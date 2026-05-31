@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Components · Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body { padding: 22px; background: var(--bg-surface); }
+</style>
+</head>
+<body>
+  <table class="table">
+    <thead>
+      <tr><th>机会</th><th>当前页</th><th>下一动作</th><th>状态</th><th style="text-align:right;">金额</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>华润万家云平台二期</strong><div class="caption">张一鸣 · 华东</div></td>
+        <td>报价中心</td><td>补交付日期</td>
+        <td><span class="pill warning no-dot">待补</span></td>
+        <td class="num" style="text-align:right;">1,280万</td>
+      </tr>
+      <tr>
+        <td><strong>省医疗云平台招标</strong><div class="caption">王蕾 · 华南</div></td>
+        <td>标书解析</td><td>生成日程</td>
+        <td><span class="pill info no-dot">进行中</span></td>
+        <td class="num" style="text-align:right;">3,210万</td>
+      </tr>
+      <tr>
+        <td><strong>连锁零售续约协议</strong><div class="caption">陈瑶 · 华东</div></td>
+        <td>合同审核</td><td>进入审批</td>
+        <td><span class="pill success no-dot">已通过</span></td>
+        <td class="num" style="text-align:right;">486万</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

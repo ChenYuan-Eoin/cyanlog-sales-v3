@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 合同审核</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <script src="./assets/layout.js"></script>
+    <script>
+        const content = `
+            <div class="breadcrumbs"><span>用户旅程</span><span>/</span><span>合同生成</span><span>/</span><span>合同审核</span></div>
+
+            <section class="page-header">
+                <div>
+                    <div class="eyebrow">Step 06</div>
+                    <div class="page-title">合同审核</div>
+                    <div class="page-description">审核页只处理红线、风险等级和整改建议。合同草案在上一页生成，这一页只聚焦判断和动作，不再回到文档编辑里来回切。</div>
+                </div>
+                <div class="header-actions">
+                    <a class="btn" href="./contract-center.html">返回合同</a>
+                    <a class="btn btn-primary" href="./approval-center.html">发起审批</a>
+                </div>
+            </section>
+
+            <section class="metric-strip">
+                <div class="metric-card">
+                    <div class="metric-note">整体评级</div>
+                    <div class="metric-inline"><strong>B</strong><span class="delta-neutral">可提交审批</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-note">红线条款</div>
+                    <div class="metric-inline"><strong>1</strong><span class="delta-down">需销售换条件</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-note">需确认项</div>
+                    <div class="metric-inline"><strong>3</strong><span class="delta-neutral">法务已标注</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-note">建议动作</div>
+                    <div class="metric-inline"><strong>今日完成</strong><span class="delta-up">可进入审批</span></div>
+                </div>
+            </section>
+
+            <section class="split">
+                <div class="card">
+                    <div class="section-title">风险项</div>
+                    <div class="risk-list">
+                        <div class="risk-item"><h4>账期超过标准</h4><p>当前验收后 30 天付款，超出公司标准 15 天。建议销售换取预付款比例上调。</p></div>
+                        <div class="risk-item"><h4>责任上限需补齐</h4><p>当前草案未明确责任总额上限，需补充 Cap 条款。</p></div>
+                        <div class="risk-item"><h4>交付边界描述偏宽</h4><p>实施服务范围与后续运维边界存在重叠，需要拆清。</p></div>
+                    </div>
+                </div>
+                <div class="panel-stack">
+                    <div class="card">
+                        <div class="section-title">整改动作</div>
+                        <div class="summary-list">
+                            <div class="summary-row"><span class="key">销售动作</span><strong>与客户换账期对价</strong></div>
+                            <div class="summary-row"><span class="key">法务动作</span><strong>补责任上限条款</strong></div>
+                            <div class="summary-row"><span class="key">交付动作</span><strong>拆清实施与运维边界</strong></div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="section-title">审核规则集</div>
+                        <div class="pill-row">
+                            <span class="pill">付款节奏</span>
+                            <span class="pill">违约责任</span>
+                            <span class="pill">知识产权</span>
+                            <span class="pill">责任总额</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
+
+        document.body.innerHTML = pageShell({
+            activeRail: "contract",
+            activePage: "contract-review",
+            topTitle: "合同审核",
+            topMeta: "红线判断、整改建议、审批准备",
+            topAction: '<a class="btn btn-primary" href="./approval-center.html">提交审批</a>',
+            content
+        });
+    </script>
+</body>
+</html>

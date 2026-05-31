@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Components · Pills</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body { padding: 22px; background: var(--bg-surface); }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border-2); }
+  .row:last-child { border-bottom: none; }
+  .row .label { width: 88px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; flex-shrink: 0; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="label">Status</div>
+    <span class="pill brand">总览</span>
+    <span class="pill info">进行中</span>
+    <span class="pill success">已通过</span>
+    <span class="pill warning">待补</span>
+    <span class="pill danger">逾期</span>
+    <span class="pill">未开始</span>
+  </div>
+  <div class="row">
+    <div class="label">With count</div>
+    <span class="pill brand no-dot">14 单</span>
+    <span class="pill warning no-dot">11 个</span>
+    <span class="pill danger no-dot">4 件</span>
+    <span class="pill success no-dot">6 单</span>
+  </div>
+  <div class="row">
+    <div class="label">Outline</div>
+    <span class="pill outline no-dot">高优</span>
+    <span class="pill outline no-dot">华东大区</span>
+    <span class="pill outline no-dot">续约</span>
+  </div>
+</body>
+</html>

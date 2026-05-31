@@ -1,0 +1,302 @@
+---
+# REQ_REGISTRY
+# 统一的需求注册表
+# 格式: YAML
+# 维护规则:
+#   - REQ ID 一旦分配，不可变更
+#   - 状态变更: draft → confirmed → in_progress → completed
+#   - 代码位置由 AI 在开发时回填
+#   - 代码中的 REQ 标记必须与之一致
+---
+
+version: "2026-05-31"
+last_updated: "2026-05-31T00:00:00Z"
+
+requirements:
+  # ═══════════════════════════════════════════════════════════════
+  # 报价中心 (Quotes Center)
+  # ═══════════════════════════════════════════════════════════════
+  F001:
+    name: 价盘管理
+    module: 报价中心
+    source: 报价中心.md#4.1
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: 产品目录、价格体系、基础价管理
+
+  F002:
+    name: 报价编制
+    module: 报价中心
+    source: 报价中心.md#4.2
+    status: completed
+    priority: P0
+    code_locations:
+      - app/api/quotes/route.ts
+      - app/api/quotes/[id]/route.ts
+    description: 报价单创建、编辑、明细管理
+
+  F003:
+    name: Account（认证与权限）
+    module: Account
+    source: Account.md
+    status: completed
+    priority: P0
+    code_locations:
+      - app/api/auth/login/route.ts
+      - app/api/auth/route.ts
+      - lib/auth.ts
+      - lib/supabase.ts
+    description: 登录认证、角色权限、用户管理
+
+  F004:
+    name: 三级审批
+    module: 报价中心
+    source: 报价中心.md#4.6.2
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: 折扣审批、审批流转、超时处理
+
+  # ═══════════════════════════════════════════════════════════════
+  # 合同审核 (Contract Review)
+  # ═══════════════════════════════════════════════════════════════
+  F005:
+    name: 合同审核
+    module: 合同审核
+    source: 合同审核.md#2
+    status: completed
+    priority: P0
+    code_locations:
+      - app/api/contracts/route.ts
+      - app/api/contracts/[id]/route.ts
+      - app/api/contracts/[id]/analyze/route.ts
+    description: 合同上传、OCR解析、AI审核
+
+  F006:
+    name: 红绿灯规则
+    module: 合同审核
+    source: 合同审核.md#4
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: 结构化规则、语义规则、规则配置
+
+  F007:
+    name: Word批注生成
+    module: 合同审核
+    source: 合同审核.md#3
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: Word文档批注、审核报告
+
+  F008:
+    name: OCR招标文件解析
+    module: 合同审核
+    source: 合同审核.md#5
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: PaddleOCR、文本提取、结构化
+
+  # ═══════════════════════════════════════════════════════════════
+  # 配置中心 (Config Center)
+  # ═══════════════════════════════════════════════════════════════
+  F009:
+    name: 合同审核规则配置
+    module: 配置中心
+    source: 配置中心.md#4.1
+    status: confirmed
+    priority: P1
+    code_locations: []
+    description: 红绿灯规则、语义规则配置
+
+  F010:
+    name: 税率规则配置
+    module: 配置中心
+    source: 配置中心.md#4.2
+    status: confirmed
+    priority: P1
+    code_locations: []
+    description: 税率管理、报价计算
+
+  F011:
+    name: 审批权限配置
+    module: 配置中心
+    source: 配置中心.md#4.3
+    status: confirmed
+    priority: P1
+    code_locations: []
+    description: 折扣审批、合同审批权限
+
+  F012:
+    name: AI模型连接配置
+    module: 配置中心
+    source: 配置中心.md
+    status: confirmed
+    priority: P1
+    code_locations: []
+    description: LM Studio、云端模型配置
+
+  # ═══════════════════════════════════════════════════════════════
+  # 标书中心 (Tender Center)
+  # ═══════════════════════════════════════════════════════════════
+  F013:
+    name: 标书生成
+    module: 标书中心
+    source: 标书中心.md#6
+    status: confirmed
+    priority: P1
+    code_locations: []
+    description: 模板填充、内容生成
+
+  F014:
+    name: 招标文件OCR解析
+    module: 标书中心
+    source: 标书中心.md#4
+    status: confirmed
+    priority: P1
+    code_locations: []
+    description: 招标文件解析、关键信息提取
+
+  # ═══════════════════════════════════════════════════════════════
+  # 知识库 (Knowledge Base)
+  # ═══════════════════════════════════════════════════════════════
+  F015:
+    name: 案例库管理
+    module: 知识库
+    source: 知识库管理.md#3
+    status: draft
+    priority: P2
+    code_locations: []
+    description: 成功案例、失败案例管理
+
+  F016:
+    name: 技术文档库
+    module: 知识库
+    source: 知识库管理.md#4
+    status: draft
+    priority: P2
+    code_locations: []
+    description: 产品说明书、技术白皮书
+
+  F017:
+    name: 商务资质库
+    module: 知识库
+    source: 知识库管理.md#5
+    status: draft
+    priority: P2
+    code_locations: []
+    description: 企业资质、人员资质管理
+
+  # ═══════════════════════════════════════════════════════════════
+  # 日程管理 (Schedule Management)
+  # ═══════════════════════════════════════════════════════════════
+  F018:
+    name: 日程管理
+    module: 日程管理
+    source: 日程管理.md
+    status: draft
+    priority: P2
+    code_locations: []
+    description: 日程创建、提醒、日历视图
+
+  F019:
+    name: 提醒规则
+    module: 日程管理
+    source: 日程管理.md#3
+    status: draft
+    priority: P2
+    code_locations: []
+    description: 报价跟进、审批超时提醒
+
+  # ═══════════════════════════════════════════════════════════════
+  # 业务地图 (Business Map)
+  # ═══════════════════════════════════════════════════════════════
+  F020:
+    name: 业务地图
+    module: 业务地图
+    source: 业务地图.md
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: 业务全景、核心链路
+
+  # ═══════════════════════════════════════════════════════════════
+  # 技术架构 (Technical Architecture)
+  # ═══════════════════════════════════════════════════════════════
+  F021:
+    name: 技术架构
+    module: 技术架构
+    source: 技术架构.md
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: 服务间调用、API网关、事件总线
+
+  F022:
+    name: AI服务降级
+    module: 技术架构
+    source: 技术架构.md#4
+    status: confirmed
+    priority: P0
+    code_locations: []
+    description: 本地模型、云端模型、规则引擎降级
+
+  # ═══════════════════════════════════════════════════════════════
+  # 预留 (Reserved)
+  # ═══════════════════════════════════════════════════════════════
+  F023:
+    name: 预留-F023
+    module: 待定
+    source: ""
+    status: draft
+    priority: P3
+    code_locations: []
+    description: 预留REQ号
+
+  F024:
+    name: 预留-F024
+    module: 待定
+    source: ""
+    status: draft
+    priority: P3
+    code_locations: []
+    description: 预留REQ号
+
+  F025:
+    name: 预留-F025
+    module: 待定
+    source: ""
+    status: draft
+    priority: P3
+    code_locations: []
+    description: 预留REQ号
+
+  F026:
+    name: 预留-F026
+    module: 待定
+    source: ""
+    status: draft
+    priority: P3
+    code_locations: []
+    description: 预留REQ号
+
+  F027:
+    name: 预留-F027
+    module: 待定
+    source: ""
+    status: draft
+    priority: P3
+    code_locations: []
+    description: 预留REQ号
+
+  F028:
+    name: 预留-F028
+    module: 待定
+    source: ""
+    status: draft
+    priority: P3
+    code_locations: []
+    description: 预留REQ号

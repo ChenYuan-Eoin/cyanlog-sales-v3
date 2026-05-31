@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Components · Buttons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/colors_and_type.css">
+<link rel="stylesheet" href="/components.css">
+<style>
+  body { padding: 22px; background: var(--bg-surface); }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-2); }
+  .row:last-child { border-bottom: none; }
+  .row .label { width: 92px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; flex-shrink: 0; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="label">Primary</div>
+    <button class="btn btn-primary">新建机会</button>
+    <button class="btn btn-primary">
+      <svg class="i i-sm" aria-hidden="true"><use href="../assets/icons.svg#i-arrow-right"></use></svg>
+      进入首页
+    </button>
+    <button class="btn btn-primary btn-lg">提交审批</button>
+  </div>
+  <div class="row">
+    <div class="label">Default</div>
+    <button class="btn">取消</button>
+    <button class="btn">
+      <svg class="i i-sm" aria-hidden="true"><use href="../assets/icons.svg#i-download"></use></svg>
+      导出
+    </button>
+    <button class="btn btn-icon" aria-label="更多">
+      <svg class="i i-sm" aria-hidden="true"><use href="../assets/icons.svg#i-settings"></use></svg>
+    </button>
+  </div>
+  <div class="row">
+    <div class="label">Ghost</div>
+    <button class="btn btn-ghost">返回</button>
+    <button class="btn btn-ghost btn-sm">查看详情</button>
+    <button class="btn btn-danger">驳回</button>
+  </div>
+</body>
+</html>

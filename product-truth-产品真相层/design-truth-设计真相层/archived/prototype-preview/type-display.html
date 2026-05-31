@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Type · Display</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 28px; background: var(--bg-surface); }
+  .row { display: flex; align-items: baseline; gap: 16px; margin-top: 14px; }
+  .row:first-child { margin-top: 0; }
+  .row .label { width: 100px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; flex-shrink: 0; }
+  .specimen { line-height: 1; }
+  .meta { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); margin-left: auto; flex-shrink: 0; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="label">Display 1</div>
+    <div class="specimen" style="font-family:var(--font-display);font-size:56px;font-weight:600;letter-spacing:-0.03em;">销售作战首页</div>
+    <div class="meta">56 / 600 / -3%</div>
+  </div>
+  <div class="row">
+    <div class="label">Display 2</div>
+    <div class="specimen" style="font-family:var(--font-display);font-size:44px;font-weight:600;letter-spacing:-0.025em;">企业访问验证</div>
+    <div class="meta">44 / 600 / -2.5%</div>
+  </div>
+  <div class="row">
+    <div class="label">Heading 1</div>
+    <div class="specimen" style="font-size:34px;font-weight:700;letter-spacing:-0.02em;">报价工作台</div>
+    <div class="meta">34 / 700 / -2%</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 首页</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <script src="./assets/layout.js"></script>
+    <script>
+        const content = `
+            <section class="page-header">
+                <div>
+                    <div class="eyebrow">首页</div>
+                    <div class="page-title">销售作战首页</div>
+                    <div class="page-description">首页展示队列、节点和业务入口。</div>
+                </div>
+                <div class="header-actions">
+                    <a class="btn" href="./lead-intake.html">录入客户接触</a>
+                    <a class="btn btn-primary" href="./opportunity-routing.html">新建机会分流</a>
+                </div>
+            </section>
+
+            <section class="metric-strip">
+                <div class="metric-card">
+                    <div class="metric-top"><span class="metric-note">活跃机会</span><span class="pill brand">总览</span></div>
+                    <div class="metric-inline"><strong>27</strong><span class="delta-up">+6 较上周</span></div>
+                    <div class="metric-caption">询价 14 / 招标 9 / 续约 4</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-top"><span class="metric-note">今日硬节点</span><span class="pill warning">11 个</span></div>
+                    <div class="metric-inline"><strong>4 个</strong><span class="delta-neutral">需跨角色协同</span></div>
+                    <div class="metric-caption">报价锁交付日、封标前校核、合同账期复核</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-top"><span class="metric-note">待审批</span><span class="pill danger">4 件</span></div>
+                    <div class="metric-inline"><strong>5h 28m</strong><span class="delta-neutral">平均停留</span></div>
+                    <div class="metric-caption">法务 2 / 财务 1 / 销售总监 1</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-top"><span class="metric-note">本周签约目标</span><span class="pill success">6 单</span></div>
+                    <div class="metric-inline"><strong>3210 万</strong><span class="delta-up">完成率 62%</span></div>
+                    <div class="metric-caption">重点依赖华润二期与医疗云项目</div>
+                </div>
+            </section>
+
+            <section class="home-hub">
+                <div class="home-welcome-card">
+                    <div class="eyebrow" style="color:#bfdbfe;">华东销售作战空间</div>
+                    <h2>今日优先队列</h2>
+                    <p>优先处理下列项目与动作。</p>
+                    <div class="home-focus-strip">
+                        <div class="home-focus-chip">
+                            <strong>华润万家云平台二期</strong>
+                            <span>报价确认中 / 待补交付日</span>
+                        </div>
+                        <div class="home-focus-chip">
+                            <strong>省医疗云平台招标</strong>
+                            <span>标书准备中 / 待校案例</span>
+                        </div>
+                        <div class="home-focus-chip">
+                            <strong>连锁零售续约协议</strong>
+                            <span>合同审核中 / 待确认账期</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="home-side-dock">
+                    <div class="home-dock-card">
+                        <div class="section-title">今日安排</div>
+                        <div class="home-dock-row">
+                            <div class="home-dock-time">09:30</div>
+                            <div><strong>确认报价交付日</strong><span>3 个项目待补。</span></div>
+                        </div>
+                        <div class="home-dock-row">
+                            <div class="home-dock-time">11:00</div>
+                            <div><strong>标书材料校核</strong><span>补齐案例与附件。</span></div>
+                        </div>
+                        <div class="home-dock-row">
+                            <div class="home-dock-time">15:30</div>
+                            <div><strong>合同审核反馈</strong><span>确认是否进入审批。</span></div>
+                        </div>
+                    </div>
+
+                    <div class="home-dock-card">
+                        <div class="section-title">本日提醒</div>
+                        <div class="summary-list">
+                            <div class="summary-row"><span class="key">待补客户信息</span><strong>3 条</strong></div>
+                            <div class="summary-row"><span class="key">待锁定节点</span><strong>4 个项目</strong></div>
+                            <div class="summary-row"><span class="key">品牌与模板更新</span><strong>1 项待确认</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="home-primary-grid">
+                <a class="home-primary-card" href="./quote-center.html">
+                    <div class="workspace-card-head">
+                        <div class="icon-chip">${appIcon("i-quote")}</div>
+                        <span class="pill brand">报价工作台</span>
+                    </div>
+                    <h3>输入和正式报价并排工作</h3>
+                    <p>左侧录入与判断，右侧维护正式报价稿。</p>
+                    <ul>
+                        <li>14 单在推进，其中 5 单等交付日期</li>
+                        <li>低毛利规则会自动抬升审批门槛</li>
+                    </ul>
+                    <div class="home-card-footer"><span>当前焦点</span><span>华润二期</span></div>
+                </a>
+
+                <a class="home-primary-card" href="./tender-analysis.html">
+                    <div class="workspace-card-head">
+                        <div class="icon-chip">${appIcon("i-tender")}</div>
+                        <span class="pill warning">标书工作台</span>
+                    </div>
+                    <h3>边读原文边做对标与风险</h3>
+                    <p>正文、对标、风险三层并行。</p>
+                    <ul>
+                        <li>9 单在推进，3 单进入高压周期</li>
+                        <li>标书页直接可转到日程引擎</li>
+                    </ul>
+                    <div class="home-card-footer"><span>当前焦点</span><span>医疗云项目</span></div>
+                </a>
+
+                <a class="home-primary-card" href="./contract-center.html">
+                    <div class="workspace-card-head">
+                        <div class="icon-chip">${appIcon("i-contract")}</div>
+                        <span class="pill success">合同工作台</span>
+                    </div>
+                    <h3>生成与审核分层处理</h3>
+                    <p>生成、审核、审批分层处理。</p>
+                    <ul>
+                        <li>6 份待审核，2 份涉及特殊账期</li>
+                        <li>付款条款与报价字段自动继承</li>
+                    </ul>
+                    <div class="home-card-footer"><span>当前焦点</span><span>续约协议</span></div>
+                </a>
+            </section>
+
+            <section class="home-queue-grid">
+                <div class="card">
+                    <div class="section-title">当前机会队列</div>
+                    <table class="table">
+                        <thead>
+                            <tr><th>机会</th><th>当前页</th><th>下一动作</th><th>负责人</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>华润万家云平台二期</td><td>报价中心</td><td>补交付日期</td><td>张一鸣</td></tr>
+                            <tr><td>省医疗云平台招标</td><td>标书解析</td><td>生成日程</td><td>王蕾</td></tr>
+                            <tr><td>连锁零售续约协议</td><td>合同审核</td><td>进入审批</td><td>陈瑶</td></tr>
+                            <tr><td>制造业 MES 改造</td><td>机会分流</td><td>确定主路径</td><td>李哲</td></tr>
+                            <tr><td>华中电力数据平台</td><td>客户接触</td><td>补录信息</td><td>赵晗</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="panel-stack">
+                    <div class="card">
+                        <div class="section-title">今天要补的缺口</div>
+                        <div class="list">
+                            <div class="list-item-card"><div class="list-item-title">案例材料待补</div><div class="list-item-meta">1 项未完成。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">交付日期待确认</div><div class="list-item-meta">2 个报价待补。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">模板待确认</div><div class="list-item-meta">品牌中心 1 项待处理。</div></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="section-title">快捷入口</div>
+                        <div class="list">
+                            <a class="list-item-card" href="./lead-intake.html"><div class="list-item-title">客户接触</div><div class="list-item-meta">录入与归档。</div></a>
+                            <a class="list-item-card" href="./tender-schedule.html"><div class="list-item-title">日程引擎</div><div class="list-item-meta">倒排与提醒。</div></a>
+                            <a class="list-item-card" href="./brand-center.html"><div class="list-item-title">品牌中心</div><div class="list-item-meta">主题与模板。</div></a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
+
+        document.body.innerHTML = pageShell({
+            activeRail: "home",
+            activePage: "home-dashboard",
+            topTitle: "首页",
+            topMeta: "团队态势、推进节点、入口切换",
+            topAction: '<a class="btn btn-primary" href="./lead-intake.html">新建机会</a>',
+            content
+        });
+    </script>
+</body>
+</html>

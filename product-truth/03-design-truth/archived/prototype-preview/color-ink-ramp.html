@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Colors · Ink ramp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 20px; background: var(--bg-surface); }
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+  .swatch { aspect-ratio: 1 / 1; border-radius: 10px; position: relative; overflow: hidden; }
+  .swatch .stop { position: absolute; left: 8px; bottom: 6px; font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: 0; }
+  .swatch.dark .stop { color: rgba(255,255,255,0.9); }
+  .swatch.light .stop { color: rgba(0,0,0,0.55); }
+  .swatch.outline { border: 1px solid var(--border-1); }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 10px; }
+  .meta { display: flex; justify-content: space-between; margin-top: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); }
+</style>
+</head>
+<body>
+  <div class="label">Ink · slate neutrals (v3 original)</div>
+  <div class="grid">
+    <div class="swatch light outline" style="background:#ffffff;"><span class="stop">0</span></div>
+    <div class="swatch light outline" style="background:#f8fafc;"><span class="stop">50</span></div>
+    <div class="swatch light" style="background:#f1f5f9;"><span class="stop">100</span></div>
+    <div class="swatch light" style="background:#e8eef5;"><span class="stop">150</span></div>
+    <div class="swatch light" style="background:#e2e8f0;"><span class="stop">200</span></div>
+    <div class="swatch light" style="background:#cbd5e1;"><span class="stop">300</span></div>
+    <div class="swatch light" style="background:#94a3b8;"><span class="stop">400</span></div>
+    <div class="swatch dark" style="background:#64748b;"><span class="stop">500</span></div>
+    <div class="swatch dark" style="background:#475569;"><span class="stop">600</span></div>
+    <div class="swatch dark" style="background:#334155;"><span class="stop">700</span></div>
+    <div class="swatch dark" style="background:#111827;"><span class="stop">900 ★</span></div>
+    <div class="swatch dark" style="background:#0b1220;"><span class="stop">950</span></div>
+  </div>
+  <div class="meta">
+    <span>--fg-1 = ink-900 · text · #111827</span>
+    <span>--bg-shell = ink-950 · navigation · #0B1220</span>
+  </div>
+</body>
+</html>

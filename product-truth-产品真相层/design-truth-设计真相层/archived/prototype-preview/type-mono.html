@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Type · Mono & numerics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 22px; background: var(--bg-surface); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .col h4 { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; margin: 0 0 12px; }
+  .big { font-family: var(--font-mono); font-size: 32px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .row { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; display: flex; justify-content: space-between; padding: 4px 0; }
+  .row span:last-child { color: var(--fg-3); }
+  .meta { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); margin-top: 4px; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="col">
+      <h4>Big numerals</h4>
+      <div class="big">3,210.5万</div>
+      <div class="meta">JetBrains Mono · 32 / 600 · tnum</div>
+      <div class="big" style="margin-top:8px;">5h 28m</div>
+      <div class="meta">durations</div>
+    </div>
+    <div class="col">
+      <h4>Inline numerics</h4>
+      <div class="row"><span>活跃机会</span><span>27</span></div>
+      <div class="row"><span>本周目标</span><span>3,210万</span></div>
+      <div class="row"><span>毛利率</span><span>+6.4%</span></div>
+      <div class="row"><span>停留时长</span><span>5h 28m</span></div>
+      <div class="row"><span>编号</span><span>CY-2024-0089</span></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "rules": {
+    "registry": "governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json",
+    "ruleLayers": {
+      "universalHardRules": [
+        "topLevelHeadingWhitelist",
+        "chapterSequenceContinuous",
+        "childHeadingMustMatchParentNumber",
+        "duplicateHeadingNumberDisallowed",
+        "appendixNamespaceLocked",
+        "noBodyChapterAfterAppendix",
+        "noHeadingsInsideCodeFence",
+        "tocMustBeScriptGenerated",
+        "renameMustSyncRegistry"
+      ],
+      "projectSpecificRules": [
+        "maintainedDocumentSet",
+        "layerOwnershipBoundaries",
+        "defaultManagedDocumentId",
+        "appendixNamingConvention"
+      ],
+      "manualReviewRules": [
+        "userJourneyConsistency",
+        "businessEntryIndependence",
+        "triggerLogicRealism",
+        "contentOwnershipSeparation"
+      ]
+    },
+    "toc": {
+      "generator": "docs-governance/maintenance-config-维护配置/scripts-脚本程序/generate-toc-目录生成.py",
+      "shellEntry": "docs-governance/maintenance-config-维护配置/scripts-脚本程序/generate-toc-兼容入口.sh",
+      "defaultDocumentId": "prd-main",
+      "lineMode": "start-end",
+      "treeView": true,
+      "maxHeadingLevel": 4
+    },
+    "validation": {
+      "checkHeadingNumbering": true,
+      "checkTopLevelHeadingWhitelist": true,
+      "checkChapterSequence": true,
+      "checkParentChildHeadingAlignment": true,
+      "checkDuplicateHeadingNumber": true,
+      "checkAppendixNamespace": true,
+      "checkNoBodySectionAfterAppendix": true,
+      "checkDuplicateTitles": true,
+      "checkHeadingInCodeBlock": true,
+      "checkMidfileEndMarker": true
+    },
+    "authoring": {
+      "mainDocumentMustBeRegistered": true,
+      "tocMustBeScriptGenerated": true,
+      "appendixMustFollowIndependentNumbering": true,
+      "renameMustSyncRegistry": true
+    }
+  }
+}

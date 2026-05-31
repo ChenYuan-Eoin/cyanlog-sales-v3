@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 品牌中心</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <script src="./assets/layout.js"></script>
+    <script>
+        const content = `
+            <div class="breadcrumbs"><span>系统支撑</span><span>/</span><span>品牌中心</span></div>
+
+            <section class="page-header">
+                <div>
+                    <div class="eyebrow">系统支撑</div>
+                    <div class="page-title">品牌中心</div>
+                    <div class="page-description">统一主题、命名、图标和页面组合。</div>
+                </div>
+                <div class="header-actions">
+                    <a class="btn" href="./config-center.html">返回配置中心</a>
+                    <a class="btn btn-primary" href="./home-dashboard.html">查看业务首页</a>
+                </div>
+            </section>
+
+            <section class="brand-grid">
+                <div class="brand-stack">
+                    <div class="brand-hero">
+                        <div class="eyebrow" style="color:#bfdbfe;">页面组合</div>
+                        <strong>页面组合与品牌应用</strong>
+                        <p>当前包包含登录、首页、客户接触、机会分流、报价、标书、日程、合同、审核、审批、配置和品牌中心。</p>
+                    </div>
+
+                    <div class="brand-panel">
+                        <div class="section-title">页面组合顺序</div>
+                        <div class="list">
+                            <div class="list-item-card"><div class="list-item-title">01 登录</div><div class="list-item-meta">未登录不泄露业务信息，只做身份验证与品牌入口。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">02 首页</div><div class="list-item-meta">承接今日节点、机会队列和主入口切换。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">03 客户接触 / 机会分流</div><div class="list-item-meta">线索收口与路径选择。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">04 报价 / 标书 / 合同</div><div class="list-item-meta">三个业务工作台独立组织。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">05 日程 / 审批</div><div class="list-item-meta">协同层处理节点与流转。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">06 配置 / 品牌</div><div class="list-item-meta">系统支撑层。</div></div>
+                        </div>
+                    </div>
+
+                    <div class="brand-panel">
+                        <div class="section-title">命名与职责</div>
+                        <div class="brand-rule">
+                            <h3>首页不是说明页</h3>
+                            <p>首页只做态势与入口。</p>
+                        </div>
+                        <div class="brand-rule" style="margin-top:12px;">
+                            <h3>工作台不是后台表单</h3>
+                            <p>报价左右并排，标书保留文档舞台，审批采用密集队列与流程矩阵。</p>
+                        </div>
+                        <div class="brand-rule" style="margin-top:12px;">
+                            <h3>系统支撑单独成层</h3>
+                            <p>配置中心和品牌中心归入系统支撑层。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-stack">
+                    <div class="brand-panel">
+                        <div class="section-title">品牌色与层次</div>
+                        <div class="theme-swatch-grid">
+                            <div class="swatch"><div class="swatch-color" style="background:#0b1220;"></div><div class="swatch-body">壳层深底<br>#0B1220</div></div>
+                            <div class="swatch"><div class="swatch-color" style="background:#eef3f8;"></div><div class="swatch-body">工作台底色<br>#EEF3F8</div></div>
+                            <div class="swatch"><div class="swatch-color" style="background:#ffffff;"></div><div class="swatch-body">主内容面<br>#FFFFFF</div></div>
+                            <div class="swatch"><div class="swatch-color" style="background:#2563eb;"></div><div class="swatch-body">品牌蓝<br>#2563EB</div></div>
+                            <div class="swatch"><div class="swatch-color" style="background:#ff4d4f;"></div><div class="swatch-body">节点红<br>#FF4D4F</div></div>
+                        </div>
+                    </div>
+
+                    <div class="brand-panel">
+                        <div class="section-title">图标与入口语义</div>
+                        <div class="brand-mini-grid">
+                            <div class="brand-icon-sample"><div class="icon-chip">${appIcon("i-home","i i-lg")}</div><span>首页 / 态势入口</span></div>
+                            <div class="brand-icon-sample"><div class="icon-chip">${appIcon("i-quote","i i-lg")}</div><span>报价 / 商务测算</span></div>
+                            <div class="brand-icon-sample"><div class="icon-chip">${appIcon("i-tender","i i-lg")}</div><span>标书 / 文档阅读</span></div>
+                            <div class="brand-icon-sample"><div class="icon-chip">${appIcon("i-contract","i i-lg")}</div><span>合同 / 条款生成</span></div>
+                            <div class="brand-icon-sample"><div class="icon-chip">${appIcon("i-calendar","i i-lg")}</div><span>日程 / 时间工作面</span></div>
+                            <div class="brand-icon-sample"><div class="icon-chip">${appIcon("i-settings","i i-lg")}</div><span>系统支撑 / 配置与品牌</span></div>
+                        </div>
+                    </div>
+
+                    <div class="brand-panel">
+                        <div class="section-title">页面语法</div>
+                        <div class="brand-detail-grid">
+                            <div class="brand-rule">
+                                <h3>深色壳层 + 浅色工作台</h3>
+                                <p>导航壳层克制，工作内容落在亮面板上。</p>
+                            </div>
+                            <div class="brand-rule">
+                                <h3>文档页保留纸面舞台</h3>
+                                <p>报价、标书、合同保留正式稿或正文舞台。</p>
+                            </div>
+                            <div class="brand-rule">
+                                <h3>审批页强调流转密度</h3>
+                                <p>左队列、右详情、下矩阵、底部操作台为固定结构。</p>
+                            </div>
+                            <div class="brand-rule">
+                                <h3>日程页强调时间感</h3>
+                                <p>采用深色时间舞台，红色仅用于关键节点。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="brand-panel">
+                        <div class="section-title">交付约束</div>
+                        <div class="summary-list">
+                            <div class="summary-row"><span class="key">页面数量</span><strong>12+ 旅程页</strong></div>
+                            <div class="summary-row"><span class="key">不再保留</span><strong>输出中心独立模块</strong></div>
+                            <div class="summary-row"><span class="key">主题页命名</span><strong>品牌中心</strong></div>
+                            <div class="summary-row"><span class="key">入口默认页</span><strong>登录页</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
+
+        document.body.innerHTML = pageShell({
+            activeRail: "settings",
+            activePage: "brand-center",
+            topTitle: "品牌中心",
+            topMeta: "主题、命名、图标和页面组合规则",
+            topAction: '<a class="btn btn-primary" href="./config-center.html">配置中心</a>',
+            content
+        });
+    </script>
+</body>
+</html>

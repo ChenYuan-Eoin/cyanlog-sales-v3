@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 审批中心</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <script src="./assets/layout.js"></script>
+    <script>
+        const content = `
+            <div class="breadcrumbs"><span>用户旅程</span><span>/</span><span>合同审核</span><span>/</span><span>审批中心</span></div>
+
+            <section class="page-header">
+                <div>
+                    <div class="eyebrow">Step 06</div>
+                    <div class="page-title">审批中心</div>
+                    <div class="page-description">集中处理待办队列、单据详情、流程矩阵和操作动作。</div>
+                </div>
+                <div class="header-actions">
+                    <a class="btn" href="./contract-review.html">返回合同审核</a>
+                    <a class="btn btn-primary" href="./calendar-overview.html">同步后续节点</a>
+                </div>
+            </section>
+
+            <section class="approval-shell">
+                <aside class="approval-list-panel">
+                    <div class="approval-list-header">
+                        <h3>Pending Approvals</h3>
+                        <div class="approval-search">
+                            ${appIcon("i-search")}
+                            <input placeholder="按单据号、项目、提交人搜索">
+                        </div>
+                    </div>
+
+                    <div class="approval-ticket-list">
+                        <div class="approval-ticket active">
+                            <div class="approval-ticket-head">
+                                <strong>零售平台年度服务合同审批</strong>
+                                <span class="approval-prio high">HIGH</span>
+                            </div>
+                            <div class="approval-ticket-meta">销售一组 · 法务复核 · 2h ago</div>
+                            <div class="approval-ticket-amount">161.12 万</div>
+                        </div>
+
+                        <div class="approval-ticket">
+                            <div class="approval-ticket-head">
+                                <strong>标书预算追加审批</strong>
+                                <span class="approval-prio med">MED</span>
+                            </div>
+                            <div class="approval-ticket-meta">标书组 · 销售总监审批 · 5h ago</div>
+                            <div class="approval-ticket-amount">48.60 万</div>
+                        </div>
+
+                        <div class="approval-ticket">
+                            <div class="approval-ticket-head">
+                                <strong>折扣例外申请</strong>
+                                <span class="approval-prio med">MED</span>
+                            </div>
+                            <div class="approval-ticket-meta">销售二组 · 财务审批 · 1d ago</div>
+                            <div class="approval-ticket-amount">89.00 万</div>
+                        </div>
+
+                        <div class="approval-ticket">
+                            <div class="approval-ticket-head">
+                                <strong>续约协议条款调整</strong>
+                                <span class="approval-prio high">HIGH</span>
+                            </div>
+                            <div class="approval-ticket-meta">合同组 · 法务复核 · 1d ago</div>
+                            <div class="approval-ticket-amount">非财务条款</div>
+                        </div>
+                    </div>
+                </aside>
+
+                <section class="approval-stage-panel">
+                    <div class="approval-stage-top">
+                        <div class="approval-stage-head">
+                            <div>
+                                <div class="approval-stage-label">Contract Review / APR-2026-0526</div>
+                                <h2>零售平台年度服务合同<br>审批单</h2>
+                            </div>
+                            <div class="approval-stage-total">
+                                <strong>161.12 万</strong>
+                                <span>当前停留 5h 28m</span>
+                            </div>
+                        </div>
+
+                        <div class="approval-data-grid">
+                            <div class="approval-data-card">
+                                <label>单据</label>
+                                <strong>技术服务协议_V4</strong>
+                            </div>
+                            <div class="approval-data-card">
+                                <label>成本中心</label>
+                                <strong>EAST_SALES_02</strong>
+                            </div>
+                            <div class="approval-data-card">
+                                <label>预算剩余度</label>
+                                <strong style="color:#86efac;">64.2%</strong>
+                            </div>
+                            <div class="approval-data-card">
+                                <label>当前节点</label>
+                                <strong>法务复核</strong>
+                            </div>
+                            <div class="approval-data-card">
+                                <label>AI 风险系数</label>
+                                <strong style="color:#fbbf24;">Low · 0.18</strong>
+                            </div>
+                            <div class="approval-data-card">
+                                <label>争议焦点</label>
+                                <strong>账期 / 责任上限</strong>
+                            </div>
+                        </div>
+
+                        <div class="approval-stage-note">当前关注付款节奏与责任上限，相关附件已齐。</div>
+                    </div>
+
+                    <div class="approval-matrix-board">
+                        <div class="approval-matrix-head">
+                            <span>Audit Trail & Workflow Matrix</span>
+                            <span style="color:#86efac;">Live: system processing at node [LEGAL_REVIEW]</span>
+                        </div>
+
+                        <div class="approval-node-track">
+                            <div class="approval-node-card">
+                                <div class="approval-node-user">
+                                    <div class="approval-avatar">张</div>
+                                    <div class="approval-user-copy">
+                                        <strong>张一鸣</strong>
+                                        <span>销售负责人</span>
+                                    </div>
+                                    <span class="approval-node-status">SUBMITTED</span>
+                                </div>
+                                <div class="approval-comment">已提交报价稿、合同稿与条款差异。</div>
+                                <div class="approval-metrics">TIME: 05-26 09:20</div>
+                            </div>
+
+                            <div class="approval-connector done"></div>
+
+                            <div class="approval-node-card active">
+                                <div class="approval-node-user">
+                                    <div class="approval-avatar">法</div>
+                                    <div class="approval-user-copy">
+                                        <strong>刘婷</strong>
+                                        <span>法务复核</span>
+                                    </div>
+                                    <span class="approval-node-status">ACTIVE</span>
+                                </div>
+                                <div class="approval-comment">责任上限需保持在合同总额范围内。</div>
+                                <div class="approval-metrics">LATENCY: 2h 06m</div>
+                            </div>
+
+                            <div class="approval-connector"></div>
+
+                            <div class="approval-node-card">
+                                <div class="approval-node-user">
+                                    <div class="approval-avatar">财</div>
+                                    <div class="approval-user-copy">
+                                        <strong>顾宁</strong>
+                                        <span>财务复核</span>
+                                    </div>
+                                    <span class="approval-node-status">WAITING</span>
+                                </div>
+                                <div class="approval-comment">待法务确认后复核付款节奏。</div>
+                                <div class="approval-metrics">QUEUE: 01</div>
+                            </div>
+
+                            <div class="approval-connector"></div>
+
+                            <div class="approval-node-card">
+                                <div class="approval-node-user">
+                                    <div class="approval-avatar">总</div>
+                                    <div class="approval-user-copy">
+                                        <strong>周岚</strong>
+                                        <span>销售总监</span>
+                                    </div>
+                                    <span class="approval-node-status">READY</span>
+                                </div>
+                                <div class="approval-comment">确认口径后放行。</div>
+                                <div class="approval-metrics">ETA: same day</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="approval-console">
+                        ${appIcon("i-approval")}
+                        <input placeholder="补充审批意见或退回说明">
+                        <a class="btn" href="./contract-review.html">退回修改</a>
+                        <a class="btn btn-primary" href="./calendar-overview.html">通过并流转</a>
+                    </div>
+                </section>
+            </section>
+        `;
+        document.body.innerHTML = pageShell({
+            activeRail: "approval",
+            activePage: "approval-center",
+            topTitle: "审批中心",
+            topMeta: "待办队列、节点详情、流程矩阵与动作台",
+            topAction: '<a class="btn btn-primary" href="./contract-review.html">回合同审核</a>',
+            content
+        });
+    </script>
+</body>
+</html>

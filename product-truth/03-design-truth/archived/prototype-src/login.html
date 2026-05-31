@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 登录</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <div class="login-layout">
+        <section class="login-visual">
+            <div class="login-brand">
+                <div class="login-brand-mark">CY</div>
+                <div class="login-brand-copy">
+                    <strong>Cyanlog</strong>
+                    <span>企业工作空间</span>
+                </div>
+            </div>
+
+            <div class="login-hero">
+                <div class="eyebrow" style="color:#bfdbfe;">访问验证</div>
+                <h1>企业访问验证</h1>
+                <p>未登录状态不展示业务信息。验证通过后进入工作空间。</p>
+            </div>
+
+            <div class="login-abstract-stage">
+                <img class="login-illustration" src="./assets/illustrations/login-secure.svg" alt="登录插画">
+            </div>
+        </section>
+
+        <section class="login-panel">
+            <div class="auth-card">
+                <div class="auth-badge">
+                    <svg class="i" aria-hidden="true"><use href="./assets/icons.svg#i-login"></use></svg>
+                    企业工作空间
+                </div>
+                <h2>企业登录</h2>
+                <p>使用企业邮箱或 SSO 完成验证。通过后进入首页。</p>
+
+                <form action="./home-dashboard.html">
+                    <div class="field">
+                        <label>企业邮箱</label>
+                        <input name="email" autocomplete="email" value="zhang.ym@cyanlog.com">
+                    </div>
+                    <div class="field" style="margin-top:16px;">
+                        <label>密码</label>
+                        <input name="password" autocomplete="current-password" type="password" value="12345678">
+                    </div>
+                    <div class="field" style="margin-top:16px;">
+                        <label>工作空间</label>
+                        <input name="workspace" autocomplete="organization" value="华东销售作战空间">
+                    </div>
+
+                    <button class="btn btn-primary" type="submit" style="width:100%;margin-top:18px;">进入首页</button>
+                </form>
+                <a class="btn" href="./home-dashboard.html" style="width:100%;margin-top:12px;">使用企业 SSO 登录</a>
+
+                <div class="auth-footer">仅授权成员可访问机会、报价、合同、审批和协同记录。</div>
+            </div>
+        </section>
+    </div>
+</body>
+</html>

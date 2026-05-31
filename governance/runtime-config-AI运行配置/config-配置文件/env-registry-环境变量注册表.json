@@ -1,0 +1,316 @@
+{
+  "version": "2026-05-25",
+  "description": "Price V3 environment variable registry",
+  "source_of_truth": {
+    "template_file": ".env.example",
+    "guide_file": "governance/truth-docs-治理真相文档/CONFIGURATION.md",
+    "owner_guide": "governance/guide-harness治理指南.md"
+  },
+  "rules": {
+    "real_secrets_commit_allowed": false,
+    "example_template_commit_required": true,
+    "local_secret_file": ".env.local",
+    "production_secret_source": [
+      "Vercel",
+      "deployment platform",
+      "server environment"
+    ]
+  },
+  "variables": [
+    {
+      "key": "NODE_ENV",
+      "required": true,
+      "sensitivity": "low",
+      "scope": "runtime",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "development",
+      "notes": "Runtime mode."
+    },
+    {
+      "key": "LOG_LEVEL",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "runtime",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "info",
+      "notes": "Application log level."
+    },
+    {
+      "key": "APP_VERSION",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "runtime",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "0.1.0",
+      "notes": "Release or build version."
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "required": true,
+      "sensitivity": "low",
+      "scope": "auth",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "http://localhost:3000",
+      "notes": "Auth callback base URL for the local application."
+    },
+    {
+      "key": "DATABASE_URL",
+      "required": true,
+      "sensitivity": "high",
+      "scope": "backend",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "postgresql://user:password@localhost:5432/price_v2",
+      "notes": "Primary transactional database."
+    },
+    {
+      "key": "REDIS_URL",
+      "required": false,
+      "sensitivity": "medium",
+      "scope": "backend",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "redis://localhost:6379",
+      "notes": "Cache or queue backing service."
+    },
+    {
+      "key": "APP_SECRET",
+      "required": true,
+      "sensitivity": "high",
+      "scope": "backend",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform",
+        "secret manager"
+      ],
+      "example": "replace-with-32-plus-char-secret",
+      "notes": "Application-level signing secret."
+    },
+    {
+      "key": "JWT_SECRET",
+      "required": true,
+      "sensitivity": "high",
+      "scope": "backend",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform",
+        "secret manager"
+      ],
+      "example": "replace-with-32-plus-char-secret",
+      "notes": "JWT signing secret when token auth is enabled."
+    },
+    {
+      "key": "ENCRYPTION_KEY",
+      "required": true,
+      "sensitivity": "high",
+      "scope": "backend",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform",
+        "secret manager"
+      ],
+      "example": "replace-with-32-byte-key",
+      "notes": "Encryption key for protected fields."
+    },
+    {
+      "key": "LOCAL_MODEL_URL",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "ai",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "http://localhost:1234/v1",
+      "notes": "OpenAI-compatible local model endpoint."
+    },
+    {
+      "key": "AI_TIMEOUT",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "ai",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "120000",
+      "notes": "Model request timeout in milliseconds."
+    },
+    {
+      "key": "LOCAL_MODEL_NAME",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "ai",
+      "owner_layer": "治理层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "local-model",
+      "notes": "Model identifier for the configured local endpoint."
+    },
+    {
+      "key": "OPENAI_API_KEY",
+      "required": false,
+      "sensitivity": "high",
+      "scope": "ai",
+      "owner_layer": "治理层",
+      "storage": [
+        "shell environment",
+        ".env.local",
+        "deployment platform",
+        "secret manager"
+      ],
+      "example": "sk-xxxx",
+      "notes": "Optional for server-side integration or local testing. End-user BYOK is not stored here."
+    },
+    {
+      "key": "ANTHROPIC_API_KEY",
+      "required": false,
+      "sensitivity": "high",
+      "scope": "ai",
+      "owner_layer": "治理层",
+      "storage": [
+        "shell environment",
+        ".env.local",
+        "deployment platform",
+        "secret manager"
+      ],
+      "example": "sk-ant-xxxx",
+      "notes": "Optional for server-side integration or local testing."
+    },
+    {
+      "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
+      "required": false,
+      "sensitivity": "high",
+      "scope": "development",
+      "owner_layer": "治理层",
+      "storage": [
+        "shell environment",
+        ".env.local",
+        "secret manager"
+      ],
+      "example": "ghp_xxx",
+      "notes": "Used by the Claude GitHub plugin MCP (github@claude-plugins-official). Optional unless you want GitHub MCP features. Must not be committed."
+    },
+    {
+      "key": "OCR_URL",
+      "required": false,
+      "sensitivity": "medium",
+      "scope": "ai",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "http://localhost:8866",
+      "notes": "Optional OCR service endpoint."
+    },
+    {
+      "key": "NEXT_PUBLIC_SUPABASE_URL",
+      "required": false,
+      "sensitivity": "medium",
+      "scope": "backend",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "http://localhost:54321",
+      "notes": "Supabase project endpoint."
+    },
+    {
+      "key": "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "required": false,
+      "sensitivity": "high",
+      "scope": "frontend",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "eyJhbGci...",
+      "notes": "Public client key; still treated as managed configuration."
+    },
+    {
+      "key": "SUPABASE_SERVICE_ROLE_KEY",
+      "required": false,
+      "sensitivity": "high",
+      "scope": "backend",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform",
+        "secret manager"
+      ],
+      "example": "eyJhbGci...",
+      "notes": "Server-side Supabase service role key."
+    },
+    {
+      "key": "NEXT_PUBLIC_ENABLE_AI_REVIEW",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "feature-flag",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "true",
+      "notes": "Feature flag."
+    },
+    {
+      "key": "NEXT_PUBLIC_ENABLE_CONTRACT_EXPORT",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "feature-flag",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "true",
+      "notes": "Feature flag."
+    },
+    {
+      "key": "NEXT_PUBLIC_ENABLE_BID_MANAGEMENT",
+      "required": false,
+      "sensitivity": "low",
+      "scope": "feature-flag",
+      "owner_layer": "产品开发层",
+      "storage": [
+        ".env.local",
+        "deployment platform"
+      ],
+      "example": "false",
+      "notes": "Feature flag for tender workflows."
+    }
+  ]
+}

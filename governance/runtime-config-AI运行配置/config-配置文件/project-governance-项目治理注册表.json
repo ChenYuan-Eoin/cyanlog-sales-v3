@@ -1,0 +1,143 @@
+{
+  "version": "2026-05-31",
+  "project": {
+    "name": "Price V3",
+    "governance_mode": "registry-driven"
+  },
+  "documents": [
+    {
+      "id": "prd-main",
+      "path": "../PROJECT-主文档.md",
+      "kind": "file",
+      "required": false,
+      "maintained": true,
+      "description": "项目初始化母文档（仓库外符号链接）"
+    },
+    {
+      "id": "doc-guide",
+      "path": "docs-governance/guide-文档维护指南.md",
+      "kind": "file",
+      "required": true,
+      "maintained": true,
+      "description": "文档治理指南",
+      "aliases": [
+        "PRD_MAINTENANCE_GUIDE.md"
+      ]
+    },
+    {
+      "id": "harness-guide",
+      "path": "governance/guide-harness治理指南.md",
+      "kind": "file",
+      "required": true,
+      "maintained": true,
+      "description": "AI 运行治理指南"
+    },
+    {
+      "id": "db-schema-governance",
+      "path": "governance/truth-docs-治理真相文档/DB_SCHEMA_GOVERNANCE.md",
+      "kind": "file",
+      "required": false,
+      "maintained": true,
+      "enabled": true,
+      "description": "数据库表结构与迁移治理规范"
+    },
+    {
+      "id": "control-chain-governance",
+      "path": "governance/truth-docs-治理真相文档/CONTROL_CHAIN_GOVERNANCE.md",
+      "kind": "file",
+      "required": false,
+      "maintained": true,
+      "enabled": true,
+      "description": "主文档、治理文档、AI理解面、代码与运维证据之间的控制链治理"
+    },
+    {
+      "id": "design-truth",
+      "path": "product-truth/design-truth-设计真相层",
+      "kind": "directory",
+      "required": false,
+      "maintained": true,
+      "description": "设计真相层（tokens + primitives + examples），作为 UI 实现的唯一视觉口径"
+    },
+    {
+      "id": "requirements",
+      "path": "product-truth/REQ_REGISTRY.yml",
+      "kind": "file",
+      "required": true,
+      "maintained": true,
+      "enabled": true,
+      "description": "REQ 需求注册表，统一管理 F001-F028 需求分配"
+    },
+    {
+      "id": "product-prd",
+      "path": "product-truth/README.md",
+      "kind": "file",
+      "required": true,
+      "maintained": true,
+      "enabled": true,
+      "description": "产品真相层索引，次生文档总入口"
+    },
+    {
+      "id": "product-src",
+      "path": ".",
+      "kind": "directory",
+      "required": false,
+      "maintained": true,
+      "enabled": true,
+      "description": "当前实际业务代码目录；治理检查默认覆盖该应用仓"
+    },
+    {
+      "id": "project-changelog",
+      "path": "CHANGELOG.md",
+      "kind": "file",
+      "required": false,
+      "maintained": false,
+      "enabled": false,
+      "description": "项目变更记录，未启用时相关 hook 自动跳过"
+    }
+  ],
+  "runtime": {
+    "toc": {
+      "default_document_id": "prd-main",
+      "python_entry": "docs-governance/maintenance-config-维护配置/scripts-脚本程序/generate-toc-目录生成.py",
+      "shell_entry": "docs-governance/maintenance-config-维护配置/scripts-脚本程序/generate-toc-兼容入口.sh"
+    },
+    "harness": {
+      "settings": "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
+      "hooks_dir": "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子",
+      "validators_dir": "governance/runtime-config-AI运行配置/runtime-code-运行代码/validators-校验器",
+      "scripts_dir": "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本",
+      "hook_commands": {
+        "claude-user-prompt-submit": {
+          "command": "node",
+          "path": "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/claude-user-prompt-submit.js"
+        },
+        "claude-pretool-req-confirmed": {
+          "command": "node",
+          "path": "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/claude-pretool-req-confirmed.js"
+        },
+        "claude-pretool-req-id": {
+          "command": "node",
+          "path": "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/claude-pretool-req-id.js"
+        },
+        "generate-changelog": {
+          "command": "python3",
+          "path": "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/generate-changelog.py"
+        },
+        "git-pre-commit": {
+          "command": "bash",
+          "path": "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/pre-commit"
+        }
+      }
+    },
+    "compatibility_links": [
+      {
+        "link": "PRD_MAINTENANCE_GUIDE.md",
+        "target": "docs-governance/guide-文档维护指南.md"
+      },
+      {
+        "link": ".claude/settings.json",
+        "target": "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json"
+      }
+    ]
+  }
+}

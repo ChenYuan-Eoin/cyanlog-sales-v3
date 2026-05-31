@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Colors · Brand accent ramp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/colors_and_type.css">
+<style>
+  body { padding: 20px; background: var(--bg-surface); }
+  .grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+  .swatch { aspect-ratio: 1 / 1; border-radius: 10px; position: relative; overflow: hidden; }
+  .swatch .stop { position: absolute; left: 8px; bottom: 6px; font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.9); letter-spacing: 0; }
+  .swatch.light .stop { color: rgba(0,0,0,0.55); }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 10px; }
+  .meta { display: flex; justify-content: space-between; margin-top: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); }
+</style>
+</head>
+<body>
+  <div class="label">Accent · brand ramp (v3 original)</div>
+  <div class="grid">
+    <div class="swatch light" style="background:#eff6ff;"><span class="stop">50</span></div>
+    <div class="swatch light" style="background:#dbeafe;"><span class="stop">100</span></div>
+    <div class="swatch light" style="background:#bfdbfe;"><span class="stop">200</span></div>
+    <div class="swatch light" style="background:#93c5fd;"><span class="stop">300</span></div>
+    <div class="swatch" style="background:#60a5fa;"><span class="stop">400</span></div>
+    <div class="swatch" style="background:#3b82f6;"><span class="stop">500</span></div>
+    <div class="swatch" style="background:#2563eb;"><span class="stop">600 ★</span></div>
+    <div class="swatch" style="background:#1d4ed8;"><span class="stop">700</span></div>
+    <div class="swatch" style="background:#1e40af;"><span class="stop">800</span></div>
+    <div class="swatch" style="background:#1e3a8a;"><span class="stop">900</span></div>
+  </div>
+  <div class="meta">
+    <span>--accent = accent-600 · #2563EB</span>
+    <span>focus ring: 18% @ accent-600</span>
+  </div>
+
+  <div class="label" style="margin-top:18px;">Cyan · secondary (for chips, brand mark)</div>
+  <div class="grid">
+    <div class="swatch light" style="background:#ecfeff;"><span class="stop">50</span></div>
+    <div class="swatch light" style="background:#cffafe;"><span class="stop">100</span></div>
+    <div class="swatch light" style="background:#a5f3fc;"><span class="stop">200</span></div>
+    <div class="swatch light" style="background:#67e8f9;"><span class="stop">300</span></div>
+    <div class="swatch" style="background:#22d3ee;"><span class="stop">400</span></div>
+    <div class="swatch" style="background:#06b6d4;"><span class="stop">500</span></div>
+    <div class="swatch" style="background:#0891b2;"><span class="stop">600 ★</span></div>
+    <div class="swatch" style="background:#0e7490;"><span class="stop">700</span></div>
+    <div class="swatch" style="background:#155e75;"><span class="stop">800</span></div>
+    <div class="swatch" style="background:#164e63;"><span class="stop">900</span></div>
+  </div>
+</body>
+</html>

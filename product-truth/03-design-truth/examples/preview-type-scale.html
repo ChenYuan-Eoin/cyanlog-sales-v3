@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Type · Body & Headings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/colors_and_type.css">
+<style>
+  body { padding: 24px; background: var(--bg-surface); }
+  .row { display: flex; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border-2); }
+  .row:last-child { border-bottom: none; }
+  .row .label { width: 88px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; flex-shrink: 0; }
+  .meta { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); margin-left: auto; flex-shrink: 0; align-self: center; }
+</style>
+</head>
+<body>
+  <div class="row"><div class="label">H2</div><div style="font-size:26px;font-weight:700;letter-spacing:-0.02em;">销售作战首页</div><div class="meta">26 / 700</div></div>
+  <div class="row"><div class="label">H3</div><div style="font-size:20px;font-weight:700;letter-spacing:-0.01em;">今日优先队列</div><div class="meta">20 / 700</div></div>
+  <div class="row"><div class="label">H4</div><div style="font-size:17px;font-weight:700;">华润万家云平台二期</div><div class="meta">17 / 700</div></div>
+  <div class="row"><div class="label">Body</div><div style="font-size:15px;color:var(--fg-2);">优先处理下列项目与动作。</div><div class="meta">15 / 400 / 1.6</div></div>
+  <div class="row"><div class="label">Body sm</div><div style="font-size:13px;color:var(--fg-2);">报价确认中 · 待补交付日期</div><div class="meta">13 / 400 / 1.55</div></div>
+  <div class="row"><div class="label">Caption</div><div style="font-size:12px;color:var(--fg-3);">较上周 +6</div><div class="meta">12 / 400</div></div>
+  <div class="row"><div class="label">Overline</div><div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);">SYSTEM 系统支撑</div><div class="meta">11 / 600 / +8%</div></div>
+</body>
+</html>

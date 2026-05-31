@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Spacing scale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 22px; background: var(--bg-surface); }
+  .row { display: grid; grid-template-columns: 56px 1fr 60px; gap: 12px; align-items: center; padding: 6px 0; }
+  .token { font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); font-weight: 600; }
+  .bar { height: 12px; background: var(--accent-soft); border-radius: 3px; }
+  .px { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); text-align: right; }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 6px; }
+</style>
+</head>
+<body>
+  <div class="label">Spacing · 4-base scale</div>
+  <div class="row"><div class="token">sp-1</div><div class="bar" style="width:4px;"></div><div class="px">4 px</div></div>
+  <div class="row"><div class="token">sp-2</div><div class="bar" style="width:8px;"></div><div class="px">8 px</div></div>
+  <div class="row"><div class="token">sp-3</div><div class="bar" style="width:12px;"></div><div class="px">12 px</div></div>
+  <div class="row"><div class="token">sp-4</div><div class="bar" style="width:16px;"></div><div class="px">16 px</div></div>
+  <div class="row"><div class="token">sp-5</div><div class="bar" style="width:20px;"></div><div class="px">20 px</div></div>
+  <div class="row"><div class="token">sp-6</div><div class="bar" style="width:24px;"></div><div class="px">24 px</div></div>
+  <div class="row"><div class="token">sp-7</div><div class="bar" style="width:32px;"></div><div class="px">32 px</div></div>
+  <div class="row"><div class="token">sp-8</div><div class="bar" style="width:40px;"></div><div class="px">40 px</div></div>
+  <div class="row"><div class="token">sp-9</div><div class="bar" style="width:56px;"></div><div class="px">56 px</div></div>
+  <div class="row"><div class="token">sp-10</div><div class="bar" style="width:72px;"></div><div class="px">72 px</div></div>
+</body>
+</html>

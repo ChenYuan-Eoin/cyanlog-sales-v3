@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 标书解析</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <script src="./assets/layout.js"></script>
+    <script>
+        const content = `
+            <div class="breadcrumbs"><span>用户旅程</span><span>/</span><span>机会分流</span><span>/</span><span>标书中心</span></div>
+
+            <section class="page-header">
+                <div>
+                    <div class="eyebrow">Step 03B</div>
+                    <div class="page-title">标书解析工作台</div>
+                    <div class="page-description">重点是原文、资质、评分和风险。自动提取只作为辅助手段，正文仍围绕招标文件本身展开，不把能力感写满整页。</div>
+                </div>
+                <div class="header-actions">
+                    <a class="btn" href="./opportunity-routing.html">返回分流</a>
+                    <a class="btn btn-primary" href="./tender-schedule.html">生成标书日程</a>
+                </div>
+            </section>
+
+            <section class="reading-workspace">
+                <aside class="reading-nav">
+                    <div class="reading-nav-title">语义目录</div>
+                    <div class="reading-nav-item">01. 招标公告</div>
+                    <div class="reading-nav-item">02. 投标人须知</div>
+                    <div class="reading-nav-item active">03. 投标人资格要求</div>
+                    <div class="reading-nav-item">04. 评分标准说明</div>
+                    <div class="reading-nav-item risk">05. 废标及禁止性规定</div>
+                    <div class="reading-nav-item">06. 商务条款与支付</div>
+                </aside>
+
+                <div class="reading-stage">
+                    <div class="reading-toolbar">
+                        <div>
+                            <div class="section-title" style="color:#fff;margin-bottom:4px;">招标文件原文</div>
+                            <div class="section-caption" style="color:rgba(255,255,255,0.64);">某省智慧医疗云平台建设项目招标文件</div>
+                        </div>
+                        <div class="pill-row">
+                            <span class="pill">245 页</span>
+                            <span class="pill brand">资格要求</span>
+                            <span class="pill warning">商务条款</span>
+                        </div>
+                    </div>
+
+                    <div class="reading-paper">
+                        <div class="reading-highlight"></div>
+                        <div class="reading-highlight secondary"></div>
+                        <div class="reading-callout">
+                            <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px;">
+                                <strong style="font-size:13px;">结构化提取</strong>
+                                <span style="font-size:11px;color:#93c5fd;">置信度 99%</span>
+                            </div>
+                            <div style="font-size:12px;line-height:1.6;color:#dbeafe;">系统已将“注册资本 ≥ 5000 万”“等保三级”“禁止联合体投标”转为对标判断项，并映射到资质库。</div>
+                        </div>
+
+                        <h2>第三章 投标人资格要求</h2>
+                        <p class="section-head">3.1 基础资质要求</p>
+                        <p>投标人必须是在中华人民共和国境内注册的独立法人，具有合法有效的营业执照。</p>
+                        <p>投标人的注册资本须在人民币 5,000 万元（含）以上。</p>
+                        <p class="section-head">3.2 技术资质要求</p>
+                        <p>投标人须具备国家网络安全主管机关颁发的信息安全等级保护三级认证资质，并在有效期内。</p>
+                        <p>投标人近三年需具有至少 3 个同类医疗云平台建设项目案例，且合同额不少于 500 万元。</p>
+                        <p class="section-head" style="margin-top:32px;">3.3 废标性条款</p>
+                        <p>本项目不接受联合体投标。若发现联合体形式提交，将直接导致废标。</p>
+                    </div>
+                </div>
+
+                <aside class="analysis-rail">
+                    <div class="card">
+                        <div class="analysis-tabs">
+                            <span class="analysis-tab active">合规矩阵</span>
+                            <span class="analysis-tab">评分点</span>
+                            <span class="analysis-tab">商务风险</span>
+                        </div>
+                        <div style="margin-top:16px;" class="section-title">资质对标</div>
+                        <div class="match-card">
+                            <div class="match-head"><strong>注册资本 ≥ 5000 万</strong><span class="match-state good">符合</span></div>
+                            <p>公司主体注册资本 12,000 万，满足要求。</p>
+                        </div>
+                        <div class="match-card" style="margin-top:10px;">
+                            <div class="match-head"><strong>等保三级认证</strong><span class="match-state good">符合</span></div>
+                            <p>资质库已关联对应证书，2027 年到期。</p>
+                        </div>
+                        <div class="match-card" style="margin-top:10px;">
+                            <div class="match-head"><strong>3 个医疗云案例</strong><span class="match-state warn">存疑</span></div>
+                            <p>当前仅找到 2 个完全匹配案例，需要业务补口径。</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="section-title">重大风险</div>
+                        <div class="risk-bullet">
+                            <div class="risk-bullet-icon">!</div>
+                            <div><strong>禁止联合体投标</strong><p>合作伙伴必须以分包方式参与，不能以联合体名义进入。</p></div>
+                        </div>
+                        <div class="risk-bullet" style="margin-top:12px;">
+                            <div class="risk-bullet-icon">!</div>
+                            <div><strong>交付周期 120 天</strong><p>当前内部评估为 145 天，需要提前压缩评审和盖章路径。</p></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="section-title">商务与交付</div>
+                        <div class="chip-matrix">
+                            <div class="chip-card"><label>交付周期</label><strong>120 天</strong></div>
+                            <div class="chip-card"><label>维保要求</label><strong>3 年 7x24</strong></div>
+                            <div class="chip-card"><label>封标时间</label><strong>05-24 10:00</strong></div>
+                            <div class="chip-card"><label>当前建议</label><strong>生成日程</strong></div>
+                        </div>
+                    </div>
+                </aside>
+            </section>
+        `;
+
+        document.body.innerHTML = pageShell({
+            activeRail: "tender",
+            activePage: "tender-analysis",
+            topTitle: "标书解析",
+            topMeta: "原文阅读、资质对标、风险与评分",
+            topAction: '<a class="btn btn-primary" href="./tender-schedule.html">进入日程引擎</a>',
+            content
+        });
+    </script>
+</body>
+</html>

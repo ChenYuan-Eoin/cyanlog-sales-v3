@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 客户接触</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <script src="./assets/layout.js"></script>
+    <script>
+        const content = `
+            <div class="breadcrumbs"><span>用户旅程</span><span>/</span><span>客户接触</span></div>
+
+            <section class="page-header">
+                <div>
+                    <div class="eyebrow">Step 01</div>
+                    <div class="page-title">客户接触录入</div>
+                    <div class="page-description">先把外部输入收进系统，再做后续判断。客户询价、招标信息、续约提醒、历史合同补录都从这里进入，不把判断和编辑混在第一步。</div>
+                </div>
+                <div class="header-actions">
+                    <a class="btn" href="./home-dashboard.html">返回首页</a>
+                    <a class="btn btn-primary" href="./opportunity-routing.html">保存并分流</a>
+                </div>
+            </section>
+
+            <section class="capture-shell">
+                <div class="card">
+                    <div class="section-title">接触摘要</div>
+                    <div class="detail-grid">
+                        <div class="field-block"><label>客户名称</label><input class="input" value="华润万家有限公司"></div>
+                        <div class="field-block"><label>接触来源</label><select class="select"><option>客户直接询价</option><option>招标公告</option><option>存量客户续约</option></select></div>
+                        <div class="field-block"><label>联系人</label><input class="input" value="张经理"></div>
+                        <div class="field-block"><label>联系方式</label><input class="input" value="138 0000 5566"></div>
+                        <div class="field-block"><label>机会类型初判</label><select class="select"><option>报价型</option><option>标书型</option><option>合同补录型</option></select></div>
+                        <div class="field-block"><label>预计金额</label><input class="input" value="1,610,000"></div>
+                    </div>
+
+                    <div class="field-block" style="margin-top:18px;">
+                        <label>需求摘要</label>
+                        <textarea class="textarea">客户需要云平台二期扩容方案，希望一周内给出商务报价，并要求同步评估交付周期及后续合同模板适配情况。</textarea>
+                    </div>
+
+                    <div style="margin-top:22px;" class="section-title">附件与上下文</div>
+                    <div class="attachment-list">
+                        <div class="attachment-pill">客户需求清单.xlsx</div>
+                        <div class="attachment-pill">历史合同.pdf</div>
+                        <div class="attachment-pill">会议纪要.docx</div>
+                    </div>
+
+                    <div style="margin-top:22px;" class="section-title">最近一次接触记录</div>
+                    <div class="history-list">
+                        <div class="history-item"><h4>5 月 24 日电话沟通</h4><p>客户明确需要先看商务数字，再判断是否需要走正式招标。</p></div>
+                        <div class="history-item"><h4>5 月 22 日内部复盘</h4><p>售前认为可沿用一期架构，但要预留实施服务与运维切分说明。</p></div>
+                    </div>
+                </div>
+
+                <div class="intake-aside">
+                    <div class="score-card">
+                        <div class="section-title">接触质量</div>
+                        <div class="score-ring">84%</div>
+                        <div class="score-meta">客户信息完整度高，需求明确度中等，建议 24 小时内完成机会分流。</div>
+                        <div class="summary-list" style="margin-top:16px;">
+                            <div class="summary-row"><span class="key">客户信息完整度</span><strong>84%</strong></div>
+                            <div class="summary-row"><span class="key">是否有正式招标</span><strong>否</strong></div>
+                            <div class="summary-row"><span class="key">是否同步合同诉求</span><strong>是</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="section-title">系统建议</div>
+                        <div class="list">
+                            <div class="list-item-card"><div class="list-item-title">优先进入报价入口</div><div class="list-item-meta">当前更像客户直接询价，商务数字与交付条件是主问题。</div></div>
+                            <div class="list-item-card"><div class="list-item-title">保留合同联动</div><div class="list-item-meta">客户要求同步评估后续续签模板，报价确认后可直接带入合同草案。</div></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
+
+        document.body.innerHTML = pageShell({
+            activeRail: "home",
+            activePage: "lead-intake",
+            topTitle: "客户接触",
+            topMeta: "把外部输入标准化收口",
+            topAction: '<a class="btn btn-primary" href="./opportunity-routing.html">进入机会分流</a>',
+            content
+        });
+    </script>
+</body>
+</html>

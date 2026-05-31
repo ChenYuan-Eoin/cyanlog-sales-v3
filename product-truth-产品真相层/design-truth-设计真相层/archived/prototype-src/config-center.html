@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyanlog | 配置中心</title>
+    <link rel="stylesheet" href="./assets/theme.css">
+</head>
+<body>
+    <script src="./assets/layout.js"></script>
+    <script src="./assets/app.js"></script>
+    <script>
+        const content = `
+            <div class="breadcrumbs"><span>系统支撑</span><span>/</span><span>配置中心</span></div>
+            <section class="page-header">
+                <div>
+                    <div class="eyebrow">管理层</div>
+                    <div class="page-title">配置中心</div>
+                    <div class="page-description">配置中心属于系统支撑层，负责规则、模板、提醒和字段配置，不再放在首页和业务层里抢主视角。</div>
+                </div>
+                <div class="header-actions">
+                    <a class="btn" href="./home-dashboard.html">返回首页</a>
+                    <a class="btn btn-primary" href="./brand-center.html">查看品牌中心</a>
+                </div>
+            </section>
+
+            <section class="config-layout">
+                <aside class="card" data-nav>
+                    <div class="config-nav">
+                        <a class="config-link active">报价规则</a>
+                        <a class="config-link">合同规则</a>
+                        <a class="config-link">标书模板</a>
+                        <a class="config-link">通知策略</a>
+                        <a class="config-link">自定义字段</a>
+                    </div>
+                </aside>
+                <div class="panel-stack">
+                    <div class="card">
+                        <div class="section-title">报价自动化规则</div>
+                        <div class="setting-row">
+                            <div class="setting-info"><h4>低毛利报价强制审批</h4><p>毛利低于 20% 自动进入财务审批。</p></div>
+                            <div class="toggle on" data-toggle></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info"><h4>报价确认触发日程引擎</h4><p>报价状态改为“已确认”后自动生成计划分支。</p></div>
+                            <div class="toggle on" data-toggle></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info"><h4>交付日期为空时启用提醒节奏</h4><p>在未确认交付日期场景下生成跟进节点。</p></div>
+                            <div class="toggle on" data-toggle></div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="section-title">默认模板</div>
+                        <table class="table">
+                            <thead><tr><th>模板</th><th>用途</th><th>状态</th></tr></thead>
+                            <tbody>
+                                <tr><td>标准商务报价模板</td><td>客户询价场景</td><td>启用</td></tr>
+                                <tr><td>医疗行业合同模板</td><td>行业特化合同</td><td>启用</td></tr>
+                                <tr><td>招投标响应模板</td><td>技术标与商务标</td><td>启用</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        `;
+        document.body.innerHTML = pageShell({
+            activeRail: "settings",
+            activePage: "config-center",
+            topTitle: "配置中心",
+            topMeta: "规则、模板、通知和字段管理",
+            topAction: '<a class="btn btn-primary" href="./brand-center.html">品牌中心</a>',
+            content
+        });
+    </script>
+</body>
+</html>
