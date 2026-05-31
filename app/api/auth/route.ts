@@ -1,55 +1,53 @@
+// REQ:F003
+// FREEZE-SPEC:3.2
+
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
+import { registerSchema } from '@/lib/validation'
+
+// 统一错误响应
+function errorResponse(message: string, status: number, code?: string) {
+  return NextResponse.json({ error: message, code }, { status })
+}
 
 // POST /api/auth/register - 用户注册
 export async function POST(req: NextRequest) {
   try {
-    const { email, phone, password, name } = await req.json()
+    const body = await req.json()
 
-    if (!name || !password) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+    // Zod验证
+    const result = registerSchema.safeParse(body)
+    if (!result.success) {
+      const firstError = result.error.issues[0]
+      return errorResponse(firstError.message, 400, 'VALIDATION_ERROR')
     }
 
-    if (!email && !phone) {
-      return NextResponse.json(
-        { error: 'Email or phone is required' },
-        { status: 400 }
-      )
-    }
+    const { email, phone, password, name } = result.data
 
     // 检查邮箱/手机号是否已注册
     if (email) {
-      const { data: existingUser } = await supabase
+      const { data: existingUser } = await supabaseAdmin
         .from('users')
         .select('id')
         .eq('email', email)
         .single()
 
       if (existingUser) {
-        return NextResponse.json(
-          { error: 'Email already registered' },
-          { status: 409 }
-        )
+        return errorResponse('邮箱已被注册', 409, 'EMAIL_EXISTS')
       }
     }
 
     if (phone) {
-      const { data: existingUser } = await supabase
+      const { data: existingUser } = await supabaseAdmin
         .from('users')
         .select('id')
         .eq('phone', phone)
         .single()
 
       if (existingUser) {
-        return NextResponse.json(
-          { error: 'Phone already registered' },
-          { status: 409 }
-        )
+        return errorResponse('手机号已被注册', 409, 'PHONE_EXISTS')
       }
     }
 
@@ -58,7 +56,7 @@ export async function POST(req: NextRequest) {
     const passwordHash = await bcrypt.hash(password, saltRounds)
 
     // 创建用户
-    const { data: user, error } = await supabase
+    const { data: user, error } = await supabaseAdmin
       .from('users')
       .insert({
         id: uuidv4(),
@@ -73,19 +71,19 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error('Registration error:', error)
-      return NextResponse.json(
-        { error: 'Failed to create user' },
-        { status: 500 }
-      )
+      return errorResponse('创建用户失败', 500, 'USER_CREATE_FAILED')
     }
 
     // 生成 token
     const token = uuidv4()
-    await supabase.from('auth_tokens').insert({
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 7)
+
+    await supabaseAdmin.from('auth_tokens').insert({
       id: uuidv4(),
       token,
       user_id: user.id,
-      expires_at: null,
+      expires_at: expiresAt.toISOString(),
     })
 
     return NextResponse.json({
@@ -96,12 +94,10 @@ export async function POST(req: NextRequest) {
         displayName: user.display_name,
       },
       token,
+      expiresAt: expiresAt.toISOString(),
     })
   } catch (error) {
     console.error('Registration error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }

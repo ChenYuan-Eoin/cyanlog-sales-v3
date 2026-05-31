@@ -1,61 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
+import { loginSchema } from '@/lib/validation'
+
+// 统一错误响应格式
+function errorResponse(message: string, status: number, code?: string) {
+  return NextResponse.json(
+    { error: message, code },
+    { status }
+  )
+}
 
 // POST /api/auth/login - 用户登录
 export async function POST(req: NextRequest) {
   try {
-    const { email, phone, password } = await req.json()
+    const body = await req.json()
 
-    if (!password) {
-      return NextResponse.json(
-        { error: 'Password is required' },
-        { status: 400 }
-      )
+    // Zod验证
+    const result = loginSchema.safeParse(body)
+    if (!result.success) {
+      const firstError = result.error.issues[0]
+      return errorResponse(firstError.message, 400, 'VALIDATION_ERROR')
     }
 
-    if (!email && !phone) {
-      return NextResponse.json(
-        { error: 'Email or phone is required' },
-        { status: 400 }
-      )
-    }
+    const { email, phone, password } = result.data
 
     // 查找用户
-    let query = supabase.from('users').select('*')
+    let query = supabaseAdmin.from('users').select('id, email, phone, display_name, password_hash')
     if (email) {
       query = query.eq('email', email)
     } else {
       query = query.eq('phone', phone)
     }
 
-    const { data: user, error } = await query.single()
+    const { data: user, error: userError } = await query.single()
 
-    if (error || !user) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      )
+    if (userError || !user) {
+      return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
     }
 
     // 验证密码
     const isValid = await bcrypt.compare(password, user.password_hash)
     if (!isValid) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      )
+      return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
     }
 
     // 生成 token
     const token = uuidv4()
-    await supabase.from('auth_tokens').insert({
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 7) // 7天过期
+
+    const { error: tokenError } = await supabaseAdmin.from('auth_tokens').insert({
       id: uuidv4(),
       token,
       user_id: user.id,
-      expires_at: null,
+      expires_at: expiresAt.toISOString(),
     })
+
+    if (tokenError) {
+      console.error('Token insert error:', tokenError)
+      return errorResponse('登录失败，请重试', 500, 'TOKEN_CREATE_FAILED')
+    }
 
     return NextResponse.json({
       user: {
@@ -65,12 +71,10 @@ export async function POST(req: NextRequest) {
         displayName: user.display_name,
       },
       token,
+      expiresAt: expiresAt.toISOString(),
     })
   } catch (error) {
     console.error('Login error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }

@@ -1,10 +1,12 @@
-'use client'
-
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export default function ConfigsPage() {
+  const localModelUrl = process.env.LOCAL_MODEL_URL || '未配置'
+  const localModelName = process.env.LOCAL_MODEL_NAME || '未配置'
+  const cloudModelName = process.env.CLOUD_MODEL_NAME || '未配置'
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-6">配置中心</h1>
@@ -109,14 +111,14 @@ export default function ConfigsPage() {
                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                   <div>
                     <div className="font-medium">本地模型</div>
-                    <div className="text-sm text-slate-500">http://localhost:1234/v1</div>
+                    <div className="text-sm text-slate-500">{localModelUrl}</div>
                   </div>
                   <Button variant="outline" size="sm">测试连接</Button>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                   <div>
                     <div className="font-medium">云端备用</div>
-                    <div className="text-sm text-slate-500">claude-opus-4</div>
+                    <div className="text-sm text-slate-500">{cloudModelName}</div>
                   </div>
                   <Button variant="outline" size="sm">配置</Button>
                 </div>

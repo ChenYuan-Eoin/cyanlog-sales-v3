@@ -1,16 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
+import { requireAuth, sanitizeFileName } from '@/lib/auth'
 import { v4 as uuidv4 } from 'uuid'
+import { paginationSchema } from '@/lib/validation'
 
-// GET /api/contracts - 获取合同列表
+// 统一错误响应
+function errorResponse(message: string, status: number, code?: string) {
+  return NextResponse.json({ error: message, code }, { status })
+}
+
+// GET /api/contracts - 获取合同列表（需登录）
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url)
-    const status = searchParams.get('status')
-    const page = parseInt(searchParams.get('page') || '1')
-    const pageSize = parseInt(searchParams.get('pageSize') || '20')
+    await requireAuth(req)
 
-    let query = supabase
+    const { searchParams } = new URL(req.url)
+
+    // Zod验证分页参数
+    const pagination = paginationSchema.safeParse({
+      page: searchParams.get('page'),
+      pageSize: searchParams.get('pageSize'),
+    })
+
+    if (!pagination.success) {
+      return errorResponse('分页参数无效', 400, 'INVALID_PAGINATION')
+    }
+
+    const { page, pageSize } = pagination.data
+    const status = searchParams.get('status')
+
+    let query = supabaseAdmin
       .from('contracts')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
@@ -25,7 +44,8 @@ export async function GET(req: NextRequest) {
     )
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('Get contracts error:', error)
+      return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
     return NextResponse.json({
@@ -37,75 +57,86 @@ export async function GET(req: NextRequest) {
       },
     })
   } catch (error) {
+    const authError = error instanceof Error && error.name === 'AuthError'
+    if (authError) {
+      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+    }
     console.error('Get contracts error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }
 
-// POST /api/contracts - 上传合同
+// POST /api/contracts - 上传合同（需登录）
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuth(req)
+
     const formData = await req.formData()
     const file = formData.get('file') as File
 
     if (!file) {
-      return NextResponse.json(
-        { error: 'File is required' },
-        { status: 400 }
-      )
+      return errorResponse('请选择文件', 400, 'MISSING_FILE')
     }
 
     // 校验文件格式
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ]
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        { error: 'Only PDF and Word documents are supported' },
-        { status: 400 }
-      )
+      return errorResponse('仅支持 PDF 和 Word 文档', 400, 'INVALID_FILE_TYPE')
+    }
+
+    // 校验文件大小（50MB）
+    const MAX_SIZE = 50 * 1024 * 1024
+    if (file.size > MAX_SIZE) {
+      return errorResponse('文件大小不能超过 50MB', 400, 'FILE_TOO_LARGE')
     }
 
     // 生成存储路径
     const fileId = uuidv4()
-    const filePath = `contracts/${fileId}/${file.name}`
+    const safeName = sanitizeFileName(file.name)
+    const filePath = `contracts/${fileId}/${safeName}`
 
     // 上传文件到 Supabase Storage
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from('contracts')
       .upload(filePath, file, {
         contentType: file.type,
       })
 
     if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 })
+      console.error('Upload error:', uploadError)
+      return errorResponse('文件上传失败', 500, 'UPLOAD_FAILED')
     }
 
     // 创建合同记录
-    const { data: contract, error } = await supabase
+    const { data: contract, error } = await supabaseAdmin
       .from('contracts')
       .insert({
         id: fileId,
-        filename: file.name,
+        filename: safeName,
         storage_path: filePath,
         size: file.size,
         mime_type: file.type,
         status: 'PENDING',
+        created_by: user.id,
       })
       .select()
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('Contract insert error:', error)
+      return errorResponse('创建合同记录失败', 500, 'DB_ERROR')
     }
 
     return NextResponse.json(contract, { status: 201 })
   } catch (error) {
+    const authError = error instanceof Error && error.name === 'AuthError'
+    if (authError) {
+      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+    }
     console.error('Create contract error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }
