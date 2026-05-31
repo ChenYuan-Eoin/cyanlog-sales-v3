@@ -23,8 +23,9 @@ export async function POST(
     // 使用行级锁检查合同状态（防止并发重复审核）
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
-      .select('id, status, file_path')
+      .select('id, status, file_path, created_by')
       .eq('id', id)
+      .eq('created_by', user.id)
       .single()
 
     if (contractError) {
@@ -33,7 +34,7 @@ export async function POST(
     }
 
     if (!contract) {
-      return errorResponse('合同不存在', 404, 'NOT_FOUND')
+      return errorResponse('合同不存在或无权访问', 404, 'NOT_FOUND')
     }
 
     // 状态检查：只有PENDING或FAILED才能重新审核

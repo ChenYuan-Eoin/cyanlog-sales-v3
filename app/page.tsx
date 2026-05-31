@@ -58,7 +58,8 @@ export default function HomePage() {
 
         // 构建最近访问列表（合并报价和合同，按时间排序）
         const recent: RecentItem[] = [
-          ...contractsData.data?.slice(0, 3).map((c: any) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...contractsData.data?.slice(0, 3).map((c: any) => ({
             id: c.id,
             type: 'contract' as const,
             title: c.filename || '合同文件',
@@ -67,7 +68,8 @@ export default function HomePage() {
             statusLabel: statusMap[c.status]?.label || c.status,
             statusVariant: statusMap[c.status]?.variant || 'default',
           })),
-          ...quotesData.data?.slice(0, 3).map((q: any) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...quotesData.data?.slice(0, 3).map((q: any) => ({
             id: q.id,
             type: 'quote' as const,
             title: q.quote_no || '报价单',

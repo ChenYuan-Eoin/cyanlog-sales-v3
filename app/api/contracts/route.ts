@@ -12,7 +12,7 @@ function errorResponse(message: string, status: number, code?: string) {
 // GET /api/contracts - 获取合同列表（需登录）
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
 
     const { searchParams } = new URL(req.url)
 
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('contracts')
       .select('*', { count: 'exact' })
+      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
 
     if (status) {

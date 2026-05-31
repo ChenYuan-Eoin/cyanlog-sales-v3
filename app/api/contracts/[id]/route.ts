@@ -17,7 +17,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
 
     // Zod验证ID格式
     const idResult = contractIdSchema.safeParse({ id: params.id })
@@ -31,6 +31,7 @@ export async function GET(
       .from('contracts')
       .select('*, contract_reviews(*)')
       .eq('id', id)
+      .eq('created_by', user.id)
       .single()
 
     if (error) {

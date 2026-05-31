@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export default function ConfigsPage() {
   const localModelUrl = process.env.LOCAL_MODEL_URL || '未配置'
-  const localModelName = process.env.LOCAL_MODEL_NAME || '未配置'
   const cloudModelName = process.env.CLOUD_MODEL_NAME || '未配置'
 
   return (

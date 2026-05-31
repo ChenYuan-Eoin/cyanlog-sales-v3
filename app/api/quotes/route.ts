@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('quotes')
       .select('*', { count: 'exact' })
+      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
 
     if (status) {

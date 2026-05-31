@@ -29,7 +29,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
 
     const idResult = contractIdSchema.safeParse({ id: params.id })
     if (!idResult.success) {
@@ -42,6 +42,7 @@ export async function GET(
       .from('quotes')
       .select('*, quote_items(*)')
       .eq('id', id)
+      .eq('created_by', user.id)
       .single()
 
     if (error) {
