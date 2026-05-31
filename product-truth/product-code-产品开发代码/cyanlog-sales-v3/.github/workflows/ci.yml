@@ -10,6 +10,10 @@ env:
   NODE_VERSION: '20'
   PNPM_VERSION: '9'
 
+defaults:
+  run:
+    working-directory: product-truth/product-code-产品开发代码/cyanlog-sales-v3
+
 jobs:
   lint:
     name: Lint & Type Check
