@@ -12,7 +12,7 @@ env:
 
 defaults:
   run:
-    working-directory: product-truth/product-code-产品开发代码/cyanlog-sales-v3
+    working-directory: product-truth/product-code
 
 jobs:
   lint:

@@ -1,51 +1,65 @@
-# Price V3 - Claude Code 项目指南
+# 销售管理系统 - Claude Code 项目指南
 
 ## 项目概述
 
-销售管理系统（Price-V3）——报价管理、合同审核、标书生成一体化平台。
+报价管理、合同审核、标书生成一体化平台。
 
 ## 目录结构
 
 ```
-Price-v3/
-├── cyanlog-sales-v3/          # Next.js 14 应用代码
-├── product-truth-产品真相层/     # 产品需求与业务真相
-├── harness-manager-治理管理/     # AI 运行治理与校验
-├── md-doc-manager-文档管理/      # 文档维护工具
-├── PROJECT-主文档.md -> ...    # 主文档（符号链接）
-└── CLAUDE.md                   # 本文件
+workspace-root/
+├── CLAUDE.md                    # 本文件 - 工作区指南
+├── .github/workflows/ci.yml     # CI 配置
+├── docker-compose.yml           # 基础设施
+├── governance/                  # AI 执行治理
+├── docs-governance/             # 文档治理
+└── product-truth/               # 产品真相主容器
+    ├── README.md                # 产品真相索引
+    ├── REQ_REGISTRY.yml         # 需求注册表
+    ├── 00-master/               # 母文档
+    ├── 01-business-truth/       # 业务真相
+    ├── 02-technical-truth/      # 技术真相
+    ├── 03-design-truth/         # 设计真相
+    ├── 04-implementation-truth/ # 实现真相
+    ├── feature-packets/         # 功能闭环包
+    └── product-code/            # 代码执行域
 ```
 
 ## 关键入口
 
 | 目的 | 路径 |
 |------|------|
-| 业务需求 | `product-truth-产品真相层/README.md` |
-| 需求注册表 | `product-truth-产品真相层/REQ_REGISTRY.yml` |
-| 代码目录 | `cyanlog-sales-v3/` |
-| AI 配置 | `harness-manager-治理管理/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json` |
+| 业务需求 | `product-truth/REQ_REGISTRY.yml` |
+| 功能闭环 | `product-truth/feature-packets/` |
+| 代码目录 | `product-truth/product-code/` |
+| 治理配置 | `governance/runtime-config/` |
 
-## 治理状态 (P1 完成)
+## 开发流程
 
-- ✅ **Hook 管理**：managed hook 已启用（通过 `.git/hooks/pre-commit`）
-- ✅ **需求控制链**：统一使用 `REQ_REGISTRY.yml`，代码校验器已更新解析 YAML
-- ✅ **文档索引**：README 已标记 active/reserved 状态
-
-## 开发规范
-
-1. **代码标记**：文件头必须包含 `// REQ:Fxxx`
-2. **需求状态**：开发前确认 REQ_REGISTRY.yml 中状态为 `confirmed`
-3. **Git Hook**：pre-commit 会自动校验 REQ ID 和状态
+1. 从 `REQ_REGISTRY.yml` 确认 REQ ID
+2. 创建/查看 `feature-packets/REQ-xxx.md`
+3. 在 `product-code/` 实现代码
+4. 更新 REQ 状态和代码位置
+5. 提交（包含代码 + 真相更新）
 
 ## 技术栈
 
 - Next.js 14 / React 18 / TypeScript
 - Tailwind CSS + shadcn/ui
-- Prisma ORM (当前 paused)
 - Supabase (Auth)
 
-## 注意事项
+## 快速开始
 
-- 不使用自动生成的 CHANGELOG.md（已禁用）
-- 不直接编辑 `FREEZE-SPEC.md`（冻结规格）
-- 需求变更优先更新 `REQ_REGISTRY.yml`
+```bash
+# 进入代码目录
+cd product-truth/product-code
+
+# 安装依赖
+pnpm install
+
+# 开发
+pnpm dev
+
+# 验证
+pnpm lint && pnpm tsc --noEmit && pnpm build
+```
