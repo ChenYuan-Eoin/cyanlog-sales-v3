@@ -10,13 +10,13 @@ module: index
 
 | 目录 | 状态 | 说明 |
 |------|------|------|
+| `product-code/` | **active** | 代码执行域，唯一可运行代码位置 |
 | `01-business-truth/` | **active** | 业务真相层，验证期 truth 入口 |
 | `02-technical-truth/` | **active** | 技术真相层，非实现期参照 |
-| `03-implementation-truth/` | reserved | 预留：实现真相层（API契约、数据模型精粹）|
-| `prd-产品需求文档/` | frozen | 冻结：旧派生文档体系，不再更新 |
-| `product-code-产品开发代码/` | frozen | 冻结：旧代码 truth 占位，内容已迁移 |
+| `03-design-truth/` | **active** | 设计真相层，视觉锚点来源 |
+| `04-implementation-truth/` | reserved | 实现真相层预留（API契约、数据模型精粹）|
+| `feature-packets/` | **active** | 功能闭环包，当前开发入口 |
 | `REQ_REGISTRY.yml` | **active** | 统一需求注册表，唯一状态源 |
-| **打开 Issue 或者 项目讨论 追踪** | | 当前功能闭环 feature packet |
 
 ## 开发入口冻结规则
 
