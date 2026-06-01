@@ -59,12 +59,12 @@ Return your analysis in this JSON format:
           content: `Please review this contract:\n\n${contractText.substring(0, 8000)}`,
         },
       ],
-      maxTokens: 4000,
+      maxOutputTokens: 4000,
       temperature: 0.3,
     })
 
     // Return streaming response
-    return result.toDataStreamResponse()
+    return result.toTextStreamResponse()
 
   } catch (error) {
     console.error('[AI Review] Error:', error)
