@@ -20,9 +20,12 @@ requirements:
     name: 价盘管理
     module: 报价中心
     source: 报价中心.md#4.1
-    status: confirmed
+    status: in_progress
     priority: P0
-    code_locations: []
+    code_locations:
+      - app/products/page.tsx
+      - app/api/products/route.ts
+      - supabase/migrations/003_add_products_tables.sql
     description: 产品目录、价格体系、基础价管理
 
   F002:
