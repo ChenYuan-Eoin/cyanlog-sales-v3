@@ -45,6 +45,13 @@ export interface Contract {
   mime_type: string
   status: 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
   parsed_text: string | null
+  ocr_status?: 'PENDING' | 'PARSING' | 'COMPLETED' | 'FAILED'
+  ocr_result?: {
+    extracted_data: Record<string, string>
+    raw_text: string
+    confidence: number
+    completed_at: string
+  }
   created_by: string | null
   created_at: string
   updated_at: string

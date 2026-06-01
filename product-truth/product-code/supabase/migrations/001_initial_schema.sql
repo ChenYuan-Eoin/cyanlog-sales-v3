@@ -122,6 +122,8 @@ CREATE TABLE IF NOT EXISTS contracts (
   mime_type TEXT NOT NULL,
   status TEXT DEFAULT 'PENDING',
   parsed_text TEXT,
+  ocr_result JSONB, -- F008: OCR 解析结果（extracted_data + confidence）
+  ocr_status TEXT DEFAULT 'PENDING', -- F008: PENDING/PARSING/COMPLETED/FAILED
   created_by UUID REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
