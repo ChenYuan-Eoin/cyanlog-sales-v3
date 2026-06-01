@@ -31,6 +31,7 @@ export default function ContractDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const contractId = params.id as string
 
@@ -87,6 +88,41 @@ export default function ContractDetailPage() {
       setError('网络错误，请稍后重试')
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  async function handleExport() {
+    if (!contract) return
+    setExporting(true)
+
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/export`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || '导出失败')
+        setExporting(false)
+        return
+      }
+
+      // Download file
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${contract.filename}-审核结果.docx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch {
+      setError('网络错误，导出失败')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -201,8 +237,16 @@ export default function ContractDetailPage() {
       {/* Review Results */}
       {contract.status === 'COMPLETED' && latestReview?.results && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">AI 审核结果</CardTitle>
+            <Button
+              onClick={handleExport}
+              disabled={exporting}
+              variant="outline"
+              size="sm"
+            >
+              {exporting ? '导出中...' : '导出Word'}
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="p-4 bg-slate-50 rounded-lg mb-6">

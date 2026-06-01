@@ -1,1 +1,3 @@
-../harness-manager-治理管理/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json
+{
+  "extends": "../governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json"
+}

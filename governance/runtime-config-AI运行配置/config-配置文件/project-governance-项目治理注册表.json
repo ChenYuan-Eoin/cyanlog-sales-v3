@@ -52,7 +52,7 @@
     },
     {
       "id": "design-truth",
-      "path": "product-truth/design-truth-设计真相层",
+      "path": "product-truth/03-design-truth",
       "kind": "directory",
       "required": false,
       "maintained": true,

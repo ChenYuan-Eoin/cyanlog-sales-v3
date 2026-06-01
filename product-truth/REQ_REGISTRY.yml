@@ -94,10 +94,14 @@ requirements:
     name: Word批注生成
     module: 合同审核
     source: 合同审核.md#3
-    status: confirmed
+    status: completed
     priority: P0
-    code_locations: []
-    description: Word文档批注、审核报告
+    code_locations:
+      - app/contracts/[id]/page.tsx
+      - app/api/contracts/[id]/export/route.ts
+      - lib/export/word-generator.py
+      - lib/export/word-generator.ts
+    description: Word文档批注、审核报告导出
 
   F008:
     name: OCR招标文件解析
