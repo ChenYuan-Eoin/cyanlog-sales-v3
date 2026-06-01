@@ -4,12 +4,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
-import type { Contract, ContractReview } from '@/types'
+import type { Contract } from '@/types'
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   PENDING: { label: '待审核', variant: 'secondary' },
@@ -27,7 +27,6 @@ const riskLevelMap: Record<string, { label: string; className: string }> = {
 
 export default function ContractDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const [contract, setContract] = useState<Contract | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -37,6 +36,7 @@ export default function ContractDetailPage() {
 
   useEffect(() => {
     fetchContract()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractId])
 
   async function fetchContract() {

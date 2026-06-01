@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { executeRules } from '@/lib/rules/engine'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -125,36 +126,16 @@ async function processContractAnalysis(contractId: string, reviewId: string) {
     await supabaseAdmin.from('contracts').update({ status: 'ANALYZING' }).eq('id', contractId)
     await supabaseAdmin.from('contract_reviews').update({ status: 'ANALYZING' }).eq('id', reviewId)
 
-    // 2. 模拟 AI 分析过程（实际应调用 AI 服务）
-    // const contractText = await extractContractText(contractId)
-    // const aiResult = await analyzeWithAI(contractText)
-    // const ruleResults = await checkRules(contractText)
+    // 2. 执行规则引擎检查
+    // 实际项目中应该从存储读取合同文本
+    const contractText = await fetchContractText(contractId)
+    const ruleResults = await executeRules(contractText)
 
-    // 3. 模拟审核完成
-    await new Promise(r => setTimeout(r, 3000))
-
-    const results = {
-      risks: [
-        {
-          level: 'red',
-          title: '付款账期过长',
-          description: '当前账期为120天，超过标准90天',
-          suggestion: '建议缩短至60天内或增加预付款比例',
-        },
-        {
-          level: 'yellow',
-          title: '违约金比例偏高',
-          description: '违约金比例为10%，行业标准通常为3%-5%',
-          suggestion: '建议协商降至5%以内',
-        },
-      ],
-      summary: '合同整体风险可控，但付款条款和违约条款需要重点关注',
-    }
-
+    // 3. 完成审核
     await supabaseAdmin.from('contracts').update({ status: 'COMPLETED' }).eq('id', contractId)
     await supabaseAdmin.from('contract_reviews').update({
       status: 'COMPLETED',
-      results,
+      results: ruleResults,
       completed_at: new Date().toISOString(),
     }).eq('id', reviewId)
 
@@ -165,5 +146,27 @@ async function processContractAnalysis(contractId: string, reviewId: string) {
       status: 'FAILED',
       results: { error: '审核处理失败' },
     }).eq('id', reviewId)
+  }
+}
+
+// 从存储获取合同文本（简化实现）
+async function fetchContractText(contractId: string): Promise<string> {
+  try {
+    // 获取合同记录
+    const { data: contract } = await supabaseAdmin
+      .from('contracts')
+      .select('parsed_text, filename')
+      .eq('id', contractId)
+      .single()
+
+    if (contract?.parsed_text) {
+      return contract.parsed_text
+    }
+
+    // 如果没有解析文本，返回文件名作为占位
+    return `合同文件: ${contract?.filename || 'unknown'}`
+  } catch (error) {
+    console.error('Failed to fetch contract text:', error)
+    return ''
   }
 }

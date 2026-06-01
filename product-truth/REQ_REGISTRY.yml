@@ -80,10 +80,15 @@ requirements:
     name: 红绿灯规则
     module: 合同审核
     source: 合同审核.md#4
-    status: confirmed
+    status: completed
     priority: P0
-    code_locations: []
-    description: 结构化规则、语义规则、规则配置
+    code_locations:
+      - app/configs/page.tsx
+      - app/api/rules/route.ts
+      - app/api/rules/[id]/route.ts
+      - lib/rules/engine.ts
+      - supabase/migrations/002_add_rules_table.sql
+    description: 结构化规则、语义规则、规则配置、规则引擎
 
   F007:
     name: Word批注生成
