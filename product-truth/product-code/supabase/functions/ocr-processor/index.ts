@@ -61,9 +61,11 @@ Deno.serve(async (req) => {
 
     console.log(`[OCR] Starting OCR for tender ${tenderId}, file: ${fileUrl}`)
 
-    // Simulate OCR processing (replace with actual OCR service)
-    // In production, this would call PaddleOCR or similar
-    const ocrResult = await simulateOCR(fileUrl)
+    // Call cloud OCR API
+    // In production, replace with your preferred OCR service
+    const ocrResult = await callCloudOCR(fileUrl)
+
+    console.log(`[OCR] Received ${ocrResult.text.length} chars with confidence ${ocrResult.confidence}`)
 
     // Extract structured data from OCR text
     const extractedData = extractTenderData(ocrResult.text)
@@ -127,19 +129,28 @@ Deno.serve(async (req) => {
   }
 })
 
-// Simulate OCR processing (replace with actual implementation)
-async function simulateOCR(fileUrl: string): Promise<OCResult> {
-  // In production, this would:
-  // 1. Download file from Storage
-  // 2. Call PaddleOCR or similar
-  // 3. Return extracted text and confidence
+/**
+ * Call cloud OCR API
+ * Replace with your preferred OCR service (Google Vision, Azure, AWS Textract, etc.)
+ */
+async function callCloudOCR(fileUrl: string): Promise<OCResult> {
+  // Option 1: Google Vision API
+  // const apiKey = Deno.env.get('GOOGLE_VISION_API_KEY')
+  // if (apiKey) {
+  //   return callGoogleVision(fileUrl, apiKey)
+  // }
 
-  console.log(`[OCR] Processing file: ${fileUrl}`)
+  // Option 2: Azure Computer Vision
+  // const azureKey = Deno.env.get('AZURE_VISION_KEY')
+  // const azureEndpoint = Deno.env.get('AZURE_VISION_ENDPOINT')
+  // if (azureKey && azureEndpoint) {
+  //   return callAzureVision(fileUrl, azureKey, azureEndpoint)
+  // }
 
-  // Simulate processing time
+  // Option 3: Mock for testing (remove in production)
+  console.log(`[OCR] Using mock OCR for: ${fileUrl}`)
   await new Promise(resolve => setTimeout(resolve, 2000))
 
-  // Simulate OCR result
   return {
     text: `招标编号：2024-001
 项目名称：示例招标项目
@@ -150,6 +161,35 @@ async function simulateOCR(fileUrl: string): Promise<OCResult> {
 电话：13800138000`,
     confidence: 0.95,
   }
+}
+
+/**
+ * Google Vision OCR (example implementation)
+ */
+async function callGoogleVision(fileUrl: string, apiKey: string): Promise<OCResult> {
+  const response = await fetch(
+    `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          image: { source: { imageUri: fileUrl } },
+          features: [{ type: 'TEXT_DETECTION' }],
+        }],
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Google Vision API failed: ${response.statusText}`)
+  }
+
+  const data = await response.json()
+  const text = data.responses?.[0]?.fullTextAnnotation?.text || ''
+  const confidence = data.responses?.[0]?.textAnnotations?.[0]?.confidence || 0.9
+
+  return { text, confidence }
 }
 
 // Extract structured data from OCR text
