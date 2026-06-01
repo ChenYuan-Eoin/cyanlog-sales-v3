@@ -135,8 +135,9 @@ CREATE TABLE IF NOT EXISTS contract_reviews (
   results JSONB,
   ai_result JSONB,
   rule_version INTEGER,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  completed_at TIMESTAMPTZ
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- -----------------------------------------------------

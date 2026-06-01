@@ -19,6 +19,13 @@ const statusMap: Record<string, { label: string; variant: 'default' | 'secondary
   FAILED: { label: '审核失败', variant: 'destructive' },
 }
 
+interface Risk {
+  level: 'red' | 'yellow' | 'green'
+  title: string
+  description: string
+  suggestion: string
+}
+
 const riskLevelMap: Record<string, { label: string; className: string }> = {
   red: { label: '红灯', className: 'bg-red-100 text-red-800 border-red-200' },
   yellow: { label: '黄灯', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
@@ -258,7 +265,7 @@ export default function ContractDetailPage() {
                 <h4 className="text-sm font-medium text-slate-700">
                   发现问题 ({latestReview.results.risks.length})
                 </h4>
-                {latestReview.results.risks.map((risk, index) => (
+                {latestReview.results.risks.map((risk: Risk, index: number) => (
                   <div
                     key={index}
                     className={`p-4 rounded-lg border ${riskLevelMap[risk.level]?.className || 'bg-slate-50'}`}

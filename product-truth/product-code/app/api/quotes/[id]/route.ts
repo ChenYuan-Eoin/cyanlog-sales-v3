@@ -66,13 +66,13 @@ export async function GET(
   }
 }
 
-// PUT /api/quotes/:id - 更新报价（需登录，字段白名单+Zod验证）
+// PUT /api/quotes/:id - 更新报价（需登录，仅能更新自己的报价）
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
 
     const idResult = contractIdSchema.safeParse({ id: params.id })
     if (!idResult.success) {
@@ -81,11 +81,12 @@ export async function PUT(
 
     const { id } = idResult.data
 
-    // 先查询当前报价状态
+    // 先查询当前报价状态（带 owner 校验）
     const { data: existingQuote, error: fetchError } = await supabaseAdmin
       .from('quotes')
-      .select('id, status')
+      .select('id, status, created_by')
       .eq('id', id)
+      .eq('created_by', user.id)
       .single()
 
     if (fetchError || !existingQuote) {
@@ -112,6 +113,7 @@ export async function PUT(
       .from('quotes')
       .update(updateData)
       .eq('id', id)
+      .eq('created_by', user.id) // owner 校验
       .select()
       .single()
 
@@ -131,13 +133,13 @@ export async function PUT(
   }
 }
 
-// DELETE /api/quotes/:id - 删除报价（需登录）
+// DELETE /api/quotes/:id - 删除报价（需登录，仅能删除自己的报价）
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
 
     const idResult = contractIdSchema.safeParse({ id: params.id })
     if (!idResult.success) {
@@ -146,11 +148,12 @@ export async function DELETE(
 
     const { id } = idResult.data
 
-    // 查询报价是否存在
+    // 查询报价是否存在（带 owner 校验）
     const { data: quote, error: fetchError } = await supabaseAdmin
       .from('quotes')
-      .select('id, status')
+      .select('id, status, created_by')
       .eq('id', id)
+      .eq('created_by', user.id)
       .single()
 
     if (fetchError || !quote) {
@@ -166,6 +169,7 @@ export async function DELETE(
       .from('quotes')
       .delete()
       .eq('id', id)
+      .eq('created_by', user.id) // owner 校验
 
     if (error) {
       console.error('Delete quote error:', error)

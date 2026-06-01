@@ -54,13 +54,13 @@ export async function GET(
   }
 }
 
-// DELETE /api/contracts/:id - 删除合同（需登录）
+// DELETE /api/contracts/:id - 删除合同（需登录，仅能删除自己的合同）
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
 
     // Zod验证ID格式
     const idResult = contractIdSchema.safeParse({ id: params.id })
@@ -70,11 +70,12 @@ export async function DELETE(
 
     const { id } = idResult.data
 
-    // 查询合同是否存在
+    // 查询合同是否存在（带 owner 校验）
     const { data: contract, error: fetchError } = await supabaseAdmin
       .from('contracts')
-      .select('id, storage_path')
+      .select('id, storage_path, created_by')
       .eq('id', id)
+      .eq('created_by', user.id)
       .single()
 
     if (fetchError || !contract) {
@@ -87,11 +88,12 @@ export async function DELETE(
         .catch(err => console.error('Storage delete error:', err))
     }
 
-    // 删除数据库记录
+    // 删除数据库记录（带 owner 校验）
     const { error } = await supabaseAdmin
       .from('contracts')
       .delete()
       .eq('id', id)
+      .eq('created_by', user.id)
 
     if (error) {
       console.error('Delete contract error:', error)
