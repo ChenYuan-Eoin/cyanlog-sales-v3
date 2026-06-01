@@ -20,13 +20,23 @@ requirements:
     name: 价盘管理
     module: 报价中心
     source: 报价中心.md#4.1
-    status: in_progress
+    status: completed
     priority: P0
     code_locations:
       - app/products/page.tsx
       - app/api/products/route.ts
       - supabase/migrations/003_add_products_tables.sql
     description: 产品目录、价格体系、基础价管理
+
+  F004:
+    name: 三级审批
+    module: 报价中心
+    source: 报价中心.md#4.6.2
+    status: completed
+    priority: P0
+    code_locations:
+      - lib/approval/workflow.ts
+    description: 折扣审批、审批流转、超时处理
 
   F002:
     name: 报价编制
@@ -59,10 +69,21 @@ requirements:
     name: 三级审批
     module: 报价中心
     source: 报价中心.md#4.6.2
-    status: confirmed
+    status: completed
     priority: P0
-    code_locations: []
+    code_locations:
+      - lib/approval/workflow.ts
     description: 折扣审批、审批流转、超时处理
+
+  F008:
+    name: OCR招标文件解析
+    module: 合同审核
+    source: 合同审核.md#5
+    status: completed
+    priority: P0
+    code_locations:
+      - app/api/tenders/ocr/route.ts
+    description: PaddleOCR、文本提取、结构化
 
   # ═══════════════════════════════════════════════════════════════
   # 合同审核 (Contract Review)
@@ -164,9 +185,10 @@ requirements:
     name: 标书生成
     module: 标书中心
     source: 标书中心.md#6
-    status: confirmed
+    status: completed
     priority: P1
-    code_locations: []
+    code_locations:
+      - app/tenders/page.tsx
     description: 模板填充、内容生成
 
   F014:
