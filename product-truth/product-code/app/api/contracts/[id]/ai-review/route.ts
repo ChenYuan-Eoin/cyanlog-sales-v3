@@ -1,13 +1,20 @@
 // REQ:F005 + AI Streaming
-// PURPOSE: Stream AI contract review results using Vercel AI SDK
+// PURPOSE: Stream AI contract review results via Chinese AI gateway (yiyongai)
+// Note: 使用中转站（OpenAI 兼容）路由到 Claude 系列模型
 
 import { streamText } from 'ai'
-import { anthropic } from '@ai-sdk/anthropic'
+import { createOpenAI } from '@ai-sdk/openai'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export const runtime = 'edge'
+
+// 中转站 OpenAI 兼容客户端
+const gateway = createOpenAI({
+  baseURL: process.env.AI_GATEWAY_URL || 'https://cloud.yiyongai.cn/v1',
+  apiKey: process.env.AI_GATEWAY_API_KEY,
+})
 
 export async function POST(
   req: NextRequest,
@@ -34,36 +41,35 @@ export async function POST(
 
     const contractText = contract.parsed_text || 'No text available for review'
 
-    // Stream AI review using Claude
+    // Stream AI review via Chinese gateway
     const result = streamText({
-      model: anthropic('claude-sonnet-4-6'),
+      model: gateway(process.env.AI_MODEL || 'claude-sonnet-4-6'),
       messages: [
         {
           role: 'system',
-          content: `You are a legal contract review expert. Analyze the contract and identify risks.
-Return your analysis in this JSON format:
+          content: `你是一位专业的法务合同审核专家。请分析合同内容并识别风险。
+请按以下 JSON 格式返回：
 {
   "risks": [
     {
       "level": "red|yellow|green",
-      "title": "Brief risk title",
-      "description": "Detailed description of the issue",
-      "suggestion": "Recommended action"
+      "title": "风险标题（简短）",
+      "description": "问题详细描述",
+      "suggestion": "建议处理方式"
     }
   ],
-  "summary": "Overall assessment summary"
+  "summary": "总体评估摘要"
 }`,
         },
         {
           role: 'user',
-          content: `Please review this contract:\n\n${contractText.substring(0, 8000)}`,
+          content: `请审核以下合同：\n\n${contractText.substring(0, 8000)}`,
         },
       ],
       maxOutputTokens: 4000,
       temperature: 0.3,
     })
 
-    // Return streaming response
     return result.toTextStreamResponse()
 
   } catch (error) {
@@ -78,7 +84,7 @@ Return your analysis in this JSON format:
     }
 
     return NextResponse.json(
-      { error: 'AI review failed' },
+      { error: error instanceof Error ? error.message : 'AI review failed' },
       { status: 500 }
     )
   }

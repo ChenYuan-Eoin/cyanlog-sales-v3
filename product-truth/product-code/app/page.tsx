@@ -1,55 +1,126 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 interface DashboardStats {
   activeOpportunities: number
   todayNodes: number
   pendingApproval: number
-  weeklyTarget: number
+  monthlyContracts: number
 }
 
-interface AgendaItem {
-  time: string
+interface ContractRow {
+  id: string
+  filename: string
+  status: string
+  created_at: string
+  parsed_text: string | null
+}
+
+interface RecentItem {
+  id: string
   title: string
-  description: string
+  subtitle: string
+  status: string
+  href: string
+}
+
+const statusMap: Record<string, { label: string; pillClass: string }> = {
+  PENDING: { label: '待审核', pillClass: 'pill warning' },
+  PARSING: { label: '解析中', pillClass: 'pill info' },
+  ANALYZING: { label: '审核中', pillClass: 'pill info' },
+  COMPLETED: { label: '已完成', pillClass: 'pill success' },
+  FAILED: { label: '失败', pillClass: 'pill danger' },
+  DRAFT: { label: '草稿', pillClass: 'pill outline' },
+  PENDING_APPROVAL: { label: '审批中', pillClass: 'pill info' },
+  APPROVED: { label: '已批准', pillClass: 'pill success' },
+  REJECTED: { label: '已驳回', pillClass: 'pill danger' },
 }
 
 export default function HomePage() {
   const router = useRouter()
-  const [stats] = useState<DashboardStats>({
-    activeOpportunities: 27,
-    todayNodes: 4,
-    pendingApproval: 11,
-    weeklyTarget: 3210,
-  })
-  const [userInfo] = useState({ name: '张一鸣', department: '华东销售' })
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [recent, setRecent] = useState<RecentItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [userName, setUserName] = useState('我')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true)
+    try {
+      // 直接从 Supabase 拉（客户端 RLS 会自动过滤）
+      const [contractsRes, quotesRes] = await Promise.all([
+        supabase.from('contracts').select('id, filename, status, created_at, parsed_text').order('created_at', { ascending: false }).limit(50),
+        supabase.from('quotes').select('id, quote_no, customer_name, status, created_at').order('created_at', { ascending: false }).limit(20),
+      ])
+
+      const contracts: ContractRow[] = contractsRes.data || []
+      const quotes = quotesRes.data || []
+
+      // 统计
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+      const activeOpportunities = contracts.filter(c =>
+        ['PENDING', 'PARSING', 'ANALYZING'].includes(c.status)
+      ).length
+
+      const todayNodes = contracts.filter(c => {
+        const d = new Date(c.created_at)
+        return d.toDateString() === now.toDateString()
+      }).length
+
+      const pendingApproval = contracts.filter(c => c.status === 'PENDING').length
+      const monthlyContracts = contracts.filter(c => new Date(c.created_at) >= startOfMonth).length
+
+      setStats({ activeOpportunities, todayNodes, pendingApproval, monthlyContracts })
+
+      // 最近访问
+      const recentItems: RecentItem[] = [
+        ...contracts.slice(0, 4).map(c => ({
+          id: c.id,
+          title: c.filename,
+          subtitle: new Date(c.created_at).toLocaleString('zh-CN'),
+          status: c.status,
+          href: `/contracts/${c.id}`,
+        })),
+        ...quotes.slice(0, 3).map(q => ({
+          id: q.id,
+          title: q.quote_no,
+          subtitle: q.customer_name || '',
+          status: q.status,
+          href: `/quotes/${q.id}`,
+        })),
+      ].slice(0, 6)
+
+      setRecent(recentItems)
+    } catch (e) {
+      console.error('[Dashboard] load error', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
-    }
-    // Fetch user info and stats here
-  }, [router])
+    // 拿用户信息
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        const meta = data.user.user_metadata || {}
+        setUserName(meta.display_name || meta.full_name || data.user.email?.split('@')[0] || '我')
+      }
+    })
 
-  const agenda: AgendaItem[] = [
-    { time: '09:30', title: '确认报价交付日', description: '3 个项目待补。' },
-    { time: '11:00', title: '标书材料校核', description: '补齐案例与附件。' },
-    { time: '15:30', title: '合同审核反馈', description: '确认是否进入审。' },
-  ]
-
-  const reminders = [
-    { label: '待补客户信息', count: '3 条' },
-    { label: '待锁定节点', count: '4 个项目' },
-    { label: '品牌与模板更新', count: '1 项待确认' },
-  ]
+    loadDashboard()
+  }, [loadDashboard])
 
   return (
     <div className="dashboard-shell">
+      {/* Mobile Overlay */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
       {/* Left Rail */}
       <div className="rail">
         <div className="rail-logo">CY</div>
@@ -71,59 +142,47 @@ export default function HomePage() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
           </Link>
           <Link href="/configs" title="配置">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v6m0 6v6m4.22-10.22l4.24-4.24M6.34 6.34L2.1 2.1m17.9 9.9h-6m-6 0H1.9" />
+              <path d="M12 1v6m0 6v6" />
             </svg>
           </Link>
         </nav>
       </div>
 
-      {/* Sidebar Navigation */}
-      <div className="sidebar">
+      {/* Sidebar */}
+      <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <h2>Cyanlog</h2>
           <p>销售支撑平台</p>
         </div>
 
-        <div style={{ padding: '12px', marginBottom: '16px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-md)' }}>
-          <div style={{ fontSize: 'var(--text-body-sm)', fontWeight: 600, color: 'white', marginBottom: 4 }}>
-            华东销售作战空间
-          </div>
-          <div style={{ fontSize: 'var(--text-caption)', color: 'var(--ink-400)' }}>
-            12 个活跃机会 · 6 个关键节点
-          </div>
+        <div className="workspace-card">
+          <div className="workspace-name">华东销售作战空间</div>
+          <div className="workspace-meta">{stats?.activeOpportunities ?? 0} 个活跃机会 · {stats?.todayNodes ?? 0} 个今日节点</div>
           <div style={{ marginTop: 8, textAlign: 'right' }}>
-            <span style={{ fontSize: 'var(--text-overline)', color: 'var(--accent-400)', background: 'rgba(37,99,235,0.15)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
-              ONES
-            </span>
+            <span className="workspace-tag">ONES</span>
           </div>
         </div>
 
         <div className="nav-section">
           <div className="nav-section-title">用户旅程</div>
-          <Link href="/" className="nav-link active">
-            <span>首页</span>
-          </Link>
+          <Link href="/" className="nav-link active"><span>首页</span></Link>
           <Link href="/customers" className="nav-link">
             <span>客户接触</span>
-            <span style={{ fontSize: 'var(--text-caption)', color: 'var(--ink-500)', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 'var(--radius-sm)' }}>3</span>
+            <span className="nav-count">3</span>
           </Link>
-          <Link href="/opportunities" className="nav-link">
-            <span>机会分流</span>
-          </Link>
+          <Link href="/opportunities" className="nav-link"><span>机会分流</span></Link>
         </div>
 
         <div className="nav-section">
           <div className="nav-section-title">报价中心</div>
           <Link href="/quotes" className="nav-link">
             <span>报价中心</span>
-            <span style={{ fontSize: 'var(--text-caption)', color: 'var(--ink-500)', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 'var(--radius-sm)' }}>14</span>
+            <span className="nav-count">14</span>
           </Link>
         </div>
 
@@ -131,227 +190,207 @@ export default function HomePage() {
           <div className="nav-section-title">标书解析</div>
           <Link href="/tenders" className="nav-link">
             <span>标书解析</span>
-            <span style={{ fontSize: 'var(--text-caption)', color: 'var(--ink-500)', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 'var(--radius-sm)' }}>9</span>
+            <span className="nav-count">9</span>
           </Link>
         </div>
 
         <div className="nav-section" style={{ marginTop: 'auto' }}>
           <div className="nav-section-title">系统支撑</div>
-          <Link href="/configs" className="nav-link">
-            <span>配置中心</span>
-          </Link>
-          <Link href="/brand" className="nav-link">
-            <span>品牌中心</span>
-          </Link>
+          <Link href="/configs" className="nav-link"><span>配置中心</span></Link>
+          <Link href="/brand" className="nav-link"><span>品牌中心</span></Link>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main */}
       <div className="main">
         {/* Topbar */}
         <div className="topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-1)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--fg-3)',
-              fontSize: 'var(--text-body-sm)',
-            }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <path d="M21 21l-4.35-4.35" />
-              </svg>
-              <span>搜索机会、客户、单据、模板</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--fg-4)' }}>⌘K</span>
-            </div>
+          <button className="mobile-toggle" onClick={() => setSidebarOpen(true)} aria-label="打开菜单">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+
+          <div className="search-shell">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input placeholder="搜索机会、客户、单据、模板" />
+            <span className="kbd">⌘K</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 'var(--text-body-sm)', fontWeight: 500, color: 'var(--fg-1)' }}>{userInfo.name}</div>
-              <div style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>{userInfo.department}</div>
+              <div style={{ fontSize: 'var(--text-body-sm)', fontWeight: 500 }}>{userName}</div>
+              <div style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>华东销售</div>
             </div>
-            <div style={{
-              width: 36,
-              height: 36,
-              background: 'linear-gradient(135deg, var(--cyan-500), var(--cyan-700))',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontWeight: 600,
-              fontSize: 'var(--text-body-sm)',
-            }}>
-              张
+            <div className="avatar brand" style={{ width: 36, height: 36, fontSize: 'var(--text-body-sm)' }}>
+              {userName.charAt(0).toUpperCase()}
             </div>
+            <button
+              onClick={async () => {
+                document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+                await supabase.auth.signOut()
+                router.push('/login')
+              }}
+              className="btn btn-ghost btn-sm"
+              title="退出登录"
+            >
+              退出
+            </button>
           </div>
         </div>
 
-        {/* Page Content */}
-        <div style={{ padding: '24px 28px' }}>
-          {/* Breadcrumb */}
-          <div style={{ marginBottom: 16 }}>
-            <span style={{ fontSize: 'var(--text-caption)', color: 'var(--accent)', fontWeight: 500 }}>首页</span>
-            <h1 style={{ fontSize: 'var(--text-h1)', fontWeight: 600, marginTop: 4, letterSpacing: '-0.02em' }}>销售作战首页</h1>
-            <p style={{ fontSize: 'var(--text-body)', color: 'var(--fg-2)', marginTop: 4 }}>今天要推的项目、要补的缺口、要切换的工作台都在这里。</p>
+        {/* Content */}
+        <div className="content-area">
+          <div className="breadcrumb">
+            <span className="breadcrumb-current">首页</span>
           </div>
+          <h1>销售作战首页</h1>
+          <p className="subtitle">今天要推的项目、要补的缺口、要切换的工作台都在这里。</p>
 
           {/* Stats Grid */}
-          <div className="stats-grid" style={{ marginBottom: 24 }}>
+          <div className="stats-grid">
             <div className="stat-card">
               <div className="stat-card-header">
                 <span className="stat-card-label">活跃机会</span>
-                <span style={{ fontSize: 'var(--text-caption)', color: 'var(--accent)', background: 'var(--accent-50)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>总览</span>
+                <span className="stat-tag">总览</span>
               </div>
-              <div className="stat-card-value">{stats.activeOpportunities}</div>
-              <div className="stat-card-change up">+6 较上周</div>
+              {loading ? (
+                <div className="skeleton" style={{ width: 60, height: 32 }} />
+              ) : (
+                <div className="stat-card-value">{stats?.activeOpportunities ?? 0}</div>
+              )}
+              <div className="stat-card-change">最近 7 天</div>
             </div>
 
             <div className="stat-card">
               <div className="stat-card-header">
                 <span className="stat-card-label">今日硬节点</span>
-                <span style={{ fontSize: 'var(--text-caption)', color: 'var(--warning-700)', background: 'var(--warning-100)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>{stats.todayNodes}</span>
+                <span className="stat-tag warning">{stats?.todayNodes ?? 0}</span>
               </div>
-              <div className="stat-card-value" style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                {stats.todayNodes} <span style={{ fontSize: 'var(--text-h3)' }}>个</span>
-              </div>
+              {loading ? (
+                <div className="skeleton" style={{ width: 60, height: 32 }} />
+              ) : (
+                <div className="stat-card-value">{stats?.todayNodes ?? 0} <span style={{ fontSize: 'var(--text-h3)' }}>个</span></div>
+              )}
               <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>需跨角色协同</div>
             </div>
 
             <div className="stat-card">
               <div className="stat-card-header">
                 <span className="stat-card-label">待审批</span>
-                <span style={{ fontSize: 'var(--text-caption)', color: 'var(--accent-700)', background: 'var(--accent-100)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>{stats.pendingApproval}</span>
+                <span className="stat-tag info">{stats?.pendingApproval ?? 0}</span>
               </div>
-              <div className="stat-card-value" style={{ fontSize: '28px' }}>5h 28m</div>
-              <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>平均停留</div>
+              {loading ? (
+                <div className="skeleton" style={{ width: 80, height: 32 }} />
+              ) : (
+                <div className="stat-card-value" style={{ fontSize: '28px' }}>—</div>
+              )}
+              <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>无积压</div>
             </div>
 
             <div className="stat-card">
               <div className="stat-card-header">
-                <span className="stat-card-label">本周签约目标</span>
-                <span style={{ fontSize: 'var(--text-caption)', color: 'var(--success-700)', background: 'var(--success-100)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>6 单</span>
+                <span className="stat-card-label">本月合同</span>
+                <span className="stat-tag success">{stats?.monthlyContracts ?? 0}</span>
               </div>
-              <div className="stat-card-value">{stats.weeklyTarget.toLocaleString()}万</div>
-              <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>完成率 62%</div>
+              {loading ? (
+                <div className="skeleton" style={{ width: 60, height: 32 }} />
+              ) : (
+                <div className="stat-card-value">{stats?.monthlyContracts ?? 0}</div>
+              )}
+              <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>单</div>
             </div>
           </div>
 
           {/* Content Grid */}
           <div className="content-grid">
-            {/* Hero Card */}
             <div className="hero-card">
               <div className="eyebrow">华东销售作战空间</div>
-              <h2 style={{ fontSize: '36px', fontWeight: 600, marginBottom: 8 }}>今日优先队列</h2>
-              <p style={{ color: 'var(--fg-on-dark-2)', marginBottom: 24 }}>优先处理下列项目与动作。每一项都还差一个明确节点。</p>
+              <h2>今日优先队列</h2>
+              <p>优先处理下列项目与动作。每一项都还差一个明确节点。</p>
 
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{
-                  padding: '16px 20px',
-                  background: 'rgba(255,255,255,0.04)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  minWidth: 200,
-                }}>
-                  <div style={{ fontSize: 'var(--text-body-sm)', color: 'white', marginBottom: 4 }}>华润万家云平台二期</div>
-                  <div style={{ fontSize: 'var(--text-caption)', color: 'var(--ink-400)' }}>报价确认中 · 待补交付日</div>
-                </div>
-                <div style={{
-                  padding: '16px 20px',
-                  background: 'rgba(255,255,255,0.04)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  minWidth: 200,
-                }}>
-                  <div style={{ fontSize: 'var(--text-body-sm)', color: 'white', marginBottom: 4 }}>省医疗云平台招标</div>
-                  <div style={{ fontSize: 'var(--text-caption)', color: 'var(--ink-400)' }}>标书准备中 · 待校案例</div>
-                </div>
-                <div style={{
-                  padding: '16px 20px',
-                  background: 'rgba(255,255,255,0.04)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  minWidth: 200,
-                }}>
-                  <div style={{ fontSize: 'var(--text-body-sm)', color: 'white', marginBottom: 4 }}>连锁零售续约协议</div>
-                  <div style={{ fontSize: 'var(--text-caption)', color: 'var(--ink-400)' }}>合同审核中 · 待确认账期</div>
-                </div>
+              <div className="queue-grid">
+                {loading ? (
+                  <>
+                    <div className="skeleton queue-card" />
+                    <div className="skeleton queue-card" />
+                    <div className="skeleton queue-card" />
+                  </>
+                ) : recent.length === 0 ? (
+                  <div className="empty-state">
+                    <p>暂无活跃项目</p>
+                    <Link href="/contracts/new" className="btn btn-primary">上传第一个合同</Link>
+                  </div>
+                ) : (
+                  recent.slice(0, 3).map(item => (
+                    <Link href={item.href} key={item.id} className="queue-card">
+                      <div className="queue-card-title">{item.title}</div>
+                      <div className="queue-card-meta">
+                        {statusMap[item.status]?.label || item.status}
+                        {' · '}
+                        {item.subtitle}
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
 
-            {/* Side Panel */}
             <div className="side-panel">
-              {/* Today's Agenda */}
               <div className="side-card">
                 <div className="side-card-header">今日安排</div>
-                {agenda.map((item, index) => (
-                  <div key={index} className="agenda-item">
-                    <div className="agenda-time">{item.time}</div>
-                    <div className="agenda-content">
-                      <p>{item.title}</p>
-                      <span>{item.description}</span>
-                    </div>
+                <div className="agenda-item">
+                  <div className="agenda-time">09:30</div>
+                  <div className="agenda-content">
+                    <p>确认报价交付日</p>
+                    <span>3 个项目待补</span>
                   </div>
-                ))}
+                </div>
+                <div className="agenda-item">
+                  <div className="agenda-time">11:00</div>
+                  <div className="agenda-content">
+                    <p>标书材料校核</p>
+                    <span>补齐案例与附件</span>
+                  </div>
+                </div>
+                <div className="agenda-item">
+                  <div className="agenda-time">15:30</div>
+                  <div className="agenda-content">
+                    <p>合同审核反馈</p>
+                    <span>确认是否进入审批</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Reminders */}
               <div className="side-card">
-                <div className="side-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>今日提醒</span>
-                  <span style={{
-                    fontSize: 'var(--text-overline)',
-                    color: 'var(--warning-700)',
-                    background: 'var(--warning-100)',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-sm)',
-                  }}>3</span>
+                <div className="side-card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>最近访问</span>
+                  <button onClick={loadDashboard} className="btn btn-ghost btn-sm" title="刷新">↻</button>
                 </div>
-                {reminders.map((item, index) => (
-                  <div key={index} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px 0',
-                    borderBottom: index < reminders.length - 1 ? '1px solid var(--border-2)' : 'none',
-                  }}>
-                    <span style={{ fontSize: 'var(--text-body-sm)', color: 'var(--fg-2)' }}>{item.label}</span>
-                    <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 500 }}>{item.count}</span>
-                  </div>
-                ))}
+                {loading ? (
+                  <div className="skeleton" style={{ height: 120 }} />
+                ) : recent.length === 0 ? (
+                  <div className="empty-mini">暂无数据</div>
+                ) : (
+                  recent.map(item => (
+                    <Link href={item.href} key={item.id} className="recent-row">
+                      <div>
+                        <div className="recent-title">{item.title}</div>
+                        <div className="recent-meta">{item.subtitle}</div>
+                      </div>
+                      <span className={statusMap[item.status]?.pillClass || 'pill'}>
+                        {statusMap[item.status]?.label || item.status}
+                      </span>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 24, justifyContent: 'flex-end' }}>
-            <Link href="/customers/new" style={{
-              padding: '12px 24px',
-              background: 'white',
-              border: '1px solid var(--border-1)',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 'var(--text-body-sm)',
-              fontWeight: 500,
-              color: 'var(--fg-1)',
-            }}>
-              录入客户接触
-            </Link>
-            <Link href="/opportunities/new" style={{
-              padding: '12px 24px',
-              background: 'var(--accent)',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 'var(--text-body-sm)',
-              fontWeight: 500,
-              color: 'white',
-            }}>
-              新建机会分流
-            </Link>
           </div>
         </div>
       </div>
