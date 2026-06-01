@@ -1,0 +1,71 @@
+{
+  "schema": "https://schemas.price-v3.internal/api-contract",
+  "version": "1.0.0",
+  "description": "F008 OCR 招标文件解析 - API 合约",
+  "req_id": "F008",
+
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/tenders/{id}/parse",
+      "contentType": "multipart/form-data",
+      "description": "上传招标文件并触发 OCR 解析"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tenders/{id}/parse/{parseId}",
+      "contentType": "application/json",
+      "description": "获取解析结果"
+    }
+  ],
+
+  "request": {
+    "headers": {
+      "Content-Type": "multipart/form-data",
+      "Authorization": "Bearer {jwt_token}"
+    },
+    "body": {
+      "file": "File (PDF/JPG/PNG, max 10MB)"
+    },
+    "params": {
+      "id": "string - tender ID"
+    }
+  },
+
+  "response": {
+    "success": {
+      "status": 200,
+      "body": {
+        "id": "string",
+        "tenderId": "string",
+        "status": "PENDING|PARSING|COMPLETED|FAILED",
+        "extractedData": {
+          "tenderNo": "string?",
+          "deadline": "string?",
+          "amount": "string?",
+          "projectName": "string?",
+          "biddingUnit": "string?"
+        } | null,
+        "createdAt": "string (ISO 8601)"
+      }
+    },
+    "errors": [
+      { "status": 400, "code": "BAD_REQUEST", "description": "请求参数错误或文件格式不支持" },
+      { "status": 401, "code": "UNAUTHORIZED", "description": "未授权" },
+      { "status": 404, "code": "TENDER_NOT_FOUND", "description": "招标项目不存在" },
+      { "status": 413, "code": "FILE_TOO_LARGE", "description": "文件超过 10MB 限制" },
+      { "status": 500, "code": "OCR_SERVICE_ERROR", "description": "OCR 服务异常" }
+    ]
+  },
+
+  "validation": {
+    "schema": "zod",
+    "definition": "// 见 lib/tender/parser.ts 中的 tenderParseSchema"
+  },
+
+  "metadata": {
+    "created_at": "2026-06-01T00:00:00Z",
+    "updated_at": "2026-06-01T00:00:00Z",
+    "author": "AI"
+  }
+}

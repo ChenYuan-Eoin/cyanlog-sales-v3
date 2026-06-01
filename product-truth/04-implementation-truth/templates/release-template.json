@@ -1,0 +1,36 @@
+{
+  "schema": "https://schemas.price-v3.internal/release-evidence",
+  "version": "1.0.0",
+  "description": "发布证据模板 - 记录发布过程和结果",
+
+  "release": {
+    "version": "0.0.0",
+    "environment": "staging|production",
+    "timestamp": "2026-01-01T00:00:00Z",
+    "deployer": ""
+  },
+
+  "checklist": {
+    "pre_release": [
+      { "item": "代码审查通过", "status": "pending", "evidence": "" },
+      { "item": "测试通过", "status": "pending", "evidence": "" },
+      { "item": "REQ_REGISTRY 已更新", "status": "pending", "evidence": "" }
+    ],
+    "post_release": [
+      { "item": "健康检查通过", "status": "pending", "evidence": "" },
+      { "item": "关键功能验证", "status": "pending", "evidence": "" }
+    ]
+  },
+
+  "rollback": {
+    "enabled": true,
+    "rollback_point": "",
+    "rollback_trigger": ""
+  },
+
+  "metadata": {
+    "req_id": "Fxxx",
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:00:00Z"
+  }
+}

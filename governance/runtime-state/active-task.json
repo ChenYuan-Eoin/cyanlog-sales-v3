@@ -1,0 +1,48 @@
+{
+  "version": "1.0.0",
+  "schema": "https://schemas.price-v3.internal/active-task",
+  "description": "Price V3 活跃任务状态文件。新线程入口：读取此文件 + 对应 Feature Packet + git status",
+
+  "project": {
+    "name": "Price V3",
+    "repo_root": "/Users/nsss/Price-v3",
+    "code_root": "product-truth/product-code",
+    "truth_root": "product-truth",
+    "active_packet_dir": "product-truth/feature-packets"
+  },
+
+  "active_task": {
+    "req_id": "F008",
+    "packet_path": "product-truth/feature-packets/F008-ocr-tender.md",
+    "status": "drafting",
+    "branch": "feature/F008-ocr-tender",
+    "owner": "",
+    "started_at": "2026-06-01T00:00:00Z",
+    "last_updated": "2026-06-01T00:00:00Z"
+  },
+
+  "workspace": {
+    "workspace_root": "/Users/nsss/Price-v3",
+    "truth_root": "/Users/nsss/Price-v3/product-truth",
+    "code_root": "/Users/nsss/Price-v3/product-truth/product-code",
+    "active_packet_root": "/Users/nsss/Price-v3/product-truth/feature-packets",
+    "registry_path": "product-truth/REQ_REGISTRY.yml"
+  },
+
+  "providers": {
+    "identity_provider": null,
+    "crm_provider": null,
+    "workitem_provider": null,
+    "notify_provider": null
+  },
+
+  "entry": {
+    "continue_work": "继续工作",
+    "steps": [
+      "1. 读取此文件获取当前活跃任务",
+      "2. 读取对应的 Feature Packet",
+      "3. 执行 git status 查看当前工作区状态",
+      "4. 根据 Packet 中的状态和待办继续推进"
+    ]
+  }
+}
