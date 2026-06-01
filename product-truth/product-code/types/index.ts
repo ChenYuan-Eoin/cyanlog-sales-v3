@@ -48,17 +48,30 @@ export interface Contract {
   created_by: string | null
   created_at: string
   updated_at: string
+  contract_reviews?: ContractReview[]
 }
 
 export interface ContractReview {
   id: string
   contract_id: string
   status: 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
-  results: unknown
+  results: {
+    risks: Risk[]
+    summary: string
+    appliedRules: number
+    matchedRules: number
+  }
   ai_result: unknown
   rule_version: number | null
   created_at: string
   completed_at: string | null
+}
+
+export interface Risk {
+  level: 'red' | 'yellow' | 'green'
+  title: string
+  description: string
+  suggestion: string
 }
 
 export interface ApiResponse<T> {

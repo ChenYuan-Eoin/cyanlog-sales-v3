@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     const validated = ruleSchema.safeParse(body)
 
     if (!validated.success) {
-      return errorResponse('规则数据无效: ' + validated.error.errors.map(e => e.message).join(', '), 400, 'INVALID_DATA')
+      return errorResponse('规则数据无效: ' + validated.error.issues.map((e: { message: string }) => e.message).join(', '), 400, 'INVALID_DATA')
     }
 
     const { data: rule, error } = await supabaseAdmin

@@ -123,7 +123,7 @@ function executeStructuredRule(
     try {
       const regex = new RegExp(pattern, 'i')
       matched = regex.test(contractText)
-    } catch (e) {
+    } catch {
       console.error(`Invalid regex pattern in rule ${rule.id}:`, pattern)
       return { ...baseResult, matched: false }
     }
