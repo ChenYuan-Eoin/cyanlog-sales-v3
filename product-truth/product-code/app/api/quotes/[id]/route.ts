@@ -21,6 +21,7 @@ const updateQuoteSchema = z.object({
   discount_amount: z.number().nonnegative().optional(),
   total_amount: z.number().nonnegative().optional(),
   valid_until: z.string().optional(),
+  status: z.enum(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED']).optional(),
 })
 
 // GET /api/quotes/:id - 获取报价详情（需登录）

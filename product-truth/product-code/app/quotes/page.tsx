@@ -78,7 +78,11 @@ export default function QuotesPage() {
                 <tbody>
                   {quotes.map((quote) => (
                     <tr key={quote.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4 font-mono text-sm">{quote.quote_no}</td>
+                      <td className="py-3 px-4 font-mono text-sm">
+                        <Link href={`/quotes/${quote.id}`} className="text-blue-600 hover:underline">
+                          {quote.quote_no}
+                        </Link>
+                      </td>
                       <td className="py-3 px-4">{quote.customer_name}</td>
                       <td className="py-3 px-4">¥{(quote.total_amount || 0).toLocaleString()}</td>
                       <td className="py-3 px-4">

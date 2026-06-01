@@ -34,7 +34,10 @@ requirements:
     code_locations:
       - app/api/quotes/route.ts
       - app/api/quotes/[id]/route.ts
-    description: 报价单创建、编辑、明细管理
+      - app/quotes/page.tsx
+      - app/quotes/new/page.tsx
+      - app/quotes/[id]/page.tsx
+    description: 报价单创建、编辑、明细管理、状态流转
 
   F003:
     name: Account（认证与权限）
