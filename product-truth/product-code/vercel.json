@@ -1,11 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd product-truth/product-code && pnpm build",
-  "outputDirectory": "product-truth/product-code/.next",
-  "framework": "nextjs",
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
-    "ANTHROPIC_API_KEY": "@anthropic-api-key"
-  }
+  "buildCommand": "pnpm build",
+  "outputDirectory": ".next",
+  "framework": "nextjs"
 }
