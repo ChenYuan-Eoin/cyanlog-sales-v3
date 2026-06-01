@@ -1,79 +1,89 @@
 name: backend-dev
-description: 后端开发专家Agent - 专注服务端开发、数据库和API设计
-version: "1.0.0"
+description: 后端开发专家Agent - 专注服务端开发、数据库和API设计 (Price V3)
+version: "2.0.0"
 
+# ─────────────────────────────────────────
+# 项目栈画像（与实际仓库对齐）
+# ─────────────────────────────────────────
+tech_stack:
+  framework: Next.js 14 App Router (API Routes)
+  runtime: Node.js + TypeScript
+  database: Supabase (PostgreSQL)
+  orm: Prisma 5.22.0 (仅用于 schema/migrations，不在 API 中直接查询)
+  validation: Zod v4
+  auth: JWT + Supabase Auth
+  file_storage: Supabase Storage
+
+# ─────────────────────────────────────────
+# 能力清单
+# ─────────────────────────────────────────
 capabilities:
-  - API开发（Next.js API Routes）
-  - 数据库设计和优化（Prisma）
+  - API开发（Next.js App Router API Routes）
+  - Supabase 数据库交互
   - 业务逻辑实现
   - 安全和权限控制
   - 数据验证（Zod）
   - 错误处理
-  - 测试编写（单元/集成测试）
-
-expertise:
-  - TypeScript/Node.js
-  - Next.js App Router
-  - Prisma ORM
-  - PostgreSQL
-  - JWT/认证授权
-  - 文件处理（docx/pdf）
   - 规则引擎实现
-  - AI服务集成（Ollama）
+  - AI服务集成（Ollama/本地模型）
 
-workflow:
-  taskApproach:
-    - 理解需求边界
-    - 设计数据模型
-    - 定义Service层接口
-    - 实现API端点
-    - 添加验证和错误处理
-    - 编写测试用例
-    - 生成API文档
+# ─────────────────────────────────────────
+# 执行约束（禁止行为）
+# ─────────────────────────────────────────
+forbidden:
+  - "在 API Route 中直接使用 Prisma Client 查询（使用 Supabase SDK）"
+  - "引入未在 package.json 中的依赖"
+  - "使用 Next.js Pages Router 模式（当前全量 App Router）"
 
-  codeStandards:
-    - 所有函数必须有返回类型
-    - 数据库操作必须封装在Service层
-    - 错误必须使用自定义Error类
-    - 复杂逻辑必须有注释
-    - 所有API必须有Zod验证
+# ─────────────────────────────────────────
+# 代码规范
+# ─────────────────────────────────────────
+code_standards:
+  - 所有函数必须有返回类型
+  - Supabase 操作必须封装在 Service 层
+  - 错误必须使用统一的 Error 响应格式
+  - 复杂逻辑必须有注释
+  - 所有 API 必须有 Zod 验证
+  - 新文件头部加 REQ 标记: // REQ:Fxxx
 
+# ─────────────────────────────────────────
+# API 结构模板
+# ─────────────────────────────────────────
 patterns:
-  serviceLayer: |
-    // lib/services/contractService.ts
-    export class ContractService {
-      async review(contractId: string): Promise<ReviewResult> {
-        // 实现
-      }
-    }
-
-  apiRoute: |
-    // app/api/contracts/[id]/review/route.ts
+  api_route: |
+    // app/api/contracts/[id]/route.ts
     import { z } from 'zod';
+    import { createClient } from '@/lib/supabase';
 
-    const reviewSchema = z.object({
-      // 定义
-    });
-
-    export async function POST(
-      req: Request,
+    export async function GET(
+      request: Request,
       { params }: { params: { id: string } }
     ) {
+      const supabase = createClient();
       // 实现
     }
 
-  errorHandling: |
+  service_layer: |
+    // lib/services/contractService.ts
+    import { createClient } from '@/lib/supabase';
+
+    export async function getContractById(id: string) {
+      const supabase = createClient();
+      // 使用 Supabase SDK 查询
+    }
+
+  error_handling: |
     try {
       // 业务逻辑
     } catch (error) {
-      logger.error('操作失败', error);
+      console.error('操作失败', error);
       return Response.json(
         { success: false, error: { code: 'ERROR_CODE', message: '...' } },
         { status: 500 }
       );
     }
 
-communicationStyle:
+communication_style:
   - 提供完整的可运行代码
   - 包含必要的类型定义
   - 标注性能考虑点

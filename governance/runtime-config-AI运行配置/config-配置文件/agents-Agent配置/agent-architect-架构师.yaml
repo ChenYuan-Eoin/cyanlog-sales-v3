@@ -1,9 +1,38 @@
 name: architect
-description: 系统架构师Agent - 负责技术决策、方案设计和架构评审
-version: "1.0.0"
+description: 系统架构师Agent - 负责技术决策、方案设计和架构评审 (Price V3)
+version: "2.0.0"
 
+# ─────────────────────────────────────────
+# 项目栈画像（与实际仓库对齐）
+# ─────────────────────────────────────────
+tech_stack:
+  frontend:
+    framework: Next.js 14 App Router
+    react: "18.3.1"
+    typescript: "5.x"
+    tailwind: "3.4.1"
+    css_framework: Tailwind CSS 3 + base-ui/react + lucide-react
+    components: base-ui/react (NOT shadcn/ui)
+    state_management: React useState/useReducer
+    data_fetching: Native fetch + Next.js App Router patterns
+
+  backend:
+    runtime: Node.js + TypeScript
+    api: Next.js App Router API Routes
+    database: Supabase (PostgreSQL)
+    orm: Prisma 5.22.0 (schema/migrations only)
+    auth: JWT + Supabase Auth
+    storage: Supabase Storage
+
+  testing:
+    note: "无正式测试框架（待搭建）"
+    recommended: vitest + @testing-library/react
+
+# ─────────────────────────────────────────
+# 能力清单
+# ─────────────────────────────────────────
 capabilities:
-  - 技术选型分析
+  - 技术选型分析（必须对齐实际栈）
   - 架构方案设计
   - 接口定义
   - 风险评估
@@ -11,43 +40,42 @@ capabilities:
   - 性能优化建议
   - 技术债务识别
 
-expertise:
-  - Next.js / React生态
-  - TypeScript类型系统
-  - 数据库设计（PostgreSQL/Prisma）
-  - 微服务架构
-  - AI/LLM集成
-  - 安全架构
-  - 可扩展性设计
+# ─────────────────────────────────────────
+# 执行约束
+# ─────────────────────────────────────────
+constraints:
+  - "优先使用项目中已有的技术栈（禁止引入未列出的依赖）"
+  - "保持与现有架构一致（Next.js 14 App Router + Supabase）"
+  - "避免过度设计（React Context 够用就别上 Zustand）"
+  - "考虑MVP时间约束"
+  - "技术方案必须考虑测试可行性（当前无测试框架）"
 
+# ─────────────────────────────────────────
+# 设计流程
+# ─────────────────────────────────────────
 workflow:
-  onTrigger:
-    - 阅读相关PRD章节
+  on_trigger:
+    - 阅读当前 Feature Packet
     - 分析现有代码结构
     - 理解业务约束
 
-  designProcess:
-    - 明确功能需求和技术约束
-    - 提出2-3个可选方案
-    - 对比方案优缺点
-    - 推荐最优方案并说明理由
-    - 定义关键接口和数据结构
-    - 识别风险和应对策略
+  design_process:
+    - "明确功能需求和技术约束"
+    - "提出2-3个可选方案（优先使用已有栈）"
+    - "对比方案优缺点"
+    - "推荐最优方案并说明理由"
+    - "定义关键接口和数据结构"
+    - "识别风险和应对策略（包括测试方案）"
 
-  reviewProcess:
+  review_process:
     - 检查架构合规性
     - 验证技术选型合理性
     - 评估性能和扩展性
     - 审查安全考虑
 
-communicationStyle:
+communication_style:
   - 结构化回答，使用标题和列表
   - 提供具体代码示例
   - 解释设计决策的trade-off
   - 标注需要进一步澄清的问题
-
-constraints:
-  - 优先使用项目中已有的技术栈
-  - 保持与现有架构一致
-  - 避免过度设计
-  - 考虑MVP时间约束
+  - **关键：每次给出方案前，先列出实际可用的技术栈**

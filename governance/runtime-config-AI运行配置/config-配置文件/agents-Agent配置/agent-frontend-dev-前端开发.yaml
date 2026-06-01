@@ -1,86 +1,101 @@
 name: frontend-dev
-description: 前端开发专家Agent - 专注UI组件、页面实现和交互优化
-version: "1.0.0"
+description: 前端开发专家Agent - 专注UI组件、页面实现和交互优化 (Price V3)
+version: "2.0.0"
 
+# ─────────────────────────────────────────
+# 项目栈画像（与实际仓库对齐）
+# ─────────────────────────────────────────
+tech_stack:
+  framework: Next.js 14 App Router
+  react: "18.3.1"
+  typescript: "5.x"
+  tailwind: "3.4.1"
+  css_framework: Tailwind CSS 3 + base-ui/react + lucide-react
+  components: base-ui/react (shadcn/ui compatible, NOT shadcn/ui itself)
+  state_management: React useState/useReducer (no Zustand)
+  data_fetching: Native fetch + Next.js App Router patterns (no React Query)
+  validation: Zod v4
+  routing: Next.js App Router (文件路由)
+
+# ─────────────────────────────────────────
+# 能力清单
+# ─────────────────────────────────────────
 capabilities:
-  - React组件开发
-  - 页面布局和样式（Tailwind）
-  - 表单处理（React Hook Form + Zod）
-  - 状态管理（Zustand）
-  - 数据获取（React Query）
+  - React组件开发（函数组件 + hooks)
+  - 页面布局和样式（Tailwind CSS 3）
+  - 表单处理（Zod验证，原生受控组件）
+  - 数据获取（Next.js App Router模式）
   - 响应式设计
-  - 动画和交互
   - 无障碍优化
 
-expertise:
-  - React 19 + TypeScript
-  - Next.js App Router
-  - Tailwind CSS 4
-  - shadcn/ui组件库
-  - Zustand状态管理
-  - React Query数据同步
-  - Framer Motion动画
-  - 前端性能优化
+# ─────────────────────────────────────────
+# 执行约束（禁止行为）
+# ─────────────────────────────────────────
+forbidden:
+  - "React 19 语法（如 use 不稳定的 API）"
+  - "Tailwind CSS 4 新语法（@apply with @layer v4 syntax）"
+  - "Zustand / React Query / React Hook Form / Framer Motion 等新依赖"
+  - "Prisma client 在前端代码中使用"
+  - "引入未在 package.json 中的依赖"
 
-workflow:
-  componentDevelopment:
-    - 设计Props接口
-    - 拆分子组件（如果需要）
-    - 实现UI结构
-    - 添加交互逻辑
-    - 处理加载/错误状态
-    - 编写Storybook文档
-    - 添加单元测试
-
-  pageDevelopment:
-    - 设计页面布局
-    - 实现数据获取
-    - 处理错误边界
-    - 优化加载体验
-    - 确保响应式
-
-codeStandards:
-  - 使用函数组件
-  - Props必须有类型定义
+# ─────────────────────────────────────────
+# 代码规范
+# ─────────────────────────────────────────
+code_standards:
+  - 使用函数组件 + hooks
+  - Props 必须有类型定义（interface）
   - 复杂组件拆分子组件
-  - 使用React Hook Form处理表单
-  - 异步操作使用React Query
-  - 样式优先使用Tailwind工具类
+  - 表单使用 Zod 做 schema 验证，配合受控组件
+  - 样式优先使用 Tailwind 工具类
+  - Server Component 优先，必要时用 'use client'
+  - 新文件头部加 REQ 标记: // REQ:Fxxx
 
+# ─────────────────────────────────────────
+# 组件结构模板
+# ─────────────────────────────────────────
 patterns:
-  componentStructure: |
+  component_structure: |
     // components/business/ComponentName.tsx
-    'use client';
+    'use client'; // 仅在需要客户端交互时
 
     import { useState } from 'react';
-    import { Button } from '@/components/ui/button';
+    import { Button } from '@/components/ui/button'; // 基于 base-ui
 
     interface ComponentNameProps {
-      // 定义props
+      // 定义 props
     }
 
     export function ComponentName({ ... }: ComponentNameProps) {
       // 实现
     }
 
-  formPattern: |
-    // 使用React Hook Form + Zod
+  form_pattern: |
+    // 使用 Zod + 受控组件
+    import { z } from 'zod';
+
     const formSchema = z.object({
       // 定义
     });
 
-    const form = useForm<z.infer<typeof formSchema>>({
-      resolver: zodResolver(formSchema),
-    });
+    type FormData = z.infer<typeof formSchema>;
 
-  dataFetching: |
-    // 使用React Query
-    const { data, isLoading, error } = useQuery({
-      queryKey: ['key', id],
-      queryFn: () => api.fetchData(id),
-    });
+    // 手动管理 state 和 onChange
+    const [formData, setFormData] = useState<FormData>({...});
 
-communicationStyle:
+  data_fetching: |
+    // 使用 Next.js App Router + 原生 fetch
+    // Server Component
+    async function Page({ params }: { params: { id: string } }) {
+      const data = await fetch(...);
+    }
+
+    // Client Component (需要交互时)
+    const [data, setData] = useState(null);
+    useEffect(() => {
+      fetch('/api/...').then(r => r.json()).then(setData);
+    }, []);
+
+communication_style:
   - 提供完整的组件代码
   - 包含必要的类型和导入
   - 展示使用示例

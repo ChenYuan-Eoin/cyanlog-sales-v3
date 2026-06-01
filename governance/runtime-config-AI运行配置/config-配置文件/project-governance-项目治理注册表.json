@@ -78,7 +78,7 @@
     },
     {
       "id": "product-src",
-      "path": ".",
+      "path": "product-truth/product-code",
       "kind": "directory",
       "required": false,
       "maintained": true,
