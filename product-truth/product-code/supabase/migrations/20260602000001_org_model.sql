@@ -4,6 +4,29 @@
 -- 支持：导入组织架构后所有人员自动到位
 -- =====================================================
 
+-- 清理：001/002 留下的旧表结构，重新创建
+DROP TABLE IF EXISTS user_roles CASCADE;
+DROP TABLE IF EXISTS user_departments CASCADE;
+DROP TABLE IF EXISTS departments CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS roles CASCADE;
+DROP TABLE IF EXISTS auth_tokens CASCADE;
+DROP TABLE IF EXISTS opportunities CASCADE;
+DROP TABLE IF EXISTS milestones CASCADE;
+DROP TABLE IF EXISTS reminders CASCADE;
+DROP TABLE IF EXISTS agenda_items CASCADE;
+DROP TABLE IF EXISTS customers CASCADE;
+DROP TABLE IF EXISTS sales_space_members CASCADE;
+DROP TABLE IF EXISTS sales_spaces CASCADE;
+DROP TABLE IF EXISTS rules CASCADE;
+DROP TABLE IF EXISTS contract_reviews CASCADE;
+DROP TABLE IF EXISTS contracts CASCADE;
+DROP TABLE IF EXISTS quote_items CASCADE;
+DROP TABLE IF EXISTS quotes CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS product_categories CASCADE;
+DROP TABLE IF EXISTS organizations CASCADE;
+
 -- 1. 组织（顶级租户）
 CREATE TABLE IF NOT EXISTS organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -343,3 +366,16 @@ DROP TRIGGER IF EXISTS trg_user_dept_count ON user_departments;
 CREATE TRIGGER trg_user_dept_count
   AFTER INSERT OR DELETE ON user_departments
   FOR EACH ROW EXECUTE FUNCTION update_dept_member_count();
+
+-- =====================================================
+-- Auth tokens（用于自定义登录态，001 重建保证字段完整）
+-- =====================================================
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token TEXT UNIQUE NOT NULL,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
