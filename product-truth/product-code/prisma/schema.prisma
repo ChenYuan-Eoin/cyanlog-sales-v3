@@ -7,8 +7,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -27,11 +27,11 @@ model User {
   updated_at    DateTime @updatedAt
 
   // Relations
-  quotes               Quote[]
-  contracts            Contract[]
-  tokens               AuthToken[]
-  requested_approvals  ApprovalRequest[] @relation("ApprovalRequester")
-  assigned_approvals   ApprovalRequest[] @relation("ApprovalApprover")
+  quotes              Quote[]
+  contracts           Contract[]
+  tokens              AuthToken[]
+  requested_approvals ApprovalRequest[] @relation("ApprovalRequester")
+  assigned_approvals  ApprovalRequest[] @relation("ApprovalApprover")
 
   @@index([email])
   @@index([phone])
@@ -58,21 +58,21 @@ model AuthToken {
 // ═══════════════════════════════════════════════════════════════
 
 model Quote {
-  id               String     @id @default(uuid())
-  quote_no         String     @unique
-  version          Int        @default(1)
+  id               String    @id @default(uuid())
+  quote_no         String    @unique
+  version          Int       @default(1)
   parent_id        String?
   customer_name    String
   customer_contact String?
-  subtotal         Decimal    @default(0) @db.Decimal(15, 2)
-  discount_amount  Decimal    @default(0) @db.Decimal(15, 2)
-  tax_amount       Decimal    @default(0) @db.Decimal(15, 2)
-  total_amount     Decimal    @default(0) @db.Decimal(15, 2)
+  subtotal         Decimal   @default(0) @db.Decimal(15, 2)
+  discount_amount  Decimal   @default(0) @db.Decimal(15, 2)
+  tax_amount       Decimal   @default(0) @db.Decimal(15, 2)
+  total_amount     Decimal   @default(0) @db.Decimal(15, 2)
   valid_until      DateTime?
-  status           String     @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, SENT, CONFIRMED, REJECTED
+  status           String    @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, SENT, CONFIRMED, REJECTED
   created_by       String
-  created_at       DateTime   @default(now())
-  updated_at       DateTime   @updatedAt
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
 
   // Relations
   creator User        @relation(fields: [created_by], references: [id])
@@ -86,18 +86,18 @@ model Quote {
 }
 
 model QuoteItem {
-  id          String  @id @default(uuid())
-  quote_id    String
+  id           String  @id @default(uuid())
+  quote_id     String
   product_name String
-  description String?
-  quantity    Decimal @db.Decimal(10, 2)
-  unit_price  Decimal @db.Decimal(15, 2)
-  discount    Decimal @default(0) @db.Decimal(5, 2)
-  subtotal    Decimal @db.Decimal(15, 2)
-  tax_rate    Decimal @default(0) @db.Decimal(5, 2)
-  tax_amount  Decimal @default(0) @db.Decimal(15, 2)
-  total       Decimal @db.Decimal(15, 2)
-  sort_order  Int     @default(0)
+  description  String?
+  quantity     Decimal @db.Decimal(10, 2)
+  unit_price   Decimal @db.Decimal(15, 2)
+  discount     Decimal @default(0) @db.Decimal(5, 2)
+  subtotal     Decimal @db.Decimal(15, 2)
+  tax_rate     Decimal @default(0) @db.Decimal(5, 2)
+  tax_amount   Decimal @default(0) @db.Decimal(15, 2)
+  total        Decimal @db.Decimal(15, 2)
+  sort_order   Int     @default(0)
 
   // Relations
   quote Quote @relation(fields: [quote_id], references: [id], onDelete: Cascade)
@@ -152,19 +152,19 @@ model ContractReview {
 // ═══════════════════════════════════════════════════════════════
 
 model ApprovalRequest {
-  id          String   @id @default(uuid())
-  object_type String // quote, contract
-  object_id   String
+  id           String   @id @default(uuid())
+  object_type  String // quote, contract
+  object_id    String
   requester_id String
   approver_id  String?
-  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED, TRANSFERRED, TIMEOUT
-  comment     String?
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED, TRANSFERRED, TIMEOUT
+  comment      String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
 
   // Relations
-  requester User  @relation("ApprovalRequester", fields: [requester_id], references: [id])
-  approver  User? @relation("ApprovalApprover", fields: [approver_id], references: [id])
+  requester User           @relation("ApprovalRequester", fields: [requester_id], references: [id])
+  approver  User?          @relation("ApprovalApprover", fields: [approver_id], references: [id])
   steps     ApprovalStep[]
 
   @@index([object_id])
@@ -173,14 +173,14 @@ model ApprovalRequest {
 }
 
 model ApprovalStep {
-  id                String    @id @default(uuid())
-  approval_id       String
-  approver_id       String
-  action            String // approve, reject, transfer
-  comment           String?
-  previous_status   String
-  new_status        String
-  created_at        DateTime  @default(now())
+  id              String   @id @default(uuid())
+  approval_id     String
+  approver_id     String
+  action          String // approve, reject, transfer
+  comment         String?
+  previous_status String
+  new_status      String
+  created_at      DateTime @default(now())
 
   // Relations
   approval ApprovalRequest @relation(fields: [approval_id], references: [id], onDelete: Cascade)
@@ -194,18 +194,18 @@ model ApprovalStep {
 // ═══════════════════════════════════════════════════════════════
 
 model RuleConfig {
-  id          String   @id @default(uuid())
-  code        String   @unique // R1.1, R1.2, etc
-  name        String
-  category    String // payment, liability, ip, etc
-  rule_type   String // structured, semantic
-  content     Json // YAML content as JSON
-  severity    String // red, yellow, green
-  is_active   Boolean  @default(true)
-  version     Int      @default(1)
-  created_by  String
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  id         String   @id @default(uuid())
+  code       String   @unique // R1.1, R1.2, etc
+  name       String
+  category   String // payment, liability, ip, etc
+  rule_type  String // structured, semantic
+  content    Json // YAML content as JSON
+  severity   String // red, yellow, green
+  is_active  Boolean  @default(true)
+  version    Int      @default(1)
+  created_by String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([code])
   @@index([category])
@@ -218,14 +218,14 @@ model RuleConfig {
 // ═══════════════════════════════════════════════════════════════
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  actor_id   String?
-  action     String // create, update, delete, login
+  id          String   @id @default(uuid())
+  actor_id    String?
+  action      String // create, update, delete, login
   target_type String // quote, contract, user
-  target_id  String?
-  diff       Json? // changed fields
-  metadata   Json? // request_id, ip, user_agent
-  created_at DateTime @default(now())
+  target_id   String?
+  diff        Json? // changed fields
+  metadata    Json? // request_id, ip, user_agent
+  created_at  DateTime @default(now())
 
   @@index([actor_id])
   @@index([target_type, target_id])
