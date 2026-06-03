@@ -55,8 +55,10 @@ export async function GET() {
     checkSubsystem('schema_required_tables', async () => {
       // 验证关键表存在（FMEA 关键节点）
       for (const table of REQUIRED_TABLES) {
-        const { error } = await supabaseAdmin.from(table).select('id').limit(1).single()
-        if (error && error.code !== 'PGRST116') {
+        const { error } = await supabaseAdmin
+          .from(table)
+          .select('*', { count: 'exact', head: true })
+        if (error) {
           throw new Error(`${table}: ${error.message}`)
         }
       }
