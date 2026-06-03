@@ -323,7 +323,12 @@ function ReviewResultsTab({
   handleExport,
 }: {
   contract: Contract
-  latestReview: any
+  latestReview: {
+    results: {
+      summary: string
+      risks: Risk[]
+    }
+  } | null | undefined
   exporting: boolean
   handleExport: () => void
 }) {

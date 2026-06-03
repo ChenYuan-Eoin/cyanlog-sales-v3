@@ -4361,6 +4361,263 @@ async function executeSemanticRule(
 
 ---
 
+### 5.7 两段式 ASK 清单（2026-06-03 升级 · P0）
+
+> **详细设计**: `product-truth/feature-packets/F005-contract-ASK-upgrade.md`（开干前必读）
+> **业务文档**: `product-truth/01-business-truth/合同审核.md` 第 8 章
+
+#### 5.7.1 升级动机
+
+**问题**: 当前合同审核（5.0~5.6）输出是"纯 AI 推断报告",法务用印时常需追问"客户原因 / 谈判空间 / 财务意见",这些业务事实由销售线下补充,流程不在系统内。
+
+**方案**: 在 OCR+规则+AI 与报告生成之间,增加"ASK 清单"环节,驱动业务事实回到系统,再生成含金量更高的批注。
+
+**业务价值**:
+- 报告含金量 ↑ (从 70% AI 推断 → 70% AI + 30% 业务事实)
+- 法务用印效率 ↑ (不用再线下追问)
+- 销售应答结构化 (按 ASK-001 必问清单)
+- 闭环可追溯 (审计日志全留)
+
+#### 5.7.2 改造前后流程
+
+```
+# 改造前 (5.0~5.6 现状)
+合同上传 → OCR (5.4) → 规则 (5.3) + AI (5.5/5.6) → 报告 (5.2)
+
+# 改造后 (本节)
+合同上传 → OCR (5.4) → 规则 (5.3) + AI (5.5/5.6)
+                              ↓
+                      ★ ASK 清单生成
+                              ↓
+                      业务回应录入 (销售/财务)
+                              ↓
+                      ★ AI 二次判断
+                              ↓
+                      报告 (5.2, 含业务事实)
+```
+
+#### 5.7.3 数据模型
+
+**4 张新表** (迁移脚本见 feature-packet 第 3 节):
+
+| 表 | 行数估算 (单合同) | 关键字段 |
+|----|-------------------|----------|
+| `ask_items` | 5-15 | `ask_code` `clause_ref` `risk_name` `status` |
+| `ask_responses` | 0-30 | `ask_id` `responder_role` `response_text` |
+| `ask_audit_logs` | 10-50 | `event_type` `from_status` `to_status` |
+| `ask_role_assignments` | 5-20 | `ask_id` `role` `assignee_id` |
+
+**与现有表关系**:
+- `contracts` (F005) → 1:N → `ask_items`
+- `ask_items` → 1:N → `ask_responses` / `ask_audit_logs` / `ask_role_assignments`
+- 不动 F006 `rules` / F007 `export` 表结构,只增加消费侧适配
+
+#### 5.7.4 状态机
+
+```
+PENDING ─录入部分→ PARTIAL
+   │                  │
+   │                  ↓
+   │             RESPONDED ─AI 充分→ VERIFIED ─进报告→ CONSUMED
+   │                  │
+   │                  └AI 不足──→ INSUFFICIENT (回 PENDING)
+   │
+   └法务判定不需要──→ CLOSED (不进报告)
+```
+
+**关键不变量**:
+- CLOSED 永远不进报告
+- CONSUMED 不可再改 (留痕)
+- INSUFFICIENT 不阻断报告 (软提醒,标"X 项不足")
+
+#### 5.7.5 API 增点 (7 个端点)
+
+```
+POST   /api/contracts/:id/asks/generate    # AI 自动生成
+GET    /api/contracts/:id/asks             # 列表 + 状态汇总
+GET    /api/asks/:id                       # 详情含回应
+PATCH  /api/asks/:id                       # 法务编辑
+POST   /api/asks/:id/responses             # 业务录入
+POST   /api/asks/:id/ai-verdict            # AI 二次判断
+POST   /api/asks/:id/transition            # 状态流转
+```
+
+**消费方**:
+| 端点 | 调用方 |
+|------|--------|
+| `asks/generate` | `app/contracts/[id]/page.tsx` 审核完成后自动调 |
+| `asks (GET)` | `app/contracts/[id]/asks/page.tsx` |
+| `responses (POST)` | ASK 详情页"录入回应"表单 |
+| `ai-verdict` | 录入回应后 5s 自动触发 + 法务"重新评估"按钮 |
+| `transition` | 法务"关闭"按钮 / 销售"升级"按钮 |
+
+#### 5.7.6 F007 适配
+
+F007 (`lib/export/word-generator.py` + `lib/export/word-generator.ts`) 签名变化:
+
+```typescript
+// 旧
+generateAnnotatedContract(contract, reviewResult)
+
+// 新 (双路径兜底,旧路径保留)
+generateAnnotatedContract(contract, reviewResult, askContext?: AskContext)
+```
+
+**批注内容差异**:
+
+| 段落 | 旧 | 新 |
+|------|----|----|
+| 风险描述 | AI 推断 | AI 推断 |
+| 业务事实 | 无 | "客户因...要求...,销售 2026-06-03" |
+| AI 二次判断 | 无 | "充分 (置信 0.85)" |
+| 关联 ASK | 无 | "[关联 ASK-001]" |
+| 报告抬头 | 无 | 若有 INSUFFICIENT,标"⚠️ X 项回应不足" |
+
+#### 5.7.7 任务拆解 (2 周 Sprint)
+
+```
+W1 前端
+  D1-2: migration 4 表 + types
+  D3-4: 7 API 端点 + LLM prompts
+  D5:   UI 骨架 + 表单
+
+W2 联调
+  D6-7: e2e 联调
+  D8:   F007 适配
+  D9:   10 个测试用例 (TC-A01~A10)
+  D10:  验收 + 文档同步
+```
+
+**并行点**:
+- migration 与 F007 适配可并行
+- 7 个 API 端点 2 人并行
+- 前端 / 后端 / LLM prompt 三人并行
+
+#### 5.7.8 风险与缓解
+
+| 风险 | 缓解 | 回滚 |
+|------|------|------|
+| LLM 生成 ASK 不准 | 提示词迭代 + 法务编辑入口 | 关闭入口,退回 5.0~5.6 流程 |
+| 状态机复杂 | 状态集中在 `lib/ask/types.ts`,UI 只读 | 简化为 4 状态 |
+| 4 张新表迁移失败 | 独立 migration,顺序执行 | DROP 新表 |
+| F007 适配漏字段 | 旧路径保留,新路径 askContext 兜底 | revert F007 |
+
+#### 5.7.9 验收标准
+
+- [ ] `pnpm tsc --noEmit` / `lint` / `test` / `build` 通过
+- [ ] TC-A01~A10 全部通过 (10 个 e2e 用例)
+- [ ] 浏览器实跑:上传 → 审核 → 生成 ASK → 销售回应 → 法务关一条 → 生成报告 (含业务事实)
+- [ ] 苏格拉底终评通过 (skill-socrates)
+- [ ] 销售/法务/财务三方评审通过
+
+#### 5.7.10 开放问题 (评审待决)
+
+1. 已存在合同 (已生成报告) 是否补生成 ASK? **本轮: 否**
+2. 法务编辑 ASK 是否需二次确认? **建议: 是**
+3. 同一 ASK 多角色,响应是否串行等待? **建议: 并行,任一即 partial**
+4. "业务事实"是否需销售二次确认才进报告? **建议: 是,财务类强制**
+
+---
+
+### 5.8 v2 变更摘要（2026-06-03 追加 · 5 项设计决策落地）
+
+> 本节为 v2 增量说明，**v1 的 5.7.1~5.7.10 内容已被本节覆盖**。
+> 完整 v2 设计见 `product-truth/feature-packets/F005-contract-ASK-upgrade.md` v2。
+
+#### 5.8.1 5 项设计决策
+
+| # | 决策 | 用户原话 | v1 → v2 |
+|---|------|----------|---------|
+| 1 | 一次回答 | "预审回答一次就好了，不用反复回答" | 5 状态 → 3 状态 |
+| 2 | 必填 | "必须得回答，生成必填项" | 软提醒 → 硬关单（422） |
+| 3 | 上传人触发+澄清人入报 | "谁上传谁触发 ask，别人可以回答，ask 问题集会出现在报告里面，附带澄清人名字" | 报告引用 → 报告**显式含** ASK+澄清人 |
+| 4 | 0 风险说明 | "无问题，就不触发，提示 0 风险?标准合同?没触发 ask 的说明" | 静默 → 显式 no_ask_reason |
+| 5 | 版本管理 | "做版本管理，围绕问题项不停更新报告" | 单次 → **rolling**（report_versions） |
+
+#### 5.8.2 状态机 v2（3 状态）
+
+```
+PENDING (待回应，必填)
+   ├─ 录入回应 → RESPONDED (触发报告 v_n+1 升版)
+   └─ 法务关闭 → CLOSED (不进报告)
+
+RESPONDED → 不可编辑
+   └─ 法务重开 → PENDING (允许重新回应)
+```
+
+**移除**: PARTIAL / INSUFFICIENT / VERIFIED（不再追问）/ ai-verdict 端点。
+
+#### 5.8.3 数据模型 v2（5 张表）
+
+**新增 1 张**:
+- `report_versions`(合同 1:N, version 自增, is_current 标最新, rolling 机制)
+
+**改动 2 张**:
+- `ask_items`: 新增 `trigger_user_id`(上传人) / `response_id`(1:1 关联) / `closed_by` / `closed_reason`
+- `ask_responses`: 新增 `responder_name`(冗余入报) + UNIQUE(ask_id) 强制 1:1
+
+**总表数**: 4 → 5
+
+#### 5.8.4 API v2 增点
+
+| 端点 | 状态 |
+|------|------|
+| POST /api/asks/:id/ai-verdict | **移除** |
+| GET /api/contracts/:id/reports/current | **新增** |
+| GET /api/contracts/:id/reports/versions | **新增** |
+| POST /api/contracts/:id/export | **升级**(硬关单) |
+
+**净变化**: 7 → 8 端点(-1 +2 +1 升级)
+
+#### 5.8.5 报告抬头 v2
+
+```
+Cyanlog 合同预审报告 v3                              生成时间: 2026-06-03
+合同编号: CT-2026-001                               客户: XX 科技
+触发人: 张三 (销售) @ 2026-06-03 14:30
+本轮 ASK 状态: 5 项已回应 / 0 项待回应 / 1 项关闭
+
+# 0 风险时:
+本轮未识别需业务回应的风险项
+原因: standard_contract (命中标准合同模板 v2.1)
+```
+
+#### 5.8.6 5 条硬约束
+
+1. **预审必填**: 报告生成前所有 ASK 必须 RESPONDED 或 CLOSED，否则 422
+2. **一次回答**: 没有追问机制，响应即定稿（想改走 reopen）
+3. **谁上传谁触发**: 触发人在 audit_log + 报告抬头留痕
+4. **澄清人入报**: 报告中每条 ASK 显示"responder_name (role) @ timestamp"
+5. **rolling 版本**: 任何 ASK 状态变化 → 报告升版，版本链可追溯
+
+#### 5.8.7 验收用例 v2（TC-B01~B12）
+
+| TC | 场景 | 预期 |
+|----|------|------|
+| TC-B01 | 上传后 AI 生成 5 项 ASK | ask_items 5 条，状态 pending |
+| TC-B02 | 销售录入 ASK-001 回应 | 状态转 responded，触发 v2 报告生成 |
+| TC-B03 | 报告含 ASK-001 完整段 | 抬头有"5 项回应/0 待回应/0 关闭"，ASK-001 段含澄清人姓名+角色+时间 |
+| TC-B04 | 法务关闭 ASK-002 | 状态转 closed，触发 v3 报告，ASK-002 不在 v3 报告 |
+| TC-B05 | 仍有 pending 时点"生成报告" | 422 PENDING_ASKS_BLOCK，返回所有 pending |
+| TC-B06 | 0 风险合同生成 ASK | generated_count=0，no_ask_reason 填，报告抬头含"未识别需业务回应的风险项" |
+| TC-B07 | 同一 ASK 录 2 次回应 | 第 2 次返回 409 RESPONSE_ALREADY_EXISTS |
+| TC-B08 | 已 responded 想改 | 法务 reopen → pending → 可再录 |
+| TC-B09 | 历史报告查询 | /reports/versions 返回 v1~vn，is_current 标最新 |
+| TC-B10 | 财务/销售都能录回应 | 角色不卡，但角色记入 responder_role + 报告显式 |
+| TC-B11 | 报告 v1→v2→v3 时间线 | audit_log 全留，版本链可追溯 |
+| TC-B12 | 法务重开后，旧响应被覆盖？ | 旧响应保留，新响应追加，新版本报告用最新 |
+
+#### 5.8.8 文档一致性
+
+| 文档 | 同步点 |
+|------|--------|
+| `feature-packets/F005-contract-ASK-upgrade.md` | ✅ 已重写为 v2 |
+| `00-master/PROJECT-主文档.md` 5.7 | ✅ 本节为 v2 增量 |
+| `01-business-truth/合同审核.md` 8.x | ✅ 第 9 节为 v2 摘要 |
+| `REQ_REGISTRY.yml` F005 | ⏳ 需补 report_versions 路径 |
+
+---
+
 ## 第6章：配置中心
 
 **【产品模块章】** 给产品/后端阅读  

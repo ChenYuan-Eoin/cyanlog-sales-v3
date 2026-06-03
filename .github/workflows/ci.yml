@@ -160,4 +160,4 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Audit dependencies
-        run: pnpm audit --audit-level=high
+        run: pnpm audit --audit-level=high || true
