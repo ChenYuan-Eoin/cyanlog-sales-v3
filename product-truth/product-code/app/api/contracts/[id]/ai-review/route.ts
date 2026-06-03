@@ -1,20 +1,12 @@
-// REQ:F005 + AI Streaming
-// PURPOSE: Stream AI contract review results via Chinese AI gateway (yiyongai)
-// Note: 使用中转站（OpenAI 兼容）路由到 Claude 系列模型
+// REQ:F005 + AI Streaming with SpaceX-level fault tolerance
+// PURPOSE: Stream AI contract review with multi-level failover
 
-import { streamText } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { reviewWithFailover } from '@/lib/ai/failover'
 
 export const runtime = 'edge'
-
-// 中转站 OpenAI 兼容客户端
-const gateway = createOpenAI({
-  baseURL: process.env.AI_GATEWAY_URL || 'https://cloud.yiyongai.cn/v1',
-  apiKey: process.env.AI_GATEWAY_API_KEY,
-})
 
 export async function POST(
   req: NextRequest,
@@ -41,36 +33,18 @@ export async function POST(
 
     const contractText = contract.parsed_text || 'No text available for review'
 
-    // Stream AI review via Chinese gateway
-    const result = streamText({
-      model: gateway(process.env.AI_MODEL || 'claude-sonnet-4-6'),
-      messages: [
-        {
-          role: 'system',
-          content: `你是一位专业的法务合同审核专家。请分析合同内容并识别风险。
-请按以下 JSON 格式返回：
-{
-  "risks": [
-    {
-      "level": "red|yellow|green",
-      "title": "风险标题（简短）",
-      "description": "问题详细描述",
-      "suggestion": "建议处理方式"
-    }
-  ],
-  "summary": "总体评估摘要"
-}`,
-        },
-        {
-          role: 'user',
-          content: `请审核以下合同：\n\n${contractText.substring(0, 8000)}`,
-        },
-      ],
-      maxOutputTokens: 4000,
-      temperature: 0.3,
-    })
+    // SpaceX级故障转移：本地 → 云端 → 规则引擎 → 人工标记
+    const { stream, provider, degraded } = await reviewWithFailover(contractText)
 
-    return result.toTextStreamResponse()
+    // 添加响应头标识降级状态
+    const headers = new Headers()
+    headers.set('X-AI-Provider', provider)
+    headers.set('X-AI-Degraded', degraded ? 'true' : 'false')
+
+    return new NextResponse(stream, {
+      headers,
+      status: 200,
+    })
 
   } catch (error) {
     console.error('[AI Review] Error:', error)

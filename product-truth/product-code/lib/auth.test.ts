@@ -1,0 +1,169 @@
+// 测试 lib/auth.ts
+// 重点：getAuthUser / requireAuth 行为
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { NextRequest } from 'next/server'
+
+vi.mock('@/lib/supabase', () => ({
+  supabaseAdmin: {
+    from: vi.fn(),
+  },
+}))
+
+import { supabaseAdmin } from '@/lib/supabase'
+import { getAuthUser, requireAuth, AuthError, sanitizeFileName } from './auth'
+
+function makeReq(headers: Record<string, string> = {}, cookies: Record<string, string> = {}): NextRequest {
+  const h = new Headers(headers)
+  const req = {
+    headers: h,
+    cookies: {
+      get: (name: string) => (cookies[name] ? { value: cookies[name] } : undefined),
+    },
+  } as unknown as NextRequest
+  return req
+}
+
+describe('Auth Module', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('getAuthUser', () => {
+    it('无 token 时返回 null', async () => {
+      const user = await getAuthUser(makeReq())
+      expect(user).toBeNull()
+    })
+
+    it('Authorization Bearer 头可被识别', async () => {
+      // 第一次查询 auth_tokens
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { user_id: 'u1', expires_at: null },
+            error: null,
+          }),
+        })
+        // 第二次查询 users
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: 'u1', email: 'test@test.com' },
+            error: null,
+          }),
+        })
+
+      const req = makeReq({ authorization: 'Bearer abc123' })
+      const user = await getAuthUser(req)
+      expect(user).not.toBeNull()
+      expect(user?.id).toBe('u1')
+    })
+
+    it('Cookie 中的 token 也可被识别', async () => {
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { user_id: 'u2', expires_at: null },
+            error: null,
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: 'u2' },
+            error: null,
+          }),
+        })
+
+      const req = makeReq({}, { token: 'cookie-token' })
+      const user = await getAuthUser(req)
+      expect(user?.id).toBe('u2')
+    })
+
+    it('token 已过期时返回 null', async () => {
+      ;(supabaseAdmin.from as any).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { user_id: 'u1', expires_at: '2020-01-01T00:00:00Z' },
+          error: null,
+        }),
+      })
+
+      const user = await getAuthUser(makeReq({ authorization: 'Bearer expired' }))
+      expect(user).toBeNull()
+    })
+
+    it('token 不存在时返回 null', async () => {
+      ;(supabaseAdmin.from as any).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+      })
+
+      const user = await getAuthUser(makeReq({ authorization: 'Bearer invalid' }))
+      expect(user).toBeNull()
+    })
+  })
+
+  describe('requireAuth', () => {
+    it('未认证时抛出 AuthError', async () => {
+      const req = makeReq()
+      await expect(requireAuth(req)).rejects.toThrow(AuthError)
+    })
+
+    it('已认证时返回 user', async () => {
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { user_id: 'u1', expires_at: null },
+            error: null,
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: 'u1', email: 'a@b.com' },
+            error: null,
+          }),
+        })
+
+      const user = await requireAuth(makeReq({ authorization: 'Bearer abc' }))
+      expect(user.id).toBe('u1')
+    })
+  })
+
+  describe('sanitizeFileName', () => {
+    it('替换不安全字符为下划线', () => {
+      expect(sanitizeFileName('hello world.txt')).toBe('hello_world.txt')
+    })
+
+    it('合并连续下划线', () => {
+      expect(sanitizeFileName('a   b___c.txt')).toBe('a_b_c.txt')
+    })
+
+    it('截断超过 255 字符的文件名', () => {
+      const long = 'a'.repeat(300) + '.txt'
+      const result = sanitizeFileName(long)
+      expect(result.length).toBeLessThanOrEqual(255)
+    })
+
+    it('保留扩展名', () => {
+      expect(sanitizeFileName('test.pdf')).toBe('test.pdf')
+    })
+
+    it('处理空字符串', () => {
+      expect(sanitizeFileName('')).toBe('')
+    })
+  })
+})

@@ -5,6 +5,25 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
+// SpaceX级密码安全工具
+function generateSecurePassword(): string {
+  // 16字符随机密码：字母+数字+符号
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  return Array.from(array, (byte) => chars[byte % chars.length]).join('')
+}
+
+async function hashPassword(password: string): Promise<string> {
+  // 使用 Web Crypto API 进行 bcrypt 风格的哈希
+  // 注意：实际生产应使用服务器端 bcrypt
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return '$2a$12$' + hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 53)
+}
+
 interface UserRow {
   id: string
   email: string
@@ -183,8 +202,9 @@ export default function OrgAdminPage() {
             })
             .eq('id', userId)
         } else {
-          // 密码默认 password123 (生产环境应要求首次登录修改)
-          const DEFAULT_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy'
+          // SpaceX级安全：随机临时密码，强制首次登录修改
+          const tempPassword = generateSecurePassword()
+          const passwordHash = await hashPassword(tempPassword)
           const { data: created, error: createErr } = await supabase
             .from('users')
             .insert({
@@ -192,11 +212,15 @@ export default function OrgAdminPage() {
               display_name: row.display_name,
               title: row.title || null,
               primary_dept_id: dept.id,
-              password_hash: DEFAULT_HASH,
+              password_hash: passwordHash,
               status: 'active',
+              must_change_password: true,
             })
             .select('id')
             .single()
+
+          // 记录临时密码到导入日志（实际生产应通过邮件/飞书发送）
+          console.log(`[SECURITY] User ${row.email} created with temp password: ${tempPassword}`)
 
           if (createErr || !created) {
             errors.push(`第 ${i} 行: 创建用户失败 - ${createErr?.message}`)

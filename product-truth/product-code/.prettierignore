@@ -1,0 +1,23 @@
+node_modules/
+.next/
+.vercel/
+coverage/
+playwright-report/
+test-results/
+out/
+build/
+dist/
+pnpm-lock.yaml
+*.min.js
+*.min.css
+
+# Supabase temp
+supabase/.temp/
+
+# Generated
+next-env.d.ts
+*.tsbuildinfo
+prisma/generated/
+
+# 治理文档（中文+代码块，不希望被格式化）
+# 注意：保留 Markdown 的语义结构，由 markdownlint 处理

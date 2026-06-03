@@ -83,11 +83,16 @@ export async function POST(req: NextRequest) {
 
     const { customer_name, customer_contact, valid_until } = result.data
 
-    // 生成报价单号: QT-{YYYYMMDD}-{4位序列号}
-    const now = new Date()
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
-    const randomSeq = Math.floor(1000 + Math.random() * 9000)
-    const quoteNo = `QT-${dateStr}-${randomSeq}`
+    // SpaceX级确定性报价单号：数据库序列保证唯一性
+    const { data: quoteNoResult, error: seqError } = await supabaseAdmin
+      .rpc('generate_quote_number')
+
+    if (seqError) {
+      console.error('Quote number generation failed:', seqError)
+      return errorResponse('报价单号生成失败，请重试', 500, 'SEQUENCE_ERROR')
+    }
+
+    const quoteNo = quoteNoResult
 
     const { data: quote, error } = await supabaseAdmin
       .from('quotes')
