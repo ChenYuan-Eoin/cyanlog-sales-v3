@@ -1,5 +1,5 @@
 // REQ:F005
-// PURPOSE: Contract detail page - display contract info and AI review results
+// PURPOSE: Contract detail page - display contract info, AI review results, and ASK list
 
 'use client'
 
@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
 import type { Contract } from '@/types'
 
@@ -32,6 +33,32 @@ const riskLevelMap: Record<string, { label: string; className: string }> = {
   green: { label: '绿灯', className: 'bg-green-100 text-green-800 border-green-200' },
 }
 
+// ASK 类型
+interface AskItem {
+  id: string
+  ask_code: string
+  clause_ref: string | null
+  risk_name: string
+  initial_level: 'red' | 'yellow' | 'green'
+  question_type: string
+  required_roles: string[]
+  question_text: string
+  qualified_std: string
+  status: 'pending' | 'responded' | 'closed'
+  trigger_user_id: string
+  response_id: string | null
+  closed_by: string | null
+  closed_reason: string | null
+  created_at: string
+  updated_at: string
+  response?: {
+    responder_name: string
+    responder_role: string
+    response_text: string
+    created_at: string
+  }
+}
+
 export default function ContractDetailPage() {
   const params = useParams()
   const [contract, setContract] = useState<Contract | null>(null)
@@ -39,6 +66,8 @@ export default function ContractDetailPage() {
   const [error, setError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [askItems, setAskItems] = useState<AskItem[]>([])
+  const [askLoading, setAskLoading] = useState(false)
 
   const contractId = params.id as string
 
@@ -89,7 +118,6 @@ export default function ContractDetailPage() {
         return
       }
 
-      // Refresh to get updated status
       await fetchContract()
     } catch {
       setError('网络错误，请稍后重试')
@@ -116,7 +144,6 @@ export default function ContractDetailPage() {
         return
       }
 
-      // Download file
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -241,61 +268,38 @@ export default function ContractDetailPage() {
         </Card>
       )}
 
-      {/* Review Results */}
-      {contract.status === 'COMPLETED' && latestReview?.results && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">AI 审核结果</CardTitle>
-            <Button
-              onClick={handleExport}
-              disabled={exporting}
-              variant="outline"
-              size="sm"
-            >
-              {exporting ? '导出中...' : '导出Word'}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="p-4 bg-slate-50 rounded-lg mb-6">
-              <p className="text-sm">{latestReview.results.summary}</p>
-            </div>
-
-            {latestReview.results.risks.length > 0 ? (
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium text-slate-700">
-                  发现问题 ({latestReview.results.risks.length})
-                </h4>
-                {latestReview.results.risks.map((risk: Risk, index: number) => (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-lg border ${riskLevelMap[risk.level]?.className || 'bg-slate-50'}`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline" className="text-xs">
-                        {riskLevelMap[risk.level]?.label || risk.level}
-                      </Badge>
-                      <span className="font-medium">{risk.title}</span>
-                    </div>
-                    <p className="text-sm mb-2">{risk.description}</p>
-                    <p className="text-sm text-slate-600">
-                      <span className="font-medium">建议：</span>
-                      {risk.suggestion}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-green-600">✓ 未发现明显风险</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Tabs for Review Results and ASK List */}
+      <Card>
+        <CardHeader>
+          <Tabs defaultValue="review">
+            <TabsList variant="line">
+              <TabsTrigger value="review">审核结果</TabsTrigger>
+              <TabsTrigger value="ask">ASK 清单</TabsTrigger>
+            </TabsList>
+            <TabsContent value="review" className="pt-4">
+              <ReviewResultsTab
+                contract={contract}
+                latestReview={latestReview}
+                exporting={exporting}
+                handleExport={handleExport}
+              />
+            </TabsContent>
+            <TabsContent value="ask" className="pt-4">
+              <AskListTab
+                contractId={contractId}
+                askItems={askItems}
+                setAskItems={setAskItems}
+                askLoading={askLoading}
+                setAskLoading={setAskLoading}
+              />
+            </TabsContent>
+          </Tabs>
+        </CardHeader>
+      </Card>
 
       {/* Failed State */}
       {contract.status === 'FAILED' && (
-        <Card>
+        <Card className="mt-6">
           <CardContent className="py-8 text-center">
             <p className="text-red-600 mb-2">审核失败</p>
             <p className="text-sm text-slate-500">请稍后重试，或联系管理员</p>
@@ -307,6 +311,292 @@ export default function ContractDetailPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  )
+}
+
+// Review Results Tab
+function ReviewResultsTab({
+  contract,
+  latestReview,
+  exporting,
+  handleExport,
+}: {
+  contract: Contract
+  latestReview: any
+  exporting: boolean
+  handleExport: () => void
+}) {
+  if (contract.status !== 'COMPLETED' || !latestReview?.results) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-slate-500">暂无审核结果</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <CardTitle className="text-base">AI 审核结果</CardTitle>
+        <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm">
+          {exporting ? '导出中...' : '导出Word'}
+        </Button>
+      </div>
+
+      <div className="p-4 bg-slate-50 rounded-lg mb-6">
+        <p className="text-sm">{latestReview.results.summary}</p>
+      </div>
+
+      {latestReview.results.risks.length > 0 ? (
+        <div className="space-y-4">
+          <h4 className="text-sm font-medium text-slate-700">
+            发现问题 ({latestReview.results.risks.length})
+          </h4>
+          {latestReview.results.risks.map((risk: Risk, index: number) => (
+            <div
+              key={index}
+              className={`p-4 rounded-lg border ${riskLevelMap[risk.level]?.className || 'bg-slate-50'}`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="outline" className="text-xs">
+                  {riskLevelMap[risk.level]?.label || risk.level}
+                </Badge>
+                <span className="font-medium">{risk.title}</span>
+              </div>
+              <p className="text-sm mb-2">{risk.description}</p>
+              <p className="text-sm text-slate-600">
+                <span className="font-medium">建议：</span>
+                {risk.suggestion}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <p className="text-green-600">✓ 未发现明显风险</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ASK List Tab
+function AskListTab({
+  contractId,
+  askItems,
+  setAskItems,
+  askLoading,
+  setAskLoading,
+}: {
+  contractId: string
+  askItems: AskItem[]
+  setAskItems: (items: AskItem[]) => void
+  askLoading: boolean
+  setAskLoading: (loading: boolean) => void
+}) {
+  const [responding, setResponding] = useState<string | null>(null)
+  const [responseText, setResponseText] = useState('')
+
+  useEffect(() => {
+    fetchAskItems()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractId])
+
+  async function fetchAskItems() {
+    setAskLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/asks`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setAskItems(data.data?.items || [])
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setAskLoading(false)
+    }
+  }
+
+  async function handleGenerateAsk() {
+    setAskLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/contracts/${contractId}/asks/generate`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      })
+      await fetchAskItems()
+    } catch {
+      // silently fail
+    } finally {
+      setAskLoading(false)
+    }
+  }
+
+  async function handleSubmitResponse(askId: string) {
+    if (!responseText.trim()) return
+
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/asks/${askId}/responses`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ response_text: responseText }),
+      })
+      setResponseText('')
+      setResponding(null)
+      await fetchAskItems()
+    } catch {
+      // silently fail
+    }
+  }
+
+  if (askLoading) {
+    return <div className="text-center py-8 text-slate-500">加载 ASK 清单...</div>
+  }
+
+  if (askItems.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-slate-500 mb-4">该合同尚未生成 ASK 清单</p>
+        <Button onClick={handleGenerateAsk} variant="outline" size="sm">
+          生成 ASK 清单
+        </Button>
+      </div>
+    )
+  }
+
+  const pendingCount = askItems.filter((a) => a.status === 'pending').length
+  const respondedCount = askItems.filter((a) => a.status === 'responded').length
+  const closedCount = askItems.filter((a) => a.status === 'closed').length
+
+  return (
+    <div>
+      {/* Summary */}
+      <div className="flex items-center gap-4 mb-4 text-sm">
+        <span className="text-slate-500">ASK 统计：</span>
+        <Badge variant="secondary">总计: {askItems.length}</Badge>
+        <Badge variant="outline" className="text-yellow-700">待回应: {pendingCount}</Badge>
+        <Badge variant="outline" className="text-green-700">已回应: {respondedCount}</Badge>
+        <Badge variant="outline" className="text-slate-700">已关闭: {closedCount}</Badge>
+      </div>
+
+      {/* ASK Items */}
+      <div className="space-y-3">
+        {askItems.map((ask) => (
+          <div
+            key={ask.id}
+            className={`p-4 rounded-lg border ${
+              ask.status === 'pending'
+                ? 'bg-yellow-50 border-yellow-200'
+                : ask.status === 'responded'
+                ? 'bg-green-50 border-green-200'
+                : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm font-medium">{ask.ask_code}</span>
+                <Badge variant="outline" className="text-xs">
+                  {ask.initial_level === 'red' ? '红灯' : ask.initial_level === 'yellow' ? '黄灯' : '绿灯'}
+                </Badge>
+                <span className="font-medium text-sm">{ask.risk_name}</span>
+              </div>
+              <Badge
+                variant={
+                  ask.status === 'pending'
+                    ? 'secondary'
+                    : ask.status === 'responded'
+                    ? 'outline'
+                    : 'default'
+                }
+                className="text-xs"
+              >
+                {ask.status === 'pending' ? '待回应' : ask.status === 'responded' ? '已回应' : '已关闭'}
+              </Badge>
+            </div>
+
+            {ask.clause_ref && (
+              <p className="text-xs text-slate-500 mb-1">{ask.clause_ref}</p>
+            )}
+
+            <p className="text-sm mb-2">{ask.question_text}</p>
+
+            {/* Response */}
+            {ask.status === 'responded' && ask.response && (
+              <div className="mt-3 p-3 bg-white rounded border border-green-200">
+                <p className="text-sm text-green-800">
+                  <span className="font-medium">
+                    {ask.response.responder_name} ({ask.response.responder_role}):
+                  </span>{' '}
+                  {ask.response.response_text}
+                </p>
+              </div>
+            )}
+
+            {ask.status === 'closed' && ask.closed_reason && (
+              <div className="mt-3 p-3 bg-white rounded border border-slate-200">
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium">关闭原因：</span>
+                  {ask.closed_reason}
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            {ask.status === 'pending' && (
+              <div className="mt-3 flex gap-2">
+                {responding === ask.id ? (
+                  <div className="flex-1">
+                    <textarea
+                      className="w-full p-2 text-sm border rounded-lg mb-2 resize-y"
+                      rows={3}
+                      placeholder="输入回应..."
+                      value={responseText}
+                      onChange={(e) => setResponseText(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSubmitResponse(ask.id)}
+                        disabled={!responseText.trim()}
+                      >
+                        提交回应
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setResponding(null)
+                          setResponseText('')
+                        }}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setResponding(ask.id)}
+                  >
+                    录入回应
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

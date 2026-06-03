@@ -38,12 +38,9 @@
 2. 禁止在产品代码里直接引用
 3. 如果与 SoT 冲突，以 SoT 为准
 
-## 当前未决（必须早定）
+## 当前状态（2026-06-03 冻结）
 
-本套 tokens 中 `--accent` 当前指向蓝色（`#2563eb`），同时存在完整 cyan ramp（`--cyan-*`）。
-
-你需要在产品实现开始前做一个选择：
-
-1. Accent=蓝：最快落地，但 README/命名需要统一措辞
-2. Accent=青：更符合 Cyanlog 命名，但需要整体替换 `--accent-*` ramp 与 `--shadow-focus` 等绑定 token
+> **Accent 已冻结为 Cyan**（`--accent-*` 指向 cyan ramp，`--cyan-*` 为 `--accent-*` 的 alias）。
+>
+> 具体定义见 `foundations/tokens.css`。遗留 `--blue-*` ramp 仅用于与历史品牌资产对齐的场景，新开发应使用 `--accent-*`。}
 

@@ -19,7 +19,7 @@ export const supabase = createClient(
 // 服务端API使用的Service Role客户端（绕过RLS，需自行验证权限）
 export const supabaseAdmin = createClient(
   getEnvVar('NEXT_PUBLIC_SUPABASE_URL'),
-  getEnvVar('SUPABASE_SERVICE_ROLE_KEY') || getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY'), // fallback
+  getEnvVar('SUPABASE_SERVICE_ROLE_KEY') || '',
   {
     auth: {
       autoRefreshToken: false,

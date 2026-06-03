@@ -9,8 +9,8 @@
 #   - 代码中的 REQ 标记必须与之一致
 ---
 
-version: "2026-05-31"
-last_updated: "2026-05-31T00:00:00Z"
+version: "2026-06-03"
+last_updated: "2026-06-03T00:00:00Z"
 
 requirements:
   # ═══════════════════════════════════════════════════════════════
@@ -27,16 +27,6 @@ requirements:
       - app/api/products/route.ts
       - supabase/migrations/003_add_products_tables.sql
     description: 产品目录、价格体系、基础价管理
-
-  F004:
-    name: 三级审批
-    module: 报价中心
-    source: 报价中心.md#4.6.2
-    status: completed
-    priority: P0
-    code_locations:
-      - lib/approval/workflow.ts
-    description: 折扣审批、审批流转、超时处理
 
   F002:
     name: 报价编制
@@ -102,6 +92,48 @@ requirements:
       - app/contracts/new/page.tsx
       - app/contracts/[id]/page.tsx
     description: 合同上传、OCR解析、AI审核
+    upgrade:
+      upgrade_id: F005-ASK-v1
+      name: 两段式 ASK 清单升级
+      status: pending
+      created_at: "2026-06-03"
+      feature_packet: product-truth/feature-packets/F005-contract-ASK-upgrade.md
+      design_doc: product-truth/01-business-truth/合同审核.md#8
+      master_doc: product-truth/00-master/PROJECT-主文档.md#5.7
+      new_code_locations_pending:
+        - supabase/migrations/20260603000003_add_ask_items.sql
+        - supabase/migrations/20260603000004_add_ask_responses.sql
+        - supabase/migrations/20260603000005_add_ask_audit_logs.sql
+        - supabase/migrations/20260603000006_add_ask_role_assignments.sql
+        - supabase/migrations/20260603000007_add_report_versions.sql
+        - app/api/contracts/[id]/asks/generate/route.ts
+        - app/api/contracts/[id]/asks/route.ts
+        - app/api/asks/[id]/route.ts
+        - app/api/asks/[id]/responses/route.ts
+        - app/api/asks/[id]/transition/route.ts
+        - app/api/contracts/[id]/reports/current/route.ts
+        - app/api/contracts/[id]/reports/versions/route.ts
+        - app/contracts/[id]/asks/page.tsx
+        - lib/ask/generator.ts
+        - lib/ask/verdict.ts
+        - lib/ask/types.ts
+        - lib/ask/no-ask-detector.ts
+        - lib/report/version-manager.ts
+      removed_endpoints:
+        - /api/asks/:id/ai-verdict        # v2 移除
+      upgraded_endpoints:
+        - path: /api/contracts/:id/export
+          change: 软提醒 → 硬关单（422 PENDING_ASKS_BLOCK）
+      design_decisions_v2:
+        - 一次回答（移除 PARTIAL/INSUFFICIENT/VERIFIED 状态）
+        - 必填（硬关单，422 拒绝）
+        - 上传人触发+澄清人入报（报告显式含 ASK 列表+姓名+角色+时间）
+        - 0 风险说明（no_ask_reason 字段）
+        - rolling 版本（report_versions 表，响应即升版）
+      downstream_impact:
+        - F007: 报告生成消费侧适配 (新 askContext 参数 + 升版触发)
+        - F005 analyze: 审核完成后自动调 generate
+        - F005 page: 新增"ASK 清单"标签页 + 报告版本入口
 
   F006:
     name: 红绿灯规则
@@ -129,15 +161,6 @@ requirements:
       - lib/export/word-generator.py
       - lib/export/word-generator.ts
     description: Word文档批注、审核报告导出
-
-  F008:
-    name: OCR招标文件解析
-    module: 合同审核
-    source: 合同审核.md#5
-    status: confirmed
-    priority: P0
-    code_locations: []
-    description: PaddleOCR、文本提取、结构化
 
   # ═══════════════════════════════════════════════════════════════
   # 配置中心 (Config Center)
