@@ -3,7 +3,14 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const PUBLIC_PATHS = ['/', '/login', '/register']
-const PUBLIC_API_PATHS = ['/api/auth/login', '/api/auth/register', '/api/access/feishu']
+const PUBLIC_API_PATHS = [
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/access/feishu',
+  '/api/health',
+  '/api/health/flight-ready',
+  '/api/cron',
+]
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p)) return true

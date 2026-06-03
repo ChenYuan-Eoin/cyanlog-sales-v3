@@ -15,6 +15,7 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
+import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
 function makeRequest(url: string, method = 'GET'): any {
@@ -96,40 +97,14 @@ describe('POST /api/quotes', () => {
     expect(res.status).toBe(400)
   })
 
-  it('当天无报价 → 单号格式 QT-YYYYMMDD-0001', async () => {
+  it('序列成功 → insert 传入生成的单号', async () => {
     ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
-    const { supabaseAdmin } = await import('@/lib/supabase')
-    let callCount = 0
-    ;(supabaseAdmin.from as any).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        return makeChain({ data: null, error: { code: 'PGRST116' } })
-      }
-      // 返回的 mock 不知道真实 quote_no，但真实代码会基于 lastQuote 计算
-      return makeChain({ data: { id: 'q-new' }, error: null })
+    ;(supabaseAdmin as any).rpc = vi.fn().mockResolvedValue({
+      data: 'QT-20260603-0001',
+      error: null,
     })
-
-    const req = makeRequest('http://localhost/api/quotes', 'POST')
-    req.json = async () => ({
-      customer_name: '测试客户',
-      customer_contact: '13800138000',
-    })
-    const res = await POST(req)
-    expect(res.status).toBe(201)
-    // 验证 insert 时传入的 quote_no（已在 insertPayload 中捕获）
-  })
-
-  it('当天有 QT-20260602-0003 → insert 传入 QT-20260602-0004', async () => {
-    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
-    const { supabaseAdmin } = await import('@/lib/supabase')
-    let callCount = 0
     let insertPayload: any = null
     ;(supabaseAdmin.from as any).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        return makeChain({ data: { quote_no: 'QT-20260602-0003' }, error: null })
-      }
-      // 捕获 insert 参数
       const chain: any = {
         insert: vi.fn((payload: any) => {
           insertPayload = payload
@@ -142,65 +117,47 @@ describe('POST /api/quotes', () => {
     })
 
     const req = makeRequest('http://localhost/api/quotes', 'POST')
-    req.json = async () => ({ customer_name: 'X', customer_contact: 'Y' })
+    req.json = async () => ({
+      customer_name: '测试客户',
+      customer_contact: '13800138000',
+    })
     const res = await POST(req)
     expect(res.status).toBe(201)
     expect(insertPayload).toBeTruthy()
-    expect(insertPayload.quote_no).toBe('QT-20260602-0004')
+    expect(insertPayload.quote_no).toBe('QT-20260603-0001')
   })
 
-  it('DB 插入失败 → 500 DB_ERROR', async () => {
+  it('序列生成失败 → 500 SEQUENCE_ERROR', async () => {
     ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
-    const { supabaseAdmin } = await import('@/lib/supabase')
-    let callCount = 0
-    ;(supabaseAdmin.from as any).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        return makeChain({ data: null, error: { code: 'PGRST116' } })
-      }
-      return makeChain({ data: null, error: { message: 'insert failed', code: 'PGRST_ERROR' } })
+    ;(supabaseAdmin as any).rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'sequence unavailable' },
     })
 
     const req = makeRequest('http://localhost/api/quotes', 'POST')
     req.json = async () => ({ customer_name: 'X', customer_contact: 'Y' })
     const res = await POST(req)
     expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.code).toBe('SEQUENCE_ERROR')
   })
 
-  it('单号唯一键冲突 → 自动重试 → 成功', async () => {
+  it('DB 插入失败 → 500 DB_ERROR', async () => {
     ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
-    const { supabaseAdmin } = await import('@/lib/supabase')
-    let callCount = 0
-    ;(supabaseAdmin.from as any).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        // 第一次查询 lastQuote
-        return makeChain({ data: { quote_no: 'QT-20260602-0003' }, error: null })
-      }
-      if (callCount === 2) {
-        // 第一次 insert → 唯一键冲突
-        return makeChain({ data: null, error: { code: '23505', message: 'duplicate' } })
-      }
-      if (callCount === 3) {
-        // 第二次查询（重试）→ nextSeq 变成 0005
-        return makeChain({ data: { quote_no: 'QT-20260602-0004' }, error: null })
-      }
-      // 第二次 insert → 成功
-      return makeChain({ data: { id: 'q-new' }, error: null })
+    ;(supabaseAdmin as any).rpc = vi.fn().mockResolvedValue({
+      data: 'QT-20260603-0002',
+      error: null,
     })
-
-    const req = makeRequest('http://localhost/api/quotes', 'POST')
-    req.json = async () => ({ customer_name: 'X', customer_contact: 'Y' })
-    const res = await POST(req)
-    expect(res.status).toBe(201)
-  })
-
-  it('3 次重试都冲突 → 500 + 错误信息', async () => {
-    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
-    const { supabaseAdmin } = await import('@/lib/supabase')
     ;(supabaseAdmin.from as any).mockImplementation(() => {
-      const c = makeChain({ data: null, error: { code: '23505', message: 'duplicate' } })
-      return c
+      const chain: any = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'insert failed', code: 'PGRST_ERROR' },
+        }),
+      }
+      return chain
     })
 
     const req = makeRequest('http://localhost/api/quotes', 'POST')

@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
 import { loginSchema } from '@/lib/validation'
+import { checkLoginRateLimit, getClientIp, recordLoginAttempt } from '@/lib/rate-limit'
 
 // 统一错误响应格式
 function errorResponse(message: string, status: number, code?: string) {
@@ -25,6 +26,21 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, phone, password } = result.data
+    const identifier = email || phone!
+    const ipAddress = getClientIp(req)
+
+    const rateLimit = await checkLoginRateLimit(identifier, ipAddress)
+    if (!rateLimit.allowed) {
+      const response = errorResponse(
+        '登录尝试过于频繁，请稍后再试',
+        429,
+        rateLimit.reason || 'RATE_LIMITED'
+      )
+      if (rateLimit.retryAfterSeconds !== undefined) {
+        response.headers.set('Retry-After', String(rateLimit.retryAfterSeconds))
+      }
+      return response
+    }
 
     // 查找用户
     let query = supabaseAdmin.from('users').select('id, email, phone, display_name, password_hash')
@@ -37,12 +53,14 @@ export async function POST(req: NextRequest) {
     const { data: user, error: userError } = await query.single()
 
     if (userError || !user) {
+      await recordLoginAttempt(identifier, ipAddress, false)
       return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
     }
 
     // 验证密码
     const isValid = await bcrypt.compare(password, user.password_hash)
     if (!isValid) {
+      await recordLoginAttempt(identifier, ipAddress, false)
       return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
     }
 
@@ -62,6 +80,8 @@ export async function POST(req: NextRequest) {
       console.error('Token insert error:', tokenError)
       return errorResponse('登录失败，请重试', 500, 'TOKEN_CREATE_FAILED')
     }
+
+    await recordLoginAttempt(identifier, ipAddress, true)
 
     return NextResponse.json({
       user: {

@@ -8,6 +8,17 @@ import { supabaseAdmin } from '@/lib/supabase'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const REQUIRED_TABLES = [
+  'users',
+  'auth_tokens',
+  'quotes',
+  'contracts',
+  'rules',
+  'user_organizations',
+  'configs',
+  'config_versions',
+]
+
 interface SubsystemStatus {
   name: string
   status: 'HEALTHY' | 'DEGRADED' | 'CRITICAL'
@@ -43,8 +54,7 @@ export async function GET() {
     }),
     checkSubsystem('schema_required_tables', async () => {
       // 验证关键表存在（FMEA 关键节点）
-      const required = ['quotes', 'contracts', 'approvals', 'rules', 'auth_tokens']
-      for (const table of required) {
+      for (const table of REQUIRED_TABLES) {
         const { error } = await supabaseAdmin.from(table).select('id').limit(1).single()
         if (error && error.code !== 'PGRST116') {
           throw new Error(`${table}: ${error.message}`)

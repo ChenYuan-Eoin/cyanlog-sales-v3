@@ -40,12 +40,13 @@ $$ LANGUAGE plpgsql;
 -- 添加唯一约束（如不存在）
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF to_regclass('public.quotes') IS NOT NULL
+    AND NOT EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conname = 'quotes_quote_no_key'
   ) THEN
     ALTER TABLE quotes ADD CONSTRAINT quotes_quote_no_key UNIQUE (quote_no);
   END IF;
 EXCEPTION
-  WHEN duplicate_table THEN NULL;
+  WHEN duplicate_table OR undefined_table THEN NULL;
 END $$;

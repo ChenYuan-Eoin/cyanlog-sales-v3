@@ -4,20 +4,24 @@
 import { supabaseAdmin } from './supabase'
 
 const REQUIRED_TABLES = [
-  // F001-F008 报价/合同
+  // 认证与组织
+  'users',
+  'auth_tokens',
+  'organizations',
+  'departments',
+  'user_departments',
+  'roles',
+  'user_roles',
+  'user_organizations',
+  // F001-F008 报价/合同/审批/OCR
   'quotes',
   'contracts',
   'approvals',
   'rules',
   'ocr_results',
-  // F003 认证
-  'users',
-  'auth_tokens',
-  'roles',
-  'user_roles',
-  'organizations',
-  'departments',
-  'user_departments',
+  // 配置中心
+  'configs',
+  'config_versions',
   // F015-F019 知识库 + 日程 (新增)
   'login_attempts',
   'error_logs',

@@ -16,6 +16,12 @@ export async function register() {
 export async function onRequestError(err: Error, request: Request, context: unknown) {
   // 双重记录：Sentry + 本地 error_logs
   const { logError } = await import('./lib/error-log')
+  const extraContext =
+    typeof context === 'object' && context !== null
+      ? (context as Record<string, unknown>)
+      : context === undefined
+        ? {}
+        : { context }
 
   await logError({
     level: 'error',
@@ -25,7 +31,7 @@ export async function onRequestError(err: Error, request: Request, context: unkn
     context: {
       url: request.url,
       runtime: process.env.NEXT_RUNTIME,
-      ...context,
+      ...extraContext,
     },
   })
 }

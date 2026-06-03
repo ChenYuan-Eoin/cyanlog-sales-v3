@@ -16,10 +16,7 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/ocr/parser', () => ({
   parseDocument: vi.fn().mockResolvedValue('招标编号：ZB-001\n项目名称：测试项目'),
-}))
-
-vi.mock('@/lib/ocr/tender-parser', () => ({
-  extractTenderInfo: vi.fn().mockReturnValue({
+  extractKeyInfo: vi.fn().mockReturnValue({
     tenderNo: 'ZB-001',
     tenderName: '测试项目',
     budget: '100万',

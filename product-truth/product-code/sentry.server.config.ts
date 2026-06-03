@@ -26,10 +26,11 @@ if (dsn) {
         event.exception.values.forEach((value) => {
           if (value.stacktrace?.frames) {
             value.stacktrace.frames.forEach((frame) => {
-              if (frame.vars) {
-                Object.keys(frame.vars).forEach((key) => {
+              const frameVars = frame.vars as Record<string, unknown> | undefined
+              if (frameVars) {
+                Object.keys(frameVars).forEach((key) => {
                   if (/key|token|secret|password|hash/i.test(key)) {
-                    frame.vars[key] = '[REDACTED]'
+                    frameVars[key] = '[REDACTED]'
                   }
                 })
               }
