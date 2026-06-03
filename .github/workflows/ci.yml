@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, spacex-hardening]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, spacex-hardening]
 
 env:
   NODE_VERSION: '20'
