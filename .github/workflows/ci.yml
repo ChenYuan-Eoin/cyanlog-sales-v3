@@ -50,6 +50,8 @@ jobs:
         run: pnpm lint
 
       - name: Prisma validate
+        env:
+          DATABASE_URL: "postgresql://localhost:5432/postgres"
         run: |
           npx prisma format --check
           npx prisma validate
