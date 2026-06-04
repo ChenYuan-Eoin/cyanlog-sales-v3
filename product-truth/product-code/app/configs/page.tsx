@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { Rule } from '@/types/rules'
+import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 
 const riskLevelMap: Record<string, { label: string; className: string }> = {
   red: { label: '红灯', className: 'bg-red-100 text-red-800 border-red-200' },
@@ -32,7 +33,7 @@ interface Config {
   key: string
   name: string
   value: Record<string, unknown>
-  type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG'
+  type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' | 'UI_THEME'
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
   version: number
   description?: string
@@ -45,6 +46,7 @@ const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
   TAX_RULE: { label: '税率规则', color: 'bg-emerald-100 text-emerald-800' },
   APPROVAL_RULE: { label: '审批权限', color: 'bg-purple-100 text-purple-800' },
   AI_CONFIG: { label: 'AI 配置', color: 'bg-amber-100 text-amber-800' },
+  UI_THEME: { label: '界面主题', color: 'bg-cyan-100 text-cyan-800' },
 }
 
 const CONFIG_STATUS_META: Record<string, { label: string; className: string }> = {
@@ -73,6 +75,16 @@ export default function ConfigsPage() {
   const [isVersionOpen, setIsVersionOpen] = useState(false)
   const [versions, setVersions] = useState<Array<{ version: number; status: string; created_at: string }>>([])
 
+  // 角色权限（Tab: roles）
+  const [roles, setRoles] = useState<Array<{
+    id: string; code: string; name: string; description: string | null
+    permissions: string[] | null; sort_order: number | null
+  }>>([])
+  const [permissionKeys, setPermissionKeys] = useState<string[]>([])
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
+  const [feishuSyncing, setFeishuSyncing] = useState(false)
+  const [feishuResult, setFeishuResult] = useState<string>('')
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -84,9 +96,10 @@ export default function ConfigsPage() {
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
 
-      const [rulesRes, configsRes] = await Promise.all([
+      const [rulesRes, configsRes, rolesRes] = await Promise.all([
         fetch('/api/rules', { headers }),
         fetch('/api/configs', { headers }),
+        fetch('/api/roles', { headers }),
       ])
 
       if (rulesRes.ok) {
@@ -98,6 +111,12 @@ export default function ConfigsPage() {
         const configsData = await configsRes.json()
         setConfigs(configsData)
       }
+
+      if (rolesRes.ok) {
+        const rolesData = await rolesRes.json()
+        setRoles(rolesData.data?.roles ?? [])
+        setPermissionKeys(rolesData.data?.permission_keys ?? [])
+      }
     } catch {
       setError('网络错误')
     } finally {
@@ -106,6 +125,56 @@ export default function ConfigsPage() {
   }
 
   const getConfigsByType = (type: Config['type']) => configs.filter((c) => c.type === type)
+
+  // 角色权限：保存单个角色的 permissions
+  async function handleSaveRole(roleId: string, newPerms: string[]) {
+    setSavingRoleId(roleId)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/roles/${roleId}`, {
+        method: 'PATCH',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ permissions: newPerms }),
+      })
+      if (res.ok) {
+        setRoles((rs) => rs.map((r) => r.id === roleId ? { ...r, permissions: newPerms } : r))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || '保存失败')
+      }
+    } catch {
+      setError('网络错误')
+    } finally {
+      setSavingRoleId(null)
+    }
+  }
+
+  // 飞书同步（占位：需配置飞书 OAuth 才能真实同步）
+  async function handleFeishuSync() {
+    if (!confirm('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。')) return
+    setFeishuSyncing(true)
+    setFeishuResult('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/access/feishu/sync', {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setFeishuResult(`同步完成：导入 ${data.imported ?? 0} 个部门`)
+      } else {
+        setFeishuResult(`同步失败：${data.error ?? '未知错误'}`)
+      }
+    } catch {
+      setFeishuResult('网络错误')
+    } finally {
+      setFeishuSyncing(false)
+    }
+  }
 
   // Rule handlers
   async function handleSaveRule() {
@@ -345,6 +414,8 @@ export default function ConfigsPage() {
         return { level: 1, name: '新模型', base_url: '', model: '', timeout_ms: 45000, enabled: true }
       case 'CONTRACT_RULE':
         return { pattern: '', field: '', operator: 'gt', value: 0 }
+      case 'UI_THEME':
+        return { ...DEFAULT_THEME }
       default:
         return {}
     }
@@ -539,6 +610,70 @@ export default function ConfigsPage() {
               ))}
             </div>
           </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  function renderThemeConfigs() {
+    const themeConfigs = getConfigsByType('UI_THEME')
+
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>运行时主题</CardTitle>
+          <Button onClick={() => openNewConfig('UI_THEME')}>+ 新增主题</Button>
+        </CardHeader>
+        <CardContent>
+          {themeConfigs.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-slate-500">暂无主题配置</p>
+              <p className="text-sm text-slate-400 mt-2">发布后，按钮和输入框会在运行时自动应用。</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {themeConfigs.map((config) => (
+                <div key={config.id} className="rounded-lg border p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{config.name}</span>
+                        <ConfigStatusBadge status={config.status} />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { label: 'Primary', value: String(config.value?.primary || '') },
+                          { label: 'Secondary', value: String(config.value?.secondary || '') },
+                          { label: 'Border', value: String(config.value?.border || '') },
+                          { label: 'Background', value: String(config.value?.background || '') },
+                        ].map((item) => (
+                          <div key={item.label} className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
+                            <span
+                              className="size-3 rounded-sm border"
+                              style={{ backgroundColor: item.value }}
+                            />
+                            <span className="font-mono">{item.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-3 text-xs text-slate-500">
+                        <span>radius-md: {String(config.value?.radiusMd ?? '')}px</span>
+                        <span>radius-lg: {String(config.value?.radiusLg ?? '')}px</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditConfig(config)}>编辑</Button>
+                      {config.status !== 'PUBLISHED' && (
+                        <Button variant="outline" size="sm" onClick={() => handlePublishConfig(config.id)}>发布</Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => handleFetchVersions(config.id)}>版本</Button>
+                      <Button variant="outline" size="sm" className="text-red-600" onClick={() => handleDeleteConfig(config.id)}>删除</Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     )
@@ -830,6 +965,97 @@ export default function ConfigsPage() {
     )
   }
 
+  function renderThemeEditForm() {
+    const value = editingConfig?.value as Record<string, unknown> || { ...DEFAULT_THEME }
+
+    const setThemeField = (field: string, nextValue: string | number) => {
+      setEditingConfig({
+        ...editingConfig!,
+        value: {
+          ...value,
+          [field]: nextValue,
+        },
+      })
+    }
+
+    const colorFields = [
+      { key: 'primary', label: '主按钮背景' },
+      { key: 'primaryForeground', label: '主按钮文字' },
+      { key: 'secondary', label: '次按钮背景' },
+      { key: 'secondaryForeground', label: '次按钮文字' },
+      { key: 'background', label: '页面背景' },
+      { key: 'foreground', label: '基础文字' },
+      { key: 'border', label: '边框' },
+      { key: 'input', label: '输入框背景' },
+      { key: 'ring', label: '焦点高亮' },
+      { key: 'destructive', label: '危险态' },
+    ]
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">配置键 (Key)</label>
+          <Input
+            value={editingConfig?.key || ''}
+            onChange={(e) => setEditingConfig({ ...editingConfig!, key: e.target.value })}
+            placeholder="如: UI_THEME_DEFAULT"
+            disabled={!!editingConfig?.id}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">显示名称</label>
+          <Input
+            value={editingConfig?.name || ''}
+            onChange={(e) => setEditingConfig({ ...editingConfig!, name: e.target.value })}
+            placeholder="如: 蓝色主题"
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {colorFields.map((field) => (
+            <div key={field.key}>
+              <label className="text-sm font-medium">{field.label}</label>
+              <div className="mt-1 flex gap-2">
+                <Input
+                  type="color"
+                  className="w-14 p-1"
+                  value={String(value[field.key] || '#000000')}
+                  onChange={(e) => setThemeField(field.key, e.target.value)}
+                />
+                <Input
+                  value={String(value[field.key] || '')}
+                  onChange={(e) => setThemeField(field.key, e.target.value)}
+                  placeholder="#2563eb"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium">按钮圆角</label>
+            <Input
+              type="number"
+              min={0}
+              max={32}
+              value={Number(value.radiusMd ?? 10)}
+              onChange={(e) => setThemeField('radiusMd', Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">卡片圆角</label>
+            <Input
+              type="number"
+              min={0}
+              max={32}
+              value={Number(value.radiusLg ?? 16)}
+              onChange={(e) => setThemeField('radiusLg', Number(e.target.value))}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return <div className="p-8">加载中...</div>
   }
@@ -856,7 +1082,47 @@ export default function ConfigsPage() {
           <TabsTrigger value="tax">税率规则</TabsTrigger>
           <TabsTrigger value="approval">审批权限</TabsTrigger>
           <TabsTrigger value="ai">AI 模型配置</TabsTrigger>
+          <TabsTrigger value="theme">界面主题</TabsTrigger>
+          <TabsTrigger value="roles">角色权限</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="roles" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>角色与权限</CardTitle>
+                <p className="text-sm text-slate-500 mt-1">
+                  改完立即生效。SUPER_ADMIN 默认拥有所有权限（用 * 表示）。
+                </p>
+              </div>
+              <Button onClick={handleFeishuSync} disabled={feishuSyncing} variant="outline">
+                {feishuSyncing ? '同步中...' : '从飞书导入部门'}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {feishuResult && (
+                <div className="p-3 mb-4 text-sm bg-slate-50 rounded-lg">
+                  {feishuResult}
+                </div>
+              )}
+              {roles.length === 0 ? (
+                <p className="text-center text-slate-500 py-8">暂无角色</p>
+              ) : (
+                <div className="space-y-4">
+                  {roles.map((role) => (
+                    <RoleCard
+                      key={role.id}
+                      role={role}
+                      permissionKeys={permissionKeys}
+                      saving={savingRoleId === role.id}
+                      onSave={(perms) => handleSaveRole(role.id, perms)}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="rules" className="mt-4">
           <Card>
@@ -909,6 +1175,10 @@ export default function ConfigsPage() {
 
         <TabsContent value="ai" className="mt-4">
           {renderAIConfigs()}
+        </TabsContent>
+
+        <TabsContent value="theme" className="mt-4">
+          {renderThemeConfigs()}
         </TabsContent>
       </Tabs>
 
@@ -994,6 +1264,7 @@ export default function ConfigsPage() {
               {configType === 'TAX_RULE' && renderTaxEditForm()}
               {configType === 'APPROVAL_RULE' && renderApprovalEditForm()}
               {configType === 'AI_CONFIG' && renderAIEditForm()}
+              {configType === 'UI_THEME' && renderThemeEditForm()}
 
               <div className="mt-4">
                 <label className="text-sm font-medium">描述</label>
@@ -1051,4 +1322,61 @@ export default function ConfigsPage() {
 function ConfigStatusBadge({ status }: { status: Config['status'] }) {
   const meta = CONFIG_STATUS_META[status]
   return <Badge className={meta?.className}>{meta?.label}</Badge>
+}
+
+function RoleCard({
+  role,
+  permissionKeys,
+  saving,
+  onSave,
+}: {
+  role: { id: string; code: string; name: string; description: string | null; permissions: string[] | null }
+  permissionKeys: string[]
+  saving: boolean
+  onSave: (perms: string[]) => void
+}) {
+  const [perms, setPerms] = useState<string[]>(role.permissions ?? [])
+  const isSuperAdmin = role.code === 'SUPER_ADMIN'
+
+  function toggle(p: string) {
+    setPerms((cur) => cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p])
+  }
+
+  return (
+    <div className="p-4 border rounded-lg bg-white">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{role.name}</span>
+            <Badge variant="outline" className="text-xs">{role.code}</Badge>
+            {isSuperAdmin && <Badge className="text-xs bg-amber-100 text-amber-800">所有权限</Badge>}
+          </div>
+          {role.description && <p className="text-xs text-slate-500 mt-1">{role.description}</p>}
+        </div>
+        {!isSuperAdmin && (
+          <Button
+            size="sm"
+            onClick={() => onSave(perms)}
+            disabled={saving || JSON.stringify(perms.sort()) === JSON.stringify((role.permissions ?? []).sort())}
+          >
+            {saving ? '保存中...' : '保存'}
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {permissionKeys.map((key) => (
+          <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isSuperAdmin || perms.includes(key) || perms.includes('*')}
+              disabled={isSuperAdmin}
+              onChange={() => toggle(key)}
+              className="rounded"
+            />
+            <span className={isSuperAdmin ? 'text-slate-500' : ''}>{key}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
 }
