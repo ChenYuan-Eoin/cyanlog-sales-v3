@@ -42,6 +42,33 @@ priority: P0
 - **飞书同步按钮**：仅限 `SUPER_ADMIN` 角色可见可点
 - **系统支持所有角色使用**（销售/法务/财务/管理员），但**管理功能按角色隔离**
 
+### 1.2 实现状态（2026-06-04 回写）
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| Middleware 读 RBAC | ✅ 已实现 | 透传 `x-user-roles` / `x-user-permissions` 到下游 |
+| 路径级权限检查 | ✅ 已实现 | `/configs` 需 `config:read`；`/admin` 需 `admin:access` |
+| `/api/roles` GET | ✅ 已实现 | 列出所有角色 + 13 个权限 key |
+| `/api/roles/[id]` PATCH | ✅ 已实现 | 编辑 `permissions`，需 `config:write` |
+| `/api/access/feishu/sync` | ✅ 已实现（占位） | 后端 SUPER_ADMIN 隔离；待配置 `FEISHU_APP_ID/SECRET` |
+| 配置中心"角色权限" Tab | ✅ 已实现 | 管理员可勾选权限保存；飞书导入按钮入口 |
+| 飞书同步真实逻辑 | ⏳ 待实现 | 凭证配置后接入 OpenAPI（部门列表拉取 + UPSERT） |
+
+**权限 key 清单**（13 个，配置中心可勾选）：
+
+```
+config:read / config:write
+rule:write
+contract:read / contract:write / contract:review
+quote:read / quote:write
+user:read / user:write
+org:write
+feishu:sync
+admin:access
+```
+
+**SUPER_ADMIN 特殊规则**：拥有 `*`（所有权限），不可在 UI 上取消。
+
 ## 2. 认证机制
 
 ### 2.1 自建 Token 认证

@@ -53,7 +53,11 @@ requirements:
       - app/api/auth/route.ts
       - lib/auth.ts
       - lib/supabase.ts
-    description: 登录认证、角色权限、用户管理
+      - middleware.ts
+      - app/api/roles/[id]/route.ts
+      - app/api/access/feishu/sync/route.ts
+      - app/configs/page.tsx
+    description: 登录认证、角色权限、用户管理（自主可控 + 可配置 RBAC）
 
   F004:
     name: 三级审批
