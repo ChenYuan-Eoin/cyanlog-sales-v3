@@ -6,9 +6,9 @@ import Link from 'next/link'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('zhang.ym@cyanlog.com')
-  const [password, setPassword] = useState('********')
-  const [workspace, setWorkspace] = useState('华东销售作战空间')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [workspace, setWorkspace] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 

@@ -1,7 +1,9 @@
 // REQ: F009-F012
 // PURPOSE: 配置中心类型定义
 
-export type ConfigType = 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG'
+import type { UIThemeConfigValue } from '@/lib/ui-theme-shared'
+
+export type ConfigType = 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' | 'UI_THEME'
 export type ConfigStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 
 // 基础配置接口
@@ -73,6 +75,8 @@ export interface AIConfigValue {
   routing?: AIRoutingConfig
 }
 
+export type UIThemeValue = UIThemeConfigValue
+
 // 合同审核规则值 (F009) - 与现有 Rule 类型兼容
 export interface ContractRuleValue {
   pattern?: string
@@ -125,6 +129,10 @@ export const CONFIG_TYPE_META: Record<ConfigType, { label: string; description: 
   AI_CONFIG: {
     label: 'AI 模型配置',
     description: '本地模型、云端模型连接配置',
+  },
+  UI_THEME: {
+    label: '界面主题',
+    description: '运行时按钮/表单/卡片主题变量',
   },
 }
 

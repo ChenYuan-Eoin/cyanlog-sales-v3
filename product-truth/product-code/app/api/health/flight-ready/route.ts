@@ -17,6 +17,7 @@ const REQUIRED_TABLES = [
   'user_organizations',
   'configs',
   'config_versions',
+  'contract_analysis_jobs',
 ]
 
 interface SubsystemStatus {

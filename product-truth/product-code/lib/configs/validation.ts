@@ -15,7 +15,7 @@ export const configCreateSchema = z.object({
   key: configKeySchema,
   name: z.string().min(1, '名称不能为空').max(200, '名称过长'),
   value: z.record(z.string(), z.unknown()),
-  type: z.enum(['CONTRACT_RULE', 'TAX_RULE', 'APPROVAL_RULE', 'AI_CONFIG']),
+  type: z.enum(['CONTRACT_RULE', 'TAX_RULE', 'APPROVAL_RULE', 'AI_CONFIG', 'UI_THEME']),
   description: z.string().max(1000).optional(),
 })
 
@@ -85,6 +85,28 @@ export const contractRuleValueSchema = z.object({
     .optional(),
 })
 
+export const uiThemeValueSchema = z.object({
+  primary: z.string().min(1),
+  primaryForeground: z.string().min(1),
+  secondary: z.string().min(1),
+  secondaryForeground: z.string().min(1),
+  background: z.string().min(1),
+  foreground: z.string().min(1),
+  card: z.string().min(1).optional(),
+  cardForeground: z.string().min(1).optional(),
+  popover: z.string().min(1).optional(),
+  popoverForeground: z.string().min(1).optional(),
+  muted: z.string().min(1).optional(),
+  mutedForeground: z.string().min(1).optional(),
+  border: z.string().min(1),
+  input: z.string().min(1),
+  ring: z.string().min(1),
+  destructive: z.string().min(1),
+  destructiveForeground: z.string().min(1).optional(),
+  radiusMd: z.number().min(0).max(32),
+  radiusLg: z.number().min(0).max(32),
+})
+
 // 根据类型验证配置值
 export function validateConfigValue(type: ConfigType, value: Record<string, unknown>): {
   valid: boolean
@@ -103,6 +125,9 @@ export function validateConfigValue(type: ConfigType, value: Record<string, unkn
         break
       case 'CONTRACT_RULE':
         contractRuleValueSchema.parse(value)
+        break
+      case 'UI_THEME':
+        uiThemeValueSchema.parse(value)
         break
     }
     return { valid: true }

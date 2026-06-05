@@ -141,7 +141,7 @@ export default function HomePage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => {
     let mounted = true

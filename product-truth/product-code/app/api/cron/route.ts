@@ -3,6 +3,8 @@
 // Schedule: 每天 10:00 执行
 
 import { NextRequest, NextResponse } from 'next/server'
+import { processQueuedContractAnalysisJobs } from '@/lib/contract-analysis'
+import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -16,6 +18,12 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleCron(req: NextRequest) {
+  const startedAt = Date.now()
+  const requestId = getRequestId(req)
+  const route = '/api/cron'
+
+  logRouteStart({ route, requestId })
+
   // 验证 CRON_SECRET 授权
   const authHeader = req.headers.get('Authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -45,6 +53,8 @@ async function handleCron(req: NextRequest) {
   try {
     const results = await runCronTasks()
 
+    logRouteDone({ route, requestId }, startedAt, { taskCount: results.length })
+
     return NextResponse.json({
       success: true,
       message: 'Cron tasks completed',
@@ -52,7 +62,7 @@ async function handleCron(req: NextRequest) {
       results,
     })
   } catch (error) {
-    console.error('[CRON] Task execution failed:', error)
+    await logRouteFailure(req, { route, requestId }, startedAt, error)
     return NextResponse.json(
       { error: 'Task execution failed', details: String(error) },
       { status: 500 }
@@ -95,6 +105,19 @@ async function runCronTasks(): Promise<Array<{ task: string; status: string; dur
     tasks.push({ task: 'cleanup_temp_files', status: 'completed', duration: Date.now() - cleanupStart })
   } catch {
     tasks.push({ task: 'cleanup_temp_files', status: 'failed' })
+  }
+
+  // 5. 处理合同审核任务
+  const contractAnalysisStart = Date.now()
+  try {
+    const processed = await processQueuedContractAnalysisJobs('cron', 5)
+    tasks.push({
+      task: `process_contract_analysis_jobs:${processed.length}`,
+      status: 'completed',
+      duration: Date.now() - contractAnalysisStart,
+    })
+  } catch {
+    tasks.push({ task: 'process_contract_analysis_jobs', status: 'failed' })
   }
 
   console.log(`[CRON] All tasks completed in ${Date.now() - startTime}ms`, tasks)

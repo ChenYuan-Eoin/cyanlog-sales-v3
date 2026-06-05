@@ -5,16 +5,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { reviewWithFailover } from '@/lib/ai/failover'
+import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const startedAt = Date.now()
+  const requestId = getRequestId(req)
+  const route = '/api/contracts/[id]/ai-review'
+
   try {
     const user = await requireAuth(req)
     const contractId = params.id
+    logRouteStart({
+      route,
+      requestId,
+      userId: user.id,
+      details: { contractId },
+    })
 
     // Fetch contract with owner verification
     const { data: contract, error } = await supabaseAdmin
@@ -41,14 +53,26 @@ export async function POST(
     headers.set('X-AI-Provider', provider)
     headers.set('X-AI-Degraded', degraded ? 'true' : 'false')
 
+    logRouteDone(
+      {
+        route,
+        requestId,
+        userId: user.id,
+        details: { contractId },
+      },
+      startedAt,
+      {
+        provider,
+        degraded,
+      }
+    )
+
     return new NextResponse(stream, {
       headers,
       status: 200,
     })
 
   } catch (error) {
-    console.error('[AI Review] Error:', error)
-
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
       return NextResponse.json(
@@ -56,6 +80,17 @@ export async function POST(
         { status: 401 }
       )
     }
+
+    await logRouteFailure(
+      req,
+      {
+        route,
+        requestId,
+        details: { contractId: params.id },
+      },
+      startedAt,
+      error
+    )
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'AI review failed' },

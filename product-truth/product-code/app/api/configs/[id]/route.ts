@@ -101,7 +101,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
     // 如果更新 value，需要验证
     if (validated.data.value) {
-      const type = (config as { type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' }).type
+      const type = (config as { type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' | 'UI_THEME' }).type
       const valueValidation = validateConfigValue(type, validated.data.value)
       if (!valueValidation.valid) {
         return errorResponse(`配置值验证失败: ${valueValidation.error}`, 400, 'INVALID_VALUE')

@@ -22,6 +22,7 @@ const REQUIRED_TABLES = [
   // 配置中心
   'configs',
   'config_versions',
+  'contract_analysis_jobs',
   // F015-F019 知识库 + 日程 (新增)
   'login_attempts',
   'error_logs',

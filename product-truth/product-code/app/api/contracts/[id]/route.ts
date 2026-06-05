@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { contractIdSchema } from '@/lib/validation'
+import { logError } from '@/lib/error-log'
+import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -16,8 +18,18 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const startedAt = Date.now()
+  const requestId = getRequestId(req)
+  const route = '/api/contracts/[id]'
+
   try {
     const user = await requireAuth(req)
+    logRouteStart({
+      route,
+      requestId,
+      userId: user.id,
+      details: { contractId: params.id },
+    })
 
     // Zod验证ID格式
     const idResult = contractIdSchema.safeParse({ id: params.id })
@@ -35,7 +47,20 @@ export async function GET(
       .single()
 
     if (error) {
-      console.error('Get contract error:', error)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+          details: { contractId: id },
+        },
+        startedAt,
+        error,
+        {
+          phase: 'get_contract',
+        }
+      )
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
@@ -43,13 +68,72 @@ export async function GET(
       return errorResponse('合同不存在', 404, 'NOT_FOUND')
     }
 
+    if (Array.isArray(contract.contract_reviews)) {
+      contract.contract_reviews = contract.contract_reviews.sort((
+        a: { created_at: string },
+        b: { created_at: string }
+      ) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    }
+
+    const { data: jobs, error: jobsError } = await supabaseAdmin
+      .from('contract_analysis_jobs')
+      .select('*')
+      .eq('contract_id', id)
+      .order('created_at', { ascending: false })
+
+    if (jobsError) {
+      await logError({
+        req,
+        source: 'api',
+        userId: user.id,
+        message: jobsError.message,
+        error: jobsError,
+        context: {
+          route,
+          requestId,
+          contractId: id,
+          phase: 'get_contract_jobs',
+        },
+      })
+      contract.contract_analysis_jobs = []
+    } else if (Array.isArray(jobs)) {
+      contract.contract_analysis_jobs = jobs
+    }
+
+    contract.latest_analysis_job = contract.contract_analysis_jobs?.[0] ?? null
+
+    logRouteDone(
+      {
+        route,
+        requestId,
+        userId: user.id,
+        details: { contractId: id },
+      },
+      startedAt,
+      {
+        reviewCount: contract.contract_reviews?.length ?? 0,
+        jobCount: contract.contract_analysis_jobs?.length ?? 0,
+      }
+    )
+
     return NextResponse.json(contract)
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
       return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
     }
-    console.error('Get contract error:', error)
+    await logRouteFailure(
+      req,
+      {
+        route,
+        requestId,
+        details: { contractId: params.id },
+      },
+      startedAt,
+      error
+    )
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }
@@ -59,8 +143,18 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const startedAt = Date.now()
+  const requestId = getRequestId(req)
+  const route = '/api/contracts/[id]'
+
   try {
     const user = await requireAuth(req)
+    logRouteStart({
+      route,
+      requestId,
+      userId: user.id,
+      details: { contractId: params.id, method: 'DELETE' },
+    })
 
     // Zod验证ID格式
     const idResult = contractIdSchema.safeParse({ id: params.id })
@@ -85,7 +179,22 @@ export async function DELETE(
     // 删除Storage中的文件（异步，不阻塞）
     if (contract.storage_path) {
       supabaseAdmin.storage.from('contracts').remove([contract.storage_path])
-        .catch(err => console.error('Storage delete error:', err))
+        .catch(async (storageError) => {
+          await logError({
+            req,
+            source: 'api',
+            userId: user.id,
+            message: storageError instanceof Error ? storageError.message : String(storageError),
+            error: storageError,
+            context: {
+              route,
+              requestId,
+              contractId: id,
+              phase: 'delete_contract_storage',
+              storagePath: contract.storage_path,
+            },
+          })
+        })
     }
 
     // 删除数据库记录（带 owner 校验）
@@ -96,9 +205,32 @@ export async function DELETE(
       .eq('created_by', user.id)
 
     if (error) {
-      console.error('Delete contract error:', error)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+          details: { contractId: id, method: 'DELETE' },
+        },
+        startedAt,
+        error,
+        {
+          phase: 'delete_contract_record',
+        }
+      )
       return errorResponse('删除失败', 500, 'DB_ERROR')
     }
+
+    logRouteDone(
+      {
+        route,
+        requestId,
+        userId: user.id,
+        details: { contractId: id, method: 'DELETE' },
+      },
+      startedAt
+    )
 
     return NextResponse.json({ success: true, message: '合同已删除' })
   } catch (error) {
@@ -106,7 +238,16 @@ export async function DELETE(
     if (authError) {
       return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
     }
-    console.error('Delete contract error:', error)
+    await logRouteFailure(
+      req,
+      {
+        route,
+        requestId,
+        details: { contractId: params.id, method: 'DELETE' },
+      },
+      startedAt,
+      error
+    )
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }

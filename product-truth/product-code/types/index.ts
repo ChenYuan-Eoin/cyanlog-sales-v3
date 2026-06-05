@@ -56,6 +56,8 @@ export interface Contract {
   created_at: string
   updated_at: string
   contract_reviews?: ContractReview[]
+  contract_analysis_jobs?: ContractAnalysisJob[]
+  latest_analysis_job?: ContractAnalysisJob | null
 }
 
 export interface ContractReview {
@@ -72,6 +74,23 @@ export interface ContractReview {
   rule_version: number | null
   created_at: string
   completed_at: string | null
+}
+
+export interface ContractAnalysisJob {
+  id: string
+  contract_id: string
+  review_id: string
+  requested_by: string | null
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  attempts: number
+  provider: string | null
+  degraded: boolean
+  last_error: string | null
+  locked_at: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface Risk {

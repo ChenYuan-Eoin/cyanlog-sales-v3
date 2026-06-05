@@ -5,6 +5,24 @@
 
 /* Cyanlog Design System - Inline for production */
 :root {
+  --background: 238 243 248;
+  --foreground: 15 23 42;
+  --card: 255 255 255;
+  --card-foreground: 15 23 42;
+  --popover: 255 255 255;
+  --popover-foreground: 15 23 42;
+  --primary: 37 99 235;
+  --primary-foreground: 255 255 255;
+  --secondary: 239 246 255;
+  --secondary-foreground: 15 23 42;
+  --muted: 248 250 252;
+  --muted-foreground: 100 116 139;
+  --border: 219 228 238;
+  --input: 255 255 255;
+  --ring: 96 165 250;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+
   /* Ink / neutrals */
   --ink-1000: #050a14;
   --ink-950:  #0b1220;
@@ -47,24 +65,24 @@
   --danger-100:  #fee2e2;
 
   /* Semantic role tokens */
-  --fg-1: var(--ink-900);
+  --fg-1: rgb(var(--foreground));
   --fg-2: var(--ink-700);
   --fg-3: var(--ink-500);
   --fg-4: var(--ink-400);
   --fg-on-dark: rgba(255, 255, 255, 0.92);
   --fg-on-dark-2: rgba(255, 255, 255, 0.62);
 
-  --bg-page:      #eef3f8;
-  --bg-surface:   var(--ink-0);
+  --bg-page:      rgb(var(--background));
+  --bg-surface:   rgb(var(--card));
   --bg-shell:     var(--ink-950);
-  --bg-muted:     var(--ink-50);
+  --bg-muted:     rgb(var(--muted));
 
-  --border-1: var(--ink-200);
+  --border-1: rgb(var(--border));
   --border-2: var(--ink-150);
   --border-3: var(--ink-300);
   --border-on-dark: rgba(255, 255, 255, 0.08);
 
-  --accent:        var(--accent-600);
+  --accent:        rgb(var(--primary));
   --accent-strong: var(--accent-700);
   --accent-soft:   var(--accent-100);
 
@@ -97,6 +115,7 @@
   --text-body-sm: 13px;
   --text-caption: 12px;
   --text-overline: 11px;
+  --lh-body: 1.6;
 
   /* Layout */
   --page-max: 1560px;
@@ -117,6 +136,10 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
+}
+
+body {
+  min-height: 100vh;
 }
 
 /* Utility classes for shell layout */

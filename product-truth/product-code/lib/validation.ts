@@ -1,5 +1,15 @@
 import { z } from 'zod'
 
+function optionalIntParam(defaultValue: number, options: { min: number; max?: number }) {
+  const schema = z.coerce.number().int().min(options.min)
+  const boundedSchema = options.max === undefined ? schema : schema.max(options.max)
+
+  return z.preprocess(
+    (value) => value === null || value === undefined || value === '' ? undefined : value,
+    boundedSchema.default(defaultValue)
+  )
+}
+
 // 基础验证工具
 export const uuidSchema = z.string().uuid()
 
@@ -10,8 +20,8 @@ export const dateTimeStringSchema = z.string().refine(
 
 // 通用分页参数
 export const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  page: optionalIntParam(1, { min: 1 }),
+  pageSize: optionalIntParam(20, { min: 1, max: 100 }),
 })
 
 export const loginSchema = z.object({

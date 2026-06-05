@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth, sanitizeFileName } from '@/lib/auth'
 import { v4 as uuidv4 } from 'uuid'
 import { paginationSchema } from '@/lib/validation'
+import { logError } from '@/lib/error-log'
+import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -11,8 +13,17 @@ function errorResponse(message: string, status: number, code?: string) {
 
 // GET /api/contracts - 获取合同列表（需登录）
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now()
+  const requestId = getRequestId(req)
+  const route = '/api/contracts'
+
   try {
     const user = await requireAuth(req)
+    logRouteStart({
+      route,
+      requestId,
+      userId: user.id,
+    })
 
     const { searchParams } = new URL(req.url)
 
@@ -45,12 +56,78 @@ export async function GET(req: NextRequest) {
     )
 
     if (error) {
-      console.error('Get contracts error:', error)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+        },
+        startedAt,
+        error,
+        {
+          phase: 'list_contracts',
+        }
+      )
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
+    const contractIds = data?.map((contract) => contract.id) ?? []
+    let latestJobsByContractId = new Map<string, Record<string, unknown>>()
+
+    if (contractIds.length > 0) {
+      const { data: jobs, error: jobsError } = await supabaseAdmin
+        .from('contract_analysis_jobs')
+        .select('*')
+        .in('contract_id', contractIds)
+        .order('created_at', { ascending: false })
+
+      if (jobsError) {
+        await logError({
+          req,
+          source: 'api',
+          userId: user.id,
+          message: jobsError.message,
+          error: jobsError,
+          context: {
+            route,
+            requestId,
+            phase: 'list_contract_jobs',
+            contractCount: contractIds.length,
+          },
+        })
+      } else {
+        latestJobsByContractId = jobs.reduce((map, job) => {
+          if (!map.has(job.contract_id)) {
+            map.set(job.contract_id, job)
+          }
+          return map
+        }, new Map<string, Record<string, unknown>>())
+      }
+    }
+
+    const enrichedContracts = (data ?? []).map((contract) => ({
+      ...contract,
+      latest_analysis_job: latestJobsByContractId.get(contract.id) ?? null,
+    }))
+
+    logRouteDone(
+      {
+        route,
+        requestId,
+        userId: user.id,
+      },
+      startedAt,
+      {
+        page,
+        pageSize,
+        count: enrichedContracts.length,
+        total: count || 0,
+      }
+    )
+
     return NextResponse.json({
-      data,
+      data: enrichedContracts,
       meta: {
         page,
         pageSize,
@@ -62,15 +139,32 @@ export async function GET(req: NextRequest) {
     if (authError) {
       return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
     }
-    console.error('Get contracts error:', error)
+    await logRouteFailure(
+      req,
+      {
+        route,
+        requestId,
+      },
+      startedAt,
+      error
+    )
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }
 
 // POST /api/contracts - 上传合同（需登录）
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now()
+  const requestId = getRequestId(req)
+  const route = '/api/contracts'
+
   try {
     const user = await requireAuth(req)
+    logRouteStart({
+      route,
+      requestId,
+      userId: user.id,
+    })
 
     const formData = await req.formData()
     const file = formData.get('file') as File
@@ -107,7 +201,20 @@ export async function POST(req: NextRequest) {
       })
 
     if (uploadError) {
-      console.error('Upload error:', uploadError)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+        },
+        startedAt,
+        uploadError,
+        {
+          phase: 'upload_contract_file',
+          filePath,
+        }
+      )
       return errorResponse('文件上传失败', 500, 'UPLOAD_FAILED')
     }
 
@@ -127,9 +234,35 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      console.error('Contract insert error:', error)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+        },
+        startedAt,
+        error,
+        {
+          phase: 'insert_contract_record',
+          filePath,
+        }
+      )
       return errorResponse('创建合同记录失败', 500, 'DB_ERROR')
     }
+
+    logRouteDone(
+      {
+        route,
+        requestId,
+        userId: user.id,
+      },
+      startedAt,
+      {
+        contractId: contract.id,
+        filePath,
+      }
+    )
 
     return NextResponse.json(contract, { status: 201 })
   } catch (error) {
@@ -137,7 +270,15 @@ export async function POST(req: NextRequest) {
     if (authError) {
       return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
     }
-    console.error('Create contract error:', error)
+    await logRouteFailure(
+      req,
+      {
+        route,
+        requestId,
+      },
+      startedAt,
+      error
+    )
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }
