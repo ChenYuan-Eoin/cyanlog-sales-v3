@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 查找用户
-    let query = supabaseAdmin.from('users').select('id, email, phone, display_name, password_hash')
+    let query = supabaseAdmin.from('users').select('id, email, phone, display_name, password_hash, must_change_password')
     if (email) {
       query = query.eq('email', email)
     } else {
@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
       },
       token,
       expiresAt: expiresAt.toISOString(),
+      mustChangePassword: Boolean(user.must_change_password),
     })
   } catch (error) {
     console.error('Login error:', error)

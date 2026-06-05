@@ -20,6 +20,11 @@ const PUBLIC_API_PATHS = [
   '/api/health/flight-ready',
   '/api/cron',
 ]
+const PASSWORD_CHANGE_ALLOWED_PATHS = [
+  '/change-password',
+  '/api/auth/me',
+  '/api/auth/change-password',
+]
 
 // REQ: F003 自主可控 + RBAC
 // 路径 → 所需权限（路由级权限，权限可配置于 roles.permissions）
@@ -41,6 +46,10 @@ function getRequiredPermission(pathname: string): string | null {
     if (pathname === prefix || pathname.startsWith(prefix + '/')) return perm
   }
   return null
+}
+
+function isPasswordChangeAllowedPath(pathname: string): boolean {
+  return PASSWORD_CHANGE_ALLOWED_PATHS.some((path) => pathname === path || pathname.startsWith(path + '/'))
 }
 
 export function hasPermission(allPermissions: string[], required: string): boolean {
@@ -104,6 +113,26 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('id, must_change_password')
+      .eq('id', tokenRecord.user_id)
+      .maybeSingle()
+
+    if (!userRow) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    if (userRow.must_change_password && !isPasswordChangeAllowedPath(pathname)) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Password change required', code: 'MUST_CHANGE_PASSWORD' }, { status: 403 })
+      }
+      return NextResponse.redirect(new URL('/change-password', request.url))
     }
 
     // 读取用户的角色与合并后的权限

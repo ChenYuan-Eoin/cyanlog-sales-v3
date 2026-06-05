@@ -23,6 +23,7 @@ type OrgUserRow = {
   display_name: string
   title: string | null
   status: string
+  must_change_password: boolean | null
   primary_dept_id: string | null
   primary_dept: DepartmentLink
   user_roles: UserRoleLink[] | null
@@ -260,7 +261,7 @@ async function listOrgPayload(orgId: string) {
   const [usersResult, departmentsResult, rolesResult, orgResult] = await Promise.all([
     supabaseAdmin
       .from('users')
-      .select('id, email, display_name, title, status, primary_dept_id, primary_dept:departments!primary_dept_id(name), user_roles(role:roles(name, code))')
+      .select('id, email, display_name, title, status, must_change_password, primary_dept_id, primary_dept:departments!primary_dept_id(name), user_roles(role:roles(name, code))')
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })
       .limit(200),
@@ -310,6 +311,7 @@ async function listOrgPayload(orgId: string) {
       role_names: roleEntries.map((role) => role.name).filter(Boolean).join(', '),
       role_codes: roleEntries.map((role) => role.code).filter((code): code is string => Boolean(code)),
       status: row.status,
+      must_change_password: Boolean(row.must_change_password),
     }
   })
 
@@ -479,6 +481,7 @@ export async function POST(req: NextRequest) {
           display_name: displayName.trim(),
           title: title?.trim() || null,
           password_hash: passwordHash,
+          must_change_password: true,
           status: status || 'active',
           primary_dept_id: primaryDeptId || null,
         })
@@ -650,6 +653,49 @@ export async function PATCH(req: NextRequest) {
 
       await replaceOrgRoles(userId, auth.orgId, roleCodes)
       return NextResponse.json({ ok: true })
+    }
+
+    if (type === 'user_password_reset') {
+      const { userId } = body as {
+        userId?: string
+      }
+
+      if (!userId) {
+        return errorResponse('成员参数不完整', 400, 'INVALID_USER_PAYLOAD')
+      }
+
+      const { data: userRow } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .eq('org_id', auth.orgId)
+        .maybeSingle()
+
+      if (!userRow) {
+        return errorResponse('成员不存在', 404, 'USER_NOT_FOUND')
+      }
+
+      const tempPassword = createTempPassword()
+      const passwordHash = await bcrypt.hash(tempPassword, 12)
+
+      const { error } = await supabaseAdmin
+        .from('users')
+        .update({
+          password_hash: passwordHash,
+          must_change_password: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+        .eq('org_id', auth.orgId)
+
+      if (error) {
+        return errorResponse('重置密码失败', 500, 'PASSWORD_RESET_FAILED')
+      }
+
+      return NextResponse.json({
+        ok: true,
+        tempPassword,
+      })
     }
 
     return errorResponse('不支持的操作类型', 400, 'UNSUPPORTED_TYPE')

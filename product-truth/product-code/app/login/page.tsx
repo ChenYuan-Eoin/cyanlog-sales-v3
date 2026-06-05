@@ -34,7 +34,7 @@ export default function LoginPage() {
       document.cookie = `token=${data.token}; path=/; max-age=86400`
       localStorage.setItem('token', data.token)
 
-      router.push('/')
+      router.push(data.mustChangePassword ? '/change-password' : '/')
       router.refresh()
     } catch {
       setError('网络错误，请稍后重试')

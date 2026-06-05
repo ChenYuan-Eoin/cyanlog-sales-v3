@@ -14,6 +14,7 @@ interface UserRow {
   role_names: string
   role_codes?: string[]
   status: string
+  must_change_password: boolean
 }
 
 interface DepartmentRow {
@@ -220,6 +221,25 @@ export default function OrgAdminPage() {
     }
   }
 
+  async function resetUserPassword(userId: string, email: string) {
+    setSavingId(`${userId}-password`)
+    try {
+      const result = await requestOrgApi('PATCH', {
+        type: 'user_password_reset',
+        userId,
+      })
+      const tempPassword = typeof result.tempPassword === 'string' ? result.tempPassword : ''
+      setLastTempPassword(tempPassword ? `${email}: ${tempPassword}` : '')
+      setMessage(tempPassword ? `${email} 已重置临时密码，用户下次登录将强制改密。` : `${email} 已重置临时密码`)
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] reset user password error', e)
+      alert(e instanceof Error ? e.message : '重置密码失败')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   async function createUser() {
     if (!newUserEmail.trim() || !newUserName.trim()) {
       alert('请填写成员邮箱和姓名')
@@ -245,7 +265,8 @@ export default function OrgAdminPage() {
       setNewUserTitle('')
       setNewUserPrimaryDeptId('')
       setNewUserRoleCodes(['SALES'])
-      setMessage(tempPassword ? `成员已创建，临时密码：${tempPassword}` : '成员已创建')
+      setMessage(tempPassword ? '成员已创建，首次登录将强制修改密码。' : '成员已创建')
+      setLastTempPassword(tempPassword ? `${newUserEmail}: ${tempPassword}` : '')
       await loadData()
     } catch (e) {
       console.error('[OrgAdmin] create user error', e)
@@ -338,7 +359,7 @@ export default function OrgAdminPage() {
 
       {lastTempPassword && (
         <div style={{ marginTop: 12, padding: 12, background: 'var(--warning-100)', borderRadius: 'var(--radius-md)' }}>
-          最新临时密码：<code>{lastTempPassword}</code>
+          最新临时密码：<code>{lastTempPassword}</code>。用户首次登录后必须修改密码。
         </div>
       )}
 
@@ -446,6 +467,8 @@ export default function OrgAdminPage() {
                 <th>主部门</th>
                 <th>角色</th>
                 <th>状态</th>
+                <th>密码状态</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -506,6 +529,29 @@ export default function OrgAdminPage() {
                       <option value="inactive">inactive</option>
                       <option value="suspended">suspended</option>
                     </select>
+                  </td>
+                  <td>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '4px 8px',
+                      borderRadius: 999,
+                      fontSize: 'var(--text-caption)',
+                      background: u.must_change_password ? 'var(--warning-100)' : 'var(--success-100)',
+                      color: u.must_change_password ? 'var(--warning-700)' : 'var(--success-700)',
+                    }}>
+                      {u.must_change_password ? '待改密' : '正常'}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={savingId === `${u.id}-password`}
+                      onClick={() => void resetUserPassword(u.id, u.email)}
+                    >
+                      {savingId === `${u.id}-password` ? '重置中...' : '重置临时密码'}
+                    </button>
                   </td>
                 </tr>
               ))}

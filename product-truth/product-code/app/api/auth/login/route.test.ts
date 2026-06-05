@@ -132,7 +132,34 @@ describe('POST /api/auth/login', () => {
       expect(body.token).toBeTruthy()
       expect(body.user.id).toBe('u1')
       expect(body.expiresAt).toBeTruthy()
+      expect(body.mustChangePassword).toBe(false)
       expect(recordLoginAttempt).toHaveBeenCalledWith('u@x.com', '127.0.0.1', true)
+    })
+
+    it('首登临时密码用户返回 mustChangePassword', async () => {
+      ;(checkLoginRateLimit as any).mockResolvedValue({ allowed: true, remainingAttempts: 5 })
+      ;(bcrypt.compare as any).mockResolvedValue(true)
+
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce(
+          makeChain({
+            data: {
+              id: 'u2',
+              email: 'temp@x.com',
+              display_name: 'Temp User',
+              password_hash: 'hashed',
+              must_change_password: true,
+            },
+            error: null,
+          })
+        )
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+
+      const res = await POST(makeRequest({ email: 'temp@x.com', password: 'TempPassword123!' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.mustChangePassword).toBe(true)
     })
   })
 })

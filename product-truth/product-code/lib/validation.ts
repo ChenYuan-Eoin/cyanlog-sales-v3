@@ -41,6 +41,14 @@ export const registerSchema = z.object({
   message: '邮箱或手机号至少填一个',
 })
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, '当前密码不能为空'),
+  newPassword: z.string().min(8, '新密码至少8位').max(128, '新密码过长'),
+}).refine((data) => data.currentPassword !== data.newPassword, {
+  message: '新密码不能与当前密码相同',
+  path: ['newPassword'],
+})
+
 export const quoteSchema = z.object({
   customer_name: z.string().min(1).max(255),
   customer_contact: z.string().max(255).optional(),

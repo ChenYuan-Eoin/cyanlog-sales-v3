@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
     const { data: userRow, error: userError } = await supabaseAdmin
       .from('users')
-      .select('id, email, phone, display_name, title, primary_dept_id, org_id')
+      .select('id, email, phone, display_name, title, primary_dept_id, org_id, must_change_password')
       .eq('id', user.id)
       .single()
 
@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
       user: {
         ...userRow,
         roles,
+        mustChangePassword: Boolean(userRow.must_change_password),
       },
     })
   } catch (error) {
