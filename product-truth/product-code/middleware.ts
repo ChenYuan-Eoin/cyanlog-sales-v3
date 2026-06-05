@@ -3,6 +3,13 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const PUBLIC_PATHS = ['/', '/login', '/register']
+const PRIMARY_HOST = 'sales.cyanlog.icu'
+const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }> = {
+  'quote.cyanlog.icu': { rootPath: '/quotes', preservePath: true },
+  'contract.cyanlog.icu': { rootPath: '/contracts', preservePath: true },
+  'cyanlog.icu': { rootPath: '/', preservePath: true },
+  'www.cyanlog.icu': { rootPath: '/', preservePath: true },
+}
 const PUBLIC_API_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
@@ -17,8 +24,8 @@ const PUBLIC_API_PATHS = [
 // REQ: F003 自主可控 + RBAC
 // 路径 → 所需权限（路由级权限，权限可配置于 roles.permissions）
 const ROUTE_PERMISSIONS: Record<string, string> = {
-  '/configs': 'config:read',
-  '/admin': 'admin:access',
+  '/configs': 'config:*',
+  '/admin': 'org:*',
 }
 
 function isPublicPath(pathname: string): boolean {
@@ -36,8 +43,36 @@ function getRequiredPermission(pathname: string): string | null {
   return null
 }
 
+export function hasPermission(allPermissions: string[], required: string): boolean {
+  if (allPermissions.includes('*') || allPermissions.includes(required)) {
+    return true
+  }
+
+  const [requiredResource] = required.split(':')
+  return allPermissions.some((permission) => {
+    if (permission === '*') {
+      return true
+    }
+    if (!permission.includes(':')) {
+      return permission === required
+    }
+    const [resource, action] = permission.split(':')
+    return resource === requiredResource && action === '*'
+  })
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const host = request.headers.get('host')?.toLowerCase()
+  const redirectRule = host ? HOST_REDIRECTS[host] : undefined
+
+  if (redirectRule) {
+    const url = request.nextUrl.clone()
+    url.protocol = 'https:'
+    url.host = PRIMARY_HOST
+    url.pathname = redirectRule.preservePath && pathname !== '/' ? pathname : redirectRule.rootPath
+    return NextResponse.redirect(url, 308)
+  }
 
   if (isPublicPath(pathname)) {
     return NextResponse.next()
@@ -55,7 +90,7 @@ export async function middleware(request: NextRequest) {
 
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     const { data: tokenRecord } = await supabase
@@ -99,7 +134,7 @@ export async function middleware(request: NextRequest) {
 
     // 路径级权限校验
     const required = getRequiredPermission(pathname)
-    if (required && !allPermissions.includes('*') && !allPermissions.includes(required)) {
+    if (required && !hasPermission(allPermissions, required)) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Forbidden', required }, { status: 403 })
       }

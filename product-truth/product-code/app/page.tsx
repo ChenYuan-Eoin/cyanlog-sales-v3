@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 
 // 类型定义（与数据库 schema 对应）
 interface SalesSpace {
@@ -69,8 +68,18 @@ interface Profile {
   email: string
   title: string | null
   primary_dept_id: string
+  org_id?: string | null
   roles: { code: string; name: string }[]
   spaces: SalesSpace[]
+}
+
+interface DashboardPayload {
+  spaces: SalesSpace[]
+  activeSpace: SalesSpace | null
+  opportunities: (Opportunity & { customer?: Customer })[]
+  milestones: Milestone[]
+  reminders: Reminder[]
+  agenda: AgendaItem[]
 }
 
 const STATUS_MAP: Record<string, { label: string; pillClass: string }> = {
@@ -103,87 +112,30 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // 加载全部数据
-  const load = useCallback(async (userId: string) => {
+  const load = useCallback(async (spaceId?: string) => {
     setLoading(true)
     try {
-      // 1. 用户空间
-      const { data: spaceMembers } = await supabase
-        .from('sales_space_members')
-        .select('space:sales_spaces(*)')
-        .eq('user_id', userId)
+      const token = localStorage.getItem('token')
+      const url = spaceId ? `/api/dashboard?spaceId=${encodeURIComponent(spaceId)}` : '/api/dashboard'
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
 
-      const spaces: SalesSpace[] = (spaceMembers || [])
-        .map((m: { space: SalesSpace | SalesSpace[] }) => Array.isArray(m.space) ? m.space[0] : m.space)
-        .filter((s): s is SalesSpace => Boolean(s))
-
-      if (spaces.length === 0) {
-        setProfile(prev => prev ? { ...prev, spaces: [] } : null)
-        setActiveSpace(null)
-        setOpportunities([])
-        setMilestones([])
-        return
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push('/login')
+          return
+        }
+        throw new Error('Dashboard load failed')
       }
 
-      // 默认第一个空间
-      const currentSpace = spaces[0]
-      setActiveSpace(currentSpace)
-
-      // 2. 空间内机会
-      const { data: opps } = await supabase
-        .from('opportunities')
-        .select('*, customer:customers(id, name, short_name)')
-        .eq('space_id', currentSpace.id)
-        .order('expected_close_date', { ascending: true })
-        .limit(20)
-
-      const oppsData = (opps || []).map((o: Opportunity & { customer: Customer | Customer[] }) => ({
-        ...o,
-        customer: Array.isArray(o.customer) ? o.customer[0] : o.customer,
-      }))
-      setOpportunities(oppsData)
-
-      // 3. 空间内节点的硬节点（今日到期）
-      const today = new Date()
-      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-      const { data: mls } = await supabase
-        .from('milestones')
-        .select('*, opportunity:opportunities(name, customer_id)')
-        .in('opportunity_id', oppsData.map(o => o.id))
-        .in('status', ['PENDING', 'IN_PROGRESS'])
-        .lte('due_date', nextWeek.toISOString())
-        .order('due_date', { ascending: true })
-        .limit(10)
-
-      setMilestones((mls || []).map((m: Milestone & { opportunity: { name: string; customer_id: string } | { name: string; customer_id: string }[] }) => ({
-        ...m,
-        opportunity: Array.isArray(m.opportunity) ? m.opportunity[0] : m.opportunity,
-      })))
-
-      // 4. 当前用户提醒
-      const { data: rems } = await supabase
-        .from('reminders')
-        .select('*')
-        .eq('user_id', userId)
-        .is('dismissed_at', null)
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      setReminders(rems || [])
-
-      // 5. 今日日程
-      const todayStr = today.toISOString().slice(0, 10)
-      const { data: ag } = await supabase
-        .from('agenda_items')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('agenda_date', todayStr)
-        .order('start_time', { ascending: true })
-        .limit(6)
-
-      setAgenda(ag || [])
-
-      // 6. 设置 profile 的 spaces
-      setProfile(prev => prev ? { ...prev, spaces } : null)
+      const data = await res.json() as DashboardPayload
+      setProfile(prev => prev ? { ...prev, spaces: data.spaces || [] } : null)
+      setActiveSpace(data.activeSpace || null)
+      setOpportunities(data.opportunities || [])
+      setMilestones(data.milestones || [])
+      setReminders(data.reminders || [])
+      setAgenda(data.agenda || [])
     } catch (e) {
       console.error('[Dashboard] load error', e)
     } finally {
@@ -194,25 +146,22 @@ export default function HomePage() {
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      const token = localStorage.getItem('token')
+      const profileRes = await fetch('/api/auth/me', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+
+      if (!profileRes.ok) {
         router.push('/login')
         return
       }
 
-      // 读 profile + roles
-      const { data: profileRow } = await supabase
-        .from('users')
-        .select('id, display_name, email, title, primary_dept_id, user_roles(role:roles(code, name))')
-        .eq('id', user.id)
-        .single()
+      const profilePayload = await profileRes.json()
+      const profileRow = profilePayload.user as Profile | undefined
 
       if (mounted && profileRow) {
-        const roles = (profileRow.user_roles || []).map((r: { role: { code: string; name: string } | { code: string; name: string }[] }) =>
-          Array.isArray(r.role) ? r.role[0] : r.role
-        ).filter(Boolean)
-        setProfile({ ...profileRow, roles, spaces: [] })
-        await load(user.id)
+        setProfile({ ...profileRow, roles: profileRow.roles || [], spaces: [] })
+        await load()
       } else {
         setLoading(false)
       }
@@ -225,36 +174,8 @@ export default function HomePage() {
     const sp = profile?.spaces.find(s => s.id === spaceId)
     if (!sp || !profile) return
     setActiveSpace(sp)
-    setLoading(true)
-    const { data: opps } = await supabase
-      .from('opportunities')
-      .select('*, customer:customers(id, name, short_name)')
-      .eq('space_id', spaceId)
-      .order('expected_close_date', { ascending: true })
-      .limit(20)
-    const oppsData = (opps || []).map((o: Opportunity & { customer: Customer | Customer[] }) => ({
-      ...o,
-      customer: Array.isArray(o.customer) ? o.customer[0] : o.customer,
-    }))
-    setOpportunities(oppsData)
-
-    if (oppsData.length > 0) {
-      const { data: mls } = await supabase
-        .from('milestones')
-        .select('*, opportunity:opportunities(name, customer_id)')
-        .in('opportunity_id', oppsData.map(o => o.id))
-        .in('status', ['PENDING', 'IN_PROGRESS'])
-        .order('due_date', { ascending: true })
-        .limit(10)
-      setMilestones((mls || []).map((m: Milestone & { opportunity: { name: string; customer_id: string } | { name: string; customer_id: string }[] }) => ({
-        ...m,
-        opportunity: Array.isArray(m.opportunity) ? m.opportunity[0] : m.opportunity,
-      })))
-    } else {
-      setMilestones([])
-    }
-    setLoading(false)
-  }, [profile])
+    void load(spaceId)
+  }, [load, profile])
 
   // 统计计算
   const stats = {
@@ -410,8 +331,8 @@ export default function HomePage() {
             </div>
             <button
               onClick={async () => {
-                await supabase.auth.signOut()
                 document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+                localStorage.removeItem('token')
                 router.push('/login')
               }}
               className="btn btn-ghost btn-sm"

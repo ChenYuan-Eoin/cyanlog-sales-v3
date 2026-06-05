@@ -1,28 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
-
-// SpaceX级密码安全工具
-function generateSecurePassword(): string {
-  // 16字符随机密码：字母+数字+符号
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
-  const array = new Uint8Array(16)
-  crypto.getRandomValues(array)
-  return Array.from(array, (byte) => chars[byte % chars.length]).join('')
-}
-
-async function hashPassword(password: string): Promise<string> {
-  // 使用 Web Crypto API 进行 bcrypt 风格的哈希
-  // 注意：实际生产应使用服务器端 bcrypt
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return '$2a$12$' + hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 53)
-}
 
 interface UserRow {
   id: string
@@ -30,15 +10,37 @@ interface UserRow {
   display_name: string
   title: string
   primary_dept_name: string
+  primary_dept_id?: string | null
   role_names: string
+  role_codes?: string[]
   status: string
 }
 
 interface DepartmentRow {
   id: string
   name: string
+  code?: string | null
+  depth?: number
+  parent_id?: string | null
   parent_name: string | null
   member_count: number
+}
+
+interface RoleRow {
+  id: string
+  code: string
+  name: string
+}
+
+interface OrgPayload {
+  organization?: {
+    id: string
+    name: string
+    slug?: string | null
+  }
+  users: UserRow[]
+  departments: DepartmentRow[]
+  roles: RoleRow[]
 }
 
 const SAMPLE_CSV = `email,display_name,title,department_code,role_codes
@@ -46,97 +48,210 @@ zhang.ym@huarun.com,张一鸣,高级销售代表,EAST-MED,SALES
 li.fy@huarun.com,李芳颖,销售代表,EAST-MED,SALES
 wang.zy@huarun.com,王志远,销售代表,EAST-RTL,SALES
 chen.hj@huarun.com,陈慧娟,销售经理,EAST-RTL,SALES_MANAGER
-`;
+`
 
 export default function OrgAdminPage() {
   const router = useRouter()
   const [tab, setTab] = useState<'users' | 'departments' | 'import'>('users')
+  const [organizationName, setOrganizationName] = useState('组织管理')
   const [users, setUsers] = useState<UserRow[]>([])
   const [departments, setDepartments] = useState<DepartmentRow[]>([])
+  const [roles, setRoles] = useState<RoleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [csvText, setCsvText] = useState('')
-  const [importResult, setImportResult] = useState<{ ok: number; fail: number; errors: string[] } | null>(null)
+  const [importResult, setImportResult] = useState<{ ok: number; fail: number; errors: string[]; tempPasswords?: string[] } | null>(null)
   const [importing, setImporting] = useState(false)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [message, setMessage] = useState<string>('')
+  const [newDepartmentName, setNewDepartmentName] = useState('')
+  const [newDepartmentCode, setNewDepartmentCode] = useState('')
+  const [newDepartmentParentId, setNewDepartmentParentId] = useState('')
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserName, setNewUserName] = useState('')
+  const [newUserTitle, setNewUserTitle] = useState('')
+  const [newUserPrimaryDeptId, setNewUserPrimaryDeptId] = useState('')
+  const [newUserRoleCodes, setNewUserRoleCodes] = useState<string[]>(['SALES'])
+  const [lastTempPassword, setLastTempPassword] = useState('')
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) {
+    ;(async () => {
+      const token = localStorage.getItem('token')
+      const meRes = await fetch('/api/auth/me', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+
+      if (!meRes.ok) {
         router.push('/login')
         return
       }
-      // 检查权限（仅 ADMIN/SUPER_ADMIN）
-      const { data: userRoles } = await supabase
-        .from('user_roles')
-        .select('role:roles(code)')
-        .eq('user_id', user.id)
 
-      const codes = (userRoles || []).map((r: { role: { code: string } | { code: string }[] }) =>
-        Array.isArray(r.role) ? r.role[0]?.code : r.role?.code
-      )
+      const { user } = await meRes.json()
+      const codes = (user?.roles || []).map((role: { code: string }) => role.code)
       if (!codes.includes('ADMIN') && !codes.includes('SUPER_ADMIN')) {
         alert('无权限访问组织管理')
         router.push('/')
         return
       }
       await loadData()
-    })
+    })()
   }, [router])
 
   async function loadData() {
     setLoading(true)
+    setMessage('')
     try {
-      // 加载用户
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('id, email, display_name, title, status, primary_dept:departments!primary_dept_id(name), user_roles(role:roles(name))')
-        .order('created_at', { ascending: false })
-        .limit(100)
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/org', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
 
-      const u: UserRow[] = (usersData || []).map((row: {
-        id: string
-        email: string | null
-        display_name: string
-        title: string | null
-        status: string
-        primary_dept: { name: string } | { name: string }[] | null
-        user_roles: { role: { name: string } | { name: string }[] }[]
-      }) => ({
-        id: row.id,
-        email: row.email || '',
-        display_name: row.display_name,
-        title: row.title || '',
-        primary_dept_name: Array.isArray(row.primary_dept) ? row.primary_dept[0]?.name : row.primary_dept?.name || '-',
-        role_names: (row.user_roles || [])
-          .map(r => Array.isArray(r.role) ? r.role[0]?.name : r.role?.name)
-          .filter(Boolean)
-          .join(', '),
-        status: row.status,
-      }))
-      setUsers(u)
+      if (!res.ok) {
+        throw new Error('组织管理数据加载失败')
+      }
 
-      // 加载部门
-      const { data: depts } = await supabase
-        .from('departments')
-        .select('id, name, member_count, parent:departments!parent_id(name)')
-        .order('depth', { ascending: true })
-        .order('sort_order', { ascending: true })
-
-      const d: DepartmentRow[] = (depts || []).map((row: {
-        id: string
-        name: string
-        member_count: number
-        parent: { name: string } | { name: string }[] | null
-      }) => ({
-        id: row.id,
-        name: row.name,
-        member_count: row.member_count,
-        parent_name: Array.isArray(row.parent) ? row.parent[0]?.name : row.parent?.name || null,
-      }))
-      setDepartments(d)
+      const data = await res.json() as OrgPayload
+      setUsers(data.users || [])
+      setDepartments(data.departments || [])
+      setRoles(data.roles || [])
+      setOrganizationName(data.organization?.name || '组织管理')
     } catch (e) {
       console.error('[OrgAdmin] load error', e)
+      setMessage('组织管理数据加载失败')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function requestOrgApi(method: 'POST' | 'PATCH', body: Record<string, unknown>) {
+    const token = localStorage.getItem('token')
+    const res = await fetch('/api/admin/org', {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    })
+
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(payload.error || '请求失败')
+    }
+
+    return payload as Record<string, unknown>
+  }
+
+  async function updateDepartment(departmentId: string, patch: { name: string; parentId: string | null }) {
+    setSavingId(departmentId)
+    try {
+      await requestOrgApi('PATCH', {
+        type: 'department',
+        departmentId,
+        name: patch.name,
+        parentId: patch.parentId,
+      })
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] update department error', e)
+      alert(e instanceof Error ? e.message : '更新部门失败')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function createDepartment() {
+    if (!newDepartmentName.trim()) {
+      alert('请输入部门名称')
+      return
+    }
+
+    setSavingId('new-department')
+    try {
+      await requestOrgApi('POST', {
+        type: 'department',
+        name: newDepartmentName,
+        code: newDepartmentCode || null,
+        parentId: newDepartmentParentId || null,
+      })
+      setNewDepartmentName('')
+      setNewDepartmentCode('')
+      setNewDepartmentParentId('')
+      setMessage('新部门已创建')
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] create department error', e)
+      alert(e instanceof Error ? e.message : '创建部门失败')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function updateUser(userId: string, patch: { title?: string; primaryDeptId?: string | null; status?: string }) {
+    setSavingId(userId)
+    try {
+      await requestOrgApi('PATCH', {
+        type: 'user',
+        userId,
+        ...patch,
+      })
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] update user error', e)
+      alert(e instanceof Error ? e.message : '更新成员失败')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function updateUserRoles(userId: string, roleCodes: string[]) {
+    setSavingId(`${userId}-roles`)
+    try {
+      await requestOrgApi('PATCH', {
+        type: 'user_roles',
+        userId,
+        roleCodes,
+      })
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] update user roles error', e)
+      alert(e instanceof Error ? e.message : '更新角色失败')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function createUser() {
+    if (!newUserEmail.trim() || !newUserName.trim()) {
+      alert('请填写成员邮箱和姓名')
+      return
+    }
+
+    setSavingId('new-user')
+    try {
+      const result = await requestOrgApi('POST', {
+        type: 'user',
+        email: newUserEmail,
+        displayName: newUserName,
+        title: newUserTitle || null,
+        primaryDeptId: newUserPrimaryDeptId || null,
+        roleCodes: newUserRoleCodes,
+        status: 'active',
+      })
+
+      const tempPassword = typeof result.tempPassword === 'string' ? result.tempPassword : ''
+      setLastTempPassword(tempPassword)
+      setNewUserEmail('')
+      setNewUserName('')
+      setNewUserTitle('')
+      setNewUserPrimaryDeptId('')
+      setNewUserRoleCodes(['SALES'])
+      setMessage(tempPassword ? `成员已创建，临时密码：${tempPassword}` : '成员已创建')
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] create user error', e)
+      alert(e instanceof Error ? e.message : '创建成员失败')
+    } finally {
+      setSavingId(null)
     }
   }
 
@@ -163,101 +278,35 @@ export default function OrgAdminPage() {
     let ok = 0
     let fail = 0
     const errors: string[] = []
+    const tempPasswords: string[] = []
 
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(',').map(c => c.trim())
       const row: Record<string, string> = {}
-      header.forEach((h, idx) => row[h] = cols[idx] || '')
+      header.forEach((h, idx) => { row[h] = cols[idx] || '' })
+
+      const dept = departments.find((item) => item.code === row.department_code)
+      if (!dept) {
+        errors.push(`第 ${i} 行: 部门代码 ${row.department_code} 不存在`)
+        fail++
+        continue
+      }
 
       try {
-        // 找部门
-        const { data: dept } = await supabase
-          .from('departments')
-          .select('id')
-          .eq('code', row.department_code)
-          .single()
+        const payload = await requestOrgApi('POST', {
+          type: 'user',
+          email: row.email,
+          displayName: row.display_name,
+          title: row.title || null,
+          primaryDeptId: dept.id,
+          roleCodes: row.role_codes.split(/[|;]/).map((value) => value.trim()).filter(Boolean),
+          status: 'active',
+          upsert: true,
+        })
 
-        if (!dept) {
-          errors.push(`第 ${i} 行: 部门代码 ${row.department_code} 不存在`)
-          fail++
-          continue
+        if (typeof payload.tempPassword === 'string') {
+          tempPasswords.push(`${row.email}: ${payload.tempPassword}`)
         }
-
-        // 创建或更新用户
-        const { data: existing } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', row.email)
-          .single()
-
-        let userId: string
-        if (existing) {
-          userId = existing.id
-          await supabase
-            .from('users')
-            .update({
-              display_name: row.display_name,
-              title: row.title || null,
-              primary_dept_id: dept.id,
-            })
-            .eq('id', userId)
-        } else {
-          // SpaceX级安全：随机临时密码，强制首次登录修改
-          const tempPassword = generateSecurePassword()
-          const passwordHash = await hashPassword(tempPassword)
-          const { data: created, error: createErr } = await supabase
-            .from('users')
-            .insert({
-              email: row.email,
-              display_name: row.display_name,
-              title: row.title || null,
-              primary_dept_id: dept.id,
-              password_hash: passwordHash,
-              status: 'active',
-              must_change_password: true,
-            })
-            .select('id')
-            .single()
-
-          // 记录临时密码到导入日志（实际生产应通过邮件/飞书发送）
-          console.log(`[SECURITY] User ${row.email} created with temp password: ${tempPassword}`)
-
-          if (createErr || !created) {
-            errors.push(`第 ${i} 行: 创建用户失败 - ${createErr?.message}`)
-            fail++
-            continue
-          }
-          userId = created.id
-
-          // 关联部门
-          await supabase
-            .from('user_departments')
-            .insert({ user_id: userId, department_id: dept.id, is_primary: true })
-        }
-
-        // 关联角色
-        if (row.role_codes) {
-          const roleCodes = row.role_codes.split(/[|;]/).map(r => r.trim()).filter(Boolean)
-          for (const code of roleCodes) {
-            const { data: role } = await supabase
-              .from('roles')
-              .select('id')
-              .eq('code', code)
-              .single()
-
-            if (role) {
-              await supabase
-                .from('user_roles')
-                .upsert({
-                  user_id: userId,
-                  role_id: role.id,
-                  scope_type: 'org',
-                  scope_id: null,
-                }, { onConflict: 'user_id,role_id,scope_type,scope_id' })
-            }
-          }
-        }
-
         ok++
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
@@ -266,20 +315,100 @@ export default function OrgAdminPage() {
       }
     }
 
-    setImportResult({ ok, fail, errors })
+    setImportResult({ ok, fail, errors, tempPasswords })
     setImporting(false)
     await loadData()
   }
 
+  const selectableRoles = useMemo(() => roles.filter((role) => role.code !== 'SUPER_ADMIN'), [roles])
+
   return (
-    <div className="content-area" style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div className="content-area" style={{ maxWidth: 1280, margin: '0 auto' }}>
       <div className="breadcrumb">
         <Link href="/" className="breadcrumb-current">首页</Link> / 组织管理
       </div>
-      <h1>组织管理</h1>
-      <p className="subtitle">维护组织架构、用户、角色。导入后所有功能自动可用。</p>
+      <h1>{organizationName}</h1>
+      <p className="subtitle">维护组织架构、成员、角色归属。当前页面已经切到服务端权限收口。</p>
 
-      {/* Tab 切换 */}
+      {message && (
+        <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)' }}>
+          {message}
+        </div>
+      )}
+
+      {lastTempPassword && (
+        <div style={{ marginTop: 12, padding: 12, background: 'var(--warning-100)', borderRadius: 'var(--radius-md)' }}>
+          最新临时密码：<code>{lastTempPassword}</code>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1.2fr 1fr', marginTop: 20 }}>
+        <div className="side-card">
+          <h3 style={{ marginBottom: 12, fontSize: 'var(--text-h4)' }}>新增成员</h3>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="姓名" />
+            <input value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="企业邮箱" />
+            <input value={newUserTitle} onChange={(e) => setNewUserTitle(e.target.value)} placeholder="职位" />
+            <select value={newUserPrimaryDeptId} onChange={(e) => setNewUserPrimaryDeptId(e.target.value)}>
+              <option value="">主部门</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {`${'　'.repeat(dept.depth || 0)}${dept.name}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 'var(--text-body-sm)', marginBottom: 8 }}>组织角色</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {selectableRoles.map((role) => {
+                const active = newUserRoleCodes.includes(role.code)
+                return (
+                  <button
+                    key={role.id}
+                    type="button"
+                    className={`btn ${active ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setNewUserRoleCodes((prev) => (
+                      prev.includes(role.code)
+                        ? prev.filter((code) => code !== role.code)
+                        : [...prev, role.code]
+                    ))}
+                  >
+                    {role.name}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <button className="btn btn-primary" disabled={savingId === 'new-user'} onClick={() => void createUser()}>
+              {savingId === 'new-user' ? '创建中...' : '创建成员'}
+            </button>
+          </div>
+        </div>
+
+        <div className="side-card">
+          <h3 style={{ marginBottom: 12, fontSize: 'var(--text-h4)' }}>新增部门</h3>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <input value={newDepartmentName} onChange={(e) => setNewDepartmentName(e.target.value)} placeholder="部门名称" />
+            <input value={newDepartmentCode} onChange={(e) => setNewDepartmentCode(e.target.value)} placeholder="部门编码（可选）" />
+            <select value={newDepartmentParentId} onChange={(e) => setNewDepartmentParentId(e.target.value)}>
+              <option value="">上级部门（根）</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {`${'　'.repeat(dept.depth || 0)}${dept.name}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <button className="btn btn-primary" disabled={savingId === 'new-department'} onClick={() => void createDepartment()}>
+              {savingId === 'new-department' ? '创建中...' : '创建部门'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginTop: 24, borderBottom: '1px solid var(--border-1)', paddingBottom: 0 }}>
         <button
           onClick={() => setTab('users')}
@@ -306,7 +435,6 @@ export default function OrgAdminPage() {
 
       {loading && <div style={{ padding: 32, textAlign: 'center' }}>加载中...</div>}
 
-      {/* Users tab */}
       {!loading && tab === 'users' && (
         <div className="side-card" style={{ marginTop: 16 }}>
           <table className="table">
@@ -325,13 +453,59 @@ export default function OrgAdminPage() {
                 <tr key={u.id}>
                   <td style={{ fontWeight: 500 }}>{u.display_name}</td>
                   <td style={{ color: 'var(--fg-3)' }}>{u.email}</td>
-                  <td>{u.title}</td>
-                  <td>{u.primary_dept_name}</td>
-                  <td style={{ fontSize: 'var(--text-caption)' }}>{u.role_names || '-'}</td>
                   <td>
-                    <span className={u.status === 'active' ? 'pill success' : 'pill outline'}>
-                      {u.status}
-                    </span>
+                    <input
+                      defaultValue={u.title}
+                      onBlur={(e) => {
+                        if (e.target.value !== u.title) {
+                          void updateUser(u.id, { title: e.target.value })
+                        }
+                      }}
+                      style={{ minWidth: 140 }}
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={u.primary_dept_id || ''}
+                      onChange={(e) => void updateUser(u.id, { primaryDeptId: e.target.value || null })}
+                    >
+                      <option value="">未设置</option>
+                      {departments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {`${'　'.repeat(dept.depth || 0)}${dept.name}`}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td style={{ minWidth: 280 }}>
+                    <select
+                      multiple
+                      value={u.role_codes || []}
+                      disabled={savingId === `${u.id}-roles`}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions).map((option) => option.value)
+                        void updateUserRoles(u.id, selected)
+                      }}
+                      style={{ minHeight: 84, width: '100%' }}
+                    >
+                      {selectableRoles.map((role) => (
+                        <option key={role.id} value={role.code}>{role.name}</option>
+                      ))}
+                    </select>
+                    <div style={{ marginTop: 6, fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>
+                      {u.role_names || '-'}
+                    </div>
+                  </td>
+                  <td>
+                    <select
+                      value={u.status}
+                      disabled={savingId === u.id}
+                      onChange={(e) => void updateUser(u.id, { status: e.target.value })}
+                    >
+                      <option value="active">active</option>
+                      <option value="inactive">inactive</option>
+                      <option value="suspended">suspended</option>
+                    </select>
                   </td>
                 </tr>
               ))}
@@ -340,7 +514,6 @@ export default function OrgAdminPage() {
         </div>
       )}
 
-      {/* Departments tab */}
       {!loading && tab === 'departments' && (
         <div className="side-card" style={{ marginTop: 16 }}>
           <table className="table">
@@ -354,8 +527,39 @@ export default function OrgAdminPage() {
             <tbody>
               {departments.map(d => (
                 <tr key={d.id}>
-                  <td style={{ fontWeight: 500 }}>{d.name}</td>
-                  <td style={{ color: 'var(--fg-3)' }}>{d.parent_name || '（根）'}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <input
+                      defaultValue={d.name}
+                      onBlur={(e) => {
+                        if (e.target.value !== d.name) {
+                          void updateDepartment(d.id, {
+                            name: e.target.value,
+                            parentId: d.parent_id || null,
+                          })
+                        }
+                      }}
+                      style={{ minWidth: 180, marginLeft: `${(d.depth || 0) * 12}px` }}
+                    />
+                  </td>
+                  <td style={{ color: 'var(--fg-3)' }}>
+                    <select
+                      value={d.parent_id || ''}
+                      disabled={savingId === d.id}
+                      onChange={(e) => void updateDepartment(d.id, {
+                        name: d.name,
+                        parentId: e.target.value || null,
+                      })}
+                    >
+                      <option value="">（根）</option>
+                      {departments
+                        .filter((candidate) => candidate.id !== d.id)
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {`${'　'.repeat(candidate.depth || 0)}${candidate.name}`}
+                          </option>
+                        ))}
+                    </select>
+                  </td>
                   <td>{d.member_count}</td>
                 </tr>
               ))}
@@ -364,13 +568,12 @@ export default function OrgAdminPage() {
         </div>
       )}
 
-      {/* Import tab */}
       {!loading && tab === 'import' && (
         <div className="side-card" style={{ marginTop: 16 }}>
           <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 12 }}>CSV 导入</h3>
           <p style={{ color: 'var(--fg-3)', marginBottom: 12, fontSize: 'var(--text-body-sm)' }}>
             格式：<code>email, display_name, title, department_code, role_codes</code>。<br />
-            角色用 <code>|</code> 分隔。新用户默认密码 <code>password123</code>。
+            角色用 <code>|</code> 分隔。现在导入会走服务端创建链路，而不是浏览器直写数据库。
           </p>
           <textarea
             value={csvText}
@@ -397,6 +600,14 @@ export default function OrgAdminPage() {
             <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)' }}>
               <p>成功：<strong style={{ color: 'var(--success-700)' }}>{importResult.ok}</strong> 条</p>
               <p>失败：<strong style={{ color: 'var(--danger-700)' }}>{importResult.fail}</strong> 条</p>
+              {importResult.tempPasswords && importResult.tempPasswords.length > 0 && (
+                <div style={{ marginTop: 8, fontSize: 'var(--text-body-sm)' }}>
+                  <strong>新建账号临时密码：</strong>
+                  <ul>
+                    {importResult.tempPasswords.map((item, idx) => <li key={idx}><code>{item}</code></li>)}
+                  </ul>
+                </div>
+              )}
               {importResult.errors.length > 0 && (
                 <ul style={{ marginTop: 8, color: 'var(--danger-700)', fontSize: 'var(--text-body-sm)' }}>
                   {importResult.errors.map((e, idx) => <li key={idx}>{e}</li>)}

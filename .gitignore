@@ -5,3 +5,6 @@ node_modules/
 aliyun
 aliyun-cli-*.tgz
 .vercel
+*.tsbuildinfo
+.playwright-mcp/*.log
+.playwright-mcp/*.yml

@@ -68,10 +68,12 @@ async function main() {
       process.exit(1)
     }
 
-    // 关联 role
+    // 关联 role（匹配当前组织模型）
     await supabase.from('user_roles').insert({
       user_id: USER_ID,
       role_id: role.id,
+      scope_type: 'org',
+      scope_id: ORG_ID,
     })
 
     // 关联部门
@@ -80,6 +82,13 @@ async function main() {
       department_id: dept.id,
       is_primary: true,
     })
+
+    // 关联默认组织
+    await supabase.from('user_organizations').upsert({
+      user_id: USER_ID,
+      org_id: ORG_ID,
+      is_default: true,
+    }, { onConflict: 'user_id,org_id' })
 
     console.log(`✅ E2E 用户创建成功: ${TEST_EMAIL}`)
   } else {
@@ -93,6 +102,35 @@ async function main() {
     if (updateErr) {
       console.error('❌ 更新密码失败:', updateErr.message)
       process.exit(1)
+    }
+
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('id, org_id')
+      .eq('id', user.id)
+      .single()
+
+    if (currentUser?.org_id) {
+      const { data: adminRole } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('code', 'ADMIN')
+        .single()
+
+      if (adminRole) {
+        await supabase.from('user_roles').upsert({
+          user_id: currentUser.id,
+          role_id: adminRole.id,
+          scope_type: 'org',
+          scope_id: currentUser.org_id,
+        }, { onConflict: 'user_id,role_id,scope_type,scope_id' })
+      }
+
+      await supabase.from('user_organizations').upsert({
+        user_id: currentUser.id,
+        org_id: currentUser.org_id,
+        is_default: true,
+      }, { onConflict: 'user_id,org_id' })
     }
     console.log(`✅ E2E 用户密码已重置: ${TEST_EMAIL}`)
   }
