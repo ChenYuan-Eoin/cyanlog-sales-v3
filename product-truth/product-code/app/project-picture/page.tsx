@@ -1,4 +1,4 @@
-// 项目拼图（SpaceX 风格系统总览）
+// 项目拼图（系统架构总览）
 // 路径：/project-picture
 //
 // 哲学：每个模块是系统的一个拼图。
@@ -108,7 +108,7 @@ export default function ProjectPicturePage() {
       <header className="mb-8">
         <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-2">项目拼图</h1>
         <p className="text-slate-600 max-w-2xl">
-          以 SpaceX 哲学构建：每个模块是系统的一个拼图，<strong>创造力</strong>（3 级 AI 降级）+
+          以 系统工程哲学构建：每个模块是系统的一个拼图，<strong>创造力</strong>（3 级 AI 降级）+
           <strong>稳定性</strong>（10 项硬约束 + 错误捕获 + 速率限制）共同保证系统可发布。
         </p>
       </header>
@@ -182,7 +182,7 @@ export default function ProjectPicturePage() {
                 本地 LM Studio → 云端 AI → 规则引擎
                 任何一级失败自动降级，业务不中断
               </p>
-              <Link href="/ai-fallback" className="text-sm text-blue-600 hover:underline">
+              <Link href="/admin/health" className="text-sm text-blue-600 hover:underline">
                 查看监控 →
               </Link>
             </CardContent>
@@ -220,7 +220,7 @@ export default function ProjectPicturePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <Link href="/business-map" className="text-blue-600 hover:underline">→ 业务地图</Link>
             <Link href="/tech-architecture" className="text-blue-600 hover:underline">→ 技术架构</Link>
-            <Link href="/ai-fallback" className="text-blue-600 hover:underline">→ AI 降级监控</Link>
+            <Link href="/admin/health" className="text-blue-600 hover:underline">→ AI 降级监控</Link>
             <Link href="/knowledge" className="text-blue-600 hover:underline">→ 知识库</Link>
             <Link href="/schedule" className="text-blue-600 hover:underline">→ 日程管理</Link>
             <Link href="/configs" className="text-blue-600 hover:underline">→ 配置中心</Link>

@@ -18,27 +18,12 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
+            "command": "node",
             "args": [
-              "${CLAUDE_PROJECT_DIR}/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-              "claude-pretool-req-confirmed"
-            ]
-          }
-        ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-              "claude-pretool-req-id"
+              "${CLAUDE_PROJECT_DIR}/governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/claude-pretool-gate-enforcer.js"
             ]
           }
         ]

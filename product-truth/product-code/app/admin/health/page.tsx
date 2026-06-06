@@ -11,6 +11,7 @@ export default async function SchemaHealthPage() {
   const status = await checkSchemaStatus()
   const missing = status.filter((s) => !s.exists)
   const existing = status.filter((s) => s.exists)
+  const drifted = status.filter((s) => s.exists && s.columnsOk === false)
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto">
@@ -45,6 +46,16 @@ export default async function SchemaHealthPage() {
             <div className="text-xs text-slate-500 uppercase tracking-wide mt-1">缺失</div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="py-4 text-center">
+            <div
+              className={`text-2xl font-bold ${drifted.length > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
+            >
+              {drifted.length}
+            </div>
+            <div className="text-xs text-slate-500 uppercase tracking-wide mt-1">关键列漂移</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* 缺失警告 */}
@@ -74,6 +85,26 @@ export default async function SchemaHealthPage() {
         </div>
       )}
 
+      {drifted.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 mb-6">
+          <h2 className="font-semibold text-amber-900 mb-2">⚠️ {drifted.length} 个表存在关键列漂移</h2>
+          <p className="text-sm text-amber-800 mb-3">
+            这类问题比“表缺失”更隐蔽。页面通常会编译通过，但在登录、组织管理、配置发布等运行时路径上直接报错。
+          </p>
+          <ul className="text-sm space-y-2">
+            {drifted.map((item) => (
+              <li key={item.table} className="text-amber-800">
+                <code className="font-mono bg-amber-100 px-1 rounded">{item.table}</code>
+                {' '}缺少列：
+                <code className="font-mono bg-amber-100 px-1 rounded ml-1">
+                  {(item.missingColumns || []).join(', ')}
+                </code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* 完整列表 */}
       <Card>
         <CardContent className="py-0">
@@ -83,6 +114,7 @@ export default async function SchemaHealthPage() {
                 <th className="text-left py-3 font-medium text-slate-700">表名</th>
                 <th className="text-left py-3 font-medium text-slate-700">状态</th>
                 <th className="text-left py-3 font-medium text-slate-700">行数</th>
+                <th className="text-left py-3 font-medium text-slate-700">关键列</th>
               </tr>
             </thead>
             <tbody>
@@ -101,6 +133,22 @@ export default async function SchemaHealthPage() {
                     )}
                   </td>
                   <td className="py-2 text-slate-600">{s.rowCount ?? '—'}</td>
+                  <td className="py-2 text-slate-600">
+                    {!s.exists ? '—' : s.columnsOk === false ? (
+                      <div className="space-y-1">
+                        <div className="text-amber-700 font-mono text-xs">
+                          {(s.missingColumns || []).join(', ')}
+                        </div>
+                        {s.errorMessage && (
+                          <div className="text-[11px] text-slate-500">{s.errorMessage}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        ✓ 正常
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

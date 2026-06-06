@@ -69,6 +69,7 @@ interface Profile {
   title: string | null
   primary_dept_id: string
   org_id?: string | null
+  canManageOrg?: boolean
   roles: { code: string; name: string }[]
   spaces: SalesSpace[]
 }
@@ -147,8 +148,14 @@ export default function HomePage() {
     let mounted = true
     ;(async () => {
       const token = localStorage.getItem('token')
+      if (!token) {
+        router.push('/login')
+        setLoading(false)
+        return
+      }
+
       const profileRes = await fetch('/api/auth/me', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
       })
 
       if (!profileRes.ok) {
@@ -232,7 +239,7 @@ export default function HomePage() {
               <path d="M12 1v6m0 6v6" />
             </svg>
           </Link>
-          {profile?.roles.some(r => r.code === 'ADMIN' || r.code === 'SUPER_ADMIN') && (
+          {profile?.canManageOrg && (
             <Link href="/admin/org" title="组织管理" style={{ marginTop: 'auto' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -283,7 +290,7 @@ export default function HomePage() {
         <div className="nav-section">
           <div className="nav-section-title">用户旅程</div>
           <Link href="/" className="nav-link active"><span>首页</span></Link>
-          <Link href="/opportunities" className="nav-link"><span>机会</span></Link>
+          <Link href="/quotes" className="nav-link"><span>机会</span></Link>
         </div>
 
         <div className="nav-section">

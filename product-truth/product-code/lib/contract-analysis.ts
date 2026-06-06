@@ -1,5 +1,5 @@
-import { executeRules, type AnalysisResults } from '@/lib/rules/engine'
 import { supabaseAdmin } from '@/lib/supabase'
+import { reviewWithFailoverSync } from '@/lib/ai/failover'
 
 export interface ContractAnalysisJobRecord {
   id: string
@@ -18,7 +18,16 @@ export interface ContractAnalysisJobRecord {
   updated_at: string
 }
 
-export interface ContractAnalysisResult extends AnalysisResults {
+export interface ContractAnalysisResult {
+  risks: Array<{
+    level: 'red' | 'yellow' | 'green'
+    title: string
+    description: string
+    suggestion: string
+  }>
+  summary: string
+  appliedRules: number
+  matchedRules: number
   provider: string
   degraded: boolean
 }
@@ -74,14 +83,24 @@ export async function fetchContractText(contractId: string): Promise<string> {
   return `合同文件: ${data?.filename || 'unknown'}`
 }
 
+/**
+ * 运行合同分析 — 统一走AI降级链路
+ * 后台任务和前端请求共用同一套降级逻辑，只是消费方式不同
+ * 前端用 reviewWithFailover（流式），后台用 reviewWithFailoverSync（非流式）
+ */
 export async function runContractAnalysis(contractId: string): Promise<ContractAnalysisResult> {
   const contractText = await fetchContractText(contractId)
-  const result = await executeRules(contractText)
+
+  // 统一走AI降级链路（本地→云端→规则引擎→人工标记）
+  const aiResult = await reviewWithFailoverSync(contractText)
 
   return {
-    ...result,
-    provider: 'rule-engine',
-    degraded: false,
+    risks: aiResult.risks,
+    summary: aiResult.summary,
+    appliedRules: aiResult.risks.length,
+    matchedRules: aiResult.risks.filter((r) => r.level === 'red' || r.level === 'yellow').length,
+    provider: aiResult.provider,
+    degraded: aiResult.degraded,
   }
 }
 

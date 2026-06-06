@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import localFont from "next/font/local";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { AppShell } from "@/components/layout/AppShell";
 import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonitor";
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
 import { getPublishedUITheme } from "@/lib/ui-theme";
@@ -43,10 +43,7 @@ export default async function RootLayout({
       <body className="antialiased">
         <ClientErrorMonitor />
         <RuntimeThemeLoader />
-        <Sidebar />
-        <main className="ml-64 min-h-screen bg-background">
-          {children}
-        </main>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

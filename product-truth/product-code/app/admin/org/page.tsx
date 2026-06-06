@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -13,8 +13,19 @@ interface UserRow {
   primary_dept_id?: string | null
   role_names: string
   role_codes?: string[]
+  scoped_roles?: ScopedRoleAssignment[]
   status: string
   must_change_password: boolean
+}
+
+interface ScopedRoleAssignment {
+  roleId: string
+  roleName: string
+  roleCode: string
+  scopeType: 'org' | 'department' | 'space'
+  scopeId: string | null
+  scopeName: string
+  grantedAt: string | null
 }
 
 interface DepartmentRow {
@@ -33,6 +44,15 @@ interface RoleRow {
   name: string
 }
 
+interface SpaceRow {
+  id: string
+  name: string
+  description?: string | null
+  department_id: string
+  department_name: string
+  owner_id?: string | null
+}
+
 interface OrgPayload {
   organization?: {
     id: string
@@ -42,6 +62,7 @@ interface OrgPayload {
   users: UserRow[]
   departments: DepartmentRow[]
   roles: RoleRow[]
+  spaces: SpaceRow[]
 }
 
 const SAMPLE_CSV = `email,display_name,title,department_code,role_codes
@@ -58,6 +79,7 @@ export default function OrgAdminPage() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [departments, setDepartments] = useState<DepartmentRow[]>([])
   const [roles, setRoles] = useState<RoleRow[]>([])
+  const [spaces, setSpaces] = useState<SpaceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [csvText, setCsvText] = useState('')
   const [importResult, setImportResult] = useState<{ ok: number; fail: number; errors: string[]; tempPasswords?: string[] } | null>(null)
@@ -73,6 +95,13 @@ export default function OrgAdminPage() {
   const [newUserPrimaryDeptId, setNewUserPrimaryDeptId] = useState('')
   const [newUserRoleCodes, setNewUserRoleCodes] = useState<string[]>(['SALES'])
   const [lastTempPassword, setLastTempPassword] = useState('')
+  const [editingScopeUserId, setEditingScopeUserId] = useState<string | null>(null)
+  const [scopeDrafts, setScopeDrafts] = useState<Record<string, Array<{
+    key: string
+    scopeType: 'org' | 'department' | 'space'
+    scopeId: string | null
+    roleCodes: string[]
+  }>>>({})
 
   useEffect(() => {
     ;(async () => {
@@ -88,7 +117,7 @@ export default function OrgAdminPage() {
 
       const { user } = await meRes.json()
       const codes = (user?.roles || []).map((role: { code: string }) => role.code)
-      if (!codes.includes('ADMIN') && !codes.includes('SUPER_ADMIN')) {
+      if (!user?.canManageOrg && !codes.includes('SUPER_ADMIN') && !codes.includes('SALES_OPS')) {
         alert('无权限访问组织管理')
         router.push('/')
         return
@@ -114,6 +143,7 @@ export default function OrgAdminPage() {
       setUsers(data.users || [])
       setDepartments(data.departments || [])
       setRoles(data.roles || [])
+      setSpaces(data.spaces || [])
       setOrganizationName(data.organization?.name || '组织管理')
     } catch (e) {
       console.error('[OrgAdmin] load error', e)
@@ -216,6 +246,130 @@ export default function OrgAdminPage() {
     } catch (e) {
       console.error('[OrgAdmin] update user roles error', e)
       alert(e instanceof Error ? e.message : '更新角色失败')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  function buildScopeDrafts(user: UserRow) {
+    const grouped = new Map<string, {
+      key: string
+      scopeType: 'org' | 'department' | 'space'
+      scopeId: string | null
+      roleCodes: string[]
+    }>()
+
+    for (const assignment of user.scoped_roles || []) {
+      const scopeKey = `${assignment.scopeType}:${assignment.scopeId || 'org'}`
+      const current = grouped.get(scopeKey)
+      if (current) {
+        if (!current.roleCodes.includes(assignment.roleCode)) {
+          current.roleCodes.push(assignment.roleCode)
+        }
+        continue
+      }
+
+      grouped.set(scopeKey, {
+        key: scopeKey,
+        scopeType: assignment.scopeType,
+        scopeId: assignment.scopeId,
+        roleCodes: [assignment.roleCode],
+      })
+    }
+
+    const initial = grouped.size > 0
+      ? Array.from(grouped.values())
+      : [{
+          key: 'org:default',
+          scopeType: 'org' as const,
+          scopeId: null,
+          roleCodes: user.role_codes || [],
+        }]
+
+    setScopeDrafts((prev) => ({
+      ...prev,
+      [user.id]: initial,
+    }))
+    setEditingScopeUserId(user.id)
+  }
+
+  function updateScopeDraft(
+    userId: string,
+    key: string,
+    patch: Partial<{
+      scopeType: 'org' | 'department' | 'space'
+      scopeId: string | null
+      roleCodes: string[]
+    }>
+  ) {
+    setScopeDrafts((prev) => ({
+      ...prev,
+      [userId]: (prev[userId] || []).map((draft) => draft.key === key ? { ...draft, ...patch } : draft),
+    }))
+  }
+
+  function addScopeDraft(userId: string) {
+    setScopeDrafts((prev) => ({
+      ...prev,
+      [userId]: [
+        ...(prev[userId] || []),
+        {
+          key: `${Date.now()}-${Math.random()}`,
+          scopeType: 'department',
+          scopeId: departments[0]?.id || null,
+          roleCodes: [],
+        },
+      ],
+    }))
+  }
+
+  function removeScopeDraft(userId: string, key: string) {
+    setScopeDrafts((prev) => ({
+      ...prev,
+      [userId]: (prev[userId] || []).filter((draft) => draft.key !== key),
+    }))
+  }
+
+  async function saveScopedRoles(userId: string) {
+    const merged = new Map<string, {
+      scopeType: 'org' | 'department' | 'space'
+      scopeId: string | null
+      roleCodes: string[]
+    }>()
+
+    for (const draft of scopeDrafts[userId] || []) {
+      const scopeId = draft.scopeType === 'org' ? null : draft.scopeId
+      if (draft.scopeType !== 'org' && !scopeId) {
+        continue
+      }
+
+      const key = `${draft.scopeType}:${scopeId || 'org'}`
+      const current = merged.get(key)
+      if (current) {
+        current.roleCodes = Array.from(new Set([...current.roleCodes, ...draft.roleCodes]))
+      } else {
+        merged.set(key, {
+          scopeType: draft.scopeType,
+          scopeId,
+          roleCodes: Array.from(new Set(draft.roleCodes)),
+        })
+      }
+    }
+
+    const drafts = Array.from(merged.values())
+
+    setSavingId(`${userId}-scopes`)
+    try {
+      await requestOrgApi('PATCH', {
+        type: 'user_scoped_roles',
+        userId,
+        assignments: drafts,
+      })
+      setEditingScopeUserId(null)
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] update scoped roles error', e)
+      alert(e instanceof Error ? e.message : '更新作用域角色失败')
     } finally {
       setSavingId(null)
     }
@@ -473,8 +627,14 @@ export default function OrgAdminPage() {
             </thead>
             <tbody>
               {users.map(u => (
+                <Fragment key={u.id}>
                 <tr key={u.id}>
-                  <td style={{ fontWeight: 500 }}>{u.display_name}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <div>{u.display_name}</div>
+                    <div style={{ marginTop: 6, fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>
+                      {u.scoped_roles?.length ? `${u.scoped_roles.length} 条角色绑定` : '未配置 scoped role'}
+                    </div>
+                  </td>
                   <td style={{ color: 'var(--fg-3)' }}>{u.email}</td>
                   <td>
                     <input
@@ -544,16 +704,127 @@ export default function OrgAdminPage() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      disabled={savingId === `${u.id}-password`}
-                      onClick={() => void resetUserPassword(u.id, u.email)}
-                    >
-                      {savingId === `${u.id}-password` ? '重置中...' : '重置临时密码'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => buildScopeDrafts(u)}
+                      >
+                        作用域角色
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={savingId === `${u.id}-password`}
+                        onClick={() => void resetUserPassword(u.id, u.email)}
+                      >
+                        {savingId === `${u.id}-password` ? '重置中...' : '重置临时密码'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
+                {editingScopeUserId === u.id && (
+                  <tr key={`${u.id}-scopes`}>
+                    <td colSpan={8} style={{ background: 'var(--bg-muted)' }}>
+                      <div style={{ display: 'grid', gap: 12 }}>
+                        {(scopeDrafts[u.id] || []).map((draft) => (
+                          <div
+                            key={draft.key}
+                            style={{
+                              display: 'grid',
+                              gap: 12,
+                              gridTemplateColumns: '160px minmax(220px, 1fr) minmax(260px, 1fr) auto',
+                              alignItems: 'start',
+                            }}
+                          >
+                            <select
+                              value={draft.scopeType}
+                              onChange={(e) => {
+                                const nextScopeType = e.target.value as 'org' | 'department' | 'space'
+                                updateScopeDraft(u.id, draft.key, {
+                                  scopeType: nextScopeType,
+                                  scopeId: nextScopeType === 'department'
+                                    ? (departments[0]?.id || null)
+                                    : nextScopeType === 'space'
+                                      ? (spaces[0]?.id || null)
+                                      : null,
+                                })
+                              }}
+                            >
+                              <option value="org">组织</option>
+                              <option value="department">部门</option>
+                              <option value="space">销售空间</option>
+                            </select>
+                            {draft.scopeType === 'org' ? (
+                              <div style={{ paddingTop: 10, color: 'var(--fg-3)' }}>作用于整个组织</div>
+                            ) : draft.scopeType === 'department' ? (
+                              <select
+                                value={draft.scopeId || ''}
+                                onChange={(e) => updateScopeDraft(u.id, draft.key, { scopeId: e.target.value || null })}
+                              >
+                                {departments.map((dept) => (
+                                  <option key={dept.id} value={dept.id}>
+                                    {`${'　'.repeat(dept.depth || 0)}${dept.name}`}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <select
+                                value={draft.scopeId || ''}
+                                onChange={(e) => updateScopeDraft(u.id, draft.key, { scopeId: e.target.value || null })}
+                              >
+                                {spaces.map((space) => (
+                                  <option key={space.id} value={space.id}>
+                                    {space.name} / {space.department_name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            <select
+                              multiple
+                              value={draft.roleCodes}
+                              onChange={(e) => {
+                                const selected = Array.from(e.target.selectedOptions).map((option) => option.value)
+                                updateScopeDraft(u.id, draft.key, { roleCodes: selected })
+                              }}
+                              style={{ minHeight: 84, width: '100%' }}
+                            >
+                              {selectableRoles.map((role) => (
+                                <option key={role.id} value={role.code}>{role.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => removeScopeDraft(u.id, draft.key)}
+                            >
+                              删除
+                            </button>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>
+                            部门角色会覆盖该部门下的销售空间，空间角色只作用于指定空间。组织级角色用于全局管理能力，销售空间可见性仍以成员关系和 scoped role 为准。
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="button" className="btn btn-secondary" onClick={() => addScopeDraft(u.id)}>
+                              新增绑定
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              disabled={savingId === `${u.id}-scopes`}
+                              onClick={() => void saveScopedRoles(u.id)}
+                            >
+                              {savingId === `${u.id}-scopes` ? '保存中...' : '保存作用域角色'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

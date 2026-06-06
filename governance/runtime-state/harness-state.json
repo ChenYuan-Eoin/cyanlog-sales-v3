@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "status": "strict",
+  "mode": "permissive",
+  "startedAt": "2026-06-07T00:00:00Z",
+  "configPath": "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
+  "activeHooks": [
+    "UserPromptSubmit",
+    "PreToolUse",
+    "SessionEnd"
+  ],
+  "activeGates": [],
+  "gates": {
+    "G2": {
+      "description": "审查门 - 严格只读，禁止编辑",
+      "enforced": true,
+      "allowedTools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "mcp__paseo__get_agent_status",
+        "mcp__paseo__get_agent_activity"
+      ],
+      "blockedTools": [
+        "Edit",
+        "Write",
+        "NotebookEdit"
+      ]
+    },
+    "G4": {
+      "description": "复核门 - 只读+深度分析",
+      "enforced": true,
+      "allowedTools": [
+        "Read",
+        "Grep",
+        "Glob"
+      ],
+      "blockedTools": [
+        "Edit",
+        "Write",
+        "NotebookEdit",
+        "Bash"
+      ]
+    }
+  },
+  "lastActivity": "2026-06-06T22:38:12.004Z"
+}

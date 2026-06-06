@@ -1,3 +1,23 @@
+// 参数校验层 — Zod Schema 定义
+//
+// 【技术选型】
+// - Zod (v3.x): TypeScript-first schema validation
+//   备选：Yup（React生态成熟，但类型推导弱）/ Valibot（tree-shaking更好，但生态小）/ Joi（Node.js传统，类型支持差）
+//   权衡：
+//   1. Zod与TypeScript深度集成，infer类型无需额外定义interface
+//   2. Next.js生态主流选择，社区方案丰富
+//   3. 支持.coerce自动类型转换（字符串'123'→数字123）
+//   4. Bundle size比Yup小，但比Valibot大（~8KB gzipped）
+//
+// - 校验策略: 入参严格校验，出参信任内部代码
+//   原因：
+//   1. 入参来自不可信的外部（浏览器、第三方），必须防御
+//   2. 出参由内部逻辑生成，重复校验增加运行时开销
+//   3. 单元测试覆盖内部逻辑，替代运行时出参校验
+//
+// - 错误处理: 统一返回 { error: string, code: string }
+//   便于前端识别错误类型，展示对应文案
+
 import { z } from 'zod'
 
 function optionalIntParam(defaultValue: number, options: { min: number; max?: number }) {

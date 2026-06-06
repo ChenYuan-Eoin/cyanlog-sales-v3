@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth'
 import { contractIdSchema } from '@/lib/validation'
 import { logError } from '@/lib/error-log'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -24,6 +25,8 @@ export async function GET(
 
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     logRouteStart({
       route,
       requestId,
@@ -43,8 +46,8 @@ export async function GET(
       .from('contracts')
       .select('*, contract_reviews(*)')
       .eq('id', id)
-      .eq('created_by', user.id)
-      .single()
+      .in('created_by', accessibleUserIds)
+      .maybeSingle()
 
     if (error) {
       await logRouteFailure(

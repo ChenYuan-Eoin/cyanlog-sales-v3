@@ -7,8 +7,12 @@ import { cn } from '@/lib/utils'
 
 const navItems = [
   { name: '工作台', href: '/', icon: '□' },
+  { name: '产品目录', href: '/products', icon: '◫' },
   { name: '报价中心', href: '/quotes', icon: '¥' },
   { name: '合同审核', href: '/contracts', icon: '📄' },
+  { name: '标书中心', href: '/tenders', icon: '◉' },
+  { name: '知识库', href: '/knowledge', icon: '✦' },
+  { name: '日程', href: '/schedule', icon: '⏱' },
   { name: '配置中心', href: '/configs', icon: '⚙' },
 ]
 

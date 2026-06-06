@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import {
+  canManageOrg,
+  getOrgRoleCodes,
+  getUserScopedRoleAssignments,
+  type ScopeType,
+} from '@/lib/scoped-access'
 
 type RoleLookup = {
   id: string
@@ -10,12 +16,13 @@ type RoleLookup = {
   name: string
 }
 
-type RoleLinkRow = {
-  roles: { code?: string } | { code?: string }[] | null
-}
-
 type DepartmentLink = { name?: string } | { name?: string }[] | null
-type UserRoleLink = { role: { name?: string; code?: string } | { name?: string; code?: string }[] | null }
+type UserRoleLink = {
+  scope_type?: ScopeType
+  scope_id?: string | null
+  granted_at?: string | null
+  role: { id?: string; name?: string; code?: string } | { id?: string; name?: string; code?: string }[] | null
+}
 
 type OrgUserRow = {
   id: string
@@ -36,7 +43,14 @@ type OrgDepartmentRow = {
   depth: number | null
   member_count: number | null
   parent_id: string | null
-  parent: DepartmentLink
+}
+
+type SalesSpaceRow = {
+  id: string
+  name: string
+  description: string | null
+  department_id: string
+  owner_id: string | null
 }
 
 type OrgContext = {
@@ -62,21 +76,10 @@ function createTempPassword() {
 
 async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   const user = await requireAuth(req)
+  const assignments = await getUserScopedRoleAssignments(user.id)
+  const roleCodes = getOrgRoleCodes(assignments)
 
-  const { data: roleRows, error } = await supabaseAdmin
-    .from('user_roles')
-    .select('roles:roles(code)')
-    .eq('user_id', user.id)
-
-  if (error) {
-    throw new Error('ROLE_FETCH_FAILED')
-  }
-
-  const roleCodes = ((roleRows || []) as RoleLinkRow[])
-    .map((row) => unwrapOne(row.roles)?.code)
-    .filter((code): code is string => Boolean(code))
-
-  if (!roleCodes.includes('ADMIN') && !roleCodes.includes('SUPER_ADMIN')) {
+  if (!canManageOrg(assignments)) {
     return null
   }
 
@@ -160,6 +163,98 @@ async function replaceOrgRoles(userId: string, orgId: string, roleCodes: string[
 
   if (error) {
     throw new Error('ROLE_ASSIGN_FAILED')
+  }
+}
+
+async function replaceScopedRoles(
+  userId: string,
+  orgId: string,
+  scopeType: ScopeType,
+  scopeId: string | null,
+  roleCodes: string[]
+) {
+  const uniqueCodes = Array.from(new Set(roleCodes.map((code) => code.trim()).filter(Boolean)))
+  const roleCatalog = await getRoleCatalog()
+  const roleByCode = new Map(roleCatalog.map((role) => [role.code, role]))
+  const selectedRoles = uniqueCodes.map((code) => roleByCode.get(code)).filter((role): role is RoleLookup => Boolean(role))
+
+  let deleteQuery = supabaseAdmin
+    .from('user_roles')
+    .delete()
+    .eq('user_id', userId)
+    .eq('scope_type', scopeType)
+
+  if (scopeType === 'org') {
+    deleteQuery = deleteQuery.eq('scope_id', orgId)
+  } else if (scopeId) {
+    deleteQuery = deleteQuery.eq('scope_id', scopeId)
+  }
+
+  await deleteQuery
+
+  if (selectedRoles.length === 0) {
+    return
+  }
+
+  const effectiveScopeId = scopeType === 'org' ? orgId : scopeId
+  const { error } = await supabaseAdmin
+    .from('user_roles')
+    .insert(
+      selectedRoles.map((role) => ({
+        user_id: userId,
+        role_id: role.id,
+        scope_type: scopeType,
+        scope_id: effectiveScopeId,
+      }))
+    )
+
+  if (error) {
+    throw new Error('ROLE_ASSIGN_FAILED')
+  }
+}
+
+async function clearUserRolesForOrg(userId: string, orgId: string) {
+  const [departmentResult, spaceResult] = await Promise.all([
+    supabaseAdmin
+      .from('departments')
+      .select('id')
+      .eq('org_id', orgId),
+    supabaseAdmin
+      .from('sales_spaces')
+      .select('id')
+      .eq('org_id', orgId),
+  ])
+
+  if (departmentResult.error || spaceResult.error) {
+    throw new Error('ROLE_SCOPE_CLEAR_FAILED')
+  }
+
+  const departmentIds = (departmentResult.data || []).map((row) => row.id)
+  const spaceIds = (spaceResult.data || []).map((row) => row.id)
+
+  await supabaseAdmin
+    .from('user_roles')
+    .delete()
+    .eq('user_id', userId)
+    .eq('scope_type', 'org')
+    .eq('scope_id', orgId)
+
+  if (departmentIds.length > 0) {
+    await supabaseAdmin
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('scope_type', 'department')
+      .in('scope_id', departmentIds)
+  }
+
+  if (spaceIds.length > 0) {
+    await supabaseAdmin
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('scope_type', 'space')
+      .in('scope_id', spaceIds)
   }
 }
 
@@ -258,16 +353,16 @@ async function syncUserSalesSpaces(userId: string, orgId: string, primaryDeptId:
 }
 
 async function listOrgPayload(orgId: string) {
-  const [usersResult, departmentsResult, rolesResult, orgResult] = await Promise.all([
+  const [usersResult, departmentsResult, rolesResult, orgResult, spacesResult] = await Promise.all([
     supabaseAdmin
       .from('users')
-      .select('id, email, display_name, title, status, must_change_password, primary_dept_id, primary_dept:departments!primary_dept_id(name), user_roles(role:roles(name, code))')
+      .select('id, email, display_name, title, status, must_change_password, primary_dept_id, primary_dept:departments!primary_dept_id(name), user_roles:user_roles!user_roles_user_id_fkey(scope_type, scope_id, granted_at, role:roles(id, name, code))')
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })
       .limit(200),
     supabaseAdmin
       .from('departments')
-      .select('id, name, code, depth, member_count, parent_id, parent:departments!parent_id(name)')
+      .select('id, name, code, depth, member_count, parent_id')
       .eq('org_id', orgId)
       .order('depth', { ascending: true })
       .order('sort_order', { ascending: true }),
@@ -280,6 +375,11 @@ async function listOrgPayload(orgId: string) {
       .select('id, name, slug')
       .eq('id', orgId)
       .single(),
+    supabaseAdmin
+      .from('sales_spaces')
+      .select('id, name, description, department_id, owner_id')
+      .eq('org_id', orgId)
+      .order('name', { ascending: true }),
   ])
 
   if (usersResult.error) {
@@ -294,12 +394,50 @@ async function listOrgPayload(orgId: string) {
   if (orgResult.error) {
     throw new Error('ORG_FETCH_FAILED')
   }
+  if (spacesResult.error) {
+    throw new Error('SPACES_FETCH_FAILED')
+  }
+
+  const departmentNameById = new Map(
+    ((departmentsResult.data || []) as OrgDepartmentRow[]).map((department) => [department.id, department.name])
+  )
 
   const users = ((usersResult.data || []) as OrgUserRow[]).map((row) => {
     const primaryDept = unwrapOne(row.primary_dept)
     const roleEntries = (row.user_roles || [])
-      .map((userRole) => unwrapOne(userRole.role))
-      .filter((role): role is { name?: string; code?: string } => Boolean(role))
+      .map((userRole) => {
+        const role = unwrapOne(userRole.role)
+        if (!role?.code || !role.name || !role.id) {
+          return null
+        }
+
+        let scopeName = '组织'
+        if (userRole.scope_type === 'department' && userRole.scope_id) {
+          scopeName = departmentNameById.get(userRole.scope_id) || '部门'
+        } else if (userRole.scope_type === 'space' && userRole.scope_id) {
+          scopeName = ((spacesResult.data || []) as SalesSpaceRow[])
+            .find((space) => space.id === userRole.scope_id)?.name || '销售空间'
+        }
+
+        return {
+          roleId: role.id,
+          roleName: role.name,
+          roleCode: role.code,
+          scopeType: userRole.scope_type || 'org',
+          scopeId: userRole.scope_id || null,
+          scopeName,
+          grantedAt: userRole.granted_at || null,
+        }
+      })
+      .filter((role): role is {
+        roleId: string
+        roleName: string
+        roleCode: string
+        scopeType: ScopeType
+        scopeId: string | null
+        scopeName: string
+        grantedAt: string | null
+      } => Boolean(role))
 
     return {
       id: row.id,
@@ -308,23 +446,15 @@ async function listOrgPayload(orgId: string) {
       title: row.title || '',
       primary_dept_id: row.primary_dept_id || null,
       primary_dept_name: primaryDept?.name || '-',
-      role_names: roleEntries.map((role) => role.name).filter(Boolean).join(', '),
-      role_codes: roleEntries.map((role) => role.code).filter((code): code is string => Boolean(code)),
+      role_names: roleEntries
+        .map((role) => role.scopeType === 'org' ? role.roleName : `${role.roleName}(${role.scopeName})`)
+        .join(', '),
+      role_codes: roleEntries
+        .filter((role) => role.scopeType === 'org')
+        .map((role) => role.roleCode),
+      scoped_roles: roleEntries,
       status: row.status,
       must_change_password: Boolean(row.must_change_password),
-    }
-  })
-
-  const departments = ((departmentsResult.data || []) as OrgDepartmentRow[]).map((row) => {
-    const parent = unwrapOne(row.parent)
-    return {
-      id: row.id,
-      name: row.name,
-      code: row.code,
-      depth: row.depth || 0,
-      member_count: row.member_count || 0,
-      parent_id: row.parent_id,
-      parent_name: parent?.name || null,
     }
   })
 
@@ -334,11 +464,29 @@ async function listOrgPayload(orgId: string) {
     name: role.name,
   }))
 
+  const spaces = ((spacesResult.data || []) as SalesSpaceRow[]).map((space) => ({
+    id: space.id,
+    name: space.name,
+    description: space.description,
+    department_id: space.department_id,
+    department_name: departmentNameById.get(space.department_id) || '',
+    owner_id: space.owner_id,
+  }))
+
   return {
     organization: orgResult.data,
     users,
-    departments,
+    departments: ((departmentsResult.data || []) as OrgDepartmentRow[]).map((row) => ({
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      depth: row.depth || 0,
+      member_count: row.member_count || 0,
+      parent_id: row.parent_id,
+      parent_name: row.parent_id ? (departmentNameById.get(row.parent_id) || null) : null,
+    })),
     roles,
+    spaces,
   }
 }
 
@@ -652,6 +800,80 @@ export async function PATCH(req: NextRequest) {
       }
 
       await replaceOrgRoles(userId, auth.orgId, roleCodes)
+      return NextResponse.json({ ok: true })
+    }
+
+    if (type === 'user_scoped_roles') {
+      const { userId, assignments } = body as {
+        userId?: string
+        assignments?: Array<{
+          scopeType: ScopeType
+          scopeId?: string | null
+          roleCodes: string[]
+        }>
+      }
+
+      if (!userId || !Array.isArray(assignments)) {
+        return errorResponse('角色参数不完整', 400, 'INVALID_ROLE_PAYLOAD')
+      }
+
+      const { data: userRow } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .eq('org_id', auth.orgId)
+        .maybeSingle()
+
+      if (!userRow) {
+        return errorResponse('成员不存在', 404, 'USER_NOT_FOUND')
+      }
+
+      const normalizedAssignments = assignments
+        .map((assignment) => ({
+          scopeType: assignment.scopeType,
+          scopeId: assignment.scopeType === 'org' ? auth.orgId : (assignment.scopeId || null),
+          roleCodes: Array.from(new Set((assignment.roleCodes || []).map((code) => code.trim()).filter(Boolean))),
+        }))
+        .filter((assignment) => assignment.scopeType === 'org' || Boolean(assignment.scopeId))
+
+      for (const assignment of assignments) {
+        if (!assignment?.scopeType || !Array.isArray(assignment.roleCodes)) {
+          return errorResponse('角色参数不完整', 400, 'INVALID_ROLE_PAYLOAD')
+        }
+
+        if (assignment.scopeType === 'department') {
+          const department = await assertDepartmentInOrg(auth.orgId, assignment.scopeId)
+          if (!department) {
+            return errorResponse('部门不存在', 400, 'INVALID_SCOPE_DEPARTMENT')
+          }
+        }
+
+        if (assignment.scopeType === 'space') {
+          const { data: spaceRow } = await supabaseAdmin
+            .from('sales_spaces')
+            .select('id')
+            .eq('id', assignment.scopeId)
+            .eq('org_id', auth.orgId)
+            .maybeSingle()
+
+          if (!spaceRow) {
+            return errorResponse('销售空间不存在', 400, 'INVALID_SCOPE_SPACE')
+          }
+        }
+      }
+
+      await clearUserRolesForOrg(userId, auth.orgId)
+
+      for (const assignment of normalizedAssignments) {
+        await replaceScopedRoles(
+          userId,
+          auth.orgId,
+          assignment.scopeType,
+          assignment.scopeId,
+          assignment.roleCodes
+        )
+      }
+
       return NextResponse.json({ ok: true })
     }
 

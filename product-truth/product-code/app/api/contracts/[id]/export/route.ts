@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth'
 import { generateWordDocument } from '@/lib/export/word-generator'
 import fs from 'fs'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -23,6 +24,8 @@ export async function POST(
 
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     logRouteStart({
       route,
       requestId,
@@ -40,8 +43,8 @@ export async function POST(
       .from('contracts')
       .select('*, contract_reviews(*)')
       .eq('id', id)
-      .eq('created_by', user.id)
-      .single()
+      .in('created_by', accessibleUserIds)
+      .maybeSingle()
 
     if (contractError || !contract) {
       return errorResponse('合同不存在', 404, 'NOT_FOUND')

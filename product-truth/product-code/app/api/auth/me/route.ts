@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { canManageOrg, getOrgScopedAssignments, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -9,15 +10,7 @@ function errorResponse(message: string, status: number, code?: string) {
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-
-    const { data: roleRows, error: rolesError } = await supabaseAdmin
-      .from('user_roles')
-      .select('roles:roles(code, name)')
-      .eq('user_id', user.id)
-
-    if (rolesError) {
-      return errorResponse('读取角色失败', 500, 'ROLES_FETCH_FAILED')
-    }
+    const scopedAssignments = await getUserScopedRoleAssignments(user.id)
 
     const { data: userRow, error: userError } = await supabaseAdmin
       .from('users')
@@ -29,14 +22,17 @@ export async function GET(req: NextRequest) {
       return errorResponse('读取用户失败', 500, 'USER_FETCH_FAILED')
     }
 
-    const roles = (roleRows || [])
-      .map((row) => Array.isArray(row.roles) ? row.roles[0] : row.roles)
-      .filter(Boolean)
+    const roles = getOrgScopedAssignments(scopedAssignments).map((assignment) => ({
+      code: assignment.roleCode,
+      name: assignment.roleName,
+    }))
 
     return NextResponse.json({
       user: {
         ...userRow,
         roles,
+        scopedRoles: scopedAssignments,
+        canManageOrg: canManageOrg(scopedAssignments),
         mustChangePassword: Boolean(userRow.must_change_password),
       },
     })

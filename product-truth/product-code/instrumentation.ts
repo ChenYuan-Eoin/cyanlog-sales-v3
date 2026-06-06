@@ -1,4 +1,4 @@
-// SpaceX级应用启动监控
+// 应用启动监控
 // Next.js Instrumentation Hook（Next.js 14+）
 
 export async function register() {

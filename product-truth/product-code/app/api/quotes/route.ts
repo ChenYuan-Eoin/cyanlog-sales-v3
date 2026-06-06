@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { v4 as uuidv4 } from 'uuid'
 import { paginationSchema, quoteSchema } from '@/lib/validation'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -13,6 +14,8 @@ function errorResponse(message: string, status: number, code?: string) {
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
 
     const { searchParams } = new URL(req.url)
 
@@ -32,7 +35,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('quotes')
       .select('*', { count: 'exact' })
-      .eq('created_by', user.id)
+      .in('created_by', accessibleUserIds)
       .order('created_at', { ascending: false })
 
     if (status) {
@@ -83,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     const { customer_name, customer_contact, valid_until } = result.data
 
-    // SpaceX级确定性报价单号：数据库序列保证唯一性
+    // 确定性报价单号：数据库序列保证唯一性
     const { data: quoteNoResult, error: seqError } = await supabaseAdmin
       .rpc('generate_quote_number')
 

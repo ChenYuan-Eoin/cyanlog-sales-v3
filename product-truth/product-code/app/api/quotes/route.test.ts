@@ -14,6 +14,11 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
+vi.mock('@/lib/scoped-access', () => ({
+  getDefaultOrgId: vi.fn().mockResolvedValue('org-1'),
+  listAccessibleUserIds: vi.fn().mockResolvedValue({ userIds: ['u1'] }),
+}))
+
 import { requireAuth } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
@@ -29,7 +34,7 @@ function makeRequest(url: string, method = 'GET'): any {
 
 function makeChain(result: any) {
   const chain: any = {}
-  ;['select', 'eq', 'neq', 'order', 'like', 'limit', 'range', 'insert'].forEach((m) => {
+  ;['select', 'eq', 'neq', 'order', 'like', 'limit', 'range', 'insert', 'in', 'gte', 'lte', 'ilike'].forEach((m) => {
     chain[m] = vi.fn().mockReturnValue(chain)
   })
   chain.single = vi.fn().mockResolvedValue(result)

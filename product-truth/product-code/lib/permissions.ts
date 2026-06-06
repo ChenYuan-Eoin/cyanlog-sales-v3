@@ -1,0 +1,36 @@
+export function hasPermission(allPermissions: string[], required: string): boolean {
+  if (allPermissions.includes('*') || allPermissions.includes(required)) {
+    return true
+  }
+
+  const [requiredResource] = required.split(':')
+  return allPermissions.some((permission) => {
+    if (permission === '*') {
+      return true
+    }
+    if (!permission.includes(':')) {
+      return permission === required
+    }
+
+    const [resource, action] = permission.split(':')
+    return resource === requiredResource && action === '*'
+  })
+}
+
+export function canAccessOrgAdmin(allPermissions: string[], roleCodes: string[]): boolean {
+  if (
+    roleCodes.includes('SUPER_ADMIN')
+    || roleCodes.includes('SALES_OPS')
+    || roleCodes.includes('ADMIN')
+  ) {
+    return true
+  }
+
+  return (
+    hasPermission(allPermissions, '*')
+    || hasPermission(allPermissions, 'admin:access')
+    || hasPermission(allPermissions, 'org:write')
+    || hasPermission(allPermissions, 'user:view')
+    || hasPermission(allPermissions, 'user:write')
+  )
+}

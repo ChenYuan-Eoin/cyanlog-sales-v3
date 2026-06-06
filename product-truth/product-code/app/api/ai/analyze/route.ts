@@ -1,19 +1,16 @@
 // AI 分析 API 端点
-// 接收文本，返回降级链结果
+// 统一走 reviewWithFailover，删除原 ai-fallback 链路
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { FallbackOrchestrator } from '@/lib/ai-fallback/orchestrator'
-import { LocalModelClient } from '@/lib/ai-fallback/local-model'
-import { CloudModelClient } from '@/lib/ai-fallback/cloud-model'
-import { RuleEngineClient } from '@/lib/ai-fallback/rule-engine'
+import { reviewWithFailoverSync } from '@/lib/ai/failover'
 
 export const runtime = 'nodejs'
 
 const analyzeSchema = z.object({
   text: z.string().min(1).max(100_000),
   pageCount: z.number().int().min(1).max(1000),
-  task: z.enum(['semantic', 'extract', 'classify']),
+  task: z.enum(['semantic', 'extract', 'classify']).optional(),
   forceCloud: z.boolean().optional(),
 })
 
@@ -32,28 +29,20 @@ export async function POST(req: NextRequest) {
 
     const input = result.data
 
-    // 构造降级链：只在配置存在时注入云端客户端
-    const local = new LocalModelClient()
-    const cloudUrl = process.env.AI_GATEWAY_URL
-    const cloudKey = process.env.AI_GATEWAY_API_KEY
-    const cloud = cloudUrl && cloudKey
-      ? new CloudModelClient(cloudUrl, cloudKey, process.env.AI_MODEL)
-      : undefined
-    const rules = new RuleEngineClient()
+    // 统一走 reviewWithFailover 降级链
+    const analysis = await reviewWithFailoverSync(input.text)
 
-    const orch = new FallbackOrchestrator(local, cloud, rules)
-
-    try {
-      const analysis = await orch.analyze(input)
-      return NextResponse.json({
-        ...analysis,
-        attempts: orch.getAttempts(),
-      })
-    } catch (err) {
-      // 理论上不会到这里（rule engine 兜底）
-      const msg = err instanceof Error ? err.message : 'Unknown error'
-      return errorResponse(`降级链全部失败: ${msg}`, 500, 'FALLBACK_FAILED')
-    }
+    return NextResponse.json({
+      level: analysis.degraded ? 3 : 1,
+      source: analysis.provider,
+      provider: analysis.provider,
+      result: {
+        risks: analysis.risks,
+        summary: analysis.summary,
+      },
+      duration: 0,
+      degraded: analysis.degraded,
+    })
   } catch (error) {
     console.error('AI analyze error:', error)
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')

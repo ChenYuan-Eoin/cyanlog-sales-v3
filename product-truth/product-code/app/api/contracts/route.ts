@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { paginationSchema } from '@/lib/validation'
 import { logError } from '@/lib/error-log'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -19,6 +20,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     logRouteStart({
       route,
       requestId,
@@ -43,7 +46,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('contracts')
       .select('*', { count: 'exact' })
-      .eq('created_by', user.id)
+      .in('created_by', accessibleUserIds)
       .order('created_at', { ascending: false })
 
     if (status) {

@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { contractIdSchema } from '@/lib/validation'
 import { z } from 'zod'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -31,6 +32,8 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
 
     const idResult = contractIdSchema.safeParse({ id: params.id })
     if (!idResult.success) {
@@ -43,8 +46,8 @@ export async function GET(
       .from('quotes')
       .select('*, quote_items(*)')
       .eq('id', id)
-      .eq('created_by', user.id)
-      .single()
+      .in('created_by', accessibleUserIds)
+      .maybeSingle()
 
     if (error) {
       console.error('Get quote error:', error)

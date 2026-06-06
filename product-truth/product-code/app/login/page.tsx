@@ -8,7 +8,6 @@ export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [workspace, setWorkspace] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -152,16 +151,6 @@ export default function LoginPage() {
               />
             </div>
 
-            <div className="form-group">
-              <label>工作空间</label>
-              <input
-                type="text"
-                value={workspace}
-                onChange={(e) => setWorkspace(e.target.value)}
-                placeholder="选择工作空间"
-              />
-            </div>
-
             {error && (
               <div style={{
                 padding: '12px 16px',
@@ -187,9 +176,10 @@ export default function LoginPage() {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => alert('SSO 登录功能开发中')}
+              disabled
+              title="请联系管理员开通企业 SSO 账号"
             >
-              使用企业 SSO 登录
+              使用企业 SSO 登录（请联系管理员开通）
             </button>
           </form>
         </div>
@@ -201,11 +191,10 @@ export default function LoginPage() {
 
       {/* Floating Navigation Pill */}
       <div className="nav-pill">
-        <Link href="/" className="active">CYANLOG</Link>
-        <Link href="/login" className="active">登录</Link>
-        <Link href="/">首页</Link>
-        <Link href="/quotes">报价</Link>
-        <Link href="/contracts">审批</Link>
+        <Link href="/" prefetch={false}>CYANLOG</Link>
+        <Link href="/login" className="active" prefetch={false}>登录</Link>
+        <Link href="/quotes" prefetch={false}>报价</Link>
+        <Link href="/contracts" prefetch={false}>合同</Link>
       </div>
     </div>
   )

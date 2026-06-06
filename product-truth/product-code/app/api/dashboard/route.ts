@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
-
-type SalesSpaceRow = {
-  id: string
-  name: string
-  description: string | null
-  department_id: string
-  owner_id: string | null
-  active_opportunities: number | null
-  pending_milestones: number | null
-}
-
-type SpaceMemberRow = {
-  space: SalesSpaceRow | SalesSpaceRow[] | null
-}
+import { listAccessibleSalesSpaces } from '@/lib/scoped-access'
 
 type CustomerRow = {
   id: string
@@ -87,19 +74,18 @@ export async function GET(req: NextRequest) {
     const user = await requireAuth(req)
     const searchParams = req.nextUrl.searchParams
     const requestedSpaceId = searchParams.get('spaceId')
+    const { data: userRow, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('org_id')
+      .eq('id', user.id)
+      .single()
 
-    const { data: memberRows, error: memberError } = await supabaseAdmin
-      .from('sales_space_members')
-      .select('space:sales_spaces(id, name, description, department_id, owner_id, active_opportunities, pending_milestones)')
-      .eq('user_id', user.id)
-
-    if (memberError) {
-      return errorResponse('读取销售空间失败', 500, 'SPACE_FETCH_FAILED')
+    if (userError || !userRow?.org_id) {
+      return errorResponse('读取组织信息失败', 500, 'ORG_FETCH_FAILED')
     }
 
-    const spaces = ((memberRows || []) as SpaceMemberRow[])
-      .map((row) => unwrapOne(row.space))
-      .filter((space): space is SalesSpaceRow => Boolean(space))
+    const { spaces } = await listAccessibleSalesSpaces(user.id, userRow.org_id)
+    const normalizedSpaces = spaces
       .map((space) => ({
         id: space.id,
         name: space.name,
@@ -110,7 +96,7 @@ export async function GET(req: NextRequest) {
         pending_milestones: space.pending_milestones || 0,
       }))
 
-    if (spaces.length === 0) {
+    if (normalizedSpaces.length === 0) {
       return NextResponse.json({
         spaces: [],
         activeSpace: null,
@@ -121,7 +107,7 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    const activeSpace = spaces.find((space) => space.id === requestedSpaceId) || spaces[0]
+    const activeSpace = normalizedSpaces.find((space) => space.id === requestedSpaceId) || normalizedSpaces[0]
 
     const today = new Date()
     const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -197,7 +183,7 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json({
-      spaces,
+      spaces: normalizedSpaces,
       activeSpace,
       opportunities,
       milestones,

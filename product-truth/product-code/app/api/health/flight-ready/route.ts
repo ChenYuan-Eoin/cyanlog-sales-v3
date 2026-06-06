@@ -1,24 +1,13 @@
-// 飞控健康检查（SpaceX FMEA 标准）
+// 飞控健康检查（FMEA 标准）
 // 路径：/api/health/flight-ready
 // 返回各子系统状态 + 总体 GO/NO-GO
 
 import { NextResponse } from 'next/server'
+import { checkSchemaStatus } from '@/lib/schema-check'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const REQUIRED_TABLES = [
-  'users',
-  'auth_tokens',
-  'quotes',
-  'contracts',
-  'rules',
-  'user_organizations',
-  'configs',
-  'config_versions',
-  'contract_analysis_jobs',
-]
 
 interface SubsystemStatus {
   name: string
@@ -54,14 +43,18 @@ export async function GET() {
       }
     }),
     checkSubsystem('schema_required_tables', async () => {
-      // 验证关键表存在（FMEA 关键节点）
-      for (const table of REQUIRED_TABLES) {
-        const { error } = await supabaseAdmin
-          .from(table)
-          .select('*', { count: 'exact', head: true })
-        if (error) {
-          throw new Error(`${table}: ${error.message}`)
-        }
+      const status = await checkSchemaStatus()
+      const missingTables = status.filter((item) => !item.exists)
+      if (missingTables.length > 0) {
+        throw new Error(`missing tables: ${missingTables.map((item) => item.table).join(', ')}`)
+      }
+
+      const schemaDrift = status.filter((item) => item.exists && item.columnsOk === false)
+      if (schemaDrift.length > 0) {
+        const details = schemaDrift
+          .map((item) => `${item.table}[${(item.missingColumns || []).join(', ')}]`)
+          .join(', ')
+        throw new Error(`schema drift: ${details}`)
       }
     }),
     checkSubsystem('environment', async () => {
