@@ -215,6 +215,35 @@ async function main() {
       .eq('id', spaceId)
   }
 
+  console.log('15. Contract review rules...')
+  const rules = [
+    { name: '账期超过90天', description: '付款账期超过90天为高风险', rule_type: 'structured', risk_level: 'red', enabled: true, config: { pattern: '账期\\s*[:：]?\\s*(\\d+)\\s*天', field: 'payment_term_days', operator: 'gt', value: 90 } },
+    { name: '违约金比例超过5%', description: '违约金比例超过5%为中等风险', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '违约金\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)\\s*%', field: 'penalty_rate', operator: 'gt', value: 5 } },
+    { name: '保密期超过5年', description: '保密协议期限超过5年需评审', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '保密\\s*[:：]?\\s*(\\d+)\\s*年', field: 'confidentiality_years', operator: 'gt', value: 5 } },
+    { name: '预付款超过30%', description: '预付款比例超过30%为中等风险', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '预付\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)\\s*%', field: 'advance_payment_rate', operator: 'gt', value: 30 } },
+    { name: '未约定管辖法院', description: '合同未明确约定管辖法院', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '管辖', field: 'jurisdiction', operator: 'eq', value: 'NOT_FOUND' } },
+    { name: '未约定违约金', description: '合同未约定违约责任', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '违约', field: 'penalty_clause', operator: 'eq', value: 'NOT_FOUND' } },
+    { name: '责任划分不清晰', description: '合同中双方责任划分模糊', rule_type: 'semantic', risk_level: 'yellow', enabled: true, config: { prompt: '检查合同中"甲方""乙方"的责任描述是否清晰' } },
+    { name: '知识产权归属不明', description: '未明确约定知识产权归属', rule_type: 'semantic', risk_level: 'red', enabled: true, config: { prompt: '检查合同中关于知识产权的条款' } },
+    { name: '数据安全条款缺失', description: '涉及数据处理但未约定数据安全', rule_type: 'semantic', risk_level: 'red', enabled: true, config: { prompt: '识别合同中涉及数据采集、存储、传输的条款' } },
+    { name: '不可抗力范围过宽', description: '不可抗力条款范围过宽可能导致免责滥用', rule_type: 'semantic', risk_level: 'yellow', enabled: true, config: { prompt: '检查不可抗力条款的范围界定' } },
+  ]
+  for (const r of rules) {
+    await supabase.from('rules').upsert([{ ...r, created_by: id(0x30000001) }], { onConflict: 'name' })
+  }
+  console.log(`   seeded ${rules.length} rules`)
+
+  console.log('16. Products...')
+  const products = [
+    { code: 'PROD-001', name: '智能合同审核系统', specification: '企业版', unit: '套', base_price: 98000, cost_price: 35000, min_price: 80000, status: 'active' },
+    { code: 'PROD-002', name: '销售管理平台', specification: '标准版', unit: '套', base_price: 50000, cost_price: 18000, min_price: 40000, status: 'active' },
+    { code: 'PROD-003', name: 'AI客服系统', specification: 'SaaS', unit: '年', base_price: 120000, cost_price: 25000, min_price: 90000, status: 'active' },
+  ]
+  for (const p of products) {
+    await supabase.from('products').upsert([p], { onConflict: 'code' })
+  }
+  console.log(`   seeded ${products.length} products`)
+
   console.log('Done!')
 }
 

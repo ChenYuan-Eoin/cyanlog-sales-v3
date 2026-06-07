@@ -1,4 +1,29 @@
-# Seed 数据说明
+# 脚本说明
+
+## 唯一 Seed 入口
+
+```bash
+export SUPABASE_SERVICE_ROLE_KEY=eyJ...
+pnpm db:seed
+```
+
+这会插入：组织、角色、部门、用户、用户-角色、用户-部门、销售空间、空间成员、客户、机会、节点、提醒、日程、规则、产品。
+
+数据：3个产品、10条红绿灯规则、21个测试账号、8个客户/机会、3个销售空间。
+
+**不要新增 seed 脚本。** 如需扩展，复用 `scripts/seed-via-api.mjs`。
+
+## 一次性工具（不建议常用）
+
+- `fix-uuids.mjs` — UUID 修复（历史遗留）
+- `setup-e2e-user.mjs` — E2E 测试用户
+- `test-pg-conn.mjs` — PG 连接诊断
+- `verify.mjs` — 验证
+
+## 已弃用（待清理）
+
+- `apply-migrations.mjs` / `apply-migrations-api.mjs` — 重复，建议用 Supabase CLI
+- `deploy.sh` — 引用废弃的 Prisma，违反 ADR-008
 
 ## 快速开始
 
@@ -8,16 +33,10 @@
 
 ### 运行方式
 
-#### 方式1：Node.js脚本（推荐，含规则数据）
+#### 方式1：Node.js脚本（推荐）
 ```bash
-export SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...你的service_role_key
-
-# 使用ts-node或tsx
-npx tsx scripts/seed-rules.ts
-
-# 或编译后运行
-npx tsc scripts/seed-rules.ts
-node scripts/seed-rules.js
+export SUPABASE_SERVICE_ROLE_KEY=eyJ...
+pnpm db:seed
 ```
 
 #### 方式2：Supabase SQL Editor
