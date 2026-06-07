@@ -63,3 +63,50 @@ pnpm dev
 # 验证
 pnpm lint && pnpm tsc --noEmit && pnpm build
 ```
+
+---
+
+## ⚠️ AI 协作约束（必读）
+
+### 项目当前状态（2026-06-07 评估）
+- **健康度评分 35/100，不及格**
+- 详见 `product-truth/04-implementation-truth/PROJECT-HEALTH-ASSESSMENT.md`
+- 已知关键问题：脚本堆积、CI坏、deploy.sh违反ADR-008、无可观测性
+
+### 硬性约束（违反 = 制造屎山）
+
+1. **改之前必查**
+   - 该功能/脚本是否已存在？`grep -r "<feature>" product-truth/product-code/`
+   - 是否违反已有 ADR？`ls product-truth/02-technical-truth/architecture-decisions/`
+   - 项目当前健康度？`Read product-truth/04-implementation-truth/PROJECT-HEALTH-ASSESSMENT.md`
+
+2. **写之前必问**
+   - 能用 UI/配置解决吗？不要写新脚本
+   - 必须写新文件时，优先编辑已有而非新建
+   - 写完后如何验证？必须可量化
+
+3. **完成后必做**
+   - 更新 `~/.claude/projects/-Users-nsss-Price-v3/memory/MEMORY.md`（不写新文档）
+   - 检查脚本数量、文件数变化
+   - 与已有 ADR 做一致性核对
+
+4. **绝对禁止**
+   - 加新脚本而不先合并/删除已有的（scripts/ 已 11 个，3个seed重复）
+   - 改 deploy.sh、CI配置、ADR 而不验证现状
+   - 写"诊断/评估"文档而不修根因
+   - 一次性大改而不分步
+
+5. **优先级**
+   - 商业化产品标准 > 任何"功能完成度"
+   - 可观测/可运维/可量化 > 新功能
+   - 现有架构决策(ADR) > 临时方案
+
+### 已知项目规则
+- **不用 ORM**（ADR-008）：直接 Supabase JS SDK，不要引入 Prisma/Drizzle
+- **不用 Prisma**：deploy.sh 引用 Prisma 是历史遗留，需修复
+- **多级 AI 降级**（ADR-001）：local → cloud → rule-engine → manual-fallback
+- **PostgreSQL + JSONB**（ADR-006）
+- **SSE 流式**（ADR-003）
+- **RBAC + 数据范围**（ADR-004）
+- **CI 是 .bak，已坏**：从 `.github/workflows/ci.yml.bak` 恢复前必须验证
+
