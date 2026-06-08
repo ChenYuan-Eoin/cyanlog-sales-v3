@@ -1,5 +1,17 @@
 # 脚本说明
 
+## 6 个脚本（最终态）
+
+```
+scripts/
+├── README.md              # 本文件
+├── apply-migrations.mjs   # PG 直连跑迁移（fallback，Supabase CLI 是更优解）
+├── seed-via-api.mjs       # 唯一 seed 入口（pnpm db:seed）
+├── setup-e2e-user.mjs     # E2E 测试用户
+├── test-pg-conn.mjs       # PG 连接诊断
+└── verify.mjs             # 验证表行数
+```
+
 ## 唯一 Seed 入口
 
 ```bash
@@ -13,17 +25,21 @@ pnpm db:seed
 
 **不要新增 seed 脚本。** 如需扩展，复用 `scripts/seed-via-api.mjs`。
 
-## 一次性工具（不建议常用）
+## 一次性工具
 
-- `fix-uuids.mjs` — UUID 修复（历史遗留）
 - `setup-e2e-user.mjs` — E2E 测试用户
 - `test-pg-conn.mjs` — PG 连接诊断
-- `verify.mjs` — 验证
+- `verify.mjs` — 验证表行数
 
-## 已弃用（待清理）
+## 已删除（2026-06-08 减法清理）
 
-- `apply-migrations.mjs` / `apply-migrations-api.mjs` — 重复，建议用 Supabase CLI
-- `deploy.sh` — 引用废弃的 Prisma，违反 ADR-008
+| 删 | 原因 |
+|---|------|
+| `apply-migrations-api.mjs` | 与 `apply-migrations.mjs` 100% 等价（仅多一个网络跳转） |
+| `deploy.sh` | 引用 Prisma 违反 ADR-008；改它=加屎山。改用 **Vercel Dashboard 自动部署** |
+| `fix-uuids.mjs` | 一次性修复脚本，`supabase/seed.sql` 已是纯 hex 格式，修复已持久化 |
+
+**不再保留"已弃用（待清理）"分区**——剩余 6 个都是当前在用或必要 fallback。
 
 ## 快速开始
 

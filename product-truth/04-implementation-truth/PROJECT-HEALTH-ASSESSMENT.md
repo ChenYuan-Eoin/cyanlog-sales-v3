@@ -24,47 +24,39 @@
 
 ## 一、屎山程度评估
 
-### 1.1 脚本数量：🚨 11个独立脚本
+### 1.1 脚本数量：⚠️ 6个独立脚本（2026-06-08 减法清理后）
 
 ```
 scripts/
-├── README.md
-├── apply-migrations-api.mjs       # 迁移脚本A
-├── apply-migrations.mjs            # 迁移脚本B（重复）
-├── deploy.sh                       # 部署脚本（已坏）
-├── fix-uuids.mjs                   # UUID修复脚本
-├── seed-relations.mjs              # 种子数据A
-├── seed-rules.ts                   # 种子数据B（刚加的）
-├── seed-via-api.mjs                # 种子数据C
-├── setup-e2e-user.mjs              # E2E用户脚本
-├── test-pg-conn.mjs                # PG连接测试
-└── verify.mjs                      # 验证脚本
+├── README.md              # 文档
+├── apply-migrations.mjs   # PG 直连跑迁移（fallback；Supabase CLI 是更优解）
+├── seed-via-api.mjs       # 唯一 seed 入口（pnpm db:seed）
+├── setup-e2e-user.mjs     # E2E 测试用户
+├── test-pg-conn.mjs       # PG 连接诊断
+└── verify.mjs             # 验证表行数
 ```
 
-**问题：**
-- 3个 seed 脚本，2个迁移脚本——**重复劳动**
-- 脚本之间没有依赖图
-- 没有统一入口（"用哪个？"）
-- 缺乏文档说明每个脚本的用途和顺序
+**清理轨迹**：
+- 2026-06-07：3 个 seed 脚本（`seed-via-api.mjs` / `seed-rules.ts` / `seed-relations.mjs`）合并为 1 个 → 11 → 9
+- 2026-06-08：删除 3 个负资产 → 9 → 6
+  - `apply-migrations-api.mjs`：与 `apply-migrations.mjs` 100% 等价（仅多一个网络跳转）
+  - `deploy.sh`：引用 Prisma 违反 ADR-008，且 CI（`ci.yml.bak`）不调用——直接删
+  - `fix-uuids.mjs`：`supabase/seed.sql` 已是纯 hex UUID，修复已持久化
 
-**正经标准**：1-2个 `pnpm db:migrate` / `pnpm db:seed` 即可
+**剩余 6 个**：1 seed + 1 migrate + 1 E2E + 2 诊断 + 1 验证。**没有"已弃用"分区**——要么在用，要么必要 fallback。
 
-### 1.2 deploy.sh 已坏 💀
+**正经标准**：1-2个 `pnpm db:migrate` / `pnpm db:seed` 即可。当前的 6 个里，`apply-migrations.mjs` 是 fallback（Supabase CLI `db push` 是更优解），其余 4 个是不可替代的运维工具。
 
-```bash
-# deploy.sh 中的命令：
-make -C prisma validate
-make -C prisma format
-pnpm tsc --noEmit
-pnpm lint
-make -C prisma deploy   # ← 项目根本不用 Prisma！
-```
+### 1.2 deploy.sh 已删除 ✅
 
-**问题：**
-- ADR-008 已记录"不引入 ORM，直接 Supabase"
-- 但 deploy.sh 还在用 Prisma 流程
-- 引入 Prisma 是历史遗留
-- **脚本与架构决策矛盾**——典型的屎山特征
+2026-06-08 决策：**不修，直接删**。
+
+- 旧 deploy.sh 调用 `make -C prisma validate/format/deploy`，但项目已迁移到 Supabase JS SDK（ADR-008）
+- 改它 = 写"去掉 Prisma 字段的 deploy.sh" = 加一个中等复杂度的屎山
+- Vercel Dashboard 已对接 GitHub main 分支自动 deploy，无需脚本
+- CI 一直是 `.bak` 状态，没人在调用 deploy.sh
+
+**部署链路现状**：`git push main` → Vercel 自动 build + deploy。**不需要 deploy.sh**。
 
 ### 1.3 CI/CD 已坏 💀💀
 
@@ -156,12 +148,12 @@ ci.yml.bak
 
 ### 4.1 部署链路
 ```
-代码 → ???? → 生产
+代码 → git push main → Vercel Dashboard 自动 deploy
 ```
+- ✅ 无需 deploy.sh（已删）
 - ❌ 没有 staging 环境
 - ❌ 没有蓝绿部署
-- ❌ 没有回滚机制
-- ❌ deploy.sh 已坏
+- ❌ 没有回滚机制（Vercel 平台支持但未启用 Deploy Hooks）
 - ❌ CI 不存在
 
 ### 4.2 数据库运维
@@ -277,7 +269,7 @@ ci.yml.bak
 **当前项目达成度**：**2/10**
 
 ### Q2: 是不是脚本堆砌？屎山？
-**是。** 11个独立脚本+已坏的deploy.sh+已坏的CI+重复的seed脚本 = 典型屎山。
+**部分改善。** 6个独立脚本（已从 11 减半）+ deploy.sh 已删 + CI 仍坏（但用 Vercel Dashboard 不需要 CI deploy 步骤）= 脚本堆砌问题基本解决。
 
 ### Q3: 可观测性可以吗？
 **不可以。** 仅有请求日志，缺Sentry/PostHog/APM/告警。
@@ -295,10 +287,10 @@ ci.yml.bak
 ## 八、改进优先级（按ROI排序）
 
 ### P0 - 必须修复（系统不能"正经运行"）
-1. **部署链路修复**：deploy.sh 改用 Supabase CLI，去掉 Prisma
+1. ~~**部署链路修复**：deploy.sh 改用 Supabase CLI，去掉 Prisma~~ ✅ 2026-06-08 删除 deploy.sh，部署走 Vercel Dashboard
 2. **CI 恢复**：从 ci.yml.bak 恢复并验证
 3. **Sentry 启用**：配置 DSN 并验证捕获
-4. **统一 seed 入口**：删除 2个 seed 脚本，只留 1个
+4. ~~**统一 seed 入口**：删除 2个 seed 脚本，只留 1个~~ ✅ 2026-06-07 合并
 5. **基础指标埋点**：登录成功率、AI审核成功率、API错误率
 
 ### P1 - 重要
