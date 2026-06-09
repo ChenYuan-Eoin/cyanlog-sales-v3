@@ -1,3 +1,28 @@
+// 品牌资产定义
+export interface BrandAssets {
+  // 完整 Logo（图标+文字）
+  fullLogo: {
+    light: string  // 用于浅色背景
+    dark: string   // 用于深色背景
+  }
+  // 图标符号（正方形，用于折叠态）
+  symbol: {
+    light: string
+    dark: string
+  }
+  // 浏览器图标
+  favicon: string
+}
+
+// 容器规则（固定值，用户不可配置）
+export const LOGO_CONTAINER = {
+  height: 48,        // 侧边栏固定48px
+  maxLogoHeight: 28, // Logo最大28px（留白）
+  padding: 16,       // 左右内边距
+} as const
+
+export type AppearanceMode = 'system' | 'light' | 'dark'
+
 export interface UIThemeConfigValue {
   brandName?: string
   brandShortName?: string
@@ -5,8 +30,17 @@ export interface UIThemeConfigValue {
   productSubtitle?: string
   loginTitle?: string
   loginSubtitle?: string
+
+  // 新品牌资产配置（替代旧 logoUrl/faviconUrl）
+  brandAssets?: BrandAssets
+
+  // 主题外观模式
+  appearance?: AppearanceMode
+
+  // 旧字段保留（兼容过渡，优先使用 brandAssets）
   logoUrl?: string
   faviconUrl?: string
+
   primary?: string
   primaryForeground?: string
   secondary?: string
@@ -35,8 +69,21 @@ export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
   productSubtitle: '智能销售支撑平台',
   loginTitle: '企业销售支撑平台',
   loginSubtitle: '使用企业账号进入工作台首页',
+
+  // 新品牌资产配置
+  brandAssets: {
+    fullLogo: { light: '', dark: '' },
+    symbol: { light: '', dark: '' },
+    favicon: '',
+  },
+
+  // 默认跟随系统
+  appearance: 'system',
+
+  // 旧字段（过渡兼容）
   logoUrl: '',
   faviconUrl: '',
+
   primary: '#2563eb',
   primaryForeground: '#ffffff',
   secondary: '#eff6ff',
@@ -68,8 +115,15 @@ export function sanitizeThemeValue(value: Record<string, unknown> | null | undef
     productSubtitle: pickText(theme.productSubtitle, DEFAULT_THEME.productSubtitle),
     loginTitle: pickText(theme.loginTitle, DEFAULT_THEME.loginTitle),
     loginSubtitle: pickText(theme.loginSubtitle, DEFAULT_THEME.loginSubtitle),
+
+    // 新品牌资产配置
+    brandAssets: pickBrandAssets(theme.brandAssets),
+    appearance: pickAppearance(theme.appearance),
+
+    // 旧字段兼容
     logoUrl: pickOptionalText(theme.logoUrl),
     faviconUrl: pickOptionalText(theme.faviconUrl),
+
     primary: pickColor(theme.primary, DEFAULT_THEME.primary),
     primaryForeground: pickColor(theme.primaryForeground, DEFAULT_THEME.primaryForeground),
     secondary: pickColor(theme.secondary, DEFAULT_THEME.secondary),
@@ -124,6 +178,35 @@ function pickRadius(value: unknown, fallback: number): number {
   }
 
   return Math.min(Math.max(value, 0), 32)
+}
+
+function pickBrandAssets(value: unknown): BrandAssets {
+  const defaultAssets = DEFAULT_THEME.brandAssets
+
+  if (!value || typeof value !== 'object') {
+    return defaultAssets
+  }
+
+  const assets = value as Record<string, unknown>
+
+  return {
+    fullLogo: {
+      light: pickOptionalText((assets.fullLogo as Record<string, unknown>)?.light),
+      dark: pickOptionalText((assets.fullLogo as Record<string, unknown>)?.dark),
+    },
+    symbol: {
+      light: pickOptionalText((assets.symbol as Record<string, unknown>)?.light),
+      dark: pickOptionalText((assets.symbol as Record<string, unknown>)?.dark),
+    },
+    favicon: pickOptionalText(assets.favicon),
+  }
+}
+
+function pickAppearance(value: unknown): AppearanceMode {
+  if (value === 'light' || value === 'dark' || value === 'system') {
+    return value
+  }
+  return DEFAULT_THEME.appearance
 }
 
 export function themeToCssVariables(theme: Required<UIThemeConfigValue>): Record<string, string> {

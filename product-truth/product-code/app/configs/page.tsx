@@ -1834,7 +1834,7 @@ export default function ConfigsPage() {
   function renderThemeEditForm() {
     const value = editingConfig?.value as Record<string, unknown> || { ...DEFAULT_THEME }
 
-    const setThemeField = (field: string, nextValue: string | number) => {
+    const setThemeField = (field: string, nextValue: unknown) => {
       setEditingConfig({
         ...editingConfig!,
         value: {
@@ -1925,22 +1925,124 @@ export default function ConfigsPage() {
               placeholder="如: 使用企业账号进入工作台首页"
             />
           </div>
+          {/* 主题外观模式 */}
           <div>
-            <label className="text-sm font-medium">品牌 Logo</label>
-            <ImageUpload
-              value={String(value.logoUrl || '')}
-              onChange={(url) => setThemeField('logoUrl', url)}
-              folder="logos"
-            />
+            <label className="text-sm font-medium">主题外观</label>
+            <select
+              className="w-full mt-1 p-2 border rounded-md"
+              value={String(value.appearance || 'system')}
+              onChange={(e) => setThemeField('appearance', e.target.value)}
+            >
+              <option value="system">跟随系统</option>
+              <option value="light">强制亮色</option>
+              <option value="dark">强制暗色</option>
+            </select>
+            <p className="text-xs text-slate-500 mt-1">决定 Logo 调用亮色版还是暗色版</p>
           </div>
-          <div>
-            <label className="text-sm font-medium">浏览器 Favicon</label>
-            <ImageUpload
-              value={String(value.faviconUrl || '')}
-              onChange={(url) => setThemeField('faviconUrl', url)}
-              folder="favicons"
-              accept="image/png,image/x-icon,image/svg+xml"
-            />
+
+          {/* 品牌资产配置 */}
+          <div className="col-span-2 border-t pt-4 mt-2">
+            <h4 className="text-sm font-semibold mb-3">品牌资产配置</h4>
+            <div className="grid grid-cols-2 gap-4">
+              {/* 完整 Logo - 亮色 */}
+              <div>
+                <label className="text-sm font-medium">完整 Logo (亮色)</label>
+                <p className="text-xs text-slate-500 mb-2">用于浅色背景</p>
+                <ImageUpload
+                  value={String((value as { brandAssets?: { fullLogo?: { light?: string } } }).brandAssets?.fullLogo?.light || '')}
+                  onChange={(url) => {
+                    const current = ((value as { brandAssets?: { fullLogo?: { light?: string; dark?: string }; symbol?: { light?: string; dark?: string }; favicon?: string } }).brandAssets) || { fullLogo: {}, symbol: {}, favicon: '' }
+                    setThemeField('brandAssets', { ...current, fullLogo: { ...current.fullLogo, light: url } })
+                  }}
+                  folder="logos"
+                />
+              </div>
+              {/* 完整 Logo - 暗色 */}
+              <div>
+                <label className="text-sm font-medium">完整 Logo (暗色)</label>
+                <p className="text-xs text-slate-500 mb-2">用于深色背景</p>
+                <ImageUpload
+                  value={String((value as { brandAssets?: { fullLogo?: { dark?: string } } }).brandAssets?.fullLogo?.dark || '')}
+                  onChange={(url) => {
+                    const current = ((value as { brandAssets?: { fullLogo?: { light?: string; dark?: string }; symbol?: { light?: string; dark?: string }; favicon?: string } }).brandAssets) || { fullLogo: {}, symbol: {}, favicon: '' }
+                    setThemeField('brandAssets', { ...current, fullLogo: { ...current.fullLogo, dark: url } })
+                  }}
+                  folder="logos"
+                />
+              </div>
+              {/* 图标符号 - 亮色 */}
+              <div>
+                <label className="text-sm font-medium">图标符号 (亮色)</label>
+                <p className="text-xs text-slate-500 mb-2">侧边栏折叠、移动端</p>
+                <ImageUpload
+                  value={String((value as { brandAssets?: { symbol?: { light?: string } } }).brandAssets?.symbol?.light || '')}
+                  onChange={(url) => {
+                    const current = ((value as { brandAssets?: { fullLogo?: { light?: string; dark?: string }; symbol?: { light?: string; dark?: string }; favicon?: string } }).brandAssets) || { fullLogo: {}, symbol: {}, favicon: '' }
+                    setThemeField('brandAssets', { ...current, symbol: { ...current.symbol, light: url } })
+                  }}
+                  folder="logos"
+                />
+              </div>
+              {/* 图标符号 - 暗色 */}
+              <div>
+                <label className="text-sm font-medium">图标符号 (暗色)</label>
+                <p className="text-xs text-slate-500 mb-2">侧边栏折叠、移动端</p>
+                <ImageUpload
+                  value={String((value as { brandAssets?: { symbol?: { dark?: string } } }).brandAssets?.symbol?.dark || '')}
+                  onChange={(url) => {
+                    const current = ((value as { brandAssets?: { fullLogo?: { light?: string; dark?: string }; symbol?: { light?: string; dark?: string }; favicon?: string } }).brandAssets) || { fullLogo: {}, symbol: {}, favicon: '' }
+                    setThemeField('brandAssets', { ...current, symbol: { ...current.symbol, dark: url } })
+                  }}
+                  folder="logos"
+                />
+              </div>
+              {/* Favicon */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium">浏览器 Favicon</label>
+                <p className="text-xs text-slate-500 mb-2">1:1 比例，用于浏览器标签</p>
+                <ImageUpload
+                  value={String((value as { brandAssets?: { favicon?: string } }).brandAssets?.favicon || '')}
+                  onChange={(url) => {
+                    const current = ((value as { brandAssets?: { fullLogo?: { light?: string; dark?: string }; symbol?: { light?: string; dark?: string }; favicon?: string } }).brandAssets) || { fullLogo: {}, symbol: {}, favicon: '' }
+                    setThemeField('brandAssets', { ...current, favicon: url })
+                  }}
+                  folder="favicons"
+                  accept="image/png,image/x-icon,image/svg+xml"
+                />
+              </div>
+            </div>
+
+            {/* 预览区域 */}
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div className="p-4 bg-white border rounded-lg">
+                <p className="text-xs text-slate-500 mb-2">浅色背景预览</p>
+                <div className="h-12 flex items-center">
+                  {(value as { brandAssets?: { fullLogo?: { light?: string } } }).brandAssets?.fullLogo?.light ? (
+                    <img src={(value as { brandAssets?: { fullLogo?: { light?: string } } }).brandAssets?.fullLogo?.light} alt="Light" className="max-h-7 w-auto object-contain" />
+                  ) : (value as { logoUrl?: string }).logoUrl ? (
+                    <img src={(value as { logoUrl?: string }).logoUrl} alt="Fallback" className="max-h-7 w-auto object-contain" />
+                  ) : (
+                    <span className="text-sm text-slate-400">未上传亮色版 Logo</span>
+                  )}
+                </div>
+              </div>
+              <div className="p-4 bg-slate-900 border rounded-lg">
+                <p className="text-xs text-slate-400 mb-2">深色背景预览</p>
+                <div className="h-12 flex items-center">
+                  {(value as { brandAssets?: { fullLogo?: { dark?: string } } }).brandAssets?.fullLogo?.dark ? (
+                    <img src={(value as { brandAssets?: { fullLogo?: { dark?: string } } }).brandAssets?.fullLogo?.dark} alt="Dark" className="max-h-7 w-auto object-contain" />
+                  ) : (
+                    <span className="text-sm text-slate-500">未上传暗色版 Logo</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 旧版兼容（隐藏，数据迁移用） */}
+          <div className="hidden">
+            <Input value={String(value.logoUrl || '')} onChange={(e) => setThemeField('logoUrl', e.target.value)} />
+            <Input value={String(value.faviconUrl || '')} onChange={(e) => setThemeField('faviconUrl', e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
