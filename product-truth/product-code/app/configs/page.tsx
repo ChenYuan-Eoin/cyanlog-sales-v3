@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { ImageUpload } from '@/components/ui/ImageUpload'
 import type { Rule } from '@/types/rules'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import {
@@ -1926,19 +1927,20 @@ export default function ConfigsPage() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium">品牌 Logo URL</label>
-            <Input
+            <label className="text-sm font-medium">品牌 Logo</label>
+            <ImageUpload
               value={String(value.logoUrl || '')}
-              onChange={(e) => setThemeField('logoUrl', e.target.value)}
-              placeholder="https://..."
+              onChange={(url) => setThemeField('logoUrl', url)}
+              folder="logos"
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Favicon URL</label>
-            <Input
+            <label className="text-sm font-medium">浏览器 Favicon</label>
+            <ImageUpload
               value={String(value.faviconUrl || '')}
-              onChange={(e) => setThemeField('faviconUrl', e.target.value)}
-              placeholder="https://..."
+              onChange={(url) => setThemeField('faviconUrl', url)}
+              folder="favicons"
+              accept="image/png,image/x-icon,image/svg+xml"
             />
           </div>
         </div>
