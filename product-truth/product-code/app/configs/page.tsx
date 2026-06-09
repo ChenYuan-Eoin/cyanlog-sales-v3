@@ -17,18 +17,17 @@ import { ImageUpload } from '@/components/ui/ImageUpload'
 import type { Rule } from '@/types/rules'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import {
-  Bot,
-  Building2,
-  FileText,
-  KeyRound,
-  Palette,
-  Package,
-  Percent,
-  Settings2,
-  ShieldCheck,
-  Users,
-  type LucideIcon,
-} from 'lucide-react'
+  BotIcon,
+  BuildingIcon,
+  FileTextIcon,
+  KeyRoundIcon,
+  PaletteIcon,
+  PackageIcon,
+  PercentIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
+  UsersIcon,
+} from '@/components/icons'
 
 const riskLevelMap: Record<string, { label: string; className: string }> = {
   red: { label: '红灯', className: 'bg-red-100 text-red-800 border-red-200' },
@@ -172,55 +171,55 @@ const CONFIG_TABS: Record<ConfigTabId, {
   label: string
   description: string
   section: ConfigSectionId
-  icon: LucideIcon
+  icon: React.ComponentType<{ className?: string; size?: number }>
 }> = {
   'price-list': {
     label: '价盘与阶梯价',
     description: '配置中心拥有 SKU、基础价、最低价和阶梯价，报价工作台只读消费已发布价格。',
     section: 'trading',
-    icon: Package,
+    icon: PackageIcon,
   },
   tax: {
     label: '税率规则',
     description: '统一管理税率、适用地区和结算口径，避免报价与合同口径不一致。',
     section: 'trading',
-    icon: Percent,
+    icon: PercentIcon,
   },
   approval: {
     label: '审批权限',
     description: '按折扣、金额和合同风险设置审批链，形成交易治理闭环。',
     section: 'trading',
-    icon: ShieldCheck,
+    icon: ShieldCheckIcon,
   },
   rules: {
     label: '合同审核规则',
     description: '管理结构化规则与语义规则，供合同审核与本地模型执行。',
     section: 'contract-ai',
-    icon: FileText,
+    icon: FileTextIcon,
   },
   'org-structure': {
     label: '组织架构',
     description: '维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。',
     section: 'org-access',
-    icon: Users,
+    icon: UsersIcon,
   },
   'role-access': {
     label: '角色权限',
     description: '按业务能力维护角色，并通过组织/部门/销售空间分配数据范围。',
     section: 'org-access',
-    icon: KeyRound,
+    icon: KeyRoundIcon,
   },
   ai: {
     label: 'AI 模型配置',
     description: '管理本地模型、云端 OpenAI 兼容模型和运行时路由策略。',
     section: 'contract-ai',
-    icon: Bot,
+    icon: BotIcon,
   },
   theme: {
     label: '界面主题',
     description: '控制运行时主题变量与视觉发布，确保业务界面一致可控。',
     section: 'experience',
-    icon: Palette,
+    icon: PaletteIcon,
   },
 }
 
@@ -1421,7 +1420,7 @@ export default function ConfigsPage() {
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <Building2 className="h-4 w-4" />
+                  <BuildingIcon size={16} />
                   销售空间与部门绑定
                 </div>
                 <div className="mt-3 space-y-2">
@@ -2167,7 +2166,7 @@ export default function ConfigsPage() {
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-              <Settings2 className="h-3.5 w-3.5" />
+              <SettingsIcon size={14} />
               组织级配置工作台
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">配置中心</h1>

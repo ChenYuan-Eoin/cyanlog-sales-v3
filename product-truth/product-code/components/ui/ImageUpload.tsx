@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Upload, X, Loader2 } from 'lucide-react'
+import { UploadIcon, CloseIcon, LoaderIcon } from '@/components/icons'
 
 interface ImageUploadProps {
   value: string
@@ -98,7 +98,7 @@ export function ImageUpload({
             className="absolute -right-2 -top-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600"
             title="移除图片"
           >
-            <X className="h-3 w-3" />
+            <CloseIcon size={12} />
           </button>
         </div>
       ) : (
@@ -125,12 +125,12 @@ export function ImageUpload({
           >
             {isUploading ? (
               <>
-                <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                <LoaderIcon size={20} className="text-gray-400" />
                 <span className="text-sm text-gray-500">上传中...</span>
               </>
             ) : (
               <>
-                <Upload className="h-5 w-5 text-slate-400" />
+                <UploadIcon size={20} className="text-slate-400" />
                 <span className="text-sm text-slate-500">{placeholder}</span>
                 <span className="text-xs text-slate-400">支持 PNG、JPG、SVG，最大 {maxSizeMB}MB</span>
               </>

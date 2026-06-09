@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "status": "strict",
-  "mode": "permissive",
+  "mode": "enforcing",
   "startedAt": "2026-06-07T00:00:00Z",
   "configPath": "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
   "activeHooks": [
@@ -9,7 +9,9 @@
     "PreToolUse",
     "SessionEnd"
   ],
-  "activeGates": [],
+  "activeGates": [
+    "G2"
+  ],
   "gates": {
     "G2": {
       "description": "审查门 - 严格只读，禁止编辑",
@@ -44,5 +46,5 @@
       ]
     }
   },
-  "lastActivity": "2026-06-07T00:42:39.209Z"
+  "lastActivity": "2026-06-07T01:03:51.797Z"
 }

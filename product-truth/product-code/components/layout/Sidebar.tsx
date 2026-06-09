@@ -7,15 +7,26 @@ import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 import { logoutClientSession } from '@/lib/session-client'
+import {
+  HomeIcon,
+  QuoteIcon,
+  ContractIcon,
+  TenderIcon,
+  KnowledgeIcon,
+  ScheduleIcon,
+  SettingsIcon,
+  LogoutIcon,
+  MenuIcon,
+} from '@/components/icons'
 
 const navItems = [
-  { name: '工作台', href: '/', icon: '□' },
-  { name: '报价中心', href: '/quotes', icon: '¥' },
-  { name: '合同审核', href: '/contracts', icon: '📄' },
-  { name: '标书中心', href: '/tenders', icon: '◉' },
-  { name: '知识库', href: '/knowledge', icon: '✦' },
-  { name: '日程', href: '/schedule', icon: '⏱' },
-  { name: '配置中心', href: '/configs', icon: '⚙' },
+  { name: '工作台', href: '/', icon: HomeIcon },
+  { name: '报价中心', href: '/quotes', icon: QuoteIcon },
+  { name: '合同审核', href: '/contracts', icon: ContractIcon },
+  { name: '标书中心', href: '/tenders', icon: TenderIcon },
+  { name: '知识库', href: '/knowledge', icon: KnowledgeIcon },
+  { name: '日程', href: '/schedule', icon: ScheduleIcon },
+  { name: '配置中心', href: '/configs', icon: SettingsIcon },
 ]
 
 export function Sidebar() {
@@ -37,9 +48,7 @@ export function Sidebar() {
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="Toggle menu"
       >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+        <MenuIcon size={24} />
       </button>
 
       {/* Overlay for mobile */}
@@ -65,22 +74,25 @@ export function Sidebar() {
           </div>
         </div>
         <nav className="px-3 py-4">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
-                isActive(item.href)
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              )}
-            >
-              <span className="text-lg">{item.icon}</span>
-              <span>{item.name}</span>
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
+                  isActive(item.href)
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                )}
+              >
+                <Icon size={18} className="opacity-80" />
+                <span>{item.name}</span>
+              </Link>
+            )
+          })}
         </nav>
         <div className="mt-auto px-3 pb-6">
           <button
@@ -92,7 +104,7 @@ export function Sidebar() {
             }}
             className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
           >
-            <span className="text-lg">↗</span>
+            <LogoutIcon size={18} className="opacity-80" />
             <span>退出登录</span>
           </button>
         </div>
