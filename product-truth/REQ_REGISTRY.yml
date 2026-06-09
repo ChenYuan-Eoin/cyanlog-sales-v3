@@ -88,10 +88,10 @@ requirements:
   # 合同审核 (Contract Review)
   # ═══════════════════════════════════════════════════════════════
   F005:
-    name: 合同审核
+    name: 合同审核（完整设计）
     module: 合同审核
     source: 合同审核.md#2
-    status: completed
+    status: design_confirmed
     priority: P0
     code_locations:
       - app/api/contracts/route.ts
@@ -100,11 +100,16 @@ requirements:
       - app/contracts/page.tsx
       - app/contracts/new/page.tsx
       - app/contracts/[id]/page.tsx
-    description: 合同上传、OCR解析、AI审核
+    description: |
+      合同审核完整设计（2026-06-10补强）：
+      - 用户地图：销售/法务/财务/管理员 4角色旅程 + 状态感知 + 通知矩阵
+      - ASK升级：两段式ASK清单 + 3状态机 + 硬关单 + rolling报告
+      - 页面结构：详情页布局 + ASK清单标签页 + 报告版本标签页
+    complete_design: product-truth/feature-packets/F005-F006-complete-design.md
     upgrade:
-      upgrade_id: F005-ASK-v1
+      upgrade_id: F005-ASK-v2
       name: 两段式 ASK 清单升级
-      status: pending
+      status: design_confirmed
       created_at: "2026-06-03"
       feature_packet: product-truth/feature-packets/F005-contract-ASK-upgrade.md
       design_doc: product-truth/01-business-truth/合同审核.md#8
@@ -124,7 +129,6 @@ requirements:
         - app/api/contracts/[id]/reports/versions/route.ts
         - app/contracts/[id]/asks/page.tsx
         - lib/ask/generator.ts
-        - lib/ask/verdict.ts
         - lib/ask/types.ts
         - lib/ask/no-ask-detector.ts
         - lib/report/version-manager.ts
@@ -145,16 +149,41 @@ requirements:
         - F005 page: 新增"ASK 清单"标签页 + 报告版本入口
 
   F006:
-    name: 合同规则执行内核
-    module: 合同审核
-    source: 合同审核.md#4
-    status: in_progress
+    name: 合同规则引擎（完整设计）
+    module: 配置中心
+    source: 配置中心.md#4.1
+    status: design_confirmed
     priority: P0
     feature_packet: product-truth/feature-packets/F006-rule-config.md
+    complete_design: product-truth/feature-packets/F005-F006-complete-design.md
     code_locations:
       - app/api/contracts/[id]/analyze/route.ts
       - lib/rules/engine.ts
-    description: 消费已发布合同规则与 AI 配置，执行结构化/语义扫描并输出风险结果
+    description: |
+      规则引擎完整设计（2026-06-10补强）：
+      - 规则分类：结构化规则(100%精确) vs 语义规则(AI理解)
+      - 组合逻辑：规则组(AND/OR) + 优先级 + 冲突解决
+      - 版本管理：版本链 + 回滚机制 + 版本对比
+      - 测试沙箱：测试用例管理 + 测试报告 + 回归测试
+      - 命中率统计：触发率统计 + 低命中率告警 + 效果评估
+    new_code_locations_pending:
+      - supabase/migrations/20260610000001_enhance_contract_rules.sql
+      - supabase/migrations/20260610000002_add_rule_versions.sql
+      - supabase/migrations/20260610000003_add_rule_test_cases.sql
+      - supabase/migrations/20260610000004_add_rule_execution_logs.sql
+      - supabase/migrations/20260610000005_add_rule_stats.sql
+      - lib/rules/structured-executor.ts
+      - lib/rules/semantic-executor.ts
+      - lib/rules/group-executor.ts
+      - lib/rules/conflict-resolver.ts
+      - lib/rules/test-runner.ts
+      - lib/rules/stats-aggregator.ts
+      - app/api/rules/route.ts
+      - app/api/rules/[id]/versions/route.ts
+      - app/api/rules/[id]/test/route.ts
+      - app/api/rules/[id]/stats/route.ts
+      - app/configs/rules/page.tsx
+      - app/configs/rules/stats/page.tsx
 
   F007:
     name: Word批注生成
