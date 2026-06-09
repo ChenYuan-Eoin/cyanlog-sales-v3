@@ -66,6 +66,16 @@ export interface SalesSpaceSummary {
   pending_milestones: number | null
 }
 
+export function normalizeSalesSpaceName(name: string | null | undefined): string {
+  if (!name) {
+    return ''
+  }
+
+  return name
+    .replace(/销售作战空间/g, '销售空间')
+    .replace(/作战空间/g, '业务空间')
+}
+
 function unwrapOne<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) {
     return value[0] ?? null
@@ -82,7 +92,10 @@ function mergeSpaces(...groups: SalesSpaceSummary[][]): SalesSpaceSummary[] {
 
   for (const group of groups) {
     for (const space of group) {
-      byId.set(space.id, space)
+      byId.set(space.id, {
+        ...space,
+        name: normalizeSalesSpaceName(space.name),
+      })
     }
   }
 

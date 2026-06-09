@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOrgIdForUser, getUserIdForToken } from '@/lib/configs/runtime'
 import { resolveRouteParams } from '@/lib/route-params'
-import { listAccessibleSalesSpaces } from '@/lib/scoped-access'
+import { listAccessibleSalesSpaces, normalizeSalesSpaceName } from '@/lib/scoped-access'
 
 interface PageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -105,7 +105,7 @@ export default async function OpportunityDetailPage({ params }: PageProps) {
             <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
           </div>
           <p className="text-sm text-slate-500 mt-2">
-            {space?.name || '未分配空间'} · {opportunity.stage || '待补充阶段'}
+            {normalizeSalesSpaceName(space?.name) || '未分配空间'} · {opportunity.stage || '待补充阶段'}
           </p>
         </div>
 

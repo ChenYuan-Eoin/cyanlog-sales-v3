@@ -61,7 +61,7 @@ export default function LoginPage() {
 
         <div className="hero-content">
           <div className="eyebrow">访问验证</div>
-          <h1>把销售流程<br />装进同一个工作台。</h1>
+          <h1>{branding.productTitle}</h1>
           <p>从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。</p>
         </div>
 
@@ -128,7 +128,7 @@ export default function LoginPage() {
         <div>
           <div className="tag">企业工作空间</div>
 
-          <h1>企业登录</h1>
+          <h1>{branding.loginTitle}</h1>
           <p className="subtitle">{branding.loginSubtitle}</p>
 
           <form onSubmit={handleSubmit} style={{ marginTop: 32 }}>

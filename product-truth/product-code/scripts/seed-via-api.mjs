@@ -113,9 +113,9 @@ async function main() {
 
   console.log('7. Sales Spaces...')
   const spaces = [
-    { id: id(0x40000001), org_id: ORG_ID, department_id: id(0x20000011), name: '华东销售作战空间', description: '面向华东地区销售协同', owner_id: id(0x30000010) },
-    { id: id(0x40000002), org_id: ORG_ID, department_id: id(0x20000012), name: '华北销售作战空间', description: '面向华北地区销售协同', owner_id: id(0x30000011) },
-    { id: id(0x40000003), org_id: ORG_ID, department_id: id(0x20000013), name: '华南销售作战空间', description: '面向华南地区销售协同', owner_id: id(0x30000012) },
+    { id: id(0x40000001), org_id: ORG_ID, department_id: id(0x20000011), name: '华东销售空间', description: '面向华东地区销售协同', owner_id: id(0x30000010) },
+    { id: id(0x40000002), org_id: ORG_ID, department_id: id(0x20000012), name: '华北销售空间', description: '面向华北地区销售协同', owner_id: id(0x30000011) },
+    { id: id(0x40000003), org_id: ORG_ID, department_id: id(0x20000013), name: '华南销售空间', description: '面向华南地区销售协同', owner_id: id(0x30000012) },
   ]
   await supabase.from('sales_spaces').upsert(spaces)
 
@@ -182,7 +182,7 @@ async function main() {
     { id: id(0x80000004), org_id: ORG_ID, user_id: id(0x30000103), type: 'FOLLOWUP', title: '华润万家项目交付日待确认', description: '客户期望月底前确认交付日', priority: 'HIGH', link_type: 'OPPORTUNITY', link_id: id(0x60000002) },
     { id: id(0x80000005), org_id: ORG_ID, user_id: id(0x30000105), type: 'MILESTONE', title: 'POC 阶段待启动', description: '阿里云数据中台集成 POC 待启动', priority: 'HIGH', link_type: 'OPPORTUNITY', link_id: id(0x60000004) },
     { id: id(0x80000006), org_id: ORG_ID, user_id: id(0x30000010), type: 'OVERDUE', title: '团队本周签约目标 6 单', description: '已完成 3 单，剩余 3 单待推进', priority: 'HIGH' },
-    { id: id(0x80000007), org_id: ORG_ID, user_id: id(0x30000010), type: 'INFO', title: '部门 4 月战报已发布', description: '本月华东区域业绩 2,340 万，完成率 78%', priority: 'NORMAL' },
+    { id: id(0x80000007), org_id: ORG_ID, user_id: id(0x30000010), type: 'INFO', title: '部门 4 月简报已发布', description: '本月华东区域业绩 2,340 万，完成率 78%', priority: 'NORMAL' },
   ]
   await supabase.from('reminders').upsert(reminders)
 

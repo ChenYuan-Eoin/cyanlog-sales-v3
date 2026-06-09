@@ -4,6 +4,7 @@ import { useEffect, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { clearClientSession, logoutClientSession } from '@/lib/session-client'
+import { normalizeSalesSpaceName } from '@/lib/scoped-access'
 
 // 类型定义（与数据库 schema 对应）
 interface SalesSpace {
@@ -132,8 +133,18 @@ export default function HomePage() {
       }
 
       const data = await res.json() as DashboardPayload
-      setProfile(prev => prev ? { ...prev, spaces: data.spaces || [] } : null)
-      setActiveSpace(data.activeSpace || null)
+      const normalizedSpaces = (data.spaces || []).map((space) => ({
+        ...space,
+        name: normalizeSalesSpaceName(space.name),
+      }))
+      const normalizedActiveSpace = data.activeSpace
+        ? {
+            ...data.activeSpace,
+            name: normalizeSalesSpaceName(data.activeSpace.name),
+          }
+        : null
+      setProfile(prev => prev ? { ...prev, spaces: normalizedSpaces } : null)
+      setActiveSpace(normalizedActiveSpace)
       setOpportunities(data.opportunities || [])
       setMilestones(data.milestones || [])
       setReminders(data.reminders || [])
