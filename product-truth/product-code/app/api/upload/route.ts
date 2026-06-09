@@ -1,14 +1,53 @@
 // PURPOSE: 通用文件上传接口 (Logo/Favicon 等)
+// 自动创建存储桶，无需手动配置
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon']
 const MAX_SIZE = 2 * 1024 * 1024 // 2MB
+const BUCKET_NAME = 'workspace-assets'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
+}
+
+// 确保存储桶存在，不存在则自动创建
+async function ensureBucketExists(): Promise<boolean> {
+  try {
+    // 先检查 bucket 是否存在
+    const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets()
+
+    if (listError) {
+      console.error('List buckets error:', listError)
+      return false
+    }
+
+    const bucketExists = buckets.some(b => b.name === BUCKET_NAME)
+
+    if (bucketExists) {
+      return true
+    }
+
+    // 创建公开 bucket
+    const { error: createError } = await supabaseAdmin.storage.createBucket(BUCKET_NAME, {
+      public: true,
+      fileSizeLimit: MAX_SIZE,
+      allowedMimeTypes: ALLOWED_TYPES,
+    })
+
+    if (createError) {
+      console.error('Create bucket error:', createError)
+      return false
+    }
+
+    console.log(`Bucket '${BUCKET_NAME}' created automatically`)
+    return true
+  } catch (error) {
+    console.error('Ensure bucket error:', error)
+    return false
+  }
 }
 
 // POST /api/upload - 上传文件到 Supabase Storage
@@ -25,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return errorResponse(`.png, .jpg, .svg, .webp 格式，当前: ${file.type}`, 400, 'INVALID_TYPE')
+      return errorResponse(`仅支持 .png, .jpg, .svg, .webp 格式，当前: ${file.type}`, 400, 'INVALID_TYPE')
     }
 
     if (file.size > MAX_SIZE) {
@@ -33,7 +72,6 @@ export async function POST(req: NextRequest) {
     }
 
     const targetFolder = folder === 'favicons' ? 'favicons' : 'logos'
-    const bucket = 'workspace-assets'
     const timestamp = Date.now()
     const extension = file.name.split('.').pop() || 'png'
     const fileName = `${targetFolder}/${user.id}_${timestamp}.${extension}`
@@ -42,33 +80,46 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    // 上传到 Supabase Storage
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from(bucket)
+    // 第一次上传尝试
+    let uploadResult = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
       .upload(fileName, buffer, {
         contentType: file.type,
         cacheControl: '31536000', // 1 year cache
         upsert: false,
       })
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError)
+    // 如果失败且可能是 bucket 不存在，自动创建并重试
+    if (uploadResult.error) {
+      const isBucketError = uploadResult.error.message?.toLowerCase().includes('bucket') ||
+                           uploadResult.error.message?.toLowerCase().includes('not found') ||
+                           uploadResult.error.message?.toLowerCase().includes('does not exist')
 
-      // 如果 bucket 不存在，尝试创建
-      if (uploadError.message?.includes('bucket') || uploadError.message?.includes('Bucket')) {
-        return errorResponse(
-          '存储桶未创建，请运行: supabase storage create workspace-assets',
-          500,
-          'BUCKET_NOT_FOUND'
-        )
+      if (isBucketError) {
+        console.log('Bucket not found, attempting to create...')
+        const created = await ensureBucketExists()
+
+        if (created) {
+          // 重试上传
+          uploadResult = await supabaseAdmin.storage
+            .from(BUCKET_NAME)
+            .upload(fileName, buffer, {
+              contentType: file.type,
+              cacheControl: '31536000',
+              upsert: false,
+            })
+        }
       }
+    }
 
-      return errorResponse('上传失败: ' + uploadError.message, 500, 'UPLOAD_FAILED')
+    if (uploadResult.error) {
+      console.error('Upload error:', uploadResult.error)
+      return errorResponse('上传失败: ' + uploadResult.error.message, 500, 'UPLOAD_FAILED')
     }
 
     // 获取公开 URL
     const { data: { publicUrl } } = supabaseAdmin.storage
-      .from(bucket)
+      .from(BUCKET_NAME)
       .getPublicUrl(fileName)
 
     return NextResponse.json({
