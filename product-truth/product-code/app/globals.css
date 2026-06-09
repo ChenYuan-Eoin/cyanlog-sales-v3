@@ -778,6 +778,13 @@ body {
   .hero-dark {
     min-height: 360px;
   }
+  .bottom-notice {
+    position: static;
+    margin-top: 20px;
+    left: auto;
+    right: auto;
+    bottom: auto;
+  }
 }
 
 /* ============================================================

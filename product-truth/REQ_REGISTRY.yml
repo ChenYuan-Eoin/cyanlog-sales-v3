@@ -238,14 +238,24 @@ requirements:
   # 标书中心 (Tender Center)
   # ═══════════════════════════════════════════════════════════════
   F013:
-    name: 标书生成
+    name: 标书中心 V3
     module: 标书中心
-    source: 标书中心.md#6
-    status: completed
+    source: feature-packets/F013-tender-center-v3.md
+    status: design_confirmed
     priority: P1
     code_locations:
       - app/tenders/page.tsx
-    description: 模板填充、内容生成
+      - app/tenders/[id]/page.tsx
+      - feature-packets/F013-tender-center-v3.md
+    description: |
+      标书中心深度对标 OpenBidKit 核心设计：
+      - 6步工作流引擎（document-import → bid-analysis → outline → global-facts → content-edit → completed）
+      - 全局事实变量系统（全文一致性保障）
+      - 内容生成计划（规划-执行分离，单章重生成）
+      - 中断恢复（checkpoint_data + PostgreSQL 暂存 / Inngest 迁移）
+      - 溯源招标文件（目录-招标要求映射）
+      - 图文生成（Mermaid + Supabase Storage 插图）
+      Phase 1 基础框架 → Phase 2 AI 生成 → Phase 3 检查导出 → Phase 4 图文优化
 
   F014:
     name: 招标文件OCR解析
