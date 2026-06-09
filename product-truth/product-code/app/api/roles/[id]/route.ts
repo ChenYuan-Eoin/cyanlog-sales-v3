@@ -5,27 +5,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import { hasPermission } from '@/lib/permissions'
 
-const PERMISSION_KEYS = [
-  'config:read',
-  'config:write',
-  'rule:write',
-  'contract:read',
-  'contract:write',
-  'contract:review',
-  'quote:read',
-  'quote:write',
-  'user:read',
-  'user:write',
-  'org:write',
-  'feishu:sync',
-  'admin:access',
-] as const
+function canReadRoles(userPerms: string[]) {
+  return hasPermission(userPerms, 'config:read')
+    || hasPermission(userPerms, 'admin:access')
+}
+
+function canWriteRoles(userPerms: string[]) {
+  return hasPermission(userPerms, 'config:write')
+    || hasPermission(userPerms, 'admin:access')
+}
 
 // GET /api/roles - 列出所有角色
 export async function GET(req: NextRequest) {
   const userPerms = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
-  if (!userPerms.includes('*') && !userPerms.includes('config:read')) {
+  if (!canReadRoles(userPerms)) {
     return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
   }
 
@@ -39,11 +35,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '查询失败' }, { status: 500 })
   }
 
+  const permissionKeys = Array.from(new Set(
+    (data || [])
+      .flatMap((role) => Array.isArray(role.permissions) ? role.permissions : [])
+      .filter((permission): permission is string => typeof permission === 'string' && permission.length > 0)
+  )).sort()
+
   return NextResponse.json({
     success: true,
     data: {
       roles: data ?? [],
-      permission_keys: PERMISSION_KEYS,
+      permission_keys: permissionKeys,
     },
   })
 }
@@ -58,12 +60,14 @@ const patchSchema = z.object({
 // PATCH /api/roles/[id] - 修改角色（需 config:write 权限）
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   const userPerms = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
-  if (!userPerms.includes('*') && !userPerms.includes('config:write')) {
+  if (!canWriteRoles(userPerms)) {
     return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
   }
+
+  const id = await resolveIdParam(params)
 
   const body = await req.json()
   const parsed = patchSchema.safeParse(body)
@@ -77,7 +81,7 @@ export async function PATCH(
   const { data, error } = await supabaseAdmin
     .from('roles')
     .update(parsed.data)
-    .eq('id', params.id)
+    .eq('id', id)
     .select()
     .single()
 

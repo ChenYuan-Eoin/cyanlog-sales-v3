@@ -8,6 +8,7 @@ import { generateWordDocument } from '@/lib/export/word-generator'
 import fs from 'fs'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -16,23 +17,25 @@ function errorResponse(message: string, status: number, code?: string) {
 // POST /api/contracts/:id/export - 导出带批注的Word文档
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   const startedAt = Date.now()
   const requestId = getRequestId(req)
   const route = '/api/contracts/[id]/export'
+  let routeId = ''
 
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    routeId = await resolveIdParam(params)
+    const id = routeId
     logRouteStart({
       route,
       requestId,
       userId: user.id,
-      details: { contractId: params.id },
+      details: { contractId: id },
     })
-    const { id } = params
 
     if (!id) {
       return errorResponse('合同ID必填', 400, 'MISSING_ID')
@@ -150,7 +153,7 @@ export async function POST(
       {
         route,
         requestId,
-        details: { contractId: params.id },
+        details: { contractId: routeId },
       },
       startedAt,
       error

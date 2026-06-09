@@ -6,13 +6,19 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
-import type { Quote } from '@/types'
+import type { Quote, QuoteItem } from '@/types'
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   DRAFT: { label: '草稿', variant: 'secondary' },
   PENDING_APPROVAL: { label: '审批中', variant: 'default' },
   APPROVED: { label: '已批准', variant: 'outline' },
   REJECTED: { label: '已驳回', variant: 'destructive' },
+}
+
+const pricingSourceMap: Record<string, string> = {
+  tier: '阶梯价',
+  base: '基础价',
+  manual: '手工价',
 }
 
 export default function QuoteDetailPage() {
@@ -160,10 +166,28 @@ export default function QuoteDetailPage() {
               <span className="font-medium">¥{(quote.total_amount || 0).toLocaleString()}</span>
             </div>
             <div>
+              <span className="text-slate-500">税率：</span>
+              <span>{(((quote.tax_rate || 0) as number) * 100).toFixed(0)}%</span>
+            </div>
+            <div>
+              <span className="text-slate-500">折扣：</span>
+              <span>{(quote.discount_rate || 0).toFixed(2)}%</span>
+            </div>
+            <div>
               <span className="text-slate-500">创建时间：</span>
               <span>{new Date(quote.created_at).toLocaleString('zh-CN')}</span>
             </div>
+            <div>
+              <span className="text-slate-500">有效期：</span>
+              <span>{quote.valid_until ? new Date(quote.valid_until).toLocaleDateString('zh-CN') : '—'}</span>
+            </div>
           </div>
+
+          {quote.notes && (
+            <div className="mt-4 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {quote.notes}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="mt-6 pt-4 border-t flex gap-4">
@@ -185,6 +209,72 @@ export default function QuoteDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">报价明细</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!quote.quote_items || quote.quote_items.length === 0 ? (
+            <p className="text-sm text-slate-500">暂无报价明细</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-slate-500">
+                      <th className="text-left py-2 pr-3">SKU</th>
+                      <th className="text-left py-2 pr-3">项目</th>
+                      <th className="text-right py-2 pr-3">数量</th>
+                      <th className="text-right py-2 pr-3">单价</th>
+                      <th className="text-right py-2 pr-3">小计</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quote.quote_items.map((item: QuoteItem) => (
+                      <tr key={item.id} className="border-b last:border-b-0">
+                        <td className="py-3 pr-3 font-mono text-xs text-slate-500">
+                          {item.product_code || '自定义'}
+                        </td>
+                        <td className="py-3 pr-3">
+                          <div className="font-medium text-slate-900">{item.name}</div>
+                          <div className="text-xs text-slate-500">
+                            {[
+                              item.specification,
+                              item.unit,
+                              item.tier_range ? `阶梯 ${item.tier_range}` : null,
+                              item.pricing_source ? `价格来源 ${pricingSourceMap[item.pricing_source] || item.pricing_source}` : null,
+                            ].filter(Boolean).join(' · ') || '—'}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-3 text-right">{item.quantity}</td>
+                        <td className="py-3 pr-3 text-right font-mono">¥{item.unit_price.toLocaleString()}</td>
+                        <td className="py-3 pr-3 text-right font-mono">¥{item.line_total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="ml-auto w-full max-w-sm space-y-2 rounded-lg border bg-slate-50 p-4 text-sm">
+                <SummaryRow label="小计" value={`¥${(quote.subtotal || 0).toLocaleString()}`} />
+                <SummaryRow label={`折扣 (${(quote.discount_rate || 0).toFixed(2)}%)`} value={`-¥${(quote.discount_amount || 0).toLocaleString()}`} />
+                <SummaryRow label={`税额 (${(((quote.tax_rate || 0) as number) * 100).toFixed(0)}%)`} value={`¥${(quote.tax_amount || 0).toLocaleString()}`} />
+                <SummaryRow label="总计" value={`¥${(quote.total_amount || 0).toLocaleString()}`} strong />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function SummaryRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between ${strong ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>
+      <span>{label}</span>
+      <span className="font-mono">{value}</span>
     </div>
   )
 }

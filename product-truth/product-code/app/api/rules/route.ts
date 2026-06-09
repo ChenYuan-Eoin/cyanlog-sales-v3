@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
+import { getDefaultOrgId } from '@/lib/scoped-access'
+import { isSchemaDriftError } from '@/lib/db-compat'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -30,7 +32,8 @@ const ruleSchema = z.object({
 // GET /api/rules - 获取规则列表（需登录）
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
 
     const { searchParams } = new URL(req.url)
     const ruleType = searchParams.get('rule_type')
@@ -39,6 +42,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('rules')
       .select('*')
+      .eq('org_id', orgId)
       .order('created_at', { ascending: false })
 
     if (ruleType) {
@@ -49,7 +53,17 @@ export async function GET(req: NextRequest) {
       query = query.eq('enabled', enabled === 'true')
     }
 
-    const { data: rules, error } = await query
+    let { data: rules, error } = await query
+
+    if (error && isSchemaDriftError(error)) {
+      const legacyResult = await supabaseAdmin
+        .from('rules')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      rules = legacyResult.data
+      error = legacyResult.error
+    }
 
     if (error) {
       console.error('Get rules error:', error)
@@ -71,6 +85,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
 
     const body = await req.json()
     const validated = ruleSchema.safeParse(body)
@@ -79,21 +94,33 @@ export async function POST(req: NextRequest) {
       return errorResponse('规则数据无效: ' + validated.error.issues.map((e: { message: string }) => e.message).join(', '), 400, 'INVALID_DATA')
     }
 
-    const { data: rule, error } = await supabaseAdmin
+    let insertResult = await supabaseAdmin
       .from('rules')
       .insert({
         ...validated.data,
+        org_id: orgId,
         created_by: user.id,
       })
       .select()
       .single()
 
-    if (error) {
-      console.error('Create rule error:', error)
+    if (insertResult.error && isSchemaDriftError(insertResult.error)) {
+      insertResult = await supabaseAdmin
+        .from('rules')
+        .insert({
+          ...validated.data,
+          created_by: user.id,
+        })
+        .select()
+        .single()
+    }
+
+    if (insertResult.error) {
+      console.error('Create rule error:', insertResult.error)
       return errorResponse('创建规则失败', 500, 'DB_ERROR')
     }
 
-    return NextResponse.json(rule, { status: 201 })
+    return NextResponse.json(insertResult.data, { status: 201 })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

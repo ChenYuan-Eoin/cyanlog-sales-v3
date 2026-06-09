@@ -9,38 +9,43 @@
 #   - 代码中的 REQ 标记必须与之一致
 ---
 
-version: "2026-06-03"
-last_updated: "2026-06-03T00:00:00Z"
+version: "2026-06-09"
+last_updated: "2026-06-09T00:00:00Z"
 
 requirements:
   # ═══════════════════════════════════════════════════════════════
   # 报价中心 (Quotes Center)
   # ═══════════════════════════════════════════════════════════════
   F001:
-    name: 价盘管理
-    module: 报价中心
-    source: 报价中心.md#4.1
-    status: completed
+    name: 价盘与阶梯价
+    module: 配置中心
+    source: PROJECT-主文档.md#6.2.2
+    status: in_progress
     priority: P0
+    feature_packet: product-truth/feature-packets/F001-price-list.md
     code_locations:
+      - app/configs/page.tsx
       - app/products/page.tsx
       - app/api/products/route.ts
-      - supabase/migrations/003_add_products_tables.sql
-    description: 产品目录、价格体系、基础价管理
+      - app/api/product-price-tiers/route.ts
+      - app/quotes/new/page.tsx
+      - supabase/migrations/20260608000001_org_pricing_and_quote_items.sql
+    description: 组织级 SKU、基础价、保护价、阶梯价配置；报价中心只读消费并固化价格快照
 
   F002:
     name: 报价编制
     module: 报价中心
-    source: 报价中心.md#4.2
-    status: completed
+    source: 报价中心.md#6.1
+    status: in_progress
     priority: P0
+    feature_packet: product-truth/feature-packets/F002-quote-maintenance.md
     code_locations:
       - app/api/quotes/route.ts
       - app/api/quotes/[id]/route.ts
       - app/quotes/page.tsx
       - app/quotes/new/page.tsx
       - app/quotes/[id]/page.tsx
-    description: 报价单创建、编辑、明细管理、状态流转
+    description: 结构化报价工作台，消费 F001/F010/F011 并固化报价快照、状态流转
 
   F003:
     name: Account（认证与权限）
@@ -140,18 +145,16 @@ requirements:
         - F005 page: 新增"ASK 清单"标签页 + 报告版本入口
 
   F006:
-    name: 红绿灯规则
+    name: 合同规则执行内核
     module: 合同审核
     source: 合同审核.md#4
-    status: completed
+    status: in_progress
     priority: P0
+    feature_packet: product-truth/feature-packets/F006-rule-config.md
     code_locations:
-      - app/configs/page.tsx
-      - app/api/rules/route.ts
-      - app/api/rules/[id]/route.ts
+      - app/api/contracts/[id]/analyze/route.ts
       - lib/rules/engine.ts
-      - supabase/migrations/002_add_rules_table.sql
-    description: 结构化规则、语义规则、规则配置、规则引擎
+    description: 消费已发布合同规则与 AI 配置，执行结构化/语义扫描并输出风险结果
 
   F007:
     name: Word批注生成
@@ -172,38 +175,64 @@ requirements:
   F009:
     name: 合同审核规则配置
     module: 配置中心
-    source: 配置中心.md#4.1
-    status: confirmed
+    source: PROJECT-主文档.md#6.2.1
+    status: in_progress
     priority: P1
-    code_locations: []
-    description: 红绿灯规则、语义规则配置
+    feature_packet: product-truth/feature-packets/F009-contract-rule-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/api/rules/route.ts
+      - app/api/rules/[id]/route.ts
+      - supabase/migrations/002_add_rules_table.sql
+    description: 合同规则生产面，负责结构化/语义规则、版本、生效和测试
 
   F010:
-    name: 税率规则配置
+    name: 报价规则配置
     module: 配置中心
-    source: 配置中心.md#4.2
+    source: PROJECT-主文档.md#6.2.2
     status: confirmed
     priority: P1
-    code_locations: []
-    description: 税率管理、报价计算
+    feature_packet: product-truth/feature-packets/F010-quote-rule-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/api/configs/route.ts
+      - app/api/configs/[id]/route.ts
+      - lib/configs/types.ts
+      - lib/configs/validation.ts
+    description: 税率、折扣矩阵、审批流参数配置，供报价与审批执行链消费
 
   F011:
-    name: 审批权限配置
+    name: 组织权限配置
     module: 配置中心
-    source: 配置中心.md#4.3
+    source: PROJECT-主文档.md#6.2.4
     status: confirmed
     priority: P1
-    code_locations: []
-    description: 折扣审批、合同审批权限
+    feature_packet: product-truth/feature-packets/F011-org-permission-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/admin/org/page.tsx
+      - app/api/admin/org/route.ts
+      - app/api/roles/route.ts
+      - app/api/roles/[id]/route.ts
+      - middleware.ts
+      - lib/auth.ts
+      - lib/scoped-access.ts
+    description: 组织架构、角色权限、作用域分配和数据范围配置，供鉴权、审批与导航消费
 
   F012:
-    name: AI模型连接配置
+    name: AI运行时配置
     module: 配置中心
-    source: 配置中心.md
+    source: PROJECT-主文档.md#6.2.3
     status: confirmed
     priority: P1
-    code_locations: []
-    description: LM Studio、云端模型配置
+    feature_packet: product-truth/feature-packets/F012-ai-runtime-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/api/configs/route.ts
+      - app/api/configs/[id]/route.ts
+      - lib/configs/runtime.ts
+      - lib/ai/failover.ts
+    description: 本地模型、销售云端 OpenAI 兼容模型、路由阈值和降级链配置
 
   # ═══════════════════════════════════════════════════════════════
   # 标书中心 (Tender Center)

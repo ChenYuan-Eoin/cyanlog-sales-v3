@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { configCreateSchema, validateConfigValue } from '@/lib/configs/validation'
 import type { ConfigType, ConfigStatus } from '@/lib/configs/types'
+import { sanitizeConfigRow } from '@/lib/configs/runtime'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -61,18 +62,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 对 AI_CONFIG 类型的 api_key 进行脱敏处理
-    const sanitizedConfigs = configs.map((config) => {
-      if (config.type === 'AI_CONFIG' && config.value?.api_key) {
-        return {
-          ...config,
-          value: {
-            ...config.value,
-            api_key: maskApiKey(config.value.api_key as string),
-          },
-        }
-      }
-      return config
-    })
+    const sanitizedConfigs = configs.map((config) => sanitizeConfigRow(config))
 
     return NextResponse.json(sanitizedConfigs)
   } catch (error) {
@@ -125,10 +115,18 @@ export async function POST(req: NextRequest) {
       return errorResponse(`配置键 "${validated.data.key}" 已存在`, 409, 'DUPLICATE_KEY')
     }
 
+    const normalizedValue = validated.data.type === 'AI_CONFIG'
+      ? {
+          ...validated.data.value,
+          name: validated.data.name,
+        }
+      : validated.data.value
+
     const { data: config, error } = await supabaseAdmin
       .from('configs')
       .insert({
         ...validated.data,
+        value: normalizedValue,
         org_id: orgId,
         created_by: user.id,
         status: 'DRAFT',
@@ -151,12 +149,4 @@ export async function POST(req: NextRequest) {
     console.error('Create config error:', error)
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
-}
-
-// 脱敏 API Key：显示前 4 位和后 4 位，中间用 *** 代替
-function maskApiKey(apiKey: string): string {
-  if (apiKey.length <= 12) {
-    return '***'
-  }
-  return `${apiKey.slice(0, 4)}***${apiKey.slice(-4)}`
 }

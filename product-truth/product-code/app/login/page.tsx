@@ -3,9 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { persistClientSession } from '@/lib/session-client'
+import { BrandMark } from '@/components/branding/BrandMark'
+import { useBranding } from '@/components/branding/BrandingProvider'
 
 export default function LoginPage() {
   const router = useRouter()
+  const branding = useBranding()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -30,8 +34,7 @@ export default function LoginPage() {
         return
       }
 
-      document.cookie = `token=${data.token}; path=/; max-age=86400`
-      localStorage.setItem('token', data.token)
+      persistClientSession(data.token)
 
       router.push(data.mustChangePassword ? '/change-password' : '/')
       router.refresh()
@@ -47,19 +50,19 @@ export default function LoginPage() {
       {/* Left Hero Panel */}
       <div className="hero-dark">
         <div className="brand">
-          <div className="brand-logo">CY</div>
-          <div>
-            <div>Cyanlog</div>
+          <BrandMark size={44} className="brand-logo" />
+            <div>
+            <div>{branding.brandName}</div>
             <div style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-on-dark-2)', fontWeight: 400 }}>
-              企业销售支撑平台
+              {branding.productSubtitle}
             </div>
           </div>
         </div>
 
         <div className="hero-content">
           <div className="eyebrow">访问验证</div>
-          <h1>把销售流程<br />装进同一个工作空间。</h1>
-          <p>从客户接触到合同审批，所有节点、所有人、所有材料在一个空间内推进。验证通过后进入华东作战空间。</p>
+          <h1>把销售流程<br />装进同一个工作台。</h1>
+          <p>从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。</p>
         </div>
 
         <div className="hero-illustration" style={{
@@ -126,7 +129,7 @@ export default function LoginPage() {
           <div className="tag">企业工作空间</div>
 
           <h1>企业登录</h1>
-          <p className="subtitle">使用企业邮箱或 SSO 完成验证。通过后进入首页。</p>
+          <p className="subtitle">{branding.loginSubtitle}</p>
 
           <form onSubmit={handleSubmit} style={{ marginTop: 32 }}>
             <div className="form-group">
@@ -170,7 +173,7 @@ export default function LoginPage() {
               disabled={loading}
               style={{ marginTop: 8, marginBottom: 12 }}
             >
-              {loading ? '登录中...' : '进入首页'}
+              {loading ? '登录中...' : '进入工作台'}
             </button>
 
             <button

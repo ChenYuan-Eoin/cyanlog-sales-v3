@@ -78,7 +78,7 @@ pnpm db:seed
 | legal01@huarun.com | LEGAL | 陈法务 | 法务部 |
 | finance01@huarun.com | FINANCE | 钱会计 | 财务部 |
 
-**默认密码**：`Cyanlog2026!`（由 seed-rules.ts 生成的新hash）
+**默认密码**：`password123`
 
 ### 合同审核规则（10条）
 
@@ -123,7 +123,7 @@ http://localhost:3000/login
 ### 3. 使用测试账号登录
 ```
 邮箱: superadmin@huarun.com
-密码: Cyanlog2026!
+密码: password123
 ```
 
 ### 4. 验证功能

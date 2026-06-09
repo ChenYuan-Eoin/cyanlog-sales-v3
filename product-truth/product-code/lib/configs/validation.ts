@@ -59,12 +59,29 @@ export const aiRoutingSchema = z.object({
 export const aiConfigValueSchema = z.object({
   level: z.number().int().min(1).max(3),
   name: z.string().min(1),
+  profile: z.string().min(1).optional(),
+  provider_kind: z.enum(['openai_compatible', 'builtin']).default('openai_compatible'),
   base_url: z.string().url().or(z.string().length(0)),
   api_key: z.string().optional(),
   model: z.string().min(1),
   timeout_ms: z.number().int().min(1000).max(300000),
   enabled: z.boolean(),
   routing: aiRoutingSchema.optional(),
+}).superRefine((value, ctx) => {
+  if (value.provider_kind === 'openai_compatible' && value.base_url.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['base_url'],
+      message: 'OpenAI 兼容模型必须填写 base_url',
+    })
+  }
+  if (value.provider_kind === 'builtin' && value.model !== 'rule-engine') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['model'],
+      message: '内置 provider 目前仅支持 rule-engine',
+    })
+  }
 })
 
 // 合同审核规则值验证 (F009)
@@ -86,6 +103,14 @@ export const contractRuleValueSchema = z.object({
 })
 
 export const uiThemeValueSchema = z.object({
+  brandName: z.string().min(1).max(80).optional(),
+  brandShortName: z.string().min(1).max(12).optional(),
+  productTitle: z.string().min(1).max(120).optional(),
+  productSubtitle: z.string().min(1).max(160).optional(),
+  loginTitle: z.string().min(1).max(120).optional(),
+  loginSubtitle: z.string().min(1).max(160).optional(),
+  logoUrl: z.string().url().or(z.literal('')).optional(),
+  faviconUrl: z.string().url().or(z.literal('')).optional(),
   primary: z.string().min(1),
   primaryForeground: z.string().min(1),
   secondary: z.string().min(1),

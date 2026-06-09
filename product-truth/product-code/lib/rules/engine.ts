@@ -3,6 +3,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { Rule } from '@/types/rules'
+import { isSchemaDriftError } from '@/lib/db-compat'
 
 export interface RuleResult {
   ruleId: string
@@ -27,13 +28,30 @@ export interface AnalysisResults {
 }
 
 // 执行所有启用的规则
-export async function executeRules(contractText: string): Promise<AnalysisResults> {
+export async function executeRules(contractText: string, orgId?: string): Promise<AnalysisResults> {
   // 获取所有启用的规则
-  const { data: rules, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('rules')
     .select('*')
     .eq('enabled', true)
     .order('created_at', { ascending: false })
+
+  if (orgId) {
+    query = query.eq('org_id', orgId)
+  }
+
+  let { data: rules, error } = await query
+
+  if (error && isSchemaDriftError(error)) {
+    const legacyResult = await supabaseAdmin
+      .from('rules')
+      .select('*')
+      .eq('enabled', true)
+      .order('created_at', { ascending: false })
+
+    rules = legacyResult.data
+    error = legacyResult.error
+  }
 
   if (error || !rules) {
     console.error('Failed to fetch rules:', error)

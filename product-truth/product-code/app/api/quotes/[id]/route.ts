@@ -4,53 +4,230 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { contractIdSchema } from '@/lib/validation'
+import { contractIdSchema, dateTimeStringSchema } from '@/lib/validation'
 import { z } from 'zod'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { isSchemaDriftError } from '@/lib/db-compat'
+import { loadProductsForOrg } from '@/lib/pricing/service'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import {
+  buildLegacyQuoteUpdatePayload,
+  normalizeQuote,
+} from '../quote-compat'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
 
+async function fetchQuoteDetail(id: string, orgId: string, accessibleUserIds: string[]) {
+  const modernResult = await supabaseAdmin
+    .from('quotes')
+    .select('*, quote_items(*)')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .in('created_by', accessibleUserIds)
+    .maybeSingle()
+
+  if (!modernResult.error) {
+    return modernResult.data ? normalizeQuote(modernResult.data, orgId) : null
+  }
+
+  if (!isSchemaDriftError(modernResult.error)) {
+    throw modernResult.error
+  }
+
+  const legacyQuoteResult = await supabaseAdmin
+    .from('quotes')
+    .select('*')
+    .eq('id', id)
+    .in('created_by', accessibleUserIds)
+    .maybeSingle()
+
+  if (legacyQuoteResult.error) {
+    throw legacyQuoteResult.error
+  }
+
+  if (!legacyQuoteResult.data) {
+    return null
+  }
+
+  const legacyItemsResult = await supabaseAdmin
+    .from('quote_items')
+    .select('*')
+    .eq('quote_id', id)
+    .order('sort_order', { ascending: true })
+
+  if (legacyItemsResult.error && !isSchemaDriftError(legacyItemsResult.error)) {
+    throw legacyItemsResult.error
+  }
+
+  const legacyItems = legacyItemsResult.data || []
+
+  if (legacyItems.length === 0) {
+    return normalizeQuote(legacyQuoteResult.data, orgId, legacyItems)
+  }
+
+  const products = await loadProductsForOrg(orgId)
+  const productByName = new Map(products.map((product) => [product.name, product]))
+  const enrichedItems = legacyItems.map((item) => {
+    const product = typeof item.name === 'string' ? productByName.get(item.name) : undefined
+    if (!product) {
+      return item
+    }
+
+    return {
+      ...item,
+      product_id: item.product_id ?? product.id,
+      product_code: item.product_code ?? product.code,
+      specification: item.specification ?? product.specification,
+      unit: item.unit ?? product.unit,
+    }
+  })
+
+  return normalizeQuote(legacyQuoteResult.data, orgId, enrichedItems)
+}
+
+async function fetchOwnedQuote(id: string, orgId: string, userId: string) {
+  const result = await supabaseAdmin
+    .from('quotes')
+    .select('id, status, created_by, org_id')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .eq('created_by', userId)
+    .maybeSingle()
+
+  if (!result.error) {
+    return result.data
+  }
+
+  if (!isSchemaDriftError(result.error)) {
+    throw result.error
+  }
+
+  const legacyResult = await supabaseAdmin
+    .from('quotes')
+    .select('id, status, created_by')
+    .eq('id', id)
+    .eq('created_by', userId)
+    .maybeSingle()
+
+  if (legacyResult.error) {
+    throw legacyResult.error
+  }
+
+  if (!legacyResult.data) {
+    return null
+  }
+
+  return {
+    ...legacyResult.data,
+    org_id: orgId,
+  }
+}
+
 // 报价更新字段验证
+const quoteStatusSchema = z.enum(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED'])
+
 const updateQuoteSchema = z.object({
   customer_name: z.string().min(1).max(255).optional(),
   customer_contact: z.string().max(255).optional(),
-  subtotal: z.number().nonnegative().optional(),
-  tax_amount: z.number().nonnegative().optional(),
-  discount_amount: z.number().nonnegative().optional(),
-  total_amount: z.number().nonnegative().optional(),
-  valid_until: z.string().optional(),
-  status: z.enum(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED']).optional(),
+  notes: z.string().max(2000).optional(),
+  valid_until: z.preprocess(
+    (value) => value === '' ? null : value,
+    dateTimeStringSchema.nullable().optional()
+  ),
+  status: quoteStatusSchema.optional(),
 })
+
+type QuoteStatus = z.infer<typeof quoteStatusSchema>
+
+const editableQuoteFields = ['customer_name', 'customer_contact', 'notes', 'valid_until'] as const
+
+function isQuoteLocked(status: string): boolean {
+  return status === 'APPROVED'
+}
+
+function getAllowedTransitions(status: QuoteStatus): QuoteStatus[] {
+  switch (status) {
+    case 'DRAFT':
+      return ['PENDING_APPROVAL']
+    case 'PENDING_APPROVAL':
+      return ['APPROVED', 'REJECTED']
+    case 'REJECTED':
+      return ['DRAFT', 'PENDING_APPROVAL']
+    case 'APPROVED':
+    default:
+      return []
+  }
+}
+
+function hasEditableQuoteField(updateData: z.infer<typeof updateQuoteSchema>): boolean {
+  return editableQuoteFields.some((field) => field in updateData)
+}
+
+function validateQuoteMutation(
+  currentStatus: QuoteStatus,
+  updateData: z.infer<typeof updateQuoteSchema>
+): { valid: true } | { valid: false; message: string; code: string } {
+  const nextStatus = updateData.status
+  const editingBusinessFields = hasEditableQuoteField(updateData)
+
+  if (isQuoteLocked(currentStatus)) {
+    return {
+      valid: false,
+      message: '已批准的报价不能再修改，请基于当前报价新建版本',
+      code: 'QUOTE_LOCKED',
+    }
+  }
+
+  if (currentStatus === 'PENDING_APPROVAL' && editingBusinessFields) {
+    return {
+      valid: false,
+      message: '审批中的报价不能直接修改，请先完成审批或驳回后再调整',
+      code: 'INVALID_STATUS',
+    }
+  }
+
+  if (!nextStatus || nextStatus === currentStatus) {
+    return { valid: true }
+  }
+
+  const allowedTransitions = getAllowedTransitions(currentStatus)
+  if (!allowedTransitions.includes(nextStatus)) {
+    return {
+      valid: false,
+      message: `报价状态不允许从 ${currentStatus} 变更为 ${nextStatus}`,
+      code: 'INVALID_STATUS',
+    }
+  }
+
+  return { valid: true }
+}
 
 // GET /api/quotes/:id - 获取报价详情（需登录）
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const routeId = await resolveIdParam(params)
 
-    const idResult = contractIdSchema.safeParse({ id: params.id })
+    const idResult = contractIdSchema.safeParse({ id: routeId })
     if (!idResult.success) {
       return errorResponse('无效的报价ID', 400, 'INVALID_ID')
     }
 
     const { id } = idResult.data
 
-    const { data: quote, error } = await supabaseAdmin
-      .from('quotes')
-      .select('*, quote_items(*)')
-      .eq('id', id)
-      .in('created_by', accessibleUserIds)
-      .maybeSingle()
-
-    if (error) {
-      console.error('Get quote error:', error)
+    let quote
+    try {
+      quote = await fetchQuoteDetail(id, orgId, accessibleUserIds)
+    } catch (queryError) {
+      console.error('Get quote error:', queryError)
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
@@ -72,12 +249,13 @@ export async function GET(
 // PUT /api/quotes/:id - 更新报价（需登录，仅能更新自己的报价）
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   try {
     const user = await requireAuth(req)
+    const routeId = await resolveIdParam(params)
 
-    const idResult = contractIdSchema.safeParse({ id: params.id })
+    const idResult = contractIdSchema.safeParse({ id: routeId })
     if (!idResult.success) {
       return errorResponse('无效的报价ID', 400, 'INVALID_ID')
     }
@@ -85,20 +263,18 @@ export async function PUT(
     const { id } = idResult.data
 
     // 先查询当前报价状态（带 owner 校验）
-    const { data: existingQuote, error: fetchError } = await supabaseAdmin
-      .from('quotes')
-      .select('id, status, created_by')
-      .eq('id', id)
-      .eq('created_by', user.id)
-      .single()
+    const orgId = await getDefaultOrgId(user.id)
 
-    if (fetchError || !existingQuote) {
-      return errorResponse('报价不存在', 404, 'NOT_FOUND')
+    let existingQuote
+    try {
+      existingQuote = await fetchOwnedQuote(id, orgId, user.id)
+    } catch (fetchError) {
+      console.error('Fetch quote before update error:', fetchError)
+      return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
-    // 已确认的报价不允许修改
-    if (existingQuote.status === 'CONFIRMED') {
-      return errorResponse('已确认的报价不能修改', 409, 'QUOTE_CONFIRMED')
+    if (!existingQuote) {
+      return errorResponse('报价不存在', 404, 'NOT_FOUND')
     }
 
     const rawData = await req.json()
@@ -111,21 +287,40 @@ export async function PUT(
     }
 
     const updateData = validation.data
+    const mutationValidation = validateQuoteMutation(existingQuote.status as QuoteStatus, updateData)
+    if (!mutationValidation.valid) {
+      return errorResponse(mutationValidation.message, 409, mutationValidation.code)
+    }
 
-    const { data: quote, error } = await supabaseAdmin
+    let updateResult = await supabaseAdmin
       .from('quotes')
       .update(updateData)
       .eq('id', id)
-      .eq('created_by', user.id) // owner 校验
+      .eq('org_id', orgId)
+      .eq('created_by', user.id)
       .select()
       .single()
 
-    if (error) {
-      console.error('Update quote error:', error)
+    if (updateResult.error && isSchemaDriftError(updateResult.error)) {
+      updateResult = await supabaseAdmin
+        .from('quotes')
+        .update(buildLegacyQuoteUpdatePayload(updateData))
+        .eq('id', id)
+        .eq('created_by', user.id)
+        .select()
+        .single()
+    }
+
+    if (updateResult.error) {
+      console.error('Update quote error:', updateResult.error)
       return errorResponse('更新失败', 500, 'DB_ERROR')
     }
 
-    return NextResponse.json(quote)
+    return NextResponse.json(normalizeQuote({
+      ...existingQuote,
+      ...updateData,
+      ...(updateResult.data || {}),
+    }, orgId))
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
@@ -139,12 +334,13 @@ export async function PUT(
 // DELETE /api/quotes/:id - 删除报价（需登录，仅能删除自己的报价）
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   try {
     const user = await requireAuth(req)
+    const routeId = await resolveIdParam(params)
 
-    const idResult = contractIdSchema.safeParse({ id: params.id })
+    const idResult = contractIdSchema.safeParse({ id: routeId })
     if (!idResult.success) {
       return errorResponse('无效的报价ID', 400, 'INVALID_ID')
     }
@@ -152,30 +348,45 @@ export async function DELETE(
     const { id } = idResult.data
 
     // 查询报价是否存在（带 owner 校验）
-    const { data: quote, error: fetchError } = await supabaseAdmin
-      .from('quotes')
-      .select('id, status, created_by')
-      .eq('id', id)
-      .eq('created_by', user.id)
-      .single()
+    const orgId = await getDefaultOrgId(user.id)
 
-    if (fetchError || !quote) {
+    let quote
+    try {
+      quote = await fetchOwnedQuote(id, orgId, user.id)
+    } catch (fetchError) {
+      console.error('Fetch quote before delete error:', fetchError)
+      return errorResponse('查询失败', 500, 'DB_ERROR')
+    }
+
+    if (!quote) {
       return errorResponse('报价不存在', 404, 'NOT_FOUND')
     }
 
-    // 已确认的报价不允许删除
-    if (quote.status === 'CONFIRMED') {
-      return errorResponse('已确认的报价不能删除', 409, 'QUOTE_CONFIRMED')
+    if (quote.status === 'APPROVED') {
+      return errorResponse('已批准的报价不能删除，请保留历史记录', 409, 'QUOTE_LOCKED')
     }
 
-    const { error } = await supabaseAdmin
+    if (quote.status === 'PENDING_APPROVAL') {
+      return errorResponse('审批中的报价不能删除，请先完成审批或驳回', 409, 'INVALID_STATUS')
+    }
+
+    let deleteResult = await supabaseAdmin
       .from('quotes')
       .delete()
       .eq('id', id)
-      .eq('created_by', user.id) // owner 校验
+      .eq('org_id', orgId)
+      .eq('created_by', user.id)
 
-    if (error) {
-      console.error('Delete quote error:', error)
+    if (deleteResult.error && isSchemaDriftError(deleteResult.error)) {
+      deleteResult = await supabaseAdmin
+        .from('quotes')
+        .delete()
+        .eq('id', id)
+        .eq('created_by', user.id)
+    }
+
+    if (deleteResult.error) {
+      console.error('Delete quote error:', deleteResult.error)
       return errorResponse('删除失败', 500, 'DB_ERROR')
     }
 

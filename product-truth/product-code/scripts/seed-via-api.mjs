@@ -20,7 +20,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 const id = (n) => `${n.toString(16).padStart(8, '0')}-0000-0000-0000-000000000000`
 
 const ORG_ID = id(0x00000001)
-const HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy' // password123
+const HASH = '$2b$10$5jD6hf7CCBmVdcUIIV41r.2igA7ILgxoKvKDzPQ5l1IlhIAsPlnd6' // password123
 
 async function main() {
   console.log('1. Organizations...')
@@ -228,21 +228,82 @@ async function main() {
     { name: '数据安全条款缺失', description: '涉及数据处理但未约定数据安全', rule_type: 'semantic', risk_level: 'red', enabled: true, config: { prompt: '识别合同中涉及数据采集、存储、传输的条款' } },
     { name: '不可抗力范围过宽', description: '不可抗力条款范围过宽可能导致免责滥用', rule_type: 'semantic', risk_level: 'yellow', enabled: true, config: { prompt: '检查不可抗力条款的范围界定' } },
   ]
-  for (const r of rules) {
-    await supabase.from('rules').upsert([{ ...r, created_by: id(0x30000001) }], { onConflict: 'name' })
+  for (const [index, rule] of rules.entries()) {
+    await supabase.from('rules').upsert([{
+      id: id(0xA0000001 + index),
+      org_id: ORG_ID,
+      ...rule,
+      created_by: id(0x30000001),
+    }], { onConflict: 'id' })
   }
   console.log(`   seeded ${rules.length} rules`)
 
   console.log('16. Products...')
   const products = [
-    { code: 'PROD-001', name: '智能合同审核系统', specification: '企业版', unit: '套', base_price: 98000, cost_price: 35000, min_price: 80000, status: 'active' },
-    { code: 'PROD-002', name: '销售管理平台', specification: '标准版', unit: '套', base_price: 50000, cost_price: 18000, min_price: 40000, status: 'active' },
-    { code: 'PROD-003', name: 'AI客服系统', specification: 'SaaS', unit: '年', base_price: 120000, cost_price: 25000, min_price: 90000, status: 'active' },
+    {
+      id: id(0xB0000001),
+      org_id: ORG_ID,
+      code: 'PROD-001',
+      name: '智能合同审核系统',
+      specification: '企业版',
+      unit: '套',
+      base_price: 98000,
+      cost_price: 35000,
+      min_price: 80000,
+      tier_pricing_enabled: true,
+      status: 'active',
+      created_by: id(0x30000001),
+    },
+    {
+      id: id(0xB0000002),
+      org_id: ORG_ID,
+      code: 'PROD-002',
+      name: '销售管理平台',
+      specification: '标准版',
+      unit: '套',
+      base_price: 50000,
+      cost_price: 18000,
+      min_price: 40000,
+      tier_pricing_enabled: true,
+      status: 'active',
+      created_by: id(0x30000001),
+    },
+    {
+      id: id(0xB0000003),
+      org_id: ORG_ID,
+      code: 'PROD-003',
+      name: 'AI客服系统',
+      specification: 'SaaS',
+      unit: '年',
+      base_price: 120000,
+      cost_price: 25000,
+      min_price: 90000,
+      tier_pricing_enabled: true,
+      status: 'active',
+      created_by: id(0x30000001),
+    },
   ]
   for (const p of products) {
-    await supabase.from('products').upsert([p], { onConflict: 'code' })
+    await supabase.from('products').upsert([p], { onConflict: 'id' })
   }
   console.log(`   seeded ${products.length} products`)
+
+  console.log('17. Product price tiers...')
+  const tiers = [
+    { id: id(0xC0000001), product_id: id(0xB0000001), qty_from: 1, qty_to: 10, unit_price: 98000, sort_order: 0 },
+    { id: id(0xC0000002), product_id: id(0xB0000001), qty_from: 11, qty_to: 50, unit_price: 92000, sort_order: 1 },
+    { id: id(0xC0000003), product_id: id(0xB0000001), qty_from: 51, qty_to: null, unit_price: 88000, sort_order: 2 },
+    { id: id(0xC0000004), product_id: id(0xB0000002), qty_from: 1, qty_to: 5, unit_price: 50000, sort_order: 0 },
+    { id: id(0xC0000005), product_id: id(0xB0000002), qty_from: 6, qty_to: 20, unit_price: 47000, sort_order: 1 },
+    { id: id(0xC0000006), product_id: id(0xB0000002), qty_from: 21, qty_to: null, unit_price: 45000, sort_order: 2 },
+    { id: id(0xC0000007), product_id: id(0xB0000003), qty_from: 1, qty_to: 3, unit_price: 120000, sort_order: 0 },
+    { id: id(0xC0000008), product_id: id(0xB0000003), qty_from: 4, qty_to: 10, unit_price: 110000, sort_order: 1 },
+    { id: id(0xC0000009), product_id: id(0xB0000003), qty_from: 11, qty_to: null, unit_price: 102000, sort_order: 2 },
+  ]
+  for (const tier of tiers) {
+    await supabase.from('product_price_tiers').upsert([tier], { onConflict: 'id' })
+  }
+  console.log(`   seeded ${tiers.length} product price tiers`)
 
   console.log('Done!')
 }

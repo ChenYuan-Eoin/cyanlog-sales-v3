@@ -8,6 +8,7 @@ import { contractIdSchema } from '@/lib/validation'
 import { logError } from '@/lib/error-log'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -17,25 +18,27 @@ function errorResponse(message: string, status: number, code?: string) {
 // GET /api/contracts/:id - 获取合同详情（需登录）
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   const startedAt = Date.now()
   const requestId = getRequestId(req)
   const route = '/api/contracts/[id]'
+  let routeId = ''
 
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    routeId = await resolveIdParam(params)
     logRouteStart({
       route,
       requestId,
       userId: user.id,
-      details: { contractId: params.id },
+      details: { contractId: routeId },
     })
 
     // Zod验证ID格式
-    const idResult = contractIdSchema.safeParse({ id: params.id })
+    const idResult = contractIdSchema.safeParse({ id: routeId })
     if (!idResult.success) {
       return errorResponse('无效的合同ID', 400, 'INVALID_ID')
     }
@@ -132,7 +135,7 @@ export async function GET(
       {
         route,
         requestId,
-        details: { contractId: params.id },
+        details: { contractId: routeId },
       },
       startedAt,
       error
@@ -144,23 +147,25 @@ export async function GET(
 // DELETE /api/contracts/:id - 删除合同（需登录，仅能删除自己的合同）
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   const startedAt = Date.now()
   const requestId = getRequestId(req)
   const route = '/api/contracts/[id]'
+  let routeId = ''
 
   try {
     const user = await requireAuth(req)
+    routeId = await resolveIdParam(params)
     logRouteStart({
       route,
       requestId,
       userId: user.id,
-      details: { contractId: params.id, method: 'DELETE' },
+      details: { contractId: routeId, method: 'DELETE' },
     })
 
     // Zod验证ID格式
-    const idResult = contractIdSchema.safeParse({ id: params.id })
+    const idResult = contractIdSchema.safeParse({ id: routeId })
     if (!idResult.success) {
       return errorResponse('无效的合同ID', 400, 'INVALID_ID')
     }
@@ -246,7 +251,7 @@ export async function DELETE(
       {
         route,
         requestId,
-        details: { contractId: params.id, method: 'DELETE' },
+        details: { contractId: routeId, method: 'DELETE' },
       },
       startedAt,
       error

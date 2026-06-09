@@ -3,6 +3,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabase'
+import { resolveRouteParams } from '@/lib/route-params'
 import {
   DOC_TYPE_LABEL,
   DOC_TYPE_COLOR,
@@ -10,14 +11,15 @@ import {
 } from '@/lib/tech-documents/types'
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }> | { id: string }
 }
 
 export default async function TechDocumentDetailPage({ params }: PageProps) {
+  const { id } = await resolveRouteParams(params)
   const { data, error } = await supabaseAdmin
     .from('tech_documents')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (error || !data) notFound()

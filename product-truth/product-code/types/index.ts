@@ -12,29 +12,41 @@ export interface User {
 export interface Quote {
   id: string
   quote_no: string
+  org_id?: string
   customer_name: string
   customer_contact: string | null
   subtotal: number
+  discount_rate?: number
   tax_amount: number
+  tax_rate?: number
   discount_amount: number
   total_amount: number
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED'
   valid_until: string | null
+  notes?: string | null
   created_by: string | null
   created_at: string
   updated_at: string
+  quote_items?: QuoteItem[]
 }
 
 export interface QuoteItem {
   id: string
   quote_id: string
+  product_id?: string | null
   product_type: string
+  product_code?: string | null
   name: string
+  specification?: string | null
+  unit?: string | null
   quantity: number
   unit_price: number
   discount: number
   line_total: number
   sort_order: number
+  pricing_source?: 'base' | 'tier' | 'manual'
+  tier_range?: string | null
+  created_at?: string
 }
 
 export interface Contract {

@@ -73,6 +73,41 @@ export const quoteSchema = z.object({
   customer_name: z.string().min(1).max(255),
   customer_contact: z.string().max(255).optional(),
   valid_until: dateTimeStringSchema.optional(),
+  notes: z.string().max(2000).optional(),
+  discount_rate: z.number().min(0).max(100).optional().default(0),
+  items: z.array(z.object({
+    product_type: z.enum(['sku', 'custom']).default('sku'),
+    product_id: uuidSchema.optional(),
+    name: z.string().max(255).optional(),
+    quantity: z.number().int().min(1),
+    unit_price: z.number().nonnegative().optional(),
+    discount: z.number().nonnegative().optional().default(0),
+    sort_order: z.number().int().min(0).optional(),
+  }).superRefine((item, ctx) => {
+    if (item.product_type === 'sku' && !item.product_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['product_id'],
+        message: 'SKU 行必须选择 product_id',
+      })
+    }
+    if (item.product_type === 'custom') {
+      if (!item.name) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['name'],
+          message: '自定义行必须填写名称',
+        })
+      }
+      if (item.unit_price === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['unit_price'],
+          message: '自定义行必须填写单价',
+        })
+      }
+    }
+  })).min(1, '至少需要一条报价明细'),
 })
 
 export const contractIdSchema = z.object({

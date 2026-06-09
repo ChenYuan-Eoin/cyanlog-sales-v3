@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { reviewWithFailoverSync } from '@/lib/ai/failover'
+import { getOrgIdForUser } from '@/lib/configs/runtime'
 
 export interface ContractAnalysisJobRecord {
   id: string
@@ -83,16 +84,33 @@ export async function fetchContractText(contractId: string): Promise<string> {
   return `合同文件: ${data?.filename || 'unknown'}`
 }
 
+async function fetchContractContext(contractId: string): Promise<{ text: string; orgId?: string }> {
+  const { data, error } = await supabaseAdmin
+    .from('contracts')
+    .select('parsed_text, filename, created_by')
+    .eq('id', contractId)
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  const text = data?.parsed_text || `合同文件: ${data?.filename || 'unknown'}`
+  const orgId = data?.created_by ? await getOrgIdForUser(data.created_by) || undefined : undefined
+
+  return { text, orgId }
+}
+
 /**
  * 运行合同分析 — 统一走AI降级链路
  * 后台任务和前端请求共用同一套降级逻辑，只是消费方式不同
  * 前端用 reviewWithFailover（流式），后台用 reviewWithFailoverSync（非流式）
  */
 export async function runContractAnalysis(contractId: string): Promise<ContractAnalysisResult> {
-  const contractText = await fetchContractText(contractId)
+  const context = await fetchContractContext(contractId)
 
   // 统一走AI降级链路（本地→云端→规则引擎→人工标记）
-  const aiResult = await reviewWithFailoverSync(contractText)
+  const aiResult = await reviewWithFailoverSync(context.text, { orgId: context.orgId })
 
   return {
     risks: aiResult.risks,

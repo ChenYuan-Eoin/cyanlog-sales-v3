@@ -1,4 +1,12 @@
 export interface UIThemeConfigValue {
+  brandName?: string
+  brandShortName?: string
+  productTitle?: string
+  productSubtitle?: string
+  loginTitle?: string
+  loginSubtitle?: string
+  logoUrl?: string
+  faviconUrl?: string
   primary?: string
   primaryForeground?: string
   secondary?: string
@@ -21,6 +29,14 @@ export interface UIThemeConfigValue {
 }
 
 export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
+  brandName: 'Cyanlog',
+  brandShortName: 'CY',
+  productTitle: 'Cyanlog Sales',
+  productSubtitle: '智能销售支撑平台',
+  loginTitle: '企业销售支撑平台',
+  loginSubtitle: '使用企业账号进入工作台首页',
+  logoUrl: '',
+  faviconUrl: '',
   primary: '#2563eb',
   primaryForeground: '#ffffff',
   secondary: '#eff6ff',
@@ -46,6 +62,14 @@ export function sanitizeThemeValue(value: Record<string, unknown> | null | undef
   const theme = value ?? {}
 
   return {
+    brandName: pickText(theme.brandName, DEFAULT_THEME.brandName),
+    brandShortName: pickText(theme.brandShortName, DEFAULT_THEME.brandShortName),
+    productTitle: pickText(theme.productTitle, DEFAULT_THEME.productTitle),
+    productSubtitle: pickText(theme.productSubtitle, DEFAULT_THEME.productSubtitle),
+    loginTitle: pickText(theme.loginTitle, DEFAULT_THEME.loginTitle),
+    loginSubtitle: pickText(theme.loginSubtitle, DEFAULT_THEME.loginSubtitle),
+    logoUrl: pickOptionalText(theme.logoUrl),
+    faviconUrl: pickOptionalText(theme.faviconUrl),
     primary: pickColor(theme.primary, DEFAULT_THEME.primary),
     primaryForeground: pickColor(theme.primaryForeground, DEFAULT_THEME.primaryForeground),
     secondary: pickColor(theme.secondary, DEFAULT_THEME.secondary),
@@ -66,6 +90,23 @@ export function sanitizeThemeValue(value: Record<string, unknown> | null | undef
     radiusMd: pickRadius(theme.radiusMd, DEFAULT_THEME.radiusMd),
     radiusLg: pickRadius(theme.radiusLg, DEFAULT_THEME.radiusLg),
   }
+}
+
+function pickText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback
+  }
+
+  const normalized = value.trim()
+  return normalized || fallback
+}
+
+function pickOptionalText(value: unknown): string {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  return value.trim()
 }
 
 function pickColor(value: unknown, fallback: string): string {

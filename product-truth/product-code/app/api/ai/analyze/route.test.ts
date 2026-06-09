@@ -18,6 +18,14 @@ vi.mock('@/lib/ai/failover', () => ({
   reviewWithFailoverSync: vi.fn().mockResolvedValue(mockFailoverResult),
 }))
 
+vi.mock('@/lib/auth', () => ({
+  getAuthUser: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@/lib/scoped-access', () => ({
+  getDefaultOrgId: vi.fn().mockResolvedValue('org-1'),
+}))
+
 import { POST } from './route'
 
 function makeRequest(body: any): any {

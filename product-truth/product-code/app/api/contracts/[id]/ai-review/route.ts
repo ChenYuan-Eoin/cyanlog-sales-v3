@@ -8,23 +8,25 @@ import { reviewWithFailover } from '@/lib/ai/failover'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { UserProfileMemory } from '@/lib/memory/user-profile'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   const startedAt = Date.now()
   const requestId = getRequestId(req)
   const route = '/api/contracts/[id]/ai-review'
+  let contractId = ''
 
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
-    const contractId = params.id
+    contractId = await resolveIdParam(params)
     logRouteStart({
       route,
       requestId,
@@ -58,8 +60,13 @@ export async function POST(
 
     // 多级故障转移：本地 → 云端 → 规则引擎 → 人工标记
     // 高风险敏感度用户直接走云端（更严格审核）
-    const preferredProvider = profile?.riskSensitivity && profile.riskSensitivity > 0.7 ? 'cloud' : undefined
-    const { stream, provider, degraded } = await reviewWithFailover(contractText, preferredProvider)
+    const preferredProvider = profile?.riskSensitivity && profile.riskSensitivity > 0.7
+      ? 'sales_cloud_backup'
+      : undefined
+    const { stream, provider, degraded } = await reviewWithFailover(contractText, {
+      orgId,
+      preferredProvider,
+    })
 
     // 添加响应头标识降级状态和用户画像信息
     const headers = new Headers()
@@ -100,7 +107,7 @@ export async function POST(
       {
         route,
         requestId,
-        details: { contractId: params.id },
+        details: { contractId },
       },
       startedAt,
       error

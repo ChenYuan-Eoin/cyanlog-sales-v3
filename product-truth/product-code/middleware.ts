@@ -33,7 +33,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 
-const PUBLIC_PATHS = ['/', '/login', '/register']
+const PUBLIC_PATHS = ['/login', '/register']
 const PRIMARY_HOST = 'sales.cyanlog.icu'
 const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }> = {
   'quote.cyanlog.icu': { rootPath: '/quotes', preservePath: true },
@@ -60,7 +60,7 @@ const PASSWORD_CHANGE_ALLOWED_PATHS = [
 // REQ: F003 自主可控 + RBAC
 // 路径 → 所需权限（路由级权限，权限可配置于 roles.permissions）
 const ROUTE_PERMISSIONS: Record<string, string> = {
-  '/configs': 'config:*',
+  '/configs': 'config:read',
   '/admin': 'admin:access',
 }
 
@@ -100,6 +100,26 @@ function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): 
   return url
 }
 
+function createMiddlewareSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is required for auth middleware')
+  }
+
+  if (!serviceRoleKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for auth middleware')
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host')?.toLowerCase()
@@ -128,9 +148,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabase = createMiddlewareSupabaseClient()
 
     // 步骤1: 验证token（必须先做，获取user_id）
     const { data: tokenRecord } = await supabase
@@ -215,7 +233,15 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-user-permissions', allPermissions.join(','))
 
     return NextResponse.next({ request: { headers: requestHeaders } })
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('auth middleware')) {
+      console.error('Auth middleware misconfigured:', error.message)
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Authentication unavailable' }, { status: 503 })
+      }
+      return new NextResponse('Authentication unavailable', { status: 503 })
+    }
+
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

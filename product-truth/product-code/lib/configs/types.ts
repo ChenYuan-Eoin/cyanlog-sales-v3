@@ -63,10 +63,15 @@ export interface AIRoutingConfig {
   strategy: 'full' | 'chunked' | 'rule'
 }
 
+export type AIProviderKind = 'openai_compatible' | 'builtin'
+export type AIProfile = 'local_primary' | 'cloud_primary' | 'sales_cloud_backup' | 'rule_engine' | 'custom'
+
 // AI 模型配置值 (F012)
 export interface AIConfigValue {
   level: number // 1, 2, 3
   name: string
+  profile?: AIProfile | string
+  provider_kind?: AIProviderKind
   base_url: string
   api_key?: string // 加密存储，API 返回时脱敏
   model: string

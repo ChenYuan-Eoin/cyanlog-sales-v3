@@ -817,6 +817,48 @@ body {
 .stat-tag.success { background: var(--success-100); color: var(--success-700); }
 .stat-tag.danger  { background: var(--danger-100);  color: var(--danger-700); }
 
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--ink-100);
+  color: var(--fg-2);
+}
+
+.pill.outline {
+  background: white;
+  color: var(--fg-2);
+  border: 1px solid var(--border-2);
+}
+
+.pill.info {
+  background: var(--info-100);
+  color: var(--info-700);
+}
+
+.pill.warning {
+  background: var(--warning-100);
+  color: var(--warning-700);
+}
+
+.pill.success {
+  background: var(--success-100);
+  color: var(--success-700);
+}
+
+.pill.danger {
+  background: var(--danger-100);
+  color: var(--danger-700);
+}
+
 .workspace-card {
   padding: 12px;
   margin-bottom: 16px;

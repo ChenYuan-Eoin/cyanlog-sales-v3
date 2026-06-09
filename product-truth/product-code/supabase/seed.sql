@@ -53,11 +53,11 @@ INSERT INTO departments (id, org_id, parent_id, name, code, sort_order) VALUES
 -- 4. 用户：14 名销售 + 经理 + 法务 + 财务 + 管理员 + 超管
 -- 密码统一：password123 (bcrypt hash)
 -- =====================================================
--- 注意：bcrypt hash 是 $2a$10$... 开头的
+-- 注意：bcrypt hash 是 $2b$10$... 开头的
 
 DO $$
 DECLARE
-  hash TEXT := '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy'; -- password: "password"
+  hash TEXT := '$2b$10$5jD6hf7CCBmVdcUIIV41r.2igA7ILgxoKvKDzPQ5l1IlhIAsPlnd6'; -- password: "password123"
   org UUID := '00000000-0000-0000-0000-000000000001';
 BEGIN
   -- 超管

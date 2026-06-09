@@ -36,6 +36,27 @@ export function RuntimeThemeLoader() {
         Object.entries(variables).forEach(([key, value]) => {
           document.documentElement.style.setProperty(key, value)
         })
+
+        document.documentElement.dataset.brandName = theme.brandName
+        document.documentElement.dataset.brandShortName = theme.brandShortName
+        document.documentElement.dataset.logoUrl = theme.logoUrl
+
+        if (theme.productTitle) {
+          document.title = theme.productTitle
+        }
+
+        if (theme.faviconUrl) {
+          const rels = ['icon', 'shortcut icon', 'apple-touch-icon']
+          rels.forEach((rel) => {
+            let link = document.head.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null
+            if (!link) {
+              link = document.createElement('link')
+              link.rel = rel
+              document.head.appendChild(link)
+            }
+            link.href = theme.faviconUrl
+          })
+        }
       } catch {
         // Ignore runtime theme failures and keep defaults.
       }

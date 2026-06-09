@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { BrandMark } from '@/components/branding/BrandMark'
+import { useBranding } from '@/components/branding/BrandingProvider'
+import { logoutClientSession } from '@/lib/session-client'
 
 const navItems = [
   { name: '工作台', href: '/', icon: '□' },
-  { name: '产品目录', href: '/products', icon: '◫' },
   { name: '报价中心', href: '/quotes', icon: '¥' },
   { name: '合同审核', href: '/contracts', icon: '📄' },
   { name: '标书中心', href: '/tenders', icon: '◉' },
@@ -18,7 +20,9 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const branding = useBranding()
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -49,13 +53,16 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white transition-transform duration-300 z-40',
+          'fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-slate-900 text-white transition-transform duration-300',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
-        <div className="p-6">
-          <h1 className="text-xl font-bold">Cyanlog Sales</h1>
-          <p className="text-xs text-slate-400 mt-1">智能销售支撑平台</p>
+        <div className="flex items-center gap-3 p-6">
+          <BrandMark size={40} />
+          <div>
+            <h1 className="text-xl font-bold">{branding.productTitle}</h1>
+            <p className="mt-1 text-xs text-slate-400">{branding.productSubtitle}</p>
+          </div>
         </div>
         <nav className="px-3 py-4">
           {navItems.map((item) => (
@@ -75,6 +82,20 @@ export function Sidebar() {
             </Link>
           ))}
         </nav>
+        <div className="mt-auto px-3 pb-6">
+          <button
+            type="button"
+            onClick={async () => {
+              await logoutClientSession()
+              setMobileOpen(false)
+              router.replace('/login')
+            }}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+          >
+            <span className="text-lg">↗</span>
+            <span>退出登录</span>
+          </button>
+        </div>
       </aside>
     </>
   )

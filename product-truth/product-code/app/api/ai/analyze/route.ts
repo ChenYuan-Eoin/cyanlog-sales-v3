@@ -4,6 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { reviewWithFailoverSync } from '@/lib/ai/failover'
+import { getAuthUser } from '@/lib/auth'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 
 export const runtime = 'nodejs'
 
@@ -28,9 +30,14 @@ export async function POST(req: NextRequest) {
     }
 
     const input = result.data
+    const user = await getAuthUser(req)
+    const orgId = user?.id ? await getDefaultOrgId(user.id).catch(() => undefined) : undefined
 
     // 统一走 reviewWithFailover 降级链
-    const analysis = await reviewWithFailoverSync(input.text)
+    const analysis = await reviewWithFailoverSync(input.text, {
+      orgId,
+      preferredProvider: input.forceCloud ? 'sales_cloud_backup' : undefined,
+    })
 
     return NextResponse.json({
       level: analysis.degraded ? 3 : 1,

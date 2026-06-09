@@ -3,32 +3,65 @@
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getOrgIdForToken } from '@/lib/configs/runtime'
+import { resolveRouteParams } from '@/lib/route-params'
+import { isSchemaDriftError } from '@/lib/db-compat'
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }> | { id: string }
 }
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProductDetailPage({ params }: PageProps) {
-  const { data: product, error } = await supabaseAdmin
-    .from('products')
-    .select('*, product_categories(name)')
-    .eq('id', params.id)
-    .single()
-
-  if (error || !product) {
+  const { id } = await resolveRouteParams(params)
+  const token = cookies().get('token')?.value
+  const orgId = await getOrgIdForToken(token)
+  if (!orgId) {
     notFound()
   }
+
+  const productResult = await supabaseAdmin
+    .from('products')
+    .select('*, product_categories(name), product_price_tiers(*)')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .single()
+
+  let product = productResult.data
+  let productError = productResult.error
+
+  if (productError && isSchemaDriftError(productError)) {
+    const legacyResult = await supabaseAdmin
+      .from('products')
+      .select('*, product_categories(name)')
+      .eq('id', id)
+      .single()
+
+    product = legacyResult.data ? {
+        ...legacyResult.data,
+        tier_pricing_enabled: false,
+        product_price_tiers: [],
+        _migration_required: true,
+      } : null
+    productError = legacyResult.error
+  }
+
+  if (productError || !product) {
+    notFound()
+  }
+
+  const migrationRequired = Boolean((product as { _migration_required?: boolean })._migration_required)
 
   // 读取最近使用此产品的报价
   const { data: recentQuotes } = await supabaseAdmin
     .from('quote_items')
     .select('id, quote_id, quantity, unit_price, quotes!inner(quote_no, customer_name, status)')
-    .eq('product_id', params.id)
+    .eq('product_id', id)
     .order('created_at', { ascending: false })
     .limit(10)
 
@@ -76,6 +109,14 @@ export default async function ProductDetailPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {migrationRequired && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardContent className="py-4 text-sm text-red-700">
+            当前生产数据库尚未升级阶梯价结构，本页以兼容模式展示基础 SKU 信息。阶梯价维护与自动算价仍需先执行 migration。
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 基本信息 */}
@@ -126,6 +167,28 @@ export default async function ProductDetailPage({ params }: PageProps) {
                     mono
                   />
                 </dl>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">阶梯价</h2>
+            <Card>
+              <CardContent className="py-5">
+                {product.tier_pricing_enabled && product.product_price_tiers?.length > 0 ? (
+                  <div className="space-y-2 text-sm">
+                    {product.product_price_tiers.map((tier: { id: string; qty_from: number; qty_to: number | null; unit_price: number }) => (
+                      <div key={tier.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <span className="font-mono text-slate-600">
+                          {tier.qty_to === null ? `${tier.qty_from}+` : `${tier.qty_from}-${tier.qty_to}`}
+                        </span>
+                        <span className="font-mono text-slate-900">¥{tier.unit_price.toLocaleString('zh-CN')}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">未启用阶梯价，当前使用基础价。</p>
+                )}
               </CardContent>
             </Card>
           </section>

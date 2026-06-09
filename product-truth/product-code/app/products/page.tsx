@@ -2,18 +2,18 @@
 // 路径：/products
 
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getOrgIdForToken } from '@/lib/configs/runtime'
+import { isSchemaDriftError } from '@/lib/db-compat'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProductsPage() {
-  const { data: records } = await supabaseAdmin
-    .from('products')
-    .select('*, product_categories(name)')
-    .order('created_at', { ascending: false })
-    .limit(100)
+  const token = cookies().get('token')?.value
+  const orgId = await getOrgIdForToken(token)
 
   interface ProductRecord {
     id: string
@@ -23,10 +23,39 @@ export default async function ProductsPage() {
     specification?: string
     unit?: string
     base_price?: number
+    tier_pricing_enabled?: boolean
+    product_price_tiers?: Array<{ qty_from: number; qty_to: number | null; unit_price: number }>
     product_categories?: { name: string }
   }
 
-  const products = (records || []) as ProductRecord[]
+  let migrationRequired = false
+  let products: ProductRecord[] = []
+
+  if (orgId) {
+    const result = await supabaseAdmin
+      .from('products')
+      .select('*, product_categories(name), product_price_tiers(*)')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (result.error && isSchemaDriftError(result.error)) {
+      migrationRequired = true
+      const legacyResult = await supabaseAdmin
+        .from('products')
+        .select('*, product_categories(name)')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      products = ((legacyResult.data || []) as ProductRecord[]).map((product) => ({
+        ...product,
+        tier_pricing_enabled: false,
+        product_price_tiers: [],
+      }))
+    } else {
+      products = (result.data || []) as ProductRecord[]
+    }
+  }
 
   // 统计
   const activeCount = products.filter((p) => p.status === 'active').length
@@ -39,12 +68,31 @@ export default async function ProductsPage() {
       <div className="flex items-baseline justify-between mb-6">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-1">产品目录</h1>
-          <p className="text-sm text-slate-500">价盘管理：产品分类、基础价、规格、单位</p>
+          <p className="text-sm text-slate-500">此页面已迁入配置中心的“价盘与阶梯价”，这里保留只读入口。</p>
         </div>
-        <Link href="/products/new">
-          <Button>+ 新增产品</Button>
+        <Link href="/configs?tab=price-list">
+          <Button>前往配置中心</Button>
         </Link>
       </div>
+
+      <Card className="mb-6 border-amber-200 bg-amber-50">
+        <CardContent className="flex items-center justify-between gap-4 py-4 text-sm text-amber-900">
+          <div>
+            SKU、基础价、最低价和阶梯价已统一收口到配置中心维护，报价中心会只读消费已发布版本。
+          </div>
+          <Link href="/configs?tab=price-list">
+            <Button variant="outline">打开价盘与阶梯价</Button>
+          </Link>
+        </CardContent>
+      </Card>
+
+      {migrationRequired && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardContent className="py-4 text-sm text-red-700">
+            生产数据库尚未升级阶梯价结构。当前页面以兼容模式展示基础 SKU 信息，阶梯价维护与自动算价尚未在线生效。
+          </CardContent>
+        </Card>
+      )}
 
       {/* 统计卡 */}
       {products.length > 0 && (
@@ -65,8 +113,8 @@ export default async function ProductsPage() {
             <p className="text-sm text-slate-500 mb-4">
               添加第一份产品，为报价提供基础价和规格
             </p>
-            <Link href="/products/new">
-              <Button>+ 新增第一份产品</Button>
+            <Link href="/configs?tab=price-list">
+              <Button>前往配置中心维护</Button>
             </Link>
           </CardContent>
         </Card>
@@ -81,6 +129,7 @@ export default async function ProductsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">规格</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">单位</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">基础价</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">阶梯价</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">状态</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">操作</th>
               </tr>
@@ -97,6 +146,14 @@ export default async function ProductsPage() {
                   <td className="px-4 py-3 text-sm text-slate-600">{p.unit || '—'}</td>
                   <td className="px-4 py-3 text-sm text-right font-mono text-slate-900">
                     ¥{p.base_price?.toLocaleString('zh-CN')}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {p.tier_pricing_enabled && p.product_price_tiers && p.product_price_tiers.length > 0
+                      ? p.product_price_tiers
+                        .slice(0, 2)
+                        .map((tier) => `${tier.qty_from}${tier.qty_to ? `-${tier.qty_to}` : '+'}: ¥${tier.unit_price.toLocaleString('zh-CN')}`)
+                        .join(' / ')
+                      : '基础价'}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <StatusBadge status={p.status} />

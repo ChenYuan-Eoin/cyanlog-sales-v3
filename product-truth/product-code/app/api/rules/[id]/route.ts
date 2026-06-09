@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
+import { getDefaultOrgId } from '@/lib/scoped-access'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -27,15 +29,18 @@ const ruleUpdateSchema = z.object({
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const id = await resolveIdParam(params)
 
     const { data: rule, error } = await supabaseAdmin
       .from('rules')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
+      .eq('org_id', orgId)
       .single()
 
     if (error) {
@@ -60,10 +65,12 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const id = await resolveIdParam(params)
 
     const body = await req.json()
     const validated = ruleUpdateSchema.safeParse(body)
@@ -78,7 +85,8 @@ export async function PUT(
         ...validated.data,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', id)
+      .eq('org_id', orgId)
       .select()
       .single()
 
@@ -100,15 +108,18 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const id = await resolveIdParam(params)
 
     const { error } = await supabaseAdmin
       .from('rules')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
+      .eq('org_id', orgId)
 
     if (error) {
       console.error('Delete rule error:', error)

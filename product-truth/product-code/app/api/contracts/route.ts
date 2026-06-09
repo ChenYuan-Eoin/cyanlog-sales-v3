@@ -12,6 +12,33 @@ function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
 
+async function ensureContractsBucket() {
+  const bucketId = 'contracts'
+  const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets()
+
+  if (listError) {
+    throw listError
+  }
+
+  if ((buckets || []).some((bucket) => bucket.id === bucketId || bucket.name === bucketId)) {
+    return
+  }
+
+  const { error: createError } = await supabaseAdmin.storage.createBucket(bucketId, {
+    public: false,
+    fileSizeLimit: 50 * 1024 * 1024,
+    allowedMimeTypes: [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ],
+  })
+
+  if (createError && !/already exists/i.test(createError.message)) {
+    throw createError
+  }
+}
+
 // GET /api/contracts - 获取合同列表（需登录）
 export async function GET(req: NextRequest) {
   const startedAt = Date.now()
@@ -177,11 +204,15 @@ export async function POST(req: NextRequest) {
     }
 
     // 校验文件格式
-    const allowedTypes = [
+    const normalizedName = file.name.toLowerCase()
+    const hasAllowedMime = [
       'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ]
-    if (!allowedTypes.includes(file.type)) {
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ].includes(file.type)
+    const hasAllowedExtension = normalizedName.endsWith('.pdf') || normalizedName.endsWith('.docx') || normalizedName.endsWith('.doc')
+
+    if (!hasAllowedMime && !hasAllowedExtension) {
       return errorResponse('仅支持 PDF 和 Word 文档', 400, 'INVALID_FILE_TYPE')
     }
 
@@ -196,11 +227,16 @@ export async function POST(req: NextRequest) {
     const safeName = sanitizeFileName(file.name)
     const filePath = `contracts/${fileId}/${safeName}`
 
+    await ensureContractsBucket()
+
     // 上传文件到 Supabase Storage
     const { error: uploadError } = await supabaseAdmin.storage
       .from('contracts')
       .upload(filePath, file, {
-        contentType: file.type,
+        contentType: file.type || (normalizedName.endsWith('.pdf')
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        upsert: false,
       })
 
     if (uploadError) {

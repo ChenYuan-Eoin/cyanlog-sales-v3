@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
@@ -23,6 +23,16 @@ function makeRequest(url: string, headers: Record<string, string> = {}): NextReq
 
   return request
 }
+
+const originalServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+afterEach(() => {
+  if (originalServiceRoleKey === undefined) {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+  } else {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = originalServiceRoleKey
+  }
+})
 
 describe('middleware host routing', () => {
   it('redirects quote subdomain to sales quotes entry', async () => {
@@ -50,5 +60,16 @@ describe('middleware host routing', () => {
 
     expect(res.status).toBe(308)
     expect(res.headers.get('location')).toBe('https://sales.cyanlog.icu/')
+  })
+
+  it('returns 503 for protected pages when service role key is missing', async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    const req = makeRequest('https://sales.cyanlog.icu/configs', { host: 'sales.cyanlog.icu' })
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'token-1' })
+
+    const res = await middleware(req)
+
+    expect(res.status).toBe(503)
   })
 })

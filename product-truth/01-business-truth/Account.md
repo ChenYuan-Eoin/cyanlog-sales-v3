@@ -6,12 +6,14 @@ source_chapter: 第3章 Account（认证与权限）
 source_range: "2139-2596"
 generated_at: 2026-05-31
 version: "1.0.0"
-status: active
+status: frozen
 module: account
 priority: P0
 ---
 
 # Account（认证与权限）
+
+> 本文档为冻结业务背景稿，不再作为实现期主真相。当前开发与验收以 `product-truth/feature-packets/`、`product-truth/REQ_REGISTRY.yml` 和 `product-truth/03-design-truth/` 为准。
 
 ## 目录
 

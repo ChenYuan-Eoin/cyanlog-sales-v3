@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import { BrandingProvider } from "@/components/branding/BrandingProvider";
 import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonitor";
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
 import { getPublishedUITheme } from "@/lib/ui-theme";
@@ -20,11 +21,6 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
-export const metadata: Metadata = {
-  title: "Cyanlog Sales",
-  description: "智能销售支撑平台",
-};
-
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -39,12 +35,37 @@ export default async function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable}`}
       style={themeVariables}
+      data-brand-name={theme.brandName}
+      data-brand-short-name={theme.brandShortName}
+      data-logo-url={theme.logoUrl}
+      data-product-title={theme.productTitle}
+      data-product-subtitle={theme.productSubtitle}
+      data-login-subtitle={theme.loginSubtitle}
     >
       <body className="antialiased">
-        <ClientErrorMonitor />
-        <RuntimeThemeLoader />
-        <AppShell>{children}</AppShell>
+        <BrandingProvider value={theme}>
+          <ClientErrorMonitor />
+          <RuntimeThemeLoader />
+          <AppShell>{children}</AppShell>
+        </BrandingProvider>
       </body>
     </html>
   );
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const token = cookies().get("token")?.value;
+  const theme = await getPublishedUITheme(token);
+
+  return {
+    title: theme.productTitle || theme.brandName || "Cyanlog Sales",
+    description: theme.productSubtitle || "智能销售支撑平台",
+    icons: theme.faviconUrl
+      ? {
+          icon: theme.faviconUrl,
+          shortcut: theme.faviconUrl,
+          apple: theme.faviconUrl,
+        }
+      : undefined,
+  };
 }

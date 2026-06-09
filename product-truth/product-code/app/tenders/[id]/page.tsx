@@ -3,17 +3,19 @@
 
 import { notFound } from 'next/navigation'
 import { supabaseAdmin } from '@/lib/supabase'
+import { resolveRouteParams } from '@/lib/route-params'
 import type { TenderKeyInfo } from '@/lib/ocr/tender-parser'
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }> | { id: string }
 }
 
 export default async function TenderDetailPage({ params }: PageProps) {
+  const { id } = await resolveRouteParams(params)
   const { data: ocrResult, error } = await supabaseAdmin
     .from('ocr_results')
     .select('id, original_file, extracted_text, key_info, confidence, status, created_at')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (error || !ocrResult) {

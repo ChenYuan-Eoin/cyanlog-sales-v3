@@ -3,6 +3,7 @@ import { enqueueContractAnalysisJob, processContractAnalysisJob } from '@/lib/co
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -12,22 +13,24 @@ function errorResponse(message: string, status: number, code?: string) {
 // POST /api/contracts/:id/analyze - 触发合同审核（需登录）
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
   const startedAt = Date.now()
   const requestId = getRequestId(req)
   const route = '/api/contracts/[id]/analyze'
+  let routeId = ''
 
   try {
     const user = await requireAuth(req)
+    routeId = await resolveIdParam(params)
+    const id = routeId
     logRouteStart({
       route,
       requestId,
       userId: user.id,
-      details: { contractId: params.id },
+      details: { contractId: id },
     })
 
-    const { id } = params
     if (!id) {
       return errorResponse('合同ID必填', 400, 'MISSING_ID')
     }
@@ -195,7 +198,7 @@ export async function POST(
       {
         route,
         requestId,
-        details: { contractId: params.id },
+        details: { contractId: routeId },
       },
       startedAt,
       error
