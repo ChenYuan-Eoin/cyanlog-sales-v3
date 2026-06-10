@@ -14,7 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import { OrgAdminWorkbench } from '@/app/admin/org/page'
+import { OrgAdminWorkbench } from '@/components/admin/OrgAdminWorkbench'
 import type { Rule } from '@/types/rules'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import {
