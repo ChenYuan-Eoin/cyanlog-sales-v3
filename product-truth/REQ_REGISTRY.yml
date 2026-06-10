@@ -9,38 +9,43 @@
 #   - 代码中的 REQ 标记必须与之一致
 ---
 
-version: "2026-06-03"
-last_updated: "2026-06-03T00:00:00Z"
+version: "2026-06-09"
+last_updated: "2026-06-09T00:00:00Z"
 
 requirements:
   # ═══════════════════════════════════════════════════════════════
   # 报价中心 (Quotes Center)
   # ═══════════════════════════════════════════════════════════════
   F001:
-    name: 价盘管理
-    module: 报价中心
-    source: 报价中心.md#4.1
-    status: completed
+    name: 价盘与阶梯价
+    module: 配置中心
+    source: PROJECT-主文档.md#6.2.2
+    status: in_progress
     priority: P0
+    feature_packet: product-truth/feature-packets/F001-price-list.md
     code_locations:
+      - app/configs/page.tsx
       - app/products/page.tsx
       - app/api/products/route.ts
-      - supabase/migrations/003_add_products_tables.sql
-    description: 产品目录、价格体系、基础价管理
+      - app/api/product-price-tiers/route.ts
+      - app/quotes/new/page.tsx
+      - supabase/migrations/20260608000001_org_pricing_and_quote_items.sql
+    description: 组织级 SKU、基础价、保护价、阶梯价配置；报价中心只读消费并固化价格快照
 
   F002:
     name: 报价编制
     module: 报价中心
-    source: 报价中心.md#4.2
-    status: completed
+    source: 报价中心.md#6.1
+    status: in_progress
     priority: P0
+    feature_packet: product-truth/feature-packets/F002-quote-maintenance.md
     code_locations:
       - app/api/quotes/route.ts
       - app/api/quotes/[id]/route.ts
       - app/quotes/page.tsx
       - app/quotes/new/page.tsx
       - app/quotes/[id]/page.tsx
-    description: 报价单创建、编辑、明细管理、状态流转
+    description: 结构化报价工作台，消费 F001/F010/F011 并固化报价快照、状态流转
 
   F003:
     name: Account（认证与权限）
@@ -53,7 +58,11 @@ requirements:
       - app/api/auth/route.ts
       - lib/auth.ts
       - lib/supabase.ts
-    description: 登录认证、角色权限、用户管理
+      - middleware.ts
+      - app/api/roles/[id]/route.ts
+      - app/api/access/feishu/sync/route.ts
+      - app/configs/page.tsx
+    description: 登录认证、角色权限、用户管理（自主可控 + 可配置 RBAC）
 
   F004:
     name: 三级审批
@@ -79,10 +88,10 @@ requirements:
   # 合同审核 (Contract Review)
   # ═══════════════════════════════════════════════════════════════
   F005:
-    name: 合同审核
+    name: 合同审核（完整设计）
     module: 合同审核
     source: 合同审核.md#2
-    status: completed
+    status: design_confirmed
     priority: P0
     code_locations:
       - app/api/contracts/route.ts
@@ -91,11 +100,16 @@ requirements:
       - app/contracts/page.tsx
       - app/contracts/new/page.tsx
       - app/contracts/[id]/page.tsx
-    description: 合同上传、OCR解析、AI审核
+    description: |
+      合同审核完整设计（2026-06-10补强）：
+      - 用户地图：销售/法务/财务/管理员 4角色旅程 + 状态感知 + 通知矩阵
+      - ASK升级：两段式ASK清单 + 3状态机 + 硬关单 + rolling报告
+      - 页面结构：详情页布局 + ASK清单标签页 + 报告版本标签页
+    complete_design: product-truth/feature-packets/F005-F006-complete-design.md
     upgrade:
-      upgrade_id: F005-ASK-v1
+      upgrade_id: F005-ASK-v2
       name: 两段式 ASK 清单升级
-      status: pending
+      status: design_confirmed
       created_at: "2026-06-03"
       feature_packet: product-truth/feature-packets/F005-contract-ASK-upgrade.md
       design_doc: product-truth/01-business-truth/合同审核.md#8
@@ -115,7 +129,6 @@ requirements:
         - app/api/contracts/[id]/reports/versions/route.ts
         - app/contracts/[id]/asks/page.tsx
         - lib/ask/generator.ts
-        - lib/ask/verdict.ts
         - lib/ask/types.ts
         - lib/ask/no-ask-detector.ts
         - lib/report/version-manager.ts
@@ -136,18 +149,41 @@ requirements:
         - F005 page: 新增"ASK 清单"标签页 + 报告版本入口
 
   F006:
-    name: 红绿灯规则
-    module: 合同审核
-    source: 合同审核.md#4
-    status: completed
+    name: 合同规则引擎（完整设计）
+    module: 配置中心
+    source: 配置中心.md#4.1
+    status: design_confirmed
     priority: P0
+    feature_packet: product-truth/feature-packets/F006-rule-config.md
+    complete_design: product-truth/feature-packets/F005-F006-complete-design.md
     code_locations:
-      - app/configs/page.tsx
-      - app/api/rules/route.ts
-      - app/api/rules/[id]/route.ts
+      - app/api/contracts/[id]/analyze/route.ts
       - lib/rules/engine.ts
-      - supabase/migrations/002_add_rules_table.sql
-    description: 结构化规则、语义规则、规则配置、规则引擎
+    description: |
+      规则引擎完整设计（2026-06-10补强）：
+      - 规则分类：结构化规则(100%精确) vs 语义规则(AI理解)
+      - 组合逻辑：规则组(AND/OR) + 优先级 + 冲突解决
+      - 版本管理：版本链 + 回滚机制 + 版本对比
+      - 测试沙箱：测试用例管理 + 测试报告 + 回归测试
+      - 命中率统计：触发率统计 + 低命中率告警 + 效果评估
+    new_code_locations_pending:
+      - supabase/migrations/20260610000001_enhance_contract_rules.sql
+      - supabase/migrations/20260610000002_add_rule_versions.sql
+      - supabase/migrations/20260610000003_add_rule_test_cases.sql
+      - supabase/migrations/20260610000004_add_rule_execution_logs.sql
+      - supabase/migrations/20260610000005_add_rule_stats.sql
+      - lib/rules/structured-executor.ts
+      - lib/rules/semantic-executor.ts
+      - lib/rules/group-executor.ts
+      - lib/rules/conflict-resolver.ts
+      - lib/rules/test-runner.ts
+      - lib/rules/stats-aggregator.ts
+      - app/api/rules/route.ts
+      - app/api/rules/[id]/versions/route.ts
+      - app/api/rules/[id]/test/route.ts
+      - app/api/rules/[id]/stats/route.ts
+      - app/configs/rules/page.tsx
+      - app/configs/rules/stats/page.tsx
 
   F007:
     name: Word批注生成
@@ -168,51 +204,87 @@ requirements:
   F009:
     name: 合同审核规则配置
     module: 配置中心
-    source: 配置中心.md#4.1
-    status: confirmed
+    source: PROJECT-主文档.md#6.2.1
+    status: in_progress
     priority: P1
-    code_locations: []
-    description: 红绿灯规则、语义规则配置
+    feature_packet: product-truth/feature-packets/F009-contract-rule-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/api/rules/route.ts
+      - app/api/rules/[id]/route.ts
+      - supabase/migrations/002_add_rules_table.sql
+    description: 合同规则生产面，负责结构化/语义规则、版本、生效和测试
 
   F010:
-    name: 税率规则配置
+    name: 报价规则配置
     module: 配置中心
-    source: 配置中心.md#4.2
+    source: PROJECT-主文档.md#6.2.2
     status: confirmed
     priority: P1
-    code_locations: []
-    description: 税率管理、报价计算
+    feature_packet: product-truth/feature-packets/F010-quote-rule-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/api/configs/route.ts
+      - app/api/configs/[id]/route.ts
+      - lib/configs/types.ts
+      - lib/configs/validation.ts
+    description: 税率、折扣矩阵、审批流参数配置，供报价与审批执行链消费
 
   F011:
-    name: 审批权限配置
+    name: 组织权限配置
     module: 配置中心
-    source: 配置中心.md#4.3
+    source: PROJECT-主文档.md#6.2.4
     status: confirmed
     priority: P1
-    code_locations: []
-    description: 折扣审批、合同审批权限
+    feature_packet: product-truth/feature-packets/F011-org-permission-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/admin/org/page.tsx
+      - app/api/admin/org/route.ts
+      - app/api/roles/route.ts
+      - app/api/roles/[id]/route.ts
+      - middleware.ts
+      - lib/auth.ts
+      - lib/scoped-access.ts
+    description: 组织架构、角色权限、作用域分配和数据范围配置，供鉴权、审批与导航消费
 
   F012:
-    name: AI模型连接配置
+    name: AI运行时配置
     module: 配置中心
-    source: 配置中心.md
+    source: PROJECT-主文档.md#6.2.3
     status: confirmed
     priority: P1
-    code_locations: []
-    description: LM Studio、云端模型配置
+    feature_packet: product-truth/feature-packets/F012-ai-runtime-config.md
+    code_locations:
+      - app/configs/page.tsx
+      - app/api/configs/route.ts
+      - app/api/configs/[id]/route.ts
+      - lib/configs/runtime.ts
+      - lib/ai/failover.ts
+    description: 本地模型、销售云端 OpenAI 兼容模型、路由阈值和降级链配置
 
   # ═══════════════════════════════════════════════════════════════
   # 标书中心 (Tender Center)
   # ═══════════════════════════════════════════════════════════════
   F013:
-    name: 标书生成
+    name: 标书中心 V3
     module: 标书中心
-    source: 标书中心.md#6
-    status: completed
+    source: feature-packets/F013-tender-center-v3.md
+    status: design_confirmed
     priority: P1
     code_locations:
       - app/tenders/page.tsx
-    description: 模板填充、内容生成
+      - app/tenders/[id]/page.tsx
+      - feature-packets/F013-tender-center-v3.md
+    description: |
+      标书中心深度对标 OpenBidKit 核心设计：
+      - 6步工作流引擎（document-import → bid-analysis → outline → global-facts → content-edit → completed）
+      - 全局事实变量系统（全文一致性保障）
+      - 内容生成计划（规划-执行分离，单章重生成）
+      - 中断恢复（checkpoint_data + PostgreSQL 暂存 / Inngest 迁移）
+      - 溯源招标文件（目录-招标要求映射）
+      - 图文生成（Mermaid + Supabase Storage 插图）
+      Phase 1 基础框架 → Phase 2 AI 生成 → Phase 3 检查导出 → Phase 4 图文优化
 
   F014:
     name: 招标文件OCR解析

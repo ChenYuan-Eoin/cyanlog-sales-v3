@@ -2,13 +2,15 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { persistClientSession } from '@/lib/session-client'
+import { BrandMark } from '@/components/branding/BrandMark'
+import { useBranding } from '@/components/branding/BrandingProvider'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('zhang.ym@cyanlog.com')
-  const [password, setPassword] = useState('********')
-  const [workspace, setWorkspace] = useState('华东销售作战空间')
+  const branding = useBranding()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -31,10 +33,9 @@ export default function LoginPage() {
         return
       }
 
-      document.cookie = `token=${data.token}; path=/; max-age=86400`
-      localStorage.setItem('token', data.token)
+      persistClientSession(data.token)
 
-      router.push('/')
+      router.push(data.mustChangePassword ? '/change-password' : '/')
       router.refresh()
     } catch {
       setError('网络错误，请稍后重试')
@@ -48,76 +49,61 @@ export default function LoginPage() {
       {/* Left Hero Panel */}
       <div className="hero-dark">
         <div className="brand">
-          <div className="brand-logo">CY</div>
-          <div>
-            <div>Cyanlog</div>
+          <BrandMark size={44} className="brand-logo" />
+            <div>
+            <div>{branding.brandName}</div>
             <div style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-on-dark-2)', fontWeight: 400 }}>
-              企业销售支撑平台
+              {branding.productSubtitle}
             </div>
           </div>
         </div>
 
         <div className="hero-content">
           <div className="eyebrow">访问验证</div>
-          <h1>把销售流程<br />装进同一个工作空间。</h1>
-          <p>从客户接触到合同审批，所有节点、所有人、所有材料在一个空间内推进。验证通过后进入华东作战空间。</p>
+          <h1>{branding.productTitle}</h1>
+          <p>从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。</p>
         </div>
 
-        <div className="hero-illustration" style={{
-          position: 'absolute',
-          bottom: 60,
-          right: 48,
-          width: 320,
-          height: 240,
-          opacity: 0.6,
-        }}>
-          {/* Illustrated laptop and person - simplified CSS representation */}
-          <div style={{
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            background: 'linear-gradient(135deg, rgba(6,182,212,0.1) 0%, transparent 50%)',
-            borderRadius: 'var(--radius-xl)',
-          }}>
-            <div style={{
-              position: 'absolute',
-              bottom: 0,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: 200,
-              height: 140,
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: 20,
-                left: 20,
-                right: 20,
-                height: 80,
-                background: 'rgba(255,255,255,0.08)',
-                borderRadius: 'var(--radius-sm)',
-              }} />
-            </div>
-            <div style={{
-              position: 'absolute',
-              top: 40,
-              right: 40,
-              width: 56,
-              height: 56,
-              background: 'linear-gradient(135deg, var(--cyan-500), var(--cyan-700))',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </div>
-          </div>
+        <div className="hero-illustration" style={{ position: 'absolute', bottom: 40, right: 48, width: 380, height: 320 }}>
+          {/* Streamline-style Marketing Keynote Illustration */}
+          <svg viewBox="0 0 380 320" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Background elements */}
+            <circle cx="300" cy="80" r="60" fill="rgba(6,182,212,0.1)" />
+            <circle cx="60" cy="200" r="40" fill="rgba(99,102,241,0.08)" />
+
+            {/* Podium/Stage */}
+            <rect x="140" y="180" width="120" height="100" rx="8" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" />
+            <rect x="150" y="160" width="100" height="20" rx="4" fill="rgba(255,255,255,0.08)" />
+
+            {/* Screen/Display */}
+            <rect x="100" y="40" width="180" height="100" rx="12" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
+            <rect x="115" y="55" width="150" height="70" rx="6" fill="rgba(6,182,212,0.15)" />
+
+            {/* Chart elements on screen */}
+            <rect x="135" y="85" width="30" height="25" rx="2" fill="rgba(6,182,212,0.4)" />
+            <rect x="175" y="75" width="30" height="35" rx="2" fill="rgba(99,102,241,0.4)" />
+            <rect x="215" y="90" width="30" height="20" rx="2" fill="rgba(34,197,94,0.4)" />
+
+            {/* Person silhouette */}
+            <circle cx="190" cy="140" r="25" fill="rgba(6,182,212,0.25)" />
+            <path d="M165,170 Q165,155 185,155 L195,155 Q215,155 215,170 L215,200 L165,200 Z" fill="rgba(6,182,212,0.2)" />
+
+            {/* Hand gestures */}
+            <circle cx="140" cy="130" r="15" fill="rgba(99,102,241,0.15)" />
+            <circle cx="250" cy="140" r="12" fill="rgba(34,197,94,0.15)" />
+
+            {/* Decorative dots */}
+            <circle cx="320" cy="180" r="4" fill="rgba(6,182,212,0.3)" />
+            <circle cx="335" cy="160" r="6" fill="rgba(99,102,241,0.25)" />
+            <circle cx="50" cy="120" r="5" fill="rgba(34,197,94,0.2)" />
+            <circle cx="40" cy="250" r="8" fill="rgba(6,182,212,0.15)" />
+
+            {/* Abstract shapes representing audience/seats */}
+            <rect x="40" y="260" width="20" height="30" rx="4" fill="rgba(255,255,255,0.03)" />
+            <rect x="70" y="265" width="20" height="25" rx="4" fill="rgba(255,255,255,0.03)" />
+            <rect x="290" y="260" width="20" height="30" rx="4" fill="rgba(255,255,255,0.03)" />
+            <rect x="320" y="265" width="20" height="25" rx="4" fill="rgba(255,255,255,0.03)" />
+          </svg>
         </div>
       </div>
 
@@ -126,8 +112,8 @@ export default function LoginPage() {
         <div>
           <div className="tag">企业工作空间</div>
 
-          <h1>企业登录</h1>
-          <p className="subtitle">使用企业邮箱或 SSO 完成验证。通过后进入首页。</p>
+          <h1>{branding.loginTitle}</h1>
+          <p className="subtitle">{branding.loginSubtitle}</p>
 
           <form onSubmit={handleSubmit} style={{ marginTop: 32 }}>
             <div className="form-group">
@@ -152,16 +138,6 @@ export default function LoginPage() {
               />
             </div>
 
-            <div className="form-group">
-              <label>工作空间</label>
-              <input
-                type="text"
-                value={workspace}
-                onChange={(e) => setWorkspace(e.target.value)}
-                placeholder="选择工作空间"
-              />
-            </div>
-
             {error && (
               <div style={{
                 padding: '12px 16px',
@@ -181,15 +157,16 @@ export default function LoginPage() {
               disabled={loading}
               style={{ marginTop: 8, marginBottom: 12 }}
             >
-              {loading ? '登录中...' : '进入首页'}
+              {loading ? '登录中...' : '进入工作台'}
             </button>
 
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => alert('SSO 登录功能开发中')}
+              disabled
+              title="请联系管理员开通企业 SSO 账号"
             >
-              使用企业 SSO 登录
+              使用企业 SSO 登录（请联系管理员开通）
             </button>
           </form>
         </div>
@@ -199,14 +176,6 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Floating Navigation Pill */}
-      <div className="nav-pill">
-        <Link href="/" className="active">CYANLOG</Link>
-        <Link href="/login" className="active">登录</Link>
-        <Link href="/">首页</Link>
-        <Link href="/quotes">报价</Link>
-        <Link href="/contracts">审批</Link>
-      </div>
     </div>
   )
 }

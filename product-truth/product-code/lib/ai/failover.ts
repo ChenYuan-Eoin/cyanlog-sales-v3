@@ -1,129 +1,313 @@
-// SpaceX级AI服务故障容错链
-// 多级降级：本地模型 -> 云端主力 -> 规则引擎 -> 人工标记
+// AI 服务多级故障容错链
+// 运行时顺序：配置中心已发布 AI_CONFIG -> 环境变量默认值 -> 规则引擎 -> 人工建议
 
 import { createOpenAI } from '@ai-sdk/openai'
 import { streamText } from 'ai'
+import { listPublishedAIProviders, type PublishedAIProviderConfig } from '@/lib/configs/runtime'
+import { executeRules } from '@/lib/rules/engine'
+import { validateAIOutput } from '@/lib/validation/ai-output'
+
+export interface ReviewOptions {
+  preferredProvider?: string
+  orgId?: string
+}
 
 export interface AIProvider {
+  id: string
   name: string
-  call: (contractText: string, abortSignal?: AbortSignal) => Promise<ReadableStream>
   timeout: number
+  providerKind: 'openai_compatible' | 'builtin'
+  config: PublishedAIProviderConfig
 }
 
-// 本地模型 (LM Studio/Ollama)
-const localProvider: AIProvider = {
-  name: 'local',
-  timeout: 5000,
-  async call(contractText, abortSignal) {
-    const local = createOpenAI({
-      baseURL: process.env.LOCAL_MODEL_URL || 'http://localhost:1234/v1',
-      apiKey: 'not-needed',
-    })
-
-    const result = streamText({
-      model: local('local-model'),
-      messages: [
-        {
-          role: 'system',
-          content: `你是法务合同审核助手。识别合同风险并以 JSON 格式返回：
-{\n  "risks": [{\n    "level": "red|yellow|green",\n    "title": "风险标题",\n    "description": "问题描述",\n    "suggestion": "建议"\n  }],\n  "summary": "总体评估"\n}`,
-        },
-        { role: 'user', content: contractText.substring(0, 4000) },
-      ],
-      maxOutputTokens: 2000,
-      temperature: 0.3,
-      abortSignal,
-    })
-
-    return result.toTextStreamResponse().body!
-  },
+export interface SyncReviewResult {
+  risks: Array<{
+    level: 'red' | 'yellow' | 'green'
+    title: string
+    description: string
+    suggestion: string
+  }>
+  summary: string
+  provider: string
+  degraded: boolean
 }
 
-// 云端主力模型 (通过中转站)
-const cloudProvider: AIProvider = {
-  name: 'cloud',
-  timeout: 15000,
-  async call(contractText, abortSignal) {
-    const gateway = createOpenAI({
-      baseURL: process.env.AI_GATEWAY_URL || 'https://cloud.yiyongai.cn/v1',
-      apiKey: process.env.AI_GATEWAY_API_KEY,
-    })
+interface HealthRecord {
+  healthy: boolean
+  checkedAt: number
+}
 
-    const result = streamText({
-      model: gateway(process.env.AI_MODEL || 'claude-sonnet-4-6'),
-      messages: [
-        {
-          role: 'system',
-          content: `你是一位专业的法务合同审核专家。请分析合同内容并识别风险。
+const HEALTH_CACHE_TTL = 60_000
+const HEALTH_CACHE = new Map<string, HealthRecord>()
+
+function normalizeOptions(options?: string | ReviewOptions): ReviewOptions {
+  return typeof options === 'string'
+    ? { preferredProvider: options }
+    : (options || {})
+}
+
+function estimatePageCount(text: string): number {
+  const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
+  const englishWords = text.split(/\s+/).filter((word) => /^[a-zA-Z]+$/.test(word)).length
+  return Math.max(1, Math.ceil(chineseChars / 500 + englishWords / 300))
+}
+
+function isLocalEndpoint(baseUrl: string): boolean {
+  try {
+    const url = new URL(baseUrl)
+    return ['localhost', '127.0.0.1', '0.0.0.0'].includes(url.hostname)
+  } catch {
+    return false
+  }
+}
+
+async function isProviderHealthy(provider: AIProvider): Promise<boolean> {
+  if (provider.providerKind !== 'openai_compatible' || !isLocalEndpoint(provider.config.base_url)) {
+    return true
+  }
+
+  const now = Date.now()
+  const cached = HEALTH_CACHE.get(provider.id)
+  if (cached && now - cached.checkedAt < HEALTH_CACHE_TTL) {
+    return cached.healthy
+  }
+
+  try {
+    const base = provider.config.base_url.endsWith('/') ? provider.config.base_url : `${provider.config.base_url}/`
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(new URL('models', base), { signal: controller.signal })
+    clearTimeout(timeout)
+    const healthy = res.ok
+    HEALTH_CACHE.set(provider.id, { healthy, checkedAt: now })
+    return healthy
+  } catch {
+    HEALTH_CACHE.set(provider.id, { healthy: false, checkedAt: now })
+    return false
+  }
+}
+
+function markProviderUnhealthy(providerId: string): void {
+  HEALTH_CACHE.set(providerId, { healthy: false, checkedAt: Date.now() })
+}
+
+function getDefaultProviders(): PublishedAIProviderConfig[] {
+  return [
+    {
+      config_id: 'env-local',
+      key: 'AI_LOCAL_PRIMARY',
+      display_name: '本地模型',
+      level: 1,
+      name: '本地模型',
+      profile: 'local_primary',
+      provider_kind: 'openai_compatible',
+      base_url: process.env.LOCAL_MODEL_URL || 'http://localhost:1234/v1',
+      api_key: process.env.LOCAL_MODEL_API_KEY || 'not-needed',
+      model: process.env.LOCAL_MODEL_NAME || 'local-model',
+      timeout_ms: 45_000,
+      enabled: true,
+      routing: { max_pages: 15, strategy: 'full' },
+    },
+    {
+      config_id: 'env-cloud',
+      key: 'AI_SALES_CLOUD_BACKUP',
+      display_name: '销售云端模型',
+      level: 2,
+      name: '销售云端模型',
+      profile: 'sales_cloud_backup',
+      provider_kind: 'openai_compatible',
+      base_url: process.env.AI_GATEWAY_URL || 'https://cloud.yiyongai.cn/v1',
+      api_key: process.env.AI_GATEWAY_API_KEY,
+      model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+      timeout_ms: 20_000,
+      enabled: true,
+      routing: { max_pages: 80, strategy: 'chunked' },
+    },
+    {
+      config_id: 'env-rule',
+      key: 'AI_RULE_FALLBACK',
+      display_name: '规则引擎',
+      level: 3,
+      name: '规则引擎',
+      profile: 'rule_engine',
+      provider_kind: 'builtin',
+      base_url: '',
+      api_key: undefined,
+      model: 'rule-engine',
+      timeout_ms: 1_000,
+      enabled: true,
+      routing: { max_pages: 999, strategy: 'rule' },
+    },
+  ]
+}
+
+async function loadProviders(orgId?: string): Promise<AIProvider[]> {
+  const published = orgId ? await listPublishedAIProviders(orgId).catch(() => []) : []
+  const configs = published.length > 0 ? published : getDefaultProviders()
+
+  return configs
+    .filter((config) => config.enabled)
+    .sort((left, right) => left.level - right.level)
+    .map((config) => ({
+      id: config.key,
+      name: config.profile || config.name || config.key,
+      timeout: config.timeout_ms,
+      providerKind: config.provider_kind || (config.model === 'rule-engine' ? 'builtin' : 'openai_compatible'),
+      config,
+    }))
+}
+
+function matchesProvider(provider: AIProvider, preferredProvider: string): boolean {
+  const needle = preferredProvider.toLowerCase()
+  if (needle === 'local') {
+    return provider.providerKind === 'openai_compatible' && isLocalEndpoint(provider.config.base_url)
+  }
+  if (needle === 'cloud') {
+    return provider.providerKind === 'openai_compatible' && !isLocalEndpoint(provider.config.base_url)
+  }
+  if (needle === 'rule-engine') {
+    return provider.providerKind === 'builtin'
+  }
+  return [
+    provider.id,
+    provider.name,
+    provider.config.profile,
+    provider.config.display_name,
+    provider.config.name,
+    provider.config.model,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .some((value) => value.toLowerCase() === needle)
+}
+
+function determineStartIndex(providers: AIProvider[], contractText: string, preferredProvider?: string): number {
+  if (preferredProvider) {
+    const exactIndex = providers.findIndex((provider) => matchesProvider(provider, preferredProvider))
+    if (exactIndex >= 0) {
+      return exactIndex
+    }
+  }
+
+  const pageCount = estimatePageCount(contractText)
+  const byRouting = providers.findIndex((provider) => (
+    provider.providerKind !== 'builtin'
+    && (!provider.config.routing || pageCount <= provider.config.routing.max_pages)
+  ))
+
+  if (byRouting >= 0) {
+    return byRouting
+  }
+
+  const nonBuiltinIndex = providers.findIndex((provider) => provider.providerKind !== 'builtin')
+  return nonBuiltinIndex >= 0 ? nonBuiltinIndex : 0
+}
+
+function buildProviderChain(providers: AIProvider[], contractText: string, preferredProvider?: string): AIProvider[] {
+  if (providers.length === 0) {
+    return []
+  }
+
+  const startIndex = determineStartIndex(providers, contractText, preferredProvider)
+  return providers.slice(startIndex)
+}
+
+function hasAttemptedPreferredProvider(preferredProvider: string | undefined, attemptedProviders: Set<string>): boolean {
+  if (!preferredProvider) {
+    return false
+  }
+
+  const needle = preferredProvider.toLowerCase()
+  return Array.from(attemptedProviders).some((providerId) => {
+    const normalizedId = providerId.toLowerCase()
+    if (normalizedId === needle) {
+      return true
+    }
+    if (needle === 'local') {
+      return normalizedId.includes('local')
+    }
+    if (needle === 'cloud') {
+      return normalizedId.includes('cloud')
+    }
+    if (needle === 'rule-engine') {
+      return normalizedId.includes('rule')
+    }
+    return false
+  })
+}
+
+function truncateTextForProvider(contractText: string, provider: AIProvider): string {
+  const inputLimit = isLocalEndpoint(provider.config.base_url) ? 4000 : 8000
+  return contractText.substring(0, inputLimit)
+}
+
+async function callOpenAICompatibleProvider(
+  provider: AIProvider,
+  contractText: string,
+  abortSignal?: AbortSignal
+): Promise<ReadableStream> {
+  const gateway = createOpenAI({
+    baseURL: provider.config.base_url,
+    apiKey: provider.config.api_key || 'not-needed',
+  })
+
+  const prompt = isLocalEndpoint(provider.config.base_url)
+    ? `你是法务合同审核助手。识别合同风险并以 JSON 格式返回：
+{\n  "risks": [{\n    "level": "red|yellow|green",\n    "title": "风险标题",\n    "description": "问题描述",\n    "suggestion": "建议"\n  }],\n  "summary": "总体评估"\n}`
+    : `你是一位专业的法务合同审核专家。请分析合同内容并识别风险。
 请按以下 JSON 格式返回：
-{\n  "risks": [\n    {\n      "level": "red|yellow|green",\n      "title": "风险标题（简短）",\n      "description": "问题详细描述",\n      "suggestion": "建议处理方式"\n    }\n  ],\n  "summary": "总体评估摘要"\n}`,
-        },
-        {
-          role: 'user',
-          content: `请审核以下合同：\n\n${contractText.substring(0, 8000)}`,
-        },
-      ],
-      maxOutputTokens: 4000,
-      temperature: 0.3,
-      abortSignal,
-    })
+{\n  "risks": [\n    {\n      "level": "red|yellow|green",\n      "title": "风险标题（简短）",\n      "description": "问题详细描述",\n      "suggestion": "建议处理方式"\n    }\n  ],\n  "summary": "总体评估摘要"\n}`
 
-    return result.toTextStreamResponse().body!
-  },
-}
-
-// 规则引擎降级（纯本地，无AI）
-const ruleEngineProvider: AIProvider = {
-  name: 'rule-engine',
-  timeout: 1000,
-  async call(contractText) {
-    // 简化的规则匹配，返回流式JSON
-    const rules = [
-      { pattern: /账期.*(\d+).*天/i, field: 'payment_term_days', threshold: 90, level: 'red' as const },
-      { pattern: /违约金.*(\d+)%/i, field: 'penalty_rate', threshold: 5, level: 'yellow' as const },
-      { pattern: /保密.*(\d+).*年/i, field: 'confidentiality_years', threshold: 5, level: 'green' as const },
-    ]
-
-    const risks = []
-    for (const rule of rules) {
-      const match = contractText.match(rule.pattern)
-      if (match) {
-        const value = parseFloat(match[1])
-        if (value > rule.threshold) {
-          risks.push({
-            level: rule.level,
-            title: `${rule.field} 超标`,
-            description: `检测到 ${rule.field}: ${value}，超过建议阈值 ${rule.threshold}`,
-            suggestion: `建议协商调整至 ${rule.threshold} 以内`,
-          })
-        }
-      }
-    }
-
-    const result = {
-      risks: risks.length > 0 ? risks : [{ level: 'green', title: '无重大风险', description: '基础规则扫描未发现明显风险', suggestion: '建议人工复核' }],
-      summary: risks.length > 0 ? `发现 ${risks.length} 项规则命中` : '基础规则扫描完成，建议进一步人工审核',
-    }
-
-    // 转换为流
-    const encoder = new TextEncoder()
-    const chunks = JSON.stringify(result).match(/.{1,50}/g) || [JSON.stringify(result)]
-    let index = 0
-
-    return new ReadableStream({
-      pull(controller) {
-        if (index < chunks.length) {
-          controller.enqueue(encoder.encode(chunks[index]))
-          index++
-        } else {
-          controller.close()
-        }
+  const result = streamText({
+    model: gateway(provider.config.model),
+    messages: [
+      { role: 'system', content: prompt },
+      {
+        role: 'user',
+        content: `请审核以下合同：\n\n${truncateTextForProvider(contractText, provider)}`,
       },
-    })
-  },
+    ],
+    maxOutputTokens: isLocalEndpoint(provider.config.base_url) ? 2000 : 4000,
+    temperature: 0.3,
+    abortSignal,
+  })
+
+  return result.toTextStreamResponse().body!
 }
 
-// 带超时的 fetch 包装
+async function callRuleEngineProvider(contractText: string, orgId?: string): Promise<ReadableStream> {
+  const result = await executeRules(contractText, orgId)
+  const encoder = new TextEncoder()
+  const chunks = JSON.stringify({
+    risks: result.risks,
+    summary: result.summary,
+  }).match(/.{1,80}/g) || ['{}']
+  let index = 0
+
+  return new ReadableStream({
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[index]))
+        index += 1
+        return
+      }
+      controller.close()
+    },
+  })
+}
+
+async function callProvider(
+  provider: AIProvider,
+  contractText: string,
+  orgId?: string,
+  abortSignal?: AbortSignal
+): Promise<ReadableStream> {
+  if (provider.providerKind === 'builtin' || provider.config.model === 'rule-engine') {
+    return callRuleEngineProvider(contractText, orgId)
+  }
+
+  return callOpenAICompatibleProvider(provider, contractText, abortSignal)
+}
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -137,68 +321,126 @@ async function withTimeout<T>(
   }
 }
 
-// 主故障转移链
 export async function reviewWithFailover(
   contractText: string,
-  preferredProvider?: string
+  options?: string | ReviewOptions
 ): Promise<{ stream: ReadableStream; provider: string; degraded: boolean }> {
-  const providers = preferredProvider
-    ? [getProviderByName(preferredProvider), ruleEngineProvider]
-    : [localProvider, cloudProvider, ruleEngineProvider]
-
+  const { preferredProvider, orgId } = normalizeOptions(options)
   const errors: string[] = []
+  const providers = buildProviderChain(await loadProviders(orgId), contractText, preferredProvider)
 
   for (const provider of providers) {
-    const abortController = new AbortController()
+    if (!(await isProviderHealthy(provider))) {
+      continue
+    }
 
+    const abortController = new AbortController()
     try {
-      console.log(`[AI Failover] Trying ${provider.name}...`)
       const stream = await withTimeout(
-        provider.call(contractText, abortController.signal),
+        callProvider(provider, contractText, orgId, abortController.signal),
         provider.timeout,
         abortController
       )
 
-      const isDegraded = provider.name === 'rule-engine'
-      console.log(`[AI Failover] ✓ Using ${provider.name}${isDegraded ? ' (DEGRADED MODE)' : ''}`)
-
-      return { stream, provider: provider.name, degraded: isDegraded }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      console.warn(`[AI Failover] ✗ ${provider.name} failed: ${errorMsg}`)
-      errors.push(`${provider.name}: ${errorMsg}`)
+      return {
+        stream,
+        provider: provider.id,
+        degraded: provider.providerKind === 'builtin',
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      errors.push(`${provider.id}: ${message}`)
+      if (provider.providerKind === 'openai_compatible') {
+        markProviderUnhealthy(provider.id)
+      }
     }
   }
-
-  // 全部失败，返回人工标记
-  console.error('[AI Failover] All providers failed:', errors)
 
   const encoder = new TextEncoder()
   const fallbackStream = new ReadableStream({
     start(controller) {
-      const data = JSON.stringify({
+      controller.enqueue(encoder.encode(JSON.stringify({
         risks: [{
           level: 'yellow',
-          title: 'AI服务暂时不可用',
-          description: '所有AI提供方均不可用，建议人工审核',
+          title: 'AI 服务暂时不可用',
+          description: '所有 AI 提供方均不可用，建议人工审核',
           suggestion: '请法务同事人工审核此合同',
         }],
-        summary: 'AI审核服务暂时不可用，已切换至人工审核建议模式',
+        summary: 'AI 审核服务暂时不可用，已切换至人工审核建议模式',
         _meta: { degraded: true, errors },
-      })
-      controller.enqueue(encoder.encode(data))
+      })))
       controller.close()
     },
   })
 
-  return { stream: fallbackStream, provider: 'manual-fallback', degraded: true }
+  return {
+    stream: fallbackStream,
+    provider: 'manual-fallback',
+    degraded: true,
+  }
 }
 
-function getProviderByName(name: string): AIProvider {
-  switch (name) {
-    case 'local': return localProvider
-    case 'cloud': return cloudProvider
-    case 'rule-engine': return ruleEngineProvider
-    default: return cloudProvider
+export async function reviewWithFailoverSync(
+  contractText: string,
+  options?: string | ReviewOptions,
+  maxRetries: number = 3
+): Promise<SyncReviewResult> {
+  const normalizedOptions = normalizeOptions(options)
+  let lastError: string | undefined
+  const attemptedProviders = new Set<string>()
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const effectivePreferredProvider = normalizedOptions.preferredProvider
+      && hasAttemptedPreferredProvider(normalizedOptions.preferredProvider, attemptedProviders)
+      ? undefined
+      : normalizedOptions.preferredProvider
+
+    const { stream, provider, degraded } = await reviewWithFailover(contractText, {
+      ...normalizedOptions,
+      preferredProvider: effectivePreferredProvider,
+    })
+
+    attemptedProviders.add(provider)
+
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    let fullText = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        fullText += decoder.decode(value, { stream: true })
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    const validation = validateAIOutput(fullText)
+    if (validation.valid && validation.data) {
+      return {
+        risks: validation.data.risks,
+        summary: validation.data.summary,
+        provider,
+        degraded,
+      }
+    }
+
+    lastError = validation.error
+    if (provider === 'manual-fallback') {
+      break
+    }
+  }
+
+  return {
+    risks: [{
+      level: 'yellow',
+      title: 'AI 输出格式异常',
+      description: lastError || 'AI 输出无法解析',
+      suggestion: '建议人工复核此合同',
+    }],
+    summary: `AI 审核输出格式异常，已降级到人工审核建议（已尝试 ${attemptedProviders.size} 个 provider）`,
+    provider: 'manual-fallback',
+    degraded: true,
   }
 }

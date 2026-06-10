@@ -1,4 +1,4 @@
-// SpaceX级客户端错误监控
+// 高级客户端错误监控
 // SENTRY_DSN 从环境变量读取，不硬编码
 
 import * as Sentry from '@sentry/nextjs'

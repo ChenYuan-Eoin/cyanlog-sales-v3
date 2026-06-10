@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "db:seed": "node scripts/seed-via-api.mjs",
+    "env:check": "node scripts/check-env.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",

@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cyanlog Sales V3
 
-## Getting Started
+生产验收地址：`https://sales.cyanlog.icu/`
 
-First, run the development server:
+## 当前范围
+
+- 组织级鉴权与路由拦截
+- 配置中心：价盘、合同规则、模型配置
+- 报价中心：结构化报价、阶梯价自动算价
+- 合同中心：上传、审核、导出
+
+## 环境变量
+
+本地只维护 `.env.local`，生产以 Vercel 环境变量为准。
+
+必需变量：
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+检查方式：
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run env:check
+vercel env ls production
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+本地同步生产环境推荐用：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+vercel env pull .vercel/.env.development.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+不要把真实密钥写进仓库文件、截图或文档。`.env.local` 和 `.vercel` 已在 `.gitignore` 中排除。
 
-## Learn More
+## 常用命令
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run env:check
+npm run test:run
+npm run build
+npm run db:seed
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 生产排查顺序
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. `vercel inspect <deployment-url>`
+2. `vercel logs <deployment-url>`
+3. `npm run env:check`
+4. 检查 `sales.cyanlog.icu` 的真实接口响应，不先相信本地缓存或浏览器插件报错
 
-## Deploy on Vercel
+## 已知运维约束
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `auth_tokens` 是服务端托管表，生产必须只允许服务端访问
+- 中间件依赖 `SUPABASE_SERVICE_ROLE_KEY`，不能回退到匿名 key
+- 线上是否“挂了”，先用 `curl -I https://sales.cyanlog.icu` 和 `vercel inspect` 交叉确认

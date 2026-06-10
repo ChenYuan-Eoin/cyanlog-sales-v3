@@ -15,7 +15,7 @@ export const configCreateSchema = z.object({
   key: configKeySchema,
   name: z.string().min(1, '名称不能为空').max(200, '名称过长'),
   value: z.record(z.string(), z.unknown()),
-  type: z.enum(['CONTRACT_RULE', 'TAX_RULE', 'APPROVAL_RULE', 'AI_CONFIG']),
+  type: z.enum(['CONTRACT_RULE', 'TAX_RULE', 'APPROVAL_RULE', 'AI_CONFIG', 'UI_THEME']),
   description: z.string().max(1000).optional(),
 })
 
@@ -59,12 +59,29 @@ export const aiRoutingSchema = z.object({
 export const aiConfigValueSchema = z.object({
   level: z.number().int().min(1).max(3),
   name: z.string().min(1),
+  profile: z.string().min(1).optional(),
+  provider_kind: z.enum(['openai_compatible', 'builtin']).default('openai_compatible'),
   base_url: z.string().url().or(z.string().length(0)),
   api_key: z.string().optional(),
   model: z.string().min(1),
   timeout_ms: z.number().int().min(1000).max(300000),
   enabled: z.boolean(),
   routing: aiRoutingSchema.optional(),
+}).superRefine((value, ctx) => {
+  if (value.provider_kind === 'openai_compatible' && value.base_url.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['base_url'],
+      message: 'OpenAI 兼容模型必须填写 base_url',
+    })
+  }
+  if (value.provider_kind === 'builtin' && value.model !== 'rule-engine') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['model'],
+      message: '内置 provider 目前仅支持 rule-engine',
+    })
+  }
 })
 
 // 合同审核规则值验证 (F009)
@@ -85,6 +102,36 @@ export const contractRuleValueSchema = z.object({
     .optional(),
 })
 
+export const uiThemeValueSchema = z.object({
+  brandName: z.string().min(1).max(80).optional(),
+  brandShortName: z.string().min(1).max(12).optional(),
+  productTitle: z.string().min(1).max(120).optional(),
+  productSubtitle: z.string().min(1).max(160).optional(),
+  loginTitle: z.string().min(1).max(120).optional(),
+  loginSubtitle: z.string().min(1).max(160).optional(),
+  logoUrl: z.string().url().or(z.literal('')).optional(),
+  faviconUrl: z.string().url().or(z.literal('')).optional(),
+  primary: z.string().min(1),
+  primaryForeground: z.string().min(1),
+  secondary: z.string().min(1),
+  secondaryForeground: z.string().min(1),
+  background: z.string().min(1),
+  foreground: z.string().min(1),
+  card: z.string().min(1).optional(),
+  cardForeground: z.string().min(1).optional(),
+  popover: z.string().min(1).optional(),
+  popoverForeground: z.string().min(1).optional(),
+  muted: z.string().min(1).optional(),
+  mutedForeground: z.string().min(1).optional(),
+  border: z.string().min(1),
+  input: z.string().min(1),
+  ring: z.string().min(1),
+  destructive: z.string().min(1),
+  destructiveForeground: z.string().min(1).optional(),
+  radiusMd: z.number().min(0).max(32),
+  radiusLg: z.number().min(0).max(32),
+})
+
 // 根据类型验证配置值
 export function validateConfigValue(type: ConfigType, value: Record<string, unknown>): {
   valid: boolean
@@ -103,6 +150,9 @@ export function validateConfigValue(type: ConfigType, value: Record<string, unkn
         break
       case 'CONTRACT_RULE':
         contractRuleValueSchema.parse(value)
+        break
+      case 'UI_THEME':
+        uiThemeValueSchema.parse(value)
         break
     }
     return { valid: true }

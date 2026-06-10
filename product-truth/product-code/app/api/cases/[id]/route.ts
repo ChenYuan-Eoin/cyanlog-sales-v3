@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { OUTCOMES } from '@/lib/case-library/types'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 export const runtime = 'nodejs'
 
@@ -19,12 +20,13 @@ function errorResponse(message: string, status: number, code?: string) {
 }
 
 // GET /api/cases/[id] - 详情（同时增加 view_count）
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: AsyncRouteParams) {
   try {
+    const id = await resolveIdParam(params)
     const { data, error } = await supabaseAdmin
       .from('case_library')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error || !data) {
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     supabaseAdmin
       .from('case_library')
       .update({ view_count: (data.view_count || 0) + 1 })
-      .eq('id', params.id)
+      .eq('id', id)
       .then(() => {})
 
     return NextResponse.json(data)
@@ -46,9 +48,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PATCH /api/cases/[id] - 更新
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: AsyncRouteParams) {
   try {
     await requireAuth(req)
+    const id = await resolveIdParam(params)
     const body = await req.json()
     const result = caseUpdateSchema.safeParse(body)
 
@@ -60,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const { data, error } = await supabaseAdmin
       .from('case_library')
       .update({ ...result.data, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 
@@ -79,13 +82,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/cases/[id] - 删除
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: AsyncRouteParams) {
   try {
     await requireAuth(req)
+    const id = await resolveIdParam(params)
     const { error } = await supabaseAdmin
       .from('case_library')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (error) {
       console.error('Delete case error:', error)

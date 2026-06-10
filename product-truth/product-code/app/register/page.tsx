@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { persistClientSession } from '@/lib/session-client'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -45,8 +46,7 @@ export default function RegisterPage() {
         return
       }
 
-      document.cookie = `token=${data.token}; path=/; max-age=86400`
-      localStorage.setItem('token', data.token)
+      persistClientSession(data.token)
       router.push('/')
       router.refresh()
     } catch {

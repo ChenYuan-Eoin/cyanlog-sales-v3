@@ -1,16 +1,23 @@
 # PRD文档维护规范
 
 > 说明：本指南采用单文件维护，不再单独保留 `.toc.md` 目录副本。需要查看标题树时，直接运行目录脚本临时生成即可。
+>
+> 当前仓库已经切换到分层真相结构。本文只负责“文档治理”本身，不再定义功能开发入口。
+> 功能开发真相以 `product-truth/REQ_REGISTRY.yml`、`product-truth/feature-packets/`、`product-truth/03-design-truth/` 为准。
+> `product-truth/01-business-truth/` 仅保留冻结业务背景，`governance/truth-docs-治理真相文档/` 才是治理文档真相源。
 
 ## 长期维护范围
 
-> 约定：本项目长期维护的 Markdown 真相文档仅有 3 份。
+> 约定：当前项目按“治理真相 / 产品真相 / 执行真相”三层维护，不再使用“只有 3 份 Markdown 长期维护”的旧口径。
 
-1. `PROJECT-主文档.md`
-2. `md-doc-manager-文档管理/guide-文档维护指南.md`
-3. `harness-manager-治理管理/guide-harness治理指南.md`
+1. 治理真相：`governance/truth-docs-治理真相文档/`
+2. 产品开发真相：`product-truth/REQ_REGISTRY.yml` + `product-truth/feature-packets/` + `product-truth/03-design-truth/`
+3. 执行真相：`product-truth/product-code/`
 
-除上述 3 份外，其他 Markdown 文档默认视为历史稿、参考稿、备份稿或冻结资产，不再作为持续维护对象。
+补充：
+- `product-truth/01-business-truth/` 默认视为冻结业务背景稿。
+- 旧的主文档、派生稿、备份稿默认不是实现期真相入口。
+- 新文档只能在现有归属层内增补，不能绕开现有层级随意创建。
 
 ## 设计真相（Design Truth）边界声明
 

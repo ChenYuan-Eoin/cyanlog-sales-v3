@@ -3,16 +3,44 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { v4 as uuidv4 } from 'uuid'
 import { paginationSchema, quoteSchema } from '@/lib/validation'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { isSchemaDriftError } from '@/lib/db-compat'
+import { calculateQuoteDraft } from '@/lib/pricing/service'
+import {
+  buildLegacyQuoteInsertPayload,
+  buildLegacyQuoteItemInsertPayload,
+  normalizeQuote,
+} from './quote-compat'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
 
+function buildQuoteListQuery(orgId: string, accessibleUserIds: string[], status: string | null, includeOrgFilter: boolean) {
+  let query = supabaseAdmin
+    .from('quotes')
+    .select('*', { count: 'exact' })
+    .in('created_by', accessibleUserIds)
+    .order('created_at', { ascending: false })
+
+  if (includeOrgFilter) {
+    query = query.eq('org_id', orgId)
+  }
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  return query
+}
+
 // GET /api/quotes - 获取报价列表（需登录）
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
 
     const { searchParams } = new URL(req.url)
 
@@ -29,32 +57,29 @@ export async function GET(req: NextRequest) {
     const { page, pageSize } = pagination.data
     const status = searchParams.get('status')
 
-    let query = supabaseAdmin
-      .from('quotes')
-      .select('*', { count: 'exact' })
-      .eq('created_by', user.id)
-      .order('created_at', { ascending: false })
-
-    if (status) {
-      query = query.eq('status', status)
-    }
-
-    const { data, error, count } = await query.range(
+    let result = await buildQuoteListQuery(orgId, accessibleUserIds, status, true).range(
       (page - 1) * pageSize,
       page * pageSize - 1
     )
 
-    if (error) {
-      console.error('Get quotes error:', error)
+    if (result.error && isSchemaDriftError(result.error)) {
+      result = await buildQuoteListQuery(orgId, accessibleUserIds, status, false).range(
+        (page - 1) * pageSize,
+        page * pageSize - 1
+      )
+    }
+
+    if (result.error) {
+      console.error('Get quotes error:', result.error)
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
     return NextResponse.json({
-      data,
+      data: (result.data || []).map((quote) => normalizeQuote(quote, orgId)),
       meta: {
         page,
         pageSize,
-        total: count || 0,
+        total: result.count || 0,
       },
     })
   } catch (error) {
@@ -81,9 +106,10 @@ export async function POST(req: NextRequest) {
       return errorResponse(firstError.message, 400, 'VALIDATION_ERROR')
     }
 
-    const { customer_name, customer_contact, valid_until } = result.data
+    const orgId = await getDefaultOrgId(user.id)
+    const { customer_name, customer_contact, valid_until, notes, discount_rate, items } = result.data
 
-    // SpaceX级确定性报价单号：数据库序列保证唯一性
+    // 确定性报价单号：数据库序列保证唯一性
     const { data: quoteNoResult, error: seqError } = await supabaseAdmin
       .rpc('generate_quote_number')
 
@@ -94,30 +120,108 @@ export async function POST(req: NextRequest) {
 
     const quoteNo = quoteNoResult
 
-    const { data: quote, error } = await supabaseAdmin
+    const pricedDraft = await calculateQuoteDraft(orgId, items, discount_rate)
+    const quoteId = uuidv4()
+
+    const quotePayload = {
+      id: quoteId,
+      org_id: orgId,
+      quote_no: quoteNo,
+      customer_name,
+      customer_contact,
+      subtotal: pricedDraft.subtotal,
+      discount_rate: pricedDraft.discountRate,
+      discount_amount: pricedDraft.discountAmount,
+      tax_rate: pricedDraft.taxRate,
+      tax_amount: pricedDraft.taxAmount,
+      total_amount: pricedDraft.totalAmount,
+      notes,
+      status: 'DRAFT',
+      valid_until,
+      created_by: user.id,
+    }
+
+    let quoteInsertResult = await supabaseAdmin
       .from('quotes')
-      .insert({
-        id: uuidv4(),
-        quote_no: quoteNo,
-        customer_name,
-        customer_contact,
-        status: 'DRAFT',
-        valid_until,
-        created_by: user.id,
-      })
+      .insert(quotePayload)
       .select()
       .single()
 
-    if (error) {
-      console.error('Create quote error:', error)
+    if (quoteInsertResult.error && isSchemaDriftError(quoteInsertResult.error)) {
+      quoteInsertResult = await supabaseAdmin
+        .from('quotes')
+        .insert(buildLegacyQuoteInsertPayload({
+          id: quoteId,
+          quote_no: quoteNo,
+          customer_name,
+          customer_contact,
+          subtotal: pricedDraft.subtotal,
+          discount_amount: pricedDraft.discountAmount,
+          tax_amount: pricedDraft.taxAmount,
+          total_amount: pricedDraft.totalAmount,
+          status: 'DRAFT',
+          valid_until,
+          created_by: user.id,
+        }))
+        .select()
+        .single()
+    }
+
+    if (quoteInsertResult.error) {
+      console.error('Create quote error:', quoteInsertResult.error)
       return errorResponse('创建报价失败', 500, 'DB_ERROR')
     }
 
-    return NextResponse.json(quote, { status: 201 })
+    const quoteItemPayloads = pricedDraft.items.map((item) => ({
+      id: uuidv4(),
+      quote_id: quoteId,
+      product_id: item.product_id,
+      product_type: item.product_type,
+      product_code: item.product_code,
+      name: item.name,
+      specification: item.specification,
+      unit: item.unit,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      discount: item.discount,
+      line_total: item.line_total,
+      sort_order: item.sort_order,
+      pricing_source: item.pricing_source,
+      tier_range: item.tier_range,
+    }))
+
+    let itemInsertResult = await supabaseAdmin
+      .from('quote_items')
+      .insert(quoteItemPayloads)
+
+    if (itemInsertResult.error && isSchemaDriftError(itemInsertResult.error)) {
+      itemInsertResult = await supabaseAdmin
+        .from('quote_items')
+        .insert(quoteItemPayloads.map((item) => buildLegacyQuoteItemInsertPayload(item)))
+    }
+
+    if (itemInsertResult.error) {
+      await supabaseAdmin.from('quotes').delete().eq('id', quoteId)
+      console.error('Create quote items error:', itemInsertResult.error)
+      return errorResponse('创建报价明细失败', 500, 'DB_ERROR')
+    }
+
+    const quoteForResponse = {
+      ...quotePayload,
+      ...(quoteInsertResult.data || {}),
+    }
+
+    return NextResponse.json(
+      normalizeQuote(quoteForResponse, orgId, quoteItemPayloads),
+      { status: 201 }
+    )
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
       return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+    }
+    if (error instanceof Error && error.message.includes('SKU')) {
+      return errorResponse(error.message, 400, 'INVALID_ITEMS')
     }
     console.error('Create quote error:', error)
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')

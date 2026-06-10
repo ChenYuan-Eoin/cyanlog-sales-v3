@@ -11,22 +11,38 @@ module: index
 | 目录 | 状态 | 说明 |
 |------|------|------|
 | `product-code/` | **active** | 代码执行域，唯一可运行代码位置 |
-| `01-business-truth/` | **active** | 业务真相层，验证期 truth 入口 |
+| `01-business-truth/` | frozen | 冻结业务背景，只保留模块级业务语义，不再作为实现主入口 |
 | `02-technical-truth/` | **active** | 技术真相层，非实现期参照 |
-| `03-design-truth/` | **active** | 设计真相层，视觉锚点来源 |
+| `03-design-truth/` | **active** | 视觉真相层，视觉锚点来源 |
 | `04-implementation-truth/` | reserved | 实现真相层预留（API契约、数据模型精粹）|
-| `feature-packets/` | **active** | 功能闭环包，当前开发入口 |
+| `feature-packets/` | **active** | 功能闭环包，当前唯一功能开发入口 |
 | `REQ_REGISTRY.yml` | **active** | 统一需求注册表，唯一状态源 |
 
 ## 开发入口冻结规则
 
 - **母文档** (`PROJECT-主文档.md`): frozen — 只当源头母本，不直接驱动开发
-- **旧派生文档**: frozen — 整标记为 `legacy` 或 `frozen`，不再回填实现细节
+- **01-business-truth/**: frozen — 只保留业务背景，不再回填实现细节
+- **治理文档**: 只能位于 `governance/truth-docs-治理真相文档/`
 - **当前唯一 active 入口**:
   - `REQ_REGISTRY.yml` — 需求状态/映射
   - `Feature Packet` — 具体功能闭环规则
-  - `visual baseline` — 视觉锚点
-  - repo 执行真相 — hook/registry/code
+  - `03-design-truth` — 视觉锚点
+  - repo 执行真相 — governance/code
+
+### Feature Packet 约束补充
+
+- `REQ` 没有被取消，也不能被删除
+- `REQ_REGISTRY.yml` 仍然是当前开发的核心索引与状态源
+- `Feature Packet` 是每个 REQ 的展开执行单，不替代 REQ 本身
+- 单个 `REQ` 必须对应自己的 `Feature Packet`
+- 跨多个 `REQ` 的共享领域架构，允许沉淀为一个共享 `Feature Packet`
+- 共享 `Feature Packet` 只负责架构边界，不替代具体 `REQ Packet`
+- 禁止再用“组合稿”代替多个独立 `REQ` 的 active truth
+
+**因此当前正确链路是**：
+`主文档母本 -> REQ_REGISTRY.yml -> Feature Packet -> design / implementation truth -> code`
+
+`REQ-F009-F012.md` 被降级，并不表示 `F009-F012` 这些 REQ 被删掉；相反，是把原来错误的“组合稿”拆回到各自独立 REQ 上。
 
 ## 以后只能往哪回写
 
@@ -37,11 +53,21 @@ module: index
 | 视觉调整 | 对应 visual baseline |
 | 执行链规则 | `governance/` + `CLAUDE.md` |
 
+### 主文档回写阈值
+
+- **不会日常回写主文档**：页面细节、交互补充、局部 API 细节、实现期约束，优先写入 `Feature Packet` / `03-design-truth` / `04-implementation-truth`
+- **会阶段性回写主文档**：当模块边界、核心对象、状态机、跨模块消费关系、系统级能力域发生稳定变化时，再把稳定结论摘要回写到母文档
+- **设计文档可以比主文档更细**：这是允许的；主文档负责“骨架和边界”，详设负责“展开和落地”
+- **禁止双真相**：如果详设已经推翻主文档原判断，必须在阶段收口时同步修正母文档摘要，不允许长期并存两套相反说法
+
 **禁止继续派生，除非有明确归宿。**
 
 ---
 
-## 01-业务真相层 (active - 参照用)
+## 01-业务真相层 (frozen - 只读背景)
+
+> 本目录不再承载治理文档，也不再作为功能开发主真相。
+> 当前开发、验收、回写统一以 `REQ_REGISTRY.yml` + `feature-packets/` + `03-design-truth/` 为准。
 
 | 文档 | 模块 | 优先级 | 对应主文档章节 |
 |------|------|--------|---------------|

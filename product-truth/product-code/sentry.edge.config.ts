@@ -1,4 +1,4 @@
-// SpaceX级边界错误监控（Edge Runtime）
+// 高级边界错误监控（Edge Runtime）
 
 import * as Sentry from '@sentry/nextjs'
 

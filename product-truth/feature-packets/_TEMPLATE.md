@@ -4,6 +4,7 @@
 用途：单功能全生命周期单据
 规则：
   - 每个 REQ 对应一个 Feature Packet
+  - 跨多个 REQ 的共享领域架构，单独建 shared architecture packet，不代替具体 REQ packet
   - 状态变更必须同时更新 REQ_REGISTRY.yml
   - 只允许回写 4 处：REQ_REGISTRY.yml / 当前 Packet / 03-design-truth / 04-implementation-truth
 -->

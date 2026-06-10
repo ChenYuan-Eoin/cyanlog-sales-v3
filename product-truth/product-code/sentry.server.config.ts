@@ -1,4 +1,4 @@
-// SpaceX级服务端错误监控
+// 高级服务端错误监控
 
 import * as Sentry from '@sentry/nextjs'
 

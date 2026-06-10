@@ -4,6 +4,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabase'
+import { resolveRouteParams } from '@/lib/route-params'
 import {
   OUTCOME_LABEL,
   OUTCOME_COLOR,
@@ -12,14 +13,15 @@ import {
 } from '@/lib/case-library/types'
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }> | { id: string }
 }
 
 export default async function CaseDetailPage({ params }: PageProps) {
+  const { id } = await resolveRouteParams(params)
   const { data, error } = await supabaseAdmin
     .from('case_library')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (error || !data) {

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { enqueueContractAnalysisJob, processContractAnalysisJob } from '@/lib/contract-analysis'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { executeRules } from '@/lib/rules/engine'
+import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -11,12 +13,24 @@ function errorResponse(message: string, status: number, code?: string) {
 // POST /api/contracts/:id/analyze - 触发合同审核（需登录）
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: AsyncRouteParams
 ) {
+  const startedAt = Date.now()
+  const requestId = getRequestId(req)
+  const route = '/api/contracts/[id]/analyze'
+  let routeId = ''
+
   try {
     const user = await requireAuth(req)
+    routeId = await resolveIdParam(params)
+    const id = routeId
+    logRouteStart({
+      route,
+      requestId,
+      userId: user.id,
+      details: { contractId: id },
+    })
 
-    const { id } = params
     if (!id) {
       return errorResponse('合同ID必填', 400, 'MISSING_ID')
     }
@@ -30,7 +44,20 @@ export async function POST(
       .single()
 
     if (contractError) {
-      console.error('Contract fetch error:', contractError)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+          details: { contractId: id },
+        },
+        startedAt,
+        contractError,
+        {
+          phase: 'fetch_contract_for_analyze',
+        }
+      )
       return errorResponse('查询合同失败', 500, 'DB_ERROR')
     }
 
@@ -72,7 +99,20 @@ export async function POST(
       .eq('status', contract.status) // 乐观锁：只有状态未变才更新
 
     if (updateError) {
-      console.error('Status update error:', updateError)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+          details: { contractId: id },
+        },
+        startedAt,
+        updateError,
+        {
+          phase: 'set_contract_parsing',
+        }
+      )
       return errorResponse('状态更新失败，可能并发操作', 409, 'CONCURRENT_UPDATE')
     }
 
@@ -94,79 +134,75 @@ export async function POST(
         .update({ status: contract.status })
         .eq('id', id)
 
-      console.error('Review create error:', reviewError)
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+          details: { contractId: id },
+        },
+        startedAt,
+        reviewError,
+        {
+          phase: 'create_contract_review',
+        }
+      )
       return errorResponse('创建审核记录失败', 500, 'REVIEW_CREATE_FAILED')
     }
 
-    // 触发异步审核任务
-    // 注意：这里不await，让请求立即返回
-    processContractAnalysis(id, review.id)
-      .catch(err => console.error('合同审核异步任务失败:', err))
+    const job = await enqueueContractAnalysisJob(id, review.id, user.id)
+    let responseStatus: 'PARSING' | 'COMPLETED' | 'FAILED' = 'PARSING'
+    let responseMessage = '审核任务已创建'
+    let processingError: string | undefined
+
+    try {
+      await processContractAnalysisJob(job)
+      responseStatus = 'COMPLETED'
+      responseMessage = '审核已完成'
+    } catch (processError) {
+      processingError = processError instanceof Error ? processError.message : String(processError)
+      responseStatus = 'FAILED'
+      responseMessage = '审核处理失败，任务状态已记录'
+    }
+
+    logRouteDone(
+      {
+        route,
+        requestId,
+        userId: user.id,
+        details: { contractId: id },
+      },
+      startedAt,
+      {
+        reviewId: review.id,
+        jobId: job.id,
+        finalStatus: responseStatus,
+      }
+    )
 
     return NextResponse.json({
+      jobId: job.id,
       reviewId: review.id,
-      status: 'PARSING',
-      message: '审核任务已创建',
+      status: responseStatus,
+      message: responseMessage,
+      processingError,
     })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
       return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
     }
-    console.error('Analyze contract error:', error)
+    await logRouteFailure(
+      req,
+      {
+        route,
+        requestId,
+        details: { contractId: routeId },
+      },
+      startedAt,
+      error
+    )
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
-  }
-}
-
-// 异步审核处理（实际项目中应移到后台服务）
-async function processContractAnalysis(contractId: string, reviewId: string) {
-  try {
-    // 1. 解析中 -> 分析中
-    await new Promise(r => setTimeout(r, 2000))
-    await supabaseAdmin.from('contracts').update({ status: 'ANALYZING' }).eq('id', contractId)
-    await supabaseAdmin.from('contract_reviews').update({ status: 'ANALYZING' }).eq('id', reviewId)
-
-    // 2. 执行规则引擎检查
-    // 实际项目中应该从存储读取合同文本
-    const contractText = await fetchContractText(contractId)
-    const ruleResults = await executeRules(contractText)
-
-    // 3. 完成审核
-    await supabaseAdmin.from('contracts').update({ status: 'COMPLETED' }).eq('id', contractId)
-    await supabaseAdmin.from('contract_reviews').update({
-      status: 'COMPLETED',
-      results: ruleResults,
-      completed_at: new Date().toISOString(),
-    }).eq('id', reviewId)
-
-  } catch (error) {
-    console.error('合同审核异步处理失败:', error)
-    await supabaseAdmin.from('contracts').update({ status: 'FAILED' }).eq('id', contractId)
-    await supabaseAdmin.from('contract_reviews').update({
-      status: 'FAILED',
-      results: { error: '审核处理失败' },
-    }).eq('id', reviewId)
-  }
-}
-
-// 从存储获取合同文本（简化实现）
-async function fetchContractText(contractId: string): Promise<string> {
-  try {
-    // 获取合同记录
-    const { data: contract } = await supabaseAdmin
-      .from('contracts')
-      .select('parsed_text, filename')
-      .eq('id', contractId)
-      .single()
-
-    if (contract?.parsed_text) {
-      return contract.parsed_text
-    }
-
-    // 如果没有解析文本，返回文件名作为占位
-    return `合同文件: ${contract?.filename || 'unknown'}`
-  } catch (error) {
-    console.error('Failed to fetch contract text:', error)
-    return ''
   }
 }

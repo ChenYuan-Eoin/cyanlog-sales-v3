@@ -17,11 +17,11 @@ workspace-root/
     ├── README.md                # 产品真相索引
     ├── REQ_REGISTRY.yml         # 需求注册表
     ├── 00-master/               # 母文档
-    ├── 01-business-truth/       # 业务真相
+    ├── 01-business-truth/       # 冻结业务背景（非开发主入口）
     ├── 02-technical-truth/      # 技术真相
-    ├── 03-design-truth/         # 设计真相
+    ├── 03-design-truth/         # 视觉真相
     ├── 04-implementation-truth/ # 实现真相
-    ├── feature-packets/         # 功能闭环包
+    ├── feature-packets/         # 当前唯一功能开发真相
     └── product-code/            # 代码执行域
 ```
 
@@ -31,16 +31,32 @@ workspace-root/
 |------|------|
 | 业务需求 | `product-truth/REQ_REGISTRY.yml` |
 | 功能闭环 | `product-truth/feature-packets/` |
+| 视觉锚点 | `product-truth/03-design-truth/` |
 | 代码目录 | `product-truth/product-code/` |
-| 治理配置 | `governance/runtime-config/` |
+| 治理真相 | `governance/truth-docs-治理真相文档/` |
+
+## 当前三层管理
+
+1. `governance/`
+   AI 执行治理、项目约束、校验与运行态。这里只承载治理真相。
+2. `product-truth/REQ_REGISTRY.yml` + `product-truth/feature-packets/` + `product-truth/03-design-truth/`
+   产品开发真相。需求、功能边界、视觉锚点都从这里读。
+3. `product-truth/product-code/`
+   可执行代码真相。所有运行时代码只允许落在这里。
+
+补充约束：
+- `product-truth/01-business-truth/` 只保留冻结业务背景，不再作为实现期主真相回写。
+- 不允许把治理文档放进 `01-business-truth/`。
+- 不允许绕开现有 packet 随意新建产品文档。
 
 ## 开发流程
 
 1. 从 `REQ_REGISTRY.yml` 确认 REQ ID
 2. 创建/查看 `feature-packets/REQ-xxx.md`
-3. 在 `product-code/` 实现代码
-4. 更新 REQ 状态和代码位置
-5. 提交（包含代码 + 真相更新）
+3. 对照 `03-design-truth/` 确认视觉基线
+4. 在 `product-code/` 实现代码
+5. 更新 REQ 状态和代码位置
+6. 提交（包含代码 + 真相更新）
 
 ## 技术栈
 
@@ -63,3 +79,49 @@ pnpm dev
 # 验证
 pnpm lint && pnpm tsc --noEmit && pnpm build
 ```
+
+---
+
+## ⚠️ AI 协作约束（必读）
+
+### 项目当前状态（2026-06-07 评估）
+- **健康度评分 35/100，不及格**
+- 详见 `product-truth/04-implementation-truth/PROJECT-HEALTH-ASSESSMENT.md`
+- 已知关键问题：脚本堆积、CI坏、deploy.sh违反ADR-008、无可观测性
+
+### 硬性约束（违反 = 制造屎山）
+
+1. **改之前必查**
+   - 该功能/脚本是否已存在？`grep -r "<feature>" product-truth/product-code/`
+   - 是否违反已有 ADR？`ls product-truth/02-technical-truth/architecture-decisions/`
+   - 项目当前健康度？`Read product-truth/04-implementation-truth/PROJECT-HEALTH-ASSESSMENT.md`
+
+2. **写之前必问**
+   - 能用 UI/配置解决吗？不要写新脚本
+   - 必须写新文件时，优先编辑已有而非新建
+   - 写完后如何验证？必须可量化
+
+3. **完成后必做**
+   - 更新 `~/.claude/projects/-Users-nsss-Price-v3/memory/MEMORY.md`（不写新文档）
+   - 检查脚本数量、文件数变化
+   - 与已有 ADR 做一致性核对
+
+4. **绝对禁止**
+   - 加新脚本而不先合并/删除已有的（scripts/ 已 11 个，3个seed重复）
+   - 改 deploy.sh、CI配置、ADR 而不验证现状
+   - 写"诊断/评估"文档而不修根因
+   - 一次性大改而不分步
+
+5. **优先级**
+   - 商业化产品标准 > 任何"功能完成度"
+   - 可观测/可运维/可量化 > 新功能
+   - 现有架构决策(ADR) > 临时方案
+
+### 已知项目规则
+- **不用 ORM**（ADR-008）：直接 Supabase JS SDK，不要引入 Prisma/Drizzle
+- **不用 Prisma**：deploy.sh 引用 Prisma 是历史遗留，需修复
+- **多级 AI 降级**（ADR-001）：local → cloud → rule-engine → manual-fallback
+- **PostgreSQL + JSONB**（ADR-006）
+- **SSE 流式**（ADR-003）
+- **RBAC + 数据范围**（ADR-004）
+- **CI 是 .bak，已坏**：从 `.github/workflows/ci.yml.bak` 恢复前必须验证

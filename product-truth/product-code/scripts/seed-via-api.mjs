@@ -20,7 +20,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 const id = (n) => `${n.toString(16).padStart(8, '0')}-0000-0000-0000-000000000000`
 
 const ORG_ID = id(0x00000001)
-const HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy' // password123
+const HASH = '$2b$10$5jD6hf7CCBmVdcUIIV41r.2igA7ILgxoKvKDzPQ5l1IlhIAsPlnd6' // password123
 
 async function main() {
   console.log('1. Organizations...')
@@ -113,9 +113,9 @@ async function main() {
 
   console.log('7. Sales Spaces...')
   const spaces = [
-    { id: id(0x40000001), org_id: ORG_ID, department_id: id(0x20000011), name: '华东销售作战空间', description: '面向华东地区销售协同', owner_id: id(0x30000010) },
-    { id: id(0x40000002), org_id: ORG_ID, department_id: id(0x20000012), name: '华北销售作战空间', description: '面向华北地区销售协同', owner_id: id(0x30000011) },
-    { id: id(0x40000003), org_id: ORG_ID, department_id: id(0x20000013), name: '华南销售作战空间', description: '面向华南地区销售协同', owner_id: id(0x30000012) },
+    { id: id(0x40000001), org_id: ORG_ID, department_id: id(0x20000011), name: '华东销售空间', description: '面向华东地区销售协同', owner_id: id(0x30000010) },
+    { id: id(0x40000002), org_id: ORG_ID, department_id: id(0x20000012), name: '华北销售空间', description: '面向华北地区销售协同', owner_id: id(0x30000011) },
+    { id: id(0x40000003), org_id: ORG_ID, department_id: id(0x20000013), name: '华南销售空间', description: '面向华南地区销售协同', owner_id: id(0x30000012) },
   ]
   await supabase.from('sales_spaces').upsert(spaces)
 
@@ -182,7 +182,7 @@ async function main() {
     { id: id(0x80000004), org_id: ORG_ID, user_id: id(0x30000103), type: 'FOLLOWUP', title: '华润万家项目交付日待确认', description: '客户期望月底前确认交付日', priority: 'HIGH', link_type: 'OPPORTUNITY', link_id: id(0x60000002) },
     { id: id(0x80000005), org_id: ORG_ID, user_id: id(0x30000105), type: 'MILESTONE', title: 'POC 阶段待启动', description: '阿里云数据中台集成 POC 待启动', priority: 'HIGH', link_type: 'OPPORTUNITY', link_id: id(0x60000004) },
     { id: id(0x80000006), org_id: ORG_ID, user_id: id(0x30000010), type: 'OVERDUE', title: '团队本周签约目标 6 单', description: '已完成 3 单，剩余 3 单待推进', priority: 'HIGH' },
-    { id: id(0x80000007), org_id: ORG_ID, user_id: id(0x30000010), type: 'INFO', title: '部门 4 月战报已发布', description: '本月华东区域业绩 2,340 万，完成率 78%', priority: 'NORMAL' },
+    { id: id(0x80000007), org_id: ORG_ID, user_id: id(0x30000010), type: 'INFO', title: '部门 4 月简报已发布', description: '本月华东区域业绩 2,340 万，完成率 78%', priority: 'NORMAL' },
   ]
   await supabase.from('reminders').upsert(reminders)
 
@@ -214,6 +214,96 @@ async function main() {
       .update({ active_opportunities: active, pending_milestones: pending })
       .eq('id', spaceId)
   }
+
+  console.log('15. Contract review rules...')
+  const rules = [
+    { name: '账期超过90天', description: '付款账期超过90天为高风险', rule_type: 'structured', risk_level: 'red', enabled: true, config: { pattern: '账期\\s*[:：]?\\s*(\\d+)\\s*天', field: 'payment_term_days', operator: 'gt', value: 90 } },
+    { name: '违约金比例超过5%', description: '违约金比例超过5%为中等风险', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '违约金\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)\\s*%', field: 'penalty_rate', operator: 'gt', value: 5 } },
+    { name: '保密期超过5年', description: '保密协议期限超过5年需评审', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '保密\\s*[:：]?\\s*(\\d+)\\s*年', field: 'confidentiality_years', operator: 'gt', value: 5 } },
+    { name: '预付款超过30%', description: '预付款比例超过30%为中等风险', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '预付\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)\\s*%', field: 'advance_payment_rate', operator: 'gt', value: 30 } },
+    { name: '未约定管辖法院', description: '合同未明确约定管辖法院', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '管辖', field: 'jurisdiction', operator: 'eq', value: 'NOT_FOUND' } },
+    { name: '未约定违约金', description: '合同未约定违约责任', rule_type: 'structured', risk_level: 'yellow', enabled: true, config: { pattern: '违约', field: 'penalty_clause', operator: 'eq', value: 'NOT_FOUND' } },
+    { name: '责任划分不清晰', description: '合同中双方责任划分模糊', rule_type: 'semantic', risk_level: 'yellow', enabled: true, config: { prompt: '检查合同中"甲方""乙方"的责任描述是否清晰' } },
+    { name: '知识产权归属不明', description: '未明确约定知识产权归属', rule_type: 'semantic', risk_level: 'red', enabled: true, config: { prompt: '检查合同中关于知识产权的条款' } },
+    { name: '数据安全条款缺失', description: '涉及数据处理但未约定数据安全', rule_type: 'semantic', risk_level: 'red', enabled: true, config: { prompt: '识别合同中涉及数据采集、存储、传输的条款' } },
+    { name: '不可抗力范围过宽', description: '不可抗力条款范围过宽可能导致免责滥用', rule_type: 'semantic', risk_level: 'yellow', enabled: true, config: { prompt: '检查不可抗力条款的范围界定' } },
+  ]
+  for (const [index, rule] of rules.entries()) {
+    await supabase.from('rules').upsert([{
+      id: id(0xA0000001 + index),
+      org_id: ORG_ID,
+      ...rule,
+      created_by: id(0x30000001),
+    }], { onConflict: 'id' })
+  }
+  console.log(`   seeded ${rules.length} rules`)
+
+  console.log('16. Products...')
+  const products = [
+    {
+      id: id(0xB0000001),
+      org_id: ORG_ID,
+      code: 'PROD-001',
+      name: '智能合同审核系统',
+      specification: '企业版',
+      unit: '套',
+      base_price: 98000,
+      cost_price: 35000,
+      min_price: 80000,
+      tier_pricing_enabled: true,
+      status: 'active',
+      created_by: id(0x30000001),
+    },
+    {
+      id: id(0xB0000002),
+      org_id: ORG_ID,
+      code: 'PROD-002',
+      name: '销售管理平台',
+      specification: '标准版',
+      unit: '套',
+      base_price: 50000,
+      cost_price: 18000,
+      min_price: 40000,
+      tier_pricing_enabled: true,
+      status: 'active',
+      created_by: id(0x30000001),
+    },
+    {
+      id: id(0xB0000003),
+      org_id: ORG_ID,
+      code: 'PROD-003',
+      name: 'AI客服系统',
+      specification: 'SaaS',
+      unit: '年',
+      base_price: 120000,
+      cost_price: 25000,
+      min_price: 90000,
+      tier_pricing_enabled: true,
+      status: 'active',
+      created_by: id(0x30000001),
+    },
+  ]
+  for (const p of products) {
+    await supabase.from('products').upsert([p], { onConflict: 'id' })
+  }
+  console.log(`   seeded ${products.length} products`)
+
+  console.log('17. Product price tiers...')
+  const tiers = [
+    { id: id(0xC0000001), product_id: id(0xB0000001), qty_from: 1, qty_to: 10, unit_price: 98000, sort_order: 0 },
+    { id: id(0xC0000002), product_id: id(0xB0000001), qty_from: 11, qty_to: 50, unit_price: 92000, sort_order: 1 },
+    { id: id(0xC0000003), product_id: id(0xB0000001), qty_from: 51, qty_to: null, unit_price: 88000, sort_order: 2 },
+    { id: id(0xC0000004), product_id: id(0xB0000002), qty_from: 1, qty_to: 5, unit_price: 50000, sort_order: 0 },
+    { id: id(0xC0000005), product_id: id(0xB0000002), qty_from: 6, qty_to: 20, unit_price: 47000, sort_order: 1 },
+    { id: id(0xC0000006), product_id: id(0xB0000002), qty_from: 21, qty_to: null, unit_price: 45000, sort_order: 2 },
+    { id: id(0xC0000007), product_id: id(0xB0000003), qty_from: 1, qty_to: 3, unit_price: 120000, sort_order: 0 },
+    { id: id(0xC0000008), product_id: id(0xB0000003), qty_from: 4, qty_to: 10, unit_price: 110000, sort_order: 1 },
+    { id: id(0xC0000009), product_id: id(0xB0000003), qty_from: 11, qty_to: null, unit_price: 102000, sort_order: 2 },
+  ]
+  for (const tier of tiers) {
+    await supabase.from('product_price_tiers').upsert([tier], { onConflict: 'id' })
+  }
+  console.log(`   seeded ${tiers.length} product price tiers`)
 
   console.log('Done!')
 }

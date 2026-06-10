@@ -1,122 +1,113 @@
-# Feature Packet: F006-红绿灯规则配置
+# Feature Packet: F006-合同规则执行内核
 
 **Created**: 2026-06-01  
 **REQ ID**: F006  
-**Status**: completed  
-**Parent**: F005 (合同审核)
+**Status**: in_progress  
+**Parent**: 合同审核  
+**Consumes**: `F009`, `F012`
 
 ---
 
 ## 1. 单元定义
 
-**目标**: 让法务/管理员能配置合同审核的红绿灯规则，规则引擎在 AI 审核时执行
+**目标**：在合同审核执行链里加载已发布规则和 AI 运行时配置，完成结构化扫描、语义扫描和风险结果聚合。
 
-**边界**:
-- 规则配置界面（增删改查）
-- 规则引擎在 analyze 流程中执行
-- 结构化规则（正则/条件）和语义规则都支持
+**这包拥有的内容**：
+- 规则执行内核
+- 结构化规则匹配
+- 语义规则调用编排
+- 风险结果标准化
 
-**本轮已完成**:
-- ✅ 规则配置界面和存储
-- ✅ 规则引擎执行逻辑（AI审核流程中调用）
-- ✅ 结构化规则检查（正则/条件匹配）
-- ✅ 语义规则检查（关键词匹配）
-- ✅ 数据库存储和迁移
+**这包不拥有的内容**：
+- 规则编写 / 发布 / 回滚
+- AI Provider 配置维护
+- 合同导出
 
-**不做什么**:
-- 不做 Word 批注生成
-- 不做合同编辑
-- 不做批量操作
+这些分别属于 `F009`、`F012`、`F007`。
 
 ---
 
-## 2. 双锚点
+## 2. 关键边界
 
-### 业务锚点
-- 规则类型：
-  - **结构化规则**: 基于正则/关键字的确定性规则（如：账期 > 90 天 = 红灯）
-  - **语义规则**: 自然语言描述（如：违约金条款明显不公）
-- 规则字段：名称、描述、规则类型、风险等级（red/yellow/green）、启用状态
-- 数据存储：`rules` 表
+以前这里最容易混淆的点是：“规则执行”和“规则配置”被写在了同一包里。
 
-### 视觉锚点
-- 参考：`03-design-truth/examples/screen-approval.jsx`
-- 布局：列表页 + 编辑弹窗
-- 状态展示：Badge 显示风险等级
-- 复用：`app/configs/page.tsx` 中的 Tabs 和 Card 布局
+现在明确：
+- `F009` = 配置生产面
+- `F006` = 运行时消费面
+
+执行链只能读取当前已发布规则，不能在分析过程中改规则。
 
 ---
 
-## 3. 状态机
+## 3. 执行输入与输出
 
-| 状态 | 说明 |
-|------|------|
-| enabled | 规则启用中 |
-| disabled | 规则已停用 |
+### 3.1 输入
+- 合同文本 / 结构化解析结果
+- `F009` 发布的结构化规则和语义规则
+- `F012` 发布的 AI Provider / 路由策略
 
----
-
-## 4. 涉及文件
-
-**修改**:
-- `app/configs/page.tsx` - 合同审核规则 Tab 改为动态展示
-
-**新建**:
-- `app/api/rules/route.ts` - 规则列表 API
-- `app/api/rules/[id]/route.ts` - 规则详情/更新 API
-- `lib/types/rules.ts` - 规则类型定义（如不存在）
+### 3.2 输出
+- 风险项列表
+- 命中依据
+- 风险等级
+- 后续 ASK / 报告所需结构化结果
 
 ---
 
-## 5. 新增约束
+## 4. 运行时约束
 
-### 规则格式
+- 结构化规则优先可解释
+- 语义规则作为增强，不覆盖审计链
+- AI 不可用时可走规则兜底
+- 执行结果必须可追溯到规则版本
+
+---
+
+## 5. 核心数据结构
+
 ```typescript
-interface Rule {
-  id: string
-  name: string
+interface RuleExecutionResult {
+  ruleId: string
+  ruleVersion?: string
+  ruleType: 'structured' | 'semantic'
+  riskLevel: 'red' | 'yellow' | 'green'
+  title: string
   description: string
-  rule_type: 'structured' | 'semantic'
-  risk_level: 'red' | 'yellow' | 'green'
-  enabled: boolean
-  config: {
-    // 结构化规则：正则/条件
-    pattern?: string
-    field?: string
-    operator?: 'gt' | 'lt' | 'eq' | 'contains'
-    value?: string | number
-    // 语义规则：自然语言描述
-    prompt?: string
-  }
-  created_at: string
-  updated_at: string
+  evidence?: string[]
 }
 ```
 
+关键点不是字段本身，而是执行结果里必须能追到“哪条规则、哪个版本”。
+
 ---
 
-## 6. 新增文件
+## 6. 涉及文件
 
-- `types/rules.ts` - 规则类型定义
-- `app/api/rules/route.ts` - 规则列表/创建 API
-- `app/api/rules/[id]/route.ts` - 规则详情/更新/删除 API
-- `lib/rules/engine.ts` - 规则引擎实现（结构化/语义规则执行）
-- `supabase/migrations/002_add_rules_table.sql` - rules 表迁移
+- `product-truth/product-code/lib/rules/engine.ts`
+- `product-truth/product-code/app/api/contracts/[id]/analyze/route.ts`
+- `product-truth/product-code/app/api/rules/route.ts`
+- `product-truth/product-code/app/api/rules/[id]/route.ts`
+- `product-truth/product-code/supabase/migrations/002_add_rules_table.sql`
 
-## 7. 修改文件
+---
 
-- `app/configs/page.tsx` - 规则配置 UI（列表+弹窗）
-- `app/api/contracts/[id]/analyze/route.ts` - 集成规则引擎调用
+## 7. 当前实现判断
 
-## 8. 验证记录
+执行内核基础能力已经具备，但闭环还没结束。
 
-- [x] `pnpm lint` 通过
-- [x] 规则增删改查功能正常
-- [x] 风险等级显示正确（红黄绿 Badge）
-- [x] 规则引擎在 analyze 流程中执行
-- [ ] 数据库迁移已创建（需手动执行）
+仍需由 `F009` 补齐：
+- 规则版本
+- 生效控制
+- 回滚
+- 测试记录
 
-## 9. 遗留问题
+因此 `F006` 当前应维持 `in_progress`，直到执行结果能稳定追到已发布规则版本。
 
-- [ ] 规则版本管理
-- [ ] 更复杂的语义规则（接入真 AI）
+---
+
+## 8. 验收标准
+
+- [x] 可执行结构化规则
+- [x] 可执行语义规则
+- [x] 输出标准化风险结果
+- [ ] 执行结果可追到发布规则版本

@@ -1,7 +1,9 @@
 // REQ: F009-F012
 // PURPOSE: 配置中心类型定义
 
-export type ConfigType = 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG'
+import type { UIThemeConfigValue } from '@/lib/ui-theme-shared'
+
+export type ConfigType = 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' | 'UI_THEME'
 export type ConfigStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 
 // 基础配置接口
@@ -61,10 +63,15 @@ export interface AIRoutingConfig {
   strategy: 'full' | 'chunked' | 'rule'
 }
 
+export type AIProviderKind = 'openai_compatible' | 'builtin'
+export type AIProfile = 'local_primary' | 'cloud_primary' | 'sales_cloud_backup' | 'rule_engine' | 'custom'
+
 // AI 模型配置值 (F012)
 export interface AIConfigValue {
   level: number // 1, 2, 3
   name: string
+  profile?: AIProfile | string
+  provider_kind?: AIProviderKind
   base_url: string
   api_key?: string // 加密存储，API 返回时脱敏
   model: string
@@ -72,6 +79,8 @@ export interface AIConfigValue {
   enabled: boolean
   routing?: AIRoutingConfig
 }
+
+export type UIThemeValue = UIThemeConfigValue
 
 // 合同审核规则值 (F009) - 与现有 Rule 类型兼容
 export interface ContractRuleValue {
@@ -125,6 +134,10 @@ export const CONFIG_TYPE_META: Record<ConfigType, { label: string; description: 
   AI_CONFIG: {
     label: 'AI 模型配置',
     description: '本地模型、云端模型连接配置',
+  },
+  UI_THEME: {
+    label: '界面主题',
+    description: '运行时按钮/表单/卡片主题变量',
   },
 }
 

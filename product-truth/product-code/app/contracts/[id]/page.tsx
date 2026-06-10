@@ -3,14 +3,14 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
-import type { Contract } from '@/types'
+import type { Contract, ContractAnalysisJob } from '@/types'
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   PENDING: { label: '待审核', variant: 'secondary' },
@@ -31,6 +31,13 @@ const riskLevelMap: Record<string, { label: string; className: string }> = {
   red: { label: '红灯', className: 'bg-red-100 text-red-800 border-red-200' },
   yellow: { label: '黄灯', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
   green: { label: '绿灯', className: 'bg-green-100 text-green-800 border-green-200' },
+}
+
+const analysisJobStatusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
+  queued: { label: '已排队', variant: 'secondary' },
+  running: { label: '执行中', variant: 'default' },
+  completed: { label: '已完成', variant: 'outline' },
+  failed: { label: '已失败', variant: 'destructive' },
 }
 
 // ASK 类型
@@ -63,7 +70,8 @@ export default function ContractDetailPage() {
   const params = useParams()
   const [contract, setContract] = useState<Contract | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [pageError, setPageError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [askItems, setAskItems] = useState<AskItem[]>([])
@@ -71,12 +79,7 @@ export default function ContractDetailPage() {
 
   const contractId = params.id as string
 
-  useEffect(() => {
-    fetchContract()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractId])
-
-  async function fetchContract() {
+  const fetchContract = useCallback(async (silent: boolean = false) => {
     try {
       const token = localStorage.getItem('token')
       const res = await fetch(`/api/contracts/${contractId}`, {
@@ -84,24 +87,50 @@ export default function ContractDetailPage() {
       })
 
       if (!res.ok) {
-        if (res.status === 404) setError('合同不存在')
-        else if (res.status === 401) setError('未登录或登录已过期')
-        else setError('获取合同失败')
+        if (!silent) {
+          if (res.status === 404) setPageError('合同不存在')
+          else if (res.status === 401) setPageError('未登录或登录已过期')
+          else setPageError('获取合同失败')
+        }
         return
       }
 
       const data = await res.json()
       setContract(data)
+      if (!silent) {
+        setPageError('')
+      }
     } catch {
-      setError('网络错误，请稍后重试')
+      if (!silent) {
+        setPageError('网络错误，请稍后重试')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
-  }
+  }, [contractId])
+
+  useEffect(() => {
+    void fetchContract()
+  }, [fetchContract])
+
+  useEffect(() => {
+    if (!contract || (contract.status !== 'PARSING' && contract.status !== 'ANALYZING')) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      void fetchContract(true)
+    }, 3000)
+
+    return () => window.clearInterval(timer)
+  }, [contract, fetchContract])
 
   async function handleAnalyze() {
     if (!contract) return
     setAnalyzing(true)
+    setActionError('')
 
     try {
       const token = localStorage.getItem('token')
@@ -113,14 +142,18 @@ export default function ContractDetailPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || '启动审核失败')
+        setActionError(data.error || '启动审核失败')
         setAnalyzing(false)
         return
       }
 
+      if (data.message) {
+        setActionError('')
+      }
+
       await fetchContract()
     } catch {
-      setError('网络错误，请稍后重试')
+      setActionError('网络错误，请稍后重试')
     } finally {
       setAnalyzing(false)
     }
@@ -129,6 +162,7 @@ export default function ContractDetailPage() {
   async function handleExport() {
     if (!contract) return
     setExporting(true)
+    setActionError('')
 
     try {
       const token = localStorage.getItem('token')
@@ -139,7 +173,7 @@ export default function ContractDetailPage() {
 
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error || '导出失败')
+        setActionError(data.error || '导出失败')
         setExporting(false)
         return
       }
@@ -154,7 +188,7 @@ export default function ContractDetailPage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch {
-      setError('网络错误，导出失败')
+      setActionError('网络错误，导出失败')
     } finally {
       setExporting(false)
     }
@@ -168,12 +202,12 @@ export default function ContractDetailPage() {
     )
   }
 
-  if (error) {
+  if (pageError) {
     return (
       <div className="p-8">
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-red-600 mb-4">{error}</p>
+            <p className="text-red-600 mb-4">{pageError}</p>
             <Link href="/contracts">
               <Button variant="outline">返回列表</Button>
             </Link>
@@ -199,6 +233,7 @@ export default function ContractDetailPage() {
   }
 
   const latestReview = contract.contract_reviews?.[0]
+  const latestJob = contract.latest_analysis_job
   const isAnalyzing = contract.status === 'PARSING' || contract.status === 'ANALYZING'
   const canAnalyze = contract.status === 'PENDING' || contract.status === 'FAILED'
 
@@ -218,6 +253,14 @@ export default function ContractDetailPage() {
           <Button variant="outline">返回列表</Button>
         </Link>
       </div>
+
+      {actionError && (
+        <Card className="mb-6 border-red-200">
+          <CardContent className="py-4">
+            <p className="text-sm text-red-600">{actionError}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Basic Info */}
       <Card className="mb-6">
@@ -256,13 +299,17 @@ export default function ContractDetailPage() {
         </CardContent>
       </Card>
 
+      {latestJob && (
+        <AnalysisJobCard job={latestJob} isPolling={isAnalyzing} />
+      )}
+
       {/* Analyzing State */}
       {isAnalyzing && (
         <Card className="mb-6">
           <CardContent className="py-8 text-center">
             <div className="animate-pulse">
               <p className="text-slate-500">AI 正在审核合同中...</p>
-              <p className="text-sm text-slate-400 mt-2">请稍候，这通常需要 5-10 秒</p>
+              <p className="text-sm text-slate-400 mt-2">状态会自动刷新；失败会记录到任务和错误日志。</p>
             </div>
           </CardContent>
         </Card>
@@ -312,6 +359,62 @@ export default function ContractDetailPage() {
         </Card>
       )}
     </div>
+  )
+}
+
+function AnalysisJobCard({
+  job,
+  isPolling,
+}: {
+  job: ContractAnalysisJob
+  isPolling: boolean
+}) {
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="text-base">审核任务</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="text-slate-500">任务状态：</span>
+            <Badge variant={analysisJobStatusMap[job.status]?.variant || 'default'}>
+              {analysisJobStatusMap[job.status]?.label || job.status}
+            </Badge>
+          </div>
+          <div>
+            <span className="text-slate-500">尝试次数：</span>
+            <span>{job.attempts}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">执行器：</span>
+            <span>{job.provider || '未记录'}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">最后更新：</span>
+            <span>{new Date(job.updated_at).toLocaleString('zh-CN')}</span>
+          </div>
+        </div>
+
+        {job.degraded && (
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            当前结果来自降级路径，建议人工复核。
+          </div>
+        )}
+
+        {job.last_error && (
+          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            最近错误：{job.last_error}
+          </div>
+        )}
+
+        {isPolling && (
+          <p className="mt-4 text-sm text-slate-500">
+            详情页每 3 秒自动刷新一次任务状态。
+          </p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

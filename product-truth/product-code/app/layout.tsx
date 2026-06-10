@@ -1,7 +1,14 @@
+import type { CSSProperties } from "react";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import localFont from "next/font/local";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { AppShell } from "@/components/layout/AppShell";
+import { BrandingProvider } from "@/components/branding/BrandingProvider";
+import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonitor";
+import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
+import { getPublishedUITheme } from "@/lib/ui-theme";
+import { themeToCssVariables } from "@/lib/ui-theme-shared";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -14,26 +21,51 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
-export const metadata: Metadata = {
-  title: "Cyanlog Sales",
-  description: "智能销售支撑平台",
-};
-
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const token = cookies().get("token")?.value;
+  const theme = await getPublishedUITheme(token);
+  const themeVariables = themeToCssVariables(theme) as CSSProperties;
+
   return (
-    <html lang="zh-CN">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Sidebar />
-        <main className="ml-64 min-h-screen bg-slate-50">
-          {children}
-        </main>
+    <html
+      lang="zh-CN"
+      className={`${geistSans.variable} ${geistMono.variable}`}
+      style={themeVariables}
+      data-brand-name={theme.brandName}
+      data-brand-short-name={theme.brandShortName}
+      data-logo-url={theme.logoUrl}
+      data-product-title={theme.productTitle}
+      data-product-subtitle={theme.productSubtitle}
+      data-login-subtitle={theme.loginSubtitle}
+    >
+      <body className="antialiased">
+        <BrandingProvider value={theme}>
+          <ClientErrorMonitor />
+          <RuntimeThemeLoader />
+          <AppShell>{children}</AppShell>
+        </BrandingProvider>
       </body>
     </html>
   );
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const token = cookies().get("token")?.value;
+  const theme = await getPublishedUITheme(token);
+
+  return {
+    title: theme.productTitle || theme.brandName || "Cyanlog Sales",
+    description: theme.productSubtitle || "智能销售支撑平台",
+    icons: theme.faviconUrl
+      ? {
+          icon: theme.faviconUrl,
+          shortcut: theme.faviconUrl,
+          apple: theme.faviconUrl,
+        }
+      : undefined,
+  };
 }

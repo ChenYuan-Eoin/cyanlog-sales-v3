@@ -1,92 +1,151 @@
-# Feature Packet: F001-价盘管理
+# Feature Packet: F001-价盘与阶梯价
 
 **Created**: 2026-06-01  
 **REQ ID**: F001  
 **Status**: in_progress  
-**Parent**: 报价中心
+**Parent**: 配置中心  
+**Depends On**: `F000-config-center-architecture`
 
 ---
 
 ## 1. 单元定义
 
-**目标**: 建立产品目录和价格体系，支撑报价编制时的价格自动计算
+**目标**：在配置中心建立组织级价盘控制面，统一维护 SKU、基础价、保护价和阶梯价，作为报价中心自动算价的唯一价格来源。
 
-**边界**:
-- 产品分类管理（层级分类）
-- 产品基础信息管理
-- 产品价格管理（基础价、折扣策略）
-- 价格历史版本记录
+**这包拥有的内容**：
+- SKU 主数据
+- 基础价 / 成本价 / 最低保护价
+- 阶梯价区间
+- 在售状态
+- 组织级隔离
 
-**本轮不做什么**:
-- 不实现复杂的折扣策略引擎（F004）
-- 不做供应商价格管理
-- 不做价格审批流程
+**这包不拥有的内容**：
+- 报价单里的临时改价
+- 折扣矩阵与审批流
+- 供应商采购价体系
 
----
-
-## 2. 双锚点
-
-### 业务锚点
-- 产品分类：一级分类（如：软件、硬件、服务）
-- 产品信息：名称、编码、规格、基础价
-- 价格类型：基础价、成本价、最低售价
-
-### 视觉锚点
-- 参考 configs 页面的 Tabs + Card 布局
-- 左侧分类树 / 右侧产品列表
-- 表格展示，操作按钮（编辑/删除）
+临时报价动作属于 `F002`，折扣与审批配置属于 `F010`。
 
 ---
 
-## 3. 涉及文件
+## 2. 三层落位
 
-**新建**:
-- `app/products/page.tsx` - 产品目录页
-- `app/api/products/route.ts` - 产品列表/创建 API
-- `app/api/products/[id]/route.ts` - 产品详情/更新/删除 API
-- `app/api/categories/route.ts` - 产品分类 API
+| 层级 | 本功能对应物 |
+|------|--------------|
+| 第一层：能力域 | 价盘与阶梯价 |
+| 第二层：具体配置 | SKU、基础价、阶梯价、状态、生效版本 |
+| 第三层：消费页面 | 报价创建页、报价详情页、导出页 |
 
-**修改**:
-- `app/quotes/new/page.tsx` - 引用产品选择
+**硬边界**：
+- 配置中心维护价盘
+- 报价中心只读取已发布价格并写入报价快照
 
 ---
 
-## 4. 数据模型
+## 3. 配置对象
+
+### 3.1 SKU 主数据
+- `code`
+- `name`
+- `specification`
+- `unit`
+- `status`
+
+### 3.2 价格对象
+- `base_price`
+- `cost_price`
+- `min_price`
+- `tier_pricing_enabled`
+
+### 3.3 阶梯价对象
+- `qty_from`
+- `qty_to`
+- `unit_price`
+- `sort_order`
+
+---
+
+## 4. 数据建模原则
+
+价盘不应塞进泛型 `configs` 表，优先保持强类型结构。
+
+MVP 可接受的最小入侵方案：
+- 保留 `products` 表并升级其 SKU 语义
+- 增加 `tier_pricing_enabled`
+- 新增 `product_price_tiers`
 
 ```sql
--- 产品分类
-CREATE TABLE product_categories (
+CREATE TABLE product_price_tiers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    code VARCHAR(50) UNIQUE NOT NULL,
-    parent_id UUID REFERENCES product_categories(id),
-    sort_order INT DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- 产品
-CREATE TABLE products (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    code VARCHAR(50) UNIQUE NOT NULL,
-    category_id UUID REFERENCES product_categories(id),
-    specification TEXT,
-    unit VARCHAR(50),
-    base_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    cost_price DECIMAL(15, 2) DEFAULT 0,
-    min_price DECIMAL(15, 2) DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'active',
-    created_by UUID REFERENCES users(id),
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    qty_from INT NOT NULL,
+    qty_to INT NULL,
+    unit_price DECIMAL(15, 2) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (product_id, qty_from),
+    CHECK (qty_from >= 1 AND (qty_to IS NULL OR qty_to > qty_from))
 );
 ```
 
+报价侧不能保存“指向实时价盘的引用”，而要保存当时命中的价格快照。
+
 ---
 
-## 5. 验证记录
+## 5. 消费映射
 
-- [ ] 产品分类 CRUD
-- [ ] 产品 CRUD
-- [ ] 价格字段验证
-- [ ] 报价单引用产品
+| 消费方 | 读取什么 | 写入什么 |
+|--------|----------|----------|
+| `F002` 报价创建 | SKU、阶梯价、最小保护价 | 报价明细快照 |
+| 报价详情页 | 历史单价快照 | 无 |
+| 报价导出 | 报价行金额 | 导出文件 |
+
+**规则**：报价创建时命中哪一档价格，必须固化到报价明细里；之后即使价盘变化，历史报价也不能被重算污染。
+
+---
+
+## 6. 客户端能力要求
+
+配置中心前端至少应支持：
+- SKU 列表
+- 阶梯价摘要
+- 编辑 SKU
+- 编辑阶梯价
+- 停售 / 启售
+
+报价前端至少应支持：
+- 选 SKU
+- 输入数量
+- 自动展示命中的单价档位
+- 明确标出价格来源为“价盘配置”
+
+---
+
+## 7. 当前实现判断
+
+当前方向基本正确，但之前的 packet 仍过于“Tab + Card 页面说明”，没有把“配置拥有权”和“消费快照”讲透。
+
+本次回写后，F001 的正确定位是：
+- 配置中心生产面
+- 报价中心只读消费
+- 强类型价格域，不进入泛型配置表
+
+---
+
+## 8. 涉及文件
+
+- `product-truth/product-code/app/configs/page.tsx`
+- `product-truth/product-code/app/api/products/route.ts`
+- `product-truth/product-code/app/api/product-price-tiers/route.ts`
+- `product-truth/product-code/app/quotes/new/page.tsx`
+- `product-truth/product-code/supabase/migrations/20260608000001_org_pricing_and_quote_items.sql`
+
+---
+
+## 9. 验收标准
+
+- [ ] 配置中心可维护 SKU 和阶梯价
+- [ ] 组织间价盘隔离
+- [ ] 报价创建可按数量命中对应阶梯价
+- [ ] 报价明细固化价格快照

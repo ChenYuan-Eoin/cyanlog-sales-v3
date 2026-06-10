@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { configUpdateSchema } from '@/lib/configs/validation'
 import { validateConfigValue } from '@/lib/configs/validation'
+import { mergeStoredAIConfigValue, sanitizeConfigRow } from '@/lib/configs/runtime'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -60,13 +61,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }
 
     // 对 AI_CONFIG 类型的 api_key 进行脱敏处理
-    if ((config as { type: string; value: { api_key?: string } }).type === 'AI_CONFIG' &&
-        (config as { value: { api_key?: string } }).value?.api_key) {
-      const c = config as { value: { api_key: string } }
-      c.value.api_key = maskApiKey(c.value.api_key)
-    }
-
-    return NextResponse.json(config)
+    return NextResponse.json(sanitizeConfigRow(config as { type: string; value?: Record<string, unknown> | null }))
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
@@ -99,10 +94,24 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       )
     }
 
+    const type = (config as { type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' | 'UI_THEME' }).type
+    const nextValue = validated.data.value
+      ? (
+          type === 'AI_CONFIG'
+            ? mergeStoredAIConfigValue(
+                (config as { value?: Record<string, unknown> }).value,
+                {
+                  ...validated.data.value,
+                  ...(validated.data.name ? { name: validated.data.name } : {}),
+                }
+              )
+            : validated.data.value
+        )
+      : undefined
+
     // 如果更新 value，需要验证
-    if (validated.data.value) {
-      const type = (config as { type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' }).type
-      const valueValidation = validateConfigValue(type, validated.data.value)
+    if (nextValue) {
+      const valueValidation = validateConfigValue(type, nextValue)
       if (!valueValidation.valid) {
         return errorResponse(`配置值验证失败: ${valueValidation.error}`, 400, 'INVALID_VALUE')
       }
@@ -112,6 +121,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       .from('configs')
       .update({
         ...validated.data,
+        ...(nextValue ? { value: nextValue } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -161,12 +171,4 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     console.error('Delete config error:', error)
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
-}
-
-// 脱敏 API Key
-function maskApiKey(apiKey: string): string {
-  if (apiKey.length <= 12) {
-    return '***'
-  }
-  return `${apiKey.slice(0, 4)}***${apiKey.slice(-4)}`
 }

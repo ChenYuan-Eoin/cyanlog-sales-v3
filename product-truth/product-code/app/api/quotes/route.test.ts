@@ -4,6 +4,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
+
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
@@ -12,6 +14,37 @@ vi.mock('@/lib/supabase', () => ({
 
 vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
+}))
+
+vi.mock('@/lib/scoped-access', () => ({
+  getDefaultOrgId: vi.fn().mockResolvedValue('org-1'),
+  listAccessibleUserIds: vi.fn().mockResolvedValue({ userIds: ['u1'] }),
+}))
+
+vi.mock('@/lib/pricing/service', () => ({
+  calculateQuoteDraft: vi.fn().mockResolvedValue({
+    items: [{
+      product_id: '11111111-1111-4111-8111-111111111111',
+      product_type: 'sku',
+      product_code: 'PROD-001',
+      name: '智能合同审核系统',
+      specification: '企业版',
+      unit: '套',
+      quantity: 2,
+      unit_price: 98000,
+      discount: 0,
+      line_total: 196000,
+      sort_order: 0,
+      pricing_source: 'tier',
+      tier_range: '1-10',
+    }],
+    subtotal: 196000,
+    discountRate: 0,
+    discountAmount: 0,
+    taxRate: 0.13,
+    taxAmount: 25480,
+    totalAmount: 221480,
+  }),
 }))
 
 import { requireAuth } from '@/lib/auth'
@@ -29,7 +62,7 @@ function makeRequest(url: string, method = 'GET'): any {
 
 function makeChain(result: any) {
   const chain: any = {}
-  ;['select', 'eq', 'neq', 'order', 'like', 'limit', 'range', 'insert'].forEach((m) => {
+  ;['select', 'eq', 'neq', 'order', 'like', 'limit', 'range', 'insert', 'in', 'gte', 'lte', 'ilike'].forEach((m) => {
     chain[m] = vi.fn().mockReturnValue(chain)
   })
   chain.single = vi.fn().mockResolvedValue(result)
@@ -103,28 +136,58 @@ describe('POST /api/quotes', () => {
       data: 'QT-20260603-0001',
       error: null,
     })
-    let insertPayload: any = null
-    ;(supabaseAdmin.from as any).mockImplementation(() => {
-      const chain: any = {
-        insert: vi.fn((payload: any) => {
-          insertPayload = payload
+    let quoteInsertPayload: any = null
+    let quoteItemsPayload: any = null
+    let quotesCall = 0
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'quotes') {
+        quotesCall += 1
+        if (quotesCall === 1) {
+          const chain: any = {
+            insert: vi.fn((payload: any) => {
+              quoteInsertPayload = payload
+              return chain
+            }),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: 'q-new' }, error: null }),
+            delete: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+          }
           return chain
-        }),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'q-new' }, error: null }),
+        }
+
+        const chain: any = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: { id: 'q-new', quote_items: [] }, error: null }),
+        }
+        return chain
       }
-      return chain
+
+      if (table === 'quote_items') {
+        return {
+          insert: vi.fn((payload: any) => {
+            quoteItemsPayload = payload
+            return Promise.resolve({ error: null })
+          }),
+        }
+      }
+
+      return makeChain({ data: null, error: null })
     })
 
     const req = makeRequest('http://localhost/api/quotes', 'POST')
     req.json = async () => ({
       customer_name: '测试客户',
       customer_contact: '13800138000',
+      items: [{ product_type: 'sku', product_id: PRODUCT_ID, quantity: 2 }],
     })
     const res = await POST(req)
     expect(res.status).toBe(201)
-    expect(insertPayload).toBeTruthy()
-    expect(insertPayload.quote_no).toBe('QT-20260603-0001')
+    expect(quoteInsertPayload).toBeTruthy()
+    expect(quoteInsertPayload.quote_no).toBe('QT-20260603-0001')
+    expect(quoteInsertPayload.org_id).toBe('org-1')
+    expect(quoteItemsPayload).toHaveLength(1)
   })
 
   it('序列生成失败 → 500 SEQUENCE_ERROR', async () => {
@@ -135,7 +198,7 @@ describe('POST /api/quotes', () => {
     })
 
     const req = makeRequest('http://localhost/api/quotes', 'POST')
-    req.json = async () => ({ customer_name: 'X', customer_contact: 'Y' })
+    req.json = async () => ({ customer_name: 'X', customer_contact: 'Y', items: [{ product_type: 'sku', product_id: PRODUCT_ID, quantity: 1 }] })
     const res = await POST(req)
     expect(res.status).toBe(500)
     const body = await res.json()
@@ -161,10 +224,90 @@ describe('POST /api/quotes', () => {
     })
 
     const req = makeRequest('http://localhost/api/quotes', 'POST')
-    req.json = async () => ({ customer_name: 'X', customer_contact: 'Y' })
+    req.json = async () => ({ customer_name: 'X', customer_contact: 'Y', items: [{ product_type: 'sku', product_id: PRODUCT_ID, quantity: 1 }] })
     const res = await POST(req)
     expect(res.status).toBe(500)
     const body = await res.json()
     expect(body.code).toBe('DB_ERROR')
+  })
+
+  it('schema drift 时回退到 legacy quotes/quote_items 字段', async () => {
+    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
+    ;(supabaseAdmin as any).rpc = vi.fn().mockResolvedValue({
+      data: 'QT-20260603-0003',
+      error: null,
+    })
+
+    const quoteInsertPayloads: any[] = []
+    const quoteItemInsertPayloads: any[] = []
+    let quoteInsertAttempt = 0
+    let quoteItemsAttempt = 0
+
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'quotes') {
+        const chain: any = {
+          insert: vi.fn((payload: any) => {
+            quoteInsertPayloads.push(payload)
+            quoteInsertAttempt += 1
+            return chain
+          }),
+          select: vi.fn().mockReturnThis(),
+          single: vi.fn().mockImplementation(() => Promise.resolve(
+            quoteInsertAttempt === 1
+              ? {
+                data: null,
+                error: {
+                  code: 'PGRST204',
+                  message: "Could not find the 'discount_rate' column of 'quotes' in the schema cache",
+                },
+              }
+              : { data: { id: 'q-legacy' }, error: null }
+          )),
+          delete: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        }
+        return chain
+      }
+
+      if (table === 'quote_items') {
+        return {
+          insert: vi.fn((payload: any) => {
+            quoteItemInsertPayloads.push(payload)
+            quoteItemsAttempt += 1
+            return Promise.resolve(
+              quoteItemsAttempt === 1
+                ? {
+                  error: {
+                    code: 'PGRST204',
+                    message: "Could not find the 'product_id' column of 'quote_items' in the schema cache",
+                  },
+                }
+                : { error: null }
+            )
+          }),
+        }
+      }
+
+      return makeChain({ data: null, error: null })
+    })
+
+    const req = makeRequest('http://localhost/api/quotes', 'POST')
+    req.json = async () => ({
+      customer_name: '兼容客户',
+      customer_contact: '13800138000',
+      notes: 'legacy path',
+      discount_rate: 5,
+      items: [{ product_type: 'sku', product_id: PRODUCT_ID, quantity: 2 }],
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+    expect(quoteInsertPayloads).toHaveLength(2)
+    expect(quoteInsertPayloads[0].discount_rate).toBe(0)
+    expect(quoteInsertPayloads[1].discount_rate).toBeUndefined()
+    expect(quoteItemInsertPayloads).toHaveLength(2)
+    expect(quoteItemInsertPayloads[0][0].product_id).toBe(PRODUCT_ID)
+    expect(quoteItemInsertPayloads[1][0].product_id).toBeUndefined()
+    expect(quoteItemInsertPayloads[1][0].name).toBe('智能合同审核系统')
   })
 })

@@ -6,12 +6,14 @@ source_chapter: 第3章 Account（认证与权限）
 source_range: "2139-2596"
 generated_at: 2026-05-31
 version: "1.0.0"
-status: active
+status: frozen
 module: account
 priority: P0
 ---
 
 # Account（认证与权限）
+
+> 本文档为冻结业务背景稿，不再作为实现期主真相。当前开发与验收以 `product-truth/feature-packets/`、`product-truth/REQ_REGISTRY.yml` 和 `product-truth/03-design-truth/` 为准。
 
 ## 目录
 
@@ -31,6 +33,43 @@ priority: P0
 - **认证**：验证用户身份（你是谁）→ 登录、Token、Session
 - **鉴权**：验证用户权限（你能做什么）→ 角色、权限、资源访问控制
 - 英文统一用 **Account**，不再区分"认证中心"和"权限中心"
+
+### 1.1 关键原则（2026-06-04 锁定）
+
+- **自主可控**：认证、权限、组织架构全部自建，不依赖外部 SaaS（Clerk/Auth0 都不接）
+- **部门树来源**：自建为主（`departments.source='manual'`），飞书导入可作为补全来源（`source='feishu'`）
+- **角色与权限**：自建（`roles` 表 + `roles.permissions` JSON 字段）
+- **权限可配置**：管理员在配置中心编辑 `roles.permissions`，**改完立即生效**
+- **配置中心访问**：仅限 `SUPER_ADMIN` / `SALES_OPS` 角色
+- **飞书同步按钮**：仅限 `SUPER_ADMIN` 角色可见可点
+- **系统支持所有角色使用**（销售/法务/财务/管理员），但**管理功能按角色隔离**
+
+### 1.2 实现状态（2026-06-04 回写）
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| Middleware 读 RBAC | ✅ 已实现 | 透传 `x-user-roles` / `x-user-permissions` 到下游 |
+| 路径级权限检查 | ✅ 已实现 | `/configs` 需 `config:read`；`/admin` 需 `admin:access` |
+| `/api/roles` GET | ✅ 已实现 | 列出所有角色 + 13 个权限 key |
+| `/api/roles/[id]` PATCH | ✅ 已实现 | 编辑 `permissions`，需 `config:write` |
+| `/api/access/feishu/sync` | ✅ 已实现（占位） | 后端 SUPER_ADMIN 隔离；待配置 `FEISHU_APP_ID/SECRET` |
+| 配置中心"角色权限" Tab | ✅ 已实现 | 管理员可勾选权限保存；飞书导入按钮入口 |
+| 飞书同步真实逻辑 | ⏳ 待实现 | 凭证配置后接入 OpenAPI（部门列表拉取 + UPSERT） |
+
+**权限 key 清单**（13 个，配置中心可勾选）：
+
+```
+config:read / config:write
+rule:write
+contract:read / contract:write / contract:review
+quote:read / quote:write
+user:read / user:write
+org:write
+feishu:sync
+admin:access
+```
+
+**SUPER_ADMIN 特殊规则**：拥有 `*`（所有权限），不可在 UI 上取消。
 
 ## 2. 认证机制
 
