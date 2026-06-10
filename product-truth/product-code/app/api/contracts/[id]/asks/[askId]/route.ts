@@ -73,7 +73,8 @@ export async function GET(
       success: true,
       data: {
         ...ask,
-        trigger_user_name: ask.users?.name || ask.users?.email,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        trigger_user_name: (ask.users as any)?.name || (ask.users as any)?.email,
       },
     })
   } catch (error) {

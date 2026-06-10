@@ -81,8 +81,8 @@ export async function POST(
       .insert({
         ask_id: askId,
         responder_id: user.id,
-        responder_role: user.role || 'unknown',
-        responder_name: user.name || user.email || 'Unknown',
+        responder_role: 'unknown', // TODO: 从用户角色表获取
+        responder_name: user.display_name || user.email || 'Unknown',
         response_text: response_text.trim(),
         attachments: attachments,
       })
@@ -122,13 +122,12 @@ export async function POST(
         ask_id: askId,
         contract_id: ask.contract_id,
         actor_id: user.id,
-        actor_role: user.role || 'unknown',
+        actor_role: 'unknown', // TODO: 从用户角色表获取
         event_type: 'responded',
         from_status: 'pending',
         to_status: 'responded',
         payload: {
           response_id: response.id,
-          responder_role: user.role,
         },
       })
 
