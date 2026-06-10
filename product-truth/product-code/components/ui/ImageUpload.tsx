@@ -6,10 +6,14 @@ import { UploadIcon, CloseIcon, LoaderIcon } from '@/components/icons'
 interface ImageUploadProps {
   value: string
   onChange: (url: string) => void
-  folder?: 'logos' | 'favicons'
+  folder?: 'logos' | 'favicons' | 'avatars'
   accept?: string
   placeholder?: string
   maxSizeMB?: number
+  /** 是否保持正方形比例（用于favicon） */
+  square?: boolean
+  /** 预览高度（像素） */
+  previewHeight?: number
 }
 
 export function ImageUpload({
@@ -19,6 +23,8 @@ export function ImageUpload({
   accept = 'image/png,image/jpeg,image/svg+xml,image/webp',
   placeholder = '点击或拖拽上传图片',
   maxSizeMB = 2,
+  square = false,
+  previewHeight = 64,
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,7 +93,10 @@ export function ImageUpload({
           <img
             src={value}
             alt="Uploaded"
-            className="h-16 w-auto max-w-[200px] rounded border object-contain bg-white"
+            className={`rounded border object-contain bg-white ${
+              square ? 'w-16 h-16' : 'h-16 w-auto max-w-[200px]'
+            }`}
+            style={square ? { width: previewHeight, height: previewHeight } : { height: previewHeight }}
             onError={(e) => {
               (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚠️</text></svg>'
             }}

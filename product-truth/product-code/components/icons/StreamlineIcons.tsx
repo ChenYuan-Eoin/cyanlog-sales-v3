@@ -445,6 +445,23 @@ export function ShieldCheckIcon({ className, size = 24 }: IconProps) {
   )
 }
 
+// 单用户/个人信息
+export function UserIcon({ className, size = 24 }: IconProps) {
+  return (
+    <IconBase className={className} size={size}>
+      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      <path
+        d="M20 21a8 8 0 00-16 0"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </IconBase>
+  )
+}
+
 // 用户群
 export function UsersIcon({ className, size = 24 }: IconProps) {
   return (

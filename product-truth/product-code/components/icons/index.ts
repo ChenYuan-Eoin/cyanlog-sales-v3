@@ -23,6 +23,7 @@ export {
   PackageIcon,
   PercentIcon,
   ShieldCheckIcon,
+  UserIcon,
   UsersIcon,
   MenuIcon,
 } from './StreamlineIcons'

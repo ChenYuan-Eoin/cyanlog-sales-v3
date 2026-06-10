@@ -17,6 +17,7 @@ import {
   SettingsIcon,
   LogoutIcon,
   MenuIcon,
+  UserIcon,
 } from '@/components/icons'
 
 const navItems = [
@@ -67,11 +68,8 @@ export function Sidebar() {
         )}
       >
         <div className="flex items-center gap-3 p-6">
-          <BrandMark size={40} />
-          <div>
-            <h1 className="text-xl font-bold">{branding.productTitle}</h1>
-            <p className="mt-1 text-xs text-slate-400">{branding.productSubtitle}</p>
-          </div>
+          <BrandMark size={36} />
+          <p className="text-sm text-slate-300">{branding.productSubtitle || branding.brandName}</p>
         </div>
         <nav className="px-3 py-4">
           {navItems.map((item) => {
@@ -95,6 +93,20 @@ export function Sidebar() {
           })}
         </nav>
         <div className="mt-auto px-3 pb-6">
+          {/* 个人信息入口 */}
+          <Link
+            href="/profile"
+            onClick={() => setMobileOpen(false)}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1',
+              isActive('/profile')
+                ? 'bg-slate-800 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            )}
+          >
+            <UserIcon size={18} className="opacity-80" />
+            <span>个人信息</span>
+          </Link>
           <button
             type="button"
             onClick={async () => {
