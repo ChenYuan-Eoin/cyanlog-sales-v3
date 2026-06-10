@@ -6,6 +6,7 @@ export interface AuthUser {
   email: string | null
   phone: string | null
   display_name: string | null
+  role?: string
 }
 
 export class AuthError extends Error {
