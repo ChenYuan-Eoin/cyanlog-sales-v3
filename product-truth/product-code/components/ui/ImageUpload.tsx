@@ -14,6 +14,8 @@ interface ImageUploadProps {
   square?: boolean
   /** 预览高度（像素） */
   previewHeight?: number
+  /** 是否显示 URL 录入框 */
+  showUrlInput?: boolean
 }
 
 export function ImageUpload({
@@ -25,6 +27,7 @@ export function ImageUpload({
   maxSizeMB = 2,
   square = false,
   previewHeight = 64,
+  showUrlInput = true,
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,15 +44,12 @@ export function ImageUpload({
       formData.append('folder', folder)
 
       const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('请先登录')
-      }
 
       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: {
+        headers: token ? {
           Authorization: `Bearer ${token}`,
-        },
+        } : undefined,
         body: formData,
       })
 
@@ -89,7 +89,7 @@ export function ImageUpload({
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="relative inline-block">
+        <div className="relative inline-block max-w-full">
           <img
             src={value}
             alt="Uploaded"
@@ -148,16 +148,17 @@ export function ImageUpload({
         </div>
       )}
 
-      {/* 保留 URL 输入作为备选 */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="或输入图片 URL..."
-          className="flex-1 px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20"
-        />
-      </div>
+      {showUrlInput ? (
+        <div className="flex min-w-0 gap-2">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="或输入图片 URL..."
+            className="min-w-0 flex-1 px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
+      ) : null}
 
       {error && (
         <p className="text-xs text-red-500">{error}</p>

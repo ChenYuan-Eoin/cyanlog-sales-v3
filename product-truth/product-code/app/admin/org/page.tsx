@@ -65,6 +65,13 @@ interface OrgPayload {
   spaces: SpaceRow[]
 }
 
+interface UserDraft {
+  title: string
+  primaryDeptId: string
+  status: string
+  roleCodes: string[]
+}
+
 const SAMPLE_CSV = `email,display_name,title,department_code,role_codes
 zhang.ym@huarun.com,张一鸣,高级销售代表,EAST-MED,SALES
 li.fy@huarun.com,李芳颖,销售代表,EAST-MED,SALES
@@ -72,7 +79,7 @@ wang.zy@huarun.com,王志远,销售代表,EAST-RTL,SALES
 chen.hj@huarun.com,陈慧娟,销售经理,EAST-RTL,SALES_MANAGER
 `
 
-export default function OrgAdminPage() {
+export function OrgAdminWorkbench({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter()
   const [tab, setTab] = useState<'users' | 'departments' | 'import'>('users')
   const [organizationName, setOrganizationName] = useState('组织管理')
@@ -95,6 +102,8 @@ export default function OrgAdminPage() {
   const [newUserPrimaryDeptId, setNewUserPrimaryDeptId] = useState('')
   const [newUserRoleCodes, setNewUserRoleCodes] = useState<string[]>(['SALES'])
   const [lastTempPassword, setLastTempPassword] = useState('')
+  const [editingUserId, setEditingUserId] = useState<string | null>(null)
+  const [userDrafts, setUserDrafts] = useState<Record<string, UserDraft>>({})
   const [editingScopeUserId, setEditingScopeUserId] = useState<string | null>(null)
   const [scopeDrafts, setScopeDrafts] = useState<Record<string, Array<{
     key: string
@@ -496,14 +505,102 @@ export default function OrgAdminPage() {
   }
 
   const selectableRoles = useMemo(() => roles.filter((role) => role.code !== 'SUPER_ADMIN'), [roles])
+  const roleNameByCode = useMemo(() => new Map(roles.map((role) => [role.code, role.name])), [roles])
+  const statusMeta = useMemo(() => ({
+    active: { label: '正常', className: 'bg-emerald-100 text-emerald-700' },
+    inactive: { label: '未启用', className: 'bg-slate-100 text-slate-700' },
+    suspended: { label: '停用', className: 'bg-amber-100 text-amber-700' },
+  }), [])
+
+  function startUserEdit(user: UserRow) {
+    setUserDrafts((prev) => ({
+      ...prev,
+      [user.id]: {
+        title: user.title || '',
+        primaryDeptId: user.primary_dept_id || '',
+        status: user.status,
+        roleCodes: user.role_codes || [],
+      },
+    }))
+    setEditingUserId(user.id)
+  }
+
+  function updateUserDraft(userId: string, patch: Partial<UserDraft>) {
+    setUserDrafts((prev) => ({
+      ...prev,
+      [userId]: {
+        ...(prev[userId] || { title: '', primaryDeptId: '', status: 'active', roleCodes: [] }),
+        ...patch,
+      },
+    }))
+  }
+
+  async function saveUserDraft(userId: string) {
+    const draft = userDrafts[userId]
+    if (!draft) return
+
+    setSavingId(`${userId}-basic`)
+    try {
+      await requestOrgApi('PATCH', {
+        type: 'user',
+        userId,
+        title: draft.title || null,
+        primaryDeptId: draft.primaryDeptId || null,
+        status: draft.status,
+      })
+      await requestOrgApi('PATCH', {
+        type: 'user_roles',
+        userId,
+        roleCodes: draft.roleCodes,
+      })
+      setEditingUserId(null)
+      await loadData()
+    } catch (e) {
+      console.error('[OrgAdmin] save user draft error', e)
+      alert(e instanceof Error ? e.message : '更新成员失败')
+    } finally {
+      setSavingId(null)
+    }
+  }
 
   return (
-    <div className="content-area" style={{ maxWidth: 1280, margin: '0 auto' }}>
-      <div className="breadcrumb">
-        <Link href="/" className="breadcrumb-current">首页</Link> / 组织管理
+    <div
+      className={embedded ? '' : 'content-area'}
+      style={{ maxWidth: 1280, margin: embedded ? '0' : '0 auto' }}
+    >
+      {!embedded ? (
+        <>
+          <div className="breadcrumb">
+            <Link href="/" className="breadcrumb-current">首页</Link> / 组织管理
+          </div>
+          <h1>{organizationName}</h1>
+          <p className="subtitle">维护组织架构、成员、角色归属。当前页面已经切到服务端权限收口。</p>
+        </>
+      ) : (
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">组织工作台</div>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-950">{organizationName}</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            按“部门 {'->'} 成员 {'->'} 组织角色 {'->'} 作用域角色”的顺序完成配置。组织角色决定能做什么，作用域角色决定在哪些部门或销售空间生效。
+          </p>
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-3 md:grid-cols-4">
+        {[
+          { step: '01', title: '同步或创建部门', desc: '先建立部门树，后续成员和空间都挂在这里。', value: `${departments.length} 个部门` },
+          { step: '02', title: '创建成员', desc: '指定主部门、职位和初始组织角色。', value: `${users.length} 名成员` },
+          { step: '03', title: '分配组织角色', desc: '定义成员默认业务能力，如销售、法务、管理员。', value: `${roles.length} 个角色` },
+          { step: '04', title: '补充作用域', desc: '当成员只在部分部门或销售空间生效时，再配置作用域角色。', value: `${spaces.length} 个销售空间` },
+        ].map((item) => (
+          <div key={item.step} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{item.step}</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900">{item.title}</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">{item.desc}</div>
+            <div className="mt-3 text-sm font-medium text-slate-700">{item.value}</div>
+          </div>
+        ))}
       </div>
-      <h1>{organizationName}</h1>
-      <p className="subtitle">维护组织架构、成员、角色归属。当前页面已经切到服务端权限收口。</p>
 
       {message && (
         <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)' }}>
@@ -520,6 +617,9 @@ export default function OrgAdminPage() {
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1.2fr 1fr', marginTop: 20 }}>
         <div className="side-card">
           <h3 style={{ marginBottom: 12, fontSize: 'var(--text-h4)' }}>新增成员</h3>
+          <p style={{ marginBottom: 12, fontSize: 'var(--text-body-sm)', color: 'var(--fg-3)' }}>
+            先把成员挂到主部门，再给他组织级角色。跨部门或销售空间的额外可见范围，后面在“作用域角色”里补充。
+          </p>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
             <input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="姓名" />
             <input value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="企业邮箱" />
@@ -564,6 +664,9 @@ export default function OrgAdminPage() {
 
         <div className="side-card">
           <h3 style={{ marginBottom: 12, fontSize: 'var(--text-h4)' }}>新增部门</h3>
+          <p style={{ marginBottom: 12, fontSize: 'var(--text-body-sm)', color: 'var(--fg-3)' }}>
+            部门树决定审批链和默认数据范围。编码用于导入、同步和下游映射。
+          </p>
           <div style={{ display: 'grid', gap: 12 }}>
             <input value={newDepartmentName} onChange={(e) => setNewDepartmentName(e.target.value)} placeholder="部门名称" />
             <input value={newDepartmentCode} onChange={(e) => setNewDepartmentCode(e.target.value)} placeholder="部门编码（可选）" />
@@ -612,6 +715,9 @@ export default function OrgAdminPage() {
 
       {!loading && tab === 'users' && (
         <div className="side-card" style={{ marginTop: 16 }}>
+          <div style={{ marginBottom: 12, color: 'var(--fg-3)', fontSize: 'var(--text-body-sm)' }}>
+            成员列表默认只展示结果。点击“编辑成员”再修改基础信息和组织角色，点击“作用域角色”再做部门/销售空间级补充。
+          </div>
           <table className="table">
             <thead>
               <tr>
@@ -636,59 +742,45 @@ export default function OrgAdminPage() {
                     </div>
                   </td>
                   <td style={{ color: 'var(--fg-3)' }}>{u.email}</td>
-                  <td>
-                    <input
-                      defaultValue={u.title}
-                      onBlur={(e) => {
-                        if (e.target.value !== u.title) {
-                          void updateUser(u.id, { title: e.target.value })
-                        }
-                      }}
-                      style={{ minWidth: 140 }}
-                    />
-                  </td>
-                  <td>
-                    <select
-                      value={u.primary_dept_id || ''}
-                      onChange={(e) => void updateUser(u.id, { primaryDeptId: e.target.value || null })}
-                    >
-                      <option value="">未设置</option>
-                      {departments.map((dept) => (
-                        <option key={dept.id} value={dept.id}>
-                          {`${'　'.repeat(dept.depth || 0)}${dept.name}`}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+                  <td>{u.title || '-'}</td>
+                  <td>{u.primary_dept_name || '未设置'}</td>
                   <td style={{ minWidth: 280 }}>
-                    <select
-                      multiple
-                      value={u.role_codes || []}
-                      disabled={savingId === `${u.id}-roles`}
-                      onChange={(e) => {
-                        const selected = Array.from(e.target.selectedOptions).map((option) => option.value)
-                        void updateUserRoles(u.id, selected)
-                      }}
-                      style={{ minHeight: 84, width: '100%' }}
-                    >
-                      {selectableRoles.map((role) => (
-                        <option key={role.id} value={role.code}>{role.name}</option>
-                      ))}
-                    </select>
-                    <div style={{ marginTop: 6, fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>
-                      {u.role_names || '-'}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(u.role_codes || []).length === 0 ? (
+                        <span style={{ color: 'var(--fg-3)', fontSize: 'var(--text-caption)' }}>未分配组织角色</span>
+                      ) : (
+                        (u.role_codes || []).map((code) => (
+                          <span
+                            key={`${u.id}-${code}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '4px 8px',
+                              borderRadius: 999,
+                              fontSize: 'var(--text-caption)',
+                              background: 'var(--bg-muted)',
+                              color: 'var(--fg-2)',
+                            }}
+                          >
+                            {roleNameByCode.get(code) || code}
+                          </span>
+                        ))
+                      )}
                     </div>
                   </td>
                   <td>
-                    <select
-                      value={u.status}
-                      disabled={savingId === u.id}
-                      onChange={(e) => void updateUser(u.id, { status: e.target.value })}
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '4px 8px',
+                        borderRadius: 999,
+                        fontSize: 'var(--text-caption)',
+                      }}
+                      className={statusMeta[u.status as keyof typeof statusMeta]?.className}
                     >
-                      <option value="active">active</option>
-                      <option value="inactive">inactive</option>
-                      <option value="suspended">suspended</option>
-                    </select>
+                      {statusMeta[u.status as keyof typeof statusMeta]?.label || u.status}
+                    </span>
                   </td>
                   <td>
                     <span style={{
@@ -708,6 +800,13 @@ export default function OrgAdminPage() {
                       <button
                         type="button"
                         className="btn btn-secondary"
+                        onClick={() => startUserEdit(u)}
+                      >
+                        编辑成员
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
                         onClick={() => buildScopeDrafts(u)}
                       >
                         作用域角色
@@ -723,6 +822,89 @@ export default function OrgAdminPage() {
                     </div>
                   </td>
                 </tr>
+                {editingUserId === u.id && (
+                  <tr key={`${u.id}-basic`}>
+                    <td colSpan={8} style={{ background: 'var(--bg-muted)' }}>
+                      <div style={{ display: 'grid', gap: 16 }}>
+                        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                          <div>
+                            <div style={{ marginBottom: 6, fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>职位</div>
+                            <input
+                              value={userDrafts[u.id]?.title || ''}
+                              onChange={(e) => updateUserDraft(u.id, { title: e.target.value })}
+                              placeholder="职位"
+                            />
+                          </div>
+                          <div>
+                            <div style={{ marginBottom: 6, fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>主部门</div>
+                            <select
+                              value={userDrafts[u.id]?.primaryDeptId || ''}
+                              onChange={(e) => updateUserDraft(u.id, { primaryDeptId: e.target.value })}
+                            >
+                              <option value="">未设置</option>
+                              {departments.map((dept) => (
+                                <option key={dept.id} value={dept.id}>
+                                  {`${'　'.repeat(dept.depth || 0)}${dept.name}`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <div style={{ marginBottom: 6, fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>成员状态</div>
+                            <select
+                              value={userDrafts[u.id]?.status || 'active'}
+                              onChange={(e) => updateUserDraft(u.id, { status: e.target.value })}
+                            >
+                              <option value="active">正常</option>
+                              <option value="inactive">未启用</option>
+                              <option value="suspended">停用</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ marginBottom: 8, fontSize: 'var(--text-body-sm)', color: 'var(--fg-2)', fontWeight: 600 }}>组织角色</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {selectableRoles.map((role) => {
+                              const active = (userDrafts[u.id]?.roleCodes || []).includes(role.code)
+                              return (
+                                <button
+                                  key={`${u.id}-${role.code}`}
+                                  type="button"
+                                  className={`btn ${active ? 'btn-primary' : 'btn-secondary'}`}
+                                  onClick={() => updateUserDraft(u.id, {
+                                    roleCodes: active
+                                      ? (userDrafts[u.id]?.roleCodes || []).filter((code) => code !== role.code)
+                                      : [...(userDrafts[u.id]?.roleCodes || []), role.code],
+                                  })}
+                                >
+                                  {role.name}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                          <div style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-3)' }}>
+                            这里修改的是默认组织角色。只有在成员需要跨部门或限定销售空间时，才继续配置“作用域角色”。
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="button" className="btn btn-secondary" onClick={() => setEditingUserId(null)}>
+                              取消
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              disabled={savingId === `${u.id}-basic`}
+                              onClick={() => void saveUserDraft(u.id)}
+                            >
+                              {savingId === `${u.id}-basic` ? '保存中...' : '保存成员'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {editingScopeUserId === u.id && (
                   <tr key={`${u.id}-scopes`}>
                     <td colSpan={8} style={{ background: 'var(--bg-muted)' }}>
@@ -936,4 +1118,8 @@ export default function OrgAdminPage() {
       )}
     </div>
   )
+}
+
+export default function OrgAdminPage() {
+  return <OrgAdminWorkbench />
 }

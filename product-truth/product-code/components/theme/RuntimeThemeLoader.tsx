@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 
-import { sanitizeThemeValue, themeToCssVariables } from '@/lib/ui-theme-shared'
+import { resolveFaviconUrl, sanitizeThemeValue, themeToCssVariables } from '@/lib/ui-theme-shared'
 
 // 缓存相关常量
 const THEME_CACHE_KEY = 'runtime_theme_cache'
@@ -76,7 +76,8 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
     document.title = theme.productTitle
   }
 
-  if (theme.faviconUrl) {
+  const faviconUrl = resolveFaviconUrl(theme)
+  if (faviconUrl) {
     const rels = ['icon', 'shortcut icon', 'apple-touch-icon']
     rels.forEach((rel) => {
       let link = document.head.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null
@@ -85,7 +86,7 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
         link.rel = rel
         document.head.appendChild(link)
       }
-      link.href = theme.faviconUrl
+      link.href = faviconUrl
     })
   }
 }

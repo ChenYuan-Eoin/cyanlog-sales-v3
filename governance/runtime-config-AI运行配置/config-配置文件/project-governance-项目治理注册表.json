@@ -7,11 +7,11 @@
   "documents": [
     {
       "id": "prd-main",
-      "path": "../PROJECT-主文档.md",
+      "path": "product-truth/00-master/PROJECT-主文档.md",
       "kind": "file",
-      "required": false,
+      "required": true,
       "maintained": true,
-      "description": "项目初始化母文档（仓库外符号链接）"
+      "description": "项目初始化母文档"
     },
     {
       "id": "doc-guide",

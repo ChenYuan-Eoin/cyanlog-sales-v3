@@ -1,7 +1,6 @@
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
 export function persistClientSession(token: string) {
-  document.cookie = `token=${encodeURIComponent(token)}; path=/; max-age=${SESSION_MAX_AGE_SECONDS}; samesite=lax`
   localStorage.setItem('token', token)
 }
 

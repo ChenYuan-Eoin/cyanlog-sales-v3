@@ -68,20 +68,20 @@ export default function RegisterPage() {
               <div className="p-3 text-sm text-red-600 bg-red-50 rounded-lg">{error}</div>
             )}
             <div>
-              <label className="text-sm font-medium mb-1 block">姓名</label>
-              <Input type="text" placeholder="请输入姓名" value={name} onChange={(e) => setName(e.target.value)} required />
+              <label className="text-sm font-medium mb-1 block" htmlFor="register-name">姓名</label>
+              <Input id="register-name" name="name" autoComplete="name" type="text" placeholder="请输入姓名" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">邮箱</label>
-              <Input type="email" placeholder="请输入邮箱" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <label className="text-sm font-medium mb-1 block" htmlFor="register-email">邮箱</label>
+              <Input id="register-email" name="email" autoComplete="username" type="email" placeholder="请输入邮箱" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">密码</label>
-              <Input type="password" placeholder="至少8位" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <label className="text-sm font-medium mb-1 block" htmlFor="register-password">密码</label>
+              <Input id="register-password" name="password" autoComplete="new-password" type="password" placeholder="至少8位" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">确认密码</label>
-              <Input type="password" placeholder="再次输入密码" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+              <label className="text-sm font-medium mb-1 block" htmlFor="register-password-confirm">确认密码</label>
+              <Input id="register-password-confirm" name="confirmPassword" autoComplete="new-password" type="password" placeholder="再次输入密码" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? '注册中...' : '注册'}

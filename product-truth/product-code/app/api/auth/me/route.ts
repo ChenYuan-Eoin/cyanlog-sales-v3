@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     const { data: userRow, error: userError } = await supabaseAdmin
       .from('users')
-      .select('id, email, phone, display_name, title, primary_dept_id, org_id, must_change_password')
+      .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id, must_change_password')
       .eq('id', user.id)
       .single()
 

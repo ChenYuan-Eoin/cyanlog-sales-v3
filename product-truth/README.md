@@ -79,6 +79,7 @@ module: index
 | [标书中心.md](01-business-truth/标书中心.md) | tender-center | P1 | 第7章 |
 | [知识库管理.md](01-business-truth/知识库管理.md) | knowledge-base | P2 | 第8章 |
 | [日程管理.md](01-business-truth/日程管理.md) | schedule-management | P2 | 第9章 |
+| [销售赋能与考核中心.md](01-business-truth/销售赋能与考核中心.md) | sales-enablement-center | P2 | 附录Y7 |
 
 ## 02-技术真相层
 

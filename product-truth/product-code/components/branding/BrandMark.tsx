@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useBranding } from '@/components/branding/BrandingProvider'
-import { LOGO_CONTAINER } from '@/lib/ui-theme-shared'
+import { LOGO_CONTAINER, resolveBrandImageUrl, type BrandSurfaceTone } from '@/lib/ui-theme-shared'
 
 interface BrandMarkProps {
   size?: number
   className?: string
   variant?: 'full' | 'symbol'  // full: 完整Logo, symbol: 仅图标
+  surface?: 'auto' | BrandSurfaceTone
 }
 
 // 检测系统/配置是否为暗色模式
@@ -36,29 +37,52 @@ function useIsDarkMode(appearance: 'system' | 'light' | 'dark'): boolean {
   return isDark
 }
 
-export function BrandMark({ size = 40, className, variant = 'full' }: BrandMarkProps) {
+export function BrandMark({ size = 40, className, variant = 'full', surface = 'auto' }: BrandMarkProps) {
   const theme = useBranding()
-  const isDark = useIsDarkMode(theme.appearance)
-
-  // 选择对应版本的 Logo
-  const assets = theme.brandAssets
-  const logoUrl = variant === 'symbol'
-    ? (isDark ? assets.symbol.dark : assets.symbol.light)
-    : (isDark ? assets.fullLogo.dark : assets.fullLogo.light)
-
-  // 回退：旧版 logoUrl 或品牌缩写
-  const fallbackUrl = isDark ? '' : theme.logoUrl
-  const finalUrl = logoUrl || fallbackUrl
+  const followsDarkUi = useIsDarkMode(theme.appearance)
+  const surfaceTone: BrandSurfaceTone = surface === 'auto'
+    ? (followsDarkUi ? 'dark' : 'light')
+    : surface
+  const finalUrl = resolveBrandImageUrl(theme, variant, surfaceTone)
 
   // 品牌缩写兜底
   const brandInitials = theme.brandShortName || theme.brandName.slice(0, 2).toUpperCase()
 
   if (finalUrl) {
+    if (variant === 'symbol') {
+      return (
+        <div
+          className={className}
+          style={{
+            width: size,
+            height: size,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            flexShrink: 0,
+          }}
+        >
+          <img
+            src={finalUrl}
+            alt={theme.brandName}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+            }}
+          />
+        </div>
+      )
+    }
+
     return (
       <div
         className={className}
         style={{
-          height: LOGO_CONTAINER.height,
+          height: Math.max(size, LOGO_CONTAINER.height),
           padding: `0 ${LOGO_CONTAINER.padding}px`,
           display: 'flex',
           alignItems: 'center',
@@ -70,7 +94,8 @@ export function BrandMark({ size = 40, className, variant = 'full' }: BrandMarkP
           src={finalUrl}
           alt={theme.brandName}
           style={{
-            maxHeight: LOGO_CONTAINER.maxLogoHeight,
+            maxHeight: Math.min(size, LOGO_CONTAINER.maxLogoHeight + 8),
+            maxWidth: '100%',
             width: 'auto',
             objectFit: 'contain',
           }}

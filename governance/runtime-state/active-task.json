@@ -12,13 +12,13 @@
   },
 
   "active_task": {
-    "req_id": "F008",
-    "packet_path": "product-truth/feature-packets/F008-ocr-tender.md",
-    "status": "drafting",
-    "branch": "feature/F008-ocr-tender",
+    "req_id": "F005",
+    "packet_path": "product-truth/feature-packets/F005-contract-ASK-upgrade.md",
+    "status": "phase2_ui_development",
+    "branch": "feat/f005-ask-phase1",
     "owner": "",
-    "started_at": "2026-06-01T00:00:00Z",
-    "last_updated": "2026-06-01T00:00:00Z"
+    "started_at": "2026-06-09T00:00:00Z",
+    "last_updated": "2026-06-10T12:00:00Z"
   },
 
   "workspace": {

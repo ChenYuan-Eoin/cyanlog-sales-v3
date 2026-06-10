@@ -188,16 +188,7 @@ body {
 }
 
 .hero-dark .brand-logo {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, var(--cyan-500), var(--cyan-700));
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
-  color: white;
+  flex-shrink: 0;
 }
 
 .hero-dark .hero-content {

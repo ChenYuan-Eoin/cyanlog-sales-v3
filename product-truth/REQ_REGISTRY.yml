@@ -380,43 +380,47 @@ requirements:
     description: 本地模型、云端模型、规则引擎降级
 
   # ═══════════════════════════════════════════════════════════════
-  # 预留 (Reserved)
+  # 销售赋能与考核中心 (Sales Enablement Center)
   # ═══════════════════════════════════════════════════════════════
   F023:
-    name: 预留-F023
-    module: 待定
-    source: ""
-    status: draft
-    priority: P3
+    name: 销售赋能与考核中心
+    module: 销售赋能与考核中心
+    source: 销售赋能与考核中心.md#1
+    status: confirmed
+    priority: P2
+    feature_packet: product-truth/feature-packets/F023-sales-enablement-center.md
     code_locations: []
-    description: 预留REQ号
+    description: 共享领域占位，定义入职引导、岗位标准、学习与题库、模拟/正式考核、评分归档的模块边界，消费 F011 / F015-F019
 
   F024:
-    name: 预留-F024
-    module: 待定
-    source: ""
-    status: draft
-    priority: P3
+    name: 入职引导与岗位路径
+    module: 销售赋能与考核中心
+    source: 销售赋能与考核中心.md#2
+    status: confirmed
+    priority: P2
+    feature_packet: product-truth/feature-packets/F024-onboarding-role-path.md
     code_locations: []
-    description: 预留REQ号
+    description: 新成员到岗引导、培养岗位路径、阶段任务、导师规则、试用期里程碑与阶段复核
 
   F025:
-    name: 预留-F025
-    module: 待定
-    source: ""
-    status: draft
-    priority: P3
+    name: 胜任力模型与题库复用
+    module: 销售赋能与考核中心
+    source: 销售赋能与考核中心.md#3
+    status: confirmed
+    priority: P2
+    feature_packet: product-truth/feature-packets/F025-competency-question-bank.md
     code_locations: []
-    description: 预留REQ号
+    description: 岗位能力标准、学习内容映射、题库对象、题目版本与组卷蓝图，作为 F026 的稳定输入层
 
   F026:
-    name: 预留-F026
-    module: 待定
-    source: ""
-    status: draft
-    priority: P3
+    name: 考核编排与评分归档
+    module: 销售赋能与考核中心
+    source: 销售赋能与考核中心.md#4
+    status: confirmed
+    priority: P2
+    feature_packet: product-truth/feature-packets/F026-assessment-schedule-scoring.md
     code_locations: []
-    description: 预留REQ号
+    description: 基于 F025 蓝图生成考核计划、场次、评分表、结果归档与认证状态，并协同 F018-F019 和 F003
 
   F027:
     name: 预留-F027

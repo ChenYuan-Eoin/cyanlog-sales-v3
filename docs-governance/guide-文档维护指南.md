@@ -29,20 +29,24 @@
 
 ## 冻结文档原则
 
-1. `prd_rebuild/`、`二次文档重构/`、`历史错乱信息/` 下的 Markdown 默认视为冻结文档。
-2. 各类 `.bak`、重构稿、阶段性输出稿默认视为冻结文档。
-3. 冻结文档可查阅、可归档、可删除，但不应继续作为真相文档更新。
+1. 各类 `.bak`、重构稿、阶段性输出稿默认视为冻结文档。
+2. 冻结文档可查阅、可归档、可删除，但不应继续作为真相文档更新。
+3. **冻结层可新增背景文档**：允许在 `01-business-truth/` 新增 frozen 状态的背景文档，但必须在文件头明确声明：
+   - `status: frozen`
+   - "本文档为冻结业务背景稿，不直接驱动实现"
+   - 对应的实现以 `feature-packets/` 为准
+4. **冻结层不得作为实现入口**：任何开发、验收不得直接引用 frozen 文档，必须通过 `REQ_REGISTRY.yml` 和 `feature-packets/`。
 
 ## 被管理文档配置（机器读取）
 
 > 约定：
 > 1. 机器读取“被管理文档清单”时，优先解析本章节下的第一个 `yaml` 代码块。
 > 2. 该代码块负责声明“维护哪些文档”。
-> 3. 运行时入口、兼容链接、hook 路径同步由 `harness-manager-治理管理/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json` 负责。
+> 3. 运行时入口、兼容链接、hook 路径同步由 `governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json` 负责。
 
 ```yaml
 version: 1
-runtime_registry: harness-manager-治理管理/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json
+runtime_registry: governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json
 managed_documents:
   - id: prd-main
     name: PROJECT-主文档.md
@@ -56,7 +60,7 @@ managed_documents:
 
   - id: doc-guide
     name: guide-文档维护指南.md
-    path: md-doc-manager-文档管理/guide-文档维护指南.md
+    path: docs-governance/guide-文档维护指南.md
     type: doc-governance-guide
     required: true
     maintenance_targets:
@@ -65,7 +69,7 @@ managed_documents:
 
   - id: harness-guide
     name: guide-harness治理指南.md
-    path: harness-manager-治理管理/guide-harness治理指南.md
+    path: governance/guide-harness治理指南.md
     type: harness-governance-guide
     required: true
     maintenance_targets:
@@ -73,7 +77,19 @@ managed_documents:
       - 说明环境变量、hook、validator、兼容入口如何同步
 ```
 
-### 文档撰写规则
+## 文档模板
+
+- **Feature Packet 模板**: `product-truth/feature-packets/_TEMPLATE.md`
+- **实施验证模板**: `product-truth/04-implementation-truth/templates/verification-template.md`
+
+文档治理层 (`docs-governance/`) 不重复存放模板，只登记模板位置。新建文档时直接参照上述模板。
+
+## 归档规则
+
+一次性/临时文档归档位置：`docs-governance/archive/`
+- 归档文档不再更新
+- 保留历史参考价值的文档
+- 无用的文档可直接删除
 
 1. 被纳管的主文档必须在上方配置代码块中登记。
 2. 主文档的目录必须由脚本生成，不允许长期手工维护。
@@ -87,7 +103,7 @@ managed_documents:
 2. 章节或附录新增、删除、重排后，必须校验标题编号。
 3. 标题不得出现在 fenced code block 内。
 4. 目录、规则、脚本入口变更后，需同步更新本指南与维护配置文件。
-5. 被管理文档改名或换位置后，先更新上方 `yaml` 与运行时注册表，再执行 `python3 ./scripts/sync_governance.py`。
+5. 被管理文档改名或换位置后，先更新上方 `yaml` 与运行时注册表，再执行 `python3 docs-governance/maintenance-config-维护配置/scripts-脚本/sync_governance.py`（如脚本存在）。
 6. **禁止随便新建文档**：补充内容时，必须先评估应归入哪个已有文档（主文档、本指南、harness治理指南）。如确实需要新建文档，必须与项目负责人确认后再执行。
 
 ## 规则分层

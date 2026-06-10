@@ -68,8 +68,11 @@ export function Sidebar() {
         )}
       >
         <div className="flex items-center gap-3 p-6">
-          <BrandMark size={36} />
-          <p className="text-sm text-slate-300">{branding.productSubtitle || branding.brandName}</p>
+          <BrandMark size={36} variant="symbol" surface="dark" />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-white">{branding.brandName}</div>
+            <p className="truncate text-xs text-slate-300">{branding.productSubtitle || branding.brandName}</p>
+          </div>
         </div>
         <nav className="px-3 py-4">
           {navItems.map((item) => {

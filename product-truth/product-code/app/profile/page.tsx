@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import { supabase } from '@/lib/supabase'
 
 interface UserProfile {
   id: string
@@ -29,31 +28,23 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState('')
 
   const loadProfile = useCallback(async () => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
-    }
-
     try {
-      // Get user ID from token
-      const { data: tokenRecord } = await supabase
-        .from('auth_tokens')
-        .select('user_id')
-        .eq('token', token)
-        .single()
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/profile', token ? {
+        headers: { Authorization: `Bearer ${token}` },
+      } : undefined)
 
-      if (!tokenRecord) {
+      if (res.status === 401) {
         router.push('/login')
         return
       }
 
-      // Get user profile
-      const { data: user } = await supabase
-        .from('users')
-        .select('id, display_name, email, phone, avatar_url, title, employee_id, last_login_at')
-        .eq('id', tokenRecord.user_id)
-        .single()
+      if (!res.ok) {
+        throw new Error('读取个人信息失败')
+      }
+
+      const data = await res.json() as { user?: UserProfile }
+      const user = data.user
 
       if (user) {
         setProfile(user)
@@ -77,29 +68,44 @@ export default function ProfilePage() {
     setSaving(true)
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          display_name: displayName,
-          phone: phone || null,
-          avatar_url: avatarUrl || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profile.id)
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          displayName,
+          phone,
+          avatarUrl,
+        }),
+      })
 
-      if (error) throw error
+      if (res.status === 401) {
+        router.push('/login')
+        return
+      }
+
+      const data = await res.json().catch(() => ({} as { user?: UserProfile; error?: string }))
+      if (!res.ok) {
+        throw new Error(data.error || '保存失败')
+      }
+
+      const updatedUser = data.user
+      if (!updatedUser) {
+        throw new Error('保存失败')
+      }
 
       // Update local state
-      setProfile({
-        ...profile,
-        display_name: displayName,
-        phone: phone || null,
-        avatar_url: avatarUrl || null
-      })
+      setProfile(updatedUser)
+      setDisplayName(updatedUser.display_name || '')
+      setPhone(updatedUser.phone || '')
+      setAvatarUrl(updatedUser.avatar_url || '')
       setEditMode(false)
     } catch (error) {
       console.error('Save error:', error)
-      alert('保存失败，请重试')
+      alert(error instanceof Error ? error.message : '保存失败，请重试')
     } finally {
       setSaving(false)
     }

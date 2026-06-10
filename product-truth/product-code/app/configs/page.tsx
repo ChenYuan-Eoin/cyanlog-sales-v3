@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload } from '@/components/ui/ImageUpload'
+import { OrgAdminWorkbench } from '@/app/admin/org/page'
 import type { Rule } from '@/types/rules'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import {
@@ -1352,9 +1353,6 @@ export default function ConfigsPage() {
               <Button onClick={handleFeishuSync} disabled={feishuSyncing} variant="outline">
                 {feishuSyncing ? '同步中...' : '从飞书同步'}
               </Button>
-              <Button variant="outline" onClick={() => window.open('/admin/org', '_blank', 'noopener,noreferrer')}>
-                打开组织管理后台
-              </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1444,9 +1442,13 @@ export default function ConfigsPage() {
                 <div className="mt-3 space-y-3 text-sm text-slate-600">
                   <p>组织架构管理负责“部门、成员、空间、同步”，它提供审批链和数据范围的组织基础。</p>
                   <p>合同审核规则只负责“规则内容和生效版本”，不应承载部门树、角色分配或成员导入。</p>
-                  <p>因此这里必须作为独立控制面存在，而不是挂在合同规则之下。</p>
+                  <p>因此这里必须作为独立控制面存在，而不是挂在合同规则之下；本页直接提供组织工作台，不再要求跳转到单独后台完成日常配置。</p>
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <OrgAdminWorkbench embedded />
             </div>
           </CardContent>
         </Card>
@@ -1470,9 +1472,9 @@ export default function ConfigsPage() {
           </CardHeader>
           <CardContent>
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <span>成员分配、部门/销售空间作用域分配，在真实组织后台维护。</span>
-              <Button variant="outline" size="sm" onClick={() => window.open('/admin/org', '_blank', 'noopener,noreferrer')}>
-                打开组织管理后台
+              <span>角色能力在这里定义；成员绑定、部门/销售空间作用域分配已经并入同页“组织架构管理”工作台。</span>
+              <Button variant="outline" size="sm" onClick={() => setActiveTab('org-structure')}>
+                打开组织工作台
               </Button>
             </div>
             <div className="grid gap-4 lg:grid-cols-4">
@@ -1947,9 +1949,9 @@ export default function ConfigsPage() {
             {/* 完整 Logo 行 */}
             <div className="mb-6">
               <p className="text-sm font-medium text-slate-700 mb-3">完整 Logo</p>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {/* 完整 Logo - 亮色 */}
-                <div className="p-4 bg-white border rounded-lg">
+                <div className="min-w-0 p-4 bg-white border rounded-lg">
                   <label className="text-sm font-medium">亮色版</label>
                   <p className="text-xs text-slate-500 mb-3">用于浅色背景</p>
                   <ImageUpload
@@ -1959,10 +1961,11 @@ export default function ConfigsPage() {
                       setThemeField('brandAssets', { ...current, fullLogo: { ...current.fullLogo, light: url } })
                     }}
                     folder="logos"
+                    showUrlInput={false}
                   />
                 </div>
                 {/* 完整 Logo - 暗色 */}
-                <div className="p-4 bg-slate-800 border rounded-lg">
+                <div className="min-w-0 p-4 bg-slate-800 border rounded-lg">
                   <label className="text-sm font-medium text-white">暗色版</label>
                   <p className="text-xs text-slate-400 mb-3">用于深色背景</p>
                   <ImageUpload
@@ -1972,6 +1975,7 @@ export default function ConfigsPage() {
                       setThemeField('brandAssets', { ...current, fullLogo: { ...current.fullLogo, dark: url } })
                     }}
                     folder="logos"
+                    showUrlInput={false}
                   />
                 </div>
               </div>
@@ -1980,9 +1984,9 @@ export default function ConfigsPage() {
             {/* 图标符号行 */}
             <div className="mb-6">
               <p className="text-sm font-medium text-slate-700 mb-3">图标符号（侧边栏折叠、移动端）</p>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {/* 图标符号 - 亮色 */}
-                <div className="p-4 bg-white border rounded-lg">
+                <div className="min-w-0 p-4 bg-white border rounded-lg">
                   <label className="text-sm font-medium">亮色版</label>
                   <p className="text-xs text-slate-500 mb-3">浅色背景使用</p>
                   <ImageUpload
@@ -1992,10 +1996,11 @@ export default function ConfigsPage() {
                       setThemeField('brandAssets', { ...current, symbol: { ...current.symbol, light: url } })
                     }}
                     folder="logos"
+                    showUrlInput={false}
                   />
                 </div>
                 {/* 图标符号 - 暗色 */}
-                <div className="p-4 bg-slate-800 border rounded-lg">
+                <div className="min-w-0 p-4 bg-slate-800 border rounded-lg">
                   <label className="text-sm font-medium text-white">暗色版</label>
                   <p className="text-xs text-slate-400 mb-3">深色背景使用</p>
                   <ImageUpload
@@ -2005,6 +2010,7 @@ export default function ConfigsPage() {
                       setThemeField('brandAssets', { ...current, symbol: { ...current.symbol, dark: url } })
                     }}
                     folder="logos"
+                    showUrlInput={false}
                   />
                 </div>
               </div>
@@ -2026,6 +2032,7 @@ export default function ConfigsPage() {
                   accept="image/png,image/x-icon,image/svg+xml"
                   square={true}
                   previewHeight={48}
+                  showUrlInput={false}
                 />
               </div>
             </div>
@@ -2488,7 +2495,7 @@ export default function ConfigsPage() {
       {/* Config Edit Dialog */}
       {editingConfig && (
         <Dialog open={isConfigEditOpen} onOpenChange={setIsConfigEditOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingConfig.id ? '编辑配置' : `新建${CONFIG_TYPE_META[configType]?.label || '配置'}`}
