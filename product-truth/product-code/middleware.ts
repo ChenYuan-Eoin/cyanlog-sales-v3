@@ -31,6 +31,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getRequestAuthToken } from '@/lib/auth-token'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 
 const PUBLIC_PATHS = ['/login', '/register']
@@ -137,8 +138,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const token = request.headers.get('authorization')?.replace('Bearer ', '') ||
-    request.cookies.get('token')?.value
+  const token = getRequestAuthToken(request)
 
   if (!token) {
     if (pathname.startsWith('/api/')) {

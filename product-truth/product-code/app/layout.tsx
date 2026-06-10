@@ -1,12 +1,12 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { BrandingProvider } from "@/components/branding/BrandingProvider";
 import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonitor";
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
+import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
 import { resolveFaviconUrl, themeToCssVariables } from "@/lib/ui-theme-shared";
 
@@ -26,7 +26,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const token = cookies().get("token")?.value;
+  const token = getServerAuthToken();
   const theme = await getPublishedUITheme(token);
   const themeVariables = themeToCssVariables(theme) as CSSProperties;
 
@@ -54,7 +54,7 @@ export default async function RootLayout({
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const token = cookies().get("token")?.value;
+  const token = getServerAuthToken();
   const theme = await getPublishedUITheme(token);
   const faviconUrl = resolveFaviconUrl(theme)
 

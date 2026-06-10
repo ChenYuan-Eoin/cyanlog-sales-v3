@@ -96,9 +96,4 @@ review: ## 运行对抗性审查（大型变更时）
 .PHONY: pre-commit
 pre-commit: ## 提交前全部检查（Git Hook 调用）
 	@echo "$(BLUE)运行 pre-commit 检查...$(RESET)"
-	@make check-req || { echo "$(RED)❌ REQ 检查失败$(RESET)"; exit 2; }
-	@make check-layer || { echo "$(RED)❌ 层隔离检查失败$(RESET)"; exit 2; }
-	@make typecheck || { echo "$(RED)❌ 类型检查失败$(RESET)"; exit 2; }
-	@make lint || { echo "$(RED)❌ Lint 检查失败$(RESET)"; exit 2; }
-	@make test || { echo "$(RED)❌ 测试失败$(RESET)"; exit 2; }
-	@echo "$(GREEN)✅ 全部检查通过$(RESET)"
+	@governance/ai-behavior-准则/checks/pre-commit

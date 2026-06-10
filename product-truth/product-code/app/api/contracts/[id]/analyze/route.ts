@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { enqueueContractAnalysisJob, processContractAnalysisJob } from '@/lib/contract-analysis'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
@@ -22,6 +23,8 @@ export async function POST(
 
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     routeId = await resolveIdParam(params)
     const id = routeId
     logRouteStart({
@@ -38,10 +41,10 @@ export async function POST(
     // 使用行级锁检查合同状态（防止并发重复审核）
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
-      .select('id, status, file_path, created_by')
+      .select('id, status, storage_path, created_by')
       .eq('id', id)
-      .eq('created_by', user.id)
-      .single()
+      .in('created_by', accessibleUserIds)
+      .maybeSingle()
 
     if (contractError) {
       await logRouteFailure(

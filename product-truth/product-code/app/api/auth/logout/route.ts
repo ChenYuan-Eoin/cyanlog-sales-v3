@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { CLIENT_AUTH_COOKIE_NAME, getRequestAuthToken, SERVER_AUTH_COOKIE_NAME } from '@/lib/auth-token'
 import { supabaseAdmin } from '@/lib/supabase'
 
 function getToken(req: NextRequest) {
-  return req.headers.get('authorization')?.replace('Bearer ', '') || req.cookies.get('token')?.value || null
+  return getRequestAuthToken(req)
 }
 
 export async function POST(req: NextRequest) {
@@ -14,7 +15,12 @@ export async function POST(req: NextRequest) {
   }
 
   const response = NextResponse.json({ success: true })
-  response.cookies.set('token', '', {
+  response.cookies.set(SERVER_AUTH_COOKIE_NAME, '', {
+    path: '/',
+    expires: new Date(0),
+    sameSite: 'lax',
+  })
+  response.cookies.set(CLIENT_AUTH_COOKIE_NAME, '', {
     path: '/',
     expires: new Date(0),
     sameSite: 'lax',

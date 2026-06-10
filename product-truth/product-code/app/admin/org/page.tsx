@@ -226,7 +226,7 @@ export function OrgAdminWorkbench({ embedded = false }: { embedded?: boolean }) 
     }
   }
 
-  async function updateUser(userId: string, patch: { title?: string; primaryDeptId?: string | null; status?: string }) {
+  async function _updateUser(userId: string, patch: { title?: string; primaryDeptId?: string | null; status?: string }) {
     setSavingId(userId)
     try {
       await requestOrgApi('PATCH', {
@@ -243,7 +243,7 @@ export function OrgAdminWorkbench({ embedded = false }: { embedded?: boolean }) 
     }
   }
 
-  async function updateUserRoles(userId: string, roleCodes: string[]) {
+  async function _updateUserRoles(userId: string, roleCodes: string[]) {
     setSavingId(`${userId}-roles`)
     try {
       await requestOrgApi('PATCH', {

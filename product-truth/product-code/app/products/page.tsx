@@ -2,17 +2,17 @@
 // 路径：/products
 
 import Link from 'next/link'
-import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getOrgIdForToken } from '@/lib/configs/runtime'
 import { isSchemaDriftError } from '@/lib/db-compat'
+import { getServerAuthToken } from '@/lib/server-auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProductsPage() {
-  const token = cookies().get('token')?.value
+  const token = getServerAuthToken()
   const orgId = await getOrgIdForToken(token)
 
   interface ProductRecord {
