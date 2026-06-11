@@ -95,7 +95,7 @@ requirements:
     name: 合同审核（完整设计）
     module: 合同审核
     source: 合同审核.md#2
-    status: in_progress
+    status: completed
     priority: P0
     code_locations:
       - app/api/contracts/route.ts

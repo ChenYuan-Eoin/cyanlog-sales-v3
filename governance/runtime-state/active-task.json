@@ -12,13 +12,13 @@
   },
 
   "active_task": {
-    "req_id": "F005",
-    "packet_path": "product-truth/feature-packets/F005-contract-ASK-upgrade.md",
-    "status": "phase3_api_integration",
-    "branch": "feat/f005-ask-phase1",
+    "req_id": "F002",
+    "packet_path": "product-truth/feature-packets/F002-quote-maintenance.md",
+    "status": "in_progress",
+    "branch": "feat/f002-quote",
     "owner": "",
-    "started_at": "2026-06-09T00:00:00Z",
-    "last_updated": "2026-06-11T18:00:00Z"
+    "started_at": "2026-06-11T20:00:00Z",
+    "last_updated": "2026-06-11T20:00:00Z"
   },
 
   "workspace": {
