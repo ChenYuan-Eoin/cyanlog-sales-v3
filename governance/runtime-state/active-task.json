@@ -14,11 +14,11 @@
   "active_task": {
     "req_id": "F005",
     "packet_path": "product-truth/feature-packets/F005-contract-ASK-upgrade.md",
-    "status": "phase2_ui_development",
+    "status": "phase3_api_integration",
     "branch": "feat/f005-ask-phase1",
     "owner": "",
     "started_at": "2026-06-09T00:00:00Z",
-    "last_updated": "2026-06-10T12:00:00Z"
+    "last_updated": "2026-06-11T18:00:00Z"
   },
 
   "workspace": {
