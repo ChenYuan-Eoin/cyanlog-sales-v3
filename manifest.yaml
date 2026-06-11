@@ -9,10 +9,30 @@ project:
   name: cyanlog-sales-v3
   display_name: 销售管理系统
   version: "2026-06-11"
-  updated_at: "2026-06-11T11:30:00Z"
+  updated_at: "2026-06-11T20:00:00Z"
 
 # ═══════════════════════════════════════════════════════════════
-# 当前重心（Current Focus）
+# 研发状态（精简版）
+# ═══════════════════════════════════════════════════════════════
+
+# 正在编码
+now:
+  req: F001
+  name: 价盘与阶梯价
+  packet: product-truth/feature-packets/F001-price-list.md
+
+# 已完成
+done: [F003, F004, F007, F008]
+
+# 待实现
+todo:
+  - req: F005
+    name: 合同审核 ASK-v2
+    status: design_confirmed
+    packet: product-truth/feature-packets/F005-F006-complete-design.md
+
+# ═══════════════════════════════════════════════════════════════
+# 当前重心（详细版）
 # ═══════════════════════════════════════════════════════════════
 focus:
   # 当前唯一主目标，所有开发资源优先投入

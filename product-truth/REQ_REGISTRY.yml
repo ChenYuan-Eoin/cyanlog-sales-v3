@@ -11,7 +11,7 @@
 ---
 
 version: "2026-06-09"
-last_updated: "2026-06-11T11:30:00Z"
+last_updated: "2026-06-11T19:00:00Z"
 
 requirements:
   # ═══════════════════════════════════════════════════════════════
@@ -54,6 +54,7 @@ requirements:
     source: Account.md
     status: completed
     priority: P0
+    feature_packet: product-truth/feature-packets/F003-account-auth.md
     code_locations:
       - app/api/auth/login/route.ts
       - app/api/auth/route.ts
@@ -71,6 +72,7 @@ requirements:
     source: 报价中心.md#4.6.2
     status: completed
     priority: P0
+    feature_packet: product-truth/feature-packets/F004-approval-workflow.md
     code_locations:
       - lib/approval/workflow.ts
     description: 折扣审批、审批流转、超时处理
@@ -81,6 +83,7 @@ requirements:
     source: 合同审核.md#5
     status: completed
     priority: P0
+    feature_packet: product-truth/feature-packets/F008-ocr-tender.md
     code_locations:
       - app/api/tenders/ocr/route.ts
     description: PaddleOCR、文本提取、结构化
@@ -92,12 +95,15 @@ requirements:
     name: 合同审核（完整设计）
     module: 合同审核
     source: 合同审核.md#2
-    status: design_confirmed
+    status: in_progress
     priority: P0
     code_locations:
       - app/api/contracts/route.ts
       - app/api/contracts/[id]/route.ts
       - app/api/contracts/[id]/analyze/route.ts
+      - app/api/contracts/[id]/asks/route.ts
+      - app/api/contracts/[id]/asks/generate/route.ts
+      - app/api/asks/[id]/responses/route.ts
       - app/contracts/page.tsx
       - app/contracts/new/page.tsx
       - app/contracts/[id]/page.tsx
@@ -192,6 +198,7 @@ requirements:
     source: 合同审核.md#3
     status: completed
     priority: P0
+    feature_packet: product-truth/feature-packets/F007-word-export.md
     code_locations:
       - app/contracts/[id]/page.tsx
       - app/api/contracts/[id]/export/route.ts
