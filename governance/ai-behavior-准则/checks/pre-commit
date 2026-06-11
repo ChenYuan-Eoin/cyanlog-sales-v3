@@ -124,6 +124,13 @@ for f in "${FAILURE_DETAILS[@]}"; do
 done
 echo ""
 
+# ONES 模式：失败时自动触发 feedback
+echo "📊 正在收集失败反馈..."
+if [ -f "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" ]; then
+    node "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" 2>/dev/null || true
+fi
+echo ""
+
 case "$MODE" in
     soft)
         echo -e "${YELLOW}⚠️  SOFT 模式：仅警告，不阻断提交${NC}"

@@ -1,0 +1,30 @@
+#!/bin/bash
+# post-commit - 提交后自动触发 Skills
+# ONES 模式：监听 REQ 状态变更自动触发 socrates
+
+set +e  # 错误不阻断
+
+GIT_ROOT="$(git rev-parse --show-toplevel)"
+cd "$GIT_ROOT"
+
+# 检查是否是 REQ 变更
+if git diff --name-only HEAD~1 HEAD | grep -q "REQ_REGISTRY.yml"; then
+    echo ""
+    echo "📋 检测到 REQ_REGISTRY.yml 变更，执行 skill-socrates..."
+
+    # 检查是否有状态变更
+    STATUSES=$(git diff HEAD~1 HEAD product-truth/REQ_REGISTRY.yml | grep -E '^\+.*status:' | grep -oE '(confirmed|design_confirmed|completed)')
+
+    if [ -n "$STATUSES" ]; then
+        echo ""
+        echo "🎯 检测到需求状态变更: $STATUSES"
+        echo ""
+
+        # 运行 socrates
+        if [ -f "$GIT_ROOT/skill" ]; then
+            "$GIT_ROOT/skill" socrates
+        fi
+    fi
+fi
+
+exit 0
