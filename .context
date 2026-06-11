@@ -1,0 +1,32 @@
+# Price V3 AI 上下文
+
+## 项目概况
+销售管理系统：报价管理 + 合同审核 + 标书生成一体化平台。
+
+## 关键路径（必须遵循）
+1. 唯一运行根：`product-truth/product-code`
+2. 需求真相：`product-truth/REQ_REGISTRY.yml`
+3. 功能真相：`product-truth/feature-packets/`
+4. 代码必须带 `// REQ:Fxxx` 标记
+
+## 当前活跃任务
+- **F001**: 价盘与阶梯价（in_progress）- 配置中心生产面
+- **F005**: 合同审核 ASK-v2（in_progress）- 两段式清单
+
+详见：`governance/runtime-state/active-task.json`
+
+## 继续工作指令
+用户说"继续工作"时：
+1. 读取 `active-task.json` 获取当前任务
+2. 读取对应的 Feature Packet
+3. 执行 `git status` 查看工作区
+4. 继续推进
+
+## 技术约束
+- 数据库：PostgreSQL + Supabase（无 ORM，ADR-008）
+- 语言：TypeScript + Next.js 14
+- 必须过 pre-commit：typecheck + lint + test
+
+## 人-AI 协作界面
+- AI 出方案/写代码 → 人评审 → AI 修正
+- 复杂决策必须 AskUser，不自作主张
