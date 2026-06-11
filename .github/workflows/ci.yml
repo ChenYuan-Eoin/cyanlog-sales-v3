@@ -43,18 +43,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma client
-        run: npx prisma generate
-
       - name: Lint
         run: pnpm lint
 
-      - name: Prisma validate
-        env:
-          DATABASE_URL: "postgresql://localhost:5432/postgres"
-        run: |
-          npx prisma format --check
-          npx prisma validate
+      - name: Type check
+        run: pnpm tsc --noEmit
 
   test:
     name: Test
@@ -75,9 +68,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: npx prisma generate
 
       - name: Run tests
         run: pnpm test:run
@@ -103,9 +93,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: npx prisma generate
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
@@ -158,9 +145,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: npx prisma generate
 
       - name: Build
         run: pnpm build

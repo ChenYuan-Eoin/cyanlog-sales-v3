@@ -33,7 +33,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
-    "@prisma/client": "5.22.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^3.0.0",
@@ -46,7 +45,6 @@
     "js-yaml": "^4.2.0",
     "jsdom": "^29.1.1",
     "postcss": "^8",
-    "prisma": "5.22.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vitest": "^4.1.7"
