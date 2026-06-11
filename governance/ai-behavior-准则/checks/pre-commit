@@ -105,6 +105,14 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # 决策
 if [ $FAILED -eq 0 ]; then
     echo -e "${GREEN}🎉 所有检查通过${NC}"
+
+    # ONES 模式：收集反馈供 AI 参考
+    if [ -f "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" ]; then
+        echo ""
+        echo "📊 正在收集反馈数据..."
+        node "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" 2>/dev/null || true
+    fi
+
     exit 0
 fi
 

@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# skill - ONES 模式 Skill CLI
+# 用法: ./skill <skill-name> [options]
+#
+
+set -e
+
+# 获取项目根目录（脚本在根目录）
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+SKILL_RUNNER="$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/skill-runner.js"
+FEEDBACK_COLLECTOR="$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js"
+
+function show_help() {
+    echo "ONES Skill Runner - 手动触发 Skill"
+    echo ""
+    echo "用法:"
+    echo "  ./skill <skill-id>"
+    echo ""
+    echo "可用 Skills:"
+    echo "  socrates     - 苏格拉底提问 (需求确认时)"
+    echo "  req-review   - 需求审查 (检查 REQ_REGISTRY)"
+    echo "  feedback     - 收集反馈 (测试/lint/编译)"
+    echo ""
+    echo "示例:"
+    echo "  ./skill socrates     # 对当前需求进行苏格拉底提问"
+    echo "  ./skill req-review   # 审查需求注册表"
+    echo "  ./skill feedback     # 收集项目健康度反馈"
+}
+
+function run_skill() {
+    local skill_id="$1"
+
+    case "$skill_id" in
+        socrates|skill-socrates)
+            node "$SKILL_RUNNER" skill-socrates
+            ;;
+        req-review|skill-req-review)
+            node "$SKILL_RUNNER" skill-req-review
+            ;;
+        feedback)
+            node "$FEEDBACK_COLLECTOR"
+            ;;
+        *)
+            echo "❌ 未知 skill: $skill_id"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# 主逻辑
+if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+fi
+
+SKILL_ID="$1"
+shift
+
+run_skill "$SKILL_ID"
