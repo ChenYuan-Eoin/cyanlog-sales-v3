@@ -4,13 +4,14 @@
 # 格式: YAML
 # 维护规则:
 #   - REQ ID 一旦分配，不可变更
-#   - 状态变更: draft → confirmed → in_progress → completed
+#   - 状态变更: draft → confirmed → design_confirmed → in_progress → completed
+#   - design_confirmed: 设计已确认，等待开发（冻结设计方案）
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
 ---
 
 version: "2026-06-09"
-last_updated: "2026-06-09T00:00:00Z"
+last_updated: "2026-06-11T11:30:00Z"
 
 requirements:
   # ═══════════════════════════════════════════════════════════════
