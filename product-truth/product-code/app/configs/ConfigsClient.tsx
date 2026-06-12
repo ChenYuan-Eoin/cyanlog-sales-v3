@@ -263,7 +263,10 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       setActiveTab(tab as ConfigTabId)
     }
     setTabReady(true)
-    fetchData()
+    // 服务端预取数据已存在时，跳过客户端请求
+    if (!initialData) {
+      fetchData()
+    }
   }, [])
 
   useEffect(() => {
