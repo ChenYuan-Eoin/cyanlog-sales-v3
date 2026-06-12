@@ -255,8 +255,8 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   const [feishuSyncing, setFeishuSyncing] = useState(false)
   const [feishuResult, setFeishuResult] = useState<string>('')
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
+  const [hasInitialData] = useState(() => Boolean(initialData))
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- initialData 是服务端预取，组件生命周期内不变
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
     const tab = searchParams.get('tab')
@@ -265,10 +265,10 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     }
     setTabReady(true)
     // 服务端预取数据已存在时，跳过客户端请求
-    if (!initialData) {
+    if (!hasInitialData) {
       fetchData()
     }
-  }, [])
+  }, [hasInitialData])
 
   useEffect(() => {
     if (!tabReady) return
