@@ -43,6 +43,7 @@ export interface ConfigsInitialData {
   products?: ProductRecord[]
   rules?: Rule[]
   roles?: unknown[]
+  configs?: Config[]
 }
 
 export interface ScopedRoleAssignment {

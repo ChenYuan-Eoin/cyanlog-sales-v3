@@ -221,7 +221,7 @@ const DATA_SCOPE_LEVELS = [
 export default function ConfigsClient({ initialData, orgId: _orgId }: { initialData?: ConfigsInitialData; orgId?: string }) {
   // 优先使用服务端预取的数据，避免客户端重复请求
   const [rules, setRules] = useState<Rule[]>(initialData?.rules || [])
-  const [configs, setConfigs] = useState<Config[]>([])
+  const [configs, setConfigs] = useState<Config[]>(initialData?.configs || [])
   const [products, setProducts] = useState<ProductRecord[]>(initialData?.products || [])
   const [loading, setLoading] = useState(!initialData)  // 有初始数据则不显示 loading
   const [error, setError] = useState('')
@@ -250,7 +250,10 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   const [roles, setRoles] = useState<Array<{
     id: string; code: string; name: string; description: string | null
     permissions: string[] | null; sort_order: number | null
-  }>>([])
+  }>>(initialData?.roles as Array<{
+    id: string; code: string; name: string; description: string | null
+    permissions: string[] | null; sort_order: number | null
+  }> | [] || [])
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
   const [feishuSyncing, setFeishuSyncing] = useState(false)
   const [feishuResult, setFeishuResult] = useState<string>('')
