@@ -256,6 +256,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   const [feishuResult, setFeishuResult] = useState<string>('')
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initialData 是服务端预取，组件生命周期内不变
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
     const tab = searchParams.get('tab')
