@@ -1,15 +1,16 @@
 {
-  "timestamp": "2026-06-11T12:11:20.158Z",
+  "timestamp": "2026-06-11T21:58:49.107Z",
   "typecheck": {
     "success": true,
     "errors": 0,
     "message": "类型检查通过"
   },
   "lint": {
-    "success": true,
+    "success": false,
     "errors": 0,
     "warnings": 0,
-    "message": "Lint 检查通过"
+    "message": "Lint 检查发现问题",
+    "details": []
   },
   "test": {
     "success": true,
@@ -18,8 +19,8 @@
     "message": "测试执行完成"
   },
   "summary": {
-    "allPassed": true,
+    "allPassed": false,
     "totalErrors": 0,
-    "recommendation": "✅ 所有检查通过，可以提交"
+    "recommendation": "⚠️ 发现 0 个问题，请修正后再提交"
   }
 }
