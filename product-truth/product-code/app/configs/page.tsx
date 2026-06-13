@@ -7,6 +7,7 @@ import { getOrgIdForToken } from '@/lib/configs/runtime'
 import { fetchAllConfigsData } from './data'
 import ConfigsClient from './ConfigsClient'
 import { Card, CardContent } from '@/components/ui/card'
+import type { ConfigsInitialData } from './types'
 
 // 骨架屏
 function ConfigsSkeleton() {
@@ -35,11 +36,20 @@ function ConfigsSkeleton() {
 
 // Server Component - 立即渲染，数据流式到达
 export default async function ConfigsPage() {
+  const t0 = Date.now()
   const token = getServerAuthToken()
+  console.log(`[PERF] configs token=${Date.now() - t0}ms`)
+
+  const t1 = Date.now()
   const orgId = await getOrgIdForToken(token)
+  console.log(`[PERF] configs getOrgIdForToken=${Date.now() - t1}ms orgId=${orgId ? 'present' : 'null'}`)
 
   // 立即开始加载数据（不阻塞首屏 HTML）
-  const dataPromise = fetchAllConfigsData(orgId || '')
+  const t2 = Date.now()
+  const dataPromise = fetchAllConfigsData(orgId || '').then((data) => {
+    console.log(`[PERF] configs fetchAllConfigsData=${Date.now() - t2}ms`)
+    return data
+  })
 
   return (
     <Suspense fallback={<ConfigsSkeleton />}>
@@ -49,7 +59,7 @@ export default async function ConfigsPage() {
 }
 
 // 数据到达后渲染
-async function ConfigsContent({ orgId, dataPromise }: { orgId: string; dataPromise: ReturnType<typeof fetchAllConfigsData> }) {
+async function ConfigsContent({ orgId, dataPromise }: { orgId: string; dataPromise: Promise<unknown> }) {
   const data = await dataPromise
-  return <ConfigsClient initialData={data} orgId={orgId} />
+  return <ConfigsClient initialData={data as ConfigsInitialData} orgId={orgId} />
 }

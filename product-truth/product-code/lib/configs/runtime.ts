@@ -62,11 +62,13 @@ export function sanitizeConfigRow<T extends { type: string; value?: JsonRecord |
 }
 
 export async function getUserIdForToken(token: string): Promise<string | null> {
+  const t = Date.now()
   const { data, error } = await supabaseAdmin
     .from('auth_tokens')
     .select('user_id, expires_at')
     .eq('token', token)
     .maybeSingle()
+  console.log(`[PERF] getUserIdForToken=${Date.now() - t}ms found=${!!data?.user_id}`)
 
   if (error || !data?.user_id) {
     return null
@@ -80,6 +82,7 @@ export async function getUserIdForToken(token: string): Promise<string | null> {
 }
 
 export async function getOrgIdForUser(userId: string): Promise<string | null> {
+  const t = Date.now()
   const { data } = await supabaseAdmin
     .from('user_organizations')
     .select('org_id')
@@ -88,14 +91,17 @@ export async function getOrgIdForUser(userId: string): Promise<string | null> {
     .maybeSingle()
 
   if (data?.org_id) {
+    console.log(`[PERF] getOrgIdForUser (user_orgs)=${Date.now() - t}ms orgId=${data.org_id}`)
     return data.org_id
   }
 
+  const t2 = Date.now()
   const { data: userRow } = await supabaseAdmin
     .from('users')
     .select('org_id')
     .eq('id', userId)
     .maybeSingle()
+  console.log(`[PERF] getOrgIdForUser (users fallback)=${Date.now() - t2}ms orgId=${userRow?.org_id}`)
 
   return userRow?.org_id ?? null
 }
