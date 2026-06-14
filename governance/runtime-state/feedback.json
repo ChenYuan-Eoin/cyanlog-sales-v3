@@ -1,9 +1,12 @@
 {
-  "timestamp": "2026-06-14T06:26:36.579Z",
+  "timestamp": "2026-06-14T08:27:55.875Z",
   "typecheck": {
-    "success": true,
-    "errors": 0,
-    "message": "类型检查通过"
+    "success": false,
+    "errors": 1,
+    "message": "类型检查失败",
+    "details": [
+      "lib/rules/engine.ts(51,31): error TS2352: Conversion of type '{ rule_type: \"structured\" | \"semantic\"; category: \"legal\"; condition_config: { pattern?: string | undefined; field?: string | undefined; operator?: \"gt\" | \"lt\" | \"eq\" | \"contains\" | undefined; value?: string | ... 1 more ... | undefined; prompt?: string | undefined; }; ... 11 more ...; updated_at: string; }[]' to type 'Rule[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first."
+    ]
   },
   "lint": {
     "success": true,
@@ -18,8 +21,8 @@
     "message": "测试执行完成"
   },
   "summary": {
-    "allPassed": true,
-    "totalErrors": 0,
-    "recommendation": "✅ 所有检查通过，可以提交"
+    "allPassed": false,
+    "totalErrors": 1,
+    "recommendation": "⚠️ 发现 1 个问题，请修正后再提交"
   }
 }

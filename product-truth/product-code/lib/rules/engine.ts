@@ -2,9 +2,12 @@
 // PURPOSE: Rule engine - execute structured and semantic rules against contract text
 
 import { supabaseAdmin } from '@/lib/supabase'
-import type { Rule } from '@/types/rules'
+import type { Rule as LegacyRule } from '@/types/rules'
 import { isSchemaDriftError } from '@/lib/db-compat'
+import { executeStructuredRules } from './structured-executor'
+import type { RuleExecutionResult, Rule as NewRule, ContractData } from './types'
 
+// 兼容旧接口
 export interface RuleResult {
   ruleId: string
   ruleName: string
@@ -27,9 +30,58 @@ export interface AnalysisResults {
   matchedRules: number
 }
 
-// 执行所有启用的规则
+// 分析合同（增强版）
+export async function analyzeContract(
+  contract: ContractData,
+  options: {
+    onlyStructured?: boolean
+    onProgress?: (phase: string, completed: number, total: number) => void
+  } = {}
+): Promise<RuleExecutionResult[]> {
+  const { onlyStructured = false, onProgress } = options
+
+  // 获取所有已发布规则
+  const rules = await fetchPublishedRules(contract.org_id)
+
+  if (rules.length === 0) {
+    return []
+  }
+
+  // 转换为新格式
+  const newRules = rules.map(r => ({
+    ...r,
+    rule_type: r.rule_type as 'structured' | 'semantic',
+    category: 'legal' as const,
+    condition_config: r.config || {},
+    message_config: {},
+    scope: 'org',
+    priority: 100,
+    version: 1,
+  })) as unknown as NewRule[]
+
+  // 执行结构化规则
+  const structuredRules = newRules.filter(r => r.rule_type === 'structured')
+  if (onProgress) onProgress('structured', 0, structuredRules.length)
+
+  const structuredResults = await executeStructuredRules(
+    structuredRules,
+    contract.text,
+    contract.extractedFields || {}
+  )
+
+  if (onProgress) onProgress('structured', structuredRules.length, structuredRules.length)
+
+  // 如果不执行语义规则，直接返回
+  if (onlyStructured) {
+    return structuredResults
+  }
+
+  // 语义规则稍后实现
+  return structuredResults
+}
+
+// 兼容旧接口：执行所有启用的规则
 export async function executeRules(contractText: string, orgId?: string): Promise<AnalysisResults> {
-  // 获取所有启用的规则
   let query = supabaseAdmin
     .from('rules')
     .select('*')
@@ -98,8 +150,25 @@ export async function executeRules(contractText: string, orgId?: string): Promis
   }
 }
 
+// 获取已发布规则
+async function fetchPublishedRules(orgId: string): Promise<LegacyRule[]> {
+  const { data: rules, error } = await supabaseAdmin
+    .from('contract_rules')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('status', 'published')
+    .order('priority', { ascending: false })
+
+  if (error) {
+    console.error('Failed to fetch published rules:', error)
+    return []
+  }
+
+  return rules || []
+}
+
 // 执行单条规则
-async function executeSingleRule(rule: Rule, contractText: string): Promise<RuleResult> {
+async function executeSingleRule(rule: LegacyRule, contractText: string): Promise<RuleResult> {
   const baseResult: RuleResult = {
     ruleId: rule.id,
     ruleName: rule.name,
@@ -119,7 +188,7 @@ async function executeSingleRule(rule: Rule, contractText: string): Promise<Rule
 
 // 执行结构化规则（基于正则/关键字）
 function executeStructuredRule(
-  rule: Rule,
+  rule: LegacyRule,
   contractText: string,
   baseResult: RuleResult
 ): RuleResult {
@@ -183,7 +252,7 @@ function executeStructuredRule(
       description = `检测到匹配模式: ${pattern}`
     }
     if (field && operator && value !== undefined) {
-      const operatorText = { gt: '大于', lt: '小于', eq: '等于', contains: '包含' }
+      const operatorText: Record<string, string> = { gt: '大于', lt: '小于', eq: '等于', contains: '包含' }
       description = `${field} ${operatorText[operator] || operator} ${value}`
     }
     suggestion = getSuggestionByLevel(rule.risk_level)
@@ -199,7 +268,7 @@ function executeStructuredRule(
 
 // 执行语义规则（基于 AI 分析）
 async function executeSemanticRule(
-  rule: Rule,
+  rule: LegacyRule,
   contractText: string,
   baseResult: RuleResult
 ): Promise<RuleResult> {
@@ -212,8 +281,8 @@ async function executeSemanticRule(
 
   // 模拟语义分析（实际应调用 AI 服务）
   // 简化：检查 prompt 中的关键词是否出现在合同文本中
-  const keywords = prompt.split(/\s+/).filter(w => w.length > 2)
-  const matchCount = keywords.filter(kw =>
+  const keywords = prompt.split(/\s+/).filter((w: string) => w.length > 2)
+  const matchCount = keywords.filter((kw: string) =>
     contractText.toLowerCase().includes(kw.toLowerCase())
   ).length
 
@@ -269,3 +338,9 @@ function generateSummary(results: RuleResult[]): string {
 
   return parts.join('；') + '。'
 }
+
+// 重新导出新模块（供 F006 使用）
+export * from './types'
+export { executeStructuredRules } from './structured-executor'
+export type { StructuredCondition } from './structured-executor'
+
