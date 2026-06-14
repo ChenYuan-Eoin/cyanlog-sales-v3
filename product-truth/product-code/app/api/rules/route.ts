@@ -29,7 +29,7 @@ const ruleSchema = z.object({
   }).optional(),
 })
 
-// GET /api/rules - 获取规则列表（需登录）
+// GET /api/rules - 获取规则列表（需登录，分页）
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
@@ -38,12 +38,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const ruleType = searchParams.get('rule_type')
     const enabled = searchParams.get('enabled')
+    // 分页参数
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
+    const offset = parseInt(searchParams.get('offset') || '0', 10)
 
     let query = supabaseAdmin
       .from('rules')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (ruleType) {
       query = query.eq('rule_type', ruleType)
@@ -53,16 +57,18 @@ export async function GET(req: NextRequest) {
       query = query.eq('enabled', enabled === 'true')
     }
 
-    let { data: rules, error } = await query
+    let { data: rules, error, count } = await query
 
     if (error && isSchemaDriftError(error)) {
       const legacyResult = await supabaseAdmin
         .from('rules')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
 
       rules = legacyResult.data
       error = legacyResult.error
+      count = legacyResult.count
     }
 
     if (error) {
@@ -70,7 +76,15 @@ export async function GET(req: NextRequest) {
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
-    return NextResponse.json(rules)
+    return NextResponse.json({
+      data: rules,
+      pagination: {
+        total: count || 0,
+        limit,
+        offset,
+        hasMore: (count || 0) > offset + limit,
+      },
+    })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

@@ -299,21 +299,21 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
 
       switch (tab) {
         case 'price-list': {
-          // 只加载 products
+          // 只加载 products (分页格式)
           const productsRes = await fetch('/api/products', { headers })
           if (productsRes.ok) {
-            const productsData = await productsRes.json()
-            setProducts(productsData)
+            const productsJson = await productsRes.json()
+            setProducts(productsJson.data ?? [])
           }
           break
         }
 
         case 'rules': {
-          // 只加载 rules
+          // 只加载 rules (分页格式)
           const rulesRes = await fetch('/api/rules', { headers })
           if (rulesRes.ok) {
-            const rulesData = await rulesRes.json()
-            setRules(rulesData)
+            const rulesJson = await rulesRes.json()
+            setRules(rulesJson.data ?? [])
           }
           break
         }
@@ -322,21 +322,21 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         case 'approval':
         case 'ai':
         case 'theme': {
-          // 这些 tab 共享 configs 数据
+          // 这些 tab 共享 configs 数据 (分页格式)
           const configsRes = await fetch('/api/configs', { headers })
           if (configsRes.ok) {
-            const configsData = await configsRes.json()
-            setConfigs(configsData)
+            const configsJson = await configsRes.json()
+            setConfigs(configsJson.data ?? [])
           }
           break
         }
 
         case 'role-access': {
-          // 只加载 roles
+          // 只加载 roles (分页格式)
           const rolesRes = await fetch('/api/roles', { headers })
           if (rolesRes.ok) {
-            const rolesData = await rolesRes.json()
-            setRoles(rolesData.data?.roles ?? [])
+            const rolesJson = await rolesRes.json()
+            setRoles(rolesJson.data?.roles ?? [])
           }
           break
         }
@@ -378,13 +378,13 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       ])
 
       if (rulesRes.ok) {
-        const rulesData = await rulesRes.json()
-        setRules(rulesData)
+        const rulesJson = await rulesRes.json()
+        setRules(rulesJson.data ?? [])
       }
 
       if (configsRes.ok) {
-        const configsData = await configsRes.json()
-        setConfigs(configsData)
+        const configsJson = await configsRes.json()
+        setConfigs(configsJson.data ?? [])
       }
 
       if (rolesRes.ok) {
@@ -393,8 +393,8 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       }
 
       if (productsRes.ok) {
-        const productsData = await productsRes.json()
-        setProducts(productsData)
+        const productsJson = await productsRes.json()
+        setProducts(productsJson.data ?? [])
       }
 
       if (orgRes.ok) {
@@ -819,14 +819,30 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     setIsProductEditOpen(true)
   }
 
-  function openEditProduct(product: ProductRecord) {
-    setEditingProduct({
-      ...product,
-      product_price_tiers: [...(product.product_price_tiers || [])].sort((left, right) => (
-        (left.sort_order || 0) - (right.sort_order || 0)
-      )),
-    })
+  async function openEditProduct(product: ProductRecord) {
+    // 先打开编辑框加载基础数据
+    setEditingProduct({ ...product, product_price_tiers: [] })
     setIsProductEditOpen(true)
+
+    // 按需加载该产品的阶梯价
+    if (product.id) {
+      try {
+        const token = localStorage.getItem('token')
+        const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
+        const res = await fetch(`/api/product-price-tiers?product_id=${product.id}`, { headers })
+        if (res.ok) {
+          const tiers = await res.json()
+          setEditingProduct(prev => prev ? {
+            ...prev,
+            product_price_tiers: tiers.sort((left: ProductPriceTier, right: ProductPriceTier) =>
+              (left.sort_order || 0) - (right.sort_order || 0)
+            ),
+          } : null)
+        }
+      } catch {
+        // 忽略阶梯价加载失败，用户仍可编辑基础信息
+      }
+    }
   }
 
   async function handleSaveProduct() {

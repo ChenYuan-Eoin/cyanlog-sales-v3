@@ -24,7 +24,7 @@ async function getCurrentOrgId(userId: string): Promise<string | null> {
   return data?.org_id || null
 }
 
-// GET /api/configs - 获取配置列表
+// GET /api/configs - 获取配置列表（分页）
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
@@ -32,6 +32,9 @@ export async function GET(req: NextRequest) {
 
     const type = searchParams.get('type') as ConfigType | null
     const status = searchParams.get('status') as ConfigStatus | null
+    // 分页参数
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
+    const offset = parseInt(searchParams.get('offset') || '0', 10)
 
     // 获取用户当前组织
     const orgId = await getCurrentOrgId(user.id)
@@ -41,10 +44,11 @@ export async function GET(req: NextRequest) {
 
     let query = supabaseAdmin
       .from('configs')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('org_id', orgId)
       .order('type')
       .order('key')
+      .range(offset, offset + limit - 1)
 
     if (type) {
       query = query.eq('type', type)
@@ -54,7 +58,7 @@ export async function GET(req: NextRequest) {
       query = query.eq('status', status)
     }
 
-    const { data: configs, error } = await query
+    const { data: configs, error, count } = await query
 
     if (error) {
       console.error('Get configs error:', error)
@@ -64,7 +68,15 @@ export async function GET(req: NextRequest) {
     // 对 AI_CONFIG 类型的 api_key 进行脱敏处理
     const sanitizedConfigs = configs.map((config) => sanitizeConfigRow(config))
 
-    return NextResponse.json(sanitizedConfigs)
+    return NextResponse.json({
+      data: sanitizedConfigs,
+      pagination: {
+        total: count || 0,
+        limit,
+        offset,
+        hasMore: (count || 0) > offset + limit,
+      },
+    })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
