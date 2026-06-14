@@ -29,6 +29,7 @@ import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSu
 import TabsContent from './tabs/TabsContent'
 import ConfigStatusBadge from './tabs/ConfigStatusBadge'
 import ProductDialog from './dialogs/ProductDialog'
+import RuleDialog from './dialogs/RuleDialog'
 
 const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
   CONTRACT_RULE: { label: '合同审核规则', color: 'bg-blue-100 text-blue-800' },
@@ -1671,73 +1672,12 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         </div>
       </div>
 
-      {/* Rule Edit Dialog */}
-      {editingRule && (
-        <Dialog open={isRuleEditOpen} onOpenChange={setIsRuleEditOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editingRule.id ? '编辑规则' : '新建规则'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <label className="text-sm font-medium">规则名称</label>
-                <Input
-                  value={editingRule.name || ''}
-                  onChange={(e) => setEditingRule({ ...editingRule, name: e.target.value })}
-                  placeholder="如：付款账期检查"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">规则描述</label>
-                <Textarea
-                  value={editingRule.description || ''}
-                  onChange={(e) => setEditingRule({ ...editingRule, description: e.target.value })}
-                  placeholder="描述这条规则的作用"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">规则类型</label>
-                  <select
-                    className="w-full mt-1 p-2 border rounded-md"
-                    value={editingRule.rule_type}
-                    onChange={(e) => setEditingRule({ ...editingRule, rule_type: e.target.value as 'structured' | 'semantic' })}
-                  >
-                    <option value="structured">结构化规则</option>
-                    <option value="semantic">语义规则</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">风险等级</label>
-                  <select
-                    className="w-full mt-1 p-2 border rounded-md"
-                    value={editingRule.risk_level}
-                    onChange={(e) => setEditingRule({ ...editingRule, risk_level: e.target.value as 'red' | 'yellow' | 'green' })}
-                  >
-                    <option value="red">红灯</option>
-                    <option value="yellow">黄灯</option>
-                    <option value="green">绿灯</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={editingRule.enabled || false}
-                    onChange={(e) => setEditingRule({ ...editingRule, enabled: e.target.checked })}
-                  />
-                  <span className="text-sm">启用规则</span>
-                </label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsRuleEditOpen(false)}>取消</Button>
-              <Button onClick={handleSaveRule}>保存</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      <RuleDialog
+        rule={editingRule}
+        open={isRuleEditOpen}
+        onOpenChange={setIsRuleEditOpen}
+        onSave={handleSaveRule}
+      />
 
       {/* Config Edit Dialog */}
       {editingConfig && (
