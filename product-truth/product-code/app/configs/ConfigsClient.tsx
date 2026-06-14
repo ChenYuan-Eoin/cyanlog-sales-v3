@@ -28,6 +28,7 @@ import {
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
 import TabsContent from './tabs/TabsContent'
 import ConfigStatusBadge from './tabs/ConfigStatusBadge'
+import ProductDialog from './dialogs/ProductDialog'
 
 const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
   CONTRACT_RULE: { label: '合同审核规则', color: 'bg-blue-100 text-blue-800' },
@@ -1502,172 +1503,6 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     )
   }
 
-  function renderProductEditForm() {
-    const product = editingProduct || {}
-    const tiers = product.product_price_tiers || []
-
-    const updateTier = (index: number, patch: Partial<ProductPriceTier>) => {
-      const nextTiers = [...tiers]
-      nextTiers[index] = { ...nextTiers[index], ...patch }
-      setEditingProduct({ ...product, product_price_tiers: nextTiers })
-    }
-
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium">SKU 编码</label>
-            <Input
-              value={product.code || ''}
-              onChange={(e) => setEditingProduct({ ...product, code: e.target.value })}
-              placeholder="如: PROD-001"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">SKU 名称</label>
-            <Input
-              value={product.name || ''}
-              onChange={(e) => setEditingProduct({ ...product, name: e.target.value })}
-              placeholder="如: 智能合同审核系统"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium">规格</label>
-            <Input
-              value={product.specification || ''}
-              onChange={(e) => setEditingProduct({ ...product, specification: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">单位</label>
-            <Input
-              value={product.unit || ''}
-              onChange={(e) => setEditingProduct({ ...product, unit: e.target.value })}
-              placeholder="套 / 个 / 月"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="text-sm font-medium">基础价</label>
-            <Input
-              type="number"
-              min={0}
-              value={Number(product.base_price || 0)}
-              onChange={(e) => setEditingProduct({ ...product, base_price: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">成本价</label>
-            <Input
-              type="number"
-              min={0}
-              value={Number(product.cost_price || 0)}
-              onChange={(e) => setEditingProduct({ ...product, cost_price: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">最低保护价</label>
-            <Input
-              type="number"
-              min={0}
-              value={Number(product.min_price || 0)}
-              onChange={(e) => setEditingProduct({ ...product, min_price: Number(e.target.value || 0) })}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium">状态</label>
-            <select
-              className="w-full mt-1 p-2 border rounded-md"
-              value={product.status || 'active'}
-              onChange={(e) => setEditingProduct({ ...product, status: e.target.value as ProductRecord['status'] })}
-            >
-              <option value="active">在售</option>
-              <option value="inactive">停售</option>
-              <option value="discontinued">停产</option>
-            </select>
-          </div>
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(product.tier_pricing_enabled)}
-                onChange={(e) => setEditingProduct({ ...product, tier_pricing_enabled: e.target.checked })}
-              />
-              <span>启用阶梯价</span>
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label className="text-sm font-medium">阶梯价</label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditingProduct({
-                ...product,
-                tier_pricing_enabled: true,
-                product_price_tiers: [...tiers, { qty_from: 1, qty_to: null, unit_price: Number(product.base_price || 0), sort_order: tiers.length }],
-              })}
-            >
-              + 添加阶梯
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {tiers.length === 0 ? (
-              <div className="rounded-md border border-dashed px-3 py-4 text-sm text-slate-500">
-                未配置阶梯价，将使用基础价。
-              </div>
-            ) : (
-              tiers.map((tier, index) => (
-                <div key={tier.id || index} className="grid grid-cols-[1fr_1fr_1fr_72px] gap-2 rounded-md bg-slate-50 p-3">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={tier.qty_from}
-                    onChange={(e) => updateTier(index, { qty_from: Number(e.target.value || 1) })}
-                  />
-                  <Input
-                    type="number"
-                    min={2}
-                    value={tier.qty_to ?? ''}
-                    onChange={(e) => updateTier(index, { qty_to: e.target.value ? Number(e.target.value) : null })}
-                    placeholder="留空=无上限"
-                  />
-                  <Input
-                    type="number"
-                    min={0}
-                    value={tier.unit_price}
-                    onChange={(e) => updateTier(index, { unit_price: Number(e.target.value || 0) })}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingProduct({
-                      ...product,
-                      product_price_tiers: tiers.filter((_, tierIndex) => tierIndex !== index),
-                    })}
-                  >
-                    删除
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   if (loading) {
     return <div className="p-8">加载中...</div>
@@ -1970,22 +1805,19 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         </DialogContent>
       </Dialog>
 
-      {editingProduct && (
-        <Dialog open={isProductEditOpen} onOpenChange={setIsProductEditOpen}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingProduct.id ? '编辑 SKU' : '新建 SKU'}</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              {renderProductEditForm()}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsProductEditOpen(false)}>取消</Button>
-              <Button onClick={handleSaveProduct}>保存</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      <ProductDialog
+        product={editingProduct}
+        open={isProductEditOpen}
+        onOpenChange={setIsProductEditOpen}
+        onLoadTiers={async (productId) => {
+          const token = localStorage.getItem('token')
+          const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+          const res = await fetch(`/api/product-price-tiers?product_id=${productId}`, { headers })
+          if (!res.ok) throw new Error('加载失败')
+          return res.json()
+        }}
+        onSave={handleSaveProduct}
+      />
     </div>
   )
 }
