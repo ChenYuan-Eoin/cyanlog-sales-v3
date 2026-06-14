@@ -1,10 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { BuildingIcon } from '@/components/icons'
-import { OrgAdminWorkbench } from '@/components/admin/OrgAdminWorkbench'
+import { BuildingIcon, ChevronRightIcon, ChevronDownIcon, UsersIcon, Building2Icon, MapPinIcon } from '@/components/icons'
 import type { OrgSummaryPayload } from '../types'
 
 interface OrgStructureTabProps {
@@ -21,117 +21,239 @@ export default function OrgStructureTab({ orgSummary, feishuSyncing, feishuResul
 
   return (
     <div className="space-y-6">
+      {/* Header Stats */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          icon={<Building2Icon size={20} />}
+          label="部门"
+          value={departments.length}
+          description="组织架构节点"
+        />
+        <StatCard
+          icon={<UsersIcon size={20} />}
+          label="成员"
+          value={users.length}
+          description="在职员工"
+        />
+        <StatCard
+          icon={<MapPinIcon size={20} />}
+          label="销售空间"
+          value={spaces.length}
+          description="业务空间"
+        />
+      </div>
+
+      {/* Actions */}
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
           <div>
-            <CardTitle>组织架构管理</CardTitle>
+            <CardTitle>组织架构同步</CardTitle>
             <p className="mt-1 text-sm text-slate-500">
-              组织架构是角色权限、审批路由和数据范围的基础层，不属于合同审核规则配置。
+              从外部系统同步部门结构和成员信息
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={onFeishuSync} disabled={feishuSyncing} variant="outline">
-              {feishuSyncing ? '同步中...' : '从飞书同步'}
-            </Button>
-          </div>
+          <Button onClick={onFeishuSync} disabled={feishuSyncing} variant="outline">
+            {feishuSyncing ? '同步中...' : '从飞书同步'}
+          </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {feishuResult && (
+        {feishuResult && (
+          <CardContent>
             <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
               {feishuResult}
             </div>
-          )}
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">部门树</div>
-              <div className="mt-3 space-y-2">
-                {departments.slice(0, 8).map((department) => (
-                  <div key={department.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-slate-900">
-                        {`${'\u3000'.repeat(department.depth || 0)}${department.name}`}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {department.code || '未设编码'}
-                      </div>
-                    </div>
-                    <Badge variant="outline">{department.member_count} 人</Badge>
+          </CardContent>
+        )}
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Department Tree */}
+        <Card>
+          <CardHeader>
+            <CardTitle>部门结构</CardTitle>
+            <p className="text-sm text-slate-500">按层级展示组织架构</p>
+          </CardHeader>
+          <CardContent>
+            <DepartmentTree departments={departments} />
+          </CardContent>
+        </Card>
+
+        {/* Members */}
+        <Card>
+          <CardHeader>
+            <CardTitle>成员概览</CardTitle>
+            <p className="text-sm text-slate-500">最近活跃的团队成员</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {users.slice(0, 10).map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 transition hover:shadow-sm"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                    {user.display_name?.charAt(0) || '?'}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 lg:col-span-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">成员概览</div>
-              <div className="mt-3 overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-500">
-                      <th className="pb-2 font-medium">成员</th>
-                      <th className="pb-2 font-medium">主部门</th>
-                      <th className="pb-2 font-medium">组织角色</th>
-                      <th className="pb-2 font-medium">状态</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.slice(0, 8).map((user) => (
-                      <tr key={user.id} className="border-b border-slate-100 last:border-0">
-                        <td className="py-3">
-                          <div className="font-medium text-slate-900">{user.display_name}</div>
-                          <div className="text-xs text-slate-500">{user.email}</div>
-                        </td>
-                        <td className="py-3 text-slate-600">{user.primary_dept_name || '-'}</td>
-                        <td className="py-3 text-slate-600">{user.role_names || '-'}</td>
-                        <td className="py-3">
-                          <Badge className={user.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
-                            {user.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <BuildingIcon size={16} />
-                销售空间与部门绑定
-              </div>
-              <div className="mt-3 space-y-2">
-                {spaces.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-sm text-slate-500">
-                    暂无销售空间。
-                  </div>
-                ) : (
-                  spaces.slice(0, 6).map((space) => (
-                    <div key={space.id} className="rounded-lg bg-slate-50 px-3 py-3">
-                      <div className="text-sm font-medium text-slate-900">{space.name}</div>
-                      <div className="mt-1 text-xs text-slate-500">{space.department_name}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-900">{user.display_name}</span>
+                      {user.status === 'active' ? (
+                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                      ) : (
+                        <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+                      )}
                     </div>
-                  ))
-                )}
-              </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                      <span>{user.primary_dept_name || '未分配部门'}</span>
+                      <span className="text-slate-300">·</span>
+                      <span>{user.email}</span>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 text-xs">
+                    {user.role_names || '成员'}
+                  </Badge>
+                </div>
+              ))}
+              {users.length === 0 && (
+                <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
+                  暂无成员数据
+                </div>
+              )}
             </div>
+          </CardContent>
+        </Card>
+      </div>
 
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-sm font-semibold text-slate-900">设计判断</div>
-              <div className="mt-3 space-y-3 text-sm text-slate-600">
-                <p>组织架构管理负责「部门、成员、空间、同步」，它提供审批链和数据范围的组织基础。</p>
-                <p>合同审核规则只负责「规则内容和生效版本」，不应承载部门树、角色分配或成员导入。</p>
-                <p>因此这里必须作为独立控制面存在，而不是挂在合同规则之下；本页直接提供组织工作台，不再要求跳转到单独后台完成日常配置。</p>
+      {/* Sales Spaces */}
+      <Card>
+        <CardHeader>
+          <CardTitle>销售空间</CardTitle>
+          <p className="text-sm text-slate-500">业务空间与部门绑定关系</p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {spaces.map((space) => (
+              <div
+                key={space.id}
+                className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-sm"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <BuildingIcon size={20} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-slate-900">{space.name}</div>
+                  <div className="mt-0.5 text-xs text-slate-500">{space.department_name}</div>
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <OrgAdminWorkbench embedded />
+            ))}
+            {spaces.length === 0 && (
+              <div className="col-span-full rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
+                暂无销售空间
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function StatCard({ icon, label, value, description }: { icon: React.ReactNode; label: string; value: number; description: string }) {
+  return (
+    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+        {icon}
+      </div>
+      <div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold text-slate-900">{value}</span>
+          <span className="text-sm text-slate-500">{label}</span>
+        </div>
+        <p className="text-xs text-slate-400">{description}</p>
+      </div>
+    </div>
+  )
+}
+
+function DepartmentTree({ departments }: { departments: OrgSummaryPayload['departments'] }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  // Build tree structure
+  const deptMap = new Map(departments.map(d => [d.id, d]))
+  const rootDepts = departments.filter(d => !d.parent_id)
+
+  function getChildren(parentId: string) {
+    return departments.filter(d => d.parent_id === parentId)
+  }
+
+  function toggleExpand(id: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function DeptNode({ dept, depth }: { dept: typeof departments[0]; depth: number }) {
+    const children = getChildren(dept.id)
+    const isExpanded = expanded.has(dept.id)
+    const hasChildren = children.length > 0
+
+    return (
+      <div>
+        <button
+          onClick={() => hasChildren && toggleExpand(dept.id)}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition hover:bg-slate-50"
+          style={{ paddingLeft: `${depth * 24 + 12}px` }}
+        >
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center">
+            {hasChildren ? (
+              isExpanded ? (
+                <ChevronDownIcon size={14} className="text-slate-400" />
+              ) : (
+                <ChevronRightIcon size={14} className="text-slate-400" />
+              )
+            ) : (
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-900">{dept.name}</span>
+              {dept.code && (
+                <span className="font-mono text-xs text-slate-400">{dept.code}</span>
+              )}
+            </div>
+          </div>
+          <Badge variant="outline" className="shrink-0 text-xs">
+            {dept.member_count} 人
+          </Badge>
+        </button>
+        {isExpanded && hasChildren && (
+          <div>
+            {children.map(child => (
+              <DeptNode key={child.id} dept={child} depth={depth + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1">
+      {rootDepts.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
+          暂无部门数据
+        </div>
+      ) : (
+        rootDepts.map(dept => (
+          <DeptNode key={dept.id} dept={dept} depth={0} />
+        ))
+      )}
     </div>
   )
 }

@@ -35,32 +35,10 @@ export default function RoleAccessTab({ roles, savingRoleId, orgSummary, onSaveR
       <CardHeader>
         <CardTitle>角色权限管理</CardTitle>
         <p className="text-sm text-slate-500 mt-1">
-          按业务能力维护角色，通过组织/部门/销售空间分配数据范围。
+          为每个角色分配业务能力和数据范围，控制成员的访问权限。
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-semibold text-slate-900">能力体系</div>
-            <div className="mt-3 space-y-1 text-xs text-slate-600">
-              <p>权限以 <code className="bg-white px-1 rounded border">资源:操作</code> 命名。</p>
-              <p>角色拥有权限 = 能访问的资源 × 数据范围。</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-semibold text-slate-900">数据范围层级</div>
-            <div className="mt-3 grid gap-2">
-              {DATA_SCOPE_LEVELS.map((level) => (
-                <div key={level.key} className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
-                  <span className="text-sm font-medium text-slate-900">{level.label}</span>
-                  <span className="text-xs text-slate-500">{level.description}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
         <div className="space-y-6">
           {roles.map((role) => (
             <RoleAccessCard

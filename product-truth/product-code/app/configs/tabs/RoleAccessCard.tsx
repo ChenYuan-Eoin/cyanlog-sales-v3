@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ShieldIcon, ChevronDownIcon, ChevronUpIcon } from '@/components/icons'
 import type {
   OrgSummaryUser,
   OrgSummaryDepartment,
@@ -202,7 +203,6 @@ export default function RoleAccessCard({
                           {item.label}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">{item.description}</div>
-                        <div className="mt-2 font-mono text-[11px] text-slate-400">{item.key}</div>
                       </div>
                     </div>
                   </label>
