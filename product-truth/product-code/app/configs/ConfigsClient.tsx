@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -259,6 +259,10 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   const [feishuResult, setFeishuResult] = useState<string>('')
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const [hasInitialData] = useState(() => Boolean(initialData))
+  const [loadedTabs, setLoadedTabs] = useState<Set<ConfigTabId>>(new Set(hasInitialData ? ['price-list'] : []))
+  const loadedTabsRef = useRef(loadedTabs)
+  // 保持 ref 与 state 同步
+  useEffect(() => { loadedTabsRef.current = loadedTabs }, [loadedTabs])
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -267,9 +271,10 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       setActiveTab(tab as ConfigTabId)
     }
     setTabReady(true)
-    // 服务端预取数据已存在时，跳过客户端请求
+    // 按需加载：初始加载当前 tab 数据（如果还没加载过）
     if (!hasInitialData) {
-      fetchData()
+      const initialTab = (tab && tab in CONFIG_TABS) ? tab as ConfigTabId : 'price-list'
+      loadTabData(initialTab)
     }
   }, [hasInitialData])
 
@@ -278,8 +283,85 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     const url = new URL(window.location.href)
     url.searchParams.set('tab', activeTab)
     window.history.replaceState({}, '', url)
+    // 按需加载：切换 tab 时加载对应数据（如果还没加载过）
+    if (!loadedTabsRef.current.has(activeTab)) {
+      loadTabData(activeTab)
+    }
   }, [activeTab, tabReady])
 
+  // 按需加载指定 tab 的数据
+  async function loadTabData(tab: ConfigTabId) {
+    setLoading(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('token')
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
+
+      switch (tab) {
+        case 'price-list': {
+          // 只加载 products
+          const productsRes = await fetch('/api/products', { headers })
+          if (productsRes.ok) {
+            const productsData = await productsRes.json()
+            setProducts(productsData)
+          }
+          break
+        }
+
+        case 'rules': {
+          // 只加载 rules
+          const rulesRes = await fetch('/api/rules', { headers })
+          if (rulesRes.ok) {
+            const rulesData = await rulesRes.json()
+            setRules(rulesData)
+          }
+          break
+        }
+
+        case 'tax':
+        case 'approval':
+        case 'ai':
+        case 'theme': {
+          // 这些 tab 共享 configs 数据
+          const configsRes = await fetch('/api/configs', { headers })
+          if (configsRes.ok) {
+            const configsData = await configsRes.json()
+            setConfigs(configsData)
+          }
+          break
+        }
+
+        case 'role-access': {
+          // 只加载 roles
+          const rolesRes = await fetch('/api/roles', { headers })
+          if (rolesRes.ok) {
+            const rolesData = await rolesRes.json()
+            setRoles(rolesData.data?.roles ?? [])
+          }
+          break
+        }
+
+        case 'org-structure': {
+          // 只加载 org
+          const orgRes = await fetch('/api/admin/org', { headers })
+          if (orgRes.ok) {
+            const orgData = await orgRes.json()
+            setOrgSummary(orgData)
+          }
+          break
+        }
+      }
+
+      // 标记该 tab 已加载
+      setLoadedTabs(prev => new Set(prev).add(tab))
+    } catch {
+      setError('加载失败，请重试')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 兼容原有调用：全部加载（供刷新按钮等使用）
   async function fetchData() {
     setLoading(true)
     setError('')
