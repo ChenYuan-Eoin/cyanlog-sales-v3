@@ -722,7 +722,9 @@ body {
   .sidebar.open {
     transform: translateX(0);
   }
-  .sidebar-overlay {
+  /* Only show overlay when sidebar is explicitly open */
+  .sidebar.open + .sidebar-overlay,
+  .sidebar-overlay.open {
     display: block;
   }
   .rail {

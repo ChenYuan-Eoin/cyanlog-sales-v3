@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
@@ -41,31 +41,58 @@ export function Sidebar() {
     return pathname.startsWith(href)
   }
 
+  const handleNavClick = useCallback(() => {
+    setMobileOpen(false)
+  }, [])
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
+  // Prevent body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileOpen])
+
   return (
     <>
       {/* Mobile hamburger button */}
       <button
-        className="fixed top-4 left-4 z-50 p-2 bg-slate-900 text-white rounded-md lg:hidden"
+        className="fixed top-4 left-4 z-[60] p-2 bg-slate-900 text-white rounded-md lg:hidden"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="Toggle menu"
       >
         <MenuIcon size={24} />
       </button>
 
-      {/* Overlay for mobile */}
+      {/* Overlay for mobile - only when sidebar is explicitly open */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-[55] lg:hidden"
           onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-slate-900 text-white transition-transform duration-300',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          'fixed left-0 top-0 z-[56] flex h-screen w-64 flex-col bg-slate-900 text-white',
+          // Transition only on mobile, desktop is always visible
+          'lg:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
+        style={{
+          transition: 'transform 300ms ease-out',
+        }}
       >
         <div className="flex items-center gap-3 p-6">
           <BrandMark size={36} variant="symbol" surface="dark" />
@@ -74,14 +101,14 @@ export function Sidebar() {
             <p className="truncate text-xs text-slate-300">{branding.productSubtitle || branding.brandName}</p>
           </div>
         </div>
-        <nav className="px-3 py-4">
+        <nav className="px-3 py-4 flex-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
+                onClick={handleNavClick}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
                   isActive(item.href)
@@ -99,7 +126,7 @@ export function Sidebar() {
           {/* 个人信息入口 */}
           <Link
             href="/profile"
-            onClick={() => setMobileOpen(false)}
+            onClick={handleNavClick}
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1',
               isActive('/profile')
