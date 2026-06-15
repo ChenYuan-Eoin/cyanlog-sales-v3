@@ -1,14 +1,26 @@
 // REQ: F003 自主可控 + RBAC
 // PURPOSE: 飞书部门结构同步
-// 权限要求: SUPER_ADMIN 角色（middleware 已做路径级别检查，本端点再做角色级硬隔离）
+// 权限要求: 组织管理员（SUPER_ADMIN / SALES_OPS / ADMIN 或拥有 admin:access/org:write 权限）
 
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   const userRoles = (req.headers.get('x-user-roles') ?? '').split(',').filter(Boolean)
-  if (!userRoles.includes('SUPER_ADMIN')) {
+  const userPermissions = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
+
+  // 检查是否有组织管理权限（与 middleware 保持一致）
+  const canManageOrg =
+    userRoles.includes('SUPER_ADMIN') ||
+    userRoles.includes('SALES_OPS') ||
+    userRoles.includes('ADMIN') ||
+    userPermissions.includes('*') ||
+    userPermissions.includes('admin:access') ||
+    userPermissions.includes('org:write') ||
+    userPermissions.includes('user:write')
+
+  if (!canManageOrg) {
     return NextResponse.json(
-      { error: '需要 SUPER_ADMIN 权限' },
+      { error: '需要组织管理员权限' },
       { status: 403 }
     )
   }

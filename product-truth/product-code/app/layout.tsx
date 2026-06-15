@@ -57,5 +57,12 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Cyanlog Sales",
     description: "智能销售支撑平台",
+    icons: {
+      icon: [
+        { url: '/favicon.svg', type: 'image/svg+xml' },
+        { url: '/favicon.ico', type: 'image/x-icon', sizes: 'any' },
+      ],
+      shortcut: '/favicon.ico',
+    },
   }
 }
