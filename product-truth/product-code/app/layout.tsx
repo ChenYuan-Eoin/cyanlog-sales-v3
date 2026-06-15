@@ -8,7 +8,7 @@ import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonito
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
 import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
-import { resolveFaviconUrl, themeToCssVariables } from "@/lib/ui-theme-shared";
+import { themeToCssVariables } from "@/lib/ui-theme-shared";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -54,19 +54,8 @@ export default async function RootLayout({
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const token = getServerAuthToken();
-  const theme = await getPublishedUITheme(token);
-  const faviconUrl = resolveFaviconUrl(theme)
-
   return {
-    title: theme.productTitle || theme.brandName || "Cyanlog Sales",
-    description: theme.productSubtitle || "智能销售支撑平台",
-    icons: faviconUrl
-      ? {
-          icon: faviconUrl,
-          shortcut: faviconUrl,
-          apple: faviconUrl,
-        }
-      : undefined,
-  };
+    title: "Cyanlog Sales",
+    description: "智能销售支撑平台",
+  }
 }

@@ -1,18 +1,25 @@
 {
-  "timestamp": "2026-06-14T08:27:55.875Z",
+  "timestamp": "2026-06-15T01:58:55.415Z",
   "typecheck": {
     "success": false,
-    "errors": 1,
+    "errors": 7,
     "message": "类型检查失败",
     "details": [
-      "lib/rules/engine.ts(51,31): error TS2352: Conversion of type '{ rule_type: \"structured\" | \"semantic\"; category: \"legal\"; condition_config: { pattern?: string | undefined; field?: string | undefined; operator?: \"gt\" | \"lt\" | \"eq\" | \"contains\" | undefined; value?: string | ... 1 more ... | undefined; prompt?: string | undefined; }; ... 11 more ...; updated_at: string; }[]' to type 'Rule[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first."
+      "app/configs/tabs/OrgStructureTab.tsx(7,24): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronRightIcon'.",
+      "app/configs/tabs/OrgStructureTab.tsx(7,42): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronDownIcon'.",
+      "app/configs/tabs/OrgStructureTab.tsx(7,70): error TS2724: '\"@/components/icons\"' has no exported member named 'Building2Icon'. Did you mean 'BuildingIcon'?",
+      "app/configs/tabs/OrgStructureTab.tsx(7,85): error TS2305: Module '\"@/components/icons\"' has no exported member 'MapPinIcon'.",
+      "app/configs/tabs/RoleAccessCard.tsx(6,10): error TS2305: Module '\"@/components/icons\"' has no exported member 'ShieldIcon'.",
+      "app/configs/tabs/RoleAccessCard.tsx(6,22): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronDownIcon'.",
+      "app/configs/tabs/RoleAccessCard.tsx(6,39): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronUpIcon'."
     ]
   },
   "lint": {
-    "success": true,
+    "success": false,
     "errors": 0,
     "warnings": 0,
-    "message": "Lint 检查通过"
+    "message": "Lint 检查发现问题",
+    "details": []
   },
   "test": {
     "success": true,
@@ -22,7 +29,7 @@
   },
   "summary": {
     "allPassed": false,
-    "totalErrors": 1,
-    "recommendation": "⚠️ 发现 1 个问题，请修正后再提交"
+    "totalErrors": 7,
+    "recommendation": "⚠️ 发现 7 个问题，请修正后再提交"
   }
 }
