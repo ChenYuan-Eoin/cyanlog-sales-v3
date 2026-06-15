@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { BrandingProvider } from "@/components/branding/BrandingProvider";
@@ -42,11 +44,18 @@ export default async function RootLayout({
       data-product-subtitle={theme.productSubtitle}
       data-login-subtitle={theme.loginSubtitle}
     >
+      <head>
+        {/* 预加载关键字体 */}
+        <link rel="preload" href="/fonts/GeistVF.woff" as="font" type="font/woff" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/GeistMonoVF.woff" as="font" type="font/woff" crossOrigin="anonymous" />
+      </head>
       <body className="antialiased">
         <BrandingProvider value={theme}>
           <ClientErrorMonitor />
           <RuntimeThemeLoader />
           <AppShell>{children}</AppShell>
+          <Analytics />
+          <SpeedInsights />
         </BrandingProvider>
       </body>
     </html>

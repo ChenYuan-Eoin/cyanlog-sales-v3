@@ -1,5 +1,8 @@
 // REQ:F001
-// PURPOSE: Product / SKU API - org scoped list and create
+// PURPOSE: Product / SKU API
+// Note: 使用 Node.js runtime
+
+export const preferredRegion = 'sin1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -130,16 +133,23 @@ export async function GET(req: NextRequest) {
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
-    // 返回分页数据
-    return NextResponse.json({
-      data,
-      pagination: {
-        total: count || 0,
-        limit,
-        offset,
-        hasMore: (count || 0) > offset + limit,
+    // 返回分页数据，Edge Cache 60s
+    return NextResponse.json(
+      {
+        data,
+        pagination: {
+          total: count || 0,
+          limit,
+          offset,
+          hasMore: (count || 0) > offset + limit,
+        },
       },
-    })
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    )
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

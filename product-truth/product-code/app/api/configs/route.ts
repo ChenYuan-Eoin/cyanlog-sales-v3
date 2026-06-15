@@ -1,5 +1,8 @@
 // REQ: F009-F012
-// PURPOSE: 配置中心 API - 列表查询和创建配置
+// PURPOSE: 配置中心 API
+// Note: 使用 Node.js runtime
+
+export const preferredRegion = 'sin1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -68,15 +71,22 @@ export async function GET(req: NextRequest) {
     // 对 AI_CONFIG 类型的 api_key 进行脱敏处理
     const sanitizedConfigs = configs.map((config) => sanitizeConfigRow(config))
 
-    return NextResponse.json({
-      data: sanitizedConfigs,
-      pagination: {
-        total: count || 0,
-        limit,
-        offset,
-        hasMore: (count || 0) > offset + limit,
+    return NextResponse.json(
+      {
+        data: sanitizedConfigs,
+        pagination: {
+          total: count || 0,
+          limit,
+          offset,
+          hasMore: (count || 0) > offset + limit,
+        },
       },
-    })
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+        },
+      }
+    )
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

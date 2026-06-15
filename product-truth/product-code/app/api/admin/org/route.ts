@@ -1,3 +1,9 @@
+// REQ:F003 - Organization Admin API
+// PURPOSE: 组织架构管理
+// Note: 使用 Node.js runtime (bcryptjs 需要 crypto)
+
+export const preferredRegion = 'sin1'
+
 import { randomBytes, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { cache } from 'react'
@@ -561,7 +567,14 @@ export async function GET(req: NextRequest) {
       return errorResponse('无权限访问组织管理', 403, 'FORBIDDEN')
     }
 
-    return NextResponse.json(await listOrgPayload(auth.orgId))
+    const data = await listOrgPayload(auth.orgId)
+
+    // Edge Cache: 缓存 30s，过期后 2min 内增量更新
+    return NextResponse.json(data, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+      },
+    })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

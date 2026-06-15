@@ -3,5 +3,9 @@
 		"@types/pg": "^8.20.0",
 		"js-yaml": "^4.2.0",
 		"pg": "^8.21.0"
+	},
+	"dependencies": {
+		"@vercel/analytics": "^2.0.1",
+		"@vercel/speed-insights": "^2.0.0"
 	}
 }
