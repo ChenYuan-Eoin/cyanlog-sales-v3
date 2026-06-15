@@ -1,25 +1,15 @@
 {
-  "timestamp": "2026-06-15T01:58:55.415Z",
+  "timestamp": "2026-06-15T06:45:05.141Z",
   "typecheck": {
-    "success": false,
-    "errors": 7,
-    "message": "类型检查失败",
-    "details": [
-      "app/configs/tabs/OrgStructureTab.tsx(7,24): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronRightIcon'.",
-      "app/configs/tabs/OrgStructureTab.tsx(7,42): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronDownIcon'.",
-      "app/configs/tabs/OrgStructureTab.tsx(7,70): error TS2724: '\"@/components/icons\"' has no exported member named 'Building2Icon'. Did you mean 'BuildingIcon'?",
-      "app/configs/tabs/OrgStructureTab.tsx(7,85): error TS2305: Module '\"@/components/icons\"' has no exported member 'MapPinIcon'.",
-      "app/configs/tabs/RoleAccessCard.tsx(6,10): error TS2305: Module '\"@/components/icons\"' has no exported member 'ShieldIcon'.",
-      "app/configs/tabs/RoleAccessCard.tsx(6,22): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronDownIcon'.",
-      "app/configs/tabs/RoleAccessCard.tsx(6,39): error TS2305: Module '\"@/components/icons\"' has no exported member 'ChevronUpIcon'."
-    ]
+    "success": true,
+    "errors": 0,
+    "message": "类型检查通过"
   },
   "lint": {
-    "success": false,
+    "success": true,
     "errors": 0,
     "warnings": 0,
-    "message": "Lint 检查发现问题",
-    "details": []
+    "message": "Lint 检查通过"
   },
   "test": {
     "success": true,
@@ -28,8 +18,8 @@
     "message": "测试执行完成"
   },
   "summary": {
-    "allPassed": false,
-    "totalErrors": 7,
-    "recommendation": "⚠️ 发现 7 个问题，请修正后再提交"
+    "allPassed": true,
+    "totalErrors": 0,
+    "recommendation": "✅ 所有检查通过，可以提交"
   }
 }

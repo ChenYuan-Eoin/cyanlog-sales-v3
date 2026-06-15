@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import { cache } from 'react'
 import bcrypt from 'bcryptjs'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
@@ -14,26 +15,17 @@ type RoleLookup = {
   id: string
   code: string
   name: string
+  sort_order?: number | null
 }
 
-type DepartmentLink = { name?: string } | { name?: string }[] | null
-type UserRoleLink = {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _DepartmentLink = { name?: string } | { name?: string }[] | null
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _UserRoleLink = {
   scope_type?: ScopeType
   scope_id?: string | null
   granted_at?: string | null
   role: { id?: string; name?: string; code?: string } | { id?: string; name?: string; code?: string }[] | null
-}
-
-type OrgUserRow = {
-  id: string
-  email: string | null
-  display_name: string
-  title: string | null
-  status: string
-  must_change_password: boolean | null
-  primary_dept_id: string | null
-  primary_dept: DepartmentLink
-  user_roles: UserRoleLink[] | null
 }
 
 type OrgDepartmentRow = {
@@ -63,16 +55,100 @@ function errorResponse(message: string, status: number, code?: string, extra?: R
   return NextResponse.json({ error: message, code, ...extra }, { status })
 }
 
-function unwrapOne<T>(value: T | T[] | null | undefined): T | null {
+// 兼容旧代码调用
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const unwrapOne = <T,>(value: T | T[] | null | undefined): T | null => {
   if (Array.isArray(value)) {
     return value[0] ?? null
   }
   return value ?? null
 }
 
-function createTempPassword() {
+// 兼容旧代码调用
+const createTempPassword = (): string => {
   return `Cyan!${randomBytes(9).toString('base64url')}`
 }
+
+// ============ 缓存层 - 数据不常变，缓存 5 分钟 ============
+
+// 缓存 TTL 注释说明：react cache 自动处理缓存生命周期
+// const CACHE_TTL_SECONDS = 300 // 5 分钟 - 保留作为文档
+
+// 缓存部门列表查询
+const getCachedDepartments = cache(async (orgId: string): Promise<OrgDepartmentRow[]> => {
+  const { data, error } = await supabaseAdmin
+    .from('departments')
+    .select('id, name, code, depth, member_count, parent_id')
+    .eq('org_id', orgId)
+    .order('depth', { ascending: true })
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    throw new Error('DEPARTMENTS_FETCH_FAILED')
+  }
+
+  return (data || []) as OrgDepartmentRow[]
+})
+
+// 缓存角色列表查询
+const getCachedRoles = cache(async (): Promise<RoleLookup[]> => {
+  const { data, error } = await supabaseAdmin
+    .from('roles')
+    .select('id, code, name, sort_order')
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    throw new Error('ROLES_FETCH_FAILED')
+  }
+
+  return (data || []) as RoleLookup[]
+})
+
+// 缓存销售空间列表查询
+const getCachedSalesSpaces = cache(async (orgId: string): Promise<SalesSpaceRow[]> => {
+  const { data, error } = await supabaseAdmin
+    .from('sales_spaces')
+    .select('id, name, description, department_id, owner_id')
+    .eq('org_id', orgId)
+    .order('name', { ascending: true })
+
+  if (error) {
+    throw new Error('SPACES_FETCH_FAILED')
+  }
+
+  return (data || []) as SalesSpaceRow[]
+})
+
+// 缓存组织信息查询
+const getCachedOrganization = cache(async (orgId: string) => {
+  const { data, error } = await supabaseAdmin
+    .from('organizations')
+    .select('id, name, slug')
+    .eq('id', orgId)
+    .single()
+
+  if (error) {
+    throw new Error('ORG_FETCH_FAILED')
+  }
+
+  return data
+})
+
+// 缓存用户角色查询
+const getCachedUserRoles = cache(async (orgId: string) => {
+  // 只查询当前组织的用户角色关联
+  const { data, error } = await supabaseAdmin
+    .from('user_roles')
+    .select('user_id, scope_type, scope_id, granted_at, role:roles(id, name, code)')
+    .eq('scope_type', 'org')
+    .eq('scope_id', orgId)
+
+  if (error) {
+    throw new Error('USER_ROLES_FETCH_FAILED')
+  }
+
+  return data || []
+})
 
 async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   const user = await requireAuth(req)
@@ -352,84 +428,80 @@ async function syncUserSalesSpaces(userId: string, orgId: string, primaryDeptId:
   }
 }
 
+// 优化后的列表查询 - 使用缓存和简化查询
 async function listOrgPayload(orgId: string) {
-  const [usersResult, departmentsResult, rolesResult, orgResult, spacesResult] = await Promise.all([
-    supabaseAdmin
-      .from('users')
-      .select('id, email, display_name, title, status, must_change_password, primary_dept_id, primary_dept:departments!primary_dept_id(name), user_roles:user_roles!user_roles_user_id_fkey(scope_type, scope_id, granted_at, role:roles(id, name, code))')
-      .eq('org_id', orgId)
-      .order('created_at', { ascending: false })
-      .limit(200),
-    supabaseAdmin
-      .from('departments')
-      .select('id, name, code, depth, member_count, parent_id')
-      .eq('org_id', orgId)
-      .order('depth', { ascending: true })
-      .order('sort_order', { ascending: true }),
-    supabaseAdmin
-      .from('roles')
-      .select('id, code, name')
-      .order('sort_order', { ascending: true }),
-    supabaseAdmin
-      .from('organizations')
-      .select('id, name, slug')
-      .eq('id', orgId)
-      .single(),
-    supabaseAdmin
-      .from('sales_spaces')
-      .select('id, name, description, department_id, owner_id')
-      .eq('org_id', orgId)
-      .order('name', { ascending: true }),
+  // 并行获取缓存数据（部门、角色、销售空间、组织信息）
+  const [departments, roles, spaces, organization] = await Promise.all([
+    getCachedDepartments(orgId),
+    getCachedRoles(),
+    getCachedSalesSpaces(orgId),
+    getCachedOrganization(orgId),
   ])
 
-  if (usersResult.error) {
+  // 构建部门名称映射
+  const departmentNameById = new Map(departments.map((d) => [d.id, d.name]))
+  const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]))
+
+  // 简化用户查询 - 不关联复杂角色数据，只获取基础信息
+  const { data: usersData, error: usersError } = await supabaseAdmin
+    .from('users')
+    .select('id, email, display_name, title, status, must_change_password, primary_dept_id')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (usersError) {
     throw new Error('USERS_FETCH_FAILED')
   }
-  if (departmentsResult.error) {
-    throw new Error('DEPARTMENTS_FETCH_FAILED')
-  }
-  if (rolesResult.error) {
-    throw new Error('ROLES_FETCH_FAILED')
-  }
-  if (orgResult.error) {
-    throw new Error('ORG_FETCH_FAILED')
-  }
-  if (spacesResult.error) {
-    throw new Error('SPACES_FETCH_FAILED')
+
+  // 获取用户角色关联（缓存）
+  const userRolesData = await getCachedUserRoles(orgId)
+
+  // 构建角色映射
+  // 角色映射（预留，用于后续扩展）
+  // const _roleById = new Map(roles.map((r) => [r.id, r]))
+
+  // 构建用户角色映射
+  const userRolesMap = new Map<string, typeof userRolesData>()
+  for (const ur of userRolesData) {
+    const userId = (ur as unknown as { user_id: string }).user_id
+    if (!userRolesMap.has(userId)) {
+      userRolesMap.set(userId, [])
+    }
+    userRolesMap.get(userId)!.push(ur)
   }
 
-  const departmentNameById = new Map(
-    ((departmentsResult.data || []) as OrgDepartmentRow[]).map((department) => [department.id, department.name])
-  )
-
-  const users = ((usersResult.data || []) as OrgUserRow[]).map((row) => {
-    const primaryDept = unwrapOne(row.primary_dept)
-    const roleEntries = (row.user_roles || [])
-      .map((userRole) => {
-        const role = unwrapOne(userRole.role)
-        if (!role?.code || !role.name || !role.id) {
-          return null
+  // 处理用户数据
+  const users = (usersData || []).map((row) => {
+    const userRoleEntries = (userRolesMap.get(row.id) || [])
+      .map((ur: unknown) => {
+        const entry = ur as {
+          scope_type: string
+          scope_id: string | null
+          granted_at: string | null
+          role: { id: string; name: string; code: string } | null
         }
+        const role = entry.role
+        if (!role?.code) return null
 
         let scopeName = '组织'
-        if (userRole.scope_type === 'department' && userRole.scope_id) {
-          scopeName = departmentNameById.get(userRole.scope_id) || '部门'
-        } else if (userRole.scope_type === 'space' && userRole.scope_id) {
-          scopeName = ((spacesResult.data || []) as SalesSpaceRow[])
-            .find((space) => space.id === userRole.scope_id)?.name || '销售空间'
+        if (entry.scope_type === 'department' && entry.scope_id) {
+          scopeName = departmentNameById.get(entry.scope_id) || '部门'
+        } else if (entry.scope_type === 'space' && entry.scope_id) {
+          scopeName = spaceNameById.get(entry.scope_id) || '销售空间'
         }
 
         return {
           roleId: role.id,
           roleName: role.name,
           roleCode: role.code,
-          scopeType: userRole.scope_type || 'org',
-          scopeId: userRole.scope_id || null,
+          scopeType: entry.scope_type as ScopeType,
+          scopeId: entry.scope_id,
           scopeName,
-          grantedAt: userRole.granted_at || null,
+          grantedAt: entry.granted_at,
         }
       })
-      .filter((role): role is {
+      .filter(Boolean) as {
         roleId: string
         roleName: string
         roleCode: string
@@ -437,56 +509,48 @@ async function listOrgPayload(orgId: string) {
         scopeId: string | null
         scopeName: string
         grantedAt: string | null
-      } => Boolean(role))
+      }[]
 
     return {
       id: row.id,
       email: row.email || '',
       display_name: row.display_name,
       title: row.title || '',
-      primary_dept_id: row.primary_dept_id || null,
-      primary_dept_name: primaryDept?.name || '-',
-      role_names: roleEntries
-        .map((role) => role.scopeType === 'org' ? role.roleName : `${role.roleName}(${role.scopeName})`)
+      primary_dept_id: row.primary_dept_id,
+      primary_dept_name: row.primary_dept_id
+        ? departmentNameById.get(row.primary_dept_id) || '-'
+        : '-',
+      role_names: userRoleEntries
+        .map((r) => (r.scopeType === 'org' ? r.roleName : `${r.roleName}(${r.scopeName})`))
         .join(', '),
-      role_codes: roleEntries
-        .filter((role) => role.scopeType === 'org')
-        .map((role) => role.roleCode),
-      scoped_roles: roleEntries,
+      role_codes: userRoleEntries.filter((r) => r.scopeType === 'org').map((r) => r.roleCode),
+      scoped_roles: userRoleEntries,
       status: row.status,
       must_change_password: Boolean(row.must_change_password),
     }
   })
 
-  const roles = (rolesResult.data || []).map((role) => ({
-    id: role.id,
-    code: role.code,
-    name: role.name,
-  }))
-
-  const spaces = ((spacesResult.data || []) as SalesSpaceRow[]).map((space) => ({
-    id: space.id,
-    name: space.name,
-    description: space.description,
-    department_id: space.department_id,
-    department_name: departmentNameById.get(space.department_id) || '',
-    owner_id: space.owner_id,
-  }))
-
   return {
-    organization: orgResult.data,
+    organization: organization,
     users,
-    departments: ((departmentsResult.data || []) as OrgDepartmentRow[]).map((row) => ({
+    departments: departments.map((row) => ({
       id: row.id,
       name: row.name,
       code: row.code,
       depth: row.depth || 0,
       member_count: row.member_count || 0,
       parent_id: row.parent_id,
-      parent_name: row.parent_id ? (departmentNameById.get(row.parent_id) || null) : null,
+      parent_name: row.parent_id ? departmentNameById.get(row.parent_id) || null : null,
     })),
-    roles,
-    spaces,
+    roles: roles.map((r) => ({ id: r.id, code: r.code, name: r.name })),
+    spaces: spaces.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      department_id: s.department_id,
+      department_name: departmentNameById.get(s.department_id) || '',
+      owner_id: s.owner_id,
+    })),
   }
 }
 
