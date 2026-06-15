@@ -265,6 +265,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   const [hasInitialData] = useState(() => Boolean(initialData))
   const [loadedTabs, setLoadedTabs] = useState<Set<ConfigTabId>>(new Set(hasInitialData ? ['price-list'] : []))
   const loadedTabsRef = useRef(loadedTabs)
+  const loadingTabRef = useRef<ConfigTabId | null>(null) // 防重复请求锁
   // 保持 ref 与 state 同步
   useEffect(() => { loadedTabsRef.current = loadedTabs }, [loadedTabs])
 
@@ -278,7 +279,12 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     // 按需加载：初始加载当前 tab 数据（如果还没加载过）
     if (!hasInitialData) {
       const initialTab = (tab && tab in CONFIG_TABS) ? tab as ConfigTabId : 'price-list'
-      loadTabData(initialTab)
+      // 使用 setTimeout 避免与第二个 useEffect 竞态
+      setTimeout(() => {
+        if (!loadedTabsRef.current.has(initialTab) && loadingTabRef.current !== initialTab) {
+          loadTabData(initialTab)
+        }
+      }, 0)
     }
   }, [hasInitialData])
 
@@ -287,14 +293,20 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     const url = new URL(window.location.href)
     url.searchParams.set('tab', activeTab)
     window.history.replaceState({}, '', url)
-    // 按需加载：切换 tab 时加载对应数据（如果还没加载过）
-    if (!loadedTabsRef.current.has(activeTab)) {
+    // 按需加载：切换 tab 时加载对应数据（如果还没加载过，且不在加载中）
+    if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
       loadTabData(activeTab)
     }
   }, [activeTab, tabReady])
 
   // 按需加载指定 tab 的数据
   async function loadTabData(tab: ConfigTabId) {
+    // 防重复请求：如果已经在加载该 tab，则跳过
+    if (loadingTabRef.current === tab) return
+    // 如果已经加载过，则跳过
+    if (loadedTabsRef.current.has(tab)) return
+
+    loadingTabRef.current = tab
     setLoading(true)
     setError('')
     try {
@@ -362,6 +374,10 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       setError('加载失败，请重试')
     } finally {
       setLoading(false)
+      // 释放锁
+      if (loadingTabRef.current === tab) {
+        loadingTabRef.current = null
+      }
     }
   }
 
@@ -1079,7 +1095,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
             </div>
 
             <div className="mt-6 space-y-6">
-              <TabsContent activeTab={activeTab} products={products} onNewProduct={openNewProduct} onEditProduct={openEditProduct} onDeleteProduct={handleDeleteProduct} rules={rules} onNewRule={openNewRule} onEditRule={openEditRule} onDeleteRule={handleDeleteRule} configs={configs} onNewConfig={openNewConfig} onEditConfig={openEditConfig} onPublishConfig={handlePublishConfig} onFetchVersions={handleFetchVersions} onDeleteConfig={handleDeleteConfig} orgSummary={orgSummary} feishuSyncing={feishuSyncing} feishuResult={feishuResult} onFeishuSync={handleFeishuSync} roles={roles} savingRoleId={savingRoleId} onSaveRole={handleSaveRole} />
+              <TabsContent activeTab={activeTab} loading={loading && !loadedTabs.has(activeTab)} products={products} onNewProduct={openNewProduct} onEditProduct={openEditProduct} onDeleteProduct={handleDeleteProduct} rules={rules} onNewRule={openNewRule} onEditRule={openEditRule} onDeleteRule={handleDeleteRule} configs={configs} onNewConfig={openNewConfig} onEditConfig={openEditConfig} onPublishConfig={handlePublishConfig} onFetchVersions={handleFetchVersions} onDeleteConfig={handleDeleteConfig} orgSummary={orgSummary} feishuSyncing={feishuSyncing} feishuResult={feishuResult} onFeishuSync={handleFeishuSync} roles={roles} savingRoleId={savingRoleId} onSaveRole={handleSaveRole} />
             </div>
           </main>
         </div>

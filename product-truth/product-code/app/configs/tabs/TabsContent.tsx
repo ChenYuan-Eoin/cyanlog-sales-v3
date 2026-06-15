@@ -11,8 +11,11 @@ import RoleAccessTab from './RoleAccessTab'
 import type { ProductRecord, Config, OrgSummaryPayload } from '../types'
 import type { Rule } from '@/types/rules'
 
+import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
+
 export interface TabsContentProps {
   activeTab: string
+  loading?: boolean
   // price-list
   products: ProductRecord[]
   onNewProduct: () => void
@@ -50,6 +53,7 @@ export interface TabsContentProps {
 
 export default function TabsContent({
   activeTab,
+  loading,
   products,
   onNewProduct,
   onEditProduct,
@@ -72,6 +76,55 @@ export default function TabsContent({
   savingRoleId,
   onSaveRole,
 }: TabsContentProps) {
+  if (loading) {
+    // 骨架屏根据 tab 类型显示不同形态
+    switch (activeTab) {
+      case 'price-list':
+      case 'rules':
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <StatsSkeleton count={3} />
+            </div>
+            <CardSkeleton />
+            <TableSkeleton rows={5} />
+          </div>
+        )
+      case 'org-structure':
+        return (
+          <div className="space-y-4">
+            <StatsSkeleton count={3} />
+            <div className="flex gap-6">
+              <div className="w-[260px]">
+                <CardSkeleton />
+              </div>
+              <div className="flex-1">
+                <CardSkeleton />
+              </div>
+            </div>
+          </div>
+        )
+      case 'role-access':
+        return (
+          <div className="flex gap-6">
+            <div className="w-[280px]">
+              <CardSkeleton />
+            </div>
+            <div className="flex-1">
+              <CardSkeleton />
+            </div>
+          </div>
+        )
+      default:
+        return (
+          <div className="space-y-4">
+            <StatsSkeleton count={3} />
+            <CardSkeleton />
+          </div>
+        )
+    }
+  }
+
   switch (activeTab) {
     case 'price-list':
       return (
