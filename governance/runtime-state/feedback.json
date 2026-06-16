@@ -1,25 +1,39 @@
 {
-  "timestamp": "2026-06-15T09:56:17.779Z",
+  "timestamp": "2026-06-16T04:41:32.031Z",
   "typecheck": {
-    "success": true,
-    "errors": 0,
-    "message": "类型检查通过"
+    "success": false,
+    "errors": 17,
+    "message": "类型检查失败",
+    "details": [
+      "app/api/admin/__harness__/org_migration.test.ts(113,36): error TS2307: Cannot find module './users/route' or its corresponding type declarations.",
+      "app/api/admin/__harness__/org_migration.test.ts(121,38): error TS2307: Cannot find module './users/[id]/route' or its corresponding type declarations.",
+      "app/api/admin/__harness__/org_migration.test.ts(132,36): error TS2307: Cannot find module './users/[id]/roles/route' or its corresponding type declarations.",
+      "app/api/admin/__harness__/org_migration.test.ts(140,36): error TS2307: Cannot find module './users/[id]/scoped-roles/route' or its corresponding type declarations.",
+      "app/api/admin/__harness__/org_migration.test.ts(151,37): error TS2307: Cannot find module './users/[id]/password/reset/route' or its corresponding type declarations.",
+      "app/api/admin/__harness__/org_migration.test.ts(162,36): error TS2307: Cannot find module './sales-spaces/route' or its corresponding type declarations.",
+      "app/api/admin/_characterization/org.route.characterization.test.ts(41,34): error TS2307: Cannot find module '../route' or its corresponding type declarations.",
+      "app/configs/tabs/components/DepartmentFormDialog.tsx(19,8): error TS2307: Cannot find module '@/components/ui/form' or its corresponding type declarations.",
+      "app/configs/tabs/components/DepartmentFormDialog.tsx(27,8): error TS2307: Cannot find module '@/components/ui/select' or its corresponding type declarations.",
+      "app/configs/tabs/components/DepartmentFormDialog.tsx(28,25): error TS2307: Cannot find module 'react-hook-form' or its corresponding type declarations."
+    ]
   },
   "lint": {
-    "success": true,
+    "success": false,
     "errors": 0,
     "warnings": 0,
-    "message": "Lint 检查通过"
+    "message": "Lint 检查发现问题",
+    "details": []
   },
   "test": {
-    "success": true,
-    "passed": 45,
-    "failed": 0,
-    "message": "测试执行完成"
+    "success": false,
+    "passed": 0,
+    "failed": 2,
+    "message": "测试失败",
+    "details": []
   },
   "summary": {
-    "allPassed": true,
-    "totalErrors": 0,
-    "recommendation": "✅ 所有检查通过，可以提交"
+    "allPassed": false,
+    "totalErrors": 19,
+    "recommendation": "⚠️ 发现 19 个问题，请修正后再提交"
   }
 }

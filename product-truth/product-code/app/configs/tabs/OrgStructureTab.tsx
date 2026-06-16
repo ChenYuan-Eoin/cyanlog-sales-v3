@@ -251,7 +251,19 @@ const MEMBER_COLUMNS: ColumnDef<OrgSummaryUser>[] = [
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-red-600"
-            onClick={() => console.log('Delete user:', row.original.id)}
+            onClick={async () => {
+              if (!confirm(`确定要删除用户 "${row.original.display_name}" 吗？`)) return
+              const res = await fetch(`/api/admin/users/${row.original.id}`, {
+                method: 'DELETE',
+              })
+              if (!res.ok) {
+                const result = await res.json()
+                alert(result.error || '删除失败')
+                return
+              }
+              alert('用户已删除')
+              window.location.reload()
+            }}
           >
             <TrashIcon className="h-4 w-4 mr-2" />
             删除
@@ -423,8 +435,18 @@ export default function OrgStructureTab({
           <DepartmentFormDialog
             departments={departments}
             onSubmit={async (values) => {
-              // TODO: 调用 POST /api/admin/departments
-              console.log('Create department:', values)
+              const res = await fetch('/api/admin/departments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(values),
+              })
+              const result = await res.json()
+              if (!res.ok) {
+                alert(result.error || '创建部门失败')
+                throw new Error(result.error)
+              }
+              alert('部门创建成功')
+              window.location.reload()
             }}
             trigger={
               <Button variant="outline" size="sm">

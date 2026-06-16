@@ -1,0 +1,195 @@
+// REQ:F003 - 部门管理 API (单条操作)
+// PURPOSE: 部门的更新和删除
+
+import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
+import { canAccessOrgAdmin } from '@/lib/permissions'
+
+// PATCH /api/admin/departments/:id - 更新部门
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const user = await requireAuth(req)
+    const { orgId } = user
+
+    // 权限检查
+    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
+    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
+
+    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
+
+    const body = await req.json()
+    const { name, code, parent_id, sort_order } = body
+
+    // 检查部门是否存在
+    const { data: existing, error: checkError } = await supabaseAdmin
+      .from('departments')
+      .select('id, depth, parent_id')
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .single()
+
+    if (checkError || !existing) {
+      return NextResponse.json({ error: '部门不存在' }, { status: 404 })
+    }
+
+    // 如果修改 code，检查唯一性
+    if (code) {
+      const { data: codeExists, error: codeCheckError } = await supabaseAdmin
+        .from('departments')
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('code', code)
+        .neq('id', id)
+        .single()
+
+      if (codeExists) {
+        return NextResponse.json({ error: '部门编码已存在' }, { status: 409 })
+      }
+    }
+
+    // 计算新的 depth（如果 parent_id 改变）
+    let depth = existing.depth
+    if (parent_id !== undefined && parent_id !== existing.parent_id) {
+      if (parent_id === null) {
+        depth = 0
+      } else {
+        // 检查新上级是否存在且不是当前部门或其子部门
+        const { data: parent, error: parentError } = await supabaseAdmin
+          .from('departments')
+          .select('depth, path')
+          .eq('id', parent_id)
+          .eq('org_id', orgId)
+          .single()
+
+        if (parentError || !parent) {
+          return NextResponse.json({ error: '上级部门不存在' }, { status: 400 })
+        }
+
+        // 防止循环引用
+        if (parent.path?.includes(id)) {
+          return NextResponse.json({ error: '不能将部门设置为其子部门的下级' }, { status: 400 })
+        }
+
+        depth = (parent.depth || 0) + 1
+      }
+    }
+
+    // 更新数据
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name
+    if (code !== undefined) updateData.code = code
+    if (parent_id !== undefined) updateData.parent_id = parent_id
+    if (depth !== undefined) updateData.depth = depth
+    if (sort_order !== undefined) updateData.sort_order = sort_order
+
+    const { data, error } = await supabaseAdmin
+      .from('departments')
+      .update(updateData)
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .select('id, name, code, depth, member_count, parent_id, sort_order')
+      .single()
+
+    if (error) {
+      console.error('Update department error:', error)
+      return NextResponse.json({ error: '更新部门失败' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+      message: '部门更新成功',
+    })
+  } catch (err) {
+    console.error('PATCH department error:', err)
+    if (err instanceof Error && err.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+// DELETE /api/admin/departments/:id - 删除部门
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const user = await requireAuth(req)
+    const { orgId } = user
+
+    // 权限检查
+    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
+    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
+
+    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
+
+    // 检查部门是否存在
+    const { data: existing, error: checkError } = await supabaseAdmin
+      .from('departments')
+      .select('id, member_count, name')
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .single()
+
+    if (checkError || !existing) {
+      return NextResponse.json({ error: '部门不存在' }, { status: 404 })
+    }
+
+    // 检查是否有成员
+    if (existing.member_count > 0) {
+      return NextResponse.json(
+        { error: `部门 "${existing.name}" 下还有 ${existing.member_count} 名成员，请先转移或删除成员` },
+        { status: 400 }
+      )
+    }
+
+    // 检查是否有子部门
+    const { data: children, error: childrenError } = await supabaseAdmin
+      .from('departments')
+      .select('id')
+      .eq('parent_id', id)
+      .eq('org_id', orgId)
+      .limit(1)
+
+    if (children && children.length > 0) {
+      return NextResponse.json(
+        { error: `部门 "${existing.name}" 下还有子部门，请先删除子部门` },
+        { status: 400 }
+      )
+    }
+
+    // 软删除：将状态改为 inactive
+    const { error } = await supabaseAdmin
+      .from('departments')
+      .update({ status: 'inactive' })
+      .eq('id', id)
+      .eq('org_id', orgId)
+
+    if (error) {
+      console.error('Delete department error:', error)
+      return NextResponse.json({ error: '删除部门失败' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `部门 "${existing.name}" 已删除`,
+    })
+  } catch (err) {
+    console.error('DELETE department error:', err)
+    if (err instanceof Error && err.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
