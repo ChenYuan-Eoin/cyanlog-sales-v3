@@ -99,7 +99,7 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
       <div>
         <button
           onClick={() => handleDeptClick(dept.id, hasChildren)}
-          className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition ${
+          className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition group ${
             isSelected
               ? 'bg-blue-50 text-blue-900 hover:bg-blue-100'
               : 'hover:bg-slate-50'
@@ -131,6 +131,67 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
               {dept.name}
             </span>
           </div>
+
+          {/* Actions: Edit / Delete */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-slate-200/50"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontalIcon size={14} className="text-slate-400" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DepartmentFormDialog
+                departments={departments}
+                editingDept={dept}
+                onSubmit={async (values) => {
+                  const res = await fetch(`/api/admin/departments/${dept.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: values.name,
+                      code: values.code,
+                      parent_id: values.parent_id,
+                    }),
+                  })
+                  const result = await res.json()
+                  if (!res.ok) {
+                    alert(result.error || '更新失败')
+                    throw new Error(result.error)
+                  }
+                  alert('部门更新成功')
+                  window.location.reload()
+                }}
+                trigger={
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                    <EditIcon className="h-4 w-4 mr-2" />
+                    编辑
+                  </DropdownMenuItem>
+                }
+              />
+              <DropdownMenuItem
+                className="text-red-600"
+                onClick={async () => {
+                  if (!confirm(`确定要删除部门 "${dept.name}" 吗？`)) return
+                  const res = await fetch(`/api/admin/departments/${dept.id}`, {
+                    method: 'DELETE',
+                  })
+                  if (!res.ok) {
+                    const result = await res.json().catch(() => ({}))
+                    alert(result.error || '删除失败')
+                    return
+                  }
+                  alert('部门已删除')
+                  window.location.reload()
+                }}
+              >
+                <TrashIcon className="h-4 w-4 mr-2" />
+                删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Member count */}
           <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">

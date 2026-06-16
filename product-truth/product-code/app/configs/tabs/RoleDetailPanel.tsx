@@ -221,7 +221,7 @@ export function RoleDetailPanel({
         {/* 员工分配 Tab */}
         <TabsContent value="members" className="m-0">
           <MemberAssignmentTab
-            roleCode={role.code}
+            roleId={role.id}
             users={users}
             _departments={departments}
             assignedUsers={stats.assignedUsers}
@@ -244,14 +244,16 @@ export function RoleDetailPanel({
 // ============ 员工分配 Tab ============
 
 interface MemberAssignmentTabProps {
-  roleCode: string
+  _roleCode?: string
+  roleId: string
   users: OrgSummaryUser[]
   _departments: OrgSummaryDepartment[]
   assignedUsers: OrgSummaryUser[]
 }
 
-function MemberAssignmentTab({ roleCode, users, _departments, assignedUsers }: MemberAssignmentTabProps) {
+function MemberAssignmentTab({ roleId, users, _departments, assignedUsers }: MemberAssignmentTabProps) {
   const [userSearch, setUserSearch] = useState('')
+  const [assigning, setAssigning] = useState(false)
 
   // 已分配用户的 ID 集合
   const assignedUserIds = useMemo(
@@ -280,15 +282,78 @@ function MemberAssignmentTab({ roleCode, users, _departments, assignedUsers }: M
     return fuse.search(userSearch).map(r => r.item)
   }, [fuse, userSearch])
 
-  // TODO: 实现添加/移除成员的 API 调用
-  const handleAddMember = (userId: string) => {
-    console.log('Add member:', userId, 'to role:', roleCode)
-    // 这里将来调用 API
+  // 添加成员到角色
+  const handleAddMember = async (userId: string) => {
+    const user = users.find(u => u.id === userId)
+    if (!user) return
+
+    const currentRoleIds = user.role_ids || []
+    if (currentRoleIds.includes(roleId)) {
+      alert('该用户已经是此角色')
+      return
+    }
+
+    const newRoleIds = [...currentRoleIds, roleId]
+
+    setAssigning(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/admin/users/${userId}/roles`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role_ids: newRoleIds }),
+      })
+
+      if (res.ok) {
+        setUserSearch('')
+        window.location.reload()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || '添加失败')
+      }
+    } catch {
+      alert('网络错误')
+    } finally {
+      setAssigning(false)
+    }
   }
 
-  const handleRemoveMember = (userId: string) => {
-    console.log('Remove member:', userId, 'from role:', roleCode)
-    // 这里将来调用 API
+  // 从角色移除成员
+  const handleRemoveMember = async (userId: string) => {
+    const user = assignedUsers.find(u => u.id === userId)
+    if (!user) return
+
+    if (!confirm(`确定要从角色中移除「${user.display_name}」？`)) return
+
+    const currentRoleIds = user.role_ids || []
+    const newRoleIds = currentRoleIds.filter(id => id !== roleId)
+
+    setAssigning(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/admin/users/${userId}/roles`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role_ids: newRoleIds }),
+      })
+
+      if (res.ok) {
+        window.location.reload()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || '移除失败')
+      }
+    } catch {
+      alert('网络错误')
+    } finally {
+      setAssigning(false)
+    }
   }
 
   return (
@@ -322,7 +387,7 @@ function MemberAssignmentTab({ roleCode, users, _departments, assignedUsers }: M
                     <div className="text-sm font-medium text-slate-900">{user.display_name}</div>
                     <div className="text-xs text-slate-500">{user.email} · {user.primary_dept_name}</div>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => handleAddMember(user.id)}>
+                  <Button size="sm" variant="ghost" onClick={() => handleAddMember(user.id)} disabled={assigning}>
                     <CheckIcon size={16} className="text-green-600" />
                   </Button>
                 </div>
@@ -373,6 +438,7 @@ function MemberAssignmentTab({ roleCode, users, _departments, assignedUsers }: M
                         size="sm"
                         variant="ghost"
                         onClick={() => handleRemoveMember(user.id)}
+                        disabled={assigning}
                       >
                         <TrashIcon size={16} className="text-red-500" />
                       </Button>
