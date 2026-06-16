@@ -52,7 +52,7 @@ jobs:
 
   feedback-on-failure:
     name: Collect feedback on failure
-    runs-on: ubuntu-listantml:binary>
+    runs-on: ubuntu-latest
     if: failure()
     steps:
       - name: Collect failure feedback
