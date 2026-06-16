@@ -9,6 +9,8 @@ on:
 env:
   NODE_VERSION: '20'
   PNPM_VERSION: '9'
+  # 禁用 frozen-lockfile 以允许 lock 文件自动更新
+  PNPM_FROZEN_LOCKFILE: 'false'
 
 # Vercel 部署所需的权限
 permissions:
