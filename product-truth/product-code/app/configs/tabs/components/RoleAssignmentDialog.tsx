@@ -28,6 +28,8 @@ interface RoleAssignmentDialogProps {
   departments: OrgSummaryDepartment[]
   onSubmit: (roleIds: string[]) => Promise<void>
   trigger?: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export function RoleAssignmentDialog({
@@ -37,8 +39,12 @@ export function RoleAssignmentDialog({
   departments: _departments,
   onSubmit,
   trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: RoleAssignmentDialogProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const onOpenChange = controlledOnOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
   const [roles, setRoles] = useState<Role[]>([])
   const [selectedRoles, setSelectedRoles] = useState<string[]>(currentRoles)
@@ -85,14 +91,14 @@ export function RoleAssignmentDialog({
     setLoading(true)
     try {
       await onSubmit(selectedRoles)
-      setOpen(false)
+      onOpenChange(false)
     } finally {
       setLoading(false)
     }
-  }, [onSubmit, selectedRoles])
+  }, [onSubmit, selectedRoles, onOpenChange])
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger>
         {trigger ?? (
           <Button variant="ghost" size="sm">
@@ -162,7 +168,7 @@ export function RoleAssignmentDialog({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setOpen(false)}
+                onClick={() => onOpenChange(false)}
                 disabled={loading}
               >
                 取消

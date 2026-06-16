@@ -251,160 +251,12 @@ interface MemberTableProps {
   departments: OrgSummaryDepartment[]
 }
 
-const MEMBER_COLUMNS: ColumnDef<OrgSummaryUser>[] = [
-  {
-    accessorKey: 'display_name',
-    header: '姓名',
-    cell: ({ row }) => (
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
-          {row.original.display_name?.charAt(0) || '?'}
-        </div>
-        <div>
-          <div className="font-medium text-slate-900">{row.original.display_name}</div>
-          <div className="text-xs text-slate-500">{row.original.email}</div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    accessorKey: 'title',
-    header: '职位',
-    cell: ({ row }) => (
-      <span className="text-sm text-slate-600">
-        {row.original.title || '-'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'primary_dept_name',
-    header: '部门',
-    cell: ({ row }) => (
-      <Badge variant="outline" className="font-normal">
-        {row.original.primary_dept_name || '未分配'}
-      </Badge>
-    ),
-  },
-  {
-    accessorKey: 'role_names',
-    header: '角色',
-    cell: ({ row }) => (
-      <div className="flex flex-wrap gap-1">
-        {row.original.role_names?.split(',').map((role, i) => (
-          <Badge key={i} variant="secondary" className="text-xs">
-            {role.trim()}
-          </Badge>
-        )) || <span className="text-slate-400">-</span>}
-      </div>
-    ),
-  },
-  {
-    accessorKey: 'status',
-    header: '状态',
-    cell: ({ row }) => (
-      <div className="flex items-center gap-2">
-        <span className={`inline-block h-2 w-2 rounded-full ${
-          row.original.status === 'active' ? 'bg-emerald-400' : 'bg-amber-400'
-        }`} />
-        <span className="text-sm text-slate-600">
-          {row.original.status === 'active' ? '在职' : '未激活'}
-        </span>
-      </div>
-    ),
-  },
-  {
-    id: 'actions',
-    header: '操作',
-    cell: ({ row, table }) => {
-      const user = row.original
-      const departments = (table.options.meta as { departments: OrgSummaryDepartment[] })?.departments ?? []
-
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <MoreHorizontalIcon className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <UserFormDialog
-              departments={departments}
-              editingUser={user}
-              onSubmit={async (values) => {
-                const res = await fetch(`/api/admin/users/${user.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(values),
-                })
-                const result = await res.json()
-                if (!res.ok) {
-                  alert(result.error || '更新失败')
-                  throw new Error(result.error)
-                }
-                alert('用户更新成功')
-                window.location.reload()
-              }}
-              trigger={
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <EditIcon className="h-4 w-4 mr-2" />
-                  编辑
-                </DropdownMenuItem>
-              }
-            />
-            <RoleAssignmentDialog
-              userId={user.id}
-              userName={user.display_name}
-              currentRoles={user.role_ids || []}
-              departments={departments}
-              onSubmit={async (roleIds) => {
-                const res = await fetch(`/api/admin/users/${user.id}/roles`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ role_ids: roleIds, scope_type: 'org' }),
-                })
-                const result = await res.json()
-                if (!res.ok) {
-                  alert(result.error || '分配角色失败')
-                  throw new Error(result.error)
-                }
-                alert('角色分配成功')
-                window.location.reload()
-              }}
-              trigger={
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <ShieldIcon className="h-4 w-4 mr-2" />
-                  分配角色
-                </DropdownMenuItem>
-              }
-            />
-            <DropdownMenuItem
-              className="text-red-600"
-              onClick={async () => {
-                if (!confirm(`确定要删除用户 "${user.display_name}" 吗？`)) return
-                const res = await fetch(`/api/admin/users/${user.id}`, {
-                  method: 'DELETE',
-                })
-                if (!res.ok) {
-                  const result = await res.json()
-                  alert(result.error || '删除失败')
-                  return
-                }
-                alert('用户已删除')
-                window.location.reload()
-              }}
-            >
-              <TrashIcon className="h-4 w-4 mr-2" />
-              删除
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )
-    },
-  },
-]
-
-function MemberTable({ users, departments }: MemberTableProps) {
+function MemberTable({ users }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
 
   // 使用 Fuse.js 进行模糊搜索
   const fuse = useMemo(() => {
@@ -420,13 +272,121 @@ function MemberTable({ users, departments }: MemberTableProps) {
     return fuse.search(globalFilter).map(result => result.item)
   }, [users, fuse, globalFilter])
 
+  const columns = useMemo<ColumnDef<OrgSummaryUser>[]>(() => [
+    {
+      accessorKey: 'display_name',
+      header: '姓名',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+            {row.original.display_name?.charAt(0) || '?'}
+          </div>
+          <div>
+            <div className="font-medium text-slate-900">{row.original.display_name}</div>
+            <div className="text-xs text-slate-500">{row.original.email}</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'title',
+      header: '职位',
+      cell: ({ row }) => (
+        <span className="text-sm text-slate-600">
+          {row.original.title || '-'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'primary_dept_name',
+      header: '部门',
+      cell: ({ row }) => (
+        <Badge variant="outline" className="font-normal">
+          {row.original.primary_dept_name || '未分配'}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: 'role_names',
+      header: '角色',
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {row.original.role_names?.split(',').map((role, i) => (
+            <Badge key={i} variant="secondary" className="text-xs">
+              {role.trim()}
+            </Badge>
+          )) || <span className="text-slate-400">-</span>}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: '状态',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <span className={`inline-block h-2 w-2 rounded-full ${
+            row.original.status === 'active' ? 'bg-emerald-400' : 'bg-amber-400'
+          }`} />
+          <span className="text-sm text-slate-600">
+            {row.original.status === 'active' ? '在职' : '未激活'}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: '操作',
+      cell: ({ row }) => {
+        const user = row.original
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontalIcon className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setEditingUser(user)}>
+                <EditIcon className="h-4 w-4 mr-2" />
+                编辑
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setAssigningUser(user)}>
+                <ShieldIcon className="h-4 w-4 mr-2" />
+                分配角色
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-red-600"
+                onClick={async () => {
+                  if (!confirm(`确定要删除用户 "${user.display_name}" 吗？`)) return
+                  const res = await fetch(`/api/admin/users/${user.id}`, {
+                    method: 'DELETE',
+                  })
+                  if (!res.ok) {
+                    const result = await res.json()
+                    alert(result.error || '删除失败')
+                    return
+                  }
+                  alert('用户已删除')
+                  window.location.reload()
+                }}
+              >
+                <TrashIcon className="h-4 w-4 mr-2" />
+                删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+    },
+  ], [])
+
   const table = useReactTable({
     data: filteredUsers,
-    columns: MEMBER_COLUMNS,
+    columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    meta: { departments },
     initialState: {
       pagination: {
         pageSize: 10,
@@ -481,7 +441,7 @@ function MemberTable({ users, departments }: MemberTableProps) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={MEMBER_COLUMNS.length} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={columns.length} className="h-24 text-center text-slate-500">
                   未找到匹配的成员
                 </TableCell>
               </TableRow>
@@ -552,9 +512,9 @@ export default function OrgStructureTab({
     departments.find(d => d.id === selectedDeptId) ?? null
   , [departments, selectedDeptId])
 
-  // 编辑用户状态（预留，可能用于未来扩展）
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editingUser, _setEditingUser] = useState<OrgSummaryUser | null>(null)
+  // 编辑用户状态
+  const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
+  const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
 
   return (
     <div className="space-y-6">
@@ -699,6 +659,56 @@ export default function OrgStructureTab({
           </div>
         </div>
       </div>
+
+      {/* 编辑用户 Dialog */}
+      {editingUser && (
+        <UserFormDialog
+          departments={departments}
+          editingUser={editingUser}
+          open={true}
+          onOpenChange={(open) => !open && setEditingUser(null)}
+          onSubmit={async (values) => {
+            const res = await fetch(`/api/admin/users/${editingUser.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(values),
+            })
+            const result = await res.json()
+            if (!res.ok) {
+              alert(result.error || '更新失败')
+              throw new Error(result.error)
+            }
+            alert('用户更新成功')
+            window.location.reload()
+          }}
+        />
+      )}
+
+      {/* 分配角色 Dialog */}
+      {assigningUser && (
+        <RoleAssignmentDialog
+          userId={assigningUser.id}
+          userName={assigningUser.display_name}
+          currentRoles={assigningUser.role_ids || []}
+          departments={departments}
+          open={true}
+          onOpenChange={(open) => !open && setAssigningUser(null)}
+          onSubmit={async (roleIds) => {
+            const res = await fetch(`/api/admin/users/${assigningUser.id}/roles`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ role_ids: roleIds, scope_type: 'org' }),
+            })
+            const result = await res.json()
+            if (!res.ok) {
+              alert(result.error || '分配角色失败')
+              throw new Error(result.error)
+            }
+            alert('角色分配成功')
+            window.location.reload()
+          }}
+        />
+      )}
     </div>
   )
 }
