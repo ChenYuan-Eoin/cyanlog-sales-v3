@@ -63,6 +63,8 @@ interface DepartmentTreeProps {
 
 function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
+  const [deletingDept, setDeletingDept] = useState<OrgSummaryDepartment | null>(null)
 
   const rootDepts = useMemo(() => departments.filter(d => !d.parent_id), [departments])
 
@@ -88,6 +90,25 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
       toggleExpand(deptId)
     }
   }, [selectedDeptId, onSelectDept, expanded, toggleExpand])
+
+  const handleDelete = useCallback(async (dept: OrgSummaryDepartment) => {
+    if (!confirm(`确定要删除部门 "${dept.name}" 吗？`)) return
+    setDeletingDept(dept)
+    try {
+      const res = await fetch(`/api/admin/departments/${dept.id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}))
+        alert(result.error || '删除失败')
+        return
+      }
+      alert('部门已删除')
+      window.location.reload()
+    } finally {
+      setDeletingDept(null)
+    }
+  }, [])
 
   function DeptNode({ dept, depth }: { dept: OrgSummaryDepartment; depth: number }) {
     const children = useMemo(() => departments.filter(d => d.parent_id === dept.id), [departments, dept.id])
@@ -148,52 +169,17 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DepartmentFormDialog
-                departments={departments}
-                editingDept={dept}
-                onSubmit={async (values) => {
-                  const res = await fetch(`/api/admin/departments/${dept.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      name: values.name,
-                      code: values.code,
-                      parent_id: values.parent_id,
-                    }),
-                  })
-                  const result = await res.json()
-                  if (!res.ok) {
-                    alert(result.error || '更新失败')
-                    throw new Error(result.error)
-                  }
-                  alert('部门更新成功')
-                  window.location.reload()
-                }}
-                trigger={
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                    <EditIcon className="h-4 w-4 mr-2" />
-                    编辑
-                  </DropdownMenuItem>
-                }
-              />
+              <DropdownMenuItem onSelect={() => setEditDept(dept)}>
+                <EditIcon className="h-4 w-4 mr-2" />
+                编辑
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-red-600"
-                onClick={async () => {
-                  if (!confirm(`确定要删除部门 "${dept.name}" 吗？`)) return
-                  const res = await fetch(`/api/admin/departments/${dept.id}`, {
-                    method: 'DELETE',
-                  })
-                  if (!res.ok) {
-                    const result = await res.json().catch(() => ({}))
-                    alert(result.error || '删除失败')
-                    return
-                  }
-                  alert('部门已删除')
-                  window.location.reload()
-                }}
+                disabled={deletingDept?.id === dept.id}
+                onSelect={() => handleDelete(dept)}
               >
                 <TrashIcon className="h-4 w-4 mr-2" />
-                删除
+                {deletingDept?.id === dept.id ? '删除中...' : '删除'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -216,15 +202,45 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
   }
 
   return (
-    <div className={`space-y-1 ${className}`}>
-      {rootDepts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
-          暂无部门数据
-        </div>
-      ) : (
-        rootDepts.map(dept => <DeptNode key={dept.id} dept={dept} depth={0} />)
+    <>
+      <div className={`space-y-1 ${className}`}>
+        {rootDepts.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
+            暂无部门数据
+          </div>
+        ) : (
+          rootDepts.map(dept => <DeptNode key={dept.id} dept={dept} depth={0} />)
+        )}
+      </div>
+
+      {/* Edit Dialog - controlled by state, not nested in DropdownMenu */}
+      {editDept && (
+        <DepartmentFormDialog
+          departments={departments}
+          editingDept={editDept}
+          open={true}
+          onOpenChange={(open) => !open && setEditDept(null)}
+          onSubmit={async (values) => {
+            const res = await fetch(`/api/admin/departments/${editDept.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: values.name,
+                code: values.code,
+                parent_id: values.parent_id,
+              }),
+            })
+            const result = await res.json()
+            if (!res.ok) {
+              alert(result.error || '更新失败')
+              throw new Error(result.error)
+            }
+            alert('部门更新成功')
+            window.location.reload()
+          }}
+        />
       )}
-    </div>
+    </>
   )
 }
 

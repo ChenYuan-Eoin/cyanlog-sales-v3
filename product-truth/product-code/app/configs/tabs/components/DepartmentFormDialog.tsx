@@ -44,6 +44,8 @@ interface DepartmentFormDialogProps {
   editingDept?: OrgSummaryDepartment | null
   onSubmit: (values: DepartmentFormValues) => Promise<void>
   trigger?: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export function DepartmentFormDialog({
@@ -51,8 +53,12 @@ export function DepartmentFormDialog({
   editingDept,
   onSubmit,
   trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: DepartmentFormDialogProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const onOpenChange = controlledOnOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
 
   const form = useForm<DepartmentFormValues>({
@@ -69,17 +75,17 @@ export function DepartmentFormDialog({
       setLoading(true)
       try {
         await onSubmit(values)
-        setOpen(false)
+        onOpenChange(false)
         form.reset()
       } finally {
         setLoading(false)
       }
     },
-    [onSubmit, form]
+    [onSubmit, form, onOpenChange]
   )
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger>{trigger ?? (
         <Button variant="outline" size="sm">
           <PlusIcon className="h-4 w-4 mr-1" />
@@ -153,7 +159,7 @@ export function DepartmentFormDialog({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setOpen(false)}
+                onClick={() => onOpenChange(false)}
                 disabled={loading}
               >
                 取消
