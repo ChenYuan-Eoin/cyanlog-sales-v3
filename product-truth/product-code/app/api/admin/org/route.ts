@@ -41,6 +41,7 @@ type OrgDepartmentRow = {
   depth: number | null
   member_count: number | null
   parent_id: string | null
+  leader_id: string | null
 }
 
 type SalesSpaceRow = {
@@ -84,7 +85,7 @@ const createTempPassword = (): string => {
 const getCachedDepartments = cache(async (orgId: string): Promise<OrgDepartmentRow[]> => {
   const { data, error } = await supabaseAdmin
     .from('departments')
-    .select('id, name, code, depth, member_count, parent_id')
+    .select('id, name, code, depth, member_count, parent_id, leader_id')
     .eq('org_id', orgId)
     .order('depth', { ascending: true })
     .order('sort_order', { ascending: true })
@@ -460,6 +461,9 @@ async function listOrgPayload(orgId: string) {
     throw new Error('USERS_FETCH_FAILED')
   }
 
+  // 构建用户姓名映射（用于查找部门主管）
+  const userNameById = new Map((usersData || []).map((u) => [u.id, u.display_name]))
+
   // 获取用户角色关联（缓存）
   const userRolesData = await getCachedUserRoles(orgId)
 
@@ -547,6 +551,8 @@ async function listOrgPayload(orgId: string) {
       member_count: row.member_count || 0,
       parent_id: row.parent_id,
       parent_name: row.parent_id ? departmentNameById.get(row.parent_id) || null : null,
+      leader_id: row.leader_id,
+      leader_name: row.leader_id ? userNameById.get(row.leader_id) || null : null,
     })),
     roles: roles.map((r) => ({ id: r.id, code: r.code, name: r.name })),
     spaces: spaces.map((s) => ({

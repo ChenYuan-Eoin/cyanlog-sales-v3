@@ -44,12 +44,12 @@ async function main() {
     { id: id(0x20000002), org_id: ORG_ID, parent_id: null, name: '法务部', code: 'LEGAL', sort_order: 2 },
     { id: id(0x20000003), org_id: ORG_ID, parent_id: null, name: '财务部', code: 'FINANCE', sort_order: 3 },
     { id: id(0x20000004), org_id: ORG_ID, parent_id: null, name: '信息技术部', code: 'IT', sort_order: 4 },
-    { id: id(0x20000011), org_id: ORG_ID, parent_id: id(0x20000001), name: '华东销售', code: 'EAST', sort_order: 1 },
-    { id: id(0x20000012), org_id: ORG_ID, parent_id: id(0x20000001), name: '华北销售', code: 'NORTH', sort_order: 2 },
-    { id: id(0x20000013), org_id: ORG_ID, parent_id: id(0x20000001), name: '华南销售', code: 'SOUTH', sort_order: 3 },
-    { id: id(0x20000021), org_id: ORG_ID, parent_id: id(0x20000011), name: '华东·医药行业', code: 'EAST-MED', sort_order: 1 },
-    { id: id(0x20000022), org_id: ORG_ID, parent_id: id(0x20000011), name: '华东·零售行业', code: 'EAST-RTL', sort_order: 2 },
-    { id: id(0x20000023), org_id: ORG_ID, parent_id: id(0x20000011), name: '华东·互联网行业', code: 'EAST-INT', sort_order: 3 },
+    { id: id(0x20000011), org_id: ORG_ID, parent_id: id(0x20000001), name: '华东销售', code: 'EAST', sort_order: 1, leader_id: id(0x30000010) },
+    { id: id(0x20000012), org_id: ORG_ID, parent_id: id(0x20000001), name: '华北销售', code: 'NORTH', sort_order: 2, leader_id: id(0x30000011) },
+    { id: id(0x20000013), org_id: ORG_ID, parent_id: id(0x20000001), name: '华南销售', code: 'SOUTH', sort_order: 3, leader_id: id(0x30000012) },
+    { id: id(0x20000021), org_id: ORG_ID, parent_id: id(0x20000011), name: '华东·医药行业', code: 'EAST-MED', sort_order: 1, leader_id: id(0x30000101) },
+    { id: id(0x20000022), org_id: ORG_ID, parent_id: id(0x20000011), name: '华东·零售行业', code: 'EAST-RTL', sort_order: 2, leader_id: id(0x30000104) },
+    { id: id(0x20000023), org_id: ORG_ID, parent_id: id(0x20000011), name: '华东·互联网行业', code: 'EAST-INT', sort_order: 3, leader_id: id(0x30000105) },
   ]
   await supabase.from('departments').upsert(depts)
 

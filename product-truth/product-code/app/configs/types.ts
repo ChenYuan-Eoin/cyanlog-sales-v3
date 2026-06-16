@@ -79,6 +79,8 @@ export interface OrgSummaryDepartment {
   parent_id?: string | null
   parent_name: string | null
   member_count: number
+  leader_id?: string | null
+  leader_name?: string | null
 }
 
 export interface OrgSummaryRole {

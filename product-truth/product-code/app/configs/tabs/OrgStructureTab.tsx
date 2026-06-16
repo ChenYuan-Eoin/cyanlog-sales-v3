@@ -125,11 +125,16 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
             )}
           </div>
 
-          {/* Department name */}
+          {/* Department name + leader */}
           <div className="min-w-0 flex-1 truncate">
             <span className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
               {dept.name}
             </span>
+            {dept.leader_name && (
+              <span className="ml-1 text-xs text-amber-600">
+                👤 {dept.leader_name}
+              </span>
+            )}
           </div>
 
           {/* Actions: Edit / Delete */}
