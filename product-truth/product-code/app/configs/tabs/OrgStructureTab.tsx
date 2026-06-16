@@ -20,9 +20,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom } from 'lucide-react'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
+import { DepartmentFormDialog } from './components/DepartmentFormDialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface OrgStructureTabProps {
   orgSummary: OrgSummaryPayload | null
@@ -223,6 +230,36 @@ const MEMBER_COLUMNS: ColumnDef<OrgSummaryUser>[] = [
       </div>
     ),
   },
+  {
+    id: 'actions',
+    header: '操作',
+    cell: ({ row }) => (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm">
+            <MoreHorizontalIcon className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => console.log('Edit user:', row.original.id)}>
+            <EditIcon className="h-4 w-4 mr-2" />
+            编辑
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => console.log('Assign role:', row.original.id)}>
+            <BuildingIcon className="h-4 w-4 mr-2" />
+            分配角色
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-red-600"
+            onClick={() => console.log('Delete user:', row.original.id)}
+          >
+            <TrashIcon className="h-4 w-4 mr-2" />
+            删除
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ),
+  },
 ]
 
 function MemberTable({ users, _departments }: MemberTableProps) {
@@ -266,6 +303,8 @@ function MemberTable({ users, _departments }: MemberTableProps) {
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
             className="pl-9"
+            autoComplete="off"
+            type="search"
           />
         </div>
         <div className="text-sm text-slate-500">
@@ -380,13 +419,33 @@ export default function OrgStructureTab({
           <StatCard icon={<UsersIcon size={18} />} label="成员" value={stats.userCount} />
           <StatCard icon={<BuildingIcon size={18} />} label="销售空间" value={stats.spaceCount} />
         </div>
-        <Button
-          onClick={onFeishuSync}
-          disabled={feishuSyncing}
-          variant="outline"
-        >
-          {feishuSyncing ? '同步中...' : '从飞书同步'}
-        </Button>
+        <div className="flex gap-2">
+          <DepartmentFormDialog
+            departments={departments}
+            onSubmit={async (values) => {
+              // TODO: 调用 POST /api/admin/departments
+              console.log('Create department:', values)
+            }}
+            trigger={
+              <Button variant="outline" size="sm">
+                <PlusIcon className="h-4 w-4 mr-1" />
+                添加部门
+              </Button>
+            }
+          />
+          <Button variant="outline" size="sm">
+            <UserPlusIcon className="h-4 w-4 mr-1" />
+            添加成员
+          </Button>
+          <Button
+            onClick={onFeishuSync}
+            disabled={feishuSyncing}
+            variant="outline"
+            size="sm"
+          >
+            {feishuSyncing ? '同步中...' : '从飞书同步'}
+          </Button>
+        </div>
       </div>
 
       {feishuResult && (

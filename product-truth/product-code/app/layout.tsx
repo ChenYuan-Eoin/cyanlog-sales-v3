@@ -68,10 +68,10 @@ export async function generateMetadata(): Promise<Metadata> {
     description: "智能销售支撑平台",
     icons: {
       icon: [
-        { url: '/favicon.svg', type: 'image/svg+xml' },
-        { url: '/favicon.ico', type: 'image/x-icon', sizes: 'any' },
+        { url: '/favicon.svg?v=2', type: 'image/svg+xml', sizes: '32x32' },
       ],
-      shortcut: '/favicon.ico',
+      shortcut: '/favicon.svg?v=2',
+      apple: '/favicon.svg?v=2',
     },
   }
 }
