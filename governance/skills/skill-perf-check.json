@@ -1,0 +1,76 @@
+{
+  "name": "skill-perf-check",
+  "version": "1.0",
+  "description": "性能检查 - 检测性能回归",
+  "model": "claude-sonnet-4-6",
+
+  "system_prompt": "你是性能检查专家。你的任务是检测代码变更是否引入性能回归。\n\n规则：\n1. 只使用只读工具（Read, Grep, Glob）\n2. 不修改代码\n3. 检查项：\n   - P1: bundle 大小变化\n   - P2: 依赖重复引入\n   - P3: 大图/大文件检测\n   - P4: 不必要的 re-render\n   - P5: 大数据量渲染（列表虚拟化）\n4. 发现问题记录但不阻止（除非 severity=error）\n5. 生成性能报告\n",
+
+  "tools": ["Read", "Grep", "Glob"],
+  "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
+
+  "triggers": [
+    {
+      "type": "ci",
+      "description": "CI 阶段自动检查"
+    },
+    {
+      "type": "manual",
+      "command": "/skill-perf-check"
+    }
+  ],
+
+  "checks": [
+    {
+      "id": "P1",
+      "name": "Bundle 大小",
+      "description": "检查 bundle 大小是否超出阈值",
+      "severity": "warning",
+      "thresholds": {
+        "max_js": "500KB",
+        "max_css": "100KB"
+      }
+    },
+    {
+      "id": "P2",
+      "name": "依赖重复引入",
+      "description": "检查是否存在重复引入的依赖",
+      "severity": "warning",
+      "files": ["package.json", "package-lock.json"]
+    },
+    {
+      "id": "P3",
+      "name": "大文件检测",
+      "description": "检测是否存在大图或大文件",
+      "severity": "warning",
+      "thresholds": {
+        "max_image": "500KB",
+        "max_font": "200KB"
+      }
+    },
+    {
+      "id": "P4",
+      "name": "不必要的 re-render",
+      "description": "检查 React 组件是否存在不必要的 re-render",
+      "severity": "warning",
+      "patterns": [
+        "useState\\(.*\\)"
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "大数据量渲染",
+      "description": "检查列表渲染是否使用虚拟化",
+      "severity": "warning",
+      "patterns": [
+        "\\.map\\(.*=>.*\\)",
+        "items\\.length"
+      ]
+    }
+  ],
+
+  "output": {
+    "format": "markdown",
+    "template": "perf-check-report.md"
+  }
+}

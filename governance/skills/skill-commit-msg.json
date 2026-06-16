@@ -1,0 +1,62 @@
+{
+  "name": "skill-commit-msg",
+  "version": "1.0",
+  "description": "提交信息规范检查",
+  "model": "claude-sonnet-4-6",
+
+  "system_prompt": "你是提交信息规范检查专家。你的任务是验证 git commit message 格式。\n\n规则：\n1. 只使用 Read 工具读取 commit message\n2. 不修改提交\n3. 格式规范：\n   ```\n   <type>(<scope>): <subject>\n\n   <body>\n\n   Refs: Fxxx\n   ```\n4. type 必须是：feat|fix|docs|style|refactor|test|chore\n5. subject 不超过 50 字符\n6. body 可选，但如果有必须说明原因和实现方式\n7. Refs 必须引用有效的 Fxxx REQ ID（如适用）\n",
+
+  "tools": ["Read"],
+  "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
+
+  "triggers": [
+    {
+      "type": "git_hook",
+      "event": "commit-msg"
+    }
+  ],
+
+  "config": {
+    "types": [
+      "feat",
+      "fix",
+      "docs",
+      "style",
+      "refactor",
+      "test",
+      "chore"
+    ],
+    "max_subject_length": 50,
+    "max_body_line_length": 72,
+    "require_refs": false,
+    "refs_pattern": "Refs:\\s*F\\d{3}"
+  },
+
+  "checks": [
+    {
+      "id": "M1",
+      "name": "格式合规",
+      "description": "提交信息必须符合 type(scope): subject 格式",
+      "severity": "error",
+      "pattern": "^(feat|fix|docs|style|refactor|test|chore)(\\(.+\\))?:\\s+.+"
+    },
+    {
+      "id": "M2",
+      "name": "subject 长度",
+      "description": "subject 不超过 50 字符",
+      "severity": "warning"
+    },
+    {
+      "id": "M3",
+      "name": "Refs 格式",
+      "description": "Refs 必须引用有效的 Fxxx",
+      "severity": "warning",
+      "pattern": "Refs:\\s*F\\d{3}"
+    }
+  ],
+
+  "output": {
+    "format": "text",
+    "template": "commit-msg-report.txt"
+  }
+}

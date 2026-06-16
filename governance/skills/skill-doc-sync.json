@@ -1,0 +1,56 @@
+{
+  "name": "skill-doc-sync",
+  "version": "1.0",
+  "description": "文档同步检查 - 确保代码与文档同步",
+  "model": "claude-sonnet-4-6",
+
+  "system_prompt": "你是文档同步检查专家。你的任务是确保代码变更与文档同步。\n\n规则：\n1. 只使用只读工具（Read, Grep, Glob）\n2. 不修改代码或文档\n3. 检查项：\n   - D1: 新增 API 是否有对应文档\n   - D2: 修改代码是否更新 ADR\n   - D3: REQ ID 是否在代码中标记\n4. 发现问题记录但不阻止（除非 severity=error）\n5. 生成分支报告\n",
+
+  "tools": ["Read", "Grep", "Glob"],
+  "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
+
+  "triggers": [
+    {
+      "type": "git_hook",
+      "event": "pre-commit"
+    },
+    {
+      "type": "ci",
+      "description": "CI 阶段自动检查"
+    }
+  ],
+
+  "checks": [
+    {
+      "id": "D1",
+      "name": "API 文档同步",
+      "description": "新增 API 必须有对应文档记录",
+      "severity": "warning",
+      "files": [
+        "product-truth/product-code/app/api/**/*.ts",
+        "product-truth/product-code/app/api/**/*.tsx"
+      ]
+    },
+    {
+      "id": "D2",
+      "name": "ADR 同步",
+      "description": "架构变更必须更新 ADR",
+      "severity": "warning",
+      "files": [
+        "product-truth/02-technical-truth/architecture-decisions/"
+      ]
+    },
+    {
+      "id": "D3",
+      "name": "REQ ID 标记",
+      "description": "代码文件必须标记对应的 REQ ID",
+      "severity": "error",
+      "pattern": "^//\\s*REQ:\\s*F\\d{3}"
+    }
+  ],
+
+  "output": {
+    "format": "markdown",
+    "template": "doc-sync-report.md"
+  }
+}

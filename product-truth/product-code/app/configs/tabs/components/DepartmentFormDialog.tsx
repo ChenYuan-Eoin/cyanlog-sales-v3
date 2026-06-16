@@ -29,18 +29,20 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { PlusIcon, BuildingIcon } from 'lucide-react'
-import type { OrgSummaryDepartment } from '../../types'
+import type { OrgSummaryDepartment, OrgSummaryUser } from '../../types'
 
 const departmentSchema = z.object({
   name: z.string().min(1, '部门名称不能为空'),
   code: z.string().min(1, '部门编码不能为空'),
   parent_id: z.string().nullable(),
+  leader_id: z.string().nullable(),
 })
 
 type DepartmentFormValues = z.infer<typeof departmentSchema>
 
 interface DepartmentFormDialogProps {
   departments: OrgSummaryDepartment[]
+  users?: OrgSummaryUser[]
   editingDept?: OrgSummaryDepartment | null
   onSubmit: (values: DepartmentFormValues) => Promise<void>
   trigger?: React.ReactNode
@@ -50,6 +52,7 @@ interface DepartmentFormDialogProps {
 
 export function DepartmentFormDialog({
   departments,
+  users = [],
   editingDept,
   onSubmit,
   trigger,
@@ -67,6 +70,7 @@ export function DepartmentFormDialog({
       name: editingDept?.name ?? '',
       code: editingDept?.code ?? '',
       parent_id: editingDept?.parent_id ?? null,
+      leader_id: editingDept?.leader_id ?? null,
     },
   })
 
@@ -147,6 +151,34 @@ export function DepartmentFormDialog({
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="leader_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>部门主管</FormLabel>
+                  <Select
+                    value={field.value ?? 'null'}
+                    onValueChange={(value) => field.onChange(value === 'null' ? null : value)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择部门主管（可选）" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="null">暂无主管</SelectItem>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.display_name} · {user.title}
                         </SelectItem>
                       ))}
                     </SelectContent>

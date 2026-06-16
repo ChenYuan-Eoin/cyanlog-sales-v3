@@ -1,0 +1,57 @@
+{
+  "name": "skill-socrates",
+  "version": "1.0",
+  "description": "苏格拉底式提问 - 需求确认时强制触发深度思考",
+  "model": "claude-opus-4-6",
+
+  "system_prompt": "你是苏格拉底式提问专家。当用户确认需求时，你的任务是帮助他们发现遗漏。\n\n规则：\n1. 只使用 AskUserQuestion 工具提问，不使用 Edit/Write\n2. 从以下5个维度选择3-5个问题：\n   - 技术选型：性能、扩展性\n   - 潜在风险：依赖、故障场景\n   - 需求对齐：与其他Fxxx的冲突\n   - 边界情况：异常、空值、并发\n   - 维护成本：配置复杂度、文档\n3. 问题要像苏格拉底一样——不是质问，而是引导发现\n4. 等待用户回答后生成审查报告\n",
+
+  "tools": ["AskUserQuestion", "Read", "Grep"],
+  "forbidden_tools": ["Edit", "Write", "Bash", "Agent", "Skill"],
+
+  "triggers": [
+    {
+      "type": "file_change",
+      "path": "product-truth/REQ_REGISTRY.yml",
+      "pattern": "F[0-9]{3}.*状态.*已确认"
+    },
+    {
+      "type": "manual",
+      "command": "/skill-socrates F001"
+    }
+  ],
+
+  "config": {
+    "min_questions": 3,
+    "max_questions": 5,
+    "categories": ["technical", "risk", "alignment", "edge-case", "maintenance"],
+
+    "question_templates": [
+      {
+        "category": "technical",
+        "question": "这个功能的实现方式，如果用户量增长10倍，数据量增长100倍，还能正常工作吗？需要哪些提前准备？"
+      },
+      {
+        "category": "risk",
+        "question": "如果{primary_dependency}服务宕机，这个功能会如何表现？用户会看到什么？数据会怎么处理？"
+      },
+      {
+        "category": "alignment",
+        "question": "这个需求与已确认的{related_requirements}之间，是否存在数据模型重复定义或业务逻辑冲突？"
+      },
+      {
+        "category": "edge-case",
+        "question": "考虑这些场景：1)网络中断 2)数据为空 3)并发操作 4)用户快速重复点击。当前设计如何处理？"
+      },
+      {
+        "category": "maintenance",
+        "question": "这个功能需要多少配置？改一个规则要动几处代码？新来的人能看懂吗？"
+      }
+    ]
+  },
+
+  "output": {
+    "format": "markdown",
+    "template": "socrates-report.md"
+  }
+}

@@ -56,12 +56,13 @@ function getAllChildDeptIds(departments: OrgSummaryDepartment[], parentId: strin
 
 interface DepartmentTreeProps {
   departments: OrgSummaryDepartment[]
+  users: OrgSummaryUser[]
   selectedDeptId: string | null
   onSelectDept: (id: string | null) => void
   className?: string
 }
 
-function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }: DepartmentTreeProps) {
+function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, className }: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
   const [deletingDept, setDeletingDept] = useState<OrgSummaryDepartment | null>(null)
@@ -217,6 +218,7 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
       {editDept && (
         <DepartmentFormDialog
           departments={departments}
+          users={users}
           editingDept={editDept}
           open={true}
           onOpenChange={(open) => !open && setEditDept(null)}
@@ -228,6 +230,7 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
                 name: values.name,
                 code: values.code,
                 parent_id: values.parent_id,
+                leader_id: values.leader_id,
               }),
             })
             const result = await res.json()
@@ -528,11 +531,17 @@ export default function OrgStructureTab({
         <div className="flex gap-2">
           <DepartmentFormDialog
             departments={departments}
+            users={users}
             onSubmit={async (values) => {
               const res = await fetch('/api/admin/departments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(values),
+                body: JSON.stringify({
+                  name: values.name,
+                  code: values.code,
+                  parent_id: values.parent_id,
+                  leader_id: values.leader_id,
+                }),
               })
               const result = await res.json()
               if (!res.ok) {
@@ -619,6 +628,7 @@ export default function OrgStructureTab({
 
               <DepartmentTree
                 departments={departments}
+                users={users}
                 selectedDeptId={selectedDeptId}
                 onSelectDept={setSelectedDeptId}
               />
