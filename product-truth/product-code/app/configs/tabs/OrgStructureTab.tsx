@@ -20,10 +20,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon } from 'lucide-react'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
+import { UserFormDialog } from './components/UserFormDialog'
+import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -164,9 +166,7 @@ function DepartmentTree({ departments, selectedDeptId, onSelectDept, className }
 
 interface MemberTableProps {
   users: OrgSummaryUser[]
-  _departments: OrgSummaryDepartment[]
-  onEditUser?: (user: OrgSummaryUser) => void
-  onTransferDept?: (user: OrgSummaryUser) => void
+  departments: OrgSummaryDepartment[]
 }
 
 const MEMBER_COLUMNS: ColumnDef<OrgSummaryUser>[] = [
@@ -233,48 +233,95 @@ const MEMBER_COLUMNS: ColumnDef<OrgSummaryUser>[] = [
   {
     id: 'actions',
     header: '操作',
-    cell: ({ row }) => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">
-            <MoreHorizontalIcon className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => console.log('Edit user:', row.original.id)}>
-            <EditIcon className="h-4 w-4 mr-2" />
-            编辑
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => console.log('Assign role:', row.original.id)}>
-            <BuildingIcon className="h-4 w-4 mr-2" />
-            分配角色
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="text-red-600"
-            onClick={async () => {
-              if (!confirm(`确定要删除用户 "${row.original.display_name}" 吗？`)) return
-              const res = await fetch(`/api/admin/users/${row.original.id}`, {
-                method: 'DELETE',
-              })
-              if (!res.ok) {
+    cell: ({ row, table }) => {
+      const user = row.original
+      const departments = (table.options.meta as { departments: OrgSummaryDepartment[] })?.departments ?? []
+
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <MoreHorizontalIcon className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <UserFormDialog
+              departments={departments}
+              editingUser={user}
+              onSubmit={async (values) => {
+                const res = await fetch(`/api/admin/users/${user.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(values),
+                })
                 const result = await res.json()
-                alert(result.error || '删除失败')
-                return
+                if (!res.ok) {
+                  alert(result.error || '更新失败')
+                  throw new Error(result.error)
+                }
+                alert('用户更新成功')
+                window.location.reload()
+              }}
+              trigger={
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <EditIcon className="h-4 w-4 mr-2" />
+                  编辑
+                </DropdownMenuItem>
               }
-              alert('用户已删除')
-              window.location.reload()
-            }}
-          >
-            <TrashIcon className="h-4 w-4 mr-2" />
-            删除
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+            />
+            <RoleAssignmentDialog
+              userId={user.id}
+              userName={user.display_name}
+              currentRoles={user.role_ids || []}
+              departments={departments}
+              onSubmit={async (roleIds) => {
+                const res = await fetch(`/api/admin/users/${user.id}/roles`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ role_ids: roleIds, scope_type: 'org' }),
+                })
+                const result = await res.json()
+                if (!res.ok) {
+                  alert(result.error || '分配角色失败')
+                  throw new Error(result.error)
+                }
+                alert('角色分配成功')
+                window.location.reload()
+              }}
+              trigger={
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <ShieldIcon className="h-4 w-4 mr-2" />
+                  分配角色
+                </DropdownMenuItem>
+              }
+            />
+            <DropdownMenuItem
+              className="text-red-600"
+              onClick={async () => {
+                if (!confirm(`确定要删除用户 "${user.display_name}" 吗？`)) return
+                const res = await fetch(`/api/admin/users/${user.id}`, {
+                  method: 'DELETE',
+                })
+                if (!res.ok) {
+                  const result = await res.json()
+                  alert(result.error || '删除失败')
+                  return
+                }
+                alert('用户已删除')
+                window.location.reload()
+              }}
+            >
+              <TrashIcon className="h-4 w-4 mr-2" />
+              删除
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    },
   },
 ]
 
-function MemberTable({ users, _departments }: MemberTableProps) {
+function MemberTable({ users, departments }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
 
   // 使用 Fuse.js 进行模糊搜索
@@ -297,6 +344,7 @@ function MemberTable({ users, _departments }: MemberTableProps) {
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    meta: { departments },
     initialState: {
       pagination: {
         pageSize: 10,
@@ -422,6 +470,9 @@ export default function OrgStructureTab({
     departments.find(d => d.id === selectedDeptId) ?? null
   , [departments, selectedDeptId])
 
+  // 编辑用户状态
+  const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
+
   return (
     <div className="space-y-6">
       {/* 顶部统计和操作 */}
@@ -455,10 +506,29 @@ export default function OrgStructureTab({
               </Button>
             }
           />
-          <Button variant="outline" size="sm">
-            <UserPlusIcon className="h-4 w-4 mr-1" />
-            添加成员
-          </Button>
+          <UserFormDialog
+            departments={departments}
+            onSubmit={async (values) => {
+              const res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...values, status: 'active' }),
+              })
+              const result = await res.json()
+              if (!res.ok) {
+                alert(result.error || '创建用户失败')
+                throw new Error(result.error)
+              }
+              alert('用户创建成功')
+              window.location.reload()
+            }}
+            trigger={
+              <Button variant="outline" size="sm">
+                <UserPlusIcon className="h-4 w-4 mr-1" />
+                添加成员
+              </Button>
+            }
+          />
           <Button
             onClick={onFeishuSync}
             disabled={feishuSyncing}
@@ -541,7 +611,7 @@ export default function OrgStructureTab({
               </div>
             </div>
             <div className="p-6">
-              <MemberTable users={filteredUsers} _departments={departments} />
+              <MemberTable users={filteredUsers} departments={departments} />
             </div>
           </div>
         </div>
