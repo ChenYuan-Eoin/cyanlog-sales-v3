@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 
 // PATCH /api/admin/users/:id - 更新用户
 export async function PATCH(
@@ -14,7 +15,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const { orgId } = currentUser
+    const orgId = await getDefaultOrgId(currentUser.id)
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
@@ -81,7 +82,7 @@ export async function DELETE(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const { orgId } = currentUser
+    const orgId = await getDefaultOrgId(currentUser.id)
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []

@@ -82,23 +82,21 @@ export function UserFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline" size="sm">
-            {editingUser ? (
-              <>
-                <EditIcon className="h-4 w-4 mr-1" />
-                编辑成员
-              </>
-            ) : (
-              <>
-                <PlusIcon className="h-4 w-4 mr-1" />
-                添加成员
-              </>
-            )}
-          </Button>
-        )}
-      </DialogTrigger>
+      <DialogTrigger>{trigger ?? (
+        <Button variant="outline" size="sm">
+          {editingUser ? (
+            <>
+              <EditIcon className="h-4 w-4 mr-1" />
+              编辑成员
+            </>
+          ) : (
+            <>
+              <PlusIcon className="h-4 w-4 mr-1" />
+              添加成员
+            </>
+          )}
+        </Button>
+      )}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

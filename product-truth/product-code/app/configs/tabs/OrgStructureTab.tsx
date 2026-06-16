@@ -470,8 +470,9 @@ export default function OrgStructureTab({
     departments.find(d => d.id === selectedDeptId) ?? null
   , [departments, selectedDeptId])
 
-  // 编辑用户状态
-  const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
+  // 编辑用户状态（预留，可能用于未来扩展）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_editingUser, _setEditingUser] = useState<OrgSummaryUser | null>(null)
 
   return (
     <div className="space-y-6">

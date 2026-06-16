@@ -64,6 +64,7 @@ export interface OrgSummaryUser {
   primary_dept_name: string
   primary_dept_id?: string | null
   role_names: string
+  role_ids?: string[]
   role_codes?: string[]
   scoped_roles?: ScopedRoleAssignment[]
   status: string

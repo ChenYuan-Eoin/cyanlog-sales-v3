@@ -5,12 +5,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 
 // GET /api/admin/users - 获取用户列表
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const { orgId } = user
+    const orgId = await getDefaultOrgId(user.id)
 
     const { searchParams } = new URL(req.url)
     const deptId = searchParams.get('dept_id')
@@ -44,12 +45,12 @@ export async function GET(req: NextRequest) {
     }
 
     // 格式化返回数据
-    const formattedUsers = (users || []).map((u: any) => ({
+    const formattedUsers = (users || []).map((u: Record<string, unknown>) => ({
       ...u,
-      primary_dept_name: u.departments?.name || null,
-      role_names: u.user_roles
-        ?.map((ur: any) => ur.role?.name)
-        .filter(Boolean)
+      primary_dept_name: (u.departments as { name?: string } | null)?.name || null,
+      role_names: ((u.user_roles as Array<{ role?: { name?: string } | null }> | undefined) || [])
+        .map((ur) => ur.role?.name)
+        .filter((name): name is string => Boolean(name))
         .join(', ') || '',
     }))
 
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const currentUser = await requireAuth(req)
-    const { orgId } = currentUser
+    const orgId = await getDefaultOrgId(currentUser.id)
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 检查邮箱唯一性
-    const { data: existing, error: checkError } = await supabaseAdmin
+    const { data: existing } = await supabaseAdmin
       .from('users')
       .select('id')
       .eq('org_id', orgId)

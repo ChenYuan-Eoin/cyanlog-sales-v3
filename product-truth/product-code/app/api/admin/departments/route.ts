@@ -5,12 +5,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 
 // GET /api/admin/departments - 获取部门列表
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const { orgId } = user
+    const orgId = await getDefaultOrgId(user.id)
 
     const { data: departments, error } = await supabaseAdmin
       .from('departments')
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const { orgId, id: userId } = user
+    const orgId = await getDefaultOrgId(user.id)
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 检查 code 唯一性
-    const { data: existing, error: checkError } = await supabaseAdmin
+    const { data: existing } = await supabaseAdmin
       .from('departments')
       .select('id')
       .eq('org_id', orgId)

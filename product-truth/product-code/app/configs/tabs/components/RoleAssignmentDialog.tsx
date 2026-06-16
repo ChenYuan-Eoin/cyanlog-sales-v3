@@ -31,10 +31,10 @@ interface RoleAssignmentDialogProps {
 }
 
 export function RoleAssignmentDialog({
-  userId,
+  userId: _userId,
   userName,
   currentRoles,
-  departments,
+  departments: _departments,
   onSubmit,
   trigger,
 }: RoleAssignmentDialogProps) {
@@ -93,7 +93,7 @@ export function RoleAssignmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger>
         {trigger ?? (
           <Button variant="ghost" size="sm">
             <ShieldIcon className="h-4 w-4 mr-1" />
@@ -105,7 +105,7 @@ export function RoleAssignmentDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldIcon className="h-5 w-5" />
-            为 "{userName}" 分配角色
+            为 &quot;{userName}&quot; 分配角色
           </DialogTitle>
         </DialogHeader>
 

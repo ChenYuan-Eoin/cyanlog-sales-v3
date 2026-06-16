@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 
 // PATCH /api/admin/departments/:id - 更新部门
 export async function PATCH(
@@ -14,7 +15,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const user = await requireAuth(req)
-    const { orgId } = user
+    const orgId = await getDefaultOrgId(user.id)
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
@@ -41,7 +42,7 @@ export async function PATCH(
 
     // 如果修改 code，检查唯一性
     if (code) {
-      const { data: codeExists, error: codeCheckError } = await supabaseAdmin
+      const { data: codeExists } = await supabaseAdmin
         .from('departments')
         .select('id')
         .eq('org_id', orgId)
@@ -124,7 +125,7 @@ export async function DELETE(
   try {
     const { id } = await params
     const user = await requireAuth(req)
-    const { orgId } = user
+    const orgId = await getDefaultOrgId(user.id)
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
@@ -155,7 +156,7 @@ export async function DELETE(
     }
 
     // 检查是否有子部门
-    const { data: children, error: childrenError } = await supabaseAdmin
+    const { data: children } = await supabaseAdmin
       .from('departments')
       .select('id')
       .eq('parent_id', id)

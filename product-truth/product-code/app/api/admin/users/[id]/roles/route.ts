@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 
 // POST /api/admin/users/:id/roles - 分配角色
 export async function POST(
@@ -14,7 +15,7 @@ export async function POST(
   try {
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
-    const { orgId } = currentUser
+    const orgId = await getDefaultOrgId(currentUser.id)
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []

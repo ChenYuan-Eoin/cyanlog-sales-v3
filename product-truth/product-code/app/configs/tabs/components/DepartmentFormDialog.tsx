@@ -80,14 +80,12 @@ export function DepartmentFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline" size="sm">
-            <PlusIcon className="h-4 w-4 mr-1" />
-            添加部门
-          </Button>
-        )}
-      </DialogTrigger>
+      <DialogTrigger>{trigger ?? (
+        <Button variant="outline" size="sm">
+          <PlusIcon className="h-4 w-4 mr-1" />
+          添加部门
+        </Button>
+      )}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
