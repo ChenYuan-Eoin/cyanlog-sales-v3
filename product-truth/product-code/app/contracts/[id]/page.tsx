@@ -382,16 +382,17 @@ export default function ContractDetailPage() {
         </Card>
       )}
 
-      {/* Tabs for Review Results and ASK List */}
+      {/* 报告三表 Tab */}
       <Card>
         <CardHeader>
-          <Tabs defaultValue="review">
+          <Tabs defaultValue="preview">
             <TabsList variant="line">
-              <TabsTrigger value="review">审核结果</TabsTrigger>
-              <TabsTrigger value="ask">ASK 清单</TabsTrigger>
+              <TabsTrigger value="preview">表一 · 预览</TabsTrigger>
+              <TabsTrigger value="clarify">表二 · 澄清</TabsTrigger>
+              <TabsTrigger value="summary">表三 · 摘要</TabsTrigger>
             </TabsList>
-            <TabsContent value="review" className="pt-4">
-              <ReviewResultsTab
+            <TabsContent value="preview" className="pt-4">
+              <PreviewTableTab
                 contract={contract}
                 latestReview={latestReview}
                 exporting={exporting}
@@ -400,13 +401,19 @@ export default function ContractDetailPage() {
                 contractId={contractId}
               />
             </TabsContent>
-            <TabsContent value="ask" className="pt-4">
-              <AskListTab
+            <TabsContent value="clarify" className="pt-4">
+              <ClarifyTableTab
                 contractId={contractId}
                 askItems={askItems}
                 setAskItems={setAskItems}
                 askLoading={askLoading}
                 setAskLoading={setAskLoading}
+              />
+            </TabsContent>
+            <TabsContent value="summary" className="pt-4">
+              <SummaryTableTab
+                contract={contract}
+                latestReview={latestReview}
               />
             </TabsContent>
           </Tabs>
@@ -488,7 +495,8 @@ function AnalysisJobCard({
 }
 
 // Review Results Tab - iTerms 风格：风险统计 + 策略 + 条款 + 效力分析
-function ReviewResultsTab({
+// 表一·预览 — 风险统计 + 条款列表 + AI风险点
+function PreviewTableTab({
   contract,
   latestReview,
   exporting,
@@ -878,7 +886,8 @@ function ReviewResultsTab({
 }
 
 // ASK List Tab
-function AskListTab({
+// 表二·澄清 — ASK清单（法务录入回应）
+function ClarifyTableTab({
   contractId,
   askItems,
   setAskItems,
@@ -893,6 +902,8 @@ function AskListTab({
 }) {
   const [responding, setResponding] = useState<string | null>(null)
   const [responseText, setResponseText] = useState('')
+  const [closing, setClosing] = useState<string | null>(null)
+  const [closeReason, setCloseReason] = useState('')
 
   useEffect(() => {
     fetchAskItems()
@@ -949,6 +960,44 @@ function AskListTab({
       })
       setResponseText('')
       setResponding(null)
+      await fetchAskItems()
+    } catch {
+      // silently fail
+    }
+  }
+
+  async function handleCloseAsk(askId: string) {
+    if (!closeReason.trim()) return
+
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/asks/${askId}/transition`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'close', closed_reason: closeReason }),
+      })
+      setCloseReason('')
+      setClosing(null)
+      await fetchAskItems()
+    } catch {
+      // silently fail
+    }
+  }
+
+  async function handleReopenAsk(askId: string) {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/asks/${askId}/transition`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'reopen' }),
+      })
       await fetchAskItems()
     } catch {
       // silently fail
@@ -1049,7 +1098,7 @@ function AskListTab({
 
             {/* Actions */}
             {ask.status === 'pending' && (
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2 flex-wrap">
                 {responding === ask.id ? (
                   <div className="flex-1">
                     <textarea
@@ -1080,14 +1129,70 @@ function AskListTab({
                     </div>
                   </div>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setResponding(ask.id)}
-                  >
-                    录入回应
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setResponding(ask.id)}
+                    >
+                      录入回应
+                    </Button>
+                    {closing === ask.id ? (
+                      <div className="flex-1">
+                        <textarea
+                          className="w-full p-2 text-sm border rounded-lg mb-2 resize-y"
+                          rows={2}
+                          placeholder="填写关闭原因（如：伪风险/重复项）..."
+                          value={closeReason}
+                          onChange={(e) => setCloseReason(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleCloseAsk(ask.id)}
+                            disabled={!closeReason.trim()}
+                          >
+                            确认关闭
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setClosing(null)
+                              setCloseReason('')
+                            }}
+                          >
+                            取消
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-slate-500 hover:text-slate-700"
+                        onClick={() => setClosing(ask.id)}
+                      >
+                        关闭（伪风险）
+                      </Button>
+                    )}
+                  </>
                 )}
+              </div>
+            )}
+
+            {/* 已回应的ASK：支持重开 */}
+            {(ask.status === 'responded' || ask.status === 'closed') && (
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-slate-500 hover:text-amber-600"
+                  onClick={() => handleReopenAsk(ask.id)}
+                >
+                  重开 ASK
+                </Button>
               </div>
             )}
           </div>
@@ -1217,5 +1322,275 @@ function QuoteSection({ contractId, quoteId }: { contractId: string; quoteId: st
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// 表三·摘要 — 综合评分 + 效力分析 + 行动建议
+function SummaryTableTab({
+  contract,
+  latestReview,
+}: {
+  contract: Contract
+  latestReview: {
+    results?: {
+      summary: string
+      risks: Array<{
+        level: 'red' | 'yellow' | 'green'
+        title: string
+        description: string
+        suggestion: string
+      }>
+    }
+    risk_summary?: {
+      total_clauses: number
+      critical_risks: number
+      high_risks: number
+      medium_risks: number
+      low_risks: number
+      compliance_score: number
+    }
+    compliance_check?: {
+      missing_required_clauses: string[]
+      dangerous_clauses: string[]
+      ambiguous_clauses: string[]
+      unbalanced_clauses: string[]
+      party_a_consistency: string
+      party_b_consistency: string
+      issues: string[]
+    }
+    effectiveness_analysis?: string
+  } | null | undefined
+}) {
+  const risk = latestReview?.risk_summary
+  const compliance = latestReview?.compliance_check
+  const summary = latestReview?.results?.summary
+  const risks = latestReview?.results?.risks || []
+  const effectiveness = latestReview?.effectiveness_analysis
+
+  if (contract.status !== 'COMPLETED' || !latestReview?.results) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-slate-500">审核完成后显示摘要</p>
+      </div>
+    )
+  }
+
+  // 评分颜色
+  const score = risk?.compliance_score ?? 0
+  const scoreColor = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600'
+  const scoreBg = score >= 80 ? 'bg-green-50 border-green-200' : score >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'
+
+  // 风险等级统计
+  const redCount = risks.filter(r => r.level === 'red').length
+  const yellowCount = risks.filter(r => r.level === 'yellow').length
+  const greenCount = risks.filter(r => r.level === 'green').length
+
+  // 整体结论
+  let conclusion = '合同整体风险可控'
+  let conclusionColor = 'text-green-600'
+  if (redCount > 0) {
+    conclusion = `存在 ${redCount} 项严重风险，建议修改后签署`
+    conclusionColor = 'text-red-600'
+  } else if (yellowCount > 0) {
+    conclusion = `存在 ${yellowCount} 项需关注风险，建议与法务确认`
+    conclusionColor = 'text-yellow-600'
+  }
+
+  // 行动建议
+  const actionItems: Array<{ title: string; desc: string; urgent: boolean }> = []
+  if (compliance?.missing_required_clauses.length) {
+    actionItems.push({
+      title: '补充缺失条款',
+      desc: `需补充：${compliance.missing_required_clauses.join('、')}`,
+      urgent: true,
+    })
+  }
+  if (compliance?.dangerous_clauses.length) {
+    actionItems.push({
+      title: '修改高风险条款',
+      desc: '部分条款严重偏离标准，必须修改',
+      urgent: true,
+    })
+  }
+  if (compliance?.ambiguous_clauses.length) {
+    actionItems.push({
+      title: '澄清模糊用语',
+      desc: `需澄清：${compliance.ambiguous_clauses.join('、')}`,
+      urgent: false,
+    })
+  }
+  if (!actionItems.length && score >= 80) {
+    actionItems.push({
+      title: '合同可直接签署',
+      desc: '经审核未发现重大风险，建议按标准流程签署',
+      urgent: false,
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* 1. 综合评分 */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className={`p-4 rounded-lg border ${scoreBg}`}>
+          <div className="text-xs text-slate-500">合规评分</div>
+          <div className={`text-2xl font-bold ${scoreColor}`}>{score}</div>
+          <div className="text-xs text-slate-500 mt-1">/ 100</div>
+        </div>
+        <div className="p-4 rounded-lg border border-red-200 bg-red-50">
+          <div className="text-xs text-slate-500">红灯</div>
+          <div className="text-2xl font-bold text-red-600">{redCount}</div>
+        </div>
+        <div className="p-4 rounded-lg border border-yellow-200 bg-yellow-50">
+          <div className="text-xs text-slate-500">黄灯</div>
+          <div className="text-2xl font-bold text-yellow-600">{yellowCount}</div>
+        </div>
+        <div className="p-4 rounded-lg border border-green-200 bg-green-50">
+          <div className="text-xs text-slate-500">绿灯</div>
+          <div className="text-2xl font-bold text-green-600">{greenCount}</div>
+        </div>
+      </div>
+
+      {/* 2. 整体结论 */}
+      <Card className={`border-l-4 ${redCount > 0 ? 'border-l-red-500' : yellowCount > 0 ? 'border-l-yellow-500' : 'border-l-green-500'}`}>
+        <CardHeader>
+          <CardTitle className="text-base">整体结论</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className={`text-sm font-medium mb-3 ${conclusionColor}`}>{conclusion}</p>
+          {summary && (
+            <div className="prose prose-sm max-w-none text-slate-600">
+              {summary}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 3. 效力分析 */}
+      {effectiveness && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">效力与风险分析</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-sm max-w-none">
+              {effectiveness.split('\n').map((line, i) => {
+                if (line.startsWith('## ')) return <h3 key={i} className="text-lg font-semibold mt-3 mb-2">{line.slice(3)}</h3>
+                if (line.startsWith('### ')) return <h4 key={i} className="text-base font-semibold mt-3 mb-1">{line.slice(4)}</h4>
+                if (line.startsWith('- ')) return <li key={i} className="ml-4 list-disc text-sm">{line.slice(2)}</li>
+                if (line.trim() === '') return <br key={i} />
+                return <p key={i} className="text-sm my-1">{line}</p>
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. 合规检查摘要 */}
+      {compliance && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">合规检查</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-slate-500">甲方一致性：</span>
+                <Badge variant={compliance.party_a_consistency === 'consistent' ? 'outline' : 'destructive'}>
+                  {compliance.party_a_consistency === 'consistent' ? '一致' : compliance.party_a_consistency === 'inconsistent' ? '冲突' : '未知'}
+                </Badge>
+              </div>
+              <div>
+                <span className="text-slate-500">乙方一致性：</span>
+                <Badge variant={compliance.party_b_consistency === 'consistent' ? 'outline' : 'destructive'}>
+                  {compliance.party_b_consistency === 'consistent' ? '一致' : compliance.party_b_consistency === 'inconsistent' ? '冲突' : '未知'}
+                </Badge>
+              </div>
+              <div>
+                <span className="text-slate-500">缺失条款：</span>
+                <span className={compliance.missing_required_clauses.length > 0 ? 'text-red-600' : 'text-slate-600'}>
+                  {compliance.missing_required_clauses.length} 项
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500">高风险条款：</span>
+                <span className={compliance.dangerous_clauses.length > 0 ? 'text-red-600' : 'text-slate-600'}>
+                  {compliance.dangerous_clauses.length} 项
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500">模糊用语：</span>
+                <span className={compliance.ambiguous_clauses.length > 0 ? 'text-yellow-600' : 'text-slate-600'}>
+                  {compliance.ambiguous_clauses.length} 项
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500">总问题数：</span>
+                <span>{compliance.issues.length} 项</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 5. 行动建议 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">行动建议</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {actionItems.map((item, i) => (
+              <div key={i} className={`p-3 rounded-lg border ${item.urgent ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-sm font-medium ${item.urgent ? 'text-red-700' : 'text-slate-700'}`}>
+                    {i + 1}. {item.title}
+                  </span>
+                  {item.urgent && <Badge variant="destructive" className="text-xs">紧急</Badge>}
+                </div>
+                <p className="text-sm text-slate-600">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 6. 风险分布 */}
+      {risks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">风险点清单（{risks.length} 项）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {risks.slice(0, 10).map((risk, i) => (
+                <div key={i} className={`p-3 rounded border text-sm ${
+                  risk.level === 'red' ? 'border-red-200 bg-red-50' : risk.level === 'yellow' ? 'border-yellow-200 bg-yellow-50' : 'border-green-200 bg-green-50'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="outline" className={
+                      risk.level === 'red' ? 'text-red-600' : risk.level === 'yellow' ? 'text-yellow-600' : 'text-green-600'
+                    }>
+                      {risk.level === 'red' ? '红灯' : risk.level === 'yellow' ? '黄灯' : '绿灯'}
+                    </Badge>
+                    <span className="font-medium">{risk.title}</span>
+                  </div>
+                  <p className="text-slate-600">{risk.description}</p>
+                  {risk.suggestion && (
+                    <p className="text-slate-500 mt-1 text-xs">
+                      建议：{risk.suggestion}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {risks.length > 10 && (
+                <p className="text-xs text-center text-slate-500">
+                  还有 {risks.length - 10} 项风险...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
