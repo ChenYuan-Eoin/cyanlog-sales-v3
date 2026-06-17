@@ -387,7 +387,17 @@ function MemberAssignmentTab({ roleId, users, _departments, assignedUsers }: Mem
                     <div className="text-sm font-medium text-slate-900">{user.display_name}</div>
                     <div className="text-xs text-slate-500">{user.email} · {user.primary_dept_name}</div>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => handleAddMember(user.id)} disabled={assigning}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      void handleAddMember(user.id)
+                    }}
+                    disabled={assigning}
+                    className="touch-manipulation"
+                  >
                     <CheckIcon size={16} className="text-green-600" />
                   </Button>
                 </div>
