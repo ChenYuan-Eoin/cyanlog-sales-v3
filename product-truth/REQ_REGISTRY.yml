@@ -307,8 +307,9 @@ requirements:
     name: 案例库管理
     module: 知识库
     source: 知识库管理.md#3
-    status: draft
+    status: design_in_progress
     priority: P2
+    feature_packet: product-truth/feature-packets/F015-case-library.md
     code_locations: []
     description: 成功案例、失败案例管理
 
@@ -316,8 +317,9 @@ requirements:
     name: 技术文档库
     module: 知识库
     source: 知识库管理.md#4
-    status: draft
+    status: design_in_progress
     priority: P2
+    feature_packet: product-truth/feature-packets/F016-tech-docs.md
     code_locations: []
     description: 产品说明书、技术白皮书
 
@@ -325,8 +327,9 @@ requirements:
     name: 商务资质库
     module: 知识库
     source: 知识库管理.md#5
-    status: draft
+    status: design_in_progress
     priority: P2
+    feature_packet: product-truth/feature-packets/F017-qualification-library.md
     code_locations: []
     description: 企业资质、人员资质管理
 
@@ -337,8 +340,9 @@ requirements:
     name: 日程管理
     module: 日程管理
     source: 日程管理.md
-    status: draft
+    status: design_in_progress
     priority: P2
+    feature_packet: product-truth/feature-packets/F018-schedule.md
     code_locations: []
     description: 日程创建、提醒、日历视图
 
@@ -346,8 +350,9 @@ requirements:
     name: 提醒规则
     module: 日程管理
     source: 日程管理.md#3
-    status: draft
+    status: design_in_progress
     priority: P2
+    feature_packet: product-truth/feature-packets/F019-reminder-rules.md
     code_locations: []
     description: 报价跟进、审批超时提醒
 

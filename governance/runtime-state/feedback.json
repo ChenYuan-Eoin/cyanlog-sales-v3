@@ -1,26 +1,26 @@
 {
-  "timestamp": "2026-06-16T17:24:55.010Z",
+  "timestamp": "2026-06-17T05:43:46.225Z",
   "typecheck": {
     "success": true,
     "errors": 0,
     "message": "类型检查通过"
   },
   "lint": {
-    "success": false,
+    "success": true,
     "errors": 0,
     "warnings": 0,
-    "message": "Lint 检查发现问题",
-    "details": []
+    "message": "Lint 检查通过"
   },
   "test": {
-    "success": true,
-    "passed": 45,
-    "failed": 0,
-    "message": "测试执行完成"
+    "success": false,
+    "passed": 0,
+    "failed": 1,
+    "message": "测试失败",
+    "details": []
   },
   "summary": {
     "allPassed": false,
-    "totalErrors": 0,
-    "recommendation": "⚠️ 发现 0 个问题，请修正后再提交"
+    "totalErrors": 1,
+    "recommendation": "⚠️ 发现 1 个问题，请修正后再提交"
   }
 }
