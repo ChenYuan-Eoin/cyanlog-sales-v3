@@ -32,58 +32,63 @@ function IconBase({
   )
 }
 
-// 工作台 - 房子/仪表盘
+// 工作台 - 房子/仪表盘 (Core Pop 双色填充风格)
 export function HomeIcon({ className, size = 24 }: IconProps) {
   return (
     <IconBase className={className} size={size}>
+      {/* 背景填充 */}
       <path
-        d="M3 9.5l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2v-11z"
+        d="M12 3L4 9v12a2 2 0 002 2h12a2 2 0 002-2V9l-8-6z"
+        fill="currentColor"
+        opacity="0.2"
+      />
+      {/* 主体轮廓 */}
+      <path
+        d="M12 3L4 9v12a2 2 0 002 2h12a2 2 0 002-2V9l-8-6z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
       />
-      <path
-        d="M9 22v-10h6v10"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        opacity="0.6"
-      />
+      {/* 门 - 强调色块 */}
+      <rect x="10" y="14" width="4" height="7" rx="0.5" fill="currentColor" />
     </IconBase>
   )
 }
 
-// 报价中心 - 货币/报价单
+// 报价中心 - 货币/报价单 (Core Pop 双色填充风格)
 export function QuoteIcon({ className, size = 24 }: IconProps) {
   return (
     <IconBase className={className} size={size}>
+      {/* 圆形背景 */}
+      <circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.15" />
+      {/* 货币符号 */}
       <path
-        d="M12 2v20"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"
+        d="M12 6v12M15 8H10a3 3 0 000 6h4a3 3 0 010 6H9"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
       />
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.3" />
+      {/* 小圆点强调 */}
+      <circle cx="12" cy="5" r="1.5" fill="currentColor" />
     </IconBase>
   )
 }
 
-// 合同审核 - 文档/合同
+// 合同审核 - 文档/合同 (Core Pop 双色填充风格)
 export function ContractIcon({ className, size = 24 }: IconProps) {
   return (
     <IconBase className={className} size={size}>
+      {/* 文档背景填充 */}
+      <path
+        d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"
+        fill="currentColor"
+        opacity="0.12"
+      />
+      {/* 文档轮廓 */}
       <path
         d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"
         stroke="currentColor"
@@ -92,22 +97,39 @@ export function ContractIcon({ className, size = 24 }: IconProps) {
         strokeLinejoin="round"
         fill="none"
       />
+      {/* 折角强调 */}
       <path
-        d="M14 2v6h6M8 13h8M8 17h8M8 9h2"
+        d="M14 2v6h6"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
+        fill="currentColor"
+        fillOpacity="0.4"
+      />
+      {/* 文字线 */}
+      <path
+        d="M8 13h8M8 17h6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
         opacity="0.6"
       />
     </IconBase>
   )
 }
 
-// 标书中心 - 证书/徽章
+// 标书中心 - 证书/徽章 (Core Pop 双色填充风格)
 export function TenderIcon({ className, size = 24 }: IconProps) {
   return (
     <IconBase className={className} size={size}>
+      {/* 星形填充背景 */}
+      <path
+        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+        fill="currentColor"
+        opacity="0.15"
+      />
+      {/* 星形轮廓 */}
       <path
         d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
         stroke="currentColor"
@@ -116,15 +138,23 @@ export function TenderIcon({ className, size = 24 }: IconProps) {
         strokeLinejoin="round"
         fill="none"
       />
-      <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.5" />
+      {/* 中心圆点强调 */}
+      <circle cx="12" cy="11" r="2" fill="currentColor" />
     </IconBase>
   )
 }
 
-// 知识库 - 书本/知识
+// 知识库 - 书本/知识 (Core Pop 双色填充风格)
 export function KnowledgeIcon({ className, size = 24 }: IconProps) {
   return (
     <IconBase className={className} size={size}>
+      {/* 书本背景填充 */}
+      <path
+        d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"
+        fill="currentColor"
+        opacity="0.1"
+      />
+      {/* 书本轮廓 */}
       <path
         d="M4 19.5A2.5 2.5 0 016.5 17H20"
         stroke="currentColor"
@@ -140,48 +170,83 @@ export function KnowledgeIcon({ className, size = 24 }: IconProps) {
         strokeLinejoin="round"
         fill="none"
       />
+      {/* 书页线条 */}
       <path
-        d="M9 7h6M9 11h6M9 15h4"
+        d="M9 7h6M9 11h5M9 15h4"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
-        opacity="0.6"
+        opacity="0.5"
       />
     </IconBase>
   )
 }
 
-// 日程 - 日历/时钟
+// 日程 - 日历/时钟 (Core Pop 双色填充风格)
 export function ScheduleIcon({ className, size = 24 }: IconProps) {
   return (
     <IconBase className={className} size={size}>
+      {/* 日历背景填充 */}
       <rect
         x="3"
-        y="4"
+        y="5"
         width="18"
-        height="18"
+        height="16"
         rx="2"
-        ry="2"
+        fill="currentColor"
+        opacity="0.1"
+      />
+      {/* 日历轮廓 */}
+      <rect
+        x="3"
+        y="5"
+        width="18"
+        height="16"
+        rx="2"
         stroke="currentColor"
         strokeWidth="1.5"
         fill="none"
       />
+      {/* 顶部挂钩 */}
       <path
-        d="M16 2v4M8 2v4M3 10h18"
+        d="M16 2v4M8 2v4"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
       />
-      <circle cx="12" cy="15" r="3" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.5" />
+      {/* 日期线 */}
+      <path
+        d="M3 10h18"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      {/* 中心时钟圆点 */}
+      <circle cx="12" cy="14" r="2.5" fill="currentColor" opacity="0.3" />
+      {/* 时钟指针 */}
+      <path
+        d="M12 14v-2.5M12 14l1.5 1"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </IconBase>
   )
 }
 
-// 配置中心 - 齿轮/设置
+// 配置中心 - 齿轮/设置 (Core Pop 双色填充风格)
 export function SettingsIcon({ className, size = 24 }: IconProps) {
   return (
     <IconBase className={className} size={size}>
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      {/* 齿轮背景填充 */}
+      <path
+        d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+        fill="currentColor"
+        opacity="0.2"
+      />
+      {/* 中心圆点 */}
+      <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.9" />
+      {/* 齿轮轮廓 */}
       <path
         d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"
         stroke="currentColor"
@@ -189,7 +254,6 @@ export function SettingsIcon({ className, size = 24 }: IconProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
-        opacity="0.7"
       />
     </IconBase>
   )
