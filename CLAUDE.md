@@ -17,7 +17,7 @@ workspace-root/
     ├── README.md                # 产品真相索引
     ├── REQ_REGISTRY.yml         # 需求注册表
     ├── 00-master/               # 母文档
-    ├── 01-business-truth/       # 冻结业务背景（非开发主入口）
+    ├── 01-business-truth/       # 【已归档/删除】冻结业务背景已合并到派生文档
     ├── 02-technical-truth/      # 技术真相
     ├── 03-design-truth/         # 视觉真相
     ├── 04-implementation-truth/ # 实现真相
@@ -45,8 +45,8 @@ workspace-root/
    可执行代码真相。所有运行时代码只允许落在这里。
 
 补充约束：
-- `product-truth/01-business-truth/` 只保留冻结业务背景，不再作为实现期主真相回写。
-- 不允许把治理文档放进 `01-business-truth/`。
+- ~~`product-truth/01-business-truth/`~~ **已删除**：冻结业务背景已合并到派生文档。
+- 不允许把治理文档放进 `01-business-truth/`（已不存在）。
 - 不允许绕开现有 packet 随意新建产品文档。
 
 ## 开发流程
@@ -124,4 +124,4 @@ pnpm lint && pnpm tsc --noEmit && pnpm build
 - **PostgreSQL + JSONB**（ADR-006）
 - **SSE 流式**（ADR-003）
 - **RBAC + 数据范围**（ADR-004）
-- **CI 是 .bak，已坏**：从 `.github/workflows/ci.yml.bak` 恢复前必须验证
+- **CI 已修复**（2026-06-11）：从 `.bak` 恢复并验证通过

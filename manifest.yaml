@@ -27,9 +27,9 @@ done: [F003, F004, F007, F008]
 # 待实现
 todo:
   - req: F005
-    name: 合同审核 ASK-v2
-    status: design_confirmed
-    packet: product-truth/feature-packets/F005-F006-complete-design.md
+    name: 合同审核 (F005-derive)
+    status: design_in_progress
+    packet: product-truth/feature-packets/F005-derive.md
 
 # ═══════════════════════════════════════════════════════════════
 # 当前重心（详细版）

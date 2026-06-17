@@ -27,5 +27,5 @@ pnpm dev
 ## 快速导航
 
 - **价盘开发**: see [F001-price-list.md](./product-truth/feature-packets/F001-price-list.md)
-- **合同审核设计**: see [F005-F006-complete-design.md](./product-truth/feature-packets/F005-F006-complete-design.md)
+- **合同审核设计**: see [F005-derive.md](./product-truth/feature-packets/F005-derive.md) (整合 F005-F009)
 - **数据库迁移**: `product-truth/product-code/supabase/migrations/`
