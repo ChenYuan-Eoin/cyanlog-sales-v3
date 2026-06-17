@@ -9,7 +9,6 @@ import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft } from '@/lib/pricing/service'
 import {
-  successResponse,
   errorResponse,
   paginatedResponse,
   createdResponse,

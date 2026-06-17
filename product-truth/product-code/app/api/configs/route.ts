@@ -10,7 +10,6 @@ import { configCreateSchema, validateConfigValue } from '@/lib/configs/validatio
 import type { ConfigType, ConfigStatus } from '@/lib/configs/types'
 import { sanitizeConfigRow } from '@/lib/configs/runtime'
 import {
-  successResponse,
   errorResponse,
   paginatedResponse,
   createdResponse,

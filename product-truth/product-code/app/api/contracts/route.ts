@@ -6,7 +6,6 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
 import { logError } from '@/lib/error-log'
 import {
-  successResponse,
   errorResponse,
   createdResponse,
 } from '@/lib/api/common'

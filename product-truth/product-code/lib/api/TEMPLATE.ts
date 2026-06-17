@@ -1,21 +1,25 @@
 // API 路由规范化迁移指南
 // 所有新路由都应遵循此规范
+//
+// 使用方法：复制本文档中的模板代码到你的路由文件中
 
-import { NextRequest } from 'next/server'
-import {
-  successResponse,
-  errorResponse,
-  paginatedResponse,
-  createdResponse,
-  noContentResponse,
-} from '@/lib/api/common'
-import { createApiError } from '@/lib/api/errors'
-import { withAuth, withAuthAndOrg, withOptionalAuth } from '@/lib/api/auth-wrapper'
-import type { AuthUser } from '@/lib/auth'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _DOC_VERSION = '1.0.0'
 
 // ============================================================
 // 1. 基础模板 - 简单 CRUD
 // ============================================================
+
+/*
+import { NextRequest } from 'next/server'
+import {
+  errorResponse,
+  paginatedResponse,
+  createdResponse,
+} from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
+import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import type { AuthUser } from '@/lib/auth'
 
 // GET /api/resources - 列表（分页）
 export async function GET(req: NextRequest) {
@@ -78,12 +82,23 @@ export async function POST(req: NextRequest) {
     return createdResponse(data)
   })
 }
+*/
 
 // ============================================================
 // 2. 单资源操作（带ID路由）
 // ============================================================
 
+/*
 // app/api/resources/[id]/route.ts
+import { NextRequest } from 'next/server'
+import {
+  successResponse,
+  errorResponse,
+  noContentResponse,
+} from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
+import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import type { AuthUser } from '@/lib/auth'
 
 // GET - 获取单个资源
 export async function GET(
@@ -149,6 +164,7 @@ export async function DELETE(
     return noContentResponse()
   })
 }
+*/
 
 // ============================================================
 // 3. 常见错误码选择指南
@@ -173,9 +189,7 @@ export async function DELETE(
 
 /*
 1. 始终使用包装器
-   - withAuth: 仅需要认证
    - withAuthAndOrg: 需要认证+组织上下文
-   - withOptionalAuth: 可选认证
 
 2. 响应格式统一
    成功: { success: true, data: T, meta?: {} }
@@ -193,3 +207,7 @@ export async function DELETE(
    - ❌ 不同的响应格式
    - ❌ 硬编码错误消息
 */
+
+// 必须导出一些东西以避免 TypeScript 报错
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const API_TEMPLATE_VERSION = '1.0.0'

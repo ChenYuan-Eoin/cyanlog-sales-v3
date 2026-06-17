@@ -28,7 +28,7 @@ export async function withAuth<T>(
   try {
     const user = await requireAuth(req)
     return await handler(user)
-  } catch (error) {
+  } catch (_error) {
     return errorResponse(createApiError('UNAUTHORIZED'))
   }
 }
@@ -56,8 +56,8 @@ export async function withAuthAndOrg<T>(
     }
 
     return await handler(user, orgId)
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AuthError') {
+  } catch (_error) {
+    if (_error instanceof Error && _error.name === 'AuthError') {
       return errorResponse(createApiError('UNAUTHORIZED'))
     }
     return errorResponse(createApiError('INTERNAL_ERROR'))
@@ -77,7 +77,7 @@ export async function withPermission<T>(
     // 例如：检查 user.roles 是否包含所需权限
 
     return await handler(user)
-  } catch (error) {
+  } catch (_error) {
     return errorResponse(createApiError('UNAUTHORIZED'))
   }
 }
