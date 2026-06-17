@@ -200,6 +200,27 @@ F002 的职责是”记录业务输入并固化结果”，不是”在业务页
 
 ---
 
+## 9. 报价到合同的映射规则
+
+报价确认后，可一键生成合同草稿。数据映射规则：
+
+| 报价字段 | 合同字段 | 说明 |
+|---------|---------|------|
+| quote_no | source_quote_no | 来源报价编号（追溯） |
+| customer_name | party_b_name | 乙方名称 |
+| customer_contact | party_b_contact | 乙方联系人 |
+| total_amount | contract_amount | 合同金额 |
+| tax_amount | tax_amount | 税额 |
+| valid_until | delivery_date | 交付截止日期 |
+| payment_terms | payment_clause | 付款条款继承 |
+| quote_items[] | contract_items[] | 标的明细转换 |
+
+生成合同后：
+- Quote.generated_contract_id → Contract.id
+- Contract.status = DRAFT（可编辑）
+
+---
+
 ## 10. 验收标准
 
 - [ ] 报价明细含 SKU / 数量 / 单价 / 税率 / 折扣快照

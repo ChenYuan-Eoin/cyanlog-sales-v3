@@ -870,13 +870,42 @@ CREATE TABLE user_permission_assignments (
 
 ```sql
 -- ========= 合同 =========
-contracts                                   (已有)
+contracts                                   -- 【需要扩展】见下方完整结构
 contract_reviews                           (扩展 risk_summary, compliance_check, effectiveness_analysis)
 contract_clauses                            (已有：提取的合同条款)
 contract_versions                          (已有)
 contract_parties                            (已有)
 contract_annotations                        (已有)
 contract_ai_degradation                     (扩展字段)
+
+-- ========= 合同扩展字段（新增）=========
+-- contracts 表需要添加以下字段，以支持报价→合同链路：
+--   quote_id UUID REFERENCES quotes(id)           -- 来源报价
+--   tender_id UUID REFERENCES tenders(id)         -- 来源标书
+--   contract_no TEXT UNIQUE                     -- 合同编号
+--   party_a_name TEXT                           -- 甲方名称(我方)
+--   party_b_name TEXT                           -- 乙方名称(客户)
+--   party_b_contact TEXT                        -- 乙方联系人
+--   contract_amount DECIMAL(15,2)               -- 合同金额
+--   tax_amount DECIMAL(15,2)                    -- 税额
+--   contract_date DATE                          -- 签约日期
+--   effective_date DATE                         -- 生效日期
+--   expiry_date DATE                            -- 到期日期
+--   payment_terms TEXT                          -- 付款条款
+--   delivery_terms TEXT                         -- 交付条款
+--   signature_status TEXT                       -- 签章状态
+--   category TEXT                               -- 品类(买断/订阅)
+--   deployment_type TEXT                        -- 部署类型
+--   license_type TEXT                           -- 授权类型
+
+-- ========= 合同标的（新增）=========
+contract_items                              -- 合同标的明细
+  - contract_id UUID
+  - quote_item_id UUID                        -- 关联报价明细
+  - name TEXT
+  - quantity INTEGER
+  - unit_price DECIMAL
+  - line_total DECIMAL
 
 -- ========= 规则（柔性化）=========
 contract_rule_sets                          -- 规则集（多套可重叠）
