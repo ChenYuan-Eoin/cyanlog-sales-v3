@@ -138,8 +138,8 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
 
           <div className="mb-6">
             <p className="text-sm font-medium text-slate-700 mb-3">完整 Logo</p>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div className="min-w-0 p-4 bg-white border rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-white border rounded-lg">
                 <label className="text-sm font-medium">亮色版</label>
                 <p className="text-xs text-slate-500 mb-3">用于浅色背景</p>
                 <ImageUpload
@@ -149,7 +149,7 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
                   showUrlInput={false}
                 />
               </div>
-              <div className="min-w-0 p-4 bg-slate-800 border rounded-lg">
+              <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg">
                 <label className="text-sm font-medium text-white">暗色版</label>
                 <p className="text-xs text-slate-400 mb-3">用于深色背景</p>
                 <ImageUpload
@@ -164,8 +164,8 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
 
           <div className="mb-6">
             <p className="text-sm font-medium text-slate-700 mb-3">图标符号（侧边栏折叠、移动端）</p>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div className="min-w-0 p-4 bg-white border rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-white border rounded-lg">
                 <label className="text-sm font-medium">亮色版</label>
                 <p className="text-xs text-slate-500 mb-3">浅色背景使用</p>
                 <ImageUpload
@@ -175,7 +175,7 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
                   showUrlInput={false}
                 />
               </div>
-              <div className="min-w-0 p-4 bg-slate-800 border rounded-lg">
+              <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg">
                 <label className="text-sm font-medium text-white">暗色版</label>
                 <p className="text-xs text-slate-400 mb-3">深色背景使用</p>
                 <ImageUpload

@@ -504,7 +504,7 @@ export function OrgAdminWorkbench({ embedded = false }: { embedded?: boolean }) 
     await loadData()
   }
 
-  const selectableRoles = useMemo(() => roles.filter((role) => role.code !== 'SUPER_ADMIN'), [roles])
+  const selectableRoles = useMemo(() => roles, [roles])
   const roleNameByCode = useMemo(() => new Map(roles.map((role) => [role.code, role.name])), [roles])
   const statusMeta = useMemo(() => ({
     active: { label: '正常', className: 'bg-emerald-100 text-emerald-700' },
@@ -908,14 +908,14 @@ export function OrgAdminWorkbench({ embedded = false }: { embedded?: boolean }) 
                 {editingScopeUserId === u.id && (
                   <tr key={`${u.id}-scopes`}>
                     <td colSpan={8} style={{ background: 'var(--bg-muted)' }}>
-                      <div style={{ display: 'grid', gap: 12 }}>
+                      <div style={{ display: 'grid', gap: 12, padding: '16px' }}>
                         {(scopeDrafts[u.id] || []).map((draft) => (
                           <div
                             key={draft.key}
                             style={{
                               display: 'grid',
                               gap: 12,
-                              gridTemplateColumns: '160px minmax(220px, 1fr) minmax(260px, 1fr) auto',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
                               alignItems: 'start',
                             }}
                           >
@@ -969,7 +969,7 @@ export function OrgAdminWorkbench({ embedded = false }: { embedded?: boolean }) 
                                 const selected = Array.from(e.target.selectedOptions).map((option) => option.value)
                                 updateScopeDraft(u.id, draft.key, { roleCodes: selected })
                               }}
-                              style={{ minHeight: 84, width: '100%' }}
+                              style={{ minHeight: 84, width: '100%', minWidth: 0 }}
                             >
                               {selectableRoles.map((role) => (
                                 <option key={role.id} value={role.code}>{role.name}</option>

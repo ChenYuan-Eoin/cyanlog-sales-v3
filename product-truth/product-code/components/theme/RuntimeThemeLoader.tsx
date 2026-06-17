@@ -110,7 +110,7 @@ export function RuntimeThemeLoader() {
       }
 
       try {
-        const response = await fetch('/api/configs?type=UI_THEME&status=PUBLISHED', {
+        const response = await fetch('/api/configs?type=UI_THEME', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -120,8 +120,14 @@ export function RuntimeThemeLoader() {
           return
         }
 
-        const configs = await response.json() as Array<{ value?: Record<string, unknown> }>
-        const theme = sanitizeThemeValue(configs[0]?.value)
+        const configs = await response.json() as Array<{ value?: Record<string, unknown>; status?: string; updated_at?: string }>
+        // 优先使用已发布配置，如果没有则使用最新更新的配置
+        const publishedConfig = configs.find(c => c.status === 'PUBLISHED')
+        const latestConfig = configs.sort((a, b) =>
+          new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+        )[0]
+        const themeConfig = publishedConfig || latestConfig
+        const theme = sanitizeThemeValue(themeConfig?.value)
 
         if (cancelled) {
           return
