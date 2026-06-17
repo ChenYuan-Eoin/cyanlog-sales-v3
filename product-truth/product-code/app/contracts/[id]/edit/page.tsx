@@ -490,7 +490,7 @@ export default function ContractEditPage() {
                       onChange={handleFileUpload}
                       className="hidden"
                     />
-                    <Button variant="outline" className="w-full" disabled={uploading} asChild>
+                    <Button variant="outline" className="w-full" disabled={uploading}>
                       <span>{uploading ? '上传中...' : '上传文件'}</span>
                     </Button>
                   </label>

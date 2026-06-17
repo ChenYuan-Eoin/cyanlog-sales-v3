@@ -315,7 +315,7 @@ export async function PATCH(
       'notes',
     ]
 
-    const updateData: Record<string, any> = {}
+    const updateData: Record<string, string | number | null | undefined> = {}
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
         updateData[field] = body[field]

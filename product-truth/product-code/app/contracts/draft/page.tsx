@@ -45,7 +45,7 @@ export default function ContractDraftPage() {
   const [contractDate, setContractDate] = useState('')
   const [effectiveDate, setEffectiveDate] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
-  const [notes, setNotes] = useState('')
+  const [notes, _setNotes] = useState('')
 
   // 报价引用
   const [quotes, setQuotes] = useState<QuoteOption[]>([])
@@ -106,7 +106,13 @@ export default function ContractDraftPage() {
 
         // 加载报价明细
         if (quote.quote_items) {
-          setSelectedQuoteItems(quote.quote_items.map((item: any) => ({
+          interface QuoteItemFromAPI {
+            name: string
+            quantity: number
+            unit_price: number
+            line_total: number
+          }
+          setSelectedQuoteItems(quote.quote_items.map((item: QuoteItemFromAPI) => ({
             name: item.name,
             quantity: item.quantity,
             unit_price: item.unit_price,
@@ -149,7 +155,7 @@ export default function ContractDraftPage() {
 
     try {
       const token = localStorage.getItem('token')
-      const body: any = {
+      const body: Record<string, string | number | boolean | undefined> = {
         party_a_name: partyAName || undefined,
         party_b_name: partyBName,
         party_b_contact: partyBContact || undefined,
@@ -278,7 +284,7 @@ export default function ContractDraftPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-slate-500 mt-1">
-                    引用报价后，合同的"报价章节"将包含该报价的总价和分项明细
+                    引用报价后，合同的&quot;报价章节&quot;将包含该报价的总价和分项明细
                   </p>
                 </div>
               ) : (

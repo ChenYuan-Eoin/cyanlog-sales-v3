@@ -74,7 +74,7 @@ export async function POST(
     const storagePath = `${contractId}/${timestamp}_${safeFileName}`
 
     // 上传文件到 Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabaseAdmin
+    const { error: uploadError } = await supabaseAdmin
       .storage
       .from('contracts')
       .upload(storagePath, file, {
@@ -142,11 +142,12 @@ export async function POST(
       },
       message: '上传成功',
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error
     await logError({
       req,
       source: 'api',
-      message: error.message,
+      message: err.message,
       error,
       context: {
         route: '/api/contracts/[id]/upload',

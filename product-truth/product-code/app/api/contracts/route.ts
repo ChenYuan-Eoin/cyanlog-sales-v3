@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { requireAuth, requireOrg } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
 import { logError } from '@/lib/error-log'
 
@@ -46,7 +46,15 @@ export async function POST(req: NextRequest) {
       return errorResponse('未登录', 401, 'UNAUTHORIZED')
     }
 
-    const orgId = await requireOrg(user.id)
+    // 获取 orgId
+    const { data: userOrg } = await supabaseAdmin
+      .from('user_organizations')
+      .select('org_id')
+      .eq('user_id', user.id)
+      .eq('is_default', true)
+      .single()
+
+    const orgId = userOrg?.org_id
     if (!orgId) {
       return errorResponse('未选择组织', 400, 'NO_ORG')
     }
@@ -56,7 +64,7 @@ export async function POST(req: NextRequest) {
     const parsed = createContractSchema.safeParse(body)
     if (!parsed.success) {
       return errorResponse(
-        `参数验证失败: ${parsed.error.errors.map((e) => e.message).join(', ')}`,
+        `参数验证失败: ${parsed.error.issues.map((e) => e.message).join(', ')}`,
         400,
         'VALIDATION_ERROR'
       )
@@ -64,9 +72,43 @@ export async function POST(req: NextRequest) {
 
     const { quote_id, include_quote_items, ...contractData } = parsed.data
 
-    let quoteData: any = null
+    interface QuoteItem {
+      id: string
+      name: string
+      specification: string | null
+      quantity: number
+      unit: string
+      unit_price: number
+      line_total: number
+      sort_order: number
+    }
+
+    interface QuoteData {
+      id: string
+      quote_no: string
+      customer_name: string
+      customer_contact: string | null
+      total_amount: number
+      tax_amount: number
+      subtotal: number
+      payment_terms: string | null
+      valid_until: string | null
+      status: string
+      quote_items: QuoteItem[] | null
+    }
+
+    let quoteData: QuoteData | null = null
     let contractAmount = contractData.contract_amount
-    let contractItems: any[] = []
+    let contractItems: Array<{
+      quote_item_id: string
+      name: string
+      specification: string | null
+      quantity: number
+      unit: string
+      unit_price: number
+      line_total: number
+      sort_order: number
+    }> = []
 
     // 3. 如果传了 quote_id，查询报价数据（作为合同章节引用）
     if (quote_id) {
@@ -111,7 +153,7 @@ export async function POST(req: NextRequest) {
 
       // 准备合同标的（来自报价明细）
       if (include_quote_items && quote.quote_items) {
-        contractItems = quote.quote_items.map((item: any) => ({
+        contractItems = quote.quote_items.map((item: QuoteItem) => ({
           quote_item_id: item.id,
           name: item.name,
           specification: item.specification,
@@ -168,8 +210,10 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (contractError || !contract) {
-      await logError('contract_create_failed', contractError?.message || 'unknown', {
-        user_id: user.id,
+      await logError({
+        message: '合同创建失败',
+        error: contractError,
+        context: { user_id: user.id },
       })
       return errorResponse('合同创建失败', 500, 'CONTRACT_CREATE_FAILED')
     }
@@ -186,8 +230,12 @@ export async function POST(req: NextRequest) {
         .insert(itemsToInsert)
 
       if (itemsError) {
-        await logError('contract_items_create_failed', itemsError.message, {
-          contract_id: contract.id,
+        await logError({
+          source: 'api',
+          message: itemsError.message,
+          context: {
+            contract_id: contract.id,
+          },
         })
       }
     }
@@ -216,9 +264,15 @@ export async function POST(req: NextRequest) {
       },
     })
 
-  } catch (error: any) {
-    await logError('contract_create_api_error', error.message, {
-      stack: error.stack,
+  } catch (error: unknown) {
+    const err = error as Error
+    await logError({
+      source: 'api',
+      message: err.message,
+      error,
+      context: {
+        route: 'POST /api/contracts',
+      },
     })
     return errorResponse('服务器错误', 500, 'INTERNAL_ERROR')
   }

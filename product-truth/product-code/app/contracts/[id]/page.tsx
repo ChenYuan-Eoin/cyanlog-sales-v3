@@ -12,6 +12,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
 import type { Contract, ContractAnalysisJob } from '@/types'
 
+// 扩展 Contract 类型，包含业务字段
+interface ContractWithDetails extends Contract {
+  contract_no?: string
+  contract_amount?: number
+  party_a_name?: string
+  party_b_name?: string
+  quote_id?: string
+  owner_name?: string
+}
+
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   PENDING: { label: '待审核', variant: 'secondary' },
   PARSING: { label: '解析中', variant: 'default' },
@@ -68,7 +78,7 @@ interface AskItem {
 
 export default function ContractDetailPage() {
   const params = useParams()
-  const [contract, setContract] = useState<Contract | null>(null)
+  const [contract, setContract] = useState<ContractWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [pageError, setPageError] = useState('')
   const [actionError, setActionError] = useState('')
@@ -333,7 +343,7 @@ export default function ContractDetailPage() {
                 <span>{contract.party_b_name}</span>
               </div>
             )}
-            {contract.contract_amount > 0 && (
+            {(contract.contract_amount ?? 0) > 0 && (
               <div>
                 <span className="text-slate-500">合同金额：</span>
                 <span>¥{contract.contract_amount?.toLocaleString()}</span>
@@ -1087,10 +1097,31 @@ function AskListTab({
   )
 }
 
+interface QuoteData {
+  id: string
+  quote_no: string
+  customer_name: string
+  total_amount: number
+  subtotal: number
+  tax_amount: number
+  status: string
+  valid_until: string
+}
+
+interface QuoteItemData {
+  id: string
+  name: string
+  specification: string | null
+  quantity: number
+  unit: string
+  unit_price: number
+  line_total: number
+}
+
 // QuoteSection - 展示引用的报价章节
 function QuoteSection({ contractId, quoteId }: { contractId: string; quoteId: string }) {
-  const [quote, setQuote] = useState<any>(null)
-  const [items, setItems] = useState<any[]>([])
+  const [quote, setQuote] = useState<QuoteData | null>(null)
+  const [items, setItems] = useState<QuoteItemData[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
