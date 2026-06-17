@@ -50,6 +50,7 @@ export default function ProductDialog({
   }, [])
 
   // 初始化表单数据
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (product) {
       setEditingProduct({

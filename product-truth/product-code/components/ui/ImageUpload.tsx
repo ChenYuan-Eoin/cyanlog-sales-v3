@@ -90,6 +90,7 @@ export function ImageUpload({
     <div className="space-y-2">
       {value ? (
         <div className="relative inline-block max-w-full">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value}
             alt="Uploaded"

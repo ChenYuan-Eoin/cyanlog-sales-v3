@@ -147,7 +147,7 @@ export function RoleDetailPanel({
   // 权限变更时同步
   useMemo(() => {
     setPerms(role.permissions ?? [])
-  }, [role.id])
+  }, [role.id, role.permissions])
 
   const hasChanges = JSON.stringify(perms.sort()) !== JSON.stringify((role.permissions ?? []).sort())
 

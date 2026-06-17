@@ -46,6 +46,7 @@ export default function RoleAccessTab({
   const [roleSearchQuery, setRoleSearchQuery] = useState('')
 
   // 计算每个角色的成员数
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const rolesWithStats: RoleWithStats[] = useMemo(() => {
     return roles.map(role => {
       const memberCount = users.filter(u => u.role_codes?.includes(role.code)).length

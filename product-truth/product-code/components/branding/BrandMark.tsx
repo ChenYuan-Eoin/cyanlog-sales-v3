@@ -63,6 +63,7 @@ export function BrandMark({ size = 40, className, variant = 'full', surface = 'a
             flexShrink: 0,
           }}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={finalUrl}
             alt={theme.brandName}
@@ -90,6 +91,7 @@ export function BrandMark({ size = 40, className, variant = 'full', surface = 'a
           overflow: 'hidden',
         }}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={finalUrl}
           alt={theme.brandName}
