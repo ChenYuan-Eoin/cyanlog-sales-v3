@@ -124,9 +124,20 @@ export default function ContractsPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">合同审核</h1>
-        <Link href="/contracts/new">
-          <Button>+ 上传合同</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/admin/review-strategies">
+            <Button variant="outline" size="sm">审核策略</Button>
+          </Link>
+          <Link href="/admin/clause-library">
+            <Button variant="outline" size="sm">条款库</Button>
+          </Link>
+          <Link href="/contracts/draft">
+            <Button variant="outline" size="sm">起草合同</Button>
+          </Link>
+          <Link href="/contracts/new">
+            <Button>+ 上传合同</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4 mb-6">

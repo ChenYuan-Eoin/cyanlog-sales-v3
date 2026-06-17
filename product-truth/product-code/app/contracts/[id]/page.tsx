@@ -194,6 +194,37 @@ export default function ContractDetailPage() {
     }
   }
 
+  // 用指定策略重新审核
+  async function handleReAnalyze(strategyCode: string) {
+    if (!contract) return
+    setAnalyzing(true)
+    setActionError('')
+
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/analyze`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ strategy: strategyCode }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setActionError(data.error || '重新审核失败')
+        return
+      }
+
+      await fetchContract()
+    } catch {
+      setActionError('网络错误')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8">
@@ -329,6 +360,8 @@ export default function ContractDetailPage() {
                 latestReview={latestReview}
                 exporting={exporting}
                 handleExport={handleExport}
+                onReAnalyze={handleReAnalyze}
+                contractId={contractId}
               />
             </TabsContent>
             <TabsContent value="ask" className="pt-4">
@@ -418,12 +451,14 @@ function AnalysisJobCard({
   )
 }
 
-// Review Results Tab
+// Review Results Tab - iTerms 风格：风险统计 + 策略 + 条款 + 效力分析
 function ReviewResultsTab({
   contract,
   latestReview,
   exporting,
   handleExport,
+  onReAnalyze,
+  contractId,
 }: {
   contract: Contract
   latestReview: {
@@ -431,59 +466,376 @@ function ReviewResultsTab({
       summary: string
       risks: Risk[]
     }
+    risk_summary?: {
+      total_clauses: number
+      critical_risks: number
+      high_risks: number
+      medium_risks: number
+      low_risks: number
+      compliance_score: number
+      strategy_code?: string
+    }
+    compliance_check?: {
+      missing_required_clauses: string[]
+      dangerous_clauses: string[]
+      ambiguous_clauses: string[]
+      unbalanced_clauses: string[]
+      party_a_consistency: string
+      party_b_consistency: string
+      issues: string[]
+    }
+    effectiveness_analysis?: string
+    report_version?: number
   } | null | undefined
   exporting: boolean
   handleExport: () => void
+  onReAnalyze: (strategyCode: string) => Promise<void>
+  contractId: string
 }) {
+  const [selectedStrategy, setSelectedStrategy] = useState<string>(
+    latestReview?.risk_summary?.strategy_code || 'BALANCED'
+  )
+  const [strategies, setStrategies] = useState<Array<{ id: string; code: string; name: string; description: string | null; risk_threshold: number }>>([])
+  const [clauses, setClauses] = useState<Array<{
+    id: string
+    clause_number: string | null
+    clause_title: string | null
+    clause_text: string
+    risk_level: string
+    risk_category: string | null
+    risk_description: string | null
+    legal_basis: string | null
+    suggestion: string | null
+  }>>([])
+  const [reAnalyzing, setReAnalyzing] = useState(false)
+
+  // 加载策略列表
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/review-strategies')
+        if (res.ok) {
+          const data = await res.json()
+          setStrategies(data.data?.strategies || [])
+        }
+      } catch { /* ignore */ }
+    })()
+  }, [])
+
+  // 加载条款列表
+  useEffect(() => {
+    if (contract.status !== 'COMPLETED') return
+    void (async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/contracts/${contractId}/clauses`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setClauses(data.data?.clauses || [])
+        }
+      } catch { /* ignore */ }
+    })()
+  }, [contractId, contract.status])
+
   if (contract.status !== 'COMPLETED' || !latestReview?.results) {
     return (
       <div className="text-center py-8">
-        <p className="text-slate-500">暂无审核结果</p>
+        <p className="textlate-500">暂无审核结果</p>
       </div>
     )
   }
 
+  const risk = latestReview.risk_summary || {
+    total_clauses: 0,
+    critical_risks: 0,
+    high_risks: 0,
+    medium_risks: 0,
+    low_risks: 0,
+    compliance_score: 0,
+  }
+  const compliance = latestReview.compliance_check || {
+    missing_required_clauses: [],
+    dangerous_clauses: [],
+    ambiguous_clauses: [],
+    unbalanced_clauses: [],
+    party_a_consistency: 'unknown',
+    party_b_consistency: 'unknown',
+    issues: [],
+  }
+
+  async function handleStrategyChange(code: string) {
+    setSelectedStrategy(code)
+    setReAnalyzing(true)
+    try {
+      await onReAnalyze(code)
+    } finally {
+      setReAnalyzing(false)
+    }
+  }
+
+  const scoreColor = risk.compliance_score >= 80 ? 'text-green-600' : risk.compliance_score >= 60 ? 'text-yellow-600' : 'text-red-600'
+  const scoreBg = risk.compliance_score >= 80 ? 'bg-green-50 border-green-200' : risk.compliance_score >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <CardTitle className="text-base">AI 审核结果</CardTitle>
-        <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm">
-          {exporting ? '导出中...' : '导出Word'}
-        </Button>
+    <div className="space-y-6">
+      {/* 1. 风险统计卡片（iTerms 风格顶部） */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className={`p-4 rounded-lg border ${scoreBg}`}>
+          <div className="text-xs text-slate-500">综合评分</div>
+          <div className={`text-2xl font-bold ${scoreColor}`}>{risk.compliance_score}</div>
+          <div className="text-xs text-slate-500 mt-1">/ 100</div>
+        </div>
+        <div className="p-4 rounded-lg border border-red-200 bg-red-50">
+          <div className="text-xs text-slate-500">严重风险</div>
+          <div className="text-2xl font-bold text-red-600">{risk.critical_risks}</div>
+        </div>
+        <div className="p-4 rounded-lg border border-orange-200 bg-orange-50">
+          <div className="text-xs text-slate-500">高风险</div>
+          <div className="text-2xl font-bold text-orange-600">{risk.high_risks}</div>
+        </div>
+        <div className="p-4 rounded-lg border border-yellow-200 bg-yellow-50">
+          <div className="text-xs text-slate-500">中风险</div>
+          <div className="text-2xl font-bold text-yellow-600">{risk.medium_risks}</div>
+        </div>
       </div>
 
-      <div className="p-4 bg-slate-50 rounded-lg mb-6">
-        <p className="text-sm">{latestReview.results.summary}</p>
-      </div>
-
-      {latestReview.results.risks.length > 0 ? (
-        <div className="space-y-4">
-          <h4 className="text-sm font-medium text-slate-700">
-            发现问题 ({latestReview.results.risks.length})
-          </h4>
-          {latestReview.results.risks.map((risk: Risk, index: number) => (
-            <div
-              key={index}
-              className={`p-4 rounded-lg border ${riskLevelMap[risk.level]?.className || 'bg-slate-50'}`}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline" className="text-xs">
-                  {riskLevelMap[risk.level]?.label || risk.level}
-                </Badge>
-                <span className="font-medium">{risk.title}</span>
+      {/* 2. 审核策略选择器 */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-slate-700 mb-2">审核策略</div>
+              <div className="flex gap-2">
+                {strategies.length > 0 ? strategies.map(s => (
+                  <Button
+                    key={s.code}
+                    size="sm"
+                    variant={selectedStrategy === s.code ? 'default' : 'outline'}
+                    onClick={() => void handleStrategyChange(s.code)}
+                    disabled={reAnalyzing}
+                    title={s.description || ''}
+                  >
+                    {s.name}
+                  </Button>
+                )) : (
+                  <>
+                    <Button size="sm" variant={selectedStrategy === 'AGGRESSIVE' ? 'default' : 'outline'} disabled>强势</Button>
+                    <Button size="sm" variant={selectedStrategy === 'BALANCED' ? 'default' : 'outline'} disabled>平衡</Button>
+                    <Button size="sm" variant={selectedStrategy === 'CONSERVATIVE' ? 'default' : 'outline'} disabled>弱势</Button>
+                  </>
+                )}
               </div>
-              <p className="text-sm mb-2">{risk.description}</p>
-              <p className="text-sm text-slate-600">
-                <span className="font-medium">建议：</span>
-                {risk.suggestion}
+              <p className="text-xs text-slate-500 mt-2">
+                {strategies.find(s => s.code === selectedStrategy)?.description || '选择不同的审核立场，重新分析合同风险'}
               </p>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <p className="text-green-600">✓ 未发现明显风险</p>
-        </div>
+            <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm">
+              {exporting ? '导出中...' : '导出 Word（含批注）'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 3. 综合分析（效力 + 解释） */}
+      {latestReview.effectiveness_analysis && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">效力与风险分析</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-sm max-w-none">
+              {latestReview.effectiveness_analysis.split('\n').map((line, i) => {
+                if (line.startsWith('## ')) {
+                  return <h3 key={i} className="text-lg font-semibold mt-3 mb-2">{line.slice(3)}</h3>
+                }
+                if (line.startsWith('### ')) {
+                  return <h4 key={i} className="text-base font-semibold mt-3 mb-1">{line.slice(4)}</h4>
+                }
+                if (line.startsWith('- ')) {
+                  return <li key={i} className="ml-4 list-disc text-sm">{line.slice(2)}</li>
+                }
+                if (line.trim() === '') return <br key={i} />
+                return <p key={i} className="text-sm my-1">{line}</p>
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. 合规检查（关联方一致性、必备条款） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">合规性检查</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <div className="text-slate-500 mb-1">甲方信息一致性</div>
+              <Badge variant={compliance.party_a_consistency === 'consistent' ? 'outline' : 'destructive'}>
+                {compliance.party_a_consistency === 'consistent' ? '一致' : compliance.party_a_consistency === 'inconsistent' ? '存在冲突' : '未知'}
+              </Badge>
+            </div>
+            <div>
+              <div className="text-slate-500 mb-1">乙方信息一致性</div>
+              <Badge variant={compliance.party_b_consistency === 'consistent' ? 'outline' : 'destructive'}>
+                {compliance.party_b_consistency === 'consistent' ? '一致' : compliance.party_b_consistency === 'inconsistent' ? '存在冲突' : '未知'}
+              </Badge>
+            </div>
+            <div>
+              <div className="text-slate-500 mb-1">缺失必备条款</div>
+              <Badge variant={compliance.missing_required_clauses.length === 0 ? 'outline' : 'destructive'}>
+                {compliance.missing_required_clauses.length} 项
+              </Badge>
+            </div>
+            <div>
+              <div className="text-slate-500 mb-1">高风险条款</div>
+              <Badge variant={compliance.dangerous_clauses.length === 0 ? 'outline' : 'destructive'}>
+                {compliance.dangerous_clauses.length} 项
+              </Badge>
+            </div>
+            <div>
+              <div className="text-slate-500 mb-1">模糊用语条款</div>
+              <Badge variant={compliance.ambiguous_clauses.length === 0 ? 'outline' : 'secondary'}>
+                {compliance.ambiguous_clauses.length} 项
+              </Badge>
+            </div>
+          </div>
+
+          {(compliance.missing_required_clauses.length > 0 ||
+            compliance.dangerous_clauses.length > 0 ||
+            compliance.ambiguous_clauses.length > 0 ||
+            compliance.issues.length > 0) && (
+            <div className="mt-4 pt-4 border-t space-y-2">
+              {compliance.missing_required_clauses.length > 0 && (
+                <div>
+                  <div className="text-sm font-medium text-orange-700 mb-1">缺失必备条款</div>
+                  <ul className="text-sm text-slate-600 space-y-1">
+                    {compliance.missing_required_clauses.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-orange-500">●</span>{c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {compliance.dangerous_clauses.length > 0 && (
+                <div>
+                  <div className="text-sm font-medium text-red-700 mb-1">高风险条款</div>
+                  <ul className="text-sm text-slate-600 space-y-1">
+                    {compliance.dangerous_clauses.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-red-500">●</span>{c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {compliance.issues.length > 0 && (
+                <div>
+                  <div className="text-sm font-medium text-amber-700 mb-1">其他问题</div>
+                  <ul className="text-sm text-slate-600 space-y-1">
+                    {compliance.issues.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-amber-500">●</span>{c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 5. 提取的合同条款（按条款定位风险） */}
+      {clauses.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              提取条款（{clauses.length} 条）
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {clauses.slice(0, 20).map((clause, i) => (
+                <div
+                  key={clause.id || i}
+                  className={`p-3 rounded-lg border ${
+                    clause.risk_level === 'critical' || clause.risk_level === 'high'
+                      ? 'border-red-200 bg-red-50'
+                      : clause.risk_level === 'medium'
+                      ? 'border-yellow-200 bg-yellow-50'
+                      : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {clause.clause_number && (
+                      <span className="text-sm font-medium text-slate-700">
+                        第{clause.clause_number}条
+                      </span>
+                    )}
+                    {clause.clause_title && (
+                      <span className="text-sm text-slate-600">· {clause.clause_title}</span>
+                    )}
+                    {clause.risk_level && clause.risk_level !== 'low' && (
+                      <Badge variant="destructive" className="text-xs">
+                        {clause.risk_level === 'critical' ? '严重' : clause.risk_level === 'high' ? '高风险' : '中风险'}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-700 line-clamp-2 mb-1">
+                    {clause.clause_text}
+                  </p>
+                  {clause.suggestion && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      <span className="font-medium">建议：</span>{clause.suggestion}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {clauses.length > 20 && (
+                <p className="text-xs text-center text-slate-500">
+                  还有 {clauses.length - 20} 条条款...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 6. AI 原始风险列表（兼容老数据） */}
+      {latestReview.results.risks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">AI 风险点（{latestReview.results.risks.length} 项）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="p-4 bg-slate-50 rounded-lg mb-4">
+              <p className="text-sm">{latestReview.results.summary}</p>
+            </div>
+            <div className="space-y-3">
+              {latestReview.results.risks.map((risk, index) => (
+                <div
+                  key={index}
+                  className={`p-4 rounded-lg border ${riskLevelMap[risk.level]?.className || 'bg-slate-50'}`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className="text-xs">
+                      {riskLevelMap[risk.level]?.label || risk.level}
+                    </Badge>
+                    <span className="font-medium text-sm">{risk.title}</span>
+                  </div>
+                  <p className="text-sm mb-2">{risk.description}</p>
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium">建议：</span>{risk.suggestion}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
