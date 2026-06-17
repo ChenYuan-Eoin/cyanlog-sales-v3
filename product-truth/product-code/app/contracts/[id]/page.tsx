@@ -295,8 +295,11 @@ export default function ContractDetailPage() {
 
       {/* Basic Info */}
       <Card className="mb-6">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">基本信息</CardTitle>
+          <Link href={`/contracts/${contractId}/edit`}>
+            <Button variant="outline" size="sm">编辑</Button>
+          </Link>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -318,6 +321,24 @@ export default function ContractDetailPage() {
               <span className="text-slate-500">上传时间：</span>
               <span>{new Date(contract.created_at).toLocaleString('zh-CN')}</span>
             </div>
+            {contract.contract_no && (
+              <div>
+                <span className="text-slate-500">合同编号：</span>
+                <span>{contract.contract_no}</span>
+              </div>
+            )}
+            {contract.party_b_name && (
+              <div>
+                <span className="text-slate-500">乙方：</span>
+                <span>{contract.party_b_name}</span>
+              </div>
+            )}
+            {contract.contract_amount > 0 && (
+              <div>
+                <span className="text-slate-500">合同金额：</span>
+                <span>¥{contract.contract_amount?.toLocaleString()}</span>
+              </div>
+            )}
           </div>
 
           {canAnalyze && (
@@ -329,6 +350,11 @@ export default function ContractDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 报价章节（如果引用了报价） */}
+      {contract.quote_id && (
+        <QuoteSection contractId={contractId} quoteId={contract.quote_id} />
+      )}
 
       {latestJob && (
         <AnalysisJobCard job={latestJob} isPolling={isAnalyzing} />
@@ -1058,5 +1084,107 @@ function AskListTab({
         ))}
       </div>
     </div>
+  )
+}
+
+// QuoteSection - 展示引用的报价章节
+function QuoteSection({ contractId, quoteId }: { contractId: string; quoteId: string }) {
+  const [quote, setQuote] = useState<any>(null)
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadQuote() {
+      try {
+        const token = localStorage.getItem('token')
+        const [quoteRes, itemsRes] = await Promise.all([
+          fetch(`/api/quotes/${quoteId}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          }),
+          fetch(`/api/contracts/${contractId}/items`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          }),
+        ])
+
+        if (quoteRes.ok) {
+          const quoteData = await quoteRes.json()
+          setQuote(quoteData.data || quoteData)
+        }
+        if (itemsRes.ok) {
+          const itemsData = await itemsRes.json()
+          setItems(itemsData.data || [])
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void loadQuote()
+  }, [contractId, quoteId])
+
+  if (loading) {
+    return (
+      <Card className="mb-6">
+        <CardContent className="py-6">
+          <p className="text-sm text-slate-500">加载报价信息...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!quote) return null
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">报价章节</CardTitle>
+        <Link href={`/quotes/${quoteId}`}>
+          <Button variant="ghost" size="sm">查看原报价</Button>
+        </Link>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4 text-sm">
+          <p>
+            <span className="text-slate-500">报价编号：</span>
+            {quote.quote_no}
+          </p>
+          <p>
+            <span className="text-slate-500">客户：</span>
+            {quote.customer_name}
+          </p>
+          <p>
+            <span className="text-slate-500">报价总金额：</span>
+            ¥{quote.total_amount?.toLocaleString()}
+          </p>
+        </div>
+
+        {items.length > 0 && (
+          <div className="border rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-3 py-2 text-left">标的名称</th>
+                  <th className="px-3 py-2 text-right">数量</th>
+                  <th className="px-3 py-2 text-right">单价</th>
+                  <th className="px-3 py-2 text-right">小计</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t">
+                    <td className="px-3 py-2">{item.name}</td>
+                    <td className="px-3 py-2 text-right">{item.quantity}</td>
+                    <td className="px-3 py-2 text-right">¥{item.unit_price?.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">¥{item.line_total?.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
