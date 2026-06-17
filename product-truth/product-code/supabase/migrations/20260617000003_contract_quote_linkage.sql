@@ -120,3 +120,14 @@ DROP TRIGGER IF EXISTS trig_contract_items_updated_at ON contract_items;
 CREATE TRIGGER trig_contract_items_updated_at
   BEFORE UPDATE ON contract_items
   FOR EACH ROW EXECUTE FUNCTION update_contract_items_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════
+-- 5. quotes 表添加关联合同ID字段
+-- ═══════════════════════════════════════════════════════════════
+
+ALTER TABLE quotes
+  ADD COLUMN IF NOT EXISTS generated_contract_id UUID REFERENCES contracts(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_quotes_generated_contract_id ON quotes(generated_contract_id);
+
+COMMENT ON COLUMN quotes.generated_contract_id IS '从该报价生成的合同ID';
