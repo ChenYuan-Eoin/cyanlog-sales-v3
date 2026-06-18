@@ -176,6 +176,14 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => {}}>
+                <PlusIcon className="h-4 w-4 mr-2" />
+                添加同级部门
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => {}}>
+                <PlusIcon className="h-4 w-4 mr-2" />
+                添加下级部门
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-red-600"
                 disabled={deletingDept?.id === dept.id}
@@ -254,14 +262,12 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
 interface MemberTableProps {
   users: OrgSummaryUser[]
   departments: OrgSummaryDepartment[]
+  onEditUser: (user: OrgSummaryUser) => void
+  onAssignRole: (user: OrgSummaryUser) => void
 }
 
-function MemberTable({ users }: MemberTableProps) {
+function MemberTable({ users, onEditUser, onAssignRole }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
 
   // 使用 Fuse.js 进行模糊搜索
   const fuse = useMemo(() => {
@@ -352,11 +358,11 @@ function MemberTable({ users }: MemberTableProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setEditingUser(user)}>
+              <DropdownMenuItem onSelect={() => onEditUser(user)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setAssigningUser(user)}>
+              <DropdownMenuItem onSelect={() => onAssignRole(user)}>
                 <ShieldIcon className="h-4 w-4 mr-2" />
                 分配角色
               </DropdownMenuItem>
@@ -668,7 +674,12 @@ export default function OrgStructureTab({
               </div>
             </div>
             <div className="p-6">
-              <MemberTable users={filteredUsers} departments={departments} />
+              <MemberTable
+                users={filteredUsers}
+                departments={departments}
+                onEditUser={setEditingUser}
+                onAssignRole={setAssigningUser}
+              />
             </div>
           </div>
         </div>
