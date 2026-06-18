@@ -179,7 +179,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.parent_id || null); setAddDeptOpen(true); }}>
+              <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.parent_id ? dept.parent_id : null); setAddDeptOpen(true); }}>
                 <PlusIcon className="h-4 w-4 mr-2" />
                 添加同级部门
               </DropdownMenuItem>
