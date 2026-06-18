@@ -31,7 +31,7 @@ async function getPublishedUIThemeInternal(token?: string): Promise<Required<UIT
 export const getPublishedUITheme = cache(async (token?: string) => {
   try {
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Theme query timeout')), 100)
+      setTimeout(() => reject(new Error('Theme query timeout')), 3000)
     })
     return await Promise.race([
       getPublishedUIThemeInternal(token),
