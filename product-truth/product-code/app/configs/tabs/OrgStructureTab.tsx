@@ -66,6 +66,9 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
   const [deletingDept, setDeletingDept] = useState<OrgSummaryDepartment | null>(null)
+  // 添加部门弹窗状态
+  const [addDeptOpen, setAddDeptOpen] = useState(false)
+  const [addDeptParentId, setAddDeptParentId] = useState<string | null>(null)
 
   const rootDepts = useMemo(() => departments.filter(d => !d.parent_id), [departments])
 
@@ -176,11 +179,11 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => {}}>
+              <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.parent_id); setAddDeptOpen(true); }}>
                 <PlusIcon className="h-4 w-4 mr-2" />
                 添加同级部门
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => {}}>
+              <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.id); setAddDeptOpen(true); }}>
                 <PlusIcon className="h-4 w-4 mr-2" />
                 添加下级部门
               </DropdownMenuItem>
@@ -251,6 +254,36 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
             alert('部门更新成功')
             window.location.reload()
           }}
+        />
+      )}
+
+      {/* 添加同级/下级部门 Dialog */}
+      {addDeptOpen && (
+        <DepartmentFormDialog
+          departments={departments}
+          users={users}
+          open={true}
+          onOpenChange={(open) => !open && setAddDeptOpen(false)}
+          onSubmit={async (values) => {
+            const res = await fetch('/api/admin/departments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: values.name,
+                code: values.code,
+                parent_id: addDeptParentId,
+                leader_id: values.leader_id,
+              }),
+            })
+            const result = await res.json()
+            if (!res.ok) {
+              alert(result.error || '创建失败')
+              throw new Error(result.error)
+            }
+            alert('部门创建成功')
+            window.location.reload()
+          }}
+          trigger={null}
         />
       )}
     </>
