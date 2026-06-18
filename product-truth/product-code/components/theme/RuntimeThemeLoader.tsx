@@ -89,6 +89,12 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
       link.href = faviconUrl
     })
   }
+
+  // 同步到全局，供 BrandingProvider 读取（brandAssets 等复杂对象无法通过 DOM 属性传递）
+  if (typeof window !== 'undefined') {
+    ;(window as unknown as Record<string, unknown>).__RUNTIME_THEME__ = theme
+    window.dispatchEvent(new CustomEvent('runtime-theme-applied', { detail: theme }))
+  }
 }
 
 export function RuntimeThemeLoader() {

@@ -91,6 +91,36 @@ requirements:
   # ═══════════════════════════════════════════════════════════════
   # 合同审核 (Contract Review)
   # ═══════════════════════════════════════════════════════════════
+
+  F005v2:
+    name: 合同中心 V2 (ONES Contract)
+    module: 合同中心
+    source: feature-packets/F005v2-contract-center.md
+    status: design_confirmed
+    priority: P0
+    feature_packet: product-truth/feature-packets/F005v2-contract-center.md
+    code_locations:
+      - app/contracts/page.tsx                    # 首页工作台
+      - app/contracts/draft/page.tsx              # AI 智能起草
+      - app/contracts/[id]/review/page.tsx        # 三段式风险审核
+      - app/contracts/[id]/compare/page.tsx       # 文档精准比对
+      - app/admin/contract-policies/page.tsx      # 策略配置中心
+      - app/api/contracts/dashboard/route.ts      # 首页仪表盘
+      - app/api/contracts/drafts/route.ts         # 草稿 CRUD
+      - app/api/contracts/[id]/review/route.ts    # 审核结果
+      - app/api/contracts/[id]/risk-cards/route.ts # 风险卡片
+      - app/api/contracts/[id]/ai-chat/route.ts   # AI 对话
+      - app/api/contracts/[id]/compare/route.ts # 比对任务
+      - app/api/contract-policies/rules/route.ts  # 规则配置
+    description: |
+      基于合同中心 PRD (2026-06-18) 和原型文件的 V2 升级：
+      - 首页工作台（金刚区 + 资产看板 + 任务流）
+      - AI 智能起草（CRM 联动 + 填空式引导 + 实时预览）
+      - 智能风险审核（三段式布局 + 风险卡片 + 一键修复 + AI 对话）
+      - 文档精准比对（语义对齐 + AI 变更解读）
+      - 策略配置中心（规则原子化 + 3 级阈值 + 版本管理 + 灰度发布）
+    parent_doc: product-truth/feature-packets/F005-derive.md
+
   F005:
     name: 合同审核（完整设计）
     module: 合同审核

@@ -52,6 +52,7 @@ export interface QuoteItem {
 export interface Contract {
   id: string
   filename: string
+  title?: string
   storage_path: string
   size: number
   mime_type: string

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONES 合同中心 - 文档精准比对</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', 'PingFang SC', sans-serif; background-color: #f1f5f9; }
+        
+        /* 差异高亮样式 */
+        .diff-added { background-color: #dcfce7; color: #166534; text-decoration: underline; font-weight: 500; }
+        .diff-removed { background-color: #fee2e2; color: #991b1b; text-decoration: line-through; }
+        .diff-moved { border-left: 2px solid #3b82f6; background-color: #eff6ff; }
+        
+        /* 双栏对齐滚动同步 */
+        .sync-scroll-container { display: flex; height: calc(100vh - 120px); }
+        .pane { overflow-y: auto; flex: 1; padding: 40px; background: white; border: 1px solid #e2e8f0; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .change-item:hover { background-color: #f8fafc; border-left-color: #6366f1 !important; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- 左侧极简导航 -->
+    <aside class="w-16 bg-[#0f172a] flex flex-col items-center py-6 space-y-8 flex-shrink-0">
+        <div class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-lg">
+            <i class="lucide-copy-check text-white w-5 h-5"></i>
+        </div>
+        <div class="flex flex-col space-y-6">
+            <i class="lucide-layout-dashboard text-gray-500 cursor-pointer hover:text-white"></i>
+            <i class="lucide-file-text text-gray-500 cursor-pointer hover:text-white"></i>
+            <i class="lucide-git-compare text-indigo-400 cursor-pointer"></i>
+        </div>
+    </aside>
+
+    <!-- 主容器 -->
+    <div class="flex-1 flex flex-col">
+        <!-- 顶部操作栏 -->
+        <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0 z-20">
+            <div class="flex items-center space-x-4">
+                <i class="lucide-arrow-left w-5 h-5 text-slate-400 cursor-pointer"></i>
+                <div class="flex items-center space-x-2">
+                    <h1 class="font-bold text-slate-900">版本比对：标准模板 vs 客户回传件_修正版.docx</h1>
+                    <span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded font-bold">检测到 8 处差异</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-lg">
+                    <button class="px-3 py-1 bg-white shadow-sm rounded text-xs font-bold text-indigo-600">双栏视图</button>
+                    <button class="px-3 py-1 text-xs text-slate-500 hover:text-slate-700">合并视图</button>
+                </div>
+                <button class="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center">
+                    <i class="lucide-download w-4 h-4 mr-2"></i> 导出比对报告
+                </button>
+            </div>
+        </header>
+
+        <!-- 差异统计条 -->
+        <div class="h-10 bg-slate-50 border-b border-slate-200 flex items-center px-6 space-x-8 text-[11px] font-medium text-slate-500">
+            <div class="flex items-center"><span class="w-3 h-3 bg-red-200 border border-red-300 rounded-sm mr-2"></span> 删除: 3 处</div>
+            <div class="flex items-center"><span class="w-3 h-3 bg-green-200 border border-green-300 rounded-sm mr-2"></span> 新增: 4 处</div>
+            <div class="flex items-center"><span class="w-3 h-3 bg-blue-100 border border-blue-300 rounded-sm mr-2"></span> 移动/语义修改: 1 处</div>
+            <div class="flex-1"></div>
+            <div class="flex items-center text-indigo-600 cursor-pointer hover:underline">
+                <i class="lucide-check-circle w-3 h-3 mr-1"></i> 全部标记为已读
+            </div>
+        </div>
+
+        <div class="flex-1 flex overflow-hidden">
+            
+            <!-- 1. 左侧差异导航面板 -->
+            <section class="w-72 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+                <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
+                        <i class="lucide-list-checks w-3 h-3 mr-2"></i> 变更项列表
+                    </h3>
+                </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                    <!-- 变更项目 -->
+                    <div class="p-4 border-l-4 border-red-500 change-item cursor-pointer bg-slate-50">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-[10px] font-bold text-red-500 uppercase">第 2 条 - 删除</span>
+                            <span class="text-[10px] text-slate-400 font-mono">L12</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-800 line-through truncate">"甲方应在5个工作日内支付..."</p>
+                        <p class="text-[11px] text-slate-500 mt-2 leading-relaxed">客户删除了具体的支付时限限制。</p>
+                    </div>
+
+                    <div class="p-4 border-l-4 border-green-500 change-item cursor-pointer border-transparent">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-[10px] font-bold text-green-500 uppercase">第 5 条 - 新增</span>
+                            <span class="text-[10px] text-slate-400 font-mono">L45</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-800 truncate">"乙方需承担额外差旅费用..."</p>
+                        <p class="text-[11px] text-slate-500 mt-2 leading-relaxed">新增了关于差旅费用的承担约定。</p>
+                    </div>
+
+                    <div class="p-4 border-l-4 border-blue-500 change-item cursor-pointer border-transparent">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-[10px] font-bold text-blue-500 uppercase">第 12 条 - 语义修改</span>
+                            <span class="text-[10px] text-slate-400 font-mono">L89</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-800 truncate">争议解决地变更</p>
+                        <p class="text-[11px] text-slate-500 mt-2 leading-relaxed">将仲裁机构由北京变更为上海。</p>
+                    </div>
+                </div>
+
+                <!-- AI 总结卡片 -->
+                <div class="p-4 m-4 bg-indigo-600 rounded-xl text-white shadow-lg shadow-indigo-200">
+                    <div class="flex items-center mb-2">
+                        <i class="lucide-sparkles w-4 h-4 mr-2"></i>
+                        <span class="text-xs font-bold">AI 差异深度解读</span>
+                    </div>
+                    <p class="text-[11px] leading-relaxed opacity-90">
+                        回传版本中，对方将“违约金上限”由合同总额的20%降低至5%，并取消了甲方延期付款的容忍期。建议法务重点关注第8条。
+                    </p>
+                </div>
+            </section>
+
+            <!-- 2. 中间：双栏比对区 -->
+            <section class="flex-1 sync-scroll-container overflow-hidden bg-slate-100 p-4 space-x-4">
+                
+                <!-- 左窗格：原件 (Standard) -->
+                <div class="pane custom-scrollbar live-preview-box rounded-xl shadow-sm relative">
+                    <div class="sticky top-0 bg-white/90 backdrop-blur pb-4 border-b border-slate-100 mb-8 z-10 flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Source: 公司标准模版</span>
+                        <i class="lucide-lock w-3 h-3 text-slate-300"></i>
+                    </div>
+                    
+                    <div class="space-y-6 text-sm leading-loose text-slate-600">
+                        <h2 class="text-xl font-bold text-center text-slate-900 mb-10">系统服务采购协议</h2>
+                        
+                        <p>第一条 双方信息<br>甲方：ONES 智能协作<br>乙方：复临科技有限公司</p>
+
+                        <div class="p-2 border border-transparent">
+                            <h4 class="font-bold text-slate-800">第二条 付款时限</h4>
+                            <p>甲方在收到乙方开具的等额发票后，<span class="diff-removed">应当在 5 个工作日内</span> 完成首笔款项支付。</p>
+                        </div>
+
+                        <div class="p-2">
+                            <h4 class="font-bold text-slate-800">第三条 服务交付</h4>
+                            <p>乙方应按照本协议约定的交付时间表完成所有系统上线工作，确保系统的可用性达到 99.9%...</p>
+                        </div>
+
+                        <div class="p-2 diff-moved">
+                            <h4 class="font-bold text-slate-800 italic">第十二条 争议解决</h4>
+                            <p>本协议项下产生的任何争议，双方应友好协商；协商不成，提交至 <span class="font-bold underline text-blue-600">北京仲裁委员会</span> 进行裁决。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右窗格：修改件 (Revised) -->
+                <div class="pane custom-scrollbar live-preview-box rounded-xl shadow-sm relative">
+                    <div class="sticky top-0 bg-white/90 backdrop-blur pb-4 border-b border-slate-100 mb-8 z-10 flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Target: 客户回传修订版</span>
+                        <i class="lucide-edit-3 w-3 h-3 text-indigo-300"></i>
+                    </div>
+
+                    <div class="space-y-6 text-sm leading-loose text-slate-600">
+                        <h2 class="text-xl font-bold text-center text-slate-900 mb-10">系统服务采购协议</h2>
+
+                        <p>第一条 双方信息<br>甲方：ONES 智能协作<br>乙方：复临科技有限公司</p>
+
+                        <div class="p-2 bg-rose-50/30">
+                            <h4 class="font-bold text-slate-800">第二条 付款时限</h4>
+                            <p>甲方在收到乙方开具的等额发票后，<span class="diff-added">应在双方确认交付物无误后的 15 个工作日内</span> 完成首笔款项支付。</p>
+                        </div>
+
+                        <div class="p-2 bg-emerald-50/30">
+                            <h4 class="font-bold text-slate-800">第三条 服务交付</h4>
+                            <p>乙方应按照本协议约定的交付时间表完成所有系统上线工作。乙方明确，<span class="diff-added">若因甲方配合不力导致延期，乙方不承担任何责任。</span></p>
+                        </div>
+
+                        <div class="p-2 diff-moved bg-blue-50/30">
+                            <h4 class="font-bold text-slate-800 italic">第十二条 争议解决</h4>
+                            <p>本协议项下产生的任何争议，双方应友好协商；协商不成，提交至 <span class="font-bold underline text-blue-600">上海仲裁委员会</span> 进行裁决。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 中间指示 VS 图标 -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
+                    <div class="w-10 h-10 bg-white rounded-full shadow-xl flex items-center justify-center border-2 border-indigo-100">
+                        <span class="text-[10px] font-black text-indigo-500">VS</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+</body>
+</html>

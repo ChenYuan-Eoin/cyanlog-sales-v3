@@ -1,477 +1,432 @@
-// REQ:F005 - 合同起草页面
-// PURPOSE: 独立创建合同草稿，可选引用报价数据作为合同章节
-
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { LoaderIcon, PlusIcon, FileTextIcon, LinkIcon, XIcon } from 'lucide-react'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  ArrowLeftIcon,
+  PenToolIcon,
+  SparklesIcon,
+  InfoIcon,
+  SaveIcon,
+  LoaderIcon,
+} from 'lucide-react'
+import type { ContractTemplateParam } from '../types'
 
-interface QuoteOption {
-  id: string
-  quote_no: string
-  customer_name: string
-  total_amount: number
-  status: string
-}
-
-interface QuoteItem {
-  name: string
-  quantity: number
-  unit_price: number
-  line_total: number
+interface DraftData {
+  title: string
+  party_a_name: string
+  party_b_name: string
+  party_b_contact: string
+  contract_amount: string
+  business_params: Record<string, string | number | boolean>
+  clause_toggles: Record<string, boolean>
 }
 
 export default function ContractDraftPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const prefillQuoteId = searchParams.get('quote_id')
+  const [params, setParams] = useState<ContractTemplateParam[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [generating, setGenerating] = useState(false)
 
-  // 表单状态
-  const [partyAName, setPartyAName] = useState('')
-  const [partyBName, setPartyBName] = useState('')
-  const [partyBContact, setPartyBContact] = useState('')
-  const [contractAmount, setContractAmount] = useState('')
-  const [taxAmount, setTaxAmount] = useState('')
-  const [paymentTerms, setPaymentTerms] = useState('')
-  const [deliveryTerms, setDeliveryTerms] = useState('')
-  const [contractDate, setContractDate] = useState('')
-  const [effectiveDate, setEffectiveDate] = useState('')
-  const [expiryDate, setExpiryDate] = useState('')
-  const [notes, _setNotes] = useState('')
+  const [draft, setDraft] = useState<DraftData>({
+    title: '',
+    party_a_name: '',
+    party_b_name: '',
+    party_b_contact: '',
+    contract_amount: '',
+    business_params: {},
+    clause_toggles: {},
+  })
 
-  // 报价引用
-  const [quotes, setQuotes] = useState<QuoteOption[]>([])
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string>(prefillQuoteId || '')
-  const [selectedQuoteItems, setSelectedQuoteItems] = useState<QuoteItem[]>([])
-  const [includeQuoteItems, setIncludeQuoteItems] = useState(true)
+  const [aiAddition, setAiAddition] = useState('')
+  const [generatedContent, setGeneratedContent] = useState('')
 
-  // UI 状态
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [quotesLoading, setQuotesLoading] = useState(true)
-
-  // 加载可引用的报价列表（已确认状态）
+  // 加载模板参数
   useEffect(() => {
-    async function loadQuotes() {
+    async function loadParams() {
       try {
         const token = localStorage.getItem('token')
-        const res = await fetch('/api/quotes?status=CONFIRMED&pageSize=50', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        const res = await fetch('/api/contracts/template-params', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
         if (res.ok) {
           const data = await res.json()
-          const list = data.data?.quotes || data.quotes || []
-          setQuotes(list)
-
-          // 如果有预填充的 quote_id，自动加载
-          if (prefillQuoteId) {
-            loadQuoteDetails(prefillQuoteId)
+          const fetchedParams = (data.data || []) as ContractTemplateParam[]
+          setParams(fetchedParams)
+          // 初始化默认值
+          const defaults: Record<string, string | number | boolean> = {}
+          const toggles: Record<string, boolean> = {}
+          for (const p of fetchedParams) {
+            if (p.param_type === 'toggle') {
+              toggles[p.param_key] = (p.default_value as { value?: boolean })?.value ?? false
+            } else if (p.default_value) {
+              defaults[p.param_key] = (p.default_value as { value?: string | number }).value ?? ''
+            }
           }
+          setDraft((prev) => ({
+            ...prev,
+            business_params: defaults,
+            clause_toggles: toggles,
+          }))
         }
       } catch {
         // ignore
       } finally {
-        setQuotesLoading(false)
+        setLoading(false)
       }
     }
+    void loadParams()
+  }, [])
 
-    void loadQuotes()
-  }, [prefillQuoteId])
+  const updateParam = useCallback((key: string, value: string | number | boolean) => {
+    setDraft((prev) => ({
+      ...prev,
+      business_params: { ...prev.business_params, [key]: value },
+    }))
+  }, [])
 
-  // 加载报价详情
-  async function loadQuoteDetails(quoteId: string) {
+  const updateToggle = useCallback((key: string, value: boolean) => {
+    setDraft((prev) => ({
+      ...prev,
+      clause_toggles: { ...prev.clause_toggles, [key]: value },
+    }))
+  }, [])
+
+  const handleSaveDraft = useCallback(async () => {
+    if (!draft.title.trim()) {
+      alert('请输入合同标题')
+      return
+    }
+    setSaving(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/quotes/${quoteId}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      const res = await fetch('/api/contracts/drafts', {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: draft.title,
+          party_a_name: draft.party_a_name,
+          party_b_name: draft.party_b_name,
+          party_b_contact: draft.party_b_contact,
+          contract_amount: draft.contract_amount ? Number(draft.contract_amount) : undefined,
+          business_params: draft.business_params,
+          clause_toggles: draft.clause_toggles,
+        }),
+      })
+      if (res.ok) {
+        alert('草稿已保存')
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || '保存失败')
+      }
+    } catch {
+      alert('保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }, [draft])
+
+  const handleGenerate = useCallback(async () => {
+    if (!draft.title.trim()) {
+      alert('请输入合同标题')
+      return
+    }
+    setGenerating(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/contracts/draft', {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mode: 'ai_generate',
+          purpose: draft.title,
+          party_a: draft.party_a_name || '甲方',
+          party_b: draft.party_b_name || '乙方',
+          contract_type: '系统服务协议',
+          key_terms: Object.entries(draft.business_params)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('；'),
+        }),
       })
       if (res.ok) {
         const data = await res.json()
-        const quote = data.data || data
-
-        // 自动填充客户信息
-        setPartyBName(quote.customer_name || '')
-        setPartyBContact(quote.customer_contact || '')
-        setContractAmount(String(quote.total_amount || ''))
-        setTaxAmount(String(quote.tax_amount || ''))
-        setPaymentTerms(quote.payment_terms || '')
-
-        // 加载报价明细
-        if (quote.quote_items) {
-          interface QuoteItemFromAPI {
-            name: string
-            quantity: number
-            unit_price: number
-            line_total: number
-          }
-          setSelectedQuoteItems(quote.quote_items.map((item: QuoteItemFromAPI) => ({
-            name: item.name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            line_total: item.line_total,
-          })))
-        }
+        setGeneratedContent(data.data?.content || '')
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || '生成失败')
       }
     } catch {
-      // ignore
-    }
-  }
-
-  // 选择报价时填充数据
-  function handleQuoteSelect(quoteId: string) {
-    setSelectedQuoteId(quoteId)
-    if (quoteId) {
-      loadQuoteDetails(quoteId)
-    } else {
-      // 清除报价数据
-      setSelectedQuoteItems([])
-    }
-  }
-
-  // 清除报价引用
-  function clearQuoteRef() {
-    setSelectedQuoteId('')
-    setSelectedQuoteItems([])
-    setIncludeQuoteItems(true)
-  }
-
-  // 提交创建合同
-  async function handleSubmit() {
-    if (!partyBName.trim()) {
-      setError('请填写乙方名称')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
-    try {
-      const token = localStorage.getItem('token')
-      const body: Record<string, string | number | boolean | undefined> = {
-        party_a_name: partyAName || undefined,
-        party_b_name: partyBName,
-        party_b_contact: partyBContact || undefined,
-        contract_amount: contractAmount ? parseFloat(contractAmount) : undefined,
-        tax_amount: taxAmount ? parseFloat(taxAmount) : undefined,
-        payment_terms: paymentTerms || undefined,
-        delivery_terms: deliveryTerms || undefined,
-        contract_date: contractDate || undefined,
-        effective_date: effectiveDate || undefined,
-        expiry_date: expiryDate || undefined,
-        notes: notes || undefined,
-      }
-
-      // 可选引用报价
-      if (selectedQuoteId) {
-        body.quote_id = selectedQuoteId
-        body.include_quote_items = includeQuoteItems
-      }
-
-      const res = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || '创建失败')
-        return
-      }
-
-      // 创建成功，跳转到编辑页
-      router.push(`/contracts/${data.data.contract_id}/edit`)
-
-    } catch {
-      setError('网络错误，创建失败')
+      alert('生成失败')
     } finally {
-      setLoading(false)
+      setGenerating(false)
     }
+  }, [draft])
+
+  const groupedParams = useMemo(() => {
+    const enums = params.filter((p) => p.param_type === 'enum')
+    const toggles = params.filter((p) => p.param_type === 'toggle')
+    return { enums, toggles }
+  }, [params])
+
+  if (loading) {
+    return (
+      <div className="min-h-full bg-slate-50 flex items-center justify-center">
+        <div className="text-slate-500">加载参数配置...</div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      {/* 顶部 */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="text-sm text-slate-500 mb-1">
-            <Link href="/contracts" className="hover:underline">合同审核</Link>
-            <span className="mx-2">/</span>
-            <span>新建合同</span>
+    <div className="min-h-full bg-slate-50">
+      <div className="flex h-screen">
+        {/* 左侧：参数配置面板 */}
+        <aside className="w-[420px] bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+          <div className="h-14 border-b border-slate-200 flex items-center px-5 gap-3 flex-shrink-0">
+            <Link href="/contracts">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ArrowLeftIcon className="h-4 w-4" />
+              </Button>
+            </Link>
+            <h1 className="font-bold text-slate-900 flex-1">AI 智能起草</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveDraft}
+              disabled={saving}
+            >
+              <SaveIcon className="h-3.5 w-3.5 mr-1" />
+              {saving ? '保存中...' : '保存'}
+            </Button>
           </div>
-          <h1 className="text-2xl font-bold">新建合同</h1>
-        </div>
-        <Link href="/contracts">
-          <Button variant="outline">返回列表</Button>
-        </Link>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            {/* 基础信息 */}
+            <section>
+              <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <PenToolIcon className="h-4 w-4 text-indigo-500" />
+                基础信息
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1 block">合同标题</label>
+                  <Input
+                    placeholder="如：ONES 系统服务续费合同"
+                    value={draft.title}
+                    onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">甲方</label>
+                    <Input
+                      placeholder="我方公司名称"
+                      value={draft.party_a_name}
+                      onChange={(e) => setDraft((p) => ({ ...p, party_a_name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">乙方</label>
+                    <Input
+                      placeholder="客户公司名称"
+                      value={draft.party_b_name}
+                      onChange={(e) => setDraft((p) => ({ ...p, party_b_name: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">联系人</label>
+                    <Input
+                      placeholder="乙方联系人"
+                      value={draft.party_b_contact}
+                      onChange={(e) => setDraft((p) => ({ ...p, party_b_contact: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">合同金额</label>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={draft.contract_amount}
+                      onChange={(e) => setDraft((p) => ({ ...p, contract_amount: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 业务参数 */}
+            {groupedParams.enums.length > 0 && (
+              <section>
+                <h3 className="text-sm font-bold text-slate-900 mb-3">业务参数</h3>
+                <div className="space-y-3">
+                  {groupedParams.enums.map((param) => (
+                    <div key={param.id}>
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">{param.param_label}</label>
+                      <select
+                        className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-md text-sm"
+                        value={String(draft.business_params[param.param_key] || '')}
+                        onChange={(e) => updateParam(param.param_key, e.target.value)}
+                      >
+                        <option value="">请选择</option>
+                        {(param.param_options || []).map((opt: { value: string; label: string }) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 条款开关 */}
+            {groupedParams.toggles.length > 0 && (
+              <section>
+                <h3 className="text-sm font-bold text-slate-900 mb-3">条款开关</h3>
+                <div className="space-y-3">
+                  {groupedParams.toggles.map((param) => (
+                    <div key={param.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 block">{param.param_label}</span>
+                        <span className="text-[10px] text-slate-400">启用后自动追加相关条款</span>
+                      </div>
+                      <Checkbox
+                        checked={!!draft.clause_toggles[param.param_key]}
+                        onCheckedChange={(value) => updateToggle(param.param_key, value === true)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* AI 增补 */}
+            <section>
+              <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <SparklesIcon className="h-4 w-4 text-indigo-500" />
+                AI 增补诉求
+              </h3>
+              <div className="relative">
+                <Textarea
+                  placeholder="例如：要求乙方在交付后提供不少于3天的现场培训..."
+                  value={aiAddition}
+                  onChange={(e) => setAiAddition(e.target.value)}
+                  className="min-h-[120px] resize-none"
+                />
+                <div className="absolute bottom-3 right-3 flex items-center gap-1 text-[10px] text-indigo-400">
+                  <SparklesIcon className="h-3 w-3" />
+                  AI 智能转换
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* 底部操作 */}
+          <div className="p-4 border-t border-slate-200 space-y-2 flex-shrink-0">
+            <Button className="w-full" onClick={handleGenerate} disabled={generating}>
+              {generating ? (
+                <>
+                  <LoaderIcon className="h-4 w-4 mr-1.5 animate-spin" />
+                  生成中...
+                </>
+              ) : (
+                <>
+                  <SparklesIcon className="h-4 w-4 mr-1.5" />
+                  AI 生成合同
+                </>
+              )}
+            </Button>
+          </div>
+        </aside>
+
+        {/* 右侧：实时预览 */}
+        <main className="flex-1 bg-slate-100 overflow-auto p-10">
+          <div className="max-w-[800px] mx-auto bg-white min-h-[1100px] p-16 shadow-sm rounded-lg relative">
+            <div className="absolute top-6 right-8 flex items-center gap-2">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                {generatedContent ? 'Generated' : 'Live Preview'}
+              </span>
+            </div>
+
+            {generatedContent ? (
+              <div className="space-y-6 text-sm leading-relaxed text-slate-700">
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{generatedContent}</pre>
+              </div>
+            ) : (
+              <DraftPreview draft={draft} />
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
+// 参数配置预览（骨架）
+function DraftPreview({ draft }: { draft: DraftData }) {
+  return (
+    <div className="space-y-10 text-sm leading-relaxed text-slate-700">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-slate-900">{draft.title || '合同标题'}</h2>
+        <p className="text-[10px] text-slate-300 mt-2 font-mono">PREVIEW MODE</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 左侧：合同基本信息 */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* 甲乙双方 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">合同主体</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">甲方（我方）</label>
-                  <Input
-                    placeholder="默认为配置中的公司名称"
-                    value={partyAName}
-                    onChange={(e) => setPartyAName(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">乙方（客户）<span className="text-red-500">*</span></label>
-                  <Input
-                    placeholder="客户公司名称"
-                    value={partyBName}
-                    onChange={(e) => setPartyBName(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">乙方联系人</label>
-                <Input
-                  placeholder="姓名、电话等"
-                  value={partyBContact}
-                  onChange={(e) => setPartyBContact(e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 报价引用（可选）- 作为合同的一个章节 */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">报价章节（可选）</CardTitle>
-              {selectedQuoteId && (
-                <Button variant="ghost" size="sm" onClick={clearQuoteRef}>
-                  <XIcon className="h-4 w-4 mr-1" />
-                  移除引用
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!selectedQuoteId ? (
-                <div>
-                  <label className="text-sm font-medium">引用已确认的报价</label>
-                  <Select value={selectedQuoteId} onValueChange={handleQuoteSelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={quotesLoading ? '加载中...' : '选择报价（可选）'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">不引用报价</SelectItem>
-                      {quotes.map((q) => (
-                        <SelectItem key={q.id} value={q.id}>
-                          {q.quote_no} - {q.customer_name} (¥{q.total_amount?.toLocaleString()})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    引用报价后，合同的&quot;报价章节&quot;将包含该报价的总价和分项明细
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-slate-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
-                    <LinkIcon className="h-4 w-4" />
-                    已引用报价
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Checkbox
-                      id="include-items"
-                      checked={includeQuoteItems}
-                      onCheckedChange={(v) => setIncludeQuoteItems(v as boolean)}
-                    />
-                    <label htmlFor="include-items" className="text-sm">
-                      包含报价分项明细 ({selectedQuoteItems.length} 项)
-                    </label>
-                  </div>
-                  {includeQuoteItems && selectedQuoteItems.length > 0 && (
-                    <div className="border rounded overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-100">
-                          <tr>
-                            <th className="px-3 py-2 text-left">标的名称</th>
-                            <th className="px-3 py-2 text-right">数量</th>
-                            <th className="px-3 py-2 text-right">单价</th>
-                            <th className="px-3 py-2 text-right">小计</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedQuoteItems.map((item, idx) => (
-                            <tr key={idx} className="border-t">
-                              <td className="px-3 py-2">{item.name}</td>
-                              <td className="px-3 py-2 text-right">{item.quantity}</td>
-                              <td className="px-3 py-2 text-right">¥{item.unit_price?.toLocaleString()}</td>
-                              <td className="px-3 py-2 text-right">¥{item.line_total?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* 金额与条款 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">金额与条款</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">合同总金额（元）</label>
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    value={contractAmount}
-                    onChange={(e) => setContractAmount(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">税额（元）</label>
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    value={taxAmount}
-                    onChange={(e) => setTaxAmount(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">付款条款</label>
-                <Textarea
-                  placeholder="例如：合同签订后5个工作日内支付30%预付款..."
-                  value={paymentTerms}
-                  onChange={(e) => setPaymentTerms(e.target.value)}
-                  rows={2}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">交付条款</label>
-                <Textarea
-                  placeholder="例如：合同生效后30个工作日内完成交付..."
-                  value={deliveryTerms}
-                  onChange={(e) => setDeliveryTerms(e.target.value)}
-                  rows={2}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 日期 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">合同日期</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium">签约日期</label>
-                  <Input
-                    type="date"
-                    value={contractDate}
-                    onChange={(e) => setContractDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">生效日期</label>
-                  <Input
-                    type="date"
-                    value={effectiveDate}
-                    onChange={(e) => setEffectiveDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">到期日期</label>
-                  <Input
-                    type="date"
-                    value={expiryDate}
-                    onChange={(e) => setExpiryDate(e.target.value)}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-2 gap-8">
+        <div>
+          <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">甲方 (采购方)</p>
+          <p className="bg-indigo-50/50 px-2 py-1 rounded text-indigo-700">{draft.party_a_name || '甲方名称'}</p>
         </div>
+        <div>
+          <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">乙方 (供应商)</p>
+          <p className="bg-indigo-50/50 px-2 py-1 rounded text-indigo-700">{draft.party_b_name || '乙方名称'}</p>
+        </div>
+      </div>
 
-        {/* 右侧：操作区 */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">创建合同</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                  {error}
-                </div>
-              )}
+      <div className="border-l-4 border-indigo-200 pl-4 py-2">
+        <h4 className="font-bold text-slate-900 mb-2">第二条 费用与结算</h4>
+        <p>
+          本合同总金额为人民币{' '}
+          <span className="bg-amber-50 px-1 rounded text-amber-700 font-bold">
+            {draft.contract_amount ? `¥${Number(draft.contract_amount).toLocaleString()}` : '金额待填写'}
+          </span>
+        </p>
+        <div className="mt-2 p-2 bg-indigo-50/50 rounded border border-indigo-50 flex items-center text-[10px] text-indigo-400 italic gap-2">
+          <InfoIcon className="h-3 w-3 shrink-0" />
+          已根据左侧参数配置自动生成
+        </div>
+      </div>
 
-              <Button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="w-full"
-                size="lg"
-              >
-                {loading ? (
-                  <>
-                    <LoaderIcon className="h-4 w-4 mr-2 animate-spin" />
-                    创建中...
-                  </>
-                ) : (
-                  <>
-                    <PlusIcon className="h-4 w-4 mr-2" />
-                    创建合同草稿
-                  </>
-                )}
-              </Button>
+      {Object.entries(draft.clause_toggles).some(([, v]) => v) && (
+        <div>
+          <h4 className="font-bold text-slate-900 mb-3">第三条 知识产权保护</h4>
+          <p className="text-slate-600">乙方承诺其所提供的软件产品不侵犯任何第三方的知识产权...</p>
+          <p className="mt-2 text-indigo-600 italic text-xs">由于开启了&quot;加强保护模式&quot;，此处已自动追加相关条款。</p>
+        </div>
+      )}
 
-              <div className="text-xs text-slate-500 space-y-1">
-                <p>创建后您可以：</p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  <li>上传合同文件</li>
-                  <li>编辑合同条款</li>
-                  <li>提交AI审核</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">提示</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-slate-600 space-y-2">
-              <p>
-                <FileTextIcon className="h-4 w-4 inline mr-1" />
-                合同是独立的法律文档，报价只是其中的一个章节。
-              </p>
-              <p>
-                即使引用了报价，您也可以在编辑时修改所有内容。
-              </p>
-            </CardContent>
-          </Card>
+      <div className="border-t pt-8 mt-8">
+        <div className="grid grid-cols-2 gap-16">
+          <div>
+            <p className="font-medium">甲方（盖章）：{draft.party_a_name || '____'}</p>
+            <p className="text-slate-400 mt-4">法定代表人/授权代表：________________</p>
+            <p className="text-slate-400 mt-2">日期：____年__月__日</p>
+          </div>
+          <div>
+            <p className="font-medium">乙方（盖章）：{draft.party_b_name || '____'}</p>
+            <p className="text-slate-400 mt-4">法定代表人/授权代表：________________</p>
+            <p className="text-slate-400 mt-2">日期：____年__月__日</p>
+          </div>
         </div>
       </div>
     </div>

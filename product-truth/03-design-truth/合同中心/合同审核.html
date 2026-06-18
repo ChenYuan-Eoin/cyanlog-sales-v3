@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONES 合同中心 - 合同风险审核</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', 'PingFang SC', sans-serif; background-color: #f3f4f6; }
+        .risk-high { border-left: 4px solid #ef4444; background-color: #fef2f2; }
+        .risk-medium { border-left: 4px solid #f59e0b; background-color: #fffbeb; }
+        .risk-low { border-left: 4px solid #3b82f6; background-color: #eff6ff; }
+        .text-highlight-red { background-color: rgba(239, 68, 68, 0.2); border-bottom: 2px solid #ef4444; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-gray-800">
+
+    <!-- 左侧导航 (窄版) -->
+    <aside class="w-16 bg-[#0f172a] flex flex-col items-center py-6 space-y-8 flex-shrink-0">
+        <div class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <i class="lucide-shield-check text-white w-5 h-5"></i>
+        </div>
+        <div class="flex flex-col space-y-6">
+            <i class="lucide-layout-dashboard text-gray-500 cursor-pointer hover:text-white transition-colors"></i>
+            <i class="lucide-file-text text-indigo-400 cursor-pointer"></i>
+            <i class="lucide-search text-gray-500 cursor-pointer hover:text-white transition-colors"></i>
+            <i class="lucide-settings text-gray-500 cursor-pointer hover:text-white transition-colors"></i>
+        </div>
+    </aside>
+
+    <!-- 主容器 -->
+    <div class="flex-1 flex flex-col">
+        <!-- 顶部操作栏 -->
+        <header class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0">
+            <div class="flex items-center space-x-4">
+                <button class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <i class="lucide-arrow-left w-5 h-5"></i>
+                </button>
+                <h1 class="font-bold text-gray-900">审核：ONES 系统服务续费合同_V2.docx</h1>
+                <span class="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-wider">服务合同</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div class="flex items-center bg-gray-100 rounded-lg p-1 mr-2 text-xs">
+                    <span class="px-3 py-1 bg-white shadow-sm rounded-md font-medium text-indigo-600">甲方视角</span>
+                    <span class="px-3 py-1 text-gray-500 cursor-pointer hover:text-indigo-400">标准策略</span>
+                </div>
+                <button class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">重新审查</button>
+                <button class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm flex items-center">
+                    <i class="lucide-download w-4 h-4 mr-2"></i> 下载报告
+                </button>
+            </div>
+        </header>
+
+        <!-- 三段式内容区 -->
+        <div class="flex-1 flex overflow-hidden">
+            
+            <!-- 1. 左侧：智能摘要 & 导航 -->
+            <section class="w-64 bg-white border-r border-gray-200 flex flex-col custom-scrollbar overflow-y-auto">
+                <div class="p-4 border-b border-gray-100 bg-gray-50/50">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+                        <i class="lucide-list-tree w-3 h-3 mr-2"></i> AI 摘要提取
+                    </h3>
+                </div>
+                <div class="p-4 space-y-6">
+                    <div>
+                        <label class="text-[11px] text-gray-400 font-medium uppercase">签约主体</label>
+                        <div class="mt-2 p-2 bg-indigo-50 rounded-lg border border-indigo-100">
+                            <p class="text-xs font-semibold text-gray-700">甲方：卧安科技</p>
+                            <p class="text-[10px] text-indigo-400 mt-1">乙方：复临科技</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-gray-400 font-medium uppercase">交易核心</label>
+                        <ul class="mt-2 space-y-2">
+                            <li class="text-xs flex justify-between"><span class="text-gray-500">总计金额</span> <span class="font-bold">￥118,935</span></li>
+                            <li class="text-xs flex justify-between"><span class="text-gray-500">结算方式</span> <span class="font-bold italic">3-4-3分期</span></li>
+                            <li class="text-xs flex justify-between"><span class="text-gray-500">服务周期</span> <span class="font-bold">12个月</span></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-gray-400 font-medium uppercase">关键风险点预览</label>
+                        <div class="mt-2 space-y-1">
+                            <div class="flex items-center text-[11px] p-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                <span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span> 违约责任条款缺失
+                            </div>
+                            <div class="flex items-center text-[11px] p-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                <span class="w-2 h-2 rounded-full bg-amber-500 mr-2"></span> 账期偏离我方政策
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. 中间：合同正文预览 -->
+            <section class="flex-1 bg-gray-100 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center">
+                <div class="w-full max-w-4xl bg-white shadow-xl min-h-[1000px] p-12 relative">
+                    <!-- 页码悬浮 -->
+                    <div class="absolute top-4 right-4 text-[10px] text-gray-300">第 1 / 8 页</div>
+                    
+                    <h2 class="text-2xl font-bold text-center mb-12">ONES 系统服务协议</h2>
+                    
+                    <div class="space-y-8 text-sm leading-relaxed text-gray-700 text-justify">
+                        <p>甲方：卧安科技（深圳）有限公司<br>乙方：深圳复临科技有限公司</p>
+                        
+                        <div>
+                            <h4 class="font-bold mb-2">第一条 服务内容</h4>
+                            <p>乙方作为 ONES 系统服务提供商，同意按照本协议约定向甲方提供包括 ONES Project、ONES TestCase 等在内的研发管理协作工具服务...</p>
+                        </div>
+
+                        <div>
+                            <h4 class="font-bold mb-2">第二条 费用与支付</h4>
+                            <p>本合同总金额为人民币 118,935 元（含6%增值税）。<span class="text-highlight-red">甲方应在协议签署后 90 个工作日内支付首笔款项。</span>乙方收到款项后 5 个工作日内开具发票...</p>
+                        </div>
+
+                        <div>
+                            <h4 class="font-bold mb-2">第三条 知识产权</h4>
+                            <p>乙方授权甲方在服务期内非排他性地使用 ONES 软件系统，双方确认本协议项下的所有系统软件所有权、知识产权均归乙方所有...</p>
+                        </div>
+
+                        <div class="h-24 flex items-center justify-center border-2 border-dashed border-gray-100 rounded-xl">
+                            <p class="text-gray-300 italic">... (此处省略其他条款) ...</p>
+                        </div>
+
+                        <div class="p-4 bg-rose-50 border-2 border-dashed border-rose-200 rounded-xl relative">
+                            <div class="absolute -top-3 -right-3 bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded shadow-lg">缺失条款提示</div>
+                            <p class="text-rose-400 text-xs italic text-center">AI 检测到此处缺失“违约责任”及“争议解决”条款，建议补充以降低风险。</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. 右侧：AI 风险审查面板 -->
+            <section class="w-[380px] bg-white border-l border-gray-200 flex flex-col">
+                <!-- Tab 切换 -->
+                <div class="flex border-b border-gray-100 h-12 flex-shrink-0">
+                    <button class="flex-1 text-xs font-bold text-indigo-600 border-b-2 border-indigo-600">全部风险 (29)</button>
+                    <button class="flex-1 text-xs font-medium text-gray-400 hover:text-gray-600">高风险 (3)</button>
+                    <button class="flex-1 text-xs font-medium text-gray-400 hover:text-gray-600">中风险 (12)</button>
+                </div>
+
+                <!-- 风险列表 -->
+                <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                    
+                    <!-- 卡片：高风险 -->
+                    <div class="risk-high p-4 rounded-lg shadow-sm border border-red-100">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">高风险</span>
+                            <span class="text-[10px] text-gray-400">#缺失项</span>
+                        </div>
+                        <h4 class="text-sm font-bold text-gray-900 mb-2">审查受托人资质是否覆盖委托事项</h4>
+                        <div class="bg-white/60 p-2 rounded text-xs text-gray-500 mb-3 border border-red-50 italic">
+                            原文中未找到相关条款
+                        </div>
+                        <div class="bg-white p-3 rounded-lg border border-indigo-100 shadow-inner mb-3">
+                            <p class="text-[11px] font-bold text-indigo-600 mb-1 leading-tight">✨ AI 修改建议：</p>
+                            <p class="text-[11px] text-gray-600 leading-normal">受托人承诺其具备完成本合同项下委托事项所需的全部合法有效资质、许可及备案手续...</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="flex-1 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors">选定位置添加</button>
+                            <button class="p-1.5 border border-gray-200 rounded text-gray-400 hover:text-red-500"><i class="lucide-slash w-3 h-3"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- 卡片：中风险 -->
+                    <div class="risk-medium p-4 rounded-lg shadow-sm border border-amber-100">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">中风险</span>
+                            <span class="text-[10px] text-gray-400">#账期偏离</span>
+                        </div>
+                        <h4 class="text-sm font-bold text-gray-900 mb-2">甲方付款周期过长</h4>
+                        <p class="text-[11px] text-gray-500 mb-3 leading-relaxed">当前合同设定 90 个工作日付账，偏离我方库中标准的 30-45 天要求，可能导致现金流回收风险。</p>
+                        <div class="flex space-x-2">
+                            <button class="flex-1 py-1.5 bg-white border border-indigo-200 text-indigo-600 text-xs rounded hover:bg-indigo-50 font-medium">一键修复 (改为45天)</button>
+                            <button class="p-1.5 border border-gray-200 rounded text-gray-400"><i class="lucide-message-square w-3 h-3"></i></button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 底部交互框 -->
+                <div class="p-4 border-t border-gray-100 bg-gray-50">
+                    <div class="relative">
+                        <textarea placeholder="针对此合同内容，向 AI 提问..." class="w-full h-20 bg-white border border-gray-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none shadow-inner"></textarea>
+                        <button class="absolute bottom-2 right-2 p-1.5 bg-indigo-600 text-white rounded-lg">
+                            <i class="lucide-sparkles w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+</body>
+</html>

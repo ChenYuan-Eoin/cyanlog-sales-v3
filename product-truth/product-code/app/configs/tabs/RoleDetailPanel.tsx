@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -18,10 +18,18 @@ import {
   UsersIcon,
   ShieldIcon,
   TrashIcon,
-  CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  UserPlusIcon,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
 import type {
   OrgSummaryUser,
@@ -159,7 +167,7 @@ export function RoleDetailPanel({
   }
 
   return (
-    <div className="rounded-lg border bg-white">
+    <div className="rounded-lg border bg-white overflow-hidden">
       {/* 头部信息 */}
       <div className="border-b px-6 py-4">
         <div className="flex items-start justify-between">
@@ -222,6 +230,7 @@ export function RoleDetailPanel({
         <TabsContent value="members" className="m-0">
           <MemberAssignmentTab
             roleId={role.id}
+            roleName={role.name}
             users={users}
             _departments={departments}
             assignedUsers={stats.assignedUsers}
@@ -246,14 +255,17 @@ export function RoleDetailPanel({
 interface MemberAssignmentTabProps {
   _roleCode?: string
   roleId: string
+  roleName: string
   users: OrgSummaryUser[]
   _departments: OrgSummaryDepartment[]
   assignedUsers: OrgSummaryUser[]
 }
 
-function MemberAssignmentTab({ roleId, users, _departments, assignedUsers }: MemberAssignmentTabProps) {
-  const [userSearch, setUserSearch] = useState('')
+function MemberAssignmentTab({ roleId, roleName, users, assignedUsers }: MemberAssignmentTabProps) {
   const [assigning, setAssigning] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogSearch, setDialogSearch] = useState('')
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
 
   // 已分配用户的 ID 集合
   const assignedUserIds = useMemo(
@@ -267,55 +279,87 @@ function MemberAssignmentTab({ roleId, users, _departments, assignedUsers }: Mem
     [users, assignedUserIds]
   )
 
-  // 搜索
+  // 弹窗内搜索
   const fuse = useMemo(
     () =>
       new Fuse(availableUsers, {
-        keys: ['display_name', 'email', 'title'],
-        threshold: 0.4,
+        keys: ['display_name', 'email', 'title', 'primary_dept_name'],
+        threshold: 0.3,
       }),
     [availableUsers]
   )
 
-  const searchResults = useMemo(() => {
-    if (!userSearch.trim()) return []
-    return fuse.search(userSearch).map(r => r.item)
-  }, [fuse, userSearch])
+  const dialogFilteredUsers = useMemo(() => {
+    if (!dialogSearch.trim()) return availableUsers
+    return fuse.search(dialogSearch).map(r => r.item)
+  }, [fuse, dialogSearch, availableUsers])
 
-  // 添加成员到角色
-  const handleAddMember = async (userId: string) => {
-    const user = users.find(u => u.id === userId)
-    if (!user) return
-
-    const currentRoleIds = user.role_ids || []
-    if (currentRoleIds.includes(roleId)) {
-      alert('该用户已经是此角色')
-      return
+  // 打开弹窗时重置选择
+  useEffect(() => {
+    if (dialogOpen) {
+      setDialogSearch('')
+      setSelectedUserIds(new Set())
     }
+  }, [dialogOpen])
 
-    const newRoleIds = [...currentRoleIds, roleId]
+  const toggleSelectUser = useCallback((userId: string) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev)
+      if (next.has(userId)) {
+        next.delete(userId)
+      } else {
+        next.add(userId)
+      }
+      return next
+    })
+  }, [])
+
+  const handleSelectAll = useCallback(() => {
+    const allSelected = dialogFilteredUsers.every(u => selectedUserIds.has(u.id))
+    setSelectedUserIds(prev => {
+      const next = new Set(prev)
+      if (allSelected) {
+        // 取消全选当前可见
+        dialogFilteredUsers.forEach(u => next.delete(u.id))
+      } else {
+        // 全选当前可见
+        dialogFilteredUsers.forEach(u => next.add(u.id))
+      }
+      return next
+    })
+  }, [dialogFilteredUsers, selectedUserIds])
+
+  // 批量添加成员到角色
+  const handleBatchAdd = async () => {
+    if (selectedUserIds.size === 0) return
 
     setAssigning(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/admin/users/${userId}/roles`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ role_ids: newRoleIds }),
+      const headers: HeadersInit = {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'Content-Type': 'application/json',
+      }
+
+      const promises = Array.from(selectedUserIds).map(async userId => {
+        const user = users.find(u => u.id === userId)
+        if (!user) return
+        const currentRoleIds = user.role_ids || []
+        if (currentRoleIds.includes(roleId)) return
+        const newRoleIds = [...currentRoleIds, roleId]
+
+        return fetch(`/api/admin/users/${userId}/roles`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ role_ids: newRoleIds }),
+        })
       })
 
-      if (res.ok) {
-        setUserSearch('')
-        window.location.reload()
-      } else {
-        const data = await res.json().catch(() => ({}))
-        alert(data.error || '添加失败')
-      }
+      await Promise.all(promises)
+      setDialogOpen(false)
+      window.location.reload()
     } catch {
-      alert('网络错误')
+      alert('添加失败，请重试')
     } finally {
       setAssigning(false)
     }
@@ -356,64 +400,32 @@ function MemberAssignmentTab({ roleId, users, _departments, assignedUsers }: Mem
     }
   }
 
+  // 全选按钮文字
+  const selectAllText = useMemo(() => {
+    if (dialogFilteredUsers.length === 0) return '全选'
+    const allSelected = dialogFilteredUsers.every(u => selectedUserIds.has(u.id))
+    return allSelected ? '取消全选' : '全选'
+  }, [dialogFilteredUsers, selectedUserIds])
+
   return (
     <div className="p-6 space-y-6">
-      {/* 搜索添加区域 */}
-      <div className="rounded-lg border bg-slate-50 p-4">
-        <h4 className="font-medium text-slate-900 mb-3">添加成员到角色</h4>
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="搜索姓名、邮箱添加成员..."
-            value={userSearch}
-            onChange={(e) => setUserSearch(e.target.value)}
-            className="pl-9 bg-white"
-          />
-        </div>
-
-        {/* 搜索结果 */}
-        {userSearch.trim() && (
-          <div className="mt-3 rounded-lg border bg-white max-h-48 overflow-y-auto">
-            {searchResults.length > 0 ? (
-              searchResults.slice(0, 5).map(user => (
-                <div
-                  key={user.id}
-                  className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
-                    {user.display_name?.charAt(0) || '?'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-900">{user.display_name}</div>
-                    <div className="text-xs text-slate-500">{user.email} · {user.primary_dept_name}</div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      void handleAddMember(user.id)
-                    }}
-                    disabled={assigning}
-                    className="touch-manipulation"
-                  >
-                    <CheckIcon size={16} className="text-green-600" />
-                  </Button>
-                </div>
-              ))
-            ) : (
-              <div className="px-3 py-4 text-sm text-slate-500 text-center">未找到匹配的成员</div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* 已分配成员列表 */}
       <div>
-        <h4 className="font-medium text-slate-900 mb-3">
-          已分配成员 ({assignedUsers.length})
-        </h4>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-medium text-slate-900">
+            已分配成员 ({assignedUsers.length})
+          </h4>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDialogOpen(true)}
+            disabled={assigning}
+          >
+            <UserPlusIcon size={16} className="mr-1.5" />
+            添加成员
+          </Button>
+        </div>
+
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -466,6 +478,126 @@ function MemberAssignmentTab({ roleId, users, _departments, assignedUsers }: Mem
           </Table>
         </div>
       </div>
+
+      {/* 添加成员 Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[520px] max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlusIcon size={20} className="text-slate-500" />
+              为「{roleName}」添加成员
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-hidden flex flex-col gap-3 py-2">
+            {/* 搜索栏 + 全选 */}
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="relative flex-1">
+                <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  placeholder="搜索姓名、邮箱、职位..."
+                  value={dialogSearch}
+                  onChange={(e) => setDialogSearch(e.target.value)}
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSelectAll}
+                disabled={dialogFilteredUsers.length === 0}
+              >
+                {selectAllText}
+              </Button>
+            </div>
+
+            {/* 统计提示 */}
+            <div className="text-xs text-slate-500 shrink-0">
+              {selectedUserIds.size > 0 && (
+                <span className="text-blue-600 font-medium">
+                  已选择 {selectedUserIds.size} 人
+                </span>
+              )}
+              {dialogSearch.trim() ? (
+                <span className={selectedUserIds.size > 0 ? 'ml-2' : ''}>
+                  搜索到 {dialogFilteredUsers.length} 人
+                  {availableUsers.length !== dialogFilteredUsers.length && `（共 ${availableUsers.length} 人可添加）`}
+                </span>
+              ) : (
+                <span className={selectedUserIds.size > 0 ? 'ml-2' : ''}>
+                  共 {availableUsers.length} 人可添加
+                </span>
+              )}
+            </div>
+
+            {/* 用户列表 */}
+            <div className="flex-1 overflow-y-auto border rounded-lg">
+              {dialogFilteredUsers.length > 0 ? (
+                <div className="divide-y">
+                  {dialogFilteredUsers.map(user => {
+                    const isSelected = selectedUserIds.has(user.id)
+                    return (
+                      <label
+                        key={user.id}
+                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition hover:bg-slate-50 ${
+                          isSelected ? 'bg-blue-50/50' : ''
+                        }`}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelectUser(user.id)}
+                        />
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                          {user.display_name?.charAt(0) || '?'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-slate-900">{user.display_name}</div>
+                          <div className="text-xs text-slate-500 truncate">
+                            {user.email} · {user.primary_dept_name || '未分配部门'}
+                            {user.title && ` · ${user.title}`}
+                          </div>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 py-12">
+                  {dialogSearch.trim() ? (
+                    <>
+                      <SearchIcon size={32} className="mb-2 text-slate-300" />
+                      <p className="text-sm">未找到匹配的成员</p>
+                    </>
+                  ) : (
+                    <>
+                      <UsersIcon size={32} className="mb-2 text-slate-300" />
+                      <p className="text-sm">暂无可添加的成员</p>
+                      <p className="text-xs text-slate-400 mt-1">所有成员已分配到此角色</p>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setDialogOpen(false)}
+              disabled={assigning}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleBatchAdd}
+              disabled={selectedUserIds.size === 0 || assigning}
+            >
+              {assigning ? '添加中...' : `添加 ${selectedUserIds.size} 人到角色`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

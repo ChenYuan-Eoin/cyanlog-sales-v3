@@ -155,7 +155,7 @@ export default function RoleAccessTab({
       </div>
 
       {/* 右侧角色详情 */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 overflow-hidden">
         {selectedRole ? (
           <RoleDetailPanel
             role={selectedRole}
