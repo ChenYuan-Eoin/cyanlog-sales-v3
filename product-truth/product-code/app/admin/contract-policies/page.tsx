@@ -14,6 +14,7 @@ import {
   ChevronRightIcon,
   PencilIcon,
   TrashIcon,
+  GitBranchIcon,
 } from 'lucide-react'
 
 interface AuditRule {
@@ -192,6 +193,11 @@ export default function ContractPoliciesPage() {
                       </div>
 
                       <div className="flex items-center gap-2 ml-4">
+                        <Link href={`/admin/contract-policies/rules/${rule.id}/versions`}>
+                          <Button variant="ghost" size="sm" title="版本管理">
+                            <GitBranchIcon className="h-4 w-4 text-slate-500" />
+                          </Button>
+                        </Link>
                         <Button variant="ghost" size="sm">
                           <PencilIcon className="h-4 w-4" />
                         </Button>

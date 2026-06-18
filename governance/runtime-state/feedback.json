@@ -1,28 +1,15 @@
 {
-  "timestamp": "2026-06-17T10:07:37.410Z",
+  "timestamp": "2026-06-18T11:19:26.125Z",
   "typecheck": {
-    "success": false,
-    "errors": 15,
-    "message": "类型检查失败",
-    "details": [
-      "app/api/contracts/route.ts(6,23): error TS2305: Module '\"@/lib/auth\"' has no exported member 'requireOrg'.",
-      "app/api/contracts/route.ts(59,33): error TS2339: Property 'errors' does not exist on type 'ZodError<{ party_b_name: string; include_quote_items: boolean; contract_no?: string | undefined; party_a_name?: string | undefined; party_b_contact?: string | undefined; contract_date?: string | undefined; ... 7 more ...; notes?: string | undefined; }>'.",
-      "app/api/contracts/route.ts(59,45): error TS7006: Parameter 'e' implicitly has an 'any' type.",
-      "app/api/contracts/route.ts(171,48): error TS2554: Expected 1 arguments, but got 3.",
-      "app/api/contracts/route.ts(189,56): error TS2554: Expected 1 arguments, but got 3.",
-      "app/api/contracts/route.ts(220,49): error TS2554: Expected 1 arguments, but got 3.",
-      "app/contracts/[id]/edit/page.tsx(493,87): error TS2322: Type '{ children: Element; variant: \"outline\"; className: string; disabled: boolean; asChild: true; }' is not assignable to type 'IntrinsicAttributes & ButtonProps & VariantProps<(props?: (ConfigVariants<{ variant: { default: string; outline: string; secondary: string; ghost: string; destructive: string; link: string; }; size: { ...; }; }> & ClassProp) | undefined) => string>'.",
-      "app/contracts/[id]/page.tsx(324,23): error TS2339: Property 'contract_no' does not exist on type 'Contract'.",
-      "app/contracts/[id]/page.tsx(327,33): error TS2339: Property 'contract_no' does not exist on type 'Contract'.",
-      "app/contracts/[id]/page.tsx(330,23): error TS2339: Property 'party_b_name' does not exist on type 'Contract'."
-    ]
+    "success": true,
+    "errors": 0,
+    "message": "类型检查通过"
   },
   "lint": {
-    "success": false,
+    "success": true,
     "errors": 0,
     "warnings": 0,
-    "message": "Lint 检查发现问题",
-    "details": []
+    "message": "Lint 检查通过"
   },
   "test": {
     "success": false,
@@ -33,7 +20,7 @@
   },
   "summary": {
     "allPassed": false,
-    "totalErrors": 16,
-    "recommendation": "⚠️ 发现 16 个问题，请修正后再提交"
+    "totalErrors": 1,
+    "recommendation": "⚠️ 发现 1 个问题，请修正后再提交"
   }
 }
