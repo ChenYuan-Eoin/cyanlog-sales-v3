@@ -66,7 +66,7 @@ export function Sidebar() {
     <>
       {/* Mobile hamburger button */}
       <button
-        className="fixed top-4 left-4 z-[60] p-2 bg-slate-900 text-white rounded-md lg:hidden"
+        className="fixed top-4 left-4 z-40 p-2 bg-slate-900 text-white rounded-md lg:hidden"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="Toggle menu"
       >
@@ -76,7 +76,7 @@ export function Sidebar() {
       {/* Overlay for mobile - only when sidebar is explicitly open */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-[55] lg:hidden touch-none"
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden touch-none"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -85,7 +85,7 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-[56] flex h-screen w-64 flex-col bg-slate-900 text-white',
+          'fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-slate-900 text-white',
           'will-change-transform',
           // Transition only on mobile, desktop is always visible
           'lg:translate-x-0',

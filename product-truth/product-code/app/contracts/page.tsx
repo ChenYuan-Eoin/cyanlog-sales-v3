@@ -48,7 +48,7 @@ const quickActions = [
     icon: EyeIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
-    href: '/contracts/new',
+    href: '/contracts/upload',
     description: '上传即审核',
   },
   {
@@ -58,8 +58,8 @@ const quickActions = [
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
-    href: '/contracts/new',
-    description: '差异定位',
+    href: '/contracts',
+    description: '选择合同进行对比',
   },
   {
     id: 'upload',
@@ -68,7 +68,7 @@ const quickActions = [
     icon: UploadIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
-    href: '/contracts/new',
+    href: '/contracts/upload',
     description: '快速导入',
   },
 ]
