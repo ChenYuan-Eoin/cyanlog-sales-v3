@@ -31,13 +31,23 @@ export async function GET(req: NextRequest, { params }: AsyncRouteParams) {
 
     const { data: clauses, error } = await supabaseAdmin
       .from('contract_clauses')
-      .select('id, clause_number, clause_title, clause_text, risk_level, risk_category, risk_description, legal_basis, suggestion, suggested_text, matched_library_clause_id, position, start_offset, end_offset')
+      .select('id, clause_number, clause_title, clause_text, risk_level, risk_category, risk_description, legal_basis, suggestion, suggested_text, matched_library_clause_id, position, start_offset, end_offset, review_status, review_notes, reviewed_by, reviewed_at')
       .eq('review_id', latestReview.id)
       .order('position', { ascending: true })
 
     if (error) return errorResponse('查询失败', 500, 'DB_ERROR')
 
-    return NextResponse.json({ success: true, data: { clauses: clauses || [] } })
+    // 统计审核状态
+    const stats = {
+      total: clauses?.length || 0,
+      passed: clauses?.filter((c: Record<string, unknown>) => c.review_status === 'passed').length || 0,
+      attention: clauses?.filter((c: Record<string, unknown>) => c.review_status === 'attention').length || 0,
+      must_fix: clauses?.filter((c: Record<string, unknown>) => c.review_status === 'must_fix').length || 0,
+      skipped: clauses?.filter((c: Record<string, unknown>) => c.review_status === 'skipped').length || 0,
+      pending: clauses?.filter((c: Record<string, unknown>) => c.review_status === 'pending').length || 0,
+    }
+
+    return NextResponse.json({ success: true, data: { clauses: clauses || [], stats } })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) return errorResponse('未登录', 401, 'UNAUTHORIZED')

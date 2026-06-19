@@ -60,6 +60,7 @@ import { z } from 'zod'
 import { logError } from '@/lib/error-log'
 import {
   errorResponse,
+  successResponse,
   createdResponse,
 } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'

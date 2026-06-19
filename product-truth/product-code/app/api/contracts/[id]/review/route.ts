@@ -66,7 +66,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, _orgId: string) => {
     const { id } = await params
     const body = await req.json().catch(() => ({}))
     const { conclusion, conclusion_reason } = body

@@ -21,6 +21,9 @@ import {
   XCircleIcon,
   RotateCcwIcon,
 } from 'lucide-react'
+import dynamic from 'next/dynamic'
+
+const ClauseReviewWorkshop = dynamic(() => import('./components/ClauseReviewWorkshop'), { ssr: false })
 
 interface RiskCardData {
   id: string
@@ -77,6 +80,9 @@ export default function ContractReviewPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // 左侧导航标签
+  const [activeTab, setActiveTab] = useState<'risks' | 'clauses'>('risks')
 
   const fetchReviewData = useCallback(async () => {
     try {
@@ -406,10 +412,26 @@ export default function ContractReviewPage() {
             </div>
           </div>
 
+          {/* 导航选项卡 */}
+          <div className="flex border-b border-slate-200">
+            <button
+              onClick={() => setActiveTab('risks')}
+              className={activeTab === 'risks' ? 'flex-1 py-2 text-xs font-medium text-center text-slate-900 border-b-2 border-indigo-500 bg-slate-50' : 'flex-1 py-2 text-xs font-medium text-center text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
+            >
+              风险点
+            </button>
+            <button
+              onClick={() => setActiveTab('clauses')}
+              className={activeTab === 'clauses' ? 'flex-1 py-2 text-xs font-medium text-center text-slate-900 border-b-2 border-indigo-500 bg-slate-50' : 'flex-1 py-2 text-xs font-medium text-center text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
+            >
+              条款审核
+            </button>
+          </div>
+
           {/* 风险导航列表 */}
           <div className="p-2">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-2 mb-2">
-              风险点 ({contract.stats.open} 待处理)
+              {activeTab === 'risks' ? '风险点' : '条款审核'} ({contract.stats.open} 待处理)
             </h3>
             <div className="space-y-1">
               {contract.riskCards.map((risk) => {
@@ -447,6 +469,13 @@ export default function ContractReviewPage() {
               )}
             </div>
           </div>
+
+          {/* 条款审核工作台 */}
+          {activeTab === 'clauses' && (
+            <div className="flex-1 overflow-hidden">
+              <ClauseReviewWorkshop contractId={contractId} />
+            </div>
+          )}
         </aside>
 
         {/* 2. 中间：合同正文预览 */}
