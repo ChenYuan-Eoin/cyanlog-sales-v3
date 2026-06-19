@@ -1,3 +1,56 @@
+// GET /api/contracts - 合同列表（支持分页和搜索）
+export async function GET(req: NextRequest) {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    const { searchParams } = new URL(req.url)
+    const page = parseInt(searchParams.get('page') || '1', 10)
+    const pageSize = parseInt(searchParams.get('pageSize') || '20', 10)
+    const search = searchParams.get('search') || ''
+    const status = searchParams.get('status') || ''
+
+    // 验证分页参数
+    const safePage = Math.max(1, page)
+    const safePageSize = Math.min(100, Math.max(1, pageSize))
+    const offset = (safePage - 1) * safePageSize
+
+    // 构建查询
+    let query = supabaseAdmin
+      .from('contracts')
+      .select('*, contract_reviews(id, status, created_at)', { count: 'exact' })
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + safePageSize - 1)
+
+    if (search.trim()) {
+      query = query.or(`filename.ilike.%${search}%,parsed_text.ilike.%${search}%`)
+    }
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data: contracts, error, count } = await query
+
+    if (error) {
+      return errorResponse(createApiError('DB_ERROR', '获取合同列表失败'))
+    }
+
+    const total = count || 0
+    const totalPages = Math.ceil(total / safePageSize)
+
+    return successResponse({
+      data: contracts || [],
+      meta: {
+        page: safePage,
+        pageSize: safePageSize,
+        total,
+        totalPages,
+        hasNext: safePage < totalPages,
+        hasPrev: safePage > 1,
+      },
+    })
+  })
+}
+
 // POST /api/contracts - 创建合同草稿
 // 支持可选的 quote_id 参数，在创建时带入报价数据作为合同的一个章节
 

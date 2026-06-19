@@ -81,6 +81,13 @@ export default function ContractCenterPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('desktop')
 
+  // 分页状态
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(20)
+  const [totalPages, setTotalPages] = useState(1)
+  const [hasNext, setHasNext] = useState(false)
+  const [hasPrev, setHasPrev] = useState(false)
+
   // 检测视口宽度
   useEffect(() => {
     const checkViewport = () => {
@@ -91,19 +98,23 @@ export default function ContractCenterPage() {
     return () => window.removeEventListener('resize', checkViewport)
   }, [])
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (pageNum = 1) => {
     try {
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
 
       const [contractsRes, draftsRes] = await Promise.all([
-        fetch('/api/contracts?pageSize=50', { headers }),
+        fetch(`/api/contracts?page=${pageNum}&pageSize=${pageSize}`, { headers }),
         fetch('/api/contracts/drafts', { headers }),
       ])
 
       if (contractsRes.ok) {
         const contractsData = await contractsRes.json()
-        setContracts(contractsData.data || [])
+        setContracts(contractsData.data.data || [])
+        const meta = contractsData.data.meta || {}
+        setTotalPages(meta.totalPages || 1)
+        setHasNext(meta.hasNext || false)
+        setHasPrev(meta.hasPrev || false)
       }
 
       if (draftsRes.ok) {
@@ -115,32 +126,39 @@ export default function ContractCenterPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [pageSize])
 
   useEffect(() => {
     void fetchData()
   }, [fetchData])
 
   // 搜索功能
-  const handleSearch = useCallback(async () => {
+  const handleSearch = useCallback(async (pageNum = 1) => {
     if (!searchQuery.trim()) {
-      await fetchData()
+      await fetchData(pageNum)
       return
     }
 
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/contracts?search=${encodeURIComponent(searchQuery)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await fetch(
+        `/api/contracts?page=${pageNum}&pageSize=${pageSize}&search=${encodeURIComponent(searchQuery)}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      )
       if (res.ok) {
         const data = await res.json()
-        setContracts(data.data || [])
+        setContracts(data.data.data || [])
+        const meta = data.data.meta || {}
+        setTotalPages(meta.totalPages || 1)
+        setHasNext(meta.hasNext || false)
+        setHasPrev(meta.hasPrev || false)
       }
     } catch {
       // ignore
     }
-  }, [searchQuery, fetchData])
+  }, [searchQuery, pageSize, fetchData])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -357,6 +375,41 @@ export default function ContractCenterPage() {
                 isMobile={isMobile}
               />
             ))}
+          </div>
+        )}
+
+        {/* 分页控件 */}
+        {!loading && filteredTasks.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
+            <p className="text-xs text-slate-500">
+              第 {page} / {totalPages} 页
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasPrev}
+                onClick={() => {
+                  const prev = page - 1
+                  setPage(prev)
+                  void fetchData(prev)
+                }}
+              >
+                上一页
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasNext}
+                onClick={() => {
+                  const next = page + 1
+                  setPage(next)
+                  void fetchData(next)
+                }}
+              >
+                下一页
+              </Button>
+            </div>
           </div>
         )}
       </main>
