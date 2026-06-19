@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
+import { toast } from '@/lib/toast'
 import type {
   OrgSummaryUser,
   OrgSummaryDepartment,
@@ -259,9 +260,10 @@ interface MemberAssignmentTabProps {
   users: OrgSummaryUser[]
   _departments: OrgSummaryDepartment[]
   assignedUsers: OrgSummaryUser[]
+  onRefresh?: () => void
 }
 
-function MemberAssignmentTab({ roleId, roleName, users, assignedUsers }: MemberAssignmentTabProps) {
+function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh }: MemberAssignmentTabProps) {
   const [assigning, setAssigning] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogSearch, setDialogSearch] = useState('')
@@ -357,9 +359,10 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers }: MemberA
 
       await Promise.all(promises)
       setDialogOpen(false)
-      window.location.reload()
+      toast.success('成员已添加')
+      onRefresh?.()
     } catch {
-      alert('添加失败，请重试')
+      toast.error('添加失败，请重试')
     } finally {
       setAssigning(false)
     }
@@ -388,13 +391,14 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers }: MemberA
       })
 
       if (res.ok) {
-        window.location.reload()
+        toast.success('成员已移除')
+        onRefresh?.()
       } else {
         const data = await res.json().catch(() => ({}))
-        alert(data.error || '移除失败')
+        toast.error(data.error || '移除失败')
       }
     } catch {
-      alert('网络错误')
+      toast.error('网络错误')
     } finally {
       setAssigning(false)
     }
