@@ -1,22 +1,31 @@
 // REQ:F006
-// PURPOSE: Rule engine - execute structured and semantic rules against contract text
+// PURPOSE: Rule engine - 统一入口，调用柔性化规则引擎 (F005-derive.md §4)
+// 注意：旧表 (rules/contract_rules) 已废弃，统一使用 contract_rules_v2
 
-import { supabaseAdmin } from '@/lib/supabase'
-import type { Rule as LegacyRule } from '@/types/rules'
-import { isSchemaDriftError } from '@/lib/db-compat'
-import { executeStructuredRules } from './structured-executor'
-import type { RuleExecutionResult, Rule as NewRule, ContractData } from './types'
+import {
+  executeFlexibleRules,
+  executeFlexibleRulesCompat,
+  generateFlexibleSummary,
+  loadFlexibleRules,
+  evaluateFlexibleRule,
+  extractField,
+  type FlexibleAnalysisResults,
+  type LoadRulesOptions,
+} from './flexible-engine'
 
-// 兼容旧接口
-export interface RuleResult {
-  ruleId: string
-  ruleName: string
-  matched: boolean
-  level: 'red' | 'yellow' | 'green'
-  title: string
-  description: string
-  suggestion: string
+export type { FlexibleAnalysisResults, LoadRulesOptions }
+export {
+  executeFlexibleRules,
+  executeFlexibleRulesCompat,
+  loadFlexibleRules,
+  evaluateFlexibleRule,
+  extractField,
+  generateFlexibleSummary,
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 统一出口：executeRules（兼容旧接口）
+// ═══════════════════════════════════════════════════════════════
 
 export interface AnalysisResults {
   risks: Array<{
@@ -24,323 +33,58 @@ export interface AnalysisResults {
     title: string
     description: string
     suggestion: string
+    counterparty?: string
   }>
   summary: string
   appliedRules: number
   matchedRules: number
 }
 
-// 分析合同（增强版）
-export async function analyzeContract(
-  contract: ContractData,
-  options: {
-    onlyStructured?: boolean
-    onProgress?: (phase: string, completed: number, total: number) => void
-  } = {}
-): Promise<RuleExecutionResult[]> {
-  const { onlyStructured = false, onProgress } = options
-
-  // 获取所有已发布规则
-  const rules = await fetchPublishedRules(contract.org_id)
-
-  if (rules.length === 0) {
-    return []
-  }
-
-  // 转换为新格式
-  const newRules = rules.map(r => ({
-    ...r,
-    rule_type: r.rule_type as 'structured' | 'semantic',
-    category: 'legal' as const,
-    condition_config: r.config || {},
-    message_config: {},
-    scope: 'org',
-    priority: 100,
-    version: 1,
-  })) as unknown as NewRule[]
-
-  // 执行结构化规则
-  const structuredRules = newRules.filter(r => r.rule_type === 'structured')
-  if (onProgress) onProgress('structured', 0, structuredRules.length)
-
-  const structuredResults = await executeStructuredRules(
-    structuredRules,
-    contract.text,
-    contract.extractedFields || {}
-  )
-
-  if (onProgress) onProgress('structured', structuredRules.length, structuredRules.length)
-
-  // 如果不执行语义规则，直接返回
-  if (onlyStructured) {
-    return structuredResults
-  }
-
-  // 语义规则稍后实现
-  return structuredResults
-}
-
-// 兼容旧接口：执行所有启用的规则
-export async function executeRules(contractText: string, orgId?: string): Promise<AnalysisResults> {
-  let query = supabaseAdmin
-    .from('rules')
-    .select('*')
-    .eq('enabled', true)
-    .order('created_at', { ascending: false })
-
-  if (orgId) {
-    query = query.eq('org_id', orgId)
-  }
-
-  let { data: rules, error } = await query
-
-  if (error && isSchemaDriftError(error)) {
-    const legacyResult = await supabaseAdmin
-      .from('rules')
-      .select('*')
-      .eq('enabled', true)
-      .order('created_at', { ascending: false })
-
-    rules = legacyResult.data
-    error = legacyResult.error
-  }
-
-  if (error || !rules) {
-    console.error('Failed to fetch rules:', error)
+/**
+ * 执行规则审核（统一入口）
+ * 读取 contract_rules_v2 表，执行 Level A/B/C 柔性化判定
+ *
+ * @deprecated 建议使用 executeFlexibleRules 替代，获得更多细节
+ */
+export async function executeRules(
+  contractText: string,
+  orgId?: string
+): Promise<AnalysisResults> {
+  if (!orgId) {
+    console.warn('executeRules called without orgId')
     return {
       risks: [],
-      summary: '规则引擎未能加载规则配置',
+      summary: '规则引擎未能加载规则配置（缺少组织ID）',
       appliedRules: 0,
       matchedRules: 0,
     }
   }
 
-  const results: RuleResult[] = []
+  try {
+    // 调用新的柔性化引擎
+    const flexibleResult = await executeFlexibleRulesCompat(contractText, orgId)
 
-  for (const rule of rules) {
-    try {
-      const result = await executeSingleRule(rule, contractText)
-      if (result.matched) {
-        results.push(result)
-      }
-    } catch (err) {
-      console.error(`Rule execution failed for ${rule.id}:`, err)
+    return {
+      risks: flexibleResult.risks,
+      summary: flexibleResult.summary,
+      appliedRules: flexibleResult.appliedRules,
+      matchedRules: flexibleResult.matchedRules,
+    }
+  } catch (error) {
+    console.error('Rule engine execution failed:', error)
+    return {
+      risks: [],
+      summary: '规则引擎执行失败，请稍后重试',
+      appliedRules: 0,
+      matchedRules: 0,
     }
   }
-
-  // 按风险等级排序：red > yellow > green
-  const sortedResults = results.sort((a, b) => {
-    const levelOrder = { red: 0, yellow: 1, green: 2 }
-    return levelOrder[a.level] - levelOrder[b.level]
-  })
-
-  // 生成摘要
-  const summary = generateSummary(sortedResults)
-
-  return {
-    risks: sortedResults.map(r => ({
-      level: r.level,
-      title: r.title,
-      description: r.description,
-      suggestion: r.suggestion,
-    })),
-    summary,
-    appliedRules: rules.length,
-    matchedRules: results.length,
-  }
 }
 
-// 获取已发布规则
-async function fetchPublishedRules(orgId: string): Promise<LegacyRule[]> {
-  const { data: rules, error } = await supabaseAdmin
-    .from('contract_rules')
-    .select('*')
-    .eq('org_id', orgId)
-    .eq('status', 'published')
-    .order('priority', { ascending: false })
+// ═══════════════════════════════════════════════════════════════
+// 旧接口兼容性导出（逐步废弃）
+// ═══════════════════════════════════════════════════════════════
 
-  if (error) {
-    console.error('Failed to fetch published rules:', error)
-    return []
-  }
-
-  return rules || []
-}
-
-// 执行单条规则
-async function executeSingleRule(rule: LegacyRule, contractText: string): Promise<RuleResult> {
-  const baseResult: RuleResult = {
-    ruleId: rule.id,
-    ruleName: rule.name,
-    matched: false,
-    level: rule.risk_level,
-    title: rule.name,
-    description: rule.description || '未提供描述',
-    suggestion: '请检查相关条款',
-  }
-
-  if (rule.rule_type === 'structured') {
-    return executeStructuredRule(rule, contractText, baseResult)
-  } else {
-    return executeSemanticRule(rule, contractText, baseResult)
-  }
-}
-
-// 执行结构化规则（基于正则/关键字）
-function executeStructuredRule(
-  rule: LegacyRule,
-  contractText: string,
-  baseResult: RuleResult
-): RuleResult {
-  const config = rule.config || {}
-  const pattern = config.pattern
-  const field = config.field
-  const operator = config.operator
-  const value = config.value
-
-  // 如果没有配置，直接返回不匹配
-  if (!pattern && !field) {
-    return { ...baseResult, matched: false }
-  }
-
-  let matched = false
-
-  // 正则匹配
-  if (pattern) {
-    try {
-      const regex = new RegExp(pattern, 'i')
-      matched = regex.test(contractText)
-    } catch {
-      console.error(`Invalid regex pattern in rule ${rule.id}:`, pattern)
-      return { ...baseResult, matched: false }
-    }
-  }
-
-  // 字段条件匹配（简化实现）
-  if (field && operator && value !== undefined) {
-    // 从合同文本中提取字段值（简化处理）
-    const fieldPattern = new RegExp(`${field}[:：]\\s*(\\d+)`, 'i')
-    const match = contractText.match(fieldPattern)
-
-    if (match) {
-      const extractedValue = parseFloat(match[1])
-      const compareValue = typeof value === 'string' ? parseFloat(value) : value
-
-      switch (operator) {
-        case 'gt':
-          matched = extractedValue > compareValue
-          break
-        case 'lt':
-          matched = extractedValue < compareValue
-          break
-        case 'eq':
-          matched = extractedValue === compareValue
-          break
-        case 'contains':
-          matched = contractText.includes(String(value))
-          break
-      }
-    }
-  }
-
-  // 生成具体描述
-  let description = rule.description || ''
-  let suggestion = '请检查相关条款'
-
-  if (matched) {
-    if (pattern) {
-      description = `检测到匹配模式: ${pattern}`
-    }
-    if (field && operator && value !== undefined) {
-      const operatorText: Record<string, string> = { gt: '大于', lt: '小于', eq: '等于', contains: '包含' }
-      description = `${field} ${operatorText[operator] || operator} ${value}`
-    }
-    suggestion = getSuggestionByLevel(rule.risk_level)
-  }
-
-  return {
-    ...baseResult,
-    matched,
-    description,
-    suggestion,
-  }
-}
-
-// 执行语义规则（基于 AI 分析）
-async function executeSemanticRule(
-  rule: LegacyRule,
-  contractText: string,
-  baseResult: RuleResult
-): Promise<RuleResult> {
-  const config = rule.config || {}
-  const prompt = config.prompt
-
-  if (!prompt) {
-    return { ...baseResult, matched: false }
-  }
-
-  // 模拟语义分析（实际应调用 AI 服务）
-  // 简化：检查 prompt 中的关键词是否出现在合同文本中
-  const keywords = prompt.split(/\s+/).filter((w: string) => w.length > 2)
-  const matchCount = keywords.filter((kw: string) =>
-    contractText.toLowerCase().includes(kw.toLowerCase())
-  ).length
-
-  const matchRate = keywords.length > 0 ? matchCount / keywords.length : 0
-  // 如果匹配率超过 30%，认为触发规则
-  const matched = matchRate > 0.3
-
-  return {
-    ...baseResult,
-    matched,
-    description: matched
-      ? `语义分析检测到相关问题: ${prompt.substring(0, 50)}...`
-      : `未检测到语义规则"${rule.name}"相关问题`,
-    suggestion: matched ? getSuggestionByLevel(rule.risk_level) : '无特别建议',
-  }
-}
-
-// 根据风险等级获取建议
-function getSuggestionByLevel(level: 'red' | 'yellow' | 'green'): string {
-  switch (level) {
-    case 'red':
-      return '建议立即修改此条款，风险较高'
-    case 'yellow':
-      return '建议协商调整此条款'
-    case 'green':
-      return '可作为参考建议，非强制性'
-    default:
-      return '请检查相关条款'
-  }
-}
-
-// 生成审核摘要
-function generateSummary(results: RuleResult[]): string {
-  if (results.length === 0) {
-    return '未发现明显风险，合同条款符合常规标准'
-  }
-
-  const redCount = results.filter(r => r.level === 'red').length
-  const yellowCount = results.filter(r => r.level === 'yellow').length
-  const greenCount = results.filter(r => r.level === 'green').length
-
-  const parts: string[] = []
-
-  if (redCount > 0) {
-    parts.push(`发现 ${redCount} 项高风险问题，建议立即处理`)
-  }
-  if (yellowCount > 0) {
-    parts.push(`${yellowCount} 项中风险建议协商调整`)
-  }
-  if (greenCount > 0) {
-    parts.push(`${greenCount} 项低风险提示供参考`)
-  }
-
-  return parts.join('；') + '。'
-}
-
-// 重新导出新模块（供 F006 使用）
 export * from './types'
-export { executeStructuredRules } from './structured-executor'
+export * from './structured-executor'
 export type { StructuredCondition } from './structured-executor'
-
