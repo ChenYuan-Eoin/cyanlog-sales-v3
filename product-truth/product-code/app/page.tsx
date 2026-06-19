@@ -277,7 +277,7 @@ export default function HomePage() {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {profile?.canManageOrg && (
                 <Link
-                  href="/admin/org"
+                  href="/configs?tab=org-structure"
                   className="inline-flex h-10 items-center rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   组织与权限
