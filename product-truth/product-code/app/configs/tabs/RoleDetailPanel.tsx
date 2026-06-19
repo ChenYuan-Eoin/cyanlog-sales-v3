@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
-import { toast } from '@/lib/toast'
+import { toast, success, error } from '@/lib/toast'
 import type {
   OrgSummaryUser,
   OrgSummaryDepartment,
@@ -359,10 +359,10 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
 
       await Promise.all(promises)
       setDialogOpen(false)
-      toast.success('成员已添加')
+      success('成员已添加')
       onRefresh?.()
     } catch {
-      toast.error('添加失败，请重试')
+      error('添加失败，请重试')
     } finally {
       setAssigning(false)
     }
@@ -391,14 +391,14 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
       })
 
       if (res.ok) {
-        toast.success('成员已移除')
+        success('成员已移除')
         onRefresh?.()
       } else {
         const data = await res.json().catch(() => ({}))
-        toast.error(data.error || '移除失败')
+        error(data.error || '移除失败')
       }
     } catch {
-      toast.error('网络错误')
+      error('网络错误')
     } finally {
       setAssigning(false)
     }

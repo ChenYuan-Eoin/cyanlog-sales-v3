@@ -22,7 +22,7 @@ import {
   RotateCcwIcon,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { toast, handleError } from '@/lib/toast'
+import { toast, success, error as toastError, handleError } from '@/lib/toast'
 
 const ClauseReviewWorkshop = dynamic(() => import('./components/ClauseReviewWorkshop'), { ssr: false })
 
@@ -141,7 +141,7 @@ export default function ContractReviewPage() {
       })
       await fetchReviewData()
     } catch {
-      toast.error('修复失败')
+      toastError('修复失败')
     } finally {
       setFixingId(null)
     }

@@ -18,7 +18,7 @@ import {
   FileTextIcon,
 } from 'lucide-react'
 import type { ContractTemplateParam } from '../types'
-import { toast } from '@/lib/toast'
+import { toast, success, error } from '@/lib/toast'
 
 interface DraftData {
   title: string
@@ -143,7 +143,7 @@ export default function ContractDraftPage() {
 
   const handleSaveDraft = useCallback(async () => {
     if (!draft.title.trim()) {
-      toast.error('请输入合同标题')
+      error('请输入合同标题')
       return
     }
     setSaving(true)
@@ -167,13 +167,13 @@ export default function ContractDraftPage() {
         }),
       })
       if (res.ok) {
-        toast.success('草稿已保存')
+        success('草稿已保存')
       } else {
         const err = await res.json().catch(() => ({}))
-        toast.error(err.error || '保存失败')
+        error(err.error || '保存失败')
       }
     } catch {
-      toast.error('保存失败')
+      error('保存失败')
     } finally {
       setSaving(false)
     }
@@ -181,7 +181,7 @@ export default function ContractDraftPage() {
 
   const handleGenerate = useCallback(async () => {
     if (!draft.title.trim()) {
-      toast.error('请输入合同标题')
+      error('请输入合同标题')
       return
     }
     setGenerating(true)
@@ -209,10 +209,10 @@ export default function ContractDraftPage() {
         setGeneratedContent(data.data?.content || '')
       } else {
         const err = await res.json().catch(() => ({}))
-        toast.error(err.error || '生成失败')
+        error(err.error || '生成失败')
       }
     } catch {
-      toast.error('生成失败')
+      error('生成失败')
     } finally {
       setGenerating(false)
     }

@@ -27,12 +27,13 @@ export default function NotFoundPage() {
             <ArrowLeftIcon className="mr-2 h-4 w-4" />
             返回上一页
           </Button>
-          <Button asChild className="w-full sm:w-auto">
-            <Link href="/">
-              <HomeIcon className="mr-2 h-4 w-4" />
-              回到首页
-            </Link>
-          </Button>
+          <Link
+            href="/"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 w-full sm:w-auto"
+          >
+            <HomeIcon className="mr-2 h-4 w-4" />
+            回到首页
+          </Link>
         </div>
       </div>
 

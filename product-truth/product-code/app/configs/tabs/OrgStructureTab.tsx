@@ -23,7 +23,7 @@ import {
 import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
-import { toast } from '@/lib/toast'
+import { toast, success, error } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
@@ -60,10 +60,11 @@ interface DepartmentTreeProps {
   users: OrgSummaryUser[]
   selectedDeptId: string | null
   onSelectDept: (id: string | null) => void
+  onRefresh?: () => void
   className?: string
 }
 
-function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, className }: DepartmentTreeProps) {
+function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRefresh, className }: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
   const [deletingDept, setDeletingDept] = useState<OrgSummaryDepartment | null>(null)
@@ -105,11 +106,11 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
       })
       if (!res.ok) {
         const result = await res.json().catch(() => ({}))
-        toast.error(result.error || '删除失败')
+        error(result.error || '删除失败')
         return
       }
-      toast.success('部门已删除')
-      onFeishuSync()
+      success('部门已删除')
+      onRefresh?.()
     } finally {
       setDeletingDept(null)
     }
@@ -249,11 +250,11 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
             })
             const result = await res.json()
             if (!res.ok) {
-              toast.error(result.error || '更新失败')
+              error(result.error || '更新失败')
               throw new Error(result.error)
             }
-            toast.success('部门更新成功')
-            onFeishuSync()
+            success('部门更新成功')
+            onRefresh?.()
           }}
         />
       )}
@@ -278,11 +279,11 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, clas
             })
             const result = await res.json()
             if (!res.ok) {
-              toast.error(result.error || '创建失败')
+              error(result.error || '创建失败')
               throw new Error(result.error)
             }
-            toast.success('部门创建成功')
-            onFeishuSync()
+            success('部门创建成功')
+            onRefresh?.()
           }}
           trigger={null}
         />
@@ -298,9 +299,10 @@ interface MemberTableProps {
   departments: OrgSummaryDepartment[]
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
+  onRefresh?: () => void
 }
 
-function MemberTable({ users, onEditUser, onAssignRole }: MemberTableProps) {
+function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
 
   // 使用 Fuse.js 进行模糊搜索
@@ -409,11 +411,11 @@ function MemberTable({ users, onEditUser, onAssignRole }: MemberTableProps) {
                   })
                   if (!res.ok) {
                     const result = await res.json()
-                    toast.error(result.error || '删除失败')
+                    error(result.error || '删除失败')
                     return
                   }
-                  toast.success('用户已删除')
-                  onFeishuSync()
+                  success('用户已删除')
+                  onRefresh?.()
                 }}
               >
                 <TrashIcon className="h-4 w-4 mr-2" />
@@ -424,7 +426,7 @@ function MemberTable({ users, onEditUser, onAssignRole }: MemberTableProps) {
         )
       },
     },
-  ], [])
+  ], [onEditUser, onAssignRole, onRefresh])
 
   const table = useReactTable({
     data: filteredUsers,
@@ -589,10 +591,10 @@ export default function OrgStructureTab({
               })
               const result = await res.json()
               if (!res.ok) {
-                toast.error(result.error || '创建部门失败')
+                error(result.error || '创建部门失败')
                 throw new Error(result.error)
               }
-              toast.success('部门创建成功')
+              success('部门创建成功')
               onFeishuSync()
             }}
             trigger={
@@ -612,10 +614,10 @@ export default function OrgStructureTab({
               })
               const result = await res.json()
               if (!res.ok) {
-                toast.error(result.error || '创建用户失败')
+                error(result.error || '创建用户失败')
                 throw new Error(result.error)
               }
-              toast.success('用户创建成功')
+              success('用户创建成功')
               onFeishuSync()
             }}
             trigger={
@@ -675,6 +677,7 @@ export default function OrgStructureTab({
                 users={users}
                 selectedDeptId={selectedDeptId}
                 onSelectDept={setSelectedDeptId}
+                onRefresh={onFeishuSync}
               />
             </div>
           </div>
@@ -713,6 +716,7 @@ export default function OrgStructureTab({
                 departments={departments}
                 onEditUser={setEditingUser}
                 onAssignRole={setAssigningUser}
+                onRefresh={onFeishuSync}
               />
             </div>
           </div>
@@ -734,10 +738,10 @@ export default function OrgStructureTab({
             })
             const result = await res.json()
             if (!res.ok) {
-              toast.error(result.error || '更新失败')
+              error(result.error || '更新失败')
               throw new Error(result.error)
             }
-            toast.success('用户更新成功')
+            success('用户更新成功')
             onFeishuSync()
           }}
         />
@@ -760,10 +764,10 @@ export default function OrgStructureTab({
             })
             const result = await res.json()
             if (!res.ok) {
-              toast.error(result.error || '分配角色失败')
+              error(result.error || '分配角色失败')
               throw new Error(result.error)
             }
-            toast.success('角色分配成功')
+            success('角色分配成功')
             onFeishuSync()
           }}
         />
