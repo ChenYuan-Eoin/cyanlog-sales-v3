@@ -49,6 +49,10 @@ export default function ContractDraftPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; description: string; category: string }>>([])
 
+  // 报价单选择（CRM 联动 TC-07）
+  const [selectedQuote, setSelectedQuote] = useState<string>('')
+  const [quotes, setQuotes] = useState<Array<{ id: string; quote_no: string; customer_name: string; total_amount: number; status: string }>>([])
+
   const [aiAddition, setAiAddition] = useState('')
   const [generatedContent, setGeneratedContent] = useState('')
 
@@ -65,6 +69,15 @@ export default function ContractDraftPage() {
         if (tplRes.ok) {
           const tplData = await tplRes.json()
           setTemplates(tplData.data || [])
+        }
+
+        // 加载报价单列表（CRM 联动 TC-07）
+        const quotesRes = await fetch('/api/quotes?status=APPROVED&pageSize=50', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        if (quotesRes.ok) {
+          const quotesData = await quotesRes.json()
+          setQuotes(quotesData.data?.data || [])
         }
 
         const res = await fetch('/api/contracts/template-params', {
@@ -113,6 +126,19 @@ export default function ContractDraftPage() {
     }))
   }, [])
 
+  // 选择报价单后自动填充客户信息（CRM 联动 TC-07）
+  const handleSelectQuote = useCallback((quoteId: string) => {
+    setSelectedQuote(quoteId)
+    const quote = quotes.find((q) => q.id === quoteId)
+    if (quote) {
+      setDraft((prev) => ({
+        ...prev,
+        party_b_name: quote.customer_name,
+        contract_amount: quote.total_amount.toString(),
+      }))
+    }
+  }, [quotes])
+
   const handleSaveDraft = useCallback(async () => {
     if (!draft.title.trim()) {
       alert('请输入合同标题')
@@ -135,6 +161,7 @@ export default function ContractDraftPage() {
           contract_amount: draft.contract_amount ? Number(draft.contract_amount) : undefined,
           business_params: draft.business_params,
           clause_toggles: draft.clause_toggles,
+          quote_id: selectedQuote || undefined,
         }),
       })
       if (res.ok) {
@@ -148,7 +175,7 @@ export default function ContractDraftPage() {
     } finally {
       setSaving(false)
     }
-  }, [draft])
+  }, [draft, selectedQuote])
 
   const handleGenerate = useCallback(async () => {
     if (!draft.title.trim()) {
@@ -267,6 +294,47 @@ export default function ContractDraftPage() {
                 )}
                 {!selectedTemplate && templates.length > 0 && (
                   <p className="text-xs text-amber-600 mt-2">请先选择一个模板以继续</p>
+                )}
+              </div>
+            </section>
+
+            {/* 报价单选择（CRM 联动 TC-07） */}
+            <section>
+              <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px]">¥</span>
+                关联报价单（可选）
+              </h3>
+              <div className="space-y-2">
+                {quotes.length === 0 ? (
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <p className="text-xs text-slate-500">暂无已审批的报价单</p>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      className="w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={selectedQuote}
+                      onChange={(e) => handleSelectQuote(e.target.value)}
+                    >
+                      <option value="">选择报价单（自动带入客户/金额）</option>
+                      {quotes.map((quote) => (
+                        <option key={quote.id} value={quote.id}>
+                          {quote.quote_no} · {quote.customer_name} · ¥{quote.total_amount?.toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedQuote && (
+                      <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-xs">
+                        <p className="text-emerald-800">
+                          <span className="font-medium">已关联报价单：</span>
+                          {quotes.find((q) => q.id === selectedQuote)?.quote_no}
+                        </p>
+                        <p className="text-emerald-700 mt-1">
+                          客户和金额已自动填充
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </section>
