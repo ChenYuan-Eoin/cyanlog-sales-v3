@@ -22,6 +22,7 @@ import {
   RotateCcwIcon,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import { toast, handleError } from '@/lib/toast'
 
 const ClauseReviewWorkshop = dynamic(() => import('./components/ClauseReviewWorkshop'), { ssr: false })
 
@@ -122,8 +123,8 @@ export default function ContractReviewPage() {
           const data = await res.json()
           setChatMessages(data.data || [])
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('加载聊天记录失败', err)
       }
     }
     void loadChats()
@@ -140,7 +141,7 @@ export default function ContractReviewPage() {
       })
       await fetchReviewData()
     } catch {
-      alert('修复失败')
+      toast.error('修复失败')
     } finally {
       setFixingId(null)
     }
@@ -165,8 +166,8 @@ export default function ContractReviewPage() {
         setChatMessages((prev) => [...prev, data.data.userMessage, data.data.assistantMessage])
         setChatInput('')
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '发送消息失败')
     } finally {
       setChatLoading(false)
     }

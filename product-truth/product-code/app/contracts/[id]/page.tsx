@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
 import type { Contract, ContractAnalysisJob } from '@/types'
+import { toast } from '@/lib/toast'
 
 // 扩展 Contract 类型，包含业务字段
 interface ContractWithDetails extends Contract {
@@ -1256,7 +1257,7 @@ function QuoteSection({ contractId, quoteId }: { contractId: string; quoteId: st
           setItems(itemsData.data || [])
         }
       } catch {
-        // ignore
+        // 报价信息加载失败不影响主页面显示
       } finally {
         setLoading(false)
       }

@@ -11,6 +11,7 @@ import {
   ChevronRightIcon,
   LoaderIcon,
 } from 'lucide-react'
+import { handleError } from '@/lib/toast'
 
 interface Clause {
   id: string
@@ -52,8 +53,8 @@ export default function ClauseReviewWorkshop({ contractId }: { contractId: strin
         setClauses(data.data?.clauses || [])
         setStats(data.data?.stats || null)
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '加载条款数据失败')
     } finally {
       setLoading(false)
     }

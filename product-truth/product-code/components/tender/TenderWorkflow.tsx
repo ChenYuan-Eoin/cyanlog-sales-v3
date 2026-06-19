@@ -18,6 +18,7 @@ import {
   CheckCircleIcon,
   Loader2Icon,
 } from 'lucide-react'
+import { toast } from '@/lib/toast'
 
 interface WorkflowStep {
   id: string
@@ -67,8 +68,8 @@ export default function TenderWorkflow({ tenderId, initialData }: TenderWorkflow
         const data = await res.json()
         setWorkflow(data.data)
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('获取工作流失败', err)
     } finally {
       setLoading(false)
     }
@@ -107,7 +108,7 @@ export default function TenderWorkflow({ tenderId, initialData }: TenderWorkflow
           )
         }
       } catch {
-        alert('操作失败')
+        toast.error('操作失败')
       } finally {
         setActionLoading(false)
       }

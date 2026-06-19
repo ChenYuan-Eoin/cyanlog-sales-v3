@@ -14,6 +14,7 @@ import {
   GitCompareIcon,
   DownloadIcon,
 } from 'lucide-react'
+import { handleError } from '@/lib/toast'
 
 interface TemplateClause {
   id: string
@@ -50,8 +51,8 @@ export default function CompareStandardPage() {
         const data = await res.json()
         setTemplates(data.data || [])
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '加载模板失败')
     } finally {
       setLoading(false)
     }
