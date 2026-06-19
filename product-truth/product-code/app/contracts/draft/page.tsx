@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
   ArrowLeftIcon,
   PenToolIcon,
@@ -13,6 +15,7 @@ import {
   InfoIcon,
   SaveIcon,
   LoaderIcon,
+  FileTextIcon,
 } from 'lucide-react'
 import type { ContractTemplateParam } from '../types'
 
@@ -42,6 +45,10 @@ export default function ContractDraftPage() {
     clause_toggles: {},
   })
 
+  // 模板选择
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; description: string; category: string }>>([])
+
   const [aiAddition, setAiAddition] = useState('')
   const [generatedContent, setGeneratedContent] = useState('')
 
@@ -50,6 +57,16 @@ export default function ContractDraftPage() {
     async function loadParams() {
       try {
         const token = localStorage.getItem('token')
+
+        // 加载模板列表
+        const tplRes = await fetch('/api/contracts/templates', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        if (tplRes.ok) {
+          const tplData = await tplRes.json()
+          setTemplates(tplData.data || [])
+        }
+
         const res = await fetch('/api/contracts/template-params', {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
@@ -210,6 +227,50 @@ export default function ContractDraftPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            {/* 模板选择 */}
+            <section>
+              <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <FileTextIcon className="h-4 w-4 text-indigo-500" />
+                选择合同模板
+              </h3>
+              <div className="space-y-2">
+                {templates.length === 0 ? (
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                    <p className="text-xs text-slate-500 mb-2">暂无可用模板</p>
+                    <p className="text-[10px] text-slate-400">请联系管理员在配置中心添加模板</p>
+                  </div>
+                ) : (
+                  templates.map((tpl) => (
+                    <Card
+                      key={tpl.id}
+                      className={`cursor-pointer transition-all hover:shadow-md ${
+                        selectedTemplate === tpl.id ? 'border-indigo-300 ring-1 ring-indigo-200 bg-indigo-50/30' : ''
+                      }`}
+                      onClick={() => setSelectedTemplate(tpl.id)}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${selectedTemplate === tpl.id ? 'bg-indigo-500' : 'bg-slate-200'}`} />
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">{tpl.name}</p>
+                              <p className="text-[10px] text-slate-500">{tpl.description}</p>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-[10px]">
+                            {tpl.category}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+                {!selectedTemplate && templates.length > 0 && (
+                  <p className="text-xs text-amber-600 mt-2">请先选择一个模板以继续</p>
+                )}
+              </div>
+            </section>
+
             {/* 基础信息 */}
             <section>
               <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
