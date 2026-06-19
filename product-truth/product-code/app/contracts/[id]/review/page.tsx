@@ -17,6 +17,9 @@ import {
   LightbulbIcon,
   UserIcon,
   BotIcon,
+  ShieldCheckIcon,
+  XCircleIcon,
+  RotateCcwIcon,
 } from 'lucide-react'
 
 interface RiskCardData {
@@ -66,6 +69,7 @@ export default function ContractReviewPage() {
   const [error, setError] = useState('')
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
   const [fixingId, setFixingId] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   // AI 聊天
   const [chatOpen, setChatOpen] = useState(false)
@@ -167,6 +171,83 @@ export default function ContractReviewPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
+  // ─── 审核结论操作 ───
+  const handleApprove = useCallback(async () => {
+    if (!confirm('确认审核通过？通过后合同将进入已归档状态。')) return
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/review`, {
+        method: 'PATCH',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ conclusion: 'APPROVED', concluded_at: new Date().toISOString() }),
+      })
+      if (res.ok) await fetchReviewData()
+      else alert('操作失败')
+    } catch {
+      alert('网络错误')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [contractId, fetchReviewData])
+
+  const handleReject = useCallback(async () => {
+    const reason = prompt('请输入驳回原因（必填）：')
+    if (!reason?.trim()) return
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/review`, {
+        method: 'PATCH',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conclusion: 'REJECTED',
+          conclusion_reason: reason,
+          concluded_at: new Date().toISOString(),
+        }),
+      })
+      if (res.ok) await fetchReviewData()
+      else alert('操作失败')
+    } catch {
+      alert('网络错误')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [contractId, fetchReviewData])
+
+  const handleEscalate = useCallback(async () => {
+    const reason = prompt('请输入转交原因及目标角色（如：法务/财务）：')
+    if (!reason?.trim()) return
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/review`, {
+        method: 'PATCH',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conclusion: 'ESCALATED',
+          conclusion_reason: reason,
+          concluded_at: new Date().toISOString(),
+        }),
+      })
+      if (res.ok) await fetchReviewData()
+      else alert('操作失败')
+    } catch {
+      alert('网络错误')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [contractId, fetchReviewData])
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -226,6 +307,12 @@ export default function ContractReviewPage() {
           </h1>
           <Badge variant="outline" className="text-[10px]">
             {contract.status === 'COMPLETED' ? '审核完成' : contract.status}
+            {contract.status === 'APPROVED' && (
+              <ShieldCheckIcon className="h-3 w-3 text-green-500 ml-1" />
+            )}
+            {contract.status === 'REJECTED' && (
+              <XCircleIcon className="h-3 w-3 text-red-500 ml-1" />
+            )}
           </Badge>
         </div>
         <div className="flex items-center gap-2">
@@ -237,9 +324,53 @@ export default function ContractReviewPage() {
             <span className="w-2 h-2 rounded-full bg-green-500 ml-2" />
             {contract.stats.green} 绿
           </div>
-          <Button variant="outline" size="sm">
-            下载报告
-          </Button>
+          {(contract.status === 'COMPLETED' || contract.status === 'PENDING' || contract.status === 'ANALYZING') ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                onClick={handleEscalate}
+                disabled={submitting}
+              >
+                <RotateCcwIcon className="h-3.5 w-3.5 mr-1" />
+                转交
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={handleReject}
+                disabled={submitting}
+              >
+                <XCircleIcon className="h-3.5 w-3.5 mr-1" />
+                驳回
+              </Button>
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={handleApprove}
+                disabled={submitting}
+              >
+                <ShieldCheckIcon className="h-3.5 w-3.5 mr-1" />
+                审核通过
+              </Button>
+            </>
+          ) : contract.status === 'APPROVED' ? (
+            <Badge className="bg-green-100 text-green-700 border-green-200">
+              <ShieldCheckIcon className="h-3 w-3 mr-1" />
+              已通过
+            </Badge>
+          ) : contract.status === 'REJECTED' ? (
+            <Badge className="bg-red-100 text-red-700 border-red-200">
+              <XCircleIcon className="h-3 w-3 mr-1" />
+              已驳回
+            </Badge>
+          ) : (
+            <Button variant="outline" size="sm">
+              下载报告
+            </Button>
+          )}
         </div>
       </header>
 
