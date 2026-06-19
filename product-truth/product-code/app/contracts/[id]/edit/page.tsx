@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
+import { handleError } from '@/lib/toast'
 
 interface Contract {
   id: string
@@ -115,8 +116,8 @@ export default function ContractEditPage() {
         const data = await res.json()
         setItems(data.data || [])
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '加载合同数据失败')
     }
   }, [contractId])
 

@@ -22,6 +22,7 @@ import {
   BarChart3Icon,
   ChevronRightIcon,
 } from 'lucide-react'
+import { handleError } from '@/lib/toast'
 
 interface Version {
   id: string
@@ -75,8 +76,8 @@ export default function RuleVersionsPage() {
         setRule(data.data.rule)
         setVersions(data.data.versions || [])
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '加载版本数据失败')
     } finally {
       setLoading(false)
     }

@@ -16,6 +16,7 @@ import {
   TrashIcon,
   GitBranchIcon,
 } from 'lucide-react'
+import { handleError } from '@/lib/toast'
 
 interface AuditRule {
   id: string
@@ -50,8 +51,8 @@ export default function ContractPoliciesPage() {
         const data = await res.json()
         setRules(data.data || [])
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '加载规则失败')
     } finally {
       setLoading(false)
     }
