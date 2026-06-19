@@ -25,6 +25,7 @@ import {
   XIcon,
 } from 'lucide-react'
 import type { Contract } from '@/types'
+import { toast, handleError } from '@/lib/toast'
 
 type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'
@@ -121,8 +122,8 @@ export default function ContractCenterPage() {
         const draftsData = await draftsRes.json()
         setDrafts(draftsData.data || [])
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '加载合同数据失败')
     } finally {
       setLoading(false)
     }
@@ -155,8 +156,8 @@ export default function ContractCenterPage() {
         setHasNext(meta.hasNext || false)
         setHasPrev(meta.hasPrev || false)
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '搜索合同失败')
     }
   }, [searchQuery, pageSize, fetchData])
 

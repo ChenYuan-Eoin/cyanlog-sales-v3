@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { handleError } from '@/lib/toast'
 import {
   ChevronRightIcon,
   ChevronDownIcon,
@@ -181,8 +182,8 @@ export default function KnowledgePage() {
         const data = await res.json()
         setTree(data.data || [])
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      handleError(err, '加载知识库失败')
     } finally {
       setLoading(false)
     }
@@ -325,8 +326,8 @@ function KnowledgeContent({ pageId }: { pageId: string }) {
           const data = await res.json()
           setPage(data.data)
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        handleError(err, '加载页面失败')
       } finally {
         setLoading(false)
       }
