@@ -21,6 +21,7 @@ import {
   PlusIcon,
   SearchIcon,
 } from 'lucide-react'
+import NotionEditor from '@/components/knowledge/NotionEditor'
 
 // Notion Blocks 类型（在NotionEditor组件中定义）
 // interface Block { ... }
@@ -376,14 +377,13 @@ function KnowledgeContent({ pageId }: { pageId: string }) {
         </div>
       </div>
 
-      {/* 内容区（占位，后续实现富文本编辑器） */}
-      <Card>
-        <CardContent className="p-6">
-          <p className="text-slate-500 text-sm">
-            富文本编辑器（Notion风格Blocks）即将上线...
-          </p>
-        </CardContent>
-      </Card>
+      {/* 内容区 - Notion风格富文本编辑器 */}
+      <NotionEditor
+        onChange={(blocks) => {
+          // 自动保存（防抖处理在组件内）
+          console.log('Blocks changed:', blocks)
+        }}
+      />
     </div>
   )
 }

@@ -290,9 +290,14 @@ export default function ContractDetailPage() {
           </div>
           <h1 className="text-2xl font-bold">{contract.filename}</h1>
         </div>
-        <Link href="/contracts">
-          <Button variant="outline">返回列表</Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href={`/contracts/${contractId}/compare-standard`}>
+            <Button variant="outline" size="sm">标准合同对照</Button>
+          </Link>
+          <Link href="/contracts">
+            <Button variant="outline">返回列表</Button>
+          </Link>
+        </div>
       </div>
 
       {actionError && (
