@@ -79,6 +79,29 @@ export async function POST(
       }>
     }
 
+    // ===== 硬关单检查：ASK 清单未回应阻断导出 =====
+    const { data: pendingAsks, error: askError } = await supabaseAdmin
+      .from('ask_items')
+      .select('id, ask_code, question_text')
+      .eq('contract_id', id)
+      .eq('status', 'pending')
+
+    if (askError) {
+      console.error('[Export] ASK check error:', askError)
+    }
+
+    if (pendingAsks && pendingAsks.length > 0) {
+      return NextResponse.json({
+        error: '合同有未回应的 ASK 问题，请先处理',
+        code: 'PENDING_ASKS_BLOCK',
+        details: {
+          pending_count: pendingAsks.length,
+          items: pendingAsks.map((a) => ({ id: a.id, code: a.ask_code, question: a.question_text })),
+        },
+      }, { status: 422 })
+    }
+    // ===== 硬关单检查结束 =====
+
     // 获取结构化报告字段
     const riskSummary = (latestReview as unknown as { risk_summary?: {
       total_clauses: number

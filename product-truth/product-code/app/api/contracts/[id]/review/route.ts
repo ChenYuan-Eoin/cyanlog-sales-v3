@@ -1,5 +1,6 @@
 // GET /api/contracts/:id/review
-// 获取合同审核结果（风险卡片 + AI 摘要 + 合规检查）
+// PATCH /api/contracts/:id/review
+// 获取合同审核结果 + 更新审核结论
 
 import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -11,6 +12,7 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 
+// GET - 获取审核结果
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,7 +20,7 @@ export async function GET(
   return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
     const { id } = await params
 
-    // 1. 获取合同基本信息
+    // 1. 获取合同基本信息（包含结论字段）
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
       .select('*, contract_reviews(*)')
@@ -51,10 +53,86 @@ export async function GET(
     }
 
     return successResponse({
-      contract,
+      ...contract,
       riskCards: riskCards || [],
       stats,
       latestReview: contract.contract_reviews?.[0] || null,
+    })
+  })
+}
+
+// PATCH - 更新审核结论（通过/驳回/转交）
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    const { id } = await params
+    const body = await req.json().catch(() => ({}))
+    const { conclusion, conclusion_reason } = body
+
+    // 1. 验证结论值
+    const validConclusions = ['APPROVED', 'REJECTED', 'ESCALATED']
+    if (!validConclusions.includes(conclusion)) {
+      return errorResponse(
+        createApiError('VALIDATION_ERROR', `无效的结论值: ${conclusion}，必须选择通过/驳回/转交`)
+      )
+    }
+
+    // 2. 检查合同是否存在
+    const { data: existing, error: checkError } = await supabaseAdmin
+      .from('contracts')
+      .select('id, status, conclusion')
+      .eq('id', id)
+      .single()
+
+    if (checkError || !existing) {
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
+    }
+
+    // 3. 防止重复操作
+    if (existing.conclusion && existing.conclusion !== 'PENDING') {
+      return errorResponse(
+        createApiError('VALIDATION_ERROR', `合同已${existing.conclusion === 'APPROVED' ? '通过' : existing.conclusion === 'REJECTED' ? '驳回' : '转交'}，不可重复操作`)
+      )
+    }
+
+    // 4. 更新合同结论
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('contracts')
+      .update({
+        conclusion,
+        conclusion_reason: conclusion_reason || null,
+        concluded_at: new Date().toISOString(),
+        concluded_by: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (updateError) {
+      return errorResponse(createApiError('DB_ERROR', '更新审核结论失败'))
+    }
+
+    // 5. 写入审计日志
+    await supabaseAdmin.from('contract_rule_audit_logs').insert({
+      rule_id: null,  // 无关联规则
+      rule_set_id: null,
+      action: `conclusion_${conclusion.toLowerCase()}`,
+      before_value: { conclusion: existing.conclusion },
+      after_value: { conclusion, reason: conclusion_reason },
+      changed_by: user.id,
+      change_note: conclusion_reason || `${conclusion} 操作`,
+    })
+
+    return successResponse({
+      message: conclusion === 'APPROVED'
+        ? '审核通过'
+        : conclusion === 'REJECTED'
+          ? '已驳回'
+          : '已转交',
+      contract: updated,
     })
   })
 }
