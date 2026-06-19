@@ -143,11 +143,10 @@ const getCachedOrganization = cache(async (orgId: string) => {
 
 // 缓存用户角色查询
 const getCachedUserRoles = cache(async (orgId: string) => {
-  // 只查询当前组织的用户角色关联
+  // 查询当前组织的所有用户角色（包括 org/department/space 各级别）
   const { data, error } = await supabaseAdmin
     .from('user_roles')
     .select('user_id, scope_type, scope_id, granted_at, role:roles(id, name, code)')
-    .eq('scope_type', 'org')
     .eq('scope_id', orgId)
 
   if (error) {
