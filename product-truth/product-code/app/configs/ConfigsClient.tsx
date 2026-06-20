@@ -21,7 +21,9 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   UsersIcon,
+  GavelIcon,
 } from '@/components/icons'
+import Link from 'next/link'
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
@@ -1096,6 +1098,16 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
                     </button>
                   )
                 })}
+                {/* 合同审核策略规则入口 */}
+                {activeSection === 'contract-ai' && (
+                  <Link
+                    href="/admin/contract-policies"
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition"
+                  >
+                    <GavelIcon className="h-4 w-4" />
+                    <span>合同审核策略</span>
+                  </Link>
+                )}
               </div>
             </div>
 

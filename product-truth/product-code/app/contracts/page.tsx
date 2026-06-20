@@ -412,10 +412,14 @@ export default function ContractCenterPage() {
 
       {/* 移动端底部固定快捷操作栏 */}
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-40 safe-area-pb">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-[100] safe-area-pb">
           <div className="flex items-center justify-around">
             {quickActions.map((action) => (
-              <Link key={action.id} href={action.href} className="flex flex-col items-center gap-1 py-1 px-3">
+              <Link
+                key={action.id}
+                href={action.href}
+                className="flex flex-col items-center gap-1 py-1 px-3 active:scale-95 transition-transform"
+              >
                 <div className={`w-10 h-10 rounded-full ${action.color} flex items-center justify-center shadow-md`}>
                   <action.icon className="h-5 w-5 text-white" />
                 </div>
