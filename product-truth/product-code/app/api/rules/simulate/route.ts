@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { executeFlexibleRules, loadFlexibleRules } from '@/lib/rules/engine'
+import { executeRules } from '@/lib/rules/engine'
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,12 +27,12 @@ export async function POST(req: NextRequest) {
       effectiveOrgId = userOrg?.org_id || '00000001-0000-0000-0000-000000000000'
     }
 
-    // 执行柔性化规则引擎
-    const result = await executeFlexibleRules(text, effectiveOrgId)
+    // 执行规则引擎（返回 AnalysisResults）
+    const result = await executeRules(text, effectiveOrgId)
 
     // 转换为SimulationResult格式
     const simulationResults = result.risks.map((risk) => ({
-      ruleId: risk.ruleId || 'unknown',
+      ruleId: 'unknown',
       ruleName: risk.title,
       matched: true,
       level: risk.level === 'red' ? 'C' as const : risk.level === 'yellow' ? 'B' as const : 'A' as const,

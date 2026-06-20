@@ -70,6 +70,7 @@ const CONFIG_TABS: Record<ConfigTabId, {
     label: '合同审核规则',
     description: '管理结构化规则与语义规则，供合同审核与本地模型执行。',
     section: 'contract-ai',
+    icon: FileTextIcon,
   },
   'org-structure': {
     label: '组织架构',

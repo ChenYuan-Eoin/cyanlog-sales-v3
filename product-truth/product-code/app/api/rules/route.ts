@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
+import { getDefaultOrgId } from '@/lib/scoped-access'
+import { isSchemaDriftError } from '@/lib/db-compat'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
