@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { toast } from '@/lib/toast'
+import { error as toastError } from '@/lib/toast'
 
 // Level A/B/C 配置
 interface RuleLevelConfig {
@@ -70,7 +70,7 @@ export default function RuleDesigner({ initialRule, onSave, onTest }: RuleDesign
 
   const handleTest = () => {
     if (!form.code || !form.name) {
-      toast.error('请填写规则编码和名称')
+      toastError('请填写规则编码和名称')
       return
     }
     onTest(form)
@@ -78,7 +78,7 @@ export default function RuleDesigner({ initialRule, onSave, onTest }: RuleDesign
 
   const handleSave = () => {
     if (!form.code || !form.name) {
-      toast.error('请填写规则编码和名称')
+      toastError('请填写规则编码和名称')
       return
     }
     onSave(form)

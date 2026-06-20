@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PlusIcon, PlayIcon, ChevronRightIcon } from 'lucide-react'
-import type { Rule } } from '@/types/rules'
+import type { Rule } from '@/types/rules'
 import RuleDesigner from '../components/RuleDesigner'
 import RuleTestSandbox from '../components/RuleTestSandbox'
 

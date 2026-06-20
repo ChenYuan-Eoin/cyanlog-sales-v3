@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon, Loader2Icon, FileTextIcon } from 'lucide-react'
-import { toast } from '@/lib/toast'
+import { error as toastError } from '@/lib/toast'
 
 interface RiskCard {
   id: string
@@ -36,7 +36,7 @@ export default function RuleReviewPage() {
 
   const runReview = useCallback(async () => {
     if (!contractText.trim()) {
-      toast.error('请提供合同文本')
+      toastError('请提供合同文本')
       return
     }
 
@@ -56,11 +56,11 @@ export default function RuleReviewPage() {
         const data = await res.json()
         setResult(data.data || null)
       } else {
-        toast.error('审核失败')
+        toastError('审核失败')
       }
     } catch (err) {
       console.error('Review error:', err)
-      toast.error('审核请求失败')
+      toastError('审核请求失败')
     } finally {
       setLoading(false)
     }

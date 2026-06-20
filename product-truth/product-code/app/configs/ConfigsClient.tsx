@@ -13,7 +13,6 @@ import { Textarea } from '@/components/ui/textarea'
 import type { Rule } from '@/types/rules'
 import {
   BotIcon,
-  FileTextIcon,
   KeyRoundIcon,
   PaletteIcon,
   PackageIcon,
@@ -21,7 +20,6 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   UsersIcon,
-  GavelIcon,
 } from '@/components/icons'
 import Link from 'next/link'
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
@@ -72,7 +70,6 @@ const CONFIG_TABS: Record<ConfigTabId, {
     label: '合同审核规则',
     description: '管理结构化规则与语义规则，供合同审核与本地模型执行。',
     section: 'contract-ai',
-    icon: FileTextIcon,
   },
   'org-structure': {
     label: '组织架构',
@@ -1104,7 +1101,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
                     href="/admin/contract-policies"
                     className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition"
                   >
-                    <GavelIcon className="h-4 w-4" />
+                    <FileTextIcon className="h-4 w-4" />
                     <span>合同审核策略</span>
                   </Link>
                 )}
