@@ -3,20 +3,24 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { reviewWithFailoverSync } from '@/lib/ai/failover'
 
-interface DraftRequest {
-  mode: 'ai_generate' | 'template' | 'upload'
-  purpose: string                                  // 合同签署目的
-  party_a: string                                // 甲方
-  party_b: string                                // 乙方
-  contract_type: string                          // 合同类型
-  key_terms?: string                             // 关键条款要求
-  template_id?: string                           // 模板ID（模板起草）
-  source_contract_id?: string                    // 源合同ID（上传合同起草）
-  provider?: string
-}
+// Zod schema for request validation
+const DraftRequestSchema = z.object({
+  mode: z.enum(['ai_generate', 'template', 'upload'], { message: '请指定有效的起草方式' }),
+  purpose: z.string().min(1, '请填写合同签署目的'),
+  party_a: z.string().min(1, '请填写甲方信息'),
+  party_b: z.string().min(1, '请填写乙方信息'),
+  contract_type: z.string().min(1, '请选择合同类型'),
+  key_terms: z.string().optional(),
+  template_id: z.string().optional(),
+  source_contract_id: z.string().optional(),
+  provider: z.string().optional(),
+})
+
+type DraftRequest = z.infer<typeof DraftRequestSchema>
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -115,20 +119,13 @@ export async function POST(req: NextRequest) {
     void req
     const orgId = '00000000-0000-0000-0000-000000000000'
 
-    const body = (await req.json().catch(() => ({}))) as DraftRequest
-
-    if (!body.mode) {
-      return errorResponse('请指定起草方式', 400, 'MISSING_MODE')
+    // Zod validation
+    const bodyResult = DraftRequestSchema.safeParse(await req.json().catch(() => ({})))
+    if (!bodyResult.success) {
+      const errorMsg = bodyResult.error.issues.map((e: { message: string }) => e.message).join(', ')
+      return errorResponse(errorMsg, 400, 'VALIDATION_ERROR')
     }
-    if (!body.purpose) {
-      return errorResponse('请填写合同签署目的', 400, 'MISSING_PURPOSE')
-    }
-    if (!body.party_a || !body.party_b) {
-      return errorResponse('请填写甲乙双方信息', 400, 'MISSING_PARTIES')
-    }
-    if (!body.contract_type) {
-      return errorResponse('请选择合同类型', 400, 'MISSING_TYPE')
-    }
+    const body = bodyResult.data
 
     let generatedContent = ''
 

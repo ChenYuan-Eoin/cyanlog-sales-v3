@@ -5,6 +5,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
 
+// ASK关联用户类型 - 匹配数据库查询返回的结构
+interface AskWithUser {
+  id: string
+  status: string
+  initial_level: string
+  question_text: string
+  created_at: string
+  updated_at: string
+  ask_code?: string
+  clause_ref?: string
+  risk_name?: string
+  question_type?: string
+  required_roles?: string[]
+  qualified_std?: string
+  trigger_user_id?: string
+  closed_reason?: string
+  users?: {
+    name?: string
+    email?: string
+  }[]
+}
+
 interface RouteParams {
   params: Promise<{ id: string; askId: string }> | { id: string; askId: string }
 }
@@ -69,12 +91,14 @@ export async function GET(
       )
     }
 
+    const typedAsk = ask as AskWithUser
+    const triggerUser = typedAsk.users?.[0]
+
     return NextResponse.json({
       success: true,
       data: {
-        ...ask,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        trigger_user_name: (ask.users as any)?.name || (ask.users as any)?.email,
+        ...typedAsk,
+        trigger_user_name: triggerUser?.name || triggerUser?.email,
       },
     })
   } catch (error) {

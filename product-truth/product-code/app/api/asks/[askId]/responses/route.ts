@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { getUserScopedRoleAssignments, getOrgRoleCodes } from '@/lib/scoped-access'
 
 export async function POST(
   req: NextRequest,
@@ -14,13 +15,18 @@ export async function POST(
     const askId = params.askId
     const { response_text, attachments } = await req.json()
 
+    // 获取用户角色（取第一个组织级角色）
+    const assignments = await getUserScopedRoleAssignments(user.id)
+    const roleCodes = getOrgRoleCodes(assignments)
+    const primaryRole = roleCodes[0] || 'sales'
+
     // 创建回应
     const { data: response, error: respError } = await supabaseAdmin
       .from('ask_responses')
       .insert({
         ask_id: askId,
         responder_id: user.id,
-        responder_role: 'sales', // TODO: 从用户权限获取
+        responder_role: primaryRole,
         responder_name: user.display_name || user.email,
         response_text,
         attachments: attachments || [],
@@ -33,7 +39,7 @@ export async function POST(
     // 更新 ASK 状态为 responded
     await supabaseAdmin
       .from('ask_items')
-      .update({ 
+      .update({
         status: 'responded',
         response_id: response.id,
         updated_at: new Date().toISOString(),

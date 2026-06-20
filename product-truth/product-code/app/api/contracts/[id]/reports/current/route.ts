@@ -5,6 +5,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
 
+// ASK Item 类型定义
+interface AskItem {
+  id: string
+  status: 'pending' | 'responded' | 'closed'
+}
+
 interface RouteParams {
   params: Promise<{ id: string }> | { id: string }
 }
@@ -64,12 +70,11 @@ export async function GET(
       console.error('[Report Current] ASK count error:', askError)
     }
 
-    /* eslint-disable @typescript-eslint/no-explicit-any */
     const total = asks?.length || 0
-    const pending = asks?.filter((a: any) => a.status === 'pending').length || 0
-    const responded = asks?.filter((a: any) => a.status === 'responded').length || 0
-    const closed = asks?.filter((a: any) => a.status === 'closed').length || 0
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    const typedAsks = (asks || []) as AskItem[]
+    const pending = typedAsks.filter((a) => a.status === 'pending').length
+    const responded = typedAsks.filter((a) => a.status === 'responded').length
+    const closed = typedAsks.filter((a) => a.status === 'closed').length
 
     // 如果没有报告，返回空数据
     if (!report) {
