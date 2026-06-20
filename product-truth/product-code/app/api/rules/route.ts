@@ -5,8 +5,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
-import { getDefaultOrgId } from '@/lib/scoped-access'
-import { isSchemaDriftError } from '@/lib/db-compat'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -32,8 +30,7 @@ const ruleSchema = z.object({
 // GET /api/rules - 获取规则列表（需登录，分页）
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
+    await requireAuth(req)
 
     const { searchParams } = new URL(req.url)
     const ruleType = searchParams.get('rule_type')
@@ -45,7 +42,6 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('rules')
       .select('*', { count: 'exact' })
-      .eq('org_id', orgId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
@@ -58,18 +54,6 @@ export async function GET(req: NextRequest) {
     }
 
     let { data: rules, error, count } = await query
-
-    if (error && isSchemaDriftError(error)) {
-      const legacyResult = await supabaseAdmin
-        .from('rules')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1)
-
-      rules = legacyResult.data
-      error = legacyResult.error
-      count = legacyResult.count
-    }
 
     if (error) {
       console.error('Get rules error:', error)
