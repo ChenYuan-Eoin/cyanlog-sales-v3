@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
-import { toast, success, error } from '@/lib/toast'
+import { success, error } from '@/lib/toast'
 import type {
   OrgSummaryUser,
   OrgSummaryDepartment,

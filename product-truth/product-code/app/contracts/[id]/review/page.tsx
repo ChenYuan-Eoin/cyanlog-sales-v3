@@ -22,7 +22,7 @@ import {
   RotateCcwIcon,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { toast, success, error as toastError, handleError } from '@/lib/toast'
+import { error as toastError, handleError } from '@/lib/toast'
 
 const ClauseReviewWorkshop = dynamic(() => import('./components/ClauseReviewWorkshop'), { ssr: false })
 

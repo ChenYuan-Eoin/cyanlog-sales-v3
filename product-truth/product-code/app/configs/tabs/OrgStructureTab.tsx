@@ -23,7 +23,7 @@ import {
 import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
-import { toast, success, error } from '@/lib/toast'
+import { success, error } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'

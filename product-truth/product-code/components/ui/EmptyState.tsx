@@ -1,4 +1,4 @@
-import { FileQuestionIcon, SearchIcon, FolderOpenIcon, type LucideIcon } from 'lucide-react'
+import { SearchIcon, FolderOpenIcon, type LucideIcon } from 'lucide-react'
 import { Button } from './button'
 
 interface EmptyStateProps {

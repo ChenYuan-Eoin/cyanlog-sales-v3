@@ -18,7 +18,7 @@ import {
   CheckCircleIcon,
   Loader2Icon,
 } from 'lucide-react'
-import { toast, error } from '@/lib/toast'
+import { error } from '@/lib/toast'
 
 interface WorkflowStep {
   id: string

@@ -1,5 +1,6 @@
+'use client'
+
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 import { HomeIcon, ArrowLeftIcon } from 'lucide-react'
 
 export default function NotFoundPage() {
@@ -19,14 +20,13 @@ export default function NotFoundPage() {
 
         {/* 操作按钮 */}
         <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Button
-            variant="outline"
+          <button
             onClick={() => window.history.back()}
-            className="w-full sm:w-auto"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 w-full sm:w-auto"
           >
             <ArrowLeftIcon className="mr-2 h-4 w-4" />
             返回上一页
-          </Button>
+          </button>
           <Link
             href="/"
             className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 w-full sm:w-auto"

@@ -22,6 +22,9 @@ const DraftRequestSchema = z.object({
 
 type DraftRequest = z.infer<typeof DraftRequestSchema>
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _typeCheck: DraftRequest | undefined = undefined
+
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }

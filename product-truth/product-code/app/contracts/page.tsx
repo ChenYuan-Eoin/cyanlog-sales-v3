@@ -25,9 +25,8 @@ import {
   XIcon,
 } from 'lucide-react'
 import type { Contract } from '@/types'
-import { toast, handleError } from '@/lib/toast'
+import { handleError } from '@/lib/toast'
 import { LoadingState } from '@/components/ui/LoadingState'
-import { EmptyState as EmptyStateComponent } from '@/components/ui/EmptyState'
 
 type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'

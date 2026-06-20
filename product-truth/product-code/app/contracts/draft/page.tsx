@@ -18,7 +18,7 @@ import {
   FileTextIcon,
 } from 'lucide-react'
 import type { ContractTemplateParam } from '../types'
-import { toast, success, error } from '@/lib/toast'
+import { success, error } from '@/lib/toast'
 
 interface DraftData {
   title: string
