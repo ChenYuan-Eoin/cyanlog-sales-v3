@@ -17,6 +17,7 @@ interface RuleTabProps {
 }
 
 // 规则扩展类型（包含Level A/B/C配置）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface RuleWithLevels extends Rule {
   level_a?: { threshold: number; unit: string; action: string }
   level_b?: { threshold: number; unit: string; action: string; counterparty?: string }
@@ -36,6 +37,7 @@ const ruleTypeMap: Record<string, string> = {
 
 export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps) {
   const [selectedRule, setSelectedRule] = useState<Rule | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showDesigner, setShowDesigner] = useState(false)
   const [activeTab, setActiveTab] = useState<'list' | 'design' | 'test'>('list')
 
