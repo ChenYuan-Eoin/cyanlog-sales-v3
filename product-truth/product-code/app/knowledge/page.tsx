@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { handleError } from '@/lib/toast'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { EmptyState } from '@/components/ui/EmptyState'
 import {
   ChevronRightIcon,
   ChevronDownIcon,
@@ -226,11 +228,8 @@ export default function KnowledgePage() {
 
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 bg-slate-200 rounded" />
-          <div className="h-64 bg-slate-100 rounded" />
-        </div>
+      <div className="flex h-screen items-center justify-center">
+        <LoadingState message="加载知识库..." size="lg" />
       </div>
     )
   }
@@ -265,9 +264,12 @@ export default function KnowledgePage() {
         {/* 树 */}
         <div className="flex-1 overflow-y-auto p-2">
           {filteredTree.length === 0 ? (
-            <div className="text-center py-8 text-sm text-slate-500">
-              {searchQuery ? '未找到匹配的页面' : '暂无知识库页面'}
-            </div>
+            <EmptyState
+              title={searchQuery ? '未找到匹配页面' : '暂无知识库页面'}
+              description={searchQuery ? '请尝试其他搜索关键词' : '点击上方"新建"按钮创建第一个页面'}
+              icon={searchQuery ? SearchIcon : BookOpenIcon}
+              size="sm"
+            />
           ) : (
             filteredTree.map(page => (
               <TreeNode
@@ -294,14 +296,15 @@ export default function KnowledgePage() {
           <KnowledgeContent pageId={selectedId} />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <BookOpenIcon size={48} className="text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-slate-900 mb-2">知识库</h3>
-              <p className="text-sm text-slate-500 max-w-md">
-                左侧选择页面查看详情，或新建页面开始构建知识库。
-                支持树状6+层结构、Notion风格富文本编辑、页面级权限控制。
-              </p>
-            </div>
+            <EmptyState
+              title="知识库"
+              description="左侧选择页面查看详情，或新建页面开始构建知识库。支持树状6+层结构、Notion风格富文本编辑、页面级权限控制。"
+              icon={BookOpenIcon}
+              action={{
+                label: '新建页面',
+                onClick: () => window.location.href = '/knowledge/new',
+              }}
+            />
           </div>
         )}
       </div>

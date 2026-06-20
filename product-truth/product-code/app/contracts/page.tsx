@@ -26,6 +26,8 @@ import {
 } from 'lucide-react'
 import type { Contract } from '@/types'
 import { toast, handleError } from '@/lib/toast'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { EmptyState as EmptyStateComponent } from '@/components/ui/EmptyState'
 
 type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'
@@ -358,13 +360,7 @@ export default function ContractCenterPage() {
 
         {/* 列表内容 */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-pulse space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-16 bg-slate-200 rounded-lg" />
-              ))}
-            </div>
-          </div>
+          <LoadingState message="加载合同中..." />
         ) : filteredTasks.length === 0 ? (
           <EmptyState isMobile={isMobile} />
         ) : (

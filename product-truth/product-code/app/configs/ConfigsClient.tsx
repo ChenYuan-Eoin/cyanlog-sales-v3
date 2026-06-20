@@ -23,6 +23,7 @@ import {
   UsersIcon,
 } from '@/components/icons'
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
+import { LoadingState } from '@/components/ui/LoadingState'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import TabsContent from './tabs/TabsContent'
 import ConfigStatusBadge from './tabs/ConfigStatusBadge'
@@ -935,7 +936,11 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   }
 
   if (loading) {
-    return <div className="p-8">加载中...</div>
+    return (
+      <div className="flex h-[calc(100vh-100px)] items-center justify-center">
+        <LoadingState message="加载配置中心..." size="lg" />
+      </div>
+    )
   }
 
   return (
