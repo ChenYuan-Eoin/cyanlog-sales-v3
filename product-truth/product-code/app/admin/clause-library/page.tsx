@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PlusIcon, EditIcon, TrashIcon, LibraryIcon, SearchIcon } from 'lucide-react'
+import { error as toastError } from '@/lib/toast'
 
 type Stance = 'required' | 'recommended' | 'optional' | 'risky' | 'dangerous'
 const STANCE_MAP: Record<Stance, { label: string; color: string }> = {
@@ -97,7 +98,7 @@ export default function ClauseLibraryPage() {
 
   async function handleCreate() {
     if (!form.name || !form.template_text) {
-      alert('请填写条款名称和标准文本')
+      toastError('请填写条款名称和标准文本')
       return
     }
     setSubmitting(true)
@@ -116,7 +117,7 @@ export default function ClauseLibraryPage() {
         await fetchClauses()
       } else {
         const data = await res.json()
-        alert(data.error || '创建失败')
+        toastError(data.error || '创建失败')
       }
     } finally {
       setSubmitting(false)
@@ -146,7 +147,7 @@ export default function ClauseLibraryPage() {
         await fetchClauses()
       } else {
         const data = await res.json()
-        alert(data.error || '更新失败')
+        toastError(data.error || '更新失败')
       }
     } finally {
       setSubmitting(false)
@@ -160,7 +161,7 @@ export default function ClauseLibraryPage() {
       await fetchClauses()
     } else {
       const data = await res.json()
-      alert(data.error || '删除失败')
+      toastError(data.error || '删除失败')
     }
   }
 

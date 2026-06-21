@@ -11,7 +11,7 @@ import {
   ChevronRightIcon,
   LoaderIcon,
 } from 'lucide-react'
-import { handleError } from '@/lib/toast'
+import { handleError, error } from '@/lib/toast'
 
 interface Clause {
   id: string
@@ -81,7 +81,7 @@ export default function ClauseReviewWorkshop({ contractId }: { contractId: strin
           await fetchClauses()
         }
       } catch {
-        alert('更新失败')
+        error('更新失败')
       } finally {
         setUpdatingId(null)
       }

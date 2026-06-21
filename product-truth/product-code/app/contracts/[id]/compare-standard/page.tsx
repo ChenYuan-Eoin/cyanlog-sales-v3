@@ -14,7 +14,7 @@ import {
   GitCompareIcon,
   DownloadIcon,
 } from 'lucide-react'
-import { handleError } from '@/lib/toast'
+import { error as toastError, handleError } from '@/lib/toast'
 
 interface TemplateClause {
   id: string
@@ -80,7 +80,7 @@ export default function CompareStandardPage() {
         setResults(data.data.results || [])
       }
     } catch {
-      alert('比对失败')
+      toastError('比对失败')
     } finally {
       setComparing(false)
     }

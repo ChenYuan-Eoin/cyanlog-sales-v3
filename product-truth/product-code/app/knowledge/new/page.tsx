@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArrowLeftIcon, FileTextIcon, FolderIcon } from 'lucide-react'
+import { error as toastError } from '@/lib/toast'
 
 const PAGE_TYPES = [
   { value: 'doc', label: '文档', icon: FileTextIcon },
@@ -41,10 +42,10 @@ export default function KnowledgeNewPage() {
         router.push(`/knowledge/pages/${data.data?.id || data.id}`)
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(err.error || '创建失败')
+        toastError(err.error || '创建失败')
       }
     } catch {
-      alert('网络错误，请重试')
+      toastError('网络错误，请重试')
     } finally {
       setCreating(false)
     }

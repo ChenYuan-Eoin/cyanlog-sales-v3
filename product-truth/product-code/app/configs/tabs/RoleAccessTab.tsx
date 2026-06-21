@@ -87,9 +87,9 @@ export default function RoleAccessTab({
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col lg:flex-row gap-6">
       {/* 左侧角色列表 */}
-      <div className="w-[280px] shrink-0">
+      <div className="w-full lg:w-[280px] shrink-0">
         <div className="rounded-lg border bg-white">
           <div className="border-b px-4 py-3">
             <h3 className="font-medium text-slate-900">角色列表</h3>

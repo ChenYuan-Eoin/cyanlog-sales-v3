@@ -20,6 +20,7 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   UsersIcon,
+  FileTextIcon,
 } from '@/components/icons'
 import Link from 'next/link'
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
@@ -945,7 +946,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
 
   return (
     <div className="min-h-full bg-slate-50">
-      <div className="mx-auto max-w-[1480px] px-6 py-8 lg:px-8">
+      <div className="mx-auto max-w-[1480px] px-4 py-6 pl-14 lg:px-8 lg:pl-8">
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">

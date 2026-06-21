@@ -181,7 +181,7 @@ export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps
               <div className="flex gap-2">
                 <Button
                   size="sm"
-                  variant={activeTab === 'test' ? 'default' : 'outline'}
+                  variant="outline"
                   onClick={() => setActiveTab('test')}
                 >
                   <PlayIcon className="h-4 w-4 mr-1" />

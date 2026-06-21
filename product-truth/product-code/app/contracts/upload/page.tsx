@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowLeftIcon, UploadIcon, FileTextIcon } from 'lucide-react'
+import { error as toastError } from '@/lib/toast'
 
 export default function ContractUploadPage() {
   const router = useRouter()
@@ -37,10 +38,10 @@ export default function ContractUploadPage() {
         router.push(`/contracts/${data.id}`)
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(err.error || '上传失败')
+        toastError(err.error || '上传失败')
       }
     } catch {
-      alert('网络错误，请重试')
+      toastError('网络错误，请重试')
     } finally {
       setUploading(false)
     }

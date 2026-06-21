@@ -70,7 +70,7 @@ export default function ContractReviewPage() {
 
   const [contract, setContract] = useState<ContractReviewData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
   const [fixingId, setFixingId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -93,15 +93,15 @@ export default function ContractReviewPage() {
       })
 
       if (!res.ok) {
-        if (res.status === 401) setError('未登录或登录已过期')
-        else setError('获取审核结果失败')
+        if (res.status === 401) setErrorMsg('未登录或登录已过期')
+        else setErrorMsg('获取审核结果失败')
         return
       }
 
       const data = await res.json()
       setContract(data.data)
     } catch {
-      setError('网络错误')
+      setErrorMsg('网络错误')
     } finally {
       setLoading(false)
     }
@@ -193,9 +193,9 @@ export default function ContractReviewPage() {
         body: JSON.stringify({ conclusion: 'APPROVED', concluded_at: new Date().toISOString() }),
       })
       if (res.ok) await fetchReviewData()
-      else alert('操作失败')
+      else toastError('操作失败')
     } catch {
-      alert('网络错误')
+      toastError('网络错误')
     } finally {
       setSubmitting(false)
     }
@@ -220,9 +220,9 @@ export default function ContractReviewPage() {
         }),
       })
       if (res.ok) await fetchReviewData()
-      else alert('操作失败')
+      else toastError('操作失败')
     } catch {
-      alert('网络错误')
+      toastError('网络错误')
     } finally {
       setSubmitting(false)
     }
@@ -247,9 +247,9 @@ export default function ContractReviewPage() {
         }),
       })
       if (res.ok) await fetchReviewData()
-      else alert('操作失败')
+      else toastError('操作失败')
     } catch {
-      alert('网络错误')
+      toastError('网络错误')
     } finally {
       setSubmitting(false)
     }
@@ -263,10 +263,10 @@ export default function ContractReviewPage() {
     )
   }
 
-  if (error) {
+  if (errorMsg) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-red-600">{error}</div>
+        <div className="text-red-600">{errorMsg}</div>
       </div>
     )
   }

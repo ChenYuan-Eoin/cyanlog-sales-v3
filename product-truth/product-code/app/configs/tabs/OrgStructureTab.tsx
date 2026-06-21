@@ -462,7 +462,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
       </div>
 
       {/* 表格 */}
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
@@ -569,7 +569,7 @@ export default function OrgStructureTab({
     <div className="space-y-6">
       {/* 顶部统计和操作 */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-2">
           <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />
           <StatCard icon={<UsersIcon size={18} />} label="成员" value={stats.userCount} />
           <StatCard icon={<BuildingIcon size={18} />} label="销售空间" value={stats.spaceCount} />
@@ -645,9 +645,9 @@ export default function OrgStructureTab({
       )}
 
       {/* 左右分栏布局 */}
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* 左侧部门树 */}
-        <div className="w-[260px] shrink-0">
+        <div className="w-full lg:w-[260px] shrink-0">
           <div className="rounded-lg border bg-white">
             <div className="border-b px-4 py-3">
               <h3 className="font-medium text-slate-900">部门结构</h3>

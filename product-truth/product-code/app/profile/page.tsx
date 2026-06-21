@@ -103,9 +103,10 @@ export default function ProfilePage() {
       setPhone(updatedUser.phone || '')
       setAvatarUrl(updatedUser.avatar_url || '')
       setEditMode(false)
-    } catch (error) {
-      console.error('Save error:', error)
-      alert(error instanceof Error ? error.message : '保存失败，请重试')
+    } catch (err) {
+      console.error('Save error:', err)
+      const msg = err instanceof Error ? err.message : '保存失败，请重试'
+      alert(msg)
     } finally {
       setSaving(false)
     }

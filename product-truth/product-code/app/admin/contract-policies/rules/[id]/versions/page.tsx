@@ -22,7 +22,7 @@ import {
   BarChart3Icon,
   ChevronRightIcon,
 } from 'lucide-react'
-import { handleError } from '@/lib/toast'
+import { handleError, error } from '@/lib/toast'
 
 interface Version {
   id: string
@@ -107,7 +107,7 @@ export default function RuleVersionsPage() {
           await fetchData()
         }
       } catch {
-        alert('发布失败')
+        error('发布失败')
       } finally {
         setPublishingId(null)
       }
@@ -136,7 +136,7 @@ export default function RuleVersionsPage() {
           await fetchData()
         }
       } catch {
-        alert('回滚失败')
+        error('回滚失败')
       } finally {
         setRollingBackId(null)
       }

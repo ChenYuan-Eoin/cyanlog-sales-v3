@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ShieldIcon, ShieldOffIcon, EqualIcon, CheckIcon } from 'lucide-react'
+import { error as toastError } from '@/lib/toast'
 
 interface Strategy {
   id: string
@@ -87,7 +88,7 @@ export default function ReviewStrategiesPage() {
         await fetchStrategies()
       } else {
         const data = await res.json()
-        alert(data.error || '设置失败')
+        toastError(data.error || '设置失败')
       }
     } finally {
       setSaving(null)
