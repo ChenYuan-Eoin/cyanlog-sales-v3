@@ -32,6 +32,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu'
 
 interface OrgStructureTabProps {
@@ -393,7 +394,8 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                 <MoreHorizontalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="z-[100]">
+            <DropdownMenuPortal>
+            <DropdownMenuContent align="end" className="z-[100]" side="bottom" sideOffset={5}>
               <DropdownMenuItem onSelect={() => onEditUser(user)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
@@ -422,6 +424,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                 删除
               </DropdownMenuItem>
             </DropdownMenuContent>
+            </DropdownMenuPortal>
           </DropdownMenu>
         )
       },
