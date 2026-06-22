@@ -94,7 +94,7 @@ export function ImageUpload({
           <img
             src={value}
             alt="Uploaded"
-            className={`rounded border object-contain bg-white ${
+            className={`rounded border object-contain bg-white max-w-full ${
               square ? 'w-16 h-16' : 'h-16 w-auto max-w-[200px]'
             }`}
             style={square ? { width: previewHeight, height: previewHeight } : { height: previewHeight }}
