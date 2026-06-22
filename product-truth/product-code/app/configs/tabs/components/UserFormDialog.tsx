@@ -28,6 +28,7 @@ import {
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
+import { Checkbox } from '@/components/ui/checkbox'
 import { PlusIcon, UserIcon, EditIcon } from 'lucide-react'
 import type { OrgSummaryUser, OrgSummaryDepartment } from '../../types'
 
@@ -36,14 +37,16 @@ const userSchema = z.object({
   display_name: z.string().min(1, '姓名不能为空'),
   title: z.string().optional(),
   primary_dept_id: z.string().nullable(),
+  role_ids: z.array(z.string()).optional(),
 })
 
 type UserFormValues = z.infer<typeof userSchema>
 
 interface UserFormDialogProps {
   departments: OrgSummaryDepartment[]
+  roles?: Array<{ id: string; name: string; code: string }>
   editingUser?: OrgSummaryUser | null
-  onSubmit: (values: UserFormValues) => Promise<void>
+  onSubmit: (values: UserFormValues & { role_ids?: string[] }) => Promise<void>
   trigger?: React.ReactNode
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -51,6 +54,7 @@ interface UserFormDialogProps {
 
 export function UserFormDialog({
   departments,
+  roles = [],
   editingUser,
   onSubmit,
   trigger,
@@ -69,6 +73,7 @@ export function UserFormDialog({
       display_name: editingUser?.display_name ?? '',
       title: editingUser?.title ?? '',
       primary_dept_id: editingUser?.primary_dept_id ?? null,
+      role_ids: editingUser?.role_ids ?? [],
     },
   })
 
@@ -184,6 +189,36 @@ export function UserFormDialog({
                 </FormItem>
               )}
             />
+            {roles.length > 0 && (
+              <FormField
+                control={form.control}
+                name="role_ids"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>角色</FormLabel>
+                    <div className="space-y-2">
+                      {roles.map((role) => (
+                        <div key={role.id} className="flex items-center gap-2">
+                          <Checkbox
+                            checked={(field.value || []).includes(role.id)}
+                            onCheckedChange={(checked) => {
+                              const current = field.value || []
+                              if (checked) {
+                                field.onChange([...current, role.id])
+                              } else {
+                                field.onChange(current.filter((id) => id !== role.id))
+                              }
+                            }}
+                          />
+                          <span className="text-sm">{role.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <div className="flex justify-end gap-2 pt-4">
               <Button
                 type="button"

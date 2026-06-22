@@ -609,6 +609,7 @@ export default function OrgStructureTab({
           />
           <UserFormDialog
             departments={departments}
+            roles={orgSummary?.roles ?? []}
             onSubmit={async (values) => {
               const res = await fetch('/api/admin/users', {
                 method: 'POST',
