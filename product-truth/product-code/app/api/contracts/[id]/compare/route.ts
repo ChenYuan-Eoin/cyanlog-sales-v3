@@ -20,7 +20,44 @@ const compareSchema = z.object({
 })
 
 // POST - 发起比对
-export async function POST(
+export async function POST(}
+
+// GET - 查询比对结果
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
+    const { id } = await params
+
+    const { data: comparisons, error } = await supabaseAdmin
+      .from('contract_comparisons')
+      .select(`
+        *,
+        comparison_diffs(id, diff_type, baseline_text, compare_text, semantic_change, risk_level, sort_order)
+      `)
+      .eq('contract_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (error) {
+      return errorResponse(createApiError('DB_ERROR', '查询比对结果失败'))
+    }
+
+    const comparison = comparisons?.[0]
+
+    if (!comparison) {
+      return errorResponse(createApiError('NOT_FOUND', '无比对记录'))
+    }
+
+    return NextResponse.json({
+      data: {
+        ...comparison,
+        diffs: comparison.comparison_diffs || [],
+      },
+    })
+  })
+}
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
