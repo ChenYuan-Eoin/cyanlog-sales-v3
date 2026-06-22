@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon, Loader2Icon, FileTextIcon } from 'lucide-react'
+import { AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon, Loader2Icon } from 'lucide-react'
 import { error as toastError } from '@/lib/toast'
 
 interface RiskCard {

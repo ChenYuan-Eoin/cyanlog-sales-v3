@@ -35,6 +35,7 @@ const ruleTypeMap: Record<string, string> = {
   semantic: '语义规则',
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps) {
   const [selectedRule, setSelectedRule] = useState<Rule | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

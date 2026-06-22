@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
       query = query.eq('enabled', enabled === 'true')
     }
 
-    let { data: rules, error, count } = await query
+    const { data: rules, error, count } = await query
 
     if (error) {
       console.error('Get rules error:', error)

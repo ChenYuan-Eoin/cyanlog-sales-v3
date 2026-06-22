@@ -89,7 +89,7 @@ export function ImageUpload({
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="relative inline-block max-w-full">
+        <div className="relative inline-block max-w-full p-1">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value}
@@ -105,7 +105,7 @@ export function ImageUpload({
           <button
             type="button"
             onClick={clearImage}
-            className="absolute -right-2 -top-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600"
+            className="absolute right-0 top-0 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
             title="移除图片"
           >
             <CloseIcon size={12} />

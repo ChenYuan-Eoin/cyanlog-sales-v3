@@ -60,7 +60,7 @@ const quickActions = [
     icon: EyeIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
-    href: '/contracts',
+    href: '/admin/rule-review',
     description: '选择合同审核',
   },
   {
@@ -70,7 +70,7 @@ const quickActions = [
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
-    href: '/contracts',
+    href: '/contracts/compare',
     description: '选择合同比对',
   },
 ]

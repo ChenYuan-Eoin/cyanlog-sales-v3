@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,8 @@ export default function ContractUploadPage() {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0]
@@ -19,29 +21,84 @@ export default function ContractUploadPage() {
     }
   }, [])
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const droppedFile = e.dataTransfer.files[0]
+    if (droppedFile) {
+      setFile(droppedFile)
+    }
+  }, [])
+
   const handleUpload = useCallback(async () => {
     if (!file) return
     setUploading(true)
+
     try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        toastError('请先登录')
+        return
+      }
+
+      // Step 1: Create contract draft
+      const createRes = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          party_b_name: file.name.replace(/\.[^/.]+$/, ''), // Use filename as default party name
+          contract_amount: 0,
+        }),
+      })
+
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({}))
+        toastError(err.error || '创建合同草稿失败')
+        return
+      }
+
+      const createData = await createRes.json()
+      const contractId = createData.data?.contract_id || createData.data?.id
+
+      if (!contractId) {
+        toastError('创建合同草稿失败：未返回合同ID')
+        return
+      }
+
+      // Step 2: Upload file
       const formData = new FormData()
       formData.append('file', file)
 
-      const token = localStorage.getItem('token')
-      const res = await fetch('/api/contracts', {
+      const uploadRes = await fetch(`/api/contracts/${contractId}/upload`, {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: formData,
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        router.push(`/contracts/${data.id}`)
-      } else {
-        const err = await res.json().catch(() => ({}))
-        toastError(err.error || '上传失败')
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}))
+        toastError(err.error || '文件上传失败')
+        return
       }
-    } catch {
-      toastError('网络错误，请重试')
+
+      // Step 3: Redirect to review
+      router.push(`/contracts/${contractId}/review`)
+    } catch (err) {
+      toastError('上传过程中发生错误，请重试')
+      console.error('Upload error:', err)
     } finally {
       setUploading(false)
     }
@@ -63,10 +120,15 @@ export default function ContractUploadPage() {
         {/* Upload Area */}
         <div className="bg-white rounded-lg border border-slate-200 p-8">
           <div
-            className="border-2 border-dashed border-slate-300 rounded-lg p-12 text-center hover:border-blue-400 transition-colors cursor-pointer"
-            onClick={() => document.getElementById('file-input')?.click()}
+            className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer
+              ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:border-blue-400'}`}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             <input
+              ref={inputRef}
               id="file-input"
               type="file"
               accept=".doc,.docx,.pdf"
@@ -82,7 +144,7 @@ export default function ContractUploadPage() {
 
           {file && (
             <div className="flex items-center gap-3 mt-6 p-3 bg-slate-50 rounded-lg">
-              <FileTextIcon className="h-5 w-5 text-blue-500" />
+              <FileTextIcon className="h-5 w-5 text-blue-500 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{file.name}</p>
                 <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>

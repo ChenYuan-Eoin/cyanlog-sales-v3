@@ -5,15 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Loader2Icon, CheckCircleIcon, XCircleIcon } from 'lucide-react'
-
-interface TestCase {
-  id: string
-  name: string
-  field: string
-  value: number
-  unit: string
-}
+import { Loader2Icon } from 'lucide-react'
 
 interface TestResult {
   ruleId: string
@@ -29,7 +21,8 @@ interface RuleTestSandboxProps {
   ruleId?: string
 }
 
-export default function RuleTestSandbox({ ruleId }: RuleTestSandboxProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function RuleTestSandbox(props: RuleTestSandboxProps) {
   const [testValue, setTestValue] = useState('')
   const [testUnit, setTestUnit] = useState('day')
   const [loading, setLoading] = useState(false)

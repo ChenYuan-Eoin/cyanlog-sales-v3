@@ -393,7 +393,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                 <MoreHorizontalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="z-50">
+            <DropdownMenuContent align="end" className="z-[100]">
               <DropdownMenuItem onSelect={() => onEditUser(user)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑

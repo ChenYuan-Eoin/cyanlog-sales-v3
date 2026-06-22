@@ -45,11 +45,17 @@ export default function RoleAccessTab({
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [roleSearchQuery, setRoleSearchQuery] = useState('')
 
-  // 计算每个角色的成员数
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const rolesWithStats: RoleWithStats[] = useMemo(() => {
     return roles.map(role => {
-      const memberCount = users.filter(u => u.role_codes?.includes(role.code)).length
+      const memberCount = users.filter(u => {
+        // Try role_ids first (UUID matching)
+        if (u.role_ids?.includes(role.id)) return true
+        // Then try role_codes (code matching)
+        if (u.role_codes?.includes(role.code)) return true
+        // Fallback to role_names (name matching for comma-separated string)
+        if (u.role_names?.includes(role.name)) return true
+        return false
+      }).length
       return {
         ...role,
         memberCount,
