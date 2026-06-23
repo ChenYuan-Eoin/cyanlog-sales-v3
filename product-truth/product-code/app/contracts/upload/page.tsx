@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftIcon, UploadIcon, FileTextIcon } from 'lucide-react'
+import { ArrowLeftIcon, UploadIcon, FileTextIcon, AlertCircleIcon } from 'lucide-react'
 import { error as toastError } from '@/lib/toast'
 
 export default function ContractUploadPage() {
@@ -12,6 +12,7 @@ export default function ContractUploadPage() {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,10 +44,12 @@ export default function ContractUploadPage() {
   const handleUpload = useCallback(async () => {
     if (!file) return
     setUploading(true)
+    setErrorMsg(null)
 
     try {
       const token = localStorage.getItem('token')
       if (!token) {
+        setErrorMsg('请先登录')
         toastError('请先登录')
         return
       }
@@ -59,13 +62,14 @@ export default function ContractUploadPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          party_b_name: file.name.replace(/\.[^/.]+$/, ''), // Use filename as default party name
+          party_b_name: file.name.replace(/\.[^/.]+$/, ''),
           contract_amount: 0,
         }),
       })
 
       if (!createRes.ok) {
-        const err = await createRes.json().catch(() => ({}))
+        const err = await createRes.json().catch(() => ({ error: '创建合同草稿失败' }))
+        setErrorMsg(err.error || '创建合同草稿失败')
         toastError(err.error || '创建合同草稿失败')
         return
       }
@@ -74,6 +78,7 @@ export default function ContractUploadPage() {
       const contractId = createData.data?.contract_id || createData.data?.id
 
       if (!contractId) {
+        setErrorMsg('创建合同草稿失败：未返回合同ID')
         toastError('创建合同草稿失败：未返回合同ID')
         return
       }
@@ -89,7 +94,8 @@ export default function ContractUploadPage() {
       })
 
       if (!uploadRes.ok) {
-        const err = await uploadRes.json().catch(() => ({}))
+        const err = await uploadRes.json().catch(() => ({ error: '文件上传失败' }))
+        setErrorMsg(err.error || '文件上传失败')
         toastError(err.error || '文件上传失败')
         return
       }
@@ -97,7 +103,9 @@ export default function ContractUploadPage() {
       // Step 3: Redirect to review
       router.push(`/contracts/${contractId}/review`)
     } catch (err) {
-      toastError('上传过程中发生错误，请重试')
+      const errorMessage = err instanceof Error ? err.message : '上传过程中发生错误，请重试'
+      setErrorMsg(errorMessage)
+      toastError(errorMessage)
       console.error('Upload error:', err)
     } finally {
       setUploading(false)
@@ -116,6 +124,17 @@ export default function ContractUploadPage() {
           </Link>
           <h1 className="text-xl font-bold">上传合同</h1>
         </div>
+
+        {/* Error Alert */}
+        {errorMsg && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+            <AlertCircleIcon className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-red-700 font-medium">上传失败</p>
+              <p className="text-sm text-red-600">{errorMsg}</p>
+            </div>
+          </div>
+        )}
 
         {/* Upload Area */}
         <div className="bg-white rounded-lg border border-slate-200 p-8">

@@ -228,3 +228,49 @@ FROM organizations o
 WHERE NOT EXISTS (
   SELECT 1 FROM contract_rules_v2 v2 WHERE v2.code = 'RULE-01-03'
 );
+
+-- ═══════════════════════════════════════════════════════════════
+-- 6. Seed: 扩展规则（R002-R015，共12条）
+-- ═══════════════════════════════════════════════════════════════
+
+-- R002: 付款周期
+echo "Inserting R002...";
+INSERT INTO contract_rules_v2 (
+  org_id, code, name, description, category,
+  level_a_operator, level_a_threshold, level_a_unit, level_a_action,
+  level_b_operator, level_b_threshold, level_b_unit, level_b_action, level_b_counterparty,
+  level_c_operator, level_c_threshold, level_c_unit, level_c_action, level_c_message,
+  priority, is_active, created_at
+)
+SELECT
+  o.id, 'R002', '付款周期', '付款账期应在30-90天，超过180天为红线', 'duration',
+  '<=', 90, 'day', 'auto_approve',
+  '>', 90, 'day', 'suggest_counterparty', '提供银行保函',
+  '>', 180, 'day', 'block', '账期超过180天，必须修改合同',
+  90, true, NOW()
+FROM organizations o
+WHERE NOT EXISTS (SELECT 1 FROM contract_rules_v2 v2 WHERE v2.code = 'R002');
+
+-- R003: 质保金比例
+INSERT INTO contract_rules_v2 (org_id, code, name, description, category, level_a_operator, level_a_threshold, level_a_unit, level_a_action, level_b_operator, level_b_threshold, level_b_unit, level_b_action, level_b_counterparty, level_c_operator, level_c_threshold, level_c_unit, level_c_action, level_c_message, priority, is_active, created_at)
+SELECT o.id, 'R003', '质保金比例', '质保金比例应在5%-10%，超过20%为红线', 'ratio',
+  '<=', 10, 'percent', 'auto_approve', '>', 10, 'percent', 'suggest_counterparty', '提高违约赔偿倍数', '>', 20, 'percent', 'block', '质保金比例超过20%，必须修改合同',
+  80, true, NOW() FROM organizations o WHERE NOT EXISTS (SELECT 1 FROM contract_rules_v2 v2 WHERE v2.code = 'R003');
+
+-- R004: 质保期
+INSERT INTO contract_rules_v2 (org_id, code, name, description, category, level_a_operator, level_a_threshold, level_a_unit, level_a_action, level_b_operator, level_b_threshold, level_b_unit, level_b_action, level_b_counterparty, level_c_operator, level_c_threshold, level_c_unit, level_c_action, level_c_message, priority, is_active, created_at)
+SELECT o.id, 'R004', '质保期', '质保期应在1-3年，超过5年为红线', 'duration',
+  '<=', 1095, 'day', 'auto_approve', '>', 1095, 'day', 'suggest_counterparty', '增加首年免费维护', '>', 1825, 'day', 'block', '质保期超过5年，必须修改合同',
+  70, true, NOW() FROM organizations o WHERE NOT EXISTS (SELECT 1 FROM contract_rules_v2 v2 WHERE v2.code = 'R004');
+
+-- R005: 违约金上限
+INSERT INTO contract_rules_v2 (org_id, code, name, description, category, level_a_operator, level_a_threshold, level_a_unit, level_a_action, level_b_operator, level_b_threshold, level_b_unit, level_b_action, level_b_counterparty, level_c_operator, level_c_threshold, level_c_unit, level_c_action, level_c_message, priority, is_active, created_at)
+SELECT o.id, 'R005', '违约金上限', '违约金上限应在合同额10%-20%，超过30%为红线', 'ratio',
+  '<=', 20, 'percent', 'auto_approve', '>', 20, 'percent', 'suggest_counterparty', '降低违约金比例', '>', 30, 'percent', 'block', '违约金超过30%，必须修改合同',
+  85, true, NOW() FROM organizations o WHERE NOT EXISTS (SELECT 1 FROM contract_rules_v2 v2 WHERE v2.code = 'R005');
+
+-- R006: 滞纳金比例
+INSERT INTO contract_rules_v2 (org_id, code, name, description, category, level_a_operator, level_a_threshold, level_a_unit, level_a_action, level_b_operator, level_b_threshold, level_b_unit, level_b_action, level_b_counterparty, level_c_operator, level_c_threshold, level_c_unit, level_c_action, level_c_message, priority, is_active, created_at)
+SELECT o.id, 'R006', '滞纳金比例', '滞纳金应控制在日万分之五以内，超过千分之一为红线', 'ratio',
+  '<=', 0.05, 'percent', 'auto_approve', '>', 0.05, 'percent', 'suggest_counterparty', '降低滞纳金比例', '>', 0.1, 'percent', 'block', '滞纳金比例过高，必须修改合同',
+  75, true, NOW() FROM organizations o WHERE NOT EXISTS (SELECT 1 FROM contract_rules_v2 v2 WHERE v2.code = 'R006');
