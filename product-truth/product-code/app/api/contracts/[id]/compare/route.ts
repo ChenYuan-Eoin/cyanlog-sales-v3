@@ -1,8 +1,8 @@
 // POST /api/contracts/:id/compare
-// GET /api/comparisons/:id
+// GET /api/contracts/:id/compare
 // 文档比对 API
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
 import {
@@ -20,44 +20,7 @@ const compareSchema = z.object({
 })
 
 // POST - 发起比对
-export async function POST(}
-
-// GET - 查询比对结果
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
-    const { id } = await params
-
-    const { data: comparisons, error } = await supabaseAdmin
-      .from('contract_comparisons')
-      .select(`
-        *,
-        comparison_diffs(id, diff_type, baseline_text, compare_text, semantic_change, risk_level, sort_order)
-      `)
-      .eq('contract_id', id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (error) {
-      return errorResponse(createApiError('DB_ERROR', '查询比对结果失败'))
-    }
-
-    const comparison = comparisons?.[0]
-
-    if (!comparison) {
-      return errorResponse(createApiError('NOT_FOUND', '无比对记录'))
-    }
-
-    return NextResponse.json({
-      data: {
-        ...comparison,
-        diffs: comparison.comparison_diffs || [],
-      },
-    })
-  })
-}
+export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -123,6 +86,43 @@ export async function GET(
     return createdResponse({
       ...comparison,
       status: 'completed',
+    })
+  })
+}
+
+// GET - 查询比对结果
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
+    const { id } = await params
+
+    const { data: comparisons, error } = await supabaseAdmin
+      .from('contract_comparisons')
+      .select(`
+        *,
+        comparison_diffs(id, diff_type, baseline_text, compare_text, semantic_change, risk_level, sort_order)
+      `)
+      .eq('contract_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (error) {
+      return errorResponse(createApiError('DB_ERROR', '查询比对结果失败'))
+    }
+
+    const comparison = comparisons?.[0]
+
+    if (!comparison) {
+      return errorResponse(createApiError('NOT_FOUND', '无比对记录'))
+    }
+
+    return NextResponse.json({
+      data: {
+        ...comparison,
+        diffs: comparison.comparison_diffs || [],
+      },
     })
   })
 }

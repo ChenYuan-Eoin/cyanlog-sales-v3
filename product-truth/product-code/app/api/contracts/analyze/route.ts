@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
-  } catch (err) {
+  } catch (_err) {
     return NextResponse.json({ error: '分析失败' }, { status: 500 })
   }
 }
