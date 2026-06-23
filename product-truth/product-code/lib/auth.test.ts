@@ -87,6 +87,30 @@ describe('Auth Module', () => {
       expect(user?.id).toBe('u2')
     })
 
+    it('客户端回退 cookie 中的 token 也可被识别', async () => {
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { user_id: 'u3', expires_at: null },
+            error: null,
+          }),
+        })
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: 'u3' },
+            error: null,
+          }),
+        })
+
+      const req = makeReq({}, { client_token: 'client-cookie-token' })
+      const user = await getAuthUser(req)
+      expect(user?.id).toBe('u3')
+    })
+
     it('token 已过期时返回 null', async () => {
       ;(supabaseAdmin.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),

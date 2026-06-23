@@ -112,11 +112,12 @@ python3 ./scripts/sync_governance.py
 ### 1. 运行配置
 - `settings-claude运行配置.json`
 - `agents-Agent配置/`
-- `legacy-skills/`
+- `legacy-skills/` (已弃用，skills 现内联于 settings.json)
 
 备注（SoT 约定）：
-1. `legacy-skills/` 是当前项目 **唯一生效** 的 skill 配置来源（与 `.claude/settings.json` 的声明保持一致）。
-2. 本目录不再保留并行 skill 草案目录，避免出现“看起来存在两套运行配置”的误导。
+1. **Skills 配置现已内联于 `settings-claude运行配置.json`** 的 `skills` 字段，不再使用 `legacy-skills/` 目录。
+2. `legacy-skills/` 目录保留仅作历史参考，实际运行以 settings.json 内联配置为准。
+3. 如需新增 skill，直接修改 `settings-claude运行配置.json`，无需创建单独文件。
 
 ## Claude 插件（Marketplace Plugins）治理
 

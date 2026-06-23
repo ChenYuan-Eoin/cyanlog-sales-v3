@@ -259,3 +259,106 @@ export async function DELETE(
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }
+
+// PATCH /api/contracts/:id - 更新合同信息
+export async function PATCH(
+  req: NextRequest,
+  { params }: AsyncRouteParams
+) {
+  try {
+    const user = await requireAuth(req)
+    const contractId = await resolveIdParam(params)
+
+    // Zod验证ID格式
+    const idResult = contractIdSchema.safeParse({ id: contractId })
+    if (!idResult.success) {
+      return errorResponse('无效的合同ID', 400, 'INVALID_ID')
+    }
+
+    const { id } = idResult.data
+
+    // 检查合同是否存在且有权限
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('contracts')
+      .select('id, created_by, status')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existing) {
+      return errorResponse('合同不存在', 404, 'NOT_FOUND')
+    }
+
+    // 只有合同创建者或管理员可以编辑
+    if (existing.created_by !== user.id) {
+      return errorResponse('无权限编辑此合同', 403, 'FORBIDDEN')
+    }
+
+    // 只有 DRAFT 状态可以编辑基本信息
+    if (existing.status !== 'DRAFT') {
+      return errorResponse('只有草稿状态的合同可以编辑', 400, 'NOT_EDITABLE')
+    }
+
+    // 获取更新数据
+    const body = await req.json()
+    const allowedFields = [
+      'contract_no',
+      'party_a_name',
+      'party_b_name',
+      'party_b_contact',
+      'contract_amount',
+      'tax_amount',
+      'contract_date',
+      'effective_date',
+      'expiry_date',
+      'payment_terms',
+      'delivery_terms',
+      'notes',
+    ]
+
+    const updateData: Record<string, string | number | null | undefined> = {}
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field]
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return errorResponse('没有可更新的字段', 400, 'NO_FIELDS_TO_UPDATE')
+    }
+
+    const { data: contract, error } = await supabaseAdmin
+      .from('contracts')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      await logError({
+        req,
+        source: 'api',
+        userId: user.id,
+        message: error.message,
+        error,
+        context: {
+          route: '/api/contracts/[id]',
+          contractId: id,
+          method: 'PATCH',
+        },
+      })
+      return errorResponse('更新失败', 500, 'DB_ERROR')
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: contract,
+      message: '合同已更新',
+    })
+  } catch (error) {
+    const authError = error instanceof Error && error.name === 'AuthError'
+    if (authError) {
+      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+    }
+    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
+  }
+}

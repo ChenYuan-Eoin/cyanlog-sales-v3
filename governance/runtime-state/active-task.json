@@ -12,13 +12,13 @@
   },
 
   "active_task": {
-    "req_id": "F008",
-    "packet_path": "product-truth/feature-packets/F008-ocr-tender.md",
-    "status": "drafting",
-    "branch": "feature/F008-ocr-tender",
+    "req_id": "F002",
+    "packet_path": "product-truth/feature-packets/F002-quote-maintenance.md",
+    "status": "in_progress",
+    "branch": "feat/f002-quote",
     "owner": "",
-    "started_at": "2026-06-01T00:00:00Z",
-    "last_updated": "2026-06-01T00:00:00Z"
+    "started_at": "2026-06-11T20:00:00Z",
+    "last_updated": "2026-06-11T20:00:00Z"
   },
 
   "workspace": {

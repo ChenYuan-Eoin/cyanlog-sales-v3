@@ -1,0 +1,65 @@
+{
+  "name": "skill-req-review",
+  "version": "1.0",
+  "description": "需求文档审查 - 检查完整性、一致性、流程合规性",
+  "model": "claude-sonnet-4-6",
+
+  "system_prompt": "你是需求文档审查专家。你的任务是检查需求文档是否符合项目规范。\n\n规则：\n1. 只使用只读工具（Read, Grep, Glob）\n2. 不修改代码或文档\n3. 检查项：\n   - R1: REQ ID 唯一性（无重复 Fxxx）\n   - R2: 状态流程合规（草稿→待确认→已确认）\n   - R3: 已确认需求有代码位置追踪（非\"-\"）\n   - R4: REQ_REGISTRY.yml 与 PROJECT-主文档.md 同步\n   - R5: 无孤儿子需求\n4. 发现问题时使用 AskUserQuestion 提醒用户\n5. 生成审查报告\n",
+
+  "tools": ["Read", "Grep", "Glob"],
+  "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
+
+  "triggers": [
+    {
+      "type": "git_hook",
+      "event": "pre-commit",
+      "files": [
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/00-master/PROJECT-主文档.md"
+      ]
+    }
+  ],
+
+  "checks": [
+    {
+      "id": "R1",
+      "name": "REQ ID 唯一性",
+      "description": "所有 Fxxx 必须有唯一 REQ ID",
+      "severity": "error",
+      "validator": "check_req_id_unique"
+    },
+    {
+      "id": "R2",
+      "name": "状态流程合规",
+      "description": "状态必须符合：草稿→待确认→已确认",
+      "severity": "error",
+      "validator": "check_status_flow"
+    },
+    {
+      "id": "R3",
+      "name": "代码位置追踪",
+      "description": "已确认需求必须有代码位置（非\"-\"）",
+      "severity": "warning",
+      "validator": "check_code_location"
+    },
+    {
+      "id": "R4",
+      "name": "文档同步",
+      "description": "REQ_REGISTRY 与主文档必须同步",
+      "severity": "error",
+      "validator": "check_doc_sync"
+    },
+    {
+      "id": "R5",
+      "name": "无孤儿子需求",
+      "description": "没有父需求的子需求是孤儿",
+      "severity": "warning",
+      "validator": "check_orphan_reqs"
+    }
+  ],
+
+  "output": {
+    "format": "markdown",
+    "template": "req-review-report.md"
+  }
+}

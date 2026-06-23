@@ -1,0 +1,17 @@
+# lib/ask 模块上下文
+
+## 职责
+合同审核 ASK 清单核心，F005 的关键实现。
+
+## 关键表
+- `ask_items` - ASK 主表（pending/responded/closed）
+- `ask_responses` - 回应表
+- `report_versions` - 报告版本
+
+## 状态机
+```
+pending → responded → (人评审) → closed
+```
+
+## 硬关单规则
+有 pending ASK 时，禁止导出合同（422 错误）

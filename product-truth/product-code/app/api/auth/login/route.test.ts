@@ -133,6 +133,7 @@ describe('POST /api/auth/login', () => {
       expect(body.user.id).toBe('u1')
       expect(body.expiresAt).toBeTruthy()
       expect(body.mustChangePassword).toBe(false)
+      expect(res.cookies.get('token')?.value).toBe(body.token)
       expect(recordLoginAttempt).toHaveBeenCalledWith('u@x.com', '127.0.0.1', true)
     })
 

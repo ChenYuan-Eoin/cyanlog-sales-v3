@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>策略编辑器 - ONES 合同中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'PingFang SC', sans-serif; background-color: rgba(15, 23, 42, 0.02); }
+        .editor-container { background: white; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .input-focus:focus { border-color: #6366f1; ring: 2px; ring-color: rgba(99, 102, 241, 0.2); outline: none; }
+        .level-card { border-top: 4px solid #e2e8f0; transition: all 0.2s; }
+        .level-card:hover { border-top-color: #6366f1; background: #f8fafc; }
+        .prop-label { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+    </style>
+</head>
+<body class="p-10 flex justify-center">
+
+    <div class="editor-container w-full max-w-5xl flex flex-col overflow-hidden border border-slate-200">
+        <!-- Editor Header -->
+        <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                    <i class="lucide-file-cog w-6 h-6"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">编辑审计规则：付款节奏 - 首期款比例</h2>
+                    <p class="text-xs text-slate-400 font-mono mt-1">UUID: RULE-01-01-RATIO | Last Modified: 2024-06-18</p>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button class="px-5 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 rounded-lg">取消</button>
+                <button class="px-6 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg shadow-lg">保存策略</button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex overflow-hidden h-[700px]">
+            <!-- Left: Base Properties -->
+            <div class="w-1/3 p-8 border-r border-slate-100 overflow-y-auto space-y-8">
+                <section>
+                    <label class="prop-label">1. 属性定义 (Attribute Type)</label>
+                    <div class="mt-3 space-y-3">
+                        <select class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 outline-none">
+                            <option>比例类 (Ratio / %)</option>
+                            <option>时限类 (Duration / Days)</option>
+                            <option>金额类 (Amount / CNY)</option>
+                            <option>文本匹配 (Text / Regex)</option>
+                        </select>
+                        <div class="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <p class="text-[10px] text-indigo-600 font-medium">提示：比例类规则将自动根据合同总额计算百分比数值进行判定。</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section>
+                    <label class="prop-label">2. 业务标签 (Scope)</label>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <span class="px-3 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-200">私有部署</span>
+                        <span class="px-3 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-200">买断</span>
+                        <span class="px-3 py-1 bg-indigo-100 text-indigo-600 text-[10px] font-bold rounded-full border border-indigo-200">+ 添加标签</span>
+                    </div>
+                </section>
+
+                <section>
+                    <label class="prop-label">3. 审批路由绑定 (Workflow)</label>
+                    <div class="mt-4 space-y-3">
+                        <label class="flex items-center space-x-3 cursor-pointer">
+                            <input type="checkbox" checked class="w-4 h-4 text-indigo-600 rounded">
+                            <span class="text-sm text-slate-600">法务助理 (Legal)</span>
+                        </label>
+                        <label class="flex items-center space-x-3 cursor-pointer">
+                            <input type="checkbox" checked class="w-4 h-4 text-indigo-600 rounded">
+                            <span class="text-sm text-slate-600">财务助理 (Finance)</span>
+                        </label>
+                        <label class="flex items-center space-x-3 cursor-pointer">
+                            <input type="checkbox" class="w-4 h-4 text-indigo-600 rounded">
+                            <span class="text-sm text-slate-600">售后/交付 (Delivery)</span>
+                        </label>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right: Logic Matrix -->
+            <div class="flex-1 p-8 overflow-y-auto bg-slate-50/30 space-y-6">
+                <h3 class="prop-label">4. 风险阈值与对价矩阵 (Logic Matrix)</h3>
+                
+                <!-- Level A Config -->
+                <div class="level-card bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded border border-emerald-200 uppercase">Level A (标准起点)</span>
+                        <i class="lucide-check-circle w-4 h-4 text-emerald-500"></i>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="text-[11px] text-slate-400 font-bold">判定逻辑</label>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-mono text-slate-400">VALUE</span>
+                                <select class="bg-slate-50 border border-slate-200 text-xs rounded p-1">
+                                    <option>>=</option><option>></option>
+                                </select>
+                                <input type="text" value="30" class="w-16 border-b-2 border-slate-200 text-center text-sm font-bold focus:border-indigo-500 outline-none">
+                                <span class="text-sm font-mono text-slate-400">%</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[11px] text-slate-400 font-bold">输出结论</label>
+                            <input type="text" value="🟢 条款符合公司标准，可接受" class="w-full text-xs border-b border-slate-100 italic text-slate-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Level B Config -->
+                <div class="level-card bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold rounded border border-amber-200 uppercase">Level B (让步范围)</span>
+                        <i class="lucide-help-circle w-4 h-4 text-amber-500"></i>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center space-x-4">
+                            <label class="text-[11px] text-slate-400 font-bold w-16">区间设定</label>
+                            <div class="flex items-center space-x-2 text-xs font-mono">
+                                <input type="text" value="15" class="w-12 text-center border-b"> % 
+                                <span>≤ VALUE <</span> 
+                                <input type="text" value="30" class="w-12 text-center border-b"> %
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <label class="text-[11px] text-slate-400 font-bold w-16">退让对价</label>
+                            <select class="flex-1 bg-slate-50 border border-slate-200 text-[11px] rounded p-2 outline-none">
+                                <option>绑定对价：缩短尾款账期 (Ref/02-T1)</option>
+                                <option>绑定对价：增加延期违约金 (Ref/02-T2)</option>
+                            </option>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <label class="text-[11px] text-slate-400 font-bold w-16">推荐话术</label>
+                            <div class="flex-1 p-2 bg-slate-50 rounded text-[10px] text-slate-500 border border-dashed border-slate-200 uppercase">
+                                <i class="lucide-message-square w-3 h-3 inline mr-1"></i> 已关联 Ref/03-话术1-场景A
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Level C Config -->
+                <div class="level-card bg-white p-6 rounded-xl shadow-sm border border-slate-200 border-t-red-400">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded border border-red-200 uppercase">Level C (绝对红线)</span>
+                        <i class="lucide-alert-triangle w-4 h-4 text-red-500"></i>
+                    </div>
+                    <div class="flex items-center space-x-6">
+                        <div class="space-y-2">
+                            <label class="text-[11px] text-slate-400 font-bold">触发逻辑</label>
+                            <div class="flex items-center space-x-2 text-xs font-mono">
+                                <span>VALUE < </span><input type="text" value="15" class="w-12 text-center border-b text-red-600 font-bold"> %
+                            </div>
+                        </div>
+                        <div class="h-10 w-px bg-slate-100"></div>
+                        <div class="space-y-2 flex-1">
+                            <label class="text-[11px] text-slate-400 font-bold italic text-red-400">🚨 强制拦截动作</label>
+                            <p class="text-[10px] text-slate-500">自动在报告中标记为“🔴 必须修正”，并在审批流中强制抄送业务负责人。</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

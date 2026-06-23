@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>策略发布中心 - ONES 合同中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap');
+        body { font-family: 'PingFang SC', sans-serif; background-color: #f8fafc; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .version-tag { border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+        .active-glow { box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); border: 2px solid #6366f1; }
+        .tab-active { color: #6366f1; border-bottom: 2px solid #6366f1; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- 左侧分类导航 (Ref/01-15) -->
+    <aside class="w-64 bg-slate-900 text-slate-400 flex flex-col flex-shrink-0">
+        <div class="p-6 border-b border-slate-800 flex items-center space-x-2 text-white">
+            <i class="lucide-git-branch text-indigo-400"></i>
+            <span class="font-bold">策略版本管理</span>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar text-xs">
+            <div class="px-3 py-2 text-slate-500 font-bold uppercase tracking-widest">审计类目分类</div>
+            <a href="#" class="flex items-center px-3 py-2 bg-slate-800 text-white rounded-lg"><i class="lucide-dollar-sign mr-2 w-4 h-4"></i> 01-金额与结算类</a>
+            <a href="#" class="flex items-center px-3 py-2 hover:text-white"><i class="lucide-percent mr-2 w-4 h-4"></i> 02-比例与对价类</a>
+            <a href="#" class="flex items-center px-3 py-2 hover:text-white"><i class="lucide-clock mr-2 w-4 h-4"></i> 04-时限与验收类</a>
+            <a href="#" class="flex items-center px-3 py-2 hover:text-white"><i class="lucide-shield-alert mr-2 w-4 h-4"></i> 06-合规与风控类</a>
+            <a href="#" class="flex items-center px-3 py-2 hover:text-white"><i class="lucide-database mr-2 w-4 h-4"></i> 10-产品名称标准类</a>
+        </div>
+    </aside>
+
+    <!-- 主操作区 -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <!-- Header: 版本切换与全局发布 -->
+        <header class="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between z-10 shadow-sm">
+            <div class="flex items-center space-x-6">
+                <div>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">当前全量生效版本</p>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xl font-black text-slate-900 mono">V2026.04.01-FINAL</span>
+                        <span class="version-tag bg-emerald-100 text-emerald-600 border border-emerald-200">RUNNING</span>
+                    </div>
+                </div>
+                <div class="h-10 w-px bg-slate-100"></div>
+                <div>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">灰度测试中版本</p>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xl font-black text-indigo-600 mono">V2026.06.18-BETA</span>
+                        <span class="version-tag bg-indigo-100 text-indigo-600 border border-indigo-200 animate-pulse">GRAY TEST</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button class="px-6 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold flex items-center shadow-lg">
+                   <i class="lucide-rocket mr-2 w-4 h-4 text-indigo-400"></i> 全量发布
+                </button>
+            </div>
+        </header>
+
+        <!-- 灰度测试报告看板 -->
+        <div class="p-8 bg-indigo-50/50 border-b border-indigo-100">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-indigo-900 flex items-center italic">
+                    <i class="lucide-line-chart mr-2 w-4 h-4"></i> 灰度版本影响分析报告 (Beta vs Final)
+                </h3>
+                <span class="text-xs text-indigo-400">基于近 30 天 500 份真实成交合同模拟</span>
+            </div>
+            <div class="grid grid-cols-4 gap-6">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-indigo-100">
+                    <p class="text-[10px] text-slate-400 font-bold mb-2 uppercase">高风险拦截率变化</p>
+                    <div class="flex items-end justify-between">
+                        <span class="text-2xl font-black text-slate-800">18.5% <span class="text-xs font-normal text-rose-500">↑ 3.2%</span></span>
+                        <i class="lucide-alert-octagon text-rose-400 w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-indigo-100">
+                    <p class="text-[10px] text-slate-400 font-bold mb-2 uppercase">财务审批负载</p>
+                    <div class="flex items-end justify-between">
+                        <span class="text-2xl font-black text-slate-800">12h <span class="text-xs font-normal text-amber-500">↑ 0.5h</span></span>
+                        <i class="lucide-user-cog text-amber-400 w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-indigo-100">
+                    <p class="text-[10px] text-slate-400 font-bold mb-2 uppercase">平均让步深度</p>
+                    <div class="flex items-end justify-between">
+                        <span class="text-2xl font-black text-slate-800">22% <span class="text-xs font-normal text-emerald-500">↓ 1.4%</span></span>
+                        <i class="lucide-trending-down text-emerald-400 w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-indigo-100">
+                    <p class="text-[10px] text-slate-400 font-bold mb-2 uppercase">AI 条款匹配准确率</p>
+                    <div class="flex items-end justify-between">
+                        <span class="text-2xl font-black text-slate-800">98.2% <span class="text-xs font-normal text-indigo-500">持平</span></span>
+                        <i class="lucide-check-circle2 text-indigo-400 w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 规则详情列表 -->
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex space-x-6 text-sm font-bold text-slate-400">
+                    <button class="pb-2 tab-active">待发布修改项 (12)</button>
+                    <button class="pb-2 hover:text-slate-600 transition-colors">已发布历史规则</button>
+                </div>
+            </div>
+
+            <!-- 规则对比条目 -->
+            <div class="space-y-4">
+                
+                <!-- 条目 1 -->
+                <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                        <div class="flex items-center space-x-3">
+                            <span class="mono text-[10px] text-slate-400 font-bold">RULE-01-01</span>
+                            <h4 class="text-sm font-bold text-slate-800">首期款比例要求 (Ratio)</h4>
+                        </div>
+                        <span class="version-tag bg-amber-50 text-amber-600 border border-amber-200 font-black italic">已修改</span>
+                    </div>
+                    <div class="grid grid-cols-2 divide-x divide-slate-100">
+                        <div class="p-6 bg-slate-50/20">
+                            <p class="text-[10px] text-slate-400 font-bold mb-3 uppercase tracking-widest">Final (运行中版本)</p>
+                            <div class="flex items-center space-x-4">
+                                <span class="text-xs font-bold text-slate-500 italic">Level A 起点:</span>
+                                <span class="mono text-sm font-bold text-slate-500">VALUE >= 30%</span>
+                            </div>
+                        </div>
+                        <div class="p-6 bg-indigo-50/10">
+                            <p class="text-[10px] text-indigo-400 font-bold mb-3 uppercase tracking-widest">Beta (新版提议)</p>
+                            <div class="flex items-center space-x-4">
+                                <span class="text-xs font-bold text-indigo-600 italic">Level A 起点:</span>
+                                <span class="mono text-sm font-bold text-indigo-700 bg-indigo-100 px-2 rounded">VALUE >= 15%</span>
+                                <span class="text-[10px] text-indigo-400">(理由: 响应Q3销售拓新政策，下调首付红线)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 条目 2 -->
+                <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm opacity-60">
+                    <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                        <div class="flex items-center space-x-3">
+                            <span class="mono text-[10px] text-slate-400 font-bold">RULE-10-05</span>
+                            <h4 class="text-sm font-bold text-slate-800">标准产品库：ONES Desk V7.0 (Text)</h4>
+                        </div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase italic">未变更</span>
+                    </div>
+                    <div class="p-6 flex items-center space-x-12">
+                        <span class="text-xs text-slate-500 italic">全版本一致:</span>
+                        <span class="text-xs font-bold text-slate-700">严格匹配 "ONES Desk工单管理平台企业版V7.0" (空格忽略)</span>
+                    </div>
+                </div>
+
+                <!-- 条目 3 -->
+                <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                        <div class="flex items-center space-x-3">
+                            <span class="mono text-[10px] text-slate-400 font-bold">RULE-15-02</span>
+                            <h4 class="text-sm font-bold text-slate-800">争议解决地 (Enum)</h4>
+                        </div>
+                        <span class="version-tag bg-emerald-50 text-emerald-600 border border-emerald-200 font-black italic">新增</span>
+                    </div>
+                    <div class="p-6 bg-emerald-50/10">
+                        <div class="flex items-start space-x-8">
+                            <div class="flex flex-col">
+                                <span class="text-[10px] text-emerald-400 font-bold mb-2 uppercase">Beta 版新增逻辑</span>
+                                <p class="text-xs text-slate-700 leading-relaxed font-medium">若客户注册地为上海，且合同金额 < 50W，允许将争议地从“深圳仲裁”改为“上海仲裁”，自动标记为 🟢 可接受。</p>
+                            </div>
+                            <div class="p-3 bg-white border border-emerald-100 rounded-xl shadow-sm text-[10px] text-slate-500">
+                                <i class="lucide-info w-3 h-3 text-emerald-500 inline mr-1"></i> 旨在提升江浙沪区域中小客户签单效率
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

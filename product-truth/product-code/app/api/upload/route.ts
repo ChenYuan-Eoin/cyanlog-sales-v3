@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
-    const folder = formData.get('folder') as string | null // 'logos' | 'favicons'
+    const folder = formData.get('folder') as string | null // 'logos' | 'favicons' | 'avatars'
 
     if (!file) {
       return errorResponse('未找到文件', 400, 'NO_FILE')
@@ -71,7 +71,11 @@ export async function POST(req: NextRequest) {
       return errorResponse('文件大小不能超过 2MB', 400, 'FILE_TOO_LARGE')
     }
 
-    const targetFolder = folder === 'favicons' ? 'favicons' : 'logos'
+    const targetFolder = folder === 'favicons'
+      ? 'favicons'
+      : folder === 'avatars'
+        ? 'avatars'
+        : 'logos'
     const timestamp = Date.now()
     const extension = file.name.split('.').pop() || 'png'
     const fileName = `${targetFolder}/${user.id}_${timestamp}.${extension}`

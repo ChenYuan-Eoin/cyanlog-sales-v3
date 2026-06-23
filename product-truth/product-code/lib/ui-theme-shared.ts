@@ -62,6 +62,9 @@ export interface UIThemeConfigValue {
   radiusLg?: number
 }
 
+export type BrandAssetVariant = 'full' | 'symbol'
+export type BrandSurfaceTone = 'light' | 'dark'
+
 export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
   brandName: 'Cyanlog',
   brandShortName: 'CY',
@@ -144,6 +147,26 @@ export function sanitizeThemeValue(value: Record<string, unknown> | null | undef
     radiusMd: pickRadius(theme.radiusMd, DEFAULT_THEME.radiusMd),
     radiusLg: pickRadius(theme.radiusLg, DEFAULT_THEME.radiusLg),
   }
+}
+
+export function resolveBrandImageUrl(
+  theme: Required<UIThemeConfigValue>,
+  variant: BrandAssetVariant,
+  surfaceTone: BrandSurfaceTone
+): string {
+  const preferred = variant === 'symbol'
+    ? (surfaceTone === 'dark' ? theme.brandAssets.symbol.dark : theme.brandAssets.symbol.light)
+    : (surfaceTone === 'dark' ? theme.brandAssets.fullLogo.dark : theme.brandAssets.fullLogo.light)
+
+  const fallback = variant === 'symbol'
+    ? (surfaceTone === 'dark' ? theme.brandAssets.fullLogo.dark : theme.brandAssets.fullLogo.light)
+    : ''
+
+  return preferred || fallback || theme.logoUrl || ''
+}
+
+export function resolveFaviconUrl(theme: Required<UIThemeConfigValue>): string {
+  return theme.brandAssets.favicon || theme.faviconUrl || ''
 }
 
 function pickText(value: unknown, fallback: string): string {

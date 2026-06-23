@@ -1,12 +1,14 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { BrandingProvider } from "@/components/branding/BrandingProvider";
 import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonitor";
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
+import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
 import { themeToCssVariables } from "@/lib/ui-theme-shared";
 
@@ -26,7 +28,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const token = cookies().get("token")?.value;
+  const token = getServerAuthToken();
   const theme = await getPublishedUITheme(token);
   const themeVariables = themeToCssVariables(theme) as CSSProperties;
 
@@ -42,11 +44,18 @@ export default async function RootLayout({
       data-product-subtitle={theme.productSubtitle}
       data-login-subtitle={theme.loginSubtitle}
     >
+      <head>
+        {/* 预加载关键字体 */}
+        <link rel="preload" href="/fonts/GeistVF.woff" as="font" type="font/woff" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/GeistMonoVF.woff" as="font" type="font/woff" crossOrigin="anonymous" />
+      </head>
       <body className="antialiased">
         <BrandingProvider value={theme}>
           <ClientErrorMonitor />
           <RuntimeThemeLoader />
           <AppShell>{children}</AppShell>
+          <Analytics />
+          <SpeedInsights />
         </BrandingProvider>
       </body>
     </html>
@@ -54,18 +63,16 @@ export default async function RootLayout({
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const token = cookies().get("token")?.value;
-  const theme = await getPublishedUITheme(token);
-
   return {
-    title: theme.productTitle || theme.brandName || "Cyanlog Sales",
-    description: theme.productSubtitle || "智能销售支撑平台",
-    icons: theme.faviconUrl
-      ? {
-          icon: theme.faviconUrl,
-          shortcut: theme.faviconUrl,
-          apple: theme.faviconUrl,
-        }
-      : undefined,
-  };
+    title: "Cyanlog Sales",
+    description: "智能销售支撑平台",
+    icons: {
+      icon: [
+        { url: '/favicon.png?v=2', type: 'image/png', sizes: '32x32' },
+        { url: '/favicon.svg?v=2', type: 'image/svg+xml', sizes: '32x32' },
+      ],
+      shortcut: '/favicon.png?v=2',
+      apple: '/favicon.png?v=2',
+    },
+  }
 }

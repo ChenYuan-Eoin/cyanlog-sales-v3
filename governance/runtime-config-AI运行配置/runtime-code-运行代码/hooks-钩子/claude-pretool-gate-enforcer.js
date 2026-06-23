@@ -39,13 +39,28 @@ function getActiveGate() {
   return null;
 }
 
-// 加载settings中的gates配置
+// 加载gate配置：优先从harness-state读取动态配置，回退到settings.json
 function loadGateConfig(gateId) {
+  try {
+    // 先尝试从 harness-state.json 读取动态配置
+    const statePath = path.join(WORKSPACE_ROOT, 'governance/runtime-state/harness-state.json');
+    if (fs.existsSync(statePath)) {
+      const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+      if (state.gates?.[gateId]) {
+        console.error(`[Gate] 使用动态配置: ${gateId}`);
+        return state.gates[gateId];
+      }
+    }
+  } catch (e) {
+    console.error('[Gate] 读取 harness-state 失败:', e.message);
+  }
+
+  // 回退到 settings.json
   try {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
     return settings.gates?.[gateId] || null;
   } catch (e) {
-    console.error('⚠️ 无法加载settings:', e.message);
+    console.error('[Gate] 无法加载settings:', e.message);
     return null;
   }
 }

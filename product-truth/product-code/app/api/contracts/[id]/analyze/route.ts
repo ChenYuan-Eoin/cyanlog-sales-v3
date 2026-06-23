@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enqueueContractAnalysisJob, processContractAnalysisJob } from '@/lib/contract-analysis'
+import { enqueueContractAnalysisJob, runStructuredAnalysis, saveStructuredReport, markContractAnalysisRunning, markContractAnalysisCompleted, type ReviewOptions } from '@/lib/contract-analysis'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
@@ -22,6 +23,7 @@ export async function POST(
 
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
     routeId = await resolveIdParam(params)
     const id = routeId
     logRouteStart({
@@ -38,10 +40,9 @@ export async function POST(
     // 使用行级锁检查合同状态（防止并发重复审核）
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
-      .select('id, status, file_path, created_by')
+      .select('id, status, storage_path, created_by')
       .eq('id', id)
-      .eq('created_by', user.id)
-      .single()
+      .maybeSingle()
 
     if (contractError) {
       await logRouteFailure(
@@ -156,12 +157,39 @@ export async function POST(
     let responseMessage = '审核任务已创建'
     let processingError: string | undefined
 
+    // 解析审核策略（来自请求体）
+    let reviewOptions: ReviewOptions | undefined
+    let strategyId: string | undefined
     try {
-      await processContractAnalysisJob(job)
+      const body = await req.json().catch(() => ({})) as { strategy?: string; strategy_id?: string }
+      if (body.strategy_id) {
+        strategyId = body.strategy_id
+      } else if (body.strategy) {
+        // 根据 code 查找 strategy
+        const { data: strategyData } = await supabaseAdmin
+          .from('review_strategies')
+          .select('id, code')
+          .or(`org_id.is.null,org_id.eq.${orgId}`)
+          .eq('code', body.strategy)
+          .limit(1)
+          .maybeSingle()
+        if (strategyData) strategyId = strategyData.id
+        reviewOptions = { strategyCode: (body.strategy || 'BALANCED') as 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE' }
+      }
+    } catch {
+ /* 解析失败忽略 */ }
+
+    try {
+      // 改用结构化分析（保留 AI 模型和规则引擎不改动）
+      const structuredReport = await runStructuredAnalysis(id, reviewOptions)
+      // 用现有的 mark 函数，避免新增
+      await markContractAnalysisRunning(job)
+      await saveStructuredReport(review.id, id, structuredReport, strategyId)
+      await markContractAnalysisCompleted(job, structuredReport.result)
       responseStatus = 'COMPLETED'
-      responseMessage = '审核已完成'
-    } catch (processError) {
-      processingError = processError instanceof Error ? processError.message : String(processError)
+      responseMessage = '结构化审核已完成'
+    } catch (fallbackError) {
+      processingError = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
       responseStatus = 'FAILED'
       responseMessage = '审核处理失败，任务状态已记录'
     }

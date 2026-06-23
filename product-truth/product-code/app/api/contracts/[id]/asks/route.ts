@@ -5,6 +5,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
 
+// ASK Item 类型定义 - 匹配数据库查询返回的结构
+interface AskItem {
+  id: string
+  status: 'pending' | 'responded' | 'closed'
+  initial_level: 'red' | 'yellow' | 'green' | 'white'
+  question_text: string
+  created_at: string
+  updated_at: string
+  ask_code?: string
+  clause_ref?: string
+  risk_name?: string
+  question_type?: string
+  required_roles?: string[]
+  qualified_std?: string
+  trigger_user_id?: string
+  closed_reason?: string
+  ask_responses?: unknown[]
+}
+
 interface RouteParams {
   params: Promise<{ id: string }> | { id: string }
 }
@@ -79,18 +98,16 @@ export async function GET(
       )
     }
 
-    /* eslint-disable @typescript-eslint/no-explicit-any */
     // 统计
     const total = asks?.length || 0
-    const pending = asks?.filter((a: any) => a.status === 'pending').length || 0
-    const responded = asks?.filter((a: any) => a.status === 'responded').length || 0
-    const closed = asks?.filter((a: any) => a.status === 'closed').length || 0
+    const pending = asks?.filter((a: AskItem) => a.status === 'pending').length || 0
+    const responded = asks?.filter((a: AskItem) => a.status === 'responded').length || 0
+    const closed = asks?.filter((a: AskItem) => a.status === 'closed').length || 0
 
     // 按风险等级统计
-    const redCount = asks?.filter((a: any) => a.initial_level === 'red').length || 0
-    const yellowCount = asks?.filter((a: any) => a.initial_level === 'yellow').length || 0
-    const greenCount = asks?.filter((a: any) => a.initial_level === 'green').length || 0
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    const redCount = asks?.filter((a: AskItem) => a.initial_level === 'red').length || 0
+    const yellowCount = asks?.filter((a: AskItem) => a.initial_level === 'yellow').length || 0
+    const greenCount = asks?.filter((a: AskItem) => a.initial_level === 'green').length || 0
 
     return NextResponse.json({
       success: true,

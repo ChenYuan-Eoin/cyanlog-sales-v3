@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getOrgIdForUser, getUserIdForToken } from '@/lib/configs/runtime'
 import { resolveRouteParams } from '@/lib/route-params'
 import { listAccessibleSalesSpaces, normalizeSalesSpaceName } from '@/lib/scoped-access'
+import { getServerAuthToken } from '@/lib/server-auth'
 
 interface PageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -33,7 +33,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function OpportunityDetailPage({ params }: PageProps) {
   const { id } = await resolveRouteParams(params)
-  const token = cookies().get('token')?.value
+  const token = getServerAuthToken()
 
   if (!token) {
     redirect('/login')

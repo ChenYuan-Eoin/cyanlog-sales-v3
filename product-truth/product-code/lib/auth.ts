@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { getRequestAuthToken } from './auth-token'
 import { supabaseAdmin } from './supabase'
 
 export interface AuthUser {
@@ -17,8 +18,7 @@ export class AuthError extends Error {
 }
 
 export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') ||
-    req.cookies.get('token')?.value
+  const token = getRequestAuthToken(req)
 
   if (!token) return null
 

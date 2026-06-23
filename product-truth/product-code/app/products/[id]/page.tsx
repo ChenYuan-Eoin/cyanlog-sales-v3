@@ -3,13 +3,13 @@
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getOrgIdForToken } from '@/lib/configs/runtime'
 import { resolveRouteParams } from '@/lib/route-params'
 import { isSchemaDriftError } from '@/lib/db-compat'
+import { getServerAuthToken } from '@/lib/server-auth'
 
 interface PageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function ProductDetailPage({ params }: PageProps) {
   const { id } = await resolveRouteParams(params)
-  const token = cookies().get('token')?.value
+  const token = getServerAuthToken()
   const orgId = await getOrgIdForToken(token)
   if (!orgId) {
     notFound()

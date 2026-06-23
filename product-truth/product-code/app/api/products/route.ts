@@ -1,5 +1,8 @@
 // REQ:F001
-// PURPOSE: Product / SKU API - org scoped list and create
+// PURPOSE: Product / SKU API
+// Note: 使用 Node.js runtime
+
+export const preferredRegion = 'sin1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -71,12 +74,17 @@ export async function GET(req: NextRequest) {
     const categoryId = searchParams.get('category_id')
     const status = searchParams.get('status')
     const search = searchParams.get('search')
+    // 分页参数，默认 50 条，最大 100 条
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
+    const offset = parseInt(searchParams.get('offset') || '0', 10)
 
+    // 主查询：只查产品基本信息（不含阶梯价，避免笛卡尔积）
     let query = supabaseAdmin
       .from('products')
-      .select('*, product_categories(name), product_price_tiers(*)')
+      .select('*, product_categories(name)', { count: 'exact' })
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (categoryId) {
       query = query.eq('category_id', categoryId)
@@ -90,13 +98,14 @@ export async function GET(req: NextRequest) {
       query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
     }
 
-    let { data, error } = await query
+    let { data, error, count } = await query
 
     if (error && isSchemaDriftError(error)) {
       let legacyQuery = supabaseAdmin
         .from('products')
-        .select('*, product_categories(name)')
+        .select('*, product_categories(name)', { count: 'exact' })
         .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
 
       if (categoryId) {
         legacyQuery = legacyQuery.eq('category_id', categoryId)
@@ -116,6 +125,7 @@ export async function GET(req: NextRequest) {
         _migration_required: true,
       }))
       error = legacyResult.error
+      count = legacyResult.count
     }
 
     if (error) {
@@ -123,7 +133,23 @@ export async function GET(req: NextRequest) {
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
-    return NextResponse.json(data)
+    // 返回分页数据，Edge Cache 60s
+    return NextResponse.json(
+      {
+        data,
+        pagination: {
+          total: count || 0,
+          limit,
+          offset,
+          hasMore: (count || 0) > offset + limit,
+        },
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    )
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

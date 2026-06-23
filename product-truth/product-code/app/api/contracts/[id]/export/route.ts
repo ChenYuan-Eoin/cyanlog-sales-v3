@@ -69,7 +69,8 @@ export async function POST(
     }
 
     // 获取审核结果中的风险项
-    const results = latestReview.results as {
+    const reviewResults = latestReview.results as {
+      summary?: string
       risks?: Array<{
         level: 'red' | 'yellow' | 'green'
         title: string
@@ -78,7 +79,90 @@ export async function POST(
       }>
     }
 
-    const comments = results.risks || []
+    // ===== 硬关单检查：ASK 清单未回应阻断导出 =====
+    const { data: pendingAsks, error: askError } = await supabaseAdmin
+      .from('ask_items')
+      .select('id, ask_code, question_text')
+      .eq('contract_id', id)
+      .eq('status', 'pending')
+
+    if (askError) {
+      console.error('[Export] ASK check error:', askError)
+    }
+
+    if (pendingAsks && pendingAsks.length > 0) {
+      return NextResponse.json({
+        error: '合同有未回应的 ASK 问题，请先处理',
+        code: 'PENDING_ASKS_BLOCK',
+        details: {
+          pending_count: pendingAsks.length,
+          items: pendingAsks.map((a) => ({ id: a.id, code: a.ask_code, question: a.question_text })),
+        },
+      }, { status: 422 })
+    }
+    // ===== 硬关单检查结束 =====
+
+    // 获取结构化报告字段
+    const riskSummary = (latestReview as unknown as { risk_summary?: {
+      total_clauses: number
+      critical_risks: number
+      high_risks: number
+      medium_risks: number
+      low_risks: number
+      compliance_score: number
+      strategy_code?: string
+    } }).risk_summary
+
+    const complianceCheck = (latestReview as unknown as { compliance_check?: {
+      missing_required_clauses: string[]
+      dangerous_clauses: string[]
+      ambiguous_clauses: string[]
+      unbalanced_clauses: string[]
+      party_a_consistency: string
+      party_b_consistency: string
+      issues: string[]
+    } }).compliance_check
+
+    const effectivenessAnalysis = (latestReview as unknown as { effectiveness_analysis?: string }).effectiveness_analysis
+
+    // 加载合同条款（按 position 排序）
+    const { data: clauses } = await supabaseAdmin
+      .from('contract_clauses')
+      .select('id, clause_number, clause_title, clause_text, risk_level, risk_category, risk_description, legal_basis, suggestion, position')
+      .eq('review_id', latestReview.id)
+      .order('position', { ascending: true })
+
+    // 加载批注
+    const { data: annotations } = await supabaseAdmin
+      .from('contract_annotations')
+      .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
+      .eq('contract_id', id)
+      .order('created_at', { ascending: true })
+
+    // 加载策略名称
+    let strategyName = ''
+    if (riskSummary?.strategy_code) {
+      const { data: strategy } = await supabaseAdmin
+        .from('review_strategies')
+        .select('name')
+        .eq('code', riskSummary.strategy_code)
+        .or('org_id.is.null,org_id.eq.' + orgId)
+        .limit(1)
+        .maybeSingle()
+      strategyName = strategy?.name || riskSummary.strategy_code
+    }
+
+    const exportData = {
+      summary: reviewResults.summary,
+      risks: reviewResults.risks || [],
+      risk_summary: riskSummary,
+      compliance_check: complianceCheck,
+      effectiveness_analysis: effectivenessAnalysis,
+      clauses: clauses || [],
+      annotations: annotations || [],
+      strategy_name: strategyName,
+      strategy_code: riskSummary?.strategy_code,
+    }
 
     // 下载原始合同文件
     const { data: fileData, error: fileError } = await supabaseAdmin.storage
@@ -99,8 +183,8 @@ export async function POST(
       inputPath = tempInputPath
     }
 
-    // Generate Word document with comments
-    const exportResult = await generateWordDocument(inputPath, comments)
+    // Generate Word document with structured report + comments
+    const exportResult = await generateWordDocument(inputPath, exportData)
 
     // Clean up temp input file
     if (inputPath && fs.existsSync(inputPath)) {

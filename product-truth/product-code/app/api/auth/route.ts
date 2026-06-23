@@ -7,6 +7,8 @@ import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
 import { registerSchema } from '@/lib/validation'
 
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -86,7 +88,7 @@ export async function POST(req: NextRequest) {
       expires_at: expiresAt.toISOString(),
     })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
@@ -96,6 +98,17 @@ export async function POST(req: NextRequest) {
       token,
       expiresAt: expiresAt.toISOString(),
     })
+
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: SESSION_MAX_AGE_SECONDS,
+      expires: expiresAt,
+    })
+
+    return response
   } catch (error) {
     console.error('Registration error:', error)
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')

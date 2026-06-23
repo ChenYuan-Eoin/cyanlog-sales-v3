@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { FileTextIcon } from 'lucide-react'
 
 interface Quote {
   id: string
@@ -49,16 +52,17 @@ export default function QuotesPage() {
       </div>
 
       {loading ? (
-        <div className="text-slate-500">加载中...</div>
+        <LoadingState message="加载报价单..." />
       ) : quotes.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-slate-500 mb-4">暂无报价单</p>
-            <Link href="/quotes/new">
-              <Button>+ 新建报价</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <EmptyState
+          title="暂无报价单"
+          description="报价单是销售流程的核心文档，记录产品、价格、条款等关键信息。"
+          icon={FileTextIcon}
+          action={{
+            label: '+ 新建报价',
+            onClick: () => window.location.href = '/quotes/new',
+          }}
+        />
       ) : (
         <Card>
           <CardHeader>

@@ -5,6 +5,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
 
+// 报告版本类型定义
+interface ReportVersion {
+  id: string
+  version: number
+  trigger_event: string
+  trigger_ask_id?: string
+  no_ask_reason?: string
+  created_at: string
+  is_current: boolean
+  users?: {
+    name: string
+  }[]
+}
+
 interface RouteParams {
   params: Promise<{ id: string }> | { id: string }
 }
@@ -50,19 +64,17 @@ export async function GET(
       )
     }
 
-    /* eslint-disable @typescript-eslint/no-explicit-any */
     // 格式化结果
-    const formattedVersions = versions?.map((v: any) => ({
+    const formattedVersions = (versions as ReportVersion[] | null)?.map((v) => ({
       id: v.id,
       version: v.version,
       trigger_event: v.trigger_event,
       trigger_ask_code: v.trigger_ask_id ? `ASK-${v.trigger_ask_id.slice(0, 8)}` : null,
-      trigger_user_name: v.users?.name || 'System',
+      trigger_user_name: v.users?.[0]?.name || 'System',
       no_ask_reason: v.no_ask_reason,
       created_at: v.created_at,
       is_current: v.is_current,
     })) || []
-    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     return NextResponse.json({
       success: true,

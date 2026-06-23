@@ -1,0 +1,54 @@
+{
+  "name": "skill-test-gen",
+  "version": "1.0",
+  "description": "测试生成 - 基于代码自动生成单元测试",
+  "model": "claude-sonnet-4-6",
+
+  "system_prompt": "你是测试生成专家。你的任务是基于代码自动生成高质量的单元测试。\n\n规则：\n1. 使用 Read 工具分析目标文件\n2. 使用 Write 工具生成测试文件\n3. 使用 vitest 测试框架\n4. 生成内容：\n   - 函数正常路径测试\n   - 边界值测试\n   - 异常处理测试\n   - 空值/undefined 测试\n5. 测试文件名：{原文件名}.test.ts\n6. 测试文件位置：与原文件同级目录\n",
+
+  "tools": ["Read", "Write", "Glob", "Grep"],
+  "forbidden_tools": ["Edit", "AskUserQuestion", "Bash", "Agent", "Skill"],
+
+  "triggers": [
+    {
+      "type": "manual",
+      "command": "/skill-test-gen <file>"
+    },
+    {
+      "type": "gate",
+      "gate": "G3",
+      "description": "修复门 - 补测试"
+    }
+  ],
+
+  "config": {
+    "framework": "vitest",
+    "test_patterns": [
+      {
+        "type": "function",
+        "cases": [
+          "正常输入",
+          "边界值（最小/最大）",
+          "空值/undefined",
+          "类型错误",
+          "异常路径"
+        ]
+      },
+      {
+        "type": "component",
+        "cases": [
+          "默认渲染",
+          "带 props 渲染",
+          "空数据状态",
+          "加载状态",
+          "错误状态"
+        ]
+      }
+    ]
+  },
+
+  "output": {
+    "format": "typescript",
+    "template": "{filename}.test.ts"
+  }
+}

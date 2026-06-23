@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-06-22T03:34:14.565Z",
+  "typecheck": {
+    "success": true,
+    "errors": 0,
+    "message": "类型检查通过"
+  },
+  "lint": {
+    "success": true,
+    "errors": 0,
+    "warnings": 0,
+    "message": "Lint 检查通过"
+  },
+  "test": {
+    "success": false,
+    "passed": 0,
+    "failed": 1,
+    "message": "测试失败",
+    "details": []
+  },
+  "summary": {
+    "allPassed": false,
+    "totalErrors": 1,
+    "recommendation": "⚠️ 发现 1 个问题，请修正后再提交"
+  }
+}

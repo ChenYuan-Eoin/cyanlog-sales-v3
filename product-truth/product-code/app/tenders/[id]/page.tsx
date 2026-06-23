@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { supabaseAdmin } from '@/lib/supabase'
 import { resolveRouteParams } from '@/lib/route-params'
 import type { TenderKeyInfo } from '@/lib/ocr/tender-parser'
+import TenderWorkflow from '@/components/tender/TenderWorkflow'
 
 interface PageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -171,6 +172,12 @@ export default async function TenderDetailPage({ params }: PageProps) {
         {ocrResult.created_at ? new Date(ocrResult.created_at).toLocaleString('zh-CN') : '未知'}
         · 信心度 {confidence}%
       </footer>
+
+      {/* 工作流引擎 */}
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">标书生成工作流</h2>
+        <TenderWorkflow tenderId={id} />
+      </section>
     </div>
   )
 }

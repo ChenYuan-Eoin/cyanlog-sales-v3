@@ -1,0 +1,16 @@
+# lib/pricing 模块上下文
+
+## 职责
+价盘计算核心，F001 的关键实现。
+
+## 关键函数
+- `getTierPrice(product, qty, tiers)` - 阶梯价命中
+- `validatePriceTiers(tiers)` - 阶梯价合法性检查
+
+## 数据模型
+- `products` - SKU 主数据
+- `product_price_tiers` - 阶梯价表
+
+## 注意
+- 组织隔离：所有查询必须带 `org_id`
+- 报价快照：价格必须固化，不存实时引用

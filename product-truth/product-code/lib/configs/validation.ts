@@ -109,6 +109,18 @@ export const uiThemeValueSchema = z.object({
   productSubtitle: z.string().min(1).max(160).optional(),
   loginTitle: z.string().min(1).max(120).optional(),
   loginSubtitle: z.string().min(1).max(160).optional(),
+  appearance: z.enum(['system', 'light', 'dark']).optional(),
+  brandAssets: z.object({
+    fullLogo: z.object({
+      light: z.string().url().or(z.literal('')).optional(),
+      dark: z.string().url().or(z.literal('')).optional(),
+    }).optional(),
+    symbol: z.object({
+      light: z.string().url().or(z.literal('')).optional(),
+      dark: z.string().url().or(z.literal('')).optional(),
+    }).optional(),
+    favicon: z.string().url().or(z.literal('')).optional(),
+  }).optional(),
   logoUrl: z.string().url().or(z.literal('')).optional(),
   faviconUrl: z.string().url().or(z.literal('')).optional(),
   primary: z.string().min(1),

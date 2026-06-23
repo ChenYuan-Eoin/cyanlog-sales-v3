@@ -18,17 +18,23 @@ function canWriteRoles(userPerms: string[]) {
     || hasPermission(userPerms, 'admin:access')
 }
 
-// GET /api/roles - 列出所有角色
+// GET /api/roles - 列出所有角色（分页）
 export async function GET(req: NextRequest) {
   const userPerms = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
   if (!canReadRoles(userPerms)) {
     return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
   }
 
-  const { data, error } = await supabaseAdmin
+  const { searchParams } = new URL(req.url)
+  // 分页参数
+  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
+  const offset = parseInt(searchParams.get('offset') || '0', 10)
+
+  const { data, error, count } = await supabaseAdmin
     .from('roles')
-    .select('id, code, name, description, permissions, sort_order, created_at')
+    .select('id, code, name, description, permissions, sort_order, created_at', { count: 'exact' })
     .order('sort_order', { ascending: true })
+    .range(offset, offset + limit - 1)
 
   if (error) {
     console.error('List roles error:', error)
@@ -46,6 +52,12 @@ export async function GET(req: NextRequest) {
     data: {
       roles: data ?? [],
       permission_keys: permissionKeys,
+    },
+    pagination: {
+      total: count || 0,
+      limit,
+      offset,
+      hasMore: (count || 0) > offset + limit,
     },
   })
 }

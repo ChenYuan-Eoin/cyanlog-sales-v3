@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { loginSchema } from '@/lib/validation'
 import { checkLoginRateLimit, getClientIp, recordLoginAttempt } from '@/lib/rate-limit'
 
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+
 // 统一错误响应格式
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json(
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest) {
 
     await recordLoginAttempt(identifier, ipAddress, true)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
@@ -94,6 +96,17 @@ export async function POST(req: NextRequest) {
       expiresAt: expiresAt.toISOString(),
       mustChangePassword: Boolean(user.must_change_password),
     })
+
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: SESSION_MAX_AGE_SECONDS,
+      expires: expiresAt,
+    })
+
+    return response
   } catch (error) {
     console.error('Login error:', error)
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 
-import { sanitizeThemeValue, themeToCssVariables } from '@/lib/ui-theme-shared'
+import { resolveFaviconUrl, sanitizeThemeValue, themeToCssVariables } from '@/lib/ui-theme-shared'
 
 // 缓存相关常量
 const THEME_CACHE_KEY = 'runtime_theme_cache'
@@ -76,7 +76,8 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
     document.title = theme.productTitle
   }
 
-  if (theme.faviconUrl) {
+  const faviconUrl = resolveFaviconUrl(theme)
+  if (faviconUrl) {
     const rels = ['icon', 'shortcut icon', 'apple-touch-icon']
     rels.forEach((rel) => {
       let link = document.head.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null
@@ -85,8 +86,14 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
         link.rel = rel
         document.head.appendChild(link)
       }
-      link.href = theme.faviconUrl
+      link.href = faviconUrl
     })
+  }
+
+  // 同步到全局，供 BrandingProvider 读取（brandAssets 等复杂对象无法通过 DOM 属性传递）
+  if (typeof window !== 'undefined') {
+    ;(window as unknown as Record<string, unknown>).__RUNTIME_THEME__ = theme
+    window.dispatchEvent(new CustomEvent('runtime-theme-applied', { detail: theme }))
   }
 }
 
@@ -109,7 +116,7 @@ export function RuntimeThemeLoader() {
       }
 
       try {
-        const response = await fetch('/api/configs?type=UI_THEME&status=PUBLISHED', {
+        const response = await fetch('/api/configs?type=UI_THEME', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -119,8 +126,14 @@ export function RuntimeThemeLoader() {
           return
         }
 
-        const configs = await response.json() as Array<{ value?: Record<string, unknown> }>
-        const theme = sanitizeThemeValue(configs[0]?.value)
+        const configs = await response.json() as Array<{ value?: Record<string, unknown>; status?: string; updated_at?: string }>
+        // 优先使用已发布配置，如果没有则使用最新更新的配置
+        const publishedConfig = configs.find(c => c.status === 'PUBLISHED')
+        const latestConfig = configs.sort((a, b) =>
+          new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+        )[0]
+        const themeConfig = publishedConfig || latestConfig
+        const theme = sanitizeThemeValue(themeConfig?.value)
 
         if (cancelled) {
           return

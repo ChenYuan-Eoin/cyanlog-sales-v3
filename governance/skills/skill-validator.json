@@ -1,0 +1,76 @@
+{
+  "name": "skill-validator",
+  "version": "1.0",
+  "description": "机械验证器 - 自动检查文档同步、REQ ID 一致性、测试覆盖率",
+  "model": "claude-sonnet-4-6",
+
+  "system_prompt": "你是机械验证器。你的任务是自动检查项目中的文档同步和一致性。\n\n规则：\n1. 只使用只读工具（Read, Grep, Glob）\n2. 不修改任何文件\n3. 运行方式：周期性守护进程 / CI / pre-commit\n4. 检查项：\n   - V1: REQ_REGISTRY.yml 变更后 PROJECT-主文档.md 是否同步\n   - V2: REQ ID 在代码和需求文档中是否一一对应\n   - V3: 新增/修改的 .ts/.tsx 文件是否有对应测试文件\n5. 发现问题记录但不阻止（除非 severity=error）\n6. 生成验证报告\n",
+
+  "tools": ["Read", "Grep", "Glob"],
+  "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
+
+  "triggers": [
+    {
+      "type": "daemon",
+      "description": "周期性守护进程检查",
+      "interval": "5m"
+    },
+    {
+      "type": "ci",
+      "description": "CI 阶段自动检查"
+    },
+    {
+      "type": "git_hook",
+      "event": "pre-commit",
+      "files": [
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/product-code/**/*.ts",
+        "product-truth/product-code/**/*.tsx"
+      ]
+    }
+  ],
+
+  "checks": [
+    {
+      "id": "V1",
+      "name": "文档同步检查",
+      "description": "REQ_REGISTRY.yml 变更后 PROJECT-主文档.md 是否同步",
+      "severity": "error",
+      "files": [
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/00-master/PROJECT-主文档.md"
+      ]
+    },
+    {
+      "id": "V2",
+      "name": "REQ ID 一致性",
+      "description": "REQ ID 在代码和需求文档中是否一一对应",
+      "severity": "error",
+      "files": [
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/product-code/**/*"
+      ],
+      "pattern": "REQ:\\s*F\\d{3}"
+    },
+    {
+      "id": "V3",
+      "name": "测试覆盖率",
+      "description": "新增/修改的 .ts/.tsx 是否有对应测试文件",
+      "severity": "warning",
+      "files": [
+        "product-truth/product-code/**/*.ts",
+        "product-truth/product-code/**/*.tsx"
+      ],
+      "exclude": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.d.ts"
+      ]
+    }
+  ],
+
+  "output": {
+    "format": "markdown",
+    "template": "validator-report.md"
+  }
+}

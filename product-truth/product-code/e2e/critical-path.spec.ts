@@ -22,6 +22,13 @@ const TEST_USER = {
 test.describe.configure({ mode: 'serial' })
 
 test.describe('路径 1：登录流程', () => {
+  test('登录表单暴露浏览器可识别的账号字段', async ({ page }) => {
+    await page.goto('/login')
+
+    await expect(page.locator('input[name="email"]')).toHaveAttribute('autocomplete', 'username')
+    await expect(page.locator('input[name="password"]')).toHaveAttribute('autocomplete', 'current-password')
+  })
+
   test('登录失败 → 显示错误', async ({ page }) => {
     await page.goto('/login')
     await page.fill('input[type="email"]', 'wrong@test.com')
@@ -43,6 +50,18 @@ test.describe('路径 1：登录流程', () => {
 
     // 期望看到侧边栏的"工作台"或"报价中心"等导航
     await expect(page.locator('text=/工作台|报价中心/').first()).toBeVisible()
+  })
+
+  test('登录成功后进入个人信息页，不应被重定向回登录页', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', TEST_USER.email)
+    await page.fill('input[name="password"]', TEST_USER.password)
+    await page.click('button[type="submit"]')
+    await page.waitForURL((url) => url.pathname === '/' || url.pathname === '/quotes', { timeout: 15_000 })
+
+    await page.getByRole('link', { name: '个人信息' }).click()
+    await page.waitForURL('**/profile', { timeout: 10_000 })
+    await expect(page.locator('h1')).toHaveText('个人信息')
   })
 })
 
@@ -83,6 +102,14 @@ test.describe('路径 2：配置中心新建规则', () => {
     } else {
       test.skip(true, '未找到规则编辑入口（页面结构可能变化）')
     }
+  })
+
+  test('组织架构标签页直接提供组织工作台，不要求跳到独立后台', async ({ page }) => {
+    await page.goto('/configs?tab=org-structure')
+
+    await expect(page.locator('text=组织架构管理').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('text=组织工作台').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('text=新增成员').first()).toBeVisible({ timeout: 10_000 })
   })
 })
 

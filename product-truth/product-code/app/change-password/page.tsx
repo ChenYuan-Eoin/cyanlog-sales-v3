@@ -16,16 +16,11 @@ export default function ChangePasswordPage() {
     let cancelled = false
 
     async function loadProfile() {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        router.replace('/login')
-        return
-      }
-
       try {
-        const res = await fetch('/api/auth/me', {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/auth/me', token ? {
           headers: { Authorization: `Bearer ${token}` },
-        })
+        } : undefined)
 
         if (!res.ok) {
           router.replace('/login')
@@ -113,34 +108,43 @@ export default function ChangePasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} style={{ marginTop: 24 }}>
             <div className="form-group">
-              <label>当前密码</label>
+              <label htmlFor="current-password">当前密码</label>
               <input
+                id="current-password"
+                name="currentPassword"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="输入当前临时密码"
+                autoComplete="current-password"
                 required
               />
             </div>
 
             <div className="form-group">
-              <label>新密码</label>
+              <label htmlFor="new-password">新密码</label>
               <input
+                id="new-password"
+                name="newPassword"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="至少 8 位"
+                autoComplete="new-password"
                 required
               />
             </div>
 
             <div className="form-group">
-              <label>确认新密码</label>
+              <label htmlFor="confirm-new-password">确认新密码</label>
               <input
+                id="confirm-new-password"
+                name="confirmNewPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="再次输入新密码"
+                autoComplete="new-password"
                 required
               />
             </div>

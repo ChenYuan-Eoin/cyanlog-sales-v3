@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>ONES 合同中心 - 策略配置后台 V2.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+        body { font-family: 'PingFang SC', sans-serif; background-color: #f4f7fa; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .sidebar-item:hover { background-color: rgba(99, 102, 241, 0.08); }
+        .rule-card { transition: all 0.2s; border-left-width: 4px; }
+        .rule-card:hover { transform: translateX(4px); box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .type-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- 左侧分类导航 -->
+    <aside class="w-72 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 shadow-sm z-20">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h1 class="font-bold text-lg text-indigo-600">ONES 配置中心</h1>
+                <p class="text-[10px] text-slate-400 font-medium">STRATEGY ENGINE V2.0</p>
+            </div>
+            <i class="lucide-shield-check text-indigo-600"></i>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+            <div class="px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-widest">合同条款分类 (Ref/01-15)</div>
+            <a href="#" class="sidebar-item flex items-center px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 font-semibold">
+                <i class="lucide-folder-key mr-2 w-4 h-4"></i> 01-付款条款
+            </a>
+            <a href="#" class="sidebar-item flex items-center px-3 py-2 rounded-lg text-slate-600">
+                <i class="lucide-folder mr-2 w-4 h-4"></i> 06-税率规则
+            </a>
+            <a href="#" class="sidebar-item flex items-center px-3 py-2 rounded-lg text-slate-600">
+                <i class="lucide-folder mr-2 w-4 h-4"></i> 08-多版本对比基线
+            </a>
+            <a href="#" class="sidebar-item flex items-center px-3 py-2 rounded-lg text-slate-600 border-l-2 border-transparent">
+                <i class="lucide-folder mr-2 w-4 h-4"></i> 10-产品名称标准
+            </a>
+            <a href="#" class="sidebar-item flex items-center px-3 py-2 rounded-lg text-slate-600">
+                <i class="lucide-folder mr-2 w-4 h-4"></i> 12-数据归属(DPA)
+            </a>
+            <a href="#" class="sidebar-item flex items-center px-3 py-2 rounded-lg text-slate-600">
+                <i class="lucide-folder mr-2 w-4 h-4"></i> 13-SLA服务等级
+            </a>
+            <a href="#" class="sidebar-item flex items-center px-3 py-2 rounded-lg text-slate-600">
+                <i class="lucide-folder mr-2 w-4 h-4"></i> 15-争议解决与管辖
+            </a>
+        </div>
+
+        <div class="p-4 border-t border-slate-100 space-y-2">
+            <button class="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-lg shadow-indigo-100 flex items-center justify-center">
+                <i class="lucide-plus-circle mr-2 w-4 h-4"></i> 新增审计规则
+            </button>
+        </div>
+    </aside>
+
+    <!-- 主操作区 -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <!-- Header -->
+        <header class="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-8">
+            <div class="flex items-center space-x-3">
+                <h2 class="font-bold text-slate-800 text-lg">01-付款条款规则集</h2>
+                <span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">共有 12 条规则正在生效</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex bg-slate-100 rounded-lg p-1">
+                    <button class="px-4 py-1.5 bg-white text-indigo-600 rounded-md text-xs font-bold shadow-sm">策略编辑</button>
+                    <button class="px-4 py-1.5 text-slate-500 rounded-md text-xs">模拟运行测试</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 规则过滤器 -->
+        <div class="bg-white border-b border-slate-100 px-8 py-3 flex items-center space-x-6">
+            <span class="text-xs text-slate-400 font-bold uppercase tracking-tighter">属性筛选:</span>
+            <div class="flex space-x-2">
+                <span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold cursor-pointer">全部属性</span>
+                <span class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200">比例类 (%)</span>
+                <span class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200">时限类 (Day)</span>
+                <span class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200">金额类 (Amt)</span>
+                <span class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200">布尔类 (Y/N)</span>
+            </div>
+        </div>
+
+        <!-- 规则列表 -->
+        <div class="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+            
+            <!-- 规则实体 1: 比例类 -->
+            <div class="rule-card bg-white p-6 rounded-xl border border-slate-200 border-l-indigo-500">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex items-center space-x-4">
+                        <span class="mono text-xs text-slate-400 font-bold">#RULE-01-01</span>
+                        <h4 class="font-bold text-slate-900">首期款比例</h4>
+                        <span class="type-tag bg-indigo-50 text-indigo-600 border border-indigo-100">比例类 (%)</span>
+                        <span class="text-[10px] text-slate-400">所属品类: 私有部署/买断</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="p-2 hover:bg-slate-50 rounded-lg text-slate-400"><i class="lucide-edit-3 w-4 h-4"></i></button>
+                        <button class="p-2 hover:bg-slate-50 rounded-lg text-slate-400"><i class="lucide-copy w-4 h-4"></i></button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-emerald-500 uppercase">Level A (起点)</label>
+                        <div class="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                            <span class="mono text-sm font-bold">VALUE >= 30%</span>
+                            <p class="text-[10px] text-emerald-600 mt-1 italic">🟢 自动通过审核</p>
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-amber-500 uppercase">Level B (偏离)</label>
+                        <div class="p-3 bg-amber-50 rounded-lg border border-amber-100">
+                            <span class="mono text-sm font-bold">15% <= VAL < 30%</span>
+                            <p class="text-[10px] text-amber-600 mt-1 italic">🟡 提示退让对价</p>
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-red-500 uppercase">Level C (红线)</label>
+                        <div class="p-3 bg-red-50 rounded-lg border border-red-100">
+                            <span class="mono text-sm font-bold text-red-600">VALUE < 15%</span>
+                            <p class="text-[10px] text-red-600 mt-1 italic">🔴 必须财务特批</p>
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase">关联动作 (Binding)</label>
+                        <div class="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                            <div class="flex items-center text-[10px] text-slate-500"><i class="lucide-message-square w-3 h-3 mr-1"></i> 话术库 Ref/03-A</div>
+                            <div class="flex items-center text-[10px] text-slate-500"><i class="lucide-user-cog w-3 h-3 mr-1"></i> 财务+法务并行</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 规则实体 2: 时限类 -->
+            <div class="rule-card bg-white p-6 rounded-xl border border-slate-200 border-l-sky-500">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex items-center space-x-4">
+                        <span class="mono text-xs text-slate-400 font-bold">#RULE-01-04</span>
+                        <h4 class="font-bold text-slate-900">默示验收期时长</h4>
+                        <span class="type-tag bg-sky-50 text-sky-600 border border-sky-100">时限类 (Day)</span>
+                        <span class="text-[10px] text-slate-400">计数标准: 工作日</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="p-2 hover:bg-slate-50 rounded-lg text-slate-400"><i class="lucide-edit-3 w-4 h-4"></i></button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase mb-1 block">起点阈值</label>
+                        <span class="mono text-sm font-bold">5 工作日</span>
+                    </div>
+                    <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase mb-1 block">偏离范围</label>
+                        <span class="mono text-sm font-bold">6 - 15 工作日</span>
+                    </div>
+                    <div class="p-3 bg-red-50 rounded-lg border border-red-100 border-dashed">
+                        <label class="text-[10px] font-bold text-red-400 uppercase mb-1 block">负面布尔触发</label>
+                        <span class="text-xs font-bold text-red-600 italic">取消“默示验收”逻辑</span>
+                    </div>
+                    <div class="p-3 bg-indigo-600 rounded-lg text-white shadow-md">
+                        <label class="text-[10px] font-bold text-indigo-200 uppercase mb-1 block">对价绑定建议</label>
+                        <p class="text-[10px] leading-tight">若接受 >10 天验收期，必须锁定账期 <15 天</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 规则实体 3: 金额类 -->
+            <div class="rule-card bg-white p-6 rounded-xl border border-slate-200 border-l-emerald-500">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex items-center space-x-4">
+                        <span class="mono text-xs text-slate-400 font-bold">#RULE-01-08</span>
+                        <h4 class="font-bold text-slate-900">责任总额上限 (Liability Cap)</h4>
+                        <span class="type-tag bg-emerald-50 text-emerald-600 border border-emerald-100">金额/比例混合类</span>
+                    </div>
+                </div>
+                <div class="flex space-x-4">
+                    <div class="flex-1 p-3 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                        <span class="text-xs text-slate-500 italic">基于合同总额的比例系数 (X)</span>
+                        <span class="mono text-sm font-bold text-indigo-600">X <= 100%</span>
+                    </div>
+                    <div class="w-1/3 p-3 bg-red-50 rounded-lg border border-red-100 flex items-center justify-between">
+                        <span class="text-xs text-red-500">绝对金额硬红线</span>
+                        <span class="mono text-sm font-bold text-red-600">> 5,000,000 元</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 底部保存状态 -->
+        <footer class="h-12 bg-white border-t border-slate-100 px-8 flex items-center justify-between text-[10px] text-slate-400">
+            <div class="flex items-center">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
+                所有规则已与 AI 审计引擎同步同步成功 (2024-06-18 16:30)
+            </div>
+            <div class="flex space-x-4">
+                <span>导出规则包 (.json)</span>
+                <span>查看审计追踪日志</span>
+            </div>
+        </footer>
+    </main>
+
+</body>
+</html>

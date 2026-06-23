@@ -14,6 +14,8 @@ interface ImageUploadProps {
   square?: boolean
   /** 预览高度（像素） */
   previewHeight?: number
+  /** 是否显示 URL 录入框 */
+  showUrlInput?: boolean
 }
 
 export function ImageUpload({
@@ -25,6 +27,7 @@ export function ImageUpload({
   maxSizeMB = 2,
   square = false,
   previewHeight = 64,
+  showUrlInput = true,
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,15 +44,12 @@ export function ImageUpload({
       formData.append('folder', folder)
 
       const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('请先登录')
-      }
 
       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: {
+        headers: token ? {
           Authorization: `Bearer ${token}`,
-        },
+        } : undefined,
         body: formData,
       })
 
@@ -89,11 +89,12 @@ export function ImageUpload({
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="relative inline-block">
+        <div className="relative block w-full max-w-full p-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value}
             alt="Uploaded"
-            className={`rounded border object-contain bg-white ${
+            className={`rounded border object-contain bg-white max-w-full ${
               square ? 'w-16 h-16' : 'h-16 w-auto max-w-[200px]'
             }`}
             style={square ? { width: previewHeight, height: previewHeight } : { height: previewHeight }}
@@ -104,7 +105,7 @@ export function ImageUpload({
           <button
             type="button"
             onClick={clearImage}
-            className="absolute -right-2 -top-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600"
+            className="absolute right-0 top-0 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
             title="移除图片"
           >
             <CloseIcon size={12} />
@@ -148,16 +149,17 @@ export function ImageUpload({
         </div>
       )}
 
-      {/* 保留 URL 输入作为备选 */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="或输入图片 URL..."
-          className="flex-1 px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20"
-        />
-      </div>
+      {showUrlInput ? (
+        <div className="flex min-w-0 gap-2">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="或输入图片 URL..."
+            className="min-w-0 flex-1 px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
+      ) : null}
 
       {error && (
         <p className="text-xs text-red-500">{error}</p>

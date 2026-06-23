@@ -49,8 +49,8 @@ export default function LoginPage() {
       {/* Left Hero Panel */}
       <div className="hero-dark">
         <div className="brand">
-          <BrandMark size={44} className="brand-logo" />
-            <div>
+          <BrandMark size={44} className="brand-logo" variant="symbol" surface="dark" />
+          <div>
             <div>{branding.brandName}</div>
             <div style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-on-dark-2)', fontWeight: 400 }}>
               {branding.productSubtitle}
@@ -115,25 +115,32 @@ export default function LoginPage() {
           <h1>{branding.loginTitle}</h1>
           <p className="subtitle">{branding.loginSubtitle}</p>
 
-          <form onSubmit={handleSubmit} style={{ marginTop: 32 }}>
+          <form onSubmit={handleSubmit} style={{ marginTop: 32 }} autoComplete="on">
             <div className="form-group">
-              <label>企业邮箱</label>
+              <label htmlFor="login-email">企业邮箱</label>
               <input
+                id="login-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
+                autoComplete="username"
+                inputMode="email"
                 required
               />
             </div>
 
             <div className="form-group">
-              <label>密码</label>
+              <label htmlFor="login-password">密码</label>
               <input
+                id="login-password"
+                name="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 required
               />
             </div>

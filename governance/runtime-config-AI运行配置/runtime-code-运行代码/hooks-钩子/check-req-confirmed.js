@@ -3,6 +3,7 @@
 // 检查：编辑文件对应的需求是否已确认
 
 const fs = require('fs');
+const yaml = require('js-yaml'); // 需要 npm install js-yaml
 const {
   isWithinDocument,
   resolveEnabledDocumentPath
@@ -17,34 +18,22 @@ function parseRequirements() {
   }
 
   const content = fs.readFileSync(REQUIREMENTS_FILE, 'utf-8');
-  const lines = content.split('\n');
+  const data = yaml.load(content);
 
+  // YAML 格式: requirements.F001.status
   const reqs = [];
-  let currentReq = null;
-
-  for (const line of lines) {
-    // 匹配需求ID行: F001:
-    const idMatch = line.match(/^(F\d{3}):\s*$/);
-    if (idMatch) {
-      currentReq = { id: idMatch[1], status: null };
-      continue;
-    }
-
-    // 匹配状态行: status: xxx
-    if (currentReq) {
-      const statusMatch = line.match(/^\s+status:\s*(\S+)/);
-      if (statusMatch) {
-        const statusEn = statusMatch[1];
-        const statusMap = {
-          'draft': '草稿',
-          'confirmed': '已确认',
-          'in_progress': '开发中',
-          'completed': '已完成'
-        };
-        currentReq.status = statusMap[statusEn] || statusEn;
-        reqs.push(currentReq);
-        currentReq = null;
-      }
+  for (const [id, req] of Object.entries(data.requirements || {})) {
+    if (id.match(/^F\d{3}$/)) {
+      const statusMap = {
+        'draft': '草稿',
+        'confirmed': '已确认',
+        'in_progress': '开发中',
+        'completed': '已完成'
+      };
+      reqs.push({
+        id,
+        status: statusMap[req.status] || req.status
+      });
     }
   }
 
