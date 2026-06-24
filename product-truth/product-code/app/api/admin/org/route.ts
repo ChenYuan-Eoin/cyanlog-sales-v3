@@ -459,9 +459,13 @@ async function listOrgPayload(orgId: string) {
     getCachedOrganization(orgId),
   ])
 
+  // ponytail: 调试空数据问题 (A3)
+  // 如果部门和用户都为空，可能是 seed 数据未运行或 org_id 不匹配
+  const isEmptyState = departments.length === 0
+
   // 构建部门名称映射
   const departmentNameById = new Map(departments.map((d) => [d.id, d.name]))
-  const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]))
+  const spaceNameById = new Map(spaces.map((s) => [s.name]))
 
   // 简化用户查询 - 不关联复杂角色数据，只获取基础信息
   const { data: usersData, error: usersError } = await supabaseAdmin
@@ -473,6 +477,11 @@ async function listOrgPayload(orgId: string) {
 
   if (usersError) {
     throw new Error('USERS_FETCH_FAILED')
+  }
+
+  // 调试日志：检测空数据状态
+  if (isEmptyState && (usersData || []).length === 0) {
+    console.warn(`[A3 Debug] Org ${orgId} has no departments and no users. Run: node scripts/seed-via-api.mjs`)
   }
 
   // 构建用户姓名映射（用于查找部门主管）

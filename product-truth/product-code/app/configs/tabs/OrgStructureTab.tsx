@@ -685,6 +685,9 @@ export default function OrgStructureTab({
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
   const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
 
+  // ponytail: A3 空数据状态检测
+  const isEmptyState = stats.deptCount === 0 && stats.userCount === 0
+
   return (
     <div className="space-y-6">
       {/* 顶部统计和操作 */}
@@ -762,6 +765,19 @@ export default function OrgStructureTab({
       {feishuResult && (
         <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
           {feishuResult}
+        </div>
+      )}
+
+      {/* A3: 空数据状态提示 */}
+      {isEmptyState && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-medium">暂无组织架构数据</p>
+          <p className="mt-1 text-amber-700">
+            数据库中未找到部门或成员数据。请运行以下命令初始化数据：
+          </p>
+          <code className="mt-2 block rounded bg-amber-100 px-3 py-2 font-mono text-xs">
+            node scripts/seed-via-api.mjs
+          </code>
         </div>
       )}
 
