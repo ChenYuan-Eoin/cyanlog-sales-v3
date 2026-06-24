@@ -305,6 +305,46 @@ async function main() {
   }
   console.log(`   seeded ${tiers.length} product price tiers`)
 
+  console.log('18. Contract rules v2 (R001-R015)...')
+  const contractRules = [
+    // R001: 首付款比例 (原有，保留)
+    { org_id: ORG_ID, code: 'R001', name: '首付款比例', description: '首付款比例应在30%-50%之间，低于20%为红线', category: 'ratio', level_a_operator: '>=', level_a_threshold: 30, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: '<', level_b_threshold: 30, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '提高首付款比例或提供银行保函', level_c_operator: '<', level_c_threshold: 20, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '首付款比例低于20%，必须修改合同', priority: 100, is_active: true },
+    // R002: 付款周期
+    { org_id: ORG_ID, code: 'R002', name: '付款周期', description: '付款账期应在30-90天，超过180天为红线', category: 'duration', level_a_operator: '<=', level_a_threshold: 90, level_a_unit: 'day', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 90, level_b_unit: 'day', level_b_action: 'suggest_counterparty', level_b_counterparty: '提供银行保函', level_c_operator: '>', level_c_threshold: 180, level_c_unit: 'day', level_c_action: 'block', level_c_message: '账期超过180天，必须修改合同', priority: 90, is_active: true },
+    // R003: 质保金比例
+    { org_id: ORG_ID, code: 'R003', name: '质保金比例', description: '质保金比例应在5%-10%，超过20%为红线', category: 'ratio', level_a_operator: '<=', level_a_threshold: 10, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 10, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '提高违约赔偿倍数', level_c_operator: '>', level_c_threshold: 20, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '质保金比例超过20%，必须修改合同', priority: 80, is_active: true },
+    // R004: 质保期
+    { org_id: ORG_ID, code: 'R004', name: '质保期', description: '质保期应在1-3年，超过5年为红线', category: 'duration', level_a_operator: '<=', level_a_threshold: 1095, level_a_unit: 'day', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 1095, level_b_unit: 'day', level_b_action: 'suggest_counterparty', level_b_counterparty: '增加首年免费维护', level_c_operator: '>', level_c_threshold: 1825, level_c_unit: 'day', level_c_action: 'block', level_c_message: '质保期超过5年，必须修改合同', priority: 70, is_active: true },
+    // R005: 违约金上限
+    { org_id: ORG_ID, code: 'R005', name: '违约金上限', description: '违约金上限应在合同额10%-20%，超过30%为红线', category: 'ratio', level_a_operator: '<=', level_a_threshold: 20, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 20, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '降低违约金比例', level_c_operator: '>', level_c_threshold: 30, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '违约金超过30%，必须修改合同', priority: 85, is_active: true },
+    // R006: 滞纳金比例
+    { org_id: ORG_ID, code: 'R006', name: '滞纳金比例', description: '滞纳金应控制在日万分之五以内，超过千分之一为红线', category: 'ratio', level_a_operator: '<=', level_a_threshold: 0.05, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 0.05, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '降低滞纳金比例', level_c_operator: '>', level_c_threshold: 0.1, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '滞纳金比例过高，必须修改合同', priority: 75, is_active: true },
+    // R007: 自动续约条款
+    { org_id: ORG_ID, code: 'R007', name: '自动续约条款', description: '自动续约条款需提前30-60天通知，少于15天为红线', category: 'duration', level_a_operator: '>=', level_a_threshold: 30, level_a_unit: 'day', level_a_action: 'auto_approve', level_b_operator: '<', level_b_threshold: 30, level_b_unit: 'day', level_b_action: 'suggest_counterparty', level_b_counterparty: '延长通知期', level_c_operator: '<', level_c_threshold: 15, level_c_unit: 'day', level_c_action: 'block', level_c_message: '自动续约通知期过短，必须修改合同', priority: 60, is_active: true },
+    // R008: 单方解除权
+    { org_id: ORG_ID, code: 'R008', name: '单方解除权', description: '单方解除权通知期应在30-90天，少于7天为红线', category: 'duration', level_a_operator: '>=', level_a_threshold: 30, level_a_unit: 'day', level_a_action: 'auto_approve', level_b_operator: '<', level_b_threshold: 30, level_b_unit: 'day', level_b_action: 'suggest_counterparty', level_b_counterparty: '延长解除通知期', level_c_operator: '<', level_c_threshold: 7, level_c_unit: 'day', level_c_action: 'block', level_c_message: '单方解除通知期过短，必须修改合同', priority: 65, is_active: true },
+    // R009: 知识产权归属
+    { org_id: ORG_ID, code: 'R009', name: '知识产权归属', description: '定制开发成果知识产权归属需明确约定', category: 'text', level_a_operator: 'contains', level_a_threshold: 0, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: 'contains', level_b_threshold: 0, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '明确知识产权归属', level_c_operator: 'contains', level_c_threshold: 0, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '知识产权归属未明确，必须修改合同', priority: 95, is_active: true },
+    // R010: 保密期限
+    { org_id: ORG_ID, code: 'R010', name: '保密期限', description: '保密期限应在2-5年，超过10年为红线', category: 'duration', level_a_operator: '<=', level_a_threshold: 1825, level_a_unit: 'day', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 1825, level_b_unit: 'day', level_b_action: 'suggest_counterparty', level_b_counterparty: '缩短保密期限', level_c_operator: '>', level_c_threshold: 3650, level_c_unit: 'day', level_c_action: 'block', level_c_message: '保密期限超过10年，必须修改合同', priority: 55, is_active: true },
+    // R011: 竞业限制
+    { org_id: ORG_ID, code: 'R011', name: '竞业限制', description: '竞业限制期限应在6-24个月，超过36个月为红线', category: 'duration', level_a_operator: '<=', level_a_threshold: 720, level_a_unit: 'day', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 720, level_b_unit: 'day', level_b_action: 'suggest_counterparty', level_b_counterparty: '缩短竞业限制期', level_c_operator: '>', level_c_threshold: 1095, level_c_unit: 'day', level_c_action: 'block', level_c_message: '竞业限制超过36个月，必须修改合同', priority: 50, is_active: true },
+    // R012: 争议解决方式
+    { org_id: ORG_ID, code: 'R012', name: '争议解决方式', description: '争议解决方式应优先选择己方所在地法院/仲裁', category: 'text', level_a_operator: 'contains', level_a_threshold: 0, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: 'contains', level_b_threshold: 0, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '明确争议解决地', level_c_operator: 'contains', level_c_threshold: 0, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '争议解决方式未明确，必须修改合同', priority: 92, is_active: true },
+    // R013: 不可抗力范围
+    { org_id: ORG_ID, code: 'R013', name: '不可抗力范围', description: '不可抗力范围不应包含商业风险', category: 'text', level_a_operator: 'contains', level_a_threshold: 0, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: 'contains', level_b_threshold: 0, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '明确不可抗力范围', level_c_operator: 'contains', level_c_threshold: 0, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '不可抗力范围包含商业风险，必须修改合同', priority: 88, is_active: true },
+    // R014: 合同期限
+    { org_id: ORG_ID, code: 'R014', name: '合同期限', description: '合同期限应在1-3年，超过5年为红线', category: 'duration', level_a_operator: '<=', level_a_threshold: 1095, level_a_unit: 'day', level_a_action: 'auto_approve', level_b_operator: '>', level_b_threshold: 1095, level_b_unit: 'day', level_b_action: 'suggest_counterparty', level_b_counterparty: '缩短合同期限', level_c_operator: '>', level_c_threshold: 1825, level_c_unit: 'day', level_c_action: 'block', level_c_message: '合同期限超过5年，必须修改合同', priority: 72, is_active: true },
+    // R015: 变更流程
+    { org_id: ORG_ID, code: 'R015', name: '变更流程', description: '合同变更需书面形式并经双方授权代表签字', category: 'text', level_a_operator: 'contains', level_a_threshold: 0, level_a_unit: 'percent', level_a_action: 'auto_approve', level_b_operator: 'contains', level_b_threshold: 0, level_b_unit: 'percent', level_b_action: 'suggest_counterparty', level_b_counterparty: '完善变更流程', level_c_operator: 'contains', level_c_threshold: 0, level_c_unit: 'percent', level_c_action: 'block', level_c_message: '合同变更流程缺失，必须修改合同', priority: 96, is_active: true },
+  ]
+  const { error: rulesError } = await supabase.from('contract_rules_v2').upsert(contractRules, { onConflict: ['org_id', 'code'] })
+  if (rulesError) {
+    console.error('   Error seeding contract rules:', rulesError.message)
+  } else {
+    console.log(`   seeded ${contractRules.length} contract rules`)
+  }
+
   console.log('Done!')
 }
 
