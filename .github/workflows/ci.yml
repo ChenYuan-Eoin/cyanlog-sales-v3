@@ -106,7 +106,6 @@ jobs:
 
       - name: Setup E2E test user
         run: node scripts/setup-e2e-user.mjs
-        env:
         # SUPABASE_SERVICE_ROLE_KEY 已由 job 级别 env 提供
 
       - name: Start application
