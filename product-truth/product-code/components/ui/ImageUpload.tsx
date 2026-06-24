@@ -89,15 +89,19 @@ export function ImageUpload({
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="relative block w-full max-w-full p-1">
+        <div className="relative w-full max-w-full overflow-hidden rounded border bg-white p-2">
+          {/* ponytail: A7 修复图片溢出 - 使用 object-contain 和 max-w-full */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value}
             alt="Uploaded"
-            className={`rounded border object-contain bg-white max-w-full ${
-              square ? 'w-16 h-16' : 'h-16 w-auto max-w-[200px]'
+            className={`mx-auto object-contain ${
+              square ? 'w-full h-full' : 'max-w-full h-auto'
             }`}
-            style={square ? { width: previewHeight, height: previewHeight } : { height: previewHeight }}
+            style={square
+              ? { width: previewHeight, height: previewHeight, objectFit: 'contain' }
+              : { maxHeight: previewHeight * 2, width: 'auto', maxWidth: '100%' }
+            }
             onError={(e) => {
               (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚠️</text></svg>'
             }}
@@ -105,10 +109,10 @@ export function ImageUpload({
           <button
             type="button"
             onClick={clearImage}
-            className="absolute right-0 top-0 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
+            className="absolute right-1 top-1 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
             title="移除图片"
           >
-            <CloseIcon size={12} />
+            <CloseIcon size={14} />
           </button>
         </div>
       ) : (
