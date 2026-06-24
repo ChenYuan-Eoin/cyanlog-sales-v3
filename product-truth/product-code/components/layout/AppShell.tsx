@@ -18,8 +18,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
       {showSidebar ? <Sidebar /> : null}
-      {/* ml-64: desktop sidebar offset; lg:ml-64 only applies on lg+ screens */}
-      <main className={cn('min-h-screen bg-background', showSidebar && 'lg:ml-64')}>
+      {/* ml-64: desktop sidebar offset; pt-16: mobile hamburger button space */}
+      <main className={cn('min-h-screen bg-background pt-16 px-4 lg:pt-0 lg:px-0', showSidebar && 'lg:ml-64')}>
         {children}
       </main>
     </>
