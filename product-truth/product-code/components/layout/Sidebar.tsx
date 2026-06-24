@@ -64,13 +64,13 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile hamburger button */}
+      {/* Mobile hamburger button - z-index lower than sidebar but higher than overlay */}
       <button
-        className="fixed top-4 left-4 z-40 p-2 bg-slate-900 text-white rounded-md lg:hidden"
+        className="fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md lg:hidden shadow-lg"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="Toggle menu"
       >
-        <MenuIcon size={24} />
+        <MenuIcon size={22} />
       </button>
 
       {/* Overlay for mobile - only when sidebar is explicitly open */}
@@ -82,11 +82,13 @@ export function Sidebar() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - responsive width for mobile/tablet/desktop */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-slate-900 text-white',
+          'fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white',
           'will-change-transform',
+          // Responsive width: full on mobile, w-56 on md, w-64 on lg
+          'w-full sm:w-72 md:w-56 lg:w-64',
           // Transition only on mobile, desktop is always visible
           'lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
