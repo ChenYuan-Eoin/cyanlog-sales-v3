@@ -142,12 +142,27 @@ const getCachedOrganization = cache(async (orgId: string) => {
 })
 
 // 缓存用户角色查询
+// ponytail: 之前用 .eq('scope_id', orgId) 漏掉了 org-level 角色（scope_id=null）
+// 修复：改用子查询——先查该组织所有用户，再查这些用户的 user_roles
 const getCachedUserRoles = cache(async (orgId: string) => {
-  // 查询当前组织的所有用户角色（包括 org/department/space 各级别）
+  // 获取该组织所有用户ID
+  const { data: userIds, error: userError } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('org_id', orgId)
+
+  if (userError) {
+    throw new Error('USER_ROLES_FETCH_FAILED')
+  }
+
+  const ids = userIds?.map((u) => u.id) || []
+  if (ids.length === 0) return []
+
+  // 查询这些用户的所有角色（包括 org/department/space 各级别）
   const { data, error } = await supabaseAdmin
     .from('user_roles')
     .select('user_id, scope_type, scope_id, granted_at, role:roles(id, name, code)')
-    .eq('scope_id', orgId)
+    .in('user_id', ids)
 
   if (error) {
     throw new Error('USER_ROLES_FETCH_FAILED')
