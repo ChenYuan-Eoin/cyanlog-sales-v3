@@ -324,14 +324,15 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
     {
       accessorKey: 'display_name',
       header: '姓名',
+      size: 220,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
             {row.original.display_name?.charAt(0) || '?'}
           </div>
-          <div>
-            <div className="font-medium text-slate-900">{row.original.display_name}</div>
-            <div className="text-xs text-slate-500">{row.original.email}</div>
+          <div className="min-w-0">
+            <div className="font-medium text-slate-900 truncate">{row.original.display_name}</div>
+            <div className="text-xs text-slate-500 truncate">{row.original.email}</div>
           </div>
         </div>
       ),
@@ -339,8 +340,9 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
     {
       accessorKey: 'title',
       header: '职位',
+      size: 120,
       cell: ({ row }) => (
-        <span className="text-sm text-slate-600">
+        <span className="text-sm text-slate-600 truncate block">
           {row.original.title || '-'}
         </span>
       ),
@@ -348,8 +350,9 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
     {
       accessorKey: 'primary_dept_name',
       header: '部门',
+      size: 140,
       cell: ({ row }) => (
-        <Badge variant="outline" className="font-normal">
+        <Badge variant="outline" className="font-normal truncate max-w-[120px]">
           {row.original.primary_dept_name || '未分配'}
         </Badge>
       ),
@@ -357,8 +360,9 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
     {
       accessorKey: 'role_names',
       header: '角色',
+      size: 180,
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 max-w-[170px]">
           {row.original.role_names?.split(',').map((role, i) => (
             <Badge key={i} variant="secondary" className="text-xs">
               {role.trim()}
@@ -370,6 +374,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
     {
       accessorKey: 'status',
       header: '状态',
+      size: 90,
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <span className={`inline-block h-2 w-2 rounded-full ${
@@ -384,6 +389,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
     {
       id: 'actions',
       header: '操作',
+      size: 70,
       cell: ({ row }) => {
         const user = row.original
         const isInactive = user.status !== 'active'
@@ -576,7 +582,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
       </div>
 
       {/* 表格 */}
-      <div className="rounded-md border overflow-x-auto">
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
