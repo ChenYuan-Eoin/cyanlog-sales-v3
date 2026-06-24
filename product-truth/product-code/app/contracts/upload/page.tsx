@@ -4,24 +4,111 @@ import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftIcon, UploadIcon, FileTextIcon, AlertCircleIcon } from 'lucide-react'
-import { error as toastError } from '@/lib/toast'
+import { ArrowLeftIcon, UploadIcon, FileTextIcon, AlertCircleIcon, PauseIcon, PlayIcon, XIcon } from 'lucide-react'
+import { error as toastError, success as toastSuccess } from '@/lib/toast'
+import { useChunkUpload } from '@/lib/hooks/useChunkUpload'
+import { UploadProgressBar } from '@/components/upload/UploadProgress'
+import { cn } from '@/lib/utils'
+
+// 允许的文件类型
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
+
+// 最大文件大小: 500MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024
 
 export default function ContractUploadPage() {
   const router = useRouter()
-  const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
+  const [files, setFiles] = useState<File[]>([])
+  const [currentFileIndex, setCurrentFileIndex] = useState(0)
+  const [contractId, setContractId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0]
-    if (selected) {
-      setFile(selected)
+  const {
+    state: uploadState,
+    startUpload,
+    pauseUpload,
+    cancelUpload,
+  } = useChunkUpload({
+    chunkSize: 5 * 1024 * 1024, // 5MB 分块
+    concurrency: 3, // 3个并发
+    maxRetries: 3,
+    onProgress: (state) => {
+      // 进度更新时触发重渲染
+    },
+    onComplete: ({ fileUrl }) => {
+      toastSuccess('上传成功')
+      // 所有文件上传完成后跳转
+      if (currentFileIndex >= files.length - 1) {
+        router.push(`/contracts/${contractId}/review`)
+      } else {
+        // 继续上传下一个文件
+        setCurrentFileIndex(prev => prev + 1)
+        uploadNextFile(currentFileIndex + 1)
+      }
+    },
+    onError: (error) => {
+      setErrorMsg(error)
+      toastError(error)
+    },
+  })
+
+  // 验证文件
+  const validateFile = useCallback((file: File): string | null => {
+    // 检查文件类型
+    const extension = '.' + file.name.split('.').pop()?.toLowerCase()
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
+      return `不支持的文件类型: ${extension}，请上传 PDF、DOC 或 DOCX 文件`
     }
+
+    // 检查文件大小
+    if (file.size > MAX_FILE_SIZE) {
+      return `文件大小超过 500MB 限制: ${(file.size / 1024 / 1024).toFixed(2)} MB`
+    }
+
+    return null
   }, [])
 
+  // 处理文件选择
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || [])
+    const errors: string[] = []
+    const validFiles: File[] = []
+
+    selectedFiles.forEach(file => {
+      const error = validateFile(file)
+      if (error) {
+        errors.push(`${file.name}: ${error}`)
+      } else {
+        validFiles.push(file)
+      }
+    })
+
+    if (errors.length > 0) {
+      setErrorMsg(errors.join('\n'))
+      toastError(errors[0])
+    } else {
+      setErrorMsg(null)
+    }
+
+    if (validFiles.length > 0) {
+      setFiles(prev => [...prev, ...validFiles])
+    }
+
+    // 清空 input，允许重复选择相同文件
+    if (inputRef.current) {
+      inputRef.current.value = ''
+    }
+  }, [validateFile])
+
+  // 拖拽处理
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(true)
@@ -35,90 +122,145 @@ export default function ContractUploadPage() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    const droppedFile = e.dataTransfer.files[0]
-    if (droppedFile) {
-      setFile(droppedFile)
-    }
-  }, [])
 
-  const handleUpload = useCallback(async () => {
+    const droppedFiles = Array.from(e.dataTransfer.files)
+    const errors: string[] = []
+    const validFiles: File[] = []
+
+    droppedFiles.forEach(file => {
+      const error = validateFile(file)
+      if (error) {
+        errors.push(`${file.name}: ${error}`)
+      } else {
+        validFiles.push(file)
+      }
+    })
+
+    if (errors.length > 0) {
+      setErrorMsg(errors.join('\n'))
+      toastError(errors[0])
+    } else {
+      setErrorMsg(null)
+    }
+
+    if (validFiles.length > 0) {
+      setFiles(prev => [...prev, ...validFiles])
+    }
+  }, [validateFile])
+
+  // 删除文件
+  const removeFile = useCallback((index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
+    if (index < currentFileIndex) {
+      setCurrentFileIndex(prev => Math.max(0, prev - 1))
+    }
+  }, [currentFileIndex])
+
+  // 上传单个文件
+  const uploadSingleFile = useCallback(async (file: File, cid: string, token: string) => {
+    await startUpload(file, cid, token)
+  }, [startUpload])
+
+  // 创建合同并上传
+  const uploadNextFile = useCallback(async (fileIndex: number) => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      setErrorMsg('请先登录')
+      toastError('请先登录')
+      return
+    }
+
+    const file = files[fileIndex]
     if (!file) return
-    setUploading(true)
+
     setErrorMsg(null)
 
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        setErrorMsg('请先登录')
-        toastError('请先登录')
-        return
+      // 如果没有 contractId，先创建合同草稿
+      let cid = contractId
+      if (!cid) {
+        const createRes = await fetch('/api/contracts', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            party_b_name: file.name.replace(/\.[^/.]+$/, ''),
+            contract_amount: 0,
+          }),
+        })
+
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({ error: '创建合同草稿失败' }))
+          throw new Error(err.error || '创建合同草稿失败')
+        }
+
+        const createData = await createRes.json()
+        cid = createData.data?.contract_id || createData.data?.id
+
+        if (!cid) {
+          throw new Error('创建合同草稿失败：未返回合同ID')
+        }
+
+        setContractId(cid)
       }
 
-      // Step 1: Create contract draft
-      const createRes = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          party_b_name: file.name.replace(/\.[^/.]+$/, ''),
-          contract_amount: 0,
-        }),
-      })
-
-      if (!createRes.ok) {
-        const err = await createRes.json().catch(() => ({ error: '创建合同草稿失败' }))
-        setErrorMsg(err.error || '创建合同草稿失败')
-        toastError(err.error || '创建合同草稿失败')
-        return
-      }
-
-      const createData = await createRes.json()
-      const contractId = createData.data?.contract_id || createData.data?.id
-
-      if (!contractId) {
-        setErrorMsg('创建合同草稿失败：未返回合同ID')
-        toastError('创建合同草稿失败：未返回合同ID')
-        return
-      }
-
-      // Step 2: Upload file
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const uploadRes = await fetch(`/api/contracts/${contractId}/upload`, {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        body: formData,
-      })
-
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json().catch(() => ({ error: '文件上传失败' }))
-        setErrorMsg(err.error || '文件上传失败')
-        toastError(err.error || '文件上传失败')
-        return
-      }
-
-      // Step 3: Redirect to review
-      router.push(`/contracts/${contractId}/review`)
+      // 开始分块上传
+      await uploadSingleFile(file, cid, token)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '上传过程中发生错误，请重试'
+      const errorMessage = err instanceof Error ? err.message : '上传失败'
       setErrorMsg(errorMessage)
       toastError(errorMessage)
-      console.error('Upload error:', err)
-    } finally {
-      setUploading(false)
     }
-  }, [file, router])
+  }, [files, contractId, uploadSingleFile])
+
+  // 开始上传所有文件
+  const handleUpload = useCallback(() => {
+    if (files.length === 0 || uploadState.status === 'uploading') return
+    uploadNextFile(currentFileIndex)
+  }, [files, currentFileIndex, uploadState.status, uploadNextFile])
+
+  // 暂停/继续
+  const handlePause = useCallback(() => {
+    if (uploadState.status === 'uploading') {
+      pauseUpload()
+    } else if (uploadState.status === 'paused') {
+      // 继续上传
+      const token = localStorage.getItem('token')
+      if (token && contractId && files[currentFileIndex]) {
+        uploadSingleFile(files[currentFileIndex], contractId, token)
+      }
+    }
+  }, [uploadState.status, pauseUpload, files, currentFileIndex, contractId, uploadSingleFile])
+
+  // 取消上传
+  const handleCancel = useCallback(() => {
+    cancelUpload()
+    setFiles([])
+    setCurrentFileIndex(0)
+    setContractId(null)
+  }, [cancelUpload])
+
+  // 格式化文件大小
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
+  }
+
+  const isUploading = uploadState.status === 'uploading'
+  const isPaused = uploadState.status === 'paused'
 
   return (
     <div className="min-h-full bg-slate-50">
-      <div className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link href="/contracts">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" disabled={isUploading}>
               <ArrowLeftIcon className="h-4 w-4" />
             </Button>
           </Link>
@@ -129,18 +271,23 @@ export default function ContractUploadPage() {
         {errorMsg && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
             <AlertCircleIcon className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-sm text-red-700 font-medium">上传失败</p>
-              <p className="text-sm text-red-600">{errorMsg}</p>
+              <p className="text-sm text-red-600 whitespace-pre-line">{errorMsg}</p>
             </div>
           </div>
         )}
 
         {/* Upload Area */}
-        <div className="bg-white rounded-lg border border-slate-200 p-8">
+        <div className="bg-white rounded-lg border border-slate-200 p-6">
+          {/* Drag & Drop Zone */}
           <div
-            className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer
-              ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:border-blue-400'}`}
+            className={cn(
+              'border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer',
+              dragOver && 'border-blue-500 bg-blue-50',
+              !dragOver && 'border-slate-300 hover:border-blue-400',
+              (isUploading || files.length > 0) && 'pointer-events-none opacity-50'
+            )}
             onClick={() => inputRef.current?.click()}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -151,31 +298,133 @@ export default function ContractUploadPage() {
               id="file-input"
               type="file"
               accept=".doc,.docx,.pdf"
+              multiple
               className="hidden"
               onChange={handleFileChange}
+              disabled={isUploading}
             />
-            <UploadIcon className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <p className="text-sm text-slate-600 mb-2">
-              {file ? file.name : '点击上传或拖拽文件到此处'}
+            <UploadIcon className="h-10 w-10 text-slate-400 mx-auto mb-3" />
+            <p className="text-sm text-slate-600 mb-1">
+              点击选择文件或拖拽到此处
             </p>
-            <p className="text-xs text-slate-400">支持 DOC、DOCX、PDF 格式</p>
+            <p className="text-xs text-slate-400">
+              支持 PDF、DOC、DOCX 格式，单个文件最大 500MB
+            </p>
           </div>
 
-          {file && (
-            <div className="flex items-center gap-3 mt-6 p-3 bg-slate-50 rounded-lg">
-              <FileTextIcon className="h-5 w-5 text-blue-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{file.name}</p>
-                <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-              </div>
-              <Button
-                onClick={handleUpload}
-                disabled={uploading}
-              >
-                {uploading ? '上传中...' : '开始上传'}
-              </Button>
+          {/* File List */}
+          {files.length > 0 && (
+            <div className="mt-6 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">
+                待上传文件 ({files.length}个)
+              </h3>
+
+              {files.map((file, index) => (
+                <div
+                  key={`${file.name}-${index}`}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-lg border',
+                    index === currentFileIndex && isUploading
+                      ? 'bg-blue-50 border-blue-200'
+                      : index < currentFileIndex
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-slate-50 border-slate-200'
+                  )}
+                >
+                  <FileTextIcon className={cn(
+                    'h-5 w-5 shrink-0',
+                    index === currentFileIndex && isUploading && 'text-blue-500',
+                    index < currentFileIndex && 'text-green-500',
+                    index > currentFileIndex && 'text-slate-400'
+                  )} />
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{file.name}</p>
+                    <p className="text-xs text-slate-500">{formatFileSize(file.size)}</p>
+                  </div>
+
+                  {/* 当前上传文件的进度 */}
+                  {index === currentFileIndex && (isUploading || isPaused || uploadState.status === 'error') && (
+                    <div className="w-32 shrink-0">
+                      <UploadProgressBar
+                        progress={uploadState.progress}
+                        uploadedBytes={uploadState.uploadedBytes}
+                        totalBytes={uploadState.totalBytes}
+                        speed={uploadState.speed}
+                        status={uploadState.status}
+                        chunks={uploadState.chunks}
+                      />
+                    </div>
+                  )}
+
+                  {/* 状态图标 */}
+                  {index < currentFileIndex && (
+                    <span className="text-xs text-green-600 font-medium">已完成</span>
+                  )}
+
+                  {/* 删除按钮 */}
+                  {!isUploading && index >= currentFileIndex && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => removeFile(index)}
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
+
+          {/* Action Buttons */}
+          {files.length > 0 && (
+            <div className="mt-6 flex items-center justify-end gap-2">
+              {(isUploading || isPaused) && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handlePause}
+                  >
+                    {isPaused ? (
+                      <>
+                        <PlayIcon className="h-4 w-4 mr-1" />
+                        继续
+                      </>
+                    ) : (
+                      <>
+                        <PauseIcon className="h-4 w-4 mr-1" />
+                        暂停
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleCancel}
+                  >
+                    取消
+                  </Button>
+                </>
+              )}
+
+              {!isUploading && !isPaused && (
+                <Button
+                  onClick={handleUpload}
+                  disabled={currentFileIndex >= files.length}
+                >
+                  {currentFileIndex >= files.length ? '全部完成' : `开始上传 (${files.length - currentFileIndex}个)`}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Upload Tips */}
+        <div className="mt-6 text-xs text-slate-500 space-y-1">
+          <p>• 支持大文件分块上传，单个文件最大 500MB</p>
+          <p>• 支持断点续传，上传中断后可继续</p>
+          <p>• 3个分块并发上传，提高传输速度</p>
         </div>
       </div>
     </div>
