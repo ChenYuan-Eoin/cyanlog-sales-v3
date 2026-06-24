@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon } from 'lucide-react'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, KeyRoundIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
 import { success, error } from '@/lib/toast'
@@ -32,7 +32,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuPortal,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 
 interface OrgStructureTabProps {
@@ -386,6 +386,8 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
       header: '操作',
       cell: ({ row }) => {
         const user = row.original
+        const isInactive = user.status !== 'active'
+        const isLoginDisabled = user.login_enabled === false
 
         return (
           <DropdownMenu>
@@ -394,37 +396,146 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                 <MoreHorizontalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuPortal>
-            <DropdownMenuContent align="end" className="z-[100]" side="bottom" sideOffset={5}>
+            <DropdownMenuContent align="end" className="z-[100]">
+              {/* P0: 编辑 */}
               <DropdownMenuItem onSelect={() => onEditUser(user)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
+
+              {/* P0: 分配角色 */}
               <DropdownMenuItem onSelect={() => onAssignRole(user)}>
                 <ShieldIcon className="h-4 w-4 mr-2" />
                 分配角色
               </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* P0: 重置密码 */}
+              <DropdownMenuItem
+                onSelect={async () => {
+                  if (!confirm(`确定要重置用户 "${user.display_name}" 的密码吗？\n将生成临时密码，用户首次登录需改密。`)) return
+                  try {
+                    const res = await fetch(`/api/admin/users/${user.id}/reset-password`, {
+                      method: 'POST',
+                    })
+                    const result = await res.json()
+                    if (!res.ok) {
+                      error(result.error || '重置密码失败')
+                      return
+                    }
+                    // ponytail: MVP阶段临时密码返回前端显示
+                    // 升级路径：接入邮件服务后，改为"密码已发送至邮箱"
+                    success(`密码已重置，临时密码：${result.data?.tempPassword}`)
+                    onRefresh?.()
+                  } catch (_err) {
+                    error('重置密码请求失败')
+                  }
+                }}
+              >
+                <KeyRoundIcon className="h-4 w-4 mr-2" />
+                重置密码
+              </DropdownMenuItem>
+
+              {/* P1: 停用/启用 */}
+              <DropdownMenuItem
+                onSelect={async () => {
+                  const action = isInactive ? '启用' : '停用'
+                  if (!confirm(`确定要${action}用户 "${user.display_name}" 吗？`)) return
+                  try {
+                    const res = await fetch(`/api/admin/users/${user.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: isInactive ? 'active' : 'inactive' }),
+                    })
+                    const result = await res.json()
+                    if (!res.ok) {
+                      error(result.error || `${action}失败`)
+                      return
+                    }
+                    success(`用户已${action}`)
+                    onRefresh?.()
+                  } catch (_err) {
+                    error(`${action}请求失败`)
+                  }
+                }}
+              >
+                {isInactive ? (
+                  <>
+                    <PowerIcon className="h-4 w-4 mr-2 text-emerald-600" />
+                    <span className="text-emerald-600">启用用户</span>
+                  </>
+                ) : (
+                  <>
+                    <PowerOffIcon className="h-4 w-4 mr-2 text-amber-600" />
+                    <span className="text-amber-600">停用用户</span>
+                  </>
+                )}
+              </DropdownMenuItem>
+
+              {/* P1: 允许/禁止登录 */}
+              <DropdownMenuItem
+                onSelect={async () => {
+                  const action = isLoginDisabled ? '允许' : '禁止'
+                  if (!confirm(`确定要${action}用户 "${user.display_name}" 登录吗？`)) return
+                  try {
+                    const res = await fetch(`/api/admin/users/${user.id}/login-enabled`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ login_enabled: isLoginDisabled }),
+                    })
+                    const result = await res.json()
+                    if (!res.ok) {
+                      error(result.error || `${action}登录失败`)
+                      return
+                    }
+                    success(`已${action}登录`)
+                    onRefresh?.()
+                  } catch (_err) {
+                    error(`登录状态更新请求失败`)
+                  }
+                }}
+              >
+                {isLoginDisabled ? (
+                  <>
+                    <UnlockIcon className="h-4 w-4 mr-2 text-emerald-600" />
+                    <span className="text-emerald-600">允许登录</span>
+                  </>
+                ) : (
+                  <>
+                    <LockIcon className="h-4 w-4 mr-2 text-amber-600" />
+                    <span className="text-amber-600">禁止登录</span>
+                  </>
+                )}
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* P0: 删除（破坏性操作放在最后） */}
               <DropdownMenuItem
                 className="text-red-600"
-                onClick={async () => {
-                  if (!confirm(`确定要删除用户 "${user.display_name}" 吗？`)) return
-                  const res = await fetch(`/api/admin/users/${user.id}`, {
-                    method: 'DELETE',
-                  })
-                  if (!res.ok) {
+                onSelect={async () => {
+                  if (!confirm(`确定要删除用户 "${user.display_name}" 吗？\n此操作不可恢复。`)) return
+                  try {
+                    const res = await fetch(`/api/admin/users/${user.id}`, {
+                      method: 'DELETE',
+                    })
                     const result = await res.json()
-                    error(result.error || '删除失败')
-                    return
+                    if (!res.ok) {
+                      error(result.error || '删除失败')
+                      return
+                    }
+                    success('用户已删除')
+                    onRefresh?.()
+                  } catch (_err) {
+                    error('删除请求失败')
                   }
-                  success('用户已删除')
-                  onRefresh?.()
                 }}
               >
                 <TrashIcon className="h-4 w-4 mr-2" />
                 删除
               </DropdownMenuItem>
             </DropdownMenuContent>
-            </DropdownMenuPortal>
           </DropdownMenu>
         )
       },

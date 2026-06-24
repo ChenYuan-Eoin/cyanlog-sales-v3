@@ -26,7 +26,7 @@ export async function PATCH(
     }
 
     const body = await req.json()
-    const { display_name, title, primary_dept_id, status } = body
+    const { display_name, title, primary_dept_id, status, login_enabled, report_to_user_id } = body
 
     // 检查用户是否存在
     const { data: existing, error: checkError } = await supabaseAdmin
@@ -46,13 +46,15 @@ export async function PATCH(
     if (title !== undefined) updateData.title = title
     if (primary_dept_id !== undefined) updateData.primary_dept_id = primary_dept_id
     if (status !== undefined) updateData.status = status
+    if (login_enabled !== undefined) updateData.login_enabled = login_enabled
+    if (report_to_user_id !== undefined) updateData.report_to_user_id = report_to_user_id || null
 
     const { data, error } = await supabaseAdmin
       .from('users')
       .update(updateData)
       .eq('id', id)
       .eq('org_id', orgId)
-      .select('id, email, display_name, title, primary_dept_id, status')
+      .select('id, email, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
       .single()
 
     if (error) {

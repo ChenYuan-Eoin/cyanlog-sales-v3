@@ -451,7 +451,7 @@ async function listOrgPayload(orgId: string) {
   // 简化用户查询 - 不关联复杂角色数据，只获取基础信息
   const { data: usersData, error: usersError } = await supabaseAdmin
     .from('users')
-    .select('id, email, display_name, title, status, must_change_password, primary_dept_id')
+    .select('id, email, display_name, title, status, must_change_password, primary_dept_id, login_enabled, report_to_user_id')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
     .limit(200)
@@ -536,6 +536,9 @@ async function listOrgPayload(orgId: string) {
       scoped_roles: userRoleEntries,
       status: row.status,
       must_change_password: Boolean(row.must_change_password),
+      login_enabled: row.login_enabled ?? true,
+      report_to_user_id: row.report_to_user_id || null,
+      report_to_user_name: row.report_to_user_id ? (userNameById.get(row.report_to_user_id) || null) : null,
     }
   })
 

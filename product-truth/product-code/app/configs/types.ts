@@ -69,6 +69,9 @@ export interface OrgSummaryUser {
   scoped_roles?: ScopedRoleAssignment[]
   status: string
   must_change_password: boolean
+  login_enabled?: boolean
+  report_to_user_id?: string | null
+  report_to_user_name?: string | null
 }
 
 export interface OrgSummaryDepartment {

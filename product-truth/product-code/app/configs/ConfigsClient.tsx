@@ -22,7 +22,6 @@ import {
   UsersIcon,
   FileTextIcon,
 } from '@/components/icons'
-import Link from 'next/link'
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
