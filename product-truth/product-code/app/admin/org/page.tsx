@@ -1,7 +1,7 @@
-// B11 修复：统一组织与权限入口到配置中心
-// OrgAdminWorkbench 已被 OrgStructureTab 取代
-import { redirect } from 'next/navigation'
+import { OrgAdminWorkbench } from '@/components/admin/OrgAdminWorkbench'
 
+// B11: 保留 /admin/org 入口，与 /configs?tab=org-structure 共存
+// 避免破坏性变更，用户可以通过任一入口访问组织管理
 export default function OrgAdminPage() {
-  redirect('/configs?tab=org-structure')
+  return <OrgAdminWorkbench />
 }
