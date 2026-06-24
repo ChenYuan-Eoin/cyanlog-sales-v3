@@ -71,6 +71,7 @@ export default function NotionEditor({ initialBlocks = [], onChange, readOnly = 
   useEffect(() => {
     if (initialBlocks.length > 0 && blocks === initialBlocks) return
     onChange?.(blocks)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, onChange])
 
   const updateBlock = useCallback((id: string, updates: Partial<Block>) => {

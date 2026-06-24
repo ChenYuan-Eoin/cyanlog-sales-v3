@@ -63,7 +63,7 @@ export default function ProductDialog({
         loadTiers(product.id)
       }
     }
-  }, [product?.id, open, loadTiers])
+  }, [product?.id, open, loadTiers, product])
 
   const tiers = editingProduct.product_price_tiers || []
 

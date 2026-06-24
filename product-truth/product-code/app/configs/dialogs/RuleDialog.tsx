@@ -17,12 +17,11 @@ interface RuleDialogProps {
 export default function RuleDialog({ rule, open, onOpenChange, onSave }: RuleDialogProps) {
   const [editingRule, setEditingRule] = useState<Partial<Rule>>({})
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (rule) {
       setEditingRule({ ...rule })
     }
-  }, [rule?.id, open])
+  }, [rule?.id, open, rule])
 
   const handleSave = () => {
     onSave(editingRule)

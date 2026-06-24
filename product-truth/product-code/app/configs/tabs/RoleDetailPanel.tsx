@@ -156,7 +156,8 @@ export function RoleDetailPanel({
   // 权限变更时同步
   useMemo(() => {
     setPerms(role.permissions ?? [])
-  }, [role.id, role.permissions])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role.permissions])
 
   const hasChanges = JSON.stringify(perms.sort()) !== JSON.stringify((role.permissions ?? []).sort())
 

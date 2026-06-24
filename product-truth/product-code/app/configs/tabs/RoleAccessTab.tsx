@@ -67,6 +67,7 @@ export default function RoleAccessTab({
       if (b.isSuperAdmin) return 1
       return (a.sort_order ?? 999) - (b.sort_order ?? 999)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roles, users])
 
   // 过滤角色列表

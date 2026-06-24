@@ -115,7 +115,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
     } finally {
       setDeletingDept(null)
     }
-  }, [])
+  }, [onRefresh])
 
   function DeptNode({ dept, depth }: { dept: OrgSummaryDepartment; depth: number }) {
     const children = useMemo(() => departments.filter(d => d.parent_id === dept.id),
@@ -661,11 +661,11 @@ export default function OrgStructureTab({
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
 
   // 根据选中部门过滤成员
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const filteredUsers = useMemo(() => {
     if (!selectedDeptId) return users
     const allowedDeptIds = getAllChildDeptIds(departments, selectedDeptId)
     return users.filter(u => u.primary_dept_id && allowedDeptIds.has(u.primary_dept_id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users, departments, selectedDeptId])
 
   // 统计信息
