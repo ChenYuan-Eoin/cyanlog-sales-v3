@@ -35,7 +35,7 @@ import AIEditForm from './dialogs/AIEditForm'
 import ThemeEditForm from './dialogs/ThemeEditForm'
 
 const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
-  CONTRACT_RULE: { label: '合同审核规则', color: 'bg-blue-100 text-blue-800' },
+  CONTRACT_RULE: { label: '合同审核策略', color: 'bg-blue-100 text-blue-800' },
   TAX_RULE: { label: '税率规则', color: 'bg-emerald-100 text-emerald-800' },
   APPROVAL_RULE: { label: '审批权限', color: 'bg-purple-100 text-purple-800' },
   AI_CONFIG: { label: 'AI 配置', color: 'bg-amber-100 text-amber-800' },

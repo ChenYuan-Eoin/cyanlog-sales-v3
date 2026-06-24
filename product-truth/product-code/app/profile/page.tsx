@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { ImageUpload } from '@/components/ui/ImageUpload'
+import { error } from '@/lib/toast'
 
 interface UserProfile {
   id: string
@@ -103,10 +104,10 @@ export default function ProfilePage() {
       setPhone(updatedUser.phone || '')
       setAvatarUrl(updatedUser.avatar_url || '')
       setEditMode(false)
-    } catch (err) {
-      console.error('Save error:', err)
-      const msg = err instanceof Error ? err.message : '保存失败，请重试'
-      alert(msg)
+    } catch (_err) {
+      console.error('Save error:', _err)
+      const msg = _err instanceof Error ? _err.message : '保存失败，请重试'
+      error(msg)
     } finally {
       setSaving(false)
     }
