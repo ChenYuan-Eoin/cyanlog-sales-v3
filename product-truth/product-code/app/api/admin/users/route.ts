@@ -120,6 +120,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '创建用户失败' }, { status: 500 })
     }
 
+    // 同步 user_departments 主部门关联
+    if (primary_dept_id) {
+      const { error: deptError } = await supabaseAdmin
+        .from('user_departments')
+        .upsert({
+          user_id: user.id,
+          department_id: primary_dept_id,
+          is_primary: true,
+        }, { onConflict: 'user_id,department_id' })
+
+      if (deptError) {
+        console.error('Sync user_departments error:', deptError)
+        // 不阻断，继续
+      }
+    }
+
     // 分配角色（如果有）
     if (role_ids && role_ids.length > 0) {
       const roleAssignments = role_ids.map((roleId: string) => ({
