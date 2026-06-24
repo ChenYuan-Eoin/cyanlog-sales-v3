@@ -12,6 +12,19 @@ import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
 import { themeToCssVariables } from "@/lib/ui-theme-shared";
 
+export const metadata: Metadata = {
+  title: "Cyanlog Sales",
+  description: "智能销售支撑平台",
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/favicon.png',
+  },
+};
+
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -60,19 +73,4 @@ export default async function RootLayout({
       </body>
     </html>
   );
-}
-
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title: "Cyanlog Sales",
-    description: "智能销售支撑平台",
-    icons: {
-      icon: [
-        { url: '/favicon.ico', type: 'image/x-icon', sizes: '32x32' },
-        { url: '/favicon.svg?v=2', type: 'image/svg+xml', sizes: '32x32' },
-      ],
-      shortcut: '/favicon.ico',
-      apple: '/favicon.png',
-    },
-  }
 }
