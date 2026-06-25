@@ -113,7 +113,33 @@ function cacheKey(user: AuthUser, requestedSpaceId?: string | null) {
   return `${user.id}:${user.org_id || ''}:${requestedSpaceId || ''}`
 }
 
-async function loadDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {
+function normalizeDashboardPayload(value: unknown): DashboardPayload {
+  const payload = (value || {}) as Partial<DashboardPayload>
+  return {
+    spaces: Array.isArray(payload.spaces) ? payload.spaces : [],
+    activeSpace: payload.activeSpace || null,
+    opportunities: Array.isArray(payload.opportunities) ? payload.opportunities : [],
+    milestones: Array.isArray(payload.milestones) ? payload.milestones : [],
+    reminders: Array.isArray(payload.reminders) ? payload.reminders : [],
+    agenda: Array.isArray(payload.agenda) ? payload.agenda : [],
+  }
+}
+
+async function loadDashboardPayloadFromRpc(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload | null> {
+  const { data, error } = await supabaseAdmin.rpc('get_dashboard_payload_v1', {
+    p_user_id: user.id,
+    p_org_id: user.org_id || null,
+    p_requested_space_id: requestedSpaceId || null,
+  })
+
+  if (error) {
+    return null
+  }
+
+  return normalizeDashboardPayload(data)
+}
+
+async function loadDashboardPayloadViaQueries(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {
   const orgId = user.org_id || await getDefaultOrgId(user.id)
   const { spaces } = await listAccessibleSalesSpaces(user.id, orgId)
   const normalizedSpaces = spaces
@@ -219,6 +245,13 @@ async function loadDashboardPayload(user: AuthUser, requestedSpaceId?: string | 
     reminders: (remindersResult.data || []) as ReminderRow[],
     agenda,
   }
+}
+
+async function loadDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {
+  const rpcPayload = await loadDashboardPayloadFromRpc(user, requestedSpaceId)
+  if (rpcPayload) return rpcPayload
+
+  return loadDashboardPayloadViaQueries(user, requestedSpaceId)
 }
 
 export async function getDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {

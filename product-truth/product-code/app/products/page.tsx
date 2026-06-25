@@ -12,7 +12,7 @@ import { getServerAuthToken } from '@/lib/server-auth'
 export const dynamic = 'force-dynamic'
 
 export default async function ProductsPage() {
-  const token = getServerAuthToken()
+  const token = await getServerAuthToken()
   const orgId = await getOrgIdForToken(token)
 
   interface ProductRecord {

@@ -33,7 +33,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function OpportunityDetailPage({ params }: PageProps) {
   const { id } = await resolveRouteParams(params)
-  const token = getServerAuthToken()
+  const token = await getServerAuthToken()
 
   if (!token) {
     redirect('/login')

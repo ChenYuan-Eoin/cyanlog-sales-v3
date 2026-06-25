@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function ProductDetailPage({ params }: PageProps) {
   const { id } = await resolveRouteParams(params)
-  const token = getServerAuthToken()
+  const token = await getServerAuthToken()
   const orgId = await getOrgIdForToken(token)
   if (!orgId) {
     notFound()
