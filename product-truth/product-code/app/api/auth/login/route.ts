@@ -23,14 +23,17 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
 type LoginRateLimit = Awaited<ReturnType<typeof checkLoginRateLimit>>
 
-type LoginUserRow = {
+type LoginUserPublicRow = {
   id: string
   email: string | null
   phone: string | null
   display_name: string | null
   org_id: string | null
-  password_hash: string
   must_change_password: boolean | null
+}
+
+type LoginUserRow = LoginUserPublicRow & {
+  password_hash: string
 }
 
 type LoginCandidateRpcData = {
@@ -45,6 +48,19 @@ type LoginCandidate = {
   rateLimit: LoginRateLimit
   user: LoginUserRow | null
 }
+
+type LoginWithPasswordRpcData = {
+  ok?: unknown
+  code?: unknown
+  retryAfterSeconds?: unknown
+  user?: unknown
+}
+
+type LoginWithPasswordResult =
+  | { kind: 'ok'; user: LoginUserPublicRow }
+  | { kind: 'rate_limited'; reason: string; retryAfterSeconds?: number }
+  | { kind: 'auth_failed' }
+  | { kind: 'server_error' }
 
 // 统一错误响应格式
 function errorResponse(message: string, status: number, code?: string) {
@@ -89,6 +105,10 @@ function retryAfterSeconds(oldestAttemptedAt: unknown): number {
   return Math.max(retryAfter, 0)
 }
 
+function toOptionalSeconds(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.ceil(value)) : undefined
+}
+
 function buildRateLimitFromCandidate(data: LoginCandidateRpcData): LoginRateLimit {
   const accountCount = toCount(data.accountCount)
   const ipCount = toCount(data.ipCount)
@@ -118,13 +138,13 @@ function buildRateLimitFromCandidate(data: LoginCandidateRpcData): LoginRateLimi
   }
 }
 
-function normalizeLoginUserRow(value: unknown): LoginUserRow | null {
+function normalizeLoginUserPublicRow(value: unknown): LoginUserPublicRow | null {
   if (!value || typeof value !== 'object') {
     return null
   }
 
-  const user = value as Partial<LoginUserRow>
-  if (typeof user.id !== 'string' || typeof user.password_hash !== 'string') {
+  const user = value as Partial<LoginUserPublicRow>
+  if (typeof user.id !== 'string') {
     return null
   }
 
@@ -134,9 +154,73 @@ function normalizeLoginUserRow(value: unknown): LoginUserRow | null {
     phone: typeof user.phone === 'string' ? user.phone : null,
     display_name: typeof user.display_name === 'string' ? user.display_name : null,
     org_id: typeof user.org_id === 'string' ? user.org_id : null,
-    password_hash: user.password_hash,
     must_change_password: Boolean(user.must_change_password),
   }
+}
+
+function normalizeLoginUserRow(value: unknown): LoginUserRow | null {
+  const user = normalizeLoginUserPublicRow(value)
+  if (!user || !value || typeof value !== 'object') {
+    return null
+  }
+
+  const passwordHash = (value as Partial<LoginUserRow>).password_hash
+  if (typeof passwordHash !== 'string') {
+    return null
+  }
+
+  return {
+    ...user,
+    password_hash: passwordHash,
+  }
+}
+
+async function loadLoginWithPasswordFromRpc(
+  email: string | undefined,
+  phone: string | undefined,
+  password: string,
+  ipAddress: string,
+  token: string,
+  expiresAt: Date
+): Promise<LoginWithPasswordResult | null> {
+  const since = new Date(Date.now() - LOGIN_LOCK_DURATION_MINUTES * 60 * 1000).toISOString()
+  const { data, error } = await supabaseAdmin.rpc('login_with_password_v1', {
+    p_email: email || null,
+    p_phone: phone || null,
+    p_password: password,
+    p_ip_address: ipAddress,
+    p_token_id: uuidv4(),
+    p_token: token,
+    p_expires_at: expiresAt.toISOString(),
+    p_since: since,
+    p_account_limit: LOGIN_MAX_FAILURES,
+    p_ip_limit: LOGIN_MAX_FAILURES * 3,
+  })
+
+  if (error || !data || typeof data !== 'object') {
+    return null
+  }
+
+  const result = data as LoginWithPasswordRpcData
+  const code = typeof result.code === 'string' ? result.code : ''
+  if (result.ok === true) {
+    const user = normalizeLoginUserPublicRow(result.user)
+    return user ? { kind: 'ok', user } : { kind: 'server_error' }
+  }
+
+  if (code === 'account_locked' || code === 'ip_locked') {
+    return {
+      kind: 'rate_limited',
+      reason: code,
+      retryAfterSeconds: toOptionalSeconds(result.retryAfterSeconds),
+    }
+  }
+
+  if (code === 'AUTH_FAILED') {
+    return { kind: 'auth_failed' }
+  }
+
+  return null
 }
 
 async function loadLoginCandidateFromRpc(
@@ -176,6 +260,73 @@ async function queryLoginUser(email: string | undefined, phone: string | undefin
   return query.single()
 }
 
+function createSessionExpiry() {
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 7)
+  return expiresAt
+}
+
+async function createLoginSuccessResponse(
+  user: LoginUserPublicRow,
+  token: string,
+  expiresAt: Date
+) {
+  const authUser = {
+    id: user.id,
+    email: user.email,
+    phone: user.phone,
+    display_name: user.display_name,
+    org_id: user.org_id,
+  }
+  primeDefaultOrgCache(user.id, user.org_id)
+  if (!user.must_change_password) {
+    primeDashboardPayload(authUser)
+  }
+
+  primeAuthCache(token, authUser)
+
+  const response = NextResponse.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      displayName: user.display_name,
+    },
+    token,
+    expiresAt: expiresAt.toISOString(),
+    mustChangePassword: Boolean(user.must_change_password),
+    initialDashboard: user.must_change_password ? null : getCachedDashboardPayload(authUser),
+  })
+
+  response.cookies.set('token', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: SESSION_MAX_AGE_SECONDS,
+    expires: expiresAt,
+  })
+
+  const authContextCookie = await createAuthContextCookieValue(token, {
+    userId: user.id,
+    mustChangePassword: Boolean(user.must_change_password),
+    roleCodes: [],
+    allPermissions: [],
+    full: false,
+  })
+  if (authContextCookie) {
+    response.cookies.set(AUTH_CONTEXT_COOKIE_NAME, authContextCookie, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS,
+    })
+  }
+
+  return response
+}
+
 // POST /api/auth/login - 用户登录
 export async function POST(req: NextRequest) {
   try {
@@ -191,6 +342,37 @@ export async function POST(req: NextRequest) {
     const { email, phone, password } = result.data
     const identifier = email || phone!
     const ipAddress = getClientIp(req)
+
+    let token = uuidv4()
+    let expiresAt = createSessionExpiry()
+    const loginWithPassword = await loadLoginWithPasswordFromRpc(
+      email,
+      phone,
+      password,
+      ipAddress,
+      token,
+      expiresAt
+    )
+    if (loginWithPassword?.kind === 'rate_limited') {
+      const response = errorResponse(
+        '登录尝试过于频繁，请稍后再试',
+        429,
+        loginWithPassword.reason
+      )
+      if (loginWithPassword.retryAfterSeconds !== undefined) {
+        response.headers.set('Retry-After', String(loginWithPassword.retryAfterSeconds))
+      }
+      return response
+    }
+    if (loginWithPassword?.kind === 'auth_failed') {
+      return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
+    }
+    if (loginWithPassword?.kind === 'server_error') {
+      return errorResponse('登录失败，请重试', 500, 'LOGIN_RPC_FAILED')
+    }
+    if (loginWithPassword?.kind === 'ok') {
+      return createLoginSuccessResponse(loginWithPassword.user, token, expiresAt)
+    }
 
     const loginCandidate = await loadLoginCandidateFromRpc(email, phone, ipAddress)
     const rateLimit = loginCandidate?.rateLimit ?? (await checkLoginRateLimit(identifier, ipAddress))
@@ -226,22 +408,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
     }
 
-    const authUser = {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      display_name: user.display_name,
-      org_id: user.org_id,
-    }
-    primeDefaultOrgCache(user.id, user.org_id)
-    if (!user.must_change_password) {
-      primeDashboardPayload(authUser)
-    }
-
     // 生成 token
-    const token = uuidv4()
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 7) // 7天过期
+    token = uuidv4()
+    expiresAt = createSessionExpiry()
 
     const { error: tokenError } = await supabaseAdmin.from('auth_tokens').insert({
       id: uuidv4(),
@@ -255,52 +424,11 @@ export async function POST(req: NextRequest) {
       return errorResponse('登录失败，请重试', 500, 'TOKEN_CREATE_FAILED')
     }
 
-    primeAuthCache(token, authUser)
-
     void Promise.resolve(recordLoginAttempt(identifier, ipAddress, true)).catch((error) => {
       console.error('Login success audit error:', error)
     })
 
-    const response = NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        phone: user.phone,
-        displayName: user.display_name,
-      },
-      token,
-      expiresAt: expiresAt.toISOString(),
-      mustChangePassword: Boolean(user.must_change_password),
-      initialDashboard: user.must_change_password ? null : getCachedDashboardPayload(authUser),
-    })
-
-    response.cookies.set('token', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: SESSION_MAX_AGE_SECONDS,
-      expires: expiresAt,
-    })
-
-    const authContextCookie = await createAuthContextCookieValue(token, {
-      userId: user.id,
-      mustChangePassword: Boolean(user.must_change_password),
-      roleCodes: [],
-      allPermissions: [],
-      full: false,
-    })
-    if (authContextCookie) {
-      response.cookies.set(AUTH_CONTEXT_COOKIE_NAME, authContextCookie, {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-        maxAge: AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS,
-      })
-    }
-
-    return response
+    return createLoginSuccessResponse(user, token, expiresAt)
   } catch (error) {
     console.error('Login error:', error)
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')

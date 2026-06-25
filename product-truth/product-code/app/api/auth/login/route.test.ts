@@ -202,6 +202,34 @@ describe('POST /api/auth/login', () => {
       expect(supabaseAdmin.from).toHaveBeenCalledWith('auth_tokens')
     })
 
+    it('单 RPC 登录成功 → 200 且跳过 bcrypt 与 token insert', async () => {
+      ;(supabaseAdmin.rpc as any).mockResolvedValueOnce({
+        data: {
+          ok: true,
+          code: 'OK',
+          user: {
+            id: 'u-fast',
+            email: 'fast@x.com',
+            phone: null,
+            display_name: 'Fast User',
+            org_id: 'org-fast',
+            must_change_password: false,
+          },
+        },
+        error: null,
+      })
+
+      const res = await POST(makeRequest({ email: 'fast@x.com', password: 'right' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.user.id).toBe('u-fast')
+      expect(checkLoginRateLimit).not.toHaveBeenCalled()
+      expect(bcrypt.compare).not.toHaveBeenCalled()
+      expect(recordLoginAttempt).not.toHaveBeenCalled()
+      expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    })
+
     it('首登临时密码用户返回 mustChangePassword', async () => {
       ;(checkLoginRateLimit as any).mockResolvedValue({ allowed: true, remainingAttempts: 5 })
       ;(bcrypt.compare as any).mockResolvedValue(true)
