@@ -11,9 +11,40 @@ import {
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
 import { loginSchema } from '@/lib/validation'
-import { checkLoginRateLimit, getClientIp, recordLoginAttempt } from '@/lib/rate-limit'
+import {
+  LOGIN_LOCK_DURATION_MINUTES,
+  LOGIN_MAX_FAILURES,
+  checkLoginRateLimit,
+  getClientIp,
+  recordLoginAttempt,
+} from '@/lib/rate-limit'
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+
+type LoginRateLimit = Awaited<ReturnType<typeof checkLoginRateLimit>>
+
+type LoginUserRow = {
+  id: string
+  email: string | null
+  phone: string | null
+  display_name: string | null
+  org_id: string | null
+  password_hash: string
+  must_change_password: boolean | null
+}
+
+type LoginCandidateRpcData = {
+  accountCount?: unknown
+  accountOldestAttemptedAt?: unknown
+  ipCount?: unknown
+  ipOldestAttemptedAt?: unknown
+  user?: unknown
+}
+
+type LoginCandidate = {
+  rateLimit: LoginRateLimit
+  user: LoginUserRow | null
+}
 
 // 统一错误响应格式
 function errorResponse(message: string, status: number, code?: string) {
@@ -38,6 +69,113 @@ async function parseLoginPayload(req: NextRequest) {
   }
 }
 
+function toCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function retryAfterSeconds(oldestAttemptedAt: unknown): number {
+  if (typeof oldestAttemptedAt !== 'string') {
+    return LOGIN_LOCK_DURATION_MINUTES * 60
+  }
+
+  const attemptedAtMs = new Date(oldestAttemptedAt).getTime()
+  if (!Number.isFinite(attemptedAtMs)) {
+    return LOGIN_LOCK_DURATION_MINUTES * 60
+  }
+
+  const retryAfter = Math.ceil(
+    (attemptedAtMs + LOGIN_LOCK_DURATION_MINUTES * 60 * 1000 - Date.now()) / 1000
+  )
+  return Math.max(retryAfter, 0)
+}
+
+function buildRateLimitFromCandidate(data: LoginCandidateRpcData): LoginRateLimit {
+  const accountCount = toCount(data.accountCount)
+  const ipCount = toCount(data.ipCount)
+  const ipFailureLimit = LOGIN_MAX_FAILURES * 3
+
+  if (accountCount >= LOGIN_MAX_FAILURES) {
+    return {
+      allowed: false,
+      remainingAttempts: 0,
+      retryAfterSeconds: retryAfterSeconds(data.accountOldestAttemptedAt),
+      reason: 'account_locked',
+    }
+  }
+
+  if (ipCount >= ipFailureLimit) {
+    return {
+      allowed: false,
+      remainingAttempts: 0,
+      retryAfterSeconds: retryAfterSeconds(data.ipOldestAttemptedAt),
+      reason: 'ip_locked',
+    }
+  }
+
+  return {
+    allowed: true,
+    remainingAttempts: Math.max(0, LOGIN_MAX_FAILURES - Math.max(accountCount, ipCount)),
+  }
+}
+
+function normalizeLoginUserRow(value: unknown): LoginUserRow | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const user = value as Partial<LoginUserRow>
+  if (typeof user.id !== 'string' || typeof user.password_hash !== 'string') {
+    return null
+  }
+
+  return {
+    id: user.id,
+    email: typeof user.email === 'string' ? user.email : null,
+    phone: typeof user.phone === 'string' ? user.phone : null,
+    display_name: typeof user.display_name === 'string' ? user.display_name : null,
+    org_id: typeof user.org_id === 'string' ? user.org_id : null,
+    password_hash: user.password_hash,
+    must_change_password: Boolean(user.must_change_password),
+  }
+}
+
+async function loadLoginCandidateFromRpc(
+  email: string | undefined,
+  phone: string | undefined,
+  ipAddress: string
+): Promise<LoginCandidate | null> {
+  const since = new Date(Date.now() - LOGIN_LOCK_DURATION_MINUTES * 60 * 1000).toISOString()
+  const { data, error } = await supabaseAdmin.rpc('get_login_candidate_v1', {
+    p_email: email || null,
+    p_phone: phone || null,
+    p_ip_address: ipAddress,
+    p_since: since,
+    p_account_limit: LOGIN_MAX_FAILURES,
+    p_ip_limit: LOGIN_MAX_FAILURES * 3,
+  })
+
+  if (error || !data || typeof data !== 'object') {
+    return null
+  }
+
+  const candidate = data as LoginCandidateRpcData
+  return {
+    rateLimit: buildRateLimitFromCandidate(candidate),
+    user: normalizeLoginUserRow(candidate.user),
+  }
+}
+
+async function queryLoginUser(email: string | undefined, phone: string | undefined) {
+  let query = supabaseAdmin.from('users').select('id, email, phone, display_name, org_id, password_hash, must_change_password')
+  if (email) {
+    query = query.eq('email', email)
+  } else {
+    query = query.eq('phone', phone)
+  }
+
+  return query.single()
+}
+
 // POST /api/auth/login - 用户登录
 export async function POST(req: NextRequest) {
   try {
@@ -54,7 +192,8 @@ export async function POST(req: NextRequest) {
     const identifier = email || phone!
     const ipAddress = getClientIp(req)
 
-    const rateLimit = await checkLoginRateLimit(identifier, ipAddress)
+    const loginCandidate = await loadLoginCandidateFromRpc(email, phone, ipAddress)
+    const rateLimit = loginCandidate?.rateLimit ?? (await checkLoginRateLimit(identifier, ipAddress))
     if (!rateLimit.allowed) {
       const response = errorResponse(
         '登录尝试过于频繁，请稍后再试',
@@ -67,14 +206,13 @@ export async function POST(req: NextRequest) {
       return response
     }
 
-    let query = supabaseAdmin.from('users').select('id, email, phone, display_name, org_id, password_hash, must_change_password')
-    if (email) {
-      query = query.eq('email', email)
-    } else {
-      query = query.eq('phone', phone)
+    let user = loginCandidate?.user ?? null
+    let userError: unknown = null
+    if (!loginCandidate) {
+      const userResult = await queryLoginUser(email, phone)
+      user = userResult.data as LoginUserRow | null
+      userError = userResult.error
     }
-
-    const { data: user, error: userError } = await query.single()
 
     if (userError || !user) {
       await recordLoginAttempt(identifier, ipAddress, false)

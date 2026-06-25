@@ -2,8 +2,8 @@
 // 防止暴力破解密码，限制单 IP / 单账号的尝试频率
 //
 // 策略：
-// - 同一 IP 失败 5 次后，锁定 15 分钟
-// - 同一账号失败 5 次后，锁定 30 分钟
+// - 同一 IP 失败 15 次后，锁定 15 分钟
+// - 同一账号失败 5 次后，锁定 15 分钟
 // - 锁定期间返回 429 状态码
 // - 成功登录后清零计数器
 //
@@ -11,8 +11,11 @@
 
 import { supabaseAdmin } from './supabase'
 
-const MAX_FAILURES = 5
-const LOCK_DURATION_MINUTES = 15
+export const LOGIN_MAX_FAILURES = 5
+export const LOGIN_LOCK_DURATION_MINUTES = 15
+
+const MAX_FAILURES = LOGIN_MAX_FAILURES
+const LOCK_DURATION_MINUTES = LOGIN_LOCK_DURATION_MINUTES
 
 interface RateLimitResult {
   allowed: boolean

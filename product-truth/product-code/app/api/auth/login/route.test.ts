@@ -7,10 +7,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }))
 
 vi.mock('@/lib/rate-limit', () => ({
+  LOGIN_LOCK_DURATION_MINUTES: 15,
+  LOGIN_MAX_FAILURES: 5,
   checkLoginRateLimit: vi.fn(),
   recordLoginAttempt: vi.fn(),
   getClientIp: vi.fn(() => '127.0.0.1'),
@@ -53,6 +56,10 @@ function makeChain(result: any) {
 describe('POST /api/auth/login', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({
+      data: null,
+      error: { message: 'RPC not available in route unit tests' },
+    })
   })
 
   describe('参数验证', () => {
@@ -92,6 +99,27 @@ describe('POST /api/auth/login', () => {
       expect(res.status).toBe(429)
       expect(body.code).toBe('account_locked')
       expect(res.headers.get('Retry-After')).toBe('600')
+    })
+
+    it('RPC rate limit 触发时不再执行旧查询 → 429', async () => {
+      ;(supabaseAdmin.rpc as any).mockResolvedValue({
+        data: {
+          accountCount: 5,
+          accountOldestAttemptedAt: new Date(Date.now() - 60_000).toISOString(),
+          ipCount: 0,
+          ipOldestAttemptedAt: null,
+          user: null,
+        },
+        error: null,
+      })
+
+      const res = await POST(makeRequest({ email: 'test@x.com', password: 'abc' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(429)
+      expect(body.code).toBe('account_locked')
+      expect(checkLoginRateLimit).not.toHaveBeenCalled()
+      expect(supabaseAdmin.from).not.toHaveBeenCalled()
     })
   })
 
@@ -140,6 +168,38 @@ describe('POST /api/auth/login', () => {
       expect(body.mustChangePassword).toBe(false)
       expect(res.cookies.get('token')?.value).toBe(body.token)
       expect(recordLoginAttempt).toHaveBeenCalledWith('u@x.com', '127.0.0.1', true)
+    })
+
+    it('RPC 命中用户候选 → 200 且跳过旧 rate limit 与 users 查询', async () => {
+      ;(supabaseAdmin.rpc as any).mockResolvedValue({
+        data: {
+          accountCount: 0,
+          accountOldestAttemptedAt: null,
+          ipCount: 0,
+          ipOldestAttemptedAt: null,
+          user: {
+            id: 'u-rpc',
+            email: 'rpc@x.com',
+            phone: null,
+            display_name: 'RPC User',
+            org_id: 'org-rpc',
+            password_hash: 'hashed',
+            must_change_password: false,
+          },
+        },
+        error: null,
+      })
+      ;(bcrypt.compare as any).mockResolvedValue(true)
+      ;(supabaseAdmin.from as any).mockReturnValueOnce(makeChain({ data: null, error: null }))
+
+      const res = await POST(makeRequest({ email: 'rpc@x.com', password: 'right' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.user.id).toBe('u-rpc')
+      expect(checkLoginRateLimit).not.toHaveBeenCalled()
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+      expect(supabaseAdmin.from).toHaveBeenCalledWith('auth_tokens')
     })
 
     it('首登临时密码用户返回 mustChangePassword', async () => {
