@@ -2,10 +2,25 @@
 // PURPOSE: 用户的更新和删除
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  assertDepartmentInOrg,
+  syncPrimaryDepartmentMembership,
+  syncUserSalesSpaces,
+} from '@/lib/admin/org-membership'
+
+const updateUserSchema = z.object({
+  display_name: z.string().trim().min(1, '姓名不能为空').optional(),
+  title: z.string().trim().nullable().optional(),
+  primary_dept_id: z.string().regex(/^[0-9a-f-]{36}$/i, '主部门 ID 格式不正确').nullable().optional(),
+  status: z.enum(['active', 'inactive', 'suspended']).optional(),
+  login_enabled: z.boolean().optional(),
+  report_to_user_id: z.string().regex(/^[0-9a-f-]{36}$/i, '直属上级 ID 格式不正确').nullable().optional(),
+})
 
 // PATCH /api/admin/users/:id - 更新用户
 export async function PATCH(
@@ -25,8 +40,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { display_name, title, primary_dept_id, status, login_enabled, report_to_user_id } = body
+    const parseResult = updateUserSchema.safeParse(await req.json())
+    if (!parseResult.success) {
+      const firstIssue = parseResult.error.issues[0]
+      return NextResponse.json(
+        { error: firstIssue?.message || '用户参数不正确', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
+    }
+
+    const { display_name, title, primary_dept_id, status, login_enabled, report_to_user_id } = parseResult.data
 
     // 检查用户是否存在
     const { data: existing, error: checkError } = await supabaseAdmin
@@ -38,6 +61,26 @@ export async function PATCH(
 
     if (checkError || !existing) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
+    }
+
+    if (primary_dept_id) {
+      const department = await assertDepartmentInOrg(orgId, primary_dept_id)
+      if (!department) {
+        return NextResponse.json({ error: '主部门不存在', code: 'INVALID_PRIMARY_DEPARTMENT' }, { status: 400 })
+      }
+    }
+
+    if (report_to_user_id) {
+      const { data: manager } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('id', report_to_user_id)
+        .eq('org_id', orgId)
+        .maybeSingle()
+
+      if (!manager) {
+        return NextResponse.json({ error: '直属上级不存在', code: 'INVALID_REPORT_TO_USER' }, { status: 400 })
+      }
     }
 
     // 更新数据
@@ -60,6 +103,16 @@ export async function PATCH(
     if (error) {
       console.error('Update user error:', error)
       return NextResponse.json({ error: '更新用户失败' }, { status: 500 })
+    }
+
+    if (primary_dept_id !== undefined) {
+      try {
+        await syncPrimaryDepartmentMembership(id, primary_dept_id || null)
+        await syncUserSalesSpaces(id, orgId, primary_dept_id || null)
+      } catch (syncError) {
+        console.error('Update user department sync error:', syncError)
+        return NextResponse.json({ error: '更新成员部门关联失败' }, { status: 500 })
+      }
     }
 
     return NextResponse.json({

@@ -27,7 +27,7 @@ export interface UseChunkUploadOptions {
   maxRetries?: number // default 3
   concurrency?: number // default 3
   onProgress?: (state: UploadState) => void
-  onComplete?: (result: { fileUrl: string; storagePath: string }) => void
+  onComplete?: (result: { contractId: string; fileUrl: string; storagePath: string }) => void
   onError?: (error: string) => void
 }
 
@@ -264,6 +264,14 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
       }
 
       const result = await mergeRes.json()
+      const resultData = result?.data || {}
+      const fileUrl = typeof resultData.fileUrl === 'string' ? resultData.fileUrl : ''
+      const storagePath = typeof resultData.storagePath === 'string' ? resultData.storagePath : ''
+      const mergedContractId = typeof resultData.contractId === 'string' ? resultData.contractId : contractId
+
+      if (!fileUrl || !storagePath || !mergedContractId) {
+        throw new Error('文件合并成功但返回数据不完整')
+      }
 
       setState(prev => ({
         ...prev,
@@ -272,8 +280,9 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
       }))
 
       onComplete?.({
-        fileUrl: result.data.fileUrl,
-        storagePath: result.data.storagePath,
+        contractId: mergedContractId,
+        fileUrl,
+        storagePath,
       })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '上传失败'

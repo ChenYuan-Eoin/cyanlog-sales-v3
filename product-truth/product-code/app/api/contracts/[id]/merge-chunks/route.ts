@@ -1,13 +1,14 @@
 // POST /api/contracts/[id]/merge-chunks - 合并所有分块
 // 将临时分块合并为完整文件，移动到正式存储
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { logError } from '@/lib/error-log'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
-import { errorResponse } from '@/lib/api/common'
+import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
+import { extractContractText } from '@/lib/contracts/text-extraction'
 
 const TEMP_BUCKET = 'contract-chunks'
 const FINAL_BUCKET = 'contracts'
@@ -130,6 +131,8 @@ export async function POST(
       .from(FINAL_BUCKET)
       .getPublicUrl(finalPath)
 
+    const parsedText = extractContractText(mergedArray, fileName, fileType)
+
     // 更新合同记录
     const { error: updateError } = await supabaseAdmin
       .from('contracts')
@@ -138,6 +141,18 @@ export async function POST(
         storage_path: finalPath,
         size: totalSize,
         mime_type: fileType,
+        ...(parsedText
+          ? {
+              parsed_text: parsedText,
+              ocr_status: 'COMPLETED',
+              ocr_result: {
+                raw_text: parsedText,
+                confidence: 0.8,
+                source: 'text-extraction',
+                completed_at: new Date().toISOString(),
+              },
+            }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)
@@ -158,15 +173,13 @@ export async function POST(
       })
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        fileUrl: urlData.publicUrl,
-        storagePath: finalPath,
-        fileName,
-        fileSize: totalSize,
-        fileType,
-      },
+    return successResponse({
+      contractId,
+      fileUrl: urlData.publicUrl,
+      storagePath: finalPath,
+      fileName,
+      fileSize: totalSize,
+      fileType,
       message: '上传成功',
     })
   } catch (error: unknown) {

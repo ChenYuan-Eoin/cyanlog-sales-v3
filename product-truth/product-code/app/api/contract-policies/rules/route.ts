@@ -68,6 +68,8 @@ export async function GET(req: NextRequest) {
     }
     if (isActive !== null) {
       query = query.eq('is_active', isActive === 'true')
+    } else {
+      query = query.eq('is_active', true)
     }
 
     const { data: rules, error } = await query

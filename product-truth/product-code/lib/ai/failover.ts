@@ -62,7 +62,17 @@ function isLocalEndpoint(baseUrl: string): boolean {
 }
 
 async function isProviderHealthy(provider: AIProvider): Promise<boolean> {
-  if (provider.providerKind !== 'openai_compatible' || !isLocalEndpoint(provider.config.base_url)) {
+  if (provider.providerKind !== 'openai_compatible') {
+    return true
+  }
+
+  const isLocal = isLocalEndpoint(provider.config.base_url)
+  if (!isLocal && !provider.config.api_key) {
+    HEALTH_CACHE.set(provider.id, { healthy: false, checkedAt: Date.now() })
+    return false
+  }
+
+  if (!isLocal) {
     return true
   }
 

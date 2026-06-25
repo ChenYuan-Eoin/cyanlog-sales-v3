@@ -8,6 +8,7 @@ import { logError } from '@/lib/error-log'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
+import { extractContractText } from '@/lib/contracts/text-extraction'
 
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -75,12 +76,14 @@ export async function POST(
     const timestamp = Date.now()
     const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
     const storagePath = `${contractId}/${timestamp}_${safeFileName}`
+    const fileBytes = Buffer.from(await file.arrayBuffer())
+    const parsedText = extractContractText(fileBytes, file.name, file.type)
 
     // 上传文件到 Supabase Storage
     const { error: uploadError } = await supabaseAdmin
       .storage
       .from('contracts')
-      .upload(storagePath, file, {
+      .upload(storagePath, fileBytes, {
         contentType: file.type,
         upsert: true,
       })
@@ -115,6 +118,18 @@ export async function POST(
         storage_path: storagePath,
         size: file.size,
         mime_type: file.type || 'application/octet-stream',
+        ...(parsedText
+          ? {
+              parsed_text: parsedText,
+              ocr_status: 'COMPLETED',
+              ocr_result: {
+                raw_text: parsedText,
+                confidence: 0.8,
+                source: 'text-extraction',
+                completed_at: new Date().toISOString(),
+              },
+            }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)

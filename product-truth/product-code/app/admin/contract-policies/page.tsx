@@ -44,7 +44,7 @@ export default function ContractPoliciesPage() {
   const fetchRules = useCallback(async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/contract-policies/rules', {
+      const res = await fetch('/api/contract-policies/rules?is_active=true', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (res.ok) {

@@ -81,6 +81,17 @@ export interface ReviewOptions {
   strategyCode?: 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE'
 }
 
+export function formatAnalysisError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    const parts = [record.message, record.details, record.hint, record.code]
+      .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    if (parts.length > 0) return parts.join(' | ')
+  }
+  return String(error)
+}
+
 export async function enqueueContractAnalysisJob(contractId: string, reviewId: string, requestedBy: string) {
   const { data, error } = await supabaseAdmin
     .from('contract_analysis_jobs')
@@ -241,7 +252,7 @@ export async function markContractAnalysisCompleted(job: ContractAnalysisJobReco
 
 export async function markContractAnalysisFailed(job: ContractAnalysisJobRecord, error: unknown) {
   const now = new Date().toISOString()
-  const message = error instanceof Error ? error.message : String(error)
+  const message = formatAnalysisError(error)
 
   await Promise.all([
     supabaseAdmin
@@ -577,9 +588,26 @@ export async function saveStructuredReport(
   report: StructuredReport,
   strategyId?: string
 ): Promise<void> {
-  const now = new Date().toISOString()
-
   await supabaseAdmin.from('contract_clauses').delete().eq('review_id', reviewId)
+  await supabaseAdmin.from('contract_risk_cards').delete().eq('review_id', reviewId)
+
+  if (report.result.risks.length > 0) {
+    const riskRows = report.result.risks.map((risk) => ({
+      review_id: reviewId,
+      contract_id: contractId,
+      level: risk.level,
+      title: risk.title,
+      description: risk.description,
+      suggestion: risk.suggestion,
+      auto_fixable: false,
+      detected_by: 'ai',
+      confidence: report.result.degraded ? 0.5 : 0.8,
+      status: 'open',
+    }))
+    const { error: riskError } = await supabaseAdmin.from('contract_risk_cards').insert(riskRows)
+    if (riskError) throw riskError
+  }
+
   if (report.clauses.length > 0) {
     const clauseRows = report.clauses.map(c => ({
       review_id: reviewId,
@@ -598,15 +626,16 @@ export async function saveStructuredReport(
       start_offset: c.startOffset,
       end_offset: c.endOffset,
     }))
-    await supabaseAdmin.from('contract_clauses').insert(clauseRows)
+    const { error: clauseError } = await supabaseAdmin.from('contract_clauses').insert(clauseRows)
+    if (clauseError) throw clauseError
   }
 
-  await supabaseAdmin.from('contract_reviews').update({
+  const { error: reviewError } = await supabaseAdmin.from('contract_reviews').update({
     strategy_id: strategyId || null,
     risk_summary: report.risk_summary as unknown as Record<string, unknown>,
     compliance_check: report.compliance_check as unknown as Record<string, unknown>,
     effectiveness_analysis: report.effectiveness_analysis,
     report_version: 2,
-    updated_at: now,
   }).eq('id', reviewId)
+  if (reviewError) throw reviewError
 }

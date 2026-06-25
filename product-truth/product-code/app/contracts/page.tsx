@@ -60,7 +60,7 @@ const quickActions = [
     icon: EyeIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
-    href: '/admin/rule-review',
+    href: '/contracts/upload',
     description: '选择合同审核',
   },
   {
@@ -183,16 +183,31 @@ export default function ContractCenterPage() {
   }, [contracts, drafts])
 
   const resolvedQuickActions = useMemo(() => {
+    const reviewTarget = contracts.find((contract) =>
+      contract.status === 'PENDING'
+      || contract.status === 'PARSING'
+      || contract.status === 'ANALYZING'
+      || contract.status === 'FAILED'
+    ) || contracts.find((contract) => contract.status === 'COMPLETED') || contracts[0]
     const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED') || contracts[0]
     return quickActions.map((action) => {
-      if (action.id !== 'compare') {
-        return action
+      if (action.id === 'review') {
+        return {
+          ...action,
+          href: reviewTarget ? `/contracts/${reviewTarget.id}/review` : '/contracts/upload',
+          description: reviewTarget ? '进入合同审核工作台' : '先上传合同',
+        }
       }
-      return {
-        ...action,
-        href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/new',
-        description: compareTarget ? '查看最近合同差异' : '先创建合同',
+
+      if (action.id === 'compare') {
+        return {
+          ...action,
+          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/upload',
+          description: compareTarget ? '查看最近合同差异' : '先上传合同',
+        }
       }
+
+      return action
     })
   }, [contracts])
 

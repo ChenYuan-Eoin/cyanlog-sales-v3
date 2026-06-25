@@ -127,8 +127,16 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
 
     return (
       <div>
-        <button
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => handleDeptClick(dept.id, hasChildren)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              handleDeptClick(dept.id, hasChildren)
+            }
+          }}
           className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition group ${
             isSelected
               ? 'bg-blue-50 text-blue-900 hover:bg-blue-100'
@@ -171,6 +179,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
+                type="button"
                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-slate-200/50"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -205,7 +214,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
           <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
             {dept.member_count}
           </Badge>
-        </button>
+        </div>
 
         {isExpanded && hasChildren && (
           <div>
@@ -735,7 +744,8 @@ export default function OrgStructureTab({
                 error(result.error || '创建用户失败')
                 throw new Error(result.error)
               }
-              success('用户创建成功')
+              const tempPassword = result.data?.tempPassword
+              success(tempPassword ? `用户创建成功，临时密码：${tempPassword}` : '用户创建成功')
               onFeishuSync()
             }}
             trigger={

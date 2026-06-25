@@ -6,7 +6,6 @@ export const preferredRegion = 'sin1'
 
 import { randomBytes, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
-import { cache } from 'react'
 import bcrypt from 'bcryptjs'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
@@ -81,13 +80,7 @@ const createTempPassword = (): string => {
   return `Cyan!${randomBytes(9).toString('base64url')}`
 }
 
-// ============ 缓存层 - 数据不常变，缓存 5 分钟 ============
-
-// 缓存 TTL 注释说明：react cache 自动处理缓存生命周期
-// const CACHE_TTL_SECONDS = 300 // 5 分钟 - 保留作为文档
-
-// 缓存部门列表查询
-const getCachedDepartments = cache(async (orgId: string): Promise<OrgDepartmentRow[]> => {
+async function getOrgDepartments(orgId: string): Promise<OrgDepartmentRow[]> {
   const { data, error } = await supabaseAdmin
     .from('departments')
     .select('id, name, code, depth, member_count, parent_id, leader_id')
@@ -100,10 +93,9 @@ const getCachedDepartments = cache(async (orgId: string): Promise<OrgDepartmentR
   }
 
   return (data || []) as OrgDepartmentRow[]
-})
+}
 
-// 缓存角色列表查询
-const getCachedRoles = cache(async (): Promise<RoleLookup[]> => {
+async function getOrgRoles(): Promise<RoleLookup[]> {
   const { data, error } = await supabaseAdmin
     .from('roles')
     .select('id, code, name, sort_order')
@@ -114,10 +106,9 @@ const getCachedRoles = cache(async (): Promise<RoleLookup[]> => {
   }
 
   return (data || []) as RoleLookup[]
-})
+}
 
-// 缓存销售空间列表查询
-const getCachedSalesSpaces = cache(async (orgId: string): Promise<SalesSpaceRow[]> => {
+async function getOrgSalesSpaces(orgId: string): Promise<SalesSpaceRow[]> {
   const { data, error } = await supabaseAdmin
     .from('sales_spaces')
     .select('id, name, description, department_id, owner_id')
@@ -129,10 +120,9 @@ const getCachedSalesSpaces = cache(async (orgId: string): Promise<SalesSpaceRow[
   }
 
   return (data || []) as SalesSpaceRow[]
-})
+}
 
-// 缓存组织信息查询
-const getCachedOrganization = cache(async (orgId: string) => {
+async function getOrganization(orgId: string) {
   const { data, error } = await supabaseAdmin
     .from('organizations')
     .select('id, name, slug')
@@ -144,9 +134,9 @@ const getCachedOrganization = cache(async (orgId: string) => {
   }
 
   return data
-})
+}
 
-const getCachedOrgUserIds = cache(async (orgId: string): Promise<string[]> => {
+async function getOrgUserIds(orgId: string): Promise<string[]> {
   const [membershipResult, directResult] = await Promise.all([
     supabaseAdmin
       .from('user_organizations')
@@ -166,10 +156,10 @@ const getCachedOrgUserIds = cache(async (orgId: string): Promise<string[]> => {
     ...((membershipResult.data || []) as OrgUserIdRow[]).map((row) => row.user_id),
     ...((directResult.data || []) as OrgUserIdRow[]).map((row) => row.id),
   ].filter((id): id is string => Boolean(id))))
-})
+}
 
-const getCachedUserRoles = cache(async (orgId: string) => {
-  const ids = await getCachedOrgUserIds(orgId)
+async function getOrgUserRoles(orgId: string) {
+  const ids = await getOrgUserIds(orgId)
   if (ids.length === 0) {
     return []
   }
@@ -185,7 +175,7 @@ const getCachedUserRoles = cache(async (orgId: string) => {
   }
 
   return data || []
-})
+}
 
 async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   const user = await requireAuth(req)
@@ -372,13 +362,19 @@ async function clearUserRolesForOrg(userId: string, orgId: string) {
 }
 
 async function syncPrimaryDepartmentMembership(userId: string, primaryDeptId: string | null) {
-  const { error: resetError } = await supabaseAdmin
+  let deleteOldPrimaryQuery = supabaseAdmin
     .from('user_departments')
-    .update({ is_primary: false })
+    .delete()
     .eq('user_id', userId)
+    .eq('is_primary', true)
 
-  if (resetError) {
-    console.error('[syncPrimaryDepartmentMembership] Reset error:', resetError)
+  if (primaryDeptId) {
+    deleteOldPrimaryQuery = deleteOldPrimaryQuery.neq('department_id', primaryDeptId)
+  }
+
+  const { error: deleteError } = await deleteOldPrimaryQuery
+  if (deleteError) {
+    throw new Error('PRIMARY_DEPARTMENT_SYNC_FAILED')
   }
 
   if (!primaryDeptId) {
@@ -471,13 +467,12 @@ async function syncUserSalesSpaces(userId: string, orgId: string, primaryDeptId:
 
 // 优化后的列表查询 - 使用缓存和简化查询
 async function listOrgPayload(orgId: string) {
-  // 并行获取缓存数据（部门、角色、销售空间、组织信息）
   const [departments, roles, spaces, organization, orgUserIds] = await Promise.all([
-    getCachedDepartments(orgId),
-    getCachedRoles(),
-    getCachedSalesSpaces(orgId),
-    getCachedOrganization(orgId),
-    getCachedOrgUserIds(orgId),
+    getOrgDepartments(orgId),
+    getOrgRoles(),
+    getOrgSalesSpaces(orgId),
+    getOrganization(orgId),
+    getOrgUserIds(orgId),
   ])
 
   // 构建部门名称映射
@@ -515,8 +510,7 @@ async function listOrgPayload(orgId: string) {
   // 构建用户姓名映射（用于查找部门主管）
   const userNameById = new Map(usersData.map((u) => [u.id, u.display_name]))
 
-  // 获取用户角色关联（缓存）
-  const userRolesData = await getCachedUserRoles(orgId)
+  const userRolesData = await getOrgUserRoles(orgId)
 
   // 构建角色映射
   // 角色映射（预留，用于后续扩展）
@@ -584,6 +578,7 @@ async function listOrgPayload(orgId: string) {
       role_names: userRoleEntries
         .map((r) => (r.scopeType === 'org' ? r.roleName : `${r.roleName}(${r.scopeName})`))
         .join(', '),
+      role_ids: userRoleEntries.filter((r) => r.scopeType === 'org').map((r) => r.roleId),
       role_codes: userRoleEntries.filter((r) => r.scopeType === 'org').map((r) => r.roleCode),
       scoped_roles: userRoleEntries,
       status: row.status,

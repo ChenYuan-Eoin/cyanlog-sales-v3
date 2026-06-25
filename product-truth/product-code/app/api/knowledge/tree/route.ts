@@ -9,6 +9,7 @@ import {
   fetchKnowledgePermissions,
   getKnowledgeAccessContext,
 } from '@/lib/knowledge/access'
+import { canManageOrg } from '@/lib/scoped-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,7 +80,6 @@ export async function GET(req: NextRequest) {
       .from('knowledge_pages')
       .select('*')
       .eq('org_id', orgId)
-      .eq('is_archived', false)
       .order('depth', { ascending: true })
       .order('sort_order', { ascending: true })
 
@@ -98,21 +98,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '获取知识库失败' }, { status: 500 })
     }
 
-    const permissionMap = await fetchKnowledgePermissions((pages || []).map((page) => page.id))
-    const visiblePages = ((pages || []) as KnowledgePage[]).filter((page) =>
-      canUseKnowledgePage(
+    const pageRows = ((pages || []) as KnowledgePage[]).filter((page) => !page.is_archived)
+    const canManageKnowledge = canManageOrg(assignments)
+    const permissionMap = canManageKnowledge
+      ? new Map()
+      : await fetchKnowledgePermissions(pageRows.map((page) => page.id))
+
+    const visiblePages = pageRows.filter((page) => {
+      if (page.created_by === user.id || canManageKnowledge) {
+        return true
+      }
+
+      return canUseKnowledgePage(
         page,
         permissionMap.get(page.id) || [],
         { userId: user.id, orgId, assignments },
         'view'
       )
-    )
+    })
     const tree = buildTree(visiblePages)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       data: tree,
       meta: { total: visiblePages.length },
     })
+    response.headers.set('Cache-Control', 'no-store')
+    return response
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

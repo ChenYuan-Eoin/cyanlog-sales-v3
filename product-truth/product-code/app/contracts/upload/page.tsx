@@ -40,7 +40,14 @@ export default function ContractUploadPage() {
   const [contractId, setContractId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [finalizingReview, setFinalizingReview] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const activeContractIdRef = useRef<string | null>(null)
+  const currentFileIndexRef = useRef(currentFileIndex)
+  const filesRef = useRef<File[]>(files)
+
+  currentFileIndexRef.current = currentFileIndex
+  filesRef.current = files
 
   const {
     state: uploadState,
@@ -54,22 +61,94 @@ export default function ContractUploadPage() {
     onProgress: () => {
       // 进度状态由 hook 管理，页面只消费状态渲染。
     },
-    onComplete: () => {
-      toastSuccess('上传成功')
-      // 所有文件上传完成后跳转
-      if (currentFileIndex >= files.length - 1) {
-        router.push(`/contracts/${contractId}/review`)
-      } else {
-        // 继续上传下一个文件
-        setCurrentFileIndex(prev => prev + 1)
-        uploadNextFile(currentFileIndex + 1)
-      }
+    onComplete: (result) => {
+      void handleUploadComplete(result)
     },
     onError: (error) => {
       setErrorMsg(error)
       toastError(error)
     },
   })
+
+  async function submitContractForReview(cid: string, token: string) {
+    const submitRes = await fetch(`/api/contracts/${cid}/submit`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    const submitData = await submitRes.json().catch(() => ({ error: '提交审核失败' }))
+    if (!submitRes.ok) {
+      throw new Error(readApiError(submitData, '提交审核失败'))
+    }
+
+    return submitData
+  }
+
+  async function startContractAnalysis(cid: string, token: string) {
+    const analyzeRes = await fetch(`/api/contracts/${cid}/analyze`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    const analyzeData = await analyzeRes.json().catch(() => ({ error: '启动审核失败' }))
+    if (!analyzeRes.ok) {
+      throw new Error(readApiError(analyzeData, '启动审核失败'))
+    }
+    if (analyzeData.status === 'FAILED') {
+      throw new Error(analyzeData.processingError || '审核处理失败')
+    }
+
+    return analyzeData
+  }
+
+  async function handleUploadComplete(result: { contractId: string }) {
+    toastSuccess('上传成功')
+    const completedContractId = result.contractId || activeContractIdRef.current
+    if (!completedContractId) {
+      const message = '上传完成但未返回合同ID'
+      setErrorMsg(message)
+      toastError(message)
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      const message = '请先登录'
+      setErrorMsg(message)
+      toastError(message)
+      return
+    }
+
+    setFinalizingReview(true)
+    try {
+      await submitContractForReview(completedContractId, token)
+      await startContractAnalysis(completedContractId, token)
+
+      // 所有文件上传完成后跳转
+      const completedIndex = currentFileIndexRef.current
+      const fileCount = filesRef.current.length
+      if (completedIndex >= fileCount - 1) {
+        router.push(`/contracts/${completedContractId}/review`)
+      } else {
+        // 继续上传下一个文件
+        const nextIndex = completedIndex + 1
+        setCurrentFileIndex(nextIndex)
+        setContractId(null)
+        activeContractIdRef.current = null
+        setFinalizingReview(false)
+        uploadNextFile(nextIndex)
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '审核启动失败'
+      setErrorMsg(errorMessage)
+      toastError(errorMessage)
+      setFinalizingReview(false)
+    }
+  }
 
   // 验证文件
   const validateFile = useCallback((file: File): string | null => {
@@ -187,35 +266,32 @@ export default function ContractUploadPage() {
     setErrorMsg(null)
 
     try {
-      // 如果没有 contractId，先创建合同草稿
-      let cid = contractId
-      if (!cid) {
-        const createRes = await fetch('/api/contracts', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            party_b_name: file.name.replace(/\.[^/.]+$/, ''),
-            contract_amount: 0,
-          }),
-        })
+      const createRes = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          party_b_name: file.name.replace(/\.[^/.]+$/, ''),
+          contract_amount: 0,
+        }),
+      })
 
-        if (!createRes.ok) {
-          const err = await createRes.json().catch(() => ({ error: '创建合同草稿失败' }))
-          throw new Error(readApiError(err, '创建合同草稿失败'))
-        }
-
-        const createData = await createRes.json()
-        cid = createData.data?.contract_id || createData.data?.id
-
-        if (!cid) {
-          throw new Error('创建合同草稿失败：未返回合同ID')
-        }
-
-        setContractId(cid)
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({ error: '创建合同草稿失败' }))
+        throw new Error(readApiError(err, '创建合同草稿失败'))
       }
+
+      const createData = await createRes.json()
+      const cid = createData.data?.contract_id || createData.data?.id
+
+      if (!cid) {
+        throw new Error('创建合同草稿失败：未返回合同ID')
+      }
+
+      setContractId(cid)
+      activeContractIdRef.current = cid
 
       // 开始分块上传
       await uploadSingleFile(file, cid, token)
@@ -224,13 +300,16 @@ export default function ContractUploadPage() {
       setErrorMsg(errorMessage)
       toastError(errorMessage)
     }
-  }, [files, contractId, uploadSingleFile])
+  }, [files, uploadSingleFile])
 
   // 开始上传所有文件
   const handleUpload = useCallback(() => {
     if (files.length === 0 || uploadState.status === 'uploading') return
-    uploadNextFile(currentFileIndex)
-  }, [files, currentFileIndex, uploadState.status, uploadNextFile])
+    setCurrentFileIndex(0)
+    setContractId(null)
+    activeContractIdRef.current = null
+    uploadNextFile(0)
+  }, [files, uploadState.status, uploadNextFile])
 
   // 暂停/继续
   const handlePause = useCallback(() => {
@@ -251,6 +330,8 @@ export default function ContractUploadPage() {
     setFiles([])
     setCurrentFileIndex(0)
     setContractId(null)
+    setFinalizingReview(false)
+    activeContractIdRef.current = null
   }, [cancelUpload])
 
   // 格式化文件大小
@@ -264,6 +345,7 @@ export default function ContractUploadPage() {
 
   const isUploading = uploadState.status === 'uploading'
   const isPaused = uploadState.status === 'paused'
+  const isBusy = isUploading || finalizingReview
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -271,7 +353,7 @@ export default function ContractUploadPage() {
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link href="/contracts">
-            <Button variant="ghost" size="icon" disabled={isUploading}>
+            <Button variant="ghost" size="icon" disabled={isBusy}>
               <ArrowLeftIcon className="h-4 w-4" />
             </Button>
           </Link>
@@ -297,7 +379,7 @@ export default function ContractUploadPage() {
               'border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer',
               dragOver && 'border-blue-500 bg-blue-50',
               !dragOver && 'border-slate-300 hover:border-blue-400',
-              (isUploading || files.length > 0) && 'pointer-events-none opacity-50'
+              (isBusy || files.length > 0) && 'pointer-events-none opacity-50'
             )}
             onClick={() => inputRef.current?.click()}
             onDragOver={handleDragOver}
@@ -312,7 +394,7 @@ export default function ContractUploadPage() {
               multiple
               className="hidden"
               onChange={handleFileChange}
-              disabled={isUploading}
+              disabled={isBusy}
             />
             <UploadIcon className="h-10 w-10 text-slate-400 mx-auto mb-3" />
             <p className="text-sm text-slate-600 mb-1">
@@ -355,7 +437,7 @@ export default function ContractUploadPage() {
                   </div>
 
                   {/* 当前上传文件的进度 */}
-                  {index === currentFileIndex && (isUploading || isPaused || uploadState.status === 'error') && (
+                  {index === currentFileIndex && (isBusy || isPaused || uploadState.status === 'error') && (
                     <div className="w-32 shrink-0">
                       <UploadProgressBar
                         progress={uploadState.progress}
@@ -374,7 +456,7 @@ export default function ContractUploadPage() {
                   )}
 
                   {/* 删除按钮 */}
-                  {!isUploading && index >= currentFileIndex && (
+                  {!isBusy && index >= currentFileIndex && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -392,34 +474,43 @@ export default function ContractUploadPage() {
           {/* Action Buttons */}
           {files.length > 0 && (
             <div className="mt-6 flex items-center justify-end gap-2">
-              {(isUploading || isPaused) && (
+              {(isBusy || isPaused) && (
                 <>
-                  <Button
-                    variant="outline"
-                    onClick={handlePause}
-                  >
-                    {isPaused ? (
-                      <>
-                        <PlayIcon className="h-4 w-4 mr-1" />
-                        继续
-                      </>
-                    ) : (
-                      <>
-                        <PauseIcon className="h-4 w-4 mr-1" />
-                        暂停
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                  >
-                    取消
-                  </Button>
+                  {finalizingReview ? (
+                    <Button variant="outline" disabled>
+                      <FileTextIcon className="h-4 w-4 mr-1" />
+                      生成审核中...
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={handlePause}
+                      >
+                        {isPaused ? (
+                          <>
+                            <PlayIcon className="h-4 w-4 mr-1" />
+                            继续
+                          </>
+                        ) : (
+                          <>
+                            <PauseIcon className="h-4 w-4 mr-1" />
+                            暂停
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleCancel}
+                      >
+                        取消
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
 
-              {!isUploading && !isPaused && (
+              {!isBusy && !isPaused && (
                 <Button
                   onClick={handleUpload}
                   disabled={currentFileIndex >= files.length}

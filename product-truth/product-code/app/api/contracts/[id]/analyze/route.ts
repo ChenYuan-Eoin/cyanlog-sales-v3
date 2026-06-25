@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enqueueContractAnalysisJob, runStructuredAnalysis, saveStructuredReport, markContractAnalysisRunning, markContractAnalysisCompleted, type ReviewOptions } from '@/lib/contract-analysis'
+import { enqueueContractAnalysisJob, runStructuredAnalysis, saveStructuredReport, markContractAnalysisRunning, markContractAnalysisCompleted, markContractAnalysisFailed, formatAnalysisError, type ReviewOptions } from '@/lib/contract-analysis'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
@@ -186,15 +186,15 @@ export async function POST(
 
     try {
       // 改用结构化分析（保留 AI 模型和规则引擎不改动）
-      const structuredReport = await runStructuredAnalysis(id, reviewOptions)
-      // 用现有的 mark 函数，避免新增
       await markContractAnalysisRunning(job)
+      const structuredReport = await runStructuredAnalysis(id, reviewOptions)
       await saveStructuredReport(review.id, id, structuredReport, strategyId)
       await markContractAnalysisCompleted(job, structuredReport.result)
       responseStatus = 'COMPLETED'
       responseMessage = '结构化审核已完成'
     } catch (fallbackError) {
-      processingError = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+      processingError = formatAnalysisError(fallbackError)
+      await markContractAnalysisFailed(job, fallbackError)
       responseStatus = 'FAILED'
       responseMessage = '审核处理失败，任务状态已记录'
     }

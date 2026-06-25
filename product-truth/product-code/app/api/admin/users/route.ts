@@ -2,10 +2,29 @@
 // PURPOSE: 用户的增删改查
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  assertDepartmentInOrg,
+  createAdminTempPassword,
+  ensureDefaultOrganizationMembership,
+  hashAdminPassword,
+  replaceOrgRoleIds,
+  syncPrimaryDepartmentMembership,
+  syncUserSalesSpaces,
+} from '@/lib/admin/org-membership'
+
+const createUserSchema = z.object({
+  email: z.string().trim().email('请输入有效的邮箱地址').transform((value) => value.toLowerCase()),
+  display_name: z.string().trim().min(1, '姓名不能为空'),
+  title: z.string().trim().nullable().optional(),
+  primary_dept_id: z.string().regex(/^[0-9a-f-]{36}$/i, '主部门 ID 格式不正确').nullable().optional(),
+  role_ids: z.array(z.string().regex(/^[0-9a-f-]{36}$/i, '角色 ID 格式不正确')).optional().default([]),
+  status: z.enum(['active', 'inactive', 'suspended']).optional().default('active'),
+})
 
 // GET /api/admin/users - 获取用户列表
 export async function GET(req: NextRequest) {
@@ -85,12 +104,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { email, display_name, title, primary_dept_id, role_ids } = body
+    const parseResult = createUserSchema.safeParse(await req.json())
+    if (!parseResult.success) {
+      const firstIssue = parseResult.error.issues[0]
+      return NextResponse.json(
+        { error: firstIssue?.message || '用户参数不正确', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
+    }
 
-    // 校验
-    if (!email || !display_name) {
-      return NextResponse.json({ error: '邮箱和姓名不能为空' }, { status: 400 })
+    const { email, display_name, title, primary_dept_id, role_ids, status } = parseResult.data
+
+    if (primary_dept_id) {
+      const department = await assertDepartmentInOrg(orgId, primary_dept_id)
+      if (!department) {
+        return NextResponse.json({ error: '主部门不存在', code: 'INVALID_PRIMARY_DEPARTMENT' }, { status: 400 })
+      }
     }
 
     // 检查邮箱唯一性
@@ -99,11 +128,14 @@ export async function POST(req: NextRequest) {
       .select('id')
       .eq('org_id', orgId)
       .eq('email', email)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       return NextResponse.json({ error: '该邮箱已被使用' }, { status: 409 })
     }
+
+    const tempPassword = createAdminTempPassword()
+    const passwordHash = await hashAdminPassword(tempPassword)
 
     // 创建用户
     const { data: user, error: userError } = await supabaseAdmin
@@ -114,7 +146,9 @@ export async function POST(req: NextRequest) {
         display_name,
         title: title || null,
         primary_dept_id: primary_dept_id || null,
-        status: 'active',
+        password_hash: passwordHash,
+        must_change_password: true,
+        status,
       })
       .select('id, email, display_name, title, primary_dept_id, status')
       .single()
@@ -124,45 +158,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '创建用户失败' }, { status: 500 })
     }
 
-    // 同步 user_departments 主部门关联
-    if (primary_dept_id) {
-      const { error: deptError } = await supabaseAdmin
-        .from('user_departments')
-        .upsert({
-          user_id: user.id,
-          department_id: primary_dept_id,
-          is_primary: true,
-        }, { onConflict: 'user_id,department_id' })
-
-      if (deptError) {
-        console.error('Sync user_departments error:', deptError)
-        // 不阻断，继续
-      }
-    }
-
-    // 分配角色（如果有）
-    if (role_ids && role_ids.length > 0) {
-      const roleAssignments = role_ids.map((roleId: string) => ({
-        user_id: user.id,
-        role_id: roleId,
-        scope_type: 'org',
-        scope_id: orgId,
-        granted_by: currentUser.id,
-      }))
-
-      const { error: roleError } = await supabaseAdmin
-        .from('user_roles')
-        .insert(roleAssignments)
-
-      if (roleError) {
-        console.error('Assign roles error:', roleError)
-        // 不阻断，继续返回创建成功的用户
-      }
+    try {
+      await ensureDefaultOrganizationMembership(user.id, orgId)
+      await syncPrimaryDepartmentMembership(user.id, primary_dept_id || null)
+      await syncUserSalesSpaces(user.id, orgId, primary_dept_id || null)
+      await replaceOrgRoleIds(user.id, orgId, role_ids, currentUser.id)
+    } catch (syncError) {
+      console.error('Create user consistency error:', syncError)
+      await supabaseAdmin.from('users').delete().eq('id', user.id)
+      return NextResponse.json({ error: '创建用户关联数据失败' }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      data: user,
+      data: {
+        ...user,
+        tempPassword,
+      },
       message: '用户创建成功',
     }, { status: 201 })
   } catch (err) {

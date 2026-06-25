@@ -2,10 +2,18 @@
 // PURPOSE: 为用户分配角色
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+import { replaceOrgRoleIds } from '@/lib/admin/org-membership'
+
+const assignOrgRolesSchema = z.object({
+  role_ids: z.array(z.string().regex(/^[0-9a-f-]{36}$/i, '角色 ID 格式不正确')),
+  scope_type: z.literal('org').optional().default('org'),
+  scope_id: z.string().regex(/^[0-9a-f-]{36}$/i, '作用域 ID 格式不正确').nullable().optional(),
+})
 
 // POST /api/admin/users/:id/roles - 分配角色
 export async function POST(
@@ -25,13 +33,16 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { role_ids, scope_type = 'org', scope_id = null } = body
-
-    // 校验
-    if (!role_ids || !Array.isArray(role_ids) || role_ids.length === 0) {
-      return NextResponse.json({ error: '请至少选择一个角色' }, { status: 400 })
+    const parseResult = assignOrgRolesSchema.safeParse(await req.json())
+    if (!parseResult.success) {
+      const firstIssue = parseResult.error.issues[0]
+      return NextResponse.json(
+        { error: firstIssue?.message || '角色参数不正确', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
     }
+
+    const { role_ids } = parseResult.data
 
     // 检查用户是否存在
     const { data: userExists, error: userCheckError } = await supabaseAdmin
@@ -45,55 +56,13 @@ export async function POST(
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
     }
 
-    // 检查角色是否存在且属于当前组织（全局角色不检查org_id）
-    const { data: validRoles, error: roleCheckError } = await supabaseAdmin
-      .from('roles')
-      .select('id')
-      .in('id', role_ids)
-
-    if (roleCheckError) {
-      console.error('Check roles error:', roleCheckError)
-      return NextResponse.json({ error: '检查角色失败' }, { status: 500 })
-    }
-
-    const validRoleIds = validRoles?.map(r => r.id) || []
-    if (validRoleIds.length !== role_ids.length) {
-      return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
-    }
-
-    // 先删除该用户在该范围内的现有角色
-    const { error: deleteError } = await supabaseAdmin
-      .from('user_roles')
-      .delete()
-      .eq('user_id', userId)
-      .eq('scope_type', scope_type)
-      .eq('scope_id', scope_id || null)
-
-    if (deleteError) {
-      console.error('Delete existing roles error:', deleteError)
-      return NextResponse.json({ error: '更新角色失败' }, { status: 500 })
-    }
-
-    // 插入新角色
-    const roleAssignments = validRoleIds.map((roleId: string) => ({
-      user_id: userId,
-      role_id: roleId,
-      scope_type,
-      scope_id: scope_id || null,
-      granted_by: currentUser.id,
-    }))
-
-    const { data, error } = await supabaseAdmin
-      .from('user_roles')
-      .insert(roleAssignments)
-      .select(`
-        id,
-        role:role_id(id, name, code),
-        scope_type,
-        scope_id
-      `)
-
-    if (error) {
+    let data
+    try {
+      data = await replaceOrgRoleIds(userId, orgId, role_ids, currentUser.id)
+    } catch (error) {
+      if (error instanceof Error && error.message === 'ROLE_NOT_FOUND') {
+        return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
+      }
       console.error('Assign roles error:', error)
       return NextResponse.json({ error: '分配角色失败' }, { status: 500 })
     }

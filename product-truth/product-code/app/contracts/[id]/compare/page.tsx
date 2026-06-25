@@ -13,6 +13,7 @@ import {
   CheckCircleIcon,
   LockIcon,
   Edit3Icon,
+  Loader2Icon,
 } from 'lucide-react'
 
 interface DiffItem {
@@ -36,6 +37,13 @@ interface ComparisonData {
   created_at: string
 }
 
+interface ContractOption {
+  id: string
+  filename: string
+  status: string
+  updated_at: string
+}
+
 export default function ContractComparePage() {
   const params = useParams()
   const searchParams = useSearchParams()
@@ -47,12 +55,17 @@ export default function ContractComparePage() {
   const [error, setError] = useState('')
   const [selectedDiffId, setSelectedDiffId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'dual' | 'merge'>('dual')
+  const [candidateContracts, setCandidateContracts] = useState<ContractOption[]>([])
+  const [selectedCompareDocId, setSelectedCompareDocId] = useState('')
+  const [startingComparison, setStartingComparison] = useState(false)
 
   const leftPaneRef = useRef<HTMLDivElement>(null)
   const rightPaneRef = useRef<HTMLDivElement>(null)
   const isSyncing = useRef(false)
 
   const fetchComparison = useCallback(async () => {
+    setLoading(true)
+    setError('')
     try {
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
@@ -80,9 +93,69 @@ export default function ContractComparePage() {
     }
   }, [contractId, comparisonId])
 
+  const fetchCandidateContracts = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/contracts?page=1&pageSize=100&status=COMPLETED', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) {
+        return
+      }
+
+      const data = await res.json()
+      const options = ((data.data?.data || []) as ContractOption[])
+        .filter((contract) => contract.id !== contractId)
+      setCandidateContracts(options)
+      setSelectedCompareDocId((current) => current || options[0]?.id || '')
+    } catch {
+      // The empty state remains actionable through upload when candidates cannot be loaded.
+    }
+  }, [contractId])
+
   useEffect(() => {
     void fetchComparison()
   }, [fetchComparison])
+
+  useEffect(() => {
+    if (!comparisonId && !comparison) {
+      void fetchCandidateContracts()
+    }
+  }, [comparison, comparisonId, fetchCandidateContracts])
+
+  const handleStartComparison = useCallback(async () => {
+    if (!selectedCompareDocId) {
+      return
+    }
+
+    setStartingComparison(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/compare`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseline_type: 'previous_version',
+          compare_doc_id: selectedCompareDocId,
+        }),
+      })
+
+      if (!res.ok) {
+        setError('发起比对失败')
+        return
+      }
+
+      await fetchComparison()
+    } catch {
+      setError('网络错误')
+    } finally {
+      setStartingComparison(false)
+    }
+  }, [contractId, fetchComparison, selectedCompareDocId])
 
   // 同步滚动
   const handleScroll = useCallback((source: 'left' | 'right') => {
@@ -129,7 +202,63 @@ export default function ContractComparePage() {
   if (!comparison) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-slate-500">未找到比对记录</div>
+        <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
+              <GitCompareIcon className="h-5 w-5 text-indigo-600" />
+            </div>
+            <div>
+              <h1 className="font-bold text-slate-900">发起文档比对</h1>
+              <p className="text-sm text-slate-500">选择另一份已完成合同作为对比文档。</p>
+            </div>
+          </div>
+
+          {candidateContracts.length > 0 ? (
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-slate-700">
+                对比文档
+                <select
+                  value={selectedCompareDocId}
+                  onChange={(event) => setSelectedCompareDocId(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                >
+                  {candidateContracts.map((contract) => (
+                    <option key={contract.id} value={contract.id}>
+                      {contract.filename || contract.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center justify-between gap-3">
+                <Link href={`/contracts/${contractId}`}>
+                  <Button variant="outline">返回合同</Button>
+                </Link>
+                <Button onClick={handleStartComparison} disabled={!selectedCompareDocId || startingComparison}>
+                  {startingComparison ? (
+                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <GitCompareIcon className="mr-2 h-4 w-4" />
+                  )}
+                  开始比对
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                当前没有可用于比对的已完成合同。请先上传或完成另一份合同审核。
+              </p>
+              <div className="flex items-center justify-between gap-3">
+                <Link href={`/contracts/${contractId}`}>
+                  <Button variant="outline">返回合同</Button>
+                </Link>
+                <Link href="/contracts/upload">
+                  <Button>上传合同</Button>
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
