@@ -249,19 +249,13 @@ export default function ContractCenterPage() {
   }, [contracts, drafts])
 
   const resolvedQuickActions = useMemo(() => {
-    const reviewTarget = contracts.find((contract) =>
-      contract.status === 'PENDING'
-      || contract.status === 'PARSING'
-      || contract.status === 'ANALYZING'
-      || contract.status === 'FAILED'
-    ) || contracts.find((contract) => contract.status === 'COMPLETED') || contracts[0]
     const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED') || contracts[0]
     return quickActions.map((action) => {
       if (action.id === 'review') {
         return {
           ...action,
-          href: reviewTarget ? `/contracts/${reviewTarget.id}/review` : '/contracts/upload',
-          description: reviewTarget ? '进入合同审核工作台' : '先上传合同',
+          href: '/admin/rule-review',
+          description: '进入规则审核工作台',
         }
       }
 
