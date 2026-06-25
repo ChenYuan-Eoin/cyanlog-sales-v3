@@ -70,8 +70,8 @@ const quickActions = [
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
-    href: '/contracts', // ⚠️ 临时：compare功能需先选择合同，后续优化为弹窗选择
-    description: '选择合同比对',
+    href: '#',
+    description: '先选择合同后点击比对',
   },
 ]
 
