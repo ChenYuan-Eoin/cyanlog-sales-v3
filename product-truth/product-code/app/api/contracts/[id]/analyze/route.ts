@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import { logError } from '@/lib/error-log'
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -181,8 +182,21 @@ export async function POST(
         if (strategyData) strategyId = strategyData.id
         reviewOptions = { strategyCode: (body.strategy || 'BALANCED') as 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE' }
       }
-    } catch {
- /* 解析失败忽略 */ }
+    } catch (error) {
+      await logError({
+        req,
+        level: 'warn',
+        source: 'api',
+        message: '解析审核策略参数失败',
+        error,
+        context: {
+          route,
+          requestId,
+          contractId: id,
+          phase: 'parse_review_options',
+        },
+      })
+    }
 
     try {
       // 改用结构化分析（保留 AI 模型和规则引擎不改动）

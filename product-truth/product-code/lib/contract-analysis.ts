@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOrgIdForUser } from '@/lib/configs/runtime'
 import { executeRules } from '@/lib/rules/engine'
+import { logError } from '@/lib/error-log'
 
 export interface ContractAnalysisJobRecord {
   id: string
@@ -533,8 +534,15 @@ async function performComplianceCheck(
     q = orgId ? q.or(`org_id.is.null,org_id.eq.${orgId}`) : q.is('org_id', null)
     const { data } = await q
     required = (data || []).map(d => ({ category: d.category, name: d.name }))
-  } catch {
- /* ignore */ }
+  } catch (error) {
+    await logError({
+      level: 'warn',
+      source: 'worker',
+      message: '加载必备条款库失败',
+      error,
+      context: { phase: 'required_clause_check', orgId },
+    })
+  }
 
   const found = new Set<string>()
   const kwsMap: Record<string, string[]> = {
@@ -575,8 +583,15 @@ async function performComplianceCheck(
         }
       }
     }
-  } catch {
- /* ignore */ }
+  } catch (error) {
+    await logError({
+      level: 'warn',
+      source: 'worker',
+      message: '加载风险条款库失败',
+      error,
+      context: { phase: 'dangerous_clause_check', orgId },
+    })
+  }
 
   // 3. 模糊用语检查
   for (const clause of clauses) {

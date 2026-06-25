@@ -66,7 +66,9 @@ export default function ReviewStrategiesPage() {
         const def = list.find((s: Strategy) => s.is_default)
         if (def) setActiveCode(def.code)
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      toastError('加载审核策略失败')
+    } finally {
       setLoading(false)
     }
   }

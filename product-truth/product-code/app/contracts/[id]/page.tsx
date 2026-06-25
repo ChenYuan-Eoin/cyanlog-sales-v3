@@ -569,7 +569,9 @@ function PreviewTableTab({
           const data = await res.json()
           setStrategies(data.data?.strategies || [])
         }
-      } catch { /* ignore */ }
+      } catch {
+        toastError('加载审核策略失败')
+      }
     })()
   }, [])
 
@@ -586,7 +588,9 @@ function PreviewTableTab({
           const data = await res.json()
           setClauses(data.data?.clauses || [])
         }
-      } catch { /* ignore */ }
+      } catch {
+        toastError('加载合同条款失败')
+      }
     })()
   }, [contractId, contract.status])
 

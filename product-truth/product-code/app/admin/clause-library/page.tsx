@@ -91,7 +91,9 @@ export default function ClauseLibraryPage() {
         const data = await res.json()
         setClauses(data.data?.clauses || [])
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      toastError('加载条款库失败')
+    } finally {
       setLoading(false)
     }
   }
