@@ -356,10 +356,15 @@ async function clearUserRolesForOrg(userId: string, orgId: string) {
 }
 
 async function syncPrimaryDepartmentMembership(userId: string, primaryDeptId: string | null) {
-  await supabaseAdmin
+  // ponytail: A5 修复 - 添加 await 确保重置操作完成
+  const { error: resetError } = await supabaseAdmin
     .from('user_departments')
     .update({ is_primary: false })
     .eq('user_id', userId)
+
+  if (resetError) {
+    console.error('[syncPrimaryDepartmentMembership] Reset error:', resetError)
+  }
 
   if (!primaryDeptId) {
     return
