@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 import type { Quote, QuoteItem } from '@/types'
+import { deleteBrowserCache, scopedCacheKey } from '@/lib/browser-cache'
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   DRAFT: { label: '草稿', variant: 'secondary' },
@@ -80,6 +81,7 @@ export default function QuoteDetailPage() {
         return
       }
 
+      deleteBrowserCache(scopedCacheKey(token, 'quotes:list'))
       await fetchQuote()
     } catch {
       setError('网络错误')

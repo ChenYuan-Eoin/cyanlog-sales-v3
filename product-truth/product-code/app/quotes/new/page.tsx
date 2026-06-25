@@ -13,6 +13,7 @@ import {
   type PriceBookProduct,
   type ProductPriceTier,
 } from '@/lib/pricing/engine'
+import { deleteBrowserCache, scopedCacheKey } from '@/lib/browser-cache'
 
 interface ProductOption extends PriceBookProduct {
   status: 'active' | 'inactive' | 'discontinued'
@@ -217,6 +218,8 @@ export default function NewQuotePage() {
         return
       }
 
+      const token = localStorage.getItem('token')
+      deleteBrowserCache(scopedCacheKey(token, 'quotes:list'))
       router.push(`/quotes/${quoteId}`)
       router.refresh()
     } catch {

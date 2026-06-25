@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { v4 as uuidv4 } from 'uuid'
 import { paginationSchema, quoteSchema } from '@/lib/validation'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft } from '@/lib/pricing/service'
 import {
@@ -26,7 +26,10 @@ import {
 export async function GET(req: NextRequest) {
   return withAuth(req, async (user: AuthUser) => {
     const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const assignments = await getUserScopedRoleAssignments(user.id)
+    const accessibleUserIds = canManageOrg(assignments)
+      ? null
+      : (await listAccessibleUserIds(user.id, orgId)).userIds
 
     const { searchParams } = new URL(req.url)
 
@@ -192,15 +195,18 @@ export async function POST(req: NextRequest) {
 // 构建报价列表查询
 function buildQuoteListQuery(
   orgId: string,
-  accessibleUserIds: string[],
+  accessibleUserIds: string[] | null,
   status: string | null,
   includeOrgFilter: boolean
 ) {
   let query = supabaseAdmin
     .from('quotes')
     .select('*', { count: 'exact' })
-    .in('created_by', accessibleUserIds)
     .order('created_at', { ascending: false })
+
+  if (accessibleUserIds) {
+    query = query.in('created_by', accessibleUserIds)
+  }
 
   if (includeOrgFilter) {
     query = query.eq('org_id', orgId)

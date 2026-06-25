@@ -19,7 +19,12 @@ export type AgendaUpcomingCachePayload = {
   items: AgendaItem[]
 }
 
+export type QuotesCachePayload = {
+  quotes: unknown[]
+}
+
 const WARMUP_STALE_MS = 60 * 1000
+const CONTRACTS_WARMUP_DELAY_MS = 150
 const WARMUP_DELAY_MS = 1000
 const CONTRACTS_PAGE_SIZE = 20
 export const AGENDA_UPCOMING_CACHE_KEY = 'agenda:upcoming'
@@ -28,6 +33,7 @@ const warmups = new Map<string, Promise<void>>()
 const contractListWarmups = new Map<string, Promise<ContractsCachePayload | null>>()
 const configProductsWarmups = new Map<string, Promise<unknown[] | null>>()
 const agendaUpcomingWarmups = new Map<string, Promise<AgendaUpcomingCachePayload | null>>()
+const quoteListWarmups = new Map<string, Promise<QuotesCachePayload | null>>()
 let scheduledToken: string | null = null
 
 function scheduleIdle(callback: () => void) {
@@ -154,6 +160,35 @@ export async function loadAgendaUpcomingForCache(token: string, limit = 50) {
   return request
 }
 
+export async function loadQuotesListForCache(token: string) {
+  const cacheKey = scopedCacheKey(token, 'quotes:list')
+  const cached = readFreshCache<QuotesCachePayload>(cacheKey)
+  if (cached) return cached
+
+  const inflight = quoteListWarmups.get(cacheKey)
+  if (inflight) return inflight
+
+  const request = fetch('/api/quotes', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(async (quotesRes) => {
+      if (!quotesRes.ok) return null
+
+      const quotesJson = await quotesRes.json()
+      const payload: QuotesCachePayload = {
+        quotes: quotesJson.data || [],
+      }
+      writeBrowserCache(cacheKey, payload)
+      return payload
+    })
+    .finally(() => {
+      quoteListWarmups.delete(cacheKey)
+    })
+
+  quoteListWarmups.set(cacheKey, request)
+  return request
+}
+
 export function invalidateAgendaUpcomingCache(token: string | null | undefined) {
   if (!token) return
   const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
@@ -164,6 +199,7 @@ export function invalidateAgendaUpcomingCache(token: string | null | undefined) 
 async function warmCoreData(token: string) {
   await Promise.allSettled([
     loadContractsListForCache(token),
+    loadQuotesListForCache(token),
     loadConfigProductsForCache(token),
     loadAgendaUpcomingForCache(token),
   ])
@@ -174,10 +210,19 @@ export function scheduleCorePageWarmup(token: string | null | undefined, prefetc
 
   scheduledToken = token
   prefetchCoreRoutes(prefetchRoute)
-  void loadAgendaUpcomingForCache(token).catch(() => {
-    // Visible schedule page loads still own error handling.
-  })
+  window.setTimeout(() => {
+    const pathname = window.location.pathname
+    if (pathname !== '/' && pathname !== '/contracts') return
+    void loadContractsListForCache(token).catch(() => {
+      // Visible contract page loads still own error handling.
+    })
+  }, CONTRACTS_WARMUP_DELAY_MS)
   scheduleIdle(() => {
+    if (window.location.pathname !== '/') {
+      scheduledToken = null
+      return
+    }
+
     if (warmups.has(token)) return
     const warmup = warmCoreData(token)
       .catch(() => {

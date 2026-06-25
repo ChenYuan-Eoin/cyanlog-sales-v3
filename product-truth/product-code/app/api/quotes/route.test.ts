@@ -17,7 +17,9 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
+  canManageOrg: vi.fn().mockReturnValue(false),
   getDefaultOrgId: vi.fn().mockResolvedValue('org-1'),
+  getUserScopedRoleAssignments: vi.fn().mockResolvedValue([]),
   listAccessibleUserIds: vi.fn().mockResolvedValue({ userIds: ['u1'] }),
 }))
 
@@ -48,6 +50,7 @@ vi.mock('@/lib/pricing/service', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
+import { canManageOrg, listAccessibleUserIds } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
@@ -72,6 +75,7 @@ function makeChain(result: any) {
 describe('GET /api/quotes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    ;(canManageOrg as any).mockReturnValue(false)
   })
 
   it('未登录 → 401', async () => {
@@ -102,6 +106,22 @@ describe('GET /api/quotes', () => {
     expect(body.data).toHaveLength(1)
     expect(body.meta.limit).toBe(20)
     expect(body.meta.offset).toBe(0)
+  })
+
+  it('全组织管理角色 → 直接按 org 查询，不展开用户列表', async () => {
+    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
+    ;(canManageOrg as any).mockReturnValue(true)
+    const { supabaseAdmin } = await import('@/lib/supabase')
+    const chain = makeChain({ data: [{ id: 'q1' }], error: null })
+    chain.range = vi.fn().mockResolvedValue({ data: [{ id: 'q1' }], error: null, count: 1 })
+    ;(supabaseAdmin.from as any).mockReturnValue(chain)
+
+    const res = await GET(makeRequest('http://localhost/api/quotes?page=1&pageSize=20'))
+
+    expect(res.status).toBe(200)
+    expect(listAccessibleUserIds).not.toHaveBeenCalled()
+    expect(chain.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(chain.in).not.toHaveBeenCalledWith('created_by', expect.anything())
   })
 
   it('DB 错误 → 500 DB_ERROR', async () => {

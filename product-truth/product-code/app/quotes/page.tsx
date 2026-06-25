@@ -9,6 +9,8 @@ import Link from 'next/link'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { FileTextIcon } from 'lucide-react'
+import { readBrowserCacheEntry, scopedCacheKey } from '@/lib/browser-cache'
+import { loadQuotesListForCache, type QuotesCachePayload } from '@/lib/core-page-warmup'
 
 interface Quote {
   id: string
@@ -28,8 +30,27 @@ export default function QuotesPage() {
     async function fetchQuotes() {
       try {
         const token = localStorage.getItem('token')
+        const cacheKey = scopedCacheKey(token, 'quotes:list')
+        const cachedEntry = readBrowserCacheEntry<QuotesCachePayload>(cacheKey)
+        const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
+        const cached = cacheAgeMs <= 60_000 ? cachedEntry?.value : null
+
+        if (cached) {
+          setQuotes(cached.quotes as Quote[])
+          setLoading(false)
+          return
+        }
+
+        if (token) {
+          const payload = await loadQuotesListForCache(token)
+          if (payload) {
+            setQuotes(payload.quotes as Quote[])
+          }
+          return
+        }
+
         const res = await fetch('/api/quotes', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          headers: {},
         })
         if (res.ok) {
           const data = await res.json()
@@ -48,7 +69,7 @@ export default function QuotesPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">报价中心</h1>
-        <Link href="/quotes/new">
+        <Link href="/quotes/new" prefetch={false}>
           <Button>+ 新建报价</Button>
         </Link>
       </div>
@@ -85,7 +106,7 @@ export default function QuotesPage() {
                   {quotes.map((quote) => (
                     <tr key={quote.id} className="border-b hover:bg-slate-50">
                       <td className="py-3 px-4 font-mono text-sm">
-                        <Link href={`/quotes/${quote.id}`} className="text-blue-600 hover:underline">
+                        <Link href={`/quotes/${quote.id}`} prefetch={false} className="text-blue-600 hover:underline">
                           {quote.quote_no}
                         </Link>
                       </td>
