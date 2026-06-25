@@ -152,20 +152,31 @@ const getCachedUserRoles = cache(async (orgId: string) => {
     .eq('org_id', orgId)
 
   if (userError) {
+    console.error('[getCachedUserRoles] User fetch error:', userError)
     throw new Error('USER_ROLES_FETCH_FAILED')
   }
 
   const ids = userIds?.map((u) => u.id) || []
+  console.log(`[getCachedUserRoles] Found ${ids.length} users in org ${orgId}`)
+
   if (ids.length === 0) return []
 
   // 查询这些用户的所有角色（包括 org/department/space 各级别）
   const { data, error } = await supabaseAdmin
     .from('user_roles')
-    .select('user_id, scope_type, scope_id, granted_at, role:roles(id, name, code)')
+    .select('user_id, scope_type, scope_id, granted_at, role_id, role:roles(id, name, code)')
     .in('user_id', ids)
 
   if (error) {
+    console.error('[getCachedUserRoles] Role fetch error:', error)
     throw new Error('USER_ROLES_FETCH_FAILED')
+  }
+
+  console.log(`[getCachedUserRoles] Found ${data?.length || 0} role assignments`)
+
+  // Debug: log first few entries
+  if (data && data.length > 0) {
+    console.log('[getCachedUserRoles] Sample entry:', JSON.stringify(data[0], null, 2))
   }
 
   return data || []
