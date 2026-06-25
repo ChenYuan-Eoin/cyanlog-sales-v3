@@ -318,6 +318,7 @@ async function createLoginSuccessResponse(
     token,
     expiresAt: expiresAt.toISOString(),
     mustChangePassword: Boolean(user.must_change_password),
+    authContextReady: Boolean(authContext?.full),
     initialDashboard: user.must_change_password ? null : getCachedDashboardPayload(authUser),
   })
 

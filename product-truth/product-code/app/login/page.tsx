@@ -37,11 +37,15 @@ export default function LoginPage() {
 
       persistClientSession(data.token)
       if (!data.mustChangePassword) {
+        const hasInitialDashboard = Boolean(data.initialDashboard)
         primeHomeProfile(data.token, data.user)
         primeHomeInitialSnapshot(data.token, data.user, data.initialDashboard)
-        primeHomeInitialData(data.token)
-        scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
-        router.prefetch('/')
+        if (!hasInitialDashboard || !data.authContextReady) {
+          primeHomeInitialData(data.token)
+        }
+        window.setTimeout(() => {
+          scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
+        }, 0)
       }
 
       router.replace(data.mustChangePassword ? '/change-password' : '/')

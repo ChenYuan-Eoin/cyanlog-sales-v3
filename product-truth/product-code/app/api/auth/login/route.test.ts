@@ -228,6 +228,7 @@ describe('POST /api/auth/login', () => {
 
       expect(res.status).toBe(200)
       expect(body.user.id).toBe('u-fast')
+      expect(body.authContextReady).toBe(true)
       const authContextCookie = res.cookies.get(AUTH_CONTEXT_COOKIE_NAME)?.value
       const authContext = await readAuthContextCookieValue(body.token, authContextCookie)
       expect(authContext).toMatchObject({
