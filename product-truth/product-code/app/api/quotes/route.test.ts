@@ -100,8 +100,8 @@ describe('GET /api/quotes', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body.data).toHaveLength(1)
-    expect(body.meta.page).toBe(1)
-    expect(body.meta.pageSize).toBe(20)
+    expect(body.meta.limit).toBe(20)
+    expect(body.meta.offset).toBe(0)
   })
 
   it('DB 错误 → 500 DB_ERROR', async () => {
@@ -190,7 +190,7 @@ describe('POST /api/quotes', () => {
     expect(quoteItemsPayload).toHaveLength(1)
   })
 
-  it('序列生成失败 → 500 SEQUENCE_ERROR', async () => {
+  it('序列生成失败 → 500 INTERNAL_ERROR', async () => {
     ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
     ;(supabaseAdmin as any).rpc = vi.fn().mockResolvedValue({
       data: null,
@@ -202,7 +202,7 @@ describe('POST /api/quotes', () => {
     const res = await POST(req)
     expect(res.status).toBe(500)
     const body = await res.json()
-    expect(body.code).toBe('SEQUENCE_ERROR')
+    expect(body.error.code).toBe('S002')
   })
 
   it('DB 插入失败 → 500 DB_ERROR', async () => {
@@ -228,7 +228,7 @@ describe('POST /api/quotes', () => {
     const res = await POST(req)
     expect(res.status).toBe(500)
     const body = await res.json()
-    expect(body.code).toBe('DB_ERROR')
+    expect(body.error.code).toBe('S001')
   })
 
   it('schema drift 时回退到 legacy quotes/quote_items 字段', async () => {

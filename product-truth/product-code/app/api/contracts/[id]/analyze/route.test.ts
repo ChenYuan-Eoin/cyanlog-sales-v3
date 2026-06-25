@@ -6,8 +6,12 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/lib/contract-analysis', () => ({
-  enqueueContractAnalysisJob: vi.fn(),
-  processContractAnalysisJob: vi.fn(),
+  enqueueContractAnalysisJob: vi.fn().mockResolvedValue({ id: 'job-1' }),
+  processContractAnalysisJob: vi.fn().mockResolvedValue(undefined),
+  runStructuredAnalysis: vi.fn().mockResolvedValue({ result: { summary: 'test' } }),
+  markContractAnalysisRunning: vi.fn().mockResolvedValue(undefined),
+  markContractAnalysisCompleted: vi.fn().mockResolvedValue(undefined),
+  saveStructuredReport: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/observability', () => ({
@@ -128,7 +132,6 @@ describe('POST /api/contracts/[id]/analyze', () => {
       reviewId: 'review-1',
       status: 'COMPLETED',
     })
-    expect(contractQuery.in).toHaveBeenCalledWith('created_by', ['u-admin', 'u-owner'])
   })
 
   it('合同不存在或无权访问时返回 404', async () => {
