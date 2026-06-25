@@ -3,6 +3,11 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { primeAuthCache } from '@/lib/auth'
 import { primeDefaultOrgCache } from '@/lib/scoped-access'
 import { primeDashboardPayload } from '@/lib/dashboard-data'
+import {
+  AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS,
+  AUTH_CONTEXT_COOKIE_NAME,
+  createAuthContextCookieValue,
+} from '@/lib/auth-context-cookie'
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
 import { loginSchema } from '@/lib/validation'
@@ -112,7 +117,9 @@ export async function POST(req: NextRequest) {
 
     primeAuthCache(token, authUser)
 
-    await recordLoginAttempt(identifier, ipAddress, true)
+    void Promise.resolve(recordLoginAttempt(identifier, ipAddress, true)).catch((error) => {
+      console.error('Login success audit error:', error)
+    })
 
     const response = NextResponse.json({
       user: {
@@ -134,6 +141,23 @@ export async function POST(req: NextRequest) {
       maxAge: SESSION_MAX_AGE_SECONDS,
       expires: expiresAt,
     })
+
+    const authContextCookie = await createAuthContextCookieValue(token, {
+      userId: user.id,
+      mustChangePassword: Boolean(user.must_change_password),
+      roleCodes: [],
+      allPermissions: [],
+      full: false,
+    })
+    if (authContextCookie) {
+      response.cookies.set(AUTH_CONTEXT_COOKIE_NAME, authContextCookie, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS,
+      })
+    }
 
     return response
   } catch (error) {

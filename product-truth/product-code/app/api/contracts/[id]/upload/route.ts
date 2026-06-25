@@ -29,7 +29,7 @@ function hasAllowedFileType(file: File): boolean {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
@@ -39,7 +39,7 @@ export async function POST(
 
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
-    const contractId = params.id
+    const { id: contractId } = await params
 
     // 获取表单数据
     const formData = await req.formData()

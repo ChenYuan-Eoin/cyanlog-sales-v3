@@ -10,7 +10,7 @@ import { listAccessibleSalesSpaces, normalizeSalesSpaceName } from '@/lib/scoped
 import { getServerAuthToken } from '@/lib/server-auth'
 
 interface PageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {

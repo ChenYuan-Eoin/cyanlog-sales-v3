@@ -40,11 +40,11 @@ async function requirePageAdmin(userId: string, pageId: string) {
 // 获取页面权限
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
-    const { id } = params
+    const { id } = await params
 
     const access = await requirePageAdmin(user.id, id)
     if (!access.ok) {
@@ -74,11 +74,11 @@ export async function GET(
 // 添加权限
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
-    const { id } = params
+    const { id } = await params
     const body = await req.json()
 
     const access = await requirePageAdmin(user.id, id)
@@ -124,11 +124,11 @@ export async function POST(
 // 删除权限
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; permId: string } }
+  { params }: { params: Promise<{ id: string; permId: string }> }
 ) {
   try {
     const user = await requireAuth(req)
-    const { id, permId } = params
+    const { id, permId } = await params
 
     const access = await requirePageAdmin(user.id, id)
     if (!access.ok) {

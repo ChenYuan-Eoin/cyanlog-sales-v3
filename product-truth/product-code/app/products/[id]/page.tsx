@@ -12,7 +12,7 @@ import { isSchemaDriftError } from '@/lib/db-compat'
 import { getServerAuthToken } from '@/lib/server-auth'
 
 interface PageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export const dynamic = 'force-dynamic'

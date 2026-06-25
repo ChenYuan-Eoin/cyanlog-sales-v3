@@ -18,12 +18,12 @@ import {
 // GET /api/tenders/:id/workflow
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { id } = params
+    const { id } = await params
 
     const { data: tender, error } = await supabaseAdmin
       .from('tenders')
@@ -70,12 +70,12 @@ export async function GET(
 // POST /api/tenders/:id/workflow - 推进到下一步或上一步
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { id } = params
+    const { id } = await params
     const body = await req.json().catch(() => ({}))
     const { direction = 'next' } = body
 
@@ -131,12 +131,12 @@ export async function POST(
 // PATCH /api/tenders/:id/workflow - 更新当前步骤数据
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { id } = params
+    const { id } = await params
     const body = await req.json().catch(() => ({}))
     const { checkpoint_data } = body
 

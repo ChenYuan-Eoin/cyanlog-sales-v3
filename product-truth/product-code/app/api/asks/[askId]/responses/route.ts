@@ -8,7 +8,7 @@ import { createApiError } from '@/lib/api/errors'
 import { submitAskResponse } from '@/lib/ask/submit-response'
 
 interface RouteParams {
-  params: Promise<{ askId: string }> | { askId: string }
+  params: Promise<{ askId: string }>
 }
 
 export async function POST(

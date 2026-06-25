@@ -29,12 +29,12 @@ function pickUpdatePayload(body: Record<string, unknown>, userId: string) {
 // GET /api/knowledge/pages/:id
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
-    const { id } = params
+    const { id } = await params
 
     // 获取页面
     const { data: page, error } = await supabaseAdmin
@@ -85,12 +85,12 @@ export async function GET(
 // PATCH /api/knowledge/pages/:id
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
-    const { id } = params
+    const { id } = await params
     const body = await req.json()
 
     // 获取当前内容
@@ -160,12 +160,12 @@ export async function PATCH(
 // DELETE /api/knowledge/pages/:id
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
-    const { id } = params
+    const { id } = await params
 
     const { data: page } = await supabaseAdmin
       .from('knowledge_pages')

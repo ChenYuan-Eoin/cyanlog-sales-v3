@@ -84,8 +84,20 @@ export async function loadHomeInitialData(token: string): Promise<HomeInitialDat
 
 export function primeHomeInitialData(token: string | null | undefined) {
   if (!token) return
+  primeHomeAuthContext(token)
   void loadHomeInitialData(token).catch(() => {
     // Login navigation still owns visible error handling if the warm request fails.
+  })
+}
+
+export function primeHomeAuthContext(token: string | null | undefined) {
+  if (!token) return
+
+  void fetch('/api/auth/context', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {
+    // Middleware falls back to the database-backed auth check if this warmup fails.
   })
 }
 

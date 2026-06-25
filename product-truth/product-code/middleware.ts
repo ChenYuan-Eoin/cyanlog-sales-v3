@@ -32,6 +32,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getRequestAuthToken } from '@/lib/auth-token'
+import { AUTH_CONTEXT_COOKIE_NAME, readAuthContextCookieValue } from '@/lib/auth-context-cookie'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 
 const PUBLIC_PATHS = ['/login', '/register']
@@ -255,7 +256,22 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const authContext = await getMiddlewareAuthContext(token)
+    const required = getRequiredPermission(pathname)
+    const signedContext = await readAuthContextCookieValue(
+      token,
+      request.cookies.get(AUTH_CONTEXT_COOKIE_NAME)?.value
+    )
+    let authContext: MiddlewareAuthContext | null
+    if (signedContext && (signedContext.full || !required)) {
+      authContext = {
+        userId: signedContext.userId,
+        mustChangePassword: signedContext.mustChangePassword,
+        roleCodes: signedContext.roleCodes,
+        allPermissions: signedContext.allPermissions,
+      }
+    } else {
+      authContext = await getMiddlewareAuthContext(token)
+    }
 
     if (!authContext) {
       if (pathname.startsWith('/api/')) {
@@ -272,7 +288,6 @@ export async function middleware(request: NextRequest) {
     }
 
     // 路径级权限校验
-    const required = getRequiredPermission(pathname)
     const allowed = required === 'admin:access'
       ? canAccessOrgAdmin(authContext.allPermissions, authContext.roleCodes)
       : (!required || hasPermission(authContext.allPermissions, required))

@@ -15,7 +15,7 @@ const FINAL_BUCKET = 'contracts'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
@@ -25,7 +25,7 @@ export async function POST(
 
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
-    const contractId = params.id
+    const { id: contractId } = await params
 
     // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin
