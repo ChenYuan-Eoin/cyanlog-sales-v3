@@ -46,6 +46,11 @@ export async function POST(
     const fileName = formData.get('fileName') as string
     const fileType = formData.get('fileType') as string
 
+    // ponytail: totalSize 用于日志记录和验证（未来扩展）
+    void totalSize
+    void start
+    void end
+
     if (!chunk || isNaN(index)) {
       return NextResponse.json({ error: '无效的分块数据' }, { status: 400 })
     }

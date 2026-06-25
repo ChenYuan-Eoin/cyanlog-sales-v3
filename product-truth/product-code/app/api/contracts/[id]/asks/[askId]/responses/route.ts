@@ -27,7 +27,7 @@ async function getUserRoleInContract(userId: string, contractId: string): Promis
       .limit(1)
 
     if (userRoles && userRoles.length > 0) {
-      const role = userRoles[0].role as { code: string } | null
+      const role = (userRoles[0] as unknown as { role: { code: string } | null }).role
       return role?.code || 'unknown'
     }
 
@@ -40,9 +40,11 @@ async function getUserRoleInContract(userId: string, contractId: string): Promis
       .limit(1)
 
     if (deptRoles && deptRoles.length > 0) {
-      const role = deptRoles[0].role as { code: string } | null
+      const role = (deptRoles[0] as unknown as { role: { code: string } | null }).role
       return role?.code || 'unknown'
     }
+
+    return 'unknown'
 
     return 'unknown'
   } catch {

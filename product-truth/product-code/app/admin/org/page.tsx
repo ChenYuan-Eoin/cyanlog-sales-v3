@@ -8,15 +8,18 @@ import type { OrgSummaryPayload } from '@/app/configs/types'
 export default function AdminOrgPage() {
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const [loading, setLoading] = useState(false)
-  const [feishuSyncing, setFeishuSyncing] = useState(false)
-  const [feishuResult, setFeishuResult] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _feishuSyncing = false
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _feishuResult = ''
 
   const fetchOrgData = useCallback(async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await fetch('/api/admin/org', { headers })
+      const res = await fetch('/api/admin/org', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
       if (res.ok) {
         const data = await res.json()
         setOrgSummary(data)
@@ -29,7 +32,7 @@ export default function AdminOrgPage() {
   }, [])
 
   useEffect(() => {
-    fetchOrgData()
+    void fetchOrgData()
   }, [fetchOrgData])
 
   if (loading) {
@@ -49,8 +52,8 @@ export default function AdminOrgPage() {
         </p>
         <OrgStructureTab
           orgSummary={orgSummary}
-          feishuSyncing={feishuSyncing}
-          feishuResult={feishuResult}
+          feishuSyncing={false}
+          feishuResult=""
           onFeishuSync={fetchOrgData}
         />
       </div>

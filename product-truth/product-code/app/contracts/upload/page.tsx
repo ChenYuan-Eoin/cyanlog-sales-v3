@@ -10,13 +10,7 @@ import { useChunkUpload } from '@/lib/hooks/useChunkUpload'
 import { UploadProgressBar } from '@/components/upload/UploadProgress'
 import { cn } from '@/lib/utils'
 
-// 允许的文件类型
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]
-
+// ponytail: 文件类型验证用扩展名而非 MIME 类型（更可靠）
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
 
 // 最大文件大小: 500MB
@@ -40,10 +34,10 @@ export default function ContractUploadPage() {
     chunkSize: 5 * 1024 * 1024, // 5MB 分块
     concurrency: 3, // 3个并发
     maxRetries: 3,
-    onProgress: (state) => {
-      // 进度更新时触发重渲染
+    onProgress: () => {
+      // ponytail: 进度更新时触发重渲染，不直接操作 DOM
     },
-    onComplete: ({ fileUrl }) => {
+    onComplete: () => {
       toastSuccess('上传成功')
       // 所有文件上传完成后跳转
       if (currentFileIndex >= files.length - 1) {

@@ -184,7 +184,8 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
         chunk.status = 'completed'
         completedChunks.add(chunk.index)
         updateProgress()
-      } catch (error) {
+      } catch (_error) {
+        void _error
         chunk.status = 'error'
         chunk.retries++
 
