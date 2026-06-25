@@ -20,7 +20,7 @@ export type AgendaUpcomingCachePayload = {
 }
 
 const WARMUP_STALE_MS = 60 * 1000
-const WARMUP_DELAY_MS = 250
+const WARMUP_DELAY_MS = 1000
 const CONTRACTS_PAGE_SIZE = 20
 export const AGENDA_UPCOMING_CACHE_KEY = 'agenda:upcoming'
 const CORE_ROUTES = ['/contracts', '/tenders', '/configs', '/schedule'] as const

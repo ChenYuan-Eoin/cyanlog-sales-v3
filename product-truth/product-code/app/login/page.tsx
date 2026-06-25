@@ -43,9 +43,7 @@ export default function LoginPage() {
         if (!hasInitialDashboard || !data.authContextReady) {
           primeHomeInitialData(data.token)
         }
-        window.setTimeout(() => {
-          scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
-        }, 0)
+        scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
       }
 
       router.replace(data.mustChangePassword ? '/change-password' : '/')

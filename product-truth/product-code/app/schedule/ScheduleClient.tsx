@@ -66,17 +66,7 @@ export function ScheduleClient() {
   )
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto" data-schedule-state={state}>
-      <div className="flex items-baseline justify-between mb-6">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-1">日程管理</h1>
-          <p className="text-sm text-slate-500">管理任务、会议、跟进、提醒</p>
-        </div>
-        <Link href="/schedule/new">
-          <Button>+ 新建日程</Button>
-        </Link>
-      </div>
-
+    <div data-schedule-state={state}>
       {(urgentCount > 0 || todayCount > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           {urgentCount > 0 && (
