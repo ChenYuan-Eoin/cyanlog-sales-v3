@@ -2,13 +2,31 @@
 // PURPOSE: 关闭/重开 ASK（法务权限）
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
-  canReviewContracts,
   getAccessibleContract,
   getOrgRoleCodes,
 } from '@/lib/scoped-access'
+import { errorResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
+import { canCloseOrReopenAsk } from '@/lib/ask/permissions'
+
+const transitionSchema = z.object({
+  action: z.enum(['close', 'reopen']),
+  reason: z.string().trim().max(1000, '原因不能超过 1000 字').optional(),
+  closed_reason: z.string().trim().max(1000, '原因不能超过 1000 字').optional(),
+}).superRefine((data, context) => {
+  const reason = data.reason || data.closed_reason
+  if (data.action === 'close' && !reason?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reason'],
+      message: '关闭 ASK 必须填写原因',
+    })
+  }
+})
 
 interface RouteParams {
   params: Promise<{ id: string; askId: string }> | { id: string; askId: string }
@@ -32,35 +50,25 @@ export async function POST(
       )
     }
 
-    if (!canReviewContracts(access.assignments)) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      )
+    if (!canCloseOrReopenAsk(access.assignments)) {
+      return errorResponse(createApiError('FORBIDDEN', '当前角色不能关闭或重开 ASK'))
     }
 
-    const body = await request.json()
-    const { action, reason } = body
-
-    if (!action || !['close', 'reopen'].includes(action)) {
-      return NextResponse.json(
-        { error: 'Invalid action. Must be "close" or "reopen"' },
-        { status: 400 }
+    const parsed = transitionSchema.safeParse(await request.json().catch(() => ({})))
+    if (!parsed.success) {
+      return errorResponse(
+        createApiError('VALIDATION_ERROR', 'ASK 状态流转参数不正确', {
+          fieldErrors: parsed.error.flatten().fieldErrors,
+        })
       )
     }
-
-    // close 必须填写 reason
-    if (action === 'close' && (!reason || reason.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Reason is required when closing ASK' },
-        { status: 400 }
-      )
-    }
+    const { action } = parsed.data
+    const reason = parsed.data.reason || parsed.data.closed_reason || ''
 
     // 获取 ASK 详情
     const { data: ask, error: askError } = await supabaseAdmin
       .from('ask_items')
-      .select('*')
+      .select('id, contract_id, status, response_id')
       .eq('id', askId)
       .eq('contract_id', contractId)
       .single()
@@ -101,11 +109,7 @@ export async function POST(
         .eq('contract_id', contractId)
 
       if (updateError) {
-        console.error('[ASK Transition] Close error:', updateError)
-        return NextResponse.json(
-          { error: 'Failed to close ASK' },
-          { status: 500 }
-        )
+        return errorResponse(createApiError('DB_ERROR', '关闭 ASK 失败'))
       }
     } else {
       // 重开 ASK
@@ -123,18 +127,27 @@ export async function POST(
         .from('ask_items')
         .update({
           status: 'pending',
-          // 保留原来的回应记录，但状态变为 pending 允许重新回应
+          response_id: null,
+          closed_by: null,
+          closed_reason: null,
           updated_at: now,
         })
         .eq('id', askId)
         .eq('contract_id', contractId)
 
       if (updateError) {
-        console.error('[ASK Transition] Reopen error:', updateError)
-        return NextResponse.json(
-          { error: 'Failed to reopen ASK' },
-          { status: 500 }
-        )
+        return errorResponse(createApiError('DB_ERROR', '重开 ASK 失败'))
+      }
+
+      if (ask.response_id) {
+        const { error: deleteResponseError } = await supabaseAdmin
+          .from('ask_responses')
+          .delete()
+          .eq('ask_id', askId)
+
+        if (deleteResponseError) {
+          return errorResponse(createApiError('DB_ERROR', '清理旧 ASK 回应失败'))
+        }
       }
     }
 
@@ -154,9 +167,7 @@ export async function POST(
         },
       })
 
-    if (auditError) {
-      console.error('[ASK Transition] Audit log error:', auditError)
-    }
+    void auditError
 
     return NextResponse.json({
       success: true,
@@ -171,12 +182,8 @@ export async function POST(
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
-    console.error('[ASK Transition] Unexpected error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -35,8 +35,7 @@ export default function LoginPage() {
 
       persistClientSession(data.token)
 
-      router.push(data.mustChangePassword ? '/change-password' : '/')
-      router.refresh()
+      router.replace(data.mustChangePassword ? '/change-password' : '/')
     } catch {
       setError('网络错误，请稍后重试')
     } finally {

@@ -8,6 +8,7 @@ import { resolveFaviconUrl, sanitizeThemeValue, themeToCssVariables } from '@/li
 const THEME_CACHE_KEY = 'runtime_theme_cache'
 const THEME_CACHE_TIMESTAMP_KEY = 'runtime_theme_cache_ts'
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 小时缓存
+const BACKGROUND_REFRESH_DELAY_MS = 2_000
 
 interface ThemeCache {
   theme: ReturnType<typeof sanitizeThemeValue>
@@ -97,6 +98,15 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
   }
 }
 
+function scheduleBackgroundRefresh(callback: () => void) {
+  const idle = window.requestIdleCallback
+  if (idle) {
+    idle(callback, { timeout: BACKGROUND_REFRESH_DELAY_MS })
+    return
+  }
+  window.setTimeout(callback, BACKGROUND_REFRESH_DELAY_MS)
+}
+
 export function RuntimeThemeLoader() {
   useEffect(() => {
     let cancelled = false
@@ -111,42 +121,54 @@ export function RuntimeThemeLoader() {
       const cachedTheme = getCachedTheme(token)
       if (cachedTheme) {
         applyTheme(cachedTheme)
-        // 缓存已应用，但仍需在后台刷新以获取最新主题
-        // 不 return，继续执行 fetch
       }
 
-      try {
-        const response = await fetch('/api/configs?type=UI_THEME', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const refreshTheme = async () => {
+        try {
+          const response = await fetch('/api/configs?type=UI_THEME', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (!response.ok) {
+            return
+          }
+
+          const payload = await response.json() as
+            | { data?: Array<{ value?: Record<string, unknown>; status?: string; updated_at?: string }> }
+            | Array<{ value?: Record<string, unknown>; status?: string; updated_at?: string }>
+          const configs = Array.isArray(payload) ? payload : (payload.data || [])
+          // 优先使用已发布配置，如果没有则使用最新更新的配置
+          const publishedConfig = configs.find(c => c.status === 'PUBLISHED')
+          const latestConfig = configs.sort((a, b) =>
+            new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+          )[0]
+          const themeConfig = publishedConfig || latestConfig
+          const theme = sanitizeThemeValue(themeConfig?.value)
+
+          if (cancelled) {
+            return
+          }
+
+          // 应用主题
+          applyTheme(theme)
+
+          // 更新缓存
+          setCachedTheme(theme, token)
+        } catch {
+          // 忽略运行时主题失败，保持默认值或缓存值
+        }
+      }
+
+      if (cachedTheme) {
+        scheduleBackgroundRefresh(() => {
+          void refreshTheme()
         })
-
-        if (!response.ok) {
-          return
-        }
-
-        const configs = await response.json() as Array<{ value?: Record<string, unknown>; status?: string; updated_at?: string }>
-        // 优先使用已发布配置，如果没有则使用最新更新的配置
-        const publishedConfig = configs.find(c => c.status === 'PUBLISHED')
-        const latestConfig = configs.sort((a, b) =>
-          new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
-        )[0]
-        const themeConfig = publishedConfig || latestConfig
-        const theme = sanitizeThemeValue(themeConfig?.value)
-
-        if (cancelled) {
-          return
-        }
-
-        // 应用主题
-        applyTheme(theme)
-
-        // 更新缓存
-        setCachedTheme(theme, token)
-      } catch {
-        // 忽略运行时主题失败，保持默认值或缓存值
+        return
       }
+
+      void refreshTheme()
     }
 
     void loadTheme()

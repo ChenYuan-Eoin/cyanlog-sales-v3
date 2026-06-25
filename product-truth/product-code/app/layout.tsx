@@ -37,6 +37,10 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+const enableVercelTelemetry =
+  Boolean(process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL)
+  || process.env.ENABLE_VERCEL_TELEMETRY === "1";
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -63,8 +67,8 @@ export default async function RootLayout({
           <ClientErrorMonitor />
           <RuntimeThemeLoader />
           <AppShell>{children}</AppShell>
-          <Analytics />
-          <SpeedInsights />
+          {enableVercelTelemetry ? <Analytics /> : null}
+          {enableVercelTelemetry ? <SpeedInsights /> : null}
         </BrandingProvider>
       </body>
     </html>

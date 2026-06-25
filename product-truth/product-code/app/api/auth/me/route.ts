@@ -10,13 +10,15 @@ function errorResponse(message: string, status: number, code?: string) {
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const scopedAssignments = await getUserScopedRoleAssignments(user.id)
-
-    const { data: userRow, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id, must_change_password')
-      .eq('id', user.id)
-      .single()
+    const [scopedAssignments, userResult] = await Promise.all([
+      getUserScopedRoleAssignments(user.id),
+      supabaseAdmin
+        .from('users')
+        .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id, must_change_password')
+        .eq('id', user.id)
+        .single(),
+    ])
+    const { data: userRow, error: userError } = userResult
 
     if (userError || !userRow) {
       return errorResponse('读取用户失败', 500, 'USER_FETCH_FAILED')

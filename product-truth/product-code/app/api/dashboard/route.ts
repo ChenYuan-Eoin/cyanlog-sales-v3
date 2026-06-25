@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { listAccessibleSalesSpaces } from '@/lib/scoped-access'
+import { getDefaultOrgId, listAccessibleSalesSpaces } from '@/lib/scoped-access'
 
 type CustomerRow = {
   id: string
@@ -74,17 +74,8 @@ export async function GET(req: NextRequest) {
     const user = await requireAuth(req)
     const searchParams = req.nextUrl.searchParams
     const requestedSpaceId = searchParams.get('spaceId')
-    const { data: userRow, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('org_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userRow?.org_id) {
-      return errorResponse('读取组织信息失败', 500, 'ORG_FETCH_FAILED')
-    }
-
-    const { spaces } = await listAccessibleSalesSpaces(user.id, userRow.org_id)
+    const orgId = user.org_id || await getDefaultOrgId(user.id)
+    const { spaces } = await listAccessibleSalesSpaces(user.id, orgId)
     const normalizedSpaces = spaces
       .map((space) => ({
         id: space.id,

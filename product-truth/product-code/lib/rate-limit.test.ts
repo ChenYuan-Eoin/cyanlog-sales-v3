@@ -19,7 +19,7 @@ import { getClientIp, checkLoginRateLimit, recordLoginAttempt } from './rate-lim
  */
 function makeChain() {
   const chain: any = {}
-  ;['select', 'eq', 'gte', 'order', 'insert', 'update', 'single', 'maybeSingle'].forEach(
+  ;['select', 'eq', 'gte', 'order', 'limit', 'insert', 'update', 'single', 'maybeSingle'].forEach(
     (m) => {
       chain[m] = vi.fn().mockReturnValue(chain)
     }
@@ -68,8 +68,8 @@ describe('Rate Limit', () => {
       // 账号查询和 IP 查询都返回空
       const accountChain = makeChain()
       const ipChain = makeChain()
-      accountChain.order.mockResolvedValueOnce({ data: [] })
-      ipChain.gte.mockResolvedValueOnce({ data: [] })
+      accountChain.limit.mockResolvedValueOnce({ data: [] })
+      ipChain.limit.mockResolvedValueOnce({ data: [] })
       ;(supabaseAdmin.from as any)
         .mockReturnValueOnce(accountChain)
         .mockReturnValueOnce(ipChain)
@@ -87,8 +87,8 @@ describe('Rate Limit', () => {
       ]
       const accountChain = makeChain()
       const ipChain = makeChain()
-      accountChain.order.mockResolvedValueOnce({ data: accountFailures })
-      ipChain.gte.mockResolvedValueOnce({ data: accountFailures })
+      accountChain.limit.mockResolvedValueOnce({ data: accountFailures })
+      ipChain.limit.mockResolvedValueOnce({ data: accountFailures })
       ;(supabaseAdmin.from as any)
         .mockReturnValueOnce(accountChain)
         .mockReturnValueOnce(ipChain)
@@ -107,8 +107,8 @@ describe('Rate Limit', () => {
       }))
       const accountChain = makeChain()
       const ipChain = makeChain()
-      accountChain.order.mockResolvedValueOnce({ data: accountFailures })
-      ipChain.gte.mockResolvedValueOnce({ data: [] })
+      accountChain.limit.mockResolvedValueOnce({ data: accountFailures })
+      ipChain.limit.mockResolvedValueOnce({ data: [] })
       ;(supabaseAdmin.from as any)
         .mockReturnValueOnce(accountChain)
         .mockReturnValueOnce(ipChain)
@@ -126,8 +126,8 @@ describe('Rate Limit', () => {
       }))
       const accountChain = makeChain()
       const ipChain = makeChain()
-      accountChain.order.mockResolvedValueOnce({ data: [] })
-      ipChain.gte.mockResolvedValueOnce({ data: ipFailures })
+      accountChain.limit.mockResolvedValueOnce({ data: [] })
+      ipChain.limit.mockResolvedValueOnce({ data: ipFailures })
       ;(supabaseAdmin.from as any)
         .mockReturnValueOnce(accountChain)
         .mockReturnValueOnce(ipChain)

@@ -113,6 +113,7 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 onClick={handleNavClick}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
@@ -131,6 +132,7 @@ export function Sidebar() {
           {/* 个人信息入口 */}
           <Link
             href="/profile"
+            prefetch={false}
             onClick={handleNavClick}
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1',

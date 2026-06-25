@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import Link from 'next/link'
 import type { Contract, ContractAnalysisJob } from '@/types'
+import { error as toastError, success as toastSuccess } from '@/lib/toast'
 
 // 扩展 Contract 类型，包含业务字段
 interface ContractWithDetails extends Contract {
@@ -910,6 +912,11 @@ function ClarifyTableTab({
   const [closing, setClosing] = useState<string | null>(null)
   const [closeReason, setCloseReason] = useState('')
 
+  async function readApiMessage(res: Response, fallback: string) {
+    const data = await res.json().catch(() => null)
+    return data?.error?.message || data?.message || data?.error || fallback
+  }
+
   useEffect(() => {
     fetchAskItems()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -926,9 +933,11 @@ function ClarifyTableTab({
       if (res.ok) {
         const data = await res.json()
         setAskItems(data.data?.items || [])
+      } else {
+        toastError(await readApiMessage(res, '获取 ASK 清单失败'))
       }
-    } catch {
-      // silently fail
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : '获取 ASK 清单失败')
     } finally {
       setAskLoading(false)
     }
@@ -938,13 +947,22 @@ function ClarifyTableTab({
     setAskLoading(true)
     try {
       const token = localStorage.getItem('token')
-      await fetch(`/api/contracts/${contractId}/asks/generate`, {
+      const res = await fetch(`/api/contracts/${contractId}/asks/generate`, {
         method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
       })
+      if (!res.ok) {
+        toastError(await readApiMessage(res, '生成 ASK 清单失败'))
+        return
+      }
+      toastSuccess('ASK 清单已生成')
       await fetchAskItems()
-    } catch {
-      // silently fail
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : '生成 ASK 清单失败')
     } finally {
       setAskLoading(false)
     }
@@ -955,7 +973,7 @@ function ClarifyTableTab({
 
     try {
       const token = localStorage.getItem('token')
-      await fetch(`/api/asks/${askId}/responses`, {
+      const res = await fetch(`/api/contracts/${contractId}/asks/${askId}/responses`, {
         method: 'POST',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -963,11 +981,16 @@ function ClarifyTableTab({
         },
         body: JSON.stringify({ response_text: responseText }),
       })
+      if (!res.ok) {
+        toastError(await readApiMessage(res, '提交回应失败'))
+        return
+      }
       setResponseText('')
       setResponding(null)
+      toastSuccess('ASK 回应已提交')
       await fetchAskItems()
-    } catch {
-      // silently fail
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : '提交回应失败')
     }
   }
 
@@ -976,26 +999,31 @@ function ClarifyTableTab({
 
     try {
       const token = localStorage.getItem('token')
-      await fetch(`/api/asks/${askId}/transition`, {
+      const res = await fetch(`/api/contracts/${contractId}/asks/${askId}/transition`, {
         method: 'POST',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'close', closed_reason: closeReason }),
+        body: JSON.stringify({ action: 'close', reason: closeReason }),
       })
+      if (!res.ok) {
+        toastError(await readApiMessage(res, '关闭 ASK 失败'))
+        return
+      }
       setCloseReason('')
       setClosing(null)
+      toastSuccess('ASK 已关闭')
       await fetchAskItems()
-    } catch {
-      // silently fail
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : '关闭 ASK 失败')
     }
   }
 
   async function handleReopenAsk(askId: string) {
     try {
       const token = localStorage.getItem('token')
-      await fetch(`/api/asks/${askId}/transition`, {
+      const res = await fetch(`/api/contracts/${contractId}/asks/${askId}/transition`, {
         method: 'POST',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -1003,9 +1031,14 @@ function ClarifyTableTab({
         },
         body: JSON.stringify({ action: 'reopen' }),
       })
+      if (!res.ok) {
+        toastError(await readApiMessage(res, '重开 ASK 失败'))
+        return
+      }
+      toastSuccess('ASK 已重开')
       await fetchAskItems()
-    } catch {
-      // silently fail
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : '重开 ASK 失败')
     }
   }
 
@@ -1106,7 +1139,7 @@ function ClarifyTableTab({
               <div className="mt-3 flex gap-2 flex-wrap">
                 {responding === ask.id ? (
                   <div className="flex-1">
-                    <textarea
+                    <Textarea
                       className="w-full p-2 text-sm border rounded-lg mb-2 resize-y"
                       rows={3}
                       placeholder="输入回应..."
@@ -1144,7 +1177,7 @@ function ClarifyTableTab({
                     </Button>
                     {closing === ask.id ? (
                       <div className="flex-1">
-                        <textarea
+                        <Textarea
                           className="w-full p-2 text-sm border rounded-lg mb-2 resize-y"
                           rows={2}
                           placeholder="填写关闭原因（如：伪风险/重复项）..."

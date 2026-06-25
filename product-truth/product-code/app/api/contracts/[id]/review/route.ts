@@ -3,6 +3,7 @@
 // 获取合同审核结果 + 更新审核结论
 
 import { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
   errorResponse,
@@ -12,6 +13,19 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
+
+const reviewConclusionSchema = z.object({
+  conclusion: z.enum(['APPROVED', 'REJECTED', 'ESCALATED']),
+  conclusion_reason: z.string().trim().max(1000, '原因不能超过 1000 字').optional().nullable(),
+}).superRefine((data, context) => {
+  if (data.conclusion !== 'APPROVED' && !data.conclusion_reason?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['conclusion_reason'],
+      message: data.conclusion === 'REJECTED' ? '驳回原因必填' : '转交原因必填',
+    })
+  }
+})
 
 // GET - 获取审核结果
 export async function GET(
@@ -76,15 +90,16 @@ export async function PATCH(
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
     const body = await req.json().catch(() => ({}))
-    const { conclusion, conclusion_reason } = body
-
-    // 1. 验证结论值
-    const validConclusions = ['APPROVED', 'REJECTED', 'ESCALATED']
-    if (!validConclusions.includes(conclusion)) {
+    const parsed = reviewConclusionSchema.safeParse(body)
+    if (!parsed.success) {
       return errorResponse(
-        createApiError('VALIDATION_ERROR', `无效的结论值: ${conclusion}，必须选择通过/驳回/转交`)
+        createApiError('VALIDATION_ERROR', '审核结论参数不正确', {
+          fieldErrors: parsed.error.flatten().fieldErrors,
+        })
       )
     }
+
+    const { conclusion, conclusion_reason } = parsed.data
 
     // 2. 检查合同是否存在
     const {

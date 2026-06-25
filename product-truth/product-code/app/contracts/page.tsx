@@ -25,11 +25,26 @@ import {
   XIcon,
 } from 'lucide-react'
 import type { Contract } from '@/types'
+import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
+import { loadContractsListForCache } from '@/lib/core-page-warmup'
 import { handleError } from '@/lib/toast'
 import { LoadingState } from '@/components/ui/LoadingState'
 
 type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'
+
+type ContractsCachePayload = {
+  contracts: Contract[]
+  drafts: Contract[]
+  meta: {
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
+  }
+}
+
+const LIST_CACHE_TTL_MS = 5 * 60 * 1000
+const LIST_BACKGROUND_REFRESH_MS = 60 * 1000
 
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
 const quickActions = [
@@ -104,24 +119,75 @@ export default function ContractCenterPage() {
     try {
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+      const cacheKey = scopedCacheKey(token, `contracts:list:${pageNum}:${pageSize}`)
+      const cachedEntry = readBrowserCacheEntry<ContractsCachePayload>(cacheKey)
+      const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
+      const cached = cacheAgeMs <= LIST_CACHE_TTL_MS ? cachedEntry?.value : null
+
+      if (cached) {
+        setContracts(cached.contracts)
+        setDrafts(cached.drafts)
+        setTotalPages(cached.meta.totalPages)
+        setHasNext(cached.meta.hasNext)
+        setHasPrev(cached.meta.hasPrev)
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+
+      if (cached && cacheAgeMs < LIST_BACKGROUND_REFRESH_MS) {
+        return
+      }
+
+      if (token) {
+        const payload = await loadContractsListForCache(token, pageNum, pageSize)
+        if (!payload) return
+
+        setContracts(payload.contracts as Contract[])
+        setDrafts(payload.drafts as Contract[])
+        setTotalPages(payload.meta.totalPages)
+        setHasNext(payload.meta.hasNext)
+        setHasPrev(payload.meta.hasPrev)
+        return
+      }
 
       const [contractsRes, draftsRes] = await Promise.all([
         fetch(`/api/contracts?page=${pageNum}&pageSize=${pageSize}`, { headers }),
         fetch('/api/contracts/drafts', { headers }),
       ])
 
+      let nextContracts = cached?.contracts || []
+      let nextDrafts = cached?.drafts || []
+      let nextMeta = cached?.meta || { totalPages: 1, hasNext: false, hasPrev: false }
+
       if (contractsRes.ok) {
         const contractsData = await contractsRes.json()
-        setContracts(contractsData.data.data || [])
+        nextContracts = contractsData.data.data || []
         const meta = contractsData.data.meta || {}
-        setTotalPages(meta.totalPages || 1)
-        setHasNext(meta.hasNext || false)
-        setHasPrev(meta.hasPrev || false)
+        nextMeta = {
+          totalPages: meta.totalPages || 1,
+          hasNext: meta.hasNext || false,
+          hasPrev: meta.hasPrev || false,
+        }
       }
 
       if (draftsRes.ok) {
         const draftsData = await draftsRes.json()
-        setDrafts(draftsData.data || [])
+        nextDrafts = draftsData.data || []
+      }
+
+      setContracts(nextContracts)
+      setDrafts(nextDrafts)
+      setTotalPages(nextMeta.totalPages)
+      setHasNext(nextMeta.hasNext)
+      setHasPrev(nextMeta.hasPrev)
+
+      if (contractsRes.ok && draftsRes.ok) {
+        writeBrowserCache(cacheKey, {
+          contracts: nextContracts,
+          drafts: nextDrafts,
+          meta: nextMeta,
+        })
       }
     } catch (err) {
       handleError(err, '加载合同数据失败')
@@ -295,14 +361,14 @@ export default function ContractCenterPage() {
             {/* 桌面端快捷操作 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
               {resolvedQuickActions.slice(0, 3).map((action) => (
-                <Link key={action.id} href={action.href}>
+                <Link key={action.id} href={action.href} prefetch={false}>
                   <Button size="sm" variant="outline" className="gap-1.5">
                     <action.icon className="h-4 w-4" />
                     {action.shortTitle}
                   </Button>
                 </Link>
               ))}
-              <Link href="/contracts/new">
+              <Link href="/contracts/new" prefetch={false}>
                 <Button size="sm" className="gap-1.5">
                   <PlusIcon className="h-4 w-4" />
                   新建
@@ -322,7 +388,7 @@ export default function ContractCenterPage() {
           {!isMobile && (
             <div className="grid grid-cols-4 gap-3 mt-4">
               {resolvedQuickActions.map((action) => (
-                <Link key={action.id} href={action.href} className="group">
+                <Link key={action.id} href={action.href} prefetch={false} className="group">
                   <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
                     <div className={`w-10 h-10 rounded-lg ${action.color} ${action.hoverColor} flex items-center justify-center shrink-0`}>
                       <action.icon className="h-5 w-5 text-white" />
@@ -447,6 +513,7 @@ export default function ContractCenterPage() {
               <Link
                 key={action.id}
                 href={action.href}
+                prefetch={false}
                 className="flex flex-col items-center gap-1 py-1 px-3 active:scale-95 transition-transform"
               >
                 <div className={`w-10 h-10 rounded-full ${action.color} flex items-center justify-center shadow-md`}>
@@ -513,7 +580,7 @@ function TaskItem({
   isMobile: boolean
 }) {
   return (
-    <Link href={task.href}>
+    <Link href={task.href} prefetch={false}>
       <Card className="hover:shadow-sm hover:border-indigo-200 transition-all cursor-pointer group">
         <CardContent className={`${isMobile ? 'p-3' : 'p-4'}`}>
           <div className="flex items-center gap-3">
@@ -566,7 +633,7 @@ function EmptyState({ isMobile }: { isMobile: boolean }) {
       <p className={`text-slate-500 ${isMobile ? 'text-sm' : 'text-base'}`}>暂无合同记录</p>
       <p className="text-xs text-slate-400 mt-1">点击上方按钮创建新合同</p>
       {!isMobile && (
-        <Link href="/contracts/draft">
+        <Link href="/contracts/draft" prefetch={false}>
           <Button variant="outline" size="sm" className="mt-4">
             <PlusIcon className="h-4 w-4 mr-1" />
             创建合同

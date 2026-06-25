@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabaseAdmin
       .from('contract_drafts')
-      .select('*')
+      .select('id, title, status, updated_at, created_at')
       .eq('org_id', orgId)
       .eq('created_by', user.id)
       .order('updated_at', { ascending: false })

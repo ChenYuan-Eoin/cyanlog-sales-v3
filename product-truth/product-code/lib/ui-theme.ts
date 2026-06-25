@@ -5,6 +5,7 @@ import { DEFAULT_THEME, sanitizeThemeValue, type UIThemeConfigValue } from '@/li
 import { getOrgIdForToken } from '@/lib/configs/runtime'
 
 const DEFAULT_ORG_ID = '00000000-0000-0000-0000-000000000001'
+const THEME_QUERY_TIMEOUT_MS = 150
 
 async function loadPublishedThemeByOrgId(orgId: string) {
   const { data } = await supabaseAdmin
@@ -31,7 +32,7 @@ async function getPublishedUIThemeInternal(token?: string): Promise<Required<UIT
 export const getPublishedUITheme = cache(async (token?: string) => {
   try {
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Theme query timeout')), 3000)
+      setTimeout(() => reject(new Error('Theme query timeout')), THEME_QUERY_TIMEOUT_MS)
     })
     return await Promise.race([
       getPublishedUIThemeInternal(token),

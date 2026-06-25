@@ -74,14 +74,18 @@ export async function GET(req: NextRequest) {
     const categoryId = searchParams.get('category_id')
     const status = searchParams.get('status')
     const search = searchParams.get('search')
+    const summary = searchParams.get('summary') === '1'
     // 分页参数，默认 50 条，最大 100 条
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
+    const selectColumns = summary
+      ? 'id, code, name, specification, unit, base_price, cost_price, min_price, tier_pricing_enabled, status, product_categories(name)'
+      : '*, product_categories(name)'
 
     // 主查询：只查产品基本信息（不含阶梯价，避免笛卡尔积）
     let query = supabaseAdmin
       .from('products')
-      .select('*, product_categories(name)', { count: 'exact' })
+      .select(selectColumns, summary ? undefined : { count: 'exact' })
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -98,12 +102,19 @@ export async function GET(req: NextRequest) {
       query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
     }
 
-    let { data, error, count } = await query
+    const queryResult = await query as {
+      data: Array<Record<string, unknown>> | null
+      error: unknown
+      count: number | null
+    }
+    let data = queryResult.data
+    let error = queryResult.error
+    let count = queryResult.count
 
     if (error && isSchemaDriftError(error)) {
       let legacyQuery = supabaseAdmin
         .from('products')
-        .select('*, product_categories(name)', { count: 'exact' })
+        .select(selectColumns, summary ? undefined : { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
@@ -117,7 +128,11 @@ export async function GET(req: NextRequest) {
         legacyQuery = legacyQuery.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
       }
 
-      const legacyResult = await legacyQuery
+      const legacyResult = await legacyQuery as {
+        data: Array<Record<string, unknown>> | null
+        error: unknown
+        count: number | null
+      }
       data = (legacyResult.data || []).map((product) => ({
         ...product,
         tier_pricing_enabled: false,
@@ -138,10 +153,10 @@ export async function GET(req: NextRequest) {
       {
         data,
         pagination: {
-          total: count || 0,
+          total: summary ? (data?.length || 0) : (count || 0),
           limit,
           offset,
-          hasMore: (count || 0) > offset + limit,
+          hasMore: summary ? false : (count || 0) > offset + limit,
         },
       },
       {

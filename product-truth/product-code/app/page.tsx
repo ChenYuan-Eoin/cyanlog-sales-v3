@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { scheduleCorePageWarmup } from '@/lib/core-page-warmup'
 import { clearClientSession, logoutClientSession } from '@/lib/session-client'
 import { normalizeSalesSpaceName } from '@/lib/scoped-access'
 
@@ -113,6 +114,34 @@ export default function HomePage() {
   const [agenda, setAgenda] = useState<AgendaItem[]>([])
   const [loading, setLoading] = useState(true)
 
+  const applyDashboardPayload = useCallback((data: DashboardPayload, nextProfile?: Profile) => {
+    const normalizedSpaces = (data.spaces || []).map((space) => ({
+      ...space,
+      name: normalizeSalesSpaceName(space.name),
+    }))
+    const normalizedActiveSpace = data.activeSpace
+      ? {
+          ...data.activeSpace,
+          name: normalizeSalesSpaceName(data.activeSpace.name),
+        }
+      : null
+
+    if (nextProfile) {
+      setProfile({
+        ...nextProfile,
+        roles: nextProfile.roles || [],
+        spaces: normalizedSpaces,
+      })
+    } else {
+      setProfile(prev => prev ? { ...prev, spaces: normalizedSpaces } : null)
+    }
+    setActiveSpace(normalizedActiveSpace)
+    setOpportunities(data.opportunities || [])
+    setMilestones(data.milestones || [])
+    setReminders(data.reminders || [])
+    setAgenda(data.agenda || [])
+  }, [])
+
   // 加载全部数据
   const load = useCallback(async (spaceId?: string) => {
     setLoading(true)
@@ -133,28 +162,13 @@ export default function HomePage() {
       }
 
       const data = await res.json() as DashboardPayload
-      const normalizedSpaces = (data.spaces || []).map((space) => ({
-        ...space,
-        name: normalizeSalesSpaceName(space.name),
-      }))
-      const normalizedActiveSpace = data.activeSpace
-        ? {
-            ...data.activeSpace,
-            name: normalizeSalesSpaceName(data.activeSpace.name),
-          }
-        : null
-      setProfile(prev => prev ? { ...prev, spaces: normalizedSpaces } : null)
-      setActiveSpace(normalizedActiveSpace)
-      setOpportunities(data.opportunities || [])
-      setMilestones(data.milestones || [])
-      setReminders(data.reminders || [])
-      setAgenda(data.agenda || [])
+      applyDashboardPayload(data)
     } catch (e) {
       console.error('[Dashboard] load error', e)
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [applyDashboardPayload, router])
 
   useEffect(() => {
     let mounted = true
@@ -166,9 +180,10 @@ export default function HomePage() {
         return
       }
 
-      const profileRes = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const authHeaders = { Authorization: `Bearer ${token}` }
+      const profileRequest = fetch('/api/auth/me', { headers: authHeaders })
+      const dashboardRequest = fetch('/api/dashboard', { headers: authHeaders })
+      const [profileRes, dashboardRes] = await Promise.all([profileRequest, dashboardRequest])
 
       if (!profileRes.ok) {
         clearClientSession()
@@ -177,18 +192,40 @@ export default function HomePage() {
         return
       }
 
-      const profilePayload = await profileRes.json()
+      if (!dashboardRes.ok) {
+        if (dashboardRes.status === 401) {
+          clearClientSession()
+          router.push('/login')
+          setLoading(false)
+          return
+        }
+        throw new Error('Dashboard load failed')
+      }
+
+      const [profilePayload, dashboardPayload] = await Promise.all([
+        profileRes.json(),
+        dashboardRes.json() as Promise<DashboardPayload>,
+      ])
       const profileRow = profilePayload.user as Profile | undefined
 
       if (mounted && profileRow) {
-        setProfile({ ...profileRow, roles: profileRow.roles || [], spaces: [] })
-        await load()
+        applyDashboardPayload(dashboardPayload, profileRow)
+        setLoading(false)
       } else {
         setLoading(false)
       }
-    })()
+    })().catch((error) => {
+      console.error('[Dashboard] initial load error', error)
+      if (mounted) setLoading(false)
+    })
     return () => { mounted = false }
-  }, [router, load])
+  }, [applyDashboardPayload, router])
+
+  useEffect(() => {
+    if (loading || !profile) return
+    const token = localStorage.getItem('token')
+    scheduleCorePageWarmup(token, (href) => router.prefetch(href))
+  }, [loading, profile, router])
 
   // 切换销售空间
   const switchSpace = useCallback(async (spaceId: string) => {
@@ -277,6 +314,7 @@ export default function HomePage() {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Link
                 href="/configs"
+                prefetch={false}
                 className="inline-flex h-10 items-center rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
               >
                 配置中心
@@ -392,7 +430,7 @@ export default function HomePage() {
               </div>
             ) : (
               opportunities.slice(0, 3).map(o => (
-                <Link key={o.id} href={`/opportunities/${o.id}`} className="queue-card">
+                <Link key={o.id} href={`/opportunities/${o.id}`} prefetch={false} className="queue-card">
                   <div className="queue-card-title">{o.name}</div>
                   <div className="queue-card-meta">
                     <span className={STATUS_MAP[o.status]?.pillClass || 'pill'}>

@@ -6,6 +6,15 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   ArrowLeftIcon,
   AlertCircleIcon,
@@ -25,6 +34,9 @@ import dynamic from 'next/dynamic'
 import { error as toastError, handleError, confirmAction } from '@/lib/toast'
 
 const ClauseReviewWorkshop = dynamic(() => import('./components/ClauseReviewWorkshop'), { ssr: false })
+
+type ReviewConclusion = 'APPROVED' | 'REJECTED' | 'ESCALATED'
+type ReasonedConclusion = Exclude<ReviewConclusion, 'APPROVED'>
 
 interface RiskCardData {
   id: string
@@ -74,6 +86,8 @@ export default function ContractReviewPage() {
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
   const [fixingId, setFixingId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [pendingConclusion, setPendingConclusion] = useState<ReasonedConclusion | null>(null)
+  const [conclusionReason, setConclusionReason] = useState('')
 
   // AI 聊天
   const [chatOpen, setChatOpen] = useState(false)
@@ -179,81 +193,68 @@ export default function ContractReviewPage() {
   }, [chatMessages])
 
   // ─── 审核结论操作 ───
+  const submitConclusion = useCallback(async (
+    conclusion: ReviewConclusion,
+    reason?: string
+  ): Promise<boolean> => {
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contracts/${contractId}/review`, {
+        method: 'PATCH',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conclusion,
+          ...(reason ? { conclusion_reason: reason } : {}),
+        }),
+      })
+      if (res.ok) {
+        await fetchReviewData()
+        return true
+      }
+      const payload = await res.json().catch(() => null)
+      const message = payload?.error?.message || payload?.message || payload?.error || '操作失败'
+      toastError(message)
+      return false
+    } catch {
+      toastError('网络错误')
+      return false
+    } finally {
+      setSubmitting(false)
+    }
+  }, [contractId, fetchReviewData])
+
   const handleApprove = useCallback(async () => {
     if (!await confirmAction('确认审核通过？通过后合同将进入已归档状态。', { confirmText: '审核通过' })) return
-    setSubmitting(true)
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`/api/contracts/${contractId}/review`, {
-        method: 'PATCH',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ conclusion: 'APPROVED', concluded_at: new Date().toISOString() }),
-      })
-      if (res.ok) await fetchReviewData()
-      else toastError('操作失败')
-    } catch {
-      toastError('网络错误')
-    } finally {
-      setSubmitting(false)
-    }
-  }, [contractId, fetchReviewData])
+    await submitConclusion('APPROVED')
+  }, [submitConclusion])
 
   const handleReject = useCallback(async () => {
-    const reason = prompt('请输入驳回原因（必填）：')
-    if (!reason?.trim()) return
-    setSubmitting(true)
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`/api/contracts/${contractId}/review`, {
-        method: 'PATCH',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          conclusion: 'REJECTED',
-          conclusion_reason: reason,
-          concluded_at: new Date().toISOString(),
-        }),
-      })
-      if (res.ok) await fetchReviewData()
-      else toastError('操作失败')
-    } catch {
-      toastError('网络错误')
-    } finally {
-      setSubmitting(false)
-    }
-  }, [contractId, fetchReviewData])
+    setConclusionReason('')
+    setPendingConclusion('REJECTED')
+  }, [])
 
   const handleEscalate = useCallback(async () => {
-    const reason = prompt('请输入转交原因及目标角色（如：法务/财务）：')
-    if (!reason?.trim()) return
-    setSubmitting(true)
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`/api/contracts/${contractId}/review`, {
-        method: 'PATCH',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          conclusion: 'ESCALATED',
-          conclusion_reason: reason,
-          concluded_at: new Date().toISOString(),
-        }),
-      })
-      if (res.ok) await fetchReviewData()
-      else toastError('操作失败')
-    } catch {
-      toastError('网络错误')
-    } finally {
-      setSubmitting(false)
+    setConclusionReason('')
+    setPendingConclusion('ESCALATED')
+  }, [])
+
+  const handleReasonedConclusion = useCallback(async () => {
+    if (!pendingConclusion) return
+    const reason = conclusionReason.trim()
+    if (!reason) {
+      toastError(pendingConclusion === 'REJECTED' ? '请填写驳回原因' : '请填写转交原因及目标角色')
+      return
     }
-  }, [contractId, fetchReviewData])
+    const succeeded = await submitConclusion(pendingConclusion, reason)
+    if (succeeded) {
+      setPendingConclusion(null)
+      setConclusionReason('')
+    }
+  }, [conclusionReason, pendingConclusion, submitConclusion])
 
   if (loading) {
     return (
@@ -681,6 +682,61 @@ export default function ContractReviewPage() {
           </div>
         </aside>
       </div>
+
+      <Dialog
+        open={pendingConclusion !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setPendingConclusion(null)
+            setConclusionReason('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {pendingConclusion === 'REJECTED' ? '驳回合同' : '转交合同'}
+            </DialogTitle>
+            <DialogDescription>
+              {pendingConclusion === 'REJECTED'
+                ? '请填写驳回原因。该原因会写入审核记录，供发起人查看。'
+                : '请填写转交原因和目标角色，例如“转交财务确认付款账期”。'}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={conclusionReason}
+            onChange={(event) => setConclusionReason(event.target.value)}
+            placeholder={pendingConclusion === 'REJECTED' ? '请输入驳回原因' : '请输入转交原因及目标角色'}
+            className="min-h-28"
+            disabled={submitting}
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (submitting) return
+                setPendingConclusion(null)
+                setConclusionReason('')
+              }}
+              disabled={submitting}
+            >
+              取消
+            </Button>
+            <Button
+              variant={pendingConclusion === 'REJECTED' ? 'destructive' : 'default'}
+              onClick={handleReasonedConclusion}
+              disabled={submitting || !conclusionReason.trim()}
+            >
+              {submitting ? (
+                <>
+                  <LoaderIcon className="h-4 w-4 mr-1 animate-spin" />
+                  提交中...
+                </>
+              ) : pendingConclusion === 'REJECTED' ? '确认驳回' : '确认转交'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

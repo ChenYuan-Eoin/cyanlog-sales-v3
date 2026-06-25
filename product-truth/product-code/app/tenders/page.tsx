@@ -46,7 +46,7 @@ export default async function TendersPage() {
           <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-1">标书中心</h1>
           <p className="text-sm text-slate-500">招标文件 OCR 解析、关键信息提取、标书生成</p>
         </div>
-        <Link href="/contracts/new">
+        <Link href="/contracts/new" prefetch={false}>
           <Button>+ 上传招标文件</Button>
         </Link>
       </div>
@@ -65,7 +65,7 @@ export default async function TendersPage() {
           <CardContent className="py-12 text-center">
             <p className="text-slate-500 mb-2">暂无标书</p>
             <p className="text-sm text-slate-400 mb-4">上传招标文件后，OCR 会自动解析关键信息</p>
-            <Link href="/contracts/new">
+            <Link href="/contracts/new" prefetch={false}>
               <Button>+ 上传招标文件</Button>
             </Link>
           </CardContent>
@@ -92,6 +92,7 @@ export default async function TendersPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/tenders/${t.id}`}
+                        prefetch={false}
                         className="text-sm font-medium text-slate-900 hover:text-blue-600"
                       >
                         {keyInfo.tenderName || t.original_file}
@@ -115,6 +116,7 @@ export default async function TendersPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/tenders/${t.id}`}
+                        prefetch={false}
                         className="text-sm text-blue-600 hover:underline"
                       >
                         查看详情

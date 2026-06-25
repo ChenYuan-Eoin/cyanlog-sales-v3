@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
+import { canAccessAskByRoles } from '@/lib/ask/permissions'
 
 // ASK Item 类型定义 - 匹配数据库查询返回的结构
 interface AskItem {
@@ -22,7 +23,18 @@ interface AskItem {
   qualified_std?: string
   trigger_user_id?: string
   closed_reason?: string
-  ask_responses?: unknown[]
+  ask_responses?: AskResponse[]
+  response?: AskResponse | null
+}
+
+interface AskResponse {
+  id: string
+  responder_id: string
+  responder_role: string
+  responder_name: string
+  response_text: string
+  attachments: unknown[]
+  created_at: string
 }
 
 interface RouteParams {
@@ -40,7 +52,8 @@ export async function GET(
     const user = await requireAuth(request)
 
     // 验证合同权限
-    const { contract } = await getAccessibleContract(contractId, user.id, undefined, 'id, org_id')
+    const access = await getAccessibleContract(contractId, user.id, undefined, 'id, org_id')
+    const { contract } = access
 
     if (!contract) {
       return NextResponse.json(
@@ -88,22 +101,32 @@ export async function GET(
       )
     }
 
+    const visibleItems = ((asks || []) as AskItem[])
+      .filter((ask) => canAccessAskByRoles(ask.required_roles, access.assignments))
+      .map((ask) => {
+        const { ask_responses, ...item } = ask
+        return {
+          ...item,
+          response: ask_responses?.[0] || null,
+        }
+      })
+
     // 统计
-    const total = asks?.length || 0
-    const pending = asks?.filter((a: AskItem) => a.status === 'pending').length || 0
-    const responded = asks?.filter((a: AskItem) => a.status === 'responded').length || 0
-    const closed = asks?.filter((a: AskItem) => a.status === 'closed').length || 0
+    const total = visibleItems.length
+    const pending = visibleItems.filter((a: AskItem) => a.status === 'pending').length
+    const responded = visibleItems.filter((a: AskItem) => a.status === 'responded').length
+    const closed = visibleItems.filter((a: AskItem) => a.status === 'closed').length
 
     // 按风险等级统计
-    const redCount = asks?.filter((a: AskItem) => a.initial_level === 'red').length || 0
-    const yellowCount = asks?.filter((a: AskItem) => a.initial_level === 'yellow').length || 0
-    const greenCount = asks?.filter((a: AskItem) => a.initial_level === 'green').length || 0
+    const redCount = visibleItems.filter((a: AskItem) => a.initial_level === 'red').length
+    const yellowCount = visibleItems.filter((a: AskItem) => a.initial_level === 'yellow').length
+    const greenCount = visibleItems.filter((a: AskItem) => a.initial_level === 'green').length
 
     return NextResponse.json({
       success: true,
       data: {
         contract_id: contractId,
-        items: asks || [],
+        items: visibleItems,
         summary: {
           total,
           pending,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { CLIENT_AUTH_COOKIE_NAME, getRequestAuthToken, SERVER_AUTH_COOKIE_NAME } from '@/lib/auth-token'
+import { invalidateAuthCache } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 function getToken(req: NextRequest) {
@@ -11,6 +12,7 @@ export async function POST(req: NextRequest) {
   const token = getToken(req)
 
   if (token) {
+    invalidateAuthCache(token)
     await supabaseAdmin.from('auth_tokens').delete().eq('token', token)
   }
 

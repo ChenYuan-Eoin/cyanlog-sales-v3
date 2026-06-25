@@ -32,25 +32,28 @@ export async function checkLoginRateLimit(
 ): Promise<RateLimitResult> {
   const since = new Date(Date.now() - LOCK_DURATION_MINUTES * 60 * 1000).toISOString()
 
-  // 1. 检查账号维度失败次数
-  const { data: accountFailures } = await supabaseAdmin
-    .from('login_attempts')
-    .select('id, attempted_at')
-    .eq('identifier', identifier)
-    .eq('success', false)
-    .gte('attempted_at', since)
-    .order('attempted_at', { ascending: false })
+  const [accountResult, ipResult] = await Promise.all([
+    supabaseAdmin
+      .from('login_attempts')
+      .select('id, attempted_at')
+      .eq('identifier', identifier)
+      .eq('success', false)
+      .gte('attempted_at', since)
+      .order('attempted_at', { ascending: false })
+      .limit(MAX_FAILURES),
+    supabaseAdmin
+      .from('login_attempts')
+      .select('id, attempted_at')
+      .eq('ip_address', ipAddress)
+      .eq('success', false)
+      .gte('attempted_at', since)
+      .order('attempted_at', { ascending: false })
+      .limit(MAX_FAILURES * 3),
+  ])
 
-  const accountCount = accountFailures?.length || 0
-
-  // 2. 检查 IP 维度失败次数
-  const { data: ipFailures } = await supabaseAdmin
-    .from('login_attempts')
-    .select('id, attempted_at')
-    .eq('ip_address', ipAddress)
-    .eq('success', false)
-    .gte('attempted_at', since)
-
+  const accountFailures = accountResult.data || []
+  const ipFailures = ipResult.data || []
+  const accountCount = accountFailures.length
   const ipCount = ipFailures?.length || 0
 
   // 决策

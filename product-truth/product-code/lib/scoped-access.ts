@@ -106,7 +106,51 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))))
 }
 
+const ORG_CACHE_TTL_MS = 15_000
+const defaultOrgCache = new Map<string, { orgId: string; expiresAt: number }>()
+const defaultOrgInflight = new Map<string, Promise<string>>()
+const scopedRoleCache = new Map<string, { assignments: ScopedRoleAssignment[]; expiresAt: number }>()
+const scopedRoleInflight = new Map<string, Promise<ScopedRoleAssignment[]>>()
+const salesSpacesCache = new Map<string, { value: { assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }; expiresAt: number }>()
+const salesSpacesInflight = new Map<string, Promise<{ assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }>>()
+
+export function primeDefaultOrgCache(userId: string | null | undefined, orgId: string | null | undefined) {
+  if (!userId || !orgId) return
+  defaultOrgCache.set(userId, {
+    orgId,
+    expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+  })
+}
+
 export async function getDefaultOrgId(userId: string): Promise<string> {
+  const cached = defaultOrgCache.get(userId)
+  if (cached && cached.expiresAt >= Date.now()) {
+    return cached.orgId
+  }
+  if (cached) {
+    defaultOrgCache.delete(userId)
+  }
+
+  const inflight = defaultOrgInflight.get(userId)
+  if (inflight) return inflight
+
+  const promise = loadDefaultOrgId(userId)
+    .then((orgId) => {
+      defaultOrgCache.set(userId, {
+        orgId,
+        expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+      })
+      return orgId
+    })
+    .finally(() => {
+      defaultOrgInflight.delete(userId)
+    })
+
+  defaultOrgInflight.set(userId, promise)
+  return promise
+}
+
+async function loadDefaultOrgId(userId: string): Promise<string> {
   const membershipResult = await supabaseAdmin
     .from('user_organizations')
     .select('org_id')
@@ -164,7 +208,7 @@ async function listDepartmentSubtreeIds(orgId: string, rootDepartmentIds: string
     .map((department) => department.id)
 }
 
-export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
+async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
   const { data, error } = await supabaseAdmin
     .from('user_roles')
     .select('scope_type, scope_id, granted_at, role:roles(id, code, name, permissions)')
@@ -194,6 +238,34 @@ export async function getUserScopedRoleAssignments(userId: string): Promise<Scop
     .filter((assignment): assignment is ScopedRoleAssignment => Boolean(assignment))
 }
 
+export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
+  const cached = scopedRoleCache.get(userId)
+  if (cached && cached.expiresAt >= Date.now()) {
+    return cached.assignments
+  }
+  if (cached) {
+    scopedRoleCache.delete(userId)
+  }
+
+  const inflight = scopedRoleInflight.get(userId)
+  if (inflight) return inflight
+
+  const promise = loadUserScopedRoleAssignments(userId)
+    .then((assignments) => {
+      scopedRoleCache.set(userId, {
+        assignments,
+        expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+      })
+      return assignments
+    })
+    .finally(() => {
+      scopedRoleInflight.delete(userId)
+    })
+
+  scopedRoleInflight.set(userId, promise)
+  return promise
+}
+
 export function getOrgScopedAssignments(assignments: ScopedRoleAssignment[]): ScopedRoleAssignment[] {
   return assignments.filter((assignment) => assignment.scopeType === 'org')
 }
@@ -214,7 +286,7 @@ export function canManageOrg(assignments: ScopedRoleAssignment[]): boolean {
   return canAccessOrgAdmin(getOrgPermissions(assignments), getOrgRoleCodes(assignments))
 }
 
-export async function listAccessibleSalesSpaces(userId: string, orgId: string): Promise<{
+async function loadAccessibleSalesSpaces(userId: string, orgId: string): Promise<{
   assignments: ScopedRoleAssignment[]
   spaces: SalesSpaceSummary[]
 }> {
@@ -297,6 +369,38 @@ export async function listAccessibleSalesSpaces(userId: string, orgId: string): 
     assignments,
     spaces: mergeSpaces(memberSpaces, ...extraGroups),
   }
+}
+
+export async function listAccessibleSalesSpaces(userId: string, orgId: string): Promise<{
+  assignments: ScopedRoleAssignment[]
+  spaces: SalesSpaceSummary[]
+}> {
+  const cacheKey = `${userId}:${orgId}`
+  const cached = salesSpacesCache.get(cacheKey)
+  if (cached && cached.expiresAt >= Date.now()) {
+    return cached.value
+  }
+  if (cached) {
+    salesSpacesCache.delete(cacheKey)
+  }
+
+  const inflight = salesSpacesInflight.get(cacheKey)
+  if (inflight) return inflight
+
+  const promise = loadAccessibleSalesSpaces(userId, orgId)
+    .then((value) => {
+      salesSpacesCache.set(cacheKey, {
+        value,
+        expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+      })
+      return value
+    })
+    .finally(() => {
+      salesSpacesInflight.delete(cacheKey)
+    })
+
+  salesSpacesInflight.set(cacheKey, promise)
+  return promise
 }
 
 export async function listAccessibleUserIds(userId: string, orgId?: string): Promise<{

@@ -23,7 +23,8 @@ import {
   FileTextIcon,
 } from '@/components/icons'
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
-import { LoadingState } from '@/components/ui/LoadingState'
+import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
+import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import TabsContent from './tabs/TabsContent'
 import ConfigStatusBadge from './tabs/ConfigStatusBadge'
@@ -224,6 +225,30 @@ const DATA_SCOPE_LEVELS = [
   },
 ]
 
+const TAB_CACHE_TTL_MS = 5 * 60 * 1000
+const TAB_BACKGROUND_REFRESH_MS = 60 * 1000
+const tabDataInflight = new Map<string, Promise<unknown>>()
+
+function loadInflightTabValue<T>(cacheKey: string, loader: () => Promise<T | null>) {
+  const existing = tabDataInflight.get(cacheKey) as Promise<T | null> | undefined
+  if (existing) return existing
+
+  const request = loader().finally(() => {
+    tabDataInflight.delete(cacheKey)
+  })
+  tabDataInflight.set(cacheKey, request)
+  return request
+}
+
+type ConfigRoleRecord = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  permissions: string[] | null
+  sort_order: number | null
+}
+
 export default function ConfigsClient({ initialData, orgId: _orgId }: { initialData?: ConfigsInitialData; orgId?: string }) {
   // 优先使用服务端预取的数据，避免客户端重复请求
   const [rules, setRules] = useState<Rule[]>(initialData?.rules || [])
@@ -253,13 +278,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   const [versionConfigId, setVersionConfigId] = useState<string | null>(null)
 
   // 角色权限（Tab: roles）
-  const [roles, setRoles] = useState<Array<{
-    id: string; code: string; name: string; description: string | null
-    permissions: string[] | null; sort_order: number | null
-  }>>(initialData?.roles as Array<{
-    id: string; code: string; name: string; description: string | null
-    permissions: string[] | null; sort_order: number | null
-  }> | [] || [])
+  const [roles, setRoles] = useState<ConfigRoleRecord[]>((initialData?.roles as ConfigRoleRecord[] | undefined) || [])
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
   const [feishuSyncing, setFeishuSyncing] = useState(false)
   const [feishuResult, setFeishuResult] = useState<string>('')
@@ -271,67 +290,85 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   // 保持 ref 与 state 同步
   useEffect(() => { loadedTabsRef.current = loadedTabs }, [loadedTabs])
 
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search)
-    const tab = searchParams.get('tab')
-    if (tab && tab in CONFIG_TABS) {
-      setActiveTab(tab as ConfigTabId)
-    }
-    setTabReady(true)
-    // 按需加载：初始加载当前 tab 数据（如果还没加载过）
-    if (!hasInitialData) {
-      const initialTab = (tab && tab in CONFIG_TABS) ? tab as ConfigTabId : 'price-list'
-      // 使用 setTimeout 避免与第二个 useEffect 竞态
-      setTimeout(() => {
-        if (!loadedTabsRef.current.has(initialTab) && loadingTabRef.current !== initialTab) {
-          loadTabData(initialTab)
-        }
-      }, 0)
-    }
-  }, [hasInitialData])
-
-  useEffect(() => {
-    if (!tabReady) return
-    const url = new URL(window.location.href)
-    url.searchParams.set('tab', activeTab)
-    window.history.replaceState({}, '', url)
-    // 按需加载：切换 tab 时加载对应数据（如果还没加载过，且不在加载中）
-    if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
-      loadTabData(activeTab)
-    }
-  }, [activeTab, tabReady])
-
   // 按需加载指定 tab 的数据
-  async function loadTabData(tab: ConfigTabId) {
+  const loadTabData = useCallback(async (tab: ConfigTabId) => {
     // 防重复请求：如果已经在加载该 tab，则跳过
     if (loadingTabRef.current === tab) return
     // 如果已经加载过，则跳过
     if (loadedTabsRef.current.has(tab)) return
 
     loadingTabRef.current = tab
-    setLoading(true)
     setError('')
     try {
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const cacheKey = scopedCacheKey(token, `configs:${tab}`)
+      const cachedEntry = readBrowserCacheEntry<unknown>(cacheKey)
+      const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
+      const cached = cacheAgeMs <= TAB_CACHE_TTL_MS ? cachedEntry?.value : null
+
+      if (cached) {
+        switch (tab) {
+          case 'price-list':
+            setProducts(cached as ProductRecord[])
+            break
+          case 'rules':
+            setRules(cached as Rule[])
+            break
+          case 'tax':
+          case 'approval':
+          case 'ai':
+          case 'theme':
+            setConfigs(cached as Config[])
+            break
+          case 'role-access':
+            setRoles(cached as ConfigRoleRecord[])
+            break
+          case 'org-structure':
+            setOrgSummary(cached as OrgSummaryPayload)
+            break
+        }
+        setLoadedTabs(prev => new Set(prev).add(tab))
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+
+      if (cached && cacheAgeMs < TAB_BACKGROUND_REFRESH_MS) {
+        return
+      }
 
       switch (tab) {
         case 'price-list': {
           // 只加载 products (分页格式)
-          const productsRes = await fetch('/api/products', { headers })
-          if (productsRes.ok) {
+          const nextProducts = await loadInflightTabValue<ProductRecord[]>(cacheKey, async () => {
+            if (token) {
+              return (await loadConfigProductsForCache(token) || []) as ProductRecord[]
+            }
+
+            const productsRes = await fetch('/api/products?summary=1', { headers })
+            if (!productsRes.ok) return null
             const productsJson = await productsRes.json()
-            setProducts(productsJson.data ?? [])
+            return productsJson.data ?? []
+          })
+          if (nextProducts) {
+            setProducts(nextProducts)
+            writeBrowserCache(cacheKey, nextProducts)
           }
           break
         }
 
         case 'rules': {
           // 只加载 rules (分页格式)
-          const rulesRes = await fetch('/api/rules', { headers })
-          if (rulesRes.ok) {
+          const nextRules = await loadInflightTabValue<Rule[]>(cacheKey, async () => {
+            const rulesRes = await fetch('/api/rules', { headers })
+            if (!rulesRes.ok) return null
             const rulesJson = await rulesRes.json()
-            setRules(rulesJson.data ?? [])
+            return rulesJson.data ?? []
+          })
+          if (nextRules) {
+            setRules(nextRules)
+            writeBrowserCache(cacheKey, nextRules)
           }
           break
         }
@@ -341,30 +378,44 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         case 'ai':
         case 'theme': {
           // 这些 tab 共享 configs 数据 (分页格式)
-          const configsRes = await fetch('/api/configs', { headers })
-          if (configsRes.ok) {
+          const nextConfigs = await loadInflightTabValue<Config[]>(cacheKey, async () => {
+            const configsRes = await fetch('/api/configs', { headers })
+            if (!configsRes.ok) return null
             const configsJson = await configsRes.json()
-            setConfigs(configsJson.data ?? [])
+            return configsJson.data ?? []
+          })
+          if (nextConfigs) {
+            setConfigs(nextConfigs)
+            writeBrowserCache(cacheKey, nextConfigs)
           }
           break
         }
 
         case 'role-access': {
           // 只加载 roles (分页格式)
-          const rolesRes = await fetch('/api/roles', { headers })
-          if (rolesRes.ok) {
+          const nextRoles = await loadInflightTabValue<ConfigRoleRecord[]>(cacheKey, async () => {
+            const rolesRes = await fetch('/api/roles', { headers })
+            if (!rolesRes.ok) return null
             const rolesJson = await rolesRes.json()
-            setRoles(rolesJson.data?.roles ?? [])
+            return rolesJson.data?.roles ?? []
+          })
+          if (nextRoles) {
+            setRoles(nextRoles)
+            writeBrowserCache(cacheKey, nextRoles)
           }
           break
         }
 
         case 'org-structure': {
           // 只加载 org
-          const orgRes = await fetch('/api/admin/org', { headers })
-          if (orgRes.ok) {
-            const orgData = await orgRes.json()
+          const orgData = await loadInflightTabValue<OrgSummaryPayload>(cacheKey, async () => {
+            const orgRes = await fetch('/api/admin/org', { headers })
+            if (!orgRes.ok) return null
+            return orgRes.json()
+          })
+          if (orgData) {
             setOrgSummary(orgData)
+            writeBrowserCache(cacheKey, orgData)
           }
           break
         }
@@ -381,7 +432,37 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         loadingTabRef.current = null
       }
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search)
+    const tab = searchParams.get('tab')
+    if (tab && tab in CONFIG_TABS) {
+      setActiveTab(tab as ConfigTabId)
+    }
+    setTabReady(true)
+    // 按需加载：初始加载当前 tab 数据（如果还没加载过）
+    if (!hasInitialData) {
+      const initialTab = (tab && tab in CONFIG_TABS) ? tab as ConfigTabId : 'price-list'
+      // 使用 setTimeout 避免与第二个 useEffect 竞态
+      setTimeout(() => {
+        if (!loadedTabsRef.current.has(initialTab) && loadingTabRef.current !== initialTab) {
+          void loadTabData(initialTab)
+        }
+      }, 0)
+    }
+  }, [hasInitialData, loadTabData])
+
+  useEffect(() => {
+    if (!tabReady) return
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', activeTab)
+    window.history.replaceState({}, '', url)
+    // 按需加载：切换 tab 时加载对应数据（如果还没加载过，且不在加载中）
+    if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
+      void loadTabData(activeTab)
+    }
+  }, [activeTab, tabReady, loadTabData])
 
   // 兼容原有调用：全部加载（供刷新按钮等使用）
   async function fetchData() {
@@ -934,14 +1015,6 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     } catch {
       setError('网络错误')
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex h-[calc(100vh-100px)] items-center justify-center">
-        <LoadingState message="加载配置中心..." size="lg" />
-      </div>
-    )
   }
 
   return (
