@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { primeAuthCache } from '@/lib/auth'
 import { primeDefaultOrgCache } from '@/lib/scoped-access'
+import { primeDashboardPayload } from '@/lib/dashboard-data'
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
 import { loginSchema } from '@/lib/validation'
@@ -61,7 +62,6 @@ export async function POST(req: NextRequest) {
       return response
     }
 
-    // 查找用户
     let query = supabaseAdmin.from('users').select('id, email, phone, display_name, org_id, password_hash, must_change_password')
     if (email) {
       query = query.eq('email', email)
@@ -83,6 +83,16 @@ export async function POST(req: NextRequest) {
       return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
     }
 
+    const authUser = {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      display_name: user.display_name,
+      org_id: user.org_id,
+    }
+    primeDefaultOrgCache(user.id, user.org_id)
+    primeDashboardPayload(authUser)
+
     // 生成 token
     const token = uuidv4()
     const expiresAt = new Date()
@@ -100,14 +110,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('登录失败，请重试', 500, 'TOKEN_CREATE_FAILED')
     }
 
-    primeAuthCache(token, {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      display_name: user.display_name,
-      org_id: user.org_id,
-    })
-    primeDefaultOrgCache(user.id, user.org_id)
+    primeAuthCache(token, authUser)
 
     await recordLoginAttempt(identifier, ipAddress, true)
 

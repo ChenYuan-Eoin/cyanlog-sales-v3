@@ -4,6 +4,7 @@ import { useEffect, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { scheduleCorePageWarmup } from '@/lib/core-page-warmup'
+import { HomeInitialAuthError, loadHomeInitialData } from '@/lib/home-data-client'
 import { clearClientSession, logoutClientSession } from '@/lib/session-client'
 import { normalizeSalesSpaceName } from '@/lib/scoped-access'
 
@@ -180,33 +181,9 @@ export default function HomePage() {
         return
       }
 
-      const authHeaders = { Authorization: `Bearer ${token}` }
-      const profileRequest = fetch('/api/auth/me', { headers: authHeaders })
-      const dashboardRequest = fetch('/api/dashboard', { headers: authHeaders })
-      const [profileRes, dashboardRes] = await Promise.all([profileRequest, dashboardRequest])
-
-      if (!profileRes.ok) {
-        clearClientSession()
-        router.push('/login')
-        setLoading(false)
-        return
-      }
-
-      if (!dashboardRes.ok) {
-        if (dashboardRes.status === 401) {
-          clearClientSession()
-          router.push('/login')
-          setLoading(false)
-          return
-        }
-        throw new Error('Dashboard load failed')
-      }
-
-      const [profilePayload, dashboardPayload] = await Promise.all([
-        profileRes.json(),
-        dashboardRes.json() as Promise<DashboardPayload>,
-      ])
-      const profileRow = profilePayload.user as Profile | undefined
+      const initialData = await loadHomeInitialData(token)
+      const profileRow = initialData.profile as Profile | undefined
+      const dashboardPayload = initialData.dashboard as DashboardPayload
 
       if (mounted && profileRow) {
         applyDashboardPayload(dashboardPayload, profileRow)
@@ -215,6 +192,12 @@ export default function HomePage() {
         setLoading(false)
       }
     })().catch((error) => {
+      if (error instanceof HomeInitialAuthError) {
+        clearClientSession()
+        router.push('/login')
+        if (mounted) setLoading(false)
+        return
+      }
       console.error('[Dashboard] initial load error', error)
       if (mounted) setLoading(false)
     })

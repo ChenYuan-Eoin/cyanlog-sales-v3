@@ -6,19 +6,21 @@ export async function GET(req: NextRequest) {
     const pageSize = parseInt(searchParams.get('pageSize') || '20', 10)
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status') || ''
+    const includeTotal = searchParams.get('includeTotal') === '1'
 
     // 验证分页参数
     const safePage = Math.max(1, page)
     const safePageSize = Math.min(100, Math.max(1, pageSize))
     const offset = (safePage - 1) * safePageSize
+    const rangeEnd = includeTotal ? offset + safePageSize - 1 : offset + safePageSize
 
     // 构建查询
     let query = supabaseAdmin
       .from('contracts')
-      .select('id, filename, status, created_at, updated_at', { count: 'exact' })
+      .select('id, filename, status, created_at, updated_at', includeTotal ? { count: 'exact' } : undefined)
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })
-      .range(offset, offset + safePageSize - 1)
+      .range(offset, rangeEnd)
 
     if (search.trim()) {
       query = query.or(`filename.ilike.%${search}%,parsed_text.ilike.%${search}%`)
@@ -34,17 +36,26 @@ export async function GET(req: NextRequest) {
       return errorResponse(createApiError('DB_ERROR', '获取合同列表失败'))
     }
 
-    const total = count || 0
-    const totalPages = Math.ceil(total / safePageSize)
+    const rows = contracts || []
+    const visibleRows = includeTotal ? rows : rows.slice(0, safePageSize)
+    const hasNext = includeTotal
+      ? safePage < Math.ceil((count || 0) / safePageSize)
+      : rows.length > safePageSize
+    const total = includeTotal
+      ? (count || 0)
+      : offset + visibleRows.length + (hasNext ? 1 : 0)
+    const totalPages = includeTotal
+      ? Math.ceil(total / safePageSize)
+      : safePage + (hasNext ? 1 : 0)
 
     return successResponse({
-      data: contracts || [],
+      data: visibleRows,
       meta: {
         page: safePage,
         pageSize: safePageSize,
         total,
         totalPages,
-        hasNext: safePage < totalPages,
+        hasNext,
         hasPrev: safePage > 1,
       },
     })

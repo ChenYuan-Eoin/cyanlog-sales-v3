@@ -137,7 +137,7 @@ export function confirmAction(
 
 /**
  * 统一的错误处理包装器
- * 用于替换 try-catch 中的 // ignore
+ * 用于替换吞掉异常的空处理
  */
 export function handleError(err: unknown, context?: string): void {
   const message = err instanceof Error ? err.message : String(err)

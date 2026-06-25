@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { persistClientSession } from '@/lib/session-client'
+import { primeHomeInitialData, primeHomeProfile } from '@/lib/home-data-client'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 
@@ -34,6 +35,11 @@ export default function LoginPage() {
       }
 
       persistClientSession(data.token)
+      if (!data.mustChangePassword) {
+        primeHomeProfile(data.token, data.user)
+        primeHomeInitialData(data.token)
+        router.prefetch('/')
+      }
 
       router.replace(data.mustChangePassword ? '/change-password' : '/')
     } catch {

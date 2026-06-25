@@ -15,7 +15,7 @@ export type ContractsCachePayload = {
 }
 
 const WARMUP_STALE_MS = 60 * 1000
-const WARMUP_DELAY_MS = 1200
+const WARMUP_DELAY_MS = 250
 const CONTRACTS_PAGE_SIZE = 20
 const warmups = new Map<string, Promise<void>>()
 const contractListWarmups = new Map<string, Promise<ContractsCachePayload | null>>()
