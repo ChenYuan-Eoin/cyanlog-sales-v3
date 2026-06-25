@@ -1,79 +1,166 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { PlusIcon, PlayIcon, ChevronRightIcon } from 'lucide-react'
-import type { Rule } from '@/types/rules'
+import { PlusIcon, PlayIcon, ChevronRightIcon, TrashIcon, GitBranchIcon } from 'lucide-react'
+import type { ContractPolicyRule } from '@/types/rules'
 import RuleDesigner from '../components/RuleDesigner'
 import RuleTestSandbox from '../components/RuleTestSandbox'
 
 interface RuleTabProps {
-  rules: Rule[]
-  onNew: () => void
-  onEdit: (rule: Rule) => void
+  rules: ContractPolicyRule[]
+  focusRuleId?: string | null
+  ruleMode?: string | null
+  onSave: (rule: Partial<ContractPolicyRule>, id?: string) => void | Promise<void>
   onDelete: (id: string) => void
 }
 
-// 规则扩展类型（包含Level A/B/C配置）
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface RuleWithLevels extends Rule {
-  level_a?: { threshold: number; unit: string; action: string }
-  level_b?: { threshold: number; unit: string; action: string; counterparty?: string }
-  level_c?: { threshold: number; unit: string; action: string; message?: string }
+const categoryMap: Record<string, { label: string; className: string }> = {
+  ratio: { label: '比例类', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  amount: { label: '金额类', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  duration: { label: '时限类', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  enum: { label: '枚举类', className: 'bg-slate-50 text-slate-700 border-slate-200' },
+  text: { label: '条款语义', className: 'bg-sky-50 text-sky-700 border-sky-200' },
 }
 
-const riskLevelMap: Record<string, { label: string; className: string }> = {
-  red: { label: '红灯', className: 'bg-red-100 text-red-800 border-red-200' },
-  yellow: { label: '黄灯', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  green: { label: '绿灯', className: 'bg-green-100 text-green-800 border-green-200' },
+const engineMap: Record<string, string> = {
+  structured: '结构化',
+  semantic: '语义',
+  hybrid: '混合',
 }
 
-const ruleTypeMap: Record<string, string> = {
-  structured: '结构化规则',
-  semantic: '语义规则',
+function formatThreshold(rule: ContractPolicyRule) {
+  const unit = rule.level_a_unit || rule.level_b_unit || rule.level_c_unit || ''
+  return `A ${rule.level_a_operator} ${rule.level_a_threshold}${unit} / B ${rule.level_b_operator} ${rule.level_b_threshold}${unit} / C ${rule.level_c_operator} ${rule.level_c_threshold}${unit}`
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps) {
-  const [selectedRule, setSelectedRule] = useState<Rule | null>(null)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [showDesigner, setShowDesigner] = useState(false)
+export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete }: RuleTabProps) {
+  const [selectedRule, setSelectedRule] = useState<ContractPolicyRule | null>(null)
   const [activeTab, setActiveTab] = useState<'list' | 'design' | 'test'>('list')
+  const [saving, setSaving] = useState(false)
+  const handledFocusRef = useRef<string | null>(null)
 
-  const handleSelectRule = (rule: Rule) => {
+  const sortedRules = useMemo(
+    () => [...rules].sort((left, right) => (right.priority || 0) - (left.priority || 0)),
+    [rules]
+  )
+
+  useEffect(() => {
+    const focusKey = `${ruleMode || ''}:${focusRuleId || ''}:${rules.length}`
+    if (handledFocusRef.current === focusKey) return
+
+    if (ruleMode === 'new') {
+      handledFocusRef.current = focusKey
+      setSelectedRule(null)
+      setActiveTab('design')
+      return
+    }
+
+    if (focusRuleId) {
+      const matchedRule = rules.find((rule) => rule.id === focusRuleId)
+      if (matchedRule) {
+        handledFocusRef.current = focusKey
+        setSelectedRule(matchedRule)
+        setActiveTab('design')
+      }
+    }
+  }, [focusRuleId, ruleMode, rules])
+
+  const handleNewRule = () => {
+    setSelectedRule(null)
+    setActiveTab('design')
+  }
+
+  const handleSelectRule = (rule: ContractPolicyRule) => {
     setSelectedRule(rule)
     setActiveTab('design')
   }
 
-  const handleNewRule = () => {
-    setSelectedRule(null)
-    setShowDesigner(true)
-    setActiveTab('design')
-    onNew()
-  }
-
-  const handleSaveRule = () => {
-    if (selectedRule) {
-      onEdit(selectedRule)
-    } else {
-      onNew()
+  const handleSaveRule = async (rule: Partial<ContractPolicyRule>) => {
+    setSaving(true)
+    try {
+      await onSave(rule, selectedRule?.id)
+      setActiveTab('list')
+      setSelectedRule(null)
+    } finally {
+      setSaving(false)
     }
-    setShowDesigner(false)
-    setActiveTab('list')
   }
 
-  const handleTestRule = () => {
-    setActiveTab('test')
+  const renderRuleButton = (rule: ContractPolicyRule) => {
+    const category = categoryMap[rule.category] || categoryMap.text
+    const isSelected = selectedRule?.id === rule.id
+    return (
+      <div
+        key={rule.id}
+        className={`rounded-lg border bg-white transition ${
+          isSelected ? 'border-indigo-400 ring-1 ring-indigo-100' : 'border-slate-200 hover:border-indigo-200'
+        }`}
+      >
+        <button
+          onClick={() => handleSelectRule(rule)}
+          className="w-full text-left p-3"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[11px] text-slate-400">{rule.code}</span>
+                <span className="font-medium text-sm text-slate-900">{rule.name}</span>
+                <Badge variant={rule.is_active ? 'default' : 'secondary'} className="text-[10px]">
+                  {rule.is_active ? '生效' : '停用'}
+                </Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className={`text-[10px] ${category.className}`}>
+                  {category.label}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {engineMap[rule.engine_type] || rule.engine_type}
+                </Badge>
+                <span className="text-[11px] text-slate-400">v{rule.version}</span>
+              </div>
+              <p className="mt-2 text-xs text-slate-500 line-clamp-2">
+                {rule.description || formatThreshold(rule)}
+              </p>
+            </div>
+            <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-300" />
+          </div>
+        </button>
+        <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
+          <span className="text-[11px] text-slate-400 truncate">{formatThreshold(rule)}</span>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              title="版本管理"
+              onClick={() => window.open(`/admin/contract-policies/rules/${rule.id}/versions`, '_self')}
+            >
+              <GitBranchIcon className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-red-600 hover:text-red-700"
+              title="停用规则"
+              onClick={() => onDelete(rule.id)}
+            >
+              <TrashIcon className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  // 规则列表视图
   if (activeTab === 'list') {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 左侧规则列表 */}
-        <div className="lg:col-span-1 space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-1">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">合同审核规则 ({rules.length})</CardTitle>
@@ -83,65 +170,41 @@ export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps
               </Button>
             </CardHeader>
             <CardContent>
-              {rules.length === 0 ? (
-                <div className="text-center py-8">
+              {sortedRules.length === 0 ? (
+                <div className="py-8 text-center">
                   <p className="text-slate-500">暂无规则</p>
-                  <p className="text-sm text-slate-400 mt-1">点击上方按钮创建第一条规则</p>
+                  <p className="mt-1 text-sm text-slate-400">创建后将立即作为合同审核控制面规则生效</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {rules.map((rule) => (
-                    <button
-                      key={rule.id}
-                      onClick={() => handleSelectRule(rule)}
-                      className="w-full text-left p-3 rounded-lg border hover:border-blue-300 hover:bg-blue-50 transition group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{rule.name}</span>
-                          <Badge variant={rule.enabled ? 'default' : 'secondary'} className="text-xs">
-                            {rule.enabled ? '启用' : '停用'}
-                          </Badge>
-                        </div>
-                        <ChevronRightIcon className="h-4 w-4 text-slate-400 group-hover:text-blue-500" />
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge className={`text-xs ${riskLevelMap[rule.risk_level]?.className || ''}`}>
-                          {riskLevelMap[rule.risk_level]?.label || rule.risk_level}
-                        </Badge>
-                        <span className="text-xs text-slate-400">{ruleTypeMap[rule.rule_type] || rule.rule_type}</span>
-                      </div>
-                    </button>
-                  ))}
+                  {sortedRules.map(renderRuleButton)}
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* 右侧空状态 */}
         <div className="lg:col-span-2">
-          <Card className="h-full flex items-center justify-center">
-            <div className="text-center py-12">
-              <p className="text-slate-500">选择左侧规则查看详情</p>
-              <p className="text-sm text-slate-400 mt-2">或创建新规则</p>
-              <Button className="mt-4" onClick={handleNewRule}>
-                <PlusIcon className="h-4 w-4 mr-1" />
-                新建规则
-              </Button>
-            </div>
+          <Card className="h-full">
+            <CardContent className="grid min-h-[360px] place-items-center py-12 text-center">
+              <div>
+                <p className="text-slate-600">选择左侧规则查看详情，或新建付款比例、账期、条款语义规则。</p>
+                <Button className="mt-4" onClick={handleNewRule}>
+                  <PlusIcon className="h-4 w-4 mr-1" />
+                  新建规则
+                </Button>
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>
     )
   }
 
-  // 规则设计视图
   if (activeTab === 'design') {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 左侧规则列表 */}
-        <div className="lg:col-span-1 space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-1">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">规则列表</CardTitle>
@@ -151,52 +214,29 @@ export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {rules.map((rule) => (
-                  <button
-                    key={rule.id}
-                    onClick={() => handleSelectRule(rule)}
-                    className={`w-full text-left p-3 rounded-lg border transition ${
-                      selectedRule?.id === rule.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'hover:border-blue-300 hover:bg-blue-50'
-                    }`}
-                  >
-                    <span className="font-medium text-sm">{rule.name}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge className={`text-xs ${riskLevelMap[rule.risk_level]?.className || ''}`}>
-                        {riskLevelMap[rule.risk_level]?.label || rule.risk_level}
-                      </Badge>
-                    </div>
-                  </button>
-                ))}
+                {sortedRules.map(renderRuleButton)}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* 右侧规则设计器 */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-4 lg:col-span-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">
-                {selectedRule ? `编辑规则: ${selectedRule.name}` : '新建规则'}
+                {selectedRule ? `编辑规则：${selectedRule.code} ${selectedRule.name}` : '新建合同审核规则'}
               </CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveTab('test')}
-                >
-                  <PlayIcon className="h-4 w-4 mr-1" />
-                  测试
-                </Button>
-              </div>
+              <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
+                <PlayIcon className="h-4 w-4 mr-1" />
+                测试
+              </Button>
             </CardHeader>
             <CardContent>
               <RuleDesigner
                 initialRule={selectedRule || undefined}
+                saving={saving}
                 onSave={handleSaveRule}
-                onTest={handleTestRule}
+                onTest={() => setActiveTab('test')}
               />
             </CardContent>
           </Card>
@@ -205,51 +245,34 @@ export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps
     )
   }
 
-  // 规则测试视图
-  if (activeTab === 'test') {
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">规则列表</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setActiveTab('design')}>
-                返回设计
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {rules.map((rule) => (
-                  <button
-                    key={rule.id}
-                    onClick={() => handleSelectRule(rule)}
-                    className={`w-full text-left p-3 rounded-lg border transition ${
-                      selectedRule?.id === rule.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'hover:border-blue-300 hover:bg-blue-50'
-                    }`}
-                  >
-                    <span className="font-medium text-sm">{rule.name}</span>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">测试规则: {selectedRule?.name || '新规则'}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RuleTestSandbox ruleId={selectedRule?.id} />
-            </CardContent>
-          </Card>
-        </div>
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="space-y-4 lg:col-span-1">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">规则列表</CardTitle>
+            <Button size="sm" variant="outline" onClick={() => setActiveTab('design')}>
+              返回设计
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {sortedRules.map(renderRuleButton)}
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    )
-  }
 
-  return null
+      <div className="space-y-4 lg:col-span-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">测试规则：{selectedRule?.name || '全部规则'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RuleTestSandbox ruleId={selectedRule?.id} />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
 }

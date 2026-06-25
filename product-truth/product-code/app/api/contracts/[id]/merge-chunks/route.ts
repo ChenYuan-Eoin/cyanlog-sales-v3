@@ -12,6 +12,12 @@ import { extractContractText } from '@/lib/contracts/text-extraction'
 
 const TEMP_BUCKET = 'contract-chunks'
 const FINAL_BUCKET = 'contracts'
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
+
+function hasAllowedFileName(fileName: string): boolean {
+  const extension = `.${fileName.split('.').pop()?.toLowerCase() || ''}`
+  return ALLOWED_EXTENSIONS.includes(extension)
+}
 
 export async function POST(
   req: NextRequest,
@@ -45,6 +51,9 @@ export async function POST(
 
     if (!fileName || !chunkCount) {
       return errorResponse(createApiError('MISSING_FIELD', '缺少必要参数'))
+    }
+    if (!hasAllowedFileName(fileName)) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
     }
 
     // 生成正式存储路径
@@ -132,6 +141,9 @@ export async function POST(
       .getPublicUrl(finalPath)
 
     const parsedText = extractContractText(mergedArray, fileName, fileType)
+    if (!parsedText) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '文件内容无法解析，请上传可复制文本的 PDF 或 DOCX 文件'))
+    }
 
     // 更新合同记录
     const { error: updateError } = await supabaseAdmin
@@ -141,18 +153,14 @@ export async function POST(
         storage_path: finalPath,
         size: totalSize,
         mime_type: fileType,
-        ...(parsedText
-          ? {
-              parsed_text: parsedText,
-              ocr_status: 'COMPLETED',
-              ocr_result: {
-                raw_text: parsedText,
-                confidence: 0.8,
-                source: 'text-extraction',
-                completed_at: new Date().toISOString(),
-              },
-            }
-          : {}),
+        parsed_text: parsedText,
+        ocr_status: 'COMPLETED',
+        ocr_result: {
+          raw_text: parsedText,
+          confidence: 0.8,
+          source: 'text-extraction',
+          completed_at: new Date().toISOString(),
+        },
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)

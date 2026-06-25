@@ -46,6 +46,19 @@ const initialForm: ContractForm = {
   notes: '',
 }
 
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
+
+function validateReviewFile(file: File): string | null {
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
+  if (!ALLOWED_EXTENSIONS.includes(extension)) {
+    return `不支持的文件类型: ${extension}，请上传 PDF 或 DOCX 文件`
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    return `文件大小超过 50MB 限制: ${(file.size / 1024 / 1024).toFixed(2)} MB`
+  }
+  return null
+}
+
 function readApiError(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object') {
     const data = payload as { error?: unknown }
@@ -91,14 +104,28 @@ export default function NewContractPage() {
     e.preventDefault()
     setDragActive(false)
     if (e.dataTransfer.files?.[0]) {
-      setFile(e.dataTransfer.files[0])
+      const selectedFile = e.dataTransfer.files[0]
+      const validationError = validateReviewFile(selectedFile)
+      if (validationError) {
+        setError(validationError)
+        return
+      }
+      setFile(selectedFile)
       setError('')
     }
   }, [])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
-      setFile(e.target.files[0])
+      const selectedFile = e.target.files[0]
+      const validationError = validateReviewFile(selectedFile)
+      if (validationError) {
+        setError(validationError)
+        setFile(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+        return
+      }
+      setFile(selectedFile)
       setError('')
     }
   }
@@ -445,7 +472,7 @@ export default function NewContractPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx,.doc"
+              accept=".pdf,.docx"
               onChange={handleFileChange}
               className="hidden"
               id="contract-file"
@@ -474,7 +501,7 @@ export default function NewContractPage() {
                   <div className="text-4xl mb-3">📄</div>
                   <p className="text-slate-600 font-medium mb-1">拖拽合同文件到此处</p>
                   <p className="text-xs text-slate-400 mb-3">或点击选择文件</p>
-                  <p className="text-xs text-slate-400">支持 PDF、Word 文档，最大 50MB</p>
+                  <p className="text-xs text-slate-400">支持 PDF、DOCX，最大 50MB</p>
                 </div>
               )}
             </label>

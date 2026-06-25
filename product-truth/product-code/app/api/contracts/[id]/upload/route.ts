@@ -12,13 +12,9 @@ import { extractContractText } from '@/lib/contracts/text-extraction'
 
 const ALLOWED_TYPES = [
   'application/pdf',
-  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'image/jpeg',
-  'image/png',
-  'image/jpg',
 ]
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png']
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
 
 const MAX_SIZE = 50 * 1024 * 1024 // 50MB
 
@@ -51,7 +47,7 @@ export async function POST(
 
     // 验证文件类型
     if (!hasAllowedFileType(file)) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF、Word 或图片'))
+      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
     }
 
     // 验证文件大小
@@ -78,6 +74,9 @@ export async function POST(
     const storagePath = `${contractId}/${timestamp}_${safeFileName}`
     const fileBytes = Buffer.from(await file.arrayBuffer())
     const parsedText = extractContractText(fileBytes, file.name, file.type)
+    if (!parsedText) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '文件内容无法解析，请上传可复制文本的 PDF 或 DOCX 文件'))
+    }
 
     // 上传文件到 Supabase Storage
     const { error: uploadError } = await supabaseAdmin
@@ -118,18 +117,14 @@ export async function POST(
         storage_path: storagePath,
         size: file.size,
         mime_type: file.type || 'application/octet-stream',
-        ...(parsedText
-          ? {
-              parsed_text: parsedText,
-              ocr_status: 'COMPLETED',
-              ocr_result: {
-                raw_text: parsedText,
-                confidence: 0.8,
-                source: 'text-extraction',
-                completed_at: new Date().toISOString(),
-              },
-            }
-          : {}),
+        parsed_text: parsedText,
+        ocr_status: 'COMPLETED',
+        ocr_result: {
+          raw_text: parsedText,
+          confidence: 0.8,
+          source: 'text-extraction',
+          completed_at: new Date().toISOString(),
+        },
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)

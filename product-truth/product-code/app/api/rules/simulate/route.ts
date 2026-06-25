@@ -32,13 +32,16 @@ export async function POST(req: NextRequest) {
 
     // 转换为SimulationResult格式
     const simulationResults = result.risks.map((risk) => ({
-      ruleId: 'unknown',
+      ruleId: risk.ruleId || risk.ruleCode || 'unknown',
+      ruleCode: risk.ruleCode,
+      ruleVersion: risk.ruleVersion,
       ruleName: risk.title,
       matched: true,
       level: risk.level === 'red' ? 'C' as const : risk.level === 'yellow' ? 'B' as const : 'A' as const,
       action: risk.level === 'red' ? 'block' : risk.level === 'yellow' ? 'suggest_counterparty' : 'auto_approve',
       message: risk.description,
       counterparty: risk.suggestion || risk.counterparty,
+      evidence: risk.evidence || [],
     }))
 
     return NextResponse.json({

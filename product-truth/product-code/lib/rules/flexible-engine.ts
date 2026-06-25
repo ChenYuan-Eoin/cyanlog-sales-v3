@@ -78,6 +78,11 @@ function parseFlexibleRule(row: Record<string, unknown>): FlexibleRule {
     name: row.name as string,
     description: row.description as string | null,
     category: row.category as RuleCategory,
+    engine_type: (row.engine_type as 'structured' | 'semantic' | 'hybrid') || 'structured',
+    target_field: row.target_field as string | undefined,
+    clause_category: row.clause_category as string | undefined,
+    field_hints: (row.field_hints as string[]) || [],
+    semantic_prompt: row.semantic_prompt as string | undefined,
     applicable_scenarios: (row.applicable_scenarios as string[]) || [],
     scope: (row.scope as 'org' | 'dept' | 'user') || 'org',
 
@@ -134,17 +139,18 @@ export interface ExtractedField {
 export function extractField(
   contractText: string,
   category: RuleCategory,
-  fieldHints?: string[]
+  fieldHints?: string[],
+  targetField?: string
 ): ExtractedField | null {
   const text = contractText.toLowerCase()
 
   switch (category) {
     case 'ratio':
-      return extractRatioField(text, fieldHints)
+      return extractRatioField(text, fieldHints, targetField)
     case 'amount':
-      return extractAmountField(text, fieldHints)
+      return extractAmountField(text, fieldHints, targetField)
     case 'duration':
-      return extractDurationField(text, fieldHints)
+      return extractDurationField(text, fieldHints, targetField)
     case 'enum':
       return extractEnumField(text, fieldHints)
     case 'text':
@@ -154,34 +160,92 @@ export function extractField(
   }
 }
 
+function parseChineseNumber(raw: string): number {
+  const value = raw.trim()
+  const numeric = Number(value)
+  if (Number.isFinite(numeric)) return numeric
+
+  const digitMap: Record<string, number> = {
+    零: 0,
+    一: 1,
+    二: 2,
+    两: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  }
+
+  if (value === '十') return 10
+  const hundredParts = value.split('百')
+  if (hundredParts.length === 2) {
+    const hundreds = digitMap[hundredParts[0]] || 1
+    return hundreds * 100 + parseChineseNumber(hundredParts[1] || '零')
+  }
+
+  const tenParts = value.split('十')
+  if (tenParts.length === 2) {
+    const tens = tenParts[0] ? digitMap[tenParts[0]] || 1 : 1
+    const ones = tenParts[1] ? digitMap[tenParts[1]] || 0 : 0
+    return tens * 10 + ones
+  }
+
+  return digitMap[value] ?? 0
+}
+
 /**
  * 提取比例字段（如：首期款比例 30%）
  */
 function extractRatioField(
   text: string,
-  _hints?: string[]
+  hints?: string[],
+  targetField?: string
 ): ExtractedField | null {
-  // 常见比例模式：首期款、尾款、违约金比例等
-  const patterns = [
-    // 首期款/首付款 XX%
-    /(?:首付|首期|定金|预付款)[款金]?[:：]?\s*(\d+(?:\.\d+)?)\s*%/i,
-    // 尾款/余款 XX%
-    /(?:尾款|余款|结算款)[款金]?[:：]?\s*(\d+(?:\.\d+)?)\s*%/i,
-    // 比例 XX%
-    /比例[:：]?\s*(\d+(?:\.\d+)?)\s*%/i,
-    // XX% 作为首付/尾款
-    /(\d+(?:\.\d+)?)\s*%\s*(?:作为|为)?\s*(?:首付|首期|尾款|余款)/i,
+  const targetedPatterns: Record<string, RegExp[]> = {
+    first_payment_rate: [
+      /(?:首付|首付款|首期款|首期|定金|预付款)[^0-9%]{0,20}(\d+(?:\.\d+)?)\s*%/i,
+      /(\d+(?:\.\d+)?)\s*%\s*(?:作为|为|的)?\s*(?:首付|首付款|首期款|首期|定金|预付款)/i,
+    ],
+    warranty_deposit_rate: [
+      /(?:质保金|质量保证金|保证金)[^0-9%]{0,20}(\d+(?:\.\d+)?)\s*%/i,
+      /(\d+(?:\.\d+)?)\s*%\s*(?:作为|为|的)?\s*(?:质保金|质量保证金|保证金)/i,
+    ],
+    penalty_rate: [
+      /(?:违约金|赔偿上限|违约责任)[^0-9%]{0,30}(\d+(?:\.\d+)?)\s*%/i,
+      /(\d+(?:\.\d+)?)\s*%\s*(?:的)?\s*(?:违约金|赔偿上限)/i,
+    ],
+    late_fee_rate: [
+      /(?:滞纳金|逾期付款违约金|逾期利息)[^0-9%万]{0,30}(\d+(?:\.\d+)?)\s*%/i,
+      /(?:滞纳金|逾期付款违约金|逾期利息)[^万]{0,20}万分之([一二三四五六七八九十百0-9.]+)/i,
+      /日万分之([一二三四五六七八九十百0-9.]+)/i,
+    ],
+  }
+
+  const genericPatterns = [
+    /(?:比例|费率|比率)[:：]?\s*(\d+(?:\.\d+)?)\s*%/i,
+    /(\d+(?:\.\d+)?)\s*%/i,
   ]
+
+  const patterns = targetField && targetedPatterns[targetField]
+    ? targetedPatterns[targetField]
+    : [
+        ...Object.values(targetedPatterns).flat(),
+        ...genericPatterns,
+      ]
 
   for (const pattern of patterns) {
     const match = text.match(pattern)
     if (match) {
-      const value = parseFloat(match[1])
-      // 转换为万分比存储（避免浮点精度问题）
-      const normalizedValue = Math.round(value * 10000)
+      const rawValue = parseChineseNumber(match[1])
+      const value = targetField === 'late_fee_rate' && pattern.source.includes('万分之')
+        ? rawValue / 100
+        : rawValue
       return {
-        name: 'ratio',
-        value: normalizedValue,
+        name: targetField || 'ratio',
+        value,
         unit: 'percent',
         source: match[0],
         confidence: 0.9,
@@ -197,7 +261,8 @@ function extractRatioField(
  */
 function extractAmountField(
   text: string,
-  _hints?: string[]
+  _hints?: string[],
+  targetField?: string
 ): ExtractedField | null {
   const patterns = [
     // 合同总额/金额 XX万元/元
@@ -215,7 +280,7 @@ function extractAmountField(
         value = value * 10000
       }
       return {
-        name: 'amount',
+        name: targetField || 'amount',
         value: Math.round(value),
         unit: 'cny',
         source: match[0],
@@ -232,19 +297,52 @@ function extractAmountField(
  */
 function extractDurationField(
   text: string,
-  _hints?: string[]
+  hints?: string[],
+  targetField?: string
 ): ExtractedField | null {
-  const patterns = [
-    // XX个工作日/天/月
-    /(\d+)\s*(?:个)?\s*(工作日?|自然日?|天|月|年)/i,
-    // 账期/付款期限 XX天
-    /(?:账期|付款期|期限|周期)[:：]?\s*(\d+)\s*(?:个)?\s*(工作日?|天|月|年)?/i,
+  const targetedPatterns: Record<string, RegExp[]> = {
+    payment_term_days: [
+      /(?:账期|付款期限|付款周期|付款期)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日|月|年)?/i,
+      /([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日|月|年)\s*(?:内|后)?\s*(?:付款|支付)/i,
+    ],
+    warranty_days: [
+      /(?:质保期|保修期|质量保证期|售后服务期)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?/i,
+    ],
+    auto_renew_notice_days: [
+      /(?:自动续约|续期|续约)[^0-9一二三四五六七八九十百]{0,30}(?:提前)?([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?\s*(?:通知|告知)/i,
+      /(?:提前)?([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)\s*(?:通知|告知)[^。；\n]{0,30}(?:自动续约|续期|续约)/i,
+    ],
+    termination_notice_days: [
+      /(?:单方解除|解除|终止)[^0-9一二三四五六七八九十百]{0,30}(?:提前)?([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?\s*(?:通知|告知)/i,
+      /(?:提前)?([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)\s*(?:通知|告知)[^。；\n]{0,30}(?:单方解除|解除|终止)/i,
+    ],
+    confidentiality_days: [
+      /(?:保密期限|保密期|保密义务)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?/i,
+    ],
+    non_compete_days: [
+      /(?:竞业限制|竞业禁止|不竞争)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?/i,
+    ],
+    contract_term_days: [
+      /(?:合同期限|有效期|合作期限|履行期限)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?/i,
+    ],
+  }
+
+  const genericPatterns = [
+    /([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日|月|年)/i,
+    /(?:账期|付款期|期限|周期)[:：]?\s*([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|天|日|月|年)?/i,
   ]
+
+  const patterns = targetField && targetedPatterns[targetField]
+    ? targetedPatterns[targetField]
+    : [
+        ...Object.values(targetedPatterns).flat(),
+        ...genericPatterns,
+      ]
 
   for (const pattern of patterns) {
     const match = text.match(pattern)
     if (match) {
-      const value = parseInt(match[1], 10)
+      const value = parseChineseNumber(match[1])
       const unit = match[2] || '天'
       // 统一转换为天
       let normalizedValue = value
@@ -252,7 +350,7 @@ function extractDurationField(
       if (unit.includes('年')) normalizedValue = value * 365
 
       return {
-        name: 'duration',
+        name: targetField || 'duration',
         value: normalizedValue,
         unit: 'day',
         source: match[0],
@@ -363,8 +461,14 @@ export function evaluateFlexibleRule(
   contractText: string,
   _extractedFields?: Record<string, number>
 ): LevelMatchResult {
+  const fieldHints = buildRuleHints(rule)
+
+  if (rule.category === 'text' || rule.engine_type === 'semantic') {
+    return evaluateTextRule(rule, contractText, fieldHints)
+  }
+
   // 提取字段值
-  const extracted = extractField(contractText, rule.category)
+  const extracted = extractField(contractText, rule.category, fieldHints, rule.target_field)
   if (!extracted) {
     return {
       level: null,
@@ -373,6 +477,8 @@ export function evaluateFlexibleRule(
       threshold: 0,
       actual_value: 0,
       unit: rule.level_a.unit,
+      source: '',
+      confidence: 0,
       action: 'auto_approve',
       message: `未能提取到${rule.category}类型字段`,
       risk_label: 'white',
@@ -391,6 +497,8 @@ export function evaluateFlexibleRule(
       threshold: rule.level_c.threshold,
       actual_value: actualValue,
       unit: rule.level_c.unit,
+      source: extracted.source,
+      confidence: extracted.confidence,
       action: rule.level_c.action,
       message: rule.level_c.message || `${rule.name}超出红线标准`,
       risk_label: 'red',
@@ -406,6 +514,8 @@ export function evaluateFlexibleRule(
       threshold: rule.level_b.threshold,
       actual_value: actualValue,
       unit: rule.level_b.unit,
+      source: extracted.source,
+      confidence: extracted.confidence,
       action: rule.level_b.action,
       message: `${rule.name}偏离建议区间`,
       counterparty: rule.level_b.counterparty,
@@ -422,6 +532,8 @@ export function evaluateFlexibleRule(
       threshold: rule.level_a.threshold,
       actual_value: actualValue,
       unit: rule.level_a.unit,
+      source: extracted.source,
+      confidence: extracted.confidence,
       action: rule.level_a.action,
       message: `${rule.name}在合规范围内`,
       risk_label: 'green',
@@ -436,8 +548,186 @@ export function evaluateFlexibleRule(
     threshold: rule.level_a.threshold,
     actual_value: actualValue,
     unit: rule.level_a.unit,
+    source: extracted.source,
+    confidence: extracted.confidence,
     action: 'auto_approve',
     message: `${rule.name}未能匹配任何判定级别`,
+    risk_label: 'white',
+  }
+}
+
+function buildRuleHints(rule: FlexibleRule): string[] {
+  const hints = new Set<string>()
+  for (const hint of rule.field_hints || []) {
+    if (hint.trim()) hints.add(hint.trim())
+  }
+  for (const text of [rule.name, rule.description || '', rule.semantic_prompt || '']) {
+    for (const token of text.split(/[，。；、\s/()（）:：-]+/)) {
+      const normalized = token.trim()
+      if (normalized.length >= 2 && normalized.length <= 12) {
+        hints.add(normalized)
+      }
+    }
+  }
+  return Array.from(hints)
+}
+
+function evaluateTextRule(
+  rule: FlexibleRule,
+  contractText: string,
+  hints: string[]
+): LevelMatchResult {
+  const text = contractText.toLowerCase()
+  const matchedHints = hints.filter((hint) => text.includes(hint.toLowerCase()))
+  const matched = matchedHints.length > 0
+  const source = matchedHints.join('、')
+
+  const redResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult => ({
+    level: 'C',
+    matched: true,
+    operator: rule.level_c.operator,
+    threshold: rule.level_c.threshold,
+    actual_value: 0,
+    unit: 'text',
+    source: evidence,
+    confidence,
+    action: rule.level_c.action,
+    message: rule.level_c.message || message,
+    risk_label: 'red',
+  })
+
+  const greenResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult => ({
+    level: 'A',
+    matched: true,
+    operator: rule.level_a.operator,
+    threshold: rule.level_a.threshold,
+    actual_value: 1,
+    unit: 'text',
+    source: evidence,
+    confidence,
+    action: rule.level_a.action,
+    message,
+    risk_label: 'green',
+  })
+
+  const includesAny = (terms: string[]) => terms.some((term) => text.includes(term.toLowerCase()))
+  const matchedTerms = (terms: string[]) => terms.filter((term) => text.includes(term.toLowerCase()))
+  const hasNegatedContext = (terms: string[]) => {
+    const negations = ['未约定', '未明确', '未载明', '未说明', '没有约定', '无约定', '缺失', '不明确', '待定']
+    return terms.some((term) => {
+      const normalizedTerm = term.toLowerCase()
+      let startIndex = text.indexOf(normalizedTerm)
+      while (startIndex >= 0) {
+        const windowStart = Math.max(0, startIndex - 12)
+        const windowEnd = Math.min(text.length, startIndex + normalizedTerm.length + 12)
+        const context = text.slice(windowStart, windowEnd)
+        if (negations.some((negation) => context.includes(negation))) {
+          return true
+        }
+        startIndex = text.indexOf(normalizedTerm, startIndex + normalizedTerm.length)
+      }
+      return false
+    })
+  }
+
+  const dangerHints = ['商业风险', '市场变化', '经营困难']
+  const containsDanger = rule.code === 'R013'
+    && dangerHints.some((hint) => text.includes(hint))
+
+  if (containsDanger) {
+    return {
+      level: 'C',
+      matched: true,
+      operator: rule.level_c.operator,
+      threshold: rule.level_c.threshold,
+      actual_value: 1,
+      unit: 'text',
+      source: dangerHints.filter((hint) => text.includes(hint)).join('、'),
+      confidence: 0.85,
+      action: rule.level_c.action,
+      message: rule.level_c.message || `${rule.name}存在高风险表述`,
+      risk_label: 'red',
+    }
+  }
+
+  if (rule.code === 'R009') {
+    const subjectTerms = ['知识产权', '著作权', '专利', '源代码', '定制开发成果', '技术成果', '归属']
+    const ownershipTerms = ['归甲方', '归乙方', '归双方', '归买方', '归卖方', '归属甲方', '归属乙方', '归属双方', '所有权归', '享有所有权']
+    const evidenceTerms = matchedTerms([...subjectTerms, ...ownershipTerms])
+    if (hasNegatedContext(subjectTerms) || !includesAny(subjectTerms) || !includesAny(ownershipTerms)) {
+      return redResult(`${rule.name}缺失或未明确`, evidenceTerms.join('、'))
+    }
+    return greenResult(`${rule.name}已明确`, evidenceTerms.join('、'))
+  }
+
+  if (rule.code === 'R012') {
+    const subjectTerms = ['争议解决', '仲裁', '管辖', '诉讼', '法院']
+    const resolutionTerms = ['仲裁委员会', '仲裁', '管辖法院', '人民法院', '诉讼', '争议解决方式', '管辖地']
+    const evidenceTerms = matchedTerms([...subjectTerms, ...resolutionTerms])
+    if (hasNegatedContext(subjectTerms) || !includesAny(resolutionTerms)) {
+      return redResult(`${rule.name}缺失或未明确`, evidenceTerms.join('、'))
+    }
+    return greenResult(`${rule.name}已明确`, evidenceTerms.join('、'))
+  }
+
+  if (rule.code === 'R015') {
+    const subjectTerms = ['合同变更', '变更流程', '补充协议']
+    const writtenTerms = ['书面', '补充协议', '双方签字', '双方盖章', '授权代表', '加盖公章', '签署']
+    const dangerTerms = ['口头', '单方变更', '无需书面', '电话确认']
+    const evidenceTerms = matchedTerms([...subjectTerms, ...writtenTerms, ...dangerTerms])
+    if (includesAny(dangerTerms)) {
+      return redResult(`${rule.name}存在口头或单方变更风险`, evidenceTerms.join('、'), 0.9)
+    }
+    if (hasNegatedContext([...subjectTerms, ...writtenTerms]) || !includesAny(subjectTerms) || !includesAny(writtenTerms)) {
+      return redResult(`${rule.name}缺失书面授权流程`, evidenceTerms.join('、'))
+    }
+    return greenResult(`${rule.name}已明确书面授权流程`, evidenceTerms.join('、'))
+  }
+
+  if (matched) {
+    return {
+      level: 'A',
+      matched: true,
+      operator: rule.level_a.operator,
+      threshold: rule.level_a.threshold,
+      actual_value: 1,
+      unit: 'text',
+      source,
+      confidence: Math.min(0.95, 0.55 + matchedHints.length * 0.1),
+      action: rule.level_a.action,
+      message: `${rule.name}已找到相关条款或表述`,
+      risk_label: 'green',
+    }
+  }
+
+  const requiredMissingCodes = new Set(['R009', 'R012', 'R015'])
+  if (requiredMissingCodes.has(rule.code)) {
+    return {
+      level: 'C',
+      matched: true,
+      operator: rule.level_c.operator,
+      threshold: rule.level_c.threshold,
+      actual_value: 0,
+      unit: 'text',
+      source: '',
+      confidence: 0.75,
+      action: rule.level_c.action,
+      message: rule.level_c.message || `${rule.name}缺失或未明确`,
+      risk_label: 'red',
+    }
+  }
+
+  return {
+    level: null,
+    matched: false,
+    operator: rule.level_a.operator,
+    threshold: rule.level_a.threshold,
+    actual_value: 0,
+    unit: 'text',
+    source: '',
+    confidence: 0.4,
+    action: 'auto_approve',
+    message: `${rule.name}未发现明确风险表述`,
     risk_label: 'white',
   }
 }
@@ -479,7 +769,7 @@ export async function executeFlexibleRules(
     const result: RuleExecutionResult = {
       ruleId: rule.id,
       ruleVersion: rule.version,
-      ruleType: 'structured',
+      ruleType: rule.engine_type,
       ruleCode: rule.code,
       riskLevel: levelResult.risk_label === 'red'
         ? 'red'
@@ -499,6 +789,8 @@ export async function executeFlexibleRules(
             : '符合标准',
       triggered: levelResult.matched,
       executionTime: Date.now() - startTime,
+      evidence: levelResult.source ? [levelResult.source] : undefined,
+      details: `规则 ${rule.code} v${rule.version}，实际值 ${levelResult.actual_value}${levelResult.unit}`,
       levelResult,
     }
 
@@ -522,9 +814,9 @@ export function generateFlexibleSummary(
     return '未配置审核规则，建议联系管理员配置'
   }
 
-  const redCount = results.filter((r) => r.riskLevel === 'red').length
-  const yellowCount = results.filter((r) => r.riskLevel === 'yellow').length
-  const greenCount = results.filter((r) => r.riskLevel === 'green').length
+  const redCount = results.filter((r) => r.levelResult?.level === 'C').length
+  const yellowCount = results.filter((r) => r.levelResult?.level === 'B').length
+  const greenCount = results.filter((r) => r.levelResult?.level === 'A').length
   const triggeredCount = results.filter((r) => r.triggered).length
 
   const parts: string[] = []
@@ -552,11 +844,15 @@ export function generateFlexibleSummary(
 
 export interface FlexibleAnalysisResults {
   risks: Array<{
+    ruleId?: string
+    ruleCode?: string
+    ruleVersion?: number
     level: 'red' | 'yellow' | 'green'
     title: string
     description: string
     suggestion: string
     counterparty?: string
+    evidence?: string[]
   }>
   summary: string
   appliedRules: number
@@ -599,11 +895,15 @@ export async function executeFlexibleRulesCompat(
     risks: results
       .filter((r) => r.triggered)
       .map((r) => ({
+        ruleId: r.ruleId,
+        ruleCode: r.ruleCode,
+        ruleVersion: r.ruleVersion,
         level: r.riskLevel,
         title: r.title,
         description: r.description,
         suggestion: r.suggestion || '',
         counterparty: r.levelResult?.counterparty,
+        evidence: r.evidence,
       })),
     summary: generateFlexibleSummary(results),
     appliedRules: results.length,

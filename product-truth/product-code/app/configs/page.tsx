@@ -3,6 +3,22 @@
 
 import ConfigsClient from './ConfigsClient'
 
-export default function ConfigsPage() {
-  return <ConfigsClient />
+type ConfigsPageProps = {
+  searchParams?: {
+    tab?: string | string[]
+    ruleId?: string | string[]
+    mode?: string | string[]
+  }
+}
+
+export default function ConfigsPage({ searchParams }: ConfigsPageProps) {
+  return (
+    <ConfigsClient
+      routeState={{
+        tab: searchParams?.tab,
+        ruleId: searchParams?.ruleId,
+        mode: searchParams?.mode,
+      }}
+    />
+  )
 }

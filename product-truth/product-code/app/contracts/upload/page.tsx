@@ -11,7 +11,7 @@ import { UploadProgressBar } from '@/components/upload/UploadProgress'
 import { cn } from '@/lib/utils'
 
 // 文件类型验证用扩展名而非 MIME 类型，减少浏览器 MIME 差异影响。
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
 
 // 最大文件大小: 500MB
 const MAX_FILE_SIZE = 500 * 1024 * 1024
@@ -155,7 +155,7 @@ export default function ContractUploadPage() {
     // 检查文件类型
     const extension = '.' + file.name.split('.').pop()?.toLowerCase()
     if (!ALLOWED_EXTENSIONS.includes(extension)) {
-      return `不支持的文件类型: ${extension}，请上传 PDF、DOC 或 DOCX 文件`
+      return `不支持的文件类型: ${extension}，请上传 PDF 或 DOCX 文件`
     }
 
     // 检查文件大小
@@ -390,7 +390,7 @@ export default function ContractUploadPage() {
               ref={inputRef}
               id="file-input"
               type="file"
-              accept=".doc,.docx,.pdf"
+              accept=".pdf,.docx"
               multiple
               className="hidden"
               onChange={handleFileChange}
@@ -401,7 +401,7 @@ export default function ContractUploadPage() {
               点击选择文件或拖拽到此处
             </p>
             <p className="text-xs text-slate-400">
-              支持 PDF、DOC、DOCX 格式，单个文件最大 500MB
+              支持 PDF、DOCX 格式，单个文件最大 500MB
             </p>
           </div>
 

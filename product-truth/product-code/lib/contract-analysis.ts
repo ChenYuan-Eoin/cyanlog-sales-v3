@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { reviewWithFailoverSync } from '@/lib/ai/failover'
 import { getOrgIdForUser } from '@/lib/configs/runtime'
+import { executeRules } from '@/lib/rules/engine'
 
 export interface ContractAnalysisJobRecord {
   id: string
@@ -21,10 +21,15 @@ export interface ContractAnalysisJobRecord {
 
 export interface ContractAnalysisResult {
   risks: Array<{
+    ruleId?: string
+    ruleCode?: string
+    ruleVersion?: number
     level: 'red' | 'yellow' | 'green'
     title: string
     description: string
     suggestion: string
+    counterparty?: string
+    evidence?: string[]
   }>
   summary: string
   appliedRules: number
@@ -160,24 +165,17 @@ async function fetchContractContext(contractId: string): Promise<{ text: string;
   return { text, orgId }
 }
 
-/**
- * 运行合同分析 — 统一走AI降级链路
- * 后台任务和前端请求共用同一套降级逻辑，只是消费方式不同
- * 前端用 reviewWithFailover（流式），后台用 reviewWithFailoverSync（非流式）
- */
 export async function runContractAnalysis(contractId: string): Promise<ContractAnalysisResult> {
   const context = await fetchContractContext(contractId)
-
-  // 统一走AI降级链路（本地→云端→规则引擎→人工标记）
-  const aiResult = await reviewWithFailoverSync(context.text, { orgId: context.orgId })
+  const ruleResult = await executeRules(context.text, context.orgId)
 
   return {
-    risks: aiResult.risks,
-    summary: aiResult.summary,
-    appliedRules: aiResult.risks.length,
-    matchedRules: aiResult.risks.filter((r) => r.level === 'red' || r.level === 'yellow').length,
-    provider: aiResult.provider,
-    degraded: aiResult.degraded,
+    risks: ruleResult.risks,
+    summary: ruleResult.summary,
+    appliedRules: ruleResult.appliedRules,
+    matchedRules: ruleResult.matchedRules,
+    provider: 'rule-engine',
+    degraded: ruleResult.appliedRules === 0,
   }
 }
 
@@ -385,7 +383,80 @@ function extractClauses(text: string): ClauseMatch[] {
     }
     if (clauses.length >= 50) break
   }
+
+  if (clauses.length === 0) {
+    const blocks = text
+      .split(/[\n。；;]+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 12)
+      .slice(0, 50)
+
+    let cursor = 0
+    blocks.forEach((block, index) => {
+      const startOffset = text.indexOf(block, cursor)
+      const safeStart = startOffset >= 0 ? startOffset : cursor
+      const endOffset = safeStart + block.length
+      cursor = endOffset
+      clauses.push({
+        clauseNumber: String(index + 1),
+        clauseTitle: guessClauseTitle(block),
+        clauseText: block,
+        riskLevel: 'low',
+        riskCategory: null,
+        riskDescription: null,
+        legalBasis: null,
+        suggestion: null,
+        suggestedText: null,
+        matchedLibraryClauseId: null,
+        position: index,
+        startOffset: safeStart,
+        endOffset,
+      })
+    })
+  }
+
   return clauses
+}
+
+function guessClauseTitle(text: string): string {
+  if (/(付款|支付|价款|账期|首付|预付款)/.test(text)) return '付款条款'
+  if (/(交付|验收|交货|实施)/.test(text)) return '交付验收'
+  if (/(违约|赔偿|滞纳金)/.test(text)) return '违约责任'
+  if (/(保密|商业秘密)/.test(text)) return '保密条款'
+  if (/(知识产权|著作权|专利|源代码)/.test(text)) return '知识产权'
+  if (/(争议|仲裁|法院|管辖)/.test(text)) return '争议解决'
+  if (/(终止|解除|续约)/.test(text)) return '终止续约'
+  return text.slice(0, 24)
+}
+
+function applyRiskFactsToClauses(
+  clauses: ClauseMatch[],
+  risks: ContractAnalysisResult['risks']
+): void {
+  const riskLevelMap: Record<'red' | 'yellow' | 'green', ClauseMatch['riskLevel']> = {
+    red: 'critical',
+    yellow: 'high',
+    green: 'low',
+  }
+
+  for (const risk of risks) {
+    if (risk.level === 'green') continue
+
+    const evidence = risk.evidence?.find(Boolean)
+    const matchedClause = clauses.find((clause) => (
+      (evidence && clause.clauseText.includes(evidence))
+      || clause.clauseText.includes(risk.title)
+      || Boolean(clause.clauseTitle && risk.description.includes(clause.clauseTitle))
+    ))
+
+    const clause = matchedClause || clauses[0]
+    if (!clause) continue
+
+    clause.riskLevel = riskLevelMap[risk.level]
+    clause.riskCategory = risk.ruleCode || null
+    clause.riskDescription = risk.description
+    clause.suggestion = risk.suggestion
+  }
 }
 
 async function matchClauseLibrary(clauses: ClauseMatch[], orgId?: string): Promise<Map<string, string>> {
@@ -557,18 +628,19 @@ export async function runStructuredAnalysis(
   options?: ReviewOptions
 ): Promise<StructuredReport> {
   const context = await fetchContractContext(contractId)
-  const aiResult = await reviewWithFailoverSync(context.text, { orgId: context.orgId })
+  const ruleResult = await executeRules(context.text, context.orgId)
 
   const result: ContractAnalysisResult = {
-    risks: aiResult.risks,
-    summary: aiResult.summary,
-    appliedRules: aiResult.risks.length,
-    matchedRules: aiResult.risks.filter((r) => r.level === 'red' || r.level === 'yellow').length,
-    provider: aiResult.provider,
-    degraded: aiResult.degraded,
+    risks: ruleResult.risks,
+    summary: ruleResult.summary,
+    appliedRules: ruleResult.appliedRules,
+    matchedRules: ruleResult.matchedRules,
+    provider: 'rule-engine',
+    degraded: ruleResult.appliedRules === 0,
   }
 
   const clauses = extractClauses(context.text)
+  applyRiskFactsToClauses(clauses, result.risks)
   const clauseMatches = await matchClauseLibrary(clauses, context.orgId)
   for (const clause of clauses) {
     const libId = clauseMatches.get(clause.clauseText.slice(0, 50))
@@ -595,13 +667,20 @@ export async function saveStructuredReport(
     const riskRows = report.result.risks.map((risk) => ({
       review_id: reviewId,
       contract_id: contractId,
+      rule_id: risk.ruleId || null,
+      rule_code: risk.ruleCode || null,
+      rule_version: risk.ruleVersion || null,
       level: risk.level,
       title: risk.title,
       description: risk.description,
       suggestion: risk.suggestion,
       auto_fixable: false,
-      detected_by: 'ai',
+      detected_by: risk.ruleCode ? 'rule' : 'ai',
       confidence: report.result.degraded ? 0.5 : 0.8,
+      evidence: {
+        snippets: risk.evidence || [],
+        counterparty: risk.counterparty || null,
+      },
       status: 'open',
     }))
     const { error: riskError } = await supabaseAdmin.from('contract_risk_cards').insert(riskRows)

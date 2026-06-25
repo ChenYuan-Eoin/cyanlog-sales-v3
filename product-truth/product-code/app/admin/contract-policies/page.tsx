@@ -16,7 +16,7 @@ import {
   TrashIcon,
   GitBranchIcon,
 } from 'lucide-react'
-import { handleError } from '@/lib/toast'
+import { confirmAction, handleError, success as toastSuccess } from '@/lib/toast'
 
 interface AuditRule {
   id: string
@@ -40,6 +40,7 @@ export default function ContractPoliciesPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [deactivatingRuleId, setDeactivatingRuleId] = useState<string | null>(null)
 
   const fetchRules = useCallback(async () => {
     try {
@@ -61,6 +62,37 @@ export default function ContractPoliciesPage() {
   useEffect(() => {
     void fetchRules()
   }, [fetchRules])
+
+  const handleDeactivateRule = useCallback(async (rule: AuditRule) => {
+    const confirmed = await confirmAction(
+      `停用后合同审核不会再执行 ${rule.code} ${rule.name}，历史版本和已生成报告仍保留。`,
+      {
+        title: '停用规则',
+        confirmText: '停用',
+        danger: true,
+      }
+    )
+    if (!confirmed) return
+
+    setDeactivatingRuleId(rule.id)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/contract-policies/rules/${rule.id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(typeof data.error === 'string' ? data.error : '停用规则失败')
+      }
+      setRules((current) => current.filter((item) => item.id !== rule.id))
+      toastSuccess('规则已停用')
+    } catch (err) {
+      handleError(err, '停用规则失败')
+    } finally {
+      setDeactivatingRuleId(null)
+    }
+  }, [])
 
   const filteredRules = useMemo(() => {
     let filtered = rules
@@ -103,10 +135,12 @@ export default function ContractPoliciesPage() {
               <p className="text-sm text-slate-500 mt-1">规则原子化 + 3 级阈值 + 版本管理</p>
             </div>
           </div>
-          <Button>
-            <PlusIcon className="h-4 w-4 mr-1.5" />
-            新增审计规则
-          </Button>
+          <Link href="/configs?tab=rules&mode=new">
+            <Button>
+              <PlusIcon className="h-4 w-4 mr-1.5" />
+              新增审计规则
+            </Button>
+          </Link>
         </div>
 
         {/* 过滤器 */}
@@ -145,10 +179,12 @@ export default function ContractPoliciesPage() {
             <CardContent className="py-12 text-center">
               <ShieldCheckIcon className="mx-auto h-12 w-12 text-slate-200 mb-4" />
               <p className="text-slate-500">暂无规则</p>
-              <Button variant="outline" size="sm" className="mt-4">
-                <PlusIcon className="h-4 w-4 mr-1" />
-                创建第一条规则
-              </Button>
+              <Link href="/configs?tab=rules&mode=new">
+                <Button variant="outline" size="sm" className="mt-4">
+                  <PlusIcon className="h-4 w-4 mr-1" />
+                  创建第一条规则
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         ) : (
@@ -199,10 +235,18 @@ export default function ContractPoliciesPage() {
                             <GitBranchIcon className="h-4 w-4 text-slate-500" />
                           </Button>
                         </Link>
-                        <Button variant="ghost" size="sm">
-                          <PencilIcon className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
+                        <Link href={`/configs?tab=rules&ruleId=${rule.id}`}>
+                          <Button variant="ghost" size="sm" title="在配置中心编辑">
+                            <PencilIcon className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="停用规则"
+                          disabled={deactivatingRuleId === rule.id}
+                          onClick={() => void handleDeactivateRule(rule)}
+                        >
                           <TrashIcon className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>

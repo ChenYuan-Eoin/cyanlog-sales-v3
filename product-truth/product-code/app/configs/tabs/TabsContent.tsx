@@ -9,7 +9,7 @@ import ThemeTab from './ThemeTab'
 import OrgStructureTab from './OrgStructureTab'
 import RoleAccessTab from './RoleAccessTab'
 import type { ProductRecord, Config, OrgSummaryPayload } from '../types'
-import type { Rule } from '@/types/rules'
+import type { ContractPolicyRule } from '@/types/rules'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
 
@@ -22,9 +22,10 @@ export interface TabsContentProps {
   onEditProduct: (product: ProductRecord) => void
   onDeleteProduct: (id: string) => void
   // rules
-  rules: Rule[]
-  onNewRule: () => void
-  onEditRule: (rule: Rule) => void
+  rules: ContractPolicyRule[]
+  focusRuleId?: string | null
+  ruleMode?: string | null
+  onSaveRule: (rule: Partial<ContractPolicyRule>, id?: string) => void | Promise<void>
   onDeleteRule: (id: string) => void
   // config-based tabs (tax, approval, ai, theme)
   configs: Config[]
@@ -59,8 +60,9 @@ export default function TabsContent({
   onEditProduct,
   onDeleteProduct,
   rules,
-  onNewRule,
-  onEditRule,
+  focusRuleId,
+  ruleMode,
+  onSaveRule,
   onDeleteRule,
   configs,
   onNewConfig,
@@ -139,8 +141,9 @@ export default function TabsContent({
       return (
         <RuleTab
           rules={rules}
-          onNew={onNewRule}
-          onEdit={onEditRule}
+          focusRuleId={focusRuleId}
+          ruleMode={ruleMode}
+          onSave={onSaveRule}
           onDelete={onDeleteRule}
         />
       )

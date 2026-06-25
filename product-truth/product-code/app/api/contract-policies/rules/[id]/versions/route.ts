@@ -10,21 +10,23 @@ import {
   successResponse,
 } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
-import { withAuth } from '@/lib/api/auth-wrapper'
+import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import type { AuthUser } from '@/lib/auth'
 
 // GET - 获取规则的版本历史
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuth(req, async () => {
+  return withAuthAndOrg(req, async (_user: AuthUser, orgId: string) => {
     const { id } = await params
 
     // 获取规则基本信息
     const { data: rule, error: ruleError } = await supabaseAdmin
-      .from('rules')
-      .select('id, code, name, version, is_active')
+      .from('contract_rules_v2')
+      .select('*')
       .eq('id', id)
+      .eq('org_id', orgId)
       .single()
 
     if (ruleError || !rule) {
@@ -33,7 +35,7 @@ export async function GET(
 
     // 获取版本历史
     const { data: versions, error: versionsError } = await supabaseAdmin
-      .from('contract_policy_versions')
+      .from('contract_rule_snapshots')
       .select('*')
       .eq('rule_id', id)
       .order('version', { ascending: false })
@@ -42,27 +44,25 @@ export async function GET(
       return errorResponse(createApiError('DB_ERROR', '获取版本历史失败'))
     }
 
-    // 获取影响分析报告
-    const versionIds = versions?.map((v) => v.id) || []
-    const { data: reports, error: reportsError } = await supabaseAdmin
-      .from('contract_policy_impact_reports')
-      .select('*')
-      .in('version_id', versionIds.length > 0 ? versionIds : [''])
-
-    if (reportsError) {
-      console.error('获取影响报告失败:', reportsError)
-    }
-
-    const reportsMap = new Map(
-      reports?.map((r) => [r.version_id, r]) || []
-    )
+    const snapshots = versions && versions.length > 0
+      ? versions
+      : [{
+          id: `current-${rule.id}`,
+          rule_id: rule.id,
+          version: rule.version || 1,
+          config_snapshot: rule,
+          released_by: rule.published_by || null,
+          released_at: rule.published_at || rule.updated_at,
+          release_note: '当前线上生效版本',
+          is_gray_release: false,
+          gray_end_at: null,
+          status: 'published',
+          created_at: rule.created_at,
+        }]
 
     return successResponse({
       rule,
-      versions: versions?.map((v) => ({
-        ...v,
-        impact_report: reportsMap.get(v.id) || null,
-      })),
+      versions: snapshots.map((v) => ({ ...v, impact_report: null })),
     })
   })
 }

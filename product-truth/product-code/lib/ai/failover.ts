@@ -22,10 +22,15 @@ export interface AIProvider {
 
 export interface SyncReviewResult {
   risks: Array<{
+    ruleId?: string
+    ruleCode?: string
+    ruleVersion?: number
     level: 'red' | 'yellow' | 'green'
     title: string
     description: string
     suggestion: string
+    counterparty?: string
+    evidence?: string[]
   }>
   summary: string
   provider: string

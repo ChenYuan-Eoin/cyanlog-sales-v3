@@ -9,12 +9,15 @@ import { Loader2Icon } from 'lucide-react'
 
 interface TestResult {
   ruleId: string
+  ruleCode?: string
+  ruleVersion?: number
   ruleName: string
   matched: boolean
   level: 'A' | 'B' | 'C' | null
   action: string
   message: string
   counterparty?: string
+  evidence?: string[]
 }
 
 interface RuleTestSandboxProps {
@@ -33,9 +36,13 @@ export default function RuleTestSandbox(props: RuleTestSandboxProps) {
     setLoading(true)
 
     try {
+      const token = localStorage.getItem('token')
       const response = await fetch('/api/rules/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           text: `付款账期${testValue}${testUnit === 'day' ? '天' : testUnit}`,
           field: 'payment_days',
@@ -47,14 +54,17 @@ export default function RuleTestSandbox(props: RuleTestSandboxProps) {
       if (response.ok) {
         const data = await response.json()
         // 转换API结果为TestResult格式
-        const testResults: TestResult[] = data.risks?.map((risk: { title: string; level: string; description: string; suggestion: string }) => ({
-          ruleId: 'test',
+        const testResults: TestResult[] = data.risks?.map((risk: { ruleId?: string; ruleCode?: string; ruleVersion?: number; title: string; level: string; description: string; suggestion: string; evidence?: string[] }) => ({
+          ruleId: risk.ruleId || risk.ruleCode || 'test',
+          ruleCode: risk.ruleCode,
+          ruleVersion: risk.ruleVersion,
           ruleName: risk.title,
           matched: true,
           level: risk.level === 'red' ? 'C' : risk.level === 'yellow' ? 'B' : 'A',
           action: risk.level === 'red' ? 'block' : risk.level === 'yellow' ? 'suggest_counterparty' : 'auto_approve',
           message: risk.description,
           counterparty: risk.suggestion,
+          evidence: risk.evidence,
         })) || []
         setResults(testResults)
       }
@@ -121,7 +131,9 @@ export default function RuleTestSandbox(props: RuleTestSandboxProps) {
                 className={`p-3 rounded-lg border ${result.level ? levelColors[result.level] : 'bg-slate-50 border-slate-200'}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">{result.ruleName}</span>
+                  <span className="font-medium">
+                    {result.ruleCode ? `${result.ruleCode} · ` : ''}{result.ruleName}
+                  </span>
                   <Badge variant="outline">
                     {result.level ? levelLabels[result.level] : '未命中'}
                   </Badge>
@@ -130,6 +142,11 @@ export default function RuleTestSandbox(props: RuleTestSandboxProps) {
                 {result.counterparty && (
                   <p className="text-sm mt-1 text-slate-600">
                     💡 建议: {result.counterparty}
+                  </p>
+                )}
+                {result.evidence && result.evidence.length > 0 && (
+                  <p className="text-xs mt-1 text-slate-500">
+                    证据: {result.evidence.join('、')}
                   </p>
                 )}
               </div>

@@ -64,18 +64,24 @@ export async function GET(
       return errorResponse(createApiError('DB_ERROR', '获取风险卡片失败'))
     }
 
+    const riskOrder: Record<string, number> = { red: 0, yellow: 1, green: 2, white: 3 }
+    const orderedRiskCards = [...(riskCards || [])].sort((left: { level: string; created_at?: string }, right: { level: string; created_at?: string }) => (
+      (riskOrder[left.level] ?? 9) - (riskOrder[right.level] ?? 9)
+      || new Date(left.created_at || 0).getTime() - new Date(right.created_at || 0).getTime()
+    ))
+
     // 3. 统计信息
     const stats = {
-      total: riskCards?.length || 0,
-      red: riskCards?.filter((c: { level: string }) => c.level === 'red').length || 0,
-      yellow: riskCards?.filter((c: { level: string }) => c.level === 'yellow').length || 0,
-      green: riskCards?.filter((c: { level: string }) => c.level === 'green').length || 0,
-      open: riskCards?.filter((c: { status: string }) => c.status === 'open').length || 0,
+      total: orderedRiskCards.length,
+      red: orderedRiskCards.filter((c: { level: string }) => c.level === 'red').length,
+      yellow: orderedRiskCards.filter((c: { level: string }) => c.level === 'yellow').length,
+      green: orderedRiskCards.filter((c: { level: string }) => c.level === 'green').length,
+      open: orderedRiskCards.filter((c: { status: string }) => c.status === 'open').length,
     }
 
     return successResponse({
       ...contract,
-      riskCards: riskCards || [],
+      riskCards: orderedRiskCards,
       stats,
       latestReview: contract.contract_reviews?.[0] || null,
     })

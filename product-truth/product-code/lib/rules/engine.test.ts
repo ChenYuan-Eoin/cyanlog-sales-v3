@@ -1,5 +1,7 @@
 // REQ:F006 - 规则引擎单元测试
 import { describe, it, expect } from 'vitest'
+import { evaluateFlexibleRule } from './flexible-engine'
+import type { FlexibleRule, RuleCategory, RuleType } from './types'
 
 // 直接测试规则引擎核心逻辑（不依赖 Supabase）
 
@@ -230,5 +232,138 @@ describe('规则引擎 - 结构化规则', () => {
 
       expect(result.level).toBe('green')
     })
+  })
+})
+
+function makeFlexibleRule(overrides: Partial<FlexibleRule>): FlexibleRule {
+  return {
+    id: overrides.id || overrides.code || 'rule-id',
+    org_id: 'org-1',
+    code: overrides.code || 'R000',
+    name: overrides.name || '测试规则',
+    description: overrides.description ?? null,
+    category: (overrides.category || 'text') as RuleCategory,
+    engine_type: (overrides.engine_type || 'structured') as RuleType,
+    target_field: overrides.target_field,
+    clause_category: overrides.clause_category,
+    field_hints: overrides.field_hints || [],
+    semantic_prompt: overrides.semantic_prompt,
+    applicable_scenarios: [],
+    scope: 'org',
+    level_a: {
+      operator: '<=',
+      threshold: 30,
+      unit: 'percent',
+      action: 'auto_approve',
+    },
+    level_b: {
+      operator: '>',
+      threshold: 30,
+      unit: 'percent',
+      action: 'suggest_counterparty',
+      counterparty: '法务复核',
+    },
+    level_c: {
+      operator: '>',
+      threshold: 60,
+      unit: 'percent',
+      action: 'block',
+      message: '红线风险',
+    },
+    approval_roles: [],
+    version: 1,
+    priority: 100,
+    is_active: true,
+    created_by: 'u1',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('柔性规则引擎 - 合同审核事实判定', () => {
+  it('R009 不应把“未约定知识产权归属”误判为通过', () => {
+    const rule = makeFlexibleRule({
+      code: 'R009',
+      name: '知识产权归属',
+      category: 'text',
+      engine_type: 'semantic',
+      field_hints: ['知识产权', '归属', '源代码'],
+    })
+
+    const result = evaluateFlexibleRule(rule, '双方未约定知识产权归属，后续另行协商。')
+
+    expect(result.risk_label).toBe('red')
+    expect(result.level).toBe('C')
+    expect(result.source).toContain('知识产权')
+  })
+
+  it('R012 不应把“未约定争议解决方式”误判为通过', () => {
+    const rule = makeFlexibleRule({
+      code: 'R012',
+      name: '争议解决方式',
+      category: 'text',
+      engine_type: 'semantic',
+      field_hints: ['争议解决', '仲裁', '管辖法院'],
+    })
+
+    const result = evaluateFlexibleRule(rule, '本合同未约定争议解决方式。')
+
+    expect(result.risk_label).toBe('red')
+    expect(result.level).toBe('C')
+  })
+
+  it('R015 应把口头变更识别为红线风险', () => {
+    const rule = makeFlexibleRule({
+      code: 'R015',
+      name: '变更流程',
+      category: 'text',
+      engine_type: 'semantic',
+      field_hints: ['合同变更', '书面形式', '授权代表'],
+    })
+
+    const result = evaluateFlexibleRule(rule, '合同变更可由双方业务人员口头确认后执行。')
+
+    expect(result.risk_label).toBe('red')
+    expect(result.level).toBe('C')
+    expect(result.source).toContain('口头')
+  })
+
+  it('结构化比例规则只有关键词但无数值时不应判绿', () => {
+    const rule = makeFlexibleRule({
+      code: 'R005',
+      name: '违约金上限',
+      category: 'ratio',
+      engine_type: 'structured',
+      target_field: 'penalty_rate',
+      field_hints: ['违约金', '违约责任'],
+    })
+
+    const result = evaluateFlexibleRule(rule, '双方应按照合同约定承担违约责任。')
+
+    expect(result.risk_label).toBe('white')
+    expect(result.matched).toBe(false)
+  })
+
+  it('保密期限不应复用合同期限数值', () => {
+    const rule = makeFlexibleRule({
+      code: 'R010',
+      name: '保密期限',
+      category: 'duration',
+      engine_type: 'structured',
+      target_field: 'confidentiality_days',
+      field_hints: ['保密期限', '保密义务'],
+      level_a: {
+        operator: '<=',
+        threshold: 1095,
+        unit: 'day',
+        action: 'auto_approve',
+      },
+    })
+
+    const result = evaluateFlexibleRule(rule, '合同期限为5年，未单独约定保密期限。')
+
+    expect(result.risk_label).toBe('white')
+    expect(result.matched).toBe(false)
   })
 })

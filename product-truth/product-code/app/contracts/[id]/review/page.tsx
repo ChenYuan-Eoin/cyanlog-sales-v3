@@ -45,6 +45,9 @@ interface RiskCardData {
   description?: string
   suggestion?: string
   clause_ref?: string
+  rule_code?: string
+  rule_version?: number
+  evidence?: { snippets?: string[]; counterparty?: string | null }
   auto_fixable: boolean
   status: 'open' | 'fixed' | 'accepted' | 'ignored'
 }
@@ -460,6 +463,9 @@ export default function ContractReviewPage() {
                     {risk.clause_ref && (
                       <p className="text-[10px] text-slate-400 mt-1">{risk.clause_ref}</p>
                     )}
+                    {risk.rule_code && (
+                      <p className="text-[10px] text-slate-400 mt-1">{risk.rule_code} v{risk.rule_version || 1}</p>
+                    )}
                   </button>
                 )
               })}
@@ -544,6 +550,11 @@ export default function ContractReviewPage() {
                   {selectedRisk.clause_ref && (
                     <p className="text-xs text-slate-500">{selectedRisk.clause_ref}</p>
                   )}
+                  {selectedRisk.rule_code && (
+                    <p className="text-xs text-slate-500">
+                      规则：{selectedRisk.rule_code} v{selectedRisk.rule_version || 1}
+                    </p>
+                  )}
                 </div>
 
                 {/* 描述 */}
@@ -562,6 +573,19 @@ export default function ContractReviewPage() {
                       修复建议
                     </h4>
                     <p className="text-sm text-slate-700">{selectedRisk.suggestion}</p>
+                  </div>
+                )}
+
+                {selectedRisk.evidence?.snippets && selectedRisk.evidence.snippets.length > 0 && (
+                  <div className="p-3 bg-white rounded-lg border border-slate-100">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">证据片段</h4>
+                    <div className="space-y-2">
+                      {selectedRisk.evidence.snippets.map((snippet, index) => (
+                        <p key={index} className="rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">
+                          {snippet}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 )}
 

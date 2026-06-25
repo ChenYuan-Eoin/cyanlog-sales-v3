@@ -54,6 +54,19 @@ const statusMap: Record<string, { label: string; className: string }> = {
   FAILED: { label: '审核失败', className: 'bg-red-100 text-red-700' },
 }
 
+const ALLOWED_REVIEW_EXTENSIONS = ['.pdf', '.docx']
+
+function validateReviewFile(file: File): string | null {
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
+  if (!ALLOWED_REVIEW_EXTENSIONS.includes(extension)) {
+    return `不支持的文件类型: ${extension}，请上传 PDF 或 DOCX 文件`
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    return `文件大小超过 50MB 限制: ${(file.size / 1024 / 1024).toFixed(2)} MB`
+  }
+  return null
+}
+
 export default function ContractEditPage() {
   const params = useParams()
   const router = useRouter()
@@ -160,6 +173,13 @@ export default function ContractEditPage() {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+
+    const validationError = validateReviewFile(file)
+    if (validationError) {
+      setError(validationError)
+      e.target.value = ''
+      return
+    }
 
     setUploading(true)
     setError('')
@@ -487,7 +507,7 @@ export default function ContractEditPage() {
                   <label className="block">
                     <input
                       type="file"
-                      accept=".doc,.docx,.pdf"
+                      accept=".pdf,.docx"
                       onChange={handleFileUpload}
                       className="hidden"
                     />

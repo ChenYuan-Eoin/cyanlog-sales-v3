@@ -9,10 +9,15 @@ import { z } from 'zod'
 const RiskLevelSchema = z.enum(['red', 'yellow', 'green'])
 
 const RiskSchema = z.object({
+  ruleId: z.string().optional(),
+  ruleCode: z.string().optional(),
+  ruleVersion: z.number().optional(),
   level: RiskLevelSchema,
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(2000),
   suggestion: z.string().min(1).max(1000),
+  counterparty: z.string().optional(),
+  evidence: z.array(z.string()).optional(),
 })
 
 export const AIReviewOutputSchema = z.object({

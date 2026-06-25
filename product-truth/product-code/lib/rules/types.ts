@@ -4,7 +4,7 @@
  */
 
 export type RiskLevel = 'red' | 'yellow' | 'green'
-export type RuleType = 'structured' | 'semantic'
+export type RuleType = 'structured' | 'semantic' | 'hybrid'
 export type RuleStatus = 'draft' | 'published' | 'archived'
 export type RuleCategory = 'ratio' | 'amount' | 'duration' | 'enum' | 'text'
 
@@ -32,6 +32,11 @@ export interface FlexibleRule {
   name: string
   description: string | null
   category: RuleCategory          // ratio/amount/duration/enum/text
+  engine_type: RuleType
+  target_field?: string
+  clause_category?: string
+  field_hints: string[]
+  semantic_prompt?: string
   applicable_scenarios: string[]  // 适用场景标签
   scope: 'org' | 'dept' | 'user'
 
@@ -64,6 +69,8 @@ export interface LevelMatchResult {
   threshold: number
   actual_value: number
   unit: string
+  source?: string
+  confidence?: number
   action: string                  // 简化类型
   message: string
   counterparty?: string           // Level B 专用

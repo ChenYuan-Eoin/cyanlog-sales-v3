@@ -1,274 +1,396 @@
 'use client'
 
-import { useState } from 'react'
+import { cloneElement, isValidElement, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { error as toastError } from '@/lib/toast'
+import { Textarea } from '@/components/ui/textarea'
+import type {
+  ContractPolicyRule,
+  ContractRuleCategory,
+  ContractRuleEngineType,
+  ContractRuleOperator,
+} from '@/types/rules'
 
-// Level A/B/C 配置
-interface RuleLevelConfig {
-  operator: '>=' | '<=' | '=' | '>' | '<'
-  threshold: number
-  unit: 'percent' | 'amount' | 'day' | 'month'
-  action: string
-  message?: string
-  counterparty?: string
-}
-
-// 规则设计表单
-interface RuleDesignForm {
-  code: string
-  name: string
-  description: string
-  category: 'ratio' | 'amount' | 'duration' | 'enum' | 'text'
-  levelA: RuleLevelConfig
-  levelB: RuleLevelConfig
-  levelC: RuleLevelConfig
-}
-
-const defaultLevel: RuleLevelConfig = {
-  operator: '<=',
-  threshold: 0,
-  unit: 'day',
-  action: 'auto_approve',
-  message: '',
-}
+type RuleDraft = Partial<ContractPolicyRule>
 
 interface RuleDesignerProps {
-  initialRule?: Partial<RuleDesignForm>
-  onSave: (rule: RuleDesignForm) => void
-  onTest: (rule: RuleDesignForm) => void
+  initialRule?: ContractPolicyRule
+  saving?: boolean
+  onSave: (rule: RuleDraft) => void | Promise<void>
+  onTest?: () => void
 }
 
-export default function RuleDesigner({ initialRule, onSave, onTest }: RuleDesignerProps) {
-  const [form, setForm] = useState<RuleDesignForm>({
-    code: initialRule?.code || '',
-    name: initialRule?.name || '',
-    description: initialRule?.description || '',
-    category: initialRule?.category || 'duration',
-    levelA: initialRule?.levelA || { ...defaultLevel, operator: '<=', threshold: 30, action: 'auto_approve' },
-    levelB: initialRule?.levelB || { ...defaultLevel, operator: '>', threshold: 90, action: 'suggest_counterparty', counterparty: '' },
-    levelC: initialRule?.levelC || { ...defaultLevel, operator: '>', threshold: 180, action: 'block', message: '' },
-  })
+const categoryOptions: Array<{ value: ContractRuleCategory; label: string }> = [
+  { value: 'duration', label: '时限类' },
+  { value: 'amount', label: '金额类' },
+  { value: 'ratio', label: '比例类' },
+  { value: 'enum', label: '枚举类' },
+  { value: 'text', label: '条款语义' },
+]
 
-  const updateLevel = (level: 'levelA' | 'levelB' | 'levelC', field: keyof RuleLevelConfig, value: unknown) => {
-    setForm(prev => ({
-      ...prev,
-      [level]: { ...prev[level], [field]: value },
-    }))
+const engineOptions: Array<{ value: ContractRuleEngineType; label: string }> = [
+  { value: 'structured', label: '结构化' },
+  { value: 'semantic', label: '语义' },
+  { value: 'hybrid', label: '混合' },
+]
+
+const operatorOptions: ContractRuleOperator[] = ['<=', '>=', '>', '<', '=', 'contains', 'in']
+
+const actionOptions = [
+  { value: 'auto_approve', label: '自动通过' },
+  { value: 'suggest_counterparty', label: '建议会签' },
+  { value: 'manual_review', label: '人工复核' },
+  { value: 'block', label: '阻断' },
+]
+
+function createDefaultRule(): RuleDraft {
+  return {
+    code: '',
+    name: '',
+    description: '',
+    category: 'duration',
+    engine_type: 'structured',
+    target_field: 'payment_days',
+    clause_category: '',
+    field_hints: [],
+    semantic_prompt: '',
+    applicable_scenarios: [],
+    scope: 'org',
+    level_a_operator: '<=',
+    level_a_threshold: 30,
+    level_a_unit: 'day',
+    level_a_action: 'auto_approve',
+    level_b_operator: '>',
+    level_b_threshold: 90,
+    level_b_unit: 'day',
+    level_b_action: 'suggest_counterparty',
+    level_b_counterparty: '',
+    level_c_operator: '>',
+    level_c_threshold: 180,
+    level_c_unit: 'day',
+    level_c_action: 'block',
+    level_c_message: '',
+    approval_roles: [],
+    priority: 100,
+    is_active: true,
   }
+}
 
-  const handleTest = () => {
-    if (!form.code || !form.name) {
-      toastError('请填写规则编码和名称')
-      return
-    }
-    onTest(form)
-  }
+function toCsv(value: string[] | null | undefined) {
+  return Array.isArray(value) ? value.join(', ') : ''
+}
 
-  const handleSave = () => {
-    if (!form.code || !form.name) {
-      toastError('请填写规则编码和名称')
-      return
-    }
-    onSave(form)
-  }
+function fromCsv(value: string) {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
 
-  const levelColors = {
-    levelA: 'border-green-200 bg-green-50',
-    levelB: 'border-yellow-200 bg-yellow-50',
-    levelC: 'border-red-200 bg-red-50',
-  }
+export default function RuleDesigner({ initialRule, saving = false, onSave, onTest }: RuleDesignerProps) {
+  const [draft, setDraft] = useState<RuleDraft>(() => initialRule || createDefaultRule())
+  const [fieldHints, setFieldHints] = useState(() => toCsv(initialRule?.field_hints))
+  const [scenarios, setScenarios] = useState(() => toCsv(initialRule?.applicable_scenarios))
+  const isSemantic = draft.engine_type === 'semantic' || draft.category === 'text'
 
-  const levelLabels = {
-    levelA: '🟢 Level A (通过)',
-    levelB: '🟡 Level B (偏离)',
-    levelC: '🔴 Level C (红线)',
+  useEffect(() => {
+    const nextDraft = initialRule || createDefaultRule()
+    setDraft(nextDraft)
+    setFieldHints(toCsv(nextDraft.field_hints))
+    setScenarios(toCsv(nextDraft.applicable_scenarios))
+  }, [initialRule])
+
+  const normalizedDraft = useMemo<RuleDraft>(() => ({
+    ...draft,
+    field_hints: fromCsv(fieldHints),
+    applicable_scenarios: fromCsv(scenarios),
+    level_a_threshold: Number(draft.level_a_threshold ?? 0),
+    level_b_threshold: Number(draft.level_b_threshold ?? 0),
+    level_c_threshold: Number(draft.level_c_threshold ?? 0),
+    priority: Number(draft.priority ?? 100),
+  }), [draft, fieldHints, scenarios])
+
+  function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }))
   }
 
   return (
-    <div className="space-y-6">
-      {/* 基础信息 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">基础信息</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>规则编码</Label>
-              <Input
-                value={form.code}
-                onChange={e => setForm(prev => ({ ...prev, code: e.target.value }))}
-                placeholder="RULE-01"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>规则名称</Label>
-              <Input
-                value={form.name}
-                onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="付款账期检查"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>规则描述</Label>
-            <Input
-              value={form.description}
-              onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="检查合同付款账期是否合理"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>规则分类</Label>
-            <Select
-              value={form.category}
-              onValueChange={(v: RuleDesignForm['category']) => setForm(prev => ({ ...prev, category: v }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ratio">比例类 (如违约金比例)</SelectItem>
-                <SelectItem value="amount">金额类 (如合同金额)</SelectItem>
-                <SelectItem value="duration">时长类 (如账期、质保期)</SelectItem>
-                <SelectItem value="enum">枚举类 (如争议解决方式)</SelectItem>
-                <SelectItem value="text">文本类 (语义检查)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+    <form
+      className="space-y-6"
+      onSubmit={(event) => {
+        event.preventDefault()
+        void onSave(normalizedDraft)
+      }}
+    >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="规则编码">
+          <Input
+            value={draft.code || ''}
+            onChange={(event) => update('code', event.target.value)}
+            placeholder="PAYMENT_DAYS_STANDARD"
+            required
+          />
+        </Field>
+        <Field label="规则名称">
+          <Input
+            value={draft.name || ''}
+            onChange={(event) => update('name', event.target.value)}
+            placeholder="付款账期标准"
+            required
+          />
+        </Field>
+        <Field label="规则分类">
+          <Select
+            value={draft.category || 'duration'}
+            onChange={(value) => update('category', value as ContractRuleCategory)}
+            options={categoryOptions}
+          />
+        </Field>
+        <Field label="执行引擎">
+          <Select
+            value={draft.engine_type || 'structured'}
+            onChange={(value) => update('engine_type', value as ContractRuleEngineType)}
+            options={engineOptions}
+          />
+        </Field>
+        <Field label="目标字段">
+          <Input
+            value={draft.target_field || ''}
+            onChange={(event) => update('target_field', event.target.value)}
+            placeholder="payment_days"
+          />
+        </Field>
+        <Field label="优先级">
+          <Input
+            type="number"
+            value={draft.priority ?? 100}
+            onChange={(event) => update('priority', Number(event.target.value))}
+          />
+        </Field>
+      </div>
 
-      {/* Level A/B/C 配置 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Level A/B/C 阈值配置</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {(['levelA', 'levelB', 'levelC'] as const).map((level) => (
-            <div key={level} className={`p-4 rounded-lg border ${levelColors[level]}`}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-medium">{levelLabels[level]}</span>
-                <Badge variant="outline">
-                  {form[level].action === 'auto_approve' && '自动通过'}
-                  {form[level].action === 'suggest_counterparty' && '建议对价'}
-                  {form[level].action === 'block' && '阻断'}
-                  {form[level].action === 'require_approval' && '需要审批'}
-                </Badge>
-              </div>
-              <div className="grid grid-cols-4 gap-3">
-                <div>
-                  <Label className="text-xs">运算符</Label>
-                  <Select
-                    value={form[level].operator}
-                    onValueChange={(v: RuleLevelConfig['operator']) => updateLevel(level, 'operator', v)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="<=">≤ (小于等于)</SelectItem>
-                      <SelectItem value=">=">≥ (大于等于)</SelectItem>
-                      <SelectItem value="<">&lt; (小于)</SelectItem>
-                      <SelectItem value=">">&gt; (大于)</SelectItem>
-                      <SelectItem value="=">= (等于)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">阈值</Label>
-                  <Input
-                    type="number"
-                    value={form[level].threshold}
-                    onChange={e => updateLevel(level, 'threshold', parseFloat(e.target.value))}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">单位</Label>
-                  <Select
-                    value={form[level].unit}
-                    onValueChange={(v: RuleLevelConfig['unit']) => updateLevel(level, 'unit', v)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="day">天</SelectItem>
-                      <SelectItem value="month">月</SelectItem>
-                      <SelectItem value="percent">%</SelectItem>
-                      <SelectItem value="amount">元</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">动作</Label>
-                  <Select
-                    value={form[level].action}
-                    onValueChange={(v: string) => updateLevel(level, 'action', v)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto_approve">自动通过</SelectItem>
-                      <SelectItem value="suggest_counterparty">建议对价</SelectItem>
-                      <SelectItem value="block">阻断</SelectItem>
-                      <SelectItem value="require_approval">需要审批</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Level B 特有：对价建议 */}
-              {level === 'levelB' && (
-                <div className="mt-3">
-                  <Label className="text-xs">对价建议文案</Label>
-                  <Input
-                    value={form[level].counterparty || ''}
-                    onChange={e => updateLevel(level, 'counterparty', e.target.value)}
-                    placeholder="如：建议缩短账期或增加预付款"
-                    className="mt-1"
-                  />
-                </div>
-              )}
-              {/* Level C 特有：阻断提示 */}
-              {level === 'levelC' && (
-                <div className="mt-3">
-                  <Label className="text-xs">阻断提示文案</Label>
-                  <Input
-                    value={form[level].message || ''}
-                    onChange={e => updateLevel(level, 'message', e.target.value)}
-                    placeholder="如：账期超过180天，需财务总监审批"
-                    className="mt-1"
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <Field label="规则描述">
+        <Textarea
+          value={draft.description || ''}
+          onChange={(event) => update('description', event.target.value)}
+          placeholder="说明规则适用的合同场景、风险判断依据和审批处理方式。"
+          rows={3}
+        />
+      </Field>
 
-      {/* 操作按钮 */}
-      <div className="flex gap-3">
-        <Button variant="outline" onClick={handleTest}>
-          测试规则
-        </Button>
-        <Button onClick={handleSave}>
-          保存规则
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="字段提示">
+          <Input
+            value={fieldHints}
+            onChange={(event) => setFieldHints(event.target.value)}
+            placeholder="payment_days, account_period"
+          />
+        </Field>
+        <Field label="适用场景">
+          <Input
+            value={scenarios}
+            onChange={(event) => setScenarios(event.target.value)}
+            placeholder="标准销售合同, 框架协议"
+          />
+        </Field>
+      </div>
+
+      {isSemantic ? (
+        <Field label="语义提示词">
+          <Textarea
+            value={draft.semantic_prompt || ''}
+            onChange={(event) => update('semantic_prompt', event.target.value)}
+            placeholder="描述需要从合同条款中识别的风险语义。"
+            rows={4}
+          />
+        </Field>
+      ) : null}
+
+      <div className="rounded-lg border border-slate-200">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h3 className="text-sm font-medium text-slate-900">风险等级阈值</h3>
+        </div>
+        <div className="divide-y divide-slate-100">
+          <LevelEditor
+            label="Level A"
+            operator={draft.level_a_operator || '<='}
+            threshold={draft.level_a_threshold ?? 30}
+            unit={draft.level_a_unit || ''}
+            action={draft.level_a_action || 'auto_approve'}
+            onOperatorChange={(value) => update('level_a_operator', value)}
+            onThresholdChange={(value) => update('level_a_threshold', value)}
+            onUnitChange={(value) => update('level_a_unit', value)}
+            onActionChange={(value) => update('level_a_action', value)}
+          />
+          <LevelEditor
+            label="Level B"
+            operator={draft.level_b_operator || '>'}
+            threshold={draft.level_b_threshold ?? 90}
+            unit={draft.level_b_unit || ''}
+            action={draft.level_b_action || 'suggest_counterparty'}
+            onOperatorChange={(value) => update('level_b_operator', value)}
+            onThresholdChange={(value) => update('level_b_threshold', value)}
+            onUnitChange={(value) => update('level_b_unit', value)}
+            onActionChange={(value) => update('level_b_action', value)}
+          />
+          <LevelEditor
+            label="Level C"
+            operator={draft.level_c_operator || '>'}
+            threshold={draft.level_c_threshold ?? 180}
+            unit={draft.level_c_unit || ''}
+            action={draft.level_c_action || 'block'}
+            onOperatorChange={(value) => update('level_c_operator', value)}
+            onThresholdChange={(value) => update('level_c_threshold', value)}
+            onUnitChange={(value) => update('level_c_unit', value)}
+            onActionChange={(value) => update('level_c_action', value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="B 级会签建议">
+          <Input
+            value={draft.level_b_counterparty || ''}
+            onChange={(event) => update('level_b_counterparty', event.target.value)}
+            placeholder="法务、财务或销售负责人"
+          />
+        </Field>
+        <Field label="C 级阻断提示">
+          <Input
+            value={draft.level_c_message || ''}
+            onChange={(event) => update('level_c_message', event.target.value)}
+            placeholder="超过红线阈值，需重新谈判条款"
+          />
+        </Field>
+      </div>
+
+      <label className="flex items-center gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={draft.is_active ?? true}
+          onChange={(event) => update('is_active', event.target.checked)}
+          className="h-4 w-4 rounded border-slate-300"
+        />
+        启用规则
+      </label>
+
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {onTest ? (
+          <Button type="button" variant="outline" onClick={onTest}>
+            测试规则
+          </Button>
+        ) : null}
+        <Button type="submit" disabled={saving}>
+          {saving ? '保存中...' : '保存规则'}
         </Button>
       </div>
+    </form>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  const labeledChildren = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ 'aria-label'?: string }>, {
+        'aria-label': (children.props as { 'aria-label'?: string })['aria-label'] || label,
+      })
+    : children
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs font-medium text-slate-500">{label}</Label>
+      {labeledChildren}
+    </div>
+  )
+}
+
+function Select<T extends string>({
+  value,
+  onChange,
+  options,
+  'aria-label': ariaLabel,
+}: {
+  value: T
+  onChange: (value: string) => void
+  options: Array<{ value: T; label: string }>
+  'aria-label'?: string
+}) {
+  return (
+    <select
+      value={value}
+      aria-label={ariaLabel}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function LevelEditor({
+  label,
+  operator,
+  threshold,
+  unit,
+  action,
+  onOperatorChange,
+  onThresholdChange,
+  onUnitChange,
+  onActionChange,
+}: {
+  label: string
+  operator: ContractRuleOperator
+  threshold: number
+  unit: string
+  action: string
+  onOperatorChange: (value: ContractRuleOperator) => void
+  onThresholdChange: (value: number) => void
+  onUnitChange: (value: string) => void
+  onActionChange: (value: string) => void
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[90px_120px_1fr_120px_160px] md:items-end">
+      <div className="text-sm font-medium text-slate-700">{label}</div>
+      <Field label="操作符">
+        <select
+          value={operator}
+          onChange={(event) => onOperatorChange(event.target.value as ContractRuleOperator)}
+          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          {operatorOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="阈值">
+        <Input
+          type="number"
+          value={threshold}
+          onChange={(event) => onThresholdChange(Number(event.target.value))}
+        />
+      </Field>
+      <Field label="单位">
+        <Input
+          value={unit}
+          onChange={(event) => onUnitChange(event.target.value)}
+          placeholder="day"
+        />
+      </Field>
+      <Field label="处理动作">
+        <select
+          value={action}
+          onChange={(event) => onActionChange(event.target.value)}
+          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          {actionOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </Field>
     </div>
   )
 }

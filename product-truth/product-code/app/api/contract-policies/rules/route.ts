@@ -20,6 +20,11 @@ const ruleSchema = z.object({
   name: z.string().min(1, '规则名称不能为空'),
   description: z.string().optional(),
   category: z.enum(['ratio', 'amount', 'duration', 'enum', 'text']),
+  engine_type: z.enum(['structured', 'semantic', 'hybrid']).default('structured'),
+  target_field: z.string().optional().nullable(),
+  clause_category: z.string().optional().nullable(),
+  field_hints: z.array(z.string()).optional(),
+  semantic_prompt: z.string().optional().nullable(),
   applicable_scenarios: z.array(z.string()).optional(),
   scope: z.enum(['org', 'dept', 'user']).optional(),
 
@@ -55,6 +60,7 @@ export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { searchParams } = new URL(req.url)
     const category = searchParams.get('category')
+    const engineType = searchParams.get('engine_type')
     const isActive = searchParams.get('is_active')
 
     let query = supabaseAdmin
@@ -65,6 +71,9 @@ export async function GET(req: NextRequest) {
 
     if (category) {
       query = query.eq('category', category)
+    }
+    if (engineType) {
+      query = query.eq('engine_type', engineType)
     }
     if (isActive !== null) {
       query = query.eq('is_active', isActive === 'true')
@@ -102,6 +111,8 @@ export async function POST(req: NextRequest) {
       .insert({
         org_id: orgId,
         created_by: user.id,
+        published_at: new Date().toISOString(),
+        published_by: user.id,
         ...parsed.data,
         version: 1,
       })
@@ -111,6 +122,16 @@ export async function POST(req: NextRequest) {
     if (error) {
       return errorResponse(createApiError('DB_ERROR', '创建规则失败'))
     }
+
+    await supabaseAdmin.from('contract_rule_snapshots').insert({
+      rule_id: rule.id,
+      version: rule.version || 1,
+      config_snapshot: rule,
+      released_by: user.id,
+      released_at: new Date().toISOString(),
+      release_note: '创建规则并立即生效',
+      status: 'published',
+    })
 
     return createdResponse(rule)
   })

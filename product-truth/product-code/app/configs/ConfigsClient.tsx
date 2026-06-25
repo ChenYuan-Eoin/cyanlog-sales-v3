@@ -10,7 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import type { Rule } from '@/types/rules'
+import type { ContractPolicyRule } from '@/types/rules'
 import {
   BotIcon,
   KeyRoundIcon,
@@ -29,7 +29,6 @@ import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import TabsContent from './tabs/TabsContent'
 import ConfigStatusBadge from './tabs/ConfigStatusBadge'
 import ProductDialog from './dialogs/ProductDialog'
-import RuleDialog from './dialogs/RuleDialog'
 import TaxEditForm from './dialogs/TaxEditForm'
 import ApprovalEditForm from './dialogs/ApprovalEditForm'
 import AIEditForm from './dialogs/AIEditForm'
@@ -249,19 +248,56 @@ type ConfigRoleRecord = {
   sort_order: number | null
 }
 
-export default function ConfigsClient({ initialData, orgId: _orgId }: { initialData?: ConfigsInitialData; orgId?: string }) {
+type ConfigsRouteState = {
+  tab?: string | string[]
+  ruleId?: string | string[]
+  mode?: string | string[]
+}
+
+function firstParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] || null
+  return value || null
+}
+
+function normalizeInitialRouteState(routeState?: ConfigsRouteState) {
+  let requestedTab = firstParam(routeState?.tab)
+  let ruleId = firstParam(routeState?.ruleId)
+  let mode = firstParam(routeState?.mode)
+
+  if (!requestedTab && !ruleId && !mode && typeof window !== 'undefined') {
+    const searchParams = new URLSearchParams(window.location.search)
+    requestedTab = searchParams.get('tab')
+    ruleId = searchParams.get('ruleId')
+    mode = searchParams.get('mode')
+  }
+
+  const tab = requestedTab && requestedTab in CONFIG_TABS
+    ? requestedTab as ConfigTabId
+    : (ruleId || mode === 'new' ? 'rules' : 'price-list')
+
+  return { tab, ruleId, mode }
+}
+
+export default function ConfigsClient({
+  initialData,
+  orgId: _orgId,
+  routeState,
+}: {
+  initialData?: ConfigsInitialData
+  orgId?: string
+  routeState?: ConfigsRouteState
+}) {
+  const [initialSearch] = useState(() => normalizeInitialRouteState(routeState))
   // 优先使用服务端预取的数据，避免客户端重复请求
-  const [rules, setRules] = useState<Rule[]>(initialData?.rules || [])
+  const [rules, setRules] = useState<ContractPolicyRule[]>(initialData?.rules || [])
   const [configs, setConfigs] = useState<Config[]>(initialData?.configs || [])
   const [products, setProducts] = useState<ProductRecord[]>(initialData?.products || [])
   const [loading, setLoading] = useState(!initialData)  // 有初始数据则不显示 loading
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<ConfigTabId>('price-list')
+  const [activeTab, setActiveTab] = useState<ConfigTabId>(initialSearch.tab)
+  const [focusRuleId, setFocusRuleId] = useState<string | null>(initialSearch.ruleId)
+  const [ruleMode, setRuleMode] = useState<string | null>(initialSearch.mode)
   const [tabReady, setTabReady] = useState(false)
-
-  // Rule dialog
-  const [isRuleEditOpen, setIsRuleEditOpen] = useState(false)
-  const [editingRule, setEditingRule] = useState<Partial<Rule> | null>(null)
 
   // Config dialog
   const [isConfigEditOpen, setIsConfigEditOpen] = useState(false)
@@ -313,7 +349,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
             setProducts(cached as ProductRecord[])
             break
           case 'rules':
-            setRules(cached as Rule[])
+            setRules(cached as ContractPolicyRule[])
             break
           case 'tax':
           case 'approval':
@@ -360,8 +396,8 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
 
         case 'rules': {
           // 只加载 rules (分页格式)
-          const nextRules = await loadInflightTabValue<Rule[]>(cacheKey, async () => {
-            const rulesRes = await fetch('/api/rules', { headers })
+          const nextRules = await loadInflightTabValue<ContractPolicyRule[]>(cacheKey, async () => {
+            const rulesRes = await fetch('/api/contract-policies/rules', { headers })
             if (!rulesRes.ok) return null
             const rulesJson = await rulesRes.json()
             return rulesJson.data ?? []
@@ -437,13 +473,21 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
     const tab = searchParams.get('tab')
+    const nextRuleId = searchParams.get('ruleId')
+    const nextMode = searchParams.get('mode')
     if (tab && tab in CONFIG_TABS) {
       setActiveTab(tab as ConfigTabId)
+    } else if (nextRuleId || nextMode === 'new') {
+      setActiveTab('rules')
     }
+    setFocusRuleId(nextRuleId)
+    setRuleMode(nextMode)
     setTabReady(true)
     // 按需加载：初始加载当前 tab 数据（如果还没加载过）
     if (!hasInitialData) {
-      const initialTab = (tab && tab in CONFIG_TABS) ? tab as ConfigTabId : 'price-list'
+      const initialTab = (tab && tab in CONFIG_TABS)
+        ? tab as ConfigTabId
+        : (nextRuleId || nextMode === 'new' ? 'rules' : 'price-list')
       // 使用 setTimeout 避免与第二个 useEffect 竞态
       setTimeout(() => {
         if (!loadedTabsRef.current.has(initialTab) && loadingTabRef.current !== initialTab) {
@@ -457,6 +501,10 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     if (!tabReady) return
     const url = new URL(window.location.href)
     url.searchParams.set('tab', activeTab)
+    if (activeTab !== 'rules') {
+      url.searchParams.delete('ruleId')
+      url.searchParams.delete('mode')
+    }
     window.history.replaceState({}, '', url)
     // 按需加载：切换 tab 时加载对应数据（如果还没加载过，且不在加载中）
     if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
@@ -473,7 +521,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
 
       const [rulesRes, configsRes, rolesRes, productsRes, orgRes] = await Promise.all([
-        fetch('/api/rules', { headers }),
+        fetch('/api/contract-policies/rules', { headers }),
         fetch('/api/configs', { headers }),
         fetch('/api/roles', { headers }),
         fetch('/api/products', { headers }),
@@ -540,8 +588,8 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       case 'rules':
         return [
           { label: '规则总数', value: String(rules.length) },
-          { label: '启用规则', value: String(rules.filter((rule) => rule.enabled).length) },
-          { label: '语义规则', value: String(rules.filter((rule) => rule.rule_type === 'semantic').length) },
+          { label: '启用规则', value: String(rules.filter((rule) => rule.is_active).length) },
+          { label: '语义规则', value: String(rules.filter((rule) => rule.engine_type === 'semantic' || rule.engine_type === 'hybrid').length) },
         ]
       case 'tax': {
         const taxConfigs = getConfigsByType('TAX_RULE')
@@ -649,17 +697,47 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     }
   }
 
-  // Rule handlers
-  async function handleSaveRule() {
-    if (!editingRule?.name || !editingRule?.rule_type || !editingRule?.risk_level) {
+  async function handleSaveRule(rule: Partial<ContractPolicyRule>, id?: string) {
+    if (!rule.code || !rule.name) {
+      setError('请填写规则编码和名称')
       return
     }
 
     try {
       const token = localStorage.getItem('token')
-      const isUpdate = 'id' in editingRule && editingRule.id
-      const url = isUpdate ? `/api/rules/${editingRule.id}` : '/api/rules'
-      const method = isUpdate ? 'PUT' : 'POST'
+      const isUpdate = Boolean(id)
+      const url = isUpdate ? `/api/contract-policies/rules/${id}` : '/api/contract-policies/rules'
+      const method = isUpdate ? 'PATCH' : 'POST'
+      const payload = {
+        code: rule.code,
+        name: rule.name,
+        description: rule.description || '',
+        category: rule.category || 'duration',
+        engine_type: rule.engine_type || (rule.category === 'text' ? 'semantic' : 'structured'),
+        target_field: rule.target_field || null,
+        clause_category: rule.clause_category || null,
+        field_hints: rule.field_hints || [],
+        semantic_prompt: rule.semantic_prompt || null,
+        applicable_scenarios: rule.applicable_scenarios || [],
+        scope: rule.scope || 'org',
+        level_a_operator: rule.level_a_operator || '<=',
+        level_a_threshold: Number(rule.level_a_threshold ?? 30),
+        level_a_unit: rule.level_a_unit || 'day',
+        level_a_action: rule.level_a_action || 'auto_approve',
+        level_b_operator: rule.level_b_operator || '>',
+        level_b_threshold: Number(rule.level_b_threshold ?? 90),
+        level_b_unit: rule.level_b_unit || 'day',
+        level_b_action: rule.level_b_action || 'suggest_counterparty',
+        level_b_counterparty: rule.level_b_counterparty || '',
+        level_c_operator: rule.level_c_operator || '>',
+        level_c_threshold: Number(rule.level_c_threshold ?? 180),
+        level_c_unit: rule.level_c_unit || 'day',
+        level_c_action: rule.level_c_action || 'block',
+        level_c_message: rule.level_c_message || '',
+        approval_roles: rule.approval_roles || [],
+        priority: Number(rule.priority ?? 100),
+        is_active: rule.is_active ?? true,
+      }
 
       const res = await fetch(url, {
         method,
@@ -667,7 +745,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || ''}`,
         },
-        body: JSON.stringify(editingRule),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -676,9 +754,15 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         return
       }
 
-      setIsRuleEditOpen(false)
-      setEditingRule(null)
-      await fetchData()
+      const refreshed = await fetch('/api/contract-policies/rules', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      })
+      if (refreshed.ok) {
+        const data = await refreshed.json()
+        setRules(data.data || [])
+      } else {
+        await fetchData()
+      }
     } catch {
       setError('网络错误')
     }
@@ -689,7 +773,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
 
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/rules/${id}`, {
+      const res = await fetch(`/api/contract-policies/rules/${id}`, {
         method: 'DELETE',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       })
@@ -703,23 +787,6 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     } catch {
       setError('网络错误')
     }
-  }
-
-  function openNewRule() {
-    setEditingRule({
-      name: '',
-      description: '',
-      rule_type: 'structured',
-      risk_level: 'yellow',
-      enabled: true,
-      config: {},
-    })
-    setIsRuleEditOpen(true)
-  }
-
-  function openEditRule(rule: Rule) {
-    setEditingRule({ ...rule })
-    setIsRuleEditOpen(true)
   }
 
   // Config handlers
@@ -1174,18 +1241,11 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
             </div>
 
             <div className="mt-6 space-y-6">
-              <TabsContent activeTab={activeTab} loading={loading && !loadedTabs.has(activeTab)} products={products} onNewProduct={openNewProduct} onEditProduct={openEditProduct} onDeleteProduct={handleDeleteProduct} rules={rules} onNewRule={openNewRule} onEditRule={openEditRule} onDeleteRule={handleDeleteRule} configs={configs} onNewConfig={openNewConfig} onEditConfig={openEditConfig} onPublishConfig={handlePublishConfig} onFetchVersions={handleFetchVersions} onDeleteConfig={handleDeleteConfig} orgSummary={orgSummary} feishuSyncing={feishuSyncing} feishuResult={feishuResult} onFeishuSync={handleFeishuSync} roles={roles} savingRoleId={savingRoleId} onSaveRole={handleSaveRole} />
+              <TabsContent activeTab={activeTab} loading={loading && !loadedTabs.has(activeTab)} products={products} onNewProduct={openNewProduct} onEditProduct={openEditProduct} onDeleteProduct={handleDeleteProduct} rules={rules} focusRuleId={focusRuleId} ruleMode={ruleMode} onSaveRule={handleSaveRule} onDeleteRule={handleDeleteRule} configs={configs} onNewConfig={openNewConfig} onEditConfig={openEditConfig} onPublishConfig={handlePublishConfig} onFetchVersions={handleFetchVersions} onDeleteConfig={handleDeleteConfig} orgSummary={orgSummary} feishuSyncing={feishuSyncing} feishuResult={feishuResult} onFeishuSync={handleFeishuSync} roles={roles} savingRoleId={savingRoleId} onSaveRole={handleSaveRole} />
             </div>
           </main>
         </div>
       </div>
-
-      <RuleDialog
-        rule={editingRule}
-        open={isRuleEditOpen}
-        onOpenChange={setIsRuleEditOpen}
-        onSave={handleSaveRule}
-      />
 
       {/* Config Edit Dialog */}
       {editingConfig && (

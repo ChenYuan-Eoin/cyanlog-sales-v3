@@ -37,11 +37,11 @@ export interface ProductRecord {
   product_price_tiers?: ProductPriceTier[]
 }
 
-import type { Rule } from '@/types/rules'
+import type { ContractPolicyRule } from '@/types/rules'
 
 export interface ConfigsInitialData {
   products?: ProductRecord[]
-  rules?: Rule[]
+  rules?: ContractPolicyRule[]
   roles?: unknown[]
   configs?: Config[]
 }

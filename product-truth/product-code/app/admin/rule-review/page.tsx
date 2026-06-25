@@ -16,6 +16,8 @@ interface RiskCard {
   description: string
   suggestion?: string
   ruleCode?: string
+  ruleVersion?: number
+  evidence?: string[]
 }
 
 interface ReviewResult {
@@ -205,7 +207,12 @@ export default function RuleReviewPage() {
                               )}
                               {risk.ruleCode && (
                                 <p className="text-xs text-slate-400 mt-1">
-                                  规则编码: {risk.ruleCode}
+                                  规则编码: {risk.ruleCode}{risk.ruleVersion ? ` v${risk.ruleVersion}` : ''}
+                                </p>
+                              )}
+                              {risk.evidence && risk.evidence.length > 0 && (
+                                <p className="text-xs text-slate-400 mt-1">
+                                  证据: {risk.evidence.join('、')}
                                 </p>
                               )}
                             </div>
