@@ -1,6 +1,7 @@
 'use client'
 
-import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
+import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
+import type { AgendaItem } from '@/lib/agenda/types'
 
 type PrefetchRoute = (href: string) => void
 
@@ -14,12 +15,19 @@ export type ContractsCachePayload = {
   }
 }
 
+export type AgendaUpcomingCachePayload = {
+  items: AgendaItem[]
+}
+
 const WARMUP_STALE_MS = 60 * 1000
 const WARMUP_DELAY_MS = 250
 const CONTRACTS_PAGE_SIZE = 20
+export const AGENDA_UPCOMING_CACHE_KEY = 'agenda:upcoming'
+const CORE_ROUTES = ['/contracts', '/tenders', '/configs', '/schedule'] as const
 const warmups = new Map<string, Promise<void>>()
 const contractListWarmups = new Map<string, Promise<ContractsCachePayload | null>>()
 const configProductsWarmups = new Map<string, Promise<unknown[] | null>>()
+const agendaUpcomingWarmups = new Map<string, Promise<AgendaUpcomingCachePayload | null>>()
 let scheduledToken: string | null = null
 
 function scheduleIdle(callback: () => void) {
@@ -39,6 +47,13 @@ function readFreshCache<T>(key: string): T | null {
   const entry = readBrowserCacheEntry<T>(key)
   if (!entry || Date.now() - entry.savedAt >= WARMUP_STALE_MS) return null
   return entry.value
+}
+
+function prefetchCoreRoutes(prefetchRoute?: PrefetchRoute) {
+  if (!prefetchRoute) return
+  for (const href of CORE_ROUTES) {
+    prefetchRoute(href)
+  }
 }
 
 export async function loadContractsListForCache(token: string, pageNum = 1, pageSize = CONTRACTS_PAGE_SIZE) {
@@ -110,14 +125,47 @@ export async function loadConfigProductsForCache(token: string) {
   return request
 }
 
-async function warmCoreData(token: string, prefetchRoute?: PrefetchRoute) {
-  prefetchRoute?.('/contracts')
-  prefetchRoute?.('/tenders')
-  prefetchRoute?.('/configs')
+export async function loadAgendaUpcomingForCache(token: string, limit = 50) {
+  const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
+  const cached = readFreshCache<AgendaUpcomingCachePayload>(cacheKey)
+  if (cached) return cached
 
+  const inflight = agendaUpcomingWarmups.get(cacheKey)
+  if (inflight) return inflight
+
+  const request = fetch(`/api/agenda/upcoming?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(async (agendaRes) => {
+      if (!agendaRes.ok) return null
+
+      const agendaJson = await agendaRes.json()
+      const payload: AgendaUpcomingCachePayload = {
+        items: agendaJson.data || [],
+      }
+      writeBrowserCache(cacheKey, payload)
+      return payload
+    })
+    .finally(() => {
+      agendaUpcomingWarmups.delete(cacheKey)
+    })
+
+  agendaUpcomingWarmups.set(cacheKey, request)
+  return request
+}
+
+export function invalidateAgendaUpcomingCache(token: string | null | undefined) {
+  if (!token) return
+  const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
+  agendaUpcomingWarmups.delete(cacheKey)
+  deleteBrowserCache(cacheKey)
+}
+
+async function warmCoreData(token: string) {
   await Promise.allSettled([
     loadContractsListForCache(token),
     loadConfigProductsForCache(token),
+    loadAgendaUpcomingForCache(token),
   ])
 }
 
@@ -125,9 +173,13 @@ export function scheduleCorePageWarmup(token: string | null | undefined, prefetc
   if (typeof window === 'undefined' || !token || scheduledToken === token) return
 
   scheduledToken = token
+  prefetchCoreRoutes(prefetchRoute)
+  void loadAgendaUpcomingForCache(token).catch(() => {
+    // Visible schedule page loads still own error handling.
+  })
   scheduleIdle(() => {
     if (warmups.has(token)) return
-    const warmup = warmCoreData(token, prefetchRoute)
+    const warmup = warmCoreData(token)
       .catch(() => {
         // Warmup is opportunistic; visible page loads still own error handling.
       })

@@ -56,3 +56,13 @@ export function writeBrowserCache<T>(key: string, value: T) {
     // Cache writes are opportunistic.
   }
 }
+
+export function deleteBrowserCache(key: string) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.removeItem(key)
+  } catch {
+    // Cache deletion is opportunistic.
+  }
+}

@@ -16,6 +16,7 @@ import {
   type AgendaType,
   type AgendaPriority,
 } from '@/lib/agenda/types'
+import { invalidateAgendaUpcomingCache } from '@/lib/core-page-warmup'
 
 export default function NewAgendaPage() {
   const router = useRouter()
@@ -56,6 +57,7 @@ export default function NewAgendaPage() {
         setError(body.error || '创建失败')
         return
       }
+      invalidateAgendaUpcomingCache(token)
       router.push('/schedule')
     } catch (err) {
       setError(err instanceof Error ? err.message : '网络错误')
