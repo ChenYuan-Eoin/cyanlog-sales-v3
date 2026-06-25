@@ -5,6 +5,51 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
 
+// 获取用户在合同所属组织中的角色
+async function getUserRoleInContract(userId: string, contractId: string): Promise<string> {
+  try {
+    // 1. 先获取合同的 org_id
+    const { data: contract } = await supabaseAdmin
+      .from('contracts')
+      .select('org_id')
+      .eq('id', contractId)
+      .single()
+
+    if (!contract?.org_id) return 'unknown'
+
+    // 2. 查询用户的 org-level 角色
+    const { data: userRoles } = await supabaseAdmin
+      .from('user_roles')
+      .select('role:roles(code)')
+      .eq('user_id', userId)
+      .eq('scope_type', 'org')
+      .eq('scope_id', contract.org_id)
+      .limit(1)
+
+    if (userRoles && userRoles.length > 0) {
+      const role = userRoles[0].role as { code: string } | null
+      return role?.code || 'unknown'
+    }
+
+    // 3. 查询用户的 department-level 角色
+    const { data: deptRoles } = await supabaseAdmin
+      .from('user_roles')
+      .select('role:roles(code)')
+      .eq('user_id', userId)
+      .eq('scope_type', 'department')
+      .limit(1)
+
+    if (deptRoles && deptRoles.length > 0) {
+      const role = deptRoles[0].role as { code: string } | null
+      return role?.code || 'unknown'
+    }
+
+    return 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 interface RouteParams {
   params: Promise<{ askId: string }> | { askId: string }
 }
@@ -51,6 +96,10 @@ export async function POST(
       )
     }
 
+    // 获取用户角色（B16 修复：从角色表动态获取）
+    const askContractId = (ask as unknown as { contract_id: string }).contract_id
+    const userRoleCode = await getUserRoleInContract(user.id, askContractId)
+
     // 检查 ASK 状态
     if (ask.status === 'responded') {
       return NextResponse.json(
@@ -81,7 +130,7 @@ export async function POST(
       .insert({
         ask_id: askId,
         responder_id: user.id,
-        responder_role: 'unknown', // TODO: 从用户角色表获取
+        responder_role: userRoleCode,
         responder_name: user.display_name || user.email || 'Unknown',
         response_text: response_text.trim(),
         attachments: attachments,
@@ -120,9 +169,9 @@ export async function POST(
       .from('ask_audit_logs')
       .insert({
         ask_id: askId,
-        contract_id: ask.contract_id,
+        contract_id: (ask as unknown as { contract_id: string }).contract_id,
         actor_id: user.id,
-        actor_role: 'unknown', // TODO: 从用户角色表获取
+        actor_role: userRoleCode,
         event_type: 'responded',
         from_status: 'pending',
         to_status: 'responded',
