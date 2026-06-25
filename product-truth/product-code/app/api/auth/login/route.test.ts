@@ -20,6 +20,7 @@ vi.mock('@/lib/rate-limit', () => ({
 }))
 
 vi.mock('@/lib/dashboard-data', () => ({
+  cacheDashboardPayload: vi.fn(),
   getCachedDashboardPayload: vi.fn().mockReturnValue(null),
   primeDashboardPayload: vi.fn(),
 }))
@@ -211,6 +212,14 @@ describe('POST /api/auth/login', () => {
           code: 'OK',
           roleCodes: ['SUPER_ADMIN'],
           allPermissions: ['*', 'admin:access'],
+          dashboard: {
+            spaces: [{ id: 'space-1', name: '默认空间' }],
+            activeSpace: { id: 'space-1', name: '默认空间' },
+            opportunities: [],
+            milestones: [],
+            reminders: [],
+            agenda: [],
+          },
           user: {
             id: 'u-fast',
             email: 'fast@x.com',
@@ -229,6 +238,10 @@ describe('POST /api/auth/login', () => {
       expect(res.status).toBe(200)
       expect(body.user.id).toBe('u-fast')
       expect(body.authContextReady).toBe(true)
+      expect(body.initialDashboard).toMatchObject({
+        activeSpace: { id: 'space-1', name: '默认空间' },
+        opportunities: [],
+      })
       const authContextCookie = res.cookies.get(AUTH_CONTEXT_COOKIE_NAME)?.value
       const authContext = await readAuthContextCookieValue(body.token, authContextCookie)
       expect(authContext).toMatchObject({

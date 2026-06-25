@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { primeAuthCache } from '@/lib/auth'
 import { primeDefaultOrgCache } from '@/lib/scoped-access'
-import { getCachedDashboardPayload, primeDashboardPayload } from '@/lib/dashboard-data'
+import {
+  cacheDashboardPayload,
+  getCachedDashboardPayload,
+  primeDashboardPayload,
+  type DashboardPayload,
+} from '@/lib/dashboard-data'
 import {
   AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS,
   AUTH_CONTEXT_COOKIE_NAME,
@@ -56,6 +61,7 @@ type LoginWithPasswordRpcData = {
   user?: unknown
   roleCodes?: unknown
   allPermissions?: unknown
+  dashboard?: unknown
 }
 
 type LoginAuthContext = {
@@ -65,7 +71,7 @@ type LoginAuthContext = {
 }
 
 type LoginWithPasswordResult =
-  | { kind: 'ok'; user: LoginUserPublicRow; authContext: LoginAuthContext }
+  | { kind: 'ok'; user: LoginUserPublicRow; authContext: LoginAuthContext; dashboard: DashboardPayload | null }
   | { kind: 'rate_limited'; reason: string; retryAfterSeconds?: number }
   | { kind: 'auth_failed' }
   | { kind: 'server_error' }
@@ -119,6 +125,22 @@ function toOptionalSeconds(value: unknown): number | undefined {
 
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function normalizeDashboardPayload(value: unknown): DashboardPayload | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const payload = value as Partial<DashboardPayload>
+  return {
+    spaces: Array.isArray(payload.spaces) ? payload.spaces : [],
+    activeSpace: payload.activeSpace || null,
+    opportunities: Array.isArray(payload.opportunities) ? payload.opportunities : [],
+    milestones: Array.isArray(payload.milestones) ? payload.milestones : [],
+    reminders: Array.isArray(payload.reminders) ? payload.reminders : [],
+    agenda: Array.isArray(payload.agenda) ? payload.agenda : [],
+  }
 }
 
 function buildRateLimitFromCandidate(data: LoginCandidateRpcData): LoginRateLimit {
@@ -226,6 +248,7 @@ async function loadLoginWithPasswordFromRpc(
             allPermissions: toStringArray(result.allPermissions),
             full: Array.isArray(result.roleCodes) && Array.isArray(result.allPermissions),
           },
+          dashboard: normalizeDashboardPayload(result.dashboard),
         }
       : { kind: 'server_error' }
   }
@@ -292,7 +315,8 @@ async function createLoginSuccessResponse(
   user: LoginUserPublicRow,
   token: string,
   expiresAt: Date,
-  authContext?: LoginAuthContext
+  authContext?: LoginAuthContext,
+  initialDashboard?: DashboardPayload | null
 ) {
   const authUser = {
     id: user.id,
@@ -302,7 +326,9 @@ async function createLoginSuccessResponse(
     org_id: user.org_id,
   }
   primeDefaultOrgCache(user.id, user.org_id)
-  if (!user.must_change_password) {
+  if (!user.must_change_password && initialDashboard) {
+    cacheDashboardPayload(authUser, initialDashboard)
+  } else if (!user.must_change_password) {
     primeDashboardPayload(authUser)
   }
 
@@ -319,7 +345,9 @@ async function createLoginSuccessResponse(
     expiresAt: expiresAt.toISOString(),
     mustChangePassword: Boolean(user.must_change_password),
     authContextReady: Boolean(authContext?.full),
-    initialDashboard: user.must_change_password ? null : getCachedDashboardPayload(authUser),
+    initialDashboard: user.must_change_password
+      ? null
+      : initialDashboard || getCachedDashboardPayload(authUser),
   })
 
   response.cookies.set('token', token, {
@@ -399,7 +427,8 @@ export async function POST(req: NextRequest) {
         loginWithPassword.user,
         token,
         expiresAt,
-        loginWithPassword.authContext
+        loginWithPassword.authContext,
+        loginWithPassword.dashboard
       )
     }
 

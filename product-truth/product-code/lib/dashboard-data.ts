@@ -295,6 +295,18 @@ export function getCachedDashboardPayload(user: AuthUser, requestedSpaceId?: str
   return null
 }
 
+export function cacheDashboardPayload(
+  user: AuthUser,
+  value: DashboardPayload,
+  requestedSpaceId?: string | null
+) {
+  const key = cacheKey(user, requestedSpaceId)
+  dashboardCache.set(key, {
+    value,
+    expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+  })
+}
+
 export function primeDashboardPayload(user: AuthUser) {
   void getDashboardPayload(user).catch(() => {
     // Visible dashboard requests still handle errors.
