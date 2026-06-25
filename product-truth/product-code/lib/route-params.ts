@@ -1,5 +1,5 @@
 export type AsyncRouteParams<T extends Record<string, string> = { id: string }> = {
-  params: Promise<T> | T
+  params: Promise<T>
 }
 
 export async function resolveRouteParams<T extends Record<string, string>>(params: Promise<T> | T): Promise<T> {

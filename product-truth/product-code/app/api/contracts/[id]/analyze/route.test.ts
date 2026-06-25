@@ -123,7 +123,7 @@ describe('POST /api/contracts/[id]/analyze', () => {
       .mockReturnValueOnce(reviewInsertQuery)
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
-    const res = await POST(makeRequest(), { params: { id: 'contract-1' } })
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'contract-1' }) })
     const body = await res.json()
 
     expect(res.status).toBe(200)
@@ -144,7 +144,7 @@ describe('POST /api/contracts/[id]/analyze', () => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(contractQuery)
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
-    const res = await POST(makeRequest(), { params: { id: 'contract-1' } })
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'contract-1' }) })
     const body = await res.json()
 
     expect(res.status).toBe(404)

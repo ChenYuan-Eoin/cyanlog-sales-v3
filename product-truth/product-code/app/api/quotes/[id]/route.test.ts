@@ -67,7 +67,7 @@ describe('PUT /api/quotes/[id]', () => {
     })
 
     const res = await PUT(makeRequest({ notes: 'try update approved quote' }), {
-      params: { id: QUOTE_ID },
+      params: Promise.resolve({ id: QUOTE_ID }),
     })
 
     const body = await res.json()
@@ -86,7 +86,7 @@ describe('PUT /api/quotes/[id]', () => {
     ;(supabaseAdmin.from as any).mockImplementation(() => quotesChain)
 
     const res = await PUT(makeRequest({ customer_name: '新客户名' }), {
-      params: { id: QUOTE_ID },
+      params: Promise.resolve({ id: QUOTE_ID }),
     })
 
     const body = await res.json()
@@ -105,7 +105,7 @@ describe('PUT /api/quotes/[id]', () => {
     ;(supabaseAdmin.from as any).mockImplementation(() => quotesChain)
 
     const res = await PUT(makeRequest({ status: 'APPROVED' }), {
-      params: { id: QUOTE_ID },
+      params: Promise.resolve({ id: QUOTE_ID }),
     })
 
     const body = await res.json()
@@ -143,7 +143,7 @@ describe('PUT /api/quotes/[id]', () => {
     ;(supabaseAdmin.from as any).mockImplementation(() => quotesChain)
 
     const res = await PUT(makeRequest({ status: 'PENDING_APPROVAL' }), {
-      params: { id: QUOTE_ID },
+      params: Promise.resolve({ id: QUOTE_ID }),
     })
 
     const body = await res.json()
@@ -171,7 +171,7 @@ describe('DELETE /api/quotes/[id]', () => {
     ;(supabaseAdmin.from as any).mockImplementation(() => quotesChain)
 
     const res = await DELETE(makeRequest({}, 'DELETE'), {
-      params: { id: QUOTE_ID },
+      params: Promise.resolve({ id: QUOTE_ID }),
     })
 
     const body = await res.json()
@@ -190,7 +190,7 @@ describe('DELETE /api/quotes/[id]', () => {
     ;(supabaseAdmin.from as any).mockImplementation(() => quotesChain)
 
     const res = await DELETE(makeRequest({}, 'DELETE'), {
-      params: { id: QUOTE_ID },
+      params: Promise.resolve({ id: QUOTE_ID }),
     })
 
     const body = await res.json()

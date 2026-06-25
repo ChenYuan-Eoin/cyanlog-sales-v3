@@ -2,11 +2,6 @@
 import { withSentryConfig } from '@sentry/nextjs'
 
 const nextConfig = {
-  // SpaceX级构建配置
-  experimental: {
-    // 启用 instrumentationHook 用于 Sentry 初始化
-    instrumentationHook: true,
-  },
 }
 
 // Sentry 配置（仅在 DSN 配置时启用）

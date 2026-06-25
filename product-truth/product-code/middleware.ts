@@ -64,6 +64,17 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   '/admin': 'admin:access',
 }
 
+type MiddlewareAuthContext = {
+  userId: string
+  mustChangePassword: boolean
+  roleCodes: string[]
+  allPermissions: string[]
+}
+
+const MIDDLEWARE_AUTH_CACHE_TTL_MS = 15_000
+const middlewareAuthCache = new Map<string, { value: MiddlewareAuthContext | null; expiresAt: number }>()
+const middlewareAuthInflight = new Map<string, Promise<MiddlewareAuthContext | null>>()
+
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p)) return true
   if (pathname.startsWith('/api/')) {
@@ -120,6 +131,103 @@ function createMiddlewareSupabaseClient() {
   })
 }
 
+function getCachedMiddlewareAuth(token: string): MiddlewareAuthContext | null | undefined {
+  const cached = middlewareAuthCache.get(token)
+  if (!cached) return undefined
+  if (cached.expiresAt < Date.now()) {
+    middlewareAuthCache.delete(token)
+    return undefined
+  }
+  return cached.value
+}
+
+function setCachedMiddlewareAuth(token: string, value: MiddlewareAuthContext | null) {
+  middlewareAuthCache.set(token, {
+    value,
+    expiresAt: Date.now() + MIDDLEWARE_AUTH_CACHE_TTL_MS,
+  })
+}
+
+function roleRecordOf(value: unknown): { code: string; permissions: string[] | null } | null {
+  if (Array.isArray(value)) {
+    return roleRecordOf(value[0])
+  }
+  if (!value || typeof value !== 'object') return null
+  return value as { code: string; permissions: string[] | null }
+}
+
+async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
+  const supabase = createMiddlewareSupabaseClient()
+
+  const { data: tokenRecord } = await supabase
+    .from('auth_tokens')
+    .select('user_id, expires_at')
+    .eq('token', token)
+    .single()
+
+  if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) {
+    return null
+  }
+
+  const userId = tokenRecord.user_id
+  const [{ data: userRow }, { data: userRolesData }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('id, org_id, must_change_password')
+      .eq('id', userId)
+      .maybeSingle(),
+    supabase
+      .from('user_roles')
+      .select('scope_type, scope_id, roles:roles(code, permissions)')
+      .eq('user_id', userId)
+      .eq('scope_type', 'org'),
+  ])
+
+  if (!userRow) return null
+
+  const allPermissions: string[] = []
+  const roleCodes: string[] = []
+
+  for (const ur of userRolesData ?? []) {
+    const r = roleRecordOf((ur as { roles?: unknown }).roles)
+    if (r?.code) {
+      roleCodes.push(r.code)
+      if (r.permissions) allPermissions.push(...r.permissions)
+    }
+  }
+
+  if (roleCodes.includes('SUPER_ADMIN')) {
+    allPermissions.push('*')
+  }
+
+  return {
+    userId,
+    mustChangePassword: Boolean(userRow.must_change_password),
+    roleCodes,
+    allPermissions,
+  }
+}
+
+async function getMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
+  const cached = getCachedMiddlewareAuth(token)
+  if (cached !== undefined) return cached
+
+  let inflight = middlewareAuthInflight.get(token)
+  if (!inflight) {
+    inflight = loadMiddlewareAuthContext(token)
+      .then((value) => {
+        setCachedMiddlewareAuth(token, value)
+        return value
+      })
+      .finally(() => {
+        middlewareAuthInflight.delete(token)
+      })
+    middlewareAuthInflight.set(token, inflight)
+  }
+
+  return inflight
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host')?.toLowerCase()
@@ -147,76 +255,27 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const supabase = createMiddlewareSupabaseClient()
+    const authContext = await getMiddlewareAuthContext(token)
 
-    // 步骤1: 验证token（必须先做，获取user_id）
-    const { data: tokenRecord } = await supabase
-      .from('auth_tokens')
-      .select('user_id, expires_at')
-      .eq('token', token)
-      .single()
-
-    if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) {
+    if (!authContext) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       return NextResponse.redirect(buildRedirectUrl(request, '/login'))
     }
 
-    // 步骤2: 并行查询用户信息和角色权限
-    const userId = tokenRecord.user_id
-
-    const [{ data: userRow }, { data: userRolesData }] = await Promise.all([
-      // 查询用户基本信息
-      supabase
-        .from('users')
-        .select('id, org_id, must_change_password')
-        .eq('id', userId)
-        .maybeSingle(),
-      // 查询角色和权限（一次查询获取code和permissions）
-      supabase
-        .from('user_roles')
-        .select('scope_type, scope_id, roles:roles(code, permissions)')
-        .eq('user_id', userId)
-        .eq('scope_type', 'org'),
-    ])
-
-    if (!userRow) {
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      return NextResponse.redirect(buildRedirectUrl(request, '/login'))
-    }
-
-    if (userRow.must_change_password && !isPasswordChangeAllowedPath(pathname)) {
+    if (authContext.mustChangePassword && !isPasswordChangeAllowedPath(pathname)) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Password change required', code: 'MUST_CHANGE_PASSWORD' }, { status: 403 })
       }
       return NextResponse.redirect(buildRedirectUrl(request, '/change-password'))
     }
 
-    // 步骤3: 处理角色和权限数据
-    const allPermissions: string[] = []
-    const roleCodes: string[] = []
-
-    for (const ur of userRolesData ?? []) {
-      const r = (ur as unknown as { roles: { code: string; permissions: string[] | null } | null }).roles
-      if (r?.code) {
-        roleCodes.push(r.code)
-        if (r.permissions) allPermissions.push(...r.permissions)
-      }
-    }
-
-    // SUPER_ADMIN 拥有所有权限（超级管理员）
-    if (roleCodes.includes('SUPER_ADMIN')) {
-      allPermissions.push('*')
-    }
-
     // 路径级权限校验
     const required = getRequiredPermission(pathname)
     const allowed = required === 'admin:access'
-      ? canAccessOrgAdmin(allPermissions, roleCodes)
-      : (!required || hasPermission(allPermissions, required))
+      ? canAccessOrgAdmin(authContext.allPermissions, authContext.roleCodes)
+      : (!required || hasPermission(authContext.allPermissions, required))
 
     if (required && !allowed) {
       if (pathname.startsWith('/api/')) {
@@ -227,10 +286,10 @@ export async function middleware(request: NextRequest) {
 
     // 透传 user context 到下游 route handler / page
     const requestHeaders = new Headers(request.headers)
-    requestHeaders.set('x-user-id', tokenRecord.user_id)
-    requestHeaders.set('x-user-roles', roleCodes.join(','))
-    requestHeaders.set('x-user-role-codes', roleCodes.join(','))
-    requestHeaders.set('x-user-permissions', allPermissions.join(','))
+    requestHeaders.set('x-user-id', authContext.userId)
+    requestHeaders.set('x-user-roles', authContext.roleCodes.join(','))
+    requestHeaders.set('x-user-role-codes', authContext.roleCodes.join(','))
+    requestHeaders.set('x-user-permissions', authContext.allPermissions.join(','))
 
     return NextResponse.next({ request: { headers: requestHeaders } })
   } catch (error) {
