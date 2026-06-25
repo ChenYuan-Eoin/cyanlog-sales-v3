@@ -96,10 +96,10 @@ export const fetchConfigs = unstable_cache(
 // 并行获取所有数据
 export async function fetchAllConfigsData(orgId: string) {
   const [productsRes, rulesRes, rolesRes, configsRes] = await Promise.all([
-    fetchProducts(orgId).then((d) => { console.log(`[PERF] fetchProducts=${d.duration}ms count=${d.data?.length ?? 0}`); return d }),
-    fetchRules(orgId).then((d) => { console.log(`[PERF] fetchRules=${d.duration}ms count=${d.data?.length ?? 0}`); return d }),
-    fetchRoles(orgId).then((d) => { console.log(`[PERF] fetchRoles=${d.duration}ms count=${d.data?.length ?? 0}`); return d }),
-    fetchConfigs(orgId).then((d) => { console.log(`[PERF] fetchConfigs=${d.duration}ms count=${d.data?.length ?? 0}`); return d }),
+    fetchProducts(orgId),
+    fetchRules(orgId),
+    fetchRoles(orgId),
+    fetchConfigs(orgId),
   ])
 
   return {

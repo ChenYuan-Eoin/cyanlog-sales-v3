@@ -89,8 +89,7 @@ function BlockEditor({
   onAddBelow: () => void
 }) {
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleContentChange = (e: React.FocusEvent<any>) => {
+  const handleContentChange = (e: React.FocusEvent<HTMLElement>) => {
     onChange(block.id, { content: e.currentTarget.textContent || '' })
   }
 
