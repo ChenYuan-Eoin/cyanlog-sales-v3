@@ -36,6 +36,7 @@ export default function LoginPage() {
       }
 
       persistClientSession(data.token)
+      const nextPath = data.mustChangePassword ? '/change-password' : '/'
       if (!data.mustChangePassword) {
         const hasInitialDashboard = Boolean(data.initialDashboard)
         primeHomeProfile(data.token, data.user)
@@ -43,10 +44,12 @@ export default function LoginPage() {
         if (!hasInitialDashboard || !data.authContextReady) {
           primeHomeInitialData(data.token)
         }
-        scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
+        window.setTimeout(() => {
+          scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
+        }, 0)
       }
 
-      router.replace(data.mustChangePassword ? '/change-password' : '/')
+      router.replace(nextPath)
     } catch {
       setError('网络错误，请稍后重试')
     } finally {
