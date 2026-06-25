@@ -302,7 +302,7 @@ export default function KnowledgePage() {
               icon={BookOpenIcon}
               action={{
                 label: '新建页面',
-                onClick: () => window.location.href = '/knowledge/new',
+                onClick: () => router.push('/knowledge/new'),
               }}
             />
           </div>

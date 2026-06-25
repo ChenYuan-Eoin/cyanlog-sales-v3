@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +20,7 @@ interface Quote {
 }
 
 export default function QuotesPage() {
+  const router = useRouter()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -60,7 +62,7 @@ export default function QuotesPage() {
           icon={FileTextIcon}
           action={{
             label: '+ 新建报价',
-            onClick: () => window.location.href = '/quotes/new',
+            onClick: () => router.push('/quotes/new'),
           }}
         />
       ) : (
