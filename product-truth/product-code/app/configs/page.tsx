@@ -4,20 +4,22 @@
 import ConfigsClient from './ConfigsClient'
 
 type ConfigsPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     tab?: string | string[]
     ruleId?: string | string[]
     mode?: string | string[]
-  }
+  }>
 }
 
-export default function ConfigsPage({ searchParams }: ConfigsPageProps) {
+export default async function ConfigsPage({ searchParams }: ConfigsPageProps) {
+  const resolvedSearchParams = await searchParams
+
   return (
     <ConfigsClient
       routeState={{
-        tab: searchParams?.tab,
-        ruleId: searchParams?.ruleId,
-        mode: searchParams?.mode,
+        tab: resolvedSearchParams?.tab,
+        ruleId: resolvedSearchParams?.ruleId,
+        mode: resolvedSearchParams?.mode,
       }}
     />
   )
