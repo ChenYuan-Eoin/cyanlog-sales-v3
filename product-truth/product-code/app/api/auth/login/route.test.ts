@@ -34,6 +34,7 @@ vi.mock('bcryptjs', () => ({
 import { supabaseAdmin } from '@/lib/supabase'
 import { checkLoginRateLimit, recordLoginAttempt } from '@/lib/rate-limit'
 import bcrypt from 'bcryptjs'
+import { AUTH_CONTEXT_COOKIE_NAME, readAuthContextCookieValue } from '@/lib/auth-context-cookie'
 import { POST } from './route'
 
 function makeRequest(body: any): any {
@@ -203,10 +204,13 @@ describe('POST /api/auth/login', () => {
     })
 
     it('单 RPC 登录成功 → 200 且跳过 bcrypt 与 token insert', async () => {
+      process.env.AUTH_CONTEXT_SECRET = 'test-auth-context-secret'
       ;(supabaseAdmin.rpc as any).mockResolvedValueOnce({
         data: {
           ok: true,
           code: 'OK',
+          roleCodes: ['SUPER_ADMIN'],
+          allPermissions: ['*', 'admin:access'],
           user: {
             id: 'u-fast',
             email: 'fast@x.com',
@@ -224,6 +228,14 @@ describe('POST /api/auth/login', () => {
 
       expect(res.status).toBe(200)
       expect(body.user.id).toBe('u-fast')
+      const authContextCookie = res.cookies.get(AUTH_CONTEXT_COOKIE_NAME)?.value
+      const authContext = await readAuthContextCookieValue(body.token, authContextCookie)
+      expect(authContext).toMatchObject({
+        userId: 'u-fast',
+        roleCodes: ['SUPER_ADMIN'],
+        allPermissions: ['*', 'admin:access'],
+        full: true,
+      })
       expect(checkLoginRateLimit).not.toHaveBeenCalled()
       expect(bcrypt.compare).not.toHaveBeenCalled()
       expect(recordLoginAttempt).not.toHaveBeenCalled()

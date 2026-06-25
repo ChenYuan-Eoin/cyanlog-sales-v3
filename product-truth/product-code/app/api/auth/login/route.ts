@@ -54,10 +54,18 @@ type LoginWithPasswordRpcData = {
   code?: unknown
   retryAfterSeconds?: unknown
   user?: unknown
+  roleCodes?: unknown
+  allPermissions?: unknown
+}
+
+type LoginAuthContext = {
+  roleCodes: string[]
+  allPermissions: string[]
+  full: boolean
 }
 
 type LoginWithPasswordResult =
-  | { kind: 'ok'; user: LoginUserPublicRow }
+  | { kind: 'ok'; user: LoginUserPublicRow; authContext: LoginAuthContext }
   | { kind: 'rate_limited'; reason: string; retryAfterSeconds?: number }
   | { kind: 'auth_failed' }
   | { kind: 'server_error' }
@@ -107,6 +115,10 @@ function retryAfterSeconds(oldestAttemptedAt: unknown): number {
 
 function toOptionalSeconds(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.ceil(value)) : undefined
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 function buildRateLimitFromCandidate(data: LoginCandidateRpcData): LoginRateLimit {
@@ -205,7 +217,17 @@ async function loadLoginWithPasswordFromRpc(
   const code = typeof result.code === 'string' ? result.code : ''
   if (result.ok === true) {
     const user = normalizeLoginUserPublicRow(result.user)
-    return user ? { kind: 'ok', user } : { kind: 'server_error' }
+    return user
+      ? {
+          kind: 'ok',
+          user,
+          authContext: {
+            roleCodes: toStringArray(result.roleCodes),
+            allPermissions: toStringArray(result.allPermissions),
+            full: Array.isArray(result.roleCodes) && Array.isArray(result.allPermissions),
+          },
+        }
+      : { kind: 'server_error' }
   }
 
   if (code === 'account_locked' || code === 'ip_locked') {
@@ -269,7 +291,8 @@ function createSessionExpiry() {
 async function createLoginSuccessResponse(
   user: LoginUserPublicRow,
   token: string,
-  expiresAt: Date
+  expiresAt: Date,
+  authContext?: LoginAuthContext
 ) {
   const authUser = {
     id: user.id,
@@ -310,9 +333,9 @@ async function createLoginSuccessResponse(
   const authContextCookie = await createAuthContextCookieValue(token, {
     userId: user.id,
     mustChangePassword: Boolean(user.must_change_password),
-    roleCodes: [],
-    allPermissions: [],
-    full: false,
+    roleCodes: authContext?.roleCodes ?? [],
+    allPermissions: authContext?.allPermissions ?? [],
+    full: Boolean(authContext?.full),
   })
   if (authContextCookie) {
     response.cookies.set(AUTH_CONTEXT_COOKIE_NAME, authContextCookie, {
@@ -371,7 +394,12 @@ export async function POST(req: NextRequest) {
       return errorResponse('登录失败，请重试', 500, 'LOGIN_RPC_FAILED')
     }
     if (loginWithPassword?.kind === 'ok') {
-      return createLoginSuccessResponse(loginWithPassword.user, token, expiresAt)
+      return createLoginSuccessResponse(
+        loginWithPassword.user,
+        token,
+        expiresAt,
+        loginWithPassword.authContext
+      )
     }
 
     const loginCandidate = await loadLoginCandidateFromRpc(email, phone, ipAddress)
