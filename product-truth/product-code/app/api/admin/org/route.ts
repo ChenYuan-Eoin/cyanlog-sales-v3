@@ -465,7 +465,7 @@ async function listOrgPayload(orgId: string) {
 
   // 构建部门名称映射
   const departmentNameById = new Map(departments.map((d) => [d.id, d.name]))
-  const spaceNameById = new Map(spaces.map((s) => [s.name]))
+  const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]))
 
   // 简化用户查询 - 不关联复杂角色数据，只获取基础信息
   const { data: usersData, error: usersError } = await supabaseAdmin
