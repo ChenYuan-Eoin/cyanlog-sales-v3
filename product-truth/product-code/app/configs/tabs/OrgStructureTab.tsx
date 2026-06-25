@@ -654,10 +654,9 @@ export default function OrgStructureTab({
   feishuResult,
   onFeishuSync,
 }: OrgStructureTabProps) {
-  const departments = orgSummary?.departments ?? []
-  const users = orgSummary?.users ?? []
-  const spaces = orgSummary?.spaces ?? []
-
+  // ponytail: 用 useMemo 包裹避免 ESLint warning，orgSummary 来自 API 通常稳定
+  const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
+  const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
 
   // 根据选中部门过滤成员
@@ -665,21 +664,20 @@ export default function OrgStructureTab({
     if (!selectedDeptId) return users
     const allowedDeptIds = getAllChildDeptIds(departments, selectedDeptId)
     return users.filter(u => u.primary_dept_id && allowedDeptIds.has(u.primary_dept_id))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users, departments, selectedDeptId])
 
   // 统计信息
   const stats = useMemo(() => ({
-    deptCount: departments.length,
-    userCount: users.length,
-    spaceCount: spaces.length,
+    deptCount: (orgSummary?.departments ?? []).length,
+    userCount: (orgSummary?.users ?? []).length,
+    spaceCount: (orgSummary?.spaces ?? []).length,
     filteredCount: filteredUsers.length,
-  }), [departments.length, users.length, spaces.length, filteredUsers.length])
+  }), [orgSummary, filteredUsers.length])
 
-  const selectedDept = useMemo(() =>
-    departments.find(d => d.id === selectedDeptId) ?? null
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  , [departments, selectedDeptId])
+  const selectedDept = useMemo(() => {
+    const departments = orgSummary?.departments ?? []
+    return departments.find(d => d.id === selectedDeptId) ?? null
+  }, [orgSummary, selectedDeptId])
 
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)

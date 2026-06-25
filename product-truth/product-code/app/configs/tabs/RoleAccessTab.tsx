@@ -46,6 +46,7 @@ export default function RoleAccessTab({
   const [roleSearchQuery, setRoleSearchQuery] = useState('')
 
   const rolesWithStats: RoleWithStats[] = useMemo(() => {
+    const users = orgSummary?.users ?? []
     return roles.map(role => {
       const memberCount = users.filter(u => {
         // Try role_ids first (UUID matching)
