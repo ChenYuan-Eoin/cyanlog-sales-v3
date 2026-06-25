@@ -1,6 +1,6 @@
 // GET /api/knowledge/pages/[id]/permissions - 获取页面权限
 // POST /api/knowledge/pages/[id]/permissions - 添加权限
-// DELETE /api/knowledge/pages/[id]/permissions/[permId] - 删除权限
+// DELETE /api/knowledge/pages/[id]/permissions?permId=... - 删除权限
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -124,11 +124,17 @@ export async function POST(
 // 删除权限
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string; permId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
-    const { id, permId } = await params
+    const { id } = await params
+    const body = await req.json().catch(() => ({})) as { permId?: string }
+    const permId = req.nextUrl.searchParams.get('permId') || body.permId
+
+    if (!permId) {
+      return NextResponse.json({ error: '权限ID必填' }, { status: 400 })
+    }
 
     const access = await requirePageAdmin(user.id, id)
     if (!access.ok) {

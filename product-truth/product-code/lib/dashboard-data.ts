@@ -250,6 +250,18 @@ export async function getDashboardPayload(user: AuthUser, requestedSpaceId?: str
   return request
 }
 
+export function getCachedDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): DashboardPayload | null {
+  const key = cacheKey(user, requestedSpaceId)
+  const cached = dashboardCache.get(key)
+  if (cached && cached.expiresAt >= Date.now()) {
+    return cached.value
+  }
+  if (cached) {
+    dashboardCache.delete(key)
+  }
+  return null
+}
+
 export function primeDashboardPayload(user: AuthUser) {
   void getDashboardPayload(user).catch(() => {
     // Visible dashboard requests still handle errors.

@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { persistClientSession } from '@/lib/session-client'
-import { primeHomeInitialData, primeHomeProfile } from '@/lib/home-data-client'
+import { primeHomeInitialData, primeHomeInitialSnapshot, primeHomeProfile } from '@/lib/home-data-client'
+import { scheduleCorePageWarmup } from '@/lib/core-page-warmup'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 
@@ -37,7 +38,9 @@ export default function LoginPage() {
       persistClientSession(data.token)
       if (!data.mustChangePassword) {
         primeHomeProfile(data.token, data.user)
+        primeHomeInitialSnapshot(data.token, data.user, data.initialDashboard)
         primeHomeInitialData(data.token)
+        scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
         router.prefetch('/')
       }
 

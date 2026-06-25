@@ -14,6 +14,19 @@ type LoginProfile = {
   displayName?: string | null
 }
 
+function toCachedProfile(user: LoginProfile) {
+  return {
+    id: user.id,
+    email: user.email,
+    phone: user.phone || null,
+    display_name: user.displayName || user.email,
+    title: null,
+    primary_dept_id: '',
+    roles: [],
+    spaces: [],
+  }
+}
+
 const HOME_INITIAL_CACHE_MS = 15_000
 const homeInitialInflight = new Map<string, Promise<HomeInitialData>>()
 
@@ -104,14 +117,17 @@ export function primeHomeAuthContext(token: string | null | undefined) {
 export function primeHomeProfile(token: string | null | undefined, user: LoginProfile | null | undefined) {
   if (!token || !user?.id) return
 
-  writeBrowserCache(scopedCacheKey(token, 'home:profile'), {
-    id: user.id,
-    email: user.email,
-    phone: user.phone || null,
-    display_name: user.displayName || user.email,
-    title: null,
-    primary_dept_id: '',
-    roles: [],
-    spaces: [],
-  })
+  writeBrowserCache(scopedCacheKey(token, 'home:profile'), toCachedProfile(user))
+}
+
+export function primeHomeInitialSnapshot(
+  token: string | null | undefined,
+  user: LoginProfile | null | undefined,
+  dashboard: unknown
+) {
+  if (!token || !user?.id || !dashboard) return
+
+  const profile = toCachedProfile(user)
+  writeBrowserCache(scopedCacheKey(token, 'home:profile'), profile)
+  writeBrowserCache(scopedCacheKey(token, 'home:initial'), { profile, dashboard })
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { primeAuthCache } from '@/lib/auth'
 import { primeDefaultOrgCache } from '@/lib/scoped-access'
-import { primeDashboardPayload } from '@/lib/dashboard-data'
+import { getCachedDashboardPayload, primeDashboardPayload } from '@/lib/dashboard-data'
 import {
   AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS,
   AUTH_CONTEXT_COOKIE_NAME,
@@ -96,7 +96,9 @@ export async function POST(req: NextRequest) {
       org_id: user.org_id,
     }
     primeDefaultOrgCache(user.id, user.org_id)
-    primeDashboardPayload(authUser)
+    if (!user.must_change_password) {
+      primeDashboardPayload(authUser)
+    }
 
     // 生成 token
     const token = uuidv4()
@@ -131,6 +133,7 @@ export async function POST(req: NextRequest) {
       token,
       expiresAt: expiresAt.toISOString(),
       mustChangePassword: Boolean(user.must_change_password),
+      initialDashboard: user.must_change_password ? null : getCachedDashboardPayload(authUser),
     })
 
     response.cookies.set('token', token, {
