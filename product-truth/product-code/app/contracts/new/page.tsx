@@ -46,6 +46,22 @@ const initialForm: ContractForm = {
   notes: '',
 }
 
+function readApiError(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === 'object') {
+    const data = payload as { error?: unknown }
+    if (typeof data.error === 'string') {
+      return data.error
+    }
+    if (data.error && typeof data.error === 'object') {
+      const message = (data.error as { message?: unknown }).message
+      if (typeof message === 'string') {
+        return message
+      }
+    }
+  }
+  return fallback
+}
+
 export default function NewContractPage() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -119,12 +135,19 @@ export default function NewContractPage() {
 
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || '创建失败')
+        setError(readApiError(data, '创建失败'))
         setLoading(false)
         return
       }
 
-      setContractId(data.contract_id)
+      const createdContractId = data?.data?.contract_id || data?.contract_id || data?.data?.id || data?.id
+      if (!createdContractId) {
+        setError('创建成功但未返回合同ID')
+        setLoading(false)
+        return
+      }
+
+      setContractId(createdContractId)
       setPhase('file')
     } catch {
       setError('网络错误，请稍后重试')
@@ -155,8 +178,8 @@ export default function NewContractPage() {
       })
 
       if (!uploadRes.ok) {
-        const data = await uploadRes.json()
-        setError(data.error || '文件上传失败')
+        const data = await uploadRes.json().catch(() => ({}))
+        setError(readApiError(data, '文件上传失败'))
         setLoading(false)
         return
       }

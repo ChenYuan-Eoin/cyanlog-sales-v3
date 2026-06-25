@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
   if (!secret) {
-    return true
+    return false
   }
 
   const header = req.headers.get('authorization')

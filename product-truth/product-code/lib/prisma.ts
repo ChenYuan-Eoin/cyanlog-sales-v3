@@ -7,11 +7,9 @@
 // @ts-ignore - Prisma client 未生成时跳过类型检查
 import { PrismaClient } from '@prisma/client'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const globalForPrisma = global as unknown as { prisma: any }
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
 // 全局单例Prisma客户端，避免开发时热重载创建多个实例
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const prisma = globalForPrisma.prisma || new PrismaClient({
   log: process.env.NODE_ENV === 'development'
     ? ['query', 'error', 'warn']

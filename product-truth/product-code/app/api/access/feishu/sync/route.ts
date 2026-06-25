@@ -3,22 +3,23 @@
 // 权限要求: 组织管理员（SUPER_ADMIN / SALES_OPS / ADMIN 或拥有 admin:access/org:write 权限）
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth'
+import { canManageOrg, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 
 export async function POST(req: NextRequest) {
-  const userRoles = (req.headers.get('x-user-roles') ?? '').split(',').filter(Boolean)
-  const userPermissions = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
+  let user
+  try {
+    user = await requireAuth(req)
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AuthError') {
+      return NextResponse.json({ error: '未登录或登录已过期' }, { status: 401 })
+    }
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
+  }
 
-  // 检查是否有组织管理权限（与 middleware 保持一致）
-  const canManageOrg =
-    userRoles.includes('SUPER_ADMIN') ||
-    userRoles.includes('SALES_OPS') ||
-    userRoles.includes('ADMIN') ||
-    userPermissions.includes('*') ||
-    userPermissions.includes('admin:access') ||
-    userPermissions.includes('org:write') ||
-    userPermissions.includes('user:write')
+  const assignments = await getUserScopedRoleAssignments(user.id)
 
-  if (!canManageOrg) {
+  if (!canManageOrg(assignments)) {
     return NextResponse.json(
       { error: '需要组织管理员权限' },
       { status: 403 }

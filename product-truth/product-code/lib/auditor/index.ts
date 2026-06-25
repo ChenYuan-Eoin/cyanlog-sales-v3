@@ -367,8 +367,7 @@ export function generateAuditSummary(results: AuditResult[]): {
 
 /** 从数据库加载规则（通过缓存层） */
 export async function loadRules(orgId: string): Promise<AuditRule[]> {
-  // TODO: 从缓存层（Redis）加载规则快照
-  // 如果缓存不存在，从数据库加载
+  // 当前部署未启用外部规则缓存，直接从数据库加载最新规则。
   const { supabaseAdmin } = await import('@/lib/supabase')
   const { data: rules, error } = await supabaseAdmin
     .from('contract_rules')

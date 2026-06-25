@@ -5,7 +5,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canUseKnowledgePage,
+  fetchKnowledgePermissions,
+  getKnowledgeAccessContext,
+  type KnowledgePermission,
+} from '@/lib/knowledge/access'
+
+const PRINCIPAL_TYPES = new Set(['user', 'role', 'org'])
+const PERMISSIONS = new Set(['view', 'edit', 'admin'])
+
+async function requirePageAdmin(userId: string, pageId: string) {
+  const { orgId, assignments } = await getKnowledgeAccessContext(userId)
+  const { data: page } = await supabaseAdmin
+    .from('knowledge_pages')
+    .select('id, org_id, created_by')
+    .eq('id', pageId)
+    .eq('org_id', orgId)
+    .single()
+
+  if (!page) {
+    return { ok: false as const, status: 404, error: '页面不存在或无权限' }
+  }
+
+  const permissionMap = await fetchKnowledgePermissions([pageId])
+  const permissions = permissionMap.get(pageId) || []
+  if (!canUseKnowledgePage(page, permissions, { userId, orgId, assignments }, 'admin')) {
+    return { ok: false as const, status: 403, error: '无权限管理页面权限' }
+  }
+
+  return { ok: true as const, permissions }
+}
 
 // 获取页面权限
 export async function GET(
@@ -14,19 +44,11 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const { id } = params
 
-    // 检查页面是否属于当前组织
-    const { data: page } = await supabaseAdmin
-      .from('knowledge_pages')
-      .select('id')
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .single()
-
-    if (!page) {
-      return NextResponse.json({ error: '页面不存在或无权限' }, { status: 404 })
+    const access = await requirePageAdmin(user.id, id)
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status })
     }
 
     // 获取权限
@@ -56,20 +78,20 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const { id } = params
     const body = await req.json()
 
-    // 检查页面是否属于当前组织
-    const { data: page } = await supabaseAdmin
-      .from('knowledge_pages')
-      .select('id')
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .single()
+    const access = await requirePageAdmin(user.id, id)
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status })
+    }
 
-    if (!page) {
-      return NextResponse.json({ error: '页面不存在或无权限' }, { status: 404 })
+    if (
+      !PRINCIPAL_TYPES.has(body.principal_type)
+      || typeof body.principal_id !== 'string'
+      || !PERMISSIONS.has(body.permission)
+    ) {
+      return NextResponse.json({ error: '权限参数无效' }, { status: 400 })
     }
 
     // 添加权限
@@ -79,7 +101,7 @@ export async function POST(
         page_id: id,
         principal_type: body.principal_type,
         principal_id: body.principal_id,
-        permission: body.permission,
+        permission: body.permission as KnowledgePermission,
         granted_by: user.id,
       })
       .select()
@@ -106,19 +128,11 @@ export async function DELETE(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const { id, permId } = params
 
-    // 检查页面是否属于当前组织
-    const { data: page } = await supabaseAdmin
-      .from('knowledge_pages')
-      .select('id')
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .single()
-
-    if (!page) {
-      return NextResponse.json({ error: '页面不存在或无权限' }, { status: 404 })
+    const access = await requirePageAdmin(user.id, id)
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status })
     }
 
     // 删除权限
@@ -126,6 +140,7 @@ export async function DELETE(
       .from('knowledge_page_permissions')
       .delete()
       .eq('id', permId)
+      .eq('page_id', id)
 
     if (error) {
       return NextResponse.json({ error: '删除权限失败' }, { status: 500 })

@@ -45,7 +45,6 @@ const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }
 const PUBLIC_API_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
-  '/api/access/feishu',
   '/api/client-errors',
   '/api/contracts/process',
   '/api/health',
@@ -230,6 +229,7 @@ export async function middleware(request: NextRequest) {
     const requestHeaders = new Headers(request.headers)
     requestHeaders.set('x-user-id', tokenRecord.user_id)
     requestHeaders.set('x-user-roles', roleCodes.join(','))
+    requestHeaders.set('x-user-role-codes', roleCodes.join(','))
     requestHeaders.set('x-user-permissions', allPermissions.join(','))
 
     return NextResponse.next({ request: { headers: requestHeaders } })

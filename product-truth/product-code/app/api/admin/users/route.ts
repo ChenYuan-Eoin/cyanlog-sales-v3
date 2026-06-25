@@ -75,7 +75,11 @@ export async function POST(req: NextRequest) {
 
     // 权限检查
     const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
+    const roleCodes = (
+      req.headers.get('x-user-role-codes') ||
+      req.headers.get('x-user-roles') ||
+      ''
+    ).split(',').filter(Boolean)
 
     if (!canAccessOrgAdmin(userPerms, roleCodes)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
@@ -142,6 +146,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         role_id: roleId,
         scope_type: 'org',
+        scope_id: orgId,
         granted_by: currentUser.id,
       }))
 

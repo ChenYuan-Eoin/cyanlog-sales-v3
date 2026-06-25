@@ -54,15 +54,17 @@ export default function RuleTab({ rules, onNew, onEdit, onDelete }: RuleTabProps
     onNew()
   }
 
-  const handleSaveRule = (formData: unknown) => {
-    console.log('Saving rule:', formData)
-    // TODO: 调用API保存规则
+  const handleSaveRule = () => {
+    if (selectedRule) {
+      onEdit(selectedRule)
+    } else {
+      onNew()
+    }
     setShowDesigner(false)
     setActiveTab('list')
   }
 
-  const handleTestRule = (formData: unknown) => {
-    console.log('Testing rule:', formData)
+  const handleTestRule = () => {
     setActiveTab('test')
   }
 

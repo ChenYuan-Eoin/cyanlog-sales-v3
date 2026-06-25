@@ -122,9 +122,50 @@ interface ContractItemInput {
   sort_order: number
 }
 
+function optionalNumber(value: FormDataEntryValue | null): number | undefined {
+  if (value === null || value === '') {
+    return undefined
+  }
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : undefined
+}
+
+function optionalString(value: FormDataEntryValue | null): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+async function parseCreateContractPayload(req: NextRequest) {
+  const contentType = req.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return req.json()
+  }
+
+  const formData = await req.formData()
+  return {
+    contract_no: optionalString(formData.get('contract_no')),
+    party_a_name: optionalString(formData.get('party_a_name')),
+    party_b_name: optionalString(formData.get('party_b_name')),
+    party_b_contact: optionalString(formData.get('party_b_contact')),
+    contract_date: optionalString(formData.get('contract_date')),
+    effective_date: optionalString(formData.get('effective_date')),
+    expiry_date: optionalString(formData.get('expiry_date')),
+    contract_amount: optionalNumber(formData.get('contract_amount')),
+    tax_amount: optionalNumber(formData.get('tax_amount')),
+    payment_terms: optionalString(formData.get('payment_terms')),
+    delivery_terms: optionalString(formData.get('delivery_terms')),
+    quote_id: optionalString(formData.get('quote_id')),
+    include_quote_items: formData.get('include_quote_items') !== 'false',
+    notes: optionalString(formData.get('notes')),
+  }
+}
+
 export async function POST(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
-    const body = await req.json()
+    const body = await parseCreateContractPayload(req)
     const parsed = createContractSchema.safeParse(body)
 
     if (!parsed.success) {
@@ -164,6 +205,7 @@ export async function POST(req: NextRequest) {
         `
         )
         .eq('id', quote_id)
+        .eq('org_id', orgId)
         .single()
 
       if (quoteError || !quote) {
@@ -207,6 +249,7 @@ export async function POST(req: NextRequest) {
       .from('contracts')
       .select('id')
       .eq('contract_no', contractNo)
+      .eq('org_id', orgId)
       .maybeSingle()
 
     if (existingNo) {

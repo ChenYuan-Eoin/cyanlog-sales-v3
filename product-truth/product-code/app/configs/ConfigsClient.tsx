@@ -33,6 +33,7 @@ import TaxEditForm from './dialogs/TaxEditForm'
 import ApprovalEditForm from './dialogs/ApprovalEditForm'
 import AIEditForm from './dialogs/AIEditForm'
 import ThemeEditForm from './dialogs/ThemeEditForm'
+import { confirmAction } from '@/lib/toast'
 
 const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
   CONTRACT_RULE: { label: '合同审核策略', color: 'bg-blue-100 text-blue-800' },
@@ -545,7 +546,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
 
   // 飞书同步（占位：需配置飞书 OAuth 才能真实同步）
   async function handleFeishuSync() {
-    if (!confirm('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。')) return
+    if (!await confirmAction('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。', { confirmText: '开始导入' })) return
     setFeishuSyncing(true)
     setFeishuResult('')
     try {
@@ -603,7 +604,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   }
 
   async function handleDeleteRule(id: string) {
-    if (!confirm('确定要删除这条规则吗？')) return
+    if (!await confirmAction('确定要删除这条规则吗？', { confirmText: '删除', danger: true })) return
 
     try {
       const token = localStorage.getItem('token')
@@ -691,7 +692,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   }
 
   async function handleDeleteConfig(id: string) {
-    if (!confirm('确定要删除这个配置吗？')) return
+    if (!await confirmAction('确定要删除这个配置吗？', { confirmText: '删除', danger: true })) return
 
     try {
       const token = localStorage.getItem('token')
@@ -753,7 +754,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   }
 
   async function handleRollback(configId: string, version: number) {
-    if (!confirm(`确定要回滚到版本 ${version} 吗？回滚后配置将变为草稿状态。`)) return
+    if (!await confirmAction(`确定要回滚到版本 ${version} 吗？回滚后配置将变为草稿状态。`, { confirmText: '回滚' })) return
 
     try {
       const token = localStorage.getItem('token')
@@ -914,7 +915,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
   }
 
   async function handleDeleteProduct(id: string) {
-    if (!confirm('确定删除这个 SKU 吗？对应阶梯价也会一起删除。')) return
+    if (!await confirmAction('确定删除这个 SKU 吗？对应阶梯价也会一起删除。', { confirmText: '删除', danger: true })) return
 
     try {
       const token = localStorage.getItem('token')
@@ -1195,4 +1196,3 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     </div>
   )
 }
-

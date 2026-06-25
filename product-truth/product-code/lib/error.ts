@@ -96,7 +96,7 @@ export function logError(context: string, error: unknown, extra?: Record<string,
 }
 
 export function logInfo(context: string, message: string, extra?: Record<string, unknown>) {
-  console.log(JSON.stringify({
+  console.info(JSON.stringify({
     timestamp: new Date().toISOString(),
     level: 'INFO',
     context,

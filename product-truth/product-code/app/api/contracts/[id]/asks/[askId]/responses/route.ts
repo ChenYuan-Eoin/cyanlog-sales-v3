@@ -3,57 +3,21 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getAuthUser } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
+import {
+  getAccessibleContract,
+  getOrgRoleCodes,
+  type ScopedRoleAssignment,
+} from '@/lib/scoped-access'
 
-// 获取用户在合同所属组织中的角色
-async function getUserRoleInContract(userId: string, contractId: string): Promise<string> {
-  try {
-    // 1. 先获取合同的 org_id
-    const { data: contract } = await supabaseAdmin
-      .from('contracts')
-      .select('org_id')
-      .eq('id', contractId)
-      .single()
-
-    if (!contract?.org_id) return 'unknown'
-
-    // 2. 查询用户的 org-level 角色
-    const { data: userRoles } = await supabaseAdmin
-      .from('user_roles')
-      .select('role:roles(code)')
-      .eq('user_id', userId)
-      .eq('scope_type', 'org')
-      .eq('scope_id', contract.org_id)
-      .limit(1)
-
-    if (userRoles && userRoles.length > 0) {
-      const role = (userRoles[0] as unknown as { role: { code: string } | null }).role
-      return role?.code || 'unknown'
-    }
-
-    // 3. 查询用户的 department-level 角色
-    const { data: deptRoles } = await supabaseAdmin
-      .from('user_roles')
-      .select('role:roles(code)')
-      .eq('user_id', userId)
-      .eq('scope_type', 'department')
-      .limit(1)
-
-    if (deptRoles && deptRoles.length > 0) {
-      const role = (deptRoles[0] as unknown as { role: { code: string } | null }).role
-      return role?.code || 'unknown'
-    }
-
-    return 'unknown'
-
-    return 'unknown'
-  } catch {
-    return 'unknown'
-  }
+function getPrimaryRoleCode(assignments: ScopedRoleAssignment[]): string {
+  return getOrgRoleCodes(assignments)[0]
+    || assignments.find((assignment) => assignment.roleCode)?.roleCode
+    || 'unknown'
 }
 
 interface RouteParams {
-  params: Promise<{ askId: string }> | { askId: string }
+  params: Promise<{ id: string; askId: string }> | { id: string; askId: string }
 }
 
 export async function POST(
@@ -62,14 +26,15 @@ export async function POST(
 ) {
   try {
     const resolvedParams = await params
-    const { askId } = resolvedParams
+    const { id: contractId, askId } = resolvedParams
 
-    // 获取当前用户
-    const user = await getAuthUser(request)
-    if (!user) {
+    const user = await requireAuth(request)
+
+    const access = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    if (!access.contract) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Contract not found' },
+        { status: 404 }
       )
     }
 
@@ -87,8 +52,9 @@ export async function POST(
     // 获取 ASK 详情
     const { data: ask, error: askError } = await supabaseAdmin
       .from('ask_items')
-      .select('*, contracts(org_id)')
+      .select('*')
       .eq('id', askId)
+      .eq('contract_id', contractId)
       .single()
 
     if (askError || !ask) {
@@ -98,9 +64,7 @@ export async function POST(
       )
     }
 
-    // 获取用户角色（B16 修复：从角色表动态获取）
-    const askContractId = (ask as unknown as { contract_id: string }).contract_id
-    const userRoleCode = await getUserRoleInContract(user.id, askContractId)
+    const userRoleCode = getPrimaryRoleCode(access.assignments)
 
     // 检查 ASK 状态
     if (ask.status === 'responded') {
@@ -187,10 +151,6 @@ export async function POST(
       // 非阻塞错误，继续执行
     }
 
-    // 4. 触发报告升版（异步）
-    // TODO: 调用 report version manager 生成新版本报告
-    // 这里暂时只返回成功，实际应在后台任务中完成
-
     return NextResponse.json({
       success: true,
       data: {
@@ -200,6 +160,13 @@ export async function POST(
       },
     }, { status: 201 })
   } catch (error) {
+    const authError = error instanceof Error && error.name === 'AuthError'
+    if (authError) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
     console.error('[ASK Response] Unexpected error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },

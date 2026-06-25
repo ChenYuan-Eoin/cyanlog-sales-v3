@@ -77,7 +77,7 @@ export function finishSpan(span: TraceContext, result?: { error?: Error; metadat
     ...result?.metadata,
   }
 
-  console.log(JSON.stringify(log))
+  console.info(JSON.stringify(log))
 }
 
 /**

@@ -34,3 +34,20 @@ export function canAccessOrgAdmin(allPermissions: string[], roleCodes: string[])
     || hasPermission(allPermissions, 'user:write')
   )
 }
+
+export function canReviewContracts(allPermissions: string[], roleCodes: string[]): boolean {
+  if (
+    roleCodes.includes('SUPER_ADMIN')
+    || roleCodes.includes('ADMIN')
+    || roleCodes.includes('LEGAL')
+  ) {
+    return true
+  }
+
+  return (
+    hasPermission(allPermissions, '*')
+    || hasPermission(allPermissions, 'contract:*')
+    || hasPermission(allPermissions, 'contract:review')
+    || hasPermission(allPermissions, 'contract:write')
+  )
+}

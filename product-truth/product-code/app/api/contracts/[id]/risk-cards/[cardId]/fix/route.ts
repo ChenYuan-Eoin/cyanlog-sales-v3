@@ -10,13 +10,19 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { getAccessibleContract } from '@/lib/scoped-access'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; cardId: string }> }
 ) {
-  return withAuthAndOrg(req, async (user: AuthUser, _orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id: contractId, cardId } = await params
+    const { contract } = await getAccessibleContract(contractId, user.id, orgId, 'id')
+
+    if (!contract) {
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
+    }
 
     // 1. 获取风险卡片
     const { data: riskCard, error: fetchError } = await supabaseAdmin

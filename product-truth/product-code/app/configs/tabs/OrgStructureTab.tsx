@@ -23,7 +23,7 @@ import {
 import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, KeyRoundIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
-import { success, error } from '@/lib/toast'
+import { success, error, confirmAction } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
@@ -99,7 +99,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
   }, [selectedDeptId, onSelectDept, expanded, toggleExpand])
 
   const handleDelete = useCallback(async (dept: OrgSummaryDepartment) => {
-    if (!confirm(`确定要删除部门 "${dept.name}" 吗？`)) return
+    if (!await confirmAction(`确定要删除部门 "${dept.name}" 吗？`, { confirmText: '删除', danger: true })) return
     setDeletingDept(dept)
     try {
       const res = await fetch(`/api/admin/departments/${dept.id}`, {
@@ -420,7 +420,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
               {/* P0: 重置密码 */}
               <DropdownMenuItem
                 onSelect={async () => {
-                  if (!confirm(`确定要重置用户 "${user.display_name}" 的密码吗？\n将生成临时密码，用户首次登录需改密。`)) return
+                  if (!await confirmAction(`确定要重置用户 "${user.display_name}" 的密码吗？\n将生成临时密码，用户首次登录需改密。`, { confirmText: '重置密码' })) return
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}/reset-password`, {
                       method: 'POST',
@@ -430,8 +430,6 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                       error(result.error || '重置密码失败')
                       return
                     }
-                    // ponytail: MVP阶段临时密码返回前端显示
-                    // 升级路径：接入邮件服务后，改为"密码已发送至邮箱"
                     success(`密码已重置，临时密码：${result.data?.tempPassword}`)
                     onRefresh?.()
                   } catch (_err) {
@@ -447,7 +445,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
               <DropdownMenuItem
                 onSelect={async () => {
                   const action = isInactive ? '启用' : '停用'
-                  if (!confirm(`确定要${action}用户 "${user.display_name}" 吗？`)) return
+                  if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 吗？`, { confirmText: action, danger: !isInactive })) return
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}`, {
                       method: 'PATCH',
@@ -483,7 +481,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
               <DropdownMenuItem
                 onSelect={async () => {
                   const action = isLoginDisabled ? '允许' : '禁止'
-                  if (!confirm(`确定要${action}用户 "${user.display_name}" 登录吗？`)) return
+                  if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 登录吗？`, { confirmText: action, danger: !isLoginDisabled })) return
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}/login-enabled`, {
                       method: 'PATCH',
@@ -521,7 +519,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
               <DropdownMenuItem
                 className="text-red-600"
                 onSelect={async () => {
-                  if (!confirm(`确定要删除用户 "${user.display_name}" 吗？\n此操作不可恢复。`)) return
+                  if (!await confirmAction(`确定要删除用户 "${user.display_name}" 吗？\n此操作不可恢复。`, { confirmText: '删除', danger: true })) return
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}`, {
                       method: 'DELETE',
@@ -654,7 +652,6 @@ export default function OrgStructureTab({
   feishuResult,
   onFeishuSync,
 }: OrgStructureTabProps) {
-  // ponytail: 用 useMemo 包裹避免 ESLint warning，orgSummary 来自 API 通常稳定
   const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
@@ -683,7 +680,6 @@ export default function OrgStructureTab({
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
   const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
 
-  // ponytail: A3 空数据状态检测
   const isEmptyState = stats.deptCount === 0 && stats.userCount === 0
 
   return (

@@ -2,6 +2,35 @@
 -- PURPOSE: 合同审查功能增强（条款库、审核策略、结构化报告）
 -- 基于 iTerms 合同审查产品形态设计
 
+-- Runtime contract APIs are organization-scoped. Older contract migrations only
+-- had created_by, so add and backfill org_id before RLS policies below read it.
+ALTER TABLE contracts
+  ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+
+UPDATE contracts c
+SET org_id = uo.org_id
+FROM user_organizations uo
+WHERE c.org_id IS NULL
+  AND c.created_by = uo.user_id
+  AND uo.is_default = TRUE;
+
+UPDATE contracts c
+SET org_id = u.org_id
+FROM users u
+WHERE c.org_id IS NULL
+  AND c.created_by = u.id
+  AND u.org_id IS NOT NULL;
+
+UPDATE contracts c
+SET org_id = fallback_org.id
+FROM (
+  SELECT id
+  FROM organizations
+  ORDER BY created_at ASC NULLS LAST
+  LIMIT 1
+) fallback_org
+WHERE c.org_id IS NULL;
+
 -- =====================================================
 -- 1. 条款库 (clause_library)
 -- 存储企业/行业标准条款模板，用于审核时的对比
@@ -44,12 +73,14 @@ CREATE INDEX IF NOT EXISTS idx_clause_library_tags ON clause_library USING GIN(t
 ALTER TABLE clause_library ENABLE ROW LEVEL SECURITY;
 
 -- 条款库策略：同组织可读，ADMIN 可写
+DROP POLICY IF EXISTS "Same org reads clause_library" ON clause_library;
 CREATE POLICY "Same org reads clause_library" ON clause_library
   FOR SELECT TO authenticated USING (
     org_id IS NULL
     OR org_id::text = (SELECT org_id::text FROM users WHERE id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "ADMIN writes clause_library" ON clause_library;
 CREATE POLICY "ADMIN writes clause_library" ON clause_library
   FOR ALL TO authenticated USING (
     org_id::text = (SELECT org_id::text FROM users WHERE id = auth.uid())
@@ -83,12 +114,14 @@ CREATE INDEX IF NOT EXISTS idx_review_strategies_org ON review_strategies(org_id
 
 ALTER TABLE review_strategies ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Same org reads review_strategies" ON review_strategies;
 CREATE POLICY "Same org reads review_strategies" ON review_strategies
   FOR SELECT TO authenticated USING (
     org_id IS NULL
     OR org_id::text = (SELECT org_id::text FROM users WHERE id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "ADMIN writes review_strategies" ON review_strategies;
 CREATE POLICY "ADMIN writes review_strategies" ON review_strategies
   FOR ALL TO authenticated USING (
     org_id::text = (SELECT org_id::text FROM users WHERE id = auth.uid())
@@ -142,6 +175,7 @@ CREATE INDEX IF NOT EXISTS idx_contract_clauses_position ON contract_clauses(rev
 
 ALTER TABLE contract_clauses ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Same org reads contract_clauses" ON contract_clauses;
 CREATE POLICY "Same org reads contract_clauses" ON contract_clauses
   FOR SELECT TO authenticated USING (
     contract_id::text IN (
@@ -206,6 +240,7 @@ CREATE INDEX IF NOT EXISTS idx_contract_versions_parent ON contract_versions(par
 
 ALTER TABLE contract_versions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Same org reads contract_versions" ON contract_versions;
 CREATE POLICY "Same org reads contract_versions" ON contract_versions
   FOR SELECT TO authenticated USING (
     contract_id::text IN (
@@ -248,6 +283,7 @@ CREATE INDEX IF NOT EXISTS idx_contract_parties_role ON contract_parties(contrac
 
 ALTER TABLE contract_parties ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Same org reads contract_parties" ON contract_parties;
 CREATE POLICY "Same org reads contract_parties" ON contract_parties
   FOR SELECT TO authenticated USING (
     contract_id::text IN (
@@ -290,6 +326,7 @@ CREATE INDEX IF NOT EXISTS idx_contract_annotations_status ON contract_annotatio
 
 ALTER TABLE contract_annotations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Same org reads contract_annotations" ON contract_annotations;
 CREATE POLICY "Same org reads contract_annotations" ON contract_annotations
   FOR SELECT TO authenticated USING (
     contract_id::text IN (

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { enqueueContractAnalysisJob, runStructuredAnalysis, saveStructuredReport, markContractAnalysisRunning, markContractAnalysisCompleted, type ReviewOptions } from '@/lib/contract-analysis'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
@@ -24,6 +24,7 @@ export async function POST(
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     routeId = await resolveIdParam(params)
     const id = routeId
     logRouteStart({
@@ -40,8 +41,10 @@ export async function POST(
     // 使用行级锁检查合同状态（防止并发重复审核）
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
-      .select('id, status, storage_path, created_by')
+      .select('id, status, storage_path, created_by, org_id')
       .eq('id', id)
+      .eq('org_id', orgId)
+      .in('created_by', accessibleUserIds)
       .maybeSingle()
 
     if (contractError) {
@@ -97,6 +100,7 @@ export async function POST(
       .from('contracts')
       .update({ status: 'PARSING', updated_at: new Date().toISOString() })
       .eq('id', id)
+      .eq('org_id', orgId)
       .eq('status', contract.status) // 乐观锁：只有状态未变才更新
 
     if (updateError) {
@@ -134,6 +138,7 @@ export async function POST(
         .from('contracts')
         .update({ status: contract.status })
         .eq('id', id)
+        .eq('org_id', orgId)
 
       await logRouteFailure(
         req,

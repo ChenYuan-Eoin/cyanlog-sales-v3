@@ -116,8 +116,14 @@ CREATE TRIGGER tr_rules_v2_updated_at
 -- ═══════════════════════════════════════════════════════════════
 DO $$
 BEGIN
-  -- 检查旧表是否存在
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rules') THEN
+  -- 检查旧表及所需列是否存在。早期 rules 表只有 name/rule_type/risk_level/config，
+  -- 不具备可安全迁移到 contract_rules_v2 的结构。
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'rules')
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'rules' AND column_name = 'code')
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'rules' AND column_name = 'org_id')
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'rules' AND column_name = 'category')
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'rules' AND column_name = 'threshold_red_line')
+  THEN
     -- 迁移已有的结构化规则
     INSERT INTO contract_rules_v2 (
       org_id, code, name, description, category,
@@ -149,6 +155,8 @@ BEGIN
     ON CONFLICT (org_id, code) DO NOTHING;
 
     RAISE NOTICE 'Rules migration completed from rules table to contract_rules_v2';
+  ELSE
+    RAISE NOTICE 'Skipping legacy rules migration; rules table is absent or lacks v2-compatible columns.';
   END IF;
 END $$;
 
@@ -234,7 +242,6 @@ WHERE NOT EXISTS (
 -- ═══════════════════════════════════════════════════════════════
 
 -- R002: 付款周期
-echo "Inserting R002...";
 INSERT INTO contract_rules_v2 (
   org_id, code, name, description, category,
   level_a_operator, level_a_threshold, level_a_unit, level_a_action,

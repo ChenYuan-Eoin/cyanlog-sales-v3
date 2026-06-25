@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { reviewWithFailoverSync } from '@/lib/ai/failover'
+import { requireAuth } from '@/lib/auth'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 
 // Zod schema for request validation
 const DraftRequestSchema = z.object({
@@ -119,8 +121,9 @@ function catName(cat: string): string {
 // POST /api/contracts/draft - 起草合同
 export async function POST(req: NextRequest) {
   try {
-    void req
-    const orgId = '00000000-0000-0000-0000-000000000000'
+    const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
 
     // Zod validation
     const bodyResult = DraftRequestSchema.safeParse(await req.json().catch(() => ({})))
@@ -180,6 +183,8 @@ ${body.key_terms ? `关键条款要求：${body.key_terms}` : ''}
           .from('contracts')
           .select('parsed_text, filename')
           .eq('id', body.source_contract_id)
+          .eq('org_id', orgId)
+          .in('created_by', accessibleUserIds)
           .maybeSingle()
         if (!srcContract) {
           return errorResponse('源合同不存在或无权访问', 404, 'SOURCE_NOT_FOUND')
@@ -201,6 +206,8 @@ ${body.key_terms ? `关键条款要求：${body.key_terms}` : ''}
         .from('contracts')
         .select('parsed_text, filename')
         .eq('id', body.source_contract_id)
+        .eq('org_id', orgId)
+        .in('created_by', accessibleUserIds)
         .maybeSingle()
       if (!srcContract) {
         return errorResponse('源合同不存在或无权访问', 404, 'SOURCE_NOT_FOUND')

@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
-import { success, error } from '@/lib/toast'
+import { success, error, confirmAction } from '@/lib/toast'
 import type {
   OrgSummaryUser,
   OrgSummaryDepartment,
@@ -374,7 +374,7 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
     const user = assignedUsers.find(u => u.id === userId)
     if (!user) return
 
-    if (!confirm(`确定要从角色中移除「${user.display_name}」？`)) return
+    if (!await confirmAction(`确定要从角色中移除「${user.display_name}」？`, { confirmText: '移除', danger: true })) return
 
     const currentRoleIds = user.role_ids || []
     const newRoleIds = currentRoleIds.filter(id => id !== roleId)

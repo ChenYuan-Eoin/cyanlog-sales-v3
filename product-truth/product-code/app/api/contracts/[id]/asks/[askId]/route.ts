@@ -3,7 +3,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getAuthUser } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
+import { getAccessibleContract } from '@/lib/scoped-access'
 
 // ASK关联用户类型 - 匹配数据库查询返回的结构
 interface AskWithUser {
@@ -39,12 +40,13 @@ export async function GET(
     const resolvedParams = await params
     const { id: contractId, askId } = resolvedParams
 
-    // 获取当前用户
-    const user = await getAuthUser(request)
-    if (!user) {
+    const user = await requireAuth(request)
+
+    const { contract } = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    if (!contract) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Contract not found' },
+        { status: 404 }
       )
     }
 
@@ -102,6 +104,13 @@ export async function GET(
       },
     })
   } catch (error) {
+    const authError = error instanceof Error && error.name === 'AuthError'
+    if (authError) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
     console.error('[ASK Detail] Unexpected error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },

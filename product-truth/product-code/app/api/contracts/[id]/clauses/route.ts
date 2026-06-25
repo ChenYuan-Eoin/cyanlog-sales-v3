@@ -3,6 +3,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
+import { getAccessibleContract } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 function errorResponse(message: string, status: number, code?: string) {
@@ -12,9 +14,13 @@ function errorResponse(message: string, status: number, code?: string) {
 // GET /api/contracts/:id/clauses - 获取该合同最新审核版本的条款
 export async function GET(req: NextRequest, { params }: AsyncRouteParams) {
   try {
+    const user = await requireAuth(req)
     const contractId = await resolveIdParam(params)
 
     if (!contractId) return errorResponse('合同ID必填', 400, 'MISSING_ID')
+
+    const { contract } = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    if (!contract) return errorResponse('合同不存在', 404, 'NOT_FOUND')
 
     // 找到该合同最新的 review
     const { data: latestReview } = await supabaseAdmin

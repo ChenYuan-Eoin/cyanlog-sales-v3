@@ -1,6 +1,5 @@
 /**
- * 轻量级 Toast 提示工具
- * 替代 alert() 和 console.log 错误处理
+ * 轻量级反馈提示和确认工具
  */
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -67,6 +66,73 @@ export function warning(message: string, options?: ToastOptions): void {
  */
 export function info(message: string, options?: ToastOptions): void {
   toast(message, 'info', options)
+}
+
+export function confirmAction(
+  message: string,
+  options: {
+    title?: string
+    confirmText?: string
+    cancelText?: string
+    danger?: boolean
+  } = {}
+): Promise<boolean> {
+  const {
+    title = '确认操作',
+    confirmText = '确认',
+    cancelText = '取消',
+    danger = false,
+  } = options
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div')
+    overlay.className = 'fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/40 px-4'
+
+    const dialog = document.createElement('div')
+    dialog.className = 'w-full max-w-sm rounded-lg bg-white p-5 shadow-xl'
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+
+    const heading = document.createElement('h2')
+    heading.className = 'text-base font-semibold text-slate-900'
+    heading.textContent = title
+
+    const body = document.createElement('p')
+    body.className = 'mt-2 whitespace-pre-line text-sm leading-6 text-slate-600'
+    body.textContent = message
+
+    const actions = document.createElement('div')
+    actions.className = 'mt-5 flex justify-end gap-2'
+
+    const cancelButton = document.createElement('button')
+    cancelButton.type = 'button'
+    cancelButton.className = 'h-9 rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50'
+    cancelButton.textContent = cancelText
+
+    const confirmButton = document.createElement('button')
+    confirmButton.type = 'button'
+    confirmButton.className = `h-9 rounded-md px-4 text-sm font-medium text-white ${
+      danger ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-slate-800'
+    }`
+    confirmButton.textContent = confirmText
+
+    const close = (value: boolean) => {
+      overlay.remove()
+      resolve(value)
+    }
+
+    cancelButton.addEventListener('click', () => close(false))
+    confirmButton.addEventListener('click', () => close(true))
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) close(false)
+    })
+
+    actions.append(cancelButton, confirmButton)
+    dialog.append(heading, body, actions)
+    overlay.append(dialog)
+    document.body.appendChild(overlay)
+    confirmButton.focus()
+  })
 }
 
 /**

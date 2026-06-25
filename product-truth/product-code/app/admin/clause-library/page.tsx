@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PlusIcon, EditIcon, TrashIcon, LibraryIcon, SearchIcon } from 'lucide-react'
-import { error as toastError } from '@/lib/toast'
+import { error as toastError, confirmAction } from '@/lib/toast'
 
 type Stance = 'required' | 'recommended' | 'optional' | 'risky' | 'dangerous'
 const STANCE_MAP: Record<Stance, { label: string; color: string }> = {
@@ -155,7 +155,7 @@ export default function ClauseLibraryPage() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`确定要删除条款「${name}」吗？`)) return
+    if (!await confirmAction(`确定要删除条款「${name}」吗？`, { confirmText: '删除', danger: true })) return
     const res = await fetch(`/api/admin/clause-library/${id}`, { method: 'DELETE' })
     if (res.ok) {
       await fetchClauses()

@@ -5,6 +5,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { logError } from '@/lib/error-log'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { errorResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 const TEMP_BUCKET = 'contract-chunks'
 const FINAL_BUCKET = 'contracts'
@@ -16,31 +19,31 @@ export async function POST(
   try {
     const user = await requireAuth(req)
     if (!user) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 })
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
 
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     const contractId = params.id
 
     // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin
       .from('contracts')
-      .select('id, created_by, status')
+      .select('id, created_by, org_id, status')
       .eq('id', contractId)
+      .eq('org_id', orgId)
+      .in('created_by', accessibleUserIds)
       .single()
 
     if (fetchError || !contract) {
-      return NextResponse.json({ error: '合同不存在' }, { status: 404 })
-    }
-
-    if (contract.created_by !== user.id) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 })
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
     }
 
     // 获取请求参数
     const { fileName, fileType, totalSize, chunkCount } = await req.json()
 
     if (!fileName || !chunkCount) {
-      return NextResponse.json({ error: '缺少必要参数' }, { status: 400 })
+      return errorResponse(createApiError('MISSING_FIELD', '缺少必要参数'))
     }
 
     // 生成正式存储路径
@@ -73,7 +76,7 @@ export async function POST(
             phase: 'download',
           },
         })
-        return NextResponse.json({ error: `下载分块 ${i} 失败` }, { status: 500 })
+        return errorResponse(createApiError('DB_ERROR', `下载分块 ${i} 失败`))
       }
 
       const arrayBuffer = await chunkData.arrayBuffer()
@@ -118,7 +121,7 @@ export async function POST(
           phase: 'upload',
         },
       })
-      return NextResponse.json({ error: '文件保存失败' }, { status: 500 })
+      return errorResponse(createApiError('DB_ERROR', '文件保存失败'))
     }
 
     // 获取文件 URL
@@ -138,6 +141,7 @@ export async function POST(
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)
+      .eq('org_id', orgId)
 
     if (updateError) {
       await logError({
@@ -176,6 +180,6 @@ export async function POST(
         route: '/api/contracts/[id]/merge-chunks',
       },
     })
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 })
+    return errorResponse(createApiError('INTERNAL_ERROR', '服务器错误'))
   }
 }

@@ -90,7 +90,6 @@ export function ImageUpload({
     <div className="space-y-2">
       {value ? (
         <div className="relative w-full max-w-full overflow-hidden rounded border bg-white p-2">
-          {/* ponytail: A7 修复图片溢出 - 使用 object-contain 和 max-w-full */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value}

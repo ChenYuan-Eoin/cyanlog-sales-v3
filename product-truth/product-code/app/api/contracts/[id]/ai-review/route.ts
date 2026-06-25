@@ -46,6 +46,7 @@ export async function POST(
       .from('contracts')
       .select('id, filename, parsed_text, created_by')
       .eq('id', contractId)
+      .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
       .maybeSingle()
 

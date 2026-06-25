@@ -16,11 +16,11 @@ import {
 } from 'lucide-react'
 import { error as toastError, handleError } from '@/lib/toast'
 
-interface TemplateClause {
+interface ContractTemplate {
   id: string
-  clause_number: string
-  clause_title: string
-  standard_text: string
+  name: string
+  description: string
+  category: string
 }
 
 interface ComparisonResult {
@@ -35,7 +35,7 @@ export default function CompareStandardPage() {
   const params = useParams()
   const contractId = params.id as string
 
-  const [templates, setTemplates] = useState<TemplateClause[]>([])
+  const [templates, setTemplates] = useState<ContractTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   const [results, setResults] = useState<ComparisonResult[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,7 +44,7 @@ export default function CompareStandardPage() {
   const fetchTemplates = useCallback(async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/knowledge/templates', {
+      const res = await fetch('/api/contracts/templates', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (res.ok) {
@@ -118,7 +118,7 @@ export default function CompareStandardPage() {
             >
               <option value="">选择标准模板</option>
               {templates.map((t) => (
-                <option key={t.id} value={t.id}>{t.clause_title}</option>
+                <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
             <Button

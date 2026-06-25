@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { canAccessOrgAdmin } from '@/lib/permissions'
+import { canAccessOrgAdmin, canReviewContracts as canReviewContractsByPermission } from '@/lib/permissions'
 
 export type ScopeType = 'org' | 'department' | 'space'
 
@@ -320,7 +320,10 @@ export async function listAccessibleUserIds(userId: string, orgId?: string): Pro
     return {
       orgId: effectiveOrgId,
       assignments,
-      userIds: uniqueStrings(((data || []) as UserSummaryRow[]).map((row) => row.id)),
+      userIds: uniqueStrings([
+        userId,
+        ...((data || []) as UserSummaryRow[]).map((row) => row.id),
+      ]),
     }
   }
 
@@ -413,5 +416,43 @@ export async function listAccessibleUserIds(userId: string, orgId?: string): Pro
     orgId: effectiveOrgId,
     assignments,
     userIds: Array.from(userIds),
+  }
+}
+
+export function canReviewContracts(assignments: ScopedRoleAssignment[]): boolean {
+  return canReviewContractsByPermission(
+    getOrgPermissions(assignments),
+    getOrgRoleCodes(assignments)
+  )
+}
+
+export async function getAccessibleContract<T extends Record<string, unknown> = Record<string, unknown>>(
+  contractId: string,
+  userId: string,
+  orgId?: string,
+  selectColumns = 'id'
+): Promise<{
+  orgId: string
+  assignments: ScopedRoleAssignment[]
+  userIds: string[]
+  contract: T | null
+}> {
+  const access = await listAccessibleUserIds(userId, orgId)
+
+  const { data, error } = await supabaseAdmin
+    .from('contracts')
+    .select(selectColumns)
+    .eq('id', contractId)
+    .eq('org_id', access.orgId)
+    .in('created_by', access.userIds)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return {
+    ...access,
+    contract: (data as T | null) ?? null,
   }
 }

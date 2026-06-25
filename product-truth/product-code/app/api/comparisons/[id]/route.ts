@@ -5,20 +5,25 @@ import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
-import { withAuth } from '@/lib/api/auth-wrapper'
+import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import { listAccessibleUserIds } from '@/lib/scoped-access'
+import type { AuthUser } from '@/lib/auth'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuth(req, async () => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
 
     // 1. 获取比对任务
     const { data: comparison, error: compError } = await supabaseAdmin
       .from('contract_comparisons')
-      .select('*')
+      .select('*, contracts!inner(id, org_id, created_by)')
       .eq('id', id)
+      .eq('contracts.org_id', orgId)
+      .in('contracts.created_by', accessibleUserIds)
       .single()
 
     if (compError || !comparison) {

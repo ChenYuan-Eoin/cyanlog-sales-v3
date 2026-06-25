@@ -93,7 +93,7 @@ export function UserFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>{trigger ?? (
+      <DialogTrigger asChild>{trigger ?? (
         <Button variant="outline" size="sm">
           {editingUser ? (
             <>

@@ -12,6 +12,7 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import { reviewWithFailoverSync } from '@/lib/ai/failover'
+import { getAccessibleContract } from '@/lib/scoped-access'
 import type { AuthUser } from '@/lib/auth'
 
 // GET - 获取对话历史
@@ -19,8 +20,13 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuthAndOrg(req, async (user: AuthUser, _orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
+    const { contract } = await getAccessibleContract(id, user.id, orgId, 'id')
+
+    if (!contract) {
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
+    }
 
     const { data: chats, error } = await supabaseAdmin
       .from('contract_ai_chats')
@@ -58,6 +64,16 @@ export async function POST(
       )
     }
 
+    const { contract } = await getAccessibleContract<{
+      id: string
+      parsed_text?: string | null
+      filename?: string | null
+    }>(contractId, user.id, orgId, 'id, parsed_text, filename')
+
+    if (!contract) {
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
+    }
+
     // 保存用户消息
     const { data: userMessage, error: userError } = await supabaseAdmin
       .from('contract_ai_chats')
@@ -74,13 +90,6 @@ export async function POST(
     if (userError) {
       return errorResponse(createApiError('DB_ERROR', '保存消息失败'))
     }
-
-    // 获取合同内容用于 AI 上下文
-    const { data: contract } = await supabaseAdmin
-      .from('contracts')
-      .select('parsed_text, filename, id')
-      .eq('id', contractId)
-      .single()
 
     const contractText = contract?.parsed_text || ''
 

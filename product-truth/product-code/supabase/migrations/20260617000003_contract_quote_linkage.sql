@@ -6,6 +6,97 @@
 -- 1. contracts 表扩展字段
 -- ═══════════════════════════════════════════════════════════════
 
+CREATE TABLE IF NOT EXISTS tenders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  ocr_result_id UUID REFERENCES ocr_results(id) ON DELETE SET NULL,
+  title TEXT NOT NULL DEFAULT '未命名标书',
+  original_file TEXT,
+  key_info JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  workflow_step TEXT NOT NULL DEFAULT 'document-import',
+  checkpoint_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenders_org ON tenders(org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenders_created_by ON tenders(created_by, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenders_ocr_result ON tenders(ocr_result_id);
+
+ALTER TABLE tenders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Same org reads tenders" ON tenders;
+CREATE POLICY "Same org reads tenders" ON tenders
+  FOR SELECT TO authenticated USING (
+    org_id::text = (SELECT org_id::text FROM users WHERE id = auth.uid())
+    OR EXISTS (
+      SELECT 1
+      FROM user_organizations uo
+      WHERE uo.user_id = auth.uid()
+        AND uo.org_id = tenders.org_id
+    )
+  );
+
+DROP POLICY IF EXISTS "Same org writes tenders" ON tenders;
+CREATE POLICY "Same org writes tenders" ON tenders
+  FOR ALL TO authenticated USING (
+    org_id::text = (SELECT org_id::text FROM users WHERE id = auth.uid())
+    OR EXISTS (
+      SELECT 1
+      FROM user_organizations uo
+      WHERE uo.user_id = auth.uid()
+        AND uo.org_id = tenders.org_id
+    )
+  );
+
+INSERT INTO tenders (
+  id,
+  org_id,
+  created_by,
+  ocr_result_id,
+  title,
+  original_file,
+  key_info,
+  status,
+  created_at
+)
+SELECT
+  o.id,
+  COALESCE(uo.org_id, u.org_id, fallback_org.id) AS org_id,
+  o.created_by,
+  o.id AS ocr_result_id,
+  COALESCE(o.key_info->>'tenderName', o.original_file, '未命名标书') AS title,
+  o.original_file,
+  o.key_info,
+  CASE
+    WHEN o.status IN ('pending', 'processing', 'completed', 'failed') THEN o.status
+    ELSE 'pending'
+  END AS status,
+  o.created_at
+FROM ocr_results o
+LEFT JOIN user_organizations uo ON uo.user_id = o.created_by AND uo.is_default = TRUE
+LEFT JOIN users u ON u.id = o.created_by
+CROSS JOIN LATERAL (
+  SELECT id
+  FROM organizations
+  ORDER BY created_at ASC NULLS LAST
+  LIMIT 1
+) fallback_org
+WHERE COALESCE(uo.org_id, u.org_id, fallback_org.id) IS NOT NULL
+ON CONFLICT (id) DO UPDATE SET
+  org_id = EXCLUDED.org_id,
+  created_by = COALESCE(tenders.created_by, EXCLUDED.created_by),
+  ocr_result_id = COALESCE(tenders.ocr_result_id, EXCLUDED.ocr_result_id),
+  title = COALESCE(NULLIF(tenders.title, '未命名标书'), EXCLUDED.title),
+  original_file = COALESCE(tenders.original_file, EXCLUDED.original_file),
+  key_info = CASE
+    WHEN tenders.key_info = '{}'::jsonb THEN EXCLUDED.key_info
+    ELSE tenders.key_info
+  END;
+
 -- 添加报价/标书关联
 ALTER TABLE contracts
   ADD COLUMN IF NOT EXISTS quote_id UUID REFERENCES quotes(id) ON DELETE SET NULL,

@@ -58,9 +58,26 @@ COMMENT ON COLUMN ask_items.question_type IS '问题类型: commercial(商务) |
 ALTER TABLE ask_items ENABLE ROW LEVEL SECURITY;
 
 -- 策略：组织内成员可见
+DROP POLICY IF EXISTS ask_items_org_policy ON ask_items;
 CREATE POLICY ask_items_org_policy ON ask_items
   USING (EXISTS (
     SELECT 1 FROM contracts c
-    JOIN organization_members om ON c.org_id = om.org_id
-    WHERE c.id = ask_items.contract_id AND om.user_id = auth.uid()
+    JOIN users contract_owner ON contract_owner.id = c.created_by
+    WHERE c.id = ask_items.contract_id
+      AND (
+        c.created_by = auth.uid()
+        OR
+        EXISTS (
+          SELECT 1
+          FROM user_organizations uo
+          WHERE uo.org_id = contract_owner.org_id
+            AND uo.user_id = auth.uid()
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.id = auth.uid()
+            AND u.org_id = contract_owner.org_id
+        )
+      )
   ));

@@ -11,24 +11,31 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { getAccessibleContract } from '@/lib/scoped-access'
 
 // GET - 获取审核结果
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
 
     // 1. 获取合同基本信息（包含结论字段）
-    const { data: contract, error: contractError } = await supabaseAdmin
-      .from('contracts')
-      .select('*, contract_reviews(*)')
-      .eq('id', id)
-      .single()
+    const { contract } = await getAccessibleContract<{
+      id: string
+      contract_reviews?: Array<{ created_at?: string }>
+      [key: string]: unknown
+    }>(id, user.id, orgId, '*, contract_reviews(*)')
 
-    if (contractError || !contract) {
+    if (!contract) {
       return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
+    }
+
+    if (Array.isArray(contract.contract_reviews)) {
+      contract.contract_reviews = contract.contract_reviews.sort((left, right) =>
+        new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
+      )
     }
 
     // 2. 获取风险卡片
@@ -66,7 +73,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuthAndOrg(req, async (user: AuthUser, _orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
     const body = await req.json().catch(() => ({}))
     const { conclusion, conclusion_reason } = body
@@ -80,13 +87,16 @@ export async function PATCH(
     }
 
     // 2. 检查合同是否存在
-    const { data: existing, error: checkError } = await supabaseAdmin
-      .from('contracts')
-      .select('id, status, conclusion')
-      .eq('id', id)
-      .single()
+    const {
+      contract: existing,
+      userIds: accessibleUserIds,
+    } = await getAccessibleContract<{
+      id: string
+      status: string | null
+      conclusion: string | null
+    }>(id, user.id, orgId, 'id, status, conclusion')
 
-    if (checkError || !existing) {
+    if (!existing) {
       return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
     }
 
@@ -108,6 +118,8 @@ export async function PATCH(
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .eq('org_id', orgId)
+      .in('created_by', accessibleUserIds)
       .select()
       .single()
 

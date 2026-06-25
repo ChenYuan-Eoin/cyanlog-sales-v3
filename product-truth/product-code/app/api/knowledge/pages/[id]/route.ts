@@ -4,7 +4,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canUseKnowledgePage,
+  fetchKnowledgePermissions,
+  getKnowledgeAccessContext,
+} from '@/lib/knowledge/access'
+
+const UPDATABLE_FIELDS = new Set(['title', 'content', 'content_text', 'metadata', 'is_published'])
+
+function pickUpdatePayload(body: Record<string, unknown>, userId: string) {
+  const payload: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(body)) {
+    if (UPDATABLE_FIELDS.has(key)) {
+      payload[key] = value
+    }
+  }
+  return {
+    ...payload,
+    updated_by: userId,
+    updated_at: new Date().toISOString(),
+  }
+}
 
 // GET /api/knowledge/pages/:id
 export async function GET(
@@ -13,7 +33,7 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
+    const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
     const { id } = params
 
     // 获取页面
@@ -29,10 +49,14 @@ export async function GET(
     }
 
     // 获取权限
-    const { data: permissions } = await supabaseAdmin
-      .from('knowledge_page_permissions')
-      .select('*')
-      .eq('page_id', id)
+    const permissionMap = await fetchKnowledgePermissions([id])
+    const permissions = permissionMap.get(id) || []
+
+    if (!canUseKnowledgePage(page, permissions, { userId: user.id, orgId, assignments }, 'view')) {
+      return NextResponse.json({ error: '页面不存在' }, { status: 404 })
+    }
+
+    const canManagePage = canUseKnowledgePage(page, permissions, { userId: user.id, orgId, assignments }, 'admin')
 
     // 获取版本历史
     const { data: versions } = await supabaseAdmin
@@ -45,8 +69,8 @@ export async function GET(
     return NextResponse.json({
       data: {
         ...page,
-        permissions: permissions || [],
-        versions: versions || [],
+        permissions: canManagePage ? permissions : [],
+        versions: canManagePage ? versions || [] : [],
       },
     })
   } catch (error) {
@@ -65,29 +89,44 @@ export async function PATCH(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
+    const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
     const { id } = params
     const body = await req.json()
 
-    // 获取当前版本
+    // 获取当前内容
     const { data: currentPage } = await supabaseAdmin
       .from('knowledge_pages')
-      .select('version, content')
+      .select('id, org_id, created_by, content')
       .eq('id', id)
+      .eq('org_id', orgId)
       .single()
 
     if (!currentPage) {
       return NextResponse.json({ error: '页面不存在' }, { status: 404 })
     }
 
+    const permissionMap = await fetchKnowledgePermissions([id])
+    if (!canUseKnowledgePage(
+      currentPage,
+      permissionMap.get(id) || [],
+      { userId: user.id, orgId, assignments },
+      'edit'
+    )) {
+      return NextResponse.json({ error: '无权限编辑页面' }, { status: 403 })
+    }
+
+    const { data: latestVersion } = await supabaseAdmin
+      .from('knowledge_page_versions')
+      .select('version')
+      .eq('page_id', id)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
     // 更新页面
     const { data: updated, error } = await supabaseAdmin
       .from('knowledge_pages')
-      .update({
-        ...body,
-        updated_by: user.id,
-        updated_at: new Date().toISOString(),
-      })
+      .update(pickUpdatePayload(body, user.id))
       .eq('id', id)
       .eq('org_id', orgId)
       .select()
@@ -102,7 +141,7 @@ export async function PATCH(
       .from('knowledge_page_versions')
       .insert({
         page_id: id,
-        version: (currentPage.version || 0) + 1,
+        version: (latestVersion?.version || 0) + 1,
         content: body.content || currentPage.content,
         saved_by: user.id,
         change_note: body.change_note || '自动保存',
@@ -125,14 +164,36 @@ export async function DELETE(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
+    const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
     const { id } = params
+
+    const { data: page } = await supabaseAdmin
+      .from('knowledge_pages')
+      .select('id, org_id, created_by')
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .single()
+
+    if (!page) {
+      return NextResponse.json({ error: '页面不存在' }, { status: 404 })
+    }
+
+    const permissionMap = await fetchKnowledgePermissions([id])
+    if (!canUseKnowledgePage(
+      page,
+      permissionMap.get(id) || [],
+      { userId: user.id, orgId, assignments },
+      'admin'
+    )) {
+      return NextResponse.json({ error: '无权限删除页面' }, { status: 403 })
+    }
 
     // 检查是否有子页面
     const { data: children } = await supabaseAdmin
       .from('knowledge_pages')
       .select('id')
       .eq('parent_id', id)
+      .eq('org_id', orgId)
       .limit(1)
 
     if (children && children.length > 0) {

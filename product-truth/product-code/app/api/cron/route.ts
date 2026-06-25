@@ -29,24 +29,27 @@ async function handleCron(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
 
   if (!cronSecret) {
-    console.warn('[CRON] CRON_SECRET not configured, allowing request')
-  } else {
-    // 提取 token（支持 "Bearer <token>" 或直接 "<token>"）
-    let token = authHeader
-    if (authHeader?.startsWith('Bearer ')) {
-      token = authHeader.slice(7)
-    }
+    return NextResponse.json(
+      { error: 'Cron secret is not configured' },
+      { status: 503 }
+    )
+  }
 
-    if (!token || token !== cronSecret) {
-      console.error('[CRON] Unauthorized', {
-        ip: req.headers.get('x-forwarded-for') || 'unknown',
-        hasAuth: !!authHeader,
-      })
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+  // 提取 token（支持 "Bearer <token>" 或直接 "<token>"）
+  let token = authHeader
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7)
+  }
+
+  if (!token || token !== cronSecret) {
+    console.error('[CRON] Unauthorized', {
+      ip: req.headers.get('x-forwarded-for') || 'unknown',
+      hasAuth: !!authHeader,
+    })
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
   }
 
   // 执行定时任务
@@ -73,7 +76,6 @@ async function handleCron(req: NextRequest) {
 // 定时任务调度器
 async function runCronTasks(): Promise<Array<{ task: string; status: string; duration?: number }>> {
   const tasks: Array<{ task: string; status: string; duration?: number }> = []
-  const startTime = Date.now()
 
   // 1. 清理过期提醒
   const reminderStart = Date.now()
@@ -119,8 +121,6 @@ async function runCronTasks(): Promise<Array<{ task: string; status: string; dur
   } catch {
     tasks.push({ task: 'process_contract_analysis_jobs', status: 'failed' })
   }
-
-  console.log(`[CRON] All tasks completed in ${Date.now() - startTime}ms`, tasks)
 
   return tasks
 }

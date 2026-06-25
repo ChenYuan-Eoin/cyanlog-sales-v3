@@ -115,7 +115,13 @@ export default function LoginPage() {
           <h1>{branding.loginTitle}</h1>
           <p className="subtitle">{branding.loginSubtitle}</p>
 
-          <form onSubmit={handleSubmit} style={{ marginTop: 32 }} autoComplete="on">
+          <form
+            method="post"
+            action="/api/auth/login"
+            onSubmit={handleSubmit}
+            style={{ marginTop: 32 }}
+            autoComplete="on"
+          >
             <div className="form-group">
               <label htmlFor="login-email">企业邮箱</label>
               <input

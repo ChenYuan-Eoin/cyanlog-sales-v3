@@ -22,7 +22,7 @@ import {
   RotateCcwIcon,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { error as toastError, handleError } from '@/lib/toast'
+import { error as toastError, handleError, confirmAction } from '@/lib/toast'
 
 const ClauseReviewWorkshop = dynamic(() => import('./components/ClauseReviewWorkshop'), { ssr: false })
 
@@ -180,7 +180,7 @@ export default function ContractReviewPage() {
 
   // ─── 审核结论操作 ───
   const handleApprove = useCallback(async () => {
-    if (!confirm('确认审核通过？通过后合同将进入已归档状态。')) return
+    if (!await confirmAction('确认审核通过？通过后合同将进入已归档状态。', { confirmText: '审核通过' })) return
     setSubmitting(true)
     try {
       const token = localStorage.getItem('token')

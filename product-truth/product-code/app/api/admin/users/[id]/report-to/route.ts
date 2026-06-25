@@ -59,8 +59,6 @@ export async function PATCH(
       }
 
       // 检查循环汇报：简单一层（不能汇报给直接下级）
-      // ponytail: 完整的循环检测需要递归查询，n<1000时一层检测可接受
-      // 升级路径：添加 CTE 递归查询检测多层循环汇报
       const { data: subordinates } = await supabaseAdmin
         .from('users')
         .select('id')

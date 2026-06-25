@@ -103,8 +103,8 @@ SELECT
   p.param_key,
   p.param_type,
   p.param_label,
-  p.param_options,
-  p.default_value,
+  p.param_options::jsonb,
+  p.default_value::jsonb,
   p.required,
   p.sort_order,
   p.applicable_scenario

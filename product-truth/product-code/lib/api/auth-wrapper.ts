@@ -6,6 +6,7 @@ import { requireAuth, getAuthUser } from '@/lib/auth'
 import { errorResponse } from './common'
 import { createApiError } from './errors'
 import type { AuthUser } from '@/lib/auth'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 
 // 可选认证 - 不强制要求登录
 export async function withOptionalAuth<T>(
@@ -41,16 +42,7 @@ export async function withAuthAndOrg<T>(
   try {
     const user = await requireAuth(req)
 
-    // 获取用户默认组织
-    const { supabaseAdmin } = await import('@/lib/supabase')
-    const { data: userOrg } = await supabaseAdmin
-      .from('user_organizations')
-      .select('org_id')
-      .eq('user_id', user.id)
-      .eq('is_default', true)
-      .single()
-
-    const orgId = userOrg?.org_id
+    const orgId = await getDefaultOrgId(user.id)
     if (!orgId) {
       return errorResponse(createApiError('NO_ORG'))
     }

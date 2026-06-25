@@ -99,7 +99,7 @@ export function RoleAssignmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>
+      <DialogTrigger asChild>
         {trigger ?? (
           <Button variant="ghost" size="sm">
             <ShieldIcon className="h-4 w-4 mr-1" />

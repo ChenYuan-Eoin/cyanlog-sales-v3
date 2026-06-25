@@ -56,11 +56,28 @@ COMMENT ON COLUMN report_versions.is_current IS '是否最新版本，true 表�
 ALTER TABLE report_versions ENABLE ROW LEVEL SECURITY;
 
 -- 策略：组织内成员可见
+DROP POLICY IF EXISTS report_versions_org_policy ON report_versions;
 CREATE POLICY report_versions_org_policy ON report_versions
   USING (EXISTS (
     SELECT 1 FROM contracts c
-    JOIN organization_members om ON c.org_id = om.org_id
-    WHERE c.id = report_versions.contract_id AND om.user_id = auth.uid()
+    JOIN users contract_owner ON contract_owner.id = c.created_by
+    WHERE c.id = report_versions.contract_id
+      AND (
+        c.created_by = auth.uid()
+        OR
+        EXISTS (
+          SELECT 1
+          FROM user_organizations uo
+          WHERE uo.org_id = contract_owner.org_id
+            AND uo.user_id = auth.uid()
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.id = auth.uid()
+            AND u.org_id = contract_owner.org_id
+        )
+      )
   ));
 
 -- ============================================

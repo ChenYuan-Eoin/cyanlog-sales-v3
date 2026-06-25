@@ -35,6 +35,23 @@ const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_MAX_RETRIES = 3
 const DEFAULT_CONCURRENCY = 3
 
+function readApiError(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === 'object') {
+    const error = (payload as { error?: unknown }).error
+    if (typeof error === 'string') {
+      return error
+    }
+    if (error && typeof error === 'object') {
+      const message = (error as { message?: unknown }).message
+      if (typeof message === 'string') {
+        return message
+      }
+    }
+  }
+
+  return fallback
+}
+
 export function useChunkUpload(options: UseChunkUploadOptions = {}) {
   const {
     chunkSize = DEFAULT_CHUNK_SIZE,
@@ -109,7 +126,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: '上传失败' }))
-      throw new Error(error.error || `分块 ${chunk.index} 上传失败`)
+      throw new Error(readApiError(error, `分块 ${chunk.index} 上传失败`))
     }
   }, [])
 
@@ -243,7 +260,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
 
       if (!mergeRes.ok) {
         const error = await mergeRes.json().catch(() => ({ error: '合并失败' }))
-        throw new Error(error.error || '文件合并失败')
+        throw new Error(readApiError(error, '文件合并失败'))
       }
 
       const result = await mergeRes.json()

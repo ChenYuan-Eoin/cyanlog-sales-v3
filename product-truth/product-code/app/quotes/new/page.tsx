@@ -31,6 +31,35 @@ interface TaxConfig {
   }
 }
 
+function unwrapList<T>(payload: unknown): T[] {
+  if (Array.isArray(payload)) {
+    return payload as T[]
+  }
+
+  if (payload && typeof payload === 'object') {
+    const data = (payload as { data?: unknown }).data
+    return Array.isArray(data) ? data as T[] : []
+  }
+
+  return []
+}
+
+function readApiError(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === 'object') {
+    const data = payload as { error?: unknown }
+    if (typeof data.error === 'string') {
+      return data.error
+    }
+    if (data.error && typeof data.error === 'object') {
+      const message = (data.error as { message?: unknown }).message
+      if (typeof message === 'string') {
+        return message
+      }
+    }
+  }
+  return fallback
+}
+
 function defaultValidUntil(): string {
   const date = new Date()
   date.setDate(date.getDate() + 30)
@@ -68,10 +97,10 @@ export default function NewQuotePage() {
         }
 
         const productData = await productsRes.json()
-        setProducts(productData)
+        setProducts(unwrapList<ProductOption>(productData))
 
         if (taxRes.ok) {
-          const configData = await taxRes.json() as TaxConfig[]
+          const configData = unwrapList<TaxConfig>(await taxRes.json())
           const enabledConfig = configData.find((config) => config.value?.enabled)
           setTaxRate(enabledConfig?.value?.rate ?? 0)
         }
@@ -176,12 +205,19 @@ export default function NewQuotePage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || '创建失败')
+        setError(readApiError(data, '创建失败'))
         setLoading(false)
         return
       }
 
-      router.push(`/quotes/${data.id}`)
+      const quoteId = data?.data?.id || data?.id
+      if (!quoteId) {
+        setError('创建成功但未返回报价ID')
+        setLoading(false)
+        return
+      }
+
+      router.push(`/quotes/${quoteId}`)
       router.refresh()
     } catch {
       setError('网络错误，请稍后重试')

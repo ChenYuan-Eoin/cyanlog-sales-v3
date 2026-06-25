@@ -5,6 +5,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { logError } from '@/lib/error-log'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { errorResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -14,8 +17,14 @@ const ALLOWED_TYPES = [
   'image/png',
   'image/jpg',
 ]
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png']
 
-const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_SIZE = 50 * 1024 * 1024 // 50MB
+
+function hasAllowedFileType(file: File): boolean {
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
+  return ALLOWED_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(extension)
+}
 
 export async function POST(
   req: NextRequest,
@@ -24,9 +33,11 @@ export async function POST(
   try {
     const user = await requireAuth(req)
     if (!user) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 })
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
 
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     const contractId = params.id
 
     // 获取表单数据
@@ -34,38 +45,30 @@ export async function POST(
     const file = formData.get('file') as File
 
     if (!file) {
-      return NextResponse.json({ error: '未提供文件' }, { status: 400 })
+      return errorResponse(createApiError('MISSING_FIELD', '未提供文件'))
     }
 
     // 验证文件类型
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        { error: '不支持的文件类型，请上传 PDF、Word 或图片' },
-        { status: 400 }
-      )
+    if (!hasAllowedFileType(file)) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF、Word 或图片'))
     }
 
     // 验证文件大小
     if (file.size > MAX_SIZE) {
-      return NextResponse.json(
-        { error: '文件大小超过 10MB 限制' },
-        { status: 400 }
-      )
+      return errorResponse(createApiError('VALIDATION_ERROR', '文件大小超过 50MB 限制'))
     }
 
     // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin
       .from('contracts')
-      .select('id, created_by, status')
+      .select('id, created_by, org_id, status')
       .eq('id', contractId)
+      .eq('org_id', orgId)
+      .in('created_by', accessibleUserIds)
       .single()
 
     if (fetchError || !contract) {
-      return NextResponse.json({ error: '合同不存在' }, { status: 404 })
-    }
-
-    if (contract.created_by !== user.id) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 })
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
     }
 
     // 生成存储路径：contracts/{contractId}/{timestamp}_{filename}
@@ -95,7 +98,7 @@ export async function POST(
           fileName: file.name,
         },
       })
-      return NextResponse.json({ error: '上传失败' }, { status: 500 })
+      return errorResponse(createApiError('DB_ERROR', '上传失败'))
     }
 
     // 获取文件 URL
@@ -111,10 +114,11 @@ export async function POST(
         filename: file.name,
         storage_path: storagePath,
         size: file.size,
-        mime_type: file.type,
+        mime_type: file.type || 'application/octet-stream',
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)
+      .eq('org_id', orgId)
 
     if (updateError) {
       await logError({
@@ -153,6 +157,6 @@ export async function POST(
         route: '/api/contracts/[id]/upload',
       },
     })
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 })
+    return errorResponse(createApiError('INTERNAL_ERROR', '服务器错误'))
   }
 }

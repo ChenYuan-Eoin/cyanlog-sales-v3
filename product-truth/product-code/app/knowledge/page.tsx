@@ -3,9 +3,9 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { handleError } from '@/lib/toast'
@@ -23,7 +23,7 @@ import {
   PlusIcon,
   SearchIcon,
 } from 'lucide-react'
-import NotionEditor from '@/components/knowledge/NotionEditor'
+import NotionEditor, { type Block } from '@/components/knowledge/NotionEditor'
 
 // Notion Blocks 类型（在NotionEditor组件中定义）
 // interface Block { ... }
@@ -41,6 +41,7 @@ interface KnowledgePage {
   created_by: string
   created_at: string
   updated_at: string
+  content?: Block[] | { blocks?: Block[] }
   // 聚合
   children: KnowledgePage[]
 }
@@ -167,6 +168,7 @@ function TreeNode({
 
 export default function KnowledgePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [tree, setTree] = useState<KnowledgePage[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -183,13 +185,17 @@ export default function KnowledgePage() {
       if (res.ok) {
         const data = await res.json()
         setTree(data.data || [])
+        const pageId = searchParams.get('page')
+        if (pageId) {
+          setSelectedId(pageId)
+        }
       }
     } catch (err) {
       handleError(err, '加载知识库失败')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [searchParams])
 
   useEffect(() => {
     void loadTree()
@@ -313,9 +319,25 @@ export default function KnowledgePage() {
 }
 
 // 知识库内容组件
+function getInitialBlocks(content: KnowledgePage['content']): Block[] {
+  if (Array.isArray(content)) {
+    return content as Block[]
+  }
+  if (content && typeof content === 'object' && Array.isArray(content.blocks)) {
+    return content.blocks
+  }
+  return []
+}
+
+function blocksToText(blocks: Block[]): string {
+  return blocks.map((block) => block.content).filter(Boolean).join('\n')
+}
+
 function KnowledgeContent({ pageId }: { pageId: string }) {
   const [page, setPage] = useState<KnowledgePage | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     async function loadPage() {
@@ -336,6 +358,48 @@ function KnowledgeContent({ pageId }: { pageId: string }) {
       }
     }
     void loadPage()
+  }, [pageId])
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleBlocksChange = useCallback((blocks: Block[]) => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+    }
+
+    setSaveStatus('saving')
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/knowledge/pages/${pageId}`, {
+          method: 'PATCH',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: blocks,
+            content_text: blocksToText(blocks),
+            change_note: '编辑器自动保存',
+          }),
+        })
+
+        if (!res.ok) {
+          throw new Error('保存失败')
+        }
+
+        setSaveStatus('saved')
+      } catch (err) {
+        setSaveStatus('error')
+        handleError(err, '保存页面失败')
+      }
+    }, 800)
   }, [pageId])
 
   if (loading) {
@@ -376,16 +440,18 @@ function KnowledgeContent({ pageId }: { pageId: string }) {
           <h2 className="text-2xl font-bold text-slate-900">{page.title}</h2>
           <p className="text-sm text-slate-500">
             {typeLabels[page.type] || '文档'} · 深度 {page.depth}
+            {saveStatus === 'saving' && ' · 保存中'}
+            {saveStatus === 'saved' && ' · 已保存'}
+            {saveStatus === 'error' && ' · 保存失败'}
           </p>
         </div>
       </div>
 
       {/* 内容区 - Notion风格富文本编辑器 */}
       <NotionEditor
-        onChange={(blocks) => {
-          // 自动保存（防抖处理在组件内）
-          console.log('Blocks changed:', blocks)
-        }}
+        key={page.id}
+        initialBlocks={getInitialBlocks(page.content)}
+        onChange={handleBlocksChange}
       />
     </div>
   )

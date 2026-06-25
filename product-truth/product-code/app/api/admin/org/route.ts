@@ -52,6 +52,11 @@ type SalesSpaceRow = {
   owner_id: string | null
 }
 
+type OrgUserIdRow = {
+  id?: string
+  user_id?: string
+}
+
 type OrgContext = {
   user: Awaited<ReturnType<typeof requireAuth>>
   orgId: string
@@ -141,27 +146,34 @@ const getCachedOrganization = cache(async (orgId: string) => {
   return data
 })
 
-// 缓存用户角色查询
-// ponytail: 之前用 .eq('scope_id', orgId) 漏掉了 org-level 角色（scope_id=null）
-// 修复：改用子查询——先查该组织所有用户，再查这些用户的 user_roles
-const getCachedUserRoles = cache(async (orgId: string) => {
-  // 获取该组织所有用户ID
-  const { data: userIds, error: userError } = await supabaseAdmin
-    .from('users')
-    .select('id')
-    .eq('org_id', orgId)
+const getCachedOrgUserIds = cache(async (orgId: string): Promise<string[]> => {
+  const [membershipResult, directResult] = await Promise.all([
+    supabaseAdmin
+      .from('user_organizations')
+      .select('user_id')
+      .eq('org_id', orgId),
+    supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('org_id', orgId),
+  ])
 
-  if (userError) {
-    console.error('[getCachedUserRoles] User fetch error:', userError)
-    throw new Error('USER_ROLES_FETCH_FAILED')
+  if (membershipResult.error || directResult.error) {
+    throw new Error('ORG_USERS_FETCH_FAILED')
   }
 
-  const ids = userIds?.map((u) => u.id) || []
-  console.log(`[getCachedUserRoles] Found ${ids.length} users in org ${orgId}`)
+  return Array.from(new Set([
+    ...((membershipResult.data || []) as OrgUserIdRow[]).map((row) => row.user_id),
+    ...((directResult.data || []) as OrgUserIdRow[]).map((row) => row.id),
+  ].filter((id): id is string => Boolean(id))))
+})
 
-  if (ids.length === 0) return []
+const getCachedUserRoles = cache(async (orgId: string) => {
+  const ids = await getCachedOrgUserIds(orgId)
+  if (ids.length === 0) {
+    return []
+  }
 
-  // 查询这些用户的所有角色（包括 org/department/space 各级别）
   const { data, error } = await supabaseAdmin
     .from('user_roles')
     .select('user_id, scope_type, scope_id, granted_at, role_id, role:roles(id, name, code)')
@@ -170,13 +182,6 @@ const getCachedUserRoles = cache(async (orgId: string) => {
   if (error) {
     console.error('[getCachedUserRoles] Role fetch error:', error)
     throw new Error('USER_ROLES_FETCH_FAILED')
-  }
-
-  console.log(`[getCachedUserRoles] Found ${data?.length || 0} role assignments`)
-
-  // Debug: log first few entries
-  if (data && data.length > 0) {
-    console.log('[getCachedUserRoles] Sample entry:', JSON.stringify(data[0], null, 2))
   }
 
   return data || []
@@ -252,7 +257,7 @@ async function replaceOrgRoles(userId: string, orgId: string, roleCodes: string[
     .delete()
     .eq('user_id', userId)
     .eq('scope_type', 'org')
-    .eq('scope_id', orgId)
+    .or(`scope_id.is.null,scope_id.eq.${orgId}`)
 
   if (selectedRoles.length === 0) {
     return
@@ -293,7 +298,7 @@ async function replaceScopedRoles(
     .eq('scope_type', scopeType)
 
   if (scopeType === 'org') {
-    deleteQuery = deleteQuery.eq('scope_id', orgId)
+    deleteQuery = deleteQuery.or(`scope_id.is.null,scope_id.eq.${orgId}`)
   } else if (scopeId) {
     deleteQuery = deleteQuery.eq('scope_id', scopeId)
   }
@@ -345,7 +350,7 @@ async function clearUserRolesForOrg(userId: string, orgId: string) {
     .delete()
     .eq('user_id', userId)
     .eq('scope_type', 'org')
-    .eq('scope_id', orgId)
+    .or(`scope_id.is.null,scope_id.eq.${orgId}`)
 
   if (departmentIds.length > 0) {
     await supabaseAdmin
@@ -367,7 +372,6 @@ async function clearUserRolesForOrg(userId: string, orgId: string) {
 }
 
 async function syncPrimaryDepartmentMembership(userId: string, primaryDeptId: string | null) {
-  // ponytail: A5 修复 - 添加 await 确保重置操作完成
   const { error: resetError } = await supabaseAdmin
     .from('user_departments')
     .update({ is_primary: false })
@@ -468,40 +472,48 @@ async function syncUserSalesSpaces(userId: string, orgId: string, primaryDeptId:
 // 优化后的列表查询 - 使用缓存和简化查询
 async function listOrgPayload(orgId: string) {
   // 并行获取缓存数据（部门、角色、销售空间、组织信息）
-  const [departments, roles, spaces, organization] = await Promise.all([
+  const [departments, roles, spaces, organization, orgUserIds] = await Promise.all([
     getCachedDepartments(orgId),
     getCachedRoles(),
     getCachedSalesSpaces(orgId),
     getCachedOrganization(orgId),
+    getCachedOrgUserIds(orgId),
   ])
-
-  // ponytail: 调试空数据问题 (A3)
-  // 如果部门和用户都为空，可能是 seed 数据未运行或 org_id 不匹配
-  const isEmptyState = departments.length === 0
 
   // 构建部门名称映射
   const departmentNameById = new Map(departments.map((d) => [d.id, d.name]))
   const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]))
 
-  // 简化用户查询 - 不关联复杂角色数据，只获取基础信息
-  const { data: usersData, error: usersError } = await supabaseAdmin
-    .from('users')
-    .select('id, email, display_name, title, status, must_change_password, primary_dept_id, login_enabled, report_to_user_id')
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false })
-    .limit(200)
+  let usersData: Array<{
+    id: string
+    email: string | null
+    display_name: string
+    title: string | null
+    status: string
+    must_change_password: boolean | null
+    primary_dept_id: string | null
+    login_enabled: boolean | null
+    report_to_user_id: string | null
+    created_at?: string
+  }> = []
 
-  if (usersError) {
-    throw new Error('USERS_FETCH_FAILED')
-  }
+  if (orgUserIds.length > 0) {
+    const { data, error: usersError } = await supabaseAdmin
+      .from('users')
+      .select('id, email, display_name, title, status, must_change_password, primary_dept_id, login_enabled, report_to_user_id, created_at')
+      .in('id', orgUserIds)
+      .order('created_at', { ascending: false })
+      .limit(200)
 
-  // 调试日志：检测空数据状态
-  if (isEmptyState && (usersData || []).length === 0) {
-    console.warn(`[A3 Debug] Org ${orgId} has no departments and no users. Run: node scripts/seed-via-api.mjs`)
+    if (usersError) {
+      throw new Error('USERS_FETCH_FAILED')
+    }
+
+    usersData = data || []
   }
 
   // 构建用户姓名映射（用于查找部门主管）
-  const userNameById = new Map((usersData || []).map((u) => [u.id, u.display_name]))
+  const userNameById = new Map(usersData.map((u) => [u.id, u.display_name]))
 
   // 获取用户角色关联（缓存）
   const userRolesData = await getCachedUserRoles(orgId)
@@ -521,7 +533,7 @@ async function listOrgPayload(orgId: string) {
   }
 
   // 处理用户数据
-  const users = (usersData || []).map((row) => {
+  const users = usersData.map((row) => {
     const userRoleEntries = (userRolesMap.get(row.id) || [])
       .map((ur: unknown) => {
         const entry = ur as {
@@ -617,10 +629,9 @@ export async function GET(req: NextRequest) {
 
     const data = await listOrgPayload(auth.orgId)
 
-    // Edge Cache: 缓存 30s，过期后 2min 内增量更新
     return NextResponse.json(data, {
       headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+        'Cache-Control': 'no-store',
       },
     })
   } catch (error) {

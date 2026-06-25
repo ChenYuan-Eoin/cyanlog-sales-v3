@@ -204,6 +204,14 @@ export async function PATCH(req: NextRequest) {
       return errorResponse('阶梯价不存在', 404, 'NOT_FOUND')
     }
 
+    const existingProductLookup = await verifyProductAccess(existingTier.product_id, orgId)
+    if (existingProductLookup.error || !existingProductLookup.data) {
+      return errorResponse('阶梯价不存在或无权限', 404, 'NOT_FOUND')
+    }
+    if (existingProductLookup.migrationRequired) {
+      return migrationRequiredResponse()
+    }
+
     const productId = validated.data.product_id || existingTier.product_id
     const productLookup = await verifyProductAccess(productId, orgId)
     if (productLookup.error || !productLookup.data) {

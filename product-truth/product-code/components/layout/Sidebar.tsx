@@ -68,7 +68,9 @@ export function Sidebar() {
       <button
         className="fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md lg:hidden shadow-lg"
         onClick={() => setMobileOpen(!mobileOpen)}
-        aria-label="Toggle menu"
+        aria-label="打开主导航"
+        aria-controls="app-sidebar"
+        aria-expanded={mobileOpen}
       >
         <MenuIcon size={22} />
       </button>
@@ -84,11 +86,11 @@ export function Sidebar() {
 
       {/* Sidebar - responsive width for mobile/tablet/desktop */}
       <aside
+        id="app-sidebar"
         className={cn(
           'fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white',
           'will-change-transform',
-          // Responsive width: full on mobile, w-56 on md, w-64 on lg
-          'w-full sm:w-72 md:w-56 lg:w-64',
+          'w-[min(20rem,calc(100vw-2rem))] sm:w-80 lg:w-64',
           // Transition only on mobile, desktop is always visible
           'lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'

@@ -10,11 +10,28 @@ import { useChunkUpload } from '@/lib/hooks/useChunkUpload'
 import { UploadProgressBar } from '@/components/upload/UploadProgress'
 import { cn } from '@/lib/utils'
 
-// ponytail: 文件类型验证用扩展名而非 MIME 类型（更可靠）
+// 文件类型验证用扩展名而非 MIME 类型，减少浏览器 MIME 差异影响。
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
 
 // 最大文件大小: 500MB
 const MAX_FILE_SIZE = 500 * 1024 * 1024
+
+function readApiError(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === 'object') {
+    const error = (payload as { error?: unknown }).error
+    if (typeof error === 'string') {
+      return error
+    }
+    if (error && typeof error === 'object') {
+      const message = (error as { message?: unknown }).message
+      if (typeof message === 'string') {
+        return message
+      }
+    }
+  }
+
+  return fallback
+}
 
 export default function ContractUploadPage() {
   const router = useRouter()
@@ -35,7 +52,7 @@ export default function ContractUploadPage() {
     concurrency: 3, // 3个并发
     maxRetries: 3,
     onProgress: () => {
-      // ponytail: 进度更新时触发重渲染，不直接操作 DOM
+      // 进度状态由 hook 管理，页面只消费状态渲染。
     },
     onComplete: () => {
       toastSuccess('上传成功')
@@ -187,7 +204,7 @@ export default function ContractUploadPage() {
 
         if (!createRes.ok) {
           const err = await createRes.json().catch(() => ({ error: '创建合同草稿失败' }))
-          throw new Error(err.error || '创建合同草稿失败')
+          throw new Error(readApiError(err, '创建合同草稿失败'))
         }
 
         const createData = await createRes.json()

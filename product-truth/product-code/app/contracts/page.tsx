@@ -182,6 +182,20 @@ export default function ContractCenterPage() {
     return { total, pending, needAttention, completed }
   }, [contracts, drafts])
 
+  const resolvedQuickActions = useMemo(() => {
+    const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED') || contracts[0]
+    return quickActions.map((action) => {
+      if (action.id !== 'compare') {
+        return action
+      }
+      return {
+        ...action,
+        href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/new',
+        description: compareTarget ? '查看最近合同差异' : '先创建合同',
+      }
+    })
+  }, [contracts])
+
   // 过滤后的任务列表
   const filteredTasks = useMemo(() => {
     const draftTasks = drafts.map((d) => ({
@@ -265,7 +279,7 @@ export default function ContractCenterPage() {
 
             {/* 桌面端快捷操作 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
-              {quickActions.slice(0, 3).map((action) => (
+              {resolvedQuickActions.slice(0, 3).map((action) => (
                 <Link key={action.id} href={action.href}>
                   <Button size="sm" variant="outline" className="gap-1.5">
                     <action.icon className="h-4 w-4" />
@@ -292,7 +306,7 @@ export default function ContractCenterPage() {
           {/* 桌面端快捷操作大按钮 */}
           {!isMobile && (
             <div className="grid grid-cols-4 gap-3 mt-4">
-              {quickActions.map((action) => (
+              {resolvedQuickActions.map((action) => (
                 <Link key={action.id} href={action.href} className="group">
                   <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
                     <div className={`w-10 h-10 rounded-lg ${action.color} ${action.hoverColor} flex items-center justify-center shrink-0`}>
@@ -412,9 +426,9 @@ export default function ContractCenterPage() {
 
       {/* 移动端底部固定快捷操作栏 */}
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-[100] safe-area-pb">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-20 safe-area-pb">
           <div className="flex items-center justify-around">
-            {quickActions.map((action) => (
+            {resolvedQuickActions.map((action) => (
               <Link
                 key={action.id}
                 href={action.href}

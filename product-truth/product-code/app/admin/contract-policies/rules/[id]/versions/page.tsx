@@ -22,7 +22,7 @@ import {
   BarChart3Icon,
   ChevronRightIcon,
 } from 'lucide-react'
-import { handleError, error } from '@/lib/toast'
+import { handleError, error, confirmAction } from '@/lib/toast'
 
 interface Version {
   id: string
@@ -117,7 +117,7 @@ export default function RuleVersionsPage() {
 
   const handleRollback = useCallback(
     async (versionId: string) => {
-      if (!confirm('确定要回滚到此版本吗？')) return
+      if (!await confirmAction('确定要回滚到此版本吗？', { confirmText: '回滚' })) return
       setRollingBackId(versionId)
       try {
         const token = localStorage.getItem('token')

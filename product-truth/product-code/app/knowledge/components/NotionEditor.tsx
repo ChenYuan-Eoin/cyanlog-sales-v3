@@ -89,9 +89,7 @@ function BlockEditor({
   onAddBelow: () => void
 }) {
 
-  // ponytail: 通用编辑器组件，接受任意元素类型的 FocusEvent
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleContentChange = (e: React.FocusEvent<any>) => {
+  const handleContentChange = (e: React.FocusEvent<Element>) => {
     onChange(block.id, { content: e.currentTarget.textContent || '' })
   }
 

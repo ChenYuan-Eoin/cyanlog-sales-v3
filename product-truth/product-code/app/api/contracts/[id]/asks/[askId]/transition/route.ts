@@ -3,10 +3,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getAuthUser } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
+import {
+  canReviewContracts,
+  getAccessibleContract,
+  getOrgRoleCodes,
+} from '@/lib/scoped-access'
 
 interface RouteParams {
-  params: Promise<{ askId: string }> | { askId: string }
+  params: Promise<{ id: string; askId: string }> | { id: string; askId: string }
 }
 
 export async function POST(
@@ -15,19 +20,24 @@ export async function POST(
 ) {
   try {
     const resolvedParams = await params
-    const { askId } = resolvedParams
+    const { id: contractId, askId } = resolvedParams
 
-    // 获取当前用户
-    const user = await getAuthUser(request)
-    if (!user) {
+    const user = await requireAuth(request)
+
+    const access = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    if (!access.contract) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Contract not found' },
+        { status: 404 }
       )
     }
 
-    // TODO: 检查用户是否有法务权限
-    // 暂时允许所有用户操作，实际应检查 role === 'legal' || role === 'admin'
+    if (!canReviewContracts(access.assignments)) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      )
+    }
 
     const body = await request.json()
     const { action, reason } = body
@@ -52,6 +62,7 @@ export async function POST(
       .from('ask_items')
       .select('*')
       .eq('id', askId)
+      .eq('contract_id', contractId)
       .single()
 
     if (askError || !ask) {
@@ -87,6 +98,7 @@ export async function POST(
           updated_at: now,
         })
         .eq('id', askId)
+        .eq('contract_id', contractId)
 
       if (updateError) {
         console.error('[ASK Transition] Close error:', updateError)
@@ -115,6 +127,7 @@ export async function POST(
           updated_at: now,
         })
         .eq('id', askId)
+        .eq('contract_id', contractId)
 
       if (updateError) {
         console.error('[ASK Transition] Reopen error:', updateError)
@@ -132,7 +145,7 @@ export async function POST(
         ask_id: askId,
         contract_id: ask.contract_id,
         actor_id: user.id,
-        actor_role: 'unknown', // TODO: 从用户角色表获取
+        actor_role: getOrgRoleCodes(access.assignments)[0] || 'unknown',
         event_type: eventType,
         from_status: fromStatus,
         to_status: toStatus,
@@ -156,6 +169,13 @@ export async function POST(
       },
     })
   } catch (error) {
+    const authError = error instanceof Error && error.name === 'AuthError'
+    if (authError) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
     console.error('[ASK Transition] Unexpected error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },

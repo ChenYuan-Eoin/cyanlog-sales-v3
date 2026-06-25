@@ -4,10 +4,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canUseKnowledgePage,
+  fetchKnowledgePermissions,
+  getKnowledgeAccessContext,
+} from '@/lib/knowledge/access'
+
+export const dynamic = 'force-dynamic'
 
 interface KnowledgePage {
   id: string
+  org_id: string
   title: string
   type: 'folder' | 'doc' | 'template' | 'rule' | 'case' | 'qualification' | 'reference'
   parent_id: string | null
@@ -62,7 +69,7 @@ function buildTree(pages: KnowledgePage[]): TreeNode[] {
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
+    const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
 
     const { searchParams } = new URL(req.url)
     const type = searchParams.get('type') as KnowledgePage['type'] | null
@@ -91,11 +98,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '获取知识库失败' }, { status: 500 })
     }
 
-    const tree = buildTree(pages || [])
+    const permissionMap = await fetchKnowledgePermissions((pages || []).map((page) => page.id))
+    const visiblePages = ((pages || []) as KnowledgePage[]).filter((page) =>
+      canUseKnowledgePage(
+        page,
+        permissionMap.get(page.id) || [],
+        { userId: user.id, orgId, assignments },
+        'view'
+      )
+    )
+    const tree = buildTree(visiblePages)
 
     return NextResponse.json({
       data: tree,
-      meta: { total: pages?.length || 0 },
+      meta: { total: visiblePages.length },
     })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'

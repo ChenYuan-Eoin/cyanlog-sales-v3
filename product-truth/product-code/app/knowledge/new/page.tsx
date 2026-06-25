@@ -39,7 +39,8 @@ export default function KnowledgeNewPage() {
 
       if (res.ok) {
         const data = await res.json()
-        router.push(`/knowledge/pages/${data.data?.id || data.id}`)
+        const pageId = data.data?.id || data.id
+        router.push(pageId ? `/knowledge?page=${pageId}` : '/knowledge')
       } else {
         const err = await res.json().catch(() => ({}))
         toastError(err.error || '创建失败')

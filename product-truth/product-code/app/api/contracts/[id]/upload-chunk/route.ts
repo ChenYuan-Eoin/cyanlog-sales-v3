@@ -5,6 +5,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { logError } from '@/lib/error-log'
+import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { errorResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 // 临时分块存储桶名称
 const TEMP_BUCKET = 'contract-chunks'
@@ -16,24 +19,24 @@ export async function POST(
   try {
     const user = await requireAuth(req)
     if (!user) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 })
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
 
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     const contractId = params.id
 
     // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin
       .from('contracts')
-      .select('id, created_by, status')
+      .select('id, created_by, org_id, status')
       .eq('id', contractId)
+      .eq('org_id', orgId)
+      .in('created_by', accessibleUserIds)
       .single()
 
     if (fetchError || !contract) {
-      return NextResponse.json({ error: '合同不存在' }, { status: 404 })
-    }
-
-    if (contract.created_by !== user.id) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 })
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
     }
 
     // 获取表单数据
@@ -46,13 +49,12 @@ export async function POST(
     const fileName = formData.get('fileName') as string
     const fileType = formData.get('fileType') as string
 
-    // ponytail: totalSize 用于日志记录和验证（未来扩展）
     void totalSize
     void start
     void end
 
     if (!chunk || isNaN(index)) {
-      return NextResponse.json({ error: '无效的分块数据' }, { status: 400 })
+      return errorResponse(createApiError('VALIDATION_ERROR', '无效的分块数据'))
     }
 
     // 生成临时分块路径
@@ -81,7 +83,7 @@ export async function POST(
           fileName,
         },
       })
-      return NextResponse.json({ error: '分块上传失败' }, { status: 500 })
+      return errorResponse(createApiError('DB_ERROR', '分块上传失败'))
     }
 
     return NextResponse.json({
@@ -104,6 +106,6 @@ export async function POST(
         route: '/api/contracts/[id]/upload-chunk',
       },
     })
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 })
+    return errorResponse(createApiError('INTERNAL_ERROR', '服务器错误'))
   }
 }

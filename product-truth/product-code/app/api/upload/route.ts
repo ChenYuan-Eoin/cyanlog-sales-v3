@@ -42,7 +42,6 @@ async function ensureBucketExists(): Promise<boolean> {
       return false
     }
 
-    console.log(`Bucket '${BUCKET_NAME}' created automatically`)
     return true
   } catch (error) {
     console.error('Ensure bucket error:', error)
@@ -100,7 +99,6 @@ export async function POST(req: NextRequest) {
                            uploadResult.error.message?.toLowerCase().includes('does not exist')
 
       if (isBucketError) {
-        console.log('Bucket not found, attempting to create...')
         const created = await ensureBucketExists()
 
         if (created) {

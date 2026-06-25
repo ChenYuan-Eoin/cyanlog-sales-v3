@@ -15,10 +15,25 @@ function errorResponse(message: string, status: number, code?: string) {
   )
 }
 
+async function parseLoginPayload(req: NextRequest) {
+  const contentType = req.headers.get('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    return req.json()
+  }
+
+  const formData = await req.formData()
+  return {
+    email: String(formData.get('email') || ''),
+    phone: String(formData.get('phone') || ''),
+    password: String(formData.get('password') || ''),
+  }
+}
+
 // POST /api/auth/login - 用户登录
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
+    const body = await parseLoginPayload(req)
 
     // Zod验证
     const result = loginSchema.safeParse(body)

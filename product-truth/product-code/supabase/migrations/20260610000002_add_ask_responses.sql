@@ -35,10 +35,27 @@ COMMENT ON COLUMN ask_responses.responder_name IS '回应人姓名（冗余，�
 ALTER TABLE ask_responses ENABLE ROW LEVEL SECURITY;
 
 -- 策略：组织内成员可见
+DROP POLICY IF EXISTS ask_responses_org_policy ON ask_responses;
 CREATE POLICY ask_responses_org_policy ON ask_responses
   USING (EXISTS (
     SELECT 1 FROM ask_items ai
     JOIN contracts c ON ai.contract_id = c.id
-    JOIN organization_members om ON c.org_id = om.org_id
-    WHERE ai.id = ask_responses.ask_id AND om.user_id = auth.uid()
+    JOIN users contract_owner ON contract_owner.id = c.created_by
+    WHERE ai.id = ask_responses.ask_id
+      AND (
+        c.created_by = auth.uid()
+        OR
+        EXISTS (
+          SELECT 1
+          FROM user_organizations uo
+          WHERE uo.org_id = contract_owner.org_id
+            AND uo.user_id = auth.uid()
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.id = auth.uid()
+            AND u.org_id = contract_owner.org_id
+        )
+      )
   ));

@@ -2,6 +2,9 @@
 // 转发到 /api/ai/analyze，并转换返回格式
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import type { AuthUser } from '@/lib/auth'
 
 interface RiskItem {
   id?: string
@@ -12,9 +15,26 @@ interface RiskItem {
   ruleCode?: string
 }
 
+const analyzeContractSchema = z.object({
+  text: z.string().min(1, '请提供合同文本').max(100_000),
+  pageCount: z.number().int().min(1).max(1000).optional(),
+})
+
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json()
+  return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
+    const body = await req.json().catch(() => ({}))
+    const parsed = analyzeContractSchema.safeParse({
+      text: body.contractText || body.text || '',
+      pageCount: body.pageCount || 1,
+    })
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || '参数无效' },
+        { status: 400 }
+      )
+    }
+
     const token = req.headers.get('authorization')
 
     const res = await fetch(`${req.nextUrl.origin}/api/ai/analyze`, {
@@ -24,13 +44,23 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        text: body.contractText || body.text || '',
-        pageCount: body.pageCount || 1,
+        text: parsed.data.text,
+        pageCount: parsed.data.pageCount || 1,
         task: 'semantic',
       }),
     })
 
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const message = typeof data.error === 'string'
+        ? data.error
+        : data.error?.message || '分析失败'
+
+      return NextResponse.json(
+        { error: message },
+        { status: res.status }
+      )
+    }
 
     // 转换格式以匹配前端期望
     if (data.result) {
@@ -60,8 +90,16 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json(data, { status: res.status })
-  } catch (_err) {
-    return NextResponse.json({ error: '分析失败' }, { status: 500 })
-  }
+    return NextResponse.json({
+      data: {
+        risks: [],
+        summary: data.summary || '',
+        appliedRules: 0,
+        matchedRules: 0,
+        greenCount: 0,
+        yellowCount: 0,
+        redCount: 0,
+      },
+    })
+  })
 }

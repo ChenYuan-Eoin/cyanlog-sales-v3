@@ -16,7 +16,7 @@ export function getRequestId(req?: NextRequest | Request): string | undefined {
 }
 
 export function logRouteStart(context: RequestLogContext) {
-  console.log(JSON.stringify({
+  console.info(JSON.stringify({
     level: 'info',
     msg: 'start',
     route: context.route,
@@ -27,7 +27,7 @@ export function logRouteStart(context: RequestLogContext) {
 }
 
 export function logRouteDone(context: RequestLogContext, startedAt: number, details?: Record<string, unknown>) {
-  console.log(JSON.stringify({
+  console.info(JSON.stringify({
     level: 'info',
     msg: 'done',
     route: context.route,

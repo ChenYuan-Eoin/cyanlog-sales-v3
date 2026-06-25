@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { getAccessibleContract } from '@/lib/scoped-access'
 
 interface AskInput {
   clause_ref?: string
@@ -17,12 +18,27 @@ interface AskInput {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const user = await requireAuth(req)
-    const contractId = params.id
+    const { id: contractId } = await params
     const { asks } = await req.json() // 来自 AI 扫描结果
+
+    if (!Array.isArray(asks)) {
+      return NextResponse.json(
+        { error: 'ASK list is required' },
+        { status: 400 }
+      )
+    }
+
+    const access = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    if (!access.contract) {
+      return NextResponse.json(
+        { error: 'Contract not found' },
+        { status: 404 }
+      )
+    }
 
     // 批量插入 ASK
     const { data, error } = await supabaseAdmin
@@ -51,6 +67,8 @@ export async function POST(
       .from('contracts')
       .update({ status: 'ASK_GENERATED', asks_count: asks.length })
       .eq('id', contractId)
+      .eq('org_id', access.orgId)
+      .in('created_by', access.userIds)
 
     return NextResponse.json({ success: true, data })
   } catch (err: unknown) {

@@ -74,9 +74,6 @@ export async function POST(
       return NextResponse.json({ error: '重置密码失败' }, { status: 500 })
     }
 
-    // ponytail: 不在这里发邮件，避免引入邮件服务依赖
-    // 升级路径：接入邮件服务（如 SendGrid/Amazon SES）后，在此处调用邮件发送
-
     return NextResponse.json({
       success: true,
       data: {

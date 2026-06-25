@@ -90,7 +90,7 @@ export function DepartmentFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>{trigger ?? (
+      <DialogTrigger asChild>{trigger ?? (
         <Button variant="outline" size="sm">
           <PlusIcon className="h-4 w-4 mr-1" />
           添加部门

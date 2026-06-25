@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
-    // 返回分页数据，Edge Cache 60s
+    // Authenticated product data must not be stored in shared caches.
     return NextResponse.json(
       {
         data,
@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
       },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+          'Cache-Control': 'no-store',
         },
       }
     )

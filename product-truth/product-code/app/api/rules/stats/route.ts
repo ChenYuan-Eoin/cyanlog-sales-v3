@@ -6,6 +6,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/rules/stats - 获取规则统计总览
 export async function GET(req: NextRequest) {
   try {
@@ -26,20 +28,17 @@ export async function GET(req: NextRequest) {
 
     // 获取所有规则的统计摘要
     const { data: rules, error: rulesError } = await supabaseAdmin
-      .from('contract_rules')
+      .from('contract_rules_v2')
       .select(`
         id,
+        code,
         name,
-        rule_code,
-        rule_type,
-        level,
-        total_evaluations,
-        trigger_count,
-        hit_rate,
-        status
+        category,
+        is_active,
+        priority
       `)
       .eq('org_id', orgId)
-      .order('hit_rate', { ascending: false })
+      .order('priority', { ascending: false })
 
     if (rulesError) {
       console.error('Get rules stats error:', rulesError)
@@ -49,50 +48,28 @@ export async function GET(req: NextRequest) {
     // 计算汇总统计
     const summary = {
       total_rules: rules?.length || 0,
-      published_rules: rules?.filter(r => r.status === 'published').length || 0,
-      avg_hit_rate: rules?.length > 0
-        ? Math.round(rules.reduce((sum, r) => sum + (r.hit_rate || 0), 0) / rules.length)
-        : 0,
-      structured_rules: rules?.filter(r => r.rule_type === 'structured').length || 0,
-      semantic_rules: rules?.filter(r => r.rule_type === 'semantic').length || 0,
+      published_rules: rules?.filter(r => r.is_active).length || 0,
+      avg_hit_rate: 0,
+      structured_rules: rules?.filter(r => r.category !== 'text').length || 0,
+      semantic_rules: rules?.filter(r => r.category === 'text').length || 0,
     }
-
-    // 识别低命中率规则（告警）
-    const lowHitRateRules = rules?.filter(r =>
-      r.hit_rate < 10 && r.total_evaluations > 50
-    ) || []
-
-    // 识别高命中率规则（可能过宽）
-    const highHitRateRules = rules?.filter(r =>
-      r.hit_rate > 80
-    ) || []
 
     return NextResponse.json({
       summary,
       rules: rules?.map(r => ({
         id: r.id,
         name: r.name,
-        rule_code: r.rule_code,
-        rule_type: r.rule_type,
-        level: r.level,
-        hit_rate: r.hit_rate,
-        total_evaluations: r.total_evaluations,
-        trigger_count: r.trigger_count,
-        status: r.status,
+        rule_code: r.code,
+        rule_type: r.category === 'text' ? 'semantic' : 'structured',
+        level: r.category,
+        hit_rate: 0,
+        total_evaluations: 0,
+        trigger_count: 0,
+        status: r.is_active ? 'published' : 'archived',
       })) || [],
       alerts: {
-        low_hit_rate: lowHitRateRules.map(r => ({
-          id: r.id,
-          name: r.name,
-          hit_rate: r.hit_rate,
-          message: `规则 ${r.rule_code || r.name} 触发率仅 ${r.hit_rate}%，建议检查是否需要优化或删除`,
-        })),
-        high_hit_rate: highHitRateRules.map(r => ({
-          id: r.id,
-          name: r.name,
-          hit_rate: r.hit_rate,
-          message: `规则 ${r.rule_code || r.name} 触发率 ${r.hit_rate}%，可能条件过宽`,
-        })),
+        low_hit_rate: [],
+        high_hit_rate: [],
       },
     })
   } catch (error) {
@@ -109,7 +86,7 @@ export async function GET(req: NextRequest) {
 async function getSingleRuleStats(ruleId: string, orgId: string, startDate: Date) {
   // 检查规则
   const { data: rule, error: ruleError } = await supabaseAdmin
-    .from('contract_rules')
+    .from('contract_rules_v2')
     .select('*')
     .eq('id', ruleId)
     .eq('org_id', orgId)
@@ -154,15 +131,15 @@ async function getSingleRuleStats(ruleId: string, orgId: string, startDate: Date
     rule: {
       id: rule.id,
       name: rule.name,
-      rule_code: rule.rule_code,
-      rule_type: rule.rule_type,
-      level: rule.level,
-      status: rule.status,
+      rule_code: rule.code,
+      rule_type: rule.category === 'text' ? 'semantic' : 'structured',
+      level: rule.category,
+      status: rule.is_active ? 'published' : 'archived',
     },
     stats: {
-      total_evaluations: rule.total_evaluations,
-      trigger_count: rule.trigger_count,
-      hit_rate: rule.hit_rate,
+      total_evaluations: 0,
+      trigger_count: 0,
+      hit_rate: 0,
     },
     trend: dailyStats?.map(s => ({
       date: s.stat_date,

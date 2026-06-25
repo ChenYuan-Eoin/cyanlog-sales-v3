@@ -17,10 +17,10 @@ export const metadata: Metadata = {
   description: "智能销售支撑平台",
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
       { url: '/favicon.svg', type: 'image/svg+xml' },
     ],
-    shortcut: '/favicon.ico',
+    shortcut: '/favicon.png',
     apple: '/favicon.png',
   },
 };
@@ -57,11 +57,6 @@ export default async function RootLayout({
       data-product-subtitle={theme.productSubtitle}
       data-login-subtitle={theme.loginSubtitle}
     >
-      <head>
-        {/* 预加载关键字体 */}
-        <link rel="preload" href="/fonts/GeistVF.woff" as="font" type="font/woff" crossOrigin="anonymous" />
-        <link rel="preload" href="/fonts/GeistMonoVF.woff" as="font" type="font/woff" crossOrigin="anonymous" />
-      </head>
       <body className="antialiased">
         <BrandingProvider value={theme}>
           <ClientErrorMonitor />

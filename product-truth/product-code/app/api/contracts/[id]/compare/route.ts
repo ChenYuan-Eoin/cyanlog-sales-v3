@@ -2,16 +2,18 @@
 // GET /api/contracts/:id/compare
 // 文档比对 API
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
 import {
   errorResponse,
   createdResponse,
+  successResponse,
 } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { listAccessibleUserIds } from '@/lib/scoped-access'
 
 const compareSchema = z.object({
   baseline_type: z.enum(['template', 'previous_version', 'uploaded']),
@@ -24,7 +26,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuthAndOrg(req, async (user: AuthUser, _orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
     const body = await req.json().catch(() => ({}))
     const parsed = compareSchema.safeParse(body)
@@ -33,6 +35,19 @@ export async function POST(
       return errorResponse(
         createApiError('VALIDATION_ERROR', '参数验证失败')
       )
+    }
+
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const { data: contract } = await supabaseAdmin
+      .from('contracts')
+      .select('id')
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .in('created_by', accessibleUserIds)
+      .maybeSingle()
+
+    if (!contract) {
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在或无权访问'))
     }
 
     const { data: comparison, error } = await supabaseAdmin
@@ -52,7 +67,6 @@ export async function POST(
       return errorResponse(createApiError('DB_ERROR', '创建比对任务失败'))
     }
 
-    // TODO: 在后台执行比对（Phase 5）
     // 现在直接标记为已完成并返回占位结果
     await supabaseAdmin
       .from('contract_comparisons')
@@ -95,16 +109,20 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
 
     const { data: comparisons, error } = await supabaseAdmin
       .from('contract_comparisons')
       .select(`
         *,
+        contracts!inner(id, org_id, created_by),
         comparison_diffs(id, diff_type, baseline_text, compare_text, semantic_change, risk_level, sort_order)
       `)
       .eq('contract_id', id)
+      .eq('contracts.org_id', orgId)
+      .in('contracts.created_by', accessibleUserIds)
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -115,14 +133,12 @@ export async function GET(
     const comparison = comparisons?.[0]
 
     if (!comparison) {
-      return errorResponse(createApiError('NOT_FOUND', '无比对记录'))
+      return successResponse(null)
     }
 
-    return NextResponse.json({
-      data: {
-        ...comparison,
-        diffs: comparison.comparison_diffs || [],
-      },
+    return successResponse({
+      ...comparison,
+      diffs: comparison.comparison_diffs || [],
     })
   })
 }
