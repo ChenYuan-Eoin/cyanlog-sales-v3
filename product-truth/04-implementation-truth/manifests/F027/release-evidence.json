@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "ff9f4bd",
+  "head": "6609af8",
   "commits": [
     {
       "sha": "5641824",
@@ -143,20 +143,24 @@
     {
       "sha": "ff9f4bd",
       "message": "fix(configs): classify malformed json as validation errors"
+    },
+    {
+      "sha": "6609af8",
+      "message": "fix(knowledge): classify malformed json as validation errors"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
+    "deployment_id": "dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/GCdMNrSB1RQj1jtxcabmsV6zrr5e"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/DDfZfD9oNiuRgdA4EkNYExFAb1ic"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "67 files / 345 tests passed",
+    "test": "69 files / 347 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 302ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 584ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -167,7 +171,7 @@
     "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Final prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms; all submitted-login route totals are far below 0.5s. First prewarm request still took 2066ms, so cold startup cost remains visible but is no longer on the submit path when prewarm completes.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23/4bc49c6 production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-d1d47a8244087e40.js returned 61,052 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
-    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 67 files / 345 tests without the Node 24 --localstorage-file warning.",
+    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 69 files / 347 tests without the Node 24 --localstorage-file warning.",
     "lint_warning_cleanup": "Standard pnpm lint now uses ESLint CLI over app/components/lib/types plus middleware/instrumentation/Sentry config files; latest run passed without the Next 16 next lint deprecation warning.",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
@@ -181,11 +185,11 @@
       "temp_included": false
     },
     "org_admin_route_timing": {
-      "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
-      "commit": "ff9f4bd",
+      "deployment": "dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic",
+      "commit": "6609af8",
       "http_status": 200,
       "payload_source": "rpc",
-      "x_org_timing": "auth;dur=0.3, rpc_payload;dur=79.1, total;dur=79.6",
+      "x_org_timing": "auth;dur=0.2, rpc_payload;dur=55.5, total;dur=55.9",
       "cache_control": "no-store",
       "users": 25,
       "departments": 11,
@@ -208,11 +212,36 @@
         "deployment": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
         "login_timing": "total;dur=223.1",
         "results": [
-          { "route": "POST /api/admin/departments", "status": 400, "code": "VALIDATION_ERROR", "ms": 588 },
-          { "route": "PATCH /api/admin/departments/[id]", "status": 400, "code": "VALIDATION_ERROR", "ms": 878 },
-          { "route": "POST /api/admin/users", "status": 400, "code": "VALIDATION_ERROR", "ms": 520 },
-          { "route": "PATCH /api/admin/users/[id]", "status": 400, "code": "VALIDATION_ERROR", "ms": 599 },
-          { "route": "POST /api/admin/users/[id]/roles", "status": 400, "code": "VALIDATION_ERROR", "ms": 561 }
+          {
+            "route": "POST /api/admin/departments",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 588
+          },
+          {
+            "route": "PATCH /api/admin/departments/[id]",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 878
+          },
+          {
+            "route": "POST /api/admin/users",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 520
+          },
+          {
+            "route": "PATCH /api/admin/users/[id]",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 599
+          },
+          {
+            "route": "POST /api/admin/users/[id]/roles",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 561
+          }
         ]
       }
     },
@@ -222,11 +251,51 @@
       "production": {
         "deployment": "dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy",
         "samples": [
-          { "sample": 1, "wall_ms": 2551, "route_total_ms": 315.0, "login_rpc_ms": 291.9, "rpc_total_ms": 108.7, "rpc_password_verify_ms": 79.5, "auth_context_cookie_ms": 13.8 },
-          { "sample": 2, "wall_ms": 438, "route_total_ms": 154.5, "login_rpc_ms": 152.2, "rpc_total_ms": 92.4, "rpc_password_verify_ms": 73.5, "auth_context_cookie_ms": 0.4 },
-          { "sample": 3, "wall_ms": 647, "route_total_ms": 124.5, "login_rpc_ms": 122.8, "rpc_total_ms": 93.4, "rpc_password_verify_ms": 73.4, "auth_context_cookie_ms": 0.5 },
-          { "sample": 4, "wall_ms": 398, "route_total_ms": 110.3, "login_rpc_ms": 108.7, "rpc_total_ms": 79.8, "rpc_password_verify_ms": 72.9, "auth_context_cookie_ms": 0.4 },
-          { "sample": 5, "wall_ms": 393, "route_total_ms": 109.8, "login_rpc_ms": 108.0, "rpc_total_ms": 78.0, "rpc_password_verify_ms": 73.0, "auth_context_cookie_ms": 0.5 }
+          {
+            "sample": 1,
+            "wall_ms": 2551,
+            "route_total_ms": 315,
+            "login_rpc_ms": 291.9,
+            "rpc_total_ms": 108.7,
+            "rpc_password_verify_ms": 79.5,
+            "auth_context_cookie_ms": 13.8
+          },
+          {
+            "sample": 2,
+            "wall_ms": 438,
+            "route_total_ms": 154.5,
+            "login_rpc_ms": 152.2,
+            "rpc_total_ms": 92.4,
+            "rpc_password_verify_ms": 73.5,
+            "auth_context_cookie_ms": 0.4
+          },
+          {
+            "sample": 3,
+            "wall_ms": 647,
+            "route_total_ms": 124.5,
+            "login_rpc_ms": 122.8,
+            "rpc_total_ms": 93.4,
+            "rpc_password_verify_ms": 73.4,
+            "auth_context_cookie_ms": 0.5
+          },
+          {
+            "sample": 4,
+            "wall_ms": 398,
+            "route_total_ms": 110.3,
+            "login_rpc_ms": 108.7,
+            "rpc_total_ms": 79.8,
+            "rpc_password_verify_ms": 72.9,
+            "auth_context_cookie_ms": 0.4
+          },
+          {
+            "sample": 5,
+            "wall_ms": 393,
+            "route_total_ms": 109.8,
+            "login_rpc_ms": 108,
+            "rpc_total_ms": 78,
+            "rpc_password_verify_ms": 73,
+            "auth_context_cookie_ms": 0.5
+          }
         ],
         "conclusion": "First instance use still pays HMAC import once; warmed instance signing falls to 0.4-0.5ms."
       }
@@ -239,12 +308,42 @@
       "production": {
         "deployment": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
         "results": [
-          { "route": "POST /api/auth/login", "status": 400, "code": "VALIDATION_ERROR", "ms": 1323 },
-          { "route": "POST /api/auth/register", "status": 400, "code": "VALIDATION_ERROR", "ms": 614 },
-          { "route": "POST /api/auth", "status": 400, "code": "VALIDATION_ERROR", "ms": 302 },
-          { "route": "POST /api/client-errors", "status": 400, "code": "INVALID_PAYLOAD", "ms": 648 },
-          { "route": "POST /api/auth/change-password", "status": 400, "code": "VALIDATION_ERROR", "ms": 696 },
-          { "route": "PATCH /api/profile", "status": 400, "code": "VALIDATION_ERROR", "ms": 561 }
+          {
+            "route": "POST /api/auth/login",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 1323
+          },
+          {
+            "route": "POST /api/auth/register",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 614
+          },
+          {
+            "route": "POST /api/auth",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 302
+          },
+          {
+            "route": "POST /api/client-errors",
+            "status": 400,
+            "code": "INVALID_PAYLOAD",
+            "ms": 648
+          },
+          {
+            "route": "POST /api/auth/change-password",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 696
+          },
+          {
+            "route": "PATCH /api/profile",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 561
+          }
         ],
         "route_contract_note": "Initial online verification found unauthenticated POST /api/auth returned 401 because middleware only marked /api/auth/register as public. This is closed by cdc118c with an exact public API allowlist."
       }
@@ -257,11 +356,36 @@
       "production": {
         "deployment": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
         "results": [
-          { "route": "POST /api/auth malformed JSON", "status": 400, "code": "VALIDATION_ERROR", "ms": 1408 },
-          { "route": "POST /api/auth/register malformed JSON", "status": 400, "code": "VALIDATION_ERROR", "ms": 1045 },
-          { "route": "GET /api/auth/me without token", "status": 401, "code": "UNAUTHORIZED", "ms": 185 },
-          { "route": "GET /api/auth/login-extra without token", "status": 401, "code": "UNAUTHORIZED", "ms": 399 },
-          { "route": "GET /api/health-extra without token", "status": 401, "code": "UNAUTHORIZED", "ms": 462 }
+          {
+            "route": "POST /api/auth malformed JSON",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 1408
+          },
+          {
+            "route": "POST /api/auth/register malformed JSON",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 1045
+          },
+          {
+            "route": "GET /api/auth/me without token",
+            "status": 401,
+            "code": "UNAUTHORIZED",
+            "ms": 185
+          },
+          {
+            "route": "GET /api/auth/login-extra without token",
+            "status": 401,
+            "code": "UNAUTHORIZED",
+            "ms": 399
+          },
+          {
+            "route": "GET /api/health-extra without token",
+            "status": 401,
+            "code": "UNAUTHORIZED",
+            "ms": 462
+          }
         ]
       }
     },
@@ -273,13 +397,28 @@
       "production": {
         "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
         "results": [
-          { "route": "POST /api/configs malformed JSON", "status": 400, "code": "V001", "ms": 466 },
-          { "route": "PUT /api/configs/[id] malformed JSON", "status": 400, "code": "INVALID_DATA", "ms": 1006 },
-          { "route": "POST /api/configs/[id]/rollback malformed JSON", "status": 400, "code": "INVALID_DATA", "ms": 518 }
+          {
+            "route": "POST /api/configs malformed JSON",
+            "status": 400,
+            "code": "V001",
+            "ms": 466
+          },
+          {
+            "route": "PUT /api/configs/[id] malformed JSON",
+            "status": 400,
+            "code": "INVALID_DATA",
+            "ms": 1006
+          },
+          {
+            "route": "POST /api/configs/[id]/rollback malformed JSON",
+            "status": 400,
+            "code": "INVALID_DATA",
+            "ms": 518
+          }
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e uploaded 104.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic uploaded 105.6KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -421,7 +560,7 @@
       "final_temp_visible": false,
       "console_messages": []
     },
-    "api_zod_coverage": "103 app/api route.ts files; 47 use Zod/parse indicators after auth/config validation hardening; 56 remain as staged governance debt",
+    "api_zod_coverage": "103 app/api route.ts files; 47 use Zod/parse indicators after auth/config validation hardening; 56 remain as staged governance debt. Malformed JSON coverage now additionally includes verified knowledge page write routes that catch invalid JSON before schema work.",
     "production_governance_search": "Production app/components/lib search excluding tests has 0 matches for alert(, console.log(, window.location.reload, @ts-ignore, // ignore, and direct any",
     "performance_fast_navigation": "After 8beff47 on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: rapid / -> /configs?tab=role-access browser verification produced fastNavigationConsoleMessages=[]; stale dashboard Failed to fetch noise suppressed.",
     "latest_org_admin_role_assignment": {
@@ -493,10 +632,10 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
+      "deployment": "dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 302ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 584ms"
     },
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
@@ -519,6 +658,49 @@
       "production_admin_org_page_html_bytes": 40192,
       "production_admin_org_page_chunk": "static/chunks/app/admin/org/page-fbbc3729110b8ca8.js",
       "production_admin_org_page_chunk_bytes": 9078
+    },
+    "knowledge_malformed_json_validation": {
+      "commit_scope": "knowledge page update/permission malformed JSON classification",
+      "tests": "2 route test files cover malformed JSON for PATCH /api/knowledge/pages/[id] and POST /api/knowledge/pages/[id]/permissions",
+      "targeted_tests": "2 route test files / 2 tests passed",
+      "full_tests": "69 files / 347 tests passed",
+      "production": {
+        "deployment": "dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic",
+        "note": "Production had no existing knowledge pages; verification created one temporary page, validated both malformed JSON paths, then deleted it.",
+        "setup": [
+          {
+            "route": "GET /api/knowledge/pages?limit=1",
+            "status": 200,
+            "ms": 922,
+            "result": "empty list"
+          },
+          {
+            "route": "POST /api/knowledge/pages temporary create",
+            "status": 200,
+            "ms": 587,
+            "page_id": "a113a6d1-bdd5-4f1a-947f-81145eb7eb78"
+          },
+          {
+            "route": "DELETE /api/knowledge/pages temporary cleanup",
+            "status": 200,
+            "ms": 650
+          }
+        ],
+        "results": [
+          {
+            "route": "PATCH /api/knowledge/pages/[id] malformed JSON",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 743
+          },
+          {
+            "route": "POST /api/knowledge/pages/[id]/permissions malformed JSON",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 966
+          }
+        ]
+      }
     }
   },
   "known_risks": [
