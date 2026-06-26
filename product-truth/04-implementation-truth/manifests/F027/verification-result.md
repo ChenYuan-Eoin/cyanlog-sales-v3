@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26
 **Branch**: `codex/audit-remediation-61-issues`
-**Deployed App HEAD**: `de3fc9c`
-**Production Deployment**: `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5`
+**Deployed App HEAD**: `cbda92e`
+**Production Deployment**: `dpl_8S8N46tAtGhruQf8AALfHhM4DpUW`
 **Production URL**: `https://sales.cyanlog.icu`
 
 ---
@@ -14,8 +14,8 @@
 |---|---|---|
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
-| Production | Vercel production deployment `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
-| Health | `GET /api/health` => `status=ok`, database ok, `x-vercel-id: hnd1::sin1`, database latency 357ms | Pass |
+| Production | Vercel production deployment `dpl_8S8N46tAtGhruQf8AALfHhM4DpUW` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
+| Health | `GET /api/health` => `status=ok`, database ok, `x-vercel-id: hnd1::sin1`, database latency 316ms | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
 
@@ -27,9 +27,9 @@
 |---|---|---|
 | `pnpm lint` | Pass, no ESLint warnings/errors | Script now uses ESLint CLI over app/components/lib/types and root runtime config files; Next 16 `next lint` deprecation noise removed |
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
-| `pnpm test:run` | 86 files / 371 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
+| `pnpm test:run` | 88 files / 377 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
 | `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared. Local webpack cache may also warn about serializing big strings. |
-| Commit hook | 10/10 governance checks passed through `de3fc9c` | No `--no-verify` used |
+| Commit hook | 10/10 governance checks passed through `cbda92e` | No `--no-verify` used |
 | Vercel build | Ready | `sharp@0.34.5` install script now runs and completes; remaining build warnings are Sentry/OpenTelemetry dynamic require and webpack cache big string serialization |
 | Supabase migrations | `supabase db push --linked --yes` applied `20260626062255_login_rpc_stage_timing.sql`, `20260626065920_org_admin_payload_rpc.sql`, `20260626071818_org_admin_active_members_only.sql`, and `20260626155732_org_admin_active_departments_only.sql` in this F027 performance/org-admin phase | Pass |
 | Supabase remote lint | `supabase db lint --linked --fail-on error` failed before linting due Supabase temp role SASL auth/circuit breaker | Blocked by platform auth, not counted as schema validation |
@@ -40,8 +40,8 @@
 
 | Domain | Evidence | Result |
 |---|---|---|
-| D01 Production availability | Production deployment `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
-| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 357ms. | Pass |
+| D01 Production availability | Production deployment `dpl_8S8N46tAtGhruQf8AALfHhM4DpUW`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
+| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 316ms. | Pass |
 | D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200 and warms the same route bundle/Supabase path. | Pass |
 | D02 Fast navigation resilience | Production browser on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` rapidly navigated `/` -> `/configs?tab=role-access`; `fastNavigationConsoleMessages=[]`, so stale dashboard `Failed to fetch` noise no longer leaks during navigation. | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de` on `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5`; expected title, basic info, review job and AI risk point visible; no `页面发生错误` | Pass |
@@ -63,6 +63,7 @@
 | D05 Contract rules | `GET /api/contract-policies/rules?is_active=true` => 15 active codes `R001-R015` | Pass |
 | D05 Rule stats | `GET /api/rules/stats` => 18 total, 15 published, 3 archived legacy rows | Pass with debt |
 | D06 Contract upload | Online API/UI upload flow created, uploaded, merged, submitted, analyzed and cleaned temporary contract | Pass |
+| D06 Contract upload invalid form validation | `cbda92e` validates `/api/contracts/[id]/upload` and `/api/contracts/[id]/upload-chunk` form data before org, contract, storage, or extraction work. Local tests assert invalid multipart, missing file, unsupported file, invalid chunk, and unsupported chunk filename all return 400 without Supabase/storage calls. Production `dpl_8S8N46tAtGhruQf8AALfHhM4DpUW` returned 400 for six upload/chunk invalid-form samples, and `/contracts/upload` rendered the drag/drop upload page in a logged-in browser. | Pass |
 | D06 Contract compare | Online POST compare created 6 diffs; GET returned same comparison; UI rendered compare page; temp contracts cleaned | Pass |
 | D06 Risk review | Online `/admin/rule-review` executed contract text against rules and returned R015/R009/R012/R002 risks | Pass |
 | D07 Mobile `/configs` | 390x844 and 820x1180 screenshots: no horizontal overflow, no error boundary, hamburger visible | Pass |
@@ -71,7 +72,7 @@
 | D07 Mobile `/contracts` | 390x844 screenshot: no horizontal overflow, bottom actions visible; script text assertion was too narrow | Pass |
 | D07 Favicon | `public/favicon.png`: PNG 32x32, 683 bytes; online `/favicon.png` 200 | Pass |
 | D08 Knowledge create | Browser `/knowledge` -> `/knowledge/new` -> create -> `/knowledge?page={id}`; API readback; temp page deleted | Pass |
-| D10 Deploy payload | Latest successful Vercel production deployment `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5` uploaded 146.6KB; project rootDirectory remains `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
+| D10 Deploy payload | Latest successful Vercel production deployment `dpl_8S8N46tAtGhruQf8AALfHhM4DpUW` uploaded 123.9KB; project rootDirectory remains `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
 | D10 Sharp build script | `7eded60` adds `pnpm.onlyBuiltDependencies=["sharp"]`; deployment `dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` ran `sharp@0.34.5 install/check.js` and completed; subsequent production builds completed without the previous ignored build scripts warning. | Pass |
 | D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
@@ -83,7 +84,7 @@
 |---|---|---|
 | Page switching | DevTools trace showed route switching INP 26ms and CLS 0.00. | Page switching is not the current primary bottleneck. |
 | Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After same-route prewarm plus `sin1` function region, explicit prewarm+POST samples on `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` returned route totals 166.0ms, 120.0ms and 112.1ms. Latest `dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy` direct login route totals were 315.0ms, 154.5ms, 124.5ms, 110.3ms and 109.8ms; first sample wall time was 2551ms. | Warm route time is below the 0.5s route target; wall-clock cold/external wait can still be much longer than route compute, so cold login remains monitored rather than fully closed. |
-| External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. Latest health check on `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5` returned 357ms database latency. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
+| External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. Latest health check on `dpl_8S8N46tAtGhruQf8AALfHhM4DpUW` returned 316ms database latency. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
 | `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB; prior current build was 166kB. After `c74ad23`, current production build shows `/configs` Size 18kB and First Load JS 159kB; production `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` logged-in `/configs` returns 200 and its page chunk is 61,052 bytes. `/contracts` remains 144kB and `/tenders` 126kB in the same build. | Config center first entry is improved, but still remains heavier than adjacent modules and should stay under bundle watch. |
 | `/admin/org` bundle | Before `0d15f8c`, local build showed `/admin/org` Size 73.2kB and First Load JS 245kB. After lazy-loading the reused organization workbench, production build shows 3.78kB and 107kB; production `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` logged-in `/admin/org` returns 200 and page chunk is 9,078 bytes. | Admin organization entry is no longer a large first-load outlier; interaction still depends on the deferred workbench chunk. |
 | Login CLS | Historical trace showed login page CLS around 0.21. After `be7c882`, production Playwright samples showed desktop 1440x900 CLS 0 and mobile 390x844 CLS 0, with no horizontal overflow. | Current login-page layout stability is verified; keep as regression guard. |
@@ -123,6 +124,7 @@ Latest production login timing samples:
 | `dpl_CS6` direct #4 | 200 | 398 | 110.3 | 108.7 | 79.8 | 72.9 | n/a | n/a | n/a |
 | `dpl_CS6` direct #5 | 200 | 393 | 109.8 | 108.0 | 78.0 | 73.0 | n/a | n/a | n/a |
 | `dpl_8pp` direct smoke | 200 | 1539 | 240.7 | 231.0 | 107.9 | 79.1 | 11.0 | 7.0 | 1.1 |
+| `dpl_8S8` upload validation smoke | 200 | 1581 | 229.6 | 219.6 | 115.2 | 81.4 | 10.8 | 6.7 | 3.4 |
 
 Final verification note: one Node/Playwright request context intermittently returned `ENOTFOUND` for `sales.cyanlog.icu` while `curl` and Chrome browser access succeeded. This is recorded as local/external resolver noise unless it reproduces in browser or health checks.
 
@@ -172,11 +174,11 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | C6 | D09 | Lint passes. |
 | C7 | D06 | Compare href routes to completed contract compare or upload fallback. |
 | C8 | D05/D06 | Risk review href routes to `/admin/rule-review`. |
-| D5 | D10 | 371 tests pass. |
+| D5 | D10 | 377 tests pass. |
 | D6 | D10 | Latest commits used governance hook, no `--no-verify`. |
 | D7-D9 | D09/D10 | Governance artifacts documented; ignored runtime state not staged. |
 | E1 | D06 | Create contract endpoint supports JSON/FormData; upload page uses JSON + chunked upload. |
-| E2 | D06/D09 | Upload flow errors are readable in UI; full API error envelope consistency remains long-term. |
+| E2 | D06/D09 | Contract upload and chunk invalid-form errors now return 400 common API envelopes before avoidable org/contract/storage work; full cross-API envelope consistency remains long-term. |
 | E3 | D06 | Contract list has pagination API/meta; infinite loading not implemented. |
 | E4 | D06 | Analyze route has status checks and optimistic update; full concurrent upload throttling remains long-term. |
 | E5 | D06 | Upload UI has busy/progress states in chunk flow; detailed byte progress remains UX improvement. |

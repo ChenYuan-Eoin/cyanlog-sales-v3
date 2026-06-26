@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "de3fc9c",
+  "head": "cbda92e",
   "commits": [
     {
       "sha": "5641824",
@@ -163,20 +163,24 @@
     {
       "sha": "de3fc9c",
       "message": "fix(api): guard remaining json parse failures"
+    },
+    {
+      "sha": "cbda92e",
+      "message": "fix(upload): validate form data before storage work"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5",
+    "deployment_id": "dpl_8S8N46tAtGhruQf8AALfHhM4DpUW",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/8ppMSoM9i8vFdLSeLfPZebFkQiV5"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/8S8N46tAtGhruQf8AALfHhM4DpUW"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "86 files / 371 tests passed",
+    "test": "88 files / 377 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 357ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 316ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -434,7 +438,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5 uploaded 146.6KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_8S8N46tAtGhruQf8AALfHhM4DpUW uploaded 123.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -648,10 +652,10 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5",
+      "deployment": "dpl_8S8N46tAtGhruQf8AALfHhM4DpUW",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 357ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 316ms"
     },
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
@@ -918,6 +922,60 @@
             "status": 400,
             "code": "INVALID_JSON",
             "ms": 1286
+          }
+        ]
+      }
+    },
+    "contract_upload_invalid_form_validation": {
+      "commit_scope": "contract upload and upload-chunk invalid form validation before org/contract/storage work",
+      "tests": "2 new route test files cover invalid multipart, missing file, unsupported upload file type, invalid chunk metadata, and unsupported chunk filename",
+      "targeted_tests": "3 upload route test files / 8 tests passed",
+      "full_tests": "88 files / 377 tests passed",
+      "build": "pnpm build passed with existing Sentry/OpenTelemetry dynamic require warning",
+      "production": {
+        "deployment": "dpl_8S8N46tAtGhruQf8AALfHhM4DpUW",
+        "login_wall_ms": 1581,
+        "login_route_total_ms": 229.6,
+        "browser_smoke": [
+          "/contracts/upload redirected unauthenticated browser to /login",
+          "after login, /contracts/upload rendered drag/drop upload area and chunk upload guidance"
+        ],
+        "results": [
+          {
+            "route": "POST /api/contracts/[id]/upload invalid multipart",
+            "status": 400,
+            "code": "V001",
+            "ms": 1814
+          },
+          {
+            "route": "POST /api/contracts/[id]/upload missing file",
+            "status": 400,
+            "code": "V003",
+            "ms": 2164
+          },
+          {
+            "route": "POST /api/contracts/[id]/upload unsupported file",
+            "status": 400,
+            "code": "V001",
+            "ms": 1619
+          },
+          {
+            "route": "POST /api/contracts/[id]/upload-chunk invalid index",
+            "status": 400,
+            "code": "V001",
+            "ms": 1231
+          },
+          {
+            "route": "POST /api/contracts/[id]/upload-chunk unsupported fileName",
+            "status": 400,
+            "code": "V001",
+            "ms": 1661
+          },
+          {
+            "route": "POST /api/contracts/[id]/upload-chunk invalid multipart",
+            "status": 400,
+            "code": "V001",
+            "ms": 2135
           }
         ]
       }
