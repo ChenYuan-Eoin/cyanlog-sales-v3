@@ -5,7 +5,8 @@ node_modules/
 aliyun
 aliyun-cli-*.tgz
 .vercel
+output/
+.playwright-cli/
+.playwright-mcp/
 *.tsbuildinfo
 supabase/.temp/
-.playwright-mcp/*.log
-.playwright-mcp/*.yml

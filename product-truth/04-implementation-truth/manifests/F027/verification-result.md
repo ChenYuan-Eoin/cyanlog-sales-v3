@@ -54,7 +54,8 @@
 | D07 Mobile `/contracts` | 390x844 screenshot: no horizontal overflow, bottom actions visible; script text assertion was too narrow | Pass |
 | D07 Favicon | `public/favicon.png`: PNG 32x32, 683 bytes; online `/favicon.png` 200 | Pass |
 | D08 Knowledge create | Browser `/knowledge` -> `/knowledge/new` -> create -> `/knowledge?page={id}`; API readback; temp page deleted | Pass |
-| D10 Deploy payload | Vercel CLI production deploy uploaded 18.2KB from repo root with project rootDirectory `product-truth/product-code` | Pass |
+| D10 Deploy payload | Latest Vercel CLI production deploy uploaded 740.2KB from repo root with project rootDirectory `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
+| D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
 ---
 
@@ -160,6 +161,7 @@ Latest production samples after deployment `dpl_Q2V3SDLSjCu56h3ZeuLbT1kNfarQ`:
 | Cold login < 0.5s target | Latest production samples show route total 348.6-1108ms and wall 896-1925ms. RPC internal work is 82.4-151.8ms; `rpc_password_verify` is 75.7-119.8ms; dashboard/core are not the main cost in these samples. | Next optimization should target Supabase roundtrip/connection wait and password verification cost before further prefetch work. |
 | Org-admin route latency variance | RPC hot path is down to 185-232ms in direct checks, but route-level samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep `/api/admin/org` timing in the external dependency/error classification bucket; add route-level timing headers before further optimization. |
 | `/configs` first-load JS | Current Vercel build shows `/configs` First Load JS 166kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic sample had shown 281kB. | Keep bundle budget watch; split heavy tab panes/client-only tools only if future build output regresses or user-perceived first entry remains slow. |
+| Historical design archive size | `product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html` is tracked at about 9.5MB. It is explicitly documented as historical reference, not active design truth or deployed app code. | Do not delete blindly; if clone/push size becomes a product concern, replace with an external artifact pointer or compressed release asset after user approval. |
 | Full API Zod coverage | Some APIs have Zod; project-wide coverage is not complete. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
 | Full `any` cleanup | `any` remains mostly in tests; production false positives exist in search. | Separate test mock typings from production typings; enforce no-explicit-any only for production paths first. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |

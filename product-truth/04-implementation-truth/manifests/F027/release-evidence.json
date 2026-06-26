@@ -89,6 +89,8 @@
       "spaces": 3,
       "temp_included": false
     },
+    "deploy_payload": "Latest Vercel CLI production deploy uploaded 740.2KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded",
+    "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "login_stage_timing_samples": [
       {
         "wall_ms": 1925,
@@ -127,6 +129,7 @@
     "Cold login target below 0.5s is not consistently achieved; X-Login-Timing now shows Supabase roundtrip/connection wait and password verification dominate over dashboard/core assembly in latest samples.",
     "Org-admin RPC hot path is verified at 185-232ms, but route-level latency can still vary with auth/default-org resolution and Supabase network waits; route timing headers should be added before further optimization.",
     "/configs first-load bundle is improved from the earlier 281kB sample but remains heavier than adjacent modules; keep it under bundle watch.",
+    "Historical design archive product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html is about 9.5MB and remains tracked as reference material; do not delete without replacing the asset policy.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
     "Build has known dependency warnings: sharp scripts, Sentry/OpenTelemetry dynamic require, local SWC fallback.",

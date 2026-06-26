@@ -126,6 +126,8 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 停用/启用 | 停用后成员数仍为 26，状态显示 `已停用`，菜单变为 `启用用户`；启用后状态回到 `在职`。 |
 | 删除 | 删除后成员数 26=>25，临时成员从列表消失。 |
 | 数据清理 | 验收账号已在数据库层硬删除；RPC 复核 25 用户、11 部门、7 角色、3 销售空间，临时账号不再出现在 payload。 |
+| 部署产物 | 最新生产部署上传 740.2KB；`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
+| 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 
 这次复用了既有组织权限 UI、`/api/admin/users`、`/api/admin/org` 和 Supabase migration 链路；新增的只是聚合 RPC 与状态语义补丁，没有新增第二套组织管理工作台。
 
