@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "d4fa668",
+  "head": "a7545e6",
   "commits": [
     {
       "sha": "5641824",
@@ -23,13 +23,21 @@
     {
       "sha": "d4fa668",
       "message": "docs: add F027 remediation governance evidence"
+    },
+    {
+      "sha": "59560ae",
+      "message": "docs: record F027 production deployment evidence"
+    },
+    {
+      "sha": "a7545e6",
+      "message": "fix(auth): expose login rpc stage timing"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_DLUX6LZqB2tLFjTXxozY5quz3YoG",
+    "deployment_id": "dpl_Q2V3SDLSjCu56h3ZeuLbT1kNfarQ",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/DLUX6LZqB2tLFjTXxozY5quz3YoG"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/Q2V3SDLSjCu56h3ZeuLbT1kNfarQ"
   },
   "verification": {
     "lint": "pass",
@@ -44,16 +52,50 @@
     "mobile": "configs and contracts verified without horizontal overflow",
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
-    "performance_login": "Reference sample: /api/auth/login 1173ms, overall login 1590ms; current sample total 504.3ms, login_rpc 495.1ms",
+    "performance_login": "After a7545e6: X-Login-Timing exposes rpc_* stage timing; 3 production samples route total 348.6-1108ms, login_rpc 346.6-1086.7ms, rpc_total 82.4-151.8ms",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. Current Vercel build: /configs 166kB, /contracts 144kB, /tenders 126kB",
-    "performance_login_cls": "Login page trace previously showed CLS around 0.21"
+    "performance_login_cls": "Login page trace previously showed CLS around 0.21",
+    "supabase_migration": "20260626062255_login_rpc_stage_timing.sql applied to linked remote; migration list local/remote match",
+    "login_stage_timing_samples": [
+      {
+        "wall_ms": 1925,
+        "route_total_ms": 1108,
+        "login_rpc_ms": 1086.7,
+        "rpc_total_ms": 151.8,
+        "rpc_password_verify_ms": 119.8,
+        "rpc_initial_dashboard_ms": 11.2,
+        "rpc_initial_core_ms": 5.5,
+        "rpc_token_write_ms": 2.7
+      },
+      {
+        "wall_ms": 1699,
+        "route_total_ms": 848,
+        "login_rpc_ms": 845.8,
+        "rpc_total_ms": 83.4,
+        "rpc_password_verify_ms": 76.6,
+        "rpc_initial_dashboard_ms": 2.5,
+        "rpc_initial_core_ms": 1.9,
+        "rpc_token_write_ms": 1.1
+      },
+      {
+        "wall_ms": 896,
+        "route_total_ms": 348.6,
+        "login_rpc_ms": 346.6,
+        "rpc_total_ms": 82.4,
+        "rpc_password_verify_ms": 75.7,
+        "rpc_initial_dashboard_ms": 2.2,
+        "rpc_initial_core_ms": 1.8,
+        "rpc_token_write_ms": 1.5
+      }
+    ]
   },
   "known_risks": [
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
-    "Cold login target below 0.5s is not fully achieved; login_rpc remains the main cost and needs deeper server timing.",
+    "Cold login target below 0.5s is not consistently achieved; X-Login-Timing now shows Supabase roundtrip/connection wait and password verification dominate over dashboard/core assembly in latest samples.",
     "/configs first-load bundle is improved from the earlier 281kB sample but remains heavier than adjacent modules; keep it under bundle watch.",
     "Login page CLS remains a separate layout-stability issue from page switching.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
+    "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
     "Build has known dependency warnings: sharp scripts, Sentry/OpenTelemetry dynamic require, local SWC fallback.",
     "Legacy archived rule rows remain in stats for compatibility."
   ]

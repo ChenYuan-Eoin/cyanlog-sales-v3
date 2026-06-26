@@ -69,12 +69,12 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 层级 | 当前事实 | 结论 | 下一步验收 |
 |---|---|---|---|
 | 页面切换交互 | DevTools trace 显示切页 INP 26ms、CLS 0.00。 | 三页切换本身不是当前主要瓶颈。 | 保留为回归基线，后续只在新增交互后复测。 |
-| 冷登录 | 最近样本 `/api/auth/login` 1173ms，整体登录约 1590ms；另一样本 server total 约 504ms，`login_rpc` 约 495ms。 | 冷登录仍是当前最高优先级性能问题。 | 拆出 RPC、token、initialDashboard、initialCore、cookie 签名等 server timing。 |
+| 冷登录 | 最近样本 `/api/auth/login` 1173ms，整体登录约 1590ms；`a7545e6` 后三次线上样本 route total 348.6-1108ms，`login_rpc` 346.6-1086.7ms，RPC 内部 `rpc_total` 82.4-151.8ms。 | 冷登录仍是当前最高优先级性能问题；最新证据显示 dashboard/core 不是主耗时，Supabase roundtrip/连接等待和密码校验更关键。 | 继续用 `X-Login-Timing` 分解 `rpc_*` 阶段，下一步针对连接等待和 `rpc_password_verify` 优化。 |
 | 外部网络等待 | 诊断中 Supabase/GitHub TLS reset 曾导致核心 API 拖到约 9s 后 401；网络恢复后核心 API 回到约 185-355ms。 | 外部依赖不是一概删除对象，但必须区分可控代码耗时和不可控网络等待。 | 对外部请求记录错误类别、耗时和降级结果。 |
 | 配置中心包体 | 早期诊断样本显示 `/configs` First Load JS 约 281kB；当前 Vercel 构建显示 `/configs` 166kB，高于 `/contracts` 144kB、`/tenders` 126kB。 | 当前构建已不处于 281kB 基线，但配置中心仍是相邻模块中较重入口。 | 持续记录 build 输出；若回归或首次进入仍慢，再按 tab/重组件拆 chunk。 |
 | 登录页 CLS | 登录页 trace 曾显示 CLS 约 0.21；切页 trace 无 CLS。 | CLS 属登录页布局稳定性，不属于配置/合同/标书切页问题。 | 固定品牌区、表单区、动态内容尺寸后复测 CLS。 |
 
-本轮不保留未经验证的性能改动。曾尝试把登录预热从 1200ms 提前到 350ms，但快速提交样本退化到约 5s，因此撤销；后续必须先补观测，再做优化。
+本轮不保留未经验证的性能改动。曾尝试把登录预热从 1200ms 提前到 350ms，但快速提交样本退化到约 5s，因此撤销；后续必须先补观测，再做优化。当前生产环境中 Vercel 未透出应用设置的 `Server-Timing`，所以登录链路以镜像 header `X-Login-Timing` 作为验收证据。
 
 ---
 
