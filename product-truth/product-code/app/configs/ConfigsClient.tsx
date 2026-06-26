@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -28,11 +29,6 @@ import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import TabsContent from './tabs/TabsContent'
 import ConfigStatusBadge from './tabs/ConfigStatusBadge'
-import ProductDialog from './dialogs/ProductDialog'
-import TaxEditForm from './dialogs/TaxEditForm'
-import ApprovalEditForm from './dialogs/ApprovalEditForm'
-import AIEditForm from './dialogs/AIEditForm'
-import ThemeEditForm from './dialogs/ThemeEditForm'
 import { confirmAction } from '@/lib/toast'
 import {
   buildFeishuErrorFeedback,
@@ -40,6 +36,39 @@ import {
   buildFeishuSuccessFeedback,
   type FeishuSyncResponse,
 } from './feishu-sync-feedback'
+
+function DialogChunkFallback() {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+      加载编辑表单...
+    </div>
+  )
+}
+
+const ProductDialog = dynamic(() => import('./dialogs/ProductDialog'), {
+  loading: () => null,
+  ssr: false,
+})
+
+const TaxEditForm = dynamic(() => import('./dialogs/TaxEditForm'), {
+  loading: DialogChunkFallback,
+  ssr: false,
+})
+
+const ApprovalEditForm = dynamic(() => import('./dialogs/ApprovalEditForm'), {
+  loading: DialogChunkFallback,
+  ssr: false,
+})
+
+const AIEditForm = dynamic(() => import('./dialogs/AIEditForm'), {
+  loading: DialogChunkFallback,
+  ssr: false,
+})
+
+const ThemeEditForm = dynamic(() => import('./dialogs/ThemeEditForm'), {
+  loading: DialogChunkFallback,
+  ssr: false,
+})
 
 const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
   CONTRACT_RULE: { label: '合同审核策略', color: 'bg-blue-100 text-blue-800' },
@@ -1153,6 +1182,20 @@ export default function ConfigsClient({
     }
   }
 
+  function handleConfigDialogOpenChange(open: boolean) {
+    setIsConfigEditOpen(open)
+    if (!open) {
+      setEditingConfig(null)
+    }
+  }
+
+  function handleProductDialogOpenChange(open: boolean) {
+    setIsProductEditOpen(open)
+    if (!open) {
+      setEditingProduct(null)
+    }
+  }
+
   return (
     <div className="min-h-full bg-slate-50">
       <div className="mx-auto max-w-[1480px] px-4 py-6 pl-14 lg:px-8 lg:pl-8">
@@ -1344,7 +1387,7 @@ export default function ConfigsClient({
 
       {/* Config Edit Dialog */}
       {editingConfig && (
-        <Dialog open={isConfigEditOpen} onOpenChange={setIsConfigEditOpen}>
+        <Dialog open={isConfigEditOpen} onOpenChange={handleConfigDialogOpenChange}>
           <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -1369,7 +1412,7 @@ export default function ConfigsClient({
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsConfigEditOpen(false)}>取消</Button>
+              <Button variant="outline" onClick={() => handleConfigDialogOpenChange(false)}>取消</Button>
               <Button onClick={handleSaveConfig}>保存</Button>
             </DialogFooter>
           </DialogContent>
@@ -1408,19 +1451,21 @@ export default function ConfigsClient({
         </DialogContent>
       </Dialog>
 
-      <ProductDialog
-        product={editingProduct}
-        open={isProductEditOpen}
-        onOpenChange={setIsProductEditOpen}
-        onLoadTiers={async (productId) => {
-          const token = localStorage.getItem('token')
-          const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
-          const res = await fetch(`/api/product-price-tiers?product_id=${productId}`, { headers })
-          if (!res.ok) throw new Error('加载失败')
-          return res.json()
-        }}
-        onSave={handleSaveProduct}
-      />
+      {editingProduct && (
+        <ProductDialog
+          product={editingProduct}
+          open={isProductEditOpen}
+          onOpenChange={handleProductDialogOpenChange}
+          onLoadTiers={async (productId) => {
+            const token = localStorage.getItem('token')
+            const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+            const res = await fetch(`/api/product-price-tiers?product_id=${productId}`, { headers })
+            if (!res.ok) throw new Error('加载失败')
+            return res.json()
+          }}
+          onSave={handleSaveProduct}
+        />
+      )}
     </div>
   )
 }
