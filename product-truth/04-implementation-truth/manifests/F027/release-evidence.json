@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "7eded60",
+  "head": "68a3d85",
   "commits": [
     {
       "sha": "5641824",
@@ -119,20 +119,24 @@
     {
       "sha": "7eded60",
       "message": "chore(pnpm): approve sharp build script"
+    },
+    {
+      "sha": "68a3d85",
+      "message": "fix(admin): validate user mutation parameters"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
+    "deployment_id": "dpl_FPSxxhbDhgxUbF1SqBp7YMC6pDR4",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/F8ZGdXqXQU3LDKU9YbatoZE9Yxhm"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/FPSxxhbDhgxUbF1SqBp7YMC6pDR4"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
     "test": "55 files / 328 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 518ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 368ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -157,11 +161,11 @@
       "temp_included": false
     },
     "org_admin_route_timing": {
-      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
-      "commit": "7eded60",
+      "deployment": "dpl_FPSxxhbDhgxUbF1SqBp7YMC6pDR4",
+      "commit": "68a3d85",
       "http_status": 200,
       "payload_source": "rpc",
-      "x_org_timing": "auth;dur=0.4, rpc_payload;dur=63.1, total;dur=63.7",
+      "x_org_timing": "auth;dur=0.2, rpc_payload;dur=41.0, total;dur=41.4",
       "cache_control": "no-store",
       "users": 25,
       "departments": 11,
@@ -172,9 +176,10 @@
     "admin_user_validation": {
       "commit_scope": "admin user departments/login-enabled/report-to route validation",
       "zod_coverage": "39/103 app/api route.ts files use Zod; 64 remain",
-      "tests": "3 route test files / 4 validation tests ensure invalid admin user write parameters return 400 before supabaseAdmin.from is called"
+      "tests": "3 route test files / 4 validation tests ensure invalid admin user write parameters return 400 before supabaseAdmin.from is called",
+      "production": "dpl_FPSxxhbDhgxUbF1SqBp7YMC6pDR4 returned 400 VALIDATION_ERROR for empty department_ids, string login_enabled, and invalid report_to_user_id"
     },
-    "deploy_payload": "Latest Vercel CLI production deploy uploaded 77.8KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
+    "deploy_payload": "Latest Vercel CLI production deploy uploaded 96.1KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -388,14 +393,14 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
+      "deployment": "dpl_FPSxxhbDhgxUbF1SqBp7YMC6pDR4",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 518ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 368ms"
     },
     "performance_configs_bundle_current": {
-      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
-      "commit": "7eded60",
+      "deployment": "dpl_FPSxxhbDhgxUbF1SqBp7YMC6pDR4",
+      "commit": "68a3d85",
       "local_build_route_size": "18kB",
       "local_build_first_load_js": "159kB",
       "production_configs_page_status": 200,
@@ -404,8 +409,8 @@
       "production_configs_page_chunk_bytes": 61052
     },
     "performance_admin_org_bundle_current": {
-      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
-      "commit": "7eded60",
+      "deployment": "dpl_FPSxxhbDhgxUbF1SqBp7YMC6pDR4",
+      "commit": "68a3d85",
       "production_build_route_size": "3.78kB",
       "production_build_first_load_js": "107kB",
       "previous_route_size": "73.2kB",
