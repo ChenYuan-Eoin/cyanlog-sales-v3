@@ -176,7 +176,7 @@ async function parseLoginPayload(req: NextRequest) {
   const contentType = req.headers.get('content-type') || ''
 
   if (contentType.includes('application/json')) {
-    return req.json()
+    return req.json().catch(() => null)
   }
 
   const formData = await req.formData()

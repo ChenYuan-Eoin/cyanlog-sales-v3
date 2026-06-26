@@ -12,7 +12,7 @@ function errorResponse(message: string, status: number, code?: string) {
 export async function POST(req: NextRequest) {
   try {
     const authUser = await requireAuth(req)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
 
     const parsed = changePasswordSchema.safeParse(body)
     if (!parsed.success) {

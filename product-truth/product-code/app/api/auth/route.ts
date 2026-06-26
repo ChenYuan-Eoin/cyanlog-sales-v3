@@ -17,7 +17,7 @@ function errorResponse(message: string, status: number, code?: string) {
 // POST /api/auth/register - 用户注册
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
 
     // Zod验证
     const result = registerSchema.safeParse(body)

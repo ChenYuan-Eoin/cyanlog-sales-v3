@@ -46,6 +46,16 @@ function makeRequest(body: any): any {
   }
 }
 
+function makeMalformedJsonRequest(): any {
+  return {
+    json: async () => {
+      throw new SyntaxError('Unexpected token')
+    },
+    method: 'POST',
+    headers: new Headers({ 'content-type': 'application/json', 'x-forwarded-for': '127.0.0.1' }),
+  }
+}
+
 function makeGetRequest(headers: Record<string, string> = {}): any {
   return {
     method: 'GET',
@@ -77,6 +87,15 @@ describe('POST /api/auth/login', () => {
       const body = await res.json()
       expect(res.status).toBe(400)
       expect(body.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('无效 JSON → 400 VALIDATION_ERROR 且不调用登录 RPC', async () => {
+      const res = await POST(makeMalformedJsonRequest())
+      const body = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
     })
 
     it('无 email/phone + password → 400', async () => {

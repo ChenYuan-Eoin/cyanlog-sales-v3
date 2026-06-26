@@ -31,6 +31,16 @@ function makeRequest(body: any): any {
   }
 }
 
+function makeMalformedJsonRequest(): any {
+  return {
+    json: async () => {
+      throw new SyntaxError('Unexpected token')
+    },
+    method: 'POST',
+    headers: new Headers({ 'content-type': 'application/json' }),
+  }
+}
+
 function makeChain(result: any) {
   const chain: any = {
     select: vi.fn().mockReturnThis(),
@@ -54,6 +64,17 @@ describe('POST /api/auth/change-password', () => {
 
     expect(res.status).toBe(400)
     expect(body.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('无效 JSON 返回 400 且不读取用户密码', async () => {
+    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
+
+    const res = await POST(makeMalformedJsonRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('当前密码错误时返回 400', async () => {

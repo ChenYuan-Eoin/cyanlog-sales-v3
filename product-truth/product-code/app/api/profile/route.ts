@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const parsed = profileUpdateSchema.safeParse(body)
 
     if (!parsed.success) {
