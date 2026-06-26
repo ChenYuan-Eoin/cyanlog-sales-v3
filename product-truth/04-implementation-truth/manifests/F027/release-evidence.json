@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "c0d23a9",
+  "head": "cb176af",
   "commits": [
     {
       "sha": "5641824",
@@ -91,13 +91,17 @@
     {
       "sha": "c0d23a9",
       "message": "fix(auth): warm login route before submit"
+    },
+    {
+      "sha": "cb176af",
+      "message": "fix(vercel): run functions near supabase"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ",
+    "deployment_id": "dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/7J1TDiARGGbW39XuDRzM8jrrkSuQ"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/GPh5F5bZDMwGsTAHuGewTDboEgUe"
   },
   "verification": {
     "lint": "pass",
@@ -112,7 +116,7 @@
     "mobile": "configs and contracts verified without horizontal overflow",
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
-    "performance_login": "After c0d23a9 on dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ: /login triggers same-route GET /api/auth/login prewarm. Browser DevTools saw GET /api/auth/login 200 with no console errors. API samples with explicit prewarm then POST returned X-Login-Timing total=395.4ms, 339.3ms, 337.5ms; all submitted-login route totals are below 0.5s. First prewarm request itself took 4653ms, so cold startup/network cost is shifted earlier and remains a monitored risk.",
+    "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Final prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms; all submitted-login route totals are far below 0.5s. First prewarm request still took 2066ms, so cold startup cost remains visible but is no longer on the submit path when prewarm completes.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. Current Vercel build: /configs 166kB, /contracts 144kB, /tenders 126kB",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
@@ -125,7 +129,7 @@
       "spaces": 3,
       "temp_included": false
     },
-    "deploy_payload": "Latest Vercel CLI production deploy uploaded 105.0KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
+    "deploy_payload": "Latest Vercel CLI production deploy uploaded 20.6KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -209,6 +213,45 @@
         "rpc_initial_core_ms": 1.7,
         "rpc_token_write_ms": 0.3,
         "auth_context_cookie_ms": 0.8
+      },
+      {
+        "deployment": "dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe",
+        "mode": "sin1_same_route_prewarm_then_post",
+        "sample": 1,
+        "route_total_ms": 166,
+        "login_rpc_ms": 158.4,
+        "rpc_total_ms": 115.5,
+        "rpc_password_verify_ms": 85.5,
+        "rpc_initial_dashboard_ms": 13.3,
+        "rpc_initial_core_ms": 6.5,
+        "rpc_token_write_ms": 2.8,
+        "auth_context_cookie_ms": 3.9
+      },
+      {
+        "deployment": "dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe",
+        "mode": "sin1_same_route_prewarm_then_post",
+        "sample": 2,
+        "route_total_ms": 120,
+        "login_rpc_ms": 118.3,
+        "rpc_total_ms": 79.1,
+        "rpc_password_verify_ms": 73.7,
+        "rpc_initial_dashboard_ms": 2.1,
+        "rpc_initial_core_ms": 1.7,
+        "rpc_token_write_ms": 0.3,
+        "auth_context_cookie_ms": 0.5
+      },
+      {
+        "deployment": "dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe",
+        "mode": "sin1_same_route_prewarm_then_post",
+        "sample": 3,
+        "route_total_ms": 112.1,
+        "login_rpc_ms": 110.2,
+        "rpc_total_ms": 78.1,
+        "rpc_password_verify_ms": 72.9,
+        "rpc_initial_dashboard_ms": 2.1,
+        "rpc_initial_core_ms": 1.7,
+        "rpc_token_write_ms": 0.2,
+        "auth_context_cookie_ms": 0.9
       }
     ],
     "org_admin_department_leader_cache": {
@@ -259,7 +302,7 @@
     },
     "dns_observation": "During final verification, Node/Playwright request context intermittently returned ENOTFOUND for sales.cyanlog.icu while curl and Chrome browser access succeeded; classify this as local/external resolver noise unless it reproduces in browser or health checks.",
     "performance_login_prewarm": {
-      "deployment": "dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ",
+      "deployment": "dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe",
       "browser_devtools": {
         "page": "https://sales.cyanlog.icu/login",
         "observed_request": "GET https://sales.cyanlog.icu/api/auth/login [200]",
@@ -268,37 +311,46 @@
       "api_samples": [
         {
           "sample": 1,
-          "prewarm_wall_ms": 4653,
-          "login_wall_ms": 777,
-          "route_total_ms": 395.4,
-          "login_rpc_ms": 385,
-          "rpc_total_ms": 106.2,
-          "rpc_password_verify_ms": 80.1
+          "prewarm_wall_ms": 2066,
+          "login_wall_ms": 713,
+          "route_total_ms": 166,
+          "login_rpc_ms": 158.4,
+          "rpc_total_ms": 115.5,
+          "rpc_password_verify_ms": 85.5,
+          "vercel_region": "sin1"
         },
         {
           "sample": 2,
-          "prewarm_wall_ms": 1143,
-          "login_wall_ms": 709,
-          "route_total_ms": 339.3,
-          "login_rpc_ms": 335,
-          "rpc_total_ms": 78.2,
-          "rpc_password_verify_ms": 73
+          "prewarm_wall_ms": 329,
+          "login_wall_ms": 596,
+          "route_total_ms": 120,
+          "login_rpc_ms": 118.3,
+          "rpc_total_ms": 79.1,
+          "rpc_password_verify_ms": 73.7,
+          "vercel_region": "sin1"
         },
         {
           "sample": 3,
-          "prewarm_wall_ms": 705,
-          "login_wall_ms": 695,
-          "route_total_ms": 337.5,
-          "login_rpc_ms": 335.1,
-          "rpc_total_ms": 78.8,
-          "rpc_password_verify_ms": 73.4
+          "prewarm_wall_ms": 528,
+          "login_wall_ms": 422,
+          "route_total_ms": 112.1,
+          "login_rpc_ms": 110.2,
+          "rpc_total_ms": 78.1,
+          "rpc_password_verify_ms": 72.9,
+          "vercel_region": "sin1"
         }
       ],
       "cleaned_tokens": 3
+    },
+    "performance_region": {
+      "deployment": "dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe",
+      "configured_region": "sin1",
+      "inspect_signal": "Vercel inspect lists functions in [sin1]",
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 323ms"
     }
   },
   "known_risks": [
-    "Direct first-submit cold login can still exceed 0.5s if the same-route prewarm has not completed; c0d23a9 makes the normal prewarmed submit path 337.5-395.4ms route total, while first prewarm still showed 4653ms external/cold-start cost.",
+    "Direct first-submit can still pay cold startup if same-route prewarm has not completed; with sin1 and prewarm complete, submitted login route totals are 112.1-166.0ms, while first prewarm still took 2066ms.",
     "Node/Playwright request DNS intermittently returned ENOTFOUND for sales.cyanlog.icu while curl and Chrome verified the alias; keep external resolver failures classified separately from app errors.",
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
     "/configs first-load bundle is improved from the earlier 281kB sample but remains heavier than adjacent modules; keep it under bundle watch.",

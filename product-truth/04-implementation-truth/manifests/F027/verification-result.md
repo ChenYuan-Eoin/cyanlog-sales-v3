@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26
 **Branch**: `codex/audit-remediation-61-issues`
-**Deployed App HEAD**: `c0d23a9`
-**Production Deployment**: `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ`
+**Deployed App HEAD**: `cb176af`
+**Production Deployment**: `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe`
 **Production URL**: `https://sales.cyanlog.icu`
 
 ---
@@ -14,7 +14,7 @@
 |---|---|---|
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
-| Production | Vercel production deployment `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
+| Production | Vercel production deployment `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
 | Health | `GET /api/health` => `status=ok`, database ok | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
@@ -29,7 +29,7 @@
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
 | `pnpm test:run` | 51 files / 318 tests passed | Vitest prints existing `--localstorage-file` warning |
 | `pnpm build` | Pass | Existing warnings: Sentry/OpenTelemetry dynamic require; local missing `@next/swc-darwin-arm64` fallback |
-| Commit hook | 10/10 governance checks passed through `c0d23a9` | No `--no-verify` used |
+| Commit hook | 10/10 governance checks passed through `cb176af` | No `--no-verify` used |
 | Vercel build | Ready | Vercel build warnings: `sharp@0.34.5` scripts ignored; Sentry/OpenTelemetry dynamic require |
 | Supabase migrations | `supabase db push --linked --yes` applied `20260626062255_login_rpc_stage_timing.sql`, `20260626065920_org_admin_payload_rpc.sql`, `20260626071818_org_admin_active_members_only.sql`, and `20260626155732_org_admin_active_departments_only.sql` in this F027 performance/org-admin phase | Pass |
 | Supabase remote lint | `supabase db lint --linked --fail-on error` failed before linting due Supabase temp role SASL auth/circuit breaker | Blocked by platform auth, not counted as schema validation |
@@ -40,8 +40,9 @@
 
 | Domain | Evidence | Result |
 |---|---|---|
-| D01 Production availability | Production deployment `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
-| D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200 and warms the same route bundle/Supabase path. | Pass with caveat |
+| D01 Production availability | Production deployment `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
+| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 323ms. | Pass |
+| D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200 and warms the same route bundle/Supabase path. | Pass |
 | D02 Fast navigation resilience | Production browser on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` rapidly navigated `/` -> `/configs?tab=role-access`; `fastNavigationConsoleMessages=[]`, so stale dashboard `Failed to fetch` noise no longer leaks during navigation. | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`; expected title visible; no `页面发生错误` | Pass |
 | D02 404 | Browser visited a nonexistent route; displayed `页面未找到` | Pass |
@@ -58,7 +59,7 @@
 | D07 Mobile `/contracts` | 390x844 screenshot: no horizontal overflow, bottom actions visible; script text assertion was too narrow | Pass |
 | D07 Favicon | `public/favicon.png`: PNG 32x32, 683 bytes; online `/favicon.png` 200 | Pass |
 | D08 Knowledge create | Browser `/knowledge` -> `/knowledge/new` -> create -> `/knowledge?page={id}`; API readback; temp page deleted | Pass |
-| D10 Deploy payload | Latest Vercel CLI production deploy uploaded 105.0KB from repo root with project rootDirectory `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
+| D10 Deploy payload | Latest Vercel CLI production deploy uploaded 20.6KB from repo root with project rootDirectory `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
 | D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
 ---
@@ -68,7 +69,7 @@
 | Area | Evidence | Conclusion |
 |---|---|---|
 | Page switching | DevTools trace showed route switching INP 26ms and CLS 0.00. | Page switching is not the current primary bottleneck. |
-| Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After `c0d23a9`, `/login` prewarms the same `/api/auth/login` route; explicit prewarm+POST samples on `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` returned route totals 395.4ms, 339.3ms and 337.5ms. | The normal prewarmed submit path is now below the 0.5s route target; the first prewarm request itself can still be slow and remains an external/cold-start risk. |
+| Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After same-route prewarm plus `sin1` function region, explicit prewarm+POST samples on `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` returned route totals 166.0ms, 120.0ms and 112.1ms. | The normal prewarmed submit path is now well below the 0.5s route target; first prewarm itself can still pay cold startup and remains a monitored risk. |
 | External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
 | `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB. Current Vercel build shows `/configs` 166kB, `/contracts` 144kB and `/tenders` 126kB. | Config center first entry is no longer at the 281kB baseline in the current build, but still remains heavier than adjacent modules and should stay under bundle watch. |
 | Login CLS | Historical trace showed login page CLS around 0.21. After `be7c882`, production Playwright samples showed desktop 1440x900 CLS 0 and mobile 390x844 CLS 0, with no horizontal overflow. | Current login-page layout stability is verified; keep as regression guard. |
@@ -96,10 +97,13 @@ Latest production login timing samples:
 | Prewarmed `dpl_7J1` #1 | 200 | 777 | 395.4 | 385.0 | 106.2 | 80.1 | 9.8 | 6.8 | 1.8 |
 | Prewarmed `dpl_7J1` #2 | 200 | 709 | 339.3 | 335.0 | 78.2 | 73.0 | 2.0 | 1.7 | 0.3 |
 | Prewarmed `dpl_7J1` #3 | 200 | 695 | 337.5 | 335.1 | 78.8 | 73.4 | 2.1 | 1.7 | 0.3 |
+| `sin1` `dpl_GPh` #1 | 200 | 713 | 166.0 | 158.4 | 115.5 | 85.5 | 13.3 | 6.5 | 2.8 |
+| `sin1` `dpl_GPh` #2 | 200 | 596 | 120.0 | 118.3 | 79.1 | 73.7 | 2.1 | 1.7 | 0.3 |
+| `sin1` `dpl_GPh` #3 | 200 | 422 | 112.1 | 110.2 | 78.1 | 72.9 | 2.1 | 1.7 | 0.2 |
 
 Final verification note: one Node/Playwright request context intermittently returned `ENOTFOUND` for `sales.cyanlog.icu` while `curl` and Chrome browser access succeeded. This is recorded as local/external resolver noise unless it reproduces in browser or health checks.
 
-Prewarm verification note: the first explicit prewarm request on `dpl_7J1` took 4653ms, then submitted login returned `total=395.4ms`. This means the user-facing submit stage is improved when the login page has time to prewarm, but cold function/network startup has not disappeared.
+Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 2066ms, then submitted login returned `total=166.0ms`. This means the user-facing submit stage is improved when the login page has time to prewarm, but cold function/network startup has not disappeared.
 
 ---
 
@@ -170,7 +174,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_7J1` took 
 | Risk | Why Not Closed | Next Step |
 |---|---|---|
 | Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED` with missing env list and scope hint. | Configure Feishu env in Vercel, redeploy, then run department sync success test and verify imported/updated/total plus database `source=feishu` rows. |
-| Cold login < 0.5s target | Prewarmed submit path now returns route totals 337.5-395.4ms, but direct first-submit can still exceed 0.5s if same-route prewarm has not completed; the first prewarm request itself took 4653ms in one online sample. | Keep same-route prewarm as the current mitigation; next optimization should target Vercel function region/Supabase roundtrip and password verification cost. |
+| Cold login < 0.5s target | Prewarmed submit path now returns route totals 112.1-166.0ms from `sin1`, but direct first-submit can still exceed 0.5s if same-route prewarm has not completed; the first prewarm request itself took 2066ms in one online sample. | Keep same-route prewarm and `sin1` region config; next optimization should target remaining cold startup and password verification cost. |
 | Org-admin route latency variance | RPC hot path is down to 185-232ms in direct checks, but route-level samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep `/api/admin/org` timing in the external dependency/error classification bucket; add route-level timing headers before further optimization. |
 | `/configs` first-load JS | Current Vercel build shows `/configs` First Load JS 166kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic sample had shown 281kB. | Keep bundle budget watch; split heavy tab panes/client-only tools only if future build output regresses or user-perceived first entry remains slow. |
 | Historical design archive size | `product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html` is tracked at about 9.5MB. It is explicitly documented as historical reference, not active design truth or deployed app code. | Do not delete blindly; if clone/push size becomes a product concern, replace with an external artifact pointer or compressed release asset after user approval. |
