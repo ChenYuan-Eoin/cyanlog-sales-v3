@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const parseResult = createUserSchema.safeParse(await req.json())
+    const parseResult = createUserSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {
       const firstIssue = parseResult.error.issues[0]
       return NextResponse.json(

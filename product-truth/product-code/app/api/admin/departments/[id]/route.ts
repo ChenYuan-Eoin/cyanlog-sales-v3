@@ -64,7 +64,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const parseResult = updateDepartmentSchema.safeParse(await req.json())
+    const parseResult = updateDepartmentSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {
       return validationError(parseResult.error)
     }

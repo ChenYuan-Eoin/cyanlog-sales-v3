@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const parseResult = createDepartmentSchema.safeParse(await req.json())
+    const parseResult = createDepartmentSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {
       return validationError(parseResult.error)
     }

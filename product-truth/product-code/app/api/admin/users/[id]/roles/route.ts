@@ -33,7 +33,7 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const parseResult = assignOrgRolesSchema.safeParse(await req.json())
+    const parseResult = assignOrgRolesSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {
       const firstIssue = parseResult.error.issues[0]
       return NextResponse.json(
