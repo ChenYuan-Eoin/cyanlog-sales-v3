@@ -133,6 +133,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 软删除部门过滤 | 临时部门软删除后一度仍出现在 `/api/admin/org`，已通过 `20260626155732_org_admin_active_departments_only.sql` 和 fallback 过滤修复；最终 payload 回到 11 部门。 |
 | 组织缓存再验证 | 同一浏览器里，清理临时部门后 `/configs?tab=org-structure` 会重新请求 `/api/admin/org` 并移除缓存中的旧部门；console warnings/errors 为 0。 |
 | 管理员角色增删刷新 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上通过 UI 新增 `codex-admin-1782463975754@example.com` 后立即可见；加入管理员角色后 `role_codes=["ADMIN"]`；移出后从管理员已分配列表消失且 `role_codes=[]`；临时账号已硬删除，最终仍为 25 人。 |
+| 超管成员增删复核 | 最新本地生产浏览器 run `1782493268886` 复核用户截图中的超管疑点：`SUPER_ADMIN` 的权限设置只读是设计约束，但员工分配可编辑。临时用户 `codex-super-admin-1782493268886@example.com` 通过 UI 加入超级管理员后 `/api/admin/org` 返回 `role_codes=["SUPER_ADMIN"]`，移除后返回 `role_codes=[]`，随后临时用户被删除且组织聚合不再返回该用户。桌面 1600px 与移动端 390px 均无横向溢出，添加成员入口可见。 |
 | 组织聚合耗时分层 | `4bc49c6` 在 `/api/admin/org` 响应中加入 `X-Org-Payload-Source` 和 `X-Org-Timing`；最新生产部署 `dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic` 上真实登录后返回 `source=rpc`、`auth;dur=0.2, rpc_payload;dur=55.5, total;dur=55.9`、25 用户 / 11 部门 / 7 角色 / 3 销售空间。 |
 | 管理员写接口参数校验 | `/api/admin/users/[id]/departments`、`/login-enabled`、`/report-to` 增加 Zod body/query 校验；坏参数返回 `400 VALIDATION_ERROR`，并由测试确认不会访问 Supabase。最新生产部署同样对空 `department_ids`、字符串 `login_enabled`、非法 `report_to_user_id` 返回 400。API Zod 覆盖从 36/103 提升到 39/103。 |
 | 管理员写接口 JSON 分类 | `8dd29e3` 复用既有 Zod schema 与 route 测试体系，把 `/api/admin/departments`、`/api/admin/departments/[id]`、`/api/admin/users`、`/api/admin/users/[id]`、`/api/admin/users/[id]/roles` 的 malformed JSON 从 generic 500 改为 `400 VALIDATION_ERROR`；最新生产部署五条线上样本均返回 400。 |
