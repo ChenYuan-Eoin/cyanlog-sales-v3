@@ -71,7 +71,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 页面切换交互 | DevTools trace 显示切页 INP 26ms、CLS 0.00。 | 三页切换本身不是当前主要瓶颈。 | 保留为回归基线，后续只在新增交互后复测。 |
 | 冷登录 | 最近参考样本 `/api/auth/login` 1173ms，整体登录约 1590ms；`dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 直提样本为 `X-Login-Timing total=1021.6ms`。`c0d23a9` 后登录页改为预热同一路由；`cb176af` 后 Vercel Functions 固化到 `sin1`。最终 `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` 预热后提交样本为 166.0ms、120.0ms、112.1ms。 | 正常预热后提交阶段已明显低于 0.5s；但首次预热请求本身仍可能很慢，最终样本一为 2066ms，所以冷启动/外部连接成本仍需监控。 | 保留 `X-Login-Timing`，继续针对剩余冷启动和 `rpc_password_verify` 优化。 |
 | 外部网络等待 | 诊断中 Supabase/GitHub TLS reset 曾导致核心 API 拖到约 9s 后 401；网络恢复后核心 API 回到约 185-355ms。 | 外部依赖不是一概删除对象，但必须区分可控代码耗时和不可控网络等待。 | 对外部请求记录错误类别、耗时和降级结果。 |
-| 配置中心包体 | 早期诊断样本显示 `/configs` First Load JS 约 281kB；当前 Vercel 构建显示 `/configs` 166kB，高于 `/contracts` 144kB、`/tenders` 126kB。 | 当前构建已不处于 281kB 基线，但配置中心仍是相邻模块中较重入口。 | 持续记录 build 输出；若回归或首次进入仍慢，再按 tab/重组件拆 chunk。 |
+| 配置中心包体 | 早期诊断样本显示 `/configs` First Load JS 约 281kB；中间构建为 166kB；`c74ad23` 将配置编辑弹窗/表单改为按需加载后，本地生产构建为 `/configs` Size 18kB、First Load JS 159kB，线上登录态 `/configs` 返回 200，页面 chunk 为 61,047 bytes。 | 配置中心首屏专属代码已拆小，但共享 chunk 仍占主要体积，且 `/configs` 仍高于 `/contracts` 144kB、`/tenders` 126kB。 | 持续记录 build 输出；下一步优先看共享 chunk 或 `/admin/org` 245kB，而不是继续盲拆小表单。 |
 | 登录页 CLS | 登录页 trace 曾显示 CLS 约 0.21；`be7c882` 后线上桌面 1440x900 与手机 390x844 采样均为 CLS 0。 | 当前登录页布局稳定性已恢复；CLS 属登录页问题，不属于配置/合同/标书切页问题。 | 保留为回归基线，后续主题/品牌变更后复测。 |
 
 本轮不保留未经验证的性能改动。曾尝试把登录预热从 1200ms 提前到 350ms，但快速提交样本退化到约 5s，因此撤销；后续必须先补观测，再做优化。当前生产环境中 Vercel 未透出应用设置的 `Server-Timing`，所以登录链路以镜像 header `X-Login-Timing` 作为验收证据。
@@ -137,7 +137,9 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 登录 route 预热 | `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` 上 `/login` 自动触发 `GET /api/auth/login` 200；无 header 的 GET 返回 204，不触发数据库预热；有 `X-Login-Prewarm: 1` 才预热。 |
 | 函数区域 | `cb176af` 在 `vercel.json` 固化 `"regions": ["sin1"]`；最终部署 `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` 的 `vercel inspect` 显示 functions 在 `[sin1]`，`/api/health` 返回 `x-vercel-id hnd1::sin1`。 |
 | 冷登录现状 | 预热后提交阶段 `X-Login-Timing total` 为 166.0ms、120.0ms、112.1ms，达到 0.5s route 目标；首次预热请求曾为 2066ms，仍记录为冷启动/外部连接风险。 |
-| 部署产物 | 最新生产部署上传 20.6KB；`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
+| 配置中心拆包 | `c74ad23` 复用既有 `next/dynamic` 方案，把配置编辑弹窗/表单改为打开时加载；最新生产部署 `dpl_2jd9fa8N5K5hCCrSkcuLbKvS2MMh` Ready，登录态 `/configs` 200，页面 chunk 61,047 bytes。 |
+| 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require。 |
+| 部署产物 | 最新生产部署上传 122.5KB；`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
 | 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 
 这次复用了既有组织权限 UI、`/api/admin/users`、`/api/admin/departments`、`/api/admin/org` 读取聚合和 Supabase migration 链路；新增的是部门主管字段入库、聚合只读边界、软删除部门过滤和组织 tab 缓存再验证，没有新增第二套组织管理工作台。

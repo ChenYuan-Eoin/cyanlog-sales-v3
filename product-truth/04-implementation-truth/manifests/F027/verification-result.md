@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26
 **Branch**: `codex/audit-remediation-61-issues`
-**Deployed App HEAD**: `cb176af`
-**Production Deployment**: `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe`
+**Deployed App HEAD**: `c74ad23`
+**Production Deployment**: `dpl_2jd9fa8N5K5hCCrSkcuLbKvS2MMh`
 **Production URL**: `https://sales.cyanlog.icu`
 
 ---
@@ -14,7 +14,7 @@
 |---|---|---|
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
-| Production | Vercel production deployment `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
+| Production | Vercel production deployment `dpl_2jd9fa8N5K5hCCrSkcuLbKvS2MMh` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
 | Health | `GET /api/health` => `status=ok`, database ok | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
@@ -27,9 +27,9 @@
 |---|---|---|
 | `pnpm lint` | Pass, no ESLint warnings/errors | `next lint` deprecation warning remains from Next 15 tooling |
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
-| `pnpm test:run` | 51 files / 318 tests passed | Vitest prints existing `--localstorage-file` warning |
-| `pnpm build` | Pass | Existing warnings: Sentry/OpenTelemetry dynamic require; local missing `@next/swc-darwin-arm64` fallback |
-| Commit hook | 10/10 governance checks passed through `cb176af` | No `--no-verify` used |
+| `pnpm test:run` | 51 files / 321 tests passed | Vitest prints existing `--localstorage-file` warning |
+| `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared |
+| Commit hook | 10/10 governance checks passed through `c74ad23` | No `--no-verify` used |
 | Vercel build | Ready | Vercel build warnings: `sharp@0.34.5` scripts ignored; Sentry/OpenTelemetry dynamic require |
 | Supabase migrations | `supabase db push --linked --yes` applied `20260626062255_login_rpc_stage_timing.sql`, `20260626065920_org_admin_payload_rpc.sql`, `20260626071818_org_admin_active_members_only.sql`, and `20260626155732_org_admin_active_departments_only.sql` in this F027 performance/org-admin phase | Pass |
 | Supabase remote lint | `supabase db lint --linked --fail-on error` failed before linting due Supabase temp role SASL auth/circuit breaker | Blocked by platform auth, not counted as schema validation |
@@ -40,8 +40,8 @@
 
 | Domain | Evidence | Result |
 |---|---|---|
-| D01 Production availability | Production deployment `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
-| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 323ms. | Pass |
+| D01 Production availability | Production deployment `dpl_2jd9fa8N5K5hCCrSkcuLbKvS2MMh`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
+| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 345ms. | Pass |
 | D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200 and warms the same route bundle/Supabase path. | Pass |
 | D02 Fast navigation resilience | Production browser on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` rapidly navigated `/` -> `/configs?tab=role-access`; `fastNavigationConsoleMessages=[]`, so stale dashboard `Failed to fetch` noise no longer leaks during navigation. | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`; expected title visible; no `页面发生错误` | Pass |
@@ -56,10 +56,11 @@
 | D06 Contract compare | Online POST compare created 6 diffs; GET returned same comparison; UI rendered compare page; temp contracts cleaned | Pass |
 | D06 Risk review | Online `/admin/rule-review` executed contract text against rules and returned R015/R009/R012/R002 risks | Pass |
 | D07 Mobile `/configs` | 390x844 and 820x1180 screenshots: no horizontal overflow, no error boundary, hamburger visible | Pass |
+| D07 `/configs` bundle split | `c74ad23` lazy-loads config edit dialogs/forms. Local production build: `/configs` Size 18kB and First Load JS 159kB. Production logged-in `/configs` returned 200 and chunk `static/chunks/app/configs/page-5dea359dd9dc3efb.js` returned 61,047 bytes. | Pass |
 | D07 Mobile `/contracts` | 390x844 screenshot: no horizontal overflow, bottom actions visible; script text assertion was too narrow | Pass |
 | D07 Favicon | `public/favicon.png`: PNG 32x32, 683 bytes; online `/favicon.png` 200 | Pass |
 | D08 Knowledge create | Browser `/knowledge` -> `/knowledge/new` -> create -> `/knowledge?page={id}`; API readback; temp page deleted | Pass |
-| D10 Deploy payload | Latest Vercel CLI production deploy uploaded 20.6KB from repo root with project rootDirectory `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
+| D10 Deploy payload | Latest Vercel CLI production deploy uploaded 122.5KB from repo root with project rootDirectory `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
 | D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
 ---
@@ -71,7 +72,7 @@
 | Page switching | DevTools trace showed route switching INP 26ms and CLS 0.00. | Page switching is not the current primary bottleneck. |
 | Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After same-route prewarm plus `sin1` function region, explicit prewarm+POST samples on `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` returned route totals 166.0ms, 120.0ms and 112.1ms. | The normal prewarmed submit path is now well below the 0.5s route target; first prewarm itself can still pay cold startup and remains a monitored risk. |
 | External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
-| `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB. Current Vercel build shows `/configs` 166kB, `/contracts` 144kB and `/tenders` 126kB. | Config center first entry is no longer at the 281kB baseline in the current build, but still remains heavier than adjacent modules and should stay under bundle watch. |
+| `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB; prior current build was 166kB. After `c74ad23`, local production build shows `/configs` Size 18kB and First Load JS 159kB; production logged-in `/configs` returns 200 and its page chunk is 61,047 bytes. `/contracts` remains 144kB and `/tenders` 126kB in the same local build. | Config center first entry is improved, but still remains heavier than adjacent modules and should stay under bundle watch. |
 | Login CLS | Historical trace showed login page CLS around 0.21. After `be7c882`, production Playwright samples showed desktop 1440x900 CLS 0 and mobile 390x844 CLS 0, with no horizontal overflow. | Current login-page layout stability is verified; keep as regression guard. |
 | Org admin payload | Before RPC aggregation, browser `/api/admin/org` could take 4616ms and briefly showed false 0 counts. After `3670901` + `a590d45` + `e57c34c`, first org page paint uses loading `...`, then renders 11/25/3; direct RPC hot verification after cleanup returned 25 users / 11 departments / 7 roles / 3 spaces in 232ms. After `5db94bd` + `ad7844a`, inactive departments are filtered in RPC/fallback and org cache revalidates immediately for organization tabs. | The specific usability bug is closed; route-level latency can still vary with Supabase/network and remains part of external dependency monitoring. |
 | Reverted optimization | Moving login prewarm from 1200ms to 350ms regressed a quick-submit sample to around 5s and was reverted. | No unverified performance tweak is counted as a fix. |
@@ -176,9 +177,9 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED` with missing env list and scope hint. | Configure Feishu env in Vercel, redeploy, then run department sync success test and verify imported/updated/total plus database `source=feishu` rows. |
 | Cold login < 0.5s target | Prewarmed submit path now returns route totals 112.1-166.0ms from `sin1`, but direct first-submit can still exceed 0.5s if same-route prewarm has not completed; the first prewarm request itself took 2066ms in one online sample. | Keep same-route prewarm and `sin1` region config; next optimization should target remaining cold startup and password verification cost. |
 | Org-admin route latency variance | RPC hot path is down to 185-232ms in direct checks, but route-level samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep `/api/admin/org` timing in the external dependency/error classification bucket; add route-level timing headers before further optimization. |
-| `/configs` first-load JS | Current Vercel build shows `/configs` First Load JS 166kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic sample had shown 281kB. | Keep bundle budget watch; split heavy tab panes/client-only tools only if future build output regresses or user-perceived first entry remains slow. |
+| `/configs` first-load JS | Current build after `c74ad23` shows `/configs` First Load JS 159kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic samples were 281kB and 166kB. | Keep bundle budget watch; next target is shared chunk or `admin/org` 245kB if user-perceived first entry remains slow. |
 | Historical design archive size | `product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html` is tracked at about 9.5MB. It is explicitly documented as historical reference, not active design truth or deployed app code. | Do not delete blindly; if clone/push size becomes a product concern, replace with an external artifact pointer or compressed release asset after user approval. |
 | Full API Zod coverage | 36/103 `app/api/**/route.ts` files use Zod; 67 route files remain. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
 | Test/mock `any` cleanup | Production searched paths have 0 direct `any` matches; tests and mocks still use `any` heavily for Supabase chain mocks. | Separate test mock typings from production typings; enforce stricter no-explicit-any only after shared mock builders exist. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |
-| Build warnings | `sharp` build scripts ignored on Vercel; Sentry/OpenTelemetry dynamic require warning; local SWC fallback. | Approve/build sharp if image optimization requires it; evaluate Sentry config tree-shaking; reinstall local SWC package. |
+| Build warnings | `sharp` build scripts ignored on Vercel; Sentry/OpenTelemetry dynamic require warning remains. Local SWC fallback warning was cleared by restoring the missing generated `@next/swc-darwin-arm64` package/link state. | Approve/build sharp if image optimization requires it; evaluate Sentry config tree-shaking. |
