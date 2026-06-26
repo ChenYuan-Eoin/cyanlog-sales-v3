@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "6aac024",
+  "head": "1a521a4",
   "commits": [
     {
       "sha": "5641824",
@@ -131,20 +131,24 @@
     {
       "sha": "6aac024",
       "message": "fix(auth): cache auth context hmac key"
+    },
+    {
+      "sha": "1a521a4",
+      "message": "fix(api): classify malformed auth json as validation errors"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy",
+    "deployment_id": "dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/CS6rgLkfXyeoJ9E3MLXUZG5quEjy"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/HtCjgwccjeEsrBCV8v8RA5EfqtHD"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "61 files / 335 tests passed",
+    "test": "64 files / 340 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 331ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 344ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -155,7 +159,7 @@
     "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Final prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms; all submitted-login route totals are far below 0.5s. First prewarm request still took 2066ms, so cold startup cost remains visible but is no longer on the submit path when prewarm completes.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23/4bc49c6 production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-d1d47a8244087e40.js returned 61,052 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
-    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 61 files / 335 tests without the Node 24 --localstorage-file warning.",
+    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 64 files / 340 tests without the Node 24 --localstorage-file warning.",
     "lint_warning_cleanup": "Standard pnpm lint now uses ESLint CLI over app/components/lib/types plus middleware/instrumentation/Sentry config files; latest run passed without the Next 16 next lint deprecation warning.",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
@@ -169,11 +173,11 @@
       "temp_included": false
     },
     "org_admin_route_timing": {
-      "deployment": "dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy",
-      "commit": "6aac024",
+      "deployment": "dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD",
+      "commit": "1a521a4",
       "http_status": 200,
       "payload_source": "rpc",
-      "x_org_timing": "auth;dur=0.3, rpc_payload;dur=50.2, total;dur=50.7",
+      "x_org_timing": "auth;dur=0.3, rpc_payload;dur=93.1, total;dur=93.6",
       "cache_control": "no-store",
       "users": 25,
       "departments": 11,
@@ -193,14 +197,14 @@
       "tests": "5 additional route test files cover malformed JSON for departments create/update, users create/update, and user role assignment; all assert 400 VALIDATION_ERROR before supabaseAdmin.from is called",
       "targeted_tests": "8 route test files / 9 validation tests passed",
       "production": {
-        "deployment": "dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy",
+        "deployment": "dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD",
         "login_timing": "total;dur=223.1",
         "results": [
-          { "route": "POST /api/admin/departments", "status": 400, "code": "VALIDATION_ERROR", "ms": 1345 },
-          { "route": "PATCH /api/admin/departments/[id]", "status": 400, "code": "VALIDATION_ERROR", "ms": 1048 },
-          { "route": "POST /api/admin/users", "status": 400, "code": "VALIDATION_ERROR", "ms": 632 },
-          { "route": "PATCH /api/admin/users/[id]", "status": 400, "code": "VALIDATION_ERROR", "ms": 759 },
-          { "route": "POST /api/admin/users/[id]/roles", "status": 400, "code": "VALIDATION_ERROR", "ms": 707 }
+          { "route": "POST /api/admin/departments", "status": 400, "code": "VALIDATION_ERROR", "ms": 758 },
+          { "route": "PATCH /api/admin/departments/[id]", "status": 400, "code": "VALIDATION_ERROR", "ms": 1074 },
+          { "route": "POST /api/admin/users", "status": 400, "code": "VALIDATION_ERROR", "ms": 613 },
+          { "route": "PATCH /api/admin/users/[id]", "status": 400, "code": "VALIDATION_ERROR", "ms": 494 },
+          { "route": "POST /api/admin/users/[id]/roles", "status": 400, "code": "VALIDATION_ERROR", "ms": 680 }
         ]
       }
     },
@@ -219,7 +223,24 @@
         "conclusion": "First instance use still pays HMAC import once; warmed instance signing falls to 0.4-0.5ms."
       }
     },
-    "deploy_payload": "Latest Vercel CLI production deploy uploaded 88.4KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
+    "auth_profile_malformed_json_validation": {
+      "commit_scope": "auth/login/register/change-password/profile/client-errors malformed JSON classification",
+      "tests": "5 route test files cover malformed JSON for login, register, change-password, profile and client-errors; route tests assert 400-style validation before downstream DB/Sentry calls where applicable",
+      "targeted_tests": "5 route test files / 23 tests passed",
+      "full_tests": "64 files / 340 tests passed",
+      "production": {
+        "deployment": "dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD",
+        "results": [
+          { "route": "POST /api/auth/login", "status": 400, "code": "VALIDATION_ERROR", "ms": 1330 },
+          { "route": "POST /api/auth/register", "status": 400, "code": "VALIDATION_ERROR", "ms": 1919 },
+          { "route": "POST /api/client-errors", "status": 400, "code": "INVALID_PAYLOAD", "ms": 769 },
+          { "route": "POST /api/auth/change-password", "status": 400, "code": "VALIDATION_ERROR", "ms": 999 },
+          { "route": "PATCH /api/profile", "status": 400, "code": "VALIDATION_ERROR", "ms": 628 }
+        ],
+        "route_contract_note": "Unauthenticated POST /api/auth returns 401 because middleware only marks /api/auth/register as public; /api/auth/register is the public compatibility path used for online malformed-register verification."
+      }
+    },
+    "deploy_payload": "Latest successful Vercel production deployment dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD completed after a retry; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -433,14 +454,14 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy",
+      "deployment": "dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 331ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 344ms"
     },
     "performance_configs_bundle_current": {
-      "deployment": "dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy",
-      "commit": "6aac024",
+      "deployment": "dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD",
+      "commit": "1a521a4",
       "local_build_route_size": "18kB",
       "local_build_first_load_js": "159kB",
       "production_configs_page_status": 200,
@@ -449,14 +470,14 @@
       "production_configs_page_chunk_bytes": 61052
     },
     "performance_admin_org_bundle_current": {
-      "deployment": "dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy",
-      "commit": "6aac024",
+      "deployment": "dpl_HtCjgwccjeEsrBCV8v8RA5EfqtHD",
+      "commit": "1a521a4",
       "production_build_route_size": "3.78kB",
       "production_build_first_load_js": "107kB",
       "previous_route_size": "73.2kB",
       "previous_first_load_js": "245kB",
       "production_admin_org_page_status": 200,
-      "production_admin_org_page_html_bytes": 38597,
+      "production_admin_org_page_html_bytes": 40192,
       "production_admin_org_page_chunk": "static/chunks/app/admin/org/page-fbbc3729110b8ca8.js",
       "production_admin_org_page_chunk_bytes": 9078
     }
@@ -472,7 +493,8 @@
     "Build has known dependency warnings: Sentry/OpenTelemetry dynamic require and webpack cache big string serialization. The previous Vercel sharp ignored build scripts warning was cleared by approving sharp in pnpm.onlyBuiltDependencies. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
     "Legacy archived rule rows remain in stats for compatibility.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
-    "API Zod coverage is improved to 39/103 app/api route.ts files; 64 route files still need staged schema migration. Latest admin hardening classifies malformed JSON as 400 for five existing Zod-backed write routes but does not change the route coverage count.",
+    "API Zod coverage is improved to 39/103 app/api route.ts files; 64 route files still need staged schema migration. Latest admin/auth/profile/client-errors hardening classifies malformed JSON as validation errors for the verified write routes but does not change the route coverage count.",
+    "The old POST /api/auth route exists in code but is not public in middleware; the public registration compatibility entry is POST /api/auth/register. Decide whether /api/auth should be explicitly retired or exposed with an exact middleware allowlist rule, without making all /api/auth/* public.",
     "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
   ]
 }
