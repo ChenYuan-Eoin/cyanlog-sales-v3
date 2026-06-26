@@ -79,7 +79,11 @@ export async function POST(
   try {
     const user = await requireAuth(req)
     const { id } = await params
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: '权限参数无效', code: 'VALIDATION_ERROR' }, { status: 400 })
+    }
 
     const access = await requirePageAdmin(user.id, id)
     if (!access.ok) {
@@ -87,9 +91,9 @@ export async function POST(
     }
 
     if (
-      !PRINCIPAL_TYPES.has(body.principal_type)
-      || typeof body.principal_id !== 'string'
-      || !PERMISSIONS.has(body.permission)
+      !PRINCIPAL_TYPES.has((body as Record<string, unknown>).principal_type as string)
+      || typeof (body as Record<string, unknown>).principal_id !== 'string'
+      || !PERMISSIONS.has((body as Record<string, unknown>).permission as string)
     ) {
       return NextResponse.json({ error: '权限参数无效' }, { status: 400 })
     }
@@ -99,9 +103,9 @@ export async function POST(
       .from('knowledge_page_permissions')
       .insert({
         page_id: id,
-        principal_type: body.principal_type,
-        principal_id: body.principal_id,
-        permission: body.permission as KnowledgePermission,
+        principal_type: (body as Record<string, unknown>).principal_type,
+        principal_id: (body as Record<string, unknown>).principal_id,
+        permission: (body as Record<string, unknown>).permission as KnowledgePermission,
         granted_by: user.id,
       })
       .select()

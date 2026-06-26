@@ -91,7 +91,11 @@ export async function PATCH(
     const user = await requireAuth(req)
     const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
     const { id } = await params
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: '页面参数无效', code: 'VALIDATION_ERROR' }, { status: 400 })
+    }
 
     // 获取当前内容
     const { data: currentPage } = await supabaseAdmin
@@ -126,7 +130,7 @@ export async function PATCH(
     // 更新页面
     const { data: updated, error } = await supabaseAdmin
       .from('knowledge_pages')
-      .update(pickUpdatePayload(body, user.id))
+      .update(pickUpdatePayload(body as Record<string, unknown>, user.id))
       .eq('id', id)
       .eq('org_id', orgId)
       .select()
@@ -142,9 +146,9 @@ export async function PATCH(
       .insert({
         page_id: id,
         version: (latestVersion?.version || 0) + 1,
-        content: body.content || currentPage.content,
+        content: (body as Record<string, unknown>).content || currentPage.content,
         saved_by: user.id,
-        change_note: body.change_note || '自动保存',
+        change_note: (body as Record<string, unknown>).change_note || '自动保存',
       })
 
     return NextResponse.json({ data: updated })
