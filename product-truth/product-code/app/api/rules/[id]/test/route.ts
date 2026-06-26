@@ -16,15 +16,17 @@ interface Params {
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const { id: ruleId } = await params
 
-    const body = await req.json()
-    const { test_text, input_type = 'text' } = body
+    const body = await req.json().catch(() => null) as { test_text?: unknown; input_type?: unknown } | null
+    const test_text = body?.test_text
+    const input_type = typeof body?.input_type === 'string' ? body.input_type : 'text'
 
     if (!test_text || typeof test_text !== 'string') {
       return NextResponse.json({ error: '请提供测试文本' }, { status: 400 })
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     // 获取规则
     const { data: rule, error: ruleError } = await supabaseAdmin

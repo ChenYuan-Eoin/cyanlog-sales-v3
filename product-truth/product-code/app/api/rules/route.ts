@@ -85,14 +85,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
 
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = ruleSchema.safeParse(body)
 
     if (!validated.success) {
       return errorResponse('规则数据无效: ' + validated.error.issues.map((e: { message: string }) => e.message).join(', '), 400, 'INVALID_DATA')
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     let insertResult = await supabaseAdmin
       .from('rules')

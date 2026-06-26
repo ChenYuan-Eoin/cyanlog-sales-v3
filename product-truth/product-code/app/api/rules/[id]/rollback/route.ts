@@ -14,15 +14,16 @@ interface Params {
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const { id: ruleId } = await params
 
-    const body = await req.json()
-    const { version: targetVersion } = body
+    const body = await req.json().catch(() => null) as { version?: unknown } | null
+    const targetVersion = body?.version
 
     if (!targetVersion || typeof targetVersion !== 'number') {
       return NextResponse.json({ error: '请指定回滚目标版本' }, { status: 400 })
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     // 检查规则
     const { data: rule, error: ruleError } = await supabaseAdmin

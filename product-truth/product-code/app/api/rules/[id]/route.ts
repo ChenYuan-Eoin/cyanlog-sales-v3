@@ -69,15 +69,16 @@ export async function PUT(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const id = await resolveIdParam(params)
 
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = ruleUpdateSchema.safeParse(body)
 
     if (!validated.success) {
       return errorResponse('规则数据无效', 400, 'INVALID_DATA')
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     const { data: rule, error } = await supabaseAdmin
       .from('rules')

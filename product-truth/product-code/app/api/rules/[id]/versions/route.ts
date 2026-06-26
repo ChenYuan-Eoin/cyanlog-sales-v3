@@ -71,8 +71,15 @@ export async function GET(req: NextRequest, { params }: Params) {
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const { id: ruleId } = await params
+    const body = await req.json().catch(() => null) as { change_summary?: unknown } | null
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: '请求参数无效' }, { status: 400 })
+    }
+
+    const changeSummary = typeof body.change_summary === 'string' ? body.change_summary : undefined
+    const orgId = await getDefaultOrgId(user.id)
 
     // 检查规则
     const { data: rule, error: ruleError } = await supabaseAdmin
@@ -85,9 +92,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (ruleError || !rule) {
       return NextResponse.json({ error: '规则不存在' }, { status: 404 })
     }
-
-    const body = await req.json()
-    const { change_summary } = body
 
     // 创建新版本
     const newVersion = (rule.version || 1) + 1
@@ -113,7 +117,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           level: rule.level,
         },
         change_type: 'update',
-        change_summary: change_summary || '规则更新',
+        change_summary: changeSummary || '规则更新',
         status: 'published',
         published_at: new Date().toISOString(),
         published_by: user.id,

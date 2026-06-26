@@ -9,8 +9,9 @@ import { executeRules } from '@/lib/rules/engine'
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const body = await req.json()
-    const { text, orgId } = body
+    const body = await req.json().catch(() => null) as { text?: unknown; orgId?: unknown } | null
+    const text = body?.text
+    const orgId = typeof body?.orgId === 'string' ? body.orgId : undefined
 
     if (!text || typeof text !== 'string') {
       return NextResponse.json({ error: '请提供合同文本' }, { status: 400 })

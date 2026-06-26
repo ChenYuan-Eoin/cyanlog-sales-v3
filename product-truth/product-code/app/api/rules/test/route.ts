@@ -16,12 +16,12 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const result = schema.safeParse(body)
     if (!result.success) {
       return NextResponse.json({ error: '文本长度需在 10-50000 字符之间' }, { status: 400 })
     }
+    const orgId = await getDefaultOrgId(user.id)
     const analysis = await executeRules(result.data.text, orgId)
     return NextResponse.json(analysis)
   } catch (error) {
