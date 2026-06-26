@@ -31,6 +31,7 @@ export function ImageUpload({
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const handleFileChange = useCallback(async (file: File | null) => {
     if (!file) return
@@ -76,6 +77,7 @@ export function ImageUpload({
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    setIsDragOver(false)
     const file = e.dataTransfer.files[0]
     if (file) {
       void handleFileChange(file)
@@ -84,6 +86,14 @@ export function ImageUpload({
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    if (!isUploading) {
+      setIsDragOver(true)
+    }
+  }, [isUploading])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
   }, [])
 
   const clearImage = useCallback(() => {
@@ -124,6 +134,7 @@ export function ImageUpload({
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
           className="relative"
         >
           <input
@@ -138,7 +149,11 @@ export function ImageUpload({
             className={`
               flex flex-col items-center justify-center gap-2
               h-20 px-4 rounded-lg border-2 border-dashed
-              ${isUploading ? 'bg-gray-50 border-gray-300' : 'bg-slate-50 border-slate-300 hover:bg-slate-100 hover:border-slate-400'}
+              ${isUploading
+                ? 'bg-gray-50 border-gray-300'
+                : isDragOver
+                  ? 'bg-blue-50 border-blue-500'
+                  : 'bg-slate-50 border-slate-300 hover:bg-slate-100 hover:border-slate-400'}
               transition-colors
             `}
           >

@@ -54,8 +54,13 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
 
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
+    const formData = await req.formData().catch(() => null)
+    if (!formData) {
+      return errorResponse('请求格式不是有效的表单数据', 400, 'INVALID_FORM')
+    }
+
+    const fileValue = formData.get('file')
+    const file = fileValue instanceof File ? fileValue : null
     const folder = formData.get('folder') as string | null // 'logos' | 'favicons' | 'avatars'
 
     if (!file) {
