@@ -27,7 +27,7 @@
 |---|---|---|
 | `pnpm lint` | Pass, no ESLint warnings/errors | `next lint` deprecation warning remains from Next 15 tooling |
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
-| `pnpm test:run` | 52 files / 324 tests passed | Vitest prints existing `--localstorage-file` warning |
+| `pnpm test:run` | 52 files / 324 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
 | `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared |
 | Commit hook | 10/10 governance checks passed through `4bc49c6` | No `--no-verify` used |
 | Vercel build | Ready | Vercel build warnings: `sharp@0.34.5` scripts ignored; Sentry/OpenTelemetry dynamic require |
