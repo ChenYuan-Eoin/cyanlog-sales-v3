@@ -2,11 +2,13 @@
 // PURPOSE: 角色管理 API - 编辑角色权限
 // 权限要求: config:write
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 import { hasPermission } from '@/lib/permissions'
+import { errorResponse, successResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 function canWriteRoles(userPerms: string[]) {
   return hasPermission(userPerms, 'config:write')
@@ -27,7 +29,7 @@ export async function PATCH(
 ) {
   const userPerms = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
   if (!canWriteRoles(userPerms)) {
-    return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    return errorResponse(createApiError('FORBIDDEN', 'Forbidden'))
   }
 
   const id = await resolveIdParam(params)
@@ -35,10 +37,9 @@ export async function PATCH(
   const body = await req.json().catch(() => null)
   const parsed = patchSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'INVALID_BODY', details: parsed.error.issues[0]?.message },
-      { status: 400 }
-    )
+    return errorResponse(createApiError('VALIDATION_ERROR', 'INVALID_BODY', {
+      reason: parsed.error.issues[0]?.message,
+    }))
   }
 
   const { data, error } = await supabaseAdmin
@@ -50,8 +51,8 @@ export async function PATCH(
 
   if (error) {
     console.error('Update role error:', error)
-    return NextResponse.json({ error: '更新失败' }, { status: 500 })
+    return errorResponse(createApiError('DB_ERROR', '更新失败'))
   }
 
-  return NextResponse.json({ success: true, data })
+  return successResponse(data)
 }

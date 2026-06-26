@@ -1,9 +1,11 @@
 // REQ: F003 自主可控 + RBAC
 // PURPOSE: 角色管理 API - 列出角色权限
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { hasPermission } from '@/lib/permissions'
+import { errorResponse, successResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 function canReadRoles(userPerms: string[]) {
   return hasPermission(userPerms, 'config:read')
@@ -13,7 +15,7 @@ function canReadRoles(userPerms: string[]) {
 export async function GET(req: NextRequest) {
   const userPerms = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
   if (!canReadRoles(userPerms)) {
-    return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    return errorResponse(createApiError('FORBIDDEN', 'Forbidden'))
   }
 
   const { searchParams } = new URL(req.url)
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     console.error('List roles error:', error)
-    return NextResponse.json({ error: '查询失败' }, { status: 500 })
+    return errorResponse(createApiError('DB_ERROR', '查询失败'))
   }
 
   const permissionKeys = Array.from(new Set(
@@ -37,17 +39,16 @@ export async function GET(req: NextRequest) {
       .filter((permission): permission is string => typeof permission === 'string' && permission.length > 0)
   )).sort()
 
-  return NextResponse.json({
-    success: true,
-    data: {
+  return successResponse(
+    {
       roles: data ?? [],
       permission_keys: permissionKeys,
     },
-    pagination: {
+    {
       total: count || 0,
       limit,
       offset,
       hasMore: (count || 0) > offset + limit,
-    },
-  })
+    }
+  )
 }
