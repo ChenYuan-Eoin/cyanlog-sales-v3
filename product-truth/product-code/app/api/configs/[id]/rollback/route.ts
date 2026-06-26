@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const user = await requireAuth(req)
     const { id } = await params
 
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = rollbackSchema.safeParse(body)
 
     if (!validated.success) {

@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 // POST /api/configs - 创建配置
 export async function POST(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = configCreateSchema.safeParse(body)
 
     if (!validated.success) {

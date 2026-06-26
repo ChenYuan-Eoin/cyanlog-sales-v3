@@ -83,7 +83,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       return errorResponse('配置不存在或无权限', 404, 'NOT_FOUND')
     }
 
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = configUpdateSchema.safeParse(body)
 
     if (!validated.success) {
