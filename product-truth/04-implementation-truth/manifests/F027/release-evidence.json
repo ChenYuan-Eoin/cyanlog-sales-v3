@@ -1,8 +1,8 @@
 {
   "req_id": "F027",
-  "date": "2026-06-26",
+  "date": "2026-06-27",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "50af5af",
+  "head": "480471b",
   "commits": [
     {
       "sha": "5641824",
@@ -287,22 +287,37 @@
     {
       "sha": "50af5af",
       "message": "fix(rules): hide archived rules from default stats"
+    },
+    {
+      "sha": "ee15827",
+      "message": "docs: record latest preview and deploy blocker evidence"
+    },
+    {
+      "sha": "480471b",
+      "message": "fix(home): support cookie-only dashboard recovery"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew",
+    "deployment_id": "dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/BpwMSoQQz15UXMk7qf7yTVAkVaew"
+    "target": "preview-alias",
+    "alias_note": "sales.cyanlog.icu was explicitly aliased to this Ready Preview deployment because vercel promote had been blocked by api-deployments-free-per-day.",
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/YKeSNAKpJFwVu1mTaVea571AZ9PQ"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "101 files / 424 tests passed",
+    "test": "102 files / 427 tests passed",
     "build": "pass; Sentry/OpenTelemetry dynamic require warning cleared locally and in latest Vercel Preview; /configs First Load JS stays at 129kB",
-    "health": "Production GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 323ms on old production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew",
+    "health": "Main-domain GET /api/health status=ok on dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ, x-vercel-id hnd1::sin1, database latency around 41-42ms in latest samples",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "rule_stats_active_filter": "GET /api/rules/stats now defaults to is_active=true against contract_rules_v2 so archived legacy RULE-01-* rows do not appear in current rule statistics. Explicit include_archived=true keeps historical/debug visibility. Targeted route test passed 1 file / 2 tests.",
+    "latest_rule_stats_main_domain": "On sales.cyanlog.icu after alias to dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ, /api/rules/stats returned summary.total_rules=15 and no legacy RULE-01-* in default mode; /api/rules/stats?include_archived=true returned 18 and retained archived legacy rows explicitly.",
+    "home_cookie_only_recovery": "480471b reuses loadHomeInitialData, /api/auth/me, /api/dashboard and existing HttpOnly cookie auth so / renders dashboard even when localStorage.token is absent. Local production and main-domain smoke both render the dashboard instead of redirecting to /login.",
+    "latest_browser_smoke": "Main-domain Playwright after alias opened /, /configs?tab=role-access, and /contracts/44301b16-6551-4720-afa5-f1d80b1604de. Desktop 1440px and mobile 390px had no horizontal overflow, no login redirect and no error boundary. One earlier mobile React #418 pageerror did not reproduce across five repeated mobile samples.",
+    "latest_role_ui_add_remove": "Main-domain browser used existing e2e-admin@huarun.com for a reversible READONLY role test. UI add refreshed role list/detail/table to 1 and /api/admin/org showed READONLY; UI remove refreshed to 0 and API confirmed the original ADMIN role set was restored. No console/page errors.",
+    "latest_org_api_timing": "Main-domain /api/admin/org returned 25 users, 11 departments, 7 roles, X-Org-Payload-Source: rpc, and X-Org-Timing around auth;dur=0.3, rpc_payload;dur=41.0, total;dur=41.4.",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
     "contract_compare": "POST/GET/UI flow passed",
@@ -310,11 +325,11 @@
     "mobile": "configs and contracts verified without horizontal overflow",
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
-    "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms, and later warm direct samples were also below 0.5s. However the latest user-provided reference records /api/auth/login at 1173ms and overall login at 1590ms. bde4752 extends prewarm to the no-side-effect input-validation branch of login_with_password_v1 and adds login_rpc_transport to separate Supabase/PostgREST/network wait from rpc_total. 006f41e logs sanitized stage timings to server/Vercel logs when route total is >=500ms. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw returned prewarm 200 and login X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms. 762c830 adds per-task X-Login-Prewarm-Timing plus a default 1500ms soft boundary for no-side-effect prewarm tasks. Latest local production verification on pushed app code through 2a0ca9f returned direct samples with rpc_total only 78.1-109.3ms while login_rpc_transport ranged from 178.1ms to 1552.0ms; full prewarm produced one 252.0ms route sample, but concurrent/late prewarm still produced 552.1ms and 842.1ms route samples. Production remains open until latest HEAD can be deployed/promoted and measured on sales.cyanlog.icu.",
+    "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms, and later warm direct samples were also below 0.5s. Latest main-domain alias dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ returned warm samples including total=183.4ms, rpc_total=96.0ms, login_rpc_transport=85.7ms, but repeated samples still showed one total=554.6ms with login_rpc_transport=446.5ms. Earlier user reference recorded /api/auth/login at 1173ms and overall login at 1590ms. Current evidence keeps cold-login long tail under external transport watch rather than declaring it solved by UI code.",
     "performance_external_wait": "Supabase/GitHub TLS reset was observed during diagnostics; one core API stalled around 9s before 401, then recovered to around 185-355ms. External dependencies are not treated as automatically bad, but their latency/error class must be separated from app-code compute time. After 762c830, local production POST /api/auth/prewarm returned login_rpc;dur=1501.8;status=timed_out and logged sanitized [auth/login] prewarm timeout, proving opportunistic prewarm no longer waits unboundedly for that task.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. After 56ba7e3, current local production build: /configs Size 15.4kB and First Load JS 129kB; route chunk is 51kB. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
-    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest hook run passed 101 files / 424 tests without the Node 24 --localstorage-file warning.",
+    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest hook run passed 102 files / 427 tests without the Node 24 --localstorage-file warning.",
     "lint_warning_cleanup": "Standard pnpm lint now uses ESLint CLI over app/components/lib/types plus middleware/instrumentation/Sentry config files; latest run passed without the Next 16 next lint deprecation warning.",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
@@ -326,8 +341,8 @@
     "login_prewarm_wait_boundary": "762c830 keeps the existing /api/auth/login GET prewarm and /api/auth/prewarm POST endpoints, adds X-Login-Prewarm-Timing for users_query, candidate_rpc, and login_rpc, and gives each no-side-effect prewarm task a default 1500ms soft boundary. Targeted auth tests passed 2 files / 21 tests; full hook passed 99 files / 418 tests; pnpm build passed. Local production GET /api/auth/login without X-Login-Prewarm stayed 204; with X-Login-Prewarm returned all three stages fulfilled around 1107ms. Local production POST /api/auth/prewarm returned login_rpc;dur=1501.8;status=timed_out and emitted sanitized [auth/login] prewarm timeout.",
     "latest_local_login_transport_conclusion": "Latest local production samples on pushed app code show cold-login long tails are dominated by login_rpc_transport rather than SQL/RPC compute: direct route totals were 1663.8ms, 297.5ms, 259.5ms, 534.4ms and 561.5ms, while rpc_total stayed 78.1-109.3ms. Full prewarm can help if it finishes before submit, but 350ms and 1200ms concurrent prewarm samples still returned 552.1ms and 842.1ms route totals because transport remained high. Next optimization should be gated on deployed main-domain evidence and should target Supabase/PostgREST connection, region or network behavior if the same pattern persists.",
     "preview_visual_smoke": "Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via temporary Vercel share URL: browser screenshots captured for /login, /, /configs?tab=role-access desktop 1440x900 and /configs?tab=role-access mobile 390x844. Dashboard, role-access desktop, and role-access mobile reported scrollWidth equal to viewport width, overflowX=false, hasErrorText=false, and role-access content visible. Screenshot files are ignored under product-truth/product-code/output/playwright and are not tracked or uploaded.",
-    "latest_code_preview_deploy_blocker": "Resolved for build availability: repo-root vercel deploy --yes after 50af5af uploaded 193.2KB and produced Ready Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M. The Preview URL is protected by Vercel Authentication, so direct API/MCP fetches return SSO redirects instead of application JSON and it is not usable as the user's public acceptance URL.",
-    "production_deploy_blocker": "vercel promote https://cyanlog-sales-v3-mssve63os-eoins-projects-94b17ece.vercel.app --yes failed with Vercel quota code api-deployments-free-per-day. vercel inspect https://sales.cyanlog.icu still resolves to production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew. sales.cyanlog.icu is accessible on the old production deployment, but latest 50af5af is not promoted until quota resets or plan limit is raised.",
+    "latest_code_preview_deploy_blocker": "Superseded: repo-root vercel deploy --yes after 480471b uploaded 210.7KB and produced Ready deployment dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ.",
+    "production_deploy_blocker": "Superseded for public acceptance URL by explicit alias: sales.cyanlog.icu now points to dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ. Remaining release nuance is that inspect reports target=preview because this was an alias workaround, not vercel promote.",
     "sentry_no_dsn_startup_guard": "instrumentation.ts now skips server/edge Sentry config import when SENTRY_DSN and NEXT_PUBLIC_SENTRY_DSN are both unset. Local next start -p 3000 no longer prints the server Sentry DSN-not-configured warning. 4507ae2 cleared the Sentry/OpenTelemetry dynamic require build warning locally.",
     "sentry_opentelemetry_build_warning": "4507ae2 adds Next serverExternalPackages entries for @sentry/nextjs, @sentry/node, @opentelemetry/instrumentation, and require-in-the-middle. Local pnpm build no longer reports the Sentry/OpenTelemetry require-in-the-middle critical dependency warning; latest Vercel Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M also completed without that warning. Remaining Vercel warnings are webpack cache big-string serialization notes.",
     "configs_dialog_split": "56ba7e3 moves the config edit dialog and version history dialog behind next/dynamic while reusing existing forms, Dialog, Textarea and ConfigStatusBadge components. Local pnpm build changed /configs from 18.2kB / 160kB to 15.4kB / 129kB. Local production browser verification with system Chrome logged in, opened /configs?tab=tax and the new tax dialog, then /configs?tab=theme and the theme asset dialog; there were no page errors, console errors, or real network failures.",
@@ -576,7 +591,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB. Manual Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw for bde4752 uploaded 164.2KB. The ccc6308 repo-root deploy attempt uploaded 452.2KB before quota failure. Latest 50af5af repo-root Preview deploy uploaded 193.2KB and built Ready deployment dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M. Deploy root remains product-truth/product-code. Tracked app files total 4.1MB and tracked repo files total 18MB; local node_modules 1.2GB, .next 1.0GB, output/playwright evidence screenshots, and tsconfig.tsbuildinfo are ignored and do not enter Git or Vercel payload.",
+    "deploy_payload": "Latest main-domain acceptance deployment dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ uploaded 210.7KB, built Ready, and was aliased to sales.cyanlog.icu. Deploy root remains product-truth/product-code. Tracked app files total 4.1MB and tracked repo files total 18MB; local node_modules, .next, output/playwright evidence screenshots, and tsconfig.tsbuildinfo are ignored and do not enter Git or Vercel payload.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "dependency_manifest_cleanup": {
       "production_dependency_count_before": 31,
@@ -599,7 +614,7 @@
       "validation": {
         "typecheck": "pnpm exec tsc --noEmit passed",
         "lint": "pnpm lint passed",
-        "test": "pnpm test:run passed: 100 files / 422 tests after dependency cleanup; 101 files / 424 tests after rule-stats patch",
+        "test": "pnpm test:run passed: 100 files / 422 tests after dependency cleanup; 101 files / 424 tests after rule-stats patch; latest 480471b full suite passed 102 files / 427 tests",
         "build": "pnpm build passed locally; Vercel Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M build passed with /configs 15.4kB / 129kB and /admin/org 3.77kB / 107kB"
       }
     },
@@ -898,8 +913,8 @@
       "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 186ms"
     },
     "performance_configs_bundle_current": {
-      "deployment": "local-only; latest production still dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew",
-      "commit": "56ba7e3",
+      "deployment": "dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ",
+      "commit": "480471b",
       "local_build_route_size": "15.4kB",
       "local_build_first_load_js": "129kB",
       "local_configs_page_chunk_bytes": 51846,
@@ -1333,7 +1348,7 @@
     }
   },
   "known_risks": [
-    "Direct first-submit can still pay cold startup or external wait if same-route prewarm has not completed; latest auth HMAC key cache reduced repeated auth_context_cookie signing to 0.4-0.5ms, and latest local production samples show SQL/RPC compute stayed around 78.1-109.3ms while login_rpc_transport accounted for the long tail up to 1552.0ms. The next fix should not be another blind prewarm timing change; it needs deployed main-domain transport evidence first.",
+    "Direct first-submit can still pay cold startup or external wait if same-route prewarm has not completed; latest main-domain samples on dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ include total=183.4ms with rpc_total=96.0ms, but another sample reached total=554.6ms with login_rpc_transport=446.5ms. The next fix should not be another blind prewarm timing change; it needs continued main-domain transport evidence.",
     "Node/Playwright request DNS intermittently returned ENOTFOUND for sales.cyanlog.icu while curl and Chrome verified the alias; keep external resolver failures classified separately from app errors.",
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
     "/configs first-load bundle is improved from the earlier 281kB, 166kB and 160kB samples to the current 129kB local build after deferring the config edit and version dialogs, and /admin/org is improved from 245kB to 107kB after lazy-loading the organization workbench. Keep shared chunks and real first-entry timing under bundle watch.",
@@ -1344,6 +1359,6 @@
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
     "Request-body schema migration is locally closed for the current route inventory: 67 schema+guard, 0 guard-only, 36 no-body, 0 unguarded-body, 0 schema-only. Upload/OCR envelope debt from E2 is locally closed; remaining API debt is broader legacy response envelope/code consistency outside that problem path.",
     "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired.",
-    "Latest 50af5af build is Ready only on protected Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M. sales.cyanlog.icu is accessible but still points to old production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew because vercel promote is blocked by api-deployments-free-per-day."
+    "sales.cyanlog.icu now points to latest Ready deployment dpl_YKeSNAKpJFwVu1mTaVea571AZ9PQ via explicit custom-domain alias. Vercel inspect still reports target=preview, so a strict Production target still requires vercel promote after quota constraints are cleared."
   ]
 }
