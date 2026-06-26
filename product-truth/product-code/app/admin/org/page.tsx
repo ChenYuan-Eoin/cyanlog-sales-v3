@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import OrgStructureTab from '@/app/configs/tabs/OrgStructureTab'
+import dynamic from 'next/dynamic'
 import type { FeishuSyncFeedback, OrgSummaryPayload } from '@/app/configs/types'
 import { confirmAction } from '@/lib/toast'
 import {
@@ -10,6 +10,20 @@ import {
   buildFeishuSuccessFeedback,
   type FeishuSyncResponse,
 } from '@/app/configs/feishu-sync-feedback'
+
+const OrgStructureTab = dynamic(() => import('@/app/configs/tabs/OrgStructureTab'), {
+  loading: () => (
+    <div className="space-y-4 rounded-lg border bg-white p-6">
+      <div className="h-6 w-40 rounded bg-slate-100" />
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="h-20 rounded bg-slate-100" />
+        <div className="h-20 rounded bg-slate-100" />
+        <div className="h-20 rounded bg-slate-100" />
+      </div>
+      <div className="h-72 rounded bg-slate-100" />
+    </div>
+  ),
+})
 
 // B11: /admin/org 入口复用 OrgStructureTab，避免与 /configs?tab=org-structure 重复代码
 export default function AdminOrgPage() {
