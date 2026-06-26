@@ -92,6 +92,7 @@ async function getOrgDepartments(orgId: string): Promise<OrgDepartmentRow[]> {
     .from('departments')
     .select('id, name, code, depth, member_count, parent_id, leader_id')
     .eq('org_id', orgId)
+    .eq('status', 'active')
     .order('depth', { ascending: true })
     .order('sort_order', { ascending: true })
 
