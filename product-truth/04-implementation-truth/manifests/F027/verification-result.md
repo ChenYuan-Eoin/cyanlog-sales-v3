@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26  
 **Branch**: `codex/audit-remediation-61-issues`  
-**HEAD**: `31f9a75370b4f2208ac7cd395545ae35d483bb4e`  
-**Production Deployment**: `dpl_4xYjJXQLqwPn7fc7hJ3rdHzs9M7t`  
+**HEAD**: `d4fa668`  
+**Production Deployment**: `dpl_DLUX6LZqB2tLFjTXxozY5quz3YoG`  
 **Production URL**: `https://sales.cyanlog.icu`  
 
 ---
@@ -14,7 +14,7 @@
 |---|---|---|
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
-| Production | `vercel inspect https://sales.cyanlog.icu` => `Ready`, alias attached | Pass |
+| Production | Vercel production deployment `dpl_DLUX6LZqB2tLFjTXxozY5quz3YoG` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
 | Health | `GET /api/health` => `status=ok`, database ok | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
@@ -30,7 +30,7 @@
 | `pnpm test:run` | 51 files / 318 tests passed | Vitest prints existing `--localstorage-file` warning |
 | `pnpm build` | Pass | Existing warnings: Sentry/OpenTelemetry dynamic require; local missing `@next/swc-darwin-arm64` fallback |
 | Commit hook | 10/10 governance checks passed on `31f9a75` | No `--no-verify` used |
-| Vercel build | Ready | Vercel build warning: `sharp@0.34.5` scripts ignored |
+| Vercel build | Ready | Vercel build warnings: `sharp@0.34.5` scripts ignored; Sentry/OpenTelemetry dynamic require |
 
 ---
 
@@ -38,7 +38,7 @@
 
 | Domain | Evidence | Result |
 |---|---|---|
-| D01 Production availability | `vercel inspect`: `dpl_4xYjJXQLqwPn7fc7hJ3rdHzs9M7t`, `Ready`, alias `https://sales.cyanlog.icu` | Pass |
+| D01 Production availability | Production deployment `dpl_DLUX6LZqB2tLFjTXxozY5quz3YoG`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`; expected title visible; no `页面发生错误` | Pass |
 | D02 404 | Browser visited a nonexistent route; displayed `页面未找到` | Pass |
 | D03 Org role assignment | Production browser verification before doc-only deploy: ADMIN and SUPER_ADMIN add/remove temp users worked; temp users cleaned | Pass, no behavior change after doc-only deploy |
@@ -63,7 +63,7 @@
 | Page switching | DevTools trace showed route switching INP 26ms and CLS 0.00. | Page switching is not the current primary bottleneck. |
 | Cold login | Latest reference sample: `/api/auth/login` 1173ms, overall login 1590ms. Current server timing sample also showed `total=504.3ms`, `login_rpc=495.1ms`. | Cold login remains the highest-priority performance issue and is not closed by prefetch/cache work. |
 | External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
-| `/configs` bundle | Build showed `/configs` First Load JS around 281kB, higher than `/contracts` around 144kB and `/tenders` around 125kB. | Config center first entry still has chunk-splitting potential. |
+| `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB. Current Vercel build shows `/configs` 166kB, `/contracts` 144kB and `/tenders` 126kB. | Config center first entry is no longer at the 281kB baseline in the current build, but still remains heavier than adjacent modules and should stay under bundle watch. |
 | Login CLS | Login page trace previously showed CLS around 0.21; switching trace showed no CLS. | CLS belongs to login page layout stability, not the three-page switching path. |
 | Reverted optimization | Moving login prewarm from 1200ms to 350ms regressed a quick-submit sample to around 5s and was reverted. | No unverified performance tweak is counted as a fix. |
 
@@ -145,7 +145,7 @@ Required next instrumentation for cold login:
 |---|---|---|
 | Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED`. | Configure Feishu env in Vercel, then run department sync success test and verify database rows. |
 | Cold login < 0.5s target | Latest reference sample: `/api/auth/login` 1173ms and overall login 1590ms; current server timing sample also showed `total=504.3ms`, `login_rpc=495.1ms`; target is still tight and RPC/DB-bound. | Split DB timing inside `login_with_password_v1` and add stage timing for token write, initial data assembly and cookie signing. |
-| `/configs` first-load JS | `/configs` First Load JS around 281kB, larger than nearby core modules. | Split heavy tab panes/client-only tools by tab and remeasure bundle output. |
+| `/configs` first-load JS | Current Vercel build shows `/configs` First Load JS 166kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic sample had shown 281kB. | Keep bundle budget watch; split heavy tab panes/client-only tools only if future build output regresses or user-perceived first entry remains slow. |
 | Login CLS | Login page CLS around 0.21 was observed separately from page switching. | Fix stable dimensions for login brand/media/form areas and rerun trace. |
 | Full API Zod coverage | Some APIs have Zod; project-wide coverage is not complete. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
 | Full `any` cleanup | `any` remains mostly in tests; production false positives exist in search. | Separate test mock typings from production typings; enforce no-explicit-any only for production paths first. |

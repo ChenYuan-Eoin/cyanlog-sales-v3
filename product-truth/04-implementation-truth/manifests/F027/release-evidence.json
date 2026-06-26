@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "31f9a75370b4f2208ac7cd395545ae35d483bb4e",
+  "head": "d4fa668",
   "commits": [
     {
       "sha": "5641824",
@@ -19,13 +19,17 @@
     {
       "sha": "31f9a75",
       "message": "chore: constrain vercel deployment artifacts"
+    },
+    {
+      "sha": "d4fa668",
+      "message": "docs: add F027 remediation governance evidence"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_4xYjJXQLqwPn7fc7hJ3rdHzs9M7t",
+    "deployment_id": "dpl_DLUX6LZqB2tLFjTXxozY5quz3YoG",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/4xYjJXQLqwPn7fc7hJ3rdHzs9M7t"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/DLUX6LZqB2tLFjTXxozY5quz3YoG"
   },
   "verification": {
     "lint": "pass",
@@ -41,13 +45,13 @@
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
     "performance_login": "Reference sample: /api/auth/login 1173ms, overall login 1590ms; current sample total 504.3ms, login_rpc 495.1ms",
-    "performance_configs_bundle": "/configs First Load JS around 281kB, above /contracts 144kB and /tenders 125kB",
+    "performance_configs_bundle": "Earlier sample: /configs around 281kB. Current Vercel build: /configs 166kB, /contracts 144kB, /tenders 126kB",
     "performance_login_cls": "Login page trace previously showed CLS around 0.21"
   },
   "known_risks": [
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
     "Cold login target below 0.5s is not fully achieved; login_rpc remains the main cost and needs deeper server timing.",
-    "/configs first-load bundle remains larger than adjacent modules and needs tab-level chunk splitting.",
+    "/configs first-load bundle is improved from the earlier 281kB sample but remains heavier than adjacent modules; keep it under bundle watch.",
     "Login page CLS remains a separate layout-stability issue from page switching.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Build has known dependency warnings: sharp scripts, Sentry/OpenTelemetry dynamic require, local SWC fallback.",
