@@ -52,6 +52,47 @@ const analysisJobStatusMap: Record<string, { label: string; variant: 'default' |
   failed: { label: '已失败', variant: 'destructive' },
 }
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  const numberValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numberValue) ? numberValue : fallback
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeRiskSummary(value: unknown) {
+  const source = isRecord(value) ? value : {}
+  return {
+    total_clauses: asNumber(source.total_clauses),
+    critical_risks: asNumber(source.critical_risks),
+    high_risks: asNumber(source.high_risks),
+    medium_risks: asNumber(source.medium_risks),
+    low_risks: asNumber(source.low_risks),
+    compliance_score: asNumber(source.compliance_score),
+    strategy_code: typeof source.strategy_code === 'string' ? source.strategy_code : undefined,
+  }
+}
+
+function normalizeComplianceCheck(value: unknown) {
+  const source = isRecord(value) ? value : {}
+  return {
+    missing_required_clauses: asStringArray(source.missing_required_clauses),
+    dangerous_clauses: asStringArray(source.dangerous_clauses),
+    ambiguous_clauses: asStringArray(source.ambiguous_clauses),
+    unbalanced_clauses: asStringArray(source.unbalanced_clauses),
+    party_a_consistency: typeof source.party_a_consistency === 'string' ? source.party_a_consistency : 'unknown',
+    party_b_consistency: typeof source.party_b_consistency === 'string' ? source.party_b_consistency : 'unknown',
+    issues: asStringArray(source.issues),
+  }
+}
+
 // ASK 类型
 interface AskItem {
   id: string
@@ -597,28 +638,17 @@ function PreviewTableTab({
   if (contract.status !== 'COMPLETED' || !latestReview?.results) {
     return (
       <div className="text-center py-8">
-        <p className="textlate-500">暂无审核结果</p>
+        <p className="text-slate-500">暂无审核结果</p>
       </div>
     )
   }
 
-  const risk = latestReview.risk_summary || {
-    total_clauses: 0,
-    critical_risks: 0,
-    high_risks: 0,
-    medium_risks: 0,
-    low_risks: 0,
-    compliance_score: 0,
-  }
-  const compliance = latestReview.compliance_check || {
-    missing_required_clauses: [],
-    dangerous_clauses: [],
-    ambiguous_clauses: [],
-    unbalanced_clauses: [],
-    party_a_consistency: 'unknown',
-    party_b_consistency: 'unknown',
-    issues: [],
-  }
+  const risk = normalizeRiskSummary(latestReview.risk_summary)
+  const compliance = normalizeComplianceCheck(latestReview.compliance_check)
+  const reviewRisks = Array.isArray(latestReview.results.risks) ? latestReview.results.risks : []
+  const reviewSummary = typeof latestReview.results.summary === 'string'
+    ? latestReview.results.summary
+    : '暂无审核摘要'
 
   async function handleStrategyChange(code: string) {
     setSelectedStrategy(code)
@@ -861,17 +891,17 @@ function PreviewTableTab({
       )}
 
       {/* 6. AI 原始风险列表（兼容老数据） */}
-      {latestReview.results.risks.length > 0 && (
+      {reviewRisks.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">AI 风险点（{latestReview.results.risks.length} 项）</CardTitle>
+            <CardTitle className="text-base">AI 风险点（{reviewRisks.length} 项）</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="p-4 bg-slate-50 rounded-lg mb-4">
-              <p className="text-sm">{latestReview.results.summary}</p>
+              <p className="text-sm">{reviewSummary}</p>
             </div>
             <div className="space-y-3">
-              {latestReview.results.risks.map((risk, index) => (
+              {reviewRisks.map((risk, index) => (
                 <div
                   key={index}
                   className={`p-4 rounded-lg border ${riskLevelMap[risk.level]?.className || 'bg-slate-50'}`}
