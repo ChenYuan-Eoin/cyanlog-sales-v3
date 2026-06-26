@@ -6,7 +6,6 @@ export const preferredRegion = 'sin1'
 
 import { randomBytes, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
@@ -62,6 +61,14 @@ type OrgContext = {
   roleCodes: string[]
 }
 
+type OrgAdminPayload = {
+  organization: unknown
+  users: unknown[]
+  departments: unknown[]
+  roles: unknown[]
+  spaces: unknown[]
+}
+
 function errorResponse(message: string, status: number, code?: string, extra?: Record<string, unknown>) {
   return NextResponse.json({ error: message, code, ...extra }, { status })
 }
@@ -78,6 +85,34 @@ const unwrapOne = <T,>(value: T | T[] | null | undefined): T | null => {
 // 兼容旧代码调用
 const createTempPassword = (): string => {
   return `Cyan!${randomBytes(9).toString('base64url')}`
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const { default: bcrypt } = await import('bcryptjs')
+  return bcrypt.hash(password, 12)
+}
+
+function isOrgAdminPayload(value: unknown): value is OrgAdminPayload {
+  if (!value || typeof value !== 'object') return false
+  const payload = value as Partial<OrgAdminPayload>
+  return (
+    Array.isArray(payload.users)
+    && Array.isArray(payload.departments)
+    && Array.isArray(payload.roles)
+    && Array.isArray(payload.spaces)
+  )
+}
+
+async function listOrgPayloadFromRpc(orgId: string): Promise<OrgAdminPayload> {
+  const { data, error } = await supabaseAdmin.rpc('get_org_admin_payload_v1', {
+    p_org_id: orgId,
+  })
+
+  if (error || !isOrgAdminPayload(data)) {
+    throw new Error('ORG_PAYLOAD_RPC_FAILED')
+  }
+
+  return data
 }
 
 async function getOrgDepartments(orgId: string): Promise<OrgDepartmentRow[]> {
@@ -158,8 +193,8 @@ async function getOrgUserIds(orgId: string): Promise<string[]> {
   ].filter((id): id is string => Boolean(id))))
 }
 
-async function getOrgUserRoles(orgId: string) {
-  const ids = await getOrgUserIds(orgId)
+async function getOrgUserRoles(orgId: string, orgUserIds?: string[]) {
+  const ids = orgUserIds ?? await getOrgUserIds(orgId)
   if (ids.length === 0) {
     return []
   }
@@ -510,7 +545,7 @@ async function listOrgPayload(orgId: string) {
   // 构建用户姓名映射（用于查找部门主管）
   const userNameById = new Map(usersData.map((u) => [u.id, u.display_name]))
 
-  const userRolesData = await getOrgUserRoles(orgId)
+  const userRolesData = await getOrgUserRoles(orgId, orgUserIds)
   const departmentIds = new Set(departments.map((department) => department.id))
   const spaceIds = new Set(spaces.map((space) => space.id))
 
@@ -639,7 +674,13 @@ export async function GET(req: NextRequest) {
       return errorResponse('无权限访问组织管理', 403, 'FORBIDDEN')
     }
 
-    const data = await listOrgPayload(auth.orgId)
+    let data: OrgAdminPayload
+    try {
+      data = await listOrgPayloadFromRpc(auth.orgId)
+    } catch (rpcError) {
+      console.error('[admin/org] RPC payload failed; falling back to query fan-out:', rpcError)
+      data = await listOrgPayload(auth.orgId)
+    }
 
     return NextResponse.json(data, {
       headers: {
@@ -765,7 +806,7 @@ export async function POST(req: NextRequest) {
       }
 
       const tempPassword = createTempPassword()
-      const passwordHash = await bcrypt.hash(tempPassword, 12)
+      const passwordHash = await hashPassword(tempPassword)
       const userId = randomUUID()
 
       const { error: insertUserError } = await supabaseAdmin
@@ -1046,7 +1087,7 @@ export async function PATCH(req: NextRequest) {
       }
 
       const tempPassword = createTempPassword()
-      const passwordHash = await bcrypt.hash(tempPassword, 12)
+      const passwordHash = await hashPassword(tempPassword)
 
       const { error } = await supabaseAdmin
         .from('users')

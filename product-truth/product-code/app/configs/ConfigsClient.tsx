@@ -348,6 +348,7 @@ export default function ConfigsClient({
       const cachedEntry = readBrowserCacheEntry<unknown>(cacheKey)
       const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
       const cached = cacheAgeMs <= TAB_CACHE_TTL_MS ? cachedEntry?.value : null
+      let didLoad = Boolean(cached)
 
       if (cached) {
         switch (tab) {
@@ -396,6 +397,7 @@ export default function ConfigsClient({
           if (nextProducts) {
             setProducts(nextProducts)
             writeBrowserCache(cacheKey, nextProducts)
+            didLoad = true
           }
           break
         }
@@ -411,6 +413,7 @@ export default function ConfigsClient({
           if (nextRules) {
             setRules(nextRules)
             writeBrowserCache(cacheKey, nextRules)
+            didLoad = true
           }
           break
         }
@@ -429,6 +432,7 @@ export default function ConfigsClient({
           if (nextConfigs) {
             setConfigs(nextConfigs)
             writeBrowserCache(cacheKey, nextConfigs)
+            didLoad = true
           }
           break
         }
@@ -451,11 +455,13 @@ export default function ConfigsClient({
           if (nextRoles) {
             setRoles(nextRoles)
             writeBrowserCache(cacheKey, nextRoles)
+            didLoad = true
           }
           if (nextOrgSummary) {
             setOrgSummary(nextOrgSummary)
             writeBrowserCache(orgCacheKey, nextOrgSummary)
             setLoadedTabs(prev => new Set(prev).add('org-structure'))
+            didLoad = true
           }
           break
         }
@@ -470,13 +476,16 @@ export default function ConfigsClient({
           if (orgData) {
             setOrgSummary(orgData)
             writeBrowserCache(cacheKey, orgData)
+            didLoad = true
           }
           break
         }
       }
 
       // 标记该 tab 已加载
-      setLoadedTabs(prev => new Set(prev).add(tab))
+      if (didLoad) {
+        setLoadedTabs(prev => new Set(prev).add(tab))
+      }
     } catch {
       setError('加载失败，请重试')
     } finally {
@@ -603,6 +612,7 @@ export default function ConfigsClient({
   const activeSection = CONFIG_TABS[activeTab].section
   const sectionMeta = CONFIG_SECTIONS.find((section) => section.id === activeSection) || CONFIG_SECTIONS[0]
   const sectionTabs = sectionMeta.tabs
+  const activeTabLoading = loading && !loadedTabs.has(activeTab)
 
   const moduleCounts = useMemo(() => ({
     'price-list': products.length,
@@ -614,6 +624,20 @@ export default function ConfigsClient({
     'org-structure': orgSummary?.departments.length ?? 0,
     'role-access': roles.length,
   }), [getConfigsByType, orgSummary?.departments.length, products, rules, roles])
+
+  const formatModuleCount = useCallback((tabId: ConfigTabId) => {
+    if (activeTabLoading && tabId === activeTab) {
+      return '...'
+    }
+    return String(moduleCounts[tabId] || 0)
+  }, [activeTab, activeTabLoading, moduleCounts])
+
+  const formatSectionCount = useCallback((sectionTabs: ConfigTabId[]) => {
+    if (activeTabLoading && sectionTabs.includes(activeTab)) {
+      return '...'
+    }
+    return String(sectionTabs.reduce((total, tab) => total + (moduleCounts[tab] || 0), 0))
+  }, [activeTab, activeTabLoading, moduleCounts])
 
   const activeModuleMetrics = useMemo(() => {
     switch (activeTab) {
@@ -663,9 +687,9 @@ export default function ConfigsClient({
       }
       case 'org-structure':
         return [
-          { label: '部门总数', value: String(orgSummary?.departments.length ?? 0) },
-          { label: '成员总数', value: String(orgSummary?.users.length ?? 0) },
-          { label: '销售空间', value: String(orgSummary?.spaces.length ?? 0) },
+          { label: '部门总数', value: activeTabLoading ? '...' : String(orgSummary?.departments.length ?? 0) },
+          { label: '成员总数', value: activeTabLoading ? '...' : String(orgSummary?.users.length ?? 0) },
+          { label: '销售空间', value: activeTabLoading ? '...' : String(orgSummary?.spaces.length ?? 0) },
         ]
       case 'role-access':
         return [
@@ -676,7 +700,7 @@ export default function ConfigsClient({
       default:
         return []
     }
-  }, [activeTab, getConfigsByType, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.users.length, products, roles.length, rules])
+  }, [activeTab, activeTabLoading, getConfigsByType, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.users.length, products, roles.length, rules])
 
   function switchSection(sectionId: ConfigSectionId) {
     const nextSection = CONFIG_SECTIONS.find((section) => section.id === sectionId)
@@ -1190,7 +1214,7 @@ export default function ConfigsClient({
                         <div className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           isActiveSection ? 'bg-white/10 text-slate-100' : 'bg-white text-slate-500'
                         }`}>
-                          {section.tabs.reduce((total, tab) => total + (moduleCounts[tab] || 0), 0)}
+                          {formatSectionCount(section.tabs)}
                         </div>
                       </div>
                       <p className={`mt-2 text-xs leading-5 ${
@@ -1271,7 +1295,7 @@ export default function ConfigsClient({
                       <span className={`rounded-full px-2 py-0.5 text-xs ${
                         isActive ? 'bg-white/10 text-slate-100' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {moduleCounts[tabId] || 0}
+                        {formatModuleCount(tabId)}
                       </span>
                     </button>
                   )
