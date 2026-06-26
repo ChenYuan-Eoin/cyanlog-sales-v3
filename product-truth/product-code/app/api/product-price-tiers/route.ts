@@ -116,13 +116,14 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = tierSchema.safeParse(body)
 
     if (!validated.success) {
       return errorResponse('阶梯价数据无效', 400, 'INVALID_DATA')
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     const productLookup = await verifyProductAccess(validated.data.product_id, orgId)
     if (productLookup.error || !productLookup.data) {
@@ -178,13 +179,14 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = tierUpdateSchema.safeParse(body)
 
     if (!validated.success || !validated.data.id) {
       return errorResponse('阶梯价数据无效', 400, 'INVALID_DATA')
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     const tierResult = await supabaseAdmin
       .from('product_price_tiers')

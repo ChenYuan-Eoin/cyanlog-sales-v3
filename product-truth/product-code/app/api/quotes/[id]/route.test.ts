@@ -21,6 +21,7 @@ vi.mock('@/lib/scoped-access', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
+import { getDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DELETE, PUT } from './route'
 
@@ -29,6 +30,16 @@ function makeRequest(body: Record<string, unknown> = {}, method = 'PUT'): any {
     method,
     headers: new Headers(),
     json: async () => body,
+  }
+}
+
+function makeMalformedRequest(): any {
+  return {
+    method: 'PUT',
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: async () => {
+      throw new SyntaxError('Unexpected token')
+    },
   }
 }
 
@@ -54,6 +65,16 @@ describe('PUT /api/quotes/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
+  })
+
+  it('无效 JSON → 400 且不查询组织和报价', async () => {
+    const res = await PUT(makeMalformedRequest(), {
+      params: Promise.resolve({ id: QUOTE_ID }),
+    })
+
+    expect(res.status).toBe(400)
+    expect(getDefaultOrgId).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('已批准报价不能再修改', async () => {

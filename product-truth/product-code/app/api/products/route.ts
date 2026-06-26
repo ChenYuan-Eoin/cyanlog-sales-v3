@@ -46,7 +46,7 @@ const productSchema = z.object({
 async function parseProductPayload(req: NextRequest) {
   const contentType = req.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
-    return req.json()
+    return req.json().catch(() => null)
   }
 
   const formData = await req.formData()
@@ -178,13 +178,14 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const body = await parseProductPayload(req)
     const validated = productSchema.safeParse(body)
 
     if (!validated.success) {
       return errorResponse('产品数据无效', 400, 'INVALID_DATA')
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     const normalizedTiers = validated.data.tiers.map((tier, index) => ({
       ...tier,

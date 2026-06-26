@@ -118,14 +118,15 @@ export async function GET(req: NextRequest, { params }: AsyncRouteParams) {
 export async function PUT(req: NextRequest, { params }: AsyncRouteParams) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const id = await resolveIdParam(params)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const validated = productUpdateSchema.safeParse(body)
 
     if (!validated.success) {
       return errorResponse('产品数据无效', 400, 'INVALID_DATA')
     }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     let schemaDriftDetected = false
     const fetchResult = await supabaseAdmin

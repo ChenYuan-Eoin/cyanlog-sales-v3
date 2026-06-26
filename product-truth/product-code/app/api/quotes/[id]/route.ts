@@ -315,6 +315,15 @@ export async function PUT(
 
     const { id } = idResult.data
 
+    const rawData = await req.json().catch(() => null)
+
+    // Zod验证输入
+    const validation = updateQuoteSchema.safeParse(rawData)
+    if (!validation.success) {
+      const firstError = validation.error.issues[0]
+      return errorResponse(firstError.message, 400, 'VALIDATION_ERROR')
+    }
+
     // 先查询当前报价状态（带 owner 校验）
     const orgId = await getDefaultOrgId(user.id)
 
@@ -328,15 +337,6 @@ export async function PUT(
 
     if (!existingQuote) {
       return errorResponse('报价不存在', 404, 'NOT_FOUND')
-    }
-
-    const rawData = await req.json()
-
-    // Zod验证输入
-    const validation = updateQuoteSchema.safeParse(rawData)
-    if (!validation.success) {
-      const firstError = validation.error.issues[0]
-      return errorResponse(firstError.message, 400, 'VALIDATION_ERROR')
     }
 
     const updateData = validation.data

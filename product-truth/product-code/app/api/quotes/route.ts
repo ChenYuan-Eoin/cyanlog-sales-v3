@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 // POST - 创建报价
 export async function POST(req: NextRequest) {
   return withAuth(req, async (user: AuthUser) => {
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
 
     // Zod验证
     const result = quoteSchema.safeParse(body)

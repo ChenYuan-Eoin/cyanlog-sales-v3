@@ -50,7 +50,8 @@ vi.mock('@/lib/pricing/service', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import { canManageOrg, listAccessibleUserIds } from '@/lib/scoped-access'
+import { canManageOrg, getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { calculateQuoteDraft } from '@/lib/pricing/service'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
@@ -60,6 +61,17 @@ function makeRequest(url: string, method = 'GET'): any {
     method,
     json: async () => ({}),
     headers: new Headers(),
+  }
+}
+
+function makeMalformedRequest(url: string): any {
+  return {
+    url,
+    method: 'POST',
+    json: async () => {
+      throw new SyntaxError('Unexpected token')
+    },
+    headers: new Headers({ 'content-type': 'application/json' }),
   }
 }
 
@@ -140,6 +152,17 @@ describe('GET /api/quotes', () => {
 describe('POST /api/quotes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('无效 JSON → 400 且不访问组织、定价和数据库', async () => {
+    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
+
+    const res = await POST(makeMalformedRequest('http://localhost/api/quotes'))
+
+    expect(res.status).toBe(400)
+    expect(getDefaultOrgId).not.toHaveBeenCalled()
+    expect(calculateQuoteDraft).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('参数验证失败 → 400', async () => {
