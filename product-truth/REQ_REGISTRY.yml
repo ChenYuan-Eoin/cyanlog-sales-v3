@@ -143,7 +143,6 @@ requirements:
       - 用户地图：销售/法务/财务/管理员 4角色旅程 + 状态感知 + 通知矩阵
       - ASK升级：两段式ASK清单 + 3状态机 + 硬关单 + rolling报告
       - 页面结构：详情页布局 + ASK清单标签页 + 报告版本标签页
-    derive_doc: product-truth/feature-packets/F005-derive.md
     design_doc: product-truth/01-business-truth/合同审核.md
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     design_v2:
@@ -463,13 +462,27 @@ requirements:
     description: 基于 F025 蓝图生成考核计划、场次、评分表、结果归档与认证状态，并协同 F018-F019 和 F003
 
   F027:
-    name: 预留-F027
-    module: 待定
-    source: ""
-    status: draft
+    name: 线上问题域闭环治理
+    module: 横向治理
+    source: 用户反馈 60+ 项问题清单 + 2026-06-26 闭环治理目标
+    status: in_progress
     priority: P3
-    code_locations: []
-    description: 预留REQ号
+    feature_packet: product-truth/feature-packets/F027-remediation-governance.md
+    code_locations:
+      - product-truth/product-code/.vercelignore
+      - product-truth/product-code/app/error.tsx
+      - product-truth/product-code/app/not-found.tsx
+      - product-truth/product-code/app/api/access/feishu/sync/route.ts
+      - product-truth/product-code/app/contracts/[id]/page.tsx
+      - product-truth/product-code/app/contracts/[id]/compare/page.tsx
+      - product-truth/product-code/app/api/contracts/[id]/compare/route.ts
+      - product-truth/product-code/app/knowledge/page.tsx
+      - product-truth/product-code/app/knowledge/new/page.tsx
+      - product-truth/product-code/app/configs/tabs/ThemeTab.tsx
+    description: >
+      将用户反馈的 60+ 项问题按业务根因、代码事实、数据流和用户路径合并为问题域，
+      覆盖线上可用性、异常韧性、组织权限、外部同步、配置消费、合同能力、移动端、
+      冗余治理、依赖/非代码上传和验证体系；记录修复、验收证据、发布证据和剩余风险。
 
   F028:
     name: 预留-F028

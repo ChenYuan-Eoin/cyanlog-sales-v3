@@ -1,0 +1,56 @@
+{
+  "req_id": "F027",
+  "date": "2026-06-26",
+  "branch": "codex/audit-remediation-61-issues",
+  "head": "31f9a75370b4f2208ac7cd395545ae35d483bb4e",
+  "commits": [
+    {
+      "sha": "5641824",
+      "message": "fix: clarify feishu org sync feedback"
+    },
+    {
+      "sha": "30eef81",
+      "message": "fix: stabilize mobile theme actions"
+    },
+    {
+      "sha": "a7530cd",
+      "message": "fix: harden contract detail review rendering"
+    },
+    {
+      "sha": "31f9a75",
+      "message": "chore: constrain vercel deployment artifacts"
+    }
+  ],
+  "production": {
+    "url": "https://sales.cyanlog.icu",
+    "deployment_id": "dpl_4xYjJXQLqwPn7fc7hJ3rdHzs9M7t",
+    "ready_state": "READY",
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/4xYjJXQLqwPn7fc7hJ3rdHzs9M7t"
+  },
+  "verification": {
+    "lint": "pass",
+    "typecheck": "pass",
+    "test": "51 files / 318 tests passed",
+    "build": "pass with known warnings",
+    "health": "GET /api/health status=ok",
+    "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
+    "knowledge_create": "browser create/read/delete passed",
+    "contract_upload": "api and ui upload/analyze flow passed",
+    "contract_compare": "POST/GET/UI flow passed",
+    "mobile": "configs and contracts verified without horizontal overflow",
+    "favicon": "online favicon.png 200 image/png",
+    "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
+    "performance_login": "Reference sample: /api/auth/login 1173ms, overall login 1590ms; current sample total 504.3ms, login_rpc 495.1ms",
+    "performance_configs_bundle": "/configs First Load JS around 281kB, above /contracts 144kB and /tenders 125kB",
+    "performance_login_cls": "Login page trace previously showed CLS around 0.21"
+  },
+  "known_risks": [
+    "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
+    "Cold login target below 0.5s is not fully achieved; login_rpc remains the main cost and needs deeper server timing.",
+    "/configs first-load bundle remains larger than adjacent modules and needs tab-level chunk splitting.",
+    "Login page CLS remains a separate layout-stability issue from page switching.",
+    "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
+    "Build has known dependency warnings: sharp scripts, Sentry/OpenTelemetry dynamic require, local SWC fallback.",
+    "Legacy archived rule rows remain in stats for compatibility."
+  ]
+}
