@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "f3939d5",
+  "head": "de3fc9c",
   "commits": [
     {
       "sha": "5641824",
@@ -159,20 +159,24 @@
     {
       "sha": "f3939d5",
       "message": "fix(pricing): classify malformed catalog json"
+    },
+    {
+      "sha": "de3fc9c",
+      "message": "fix(api): guard remaining json parse failures"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_BCq57B8W6Bi4LkFXmf4Q8v562Qbm",
+    "deployment_id": "dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/BCq57B8W6Bi4LkFXmf4Q8v562Qbm"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/8ppMSoM9i8vFdLSeLfPZebFkQiV5"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "82 files / 366 tests passed",
+    "test": "86 files / 371 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 310ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 357ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -430,7 +434,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_BCq57B8W6Bi4LkFXmf4Q8v562Qbm uploaded 173.6KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5 uploaded 146.6KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -572,7 +576,7 @@
       "final_temp_visible": false,
       "console_messages": []
     },
-    "api_zod_coverage": "103 app/api route.ts files; 47 use Zod/parse indicators. Malformed JSON coverage now includes verified admin/auth/profile/client-errors/config/knowledge/content CRUD/rules/pricing write routes; direct unguarded req.json() sites are down to 5 and concentrated in AI/contracts routes.",
+    "api_zod_coverage": "103 app/api route.ts files; malformed JSON coverage now includes verified admin/auth/profile/client-errors/config/knowledge/content CRUD/rules/pricing/AI/contracts write routes. Direct unguarded req.json()/request.json() scan in app/api is now empty.",
     "production_governance_search": "Production app/components/lib search excluding tests has 0 matches for alert(, console.log(, window.location.reload, @ts-ignore, // ignore, and direct any",
     "performance_fast_navigation": "After 8beff47 on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: rapid / -> /configs?tab=role-access browser verification produced fastNavigationConsoleMessages=[]; stale dashboard Failed to fetch noise suppressed.",
     "latest_org_admin_role_assignment": {
@@ -644,10 +648,10 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_BCq57B8W6Bi4LkFXmf4Q8v562Qbm",
+      "deployment": "dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 310ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 357ms"
     },
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
@@ -866,6 +870,57 @@
           }
         ]
       }
+    },
+    "ai_contracts_malformed_json_validation": {
+      "commit_scope": "remaining AI/contracts malformed JSON classification and direct req.json scan cleanup",
+      "tests": "1 extended AI route test plus 4 new contract route test files cover POST /api/ai/analyze, POST /api/contracts, PATCH /api/contracts/[id], POST /api/contracts/[id]/merge-chunks, and PATCH /api/contracts/[id]/clauses/[clauseId]",
+      "targeted_tests": "5 route test files / 13 tests passed",
+      "full_tests": "86 files / 371 tests passed",
+      "build": "pnpm build passed with existing Sentry/OpenTelemetry dynamic require warning",
+      "scan": "rg scan for unguarded req.json()/request.json() in app/api route.ts files returned no matches",
+      "production": {
+        "deployment": "dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5",
+        "login_wall_ms": 1539,
+        "login_route_total_ms": 240.7,
+        "browser_smoke": [
+          "logged-in home rendered",
+          "/configs?tab=price-list rendered configuration workbench",
+          "/contracts rendered list",
+          "/contracts/44301b16-6551-4720-afa5-f1d80b1604de rendered detail instead of error boundary"
+        ],
+        "results": [
+          {
+            "route": "POST /api/ai/analyze malformed JSON",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 2291
+          },
+          {
+            "route": "POST /api/contracts malformed JSON",
+            "status": 400,
+            "code": "V001",
+            "ms": 2505
+          },
+          {
+            "route": "PATCH /api/contracts/[id] malformed JSON",
+            "status": 400,
+            "code": "INVALID_DATA",
+            "ms": 2200
+          },
+          {
+            "route": "POST /api/contracts/[id]/merge-chunks malformed JSON",
+            "status": 400,
+            "code": "V002",
+            "ms": 1541
+          },
+          {
+            "route": "PATCH /api/contracts/[id]/clauses/[clauseId] malformed JSON",
+            "status": 400,
+            "code": "INVALID_JSON",
+            "ms": 1286
+          }
+        ]
+      }
     }
   },
   "known_risks": [
@@ -879,7 +934,7 @@
     "Build has known dependency warnings: Sentry/OpenTelemetry dynamic require and webpack cache big string serialization. The previous Vercel sharp ignored build scripts warning was cleared by approving sharp in pnpm.onlyBuiltDependencies. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
     "Legacy archived rule rows remain in stats for compatibility.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
-    "API Zod/parse coverage is 47/103 app/api route.ts files after auth/config validation hardening; 56 route files still need staged schema migration. Latest admin/auth/profile/client-errors/configs hardening classifies malformed JSON as validation errors for the verified write routes.",
+    "API schema migration is still staged by domain, but direct unguarded req.json()/request.json() scan in app/api is now empty. Remaining debt is response envelope/code consistency and route-by-route domain schemas, not raw JSON parse failure.",
     "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
   ]
 }
