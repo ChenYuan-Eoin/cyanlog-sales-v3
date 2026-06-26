@@ -44,7 +44,7 @@
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`; expected title visible; no `页面发生错误` | Pass |
 | D02 404 | Browser visited a nonexistent route; displayed `页面未找到` | Pass |
 | D03 Org role assignment | Production browser verification on `dpl_7LhA6QGMHaJVjHwEs3zMnZyt1Bb3`: org page loaded 11 departments / 25 members / 3 spaces; add temp admin changed 25=>26; stop kept member visible as `已停用`; enable restored `在职`; delete changed 26=>25 and removed row; temp user hard-cleaned | Pass |
-| D04 Feishu sync unconfigured | `POST /api/access/feishu/sync` => `503`, code `FEISHU_NOT_CONFIGURED` | Pass for unconfigured feedback; success not verified |
+| D04 Feishu sync unconfigured | Vercel Production env lacks `FEISHU_APP_ID` / `FEISHU_APP_SECRET`; online `POST /api/access/feishu/sync` => `503`, code `FEISHU_NOT_CONFIGURED`, missing both variables, hint states current MVP only syncs departments and does not import members | Pass for unconfigured feedback; success blocked by env |
 | D05 Contract rules | `GET /api/contract-policies/rules?is_active=true` => 15 active codes `R001-R015` | Pass |
 | D05 Rule stats | `GET /api/rules/stats` => 18 total, 15 published, 3 archived legacy rows | Pass with debt |
 | D06 Contract upload | Online API/UI upload flow created, uploaded, merged, submitted, analyzed and cleaned temporary contract | Pass |
@@ -157,7 +157,7 @@ Latest production samples after deployment `dpl_Q2V3SDLSjCu56h3ZeuLbT1kNfarQ`:
 
 | Risk | Why Not Closed | Next Step |
 |---|---|---|
-| Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED`. | Configure Feishu env in Vercel, then run department sync success test and verify database rows. |
+| Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED` with missing env list and scope hint. | Configure Feishu env in Vercel, redeploy, then run department sync success test and verify imported/updated/total plus database `source=feishu` rows. |
 | Cold login < 0.5s target | Latest production samples show route total 348.6-1108ms and wall 896-1925ms. RPC internal work is 82.4-151.8ms; `rpc_password_verify` is 75.7-119.8ms; dashboard/core are not the main cost in these samples. | Next optimization should target Supabase roundtrip/connection wait and password verification cost before further prefetch work. |
 | Org-admin route latency variance | RPC hot path is down to 185-232ms in direct checks, but route-level samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep `/api/admin/org` timing in the external dependency/error classification bucket; add route-level timing headers before further optimization. |
 | `/configs` first-load JS | Current Vercel build shows `/configs` First Load JS 166kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic sample had shown 281kB. | Keep bundle budget watch; split heavy tab panes/client-only tools only if future build output regresses or user-perceived first entry remains slow. |

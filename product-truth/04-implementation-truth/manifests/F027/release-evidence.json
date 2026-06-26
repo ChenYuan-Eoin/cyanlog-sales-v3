@@ -91,6 +91,7 @@
     },
     "deploy_payload": "Latest Vercel CLI production deploy uploaded 740.2KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
+    "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
       {
         "wall_ms": 1925,
