@@ -1,7 +1,15 @@
 // 应用启动监控
 // Next.js Instrumentation Hook（Next.js 14+）
 
+function hasSentryDsn() {
+  return Boolean(process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN)
+}
+
 export async function register() {
+  if (!hasSentryDsn()) {
+    return
+  }
+
   // 动态导入对应的 Sentry 配置
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('./sentry.server.config')
