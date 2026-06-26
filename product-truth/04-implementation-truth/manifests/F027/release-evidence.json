@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "4bc49c6",
+  "head": "7eded60",
   "commits": [
     {
       "sha": "5641824",
@@ -107,20 +107,32 @@
     {
       "sha": "4bc49c6",
       "message": "fix(admin): expose org payload timing"
+    },
+    {
+      "sha": "8cb085e",
+      "message": "chore(test): suppress node webstorage warning"
+    },
+    {
+      "sha": "5cda5e9",
+      "message": "chore(lint): migrate to eslint cli"
+    },
+    {
+      "sha": "7eded60",
+      "message": "chore(pnpm): approve sharp build script"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu",
+    "deployment_id": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/87GqN7KAGUhTHP36PmhcsJxMvCzu"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/F8ZGdXqXQU3LDKU9YbatoZE9Yxhm"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
     "test": "52 files / 324 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 518ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -145,18 +157,19 @@
       "temp_included": false
     },
     "org_admin_route_timing": {
-      "deployment": "dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu",
-      "commit": "4bc49c6",
+      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
+      "commit": "7eded60",
       "http_status": 200,
       "payload_source": "rpc",
-      "x_org_timing": "auth;dur=97.3, rpc_payload;dur=71.8, total;dur=169.3",
+      "x_org_timing": "auth;dur=0.4, rpc_payload;dur=63.1, total;dur=63.7",
       "cache_control": "no-store",
       "users": 25,
       "departments": 11,
       "roles": 7,
       "spaces": 3
     },
-    "deploy_payload": "Latest Vercel CLI production deploy uploaded 90.7KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
+    "sharp_build_script": "After 7eded60, Vercel install ran sharp@0.34.5 install/check.js and completed; the previous pnpm ignored build scripts warning is gone.",
+    "deploy_payload": "Latest Vercel CLI production deploy uploaded 77.8KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -370,14 +383,14 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu",
+      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 336ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 518ms"
     },
     "performance_configs_bundle_current": {
-      "deployment": "dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu",
-      "commit": "4bc49c6",
+      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
+      "commit": "7eded60",
       "local_build_route_size": "18kB",
       "local_build_first_load_js": "159kB",
       "production_configs_page_status": 200,
@@ -386,14 +399,14 @@
       "production_configs_page_chunk_bytes": 61052
     },
     "performance_admin_org_bundle_current": {
-      "deployment": "dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu",
-      "commit": "4bc49c6",
+      "deployment": "dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm",
+      "commit": "7eded60",
       "production_build_route_size": "3.78kB",
       "production_build_first_load_js": "107kB",
       "previous_route_size": "73.2kB",
       "previous_first_load_js": "245kB",
       "production_admin_org_page_status": 200,
-      "production_admin_org_page_html_bytes": 38597,
+      "production_admin_org_page_html_bytes": 40192,
       "production_admin_org_page_chunk": "static/chunks/app/admin/org/page-fbbc3729110b8ca8.js",
       "production_admin_org_page_chunk_bytes": 9078
     }
@@ -406,7 +419,7 @@
     "Historical design archive product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html is about 9.5MB and remains tracked as reference material; do not delete without replacing the asset policy.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
-    "Build has known dependency warnings: sharp scripts on Vercel and Sentry/OpenTelemetry dynamic require. Local webpack cache can warn about serializing big strings. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
+    "Build has known dependency warnings: Sentry/OpenTelemetry dynamic require and webpack cache big string serialization. The previous Vercel sharp ignored build scripts warning was cleared by approving sharp in pnpm.onlyBuiltDependencies. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
     "Legacy archived rule rows remain in stats for compatibility.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
     "API Zod coverage is improved to 36/103 app/api route.ts files; 67 route files still need staged schema migration.",
