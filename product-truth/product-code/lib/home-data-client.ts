@@ -54,34 +54,37 @@ function throwIfAborted(signal: AbortSignal | undefined) {
   }
 }
 
-export async function loadHomeInitialData(token: string, options: HomeInitialLoadOptions = {}): Promise<HomeInitialData> {
+export async function loadHomeInitialData(token: string | null | undefined, options: HomeInitialLoadOptions = {}): Promise<HomeInitialData> {
   const signal = options.signal
   throwIfAborted(signal)
 
-  const cacheKey = scopedCacheKey(token, 'home:initial')
-  const profileCacheKey = scopedCacheKey(token, 'home:profile')
-  const cached = readBrowserCache<HomeInitialData>(cacheKey, HOME_INITIAL_CACHE_MS)
+  const hasToken = Boolean(token)
+  const cacheKey = hasToken ? scopedCacheKey(token, 'home:initial') : null
+  const profileCacheKey = hasToken ? scopedCacheKey(token, 'home:profile') : null
+  const cached = cacheKey ? readBrowserCache<HomeInitialData>(cacheKey, HOME_INITIAL_CACHE_MS) : null
   if (cached) return cached
 
-  if (!signal) {
+  if (!signal && cacheKey) {
     const inflight = homeInitialInflight.get(cacheKey)
     if (inflight) return inflight
   }
 
   const request = (async () => {
-    const authHeaders = { Authorization: `Bearer ${token}` }
-    const cachedProfile = readBrowserCache<unknown>(profileCacheKey, HOME_INITIAL_CACHE_MS)
-    const profileRequest = fetch('/api/auth/me', { headers: authHeaders, signal })
+    const requestInit: RequestInit = hasToken
+      ? { headers: { Authorization: `Bearer ${token}` }, signal }
+      : { signal }
+    const cachedProfile = profileCacheKey ? readBrowserCache<unknown>(profileCacheKey, HOME_INITIAL_CACHE_MS) : null
+    const profileRequest = fetch('/api/auth/me', requestInit)
       .then(async (profileRes) => {
         if (profileRes.status === 401) throw new HomeInitialAuthError()
         if (!profileRes.ok) throw new HomeInitialLoadError('Profile load failed')
 
         const profilePayload = await profileRes.json()
         if (!profilePayload.user) throw new HomeInitialLoadError('Profile payload missing user')
-        writeBrowserCache(profileCacheKey, profilePayload.user)
+        if (profileCacheKey) writeBrowserCache(profileCacheKey, profilePayload.user)
         return profilePayload.user
       })
-    const dashboardRes = await fetch('/api/dashboard', { headers: authHeaders, signal })
+    const dashboardRes = await fetch('/api/dashboard', requestInit)
 
     if (dashboardRes.status === 401) {
       throw new HomeInitialAuthError()
@@ -94,28 +97,27 @@ export async function loadHomeInitialData(token: string, options: HomeInitialLoa
     if (cachedProfile) {
       void profileRequest.catch(() => undefined)
       const value = { profile: cachedProfile, dashboard }
-      writeBrowserCache(cacheKey, value)
+      if (cacheKey) writeBrowserCache(cacheKey, value)
       return value
     }
 
     const profile = await profileRequest
     const value = { profile, dashboard }
-    writeBrowserCache(cacheKey, value)
+    if (cacheKey) writeBrowserCache(cacheKey, value)
     return value
   })().finally(() => {
-    if (!signal) {
+    if (!signal && cacheKey) {
       homeInitialInflight.delete(cacheKey)
     }
   })
 
-  if (!signal) {
+  if (!signal && cacheKey) {
     homeInitialInflight.set(cacheKey, request)
   }
   return request
 }
 
 export function primeHomeInitialData(token: string | null | undefined) {
-  if (!token) return
   primeHomeAuthContext(token)
   void loadHomeInitialData(token).catch(() => {
     // Login navigation still owns visible error handling if the warm request fails.
@@ -123,11 +125,9 @@ export function primeHomeInitialData(token: string | null | undefined) {
 }
 
 export function primeHomeAuthContext(token: string | null | undefined) {
-  if (!token) return
-
   void fetch('/api/auth/context', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
   }).catch(() => {
     // Middleware falls back to the database-backed auth check if this warmup fails.
   })

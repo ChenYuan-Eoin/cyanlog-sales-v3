@@ -185,12 +185,6 @@ export default function HomePage() {
     const controller = new AbortController()
     ;(async () => {
       const token = localStorage.getItem('token')
-      if (!token) {
-        router.push('/login')
-        setLoading(false)
-        return
-      }
-
       const initialData = await loadHomeInitialData(token, { signal: controller.signal })
       const profileRow = initialData.profile as Profile | undefined
       const dashboardPayload = initialData.dashboard as DashboardPayload
