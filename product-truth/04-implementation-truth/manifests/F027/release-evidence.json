@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "cbda92e",
+  "head": "7d7561a",
   "commits": [
     {
       "sha": "5641824",
@@ -167,20 +167,24 @@
     {
       "sha": "cbda92e",
       "message": "fix(upload): validate form data before storage work"
+    },
+    {
+      "sha": "7d7561a",
+      "message": "fix(upload): guard asset form uploads"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_8S8N46tAtGhruQf8AALfHhM4DpUW",
+    "deployment_id": "dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/8S8N46tAtGhruQf8AALfHhM4DpUW"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/65KRcDFdHHcYMEjePwueSjNYXuJ5"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "88 files / 377 tests passed",
+    "test": "89 files / 381 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 316ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 437ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -438,7 +442,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_8S8N46tAtGhruQf8AALfHhM4DpUW uploaded 123.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5 uploaded 124.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -652,10 +656,10 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_8S8N46tAtGhruQf8AALfHhM4DpUW",
+      "deployment": "dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 316ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 437ms"
     },
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
@@ -976,6 +980,44 @@
             "status": 400,
             "code": "V001",
             "ms": 2135
+          }
+        ]
+      }
+    },
+    "asset_upload_invalid_form_validation": {
+      "commit_scope": "generic /api/upload invalid form validation plus ImageUpload drag feedback",
+      "tests": "1 new route test file covers unauthenticated upload, invalid multipart, missing file, and unsupported file type without Storage calls",
+      "targeted_tests": "app/api/upload/route.test.ts: 1 file / 4 tests passed",
+      "full_tests": "89 files / 381 tests passed",
+      "build": "pnpm build passed with existing Sentry/OpenTelemetry dynamic require warning",
+      "production": {
+        "deployment": "dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5",
+        "login_wall_ms": 1307,
+        "login_route_total_ms": 220.2,
+        "health_database_latency_ms": 437,
+        "browser_smoke": [
+          "/profile redirected unauthenticated browser to /login",
+          "after login, /profile rendered and edit mode exposed the existing ImageUpload avatar control",
+          "synthetic dragover switched the drop zone to bg-blue-50 border-blue-500; dragleave restored bg-slate-50 border-slate-300"
+        ],
+        "results": [
+          {
+            "route": "POST /api/upload invalid multipart",
+            "status": 400,
+            "code": "INVALID_FORM",
+            "ms": 1704
+          },
+          {
+            "route": "POST /api/upload missing file",
+            "status": 400,
+            "code": "NO_FILE",
+            "ms": 1709
+          },
+          {
+            "route": "POST /api/upload unsupported file",
+            "status": 400,
+            "code": "INVALID_TYPE",
+            "ms": 1089
           }
         ]
       }
