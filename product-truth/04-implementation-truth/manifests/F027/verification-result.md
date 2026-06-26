@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26  
 **Branch**: `codex/audit-remediation-61-issues`  
-**Deployed App HEAD**: `a7545e6`  
-**Production Deployment**: `dpl_Q2V3SDLSjCu56h3ZeuLbT1kNfarQ`  
+**Deployed App HEAD**: `be7c882`  
+**Production Deployment**: `dpl_8NTyuduy73K8LVCBoMvsL4LRAZxE`  
 **Production URL**: `https://sales.cyanlog.icu`  
 
 ---
@@ -14,7 +14,7 @@
 |---|---|---|
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
-| Production | Vercel production deployment `dpl_Q2V3SDLSjCu56h3ZeuLbT1kNfarQ` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
+| Production | Vercel production deployment `dpl_8NTyuduy73K8LVCBoMvsL4LRAZxE` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
 | Health | `GET /api/health` => `status=ok`, database ok | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
@@ -29,7 +29,7 @@
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
 | `pnpm test:run` | 51 files / 318 tests passed | Vitest prints existing `--localstorage-file` warning |
 | `pnpm build` | Pass | Existing warnings: Sentry/OpenTelemetry dynamic require; local missing `@next/swc-darwin-arm64` fallback |
-| Commit hook | 10/10 governance checks passed on `a7545e6` | No `--no-verify` used |
+| Commit hook | 10/10 governance checks passed on `be7c882` | No `--no-verify` used |
 | Vercel build | Ready | Vercel build warnings: `sharp@0.34.5` scripts ignored; Sentry/OpenTelemetry dynamic require |
 | Supabase migration | `supabase db push --yes` applied `20260626062255_login_rpc_stage_timing.sql`; migration list shows local/remote match | Pass |
 | Supabase remote lint | `supabase db lint --linked --fail-on error` failed before linting due Supabase temp role SASL auth/circuit breaker | Blocked by platform auth, not counted as schema validation |
@@ -40,7 +40,7 @@
 
 | Domain | Evidence | Result |
 |---|---|---|
-| D01 Production availability | Production deployment `dpl_Q2V3SDLSjCu56h3ZeuLbT1kNfarQ`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
+| D01 Production availability | Production deployment `dpl_8NTyuduy73K8LVCBoMvsL4LRAZxE`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`; expected title visible; no `页面发生错误` | Pass |
 | D02 404 | Browser visited a nonexistent route; displayed `页面未找到` | Pass |
 | D03 Org role assignment | Production browser verification before doc-only deploy: ADMIN and SUPER_ADMIN add/remove temp users worked; temp users cleaned | Pass, no behavior change after doc-only deploy |
@@ -66,7 +66,7 @@
 | Cold login | Latest reference sample: `/api/auth/login` 1173ms, overall login 1590ms. After `a7545e6`, three production samples returned total 348.6-1108ms, `login_rpc` 346.6-1086.7ms, `rpc_total` 82.4-151.8ms. | Cold login remains the highest-priority performance issue, but the bottleneck is now distinguishable: Supabase roundtrip/connection wait dominates over dashboard/core assembly in the latest samples. |
 | External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
 | `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB. Current Vercel build shows `/configs` 166kB, `/contracts` 144kB and `/tenders` 126kB. | Config center first entry is no longer at the 281kB baseline in the current build, but still remains heavier than adjacent modules and should stay under bundle watch. |
-| Login CLS | Login page trace previously showed CLS around 0.21; switching trace showed no CLS. | CLS belongs to login page layout stability, not the three-page switching path. |
+| Login CLS | Historical trace showed login page CLS around 0.21. After `be7c882`, production Playwright samples showed desktop 1440x900 CLS 0 and mobile 390x844 CLS 0, with no horizontal overflow. | Current login-page layout stability is verified; keep as regression guard. |
 | Reverted optimization | Moving login prewarm from 1200ms to 350ms regressed a quick-submit sample to around 5s and was reverted. | No unverified performance tweak is counted as a fix. |
 
 Required next instrumentation for cold login:
@@ -158,7 +158,6 @@ Latest production samples after deployment `dpl_Q2V3SDLSjCu56h3ZeuLbT1kNfarQ`:
 | Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED`. | Configure Feishu env in Vercel, then run department sync success test and verify database rows. |
 | Cold login < 0.5s target | Latest production samples show route total 348.6-1108ms and wall 896-1925ms. RPC internal work is 82.4-151.8ms; `rpc_password_verify` is 75.7-119.8ms; dashboard/core are not the main cost in these samples. | Next optimization should target Supabase roundtrip/connection wait and password verification cost before further prefetch work. |
 | `/configs` first-load JS | Current Vercel build shows `/configs` First Load JS 166kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic sample had shown 281kB. | Keep bundle budget watch; split heavy tab panes/client-only tools only if future build output regresses or user-perceived first entry remains slow. |
-| Login CLS | Login page CLS around 0.21 was observed separately from page switching. | Fix stable dimensions for login brand/media/form areas and rerun trace. |
 | Full API Zod coverage | Some APIs have Zod; project-wide coverage is not complete. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
 | Full `any` cleanup | `any` remains mostly in tests; production false positives exist in search. | Separate test mock typings from production typings; enforce no-explicit-any only for production paths first. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |
