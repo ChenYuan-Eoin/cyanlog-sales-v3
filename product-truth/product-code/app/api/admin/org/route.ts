@@ -59,6 +59,31 @@ type OrgAdminPayload = {
   spaces: unknown[]
 }
 
+type TimingEntry = {
+  name: string
+  durationMs: number
+}
+
+async function withTiming<T>(entries: TimingEntry[], name: string, fn: () => Promise<T>): Promise<T> {
+  const startedAt = performance.now()
+  try {
+    return await fn()
+  } finally {
+    entries.push({
+      name,
+      durationMs: performance.now() - startedAt,
+    })
+  }
+}
+
+function formatTimingHeader(entries: TimingEntry[], totalStartedAt: number) {
+  const timingParts = entries.map((entry) => (
+    `${entry.name};dur=${entry.durationMs.toFixed(1)}`
+  ))
+  timingParts.push(`total;dur=${(performance.now() - totalStartedAt).toFixed(1)}`)
+  return timingParts.join(', ')
+}
+
 function errorResponse(message: string, status: number, code?: string, extra?: Record<string, unknown>) {
   const headers = status === 405 ? { Allow: 'GET' } : undefined
   return NextResponse.json({ error: message, code, ...extra }, { status, headers })
@@ -405,23 +430,30 @@ async function listOrgPayload(orgId: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const totalStartedAt = performance.now()
+  const timings: TimingEntry[] = []
+  let payloadSource = 'rpc'
+
   try {
-    const auth = await requireOrgAdmin(req)
+    const auth = await withTiming(timings, 'auth', () => requireOrgAdmin(req))
     if (!auth) {
       return errorResponse('无权限访问组织管理', 403, 'FORBIDDEN')
     }
 
     let data: OrgAdminPayload
     try {
-      data = await listOrgPayloadFromRpc(auth.orgId)
+      data = await withTiming(timings, 'rpc_payload', () => listOrgPayloadFromRpc(auth.orgId))
     } catch (rpcError) {
       console.error('[admin/org] RPC payload failed; falling back to query fan-out:', rpcError)
-      data = await listOrgPayload(auth.orgId)
+      payloadSource = 'fallback'
+      data = await withTiming(timings, 'fallback_payload', () => listOrgPayload(auth.orgId))
     }
 
     return NextResponse.json(data, {
       headers: {
         'Cache-Control': 'no-store',
+        'X-Org-Payload-Source': payloadSource,
+        'X-Org-Timing': formatTimingHeader(timings, totalStartedAt),
       },
     })
   } catch (error) {
