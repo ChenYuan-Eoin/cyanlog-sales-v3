@@ -25,10 +25,10 @@
 
 | Command | Result | Notes |
 |---|---|---|
-| `pnpm lint` | Pass, no ESLint warnings/errors | `next lint` deprecation warning remains from Next 15 tooling |
+| `pnpm lint` | Pass, no ESLint warnings/errors | Script now uses ESLint CLI over app/components/lib/types and root runtime config files; Next 16 `next lint` deprecation noise removed |
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
 | `pnpm test:run` | 52 files / 324 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
-| `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared |
+| `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared. Local webpack cache may also warn about serializing big strings. |
 | Commit hook | 10/10 governance checks passed through `4bc49c6` | No `--no-verify` used |
 | Vercel build | Ready | Vercel build warnings: `sharp@0.34.5` scripts ignored; Sentry/OpenTelemetry dynamic require |
 | Supabase migrations | `supabase db push --linked --yes` applied `20260626062255_login_rpc_stage_timing.sql`, `20260626065920_org_admin_payload_rpc.sql`, `20260626071818_org_admin_active_members_only.sql`, and `20260626155732_org_admin_active_departments_only.sql` in this F027 performance/org-admin phase | Pass |
@@ -185,4 +185,4 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | Full API Zod coverage | 36/103 `app/api/**/route.ts` files use Zod; 67 route files remain. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
 | Test/mock `any` cleanup | Production searched paths have 0 direct `any` matches; tests and mocks still use `any` heavily for Supabase chain mocks. | Separate test mock typings from production typings; enforce stricter no-explicit-any only after shared mock builders exist. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |
-| Build warnings | `sharp` build scripts ignored on Vercel; Sentry/OpenTelemetry dynamic require warning remains. Local SWC fallback warning was cleared by restoring the missing generated `@next/swc-darwin-arm64` package/link state. | Approve/build sharp if image optimization requires it; evaluate Sentry config tree-shaking. |
+| Build warnings | `sharp` build scripts ignored on Vercel; Sentry/OpenTelemetry dynamic require warning remains; local webpack cache can warn about serializing big strings. Local SWC fallback warning was cleared by restoring the missing generated `@next/swc-darwin-arm64` package/link state. | Approve/build sharp if image optimization requires it; evaluate Sentry config tree-shaking and cache warning source. |

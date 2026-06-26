@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint app components lib types middleware.ts instrumentation.ts sentry.client.config.ts sentry.edge.config.ts sentry.server.config.ts --ext .js,.jsx,.ts,.tsx",
     "test": "NODE_OPTIONS=\"${NODE_OPTIONS:-} --no-experimental-webstorage\" vitest",
     "test:run": "NODE_OPTIONS=\"${NODE_OPTIONS:-} --no-experimental-webstorage\" vitest run",
     "db:seed": "node scripts/seed-via-api.mjs",

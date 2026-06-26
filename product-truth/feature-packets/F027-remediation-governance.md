@@ -140,9 +140,10 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 冷登录现状 | 预热后提交阶段 `X-Login-Timing total` 为 166.0ms、120.0ms、112.1ms，达到 0.5s route 目标；首次预热请求曾为 2066ms，仍记录为冷启动/外部连接风险。 |
 | 配置中心拆包 | `c74ad23` 复用既有 `next/dynamic` 方案，把配置编辑弹窗/表单改为打开时加载；最新生产部署 `dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu` Ready，登录态 `/configs` 200，页面 chunk 61,052 bytes。 |
 | 组织管理拆包 | `0d15f8c` 复用同一动态加载方案，把 `/admin/org` 的组织工作台延后加载；`4bc49c6` 生产部署 `dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu` 仍为 `/admin/org` 3.78kB / 107kB，登录态 `/admin/org` 200。 |
-| 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require。 |
+| 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require，以及本地 webpack cache 可能提示 big string 序列化。 |
 | 部署产物 | 最新生产部署上传 90.7KB；`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
 | 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，52 个测试文件 / 324 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
+| Lint 命令噪声 | `pnpm lint` 从 `next lint` 切到 ESLint CLI，覆盖 `app/components/lib/types` 与根运行配置文件；命令通过且不再输出 Next 16 废弃提示。 |
 | 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 
 这次复用了既有组织权限 UI、`/api/admin/users`、`/api/admin/departments`、`/api/admin/org` 读取聚合和 Supabase migration 链路；新增的是部门主管字段入库、聚合只读边界、软删除部门过滤和组织 tab 缓存再验证，没有新增第二套组织管理工作台。
