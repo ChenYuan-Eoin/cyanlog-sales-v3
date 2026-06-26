@@ -43,7 +43,8 @@ const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }
   'cyanlog.icu': { rootPath: '/', preservePath: true },
   'www.cyanlog.icu': { rootPath: '/', preservePath: true },
 }
-const PUBLIC_API_PATHS = [
+const PUBLIC_API_PATHS = new Set([
+  '/api/auth',
   '/api/auth/login',
   '/api/auth/prewarm',
   '/api/auth/register',
@@ -52,7 +53,7 @@ const PUBLIC_API_PATHS = [
   '/api/health',
   '/api/health/flight-ready',
   '/api/cron',
-]
+])
 const PASSWORD_CHANGE_ALLOWED_PATHS = [
   '/change-password',
   '/api/auth/me',
@@ -80,7 +81,7 @@ const middlewareAuthInflight = new Map<string, Promise<MiddlewareAuthContext | n
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p)) return true
   if (pathname.startsWith('/api/')) {
-    return PUBLIC_API_PATHS.some(p => pathname.startsWith(p))
+    return PUBLIC_API_PATHS.has(pathname)
   }
   return pathname.startsWith('/_next/') || pathname.startsWith('/favicon')
 }

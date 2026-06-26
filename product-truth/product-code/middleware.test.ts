@@ -73,3 +73,41 @@ describe('middleware host routing', () => {
     expect(res.status).toBe(503)
   })
 })
+
+describe('middleware public API routing', () => {
+  it('allows both registration entrypoints without opening every auth API route', async () => {
+    const legacyRegister = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/auth', { host: 'sales.cyanlog.icu' }),
+    )
+    const registerAlias = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/auth/register', { host: 'sales.cyanlog.icu' }),
+    )
+    const authProfile = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/auth/me', { host: 'sales.cyanlog.icu' }),
+    )
+    const authPrefixNeighbor = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/auth/login-extra', { host: 'sales.cyanlog.icu' }),
+    )
+
+    expect(legacyRegister.status).toBe(200)
+    expect(registerAlias.status).toBe(200)
+    expect(authProfile.status).toBe(401)
+    expect(authPrefixNeighbor.status).toBe(401)
+  })
+
+  it('uses exact public API matches for health and cron routes', async () => {
+    const health = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/health', { host: 'sales.cyanlog.icu' }),
+    )
+    const cron = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/cron', { host: 'sales.cyanlog.icu' }),
+    )
+    const healthNeighbor = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/health-extra', { host: 'sales.cyanlog.icu' }),
+    )
+
+    expect(health.status).toBe(200)
+    expect(cron.status).toBe(200)
+    expect(healthNeighbor.status).toBe(401)
+  })
+})
