@@ -10,8 +10,8 @@ Scan rule: count only request body reads through `req/request.json()`, `req/requ
 
 | Class | Count | Meaning |
 |---|---:|---|
-| `schema+guard` | 45 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
-| `guard-only` | 22 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
+| `schema+guard` | 47 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
+| `guard-only` | 20 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
 | `no-body` | 36 | Route does not read request body. |
 | `unguarded-body` | 0 | No direct unguarded `req/request` body parser was found in the current scan. |
 | `schema-only` | 0 | No route was found with body schema validation but no parse guard in the current scan. |
@@ -26,8 +26,6 @@ These routes are not immediate malformed-body crashers, because they already gua
 | `/api/admin/clause-library/[id]` | `PATCH,DELETE` | Add a named patch schema and keep delete body-free or explicitly validate delete parameters. |
 | `/api/admin/review-strategies` | `GET,POST` | Replace manual strategy payload checks with a reusable review-strategy schema. |
 | `/api/asks/[askId]/responses` | `POST` | Add response body schema for text/attachment fields. |
-| `/api/contract-policies/rules/[id]/versions/[versionId]/publish` | `POST` | Prefer an explicit empty-body or publish-options schema. |
-| `/api/contract-policies/rules/[id]/versions/[versionId]/rollback` | `POST` | Prefer an explicit rollback-options schema. |
 | `/api/contracts/[id]/analyze` | `POST` | Add schema for analysis options and idempotency controls. |
 | `/api/contracts/[id]/asks/[askId]/responses` | `POST` | Align with the top-level ask response schema. |
 | `/api/contracts/[id]/clauses/[clauseId]` | `PATCH` | Add a clause patch schema and reuse existing clause validation rules. |
@@ -52,3 +50,7 @@ These routes are not immediate malformed-body crashers, because they already gua
 3. Invalid body shape returns a consistent 400 validation envelope before avoidable Supabase, storage, model, OCR, or external-service work.
 4. Each migrated route has at least one targeted malformed-body or invalid-shape test.
 5. The inventory is refreshed after the migration so `guard-only` count moves down for the routes actually touched.
+
+## Migration Notes
+
+- `64839e2` moved `/api/contract-policies/rules/[id]/versions/[versionId]/publish` and `/rollback` from `guard-only` to `schema+guard` with targeted malformed JSON and invalid-shape tests.

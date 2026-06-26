@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "006f41e",
+  "head": "64839e2",
   "commits": [
     {
       "sha": "5641824",
@@ -199,6 +199,10 @@
     {
       "sha": "006f41e",
       "message": "chore(auth): log slow login timing stages"
+    },
+    {
+      "sha": "64839e2",
+      "message": "fix(api): validate contract policy version actions"
     }
   ],
   "production": {
@@ -210,7 +214,7 @@
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "90 files / 388 tests passed",
+    "test": "92 files / 392 tests passed",
     "build": "pass with known warnings",
     "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 186ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
@@ -234,7 +238,7 @@
     "login_transport_preview": "bde4752 local production verification: prewarm 200 in 1.229s; login 200 in 324ms; X-Login-Timing total=318.0ms, rpc_total=107.6ms, login_rpc_transport=203.4ms. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via share URL: health 200 with database latency 120ms; prewarm 200 in 1.058s; login 200 in 726ms; X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms.",
     "login_slow_timing_log": "006f41e reuses the existing login timing collector and emits a sanitized [auth/login] slow timing warning when /api/auth/login total route time is >=500ms. The log includes stage durations such as login_rpc, rpc_token_write, rpc_initial_dashboard, rpc_initial_core, login_rpc_transport, and auth_context_cookie. Unit coverage asserts email, user id, and display name are not logged.",
     "preview_visual_smoke": "Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via temporary Vercel share URL: browser screenshots captured for /login, /, /configs?tab=role-access desktop 1440x900 and /configs?tab=role-access mobile 390x844. Dashboard, role-access desktop, and role-access mobile reported scrollWidth equal to viewport width, overflowX=false, hasErrorText=false, and role-access content visible. Screenshot files are ignored under product-truth/product-code/output/playwright and are not tracked or uploaded.",
-    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. After 9e593c0, another repo-root deploy uploaded 178.4KB and failed with the same quota code. Later 006f41e app code is pushed and locally verified but has no Ready Preview or Production deployment yet.",
+    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. After 9e593c0, another repo-root deploy uploaded 178.4KB and failed with the same quota code. Later 64839e2 app code is pushed and locally verified but has no Ready Preview or Production deployment yet.",
     "production_deploy_blocker": "Repeated vercel promote for dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw failed with Vercel quota code api-deployments-free-per-day. vercel inspect https://sales.cyanlog.icu still resolves to production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew. sales.cyanlog.icu therefore still points to the old production deployment until quota resets or plan limit is raised.",
     "sentry_no_dsn_startup_guard": "instrumentation.ts now skips server/edge Sentry config import when SENTRY_DSN and NEXT_PUBLIC_SENTRY_DSN are both unset. Local next start -p 3000 no longer prints the server Sentry DSN-not-configured warning. next build still reports the Sentry/OpenTelemetry dynamic require warning, so build warning remains a tracked risk rather than a closed item.",
     "org_admin_rpc_cleanup": {
@@ -622,7 +626,8 @@
       "console_messages": []
     },
     "api_zod_coverage": "103 app/api route.ts files; malformed JSON coverage now includes verified admin/auth/profile/client-errors/config/knowledge/content CRUD/rules/pricing/AI/contracts write routes. Direct unguarded req.json()/request.json() and req.formData()/request.formData() scans in app/api are now empty.",
-    "api_validation_inventory": "F027 api-validation-inventory.md records a narrowed request-body parser scan over 103 API route files: 45 schema+guard, 22 guard-only, 36 no-body, 0 unguarded-body, 0 schema-only. The 22 guard-only routes are schema-normalization debt, not currently hidden malformed-body crashers.",
+    "api_validation_inventory": "F027 api-validation-inventory.md records a narrowed request-body parser scan over 103 API route files: 47 schema+guard, 20 guard-only, 36 no-body, 0 unguarded-body, 0 schema-only. The 20 guard-only routes are schema-normalization debt, not currently hidden malformed-body crashers.",
+    "contract_policy_version_action_validation": "64839e2 adds Zod schemas to POST /api/contract-policies/rules/[id]/versions/[versionId]/publish and /rollback. Malformed JSON and invalid field shapes now return 400 V001 before withAuthAndOrg or Supabase work. Targeted route tests cover both routes.",
     "production_governance_search": "Production app/components/lib search excluding tests has 0 matches for alert(, console.log(, window.location.reload, @ts-ignore, // ignore, and direct any",
     "performance_fast_navigation": "After 8beff47 on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: rapid / -> /configs?tab=role-access browser verification produced fastNavigationConsoleMessages=[]; stale dashboard Failed to fetch noise suppressed.",
     "latest_org_admin_role_assignment": {
@@ -1142,7 +1147,7 @@
     "Build has known dependency warnings: Sentry/OpenTelemetry dynamic require and webpack cache big string serialization. The previous Vercel sharp ignored build scripts warning was cleared by approving sharp in pnpm.onlyBuiltDependencies. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
     "Legacy archived rule rows remain in stats for compatibility.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
-    "API schema migration is still staged by domain. F027 inventory shows 0 unguarded request-body parser sites, but 22 guard-only routes still need named schemas or explicit empty-body contracts. Remaining debt is response envelope/code consistency and route-by-route domain schemas, not raw JSON/formData parse failure.",
+    "API schema migration is still staged by domain. F027 inventory shows 0 unguarded request-body parser sites, but 20 guard-only routes still need named schemas or explicit empty-body contracts. Remaining debt is response envelope/code consistency and route-by-route domain schemas, not raw JSON/formData parse failure.",
     "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
   ]
 }
