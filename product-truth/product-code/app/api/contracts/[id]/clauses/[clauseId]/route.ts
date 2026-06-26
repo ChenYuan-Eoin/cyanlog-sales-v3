@@ -2,10 +2,16 @@
 // 更新条款审核状态
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { resolveRouteParams, type AsyncRouteParams } from '@/lib/route-params'
+
+const clauseUpdateSchema = z.object({
+  review_status: z.enum(['passed', 'attention', 'must_fix', 'skipped', 'pending']),
+  review_notes: z.string().nullable().optional(),
+})
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -32,13 +38,12 @@ export async function PATCH(
       return errorResponse('请求格式不是有效的JSON', 400, 'INVALID_JSON')
     }
 
-    const reviewStatus = typeof body.review_status === 'string' ? body.review_status : ''
-    const validStatuses = ['passed', 'attention', 'must_fix', 'skipped', 'pending']
-    if (!validStatuses.includes(reviewStatus)) {
+    const parsed = clauseUpdateSchema.safeParse(body)
+    if (!parsed.success) {
       return errorResponse('无效的审核状态', 400, 'INVALID_STATUS')
     }
 
-    const reviewNotes = typeof body.review_notes === 'string' ? body.review_notes : null
+    const { review_status: reviewStatus, review_notes: reviewNotes = null } = parsed.data
 
     const { contract } = await getAccessibleContract(contractId, user.id, undefined, 'id')
     if (!contract) return errorResponse('合同不存在', 404, 'NOT_FOUND')

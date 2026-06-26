@@ -2,6 +2,7 @@
 // 合同 vs 标准模板对照
 
 import { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
@@ -10,18 +11,22 @@ import type { AuthUser } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { getContractTemplateById } from '@/lib/contracts/templates'
 
+const compareStandardSchema = z.object({
+  template_id: z.string().trim().min(1),
+})
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const parsed = compareStandardSchema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) {
+    return errorResponse(createApiError('VALIDATION_ERROR', '请选择标准模板'))
+  }
+
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id } = await params
-    const body = await req.json().catch(() => ({}))
-    const { template_id } = body
-
-    if (!template_id) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '请选择标准模板'))
-    }
+    const { template_id } = parsed.data
 
     const template = getContractTemplateById(template_id)
     if (!template) {

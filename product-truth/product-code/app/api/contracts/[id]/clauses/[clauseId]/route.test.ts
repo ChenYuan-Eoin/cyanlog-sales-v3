@@ -30,6 +30,14 @@ function makeMalformedRequest(): any {
   }
 }
 
+function makeJsonRequest(body: unknown): any {
+  return {
+    json: async () => body,
+    method: 'PATCH',
+    headers: new Headers({ 'content-type': 'application/json' }),
+  }
+}
+
 describe('PATCH /api/contracts/[id]/clauses/[clauseId] validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -44,6 +52,30 @@ describe('PATCH /api/contracts/[id]/clauses/[clauseId] validation', () => {
 
     expect(res.status).toBe(400)
     expect(body.code).toBe('INVALID_JSON')
+    expect(getAccessibleContract).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('字段类型错误返回状态错误且不查询合同和条款', async () => {
+    const res = await PATCH(makeJsonRequest({ review_status: 123 }), {
+      params: Promise.resolve({ id: 'contract-1', clauseId: 'clause-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('INVALID_STATUS')
+    expect(getAccessibleContract).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('非法状态值返回状态错误且不查询合同和条款', async () => {
+    const res = await PATCH(makeJsonRequest({ review_status: 'done' }), {
+      params: Promise.resolve({ id: 'contract-1', clauseId: 'clause-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('INVALID_STATUS')
     expect(getAccessibleContract).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
