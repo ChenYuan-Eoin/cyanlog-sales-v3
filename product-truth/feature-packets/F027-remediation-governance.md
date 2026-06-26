@@ -69,7 +69,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 层级 | 当前事实 | 结论 | 下一步验收 |
 |---|---|---|---|
 | 页面切换交互 | DevTools trace 显示切页 INP 26ms、CLS 0.00。 | 三页切换本身不是当前主要瓶颈。 | 保留为回归基线，后续只在新增交互后复测。 |
-| 冷登录 | 最近参考样本 `/api/auth/login` 1173ms，整体登录约 1590ms；最终生产样本 `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 为 `X-Login-Timing total=1021.6ms`、`login_rpc=997.1ms`、`rpc_total=106.7ms`、`rpc_password_verify=78.3ms`、`rpc_initial_dashboard=10.4ms`、`rpc_initial_core=6.7ms`。 | 冷登录仍是当前最高优先级性能问题，且没有达到 0.5s 目标；最新证据显示 dashboard/core 不是主耗时，Supabase roundtrip/连接等待和密码校验更关键。 | 继续用 `X-Login-Timing` 分解 `rpc_*` 阶段，下一步针对连接等待和 `rpc_password_verify` 优化。 |
+| 冷登录 | 最近参考样本 `/api/auth/login` 1173ms，整体登录约 1590ms；`dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 直提样本为 `X-Login-Timing total=1021.6ms`。`c0d23a9` 后登录页改为预热同一路由 `/api/auth/login`，`dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` 上预热后提交样本为 395.4ms、339.3ms、337.5ms。 | 正常预热后提交阶段已低于 0.5s；但首次预热请求本身仍可能很慢，样本一为 4653ms，所以冷启动/外部连接成本只是前移，不是消失。 | 保留 `X-Login-Timing`，继续针对 Vercel 函数区域、Supabase roundtrip 和 `rpc_password_verify` 优化。 |
 | 外部网络等待 | 诊断中 Supabase/GitHub TLS reset 曾导致核心 API 拖到约 9s 后 401；网络恢复后核心 API 回到约 185-355ms。 | 外部依赖不是一概删除对象，但必须区分可控代码耗时和不可控网络等待。 | 对外部请求记录错误类别、耗时和降级结果。 |
 | 配置中心包体 | 早期诊断样本显示 `/configs` First Load JS 约 281kB；当前 Vercel 构建显示 `/configs` 166kB，高于 `/contracts` 144kB、`/tenders` 126kB。 | 当前构建已不处于 281kB 基线，但配置中心仍是相邻模块中较重入口。 | 持续记录 build 输出；若回归或首次进入仍慢，再按 tab/重组件拆 chunk。 |
 | 登录页 CLS | 登录页 trace 曾显示 CLS 约 0.21；`be7c882` 后线上桌面 1440x900 与手机 390x844 采样均为 CLS 0。 | 当前登录页布局稳定性已恢复；CLS 属登录页问题，不属于配置/合同/标书切页问题。 | 保留为回归基线，后续主题/品牌变更后复测。 |
@@ -88,6 +88,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | `F011-org-permission-config.md` | 复用组织架构、角色权限、飞书部门同步 MVP 范围。 |
 | `LoadingState` / `EmptyState` / `app/error.tsx` / `app/not-found.tsx` | 复用现有异常、loading、empty、404 资产，不再新增重复组件。 |
 | `loadHomeInitialData` / 首页已有数据加载链路 | 复用现有首页数据加载与预热入口，补 abort/suppress stale fetch 逻辑，避免快速跳转时产生伪错误。 |
+| `/api/auth/prewarm` 预热思路 | 没有新增第二套登录 API；抽出 `warmLoginRuntime`，旧预热路由继续可用，登录页改为预热同一个 `/api/auth/login` route bundle。 |
 | `app/api/contracts/[id]/compare/route.ts` | 复用现有合同比对 API，补齐 GET/POST/UI 验证。 |
 | `app/api/knowledge/pages` 与 `app/knowledge/new` | 复用现有知识库页面管理能力，验证新建闭环。 |
 | Vercel rootDirectory 配置 | 复用 `product-truth/product-code` 作为真实应用根，补充 `.vercelignore` 而不是改变项目结构。 |
@@ -133,8 +134,9 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 管理员角色增删刷新 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上通过 UI 新增 `codex-admin-1782463975754@example.com` 后立即可见；加入管理员角色后 `role_codes=["ADMIN"]`；移出后从管理员已分配列表消失且 `role_codes=[]`；临时账号已硬删除，最终仍为 25 人。 |
 | 首页快速跳转噪声 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上快速从 `/` 跳到 `/configs?tab=role-access`，`fastNavigationConsoleMessages=[]`，不再把被导航中止的 dashboard fetch 当作页面错误噪声。 |
 | 聚合接口边界 | `/api/admin/org` POST/PATCH 不再承载旧写逻辑，误用时返回 `405`、`Allow: GET`、`ORG_AGGREGATE_READ_ONLY`；写操作复用 `/api/admin/users` 与 `/api/admin/departments`。 |
-| 冷登录现状 | 最终生产样本 `X-Login-Timing total=1021.6ms`，仍未达到 0.5s 目标；这不是已完成项，而是下一轮性能主线。 |
-| 部署产物 | 最新生产部署上传 39.2KB；`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
+| 登录 route 预热 | `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` 上 `/login` 自动触发 `GET /api/auth/login` 200；无 header 的 GET 返回 204，不触发数据库预热；有 `X-Login-Prewarm: 1` 才预热。 |
+| 冷登录现状 | 预热后提交阶段 `X-Login-Timing total` 为 395.4ms、339.3ms、337.5ms，达到 0.5s route 目标；首次预热请求曾为 4653ms，仍记录为冷启动/外部连接风险。 |
+| 部署产物 | 最新生产部署上传 105.0KB；`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
 | 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 
 这次复用了既有组织权限 UI、`/api/admin/users`、`/api/admin/departments`、`/api/admin/org` 读取聚合和 Supabase migration 链路；新增的是部门主管字段入库、聚合只读边界、软删除部门过滤和组织 tab 缓存再验证，没有新增第二套组织管理工作台。
