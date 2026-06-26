@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "4f0d2c5",
+  "head": "d226737",
   "commits": [
     {
       "sha": "5641824",
@@ -151,20 +151,24 @@
     {
       "sha": "4f0d2c5",
       "message": "fix(api): classify content json parse failures"
+    },
+    {
+      "sha": "d226737",
+      "message": "fix(rules): classify malformed json before rule queries"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU",
+    "deployment_id": "dpl_9nospHMt9Jn52muVo6uxownWoNi4",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/7UUQDoCrx3NTSerYwFb8js1MBKUU"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/9nospHMt9Jn52muVo6uxownWoNi4"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "72 files / 353 tests passed",
+    "test": "79 files / 360 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 330ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 339ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -175,7 +179,7 @@
     "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Final prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms; all submitted-login route totals are far below 0.5s. First prewarm request still took 2066ms, so cold startup cost remains visible but is no longer on the submit path when prewarm completes.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23/4bc49c6 production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-d1d47a8244087e40.js returned 61,052 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
-    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 72 files / 353 tests without the Node 24 --localstorage-file warning.",
+    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 79 files / 360 tests without the Node 24 --localstorage-file warning.",
     "lint_warning_cleanup": "Standard pnpm lint now uses ESLint CLI over app/components/lib/types plus middleware/instrumentation/Sentry config files; latest run passed without the Next 16 next lint deprecation warning.",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
@@ -422,7 +426,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU uploaded 131.3KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_9nospHMt9Jn52muVo6uxownWoNi4 uploaded 132.4KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -564,7 +568,7 @@
       "final_temp_visible": false,
       "console_messages": []
     },
-    "api_zod_coverage": "103 app/api route.ts files; 47 use Zod/parse indicators. Malformed JSON coverage now includes verified admin/auth/profile/client-errors/config/knowledge/content CRUD write routes; direct unguarded req.json() sites are down to 18 and concentrated in rules/products/quotes/contracts.",
+    "api_zod_coverage": "103 app/api route.ts files; 47 use Zod/parse indicators. Malformed JSON coverage now includes verified admin/auth/profile/client-errors/config/knowledge/content CRUD/rules write routes; direct unguarded req.json() sites are down to 11 and concentrated in AI/products/quotes/contracts/price-tier routes.",
     "production_governance_search": "Production app/components/lib search excluding tests has 0 matches for alert(, console.log(, window.location.reload, @ts-ignore, // ignore, and direct any",
     "performance_fast_navigation": "After 8beff47 on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: rapid / -> /configs?tab=role-access browser verification produced fastNavigationConsoleMessages=[]; stale dashboard Failed to fetch noise suppressed.",
     "latest_org_admin_role_assignment": {
@@ -636,10 +640,10 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU",
+      "deployment": "dpl_9nospHMt9Jn52muVo6uxownWoNi4",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 330ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 339ms"
     },
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
@@ -751,6 +755,61 @@
             "status": 400,
             "code": "VALIDATION_ERROR",
             "ms": 650
+          }
+        ]
+      }
+    },
+    "rules_malformed_json_validation": {
+      "commit_scope": "rules create/update/rollback/version/test/simulate malformed JSON classification before org/rule queries",
+      "tests": "7 new route test files cover POST /api/rules, PUT /api/rules/[id], POST /api/rules/[id]/rollback, POST /api/rules/[id]/versions, POST /api/rules/[id]/test, POST /api/rules/simulate, and POST /api/rules/test",
+      "targeted_tests": "7 route test files / 7 tests passed",
+      "full_tests": "79 files / 360 tests passed",
+      "build": "pnpm build passed with existing Sentry/OpenTelemetry dynamic require warning",
+      "production": {
+        "deployment": "dpl_9nospHMt9Jn52muVo6uxownWoNi4",
+        "login_wall_ms": 1399,
+        "results": [
+          {
+            "route": "POST /api/rules malformed JSON",
+            "status": 400,
+            "code": "INVALID_DATA",
+            "ms": 1057
+          },
+          {
+            "route": "PUT /api/rules/[id] malformed JSON",
+            "status": 400,
+            "code": "INVALID_DATA",
+            "ms": 1149
+          },
+          {
+            "route": "POST /api/rules/[id]/rollback malformed JSON",
+            "status": 400,
+            "code": "请指定回滚目标版本",
+            "ms": 524
+          },
+          {
+            "route": "POST /api/rules/[id]/versions malformed JSON",
+            "status": 400,
+            "code": "请求参数无效",
+            "ms": 671
+          },
+          {
+            "route": "POST /api/rules/[id]/test malformed JSON",
+            "status": 400,
+            "code": "请提供测试文本",
+            "ms": 550
+          },
+          {
+            "route": "POST /api/rules/simulate malformed JSON",
+            "status": 400,
+            "code": "请提供合同文本",
+            "ms": 509
+          },
+          {
+            "route": "POST /api/rules/test malformed JSON",
+            "status": 400,
+            "code": "文本长度需在 10-50000 字符之间",
+            "ms": 579
           }
         ]
       }

@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26
 **Branch**: `codex/audit-remediation-61-issues`
-**Deployed App HEAD**: `4f0d2c5`
-**Production Deployment**: `dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU`
+**Deployed App HEAD**: `d226737`
+**Production Deployment**: `dpl_9nospHMt9Jn52muVo6uxownWoNi4`
 **Production URL**: `https://sales.cyanlog.icu`
 
 ---
@@ -14,8 +14,8 @@
 |---|---|---|
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
-| Production | Vercel production deployment `dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
-| Health | `GET /api/health` => `status=ok`, database ok, `x-vercel-id: hnd1::sin1`, database latency 330ms | Pass |
+| Production | Vercel production deployment `dpl_9nospHMt9Jn52muVo6uxownWoNi4` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
+| Health | `GET /api/health` => `status=ok`, database ok, `x-vercel-id: hnd1::sin1`, database latency 339ms | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
 
@@ -27,9 +27,9 @@
 |---|---|---|
 | `pnpm lint` | Pass, no ESLint warnings/errors | Script now uses ESLint CLI over app/components/lib/types and root runtime config files; Next 16 `next lint` deprecation noise removed |
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
-| `pnpm test:run` | 72 files / 353 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
+| `pnpm test:run` | 79 files / 360 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
 | `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared. Local webpack cache may also warn about serializing big strings. |
-| Commit hook | 10/10 governance checks passed through `4f0d2c5` | No `--no-verify` used |
+| Commit hook | 10/10 governance checks passed through `d226737` | No `--no-verify` used |
 | Vercel build | Ready | `sharp@0.34.5` install script now runs and completes; remaining build warnings are Sentry/OpenTelemetry dynamic require and webpack cache big string serialization |
 | Supabase migrations | `supabase db push --linked --yes` applied `20260626062255_login_rpc_stage_timing.sql`, `20260626065920_org_admin_payload_rpc.sql`, `20260626071818_org_admin_active_members_only.sql`, and `20260626155732_org_admin_active_departments_only.sql` in this F027 performance/org-admin phase | Pass |
 | Supabase remote lint | `supabase db lint --linked --fail-on error` failed before linting due Supabase temp role SASL auth/circuit breaker | Blocked by platform auth, not counted as schema validation |
@@ -40,8 +40,8 @@
 
 | Domain | Evidence | Result |
 |---|---|---|
-| D01 Production availability | Production deployment `dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
-| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 330ms. | Pass |
+| D01 Production availability | Production deployment `dpl_9nospHMt9Jn52muVo6uxownWoNi4`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
+| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 339ms. | Pass |
 | D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200 and warms the same route bundle/Supabase path. | Pass |
 | D02 Fast navigation resilience | Production browser on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` rapidly navigated `/` -> `/configs?tab=role-access`; `fastNavigationConsoleMessages=[]`, so stale dashboard `Failed to fetch` noise no longer leaks during navigation. | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`; expected title visible; no `页面发生错误` | Pass |
@@ -56,6 +56,7 @@
 | D09 Config malformed JSON classification | `ff9f4bd` keeps existing config schemas and classifies malformed JSON as validation errors for `POST /api/configs`, `PUT /api/configs/[id]`, and `POST /api/configs/[id]/rollback`. Production `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` returned 400 for all three samples. | Pass |
 | D08/D09 Knowledge malformed JSON classification | `6609af8` keeps the existing knowledge page handlers and classifies malformed JSON as validation errors for `PATCH /api/knowledge/pages/[id]` and `POST /api/knowledge/pages/[id]/permissions`. Production `dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic` had no existing pages, so verification created a temporary page, received 400 `VALIDATION_ERROR` for both malformed samples, and deleted the temporary page. | Pass |
 | D08/D09 Content CRUD malformed JSON classification | `4f0d2c5` extends the same parse-failure classification to existing schema-backed content CRUD routes: `POST /api/agenda`, `POST /api/business-qualifications`, `POST /api/cases`, `PATCH /api/cases/[id]`, `PATCH /api/roles/[id]`, and `POST /api/tech-documents`. Production `dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU` returned 400 for all six malformed JSON samples, and local tests assert no Supabase access after invalid JSON. | Pass |
+| D05/D09 Rules malformed JSON classification | `d226737` moves body parsing/validation before rule/org queries for `POST /api/rules`, `PUT /api/rules/[id]`, `POST /api/rules/[id]/rollback`, `POST /api/rules/[id]/versions`, `POST /api/rules/[id]/test`, `POST /api/rules/simulate`, and `POST /api/rules/test`. Production `dpl_9nospHMt9Jn52muVo6uxownWoNi4` returned 400 for all seven malformed JSON samples; tests assert no default-org lookup, rule engine, or Supabase access after invalid JSON. | Pass |
 | D04 Feishu sync unconfigured | Vercel Production env lacks `FEISHU_APP_ID` / `FEISHU_APP_SECRET`; online `POST /api/access/feishu/sync` => `503`, code `FEISHU_NOT_CONFIGURED`, missing both variables, hint states current MVP only syncs departments and does not import members | Pass for unconfigured feedback; success blocked by env |
 | D05 Contract rules | `GET /api/contract-policies/rules?is_active=true` => 15 active codes `R001-R015` | Pass |
 | D05 Rule stats | `GET /api/rules/stats` => 18 total, 15 published, 3 archived legacy rows | Pass with debt |
@@ -68,7 +69,7 @@
 | D07 Mobile `/contracts` | 390x844 screenshot: no horizontal overflow, bottom actions visible; script text assertion was too narrow | Pass |
 | D07 Favicon | `public/favicon.png`: PNG 32x32, 683 bytes; online `/favicon.png` 200 | Pass |
 | D08 Knowledge create | Browser `/knowledge` -> `/knowledge/new` -> create -> `/knowledge?page={id}`; API readback; temp page deleted | Pass |
-| D10 Deploy payload | Latest successful Vercel production deployment `dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU` uploaded 131.3KB; project rootDirectory remains `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
+| D10 Deploy payload | Latest successful Vercel production deployment `dpl_9nospHMt9Jn52muVo6uxownWoNi4` uploaded 132.4KB; project rootDirectory remains `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
 | D10 Sharp build script | `7eded60` adds `pnpm.onlyBuiltDependencies=["sharp"]`; deployment `dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` ran `sharp@0.34.5 install/check.js` and completed; subsequent production builds completed without the previous ignored build scripts warning. | Pass |
 | D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
@@ -80,7 +81,7 @@
 |---|---|---|
 | Page switching | DevTools trace showed route switching INP 26ms and CLS 0.00. | Page switching is not the current primary bottleneck. |
 | Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After same-route prewarm plus `sin1` function region, explicit prewarm+POST samples on `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` returned route totals 166.0ms, 120.0ms and 112.1ms. Latest `dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy` direct login route totals were 315.0ms, 154.5ms, 124.5ms, 110.3ms and 109.8ms; first sample wall time was 2551ms. | Warm route time is below the 0.5s route target; wall-clock cold/external wait can still be much longer than route compute, so cold login remains monitored rather than fully closed. |
-| External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. Latest health check on `dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU` returned 330ms database latency. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
+| External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. Latest health check on `dpl_9nospHMt9Jn52muVo6uxownWoNi4` returned 339ms database latency. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
 | `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB; prior current build was 166kB. After `c74ad23`, current production build shows `/configs` Size 18kB and First Load JS 159kB; production `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` logged-in `/configs` returns 200 and its page chunk is 61,052 bytes. `/contracts` remains 144kB and `/tenders` 126kB in the same build. | Config center first entry is improved, but still remains heavier than adjacent modules and should stay under bundle watch. |
 | `/admin/org` bundle | Before `0d15f8c`, local build showed `/admin/org` Size 73.2kB and First Load JS 245kB. After lazy-loading the reused organization workbench, production build shows 3.78kB and 107kB; production `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` logged-in `/admin/org` returns 200 and page chunk is 9,078 bytes. | Admin organization entry is no longer a large first-load outlier; interaction still depends on the deferred workbench chunk. |
 | Login CLS | Historical trace showed login page CLS around 0.21. After `be7c882`, production Playwright samples showed desktop 1440x900 CLS 0 and mobile 390x844 CLS 0, with no horizontal overflow. | Current login-page layout stability is verified; keep as regression guard. |
@@ -153,7 +154,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | B14 | D09 | Runtime search shows no empty `catch {}` in app/components/lib; intentional boundary reporting catch remains documented. |
 | B15 | D09 | Runtime search shows no `alert(` in app/components/lib. |
 | B16 | D03/D09 | Role hardcoding reduced by F011 model; full published permissions model remains long-term. |
-| B17 | D09 | API Zod/parse coverage is now measured as 47/103 `app/api/**/route.ts` files after adding admin/auth/config validation hardening; malformed JSON classification is now covered for verified admin/auth/profile/client-errors/config/knowledge/content CRUD write routes; 18 direct `req.json()` parse sites remain in heavier rules/products/quotes/contracts routes. |
+| B17 | D09 | API Zod/parse coverage is now measured as 47/103 `app/api/**/route.ts` files after adding admin/auth/config validation hardening; malformed JSON classification is now covered for verified admin/auth/profile/client-errors/config/knowledge/content CRUD/rules write routes; 11 direct `req.json()` parse sites remain in AI/products/quotes/contracts/price-tier routes. |
 | B18 | D09 | Runtime search shows no `window.location.reload`. |
 | B19 | D09 | Runtime search shows no `console.log`; `console.error/warn` remain for server/client logging. |
 | B20 | D09 | Production `app/components/lib` search excluding tests has 0 direct `any` matches; test/mocks still use `any` and remain separate test typing debt. |
@@ -168,7 +169,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | C6 | D09 | Lint passes. |
 | C7 | D06 | Compare href routes to completed contract compare or upload fallback. |
 | C8 | D05/D06 | Risk review href routes to `/admin/rule-review`. |
-| D5 | D10 | 353 tests pass. |
+| D5 | D10 | 360 tests pass. |
 | D6 | D10 | Latest commits used governance hook, no `--no-verify`. |
 | D7-D9 | D09/D10 | Governance artifacts documented; ignored runtime state not staged. |
 | E1 | D06 | Create contract endpoint supports JSON/FormData; upload page uses JSON + chunked upload. |
@@ -197,7 +198,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | Org-admin route latency variance | RPC hot path is down to 41.4-232ms in direct checks, and route responses now expose `X-Org-Payload-Source` plus `X-Org-Timing`. Samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep collecting `X-Org-Timing` in future admin add/remove refresh tests to separate backend latency from front-end state refresh bugs. |
 | `/configs` first-load JS | Current build after `c74ad23` shows `/configs` First Load JS 159kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic samples were 281kB and 166kB. | Keep bundle budget watch; next target is shared chunk if user-perceived first entry remains slow. |
 | Historical design archive size | `product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html` is tracked at about 9.5MB. It is explicitly documented as historical reference, not active design truth or deployed app code. | Do not delete blindly; if clone/push size becomes a product concern, replace with an external artifact pointer or compressed release asset after user approval. |
-| Full API Zod coverage | 47/103 `app/api/**/route.ts` files show Zod/parse coverage. Current malformed JSON coverage is broader than this count because several routes now catch invalid JSON before schema parsing; direct unguarded `req.json()` sites are down to 18 and concentrated in rules/products/quotes/contracts. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
+| Full API Zod coverage | 47/103 `app/api/**/route.ts` files show Zod/parse coverage. Current malformed JSON coverage is broader than this count because several routes now catch invalid JSON before schema parsing; direct unguarded `req.json()` sites are down to 11 and concentrated in AI/products/quotes/contracts/price-tier routes. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
 | Test/mock `any` cleanup | Production searched paths have 0 direct `any` matches; tests and mocks still use `any` heavily for Supabase chain mocks. | Separate test mock typings from production typings; enforce stricter no-explicit-any only after shared mock builders exist. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |
 | Build warnings | Sentry/OpenTelemetry dynamic require warning remains; local/Vercel webpack cache can warn about serializing big strings. Local SWC fallback warning was cleared, and the Vercel `sharp` ignored build scripts warning is now cleared by `pnpm.onlyBuiltDependencies`. | Evaluate Sentry config tree-shaking and cache warning source. |
