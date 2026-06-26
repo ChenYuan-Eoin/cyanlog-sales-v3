@@ -7,10 +7,16 @@ import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 import { executeStructuredRules } from '@/lib/rules/structured-executor'
 import type { Rule } from '@/lib/rules/types'
+import { z } from 'zod'
 
 interface Params {
   params: Promise<{ id: string }>
 }
+
+const ruleTestSchema = z.object({
+  test_text: z.string().min(1, '请提供测试文本'),
+  input_type: z.string().optional().default('text'),
+})
 
 // POST /api/rules/[id]/test - 测试规则
 export async function POST(req: NextRequest, { params }: Params) {
@@ -18,13 +24,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     const user = await requireAuth(req)
     const { id: ruleId } = await params
 
-    const body = await req.json().catch(() => null) as { test_text?: unknown; input_type?: unknown } | null
-    const test_text = body?.test_text
-    const input_type = typeof body?.input_type === 'string' ? body.input_type : 'text'
-
-    if (!test_text || typeof test_text !== 'string') {
+    const parsed = ruleTestSchema.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) {
       return NextResponse.json({ error: '请提供测试文本' }, { status: 400 })
     }
+    const { test_text, input_type } = parsed.data
 
     const orgId = await getDefaultOrgId(user.id)
 

@@ -5,17 +5,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { executeRules } from '@/lib/rules/engine'
+import { z } from 'zod'
+
+const simulationSchema = z.object({
+  text: z.string().min(1, '请提供合同文本'),
+  orgId: z.string().optional(),
+})
 
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const body = await req.json().catch(() => null) as { text?: unknown; orgId?: unknown } | null
-    const text = body?.text
-    const orgId = typeof body?.orgId === 'string' ? body.orgId : undefined
 
-    if (!text || typeof text !== 'string') {
+    const parsed = simulationSchema.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) {
       return NextResponse.json({ error: '请提供合同文本' }, { status: 400 })
     }
+    const { text, orgId } = parsed.data
 
     // 获取用户默认组织
     let effectiveOrgId = orgId

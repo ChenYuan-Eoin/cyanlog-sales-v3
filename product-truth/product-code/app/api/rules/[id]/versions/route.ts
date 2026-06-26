@@ -5,10 +5,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+import { z } from 'zod'
 
 interface Params {
   params: Promise<{ id: string }>
 }
+
+const createRuleVersionSchema = z.object({
+  change_summary: z.string().max(500, '变更说明不能超过500个字符').optional(),
+})
 
 // GET /api/rules/[id]/versions - 获取规则版本历史
 export async function GET(req: NextRequest, { params }: Params) {
@@ -72,13 +77,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await requireAuth(req)
     const { id: ruleId } = await params
-    const body = await req.json().catch(() => null) as { change_summary?: unknown } | null
+    const parsed = createRuleVersionSchema.safeParse(await req.json().catch(() => null))
 
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    if (!parsed.success) {
       return NextResponse.json({ error: '请求参数无效' }, { status: 400 })
     }
 
-    const changeSummary = typeof body.change_summary === 'string' ? body.change_summary : undefined
+    const changeSummary = parsed.data.change_summary
     const orgId = await getDefaultOrgId(user.id)
 
     // 检查规则
