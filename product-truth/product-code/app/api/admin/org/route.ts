@@ -8,8 +8,10 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { canAccessOrgAdmin } from '@/lib/permissions'
 import {
   canManageOrg,
+  getDefaultOrgId,
   getOrgRoleCodes,
   getUserScopedRoleAssignments,
   type ScopeType,
@@ -56,7 +58,7 @@ type OrgUserIdRow = {
 }
 
 type OrgContext = {
-  user: Awaited<ReturnType<typeof requireAuth>>
+  user: { id: string }
   orgId: string
   roleCodes: string[]
 }
@@ -213,6 +215,30 @@ async function getOrgUserRoles(orgId: string, orgUserIds?: string[]) {
 }
 
 async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
+  const headerUserId = req.headers.get('x-user-id')?.trim()
+  if (headerUserId) {
+    const roleCodes = (
+      req.headers.get('x-user-role-codes')
+      || req.headers.get('x-user-roles')
+      || ''
+    ).split(',').map((code) => code.trim()).filter(Boolean)
+    const permissions = (req.headers.get('x-user-permissions') || '')
+      .split(',')
+      .map((permission) => permission.trim())
+      .filter(Boolean)
+
+    if (!canAccessOrgAdmin(permissions, roleCodes)) {
+      return null
+    }
+
+    const orgId = await getDefaultOrgId(headerUserId)
+    return {
+      user: { id: headerUserId },
+      orgId,
+      roleCodes,
+    }
+  }
+
   const user = await requireAuth(req)
   const assignments = await getUserScopedRoleAssignments(user.id)
   const roleCodes = getOrgRoleCodes(assignments)
