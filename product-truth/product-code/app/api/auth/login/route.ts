@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { primeAuthCache } from '@/lib/auth'
 import { primeDefaultOrgCache } from '@/lib/scoped-access'
-import { warmLoginRuntime } from '@/lib/login-prewarm'
+import { formatLoginPrewarmTiming, warmLoginRuntime } from '@/lib/login-prewarm'
 import {
   cacheDashboardPayload,
   getCachedDashboardPayload,
@@ -628,18 +628,23 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  let prewarmTiming = ''
   try {
-    await warmLoginRuntime()
+    prewarmTiming = formatLoginPrewarmTiming(await warmLoginRuntime())
   } catch {
     // Login remains functional if opportunistic prewarm fails.
   }
 
-  return NextResponse.json({ ok: true }, {
+  const response = NextResponse.json({ ok: true }, {
     headers: {
       'Cache-Control': 'no-store',
       'X-Login-Prewarm': '1',
     },
   })
+  if (prewarmTiming) {
+    response.headers.set('X-Login-Prewarm-Timing', prewarmTiming)
+  }
+  return response
 }
 
 export async function POST(req: NextRequest) {

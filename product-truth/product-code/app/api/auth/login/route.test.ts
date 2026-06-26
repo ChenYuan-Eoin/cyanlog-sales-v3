@@ -461,6 +461,9 @@ describe('GET /api/auth/login', () => {
     expect(res.status).toBe(200)
     expect(body.ok).toBe(true)
     expect(res.headers.get('X-Login-Prewarm')).toBe('1')
+    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('users_query')
+    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('candidate_rpc')
+    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('login_rpc')
     expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
     expect(query.select).toHaveBeenCalledWith('id')
     expect(query.limit).toHaveBeenCalledWith(1)
@@ -498,6 +501,35 @@ describe('GET /api/auth/login', () => {
 
     expect(res.status).toBe(200)
     expect(body.ok).toBe(true)
+  })
+
+  it('预热外部等待超时时仍快速返回并记录阶段', async () => {
+    process.env.LOGIN_PREWARM_TASK_TIMEOUT_MS = '1'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const query = makeChain({ data: null, error: null })
+    query.limit = vi.fn().mockReturnValue(query)
+    query.maybeSingle = vi.fn().mockReturnValue(new Promise(() => undefined))
+    ;(supabaseAdmin.from as any).mockReturnValue(query)
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: {}, error: null })
+
+    try {
+      const res = await GET(makeGetRequest({ 'x-login-prewarm': '1' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.ok).toBe(true)
+      expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('users_query')
+      expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('timed_out')
+      expect(warn).toHaveBeenCalledWith('[auth/login] prewarm timeout', expect.objectContaining({
+        timeoutMs: 1,
+        tasks: expect.arrayContaining([
+          expect.objectContaining({ name: 'users_query' }),
+        ]),
+      }))
+    } finally {
+      delete process.env.LOGIN_PREWARM_TASK_TIMEOUT_MS
+      warn.mockRestore()
+    }
   })
 
   it('缺少预热 header 时不访问数据库', async () => {

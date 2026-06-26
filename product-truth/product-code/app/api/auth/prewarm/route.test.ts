@@ -34,6 +34,9 @@ describe('POST /api/auth/prewarm', () => {
 
     expect(res.status).toBe(200)
     expect(body.ok).toBe(true)
+    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('users_query')
+    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('candidate_rpc')
+    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('login_rpc')
     expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
     expect(query.select).toHaveBeenCalledWith('id')
     expect(query.limit).toHaveBeenCalledWith(1)
