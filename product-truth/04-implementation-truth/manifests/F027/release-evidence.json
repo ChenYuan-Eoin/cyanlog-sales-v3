@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "ccc6308",
+  "head": "50af5af",
   "commits": [
     {
       "sha": "5641824",
@@ -283,6 +283,10 @@
     {
       "sha": "ccc6308",
       "message": "chore(deps): trim unused direct dependencies"
+    },
+    {
+      "sha": "50af5af",
+      "message": "fix(rules): hide archived rules from default stats"
     }
   ],
   "production": {
@@ -294,10 +298,11 @@
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "100 files / 422 tests passed",
-    "build": "pass; Sentry/OpenTelemetry dynamic require warning cleared locally; /configs First Load JS stays at 129kB after agenda envelope normalization",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 186ms",
+    "test": "101 files / 424 tests passed",
+    "build": "pass; Sentry/OpenTelemetry dynamic require warning cleared locally and in latest Vercel Preview; /configs First Load JS stays at 129kB",
+    "health": "Production GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 323ms on old production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
+    "rule_stats_active_filter": "GET /api/rules/stats now defaults to is_active=true against contract_rules_v2 so archived legacy RULE-01-* rows do not appear in current rule statistics. Explicit include_archived=true keeps historical/debug visibility. Targeted route test passed 1 file / 2 tests.",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
     "contract_compare": "POST/GET/UI flow passed",
@@ -309,7 +314,7 @@
     "performance_external_wait": "Supabase/GitHub TLS reset was observed during diagnostics; one core API stalled around 9s before 401, then recovered to around 185-355ms. External dependencies are not treated as automatically bad, but their latency/error class must be separated from app-code compute time. After 762c830, local production POST /api/auth/prewarm returned login_rpc;dur=1501.8;status=timed_out and logged sanitized [auth/login] prewarm timeout, proving opportunistic prewarm no longer waits unboundedly for that task.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. After 56ba7e3, current local production build: /configs Size 15.4kB and First Load JS 129kB; route chunk is 51kB. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
-    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest hook run passed 100 files / 422 tests without the Node 24 --localstorage-file warning.",
+    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest hook run passed 101 files / 424 tests without the Node 24 --localstorage-file warning.",
     "lint_warning_cleanup": "Standard pnpm lint now uses ESLint CLI over app/components/lib/types plus middleware/instrumentation/Sentry config files; latest run passed without the Next 16 next lint deprecation warning.",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
@@ -321,10 +326,10 @@
     "login_prewarm_wait_boundary": "762c830 keeps the existing /api/auth/login GET prewarm and /api/auth/prewarm POST endpoints, adds X-Login-Prewarm-Timing for users_query, candidate_rpc, and login_rpc, and gives each no-side-effect prewarm task a default 1500ms soft boundary. Targeted auth tests passed 2 files / 21 tests; full hook passed 99 files / 418 tests; pnpm build passed. Local production GET /api/auth/login without X-Login-Prewarm stayed 204; with X-Login-Prewarm returned all three stages fulfilled around 1107ms. Local production POST /api/auth/prewarm returned login_rpc;dur=1501.8;status=timed_out and emitted sanitized [auth/login] prewarm timeout.",
     "latest_local_login_transport_conclusion": "Latest local production samples on pushed app code show cold-login long tails are dominated by login_rpc_transport rather than SQL/RPC compute: direct route totals were 1663.8ms, 297.5ms, 259.5ms, 534.4ms and 561.5ms, while rpc_total stayed 78.1-109.3ms. Full prewarm can help if it finishes before submit, but 350ms and 1200ms concurrent prewarm samples still returned 552.1ms and 842.1ms route totals because transport remained high. Next optimization should be gated on deployed main-domain evidence and should target Supabase/PostgREST connection, region or network behavior if the same pattern persists.",
     "preview_visual_smoke": "Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via temporary Vercel share URL: browser screenshots captured for /login, /, /configs?tab=role-access desktop 1440x900 and /configs?tab=role-access mobile 390x844. Dashboard, role-access desktop, and role-access mobile reported scrollWidth equal to viewport width, overflowX=false, hasErrorText=false, and role-access content visible. Screenshot files are ignored under product-truth/product-code/output/playwright and are not tracked or uploaded.",
-    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. After 9e593c0, another repo-root deploy uploaded 178.4KB and failed with the same quota code. After 4507ae2, repo-root deploy uploaded 305.5KB and failed with the same quota code. After pushed branch head 95f4268, repo-root deploy uploaded 218.0KB and failed with the same quota code. After pushed branch head 1cd121d, repo-root deploy uploaded 232.2KB and failed with the same quota code. After pushed branch head 68cbbeb, repo-root deploy uploaded 214.7KB and failed with the same quota code. After pushed branch head c24a052, repo-root deploy uploaded 187.1KB and failed with the same quota code. After head aae2ff6, repo-root deploy uploaded 170.3KB and failed with the same quota code. After pushed branch head a61a5bc, repo-root deploy uploaded 180.6KB and failed with the same quota code. After pushed branch head ccc6308, repo-root deploy uploaded 452.2KB and failed with the same quota code. Latest ccc6308 app/dependency code is locally verified but has no Ready Preview or Production deployment yet; it remains Git-only until Vercel quota allows deployment.",
-    "production_deploy_blocker": "Repeated vercel promote for dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw failed with Vercel quota code api-deployments-free-per-day. vercel inspect https://sales.cyanlog.icu still resolves to production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew. sales.cyanlog.icu therefore still points to the old production deployment until quota resets or plan limit is raised.",
+    "latest_code_preview_deploy_blocker": "Resolved for build availability: repo-root vercel deploy --yes after 50af5af uploaded 193.2KB and produced Ready Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M. The Preview URL is protected by Vercel Authentication, so direct API/MCP fetches return SSO redirects instead of application JSON and it is not usable as the user's public acceptance URL.",
+    "production_deploy_blocker": "vercel promote https://cyanlog-sales-v3-mssve63os-eoins-projects-94b17ece.vercel.app --yes failed with Vercel quota code api-deployments-free-per-day. vercel inspect https://sales.cyanlog.icu still resolves to production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew. sales.cyanlog.icu is accessible on the old production deployment, but latest 50af5af is not promoted until quota resets or plan limit is raised.",
     "sentry_no_dsn_startup_guard": "instrumentation.ts now skips server/edge Sentry config import when SENTRY_DSN and NEXT_PUBLIC_SENTRY_DSN are both unset. Local next start -p 3000 no longer prints the server Sentry DSN-not-configured warning. 4507ae2 cleared the Sentry/OpenTelemetry dynamic require build warning locally.",
-    "sentry_opentelemetry_build_warning": "4507ae2 adds Next serverExternalPackages entries for @sentry/nextjs, @sentry/node, @opentelemetry/instrumentation, and require-in-the-middle. Local pnpm build no longer reports the Sentry/OpenTelemetry require-in-the-middle critical dependency warning; latest 56ba7e3 build also completed without that warning. Local next start -p 3010 reached Ready and GET /api/health returned 200.",
+    "sentry_opentelemetry_build_warning": "4507ae2 adds Next serverExternalPackages entries for @sentry/nextjs, @sentry/node, @opentelemetry/instrumentation, and require-in-the-middle. Local pnpm build no longer reports the Sentry/OpenTelemetry require-in-the-middle critical dependency warning; latest Vercel Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M also completed without that warning. Remaining Vercel warnings are webpack cache big-string serialization notes.",
     "configs_dialog_split": "56ba7e3 moves the config edit dialog and version history dialog behind next/dynamic while reusing existing forms, Dialog, Textarea and ConfigStatusBadge components. Local pnpm build changed /configs from 18.2kB / 160kB to 15.4kB / 129kB. Local production browser verification with system Chrome logged in, opened /configs?tab=tax and the new tax dialog, then /configs?tab=theme and the theme asset dialog; there were no page errors, console errors, or real network failures.",
     "config_derived_envelopes": "44adc21 normalizes /api/configs/[id], /publish, /versions, and /rollback to lib/api/common success/error envelopes. ConfigsClient now extracts error.message from both legacy and common error shapes and unwraps version lists from either an array or { data }. Targeted tests passed 3 files / 3 tests; targeted lint, typecheck, full hook and pnpm build passed. Local production browser verification returned /api/configs/[id]/versions as { success:true, data: [] } in an authenticated session and opened tax/theme dialogs without page errors, console errors or real network failures.",
     "agenda_response_envelopes": "cbf6e3c normalizes /api/agenda and /api/agenda/upcoming to lib/api/common success/error envelopes. The schedule creation page reads both legacy string errors and common error.message. Targeted agenda tests passed 2 files / 5 tests, covering 201 create envelope, upcoming list envelope, and validation error envelope. Targeted lint, typecheck, full hook and pnpm build passed. Middleware unauthenticated API 401 remains a separate global response boundary and was not changed in this agenda batch.",
@@ -571,7 +576,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB. Manual Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw for bde4752 uploaded 164.2KB. The 001f9cc repo-root deploy attempt uploaded 155.3KB before quota failure; the 9e593c0 repo-root deploy attempt uploaded 178.4KB before the same quota failure; the 4507ae2 repo-root deploy attempt uploaded 305.5KB before the same quota failure; the 95f4268 repo-root deploy attempt uploaded 218.0KB before the same quota failure; the 1cd121d repo-root deploy attempt uploaded 232.2KB before the same quota failure; the 68cbbeb repo-root deploy attempt uploaded 214.7KB before the same quota failure; the c24a052 repo-root deploy attempt uploaded 187.1KB before the same quota failure; the aae2ff6 repo-root deploy attempt uploaded 170.3KB before the same quota failure; the a61a5bc repo-root deploy attempt uploaded 180.6KB before the same quota failure; the ccc6308 repo-root deploy attempt uploaded 452.2KB before the same quota failure. Deploy root remains product-truth/product-code. Tracked app files total 4.1MB and tracked repo files total 18MB; local node_modules 1.2GB, .next 1.0GB, output/playwright evidence screenshots, and tsconfig.tsbuildinfo are ignored and do not enter Git or Vercel payload.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB. Manual Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw for bde4752 uploaded 164.2KB. The ccc6308 repo-root deploy attempt uploaded 452.2KB before quota failure. Latest 50af5af repo-root Preview deploy uploaded 193.2KB and built Ready deployment dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M. Deploy root remains product-truth/product-code. Tracked app files total 4.1MB and tracked repo files total 18MB; local node_modules 1.2GB, .next 1.0GB, output/playwright evidence screenshots, and tsconfig.tsbuildinfo are ignored and do not enter Git or Vercel payload.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "dependency_manifest_cleanup": {
       "production_dependency_count_before": 31,
@@ -588,13 +593,14 @@
       "evidence": [
         "Exact import search found no runtime/code references for @ai-sdk/anthropic, react-window, @types/react-window or direct js-yaml.",
         "pg is imported only by scripts/apply-migrations.mjs and scripts/test-pg-conn.mjs, so it is development/ops tooling rather than production runtime.",
-        "pnpm install --lockfile-only --ignore-scripts regenerated pnpm-lock.yaml without executing package scripts."
+        "pnpm install --lockfile-only --ignore-scripts regenerated pnpm-lock.yaml without executing package scripts.",
+        "Vercel Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M install log showed Packages: -3 and removed @ai-sdk/anthropic, @types/react-window, react-window, and direct dev js-yaml."
       ],
       "validation": {
         "typecheck": "pnpm exec tsc --noEmit passed",
         "lint": "pnpm lint passed",
-        "test": "pnpm test:run passed: 100 files / 422 tests",
-        "build": "pnpm build passed; /configs 15.4kB / 129kB, /admin/org 3.77kB / 107kB"
+        "test": "pnpm test:run passed: 100 files / 422 tests after dependency cleanup; 101 files / 424 tests after rule-stats patch",
+        "build": "pnpm build passed locally; Vercel Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M build passed with /configs 15.4kB / 129kB and /admin/org 3.77kB / 107kB"
       }
     },
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
@@ -1334,10 +1340,10 @@
     "Historical design archive product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html is about 9.5MB and remains tracked as reference material; do not delete without replacing the asset policy.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
-    "Latest local build has no Sentry/OpenTelemetry dynamic require warning. Vercel build logs still need confirmation after deploy quota resets. The previous Vercel sharp ignored build scripts warning and local SWC fallback warning are also cleared; if webpack cache big string serialization reappears it is a non-blocking build performance note.",
-    "Legacy archived rule rows remain in stats for compatibility.",
+    "Latest local and Vercel Preview builds have no Sentry/OpenTelemetry dynamic require warning. The previous Vercel sharp ignored build scripts warning and local SWC fallback warning are also cleared; current Vercel webpack cache big-string serialization warnings are non-blocking build performance notes.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
     "Request-body schema migration is locally closed for the current route inventory: 67 schema+guard, 0 guard-only, 36 no-body, 0 unguarded-body, 0 schema-only. Upload/OCR envelope debt from E2 is locally closed; remaining API debt is broader legacy response envelope/code consistency outside that problem path.",
-    "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
+    "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired.",
+    "Latest 50af5af build is Ready only on protected Preview dpl_GUsBeF2fd8QNoak2GLNT9xaLuK6M. sales.cyanlog.icu is accessible but still points to old production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew because vercel promote is blocked by api-deployments-free-per-day."
   ]
 }
