@@ -33,13 +33,16 @@ export async function POST(
       return errorResponse(createApiError('UNAUTHORIZED'))
     }
 
-    const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     const { id: contractId } = await params
 
     // 获取表单数据
-    const formData = await req.formData()
-    const file = formData.get('file') as File
+    const formData = await req.formData().catch(() => null)
+    if (!formData) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '请求格式不是有效的表单数据'))
+    }
+
+    const fileValue = formData.get('file')
+    const file = fileValue instanceof File ? fileValue : null
 
     if (!file) {
       return errorResponse(createApiError('MISSING_FIELD', '未提供文件'))
@@ -54,6 +57,9 @@ export async function POST(
     if (file.size > MAX_SIZE) {
       return errorResponse(createApiError('VALIDATION_ERROR', '文件大小超过 50MB 限制'))
     }
+
+    const orgId = await getDefaultOrgId(user.id)
+    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
 
     // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin

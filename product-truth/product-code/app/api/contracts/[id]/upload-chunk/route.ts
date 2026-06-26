@@ -11,6 +11,12 @@ import { createApiError } from '@/lib/api/errors'
 
 // 临时分块存储桶名称
 const TEMP_BUCKET = 'contract-chunks'
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
+
+function hasAllowedFileName(fileName: string): boolean {
+  const extension = `.${fileName.split('.').pop()?.toLowerCase() || ''}`
+  return ALLOWED_EXTENSIONS.includes(extension)
+}
 
 export async function POST(
   req: NextRequest,
@@ -22,9 +28,41 @@ export async function POST(
       return errorResponse(createApiError('UNAUTHORIZED'))
     }
 
+    const { id: contractId } = await params
+
+    // 获取表单数据
+    const formData = await req.formData().catch(() => null)
+    if (!formData) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '请求格式不是有效的表单数据'))
+    }
+
+    const chunkValue = formData.get('chunk')
+    const chunk = chunkValue instanceof Blob ? chunkValue : null
+    const index = parseInt(formData.get('index') as string, 10)
+    const start = parseInt(formData.get('start') as string, 10)
+    const end = parseInt(formData.get('end') as string, 10)
+    const totalSize = parseInt(formData.get('totalSize') as string, 10)
+    const fileNameValue = formData.get('fileName')
+    const fileTypeValue = formData.get('fileType')
+    const fileName = typeof fileNameValue === 'string' ? fileNameValue.trim() : ''
+    const fileType = typeof fileTypeValue === 'string' ? fileTypeValue : ''
+
+    const hasValidRange = Number.isInteger(start) &&
+      Number.isInteger(end) &&
+      Number.isInteger(totalSize) &&
+      start >= 0 &&
+      end > start &&
+      totalSize >= end
+
+    if (!chunk || chunk.size <= 0 || !fileName || !Number.isInteger(index) || index < 0 || !hasValidRange) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '无效的分块数据'))
+    }
+    if (!hasAllowedFileName(fileName)) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
+    }
+
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
-    const { id: contractId } = await params
 
     // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin
@@ -37,24 +75,6 @@ export async function POST(
 
     if (fetchError || !contract) {
       return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
-    }
-
-    // 获取表单数据
-    const formData = await req.formData()
-    const chunk = formData.get('chunk') as Blob
-    const index = parseInt(formData.get('index') as string, 10)
-    const start = parseInt(formData.get('start') as string, 10)
-    const end = parseInt(formData.get('end') as string, 10)
-    const totalSize = parseInt(formData.get('totalSize') as string, 10)
-    const fileName = formData.get('fileName') as string
-    const fileType = formData.get('fileType') as string
-
-    void totalSize
-    void start
-    void end
-
-    if (!chunk || isNaN(index)) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '无效的分块数据'))
     }
 
     // 生成临时分块路径
