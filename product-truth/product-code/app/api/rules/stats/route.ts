@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const days = parseInt(searchParams.get('days') || '30', 10)
     const ruleId = searchParams.get('rule_id')
+    const includeArchived = searchParams.get('include_archived') === 'true'
 
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - days)
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 获取所有规则的统计摘要
-    const { data: rules, error: rulesError } = await supabaseAdmin
+    let rulesQuery = supabaseAdmin
       .from('contract_rules_v2')
       .select(`
         id,
@@ -39,6 +40,12 @@ export async function GET(req: NextRequest) {
       `)
       .eq('org_id', orgId)
       .order('priority', { ascending: false })
+
+    if (!includeArchived) {
+      rulesQuery = rulesQuery.eq('is_active', true)
+    }
+
+    const { data: rules, error: rulesError } = await rulesQuery
 
     if (rulesError) {
       console.error('Get rules stats error:', rulesError)
