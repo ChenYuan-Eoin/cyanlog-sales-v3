@@ -9,7 +9,14 @@ import {
   STATUS_LABEL,
   type AgendaItem,
 } from '@/lib/agenda/types'
-import { loadAgendaUpcomingForCache } from '@/lib/core-page-warmup'
+import { readBrowserCacheEntry, scopedCacheKey } from '@/lib/browser-cache'
+import {
+  AGENDA_UPCOMING_CACHE_KEY,
+  CORE_PAGE_BACKGROUND_REFRESH_MS,
+  CORE_PAGE_VISIBLE_CACHE_TTL_MS,
+  loadAgendaUpcomingForCache,
+  type AgendaUpcomingCachePayload,
+} from '@/lib/core-page-warmup'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -28,7 +35,18 @@ export function ScheduleClient() {
       return
     }
 
-    setState('loading')
+    const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
+    const cachedEntry = readBrowserCacheEntry<AgendaUpcomingCachePayload>(cacheKey)
+    const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
+    const cached = cacheAgeMs <= CORE_PAGE_VISIBLE_CACHE_TTL_MS ? cachedEntry?.value : null
+
+    if (cached) {
+      setItems(cached.items)
+      setState('ready')
+      if (cacheAgeMs < CORE_PAGE_BACKGROUND_REFRESH_MS) return
+    } else {
+      setState('loading')
+    }
     setError('')
 
     try {

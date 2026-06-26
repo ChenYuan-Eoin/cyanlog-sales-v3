@@ -1,4 +1,6 @@
 // GET /api/contracts - 合同列表（支持分页和搜索）
+export const preferredRegion = 'sin1'
+
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { searchParams } = new URL(req.url)

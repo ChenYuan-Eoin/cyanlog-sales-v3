@@ -72,12 +72,13 @@ export default function ContractComparePage() {
 
       let url = `/api/contracts/${contractId}/compare`
       if (comparisonId) {
-        url = `/api/comparisons/${comparisonId}`
+        url = `/api/contracts/${contractId}/compare?comparison_id=${encodeURIComponent(comparisonId)}`
       }
 
       const res = await fetch(url, { headers })
       if (!res.ok) {
-        setError('获取比对结果失败')
+        const data = await res.json().catch(() => null)
+        setError(data?.error?.message || data?.error || '获取比对结果失败')
         return
       }
 
@@ -145,7 +146,8 @@ export default function ContractComparePage() {
       })
 
       if (!res.ok) {
-        setError('发起比对失败')
+        const data = await res.json().catch(() => null)
+        setError(data?.error?.message || data?.error || '发起比对失败')
         return
       }
 

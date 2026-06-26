@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canManageOrg, getOrgScopedAssignments, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 
+export const preferredRegion = 'sin1'
+
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }

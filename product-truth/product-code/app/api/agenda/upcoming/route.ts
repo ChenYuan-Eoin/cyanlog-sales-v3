@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export const runtime = 'nodejs'
+export const preferredRegion = 'sin1'
 
 const querySchema = z.object({
   from: z.string().datetime().optional(),

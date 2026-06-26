@@ -14,6 +14,8 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 
+export const preferredRegion = 'sin1'
+
 // 请求体验证
 const createDraftSchema = z.object({
   title: z.string().min(1, '标题不能为空'),

@@ -39,7 +39,8 @@ interface OrgStructureTabProps {
   orgSummary: OrgSummaryPayload | null
   feishuSyncing: boolean
   feishuResult: string
-  onFeishuSync: () => void
+  onFeishuSync: () => void | Promise<void>
+  onRefresh?: () => void | Promise<void>
 }
 
 // ============ 工具函数 ============
@@ -61,7 +62,7 @@ interface DepartmentTreeProps {
   users: OrgSummaryUser[]
   selectedDeptId: string | null
   onSelectDept: (id: string | null) => void
-  onRefresh?: () => void
+  onRefresh?: () => void | Promise<void>
   className?: string
 }
 
@@ -111,7 +112,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
         return
       }
       success('部门已删除')
-      onRefresh?.()
+      await onRefresh?.()
     } finally {
       setDeletingDept(null)
     }
@@ -264,7 +265,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
               throw new Error(result.error)
             }
             success('部门更新成功')
-            onRefresh?.()
+            await onRefresh?.()
           }}
         />
       )}
@@ -293,7 +294,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
               throw new Error(result.error)
             }
             success('部门创建成功')
-            onRefresh?.()
+            await onRefresh?.()
           }}
           trigger={null}
         />
@@ -309,7 +310,7 @@ interface MemberTableProps {
   departments: OrgSummaryDepartment[]
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
-  onRefresh?: () => void
+  onRefresh?: () => void | Promise<void>
 }
 
 function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTableProps) {
@@ -440,7 +441,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                       return
                     }
                     success(`密码已重置，临时密码：${result.data?.tempPassword}`)
-                    onRefresh?.()
+                    await onRefresh?.()
                   } catch (_err) {
                     error('重置密码请求失败')
                   }
@@ -467,7 +468,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                       return
                     }
                     success(`用户已${action}`)
-                    onRefresh?.()
+                    await onRefresh?.()
                   } catch (_err) {
                     error(`${action}请求失败`)
                   }
@@ -503,7 +504,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                       return
                     }
                     success(`已${action}登录`)
-                    onRefresh?.()
+                    await onRefresh?.()
                   } catch (_err) {
                     error(`登录状态更新请求失败`)
                   }
@@ -539,7 +540,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                       return
                     }
                     success('用户已删除')
-                    onRefresh?.()
+                    await onRefresh?.()
                   } catch (_err) {
                     error('删除请求失败')
                   }
@@ -660,6 +661,7 @@ export default function OrgStructureTab({
   feishuSyncing,
   feishuResult,
   onFeishuSync,
+  onRefresh,
 }: OrgStructureTabProps) {
   const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
@@ -721,7 +723,7 @@ export default function OrgStructureTab({
                 throw new Error(result.error)
               }
               success('部门创建成功')
-              onFeishuSync()
+              await onRefresh?.()
             }}
             trigger={
               <Button variant="outline" size="sm">
@@ -746,7 +748,7 @@ export default function OrgStructureTab({
               }
               const tempPassword = result.data?.tempPassword
               success(tempPassword ? `用户创建成功，临时密码：${tempPassword}` : '用户创建成功')
-              onFeishuSync()
+              await onRefresh?.()
             }}
             trigger={
               <Button variant="outline" size="sm">
@@ -818,7 +820,7 @@ export default function OrgStructureTab({
                 users={users}
                 selectedDeptId={selectedDeptId}
                 onSelectDept={setSelectedDeptId}
-                onRefresh={onFeishuSync}
+                onRefresh={onRefresh}
               />
             </div>
           </div>
@@ -857,7 +859,7 @@ export default function OrgStructureTab({
                 departments={departments}
                 onEditUser={setEditingUser}
                 onAssignRole={setAssigningUser}
-                onRefresh={onFeishuSync}
+                onRefresh={onRefresh}
               />
             </div>
           </div>
@@ -883,7 +885,7 @@ export default function OrgStructureTab({
               throw new Error(result.error)
             }
             success('用户更新成功')
-            onFeishuSync()
+            await onRefresh?.()
           }}
         />
       )}
@@ -909,7 +911,7 @@ export default function OrgStructureTab({
               throw new Error(result.error)
             }
             success('角色分配成功')
-            onFeishuSync()
+            await onRefresh?.()
           }}
         />
       )}

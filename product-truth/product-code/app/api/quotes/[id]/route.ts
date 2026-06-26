@@ -6,7 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { contractIdSchema, dateTimeStringSchema } from '@/lib/validation'
 import { z } from 'zod'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { loadProductsForOrg } from '@/lib/pricing/service'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
@@ -15,18 +15,57 @@ import {
   normalizeQuote,
 } from '../quote-compat'
 
+export const preferredRegion = 'sin1'
+
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
 
-async function fetchQuoteDetail(id: string, orgId: string, accessibleUserIds: string[]) {
-  const modernResult = await supabaseAdmin
+const QUOTE_DETAIL_RESPONSE_CACHE_TTL_MS = 30_000
+const quoteDetailResponseCache = new Map<string, { quote: unknown; expiresAt: number }>()
+
+function quoteDetailResponseCacheKey(userId: string, orgId: string, quoteId: string) {
+  return `${userId}:${orgId}:${quoteId}`
+}
+
+function getCachedQuoteDetail(cacheKey: string) {
+  const cached = quoteDetailResponseCache.get(cacheKey)
+  if (!cached) return null
+  if (cached.expiresAt < Date.now()) {
+    quoteDetailResponseCache.delete(cacheKey)
+    return null
+  }
+  return cached.quote
+}
+
+function setCachedQuoteDetail(cacheKey: string, quote: unknown) {
+  quoteDetailResponseCache.set(cacheKey, {
+    quote,
+    expiresAt: Date.now() + QUOTE_DETAIL_RESPONSE_CACHE_TTL_MS,
+  })
+}
+
+function invalidateQuoteDetailResponseCache(quoteId: string) {
+  for (const cacheKey of quoteDetailResponseCache.keys()) {
+    if (cacheKey.endsWith(`:${quoteId}`)) {
+      quoteDetailResponseCache.delete(cacheKey)
+    }
+  }
+}
+
+async function fetchQuoteDetail(id: string, orgId: string, accessibleUserIds: string[] | null) {
+  let modernQuery = supabaseAdmin
     .from('quotes')
     .select('*, quote_items(*)')
     .eq('id', id)
     .eq('org_id', orgId)
-    .in('created_by', accessibleUserIds)
+
+  if (accessibleUserIds) {
+    modernQuery = modernQuery.in('created_by', accessibleUserIds)
+  }
+
+  const modernResult = await modernQuery
     .maybeSingle()
 
   if (!modernResult.error) {
@@ -37,11 +76,16 @@ async function fetchQuoteDetail(id: string, orgId: string, accessibleUserIds: st
     throw modernResult.error
   }
 
-  const legacyQuoteResult = await supabaseAdmin
+  let legacyQuoteQuery = supabaseAdmin
     .from('quotes')
     .select('*')
     .eq('id', id)
-    .in('created_by', accessibleUserIds)
+
+  if (accessibleUserIds) {
+    legacyQuoteQuery = legacyQuoteQuery.in('created_by', accessibleUserIds)
+  }
+
+  const legacyQuoteResult = await legacyQuoteQuery
     .maybeSingle()
 
   if (legacyQuoteResult.error) {
@@ -213,7 +257,6 @@ export async function GET(
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     const routeId = await resolveIdParam(params)
 
     const idResult = contractIdSchema.safeParse({ id: routeId })
@@ -222,6 +265,15 @@ export async function GET(
     }
 
     const { id } = idResult.data
+    const assignments = await getUserScopedRoleAssignments(user.id)
+    const accessibleUserIds = canManageOrg(assignments)
+      ? null
+      : (await listAccessibleUserIds(user.id, orgId)).userIds
+    const cacheKey = quoteDetailResponseCacheKey(user.id, orgId, id)
+    const cachedQuote = getCachedQuoteDetail(cacheKey)
+    if (cachedQuote) {
+      return NextResponse.json(cachedQuote)
+    }
 
     let quote
     try {
@@ -235,6 +287,7 @@ export async function GET(
       return errorResponse('报价不存在', 404, 'NOT_FOUND')
     }
 
+    setCachedQuoteDetail(cacheKey, quote)
     return NextResponse.json(quote)
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
@@ -316,6 +369,7 @@ export async function PUT(
       return errorResponse('更新失败', 500, 'DB_ERROR')
     }
 
+    invalidateQuoteDetailResponseCache(id)
     return NextResponse.json(normalizeQuote({
       ...existingQuote,
       ...updateData,
@@ -390,6 +444,7 @@ export async function DELETE(
       return errorResponse('删除失败', 500, 'DB_ERROR')
     }
 
+    invalidateQuoteDetailResponseCache(id)
     return NextResponse.json({ success: true, message: '报价已删除' })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'

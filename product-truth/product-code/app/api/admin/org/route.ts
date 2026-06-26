@@ -511,6 +511,8 @@ async function listOrgPayload(orgId: string) {
   const userNameById = new Map(usersData.map((u) => [u.id, u.display_name]))
 
   const userRolesData = await getOrgUserRoles(orgId)
+  const departmentIds = new Set(departments.map((department) => department.id))
+  const spaceIds = new Set(spaces.map((space) => space.id))
 
   // 构建角色映射
   // 角色映射（预留，用于后续扩展）
@@ -519,7 +521,22 @@ async function listOrgPayload(orgId: string) {
   // 构建用户角色映射
   const userRolesMap = new Map<string, typeof userRolesData>()
   for (const ur of userRolesData) {
-    const userId = (ur as unknown as { user_id: string }).user_id
+    const entry = ur as unknown as {
+      user_id: string
+      scope_type?: ScopeType
+      scope_id?: string | null
+    }
+    const scopeId = entry.scope_id
+    const isCurrentOrgScope = (
+      (entry.scope_type === 'org' && (!scopeId || scopeId === orgId))
+      || (entry.scope_type === 'department' && typeof scopeId === 'string' && departmentIds.has(scopeId))
+      || (entry.scope_type === 'space' && typeof scopeId === 'string' && spaceIds.has(scopeId))
+    )
+    if (!isCurrentOrgScope) {
+      continue
+    }
+
+    const userId = entry.user_id
     if (!userRolesMap.has(userId)) {
       userRolesMap.set(userId, [])
     }

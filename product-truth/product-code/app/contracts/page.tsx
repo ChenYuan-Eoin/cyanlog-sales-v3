@@ -249,7 +249,7 @@ export default function ContractCenterPage() {
   }, [contracts, drafts])
 
   const resolvedQuickActions = useMemo(() => {
-    const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED') || contracts[0]
+    const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED')
     return quickActions.map((action) => {
       if (action.id === 'review') {
         return {
@@ -263,7 +263,7 @@ export default function ContractCenterPage() {
         return {
           ...action,
           href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/upload',
-          description: compareTarget ? '查看最近合同差异' : '先上传合同',
+          description: compareTarget ? '选择合同进行比对' : '先完成合同审核',
         }
       }
 

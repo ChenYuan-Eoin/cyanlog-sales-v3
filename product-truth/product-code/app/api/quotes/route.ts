@@ -22,6 +22,8 @@ import {
   normalizeQuote,
 } from './quote-compat'
 
+export const preferredRegion = 'sin1'
+
 // GET - 获取报价列表
 export async function GET(req: NextRequest) {
   return withAuth(req, async (user: AuthUser) => {

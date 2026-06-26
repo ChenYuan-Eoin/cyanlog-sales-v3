@@ -3,8 +3,210 @@
 // 权限要求: 组织管理员（SUPER_ADMIN / SALES_OPS / ADMIN 或拥有 admin:access/org:write 权限）
 
 import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canManageOrg, getUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments } from '@/lib/scoped-access'
+
+type FeishuDepartment = {
+  department_id?: string
+  open_department_id?: string
+  parent_department_id?: string
+  name?: string
+  i18n_name?: {
+    zh_cn?: string
+    en_us?: string
+  }
+  status?: {
+    is_deleted?: boolean
+  }
+}
+
+type SyncedDepartment = {
+  id: string
+  path: string
+  depth: number
+}
+
+function externalDepartmentId(department: FeishuDepartment) {
+  return department.department_id || department.open_department_id || ''
+}
+
+function departmentName(department: FeishuDepartment) {
+  return department.name || department.i18n_name?.zh_cn || department.i18n_name?.en_us || externalDepartmentId(department)
+}
+
+async function getTenantAccessToken(appId: string, appSecret: string) {
+  const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      app_id: appId,
+      app_secret: appSecret,
+    }),
+  })
+  const data = await res.json().catch(() => null) as { code?: number; msg?: string; tenant_access_token?: string } | null
+
+  if (!res.ok || data?.code !== 0 || !data.tenant_access_token) {
+    throw new Error(data?.msg || '获取飞书 tenant_access_token 失败')
+  }
+
+  return data.tenant_access_token
+}
+
+async function fetchFeishuDepartments(token: string) {
+  const departments: FeishuDepartment[] = []
+  let pageToken = ''
+
+  do {
+    const url = new URL('https://open.feishu.cn/open-apis/contact/v3/departments')
+    url.searchParams.set('department_id_type', 'department_id')
+    url.searchParams.set('user_id_type', 'user_id')
+    url.searchParams.set('page_size', '100')
+    if (pageToken) {
+      url.searchParams.set('page_token', pageToken)
+    }
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    const data = await res.json().catch(() => null) as {
+      code?: number
+      msg?: string
+      data?: {
+        items?: FeishuDepartment[]
+        has_more?: boolean
+        page_token?: string
+      }
+    } | null
+
+    if (!res.ok || data?.code !== 0) {
+      throw new Error(data?.msg || '获取飞书部门列表失败')
+    }
+
+    departments.push(...(data.data?.items || []).filter((department) => (
+      !department.status?.is_deleted && Boolean(externalDepartmentId(department))
+    )))
+    pageToken = data.data?.has_more ? (data.data.page_token || '') : ''
+  } while (pageToken)
+
+  return departments
+}
+
+async function loadExistingFeishuDepartments(orgId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('departments')
+    .select('id, external_id, path, depth')
+    .eq('org_id', orgId)
+    .eq('source', 'feishu')
+
+  if (error) {
+    throw new Error('读取已有飞书部门失败')
+  }
+
+  return new Map((data || [])
+    .filter((row) => row.external_id)
+    .map((row) => [row.external_id as string, {
+      id: row.id as string,
+      path: (row.path as string | null) || `/${row.id}/`,
+      depth: typeof row.depth === 'number' ? row.depth : 0,
+    }]))
+}
+
+async function syncDepartmentsToDatabase(orgId: string, departments: FeishuDepartment[]) {
+  const byExternalId = new Map(departments.map((department) => [externalDepartmentId(department), department]))
+  const synced = await loadExistingFeishuDepartments(orgId)
+  const pending = new Set(byExternalId.keys())
+  let imported = 0
+  let updated = 0
+  let safety = 0
+
+  while (pending.size > 0 && safety < departments.length + 5) {
+    safety += 1
+    let progressed = false
+
+    for (const externalId of Array.from(pending)) {
+      const department = byExternalId.get(externalId)
+      if (!department) {
+        pending.delete(externalId)
+        continue
+      }
+
+      const parentExternalId = department.parent_department_id && department.parent_department_id !== '0'
+        ? department.parent_department_id
+        : null
+      const parent = parentExternalId ? synced.get(parentExternalId) : null
+
+      if (parentExternalId && !parent && byExternalId.has(parentExternalId)) {
+        continue
+      }
+
+      const existing = synced.get(externalId)
+      const parentId = parent?.id ?? null
+      const depth = parent ? parent.depth + 1 : 0
+      const basePayload = {
+        org_id: orgId,
+        parent_id: parentId,
+        name: departmentName(department),
+        code: externalId,
+        source: 'feishu',
+        external_id: externalId,
+        status: 'active',
+        depth,
+        updated_at: new Date().toISOString(),
+      }
+
+      let rowId = existing?.id
+      if (rowId) {
+        const { error } = await supabaseAdmin
+          .from('departments')
+          .update(basePayload)
+          .eq('id', rowId)
+          .eq('org_id', orgId)
+        if (error) {
+          throw new Error(`更新飞书部门失败：${departmentName(department)}`)
+        }
+        updated += 1
+      } else {
+        const { data, error } = await supabaseAdmin
+          .from('departments')
+          .insert(basePayload)
+          .select('id')
+          .single()
+        if (error || !data?.id) {
+          throw new Error(`写入飞书部门失败：${departmentName(department)}`)
+        }
+        rowId = data.id
+        imported += 1
+      }
+
+      if (!rowId) {
+        throw new Error(`飞书部门缺少数据库记录：${departmentName(department)}`)
+      }
+
+      const path = parent ? `${parent.path}${rowId}/` : `/${rowId}/`
+      const { error: pathError } = await supabaseAdmin
+        .from('departments')
+        .update({ path })
+        .eq('id', rowId)
+        .eq('org_id', orgId)
+      if (pathError) {
+        throw new Error(`更新飞书部门路径失败：${departmentName(department)}`)
+      }
+
+      synced.set(externalId, { id: rowId, path, depth } satisfies SyncedDepartment)
+      pending.delete(externalId)
+      progressed = true
+    }
+
+    if (!progressed) {
+      throw new Error('飞书部门层级存在缺失父级或循环引用，无法完成同步')
+    }
+  }
+
+  return { imported, updated }
+}
 
 export async function POST(req: NextRequest) {
   let user
@@ -38,16 +240,26 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 占位实现：真实同步需要调用飞书 OpenAPI 拉取部门列表
-  // 接入步骤（待实施）：
-  // 1) POST https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal
-  // 2) GET  https://open.feishu.cn/open-apis/contact/v3/departments?parent_department_id=0
-  // 3) 递归获取子部门
-  // 4) UPSERT 到 public.departments（source='feishu'，external_id 存飞书 department_id）
+  try {
+    const orgId = await getDefaultOrgId(user.id)
+    const token = await getTenantAccessToken(appId, appSecret)
+    const departments = await fetchFeishuDepartments(token)
+    const result = await syncDepartmentsToDatabase(orgId, departments)
 
-  return NextResponse.json({
-    success: true,
-    imported: 0,
-    message: '飞书凭证已检测到，但同步逻辑待实施（占位返回）',
-  })
+    return NextResponse.json({
+      success: true,
+      imported: result.imported,
+      updated: result.updated,
+      total: departments.length,
+      message: departments.length === 0 ? '飞书返回 0 个可访问部门' : '飞书部门同步完成',
+    })
+  } catch (error) {
+    console.error('[FeishuSync] sync failed:', error)
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : '飞书同步失败',
+      },
+      { status: 502 }
+    )
+  }
 }

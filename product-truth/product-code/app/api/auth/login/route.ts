@@ -24,6 +24,8 @@ import {
   recordLoginAttempt,
 } from '@/lib/rate-limit'
 
+export const preferredRegion = 'sin1'
+
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
 type LoginRateLimit = Awaited<ReturnType<typeof checkLoginRateLimit>>
@@ -62,6 +64,7 @@ type LoginWithPasswordRpcData = {
   roleCodes?: unknown
   allPermissions?: unknown
   dashboard?: unknown
+  core?: unknown
 }
 
 type LoginAuthContext = {
@@ -70,8 +73,32 @@ type LoginAuthContext = {
   full: boolean
 }
 
+type InitialCorePagePayload = {
+  contracts?: {
+    contracts: unknown[]
+    drafts: unknown[]
+    meta: {
+      totalPages: number
+      hasNext: boolean
+      hasPrev: boolean
+    }
+  } | null
+  configs?: {
+    products: unknown[]
+  } | null
+  quotes?: {
+    quotes: unknown[]
+  } | null
+  tenders?: {
+    tenders: unknown[]
+  } | null
+  agenda?: {
+    items: unknown[]
+  } | null
+}
+
 type LoginWithPasswordResult =
-  | { kind: 'ok'; user: LoginUserPublicRow; authContext: LoginAuthContext; dashboard: DashboardPayload | null }
+  | { kind: 'ok'; user: LoginUserPublicRow; authContext: LoginAuthContext; dashboard: DashboardPayload | null; core: InitialCorePagePayload | null }
   | { kind: 'rate_limited'; reason: string; retryAfterSeconds?: number }
   | { kind: 'auth_failed' }
   | { kind: 'server_error' }
@@ -140,6 +167,66 @@ function normalizeDashboardPayload(value: unknown): DashboardPayload | null {
     milestones: Array.isArray(payload.milestones) ? payload.milestones : [],
     reminders: Array.isArray(payload.reminders) ? payload.reminders : [],
     agenda: Array.isArray(payload.agenda) ? payload.agenda : [],
+  }
+}
+
+function normalizeCorePagePayload(value: unknown): InitialCorePagePayload | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const payload = value as Partial<InitialCorePagePayload>
+  const contracts = payload.contracts && typeof payload.contracts === 'object'
+    ? payload.contracts
+    : null
+  const contractMeta = contracts?.meta && typeof contracts.meta === 'object'
+    ? contracts.meta
+    : null
+  const configs = payload.configs && typeof payload.configs === 'object'
+    ? payload.configs
+    : null
+  const quotes = payload.quotes && typeof payload.quotes === 'object'
+    ? payload.quotes
+    : null
+  const tenders = payload.tenders && typeof payload.tenders === 'object'
+    ? payload.tenders
+    : null
+  const agenda = payload.agenda && typeof payload.agenda === 'object'
+    ? payload.agenda
+    : null
+
+  return {
+    contracts: contracts
+      ? {
+          contracts: Array.isArray(contracts.contracts) ? contracts.contracts : [],
+          drafts: Array.isArray(contracts.drafts) ? contracts.drafts : [],
+          meta: {
+            totalPages: typeof contractMeta?.totalPages === 'number' ? contractMeta.totalPages : 1,
+            hasNext: Boolean(contractMeta?.hasNext),
+            hasPrev: Boolean(contractMeta?.hasPrev),
+          },
+        }
+      : null,
+    configs: configs
+      ? {
+          products: Array.isArray(configs.products) ? configs.products : [],
+        }
+      : null,
+    quotes: quotes
+      ? {
+          quotes: Array.isArray(quotes.quotes) ? quotes.quotes : [],
+        }
+      : null,
+    tenders: tenders
+      ? {
+          tenders: Array.isArray(tenders.tenders) ? tenders.tenders : [],
+        }
+      : null,
+    agenda: agenda
+      ? {
+          items: Array.isArray(agenda.items) ? agenda.items : [],
+        }
+      : null,
   }
 }
 
@@ -249,6 +336,7 @@ async function loadLoginWithPasswordFromRpc(
             full: Array.isArray(result.roleCodes) && Array.isArray(result.allPermissions),
           },
           dashboard: normalizeDashboardPayload(result.dashboard),
+          core: normalizeCorePagePayload(result.core),
         }
       : { kind: 'server_error' }
   }
@@ -316,7 +404,8 @@ async function createLoginSuccessResponse(
   token: string,
   expiresAt: Date,
   authContext?: LoginAuthContext,
-  initialDashboard?: DashboardPayload | null
+  initialDashboard?: DashboardPayload | null,
+  initialCore?: InitialCorePagePayload | null
 ) {
   const authUser = {
     id: user.id,
@@ -348,6 +437,7 @@ async function createLoginSuccessResponse(
     initialDashboard: user.must_change_password
       ? null
       : initialDashboard || getCachedDashboardPayload(authUser),
+    initialCore: user.must_change_password ? null : initialCore || null,
   })
 
   response.cookies.set('token', token, {
@@ -428,7 +518,8 @@ export async function POST(req: NextRequest) {
         token,
         expiresAt,
         loginWithPassword.authContext,
-        loginWithPassword.dashboard
+        loginWithPassword.dashboard,
+        loginWithPassword.core
       )
     }
 

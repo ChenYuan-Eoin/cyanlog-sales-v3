@@ -6,5 +6,6 @@ aliyun
 aliyun-cli-*.tgz
 .vercel
 *.tsbuildinfo
+supabase/.temp/
 .playwright-mcp/*.log
 .playwright-mcp/*.yml

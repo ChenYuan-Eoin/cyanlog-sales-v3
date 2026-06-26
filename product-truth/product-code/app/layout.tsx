@@ -12,17 +12,19 @@ import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
 import { themeToCssVariables } from "@/lib/ui-theme-shared";
 
+const FAVICON_VERSION = "20260626";
+
 export const metadata: Metadata = {
   title: "Cyanlog Sales",
   description: "智能销售支撑平台",
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: '32x32', type: 'image/x-icon' },
-      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: `/favicon.ico?v=${FAVICON_VERSION}`, sizes: '32x32', type: 'image/x-icon' },
+      { url: `/favicon.png?v=${FAVICON_VERSION}`, sizes: '32x32', type: 'image/png' },
+      { url: `/favicon.svg?v=${FAVICON_VERSION}`, type: 'image/svg+xml' },
     ],
-    shortcut: '/favicon.ico',
-    apple: '/favicon.png',
+    shortcut: `/favicon.ico?v=${FAVICON_VERSION}`,
+    apple: `/favicon.png?v=${FAVICON_VERSION}`,
   },
 };
 

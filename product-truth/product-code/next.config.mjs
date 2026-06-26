@@ -1,7 +1,12 @@
 /** @type {import('next').NextConfig} */
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { withSentryConfig } from '@sentry/nextjs'
 
+const appRoot = path.dirname(fileURLToPath(import.meta.url))
+
 const nextConfig = {
+  outputFileTracingRoot: appRoot,
 }
 
 // Sentry 配置（仅在 DSN 配置时启用）

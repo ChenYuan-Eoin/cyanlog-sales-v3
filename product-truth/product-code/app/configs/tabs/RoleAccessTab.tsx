@@ -19,6 +19,7 @@ interface RoleAccessTabProps {
   savingRoleId: string | null
   orgSummary: OrgSummaryPayload | null
   onSaveRole: (roleId: string, newPerms: string[]) => void
+  onRefresh: () => void | Promise<void>
 }
 
 interface RoleWithStats {
@@ -37,6 +38,7 @@ export default function RoleAccessTab({
   savingRoleId,
   orgSummary,
   onSaveRole,
+  onRefresh,
 }: RoleAccessTabProps) {
   const users = orgSummary?.users ?? []
   const departments = orgSummary?.departments ?? []
@@ -95,9 +97,9 @@ export default function RoleAccessTab({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex flex-col gap-6 2xl:flex-row">
       {/* 左侧角色列表 */}
-      <div className="w-full lg:w-[280px] shrink-0">
+      <div className="w-full shrink-0 2xl:w-[280px]">
         <div className="rounded-lg border bg-white">
           <div className="border-b px-4 py-3">
             <h3 className="font-medium text-slate-900">角色列表</h3>
@@ -172,6 +174,7 @@ export default function RoleAccessTab({
             users={users}
             departments={departments}
             _spaces={spaces}
+            onRefresh={onRefresh}
           />
         ) : (
           <div className="rounded-lg border bg-white p-12 text-center">

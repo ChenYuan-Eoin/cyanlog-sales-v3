@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { DashboardDataError, getDashboardPayload } from '@/lib/dashboard-data'
 
+export const preferredRegion = 'sin1'
+
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }

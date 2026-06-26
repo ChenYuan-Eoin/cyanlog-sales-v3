@@ -72,6 +72,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
+  const abortReasonRef = useRef<'pause' | 'cancel' | null>(null)
   const startTimeRef = useRef<number>(0)
   const uploadedBytesRef = useRef<number>(0)
 
@@ -141,6 +142,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
       return
     }
 
+    abortReasonRef.current = null
     abortControllerRef.current = new AbortController()
     const signal = abortControllerRef.current.signal
     startTimeRef.current = Date.now()
@@ -285,6 +287,26 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
         storagePath,
       })
     } catch (error) {
+      if (signal.aborted && abortReasonRef.current === 'pause') {
+        setState(prev => ({
+          ...prev,
+          status: 'paused',
+        }))
+        return
+      }
+
+      if (signal.aborted && abortReasonRef.current === 'cancel') {
+        setState({
+          status: 'idle',
+          progress: 0,
+          chunks: [],
+          uploadedBytes: 0,
+          totalBytes: 0,
+          speed: 0,
+        })
+        return
+      }
+
       const errorMessage = error instanceof Error ? error.message : '上传失败'
 
       setState(prev => ({
@@ -299,6 +321,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
 
   // 暂停上传
   const pauseUpload = useCallback(() => {
+    abortReasonRef.current = 'pause'
     abortControllerRef.current?.abort()
     setState(prev => ({
       ...prev,
@@ -308,6 +331,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
 
   // 取消上传
   const cancelUpload = useCallback(() => {
+    abortReasonRef.current = 'cancel'
     abortControllerRef.current?.abort()
     setState({
       status: 'idle',

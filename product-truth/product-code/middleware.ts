@@ -45,6 +45,7 @@ const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }
 }
 const PUBLIC_API_PATHS = [
   '/api/auth/login',
+  '/api/auth/prewarm',
   '/api/auth/register',
   '/api/client-errors',
   '/api/contracts/process',

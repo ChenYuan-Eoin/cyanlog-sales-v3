@@ -8,14 +8,23 @@ import { resolveFaviconUrl, sanitizeThemeValue, themeToCssVariables } from '@/li
 const THEME_CACHE_KEY = 'runtime_theme_cache'
 const THEME_CACHE_TIMESTAMP_KEY = 'runtime_theme_cache_ts'
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 小时缓存
+const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 const BACKGROUND_REFRESH_DELAY_MS = 2_000
+const BACKGROUND_REFRESH_TIMEOUT_MS = 1_500
+
+let lastRefreshAttemptAt = 0
 
 interface ThemeCache {
   theme: ReturnType<typeof sanitizeThemeValue>
   token: string
 }
 
-function getCachedTheme(token: string): ReturnType<typeof sanitizeThemeValue> | null {
+type CachedThemeEntry = {
+  theme: ReturnType<typeof sanitizeThemeValue>
+  ageMs: number
+}
+
+function getCachedTheme(token: string): CachedThemeEntry | null {
   if (typeof window === 'undefined') return null
 
   try {
@@ -41,7 +50,10 @@ function getCachedTheme(token: string): ReturnType<typeof sanitizeThemeValue> | 
       return null
     }
 
-    return cacheData.theme
+    return {
+      theme: cacheData.theme,
+      ageMs: now - cachedTime,
+    }
   } catch {
     // 缓存解析失败，清理
     localStorage.removeItem(THEME_CACHE_KEY)
@@ -120,15 +132,26 @@ export function RuntimeThemeLoader() {
       // 首先尝试从缓存加载主题，避免网络请求
       const cachedTheme = getCachedTheme(token)
       if (cachedTheme) {
-        applyTheme(cachedTheme)
+        applyTheme(cachedTheme.theme)
       }
 
       const refreshTheme = async () => {
+        const now = Date.now()
+        if (cachedTheme && now - lastRefreshAttemptAt < CACHE_REFRESH_INTERVAL_MS) {
+          return
+        }
+        lastRefreshAttemptAt = now
+        const controller = new AbortController()
+        const timeout = window.setTimeout(() => {
+          controller.abort()
+        }, BACKGROUND_REFRESH_TIMEOUT_MS)
+
         try {
           const response = await fetch('/api/configs?type=UI_THEME', {
             headers: {
               Authorization: `Bearer ${token}`,
             },
+            signal: controller.signal,
           })
 
           if (!response.ok) {
@@ -158,10 +181,15 @@ export function RuntimeThemeLoader() {
           setCachedTheme(theme, token)
         } catch {
           // 忽略运行时主题失败，保持默认值或缓存值
+        } finally {
+          window.clearTimeout(timeout)
         }
       }
 
       if (cachedTheme) {
+        if (cachedTheme.ageMs < CACHE_REFRESH_INTERVAL_MS) {
+          return
+        }
         scheduleBackgroundRefresh(() => {
           void refreshTheme()
         })

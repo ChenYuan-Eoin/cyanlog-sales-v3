@@ -220,6 +220,19 @@ describe('POST /api/auth/login', () => {
             reminders: [],
             agenda: [],
           },
+          core: {
+            contracts: {
+              contracts: [{ id: 'contract-1', filename: '合同.pdf', status: 'COMPLETED' }],
+              drafts: [],
+              meta: { totalPages: 1, hasNext: false, hasPrev: false },
+            },
+            configs: {
+              products: [{ id: 'product-1', name: '企业版SaaS授权' }],
+            },
+            agenda: {
+              items: [{ id: 'agenda-1', title: '客户跟进', start_at: '2026-06-26T01:00:00.000Z' }],
+            },
+          },
           user: {
             id: 'u-fast',
             email: 'fast@x.com',
@@ -241,6 +254,18 @@ describe('POST /api/auth/login', () => {
       expect(body.initialDashboard).toMatchObject({
         activeSpace: { id: 'space-1', name: '默认空间' },
         opportunities: [],
+      })
+      expect(body.initialCore).toMatchObject({
+        contracts: {
+          contracts: [{ id: 'contract-1', filename: '合同.pdf', status: 'COMPLETED' }],
+          meta: { totalPages: 1, hasNext: false, hasPrev: false },
+        },
+        configs: {
+          products: [{ id: 'product-1', name: '企业版SaaS授权' }],
+        },
+        agenda: {
+          items: [{ id: 'agenda-1', title: '客户跟进', start_at: '2026-06-26T01:00:00.000Z' }],
+        },
       })
       const authContextCookie = res.cookies.get(AUTH_CONTEXT_COOKIE_NAME)?.value
       const authContext = await readAuthContextCookieValue(body.token, authContextCookie)

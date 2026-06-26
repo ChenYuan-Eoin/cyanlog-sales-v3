@@ -179,6 +179,7 @@ export async function POST(
           phase: 'update_contract',
         },
       })
+      return errorResponse(createApiError('DB_ERROR', '合同文件记录更新失败'))
     }
 
     return successResponse({

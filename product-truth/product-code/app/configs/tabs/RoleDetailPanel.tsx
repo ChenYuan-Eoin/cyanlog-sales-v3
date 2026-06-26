@@ -126,6 +126,7 @@ interface RoleDetailPanelProps {
   users: OrgSummaryUser[]
   departments: OrgSummaryDepartment[]
   _spaces: OrgSummarySpace[]
+  onRefresh?: () => void | Promise<void>
 }
 
 // ============ 主组件 ============
@@ -137,6 +138,7 @@ export function RoleDetailPanel({
   users,
   departments,
   _spaces,
+  onRefresh,
 }: RoleDetailPanelProps) {
   const [activeTab, setActiveTab] = useState('members')
   const [perms, setPerms] = useState<string[]>(role.permissions ?? [])
@@ -236,6 +238,7 @@ export function RoleDetailPanel({
             users={users}
             _departments={departments}
             assignedUsers={stats.assignedUsers}
+            onRefresh={onRefresh}
           />
         </TabsContent>
 
@@ -261,7 +264,7 @@ interface MemberAssignmentTabProps {
   users: OrgSummaryUser[]
   _departments: OrgSummaryDepartment[]
   assignedUsers: OrgSummaryUser[]
-  onRefresh?: () => void
+  onRefresh?: () => void | Promise<void>
 }
 
 function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh }: MemberAssignmentTabProps) {
@@ -358,12 +361,18 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
         })
       })
 
-      await Promise.all(promises)
+      const responses = (await Promise.all(promises)).filter((res): res is Response => Boolean(res))
+      const failed = responses.find((res) => !res.ok)
+      if (failed) {
+        const data = await failed.json().catch(() => ({}))
+        throw new Error(typeof data.error === 'string' ? data.error : '添加成员失败')
+      }
+
       setDialogOpen(false)
       success('成员已添加')
-      onRefresh?.()
-    } catch {
-      error('添加失败，请重试')
+      await onRefresh?.()
+    } catch (err) {
+      error(err instanceof Error ? err.message : '添加失败，请重试')
     } finally {
       setAssigning(false)
     }
@@ -393,7 +402,7 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
 
       if (res.ok) {
         success('成员已移除')
-        onRefresh?.()
+        await onRefresh?.()
       } else {
         const data = await res.json().catch(() => ({}))
         error(data.error || '移除失败')
@@ -413,11 +422,11 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
   }, [dialogFilteredUsers, selectedUserIds])
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-4 sm:p-6">
       {/* 已分配成员列表 */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-medium text-slate-900">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h4 className="min-w-0 font-medium text-slate-900">
             已分配成员 ({assignedUsers.length})
           </h4>
           <Button
@@ -425,14 +434,55 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
             variant="outline"
             onClick={() => setDialogOpen(true)}
             disabled={assigning}
+            className="shrink-0"
           >
             <UserPlusIcon size={16} className="mr-1.5" />
             添加成员
           </Button>
         </div>
 
-        <div className="rounded-md border">
-          <Table>
+        {assignedUsers.length > 0 ? (
+          <div className="space-y-2 md:hidden">
+            {assignedUsers.map(user => (
+              <div key={user.id} className="rounded-md border bg-white p-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                    {user.display_name?.charAt(0) || '?'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium leading-5 text-slate-900">{user.display_name}</div>
+                    <div className="break-all text-xs leading-5 text-slate-500">{user.email}</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Badge variant="outline" className="max-w-full break-all">
+                        {user.primary_dept_name || '未分配'}
+                      </Badge>
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                        {user.title || '未设置职位'}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => handleRemoveMember(user.id)}
+                    disabled={assigning}
+                    aria-label={`从角色中移除 ${user.display_name}`}
+                    className="h-8 w-8 shrink-0"
+                  >
+                    <TrashIcon size={16} className="text-red-500" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-md border py-10 text-center text-sm text-slate-500 md:hidden">
+            暂无成员分配到此角色
+          </div>
+        )}
+
+        <div className="hidden overflow-x-auto rounded-md border md:block">
+          <Table className="min-w-[620px]">
             <TableHeader>
               <TableRow>
                 <TableHead>成员</TableHead>
@@ -447,25 +497,28 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
                           {user.display_name?.charAt(0) || '?'}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="font-medium text-slate-900">{user.display_name}</div>
-                          <div className="text-xs text-slate-500">{user.email}</div>
+                          <div className="max-w-[260px] break-all text-xs text-slate-500">{user.email}</div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{user.primary_dept_name || '未分配'}</Badge>
+                      <Badge variant="outline" className="max-w-[160px] break-all">
+                        {user.primary_dept_name || '未分配'}
+                      </Badge>
                     </TableCell>
-                    <TableCell className="text-slate-600">{user.title || '-'}</TableCell>
+                    <TableCell className="max-w-[160px] break-all text-slate-600">{user.title || '-'}</TableCell>
                     <TableCell>
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleRemoveMember(user.id)}
                         disabled={assigning}
+                        aria-label={`从角色中移除 ${user.display_name}`}
                       >
                         <TrashIcon size={16} className="text-red-500" />
                       </Button>

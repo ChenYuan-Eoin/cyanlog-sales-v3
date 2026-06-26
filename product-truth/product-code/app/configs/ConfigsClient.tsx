@@ -428,16 +428,28 @@ export default function ConfigsClient({
         }
 
         case 'role-access': {
-          // 只加载 roles (分页格式)
-          const nextRoles = await loadInflightTabValue<ConfigRoleRecord[]>(cacheKey, async () => {
-            const rolesRes = await fetch('/api/roles', { headers })
-            if (!rolesRes.ok) return null
-            const rolesJson = await rolesRes.json()
-            return rolesJson.data?.roles ?? []
-          })
+          const orgCacheKey = scopedCacheKey(token, 'configs:org-structure')
+          const [nextRoles, nextOrgSummary] = await Promise.all([
+            loadInflightTabValue<ConfigRoleRecord[]>(cacheKey, async () => {
+              const rolesRes = await fetch('/api/roles', { headers })
+              if (!rolesRes.ok) return null
+              const rolesJson = await rolesRes.json()
+              return rolesJson.data?.roles ?? []
+            }),
+            loadInflightTabValue<OrgSummaryPayload>(orgCacheKey, async () => {
+              const orgRes = await fetch('/api/admin/org', { headers })
+              if (!orgRes.ok) return null
+              return orgRes.json()
+            }),
+          ])
           if (nextRoles) {
             setRoles(nextRoles)
             writeBrowserCache(cacheKey, nextRoles)
+          }
+          if (nextOrgSummary) {
+            setOrgSummary(nextOrgSummary)
+            writeBrowserCache(orgCacheKey, nextOrgSummary)
+            setLoadedTabs(prev => new Set(prev).add('org-structure'))
           }
           break
         }
@@ -558,6 +570,26 @@ export default function ConfigsClient({
       setLoading(false)
     }
   }
+
+  const refreshOrgSummary = useCallback(async () => {
+    const token = localStorage.getItem('token')
+    const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
+    const orgRes = await fetch('/api/admin/org', {
+      headers,
+      cache: 'no-store',
+    })
+
+    if (!orgRes.ok) {
+      const data = await orgRes.json().catch(() => ({}))
+      setError(typeof data.error === 'string' ? data.error : '组织数据刷新失败')
+      return
+    }
+
+    const orgData = await orgRes.json()
+    setOrgSummary(orgData)
+    writeBrowserCache(scopedCacheKey(token, 'configs:org-structure'), orgData)
+    setLoadedTabs(prev => new Set(prev).add('org-structure'))
+  }, [])
 
   const getConfigsByType = useCallback((type: Config['type']) => (
     configs.filter((c) => c.type === type)
@@ -686,7 +718,9 @@ export default function ConfigsClient({
       })
       const data = await res.json()
       if (res.ok) {
-        setFeishuResult(`同步完成：导入 ${data.imported ?? 0} 个部门`)
+        await refreshOrgSummary()
+        const message = typeof data.message === 'string' ? data.message : '同步完成'
+        setFeishuResult(`${message}：导入 ${data.imported ?? 0} 个部门`)
       } else {
         setFeishuResult(`同步失败：${data.error ?? '未知错误'}`)
       }
@@ -1241,7 +1275,33 @@ export default function ConfigsClient({
             </div>
 
             <div className="mt-6 space-y-6">
-              <TabsContent activeTab={activeTab} loading={loading && !loadedTabs.has(activeTab)} products={products} onNewProduct={openNewProduct} onEditProduct={openEditProduct} onDeleteProduct={handleDeleteProduct} rules={rules} focusRuleId={focusRuleId} ruleMode={ruleMode} onSaveRule={handleSaveRule} onDeleteRule={handleDeleteRule} configs={configs} onNewConfig={openNewConfig} onEditConfig={openEditConfig} onPublishConfig={handlePublishConfig} onFetchVersions={handleFetchVersions} onDeleteConfig={handleDeleteConfig} orgSummary={orgSummary} feishuSyncing={feishuSyncing} feishuResult={feishuResult} onFeishuSync={handleFeishuSync} roles={roles} savingRoleId={savingRoleId} onSaveRole={handleSaveRole} />
+              <TabsContent
+                activeTab={activeTab}
+                loading={loading && !loadedTabs.has(activeTab)}
+                products={products}
+                onNewProduct={openNewProduct}
+                onEditProduct={openEditProduct}
+                onDeleteProduct={handleDeleteProduct}
+                rules={rules}
+                focusRuleId={focusRuleId}
+                ruleMode={ruleMode}
+                onSaveRule={handleSaveRule}
+                onDeleteRule={handleDeleteRule}
+                configs={configs}
+                onNewConfig={openNewConfig}
+                onEditConfig={openEditConfig}
+                onPublishConfig={handlePublishConfig}
+                onFetchVersions={handleFetchVersions}
+                onDeleteConfig={handleDeleteConfig}
+                orgSummary={orgSummary}
+                feishuSyncing={feishuSyncing}
+                feishuResult={feishuResult}
+                onFeishuSync={handleFeishuSync}
+                onRefreshOrg={refreshOrgSummary}
+                roles={roles}
+                savingRoleId={savingRoleId}
+                onSaveRole={handleSaveRole}
+              />
             </div>
           </main>
         </div>

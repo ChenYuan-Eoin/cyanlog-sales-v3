@@ -10,6 +10,8 @@ import {
 import { getOrgPermissions, getOrgRoleCodes, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 
+export const preferredRegion = 'sin1'
+
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }

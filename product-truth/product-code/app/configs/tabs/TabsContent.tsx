@@ -38,7 +38,8 @@ export interface TabsContentProps {
   orgSummary: OrgSummaryPayload | null
   feishuSyncing: boolean
   feishuResult: string
-  onFeishuSync: () => void
+  onFeishuSync: () => void | Promise<void>
+  onRefreshOrg: () => void | Promise<void>
   // role-access
   roles: Array<{
     id: string
@@ -74,6 +75,7 @@ export default function TabsContent({
   feishuSyncing,
   feishuResult,
   onFeishuSync,
+  onRefreshOrg,
   roles,
   savingRoleId,
   onSaveRole,
@@ -205,6 +207,7 @@ export default function TabsContent({
           feishuSyncing={feishuSyncing}
           feishuResult={feishuResult}
           onFeishuSync={onFeishuSync}
+          onRefresh={onRefreshOrg}
         />
       )
     case 'role-access':
@@ -214,6 +217,7 @@ export default function TabsContent({
           savingRoleId={savingRoleId}
           orgSummary={orgSummary}
           onSaveRole={onSaveRole}
+          onRefresh={onRefreshOrg}
         />
       )
     default:

@@ -58,10 +58,11 @@ export default function RuleReviewPage() {
         const data = await res.json()
         setResult(data.data || null)
       } else {
-        toastError('审核失败')
+        const data = await res.json().catch(() => null)
+        const message = data?.error?.message || data?.error || '审核失败'
+        toastError(message)
       }
-    } catch (err) {
-      console.error('Review error:', err)
+    } catch {
       toastError('审核请求失败')
     } finally {
       setLoading(false)

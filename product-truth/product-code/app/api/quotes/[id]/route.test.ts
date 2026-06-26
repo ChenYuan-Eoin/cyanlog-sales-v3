@@ -14,7 +14,9 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
+  canManageOrg: vi.fn().mockReturnValue(false),
   getDefaultOrgId: vi.fn().mockResolvedValue('org-1'),
+  getUserScopedRoleAssignments: vi.fn().mockResolvedValue([]),
   listAccessibleUserIds: vi.fn().mockResolvedValue({ userIds: ['u1'] }),
 }))
 

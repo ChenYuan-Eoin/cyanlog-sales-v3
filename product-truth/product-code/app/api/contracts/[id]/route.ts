@@ -49,6 +49,7 @@ export async function GET(
       .from('contracts')
       .select('*, contract_reviews(*)')
       .eq('id', id)
+      .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
       .maybeSingle()
 
@@ -156,6 +157,7 @@ export async function DELETE(
 
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
     routeId = await resolveIdParam(params)
     logRouteStart({
       route,
@@ -177,6 +179,7 @@ export async function DELETE(
       .from('contracts')
       .select('id, storage_path, created_by')
       .eq('id', id)
+      .eq('org_id', orgId)
       .eq('created_by', user.id)
       .single()
 
@@ -210,6 +213,7 @@ export async function DELETE(
       .from('contracts')
       .delete()
       .eq('id', id)
+      .eq('org_id', orgId)
       .eq('created_by', user.id)
 
     if (error) {
@@ -267,6 +271,7 @@ export async function PATCH(
 ) {
   try {
     const user = await requireAuth(req)
+    const orgId = await getDefaultOrgId(user.id)
     const contractId = await resolveIdParam(params)
 
     // Zod验证ID格式
@@ -282,6 +287,7 @@ export async function PATCH(
       .from('contracts')
       .select('id, created_by, status')
       .eq('id', id)
+      .eq('org_id', orgId)
       .single()
 
     if (fetchError || !existing) {
@@ -330,6 +336,7 @@ export async function PATCH(
       .from('contracts')
       .update(updateData)
       .eq('id', id)
+      .eq('org_id', orgId)
       .select()
       .single()
 

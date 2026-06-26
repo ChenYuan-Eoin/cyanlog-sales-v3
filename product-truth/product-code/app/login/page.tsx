@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { persistClientSession } from '@/lib/session-client'
 import { primeHomeInitialData, primeHomeInitialSnapshot, primeHomeProfile } from '@/lib/home-data-client'
-import { scheduleCorePageWarmup } from '@/lib/core-page-warmup'
+import { primeCorePageCaches, scheduleCorePageWarmup } from '@/lib/core-page-warmup'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 
@@ -15,9 +15,38 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const prewarmAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    const runPrewarm = () => {
+      const controller = new AbortController()
+      prewarmAbortRef.current = controller
+      void fetch('/api/auth/prewarm', {
+        method: 'POST',
+        cache: 'no-store',
+        signal: controller.signal,
+      }).catch(() => {
+        // Login remains fully functional if opportunistic prewarm fails.
+      }).finally(() => {
+        if (prewarmAbortRef.current === controller) {
+          prewarmAbortRef.current = null
+        }
+      })
+    }
+
+    const delayId = window.setTimeout(runPrewarm, 1200)
+
+    return () => {
+      window.clearTimeout(delayId)
+      prewarmAbortRef.current?.abort()
+      prewarmAbortRef.current = null
+    }
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    prewarmAbortRef.current?.abort()
+    prewarmAbortRef.current = null
     setError('')
     setLoading(true)
 
@@ -41,6 +70,7 @@ export default function LoginPage() {
         const hasInitialDashboard = Boolean(data.initialDashboard)
         primeHomeProfile(data.token, data.user)
         primeHomeInitialSnapshot(data.token, data.user, data.initialDashboard)
+        primeCorePageCaches(data.token, data.initialCore)
         if (!hasInitialDashboard || !data.authContextReady) {
           primeHomeInitialData(data.token)
         }

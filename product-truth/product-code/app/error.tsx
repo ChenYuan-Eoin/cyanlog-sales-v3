@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import * as Sentry from '@sentry/nextjs'
 
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,9 @@ export default function GlobalError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const router = useRouter()
+  const [isNavigatingHome, startHomeNavigation] = useTransition()
+
   useEffect(() => {
     Sentry.captureException(error, {
       tags: {
@@ -54,7 +58,17 @@ export default function GlobalError({
         </p>
         <div className="mt-4 flex gap-3">
           <Button onClick={reset}>重试</Button>
-          <Button variant="outline" onClick={() => window.location.assign('/')}>返回首页</Button>
+          <Button
+            variant="outline"
+            disabled={isNavigatingHome}
+            onClick={() => {
+              startHomeNavigation(() => {
+                router.replace('/')
+              })
+            }}
+          >
+            {isNavigatingHome ? '返回中...' : '返回首页'}
+          </Button>
         </div>
       </div>
     </div>

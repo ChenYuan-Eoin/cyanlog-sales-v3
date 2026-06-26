@@ -23,17 +23,38 @@ export type QuotesCachePayload = {
   quotes: unknown[]
 }
 
-const WARMUP_STALE_MS = 60 * 1000
+export type QuoteDetailCachePayload = unknown
+
+export type TendersCachePayload = {
+  tenders: unknown[]
+}
+
+export type CorePageCachePayload = {
+  contracts?: ContractsCachePayload | null
+  configs?: {
+    products?: unknown[] | null
+  } | null
+  quotes?: QuotesCachePayload | null
+  tenders?: TendersCachePayload | null
+  agenda?: AgendaUpcomingCachePayload | null
+}
+
+export const CORE_PAGE_BACKGROUND_REFRESH_MS = 60 * 1000
+export const CORE_PAGE_VISIBLE_CACHE_TTL_MS = 5 * 60 * 1000
+export const QUOTE_DETAIL_BACKGROUND_REFRESH_MS = CORE_PAGE_BACKGROUND_REFRESH_MS
+export const QUOTE_DETAIL_VISIBLE_CACHE_TTL_MS = CORE_PAGE_VISIBLE_CACHE_TTL_MS
 const CONTRACTS_WARMUP_DELAY_MS = 150
-const WARMUP_DELAY_MS = 1000
+const WARMUP_DELAY_MS = 250
 const CONTRACTS_PAGE_SIZE = 20
 export const AGENDA_UPCOMING_CACHE_KEY = 'agenda:upcoming'
-const CORE_ROUTES = ['/contracts', '/tenders', '/configs', '/schedule'] as const
+const CORE_ROUTES = ['/contracts', '/quotes', '/tenders', '/configs', '/schedule'] as const
 const warmups = new Map<string, Promise<void>>()
 const contractListWarmups = new Map<string, Promise<ContractsCachePayload | null>>()
 const configProductsWarmups = new Map<string, Promise<unknown[] | null>>()
 const agendaUpcomingWarmups = new Map<string, Promise<AgendaUpcomingCachePayload | null>>()
 const quoteListWarmups = new Map<string, Promise<QuotesCachePayload | null>>()
+const quoteDetailWarmups = new Map<string, Promise<QuoteDetailCachePayload | null>>()
+const tenderListWarmups = new Map<string, Promise<TendersCachePayload | null>>()
 let scheduledToken: string | null = null
 
 function scheduleIdle(callback: () => void) {
@@ -51,7 +72,7 @@ function scheduleIdle(callback: () => void) {
 
 function readFreshCache<T>(key: string): T | null {
   const entry = readBrowserCacheEntry<T>(key)
-  if (!entry || Date.now() - entry.savedAt >= WARMUP_STALE_MS) return null
+  if (!entry || Date.now() - entry.savedAt >= CORE_PAGE_BACKGROUND_REFRESH_MS) return null
   return entry.value
 }
 
@@ -59,6 +80,77 @@ function prefetchCoreRoutes(prefetchRoute?: PrefetchRoute) {
   if (!prefetchRoute) return
   for (const href of CORE_ROUTES) {
     prefetchRoute(href)
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeContractsCachePayload(value: unknown): ContractsCachePayload | null {
+  if (!isRecord(value)) return null
+
+  const meta = isRecord(value.meta) ? value.meta : {}
+  return {
+    contracts: Array.isArray(value.contracts) ? value.contracts : [],
+    drafts: Array.isArray(value.drafts) ? value.drafts : [],
+    meta: {
+      totalPages: typeof meta.totalPages === 'number' ? meta.totalPages : 1,
+      hasNext: Boolean(meta.hasNext),
+      hasPrev: Boolean(meta.hasPrev),
+    },
+  }
+}
+
+function normalizeQuotesCachePayload(value: unknown): QuotesCachePayload | null {
+  if (!isRecord(value)) return null
+  return {
+    quotes: Array.isArray(value.quotes) ? value.quotes : [],
+  }
+}
+
+function normalizeTendersCachePayload(value: unknown): TendersCachePayload | null {
+  if (!isRecord(value)) return null
+  return {
+    tenders: Array.isArray(value.tenders) ? value.tenders : [],
+  }
+}
+
+function normalizeAgendaUpcomingCachePayload(value: unknown): AgendaUpcomingCachePayload | null {
+  if (!isRecord(value)) return null
+  return {
+    items: Array.isArray(value.items) ? value.items as AgendaItem[] : [],
+  }
+}
+
+export function primeCorePageCaches(token: string | null | undefined, payload: CorePageCachePayload | null | undefined) {
+  if (typeof window === 'undefined' || !token || !isRecord(payload)) return
+
+  const contracts = normalizeContractsCachePayload(payload.contracts)
+  if (contracts) {
+    writeBrowserCache(scopedCacheKey(token, `contracts:list:1:${CONTRACTS_PAGE_SIZE}`), contracts)
+  }
+
+  const products = isRecord(payload.configs) && Array.isArray(payload.configs.products)
+    ? payload.configs.products
+    : null
+  if (products) {
+    writeBrowserCache(scopedCacheKey(token, 'configs:price-list'), products)
+  }
+
+  const quotes = normalizeQuotesCachePayload(payload.quotes)
+  if (quotes) {
+    writeBrowserCache(scopedCacheKey(token, 'quotes:list'), quotes)
+  }
+
+  const tenders = normalizeTendersCachePayload(payload.tenders)
+  if (tenders) {
+    writeBrowserCache(scopedCacheKey(token, 'tenders:list'), tenders)
+  }
+
+  const agenda = normalizeAgendaUpcomingCachePayload(payload.agenda)
+  if (agenda) {
+    writeBrowserCache(scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY), agenda)
   }
 }
 
@@ -189,6 +281,92 @@ export async function loadQuotesListForCache(token: string) {
   return request
 }
 
+export function quoteDetailCacheKey(token: string | null | undefined, quoteId: string) {
+  return scopedCacheKey(token, `quotes:detail:${quoteId}`)
+}
+
+export async function loadQuoteDetailForCache(
+  token: string,
+  quoteId: string,
+  { force = false }: { force?: boolean } = {}
+) {
+  const cacheKey = quoteDetailCacheKey(token, quoteId)
+  if (!force) {
+    const cached = readFreshCache<QuoteDetailCachePayload>(cacheKey)
+    if (cached) return cached
+  }
+
+  const inflight = quoteDetailWarmups.get(cacheKey)
+  if (inflight) return inflight
+
+  const request = fetch(`/api/quotes/${quoteId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(async (quoteRes) => {
+      if (!quoteRes.ok) return null
+
+      const payload = await quoteRes.json()
+      writeBrowserCache(cacheKey, payload)
+      return payload
+    })
+    .finally(() => {
+      quoteDetailWarmups.delete(cacheKey)
+    })
+
+  quoteDetailWarmups.set(cacheKey, request)
+  return request
+}
+
+export function scheduleQuoteDetailWarmup(
+  token: string | null | undefined,
+  quotes: Array<{ id?: unknown }>,
+  limit = 2
+) {
+  if (typeof window === 'undefined' || !token || quotes.length === 0) return
+
+  const quoteIds = quotes
+    .map((quote) => quote.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    .slice(0, limit)
+
+  if (quoteIds.length === 0) return
+
+  scheduleIdle(() => {
+    void Promise.allSettled(
+      quoteIds.map((quoteId) => loadQuoteDetailForCache(token, quoteId))
+    )
+  })
+}
+
+export async function loadTendersListForCache(token: string) {
+  const cacheKey = scopedCacheKey(token, 'tenders:list')
+  const cached = readFreshCache<TendersCachePayload>(cacheKey)
+  if (cached) return cached
+
+  const inflight = tenderListWarmups.get(cacheKey)
+  if (inflight) return inflight
+
+  const request = fetch('/api/tenders', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(async (tendersRes) => {
+      if (!tendersRes.ok) return null
+
+      const tendersJson = await tendersRes.json()
+      const payload: TendersCachePayload = {
+        tenders: tendersJson.data || [],
+      }
+      writeBrowserCache(cacheKey, payload)
+      return payload
+    })
+    .finally(() => {
+      tenderListWarmups.delete(cacheKey)
+    })
+
+  tenderListWarmups.set(cacheKey, request)
+  return request
+}
+
 export function invalidateAgendaUpcomingCache(token: string | null | undefined) {
   if (!token) return
   const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
@@ -200,6 +378,7 @@ async function warmCoreData(token: string) {
   await Promise.allSettled([
     loadContractsListForCache(token),
     loadQuotesListForCache(token),
+    loadTendersListForCache(token),
     loadConfigProductsForCache(token),
     loadAgendaUpcomingForCache(token),
   ])
@@ -218,11 +397,6 @@ export function scheduleCorePageWarmup(token: string | null | undefined, prefetc
     })
   }, CONTRACTS_WARMUP_DELAY_MS)
   scheduleIdle(() => {
-    if (window.location.pathname !== '/') {
-      scheduledToken = null
-      return
-    }
-
     if (warmups.has(token)) return
     const warmup = warmCoreData(token)
       .catch(() => {

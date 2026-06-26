@@ -7,7 +7,12 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 import type { Quote, QuoteItem } from '@/types'
-import { deleteBrowserCache, scopedCacheKey } from '@/lib/browser-cache'
+import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
+import {
+  QUOTE_DETAIL_BACKGROUND_REFRESH_MS,
+  QUOTE_DETAIL_VISIBLE_CACHE_TTL_MS,
+  quoteDetailCacheKey,
+} from '@/lib/core-page-warmup'
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   DRAFT: { label: '草稿', variant: 'secondary' },
@@ -36,24 +41,46 @@ export default function QuoteDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId])
 
-  async function fetchQuote() {
+  async function fetchQuote({ allowCache = true }: { allowCache?: boolean } = {}) {
+    let servedCached = false
     try {
       const token = localStorage.getItem('token')
+      const cacheKey = quoteDetailCacheKey(token, quoteId)
+      const cachedEntry = allowCache ? readBrowserCacheEntry<Quote>(cacheKey) : null
+      const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
+      const cached = cacheAgeMs <= QUOTE_DETAIL_VISIBLE_CACHE_TTL_MS ? cachedEntry?.value : null
+
+      if (cached) {
+        servedCached = true
+        setQuote(cached)
+        setError('')
+        setLoading(false)
+        if (cacheAgeMs < QUOTE_DETAIL_BACKGROUND_REFRESH_MS) return
+      } else {
+        setLoading(true)
+      }
+
       const res = await fetch(`/api/quotes/${quoteId}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       })
 
       if (!res.ok) {
-        if (res.status === 404) setError('报价单不存在')
-        else if (res.status === 401) setError('未登录或登录已过期')
-        else setError('获取报价失败')
+        if (!servedCached) {
+          if (res.status === 404) setError('报价单不存在')
+          else if (res.status === 401) setError('未登录或登录已过期')
+          else setError('获取报价失败')
+        }
         return
       }
 
       const data = await res.json()
       setQuote(data)
+      setError('')
+      writeBrowserCache(cacheKey, data)
     } catch {
-      setError('网络错误，请稍后重试')
+      if (!servedCached) {
+        setError('网络错误，请稍后重试')
+      }
     } finally {
       setLoading(false)
     }
@@ -82,7 +109,8 @@ export default function QuoteDetailPage() {
       }
 
       deleteBrowserCache(scopedCacheKey(token, 'quotes:list'))
-      await fetchQuote()
+      deleteBrowserCache(quoteDetailCacheKey(token, quoteId))
+      await fetchQuote({ allowCache: false })
     } catch {
       setError('网络错误')
     } finally {

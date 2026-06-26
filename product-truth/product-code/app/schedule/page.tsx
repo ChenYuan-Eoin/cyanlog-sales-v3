@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { ScheduleClient } from './ScheduleClient'
 import { Button } from '@/components/ui/button'
 
+export const dynamic = 'force-static'
+
 export default function SchedulePage() {
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto">
