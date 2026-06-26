@@ -1,0 +1,27 @@
+# Local dependencies and build output
+node_modules
+.next
+out
+build
+coverage
+
+# Test and browser automation artifacts
+playwright-report
+test-results
+.playwright-mcp
+*.trace
+*.trace.zip
+*.har
+*.webm
+
+# Local environment and cache files
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+*.log
+
+# Supabase and ad-hoc diagnostic state
+supabase/.temp
+output
