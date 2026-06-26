@@ -16,6 +16,7 @@ export type AuthContextCookieInput = Omit<AuthContextCookie, 'v' | 'tokenHash' |
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
+let hmacKeyCache: { secret: string; keyPromise: Promise<CryptoKey> } | null = null
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
@@ -58,13 +59,20 @@ async function getHmacKey(): Promise<CryptoKey | null> {
   const secret = getAuthContextSecret()
   if (!secret) return null
 
-  return crypto.subtle.importKey(
-    'raw',
-    toArrayBuffer(textEncoder.encode(secret)),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify']
-  )
+  if (hmacKeyCache?.secret !== secret) {
+    hmacKeyCache = {
+      secret,
+      keyPromise: crypto.subtle.importKey(
+        'raw',
+        toArrayBuffer(textEncoder.encode(secret)),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign', 'verify']
+      ),
+    }
+  }
+
+  return hmacKeyCache.keyPromise
 }
 
 async function signPayload(payload: string): Promise<string | null> {
