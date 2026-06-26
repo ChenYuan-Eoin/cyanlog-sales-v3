@@ -462,7 +462,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB. Manual Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw for bde4752 uploaded 164.2KB. Deploy root remains product-truth/product-code. Tracked app files total 4.1MB and tracked repo files total 18MB; local node_modules 1.2GB, .next 1.0GB, output/playwright evidence screenshots, and tsconfig.tsbuildinfo are ignored and do not enter Git or Vercel payload.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [

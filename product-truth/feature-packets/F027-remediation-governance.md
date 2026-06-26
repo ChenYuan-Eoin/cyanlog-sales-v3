@@ -159,7 +159,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 组织管理拆包 | `0d15f8c` 复用同一动态加载方案，把 `/admin/org` 的组织工作台延后加载；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 登录态 `/admin/org` 200，页面 chunk 9,078 bytes；最新构建仍为 `/admin/org` 3.78kB / 107kB。 |
 | 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require，以及本地 webpack cache 可能提示 big string 序列化。 |
 | Vercel 生产部署额度 | `bde4752` 的 Preview `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` 已 Ready，但 production promote 被免费每日部署额度拦截。 | 等额度恢复或提升额度后，优先 promote/deploy `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw`，再在 `sales.cyanlog.icu` 重跑组织/角色刷新和登录 timing 验收流。 |
-| 部署产物 | 最新成功生产部署为 `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`，上传 184.6KB；项目根仍是 `product-truth/product-code`，`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
+| 部署产物 | 最新成功生产部署为 `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`，上传 184.6KB；`bde4752` 手动 Preview `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` 上传 164.2KB。项目根仍是 `product-truth/product-code`；tracked app 文件合计 4.1MB，tracked 仓库合计 18MB；本地 `node_modules` 1.2GB、`.next` 1.0GB、`output/playwright` 截图证据和 `tsconfig.tsbuildinfo` 都被 ignore，没有进入 Git 或 Vercel payload。 |
 | Sharp 构建脚本 | `7eded60` 只批准 `sharp` 进入 `pnpm.onlyBuiltDependencies`；`dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` 执行 `sharp@0.34.5 install/check.js` 并完成，后续生产构建不再出现 ignored build scripts warning。 |
 | 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，82 个测试文件 / 366 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
 | Lint 命令噪声 | `pnpm lint` 从 `next lint` 切到 ESLint CLI，覆盖 `app/components/lib/types` 与根运行配置文件；命令通过且不再输出 Next 16 废弃提示。 |
