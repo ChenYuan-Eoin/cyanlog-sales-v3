@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "778073d",
+  "head": "6b0bd77",
   "commits": [
     {
       "sha": "5641824",
@@ -175,20 +175,24 @@
     {
       "sha": "778073d",
       "message": "fix(error): prewarm home recovery path"
+    },
+    {
+      "sha": "6b0bd77",
+      "message": "fix(api): guard remaining form data parsing"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6",
+    "deployment_id": "dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/54XuYRed9j38EJuAzyBQ5vwVc8Z6"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/BpwMSoQQz15UXMk7qf7yTVAkVaew"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "90 files / 383 tests passed",
+    "test": "90 files / 387 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 339ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 186ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -446,7 +450,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6 uploaded 119.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -660,10 +664,10 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6",
+      "deployment": "dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 339ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 186ms"
     },
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
@@ -1050,6 +1054,51 @@
           "client error report is deferred and uses navigator.sendBeacon before fetch fallback"
         ]
       }
+    },
+    "remaining_form_data_parse_validation": {
+      "commit_scope": "remaining app/api formData parse classification",
+      "tests": "login/products/contracts/tenders OCR route tests cover malformed multipart formData failures",
+      "targeted_tests": "standard pnpm test:run invocation passed 90 files / 387 tests",
+      "full_tests": "90 files / 387 tests passed",
+      "build": "pnpm build passed with existing Sentry/OpenTelemetry dynamic require warning",
+      "scan": "rg scan for unguarded req.formData()/request.formData() in app/api route.ts files returned no matches",
+      "production": {
+        "deployment": "dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew",
+        "deploy_payload": "184.6KB uploaded",
+        "health_database_latency_ms": 186,
+        "login_wall_ms": 1458,
+        "login_route_total_ms": 240.6,
+        "browser_smoke": [
+          "/contracts rendered contract center content",
+          "contract center text check returned hasErrorBoundary=false and hasContracts=true"
+        ],
+        "results": [
+          {
+            "route": "POST /api/auth/login malformed multipart",
+            "status": 400,
+            "code": "VALIDATION_ERROR",
+            "ms": 1088
+          },
+          {
+            "route": "POST /api/products malformed multipart",
+            "status": 400,
+            "code": "INVALID_DATA",
+            "ms": 1119
+          },
+          {
+            "route": "POST /api/contracts malformed multipart",
+            "status": 400,
+            "code": "V001",
+            "ms": 920
+          },
+          {
+            "route": "POST /api/tenders/ocr malformed multipart",
+            "status": 400,
+            "code": "INVALID_FORM",
+            "ms": 1065
+          }
+        ]
+      }
     }
   },
   "known_risks": [
@@ -1063,7 +1112,7 @@
     "Build has known dependency warnings: Sentry/OpenTelemetry dynamic require and webpack cache big string serialization. The previous Vercel sharp ignored build scripts warning was cleared by approving sharp in pnpm.onlyBuiltDependencies. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
     "Legacy archived rule rows remain in stats for compatibility.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
-    "API schema migration is still staged by domain, but direct unguarded req.json()/request.json() scan in app/api is now empty. Remaining debt is response envelope/code consistency and route-by-route domain schemas, not raw JSON parse failure.",
+    "API schema migration is still staged by domain, but direct unguarded req.json()/request.json() and req.formData()/request.formData() scans in app/api are now empty. Remaining debt is response envelope/code consistency and route-by-route domain schemas, not raw JSON/formData parse failure.",
     "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
   ]
 }
