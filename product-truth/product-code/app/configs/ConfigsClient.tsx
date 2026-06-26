@@ -2,15 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
 import type { ContractPolicyRule } from '@/types/rules'
 import {
   BotIcon,
@@ -28,7 +19,6 @@ import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowser
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import TabsContent from './tabs/TabsContent'
-import ConfigStatusBadge from './tabs/ConfigStatusBadge'
 import { confirmAction } from '@/lib/toast'
 import {
   buildFeishuErrorFeedback,
@@ -37,46 +27,20 @@ import {
   type FeishuSyncResponse,
 } from './feishu-sync-feedback'
 
-function DialogChunkFallback() {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-      加载编辑表单...
-    </div>
-  )
-}
-
 const ProductDialog = dynamic(() => import('./dialogs/ProductDialog'), {
   loading: () => null,
   ssr: false,
 })
 
-const TaxEditForm = dynamic(() => import('./dialogs/TaxEditForm'), {
-  loading: DialogChunkFallback,
+const ConfigEditDialog = dynamic(() => import('./dialogs/ConfigEditDialog'), {
+  loading: () => null,
   ssr: false,
 })
 
-const ApprovalEditForm = dynamic(() => import('./dialogs/ApprovalEditForm'), {
-  loading: DialogChunkFallback,
+const ConfigVersionDialog = dynamic(() => import('./dialogs/ConfigVersionDialog'), {
+  loading: () => null,
   ssr: false,
 })
-
-const AIEditForm = dynamic(() => import('./dialogs/AIEditForm'), {
-  loading: DialogChunkFallback,
-  ssr: false,
-})
-
-const ThemeEditForm = dynamic(() => import('./dialogs/ThemeEditForm'), {
-  loading: DialogChunkFallback,
-  ssr: false,
-})
-
-const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
-  CONTRACT_RULE: { label: '合同审核策略', color: 'bg-blue-100 text-blue-800' },
-  TAX_RULE: { label: '税率规则', color: 'bg-emerald-100 text-emerald-800' },
-  APPROVAL_RULE: { label: '审批权限', color: 'bg-purple-100 text-purple-800' },
-  AI_CONFIG: { label: 'AI 配置', color: 'bg-amber-100 text-amber-800' },
-  UI_THEME: { label: '界面主题', color: 'bg-cyan-100 text-cyan-800' },
-}
 
 const CONFIG_TABS: Record<ConfigTabId, {
   label: string
@@ -1429,71 +1393,24 @@ export default function ConfigsClient({
         </div>
       </div>
 
-      {/* Config Edit Dialog */}
       {editingConfig && (
-        <Dialog open={isConfigEditOpen} onOpenChange={handleConfigDialogOpenChange}>
-          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingConfig.id ? '编辑配置' : `新建${CONFIG_TYPE_META[configType]?.label || '配置'}`}
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="py-4">
-              {configType === 'TAX_RULE' && <TaxEditForm config={editingConfig} onChange={setEditingConfig} />}
-              {configType === 'APPROVAL_RULE' && <ApprovalEditForm config={editingConfig} onChange={setEditingConfig} />}
-              {configType === 'AI_CONFIG' && <AIEditForm config={editingConfig} onChange={setEditingConfig} />}
-              {configType === 'UI_THEME' && <ThemeEditForm config={editingConfig} onChange={setEditingConfig} />}
-
-              <div className="mt-4">
-                <label className="text-sm font-medium">描述</label>
-                <Textarea
-                  value={editingConfig.description || ''}
-                  onChange={(e) => setEditingConfig({ ...editingConfig, description: e.target.value })}
-                  placeholder="配置描述（可选）"
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => handleConfigDialogOpenChange(false)}>取消</Button>
-              <Button onClick={handleSaveConfig}>保存</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ConfigEditDialog
+          open={isConfigEditOpen}
+          configType={configType}
+          config={editingConfig}
+          onOpenChange={handleConfigDialogOpenChange}
+          onConfigChange={setEditingConfig}
+          onSave={handleSaveConfig}
+        />
       )}
 
-      {/* Version Dialog */}
-      <Dialog open={isVersionOpen} onOpenChange={setIsVersionOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>版本历史</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            {versions.length === 0 ? (
-              <p className="text-center text-slate-500">暂无版本历史</p>
-            ) : (
-              <div className="space-y-2">
-                {versions.map((v) => (
-                  <div key={v.version} className="flex items-center justify-between p-3 bg-slate-50 rounded">
-                    <div>
-                      <div className="font-medium">版本 {v.version}</div>
-                      <div className="text-xs text-slate-500">{new Date(v.created_at).toLocaleString()}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ConfigStatusBadge status={v.status as Config['status']} />
-                      <Button variant="outline" size="sm" onClick={() => versionConfigId && handleRollback(versionConfigId, v.version)}>回滚</Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsVersionOpen(false)}>关闭</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfigVersionDialog
+        open={isVersionOpen}
+        versions={versions}
+        versionConfigId={versionConfigId}
+        onOpenChange={setIsVersionOpen}
+        onRollback={handleRollback}
+      />
 
       {editingProduct && (
         <ProductDialog
