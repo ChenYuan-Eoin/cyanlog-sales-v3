@@ -205,6 +205,7 @@
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
     "contract_compare": "POST/GET/UI flow passed",
+    "contract_list_pagination_affordance": "Local production browser verification after contract list patch: mocked /api/contracts two-page data returned 20 rows then 2 rows. /contracts initial desktop 1440x900 had 20 task links, no error text, no horizontal overflow. Searching 华润 then clicking 加载更多 requested /api/contracts?page=2&pageSize=20&search=%E5%8D%8E%E6%B6%A6, appended to 22 task links, kept the first-page result visible, and showed loaded-to page 2/2. Mobile 390x844 had no horizontal overflow and bottom quick actions visible. Screenshots are ignored under output/playwright.",
     "mobile": "configs and contracts verified without horizontal overflow",
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",

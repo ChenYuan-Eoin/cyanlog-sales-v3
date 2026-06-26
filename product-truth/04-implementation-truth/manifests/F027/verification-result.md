@@ -74,6 +74,7 @@
 | D06 Contract upload | Online API/UI upload flow created, uploaded, merged, submitted, analyzed and cleaned temporary contract | Pass |
 | D06 Contract upload invalid form validation | `cbda92e` validates `/api/contracts/[id]/upload` and `/api/contracts/[id]/upload-chunk` form data before org, contract, storage, or extraction work. Local tests assert invalid multipart, missing file, unsupported file, invalid chunk, and unsupported chunk filename all return 400 without Supabase/storage calls. Production `dpl_8S8N46tAtGhruQf8AALfHhM4DpUW` returned 400 for six upload/chunk invalid-form samples, and `/contracts/upload` rendered the drag/drop upload page in a logged-in browser. | Pass |
 | D06 Contract compare | Online POST compare created 6 diffs; GET returned same comparison; UI rendered compare page; temp contracts cleaned | Pass |
+| D06/D07 Contract list pagination and affordance | `app/contracts/page.tsx` now treats pagination as append-style `加载更多` instead of replacing the current list, preserves `search=` when loading the next page, and gives task cards a block-level link with focus-visible and active feedback. Local production browser verification used mocked `/api/contracts` two-page data: initial 20 task links; search `华润` then load more requested `/api/contracts?page=2&pageSize=20&search=...`, appended to 22 task links, retained first-page result, showed no error text, and had no horizontal overflow on 1440x900 or 390x844. | Pass locally; needs Preview/Production after deploy |
 | D06 Risk review | Online `/admin/rule-review` executed contract text against rules and returned R015/R009/R012/R002 risks | Pass |
 | D07 Mobile `/configs` | 390x844 and 820x1180 screenshots: no horizontal overflow, no error boundary, hamburger visible | Pass |
 | D07 `/configs` bundle split | `c74ad23` lazy-loads config edit dialogs/forms. Current production build on `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5`: `/configs` Size 18kB and First Load JS 159kB. Browser smoke on logged-in `/configs?tab=price-list` rendered the configuration workbench instead of an error boundary. | Pass |
@@ -195,14 +196,14 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | D7-D9 | D09/D10 | Governance artifacts documented; ignored runtime state not staged. |
 | E1 | D06 | Create contract endpoint supports JSON/FormData; upload page uses JSON + chunked upload. |
 | E2 | D06/D09 | Contract upload and chunk invalid-form errors now return 400 common API envelopes before avoidable org/contract/storage work; full cross-API envelope consistency remains long-term. |
-| E3 | D06 | Contract list has pagination API/meta; infinite loading not implemented. |
-| E4 | D06 | Analyze route has status checks and optimistic update; full concurrent upload throttling remains long-term. |
-| E5 | D06 | Upload UI has busy/progress states in chunk flow; detailed byte progress remains UX improvement. |
+| E3 | D06 | Contract list now has real append-style pagination loading; local browser mock verified search + load-more keeps `search=` and appends page 2 instead of replacing page 1. |
+| E4 | D06 | Upload flow uses `useChunkUpload` with configurable concurrency default 3, retry control, pause/cancel and abort handling; analyze route has status checks and optimistic update. |
+| E5 | D06 | Upload UI uses `UploadProgressBar` with byte count, speed, chunk status dots and per-file busy/error states in the chunk flow. |
 | E6 | D06/D07 | Drag/drop selected-file feedback verified in contract upload flow; generic `ImageUpload` now also exposes visible dragover/dragleave feedback in profile/theme asset upload. |
 | E7 | D09 | Toast is used in repaired flows; full alert/toast unification not fully audited. |
 | E8 | D03 | Same as A4. |
-| E9 | D06/D07 | Contract cards are navigable; click-area affordance can still be improved. |
-| E10 | D07 | Mobile key buttons visible and clickable in verified paths; global touch feedback remains future QA. |
+| E9 | D06/D07 | Contract task cards are block-level links with focus-visible outline, hover border/shadow and active feedback; local browser counted task links and verified first task href. |
+| E10 | D07 | Mobile contract center keeps bottom quick actions visible, task links active, and no horizontal overflow in local 390x844 verification. |
 | F1 | D10 | Build passes; compare syntax fixed. |
 | F2 | D10 | Analyze unused error fixed; lint passes. |
 | F3-F10 | D10 | Lint now reports no warnings; build still has non-lint dependency warnings. |

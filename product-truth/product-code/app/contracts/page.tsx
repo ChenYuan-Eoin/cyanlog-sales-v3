@@ -46,6 +46,17 @@ type ContractsCachePayload = {
 const LIST_CACHE_TTL_MS = 5 * 60 * 1000
 const LIST_BACKGROUND_REFRESH_MS = 60 * 1000
 
+function mergeContractsById(existing: Contract[], incoming: Contract[]) {
+  const merged = new Map<string, Contract>()
+  for (const contract of existing) {
+    merged.set(contract.id, contract)
+  }
+  for (const contract of incoming) {
+    merged.set(contract.id, contract)
+  }
+  return Array.from(merged.values())
+}
+
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
 const quickActions = [
   {
@@ -97,13 +108,13 @@ export default function ContractCenterPage() {
   const [taskFilter, setTaskFilter] = useState<TaskFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('desktop')
+  const [loadingMore, setLoadingMore] = useState(false)
 
   // 分页状态
   const [page, setPage] = useState(1)
   const [pageSize] = useState(20)
   const [totalPages, setTotalPages] = useState(1)
   const [hasNext, setHasNext] = useState(false)
-  const [hasPrev, setHasPrev] = useState(false)
 
   // 检测视口宽度
   useEffect(() => {
@@ -115,23 +126,73 @@ export default function ContractCenterPage() {
     return () => window.removeEventListener('resize', checkViewport)
   }, [])
 
-  const fetchData = useCallback(async (pageNum = 1) => {
+  const applyContractsPayload = useCallback((
+    payload: ContractsCachePayload,
+    pageNum: number,
+    append: boolean
+  ) => {
+    setContracts((current) => append
+      ? mergeContractsById(current, payload.contracts)
+      : payload.contracts
+    )
+    setDrafts(payload.drafts)
+    setTotalPages(payload.meta.totalPages)
+    setHasNext(payload.meta.hasNext)
+    setPage(pageNum)
+  }, [])
+
+  const fetchData = useCallback(async (
+    pageNum = 1,
+    options: { append?: boolean; query?: string } = {}
+  ) => {
+    const append = Boolean(options.append)
+    const query = (options.query || '').trim()
+
     try {
+      if (append) {
+        setLoadingMore(true)
+      }
+
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+
+      if (query) {
+        if (!append) {
+          setLoading(true)
+        }
+
+        const res = await fetch(
+          `/api/contracts?page=${pageNum}&pageSize=${pageSize}&search=${encodeURIComponent(query)}`,
+          { headers }
+        )
+
+        if (!res.ok) {
+          throw new Error('搜索合同失败')
+        }
+
+        const data = await res.json()
+        const meta = data.data?.meta || {}
+        applyContractsPayload({
+          contracts: data.data?.data || [],
+          drafts: [],
+          meta: {
+            totalPages: meta.totalPages || 1,
+            hasNext: Boolean(meta.hasNext),
+            hasPrev: Boolean(meta.hasPrev),
+          },
+        }, pageNum, append)
+        return
+      }
+
       const cacheKey = scopedCacheKey(token, `contracts:list:${pageNum}:${pageSize}`)
       const cachedEntry = readBrowserCacheEntry<ContractsCachePayload>(cacheKey)
       const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
       const cached = cacheAgeMs <= LIST_CACHE_TTL_MS ? cachedEntry?.value : null
 
       if (cached) {
-        setContracts(cached.contracts)
-        setDrafts(cached.drafts)
-        setTotalPages(cached.meta.totalPages)
-        setHasNext(cached.meta.hasNext)
-        setHasPrev(cached.meta.hasPrev)
+        applyContractsPayload(cached, pageNum, append)
         setLoading(false)
-      } else {
+      } else if (!append) {
         setLoading(true)
       }
 
@@ -143,11 +204,11 @@ export default function ContractCenterPage() {
         const payload = await loadContractsListForCache(token, pageNum, pageSize)
         if (!payload) return
 
-        setContracts(payload.contracts as Contract[])
-        setDrafts(payload.drafts as Contract[])
-        setTotalPages(payload.meta.totalPages)
-        setHasNext(payload.meta.hasNext)
-        setHasPrev(payload.meta.hasPrev)
+        applyContractsPayload({
+          contracts: payload.contracts as Contract[],
+          drafts: payload.drafts as Contract[],
+          meta: payload.meta,
+        }, pageNum, append)
         return
       }
 
@@ -176,11 +237,11 @@ export default function ContractCenterPage() {
         nextDrafts = draftsData.data || []
       }
 
-      setContracts(nextContracts)
-      setDrafts(nextDrafts)
-      setTotalPages(nextMeta.totalPages)
-      setHasNext(nextMeta.hasNext)
-      setHasPrev(nextMeta.hasPrev)
+      applyContractsPayload({
+        contracts: nextContracts,
+        drafts: nextDrafts,
+        meta: nextMeta,
+      }, pageNum, append)
 
       if (contractsRes.ok && draftsRes.ok) {
         writeBrowserCache(cacheKey, {
@@ -193,47 +254,24 @@ export default function ContractCenterPage() {
       handleError(err, '加载合同数据失败')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }, [pageSize])
-
-  useEffect(() => {
-    void fetchData()
-  }, [fetchData])
-
-  // 搜索功能
-  const handleSearch = useCallback(async (pageNum = 1) => {
-    if (!searchQuery.trim()) {
-      await fetchData(pageNum)
-      return
-    }
-
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(
-        `/api/contracts?page=${pageNum}&pageSize=${pageSize}&search=${encodeURIComponent(searchQuery)}`,
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }
-      )
-      if (res.ok) {
-        const data = await res.json()
-        setContracts(data.data.data || [])
-        const meta = data.data.meta || {}
-        setTotalPages(meta.totalPages || 1)
-        setHasNext(meta.hasNext || false)
-        setHasPrev(meta.hasPrev || false)
-      }
-    } catch (err) {
-      handleError(err, '搜索合同失败')
-    }
-  }, [searchQuery, pageSize, fetchData])
+  }, [applyContractsPayload, pageSize])
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery) void handleSearch()
-    }, 300)
+      void fetchData(1, { query: searchQuery })
+    }, searchQuery.trim() ? 300 : 0)
     return () => clearTimeout(timer)
-  }, [searchQuery, handleSearch])
+  }, [fetchData, searchQuery])
+
+  const handleLoadMore = useCallback(() => {
+    if (!hasNext || loadingMore) return
+    void fetchData(page + 1, {
+      append: true,
+      query: searchQuery,
+    })
+  }, [fetchData, hasNext, loadingMore, page, searchQuery])
 
   // 统计计算
   const stats = useMemo(() => {
@@ -343,10 +381,12 @@ export default function ContractCenterPage() {
                 />
                 {searchQuery && (
                   <button
-                    onClick={() => { setSearchQuery(''); void fetchData(); }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-1 text-slate-400 transition-colors hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    aria-label="清除搜索"
                   >
-                    <XIcon className="h-4 w-4 text-slate-400" />
+                    <XIcon className="h-4 w-4" />
                   </button>
                 )}
               </div>
@@ -465,34 +505,19 @@ export default function ContractCenterPage() {
 
         {/* 分页控件 */}
         {!loading && filteredTasks.length > 0 && totalPages > 1 && (
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t border-slate-200">
             <p className="text-xs text-slate-500">
-              第 {page} / {totalPages} 页
+              已加载到第 {page} / {totalPages} 页
             </p>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!hasPrev}
-                onClick={() => {
-                  const prev = page - 1
-                  setPage(prev)
-                  void fetchData(prev)
-                }}
+                disabled={!hasNext || loadingMore}
+                onClick={handleLoadMore}
+                className="min-w-28"
               >
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!hasNext}
-                onClick={() => {
-                  const next = page + 1
-                  setPage(next)
-                  void fetchData(next)
-                }}
-              >
-                下一页
+                {loadingMore ? '加载中...' : hasNext ? '加载更多' : '已加载全部'}
               </Button>
             </div>
           </div>
@@ -574,8 +599,13 @@ function TaskItem({
   isMobile: boolean
 }) {
   return (
-    <Link href={task.href} prefetch={false}>
-      <Card className="hover:shadow-sm hover:border-indigo-200 transition-all cursor-pointer group">
+    <Link
+      href={task.href}
+      prefetch={false}
+      className="group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+      aria-label={`打开${task.meta}${task.name}`}
+    >
+      <Card className="cursor-pointer border-slate-200 transition-all group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20">
         <CardContent className={`${isMobile ? 'p-3' : 'p-4'}`}>
           <div className="flex items-center gap-3">
             {/* 图标 */}
