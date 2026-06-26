@@ -472,6 +472,8 @@ requirements:
       - product-truth/product-code/.vercelignore
       - product-truth/product-code/app/error.tsx
       - product-truth/product-code/app/not-found.tsx
+      - product-truth/product-code/app/api/auth/login/route.ts
+      - product-truth/product-code/app/api/auth/login/route.test.ts
       - product-truth/product-code/app/api/access/feishu/sync/route.ts
       - product-truth/product-code/app/contracts/[id]/page.tsx
       - product-truth/product-code/app/contracts/[id]/compare/page.tsx
@@ -479,6 +481,7 @@ requirements:
       - product-truth/product-code/app/knowledge/page.tsx
       - product-truth/product-code/app/knowledge/new/page.tsx
       - product-truth/product-code/app/configs/tabs/ThemeTab.tsx
+      - product-truth/product-code/supabase/migrations/20260626062255_login_rpc_stage_timing.sql
     description: >
       将用户反馈的 60+ 项问题按业务根因、代码事实、数据流和用户路径合并为问题域，
       覆盖线上可用性、异常韧性、组织权限、外部同步、配置消费、合同能力、移动端、

@@ -65,6 +65,7 @@ type LoginWithPasswordRpcData = {
   allPermissions?: unknown
   dashboard?: unknown
   core?: unknown
+  timing?: unknown
 }
 
 type LoginAuthContext = {
@@ -97,11 +98,13 @@ type InitialCorePagePayload = {
   } | null
 }
 
+type LoginRpcStageTiming = Record<string, number>
+
 type LoginWithPasswordResult =
-  | { kind: 'ok'; user: LoginUserPublicRow; authContext: LoginAuthContext; dashboard: DashboardPayload | null; core: InitialCorePagePayload | null }
-  | { kind: 'rate_limited'; reason: string; retryAfterSeconds?: number }
-  | { kind: 'auth_failed' }
-  | { kind: 'server_error' }
+  | { kind: 'ok'; user: LoginUserPublicRow; authContext: LoginAuthContext; dashboard: DashboardPayload | null; core: InitialCorePagePayload | null; rpcTiming: LoginRpcStageTiming }
+  | { kind: 'rate_limited'; reason: string; retryAfterSeconds?: number; rpcTiming: LoginRpcStageTiming }
+  | { kind: 'auth_failed'; rpcTiming: LoginRpcStageTiming }
+  | { kind: 'server_error'; rpcTiming: LoginRpcStageTiming }
 
 type LoginServerTiming = ReturnType<typeof createLoginServerTiming>
 
@@ -130,6 +133,13 @@ function createLoginServerTiming() {
         metrics.push({ name, durationMs: performance.now() - start })
       }
     },
+    add(name: string, durationMs: number) {
+      if (!Number.isFinite(durationMs) || durationMs < 0) {
+        return
+      }
+
+      metrics.push({ name, durationMs })
+    },
     attach(response: NextResponse) {
       const total = performance.now() - startedAt
       const headerValue = [
@@ -143,6 +153,12 @@ function createLoginServerTiming() {
       response.headers.set('X-Login-Timing', headerValue)
       return response
     },
+  }
+}
+
+function attachRpcStageTiming(timing: LoginServerTiming, rpcTiming: LoginRpcStageTiming) {
+  for (const [stage, durationMs] of Object.entries(rpcTiming)) {
+    timing.add(`rpc_${stage}`, durationMs)
   }
 }
 
@@ -273,6 +289,35 @@ function normalizeCorePagePayload(value: unknown): InitialCorePagePayload | null
   }
 }
 
+function normalizeRpcStageTiming(value: unknown): LoginRpcStageTiming {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  const allowedStages = new Set([
+    'input_validation',
+    'account_rate_limit',
+    'ip_rate_limit',
+    'user_lookup',
+    'password_verify',
+    'auth_context',
+    'token_write',
+    'audit_write',
+    'initial_dashboard',
+    'initial_core',
+    'total',
+  ])
+
+  return Object.entries(value as Record<string, unknown>).reduce<LoginRpcStageTiming>((acc, [key, rawDuration]) => {
+    if (!allowedStages.has(key) || typeof rawDuration !== 'number' || !Number.isFinite(rawDuration) || rawDuration < 0) {
+      return acc
+    }
+
+    acc[key] = rawDuration
+    return acc
+  }, {})
+}
+
 function buildRateLimitFromCandidate(data: LoginCandidateRpcData): LoginRateLimit {
   const accountCount = toCount(data.accountCount)
   const ipCount = toCount(data.ipCount)
@@ -367,6 +412,7 @@ async function loadLoginWithPasswordFromRpc(
 
   const result = data as LoginWithPasswordRpcData
   const code = typeof result.code === 'string' ? result.code : ''
+  const rpcTiming = normalizeRpcStageTiming(result.timing)
   if (result.ok === true) {
     const user = normalizeLoginUserPublicRow(result.user)
     return user
@@ -380,8 +426,9 @@ async function loadLoginWithPasswordFromRpc(
           },
           dashboard: normalizeDashboardPayload(result.dashboard),
           core: normalizeCorePagePayload(result.core),
+          rpcTiming,
         }
-      : { kind: 'server_error' }
+      : { kind: 'server_error', rpcTiming }
   }
 
   if (code === 'account_locked' || code === 'ip_locked') {
@@ -389,11 +436,12 @@ async function loadLoginWithPasswordFromRpc(
       kind: 'rate_limited',
       reason: code,
       retryAfterSeconds: toOptionalSeconds(result.retryAfterSeconds),
+      rpcTiming,
     }
   }
 
   if (code === 'AUTH_FAILED') {
-    return { kind: 'auth_failed' }
+    return { kind: 'auth_failed', rpcTiming }
   }
 
   return null
@@ -553,6 +601,9 @@ export async function POST(req: NextRequest) {
       token,
       expiresAt
     ))
+    if (loginWithPassword) {
+      attachRpcStageTiming(timing, loginWithPassword.rpcTiming)
+    }
     if (loginWithPassword?.kind === 'rate_limited') {
       const response = errorResponse(
         '登录尝试过于频繁，请稍后再试',

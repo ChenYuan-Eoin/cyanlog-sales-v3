@@ -233,6 +233,14 @@ describe('POST /api/auth/login', () => {
               items: [{ id: 'agenda-1', title: '客户跟进', start_at: '2026-06-26T01:00:00.000Z' }],
             },
           },
+          timing: {
+            input_validation: 0.4,
+            token_write: 3.2,
+            initial_dashboard: 42.8,
+            initial_core: 18.5,
+            total: 82.1,
+            ignored_stage: 99,
+          },
           user: {
             id: 'u-fast',
             email: 'fast@x.com',
@@ -252,8 +260,13 @@ describe('POST /api/auth/login', () => {
       expect(body.user.id).toBe('u-fast')
       expect(body.authContextReady).toBe(true)
       expect(res.headers.get('Server-Timing')).toContain('login_rpc')
+      expect(res.headers.get('Server-Timing')).toContain('rpc_token_write;dur=3.2')
+      expect(res.headers.get('Server-Timing')).toContain('rpc_initial_dashboard;dur=42.8')
+      expect(res.headers.get('Server-Timing')).toContain('rpc_initial_core;dur=18.5')
+      expect(res.headers.get('Server-Timing')).not.toContain('ignored_stage')
       expect(res.headers.get('Server-Timing')).toContain('total')
       expect(res.headers.get('X-Login-Timing')).toContain('login_rpc')
+      expect(res.headers.get('X-Login-Timing')).toContain('rpc_initial_dashboard;dur=42.8')
       expect(res.headers.get('X-Login-Timing')).toContain('total')
       expect(body.initialDashboard).toMatchObject({
         activeSpace: { id: 'space-1', name: '默认空间' },
