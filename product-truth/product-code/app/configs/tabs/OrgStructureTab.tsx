@@ -397,7 +397,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
             row.original.status === 'active' ? 'bg-emerald-400' : 'bg-amber-400'
           }`} />
           <span className="text-sm text-slate-600">
-            {row.original.status === 'active' ? '在职' : '未激活'}
+            {row.original.status === 'active' ? '在职' : row.original.status === 'suspended' ? '已停用' : '未激活'}
           </span>
         </div>
       ),
@@ -408,7 +408,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
       size: 70,
       cell: ({ row }) => {
         const user = row.original
-        const isInactive = user.status !== 'active'
+        const isDisabled = user.status !== 'active'
         const isLoginDisabled = user.login_enabled === false
 
         return (
@@ -460,13 +460,13 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
               {/* P1: 停用/启用 */}
               <DropdownMenuItem
                 onSelect={async () => {
-                  const action = isInactive ? '启用' : '停用'
-                  if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 吗？`, { confirmText: action, danger: !isInactive })) return
+                  const action = isDisabled ? '启用' : '停用'
+                  if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 吗？`, { confirmText: action, danger: !isDisabled })) return
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ status: isInactive ? 'active' : 'inactive' }),
+                      body: JSON.stringify({ status: isDisabled ? 'active' : 'suspended' }),
                     })
                     const result = await res.json()
                     if (!res.ok) {
@@ -480,7 +480,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                   }
                 }}
               >
-                {isInactive ? (
+                {isDisabled ? (
                   <>
                     <PowerIcon className="h-4 w-4 mr-2 text-emerald-600" />
                     <span className="text-emerald-600">启用用户</span>

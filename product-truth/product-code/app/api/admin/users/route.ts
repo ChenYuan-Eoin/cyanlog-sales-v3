@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
         )
       `)
       .eq('org_id', orgId)
+      .neq('status', 'inactive')
 
     if (deptId) {
       query = query.eq('primary_dept_id', deptId)

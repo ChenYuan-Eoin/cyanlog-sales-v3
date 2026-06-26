@@ -558,6 +558,7 @@ async function listOrgPayload(orgId: string) {
       .from('users')
       .select('id, email, display_name, title, status, must_change_password, primary_dept_id, login_enabled, report_to_user_id, created_at')
       .in('id', orgUserIds)
+      .neq('status', 'inactive')
       .order('created_at', { ascending: false })
       .limit(200)
 
