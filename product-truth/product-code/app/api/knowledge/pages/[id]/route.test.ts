@@ -32,6 +32,14 @@ function makeMalformedJsonRequest(): any {
   }
 }
 
+function makeJsonRequest(body: unknown): any {
+  return {
+    json: async () => body,
+    method: 'PATCH',
+    headers: new Headers({ 'content-type': 'application/json' }),
+  }
+}
+
 describe('PATCH /api/knowledge/pages/[id] validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -41,6 +49,17 @@ describe('PATCH /api/knowledge/pages/[id] validation', () => {
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
     const res = await PATCH(makeMalformedJsonRequest(), {
+      params: Promise.resolve({ id: 'page-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('字段类型错误返回参数错误且不访问数据库', async () => {
+    const res = await PATCH(makeJsonRequest({ title: 123 }), {
       params: Promise.resolve({ id: 'page-1' }),
     })
     const body = await res.json()

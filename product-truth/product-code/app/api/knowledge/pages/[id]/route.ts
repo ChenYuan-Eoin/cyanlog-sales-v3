@@ -2,6 +2,7 @@
 // POST /api/knowledge/pages/[id] - 更新知识库页面
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
@@ -10,9 +11,18 @@ import {
   getKnowledgeAccessContext,
 } from '@/lib/knowledge/access'
 
+const knowledgePageUpdateSchema = z.object({
+  title: z.string().trim().min(1).optional(),
+  content: z.unknown().optional(),
+  content_text: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  is_published: z.boolean().optional(),
+  change_note: z.string().trim().min(1).optional(),
+})
+
 const UPDATABLE_FIELDS = new Set(['title', 'content', 'content_text', 'metadata', 'is_published'])
 
-function pickUpdatePayload(body: Record<string, unknown>, userId: string) {
+function pickUpdatePayload(body: z.infer<typeof knowledgePageUpdateSchema>, userId: string) {
   const payload: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(body)) {
     if (UPDATABLE_FIELDS.has(key)) {
@@ -91,11 +101,11 @@ export async function PATCH(
     const user = await requireAuth(req)
     const { orgId, assignments } = await getKnowledgeAccessContext(user.id)
     const { id } = await params
-    const body = await req.json().catch(() => null)
-
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    const parsed = knowledgePageUpdateSchema.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) {
       return NextResponse.json({ error: '页面参数无效', code: 'VALIDATION_ERROR' }, { status: 400 })
     }
+    const body = parsed.data
 
     // 获取当前内容
     const { data: currentPage } = await supabaseAdmin
@@ -130,7 +140,7 @@ export async function PATCH(
     // 更新页面
     const { data: updated, error } = await supabaseAdmin
       .from('knowledge_pages')
-      .update(pickUpdatePayload(body as Record<string, unknown>, user.id))
+      .update(pickUpdatePayload(body, user.id))
       .eq('id', id)
       .eq('org_id', orgId)
       .select()
@@ -146,9 +156,9 @@ export async function PATCH(
       .insert({
         page_id: id,
         version: (latestVersion?.version || 0) + 1,
-        content: (body as Record<string, unknown>).content || currentPage.content,
+        content: body.content || currentPage.content,
         saved_by: user.id,
-        change_note: (body as Record<string, unknown>).change_note || '自动保存',
+        change_note: body.change_note || '自动保存',
       })
 
     return NextResponse.json({ data: updated })

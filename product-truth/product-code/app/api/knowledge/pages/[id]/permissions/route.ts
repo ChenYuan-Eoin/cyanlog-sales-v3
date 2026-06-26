@@ -3,6 +3,7 @@
 // DELETE /api/knowledge/pages/[id]/permissions?permId=... - 删除权限
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
@@ -12,8 +13,15 @@ import {
   type KnowledgePermission,
 } from '@/lib/knowledge/access'
 
-const PRINCIPAL_TYPES = new Set(['user', 'role', 'org'])
-const PERMISSIONS = new Set(['view', 'edit', 'admin'])
+const permissionCreateSchema = z.object({
+  principal_type: z.enum(['user', 'role', 'org']),
+  principal_id: z.string().trim().min(1),
+  permission: z.enum(['view', 'edit', 'admin']),
+})
+
+const permissionDeleteSchema = z.object({
+  permId: z.string().trim().min(1).optional(),
+})
 
 async function requirePageAdmin(userId: string, pageId: string) {
   const { orgId, assignments } = await getKnowledgeAccessContext(userId)
@@ -79,23 +87,15 @@ export async function POST(
   try {
     const user = await requireAuth(req)
     const { id } = await params
-    const body = await req.json().catch(() => null)
-
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    const parsed = permissionCreateSchema.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) {
       return NextResponse.json({ error: '权限参数无效', code: 'VALIDATION_ERROR' }, { status: 400 })
     }
+    const body = parsed.data
 
     const access = await requirePageAdmin(user.id, id)
     if (!access.ok) {
       return NextResponse.json({ error: access.error }, { status: access.status })
-    }
-
-    if (
-      !PRINCIPAL_TYPES.has((body as Record<string, unknown>).principal_type as string)
-      || typeof (body as Record<string, unknown>).principal_id !== 'string'
-      || !PERMISSIONS.has((body as Record<string, unknown>).permission as string)
-    ) {
-      return NextResponse.json({ error: '权限参数无效' }, { status: 400 })
     }
 
     // 添加权限
@@ -103,9 +103,9 @@ export async function POST(
       .from('knowledge_page_permissions')
       .insert({
         page_id: id,
-        principal_type: (body as Record<string, unknown>).principal_type,
-        principal_id: (body as Record<string, unknown>).principal_id,
-        permission: (body as Record<string, unknown>).permission as KnowledgePermission,
+        principal_type: body.principal_type,
+        principal_id: body.principal_id,
+        permission: body.permission as KnowledgePermission,
         granted_by: user.id,
       })
       .select()
@@ -133,8 +133,8 @@ export async function DELETE(
   try {
     const user = await requireAuth(req)
     const { id } = await params
-    const body = await req.json().catch(() => ({})) as { permId?: string }
-    const permId = req.nextUrl.searchParams.get('permId') || body.permId
+    const parsed = permissionDeleteSchema.safeParse(await req.json().catch(() => ({})))
+    const permId = req.nextUrl.searchParams.get('permId') || (parsed.success ? parsed.data.permId : undefined)
 
     if (!permId) {
       return NextResponse.json({ error: '权限ID必填' }, { status: 400 })
