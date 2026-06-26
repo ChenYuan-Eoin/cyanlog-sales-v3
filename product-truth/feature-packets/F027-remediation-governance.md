@@ -138,6 +138,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 认证与通用接口 JSON 分类 | `1a521a4` 将同一处理方式扩展到 `/api/auth/login`、`/api/auth/register`、`/api/auth/change-password`、`/api/profile`、`/api/client-errors`；`cdc118c` 将 public API allowlist 改为精确匹配并放行旧注册入口 `/api/auth`。`dpl_6ZME8coENZdgts2ThnPkjq21xez4` 线上验收中 `/api/auth` 与 `/api/auth/register` malformed JSON 均为 400，`/api/auth/me`、`/api/auth/login-extra`、`/api/health-extra` 未登录仍为 401。 |
 | 配置中心写接口 JSON 分类 | `ff9f4bd` 复用既有配置 schema，让 `/api/configs`、`/api/configs/[id]`、`/api/configs/[id]/rollback` 的 malformed JSON 进入 400 校验分支；`dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 三条线上样本均返回 400。 |
 | 知识库写接口 JSON 分类 | `6609af8` 复用既有知识库页面处理器，让 `/api/knowledge/pages/[id]` 与 `/api/knowledge/pages/[id]/permissions` 的 malformed JSON 进入 400 `VALIDATION_ERROR` 分支；`dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic` 线上没有现存页面，验收脚本创建临时页面后验证两条 malformed JSON 样本，并已删除临时页面。 |
+| 内容类 CRUD 写接口 JSON 分类 | `4f0d2c5` 复用 agenda/cases/roles/tech-documents/business-qualifications 既有 Zod schema，不新增业务通道，只把 JSON 解析失败接入既有 400 分支；`dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU` 线上六条 malformed JSON 样本均为 400，目标测试和全量测试确认坏 JSON 不访问 Supabase。 |
 | 首页快速跳转噪声 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上快速从 `/` 跳到 `/configs?tab=role-access`，`fastNavigationConsoleMessages=[]`，不再把被导航中止的 dashboard fetch 当作页面错误噪声。 |
 | 聚合接口边界 | `/api/admin/org` POST/PATCH 不再承载旧写逻辑，误用时返回 `405`、`Allow: GET`、`ORG_AGGREGATE_READ_ONLY`；写操作复用 `/api/admin/users` 与 `/api/admin/departments`。 |
 | 登录 route 预热 | `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` 上 `/login` 自动触发 `GET /api/auth/login` 200；无 header 的 GET 返回 204，不触发数据库预热；有 `X-Login-Prewarm: 1` 才预热。 |
@@ -146,9 +147,9 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 配置中心拆包 | `c74ad23` 复用既有 `next/dynamic` 方案，把配置编辑弹窗/表单改为打开时加载；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 登录态 `/configs` 200，页面 chunk 61,052 bytes；最新构建仍为 `/configs` 18kB / 159kB。 |
 | 组织管理拆包 | `0d15f8c` 复用同一动态加载方案，把 `/admin/org` 的组织工作台延后加载；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 登录态 `/admin/org` 200，页面 chunk 9,078 bytes；最新构建仍为 `/admin/org` 3.78kB / 107kB。 |
 | 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require，以及本地 webpack cache 可能提示 big string 序列化。 |
-| 部署产物 | 最新成功生产部署为 `dpl_DDfZfD9oNiuRgdA4EkNYExFAb1ic`，上传 105.6KB；项目根仍是 `product-truth/product-code`，`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
+| 部署产物 | 最新成功生产部署为 `dpl_7UUQDoCrx3NTSerYwFb8js1MBKUU`，上传 131.3KB；项目根仍是 `product-truth/product-code`，`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
 | Sharp 构建脚本 | `7eded60` 只批准 `sharp` 进入 `pnpm.onlyBuiltDependencies`；`dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` 执行 `sharp@0.34.5 install/check.js` 并完成，后续生产构建不再出现 ignored build scripts warning。 |
-| 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，69 个测试文件 / 347 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
+| 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，72 个测试文件 / 353 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
 | Lint 命令噪声 | `pnpm lint` 从 `next lint` 切到 ESLint CLI，覆盖 `app/components/lib/types` 与根运行配置文件；命令通过且不再输出 Next 16 废弃提示。 |
 | 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 
