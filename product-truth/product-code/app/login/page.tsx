@@ -107,7 +107,7 @@ export default function LoginPage() {
           <p>从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。</p>
         </div>
 
-        <div className="hero-illustration" style={{ position: 'absolute', bottom: 40, right: 48, width: 380, height: 320 }}>
+        <div className="hero-illustration">
           {/* Streamline-style Marketing Keynote Illustration */}
           <svg viewBox="0 0 380 320" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
             {/* Background elements */}
