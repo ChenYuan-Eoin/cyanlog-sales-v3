@@ -113,6 +113,15 @@ export interface OrgSummaryPayload {
   spaces: OrgSummarySpace[]
 }
 
+export type FeishuSyncFeedbackStatus = 'success' | 'warning' | 'error'
+
+export interface FeishuSyncFeedback {
+  status: FeishuSyncFeedbackStatus
+  title: string
+  message: string
+  detail?: string
+}
+
 export interface PermissionCatalogItem {
   key: string
   label: string

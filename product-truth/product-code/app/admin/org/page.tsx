@@ -2,16 +2,21 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import OrgStructureTab from '@/app/configs/tabs/OrgStructureTab'
-import type { OrgSummaryPayload } from '@/app/configs/types'
+import type { FeishuSyncFeedback, OrgSummaryPayload } from '@/app/configs/types'
+import { confirmAction } from '@/lib/toast'
+import {
+  buildFeishuErrorFeedback,
+  buildFeishuNetworkErrorFeedback,
+  buildFeishuSuccessFeedback,
+  type FeishuSyncResponse,
+} from '@/app/configs/feishu-sync-feedback'
 
 // B11: /admin/org 入口复用 OrgStructureTab，避免与 /configs?tab=org-structure 重复代码
 export default function AdminOrgPage() {
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const [loading, setLoading] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _feishuSyncing = false
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _feishuResult = ''
+  const [feishuSyncing, setFeishuSyncing] = useState(false)
+  const [feishuFeedback, setFeishuFeedback] = useState<FeishuSyncFeedback | null>(null)
 
   const fetchOrgData = useCallback(async () => {
     setLoading(true)
@@ -35,6 +40,32 @@ export default function AdminOrgPage() {
     void fetchOrgData()
   }, [fetchOrgData])
 
+  const handleFeishuSync = useCallback(async () => {
+    if (!await confirmAction('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。本阶段不会导入成员。', { confirmText: '开始导入' })) return
+    setFeishuSyncing(true)
+    setFeishuFeedback(null)
+
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/access/feishu/sync', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      const data = await res.json().catch(() => ({})) as FeishuSyncResponse
+
+      if (res.ok) {
+        await fetchOrgData()
+        setFeishuFeedback(buildFeishuSuccessFeedback(data))
+      } else {
+        setFeishuFeedback(buildFeishuErrorFeedback(res.status, data))
+      }
+    } catch {
+      setFeishuFeedback(buildFeishuNetworkErrorFeedback())
+    } finally {
+      setFeishuSyncing(false)
+    }
+  }, [fetchOrgData])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -52,9 +83,10 @@ export default function AdminOrgPage() {
         </p>
         <OrgStructureTab
           orgSummary={orgSummary}
-          feishuSyncing={false}
-          feishuResult=""
-          onFeishuSync={fetchOrgData}
+          feishuSyncing={feishuSyncing}
+          feishuFeedback={feishuFeedback}
+          onFeishuSync={handleFeishuSync}
+          onRefresh={fetchOrgData}
         />
       </div>
     </div>

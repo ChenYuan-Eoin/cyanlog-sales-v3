@@ -22,7 +22,7 @@ import {
   UsersIcon,
   FileTextIcon,
 } from '@/components/icons'
-import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
+import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback } from './types'
 import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
@@ -34,6 +34,12 @@ import ApprovalEditForm from './dialogs/ApprovalEditForm'
 import AIEditForm from './dialogs/AIEditForm'
 import ThemeEditForm from './dialogs/ThemeEditForm'
 import { confirmAction } from '@/lib/toast'
+import {
+  buildFeishuErrorFeedback,
+  buildFeishuNetworkErrorFeedback,
+  buildFeishuSuccessFeedback,
+  type FeishuSyncResponse,
+} from './feishu-sync-feedback'
 
 const CONFIG_TYPE_META: Record<string, { label: string; color: string }> = {
   CONTRACT_RULE: { label: '合同审核策略', color: 'bg-blue-100 text-blue-800' },
@@ -317,7 +323,7 @@ export default function ConfigsClient({
   const [roles, setRoles] = useState<ConfigRoleRecord[]>((initialData?.roles as ConfigRoleRecord[] | undefined) || [])
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
   const [feishuSyncing, setFeishuSyncing] = useState(false)
-  const [feishuResult, setFeishuResult] = useState<string>('')
+  const [feishuFeedback, setFeishuFeedback] = useState<FeishuSyncFeedback | null>(null)
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const [hasInitialData] = useState(() => Boolean(initialData))
   const [loadedTabs, setLoadedTabs] = useState<Set<ConfigTabId>>(new Set(hasInitialData ? ['price-list'] : []))
@@ -705,27 +711,26 @@ export default function ConfigsClient({
     }
   }
 
-  // 飞书同步（占位：需配置飞书 OAuth 才能真实同步）
+  // 飞书同步：当前 MVP 只同步部门结构，成员导入需单独设计。
   async function handleFeishuSync() {
-    if (!await confirmAction('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。', { confirmText: '开始导入' })) return
+    if (!await confirmAction('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。本阶段不会导入成员。', { confirmText: '开始导入' })) return
     setFeishuSyncing(true)
-    setFeishuResult('')
+    setFeishuFeedback(null)
     try {
       const token = localStorage.getItem('token')
       const res = await fetch('/api/access/feishu/sync', {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({})) as FeishuSyncResponse
       if (res.ok) {
         await refreshOrgSummary()
-        const message = typeof data.message === 'string' ? data.message : '同步完成'
-        setFeishuResult(`${message}：导入 ${data.imported ?? 0} 个部门`)
+        setFeishuFeedback(buildFeishuSuccessFeedback(data))
       } else {
-        setFeishuResult(`同步失败：${data.error ?? '未知错误'}`)
+        setFeishuFeedback(buildFeishuErrorFeedback(res.status, data))
       }
     } catch {
-      setFeishuResult('网络错误')
+      setFeishuFeedback(buildFeishuNetworkErrorFeedback())
     } finally {
       setFeishuSyncing(false)
     }
@@ -1295,7 +1300,7 @@ export default function ConfigsClient({
                 onDeleteConfig={handleDeleteConfig}
                 orgSummary={orgSummary}
                 feishuSyncing={feishuSyncing}
-                feishuResult={feishuResult}
+                feishuFeedback={feishuFeedback}
                 onFeishuSync={handleFeishuSync}
                 onRefreshOrg={refreshOrgSummary}
                 roles={roles}

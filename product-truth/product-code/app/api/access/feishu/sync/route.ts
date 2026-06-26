@@ -27,6 +27,10 @@ type SyncedDepartment = {
   depth: number
 }
 
+const FEISHU_CONNECTOR = 'feishu'
+const FEISHU_SYNC_SCOPE = 'departments'
+const FEISHU_CONFIG_HINT = '请在 Vercel Production/Preview 环境变量和本地 .env.local 配置 FEISHU_APP_ID、FEISHU_APP_SECRET 后重新部署；当前 MVP 仅同步部门结构，不会导入成员。'
+
 function externalDepartmentId(department: FeishuDepartment) {
   return department.department_id || department.open_department_id || ''
 }
@@ -214,16 +218,22 @@ export async function POST(req: NextRequest) {
     user = await requireAuth(req)
   } catch (error) {
     if (error instanceof Error && error.name === 'AuthError') {
-      return NextResponse.json({ error: '未登录或登录已过期' }, { status: 401 })
+      return NextResponse.json(
+        { code: 'UNAUTHORIZED', error: '未登录或登录已过期' },
+        { status: 401 }
+      )
     }
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
+    return NextResponse.json(
+      { code: 'INTERNAL_ERROR', error: '服务器内部错误' },
+      { status: 500 }
+    )
   }
 
   const assignments = await getUserScopedRoleAssignments(user.id)
 
   if (!canManageOrg(assignments)) {
     return NextResponse.json(
-      { error: '需要组织管理员权限' },
+      { code: 'FORBIDDEN', error: '需要组织管理员权限' },
       { status: 403 }
     )
   }
@@ -231,10 +241,19 @@ export async function POST(req: NextRequest) {
   const appId = process.env.FEISHU_APP_ID
   const appSecret = process.env.FEISHU_APP_SECRET
   if (!appId || !appSecret) {
+    const missing = [
+      !appId ? 'FEISHU_APP_ID' : null,
+      !appSecret ? 'FEISHU_APP_SECRET' : null,
+    ].filter(Boolean)
+
     return NextResponse.json(
       {
-        error: '飞书未配置：缺少 FEISHU_APP_ID / FEISHU_APP_SECRET 环境变量',
-        hint: '在 .env.local 中配置后重启服务',
+        code: 'FEISHU_NOT_CONFIGURED',
+        connector: FEISHU_CONNECTOR,
+        scope: FEISHU_SYNC_SCOPE,
+        missing,
+        error: `飞书同步未配置：缺少 ${missing.join(' / ')} 环境变量`,
+        hint: FEISHU_CONFIG_HINT,
       },
       { status: 503 }
     )
@@ -248,6 +267,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      connector: FEISHU_CONNECTOR,
+      scope: FEISHU_SYNC_SCOPE,
       imported: result.imported,
       updated: result.updated,
       total: departments.length,
@@ -257,7 +278,11 @@ export async function POST(req: NextRequest) {
     console.error('[FeishuSync] sync failed:', error)
     return NextResponse.json(
       {
+        code: 'FEISHU_SYNC_FAILED',
+        connector: FEISHU_CONNECTOR,
+        scope: FEISHU_SYNC_SCOPE,
         error: error instanceof Error ? error.message : '飞书同步失败',
+        hint: '请确认飞书应用已开通通讯录读取权限，并在 Vercel 函数日志中查看上游返回。',
       },
       { status: 502 }
     )

@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import type { ProductRecord, Config, OrgSummaryPayload } from '../types'
+import type { ProductRecord, Config, OrgSummaryPayload, FeishuSyncFeedback } from '../types'
 import type { ContractPolicyRule } from '@/types/rules'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
@@ -69,7 +69,7 @@ export interface TabsContentProps {
   // org-structure
   orgSummary: OrgSummaryPayload | null
   feishuSyncing: boolean
-  feishuResult: string
+  feishuFeedback: FeishuSyncFeedback | null
   onFeishuSync: () => void | Promise<void>
   onRefreshOrg: () => void | Promise<void>
   // role-access
@@ -105,7 +105,7 @@ export default function TabsContent({
   onDeleteConfig,
   orgSummary,
   feishuSyncing,
-  feishuResult,
+  feishuFeedback,
   onFeishuSync,
   onRefreshOrg,
   roles,
@@ -237,7 +237,7 @@ export default function TabsContent({
         <OrgStructureTab
           orgSummary={orgSummary}
           feishuSyncing={feishuSyncing}
-          feishuResult={feishuResult}
+          feishuFeedback={feishuFeedback}
           onFeishuSync={onFeishuSync}
           onRefresh={onRefreshOrg}
         />

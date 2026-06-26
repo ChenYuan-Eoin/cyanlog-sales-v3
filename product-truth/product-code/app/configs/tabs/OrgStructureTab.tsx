@@ -20,8 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, KeyRoundIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon } from 'lucide-react'
-import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, KeyRoundIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon } from 'lucide-react'
+import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, FeishuSyncFeedback } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
@@ -38,9 +38,15 @@ import {
 interface OrgStructureTabProps {
   orgSummary: OrgSummaryPayload | null
   feishuSyncing: boolean
-  feishuResult: string
+  feishuFeedback: FeishuSyncFeedback | null
   onFeishuSync: () => void | Promise<void>
   onRefresh?: () => void | Promise<void>
+}
+
+const feishuFeedbackStyle: Record<FeishuSyncFeedback['status'], string> = {
+  success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  warning: 'border-amber-200 bg-amber-50 text-amber-800',
+  error: 'border-rose-200 bg-rose-50 text-rose-800',
 }
 
 // ============ 工具函数 ============
@@ -659,7 +665,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
 export default function OrgStructureTab({
   orgSummary,
   feishuSyncing,
-  feishuResult,
+  feishuFeedback,
   onFeishuSync,
   onRefresh,
 }: OrgStructureTabProps) {
@@ -762,15 +768,26 @@ export default function OrgStructureTab({
             disabled={feishuSyncing}
             variant="outline"
             size="sm"
+            title="从飞书通讯录同步部门结构；当前 MVP 不导入成员"
+            aria-busy={feishuSyncing}
           >
-            {feishuSyncing ? '同步中...' : '从飞书同步'}
+            <RefreshCwIcon className={`mr-1 h-4 w-4 ${feishuSyncing ? 'animate-spin' : ''}`} />
+            {feishuSyncing ? '同步中...' : '同步飞书部门'}
           </Button>
         </div>
       </div>
 
-      {feishuResult && (
-        <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {feishuResult}
+      {feishuFeedback && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`rounded-lg border px-4 py-3 text-sm ${feishuFeedbackStyle[feishuFeedback.status]}`}
+        >
+          <p className="font-medium">{feishuFeedback.title}</p>
+          <p className="mt-1">{feishuFeedback.message}</p>
+          {feishuFeedback.detail && (
+            <p className="mt-1 opacity-80">{feishuFeedback.detail}</p>
+          )}
         </div>
       )}
 
