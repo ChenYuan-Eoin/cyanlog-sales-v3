@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "7d7561a",
+  "head": "778073d",
   "commits": [
     {
       "sha": "5641824",
@@ -171,20 +171,24 @@
     {
       "sha": "7d7561a",
       "message": "fix(upload): guard asset form uploads"
+    },
+    {
+      "sha": "778073d",
+      "message": "fix(error): prewarm home recovery path"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5",
+    "deployment_id": "dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/65KRcDFdHHcYMEjePwueSjNYXuJ5"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/54XuYRed9j38EJuAzyBQ5vwVc8Z6"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "89 files / 381 tests passed",
+    "test": "90 files / 383 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 437ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 339ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -442,7 +446,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5 uploaded 124.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6 uploaded 119.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -656,10 +660,10 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5",
+      "deployment": "dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 437ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 339ms"
     },
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
@@ -1019,6 +1023,31 @@
             "code": "INVALID_TYPE",
             "ms": 1089
           }
+        ]
+      }
+    },
+    "error_boundary_home_recovery": {
+      "commit_scope": "error boundary reporting and return-home recovery path",
+      "tests": "app/error-recovery.test.ts covers home prefetch/data warmup and deferred beacon-based error reporting",
+      "targeted_tests": "standard pnpm test:run invocation passed 90 files / 383 tests",
+      "full_tests": "90 files / 383 tests passed",
+      "build": "pnpm build passed with existing Sentry/OpenTelemetry dynamic require warning",
+      "production": {
+        "deployment": "dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6",
+        "deploy_payload": "119.9KB uploaded",
+        "health_database_latency_ms": 339,
+        "login_wall_ms": 1549,
+        "login_route_total_ms": 282.9,
+        "login_rpc_ms": 260,
+        "browser_smoke": [
+          "logged-in / rendered dashboard workspace content",
+          "/contracts/44301b16-6551-4720-afa5-f1d80b1604de rendered contract detail content",
+          "contract detail text check returned hasErrorBoundary=false and hasContractTitle=true"
+        ],
+        "behavior_contract": [
+          "error boundary calls router.prefetch('/') on mount",
+          "error boundary primes home initial data via existing primeHomeInitialData asset",
+          "client error report is deferred and uses navigator.sendBeacon before fetch fallback"
         ]
       }
     }
