@@ -2,6 +2,7 @@
 // 支持大文件分块上传、断点续传
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { logError } from '@/lib/error-log'
@@ -12,6 +13,20 @@ import { createApiError } from '@/lib/api/errors'
 // 临时分块存储桶名称
 const TEMP_BUCKET = 'contract-chunks'
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
+
+function isBlob(value: unknown): value is Blob {
+  return typeof Blob !== 'undefined' && value instanceof Blob
+}
+
+const uploadChunkFormSchema = z.object({
+  chunk: z.custom<Blob>(isBlob).refine(chunk => chunk.size > 0),
+  index: z.coerce.number().int().nonnegative(),
+  start: z.coerce.number().int().nonnegative(),
+  end: z.coerce.number().int().positive(),
+  totalSize: z.coerce.number().int().positive(),
+  fileName: z.string().trim().min(1),
+  fileType: z.string().optional().default(''),
+}).refine(({ start, end, totalSize }) => end > start && totalSize >= end)
 
 function hasAllowedFileName(fileName: string): boolean {
   const extension = `.${fileName.split('.').pop()?.toLowerCase() || ''}`
@@ -36,27 +51,20 @@ export async function POST(
       return errorResponse(createApiError('VALIDATION_ERROR', '请求格式不是有效的表单数据'))
     }
 
-    const chunkValue = formData.get('chunk')
-    const chunk = chunkValue instanceof Blob ? chunkValue : null
-    const index = parseInt(formData.get('index') as string, 10)
-    const start = parseInt(formData.get('start') as string, 10)
-    const end = parseInt(formData.get('end') as string, 10)
-    const totalSize = parseInt(formData.get('totalSize') as string, 10)
-    const fileNameValue = formData.get('fileName')
-    const fileTypeValue = formData.get('fileType')
-    const fileName = typeof fileNameValue === 'string' ? fileNameValue.trim() : ''
-    const fileType = typeof fileTypeValue === 'string' ? fileTypeValue : ''
-
-    const hasValidRange = Number.isInteger(start) &&
-      Number.isInteger(end) &&
-      Number.isInteger(totalSize) &&
-      start >= 0 &&
-      end > start &&
-      totalSize >= end
-
-    if (!chunk || chunk.size <= 0 || !fileName || !Number.isInteger(index) || index < 0 || !hasValidRange) {
+    const parsed = uploadChunkFormSchema.safeParse({
+      chunk: formData.get('chunk'),
+      index: formData.get('index'),
+      start: formData.get('start'),
+      end: formData.get('end'),
+      totalSize: formData.get('totalSize'),
+      fileName: formData.get('fileName'),
+      fileType: formData.get('fileType'),
+    })
+    if (!parsed.success) {
       return errorResponse(createApiError('VALIDATION_ERROR', '无效的分块数据'))
     }
+
+    const { chunk, index, start, end, fileName, fileType } = parsed.data
     if (!hasAllowedFileName(fileName)) {
       return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
     }

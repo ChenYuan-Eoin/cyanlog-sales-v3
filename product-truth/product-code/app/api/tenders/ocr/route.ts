@@ -2,9 +2,18 @@
 // PURPOSE: OCR document parsing for tender/bidding documents
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { extractKeyInfo, parseDocument } from '@/lib/ocr/parser'
+
+function isFile(value: unknown): value is File {
+  return typeof File !== 'undefined' && value instanceof File
+}
+
+const ocrFormSchema = z.object({
+  file: z.custom<File>(isFile),
+})
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -21,12 +30,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('表单数据无效', 400, 'INVALID_FORM')
     }
 
-    const fileValue = formData.get('file')
-    const file = fileValue instanceof File ? fileValue : null
-
-    if (!file) {
+    const parsed = ocrFormSchema.safeParse({
+      file: formData.get('file'),
+    })
+    if (!parsed.success) {
       return errorResponse('请选择要解析的文件', 400, 'MISSING_FILE')
     }
+
+    const { file } = parsed.data
 
     // Read file content
     const buffer = Buffer.from(await file.arrayBuffer())

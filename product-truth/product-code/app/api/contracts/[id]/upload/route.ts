@@ -2,6 +2,7 @@
 // REQ: F005
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { logError } from '@/lib/error-log'
@@ -17,6 +18,14 @@ const ALLOWED_TYPES = [
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
 
 const MAX_SIZE = 50 * 1024 * 1024 // 50MB
+
+function isFile(value: unknown): value is File {
+  return typeof File !== 'undefined' && value instanceof File
+}
+
+const contractUploadFormSchema = z.object({
+  file: z.custom<File>(isFile),
+})
 
 function hasAllowedFileType(file: File): boolean {
   const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
@@ -41,12 +50,14 @@ export async function POST(
       return errorResponse(createApiError('VALIDATION_ERROR', '请求格式不是有效的表单数据'))
     }
 
-    const fileValue = formData.get('file')
-    const file = fileValue instanceof File ? fileValue : null
-
-    if (!file) {
+    const parsed = contractUploadFormSchema.safeParse({
+      file: formData.get('file'),
+    })
+    if (!parsed.success) {
       return errorResponse(createApiError('MISSING_FIELD', '未提供文件'))
     }
+
+    const { file } = parsed.data
 
     // 验证文件类型
     if (!hasAllowedFileType(file)) {

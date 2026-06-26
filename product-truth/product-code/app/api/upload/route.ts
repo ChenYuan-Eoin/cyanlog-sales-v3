@@ -2,12 +2,32 @@
 // 自动创建存储桶，无需手动配置
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon']
 const MAX_SIZE = 2 * 1024 * 1024 // 2MB
 const BUCKET_NAME = 'workspace-assets'
+const ALLOWED_FOLDERS = ['logos', 'favicons', 'avatars'] as const
+
+function isFile(value: unknown): value is File {
+  return typeof File !== 'undefined' && value instanceof File
+}
+
+function normalizeFolder(value: FormDataEntryValue | null): typeof ALLOWED_FOLDERS[number] | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  return ALLOWED_FOLDERS.includes(value as typeof ALLOWED_FOLDERS[number])
+    ? value as typeof ALLOWED_FOLDERS[number]
+    : undefined
+}
+
+const uploadFormSchema = z.object({
+  file: z.custom<File>(isFile),
+  folder: z.enum(ALLOWED_FOLDERS).optional(),
+})
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -59,13 +79,15 @@ export async function POST(req: NextRequest) {
       return errorResponse('请求格式不是有效的表单数据', 400, 'INVALID_FORM')
     }
 
-    const fileValue = formData.get('file')
-    const file = fileValue instanceof File ? fileValue : null
-    const folder = formData.get('folder') as string | null // 'logos' | 'favicons' | 'avatars'
-
-    if (!file) {
+    const parsed = uploadFormSchema.safeParse({
+      file: formData.get('file'),
+      folder: normalizeFolder(formData.get('folder')),
+    })
+    if (!parsed.success) {
       return errorResponse('未找到文件', 400, 'NO_FILE')
     }
+
+    const { file, folder } = parsed.data
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return errorResponse(`仅支持 .png, .jpg, .svg, .webp 格式，当前: ${file.type}`, 400, 'INVALID_TYPE')

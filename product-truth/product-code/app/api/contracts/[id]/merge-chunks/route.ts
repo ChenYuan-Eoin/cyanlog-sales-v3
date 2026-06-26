@@ -2,6 +2,7 @@
 // 将临时分块合并为完整文件，移动到正式存储
 
 import { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { logError } from '@/lib/error-log'
@@ -13,6 +14,16 @@ import { extractContractText } from '@/lib/contracts/text-extraction'
 const TEMP_BUCKET = 'contract-chunks'
 const FINAL_BUCKET = 'contracts'
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
+
+const mergeChunksSchema = z.object({
+  fileName: z.string().trim().min(1),
+  fileType: z.string().optional(),
+  totalSize: z.preprocess(
+    value => typeof value === 'number' ? value : undefined,
+    z.number().nonnegative().optional()
+  ),
+  chunkCount: z.coerce.number().int().positive(),
+})
 
 function hasAllowedFileName(fileName: string): boolean {
   const extension = `.${fileName.split('.').pop()?.toLowerCase() || ''}`
@@ -41,16 +52,12 @@ export async function POST(
       return errorResponse(createApiError('INVALID_JSON'))
     }
 
-    const fileName = typeof body.fileName === 'string' ? body.fileName.trim() : ''
-    const fileType = typeof body.fileType === 'string' ? body.fileType : undefined
-    const totalSize = typeof body.totalSize === 'number' ? body.totalSize : undefined
-    const chunkCount = typeof body.chunkCount === 'number'
-      ? body.chunkCount
-      : Number(body.chunkCount)
-
-    if (!fileName || !Number.isInteger(chunkCount) || chunkCount <= 0) {
+    const parsed = mergeChunksSchema.safeParse(body)
+    if (!parsed.success) {
       return errorResponse(createApiError('MISSING_FIELD', '缺少必要参数'))
     }
+
+    const { fileName, fileType, totalSize, chunkCount } = parsed.data
     if (!hasAllowedFileName(fileName)) {
       return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
     }
