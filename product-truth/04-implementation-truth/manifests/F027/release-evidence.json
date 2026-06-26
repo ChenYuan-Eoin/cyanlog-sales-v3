@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "56ba7e3",
+  "head": "44adc21",
   "commits": [
     {
       "sha": "5641824",
@@ -247,6 +247,10 @@
     {
       "sha": "56ba7e3",
       "message": "fix(configs): defer config dialogs from first load"
+    },
+    {
+      "sha": "44adc21",
+      "message": "fix(configs): normalize derived API envelopes"
     }
   ],
   "production": {
@@ -259,7 +263,7 @@
     "lint": "pass",
     "typecheck": "pass",
     "test": "99 files / 417 tests passed",
-    "build": "pass; Sentry/OpenTelemetry dynamic require warning cleared locally; /configs First Load JS reduced to 129kB after deferred dialogs",
+    "build": "pass; Sentry/OpenTelemetry dynamic require warning cleared locally; /configs First Load JS stays at 129kB after config derived envelope normalization",
     "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 186ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
@@ -282,11 +286,12 @@
     "login_transport_preview": "bde4752 local production verification: prewarm 200 in 1.229s; login 200 in 324ms; X-Login-Timing total=318.0ms, rpc_total=107.6ms, login_rpc_transport=203.4ms. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via share URL: health 200 with database latency 120ms; prewarm 200 in 1.058s; login 200 in 726ms; X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms.",
     "login_slow_timing_log": "006f41e reuses the existing login timing collector and emits a sanitized [auth/login] slow timing warning when /api/auth/login total route time is >=500ms. The log includes stage durations such as login_rpc, rpc_token_write, rpc_initial_dashboard, rpc_initial_core, login_rpc_transport, and auth_context_cookie. Unit coverage asserts email, user id, and display name are not logged.",
     "preview_visual_smoke": "Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via temporary Vercel share URL: browser screenshots captured for /login, /, /configs?tab=role-access desktop 1440x900 and /configs?tab=role-access mobile 390x844. Dashboard, role-access desktop, and role-access mobile reported scrollWidth equal to viewport width, overflowX=false, hasErrorText=false, and role-access content visible. Screenshot files are ignored under product-truth/product-code/output/playwright and are not tracked or uploaded.",
-    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. After 9e593c0, another repo-root deploy uploaded 178.4KB and failed with the same quota code. After 4507ae2, repo-root deploy uploaded 305.5KB and failed with the same quota code. After pushed branch head 95f4268, repo-root deploy uploaded 218.0KB and failed with the same quota code. Latest 56ba7e3 app code is locally verified but has no Ready Preview or Production deployment yet; it remains Git-only until Vercel quota allows deployment.",
+    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. After 9e593c0, another repo-root deploy uploaded 178.4KB and failed with the same quota code. After 4507ae2, repo-root deploy uploaded 305.5KB and failed with the same quota code. After pushed branch head 95f4268, repo-root deploy uploaded 218.0KB and failed with the same quota code. Latest 44adc21 app code is locally verified but has no Ready Preview or Production deployment yet; it remains Git-only until Vercel quota allows deployment.",
     "production_deploy_blocker": "Repeated vercel promote for dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw failed with Vercel quota code api-deployments-free-per-day. vercel inspect https://sales.cyanlog.icu still resolves to production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew. sales.cyanlog.icu therefore still points to the old production deployment until quota resets or plan limit is raised.",
     "sentry_no_dsn_startup_guard": "instrumentation.ts now skips server/edge Sentry config import when SENTRY_DSN and NEXT_PUBLIC_SENTRY_DSN are both unset. Local next start -p 3000 no longer prints the server Sentry DSN-not-configured warning. 4507ae2 cleared the Sentry/OpenTelemetry dynamic require build warning locally.",
     "sentry_opentelemetry_build_warning": "4507ae2 adds Next serverExternalPackages entries for @sentry/nextjs, @sentry/node, @opentelemetry/instrumentation, and require-in-the-middle. Local pnpm build no longer reports the Sentry/OpenTelemetry require-in-the-middle critical dependency warning; latest 56ba7e3 build also completed without that warning. Local next start -p 3010 reached Ready and GET /api/health returned 200.",
     "configs_dialog_split": "56ba7e3 moves the config edit dialog and version history dialog behind next/dynamic while reusing existing forms, Dialog, Textarea and ConfigStatusBadge components. Local pnpm build changed /configs from 18.2kB / 160kB to 15.4kB / 129kB. Local production browser verification with system Chrome logged in, opened /configs?tab=tax and the new tax dialog, then /configs?tab=theme and the theme asset dialog; there were no page errors, console errors, or real network failures.",
+    "config_derived_envelopes": "44adc21 normalizes /api/configs/[id], /publish, /versions, and /rollback to lib/api/common success/error envelopes. ConfigsClient now extracts error.message from both legacy and common error shapes and unwraps version lists from either an array or { data }. Targeted tests passed 3 files / 3 tests; targeted lint, typecheck, full hook and pnpm build passed. Local production browser verification returned /api/configs/[id]/versions as { success:true, data: [] } in an authenticated session and opened tax/theme dialogs without page errors, console errors or real network failures.",
     "org_admin_rpc_cleanup": {
       "rpc_ms": 232,
       "users": 25,
