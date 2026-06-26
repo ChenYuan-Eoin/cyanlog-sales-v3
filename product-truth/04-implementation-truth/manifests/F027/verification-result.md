@@ -2,10 +2,10 @@
 
 **Date**: 2026-06-26
 **Branch**: `codex/audit-remediation-61-issues`
-**Branch HEAD**: `632f286`
+**Branch HEAD**: `bde4752`
 **Production Deployed App HEAD**: `6b0bd77`
 **Production Deployment**: `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`
-**Latest Preview Deployment**: `dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t`
+**Latest Preview Deployment**: `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw`
 **Production URL**: `https://sales.cyanlog.icu`
 
 ---
@@ -17,7 +17,7 @@
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
 | Production | Vercel production deployment `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
-| Latest Preview | Git push for `632f286` produced Preview `dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t` => `READY`; production deploy/promote is blocked by Vercel quota `api-deployments-free-per-day` | Preview pass / production blocked |
+| Latest Preview | Manual Preview deploy for `bde4752` produced `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` => `READY`; production promote is blocked by Vercel quota `api-deployments-free-per-day` | Preview pass / production blocked |
 | Health | `GET /api/health` => `status=ok`, database ok, `x-vercel-id: hnd1::sin1`, database latency 186ms | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
@@ -32,7 +32,7 @@
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
 | `pnpm test:run` | 90 files / 387 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
 | `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared. Local webpack cache may also warn about serializing big strings. |
-| Commit hook | 10/10 governance checks passed through `632f286` | No `--no-verify` used |
+| Commit hook | 10/10 governance checks passed through `bde4752` | No `--no-verify` used |
 | Vercel build | Ready | `sharp@0.34.5` install script now runs and completes; remaining build warnings are Sentry/OpenTelemetry dynamic require and webpack cache big string serialization |
 | Supabase migrations | `supabase db push --linked --yes` applied `20260626062255_login_rpc_stage_timing.sql`, `20260626065920_org_admin_payload_rpc.sql`, `20260626071818_org_admin_active_members_only.sql`, and `20260626155732_org_admin_active_departments_only.sql` in this F027 performance/org-admin phase | Pass |
 | Supabase remote lint | `supabase db lint --linked --fail-on error` failed before linting due Supabase temp role SASL auth/circuit breaker | Blocked by platform auth, not counted as schema validation |
@@ -45,7 +45,8 @@
 |---|---|---|
 | D01 Production availability | Production deployment `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
 | D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; latest production health returned `x-vercel-id: hnd1::sin1` and database latency 186ms. | Pass |
-| D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200 and warms the same route bundle/Supabase path. | Pass |
+| D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200. `bde4752` extends that same prewarm asset to call `login_with_password_v1` with invalid/null input so the main RPC transport path is warmed without writing login attempts or tokens. | Pass on local + Preview; not yet production |
+| D02 Login transport timing | `bde4752` adds `login_rpc_transport = login_rpc - rpc_total` to `X-Login-Timing`, separating Supabase/PostgREST/network/serialization wait from database function compute. Local production login after prewarm returned `total=318.0ms`, `rpc_total=107.6ms`, `login_rpc_transport=203.4ms`; Preview `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` returned `total=147.6ms`, `rpc_total=98.4ms`, `login_rpc_transport=39.9ms`. | Pass on local + Preview; not yet production |
 | D02 Fast navigation resilience | Production browser on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` rapidly navigated `/` -> `/configs?tab=role-access`; `fastNavigationConsoleMessages=[]`, so stale dashboard `Failed to fetch` noise no longer leaks during navigation. | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de` on `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5`; expected title, basic info, review job and AI risk point visible; no `页面发生错误` | Pass |
 | D02 Error boundary home recovery | `778073d` moves boundary reporting to a deferred helper, sends `/api/client-errors` with `sendBeacon` when available, and reuses existing `primeHomeInitialData` plus `router.prefetch('/')` so returning home is warmed before the click path. Local helper tests assert delayed reporting and home warmup; production `dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6` rendered `/` and the user-reported contract detail URL without `页面发生错误`. | Pass |
@@ -80,7 +81,7 @@
 | D07 Generic asset upload validation and drag feedback | `7d7561a` guards `/api/upload` invalid multipart, missing file and unsupported type before Storage work; local route tests cover 4 cases and full suite is 89 files / 381 tests. Production `dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5` returned 400 for invalid multipart, missing file and unsupported `.txt`. Browser `/profile` edit mode exposed the existing `ImageUpload` control; synthetic `dragover` changed the drop zone to `bg-blue-50 border-blue-500`, and `dragleave` restored `bg-slate-50 border-slate-300`. | Pass |
 | D08 Knowledge create | Browser `/knowledge` -> `/knowledge/new` -> create -> `/knowledge?page={id}`; API readback; temp page deleted | Pass |
 | D10 Deploy payload | Latest successful Vercel production deployment `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew` uploaded 184.6KB; project rootDirectory remains `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
-| D10 Production deploy blocker | `vercel deploy --prod` and `vercel promote https://cyanlog-sales-v3-lxstvysnf-eoins-projects-94b17ece.vercel.app` both failed with Vercel quota code `api-deployments-free-per-day`; `sales.cyanlog.icu` therefore still points to `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`. | Blocked by platform quota |
+| D10 Production deploy blocker | `vercel promote https://cyanlog-sales-v3-a6rzk0d24-eoins-projects-94b17ece.vercel.app` failed with Vercel quota code `api-deployments-free-per-day`; `sales.cyanlog.icu` therefore still points to `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`. | Blocked by platform quota |
 | D10 Sharp build script | `7eded60` adds `pnpm.onlyBuiltDependencies=["sharp"]`; deployment `dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` ran `sharp@0.34.5 install/check.js` and completed; subsequent production builds completed without the previous ignored build scripts warning. | Pass |
 | D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
@@ -91,7 +92,7 @@
 | Area | Evidence | Conclusion |
 |---|---|---|
 | Page switching | DevTools trace showed route switching INP 26ms and CLS 0.00. | Page switching is not the current primary bottleneck. |
-| Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After same-route prewarm plus `sin1` function region, explicit prewarm+POST samples on `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` returned route totals 166.0ms, 120.0ms and 112.1ms. Later direct-login samples on `dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy` included route totals 315.0ms, 154.5ms, 124.5ms, 110.3ms and 109.8ms, but first-sample wall time was 2551ms. Latest user-provided reference records `/api/auth/login` at 1173ms and overall login at 1590ms. | Warm route time can meet the 0.5s route target, but cold login is not closed: the latest observed login still exceeds the 0.5s target and must stay in D02 performance remediation. |
+| Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After same-route prewarm plus `sin1` function region, explicit prewarm+POST samples on `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` returned route totals 166.0ms, 120.0ms and 112.1ms. Later direct-login samples on `dpl_CS6rgLkfXyeoJ9E3MLXUZG5quEjy` included route totals 315.0ms, 154.5ms, 124.5ms, 110.3ms and 109.8ms, but first-sample wall time was 2551ms. Latest user-provided reference records `/api/auth/login` at 1173ms and overall login at 1590ms. `bde4752` Preview sample after prewarm returned wall 726ms and route total 147.6ms with `login_rpc_transport=39.9ms`. | Warm route time can meet the 0.5s route target, but cold login is not closed on production until the latest Preview can be promoted and measured on `sales.cyanlog.icu`. |
 | External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. Latest health check on `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew` returned 186ms database latency. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
 | `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB; prior current build was 166kB. After `c74ad23`, current production build shows `/configs` Size 18kB and First Load JS 159kB; production `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` logged-in `/configs` returns 200 and its page chunk is 61,052 bytes. `/contracts` remains 144kB and `/tenders` 126kB in the same build. | Config center first entry is improved, but still remains heavier than adjacent modules and should stay under bundle watch. |
 | `/admin/org` bundle | Before `0d15f8c`, local build showed `/admin/org` Size 73.2kB and First Load JS 245kB. After lazy-loading the reused organization workbench, production build shows 3.78kB and 107kB; production `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` logged-in `/admin/org` returns 200 and page chunk is 9,078 bytes. | Admin organization entry is no longer a large first-load outlier; interaction still depends on the deferred workbench chunk. |
@@ -107,6 +108,7 @@ Required next instrumentation for cold login:
 - `initialDashboard` assembly timing: done via `rpc_initial_dashboard`.
 - `initialCore` assembly timing: done via `rpc_initial_core`.
 - auth context cookie signing timing: done via `auth_context_cookie`.
+- Supabase/PostgREST/network wait outside the database function: done via `login_rpc_transport`.
 
 Production note: Vercel did not expose the application `Server-Timing` header in the login response, but the mirrored `X-Login-Timing` header is present and contains the full stage breakdown.
 
@@ -210,7 +212,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | Risk | Why Not Closed | Next Step |
 |---|---|---|
 | Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED` with missing env list and scope hint. | Configure Feishu env in Vercel, redeploy, then run department sync success test and verify imported/updated/total plus database `source=feishu` rows. |
-| Cold login < 0.5s target | Warm route compute has reached 109.8-315.0ms in direct samples, and repeated `auth_context_cookie` signing is down to 0.4-0.5ms after HMAC key cache warmup. That does not close cold login: first-request wall time was 2551ms in one sample, and the latest user-provided reference records `/api/auth/login` at 1173ms with overall login at 1590ms. | Keep same-route prewarm and `sin1` region config; next optimization should target cold startup/external wait and password verification cost. |
+| Cold login < 0.5s target | Warm route compute has reached 109.8-315.0ms in direct samples, and `bde4752` Preview returned `X-Login-Timing total=147.6ms` after prewarm. That does not close production cold login: first-request wall time was 2551ms in one sample, and the latest user-provided reference records `/api/auth/login` at 1173ms with overall login at 1590ms. | Promote the verified Preview when Vercel quota allows, then re-measure `sales.cyanlog.icu` with `login_rpc_transport` to separate external wait from RPC compute. |
 | Org-admin route latency variance | RPC hot path is down to 41.4-232ms in direct checks, and route responses now expose `X-Org-Payload-Source` plus `X-Org-Timing`. Samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep collecting `X-Org-Timing` in future admin add/remove refresh tests to separate backend latency from front-end state refresh bugs. |
 | `/configs` first-load JS | Current build after `c74ad23` shows `/configs` First Load JS 159kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic samples were 281kB and 166kB. | Keep bundle budget watch; next target is shared chunk if user-perceived first entry remains slow. |
 | Historical design archive size | `product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html` is tracked at about 9.5MB. It is explicitly documented as historical reference, not active design truth or deployed app code. | Do not delete blindly; if clone/push size becomes a product concern, replace with an external artifact pointer or compressed release asset after user approval. |
@@ -218,4 +220,4 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | Test/mock `any` cleanup | Production searched paths have 0 direct `any` matches; tests and mocks still use `any` heavily for Supabase chain mocks. | Separate test mock typings from production typings; enforce stricter no-explicit-any only after shared mock builders exist. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |
 | Build warnings | Sentry/OpenTelemetry dynamic require warning remains; local/Vercel webpack cache can warn about serializing big strings. Local SWC fallback warning was cleared, and the Vercel `sharp` ignored build scripts warning is now cleared by `pnpm.onlyBuiltDependencies`. | Evaluate Sentry config tree-shaking and cache warning source. |
-| Vercel production deploy quota | New Preview for `632f286` is Ready, but production deploy and promote are blocked by Vercel free daily deployment quota (`api-deployments-free-per-day`). | After quota resets or plan limit is raised, promote/deploy `dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t` or a fresh production build, then repeat the organization/role browser flow on `sales.cyanlog.icu`. |
+| Vercel production deploy quota | Preview `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` for `bde4752` is Ready and login timing verified, but production promote is blocked by Vercel free daily deployment quota (`api-deployments-free-per-day`). | After quota resets or plan limit is raised, promote/deploy `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` or a fresh production build, then repeat the organization/role and login timing browser/API flows on `sales.cyanlog.icu`. |

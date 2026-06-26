@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "632f286",
+  "head": "bde4752",
   "commits": [
     {
       "sha": "5641824",
@@ -183,6 +183,10 @@
     {
       "sha": "632f286",
       "message": "fix(configs): refresh org access mutations"
+    },
+    {
+      "sha": "bde4752",
+      "message": "fix(auth): prewarm login rpc transport path"
     }
   ],
   "production": {
@@ -204,7 +208,7 @@
     "mobile": "configs and contracts verified without horizontal overflow",
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
-    "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms, and later warm direct samples were also below 0.5s. However the latest user-provided reference records /api/auth/login at 1173ms and overall login at 1590ms. Conclusion: warm route compute can meet the 0.5s route target, but cold login remains open and needs stage timing around RPC, token write, initialDashboard, initialCore and auth context cookie signing.",
+    "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms, and later warm direct samples were also below 0.5s. However the latest user-provided reference records /api/auth/login at 1173ms and overall login at 1590ms. bde4752 extends prewarm to the no-side-effect input-validation branch of login_with_password_v1 and adds login_rpc_transport to separate Supabase/PostgREST/network wait from rpc_total. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw returned prewarm 200 and login X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms. Production remains open until this Preview can be promoted and measured on sales.cyanlog.icu.",
     "performance_external_wait": "Supabase/GitHub TLS reset was observed during diagnostics; one core API stalled around 9s before 401, then recovered to around 185-355ms. External dependencies are not treated as automatically bad, but their latency/error class must be separated from app-code compute time.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23/4bc49c6 production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-d1d47a8244087e40.js returned 61,052 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
@@ -214,7 +218,8 @@
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
     "org_admin": "Final production browser verification on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: org role page loaded 25 users; temp user created via UI, visible after create, assigned ADMIN role, visible in Admin role after assign, removed from Admin role, role_codes cleared, hard cleanup deleted temp user, final count 25, consoleMessages=[].",
     "org_access_refresh_preview": "Local production server and online Preview dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t verified the same org/access refresh flow after 632f286: Feishu unconfigured feedback is visible; a temp member with ADMIN role appears in org structure immediately after create, appears in the Admin role panel after tab switch, and disappears from the role panel after UI delete. Cleanup checks found 0 codex-org-refresh/codex-preview-org-refresh users remaining.",
-    "production_deploy_blocker": "Direct vercel deploy --prod and vercel promote for dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t both failed with Vercel quota code api-deployments-free-per-day. sales.cyanlog.icu therefore still points to dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew until quota resets or plan limit is raised.",
+    "login_transport_preview": "bde4752 local production verification: prewarm 200 in 1.229s; login 200 in 324ms; X-Login-Timing total=318.0ms, rpc_total=107.6ms, login_rpc_transport=203.4ms. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via share URL: health 200 with database latency 120ms; prewarm 200 in 1.058s; login 200 in 726ms; X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms.",
+    "production_deploy_blocker": "Direct vercel promote for dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw failed with Vercel quota code api-deployments-free-per-day. sales.cyanlog.icu therefore still points to dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew until quota resets or plan limit is raised.",
     "org_admin_rpc_cleanup": {
       "rpc_ms": 232,
       "users": 25,
