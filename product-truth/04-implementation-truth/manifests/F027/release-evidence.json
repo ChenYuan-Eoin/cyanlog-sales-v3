@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "d5dd3ac",
+  "head": "006f41e",
   "commits": [
     {
       "sha": "5641824",
@@ -195,6 +195,10 @@
     {
       "sha": "d5dd3ac",
       "message": "chore(sentry): skip instrumentation without dsn"
+    },
+    {
+      "sha": "006f41e",
+      "message": "chore(auth): log slow login timing stages"
     }
   ],
   "production": {
@@ -206,7 +210,7 @@
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "90 files / 387 tests passed",
+    "test": "90 files / 388 tests passed",
     "build": "pass with known warnings",
     "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 186ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
@@ -217,9 +221,9 @@
     "mobile": "configs and contracts verified without horizontal overflow",
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
-    "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms, and later warm direct samples were also below 0.5s. However the latest user-provided reference records /api/auth/login at 1173ms and overall login at 1590ms. bde4752 extends prewarm to the no-side-effect input-validation branch of login_with_password_v1 and adds login_rpc_transport to separate Supabase/PostgREST/network wait from rpc_total. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw returned prewarm 200 and login X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms. Production remains open until this Preview can be promoted and measured on sales.cyanlog.icu.",
+    "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms, and later warm direct samples were also below 0.5s. However the latest user-provided reference records /api/auth/login at 1173ms and overall login at 1590ms. bde4752 extends prewarm to the no-side-effect input-validation branch of login_with_password_v1 and adds login_rpc_transport to separate Supabase/PostgREST/network wait from rpc_total. 006f41e logs sanitized stage timings to server/Vercel logs when route total is >=500ms. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw returned prewarm 200 and login X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms. Production remains open until latest HEAD can be deployed/promoted and measured on sales.cyanlog.icu.",
     "performance_external_wait": "Supabase/GitHub TLS reset was observed during diagnostics; one core API stalled around 9s before 401, then recovered to around 185-355ms. External dependencies are not treated as automatically bad, but their latency/error class must be separated from app-code compute time.",
-    "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23/4bc49c6 production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-d1d47a8244087e40.js returned 61,052 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
+    "performance_configs_bundle": "Earlier sample: /configs around 281kB. Current local production build: /configs Size 18.2kB and First Load JS 160kB; production /_next/static/chunks/app/configs/page-d1d47a8244087e40.js returned 61,052 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
     "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 82 files / 366 tests without the Node 24 --localstorage-file warning.",
     "lint_warning_cleanup": "Standard pnpm lint now uses ESLint CLI over app/components/lib/types plus middleware/instrumentation/Sentry config files; latest run passed without the Next 16 next lint deprecation warning.",
@@ -228,8 +232,9 @@
     "org_admin": "Final production browser verification on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: org role page loaded 25 users; temp user created via UI, visible after create, assigned ADMIN role, visible in Admin role after assign, removed from Admin role, role_codes cleared, hard cleanup deleted temp user, final count 25, consoleMessages=[].",
     "org_access_refresh_preview": "Local production server and online Preview dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t verified the same org/access refresh flow after 632f286: Feishu unconfigured feedback is visible; a temp member with ADMIN role appears in org structure immediately after create, appears in the Admin role panel after tab switch, and disappears from the role panel after UI delete. Cleanup checks found 0 codex-org-refresh/codex-preview-org-refresh users remaining.",
     "login_transport_preview": "bde4752 local production verification: prewarm 200 in 1.229s; login 200 in 324ms; X-Login-Timing total=318.0ms, rpc_total=107.6ms, login_rpc_transport=203.4ms. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via share URL: health 200 with database latency 120ms; prewarm 200 in 1.058s; login 200 in 726ms; X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms.",
+    "login_slow_timing_log": "006f41e reuses the existing login timing collector and emits a sanitized [auth/login] slow timing warning when /api/auth/login total route time is >=500ms. The log includes stage durations such as login_rpc, rpc_token_write, rpc_initial_dashboard, rpc_initial_core, login_rpc_transport, and auth_context_cookie. Unit coverage asserts email, user id, and display name are not logged.",
     "preview_visual_smoke": "Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via temporary Vercel share URL: browser screenshots captured for /login, /, /configs?tab=role-access desktop 1440x900 and /configs?tab=role-access mobile 390x844. Dashboard, role-access desktop, and role-access mobile reported scrollWidth equal to viewport width, overflowX=false, hasErrorText=false, and role-access content visible. Screenshot files are ignored under product-truth/product-code/output/playwright and are not tracked or uploaded.",
-    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. Later d5dd3ac is pushed and locally verified but has no Ready Preview or Production deployment yet.",
+    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. Later 006f41e is pushed and locally verified but has no Ready Preview or Production deployment yet.",
     "production_deploy_blocker": "Repeated vercel promote for dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw failed with Vercel quota code api-deployments-free-per-day. sales.cyanlog.icu therefore still points to dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew until quota resets or plan limit is raised.",
     "sentry_no_dsn_startup_guard": "instrumentation.ts now skips server/edge Sentry config import when SENTRY_DSN and NEXT_PUBLIC_SENTRY_DSN are both unset. Local next start -p 3000 no longer prints the server Sentry DSN-not-configured warning. next build still reports the Sentry/OpenTelemetry dynamic require warning, so build warning remains a tracked risk rather than a closed item.",
     "org_admin_rpc_cleanup": {
@@ -696,8 +701,8 @@
     "performance_configs_bundle_current": {
       "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
       "commit": "ff9f4bd",
-      "local_build_route_size": "18kB",
-      "local_build_first_load_js": "159kB",
+      "local_build_route_size": "18.2kB",
+      "local_build_first_load_js": "160kB",
       "production_configs_page_status": 200,
       "production_configs_page_html_bytes": 35408,
       "production_configs_page_chunk": "static/chunks/app/configs/page-d1d47a8244087e40.js",
@@ -1129,7 +1134,7 @@
     "Direct first-submit can still pay cold startup or external wait if same-route prewarm has not completed; latest auth HMAC key cache reduced repeated auth_context_cookie signing to 0.4-0.5ms, but the first latest sample still had 2551ms wall time for 315.0ms route compute.",
     "Node/Playwright request DNS intermittently returned ENOTFOUND for sales.cyanlog.icu while curl and Chrome verified the alias; keep external resolver failures classified separately from app errors.",
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
-    "/configs first-load bundle is improved from the earlier 281kB and 166kB samples to 159kB after lazy-loading edit dialogs, and /admin/org is improved from 245kB to 107kB after lazy-loading the organization workbench. Keep shared chunks and heavier adjacent routes under bundle watch.",
+    "/configs first-load bundle is improved from the earlier 281kB and 166kB samples to the current 160kB build after lazy-loading edit dialogs, and /admin/org is improved from 245kB to 107kB after lazy-loading the organization workbench. Keep shared chunks and heavier adjacent routes under bundle watch.",
     "Historical design archive product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html is about 9.5MB and remains tracked as reference material; do not delete without replacing the asset policy.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
