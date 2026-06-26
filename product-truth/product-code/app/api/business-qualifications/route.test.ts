@@ -23,6 +23,16 @@ import { POST, GET } from './route'
 function makeReq(body: any): any {
   return { json: async () => body, method: 'POST', url: 'http://x', headers: new Headers() }
 }
+function makeMalformedReq(): any {
+  return {
+    json: async () => {
+      throw new SyntaxError('Unexpected token')
+    },
+    method: 'POST',
+    url: 'http://x',
+    headers: new Headers({ 'content-type': 'application/json' }),
+  }
+}
 function makeGetReq(url: string): any {
   return { url, method: 'GET', headers: new Headers() }
 }
@@ -33,6 +43,15 @@ beforeEach(() => {
 })
 
 describe('POST /api/business-qualifications', () => {
+  it('无效 JSON → 400 且不访问数据库', async () => {
+    const res = await POST(makeMalformedReq())
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
   it('缺 title → 400', async () => {
     const res = await POST(makeReq({ qual_type: 'ENTERPRISE' }))
     expect(res.status).toBe(400)

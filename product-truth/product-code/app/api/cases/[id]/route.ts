@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: AsyncRouteParams) {
   try {
     await requireAuth(req)
     const id = await resolveIdParam(params)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const result = caseUpdateSchema.safeParse(body)
 
     if (!result.success) {

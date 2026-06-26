@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
     const result = createSchema.safeParse(body)
     if (!result.success) {
       const firstError = result.error.issues[0]

@@ -15,6 +15,7 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
+import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
 function makeRequest(url: string, body?: any, method = 'GET'): any {
@@ -23,6 +24,17 @@ function makeRequest(url: string, body?: any, method = 'GET'): any {
     method,
     json: async () => body || {},
     headers: new Headers(),
+  }
+}
+
+function makeMalformedRequest(url: string): any {
+  return {
+    url,
+    method: 'POST',
+    json: async () => {
+      throw new SyntaxError('Unexpected token')
+    },
+    headers: new Headers({ 'content-type': 'application/json' }),
   }
 }
 
@@ -118,6 +130,16 @@ describe('GET /api/cases', () => {
 describe('POST /api/cases', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('无效 JSON → 400 且不访问数据库', async () => {
+    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
+    const res = await POST(makeMalformedRequest('http://localhost/api/cases'))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('缺 title → 400', async () => {

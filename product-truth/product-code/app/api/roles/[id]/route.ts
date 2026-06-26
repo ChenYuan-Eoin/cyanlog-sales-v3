@@ -32,7 +32,7 @@ export async function PATCH(
 
   const id = await resolveIdParam(params)
 
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
   const parsed = patchSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
