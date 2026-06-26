@@ -161,7 +161,7 @@ export function RoleDetailPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role.permissions])
 
-  const hasChanges = JSON.stringify(perms.sort()) !== JSON.stringify((role.permissions ?? []).sort())
+  const hasChanges = JSON.stringify([...perms].sort()) !== JSON.stringify([...(role.permissions ?? [])].sort())
 
   function togglePermission(key: string) {
     if (isSuperAdmin) return

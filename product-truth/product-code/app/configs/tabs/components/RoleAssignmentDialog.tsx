@@ -57,7 +57,10 @@ export function RoleAssignmentDialog({
     const fetchRoles = async () => {
       setFetchingRoles(true)
       try {
-        const res = await fetch('/api/roles')
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/roles', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
         if (res.ok) {
           const result = await res.json()
           if (result.success && result.data?.roles) {

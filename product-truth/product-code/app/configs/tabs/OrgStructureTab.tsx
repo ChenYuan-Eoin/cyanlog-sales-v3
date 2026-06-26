@@ -49,6 +49,14 @@ const feishuFeedbackStyle: Record<FeishuSyncFeedback['status'], string> = {
   error: 'border-rose-200 bg-rose-50 text-rose-800',
 }
 
+function buildAuthHeaders(includeJson = false): HeadersInit {
+  const token = localStorage.getItem('token')
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+  }
+}
+
 // ============ 工具函数 ============
 
 function getAllChildDeptIds(departments: OrgSummaryDepartment[], parentId: string): Set<string> {
@@ -111,6 +119,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
     try {
       const res = await fetch(`/api/admin/departments/${dept.id}`, {
         method: 'DELETE',
+        headers: buildAuthHeaders(),
       })
       if (!res.ok) {
         const result = await res.json().catch(() => ({}))
@@ -257,7 +266,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
           onSubmit={async (values) => {
             const res = await fetch(`/api/admin/departments/${editDept.id}`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: buildAuthHeaders(true),
               body: JSON.stringify({
                 name: values.name,
                 code: values.code,
@@ -286,7 +295,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
           onSubmit={async (values) => {
             const res = await fetch('/api/admin/departments', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: buildAuthHeaders(true),
               body: JSON.stringify({
                 name: values.name,
                 code: values.code,
@@ -440,6 +449,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}/reset-password`, {
                       method: 'POST',
+                      headers: buildAuthHeaders(),
                     })
                     const result = await res.json()
                     if (!res.ok) {
@@ -465,7 +475,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}`, {
                       method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: buildAuthHeaders(true),
                       body: JSON.stringify({ status: isDisabled ? 'active' : 'suspended' }),
                     })
                     const result = await res.json()
@@ -501,7 +511,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}/login-enabled`, {
                       method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: buildAuthHeaders(true),
                       body: JSON.stringify({ login_enabled: isLoginDisabled }),
                     })
                     const result = await res.json()
@@ -539,6 +549,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}`, {
                       method: 'DELETE',
+                      headers: buildAuthHeaders(),
                     })
                     const result = await res.json()
                     if (!res.ok) {
@@ -715,7 +726,7 @@ export default function OrgStructureTab({
             onSubmit={async (values) => {
               const res = await fetch('/api/admin/departments', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: buildAuthHeaders(true),
                 body: JSON.stringify({
                   name: values.name,
                   code: values.code,
@@ -744,7 +755,7 @@ export default function OrgStructureTab({
             onSubmit={async (values) => {
               const res = await fetch('/api/admin/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: buildAuthHeaders(true),
                 body: JSON.stringify({ ...values, status: 'active' }),
               })
               const result = await res.json()
@@ -893,7 +904,7 @@ export default function OrgStructureTab({
           onSubmit={async (values) => {
             const res = await fetch(`/api/admin/users/${editingUser.id}`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: buildAuthHeaders(true),
               body: JSON.stringify(values),
             })
             const result = await res.json()
@@ -919,7 +930,7 @@ export default function OrgStructureTab({
           onSubmit={async (roleIds) => {
             const res = await fetch(`/api/admin/users/${assigningUser.id}/roles`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: buildAuthHeaders(true),
               body: JSON.stringify({ role_ids: roleIds, scope_type: 'org' }),
             })
             const result = await res.json()

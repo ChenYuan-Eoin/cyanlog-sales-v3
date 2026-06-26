@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { SearchIcon, UsersIcon, ShieldIcon, ChevronRightIcon } from 'lucide-react'
@@ -87,14 +87,20 @@ export default function RoleAccessTab({
 
   // 选中的角色
   const selectedRole = useMemo(
-    () => roles.find(r => r.id === selectedRoleId) || roles[0] || null,
-    [roles, selectedRoleId]
+    () => rolesWithStats.find(r => r.id === selectedRoleId) || rolesWithStats[0] || null,
+    [rolesWithStats, selectedRoleId]
   )
 
-  // 如果没有选中角色，默认选中第一个
-  if (selectedRole && !selectedRoleId) {
-    setSelectedRoleId(selectedRole.id)
-  }
+  useEffect(() => {
+    if (!selectedRoleId && selectedRole) {
+      setSelectedRoleId(selectedRole.id)
+      return
+    }
+
+    if (selectedRoleId && !rolesWithStats.some((role) => role.id === selectedRoleId)) {
+      setSelectedRoleId(rolesWithStats[0]?.id ?? null)
+    }
+  }, [rolesWithStats, selectedRole, selectedRoleId])
 
   return (
     <div className="flex flex-col gap-6 2xl:flex-row">

@@ -24,7 +24,7 @@ import {
   FileTextIcon,
 } from '@/components/icons'
 import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback } from './types'
-import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
+import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import TabsContent from './tabs/TabsContent'
@@ -272,6 +272,20 @@ function loadInflightTabValue<T>(cacheKey: string, loader: () => Promise<T | nul
   })
   tabDataInflight.set(cacheKey, request)
   return request
+}
+
+function orgAccessCacheKeys(token: string | null) {
+  return {
+    org: scopedCacheKey(token, 'configs:org-structure'),
+    roles: scopedCacheKey(token, 'configs:role-access'),
+  }
+}
+
+function clearOrgAccessBrowserCache(token: string | null) {
+  const cacheKeys = orgAccessCacheKeys(token)
+  deleteBrowserCache(cacheKeys.org)
+  deleteBrowserCache(cacheKeys.roles)
+  return cacheKeys
 }
 
 type ConfigRoleRecord = {
@@ -624,10 +638,18 @@ export default function ConfigsClient({
   const refreshOrgSummary = useCallback(async () => {
     const token = localStorage.getItem('token')
     const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
-    const orgRes = await fetch('/api/admin/org', {
-      headers,
-      cache: 'no-store',
-    })
+    const cacheKeys = clearOrgAccessBrowserCache(token)
+    setError('')
+    const [orgRes, rolesRes] = await Promise.all([
+      fetch('/api/admin/org', {
+        headers,
+        cache: 'no-store',
+      }),
+      fetch('/api/roles', {
+        headers,
+        cache: 'no-store',
+      }),
+    ])
 
     if (!orgRes.ok) {
       const data = await orgRes.json().catch(() => ({}))
@@ -637,8 +659,26 @@ export default function ConfigsClient({
 
     const orgData = await orgRes.json()
     setOrgSummary(orgData)
-    writeBrowserCache(scopedCacheKey(token, 'configs:org-structure'), orgData)
-    setLoadedTabs(prev => new Set(prev).add('org-structure'))
+    writeBrowserCache(cacheKeys.org, orgData)
+
+    if (rolesRes.ok) {
+      const rolesData = await rolesRes.json()
+      const nextRoles = (rolesData.data?.roles ?? []) as ConfigRoleRecord[]
+      setRoles(nextRoles)
+      writeBrowserCache(cacheKeys.roles, nextRoles)
+    } else if (loadedTabsRef.current.has('role-access')) {
+      const data = await rolesRes.json().catch(() => ({}))
+      setError(typeof data.error === 'string' ? `组织已刷新，角色列表刷新失败：${data.error}` : '组织已刷新，角色列表刷新失败')
+    }
+
+    setLoadedTabs(prev => {
+      const next = new Set(prev)
+      next.add('org-structure')
+      if (rolesRes.ok) {
+        next.add('role-access')
+      }
+      return next
+    })
   }, [])
 
   const getConfigsByType = useCallback((type: Config['type']) => (
@@ -758,7 +798,11 @@ export default function ConfigsClient({
         body: JSON.stringify({ permissions: newPerms }),
       })
       if (res.ok) {
-        setRoles((rs) => rs.map((r) => r.id === roleId ? { ...r, permissions: newPerms } : r))
+        setRoles((rs) => {
+          const nextRoles = rs.map((r) => r.id === roleId ? { ...r, permissions: newPerms } : r)
+          writeBrowserCache(scopedCacheKey(token, 'configs:role-access'), nextRoles)
+          return nextRoles
+        })
       } else {
         const data = await res.json().catch(() => ({}))
         setError(data.error || '保存失败')
