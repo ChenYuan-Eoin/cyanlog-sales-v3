@@ -2,10 +2,49 @@
 // PURPOSE: 部门的更新和删除
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+
+const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, 'ID 格式不正确')
+const updateDepartmentSchema = z.object({
+  name: z.string().trim().min(1, '部门名称不能为空').max(80, '部门名称不能超过 80 字').optional(),
+  code: z.string().trim().min(1, '部门编码不能为空').max(50, '部门编码不能超过 50 字').optional(),
+  parent_id: uuidSchema.nullable().optional(),
+  leader_id: uuidSchema.nullable().optional(),
+  sort_order: z.coerce.number().int().min(0, '排序值不能小于 0').optional(),
+}).refine((value) => Object.keys(value).length > 0, {
+  message: '至少提供一个要更新的字段',
+})
+
+function validationError(result: z.ZodError) {
+  return NextResponse.json(
+    { error: result.issues[0]?.message || '部门参数不正确', code: 'VALIDATION_ERROR' },
+    { status: 400 }
+  )
+}
+
+async function assertUserInOrg(orgId: string, userId: string | null | undefined) {
+  if (!userId) {
+    return null
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .eq('org_id', orgId)
+    .neq('status', 'inactive')
+    .maybeSingle()
+
+  if (error || !data) {
+    return null
+  }
+
+  return data
+}
 
 // PATCH /api/admin/departments/:id - 更新部门
 export async function PATCH(
@@ -25,8 +64,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { name, code, parent_id, sort_order } = body
+    const parseResult = updateDepartmentSchema.safeParse(await req.json())
+    if (!parseResult.success) {
+      return validationError(parseResult.error)
+    }
+    const { name, code, parent_id, leader_id, sort_order } = parseResult.data
 
     // 检查部门是否存在
     const { data: existing, error: checkError } = await supabaseAdmin
@@ -48,7 +90,7 @@ export async function PATCH(
         .eq('org_id', orgId)
         .eq('code', code)
         .neq('id', id)
-        .single()
+        .maybeSingle()
 
       if (codeExists) {
         return NextResponse.json({ error: '部门编码已存在' }, { status: 409 })
@@ -82,11 +124,19 @@ export async function PATCH(
       }
     }
 
+    if (leader_id) {
+      const leader = await assertUserInOrg(orgId, leader_id)
+      if (!leader) {
+        return NextResponse.json({ error: '部门主管不存在', code: 'INVALID_LEADER' }, { status: 400 })
+      }
+    }
+
     // 更新数据
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (code !== undefined) updateData.code = code
     if (parent_id !== undefined) updateData.parent_id = parent_id
+    if (leader_id !== undefined) updateData.leader_id = leader_id
     if (depth !== undefined) updateData.depth = depth
     if (sort_order !== undefined) updateData.sort_order = sort_order
 
@@ -95,7 +145,7 @@ export async function PATCH(
       .update(updateData)
       .eq('id', id)
       .eq('org_id', orgId)
-      .select('id, name, code, depth, member_count, parent_id, sort_order')
+      .select('id, name, code, depth, member_count, parent_id, leader_id, sort_order')
       .single()
 
     if (error) {
