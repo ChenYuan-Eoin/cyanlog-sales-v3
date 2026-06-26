@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26
 **Branch**: `codex/audit-remediation-61-issues`
-**Verified Code HEAD**: `001f9cc`
-**Evidence Boundary**: Runtime/API/browser verification now covers local production code through `001f9cc`. The latest Ready Preview remains `bde4752`; deploying `001f9cc` is blocked by Vercel quota.
+**Verified Code HEAD**: `d5dd3ac`
+**Evidence Boundary**: Runtime/API/browser verification now covers local production code through `d5dd3ac`. The latest Ready Preview remains `bde4752`; deploying latest HEAD is blocked by Vercel quota.
 **Production Deployed App HEAD**: `6b0bd77`
 **Production Deployment**: `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`
 **Latest Preview Deployment**: `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw`
@@ -18,7 +18,7 @@
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
 | Production | Vercel production deployment `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
-| Latest Preview | Manual Preview deploy for `bde4752` produced `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` => `READY`; new Preview deploy for `001f9cc` uploaded 155.3KB but failed with Vercel quota `api-deployments-free-per-day` | Previous Preview pass / latest Preview blocked |
+| Latest Preview | Manual Preview deploy for `bde4752` produced `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` => `READY`; new Preview deploy for `001f9cc` uploaded 155.3KB but failed with Vercel quota `api-deployments-free-per-day`. Later `d5dd3ac` is local-only until quota allows another deploy. | Previous Preview pass / latest Preview blocked |
 | Health | `GET /api/health` => `status=ok`, database ok, `x-vercel-id: hnd1::sin1`, database latency 186ms | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
@@ -87,6 +87,7 @@
 | D10 Latest Preview payload | Manual Preview deploy for `bde4752` uploaded 164.2KB and built `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw`; tracked app files under `product-truth/product-code` total 4.1MB, tracked repo total is 18MB, while local `node_modules` 1.2GB, `.next` 1.0GB, `output/playwright` screenshots, and `tsconfig.tsbuildinfo` are ignored. | Pass |
 | D10 Latest code deploy blocker | New Preview deploy for `001f9cc` must be run from repo root because Vercel `rootDirectory=product-truth/product-code`; running from app root double-prefixes the path. Repo-root `vercel deploy --yes` uploaded 155.3KB, then failed with quota code `api-deployments-free-per-day`, so the contract list pagination fix is pushed and locally verified but not yet online. | Blocked by platform quota |
 | D10 Production deploy blocker | `vercel promote https://cyanlog-sales-v3-a6rzk0d24-eoins-projects-94b17ece.vercel.app --yes` was retried after Preview verification and still failed with Vercel quota code `api-deployments-free-per-day`; `sales.cyanlog.icu` therefore still points to `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`. | Blocked by platform quota |
+| D10 No-DSN Sentry startup noise | `instrumentation.ts` now skips importing server/edge Sentry config when neither `SENTRY_DSN` nor `NEXT_PUBLIC_SENTRY_DSN` is set. Local `next start -p 3000` no longer prints the server `Sentry DSN not configured` warning; build-time Sentry/OpenTelemetry dynamic require warning remains and is still tracked separately. | Runtime noise pass / build warning remains |
 | D10 Sharp build script | `7eded60` adds `pnpm.onlyBuiltDependencies=["sharp"]`; deployment `dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` ran `sharp@0.34.5 install/check.js` and completed; subsequent production builds completed without the previous ignored build scripts warning. | Pass |
 | D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
@@ -224,5 +225,5 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | Full API schema coverage | Domain-by-domain schema migration is not complete, but current malformed JSON coverage is broader than the Zod count because several routes catch invalid JSON before schema parsing; direct unguarded `req.json()` / `request.json()` sites in `app/api` are now 0. | Add route-by-route validation debt list and migrate by shared API schema utilities so response envelopes/codes become consistent, not merely guarded. |
 | Test/mock `any` cleanup | Production searched paths have 0 direct `any` matches; tests and mocks still use `any` heavily for Supabase chain mocks. | Separate test mock typings from production typings; enforce stricter no-explicit-any only after shared mock builders exist. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |
-| Build warnings | Sentry/OpenTelemetry dynamic require warning remains; local/Vercel webpack cache can warn about serializing big strings. Local SWC fallback warning was cleared, and the Vercel `sharp` ignored build scripts warning is now cleared by `pnpm.onlyBuiltDependencies`. | Evaluate Sentry config tree-shaking and cache warning source. |
-| Vercel production deploy quota | Preview `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` for `bde4752` is Ready and login timing/visual smoke are verified. New code `001f9cc` is pushed and locally verified, but Preview deploy and production promote are both blocked by Vercel free daily deployment quota (`api-deployments-free-per-day`). | After quota resets or plan limit is raised, deploy `001f9cc` or a fresh HEAD build, then repeat contract pagination, organization/role and login timing browser/API flows on the new Preview and `sales.cyanlog.icu`. |
+| Build warnings | Sentry/OpenTelemetry dynamic require warning remains; local/Vercel webpack cache can warn about serializing big strings. Local SWC fallback warning was cleared, the Vercel `sharp` ignored build scripts warning is cleared, and no-DSN runtime Sentry startup noise is now skipped. | Evaluate Sentry config tree-shaking only if it can preserve production Sentry coverage; do not disable monitoring just to silence the warning. |
+| Vercel production deploy quota | Preview `dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw` for `bde4752` is Ready and login timing/visual smoke are verified. Newer code through `d5dd3ac` is pushed and locally verified, but Preview deploy and production promote are both blocked by Vercel free daily deployment quota (`api-deployments-free-per-day`). | After quota resets or plan limit is raised, deploy latest HEAD, then repeat contract pagination, no-DSN startup, organization/role and login timing browser/API flows on the new Preview and `sales.cyanlog.icu`. |
