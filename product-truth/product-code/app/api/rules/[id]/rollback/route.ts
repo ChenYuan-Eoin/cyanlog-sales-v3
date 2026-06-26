@@ -2,6 +2,7 @@
 // PURPOSE: Rule rollback API - rollback to a specific version
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
@@ -10,18 +11,21 @@ interface Params {
   params: Promise<{ id: string }>
 }
 
+const rollbackRuleSchema = z.object({
+  version: z.number().int().positive(),
+})
+
 // POST /api/rules/[id]/rollback - 回滚到指定版本
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await requireAuth(req)
     const { id: ruleId } = await params
 
-    const body = await req.json().catch(() => null) as { version?: unknown } | null
-    const targetVersion = body?.version
-
-    if (!targetVersion || typeof targetVersion !== 'number') {
+    const parsed = rollbackRuleSchema.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) {
       return NextResponse.json({ error: '请指定回滚目标版本' }, { status: 400 })
     }
+    const targetVersion = parsed.data.version
 
     const orgId = await getDefaultOrgId(user.id)
 

@@ -30,6 +30,14 @@ function makeMalformedRequest(): any {
   }
 }
 
+function makeJsonRequest(body: unknown): any {
+  return {
+    json: async () => body,
+    method: 'POST',
+    headers: new Headers({ 'content-type': 'application/json' }),
+  }
+}
+
 describe('POST /api/rules/[id]/rollback validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -38,6 +46,18 @@ describe('POST /api/rules/[id]/rollback validation', () => {
 
   it('无效 JSON 返回参数错误且不访问组织和数据库', async () => {
     const res = await POST(makeMalformedRequest(), {
+      params: Promise.resolve({ id: 'rule-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toBe('请指定回滚目标版本')
+    expect(getDefaultOrgId).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('字段类型错误返回参数错误且不访问组织和数据库', async () => {
+    const res = await POST(makeJsonRequest({ version: '1' }), {
       params: Promise.resolve({ id: 'rule-1' }),
     })
     const body = await res.json()
