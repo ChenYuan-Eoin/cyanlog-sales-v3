@@ -10,8 +10,8 @@ Scan rule: count only request body reads through `req/request.json()`, `req/requ
 
 | Class | Count | Meaning |
 |---|---:|---|
-| `schema+guard` | 58 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
-| `guard-only` | 9 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
+| `schema+guard` | 60 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
+| `guard-only` | 7 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
 | `no-body` | 36 | Route does not read request body. |
 | `unguarded-body` | 0 | No direct unguarded `req/request` body parser was found in the current scan. |
 | `schema-only` | 0 | No route was found with body schema validation but no parse guard in the current scan. |
@@ -26,8 +26,6 @@ These routes are not immediate malformed-body crashers, because they already gua
 | `/api/contracts/[id]/merge-chunks` | `POST` | Add schema for merge metadata; keep chunk integrity checks close to upload domain. |
 | `/api/contracts/[id]/upload` | `POST` | Keep multipart guard; add explicit file metadata schema where practical. |
 | `/api/contracts/[id]/upload-chunk` | `POST` | Keep multipart guard; add explicit chunk index/name/total schema. |
-| `/api/knowledge/pages/[id]` | `GET,PATCH,DELETE` | Promote existing manual page update checks into a shared page patch schema. |
-| `/api/knowledge/pages/[id]/permissions` | `GET,POST,DELETE` | Promote permission mutation checks into a shared permission schema. |
 | `/api/tenders/[id]/workflow` | `GET,POST,PATCH` | Add workflow transition schema and state constraints. |
 | `/api/tenders/ocr` | `POST` | Keep multipart guard; add explicit OCR option schema. |
 | `/api/upload` | `POST` | Keep multipart guard; add explicit upload intent/category schema. |
@@ -48,3 +46,4 @@ These routes are not immediate malformed-body crashers, because they already gua
 - `614449c` reclassified `/api/asks/[askId]/responses` and `/api/contracts/[id]/asks/[askId]/responses` from `guard-only` to `schema+guard` after confirming both routes reuse the existing `submitAskResponse` Zod schema; targeted route tests cover malformed JSON and invalid `response_text` shape before contract access or Supabase work.
 - `bb83afa` moved `/api/contracts/[id]/compare-standard` and `/api/contracts/[id]/clauses/[clauseId]` from `guard-only` to `schema+guard`; targeted tests cover malformed JSON, invalid field types, and invalid clause status before auth/org where applicable and before contract/Supabase work.
 - `5ad61c4` moved `/api/admin/review-strategies`, `/api/admin/clause-library`, and `/api/admin/clause-library/[id]` from `guard-only` to `schema+guard`; targeted tests cover malformed JSON and invalid field shapes before Supabase work while keeping existing admin auth ordering and error codes.
+- `8115000` moved `/api/knowledge/pages/[id]` and `/api/knowledge/pages/[id]/permissions` from `guard-only` to `schema+guard`; targeted tests cover malformed JSON, invalid page update fields, invalid permission fields, and invalid delete permission IDs before Supabase work.
