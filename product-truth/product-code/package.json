@@ -64,6 +64,9 @@
     "vitest": "^4.1.7"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp"
+    ],
     "overrides": {
       "@opentelemetry/core": "2.8.0",
       "@opentelemetry/sdk-trace-base": "2.8.0",
