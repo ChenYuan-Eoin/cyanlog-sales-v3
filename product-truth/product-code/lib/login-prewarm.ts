@@ -12,5 +12,17 @@ export async function warmLoginRuntime() {
       p_account_limit: 5,
       p_ip_limit: 15,
     }),
+    supabaseAdmin.rpc('login_with_password_v1', {
+      p_email: null,
+      p_phone: null,
+      p_password: null,
+      p_ip_address: 'prewarm',
+      p_token_id: null,
+      p_token: null,
+      p_expires_at: null,
+      p_since: since,
+      p_account_limit: 5,
+      p_ip_limit: 15,
+    }),
   ])
 }

@@ -142,6 +142,14 @@ function createLoginServerTiming() {
 
       metrics.push({ name, durationMs })
     },
+    getDuration(name: string) {
+      for (let index = metrics.length - 1; index >= 0; index -= 1) {
+        if (metrics[index].name === name) {
+          return metrics[index].durationMs
+        }
+      }
+      return null
+    },
     attach(response: NextResponse) {
       const total = performance.now() - startedAt
       const headerValue = [
@@ -161,6 +169,12 @@ function createLoginServerTiming() {
 function attachRpcStageTiming(timing: LoginServerTiming, rpcTiming: LoginRpcStageTiming) {
   for (const [stage, durationMs] of Object.entries(rpcTiming)) {
     timing.add(`rpc_${stage}`, durationMs)
+  }
+
+  const loginRpcDuration = timing.getDuration('login_rpc')
+  const rpcTotal = rpcTiming.total
+  if (loginRpcDuration !== null && typeof rpcTotal === 'number' && loginRpcDuration > rpcTotal) {
+    timing.add('login_rpc_transport', loginRpcDuration - rpcTotal)
   }
 }
 

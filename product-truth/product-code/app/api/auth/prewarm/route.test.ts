@@ -24,7 +24,7 @@ describe('POST /api/auth/prewarm', () => {
     vi.clearAllMocks()
   })
 
-  it('预热 users 查询和登录候选 RPC', async () => {
+  it('预热 users 查询、登录候选 RPC 和主登录 RPC 无副作用分支', async () => {
     const query = makeUserQuery({ data: { id: 'u-1' }, error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(query)
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: {}, error: null })
@@ -45,6 +45,18 @@ describe('POST /api/auth/prewarm', () => {
         p_ip_address: 'prewarm',
         p_account_limit: 5,
         p_ip_limit: 15,
+      })
+    )
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'login_with_password_v1',
+      expect.objectContaining({
+        p_email: null,
+        p_phone: null,
+        p_password: null,
+        p_ip_address: 'prewarm',
+        p_token_id: null,
+        p_token: null,
+        p_expires_at: null,
       })
     )
   })

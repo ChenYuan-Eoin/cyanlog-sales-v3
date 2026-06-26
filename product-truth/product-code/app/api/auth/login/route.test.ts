@@ -251,51 +251,56 @@ describe('POST /api/auth/login', () => {
 
     it('单 RPC 登录成功 → 200 且跳过 bcrypt 与 token insert', async () => {
       process.env.AUTH_CONTEXT_SECRET = 'test-auth-context-secret'
-      ;(supabaseAdmin.rpc as any).mockResolvedValueOnce({
-        data: {
-          ok: true,
-          code: 'OK',
-          roleCodes: ['SUPER_ADMIN'],
-          allPermissions: ['*', 'admin:access'],
-          dashboard: {
-            spaces: [{ id: 'space-1', name: '默认空间' }],
-            activeSpace: { id: 'space-1', name: '默认空间' },
-            opportunities: [],
-            milestones: [],
-            reminders: [],
-            agenda: [],
-          },
-          core: {
-            contracts: {
-              contracts: [{ id: 'contract-1', filename: '合同.pdf', status: 'COMPLETED' }],
-              drafts: [],
-              meta: { totalPages: 1, hasNext: false, hasPrev: false },
+      ;(supabaseAdmin.rpc as any).mockImplementationOnce(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 100)
+        })
+        return {
+          data: {
+            ok: true,
+            code: 'OK',
+            roleCodes: ['SUPER_ADMIN'],
+            allPermissions: ['*', 'admin:access'],
+            dashboard: {
+              spaces: [{ id: 'space-1', name: '默认空间' }],
+              activeSpace: { id: 'space-1', name: '默认空间' },
+              opportunities: [],
+              milestones: [],
+              reminders: [],
+              agenda: [],
             },
-            configs: {
-              products: [{ id: 'product-1', name: '企业版SaaS授权' }],
+            core: {
+              contracts: {
+                contracts: [{ id: 'contract-1', filename: '合同.pdf', status: 'COMPLETED' }],
+                drafts: [],
+                meta: { totalPages: 1, hasNext: false, hasPrev: false },
+              },
+              configs: {
+                products: [{ id: 'product-1', name: '企业版SaaS授权' }],
+              },
+              agenda: {
+                items: [{ id: 'agenda-1', title: '客户跟进', start_at: '2026-06-26T01:00:00.000Z' }],
+              },
             },
-            agenda: {
-              items: [{ id: 'agenda-1', title: '客户跟进', start_at: '2026-06-26T01:00:00.000Z' }],
+            timing: {
+              input_validation: 0.4,
+              token_write: 3.2,
+              initial_dashboard: 42.8,
+              initial_core: 18.5,
+              total: 82.1,
+              ignored_stage: 99,
+            },
+            user: {
+              id: 'u-fast',
+              email: 'fast@x.com',
+              phone: null,
+              display_name: 'Fast User',
+              org_id: 'org-fast',
+              must_change_password: false,
             },
           },
-          timing: {
-            input_validation: 0.4,
-            token_write: 3.2,
-            initial_dashboard: 42.8,
-            initial_core: 18.5,
-            total: 82.1,
-            ignored_stage: 99,
-          },
-          user: {
-            id: 'u-fast',
-            email: 'fast@x.com',
-            phone: null,
-            display_name: 'Fast User',
-            org_id: 'org-fast',
-            must_change_password: false,
-          },
-        },
-        error: null,
+          error: null,
+        }
       })
 
       const res = await POST(makeRequest({ email: 'fast@x.com', password: 'right' }))
@@ -309,9 +314,11 @@ describe('POST /api/auth/login', () => {
       expect(res.headers.get('Server-Timing')).toContain('rpc_initial_dashboard;dur=42.8')
       expect(res.headers.get('Server-Timing')).toContain('rpc_initial_core;dur=18.5')
       expect(res.headers.get('Server-Timing')).not.toContain('ignored_stage')
+      expect(res.headers.get('Server-Timing')).toContain('login_rpc_transport')
       expect(res.headers.get('Server-Timing')).toContain('total')
       expect(res.headers.get('X-Login-Timing')).toContain('login_rpc')
       expect(res.headers.get('X-Login-Timing')).toContain('rpc_initial_dashboard;dur=42.8')
+      expect(res.headers.get('X-Login-Timing')).toContain('login_rpc_transport')
       expect(res.headers.get('X-Login-Timing')).toContain('total')
       expect(body.initialDashboard).toMatchObject({
         activeSpace: { id: 'space-1', name: '默认空间' },
@@ -376,7 +383,7 @@ describe('GET /api/auth/login', () => {
     vi.clearAllMocks()
   })
 
-  it('预热登录 route 与 Supabase 候选查询路径', async () => {
+  it('预热登录 route、候选查询 RPC 和主登录 RPC 无副作用分支', async () => {
     const query = makeChain({ data: { id: 'u-1' }, error: null })
     query.limit = vi.fn().mockReturnValue(query)
     query.maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'u-1' }, error: null })
@@ -400,6 +407,18 @@ describe('GET /api/auth/login', () => {
         p_ip_address: 'prewarm',
         p_account_limit: 5,
         p_ip_limit: 15,
+      })
+    )
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'login_with_password_v1',
+      expect.objectContaining({
+        p_email: null,
+        p_phone: null,
+        p_password: null,
+        p_ip_address: 'prewarm',
+        p_token_id: null,
+        p_token: null,
+        p_expires_at: null,
       })
     )
   })
