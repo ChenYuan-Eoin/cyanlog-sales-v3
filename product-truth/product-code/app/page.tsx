@@ -193,14 +193,17 @@ export default function HomePage() {
         setLoading(false)
       }
     })().catch((error) => {
+      if (!mounted) {
+        return
+      }
       if (error instanceof HomeInitialAuthError) {
         clearClientSession()
         router.push('/login')
-        if (mounted) setLoading(false)
+        setLoading(false)
         return
       }
       console.error('[Dashboard] initial load error', error)
-      if (mounted) setLoading(false)
+      setLoading(false)
     })
     return () => { mounted = false }
   }, [applyDashboardPayload, router])
