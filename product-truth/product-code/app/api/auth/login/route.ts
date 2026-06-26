@@ -29,6 +29,7 @@ export const preferredRegion = 'sin1'
 export const runtime = 'nodejs'
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+const LOGIN_SLOW_TIMING_THRESHOLD_MS = 500
 
 type LoginRateLimit = Awaited<ReturnType<typeof checkLoginRateLimit>>
 
@@ -114,6 +115,30 @@ function formatServerTimingDuration(durationMs: number) {
   return Math.max(0, durationMs).toFixed(1)
 }
 
+function toRoundedDuration(durationMs: number) {
+  return Number(formatServerTimingDuration(durationMs))
+}
+
+function logSlowLoginTiming(metrics: Array<{ name: string; durationMs: number }>) {
+  const totalMetric = metrics.find((metric) => metric.name === 'total')
+  if (!totalMetric || totalMetric.durationMs < LOGIN_SLOW_TIMING_THRESHOLD_MS) {
+    return
+  }
+
+  const stages = metrics
+    .filter((metric) => metric.name !== 'total')
+    .map((metric) => ({
+      name: metric.name,
+      durationMs: toRoundedDuration(metric.durationMs),
+    }))
+
+  console.warn('[auth/login] slow timing', {
+    thresholdMs: LOGIN_SLOW_TIMING_THRESHOLD_MS,
+    totalMs: toRoundedDuration(totalMetric.durationMs),
+    stages,
+  })
+}
+
 function createLoginServerTiming() {
   const startedAt = performance.now()
   const metrics: Array<{ name: string; durationMs: number }> = []
@@ -152,15 +177,17 @@ function createLoginServerTiming() {
     },
     attach(response: NextResponse) {
       const total = performance.now() - startedAt
-      const headerValue = [
+      const responseMetrics = [
         ...metrics,
         { name: 'total', durationMs: total },
       ]
+      const headerValue = responseMetrics
         .map((metric) => `${metric.name};dur=${formatServerTimingDuration(metric.durationMs)}`)
         .join(', ')
 
       response.headers.set('Server-Timing', headerValue)
       response.headers.set('X-Login-Timing', headerValue)
+      logSlowLoginTiming(responseMetrics)
       return response
     },
   }

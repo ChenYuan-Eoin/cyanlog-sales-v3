@@ -350,6 +350,71 @@ describe('POST /api/auth/login', () => {
       expect(supabaseAdmin.from).not.toHaveBeenCalled()
     })
 
+    it('慢登录只记录脱敏阶段耗时', async () => {
+      process.env.AUTH_CONTEXT_SECRET = 'test-auth-context-secret'
+      const performanceNow = vi.spyOn(performance, 'now')
+      let now = 0
+      performanceNow.mockImplementation(() => {
+        now += 150
+        return now
+      })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      ;(supabaseAdmin.rpc as any).mockResolvedValueOnce({
+        data: {
+          ok: true,
+          code: 'OK',
+          roleCodes: ['ADMIN'],
+          allPermissions: ['admin:access'],
+          dashboard: {
+            spaces: [],
+            activeSpace: null,
+            opportunities: [],
+            milestones: [],
+            reminders: [],
+            agenda: [],
+          },
+          core: null,
+          timing: {
+            token_write: 12.3,
+            initial_dashboard: 420.4,
+            initial_core: 55.6,
+            total: 498.3,
+          },
+          user: {
+            id: 'u-slow',
+            email: 'slow@example.com',
+            phone: null,
+            display_name: 'Slow User',
+            org_id: 'org-slow',
+            must_change_password: false,
+          },
+        },
+        error: null,
+      })
+
+      try {
+        const res = await POST(makeRequest({ email: 'slow@example.com', password: 'right' }))
+
+        expect(res.status).toBe(200)
+        expect(warn).toHaveBeenCalledWith('[auth/login] slow timing', expect.objectContaining({
+          thresholdMs: 500,
+          totalMs: expect.any(Number),
+          stages: expect.arrayContaining([
+            expect.objectContaining({ name: 'rpc_initial_dashboard', durationMs: 420.4 }),
+            expect.objectContaining({ name: 'rpc_initial_core', durationMs: 55.6 }),
+            expect.objectContaining({ name: 'rpc_token_write', durationMs: 12.3 }),
+          ]),
+        }))
+        const warningPayload = JSON.stringify(warn.mock.calls)
+        expect(warningPayload).not.toContain('slow@example.com')
+        expect(warningPayload).not.toContain('u-slow')
+        expect(warningPayload).not.toContain('Slow User')
+      } finally {
+        warn.mockRestore()
+        performanceNow.mockRestore()
+      }
+    })
+
     it('首登临时密码用户返回 mustChangePassword', async () => {
       ;(checkLoginRateLimit as any).mockResolvedValue({ allowed: true, remainingAttempts: 5 })
       ;(bcrypt.compare as any).mockResolvedValue(true)
