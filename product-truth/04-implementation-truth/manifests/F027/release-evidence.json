@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "bde4752",
+  "head": "001f9cc",
   "commits": [
     {
       "sha": "5641824",
@@ -187,6 +187,10 @@
     {
       "sha": "bde4752",
       "message": "fix(auth): prewarm login rpc transport path"
+    },
+    {
+      "sha": "001f9cc",
+      "message": "fix(contracts): preserve search while loading more"
     }
   ],
   "production": {
@@ -221,6 +225,7 @@
     "org_access_refresh_preview": "Local production server and online Preview dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t verified the same org/access refresh flow after 632f286: Feishu unconfigured feedback is visible; a temp member with ADMIN role appears in org structure immediately after create, appears in the Admin role panel after tab switch, and disappears from the role panel after UI delete. Cleanup checks found 0 codex-org-refresh/codex-preview-org-refresh users remaining.",
     "login_transport_preview": "bde4752 local production verification: prewarm 200 in 1.229s; login 200 in 324ms; X-Login-Timing total=318.0ms, rpc_total=107.6ms, login_rpc_transport=203.4ms. Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via share URL: health 200 with database latency 120ms; prewarm 200 in 1.058s; login 200 in 726ms; X-Login-Timing total=147.6ms, rpc_total=98.4ms, login_rpc_transport=39.9ms.",
     "preview_visual_smoke": "Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via temporary Vercel share URL: browser screenshots captured for /login, /, /configs?tab=role-access desktop 1440x900 and /configs?tab=role-access mobile 390x844. Dashboard, role-access desktop, and role-access mobile reported scrollWidth equal to viewport width, overflowX=false, hasErrorText=false, and role-access content visible. Screenshot files are ignored under product-truth/product-code/output/playwright and are not tracked or uploaded.",
+    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. Therefore 001f9cc is pushed and locally verified but has no Ready Preview or Production deployment yet.",
     "production_deploy_blocker": "Repeated vercel promote for dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw failed with Vercel quota code api-deployments-free-per-day. sales.cyanlog.icu therefore still points to dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew until quota resets or plan limit is raised.",
     "org_admin_rpc_cleanup": {
       "rpc_ms": 232,
