@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "be7c882",
+  "head": "e57c34c",
   "commits": [
     {
       "sha": "5641824",
@@ -39,13 +39,29 @@
     {
       "sha": "be7c882",
       "message": "fix(login): stabilize mobile hero layout"
+    },
+    {
+      "sha": "4e821f3",
+      "message": "docs: record login cls verification evidence"
+    },
+    {
+      "sha": "3670901",
+      "message": "fix(org): speed up admin payload loading"
+    },
+    {
+      "sha": "a590d45",
+      "message": "fix(org): reuse middleware auth context"
+    },
+    {
+      "sha": "e57c34c",
+      "message": "fix(org): hide deleted members from admin payload"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_8NTyuduy73K8LVCBoMvsL4LRAZxE",
+    "deployment_id": "dpl_7LhA6QGMHaJVjHwEs3zMnZyt1Bb3",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/8NTyuduy73K8LVCBoMvsL4LRAZxE"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/7LhA6QGMHaJVjHwEs3zMnZyt1Bb3"
   },
   "verification": {
     "lint": "pass",
@@ -63,7 +79,16 @@
     "performance_login": "After a7545e6: X-Login-Timing exposes rpc_* stage timing; 3 production samples route total 348.6-1108ms, login_rpc 346.6-1086.7ms, rpc_total 82.4-151.8ms",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. Current Vercel build: /configs 166kB, /contracts 144kB, /tenders 126kB",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
-    "supabase_migration": "20260626062255_login_rpc_stage_timing.sql applied to linked remote; migration list local/remote match",
+    "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, and 20260626071818_org_admin_active_members_only.sql applied to linked remote",
+    "org_admin": "Production browser verification on dpl_7LhA6QGMHaJVjHwEs3zMnZyt1Bb3: org page loaded 11 departments / 25 members / 3 spaces; add temp admin changed 25=>26; stop kept row visible as 已停用; enable restored 在职; delete changed 26=>25 and removed row; temp user hard-cleaned",
+    "org_admin_rpc_cleanup": {
+      "rpc_ms": 232,
+      "users": 25,
+      "departments": 11,
+      "roles": 7,
+      "spaces": 3,
+      "temp_included": false
+    },
     "login_stage_timing_samples": [
       {
         "wall_ms": 1925,
@@ -100,6 +125,7 @@
   "known_risks": [
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
     "Cold login target below 0.5s is not consistently achieved; X-Login-Timing now shows Supabase roundtrip/connection wait and password verification dominate over dashboard/core assembly in latest samples.",
+    "Org-admin RPC hot path is verified at 185-232ms, but route-level latency can still vary with auth/default-org resolution and Supabase network waits; route timing headers should be added before further optimization.",
     "/configs first-load bundle is improved from the earlier 281kB sample but remains heavier than adjacent modules; keep it under bundle watch.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
