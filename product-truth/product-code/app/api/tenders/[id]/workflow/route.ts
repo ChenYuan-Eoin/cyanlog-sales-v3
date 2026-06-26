@@ -3,6 +3,7 @@
 // PATCH /api/tenders/:id/workflow - 更新步骤数据
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
@@ -14,6 +15,18 @@ import {
   getStepProgress,
   type TenderStep,
 } from '@/lib/tender/workflow'
+
+const workflowMoveSchema = z.object({
+  direction: z.enum(['next', 'prev']).default('next'),
+})
+
+const workflowCheckpointSchema = z.object({
+  checkpoint_data: z.record(z.string(), z.unknown()).optional(),
+})
+
+function validationError(message: string) {
+  return NextResponse.json({ error: message, code: 'VALIDATION_ERROR' }, { status: 400 })
+}
 
 // GET /api/tenders/:id/workflow
 export async function GET(
@@ -76,8 +89,11 @@ export async function POST(
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
     const { id } = await params
-    const body = await req.json().catch(() => ({}))
-    const { direction = 'next' } = body
+    const parsed = workflowMoveSchema.safeParse(await req.json().catch(() => ({})))
+    if (!parsed.success) {
+      return validationError('工作流方向无效')
+    }
+    const { direction } = parsed.data
 
     const { data: tender, error } = await supabaseAdmin
       .from('tenders')
@@ -137,8 +153,11 @@ export async function PATCH(
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
     const { id } = await params
-    const body = await req.json().catch(() => ({}))
-    const { checkpoint_data } = body
+    const parsed = workflowCheckpointSchema.safeParse(await req.json().catch(() => ({})))
+    if (!parsed.success) {
+      return validationError('步骤数据无效')
+    }
+    const { checkpoint_data } = parsed.data
 
     const { error } = await supabaseAdmin
       .from('tenders')

@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { enqueueContractAnalysisJob, runStructuredAnalysis, saveStructuredReport, markContractAnalysisRunning, markContractAnalysisCompleted, markContractAnalysisFailed, formatAnalysisError, type ReviewOptions } from '@/lib/contract-analysis'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
-import { logError } from '@/lib/error-log'
+
+const analyzeOptionsSchema = z.object({
+  strategy: z.enum(['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE']).optional(),
+  strategy_id: z.string().trim().min(1).optional(),
+})
 
 // 统一错误响应
 function errorResponse(message: string, status: number, code?: string) {
@@ -38,6 +43,12 @@ export async function POST(
     if (!id) {
       return errorResponse('合同ID必填', 400, 'MISSING_ID')
     }
+
+    const optionsParse = analyzeOptionsSchema.safeParse(await req.json().catch(() => ({})))
+    if (!optionsParse.success) {
+      return errorResponse('审核策略参数无效', 400, 'INVALID_REVIEW_OPTIONS')
+    }
+    const analyzeOptions = optionsParse.data
 
     // 使用行级锁检查合同状态（防止并发重复审核）
     const { data: contract, error: contractError } = await supabaseAdmin
@@ -163,39 +174,21 @@ export async function POST(
     let responseMessage = '审核任务已创建'
     let processingError: string | undefined
 
-    // 解析审核策略（来自请求体）
     let reviewOptions: ReviewOptions | undefined
     let strategyId: string | undefined
-    try {
-      const body = await req.json().catch(() => ({})) as { strategy?: string; strategy_id?: string }
-      if (body.strategy_id) {
-        strategyId = body.strategy_id
-      } else if (body.strategy) {
-        // 根据 code 查找 strategy
-        const { data: strategyData } = await supabaseAdmin
-          .from('review_strategies')
-          .select('id, code')
-          .or(`org_id.is.null,org_id.eq.${orgId}`)
-          .eq('code', body.strategy)
-          .limit(1)
-          .maybeSingle()
-        if (strategyData) strategyId = strategyData.id
-        reviewOptions = { strategyCode: (body.strategy || 'BALANCED') as 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE' }
-      }
-    } catch (error) {
-      await logError({
-        req,
-        level: 'warn',
-        source: 'api',
-        message: '解析审核策略参数失败',
-        error,
-        context: {
-          route,
-          requestId,
-          contractId: id,
-          phase: 'parse_review_options',
-        },
-      })
+    if (analyzeOptions.strategy_id) {
+      strategyId = analyzeOptions.strategy_id
+    } else if (analyzeOptions.strategy) {
+      // 根据 code 查找 strategy
+      const { data: strategyData } = await supabaseAdmin
+        .from('review_strategies')
+        .select('id, code')
+        .or(`org_id.is.null,org_id.eq.${orgId}`)
+        .eq('code', analyzeOptions.strategy)
+        .limit(1)
+        .maybeSingle()
+      if (strategyData) strategyId = strategyData.id
+      reviewOptions = { strategyCode: analyzeOptions.strategy }
     }
 
     try {

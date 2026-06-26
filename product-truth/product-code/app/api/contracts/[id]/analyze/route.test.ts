@@ -52,6 +52,17 @@ function makeRequest() {
   })
 }
 
+function makeJsonRequest(body: unknown) {
+  return new NextRequest('http://localhost:3000/api/contracts/contract-1/analyze', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer token-1',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+}
+
 function makeChain(method: string, result: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: Record<string, any> = {
@@ -152,5 +163,20 @@ describe('POST /api/contracts/[id]/analyze', () => {
       error: '合同不存在或无权访问',
       code: 'NOT_FOUND',
     })
+  })
+
+  it('审核策略参数错误时不查询合同和不创建任务', async () => {
+    const res = await POST(makeJsonRequest({ strategy: 'FAST' }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body).toEqual({
+      error: '审核策略参数无效',
+      code: 'INVALID_REVIEW_OPTIONS',
+    })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(enqueueContractAnalysisJob).not.toHaveBeenCalled()
   })
 })
