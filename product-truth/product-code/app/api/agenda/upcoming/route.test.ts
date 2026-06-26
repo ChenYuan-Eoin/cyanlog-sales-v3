@@ -43,7 +43,7 @@ describe('GET /api/agenda/upcoming', () => {
     const body = await res.json()
 
     expect(res.status).toBe(401)
-    expect(body.code).toBe('UNAUTHORIZED')
+    expect(body.error.code).toBe('A001')
   })
 
   it('非法查询参数 → 400', async () => {
@@ -51,7 +51,7 @@ describe('GET /api/agenda/upcoming', () => {
     const body = await res.json()
 
     expect(res.status).toBe(400)
-    expect(body.code).toBe('INVALID_QUERY')
+    expect(body.error.code).toBe('V001')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
@@ -63,6 +63,7 @@ describe('GET /api/agenda/upcoming', () => {
     const body = await res.json()
 
     expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
     expect(body.data).toHaveLength(1)
     expect(supabaseAdmin.from).toHaveBeenCalledWith('agenda_items')
     expect(query.or).toHaveBeenCalledWith('user_id.eq.u-1,assignee_id.eq.u-1,created_by.eq.u-1')

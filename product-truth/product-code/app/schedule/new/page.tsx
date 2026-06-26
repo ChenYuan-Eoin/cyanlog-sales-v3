@@ -18,6 +18,19 @@ import {
 } from '@/lib/agenda/types'
 import { invalidateAgendaUpcomingCache } from '@/lib/core-page-warmup'
 
+function readAgendaApiError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== 'object') return fallback
+
+  const body = payload as { error?: unknown; message?: unknown }
+  if (typeof body.error === 'string') return body.error
+  if (body.error && typeof body.error === 'object') {
+    const message = (body.error as { message?: unknown }).message
+    if (typeof message === 'string') return message
+  }
+  if (typeof body.message === 'string') return body.message
+  return fallback
+}
+
 export default function NewAgendaPage() {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
@@ -54,7 +67,7 @@ export default function NewAgendaPage() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error || '创建失败')
+        setError(readAgendaApiError(body, '创建失败'))
         return
       }
       invalidateAgendaUpcomingCache(token)
