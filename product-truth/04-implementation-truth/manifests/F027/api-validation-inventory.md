@@ -6,27 +6,21 @@
 
 ## Current Scan Summary
 
-Scan rule: count only request body reads through `req/request.json()`, `req/request.formData()`, `req/request.text()`, or `req/request.arrayBuffer()`. Response calls such as `NextResponse.json(...)` are not counted as body reads.
+Scan rule: count only request body reads through `req/request.json()`, `req/request.formData()`, `req/request.text()`, or `req/request.arrayBuffer()`. Response calls such as `NextResponse.json(...)` are not counted as body reads. Route-local schemas and tested shared helper schemas both count as `schema+guard`.
 
 | Class | Count | Meaning |
 |---|---:|---|
-| `schema+guard` | 62 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
-| `guard-only` | 5 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
+| `schema+guard` | 67 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation either in the route or in a tested shared request helper. |
+| `guard-only` | 0 | No remaining request-body route relies only on manual or implicit validation. |
 | `no-body` | 36 | Route does not read request body. |
 | `unguarded-body` | 0 | No direct unguarded `req/request` body parser was found in the current scan. |
 | `schema-only` | 0 | No route was found with body schema validation but no parse guard in the current scan. |
 
 ## Guard-Only Routes To Normalize
 
-These routes are not immediate malformed-body crashers, because they already guard body parsing. The remaining issue is consistency: move them toward shared request schemas and common error envelopes when touching the owning domain.
+None remaining in the current F027 route-body inventory.
 
-| Route | Methods | Next Standard |
-|---|---|---|
-| `/api/contracts/[id]/merge-chunks` | `POST` | Add schema for merge metadata; keep chunk integrity checks close to upload domain. |
-| `/api/contracts/[id]/upload` | `POST` | Keep multipart guard; add explicit file metadata schema where practical. |
-| `/api/contracts/[id]/upload-chunk` | `POST` | Keep multipart guard; add explicit chunk index/name/total schema. |
-| `/api/tenders/ocr` | `POST` | Keep multipart guard; add explicit OCR option schema. |
-| `/api/upload` | `POST` | Keep multipart guard; add explicit upload intent/category schema. |
+Note: a purely mechanical route-file scan reports two ASK response routes as `guard-only`, because both delegate validation to `lib/ask/submit-response.ts`. They are counted as `schema+guard` here because `614449c` added route-level tests proving that both endpoints pass request bodies into the shared `askResponseSchema.safeParse(...)` helper before contract access or Supabase work.
 
 ## Acceptance Standard For Closing This Debt
 
@@ -46,3 +40,4 @@ These routes are not immediate malformed-body crashers, because they already gua
 - `5ad61c4` moved `/api/admin/review-strategies`, `/api/admin/clause-library`, and `/api/admin/clause-library/[id]` from `guard-only` to `schema+guard`; targeted tests cover malformed JSON and invalid field shapes before Supabase work while keeping existing admin auth ordering and error codes.
 - `8115000` moved `/api/knowledge/pages/[id]` and `/api/knowledge/pages/[id]/permissions` from `guard-only` to `schema+guard`; targeted tests cover malformed JSON, invalid page update fields, invalid permission fields, and invalid delete permission IDs before Supabase work.
 - `a7969db` moved `/api/contracts/[id]/analyze` and `/api/tenders/[id]/workflow` from `guard-only` to `schema+guard`; targeted tests cover invalid analysis strategy options, invalid workflow direction, and invalid checkpoint data before avoidable Supabase or job-queue work.
+- `172f83b` moved the final five upload/body routes to `schema+guard`: `/api/contracts/[id]/merge-chunks`, `/api/contracts/[id]/upload`, `/api/contracts/[id]/upload-chunk`, `/api/tenders/ocr`, and `/api/upload`. Targeted multipart/JSON tests cover invalid parse, missing files, bad chunks, and unsupported file types before organization lookup, Supabase, Storage, OCR parsing, or text extraction work.
