@@ -140,6 +140,7 @@ function createLoginServerTiming() {
         .join(', ')
 
       response.headers.set('Server-Timing', headerValue)
+      response.headers.set('X-Login-Timing', headerValue)
       return response
     },
   }

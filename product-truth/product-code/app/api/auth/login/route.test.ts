@@ -253,6 +253,8 @@ describe('POST /api/auth/login', () => {
       expect(body.authContextReady).toBe(true)
       expect(res.headers.get('Server-Timing')).toContain('login_rpc')
       expect(res.headers.get('Server-Timing')).toContain('total')
+      expect(res.headers.get('X-Login-Timing')).toContain('login_rpc')
+      expect(res.headers.get('X-Login-Timing')).toContain('total')
       expect(body.initialDashboard).toMatchObject({
         activeSpace: { id: 'space-1', name: '默认空间' },
         opportunities: [],
