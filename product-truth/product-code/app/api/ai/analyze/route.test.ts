@@ -93,7 +93,9 @@ describe('POST /api/ai/analyze', () => {
       expect(res.status).toBe(500)
     })
 
-    it('请求体非 JSON → 500 INTERNAL_ERROR', async () => {
+    it('请求体非 JSON → 400 VALIDATION_ERROR 且不进入鉴权和模型链路', async () => {
+      const { reviewWithFailoverSync } = await import('@/lib/ai/failover')
+      const { getAuthUser } = await import('@/lib/auth')
       const req: any = {
         json: async () => {
           throw new Error('invalid json')
@@ -102,7 +104,12 @@ describe('POST /api/ai/analyze', () => {
         headers: new Headers(),
       }
       const res = await POST(req)
-      expect(res.status).toBe(500)
+      const body = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(getAuthUser).not.toHaveBeenCalled()
+      expect(reviewWithFailoverSync).not.toHaveBeenCalled()
     })
   })
 })

@@ -19,6 +19,10 @@ function hasAllowedFileName(fileName: string): boolean {
   return ALLOWED_EXTENSIONS.includes(extension)
 }
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -29,9 +33,30 @@ export async function POST(
       return errorResponse(createApiError('UNAUTHORIZED'))
     }
 
+    const { id: contractId } = await params
+
+    // 获取请求参数。无效 JSON 在进入组织/数据库/存储链路前返回 400。
+    const body = await req.json().catch(() => null)
+    if (!isJsonObject(body)) {
+      return errorResponse(createApiError('INVALID_JSON'))
+    }
+
+    const fileName = typeof body.fileName === 'string' ? body.fileName.trim() : ''
+    const fileType = typeof body.fileType === 'string' ? body.fileType : undefined
+    const totalSize = typeof body.totalSize === 'number' ? body.totalSize : undefined
+    const chunkCount = typeof body.chunkCount === 'number'
+      ? body.chunkCount
+      : Number(body.chunkCount)
+
+    if (!fileName || !Number.isInteger(chunkCount) || chunkCount <= 0) {
+      return errorResponse(createApiError('MISSING_FIELD', '缺少必要参数'))
+    }
+    if (!hasAllowedFileName(fileName)) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
+    }
+
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
-    const { id: contractId } = await params
 
     // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin
@@ -44,16 +69,6 @@ export async function POST(
 
     if (fetchError || !contract) {
       return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
-    }
-
-    // 获取请求参数
-    const { fileName, fileType, totalSize, chunkCount } = await req.json()
-
-    if (!fileName || !chunkCount) {
-      return errorResponse(createApiError('MISSING_FIELD', '缺少必要参数'))
-    }
-    if (!hasAllowedFileName(fileName)) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
     }
 
     // 生成正式存储路径

@@ -271,7 +271,6 @@ export async function PATCH(
 ) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     const contractId = await resolveIdParam(params)
 
     // Zod验证ID格式
@@ -281,6 +280,40 @@ export async function PATCH(
     }
 
     const { id } = idResult.data
+
+    // 获取更新数据。无效 JSON 在进入组织/数据库链路前返回 400。
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return errorResponse('请求参数无效', 400, 'INVALID_DATA')
+    }
+
+    const allowedFields = [
+      'contract_no',
+      'party_a_name',
+      'party_b_name',
+      'party_b_contact',
+      'contract_amount',
+      'tax_amount',
+      'contract_date',
+      'effective_date',
+      'expiry_date',
+      'payment_terms',
+      'delivery_terms',
+      'notes',
+    ]
+
+    const updateData: Record<string, unknown> = {}
+    for (const field of allowedFields) {
+      if ((body as Record<string, unknown>)[field] !== undefined) {
+        updateData[field] = (body as Record<string, unknown>)[field]
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return errorResponse('没有可更新的字段', 400, 'NO_FIELDS_TO_UPDATE')
+    }
+
+    const orgId = await getDefaultOrgId(user.id)
 
     // 检查合同是否存在且有权限
     const { data: existing, error: fetchError } = await supabaseAdmin
@@ -302,34 +335,6 @@ export async function PATCH(
     // 只有 DRAFT 状态可以编辑基本信息
     if (existing.status !== 'DRAFT') {
       return errorResponse('只有草稿状态的合同可以编辑', 400, 'NOT_EDITABLE')
-    }
-
-    // 获取更新数据
-    const body = await req.json()
-    const allowedFields = [
-      'contract_no',
-      'party_a_name',
-      'party_b_name',
-      'party_b_contact',
-      'contract_amount',
-      'tax_amount',
-      'contract_date',
-      'effective_date',
-      'expiry_date',
-      'payment_terms',
-      'delivery_terms',
-      'notes',
-    ]
-
-    const updateData: Record<string, string | number | null | undefined> = {}
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field]
-      }
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      return errorResponse('没有可更新的字段', 400, 'NO_FIELDS_TO_UPDATE')
     }
 
     const { data: contract, error } = await supabaseAdmin
