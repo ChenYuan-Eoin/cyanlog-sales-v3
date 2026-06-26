@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "2a0ca9f",
+  "head": "ccc6308",
   "commits": [
     {
       "sha": "5641824",
@@ -263,6 +263,26 @@
     {
       "sha": "2a0ca9f",
       "message": "fix(roles): normalize API response envelopes"
+    },
+    {
+      "sha": "a61a5bc",
+      "message": "docs: record role envelope evidence"
+    },
+    {
+      "sha": "7521f22",
+      "message": "docs: record latest deploy quota failure"
+    },
+    {
+      "sha": "7943943",
+      "message": "docs: record super admin role verification"
+    },
+    {
+      "sha": "6e9c487",
+      "message": "docs: record login transport measurements"
+    },
+    {
+      "sha": "ccc6308",
+      "message": "chore(deps): trim unused direct dependencies"
     }
   ],
   "production": {
@@ -301,7 +321,7 @@
     "login_prewarm_wait_boundary": "762c830 keeps the existing /api/auth/login GET prewarm and /api/auth/prewarm POST endpoints, adds X-Login-Prewarm-Timing for users_query, candidate_rpc, and login_rpc, and gives each no-side-effect prewarm task a default 1500ms soft boundary. Targeted auth tests passed 2 files / 21 tests; full hook passed 99 files / 418 tests; pnpm build passed. Local production GET /api/auth/login without X-Login-Prewarm stayed 204; with X-Login-Prewarm returned all three stages fulfilled around 1107ms. Local production POST /api/auth/prewarm returned login_rpc;dur=1501.8;status=timed_out and emitted sanitized [auth/login] prewarm timeout.",
     "latest_local_login_transport_conclusion": "Latest local production samples on pushed app code show cold-login long tails are dominated by login_rpc_transport rather than SQL/RPC compute: direct route totals were 1663.8ms, 297.5ms, 259.5ms, 534.4ms and 561.5ms, while rpc_total stayed 78.1-109.3ms. Full prewarm can help if it finishes before submit, but 350ms and 1200ms concurrent prewarm samples still returned 552.1ms and 842.1ms route totals because transport remained high. Next optimization should be gated on deployed main-domain evidence and should target Supabase/PostgREST connection, region or network behavior if the same pattern persists.",
     "preview_visual_smoke": "Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw via temporary Vercel share URL: browser screenshots captured for /login, /, /configs?tab=role-access desktop 1440x900 and /configs?tab=role-access mobile 390x844. Dashboard, role-access desktop, and role-access mobile reported scrollWidth equal to viewport width, overflowX=false, hasErrorText=false, and role-access content visible. Screenshot files are ignored under product-truth/product-code/output/playwright and are not tracked or uploaded.",
-    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. After 9e593c0, another repo-root deploy uploaded 178.4KB and failed with the same quota code. After 4507ae2, repo-root deploy uploaded 305.5KB and failed with the same quota code. After pushed branch head 95f4268, repo-root deploy uploaded 218.0KB and failed with the same quota code. After pushed branch head 1cd121d, repo-root deploy uploaded 232.2KB and failed with the same quota code. After pushed branch head 68cbbeb, repo-root deploy uploaded 214.7KB and failed with the same quota code. After pushed branch head c24a052, repo-root deploy uploaded 187.1KB and failed with the same quota code. After head aae2ff6, repo-root deploy uploaded 170.3KB and failed with the same quota code. After pushed branch head a61a5bc, repo-root deploy uploaded 180.6KB and failed with the same quota code. Latest 2a0ca9f app code is locally verified but has no Ready Preview or Production deployment yet; it remains Git-only until Vercel quota allows deployment.",
+    "latest_code_preview_deploy_blocker": "After 001f9cc, running vercel deploy --yes from product-truth/product-code failed because Vercel rootDirectory double-prefixed the path. Running from repo root uploaded 155.3KB, then failed with Vercel quota code api-deployments-free-per-day. After 9e593c0, another repo-root deploy uploaded 178.4KB and failed with the same quota code. After 4507ae2, repo-root deploy uploaded 305.5KB and failed with the same quota code. After pushed branch head 95f4268, repo-root deploy uploaded 218.0KB and failed with the same quota code. After pushed branch head 1cd121d, repo-root deploy uploaded 232.2KB and failed with the same quota code. After pushed branch head 68cbbeb, repo-root deploy uploaded 214.7KB and failed with the same quota code. After pushed branch head c24a052, repo-root deploy uploaded 187.1KB and failed with the same quota code. After head aae2ff6, repo-root deploy uploaded 170.3KB and failed with the same quota code. After pushed branch head a61a5bc, repo-root deploy uploaded 180.6KB and failed with the same quota code. After pushed branch head ccc6308, repo-root deploy uploaded 452.2KB and failed with the same quota code. Latest ccc6308 app/dependency code is locally verified but has no Ready Preview or Production deployment yet; it remains Git-only until Vercel quota allows deployment.",
     "production_deploy_blocker": "Repeated vercel promote for dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw failed with Vercel quota code api-deployments-free-per-day. vercel inspect https://sales.cyanlog.icu still resolves to production dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew. sales.cyanlog.icu therefore still points to the old production deployment until quota resets or plan limit is raised.",
     "sentry_no_dsn_startup_guard": "instrumentation.ts now skips server/edge Sentry config import when SENTRY_DSN and NEXT_PUBLIC_SENTRY_DSN are both unset. Local next start -p 3000 no longer prints the server Sentry DSN-not-configured warning. 4507ae2 cleared the Sentry/OpenTelemetry dynamic require build warning locally.",
     "sentry_opentelemetry_build_warning": "4507ae2 adds Next serverExternalPackages entries for @sentry/nextjs, @sentry/node, @opentelemetry/instrumentation, and require-in-the-middle. Local pnpm build no longer reports the Sentry/OpenTelemetry require-in-the-middle critical dependency warning; latest 56ba7e3 build also completed without that warning. Local next start -p 3010 reached Ready and GET /api/health returned 200.",
@@ -551,7 +571,7 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB. Manual Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw for bde4752 uploaded 164.2KB. The 001f9cc repo-root deploy attempt uploaded 155.3KB before quota failure; the 9e593c0 repo-root deploy attempt uploaded 178.4KB before the same quota failure; the 4507ae2 repo-root deploy attempt uploaded 305.5KB before the same quota failure; the 95f4268 repo-root deploy attempt uploaded 218.0KB before the same quota failure; the 1cd121d repo-root deploy attempt uploaded 232.2KB before the same quota failure; the 68cbbeb repo-root deploy attempt uploaded 214.7KB before the same quota failure; the c24a052 repo-root deploy attempt uploaded 187.1KB before the same quota failure; the aae2ff6 repo-root deploy attempt uploaded 170.3KB before the same quota failure; the a61a5bc repo-root deploy attempt uploaded 180.6KB before the same quota failure. Deploy root remains product-truth/product-code. Tracked app files total 4.1MB and tracked repo files total 18MB; local node_modules 1.2GB, .next 1.0GB, output/playwright evidence screenshots, and tsconfig.tsbuildinfo are ignored and do not enter Git or Vercel payload.",
+    "deploy_payload": "Latest successful Vercel production deployment dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew uploaded 184.6KB. Manual Preview dpl_86ysbsC1CGXZjH3YG2mxytNrZzrw for bde4752 uploaded 164.2KB. The 001f9cc repo-root deploy attempt uploaded 155.3KB before quota failure; the 9e593c0 repo-root deploy attempt uploaded 178.4KB before the same quota failure; the 4507ae2 repo-root deploy attempt uploaded 305.5KB before the same quota failure; the 95f4268 repo-root deploy attempt uploaded 218.0KB before the same quota failure; the 1cd121d repo-root deploy attempt uploaded 232.2KB before the same quota failure; the 68cbbeb repo-root deploy attempt uploaded 214.7KB before the same quota failure; the c24a052 repo-root deploy attempt uploaded 187.1KB before the same quota failure; the aae2ff6 repo-root deploy attempt uploaded 170.3KB before the same quota failure; the a61a5bc repo-root deploy attempt uploaded 180.6KB before the same quota failure; the ccc6308 repo-root deploy attempt uploaded 452.2KB before the same quota failure. Deploy root remains product-truth/product-code. Tracked app files total 4.1MB and tracked repo files total 18MB; local node_modules 1.2GB, .next 1.0GB, output/playwright evidence screenshots, and tsconfig.tsbuildinfo are ignored and do not enter Git or Vercel payload.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "dependency_manifest_cleanup": {
       "production_dependency_count_before": 31,
