@@ -45,6 +45,16 @@ function makeFormRequest(file: File | null): any {
   }
 }
 
+function makeMalformedFormRequest(): any {
+  return {
+    formData: async () => {
+      throw new TypeError('invalid multipart')
+    },
+    method: 'POST',
+    headers: new Headers({ 'content-type': 'multipart/form-data' }),
+  }
+}
+
 function makeFile(name: string, content = 'fake content', type = 'text/plain'): File {
   return new File([content], name, { type })
 }
@@ -70,6 +80,19 @@ describe('POST /api/tenders/ocr', () => {
     expect(res.status).toBe(400)
     const body = await res.json()
     expect(body.code).toBe('MISSING_FILE')
+  })
+
+  it('无效表单数据 → 400 INVALID_FORM 且不解析文件或写数据库', async () => {
+    ;(requireAuth as any).mockResolvedValue({ id: 'u1' })
+    const { parseDocument } = await import('@/lib/ocr/parser')
+    const { supabaseAdmin } = await import('@/lib/supabase')
+
+    const res = await POST(makeMalformedFormRequest())
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.code).toBe('INVALID_FORM')
+    expect(parseDocument).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('提供文件 → 200 含结构化信息', async () => {

@@ -25,6 +25,16 @@ function makeMalformedJsonRequest(): any {
   }
 }
 
+function makeMalformedFormRequest(): any {
+  return {
+    formData: async () => {
+      throw new TypeError('invalid multipart')
+    },
+    method: 'POST',
+    headers: new Headers({ 'content-type': 'multipart/form-data' }),
+  }
+}
+
 describe('POST /api/contracts validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -32,6 +42,15 @@ describe('POST /api/contracts validation', () => {
 
   it('无效 JSON 返回参数错误且不访问业务数据库', async () => {
     const res = await POST(makeMalformedJsonRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error.code).toBe('V001')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('无效表单数据返回参数错误且不访问业务数据库', async () => {
+    const res = await POST(makeMalformedFormRequest())
     const body = await res.json()
 
     expect(res.status).toBe(400)

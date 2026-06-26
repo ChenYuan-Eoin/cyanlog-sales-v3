@@ -49,7 +49,9 @@ async function parseProductPayload(req: NextRequest) {
     return req.json().catch(() => null)
   }
 
-  const formData = await req.formData()
+  const formData = await req.formData().catch(() => null)
+  if (!formData) return null
+
   return {
     name: String(formData.get('name') || ''),
     code: String(formData.get('code') || ''),

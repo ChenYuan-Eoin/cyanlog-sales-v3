@@ -179,7 +179,9 @@ async function parseLoginPayload(req: NextRequest) {
     return req.json().catch(() => null)
   }
 
-  const formData = await req.formData()
+  const formData = await req.formData().catch(() => null)
+  if (!formData) return null
+
   return {
     email: String(formData.get('email') || ''),
     phone: String(formData.get('phone') || ''),

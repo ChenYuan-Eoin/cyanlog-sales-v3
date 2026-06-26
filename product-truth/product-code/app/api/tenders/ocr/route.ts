@@ -16,8 +16,13 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth(req)
 
     // Get form data with file
-    const formData = await req.formData()
-    const file = formData.get('file') as File
+    const formData = await req.formData().catch(() => null)
+    if (!formData) {
+      return errorResponse('表单数据无效', 400, 'INVALID_FORM')
+    }
+
+    const fileValue = formData.get('file')
+    const file = fileValue instanceof File ? fileValue : null
 
     if (!file) {
       return errorResponse('请选择要解析的文件', 400, 'MISSING_FILE')

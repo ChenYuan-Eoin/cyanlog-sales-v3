@@ -157,7 +157,9 @@ async function parseCreateContractPayload(req: NextRequest) {
     return req.json().catch(() => null)
   }
 
-  const formData = await req.formData()
+  const formData = await req.formData().catch(() => null)
+  if (!formData) return null
+
   return {
     contract_no: optionalString(formData.get('contract_no')),
     party_a_name: optionalString(formData.get('party_a_name')),

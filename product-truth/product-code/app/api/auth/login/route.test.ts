@@ -56,6 +56,16 @@ function makeMalformedJsonRequest(): any {
   }
 }
 
+function makeMalformedFormRequest(): any {
+  return {
+    formData: async () => {
+      throw new TypeError('invalid multipart')
+    },
+    method: 'POST',
+    headers: new Headers({ 'content-type': 'multipart/form-data', 'x-forwarded-for': '127.0.0.1' }),
+  }
+}
+
 function makeGetRequest(headers: Record<string, string> = {}): any {
   return {
     method: 'GET',
@@ -91,6 +101,15 @@ describe('POST /api/auth/login', () => {
 
     it('无效 JSON → 400 VALIDATION_ERROR 且不调用登录 RPC', async () => {
       const res = await POST(makeMalformedJsonRequest())
+      const body = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    })
+
+    it('无效表单数据 → 400 VALIDATION_ERROR 且不调用登录 RPC', async () => {
+      const res = await POST(makeMalformedFormRequest())
       const body = await res.json()
 
       expect(res.status).toBe(400)
