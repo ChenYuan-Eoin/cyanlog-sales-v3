@@ -2,8 +2,8 @@
 
 **Date**: 2026-06-26
 **Branch**: `codex/audit-remediation-61-issues`
-**Deployed App HEAD**: `0d15f8c`
-**Production Deployment**: `dpl_GQByzd7BsjGVHHBAEkdCFpuTrDRC`
+**Deployed App HEAD**: `4bc49c6`
+**Production Deployment**: `dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu`
 **Production URL**: `https://sales.cyanlog.icu`
 
 ---
@@ -14,8 +14,8 @@
 |---|---|---|
 | Branch | `codex/audit-remediation-61-issues...origin/codex/audit-remediation-61-issues` | Pass |
 | Uncommitted code | Only governance runtime state dirty: `governance/ai-behavior-准则/audit/behavior-log.jsonl`, `governance/runtime-state/feedback.json` | Pass with note |
-| Production | Vercel production deployment `dpl_GQByzd7BsjGVHHBAEkdCFpuTrDRC` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
-| Health | `GET /api/health` => `status=ok`, database ok | Pass |
+| Production | Vercel production deployment `dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu` => `READY`, alias `https://sales.cyanlog.icu` attached | Pass |
+| Health | `GET /api/health` => `status=ok`, database ok, `x-vercel-id: hnd1::sin1`, database latency 336ms | Pass |
 | Favicon | `GET /favicon.png` => `200`, `image/png`, 32x32, 683 bytes | Pass |
 | Vercel env | Production has Supabase/Sentry/Descope; no `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | Feishu success blocked by env |
 
@@ -27,9 +27,9 @@
 |---|---|---|
 | `pnpm lint` | Pass, no ESLint warnings/errors | `next lint` deprecation warning remains from Next 15 tooling |
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
-| `pnpm test:run` | 51 files / 321 tests passed | Vitest prints existing `--localstorage-file` warning |
+| `pnpm test:run` | 52 files / 324 tests passed | Vitest prints existing `--localstorage-file` warning |
 | `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared |
-| Commit hook | 10/10 governance checks passed through `0d15f8c` | No `--no-verify` used |
+| Commit hook | 10/10 governance checks passed through `4bc49c6` | No `--no-verify` used |
 | Vercel build | Ready | Vercel build warnings: `sharp@0.34.5` scripts ignored; Sentry/OpenTelemetry dynamic require |
 | Supabase migrations | `supabase db push --linked --yes` applied `20260626062255_login_rpc_stage_timing.sql`, `20260626065920_org_admin_payload_rpc.sql`, `20260626071818_org_admin_active_members_only.sql`, and `20260626155732_org_admin_active_departments_only.sql` in this F027 performance/org-admin phase | Pass |
 | Supabase remote lint | `supabase db lint --linked --fail-on error` failed before linting due Supabase temp role SASL auth/circuit breaker | Blocked by platform auth, not counted as schema validation |
@@ -40,8 +40,8 @@
 
 | Domain | Evidence | Result |
 |---|---|---|
-| D01 Production availability | Production deployment `dpl_GQByzd7BsjGVHHBAEkdCFpuTrDRC`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
-| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 338ms. | Pass |
+| D01 Production availability | Production deployment `dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu`, `READY`, alias `https://sales.cyanlog.icu` | Pass |
+| D01 Function region | `vercel.json` now sets `"regions": ["sin1"]`; `vercel inspect` lists functions in `[sin1]`; `/api/health` returned `x-vercel-id: hnd1::sin1` and database latency 336ms. | Pass |
 | D02 Login same-route prewarm | Production `/login` triggered `GET /api/auth/login` 200 in Chrome DevTools with no console warnings/errors. Header-gated `GET /api/auth/login` without `X-Login-Prewarm` returns 204 and does not touch DB; with header returns 200 and warms the same route bundle/Supabase path. | Pass |
 | D02 Fast navigation resilience | Production browser on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` rapidly navigated `/` -> `/configs?tab=role-access`; `fastNavigationConsoleMessages=[]`, so stale dashboard `Failed to fetch` noise no longer leaks during navigation. | Pass |
 | D02 Error boundary regression | Browser visited `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`; expected title visible; no `页面发生错误` | Pass |
@@ -49,6 +49,7 @@
 | D03 Org role assignment | Production browser verification on `dpl_7LhA6QGMHaJVjHwEs3zMnZyt1Bb3`: org page loaded 11 departments / 25 members / 3 spaces; add temp admin changed 25=>26; stop kept member visible as `已停用`; enable restored `在职`; delete changed 26=>25 and removed row; temp user hard-cleaned | Pass |
 | D03 Department leader and cache consistency | Production browser verification on `dpl_GA7vgxSXz3zLjLt8fUc7WhBdrh17`: temp department with leader `张雪丽` was visible in `/configs?tab=org-structure`; `/api/admin/org` POST returned `405` with `Allow: GET`; after hard cleanup, the same browser revalidated org cache and no longer showed the temp department; final org payload stayed 11 departments / 25 users; console warnings/errors 0 | Pass |
 | D03 Latest admin role add/remove refresh | Production browser verification on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA`: 25 users before test; temp user created via UI and became visible; assigned to Admin role with `role_codes=["ADMIN"]`; removed from Admin role and disappeared from assigned list with `role_codes=[]`; hard cleanup removed temp user; final count 25; console warnings/errors 0. | Pass |
+| D03 Org payload timing | Production `dpl_87GqN7KAGUhTHP36PmhcsJxMvCzu` after real login: `/api/admin/org` returned 200, `X-Org-Payload-Source: rpc`, `X-Org-Timing: auth;dur=97.3, rpc_payload;dur=71.8, total;dur=169.3`, counts 25 users / 11 departments / 7 roles / 3 spaces. | Pass |
 | D04 Feishu sync unconfigured | Vercel Production env lacks `FEISHU_APP_ID` / `FEISHU_APP_SECRET`; online `POST /api/access/feishu/sync` => `503`, code `FEISHU_NOT_CONFIGURED`, missing both variables, hint states current MVP only syncs departments and does not import members | Pass for unconfigured feedback; success blocked by env |
 | D05 Contract rules | `GET /api/contract-policies/rules?is_active=true` => 15 active codes `R001-R015` | Pass |
 | D05 Rule stats | `GET /api/rules/stats` => 18 total, 15 published, 3 archived legacy rows | Pass with debt |
@@ -56,12 +57,12 @@
 | D06 Contract compare | Online POST compare created 6 diffs; GET returned same comparison; UI rendered compare page; temp contracts cleaned | Pass |
 | D06 Risk review | Online `/admin/rule-review` executed contract text against rules and returned R015/R009/R012/R002 risks | Pass |
 | D07 Mobile `/configs` | 390x844 and 820x1180 screenshots: no horizontal overflow, no error boundary, hamburger visible | Pass |
-| D07 `/configs` bundle split | `c74ad23` lazy-loads config edit dialogs/forms. Local production build: `/configs` Size 18kB and First Load JS 159kB. Production logged-in `/configs` returned 200 and chunk `static/chunks/app/configs/page-5dea359dd9dc3efb.js` returned 61,047 bytes. | Pass |
-| D07 `/admin/org` bundle split | `0d15f8c` lazy-loads the reused organization workbench. Vercel production build: `/admin/org` Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in `/admin/org` returned 200 and chunk `static/chunks/app/admin/org/page-fbbc3729110b8ca8.js` returned 9,078 bytes. | Pass |
+| D07 `/configs` bundle split | `c74ad23` lazy-loads config edit dialogs/forms. Current production build: `/configs` Size 18kB and First Load JS 159kB. Production logged-in `/configs` returned 200 and chunk `static/chunks/app/configs/page-d1d47a8244087e40.js` returned 61,052 bytes. | Pass |
+| D07 `/admin/org` bundle split | `0d15f8c` lazy-loads the reused organization workbench; `4bc49c6` preserves the same route budget. Current production build: `/admin/org` Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in `/admin/org` returned 200 and chunk `static/chunks/app/admin/org/page-fbbc3729110b8ca8.js` returned 9,078 bytes. | Pass |
 | D07 Mobile `/contracts` | 390x844 screenshot: no horizontal overflow, bottom actions visible; script text assertion was too narrow | Pass |
 | D07 Favicon | `public/favicon.png`: PNG 32x32, 683 bytes; online `/favicon.png` 200 | Pass |
 | D08 Knowledge create | Browser `/knowledge` -> `/knowledge/new` -> create -> `/knowledge?page={id}`; API readback; temp page deleted | Pass |
-| D10 Deploy payload | Latest Vercel CLI production deploy uploaded 73.8KB from repo root with project rootDirectory `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
+| D10 Deploy payload | Latest Vercel CLI production deploy uploaded 90.7KB from repo root with project rootDirectory `product-truth/product-code`; build output excludes `node_modules`, `.next`, `output`, trace/video/HAR artifacts | Pass |
 | D10 Repo artifact cleanup | Removed 7 previously tracked `.playwright-mcp` log/snapshot files from Git and added root `.vercelignore` plus `.gitignore` coverage for `.playwright-cli/`, `.playwright-mcp/`, and `output/` | Pass |
 
 ---
@@ -73,10 +74,10 @@
 | Page switching | DevTools trace showed route switching INP 26ms and CLS 0.00. | Page switching is not the current primary bottleneck. |
 | Cold login | Earlier direct-submit sample on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` was `X-Login-Timing total=1021.6ms`. After same-route prewarm plus `sin1` function region, explicit prewarm+POST samples on `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` returned route totals 166.0ms, 120.0ms and 112.1ms. | The normal prewarmed submit path is now well below the 0.5s route target; first prewarm itself can still pay cold startup and remains a monitored risk. |
 | External dependency wait | Supabase/GitHub TLS reset occurred during diagnostics; one core API stalled around 9s before 401, later returning to around 185-355ms after network recovery. | External dependencies are not automatically bad, but latency/error class must be separated from app code latency. |
-| `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB; prior current build was 166kB. After `c74ad23`, local production build shows `/configs` Size 18kB and First Load JS 159kB; production logged-in `/configs` returns 200 and its page chunk is 61,047 bytes. `/contracts` remains 144kB and `/tenders` 126kB in the same local build. | Config center first entry is improved, but still remains heavier than adjacent modules and should stay under bundle watch. |
+| `/configs` bundle | Earlier reference sample showed `/configs` First Load JS around 281kB; prior current build was 166kB. After `c74ad23`, current production build shows `/configs` Size 18kB and First Load JS 159kB; production logged-in `/configs` returns 200 and its page chunk is 61,052 bytes. `/contracts` remains 144kB and `/tenders` 126kB in the same build. | Config center first entry is improved, but still remains heavier than adjacent modules and should stay under bundle watch. |
 | `/admin/org` bundle | Before `0d15f8c`, local build showed `/admin/org` Size 73.2kB and First Load JS 245kB. After lazy-loading the reused organization workbench, production build shows 3.78kB and 107kB; logged-in `/admin/org` returns 200 and page chunk is 9,078 bytes. | Admin organization entry is no longer a large first-load outlier; interaction still depends on the deferred workbench chunk. |
 | Login CLS | Historical trace showed login page CLS around 0.21. After `be7c882`, production Playwright samples showed desktop 1440x900 CLS 0 and mobile 390x844 CLS 0, with no horizontal overflow. | Current login-page layout stability is verified; keep as regression guard. |
-| Org admin payload | Before RPC aggregation, browser `/api/admin/org` could take 4616ms and briefly showed false 0 counts. After `3670901` + `a590d45` + `e57c34c`, first org page paint uses loading `...`, then renders 11/25/3; direct RPC hot verification after cleanup returned 25 users / 11 departments / 7 roles / 3 spaces in 232ms. After `5db94bd` + `ad7844a`, inactive departments are filtered in RPC/fallback and org cache revalidates immediately for organization tabs. | The specific usability bug is closed; route-level latency can still vary with Supabase/network and remains part of external dependency monitoring. |
+| Org admin payload | Before RPC aggregation, browser `/api/admin/org` could take 4616ms and briefly showed false 0 counts. After `3670901` + `a590d45` + `e57c34c`, first org page paint uses loading `...`, then renders 11/25/3; direct RPC hot verification after cleanup returned 25 users / 11 departments / 7 roles / 3 spaces in 232ms. After `5db94bd` + `ad7844a`, inactive departments are filtered in RPC/fallback and org cache revalidates immediately for organization tabs. After `4bc49c6`, production `/api/admin/org` exposes `X-Org-Payload-Source` and `X-Org-Timing`; latest online sample is `rpc`, total 169.3ms. | The specific usability bug is closed; route-level latency is now classifiable by auth/RPC/fallback/total timing instead of being a black box. |
 | Reverted optimization | Moving login prewarm from 1200ms to 350ms regressed a quick-submit sample to around 5s and was reverted. | No unverified performance tweak is counted as a fix. |
 
 Required next instrumentation for cold login:
@@ -178,7 +179,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 |---|---|---|
 | Feishu successful department sync | Production lacks `FEISHU_APP_ID` and `FEISHU_APP_SECRET`; current verified behavior is structured `FEISHU_NOT_CONFIGURED` with missing env list and scope hint. | Configure Feishu env in Vercel, redeploy, then run department sync success test and verify imported/updated/total plus database `source=feishu` rows. |
 | Cold login < 0.5s target | Prewarmed submit path now returns route totals 112.1-166.0ms from `sin1`, but direct first-submit can still exceed 0.5s if same-route prewarm has not completed; the first prewarm request itself took 2066ms in one online sample. | Keep same-route prewarm and `sin1` region config; next optimization should target remaining cold startup and password verification cost. |
-| Org-admin route latency variance | RPC hot path is down to 185-232ms in direct checks, but route-level samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep `/api/admin/org` timing in the external dependency/error classification bucket; add route-level timing headers before further optimization. |
+| Org-admin route latency variance | RPC hot path is down to 169.3-232ms in direct checks, and route responses now expose `X-Org-Payload-Source` plus `X-Org-Timing`. Samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep collecting `X-Org-Timing` in future admin add/remove refresh tests to separate backend latency from front-end state refresh bugs. |
 | `/configs` first-load JS | Current build after `c74ad23` shows `/configs` First Load JS 159kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic samples were 281kB and 166kB. | Keep bundle budget watch; next target is shared chunk if user-perceived first entry remains slow. |
 | Historical design archive size | `product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html` is tracked at about 9.5MB. It is explicitly documented as historical reference, not active design truth or deployed app code. | Do not delete blindly; if clone/push size becomes a product concern, replace with an external artifact pointer or compressed release asset after user approval. |
 | Full API Zod coverage | 36/103 `app/api/**/route.ts` files use Zod; 67 route files remain. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
