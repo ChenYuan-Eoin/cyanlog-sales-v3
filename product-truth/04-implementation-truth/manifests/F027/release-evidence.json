@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "c74ad23",
+  "head": "0d15f8c",
   "commits": [
     {
       "sha": "5641824",
@@ -99,13 +99,17 @@
     {
       "sha": "c74ad23",
       "message": "fix(configs): lazy load edit dialogs"
+    },
+    {
+      "sha": "0d15f8c",
+      "message": "fix(admin): lazy load organization workbench"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_2jd9fa8N5K5hCCrSkcuLbKvS2MMh",
+    "deployment_id": "dpl_GQByzd7BsjGVHHBAEkdCFpuTrDRC",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/2jd9fa8N5K5hCCrSkcuLbKvS2MMh"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/GQByzd7BsjGVHHBAEkdCFpuTrDRC"
   },
   "verification": {
     "lint": "pass",
@@ -121,7 +125,8 @@
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
     "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Final prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms; all submitted-login route totals are far below 0.5s. First prewarm request still took 2066ms, so cold startup cost remains visible but is no longer on the submit path when prewarm completes.",
-    "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23 local production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-5dea359dd9dc3efb.js returned 61,047 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
+    "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23/0d15f8c production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-5dea359dd9dc3efb.js returned 61,047 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
+    "performance_admin_org_bundle": "After 0d15f8c production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
     "org_admin": "Final production browser verification on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: org role page loaded 25 users; temp user created via UI, visible after create, assigned ADMIN role, visible in Admin role after assign, removed from Admin role, role_codes cleared, hard cleanup deleted temp user, final count 25, consoleMessages=[].",
@@ -133,7 +138,7 @@
       "spaces": 3,
       "temp_included": false
     },
-    "deploy_payload": "Latest Vercel CLI production deploy uploaded 122.5KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
+    "deploy_payload": "Latest Vercel CLI production deploy uploaded 73.8KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -347,13 +352,13 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_2jd9fa8N5K5hCCrSkcuLbKvS2MMh",
+      "deployment": "dpl_GQByzd7BsjGVHHBAEkdCFpuTrDRC",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 345ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 338ms"
     },
     "performance_configs_bundle_current": {
-      "deployment": "dpl_2jd9fa8N5K5hCCrSkcuLbKvS2MMh",
+      "deployment": "dpl_GQByzd7BsjGVHHBAEkdCFpuTrDRC",
       "commit": "c74ad23",
       "local_build_route_size": "18kB",
       "local_build_first_load_js": "159kB",
@@ -361,13 +366,25 @@
       "production_configs_page_html_bytes": 34452,
       "production_configs_page_chunk": "static/chunks/app/configs/page-5dea359dd9dc3efb.js",
       "production_configs_page_chunk_bytes": 61047
+    },
+    "performance_admin_org_bundle_current": {
+      "deployment": "dpl_GQByzd7BsjGVHHBAEkdCFpuTrDRC",
+      "commit": "0d15f8c",
+      "production_build_route_size": "3.78kB",
+      "production_build_first_load_js": "107kB",
+      "previous_route_size": "73.2kB",
+      "previous_first_load_js": "245kB",
+      "production_admin_org_page_status": 200,
+      "production_admin_org_page_html_bytes": 38009,
+      "production_admin_org_page_chunk": "static/chunks/app/admin/org/page-fbbc3729110b8ca8.js",
+      "production_admin_org_page_chunk_bytes": 9078
     }
   },
   "known_risks": [
     "Direct first-submit can still pay cold startup if same-route prewarm has not completed; with sin1 and prewarm complete, submitted login route totals are 112.1-166.0ms, while first prewarm still took 2066ms.",
     "Node/Playwright request DNS intermittently returned ENOTFOUND for sales.cyanlog.icu while curl and Chrome verified the alias; keep external resolver failures classified separately from app errors.",
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
-    "/configs first-load bundle is improved from the earlier 281kB and 166kB samples to 159kB after lazy-loading edit dialogs, but remains heavier than /contracts and /tenders; keep it under bundle watch.",
+    "/configs first-load bundle is improved from the earlier 281kB and 166kB samples to 159kB after lazy-loading edit dialogs, and /admin/org is improved from 245kB to 107kB after lazy-loading the organization workbench. Keep shared chunks and heavier adjacent routes under bundle watch.",
     "Historical design archive product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html is about 9.5MB and remains tracked as reference material; do not delete without replacing the asset policy.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
