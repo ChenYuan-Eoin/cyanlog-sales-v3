@@ -1,17 +1,49 @@
 'use client'
 
-import PriceListTab from './PriceListTab'
-import RuleTab from './RuleTab'
-import TaxTab from './TaxTab'
-import ApprovalTab from './ApprovalTab'
-import AIConfigTab from './AIConfigTab'
-import ThemeTab from './ThemeTab'
-import OrgStructureTab from './OrgStructureTab'
-import RoleAccessTab from './RoleAccessTab'
+import dynamic from 'next/dynamic'
 import type { ProductRecord, Config, OrgSummaryPayload } from '../types'
 import type { ContractPolicyRule } from '@/types/rules'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
+
+const PriceListTab = dynamic(() => import('./PriceListTab'), {
+  loading: () => <CardSkeleton />,
+})
+const RuleTab = dynamic(() => import('./RuleTab'), {
+  loading: () => <CardSkeleton />,
+})
+const TaxTab = dynamic(() => import('./TaxTab'), {
+  loading: () => <CardSkeleton />,
+})
+const ApprovalTab = dynamic(() => import('./ApprovalTab'), {
+  loading: () => <CardSkeleton />,
+})
+const AIConfigTab = dynamic(() => import('./AIConfigTab'), {
+  loading: () => <CardSkeleton />,
+})
+const ThemeTab = dynamic(() => import('./ThemeTab'), {
+  loading: () => <CardSkeleton />,
+})
+const OrgStructureTab = dynamic(() => import('./OrgStructureTab'), {
+  loading: () => (
+    <div className="space-y-4">
+      <StatsSkeleton count={3} />
+      <CardSkeleton />
+    </div>
+  ),
+})
+const RoleAccessTab = dynamic(() => import('./RoleAccessTab'), {
+  loading: () => (
+    <div className="flex gap-6">
+      <div className="w-[280px]">
+        <CardSkeleton />
+      </div>
+      <div className="flex-1">
+        <CardSkeleton />
+      </div>
+    </div>
+  ),
+})
 
 export interface TabsContentProps {
   activeTab: string

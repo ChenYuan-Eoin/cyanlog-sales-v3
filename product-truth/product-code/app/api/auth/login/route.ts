@@ -103,6 +103,48 @@ type LoginWithPasswordResult =
   | { kind: 'auth_failed' }
   | { kind: 'server_error' }
 
+type LoginServerTiming = ReturnType<typeof createLoginServerTiming>
+
+function formatServerTimingDuration(durationMs: number) {
+  return Math.max(0, durationMs).toFixed(1)
+}
+
+function createLoginServerTiming() {
+  const startedAt = performance.now()
+  const metrics: Array<{ name: string; durationMs: number }> = []
+
+  return {
+    async measure<T>(name: string, task: () => PromiseLike<T> | T): Promise<T> {
+      const start = performance.now()
+      try {
+        return await task()
+      } finally {
+        metrics.push({ name, durationMs: performance.now() - start })
+      }
+    },
+    measureSync<T>(name: string, task: () => T): T {
+      const start = performance.now()
+      try {
+        return task()
+      } finally {
+        metrics.push({ name, durationMs: performance.now() - start })
+      }
+    },
+    attach(response: NextResponse) {
+      const total = performance.now() - startedAt
+      const headerValue = [
+        ...metrics,
+        { name: 'total', durationMs: total },
+      ]
+        .map((metric) => `${metric.name};dur=${formatServerTimingDuration(metric.durationMs)}`)
+        .join(', ')
+
+      response.headers.set('Server-Timing', headerValue)
+      return response
+    },
+  }
+}
+
 // 统一错误响应格式
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json(
@@ -405,7 +447,8 @@ async function createLoginSuccessResponse(
   expiresAt: Date,
   authContext?: LoginAuthContext,
   initialDashboard?: DashboardPayload | null,
-  initialCore?: InitialCorePagePayload | null
+  initialCore?: InitialCorePagePayload | null,
+  timing?: LoginServerTiming
 ) {
   const authUser = {
     id: user.id,
@@ -414,16 +457,23 @@ async function createLoginSuccessResponse(
     display_name: user.display_name,
     org_id: user.org_id,
   }
-  primeDefaultOrgCache(user.id, user.org_id)
-  if (!user.must_change_password && initialDashboard) {
-    cacheDashboardPayload(authUser, initialDashboard)
-  } else if (!user.must_change_password) {
-    primeDashboardPayload(authUser)
+  const primeCaches = () => {
+    primeDefaultOrgCache(user.id, user.org_id)
+    if (!user.must_change_password && initialDashboard) {
+      cacheDashboardPayload(authUser, initialDashboard)
+    } else if (!user.must_change_password) {
+      primeDashboardPayload(authUser)
+    }
+
+    primeAuthCache(token, authUser)
+  }
+  if (timing) {
+    timing.measureSync('cache_prime', primeCaches)
+  } else {
+    primeCaches()
   }
 
-  primeAuthCache(token, authUser)
-
-  const response = NextResponse.json({
+  const createResponse = () => NextResponse.json({
     user: {
       id: user.id,
       email: user.email,
@@ -439,6 +489,7 @@ async function createLoginSuccessResponse(
       : initialDashboard || getCachedDashboardPayload(authUser),
     initialCore: user.must_change_password ? null : initialCore || null,
   })
+  const response = timing ? timing.measureSync('response_json', createResponse) : createResponse()
 
   response.cookies.set('token', token, {
     httpOnly: true,
@@ -449,13 +500,16 @@ async function createLoginSuccessResponse(
     expires: expiresAt,
   })
 
-  const authContextCookie = await createAuthContextCookieValue(token, {
+  const createAuthContextCookie = () => createAuthContextCookieValue(token, {
     userId: user.id,
     mustChangePassword: Boolean(user.must_change_password),
     roleCodes: authContext?.roleCodes ?? [],
     allPermissions: authContext?.allPermissions ?? [],
     full: Boolean(authContext?.full),
   })
+  const authContextCookie = timing
+    ? await timing.measure('auth_context_cookie', createAuthContextCookie)
+    : await createAuthContextCookie()
   if (authContextCookie) {
     response.cookies.set(AUTH_CONTEXT_COOKIE_NAME, authContextCookie, {
       httpOnly: true,
@@ -471,14 +525,17 @@ async function createLoginSuccessResponse(
 
 // POST /api/auth/login - 用户登录
 export async function POST(req: NextRequest) {
+  const timing = createLoginServerTiming()
+  const withTiming = (response: NextResponse) => timing.attach(response)
+
   try {
-    const body = await parseLoginPayload(req)
+    const body = await timing.measure('parse_payload', () => parseLoginPayload(req))
 
     // Zod验证
     const result = loginSchema.safeParse(body)
     if (!result.success) {
       const firstError = result.error.issues[0]
-      return errorResponse(firstError.message, 400, 'VALIDATION_ERROR')
+      return withTiming(errorResponse(firstError.message, 400, 'VALIDATION_ERROR'))
     }
 
     const { email, phone, password } = result.data
@@ -487,14 +544,14 @@ export async function POST(req: NextRequest) {
 
     let token = uuidv4()
     let expiresAt = createSessionExpiry()
-    const loginWithPassword = await loadLoginWithPasswordFromRpc(
+    const loginWithPassword = await timing.measure('login_rpc', () => loadLoginWithPasswordFromRpc(
       email,
       phone,
       password,
       ipAddress,
       token,
       expiresAt
-    )
+    ))
     if (loginWithPassword?.kind === 'rate_limited') {
       const response = errorResponse(
         '登录尝试过于频繁，请稍后再试',
@@ -504,27 +561,30 @@ export async function POST(req: NextRequest) {
       if (loginWithPassword.retryAfterSeconds !== undefined) {
         response.headers.set('Retry-After', String(loginWithPassword.retryAfterSeconds))
       }
-      return response
+      return withTiming(response)
     }
     if (loginWithPassword?.kind === 'auth_failed') {
-      return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
+      return withTiming(errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED'))
     }
     if (loginWithPassword?.kind === 'server_error') {
-      return errorResponse('登录失败，请重试', 500, 'LOGIN_RPC_FAILED')
+      return withTiming(errorResponse('登录失败，请重试', 500, 'LOGIN_RPC_FAILED'))
     }
     if (loginWithPassword?.kind === 'ok') {
-      return createLoginSuccessResponse(
+      const response = await createLoginSuccessResponse(
         loginWithPassword.user,
         token,
         expiresAt,
         loginWithPassword.authContext,
         loginWithPassword.dashboard,
-        loginWithPassword.core
+        loginWithPassword.core,
+        timing
       )
+      return withTiming(response)
     }
 
-    const loginCandidate = await loadLoginCandidateFromRpc(email, phone, ipAddress)
-    const rateLimit = loginCandidate?.rateLimit ?? (await checkLoginRateLimit(identifier, ipAddress))
+    const loginCandidate = await timing.measure('candidate_rpc', () => loadLoginCandidateFromRpc(email, phone, ipAddress))
+    const rateLimit = loginCandidate?.rateLimit
+      ?? (await timing.measure('rate_limit', () => checkLoginRateLimit(identifier, ipAddress)))
     if (!rateLimit.allowed) {
       const response = errorResponse(
         '登录尝试过于频繁，请稍后再试',
@@ -534,52 +594,55 @@ export async function POST(req: NextRequest) {
       if (rateLimit.retryAfterSeconds !== undefined) {
         response.headers.set('Retry-After', String(rateLimit.retryAfterSeconds))
       }
-      return response
+      return withTiming(response)
     }
 
     let user = loginCandidate?.user ?? null
     let userError: unknown = null
     if (!loginCandidate) {
-      const userResult = await queryLoginUser(email, phone)
+      const userResult = await timing.measure('user_query', () => queryLoginUser(email, phone))
       user = userResult.data as LoginUserRow | null
       userError = userResult.error
     }
 
     if (userError || !user) {
-      await recordLoginAttempt(identifier, ipAddress, false)
-      return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
+      await timing.measure('record_attempt', () => recordLoginAttempt(identifier, ipAddress, false))
+      return withTiming(errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED'))
     }
 
     // 验证密码
-    const isValid = await bcrypt.compare(password, user.password_hash)
+    const isValid = await timing.measure('bcrypt_compare', () => bcrypt.compare(password, user.password_hash))
     if (!isValid) {
-      await recordLoginAttempt(identifier, ipAddress, false)
-      return errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED')
+      await timing.measure('record_attempt', () => recordLoginAttempt(identifier, ipAddress, false))
+      return withTiming(errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED'))
     }
 
     // 生成 token
     token = uuidv4()
     expiresAt = createSessionExpiry()
 
-    const { error: tokenError } = await supabaseAdmin.from('auth_tokens').insert({
-      id: uuidv4(),
-      token,
-      user_id: user.id,
-      expires_at: expiresAt.toISOString(),
-    })
+    const { error: tokenError } = await timing.measure('token_insert', () => (
+      supabaseAdmin.from('auth_tokens').insert({
+        id: uuidv4(),
+        token,
+        user_id: user.id,
+        expires_at: expiresAt.toISOString(),
+      })
+    ))
 
     if (tokenError) {
       console.error('Token insert error:', tokenError)
-      return errorResponse('登录失败，请重试', 500, 'TOKEN_CREATE_FAILED')
+      return withTiming(errorResponse('登录失败，请重试', 500, 'TOKEN_CREATE_FAILED'))
     }
 
     void Promise.resolve(recordLoginAttempt(identifier, ipAddress, true)).catch((error) => {
       console.error('Login success audit error:', error)
     })
 
-    return createLoginSuccessResponse(user, token, expiresAt)
+    const response = await createLoginSuccessResponse(user, token, expiresAt, undefined, undefined, undefined, timing)
+    return withTiming(response)
   } catch (error) {
     console.error('Login error:', error)
-    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
+    return withTiming(errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR'))
   }
 }

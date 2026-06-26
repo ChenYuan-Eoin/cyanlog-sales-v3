@@ -251,6 +251,8 @@ describe('POST /api/auth/login', () => {
       expect(res.status).toBe(200)
       expect(body.user.id).toBe('u-fast')
       expect(body.authContextReady).toBe(true)
+      expect(res.headers.get('Server-Timing')).toContain('login_rpc')
+      expect(res.headers.get('Server-Timing')).toContain('total')
       expect(body.initialDashboard).toMatchObject({
         activeSpace: { id: 'space-1', name: '默认空间' },
         opportunities: [],
