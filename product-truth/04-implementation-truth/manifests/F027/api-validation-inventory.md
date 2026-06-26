@@ -10,8 +10,8 @@ Scan rule: count only request body reads through `req/request.json()`, `req/requ
 
 | Class | Count | Meaning |
 |---|---:|---|
-| `schema+guard` | 47 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
-| `guard-only` | 20 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
+| `schema+guard` | 50 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
+| `guard-only` | 17 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
 | `no-body` | 36 | Route does not read request body. |
 | `unguarded-body` | 0 | No direct unguarded `req/request` body parser was found in the current scan. |
 | `schema-only` | 0 | No route was found with body schema validation but no parse guard in the current scan. |
@@ -36,9 +36,6 @@ These routes are not immediate malformed-body crashers, because they already gua
 | `/api/knowledge/pages/[id]` | `GET,PATCH,DELETE` | Promote existing manual page update checks into a shared page patch schema. |
 | `/api/knowledge/pages/[id]/permissions` | `GET,POST,DELETE` | Promote permission mutation checks into a shared permission schema. |
 | `/api/rules/[id]/rollback` | `POST` | Add an explicit rollback request schema. |
-| `/api/rules/[id]/test` | `POST` | Add schema for test input and expected context. |
-| `/api/rules/[id]/versions` | `GET,POST` | Add schema for version creation payload. |
-| `/api/rules/simulate` | `POST` | Promote simulation input into a reusable schema. |
 | `/api/tenders/[id]/workflow` | `GET,POST,PATCH` | Add workflow transition schema and state constraints. |
 | `/api/tenders/ocr` | `POST` | Keep multipart guard; add explicit OCR option schema. |
 | `/api/upload` | `POST` | Keep multipart guard; add explicit upload intent/category schema. |
@@ -54,3 +51,4 @@ These routes are not immediate malformed-body crashers, because they already gua
 ## Migration Notes
 
 - `64839e2` moved `/api/contract-policies/rules/[id]/versions/[versionId]/publish` and `/rollback` from `guard-only` to `schema+guard` with targeted malformed JSON and invalid-shape tests.
+- `9b8d765` moved `/api/rules/[id]/test`, `/api/rules/[id]/versions`, and `/api/rules/simulate` from `guard-only` to `schema+guard` with targeted malformed JSON and invalid-shape tests.
