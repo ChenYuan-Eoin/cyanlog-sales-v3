@@ -102,6 +102,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | `F011-org-permission-config.md` | 外部组织同步范围不清会影响验收判断。 | 明确飞书 MVP 只同步部门结构，未配置时必须反馈缺失环境变量和配置位置。 |
 | `F027-remediation-governance.md` | 缺少跨问题域合并、验收、发布证据的稳定 truth。 | 将 60+ 问题合并为 10 个问题域，并定义验收与剩余风险记录方式。 |
 | `04-implementation-truth/manifests/F027/*` | 需要保留本轮线上证据、命令证据、发布证据。 | 记录当前验证结果、部署 ID、线上路径、剩余风险。 |
+| `04-implementation-truth/manifests/F027/api-validation-inventory.md` | API schema 覆盖债务不能只用粗略数量表达，否则容易把 manual guard 误判为已完成或未修复。 | 固化 103 个 API route 的 body-parse 分类：45 个 `schema+guard`、22 个 `guard-only`、36 个 `no-body`，并列出 22 个待 schema-normalize 路由。 |
 
 ---
 
@@ -142,6 +143,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 规则域写接口 JSON 分类 | `d226737` 复用既有 rules 路由和错误合约，将 body 解析/校验前移到规则/组织查询之前；`dpl_9nospHMt9Jn52muVo6uxownWoNi4` 线上七条 malformed JSON 样本均为 400，测试确认坏 JSON 不触发 default-org、规则引擎或 Supabase。 |
 | 报价与商品写接口 JSON 分类 | `f3939d5` 复用 products/quotes/price-tier 既有 schema 和错误合约，将 body 解析/校验前移到 org/SKU/报价查询之前；`dpl_BCq57B8W6Bi4LkFXmf4Q8v562Qbm` 线上六条 malformed JSON 样本均为 400，测试确认坏 JSON 不触发 org、定价计算或 Supabase。 |
 | AI 与合同接口 JSON 分类 | `de3fc9c` 处理剩余 AI/合同路由裸 `req.json()` 风险：`/api/ai/analyze`、`/api/contracts`、`/api/contracts/[id]`、`/api/contracts/[id]/merge-chunks`、`/api/contracts/[id]/clauses/[clauseId]`。`app/api` 裸 JSON 解析扫描已清零；`dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5` 线上五条 malformed JSON 样本均为 400，测试确认坏 JSON 不进入可避免的模型、组织、数据库、存储或合同访问链路。 |
+| API schema 覆盖债务清单 | `api-validation-inventory.md` 对 103 个 API route 做二次收窄扫描，只统计 `req/request` body parser，不把 `NextResponse.json` 误计为请求体读取。结果为 0 个 `unguarded-body`、45 个 `schema+guard`、22 个 `guard-only`、36 个 `no-body`。这把“不会因坏 body 崩掉”和“已经有完整业务 schema”拆开记录。 |
 | 合同上传异常路径前置校验 | `cbda92e` 复用既有上传页、`useChunkUpload` 和合同上传接口，没有新增第二套上传链路；`/api/contracts/[id]/upload` 与 `/upload-chunk` 先校验表单/文件/分块参数，再进入组织、合同、Storage 或文本解析。`dpl_8S8N46tAtGhruQf8AALfHhM4DpUW` 线上 6 条坏表单/坏文件样本均返回 400 common envelope，浏览器登录后 `/contracts/upload` 正常渲染拖拽上传区和分块说明。 |
 | 通用资产上传与拖拽反馈 | `7d7561a` 复用既有 `/api/upload` 和 `ImageUpload` 组件，没有新增第二套头像/主题图片上传链路；坏 multipart、缺失文件、非图片文件会在进入 Storage 前返回 400。`dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5` 线上 3 条坏表单样本均为 400；浏览器 `/profile` 编辑态显示头像上传控件，`dragover` 后 drop zone 切到 `bg-blue-50 border-blue-500`，`dragleave` 后恢复普通态。 |
 | 错误边界返回首页恢复 | `778073d` 复用既有首页预热资产 `primeHomeInitialData`，错误页挂载时先 `router.prefetch('/')` 并预热首页数据；错误上报延后到下一轮任务并优先使用 `sendBeacon`，避免错误态下和“返回首页”操作争抢网络。`dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6` 上 `/` 与用户截图合同详情 URL 均正常渲染，合同详情不再出现 `页面发生错误`。 |

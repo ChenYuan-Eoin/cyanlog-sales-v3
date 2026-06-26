@@ -621,7 +621,8 @@
       "final_temp_visible": false,
       "console_messages": []
     },
-    "api_zod_coverage": "103 app/api route.ts files; malformed JSON coverage now includes verified admin/auth/profile/client-errors/config/knowledge/content CRUD/rules/pricing/AI/contracts write routes. Direct unguarded req.json()/request.json() scan in app/api is now empty.",
+    "api_zod_coverage": "103 app/api route.ts files; malformed JSON coverage now includes verified admin/auth/profile/client-errors/config/knowledge/content CRUD/rules/pricing/AI/contracts write routes. Direct unguarded req.json()/request.json() and req.formData()/request.formData() scans in app/api are now empty.",
+    "api_validation_inventory": "F027 api-validation-inventory.md records a narrowed request-body parser scan over 103 API route files: 45 schema+guard, 22 guard-only, 36 no-body, 0 unguarded-body, 0 schema-only. The 22 guard-only routes are schema-normalization debt, not currently hidden malformed-body crashers.",
     "production_governance_search": "Production app/components/lib search excluding tests has 0 matches for alert(, console.log(, window.location.reload, @ts-ignore, // ignore, and direct any",
     "performance_fast_navigation": "After 8beff47 on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: rapid / -> /configs?tab=role-access browser verification produced fastNavigationConsoleMessages=[]; stale dashboard Failed to fetch noise suppressed.",
     "latest_org_admin_role_assignment": {
@@ -1141,7 +1142,7 @@
     "Build has known dependency warnings: Sentry/OpenTelemetry dynamic require and webpack cache big string serialization. The previous Vercel sharp ignored build scripts warning was cleared by approving sharp in pnpm.onlyBuiltDependencies. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
     "Legacy archived rule rows remain in stats for compatibility.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
-    "API schema migration is still staged by domain, but direct unguarded req.json()/request.json() and req.formData()/request.formData() scans in app/api are now empty. Remaining debt is response envelope/code consistency and route-by-route domain schemas, not raw JSON/formData parse failure.",
+    "API schema migration is still staged by domain. F027 inventory shows 0 unguarded request-body parser sites, but 22 guard-only routes still need named schemas or explicit empty-body contracts. Remaining debt is response envelope/code consistency and route-by-route domain schemas, not raw JSON/formData parse failure.",
     "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
   ]
 }
