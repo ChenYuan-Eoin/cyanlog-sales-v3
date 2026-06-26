@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "e57c34c",
+  "head": "8beff47",
   "commits": [
     {
       "sha": "5641824",
@@ -55,13 +55,45 @@
     {
       "sha": "e57c34c",
       "message": "fix(org): hide deleted members from admin payload"
+    },
+    {
+      "sha": "8d8d7c4",
+      "message": "chore: exclude diagnostic artifacts from git and deploy"
+    },
+    {
+      "sha": "ee29a77",
+      "message": "docs: record feishu sync blocker evidence"
+    },
+    {
+      "sha": "9459ada",
+      "message": "fix(admin): consolidate organization mutation APIs"
+    },
+    {
+      "sha": "5db94bd",
+      "message": "fix(org): hide inactive departments from admin payload"
+    },
+    {
+      "sha": "ad7844a",
+      "message": "fix(configs): revalidate organization cache"
+    },
+    {
+      "sha": "d790736",
+      "message": "fix(home): ignore stale dashboard load after navigation"
+    },
+    {
+      "sha": "b63fe8d",
+      "message": "fix(home): abort initial dashboard load on navigation"
+    },
+    {
+      "sha": "8beff47",
+      "message": "fix(home): suppress aborted dashboard fetch noise"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_7LhA6QGMHaJVjHwEs3zMnZyt1Bb3",
+    "deployment_id": "dpl_DcsLG4sdNEDESWJiwF12SErXE8iA",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/7LhA6QGMHaJVjHwEs3zMnZyt1Bb3"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/DcsLG4sdNEDESWJiwF12SErXE8iA"
   },
   "verification": {
     "lint": "pass",
@@ -76,11 +108,11 @@
     "mobile": "configs and contracts verified without horizontal overflow",
     "favicon": "online favicon.png 200 image/png",
     "performance_page_switch": "DevTools trace: route switching INP 26ms, CLS 0.00",
-    "performance_login": "After a7545e6: X-Login-Timing exposes rpc_* stage timing; 3 production samples route total 348.6-1108ms, login_rpc 346.6-1086.7ms, rpc_total 82.4-151.8ms",
+    "performance_login": "Final production sample on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: X-Login-Timing total=1021.6ms, login_rpc=997.1ms, rpc_total=106.7ms, rpc_password_verify=78.3ms, rpc_initial_dashboard=10.4ms, rpc_initial_core=6.7ms, auth_context_cookie=7.1ms; cold login still exceeds the 0.5s target.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. Current Vercel build: /configs 166kB, /contracts 144kB, /tenders 126kB",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
-    "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, and 20260626071818_org_admin_active_members_only.sql applied to linked remote",
-    "org_admin": "Production browser verification on dpl_7LhA6QGMHaJVjHwEs3zMnZyt1Bb3: org page loaded 11 departments / 25 members / 3 spaces; add temp admin changed 25=>26; stop kept row visible as 已停用; enable restored 在职; delete changed 26=>25 and removed row; temp user hard-cleaned",
+    "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
+    "org_admin": "Final production browser verification on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: org role page loaded 25 users; temp user created via UI, visible after create, assigned ADMIN role, visible in Admin role after assign, removed from Admin role, role_codes cleared, hard cleanup deleted temp user, final count 25, consoleMessages=[].",
     "org_admin_rpc_cleanup": {
       "rpc_ms": 232,
       "users": 25,
@@ -89,7 +121,7 @@
       "spaces": 3,
       "temp_included": false
     },
-    "deploy_payload": "Latest Vercel CLI production deploy uploaded 740.2KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded",
+    "deploy_payload": "Latest Vercel CLI production deploy uploaded 39.2KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -122,18 +154,80 @@
         "rpc_initial_dashboard_ms": 2.2,
         "rpc_initial_core_ms": 1.8,
         "rpc_token_write_ms": 1.5
+      },
+      {
+        "deployment": "dpl_DcsLG4sdNEDESWJiwF12SErXE8iA",
+        "http_status": 200,
+        "route_total_ms": 1021.6,
+        "login_rpc_ms": 997.1,
+        "rpc_total_ms": 106.7,
+        "rpc_password_verify_ms": 78.3,
+        "rpc_initial_dashboard_ms": 10.4,
+        "rpc_initial_core_ms": 6.7,
+        "rpc_token_write_ms": 1.8,
+        "auth_context_cookie_ms": 7.1
       }
-    ]
+    ],
+    "org_admin_department_leader_cache": {
+      "deployment": "dpl_GA7vgxSXz3zLjLt8fUc7WhBdrh17",
+      "login_status": 200,
+      "initial_users": 25,
+      "initial_departments": 11,
+      "temp_department_id": "44a6af90-1e04-4e5c-97f6-b753db69f291",
+      "temp_department_leader": "张雪丽",
+      "readonly_post_status": 405,
+      "readonly_post_allow": "GET",
+      "readonly_post_code": "ORG_AGGREGATE_READ_ONLY",
+      "hard_cleanup_deleted_rows": 1,
+      "hard_cleanup_after_exists": false,
+      "still_visible_after_cleanup": false,
+      "final_departments": 11,
+      "final_temp_visible": false,
+      "console_messages": []
+    },
+    "api_zod_coverage": "103 app/api route.ts files; 36 use Zod after adding admin department create/update schemas; 67 remain as staged governance debt",
+    "production_governance_search": "Production app/components/lib search excluding tests has 0 matches for alert(, console.log(, window.location.reload, @ts-ignore, // ignore, and direct any",
+    "performance_fast_navigation": "After 8beff47 on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: rapid / -> /configs?tab=role-access browser verification produced fastNavigationConsoleMessages=[]; stale dashboard Failed to fetch noise suppressed.",
+    "latest_org_admin_role_assignment": {
+      "deployment": "dpl_DcsLG4sdNEDESWJiwF12SErXE8iA",
+      "base_url": "https://sales.cyanlog.icu",
+      "run_id": 1782463975754,
+      "display_name": "Codex管理员验收-1782463975754",
+      "email": "codex-admin-1782463975754@example.com",
+      "login_status": 200,
+      "login_total_ms": 1021.6,
+      "initial_user_count": 25,
+      "user_created_via_ui": true,
+      "created_user_id": "28549e88-5eb8-4392-a4f8-6edc363be916",
+      "visible_after_create": true,
+      "admin_role_assigned_via_ui": true,
+      "visible_in_admin_role_after_assign": true,
+      "role_codes_after_assign": [
+        "ADMIN"
+      ],
+      "admin_role_removed_via_ui": true,
+      "visible_after_role_remove": false,
+      "role_codes_after_remove": [],
+      "hard_cleanup_deleted": true,
+      "final_temp_visible": false,
+      "final_user_count": 25,
+      "console_messages": [],
+      "fast_navigation_console_messages": []
+    },
+    "dns_observation": "During final verification, Node/Playwright request context intermittently returned ENOTFOUND for sales.cyanlog.icu while curl and Chrome browser access succeeded; classify this as local/external resolver noise unless it reproduces in browser or health checks."
   },
   "known_risks": [
+    "Node/Playwright request DNS intermittently returned ENOTFOUND for sales.cyanlog.icu while curl and Chrome verified the alias; keep external resolver failures classified separately from app errors.",
+    "Cold login target below 0.5s is still not achieved in the final production sample; latest X-Login-Timing total is 1021.6ms and login_rpc is 997.1ms.",
     "Feishu success path requires FEISHU_APP_ID and FEISHU_APP_SECRET in Production.",
-    "Cold login target below 0.5s is not consistently achieved; X-Login-Timing now shows Supabase roundtrip/connection wait and password verification dominate over dashboard/core assembly in latest samples.",
-    "Org-admin RPC hot path is verified at 185-232ms, but route-level latency can still vary with auth/default-org resolution and Supabase network waits; route timing headers should be added before further optimization.",
     "/configs first-load bundle is improved from the earlier 281kB sample but remains heavier than adjacent modules; keep it under bundle watch.",
     "Historical design archive product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html is about 9.5MB and remains tracked as reference material; do not delete without replacing the asset policy.",
     "External Supabase/GitHub network waits can still create intermittent long latency and need explicit timing/error classification.",
     "Supabase remote db lint failed before linting due temporary role SASL auth/circuit breaker; migration application was verified by migration list and live login headers.",
     "Build has known dependency warnings: sharp scripts, Sentry/OpenTelemetry dynamic require, local SWC fallback.",
-    "Legacy archived rule rows remain in stats for compatibility."
+    "Legacy archived rule rows remain in stats for compatibility.",
+    "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; active/inactive user and department semantics are now aligned in RPC and fallback.",
+    "API Zod coverage is improved to 36/103 app/api route.ts files; 67 route files still need staged schema migration.",
+    "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
   ]
 }
