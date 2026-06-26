@@ -7,6 +7,13 @@ const appRoot = path.dirname(fileURLToPath(import.meta.url))
 
 const nextConfig = {
   outputFileTracingRoot: appRoot,
+  // Keep Sentry/OpenTelemetry Node instrumentation out of the server bundle.
+  serverExternalPackages: [
+    '@opentelemetry/instrumentation',
+    '@sentry/node',
+    '@sentry/nextjs',
+    'require-in-the-middle',
+  ],
 }
 
 // Sentry 配置（仅在 DSN 配置时启用）
