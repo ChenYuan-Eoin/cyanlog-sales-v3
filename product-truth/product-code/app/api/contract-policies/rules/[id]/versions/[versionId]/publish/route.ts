@@ -7,15 +7,39 @@ import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { z } from 'zod'
+
+const publishVersionSchema = z.object({
+  gray_release: z.boolean().optional().default(false),
+  gray_end_at: z.string().datetime().nullable().optional().default(null),
+})
+
+async function readOptionalJson(req: NextRequest) {
+  const contentType = req.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    return {}
+  }
+
+  return req.json().catch(() => null)
+}
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
+  const parsed = publishVersionSchema.safeParse(await readOptionalJson(req))
+  if (!parsed.success) {
+    return errorResponse(
+      createApiError(
+        'VALIDATION_ERROR',
+        `参数验证失败: ${parsed.error.issues.map((issue) => issue.message).join(', ')}`
+      )
+    )
+  }
+
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id, versionId } = await params
-    const body = await req.json().catch(() => ({}))
-    const { gray_release = false, gray_end_at = null } = body
+    const { gray_release, gray_end_at } = parsed.data
 
     // 1. 获取版本信息
     const { data: version, error: versionError } = await supabaseAdmin
