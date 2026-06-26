@@ -27,7 +27,7 @@
 |---|---|---|
 | `pnpm lint` | Pass, no ESLint warnings/errors | Script now uses ESLint CLI over app/components/lib/types and root runtime config files; Next 16 `next lint` deprecation noise removed |
 | `pnpm exec tsc --noEmit` | Pass | No type errors |
-| `pnpm test:run` | 52 files / 324 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
+| `pnpm test:run` | 55 files / 328 tests passed | `NODE_OPTIONS=--no-experimental-webstorage` removes the Node 24 `--localstorage-file` noise from the standard test command |
 | `pnpm build` | Pass | Existing warning: Sentry/OpenTelemetry dynamic require; local `@next/swc-darwin-arm64` fallback warning cleared. Local webpack cache may also warn about serializing big strings. |
 | Commit hook | 10/10 governance checks passed through `4bc49c6` | No `--no-verify` used |
 | Vercel build | Ready | `sharp@0.34.5` install script now runs and completes; remaining build warnings are Sentry/OpenTelemetry dynamic require and webpack cache big string serialization |
@@ -50,6 +50,7 @@
 | D03 Department leader and cache consistency | Production browser verification on `dpl_GA7vgxSXz3zLjLt8fUc7WhBdrh17`: temp department with leader `张雪丽` was visible in `/configs?tab=org-structure`; `/api/admin/org` POST returned `405` with `Allow: GET`; after hard cleanup, the same browser revalidated org cache and no longer showed the temp department; final org payload stayed 11 departments / 25 users; console warnings/errors 0 | Pass |
 | D03 Latest admin role add/remove refresh | Production browser verification on `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA`: 25 users before test; temp user created via UI and became visible; assigned to Admin role with `role_codes=["ADMIN"]`; removed from Admin role and disappeared from assigned list with `role_codes=[]`; hard cleanup removed temp user; final count 25; console warnings/errors 0. | Pass |
 | D03 Org payload timing | Production `dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` after real login: `/api/admin/org` returned 200, `X-Org-Payload-Source: rpc`, `X-Org-Timing: auth;dur=0.4, rpc_payload;dur=63.1, total;dur=63.7`, counts 25 users / 11 departments / 7 roles / 3 spaces. | Pass |
+| D03 Admin user write validation | `/api/admin/users/[id]/departments`, `/login-enabled`, `/report-to` now reject invalid body/query values with `400 VALIDATION_ERROR` before Supabase is called; targeted route tests cover empty department list, missing department deletion ID, non-boolean login flag, and invalid report-to UUID. | Pass |
 | D04 Feishu sync unconfigured | Vercel Production env lacks `FEISHU_APP_ID` / `FEISHU_APP_SECRET`; online `POST /api/access/feishu/sync` => `503`, code `FEISHU_NOT_CONFIGURED`, missing both variables, hint states current MVP only syncs departments and does not import members | Pass for unconfigured feedback; success blocked by env |
 | D05 Contract rules | `GET /api/contract-policies/rules?is_active=true` => 15 active codes `R001-R015` | Pass |
 | D05 Rule stats | `GET /api/rules/stats` => 18 total, 15 published, 3 archived legacy rows | Pass with debt |
@@ -139,7 +140,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | B14 | D09 | Runtime search shows no empty `catch {}` in app/components/lib; intentional boundary reporting catch remains documented. |
 | B15 | D09 | Runtime search shows no `alert(` in app/components/lib. |
 | B16 | D03/D09 | Role hardcoding reduced by F011 model; full published permissions model remains long-term. |
-| B17 | D09 | API Zod coverage is now measured: 36/103 `app/api/**/route.ts` files use Zod after adding admin department create/update schemas; 67 route files remain staged governance debt. |
+| B17 | D09 | API Zod coverage is now measured: 39/103 `app/api/**/route.ts` files use Zod after adding admin user departments/login-enabled/report-to schemas; 64 route files remain staged governance debt. |
 | B18 | D09 | Runtime search shows no `window.location.reload`. |
 | B19 | D09 | Runtime search shows no `console.log`; `console.error/warn` remain for server/client logging. |
 | B20 | D09 | Production `app/components/lib` search excluding tests has 0 direct `any` matches; test/mocks still use `any` and remain separate test typing debt. |
@@ -154,7 +155,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | C6 | D09 | Lint passes. |
 | C7 | D06 | Compare href routes to completed contract compare or upload fallback. |
 | C8 | D05/D06 | Risk review href routes to `/admin/rule-review`. |
-| D5 | D10 | 318 tests pass. |
+| D5 | D10 | 328 tests pass. |
 | D6 | D10 | Latest commits used governance hook, no `--no-verify`. |
 | D7-D9 | D09/D10 | Governance artifacts documented; ignored runtime state not staged. |
 | E1 | D06 | Create contract endpoint supports JSON/FormData; upload page uses JSON + chunked upload. |
@@ -183,7 +184,7 @@ Prewarm verification note: the first explicit prewarm request on `dpl_GPh` took 
 | Org-admin route latency variance | RPC hot path is down to 63.7-232ms in direct checks, and route responses now expose `X-Org-Payload-Source` plus `X-Org-Timing`. Samples can still vary because middleware/auth/default-org resolution and Supabase network waits are outside the single SQL function. | Keep collecting `X-Org-Timing` in future admin add/remove refresh tests to separate backend latency from front-end state refresh bugs. |
 | `/configs` first-load JS | Current build after `c74ad23` shows `/configs` First Load JS 159kB, compared with `/contracts` 144kB and `/tenders` 126kB; earlier diagnostic samples were 281kB and 166kB. | Keep bundle budget watch; next target is shared chunk if user-perceived first entry remains slow. |
 | Historical design archive size | `product-truth/03-design-truth/archived/Cyanlog-UI-Kit-source.html` is tracked at about 9.5MB. It is explicitly documented as historical reference, not active design truth or deployed app code. | Do not delete blindly; if clone/push size becomes a product concern, replace with an external artifact pointer or compressed release asset after user approval. |
-| Full API Zod coverage | 36/103 `app/api/**/route.ts` files use Zod; 67 route files remain. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
+| Full API Zod coverage | 39/103 `app/api/**/route.ts` files use Zod; 64 route files remain. | Add route-by-route validation debt list and migrate by shared API schema utilities. |
 | Test/mock `any` cleanup | Production searched paths have 0 direct `any` matches; tests and mocks still use `any` heavily for Supabase chain mocks. | Separate test mock typings from production typings; enforce stricter no-explicit-any only after shared mock builders exist. |
 | Legacy rule rows | `/api/rules/stats` includes 3 archived legacy `RULE-01-*` rows. | Keep archived for compatibility or add legacy cleanup migration after confirming no consumers. |
 | Build warnings | Sentry/OpenTelemetry dynamic require warning remains; local/Vercel webpack cache can warn about serializing big strings. Local SWC fallback warning was cleared, and the Vercel `sharp` ignored build scripts warning is now cleared by `pnpm.onlyBuiltDependencies`. | Evaluate Sentry config tree-shaking and cache warning source. |

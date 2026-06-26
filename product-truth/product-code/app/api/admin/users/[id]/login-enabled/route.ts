@@ -2,10 +2,15 @@
 // PURPOSE: 管理员控制用户是否可以登录系统
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+
+const loginEnabledSchema = z.object({
+  login_enabled: z.boolean(),
+})
 
 // PATCH /api/admin/users/:id/login-enabled - 修改登录状态
 export async function PATCH(
@@ -30,12 +35,14 @@ export async function PATCH(
       return NextResponse.json({ error: '不能禁用当前登录的用户' }, { status: 400 })
     }
 
-    const body = await req.json()
-    const { login_enabled } = body
-
-    if (login_enabled === undefined || typeof login_enabled !== 'boolean') {
-      return NextResponse.json({ error: 'login_enabled 必须为布尔值' }, { status: 400 })
+    const parseResult = loginEnabledSchema.safeParse(await req.json().catch(() => null))
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: 'login_enabled 必须为布尔值', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
     }
+    const { login_enabled } = parseResult.data
 
     // 检查用户是否存在
     const { data: existing, error: checkError } = await supabaseAdmin

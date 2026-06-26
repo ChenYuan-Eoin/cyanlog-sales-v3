@@ -130,7 +130,7 @@
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "52 files / 324 tests passed",
+    "test": "55 files / 328 tests passed",
     "build": "pass with known warnings",
     "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 518ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
@@ -169,6 +169,11 @@
       "spaces": 3
     },
     "sharp_build_script": "After 7eded60, Vercel install ran sharp@0.34.5 install/check.js and completed; the previous pnpm ignored build scripts warning is gone.",
+    "admin_user_validation": {
+      "commit_scope": "admin user departments/login-enabled/report-to route validation",
+      "zod_coverage": "39/103 app/api route.ts files use Zod; 64 remain",
+      "tests": "3 route test files / 4 validation tests ensure invalid admin user write parameters return 400 before supabaseAdmin.from is called"
+    },
     "deploy_payload": "Latest Vercel CLI production deploy uploaded 77.8KB from repo root with rootDirectory product-truth/product-code; node_modules/.next/output/trace artifacts excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",

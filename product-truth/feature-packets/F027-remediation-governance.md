@@ -133,6 +133,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 组织缓存再验证 | 同一浏览器里，清理临时部门后 `/configs?tab=org-structure` 会重新请求 `/api/admin/org` 并移除缓存中的旧部门；console warnings/errors 为 0。 |
 | 管理员角色增删刷新 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上通过 UI 新增 `codex-admin-1782463975754@example.com` 后立即可见；加入管理员角色后 `role_codes=["ADMIN"]`；移出后从管理员已分配列表消失且 `role_codes=[]`；临时账号已硬删除，最终仍为 25 人。 |
 | 组织聚合耗时分层 | `4bc49c6` 在 `/api/admin/org` 响应中加入 `X-Org-Payload-Source` 和 `X-Org-Timing`；最新生产部署 `dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` 上真实登录后返回 `source=rpc`、`auth;dur=0.4, rpc_payload;dur=63.1, total;dur=63.7`、25 用户 / 11 部门 / 7 角色 / 3 销售空间。 |
+| 管理员写接口参数校验 | `/api/admin/users/[id]/departments`、`/login-enabled`、`/report-to` 增加 Zod body/query 校验；坏参数返回 `400 VALIDATION_ERROR`，并由测试确认不会访问 Supabase。API Zod 覆盖从 36/103 提升到 39/103。 |
 | 首页快速跳转噪声 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上快速从 `/` 跳到 `/configs?tab=role-access`，`fastNavigationConsoleMessages=[]`，不再把被导航中止的 dashboard fetch 当作页面错误噪声。 |
 | 聚合接口边界 | `/api/admin/org` POST/PATCH 不再承载旧写逻辑，误用时返回 `405`、`Allow: GET`、`ORG_AGGREGATE_READ_ONLY`；写操作复用 `/api/admin/users` 与 `/api/admin/departments`。 |
 | 登录 route 预热 | `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` 上 `/login` 自动触发 `GET /api/auth/login` 200；无 header 的 GET 返回 204，不触发数据库预热；有 `X-Login-Prewarm: 1` 才预热。 |
@@ -143,7 +144,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require，以及本地 webpack cache 可能提示 big string 序列化。 |
 | 部署产物 | 最新生产部署上传 77.8KB；`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
 | Sharp 构建脚本 | `7eded60` 只批准 `sharp` 进入 `pnpm.onlyBuiltDependencies`；最新 Vercel install 执行 `sharp@0.34.5 install/check.js` 并完成，旧的 ignored build scripts warning 已清除。 |
-| 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，52 个测试文件 / 324 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
+| 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，55 个测试文件 / 328 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
 | Lint 命令噪声 | `pnpm lint` 从 `next lint` 切到 ESLint CLI，覆盖 `app/components/lib/types` 与根运行配置文件；命令通过且不再输出 Next 16 废弃提示。 |
 | 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 

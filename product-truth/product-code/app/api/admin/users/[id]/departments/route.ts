@@ -2,10 +2,25 @@
 // PURPOSE: 添加/删除用户的兼职部门
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+
+const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, '部门 ID 格式不正确')
+
+const addDepartmentsSchema = z.object({
+  department_ids: z.array(uuidSchema).min(1, '请至少选择一个部门'),
+})
+
+const removeDepartmentSchema = z.object({
+  department_id: uuidSchema,
+})
+
+function validationError(message: string) {
+  return NextResponse.json({ error: message, code: 'VALIDATION_ERROR' }, { status: 400 })
+}
 
 // POST /api/admin/users/:id/departments - 添加兼职部门
 export async function POST(
@@ -25,12 +40,11 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { department_ids } = body
-
-    if (!department_ids || !Array.isArray(department_ids) || department_ids.length === 0) {
-      return NextResponse.json({ error: '请至少选择一个部门' }, { status: 400 })
+    const parseResult = addDepartmentsSchema.safeParse(await req.json().catch(() => null))
+    if (!parseResult.success) {
+      return validationError(parseResult.error.issues[0]?.message || '部门参数不正确')
     }
+    const { department_ids } = parseResult.data
 
     // 检查用户是否存在
     const { data: existing, error: checkError } = await supabaseAdmin
@@ -114,15 +128,23 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const body = await req.json().catch(() => ({}))
-    const { department_id } = body
     const url = new URL(req.url)
     const deptIdFromQuery = url.searchParams.get('department_id')
-    const targetDeptId = department_id || deptIdFromQuery
-
-    if (!targetDeptId) {
-      return NextResponse.json({ error: '请指定要删除的部门ID' }, { status: 400 })
+    const body = await req.json().catch(() => ({}))
+    const bodyDeptId = body && typeof body === 'object'
+      ? (body as { department_id?: unknown }).department_id
+      : undefined
+    const rawTargetDeptId = typeof bodyDeptId === 'string' ? bodyDeptId : deptIdFromQuery
+    if (!rawTargetDeptId) {
+      return validationError('请指定要删除的部门ID')
     }
+    const parseResult = removeDepartmentSchema.safeParse({
+      department_id: rawTargetDeptId,
+    })
+    if (!parseResult.success) {
+      return validationError(parseResult.error.issues[0]?.message || '请指定要删除的部门ID')
+    }
+    const targetDeptId = parseResult.data.department_id
 
     // 检查用户是否存在
     const { data: existing, error: checkError } = await supabaseAdmin

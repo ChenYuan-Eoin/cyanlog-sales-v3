@@ -2,10 +2,18 @@
 // PURPOSE: 调整组织架构中的汇报关系
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+
+const reportToSchema = z.object({
+  report_to_user_id: z
+    .string()
+    .regex(/^[0-9a-f-]{36}$/i, '直属上级 ID 格式不正确')
+    .nullable(),
+})
 
 // PATCH /api/admin/users/:id/report-to - 修改汇报对象
 export async function PATCH(
@@ -25,8 +33,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { report_to_user_id } = body
+    const parseResult = reportToSchema.safeParse(await req.json().catch(() => null))
+    if (!parseResult.success) {
+      const firstIssue = parseResult.error.issues[0]
+      return NextResponse.json(
+        { error: firstIssue?.message || '汇报对象参数不正确', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
+    }
+    const { report_to_user_id } = parseResult.data
 
     // 不能汇报给自己
     if (report_to_user_id === id) {
