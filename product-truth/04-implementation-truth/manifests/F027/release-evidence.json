@@ -2,7 +2,7 @@
   "req_id": "F027",
   "date": "2026-06-26",
   "branch": "codex/audit-remediation-61-issues",
-  "head": "cdc118c",
+  "head": "ff9f4bd",
   "commits": [
     {
       "sha": "5641824",
@@ -139,20 +139,24 @@
     {
       "sha": "cdc118c",
       "message": "fix(auth): tighten public api middleware allowlist"
+    },
+    {
+      "sha": "ff9f4bd",
+      "message": "fix(configs): classify malformed json as validation errors"
     }
   ],
   "production": {
     "url": "https://sales.cyanlog.icu",
-    "deployment_id": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
+    "deployment_id": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
     "ready_state": "READY",
-    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/6ZME8coENZdgts2ThnPkjq21xez4"
+    "inspector_url": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/GCdMNrSB1RQj1jtxcabmsV6zrr5e"
   },
   "verification": {
     "lint": "pass",
     "typecheck": "pass",
-    "test": "64 files / 342 tests passed",
+    "test": "67 files / 345 tests passed",
     "build": "pass with known warnings",
-    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 332ms",
+    "health": "GET /api/health status=ok, x-vercel-id hnd1::sin1, database latency 302ms",
     "rules": "R001-R015 active from /api/contract-policies/rules?is_active=true",
     "knowledge_create": "browser create/read/delete passed",
     "contract_upload": "api and ui upload/analyze flow passed",
@@ -163,7 +167,7 @@
     "performance_login": "After cb176af on dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe: Vercel Functions are configured for sin1 via vercel.json. /login still prewarms same-route GET /api/auth/login. Final prewarm+POST samples returned X-Login-Timing total=166.0ms, 120.0ms, 112.1ms; all submitted-login route totals are far below 0.5s. First prewarm request still took 2066ms, so cold startup cost remains visible but is no longer on the submit path when prewarm completes.",
     "performance_configs_bundle": "Earlier sample: /configs around 281kB. After c74ad23/4bc49c6 production build: /configs Size 18kB and First Load JS 159kB; production /_next/static/chunks/app/configs/page-d1d47a8244087e40.js returned 61,052 bytes. Adjacent current build references: /contracts 144kB, /tenders 126kB.",
     "performance_admin_org_bundle": "After 0d15f8c/4bc49c6 production build: /admin/org Size 3.78kB and First Load JS 107kB, down from 73.2kB / 245kB. Production logged-in /admin/org returned 200 and page chunk static/chunks/app/admin/org/page-fbbc3729110b8ca8.js returned 9,078 bytes.",
-    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 64 files / 342 tests without the Node 24 --localstorage-file warning.",
+    "test_warning_cleanup": "Standard pnpm test:run now sets NODE_OPTIONS=--no-experimental-webstorage; latest run passed 67 files / 345 tests without the Node 24 --localstorage-file warning.",
     "lint_warning_cleanup": "Standard pnpm lint now uses ESLint CLI over app/components/lib/types plus middleware/instrumentation/Sentry config files; latest run passed without the Next 16 next lint deprecation warning.",
     "performance_login_cls": "After be7c882: production desktop 1440x900 CLS 0 and mobile 390x844 CLS 0; mobile hero illustration no longer overlaps readable text",
     "supabase_migration": "20260626062255_login_rpc_stage_timing.sql, 20260626065920_org_admin_payload_rpc.sql, 20260626071818_org_admin_active_members_only.sql, and 20260626155732_org_admin_active_departments_only.sql applied to linked remote",
@@ -177,11 +181,11 @@
       "temp_included": false
     },
     "org_admin_route_timing": {
-      "deployment": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
-      "commit": "cdc118c",
+      "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
+      "commit": "ff9f4bd",
       "http_status": 200,
       "payload_source": "rpc",
-      "x_org_timing": "auth;dur=0.8, rpc_payload;dur=47.1, total;dur=48.1",
+      "x_org_timing": "auth;dur=0.3, rpc_payload;dur=79.1, total;dur=79.6",
       "cache_control": "no-store",
       "users": 25,
       "departments": 11,
@@ -261,7 +265,21 @@
         ]
       }
     },
-    "deploy_payload": "Latest successful Vercel production deployment dpl_6ZME8coENZdgts2ThnPkjq21xez4 uploaded 102.8KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
+    "configs_malformed_json_validation": {
+      "commit_scope": "configuration create/update/rollback malformed JSON classification",
+      "tests": "3 new route test files cover malformed JSON for /api/configs, /api/configs/[id], and /api/configs/[id]/rollback",
+      "targeted_tests": "3 route test files / 3 tests passed",
+      "full_tests": "67 files / 345 tests passed",
+      "production": {
+        "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
+        "results": [
+          { "route": "POST /api/configs malformed JSON", "status": 400, "code": "V001", "ms": 466 },
+          { "route": "PUT /api/configs/[id] malformed JSON", "status": 400, "code": "INVALID_DATA", "ms": 1006 },
+          { "route": "POST /api/configs/[id]/rollback malformed JSON", "status": 400, "code": "INVALID_DATA", "ms": 518 }
+        ]
+      }
+    },
+    "deploy_payload": "Latest successful Vercel production deployment dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e uploaded 104.9KB; deploy root remains product-truth/product-code, and node_modules/.next/output/trace artifacts remain excluded.",
     "repo_artifact_cleanup": "Removed 7 previously tracked .playwright-mcp log/snapshot artifacts and added root ignore coverage for .playwright-cli, .playwright-mcp, output, trace, HAR and video artifacts",
     "feishu_unconfigured": "Vercel Production has no FEISHU_APP_ID / FEISHU_APP_SECRET; online POST /api/access/feishu/sync returned 503 FEISHU_NOT_CONFIGURED with missing env list and department-only MVP hint",
     "login_stage_timing_samples": [
@@ -403,7 +421,7 @@
       "final_temp_visible": false,
       "console_messages": []
     },
-    "api_zod_coverage": "103 app/api route.ts files; 39 use Zod after admin validation hardening; 64 remain as staged governance debt",
+    "api_zod_coverage": "103 app/api route.ts files; 47 use Zod/parse indicators after auth/config validation hardening; 56 remain as staged governance debt",
     "production_governance_search": "Production app/components/lib search excluding tests has 0 matches for alert(, console.log(, window.location.reload, @ts-ignore, // ignore, and direct any",
     "performance_fast_navigation": "After 8beff47 on dpl_DcsLG4sdNEDESWJiwF12SErXE8iA: rapid / -> /configs?tab=role-access browser verification produced fastNavigationConsoleMessages=[]; stale dashboard Failed to fetch noise suppressed.",
     "latest_org_admin_role_assignment": {
@@ -475,14 +493,14 @@
       "cleaned_tokens": 3
     },
     "performance_region": {
-      "deployment": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
+      "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
       "configured_region": "sin1",
       "inspect_signal": "Vercel inspect lists functions in [sin1]",
-      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 332ms"
+      "health_signal": "GET /api/health x-vercel-id hnd1::sin1 and database latency 302ms"
     },
     "performance_configs_bundle_current": {
-      "deployment": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
-      "commit": "cdc118c",
+      "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
+      "commit": "ff9f4bd",
       "local_build_route_size": "18kB",
       "local_build_first_load_js": "159kB",
       "production_configs_page_status": 200,
@@ -491,14 +509,14 @@
       "production_configs_page_chunk_bytes": 61052
     },
     "performance_admin_org_bundle_current": {
-      "deployment": "dpl_6ZME8coENZdgts2ThnPkjq21xez4",
-      "commit": "cdc118c",
+      "deployment": "dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e",
+      "commit": "ff9f4bd",
       "production_build_route_size": "3.78kB",
       "production_build_first_load_js": "107kB",
       "previous_route_size": "73.2kB",
       "previous_first_load_js": "245kB",
       "production_admin_org_page_status": 200,
-      "production_admin_org_page_html_bytes": 38597,
+      "production_admin_org_page_html_bytes": 40192,
       "production_admin_org_page_chunk": "static/chunks/app/admin/org/page-fbbc3729110b8ca8.js",
       "production_admin_org_page_chunk_bytes": 9078
     }
@@ -514,7 +532,7 @@
     "Build has known dependency warnings: Sentry/OpenTelemetry dynamic require and webpack cache big string serialization. The previous Vercel sharp ignored build scripts warning was cleared by approving sharp in pnpm.onlyBuiltDependencies. The local SWC fallback warning was cleared by restoring the missing generated @next/swc-darwin-arm64 package/link state.",
     "Legacy archived rule rows remain in stats for compatibility.",
     "Org-admin route latency can still vary with auth/default-org resolution and Supabase network waits; route responses now expose X-Org-Payload-Source and X-Org-Timing to classify auth, RPC payload, fallback payload and total time.",
-    "API Zod coverage is improved to 39/103 app/api route.ts files; 64 route files still need staged schema migration. Latest admin/auth/profile/client-errors hardening classifies malformed JSON as validation errors for the verified write routes but does not change the route coverage count.",
+    "API Zod/parse coverage is 47/103 app/api route.ts files after auth/config validation hardening; 56 route files still need staged schema migration. Latest admin/auth/profile/client-errors/configs hardening classifies malformed JSON as validation errors for the verified write routes.",
     "Production app/components/lib no longer has direct any matches in the D09 search; test and mock files still use any and need a separate test typing cleanup if desired."
   ]
 }

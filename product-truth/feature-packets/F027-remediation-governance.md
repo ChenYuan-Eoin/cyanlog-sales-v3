@@ -132,21 +132,22 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 软删除部门过滤 | 临时部门软删除后一度仍出现在 `/api/admin/org`，已通过 `20260626155732_org_admin_active_departments_only.sql` 和 fallback 过滤修复；最终 payload 回到 11 部门。 |
 | 组织缓存再验证 | 同一浏览器里，清理临时部门后 `/configs?tab=org-structure` 会重新请求 `/api/admin/org` 并移除缓存中的旧部门；console warnings/errors 为 0。 |
 | 管理员角色增删刷新 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上通过 UI 新增 `codex-admin-1782463975754@example.com` 后立即可见；加入管理员角色后 `role_codes=["ADMIN"]`；移出后从管理员已分配列表消失且 `role_codes=[]`；临时账号已硬删除，最终仍为 25 人。 |
-| 组织聚合耗时分层 | `4bc49c6` 在 `/api/admin/org` 响应中加入 `X-Org-Payload-Source` 和 `X-Org-Timing`；最新生产部署 `dpl_6ZME8coENZdgts2ThnPkjq21xez4` 上真实登录后返回 `source=rpc`、`auth;dur=0.8, rpc_payload;dur=47.1, total;dur=48.1`、25 用户 / 11 部门 / 7 角色 / 3 销售空间。 |
+| 组织聚合耗时分层 | `4bc49c6` 在 `/api/admin/org` 响应中加入 `X-Org-Payload-Source` 和 `X-Org-Timing`；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 上真实登录后返回 `source=rpc`、`auth;dur=0.3, rpc_payload;dur=79.1, total;dur=79.6`、25 用户 / 11 部门 / 7 角色 / 3 销售空间。 |
 | 管理员写接口参数校验 | `/api/admin/users/[id]/departments`、`/login-enabled`、`/report-to` 增加 Zod body/query 校验；坏参数返回 `400 VALIDATION_ERROR`，并由测试确认不会访问 Supabase。最新生产部署同样对空 `department_ids`、字符串 `login_enabled`、非法 `report_to_user_id` 返回 400。API Zod 覆盖从 36/103 提升到 39/103。 |
 | 管理员写接口 JSON 分类 | `8dd29e3` 复用既有 Zod schema 与 route 测试体系，把 `/api/admin/departments`、`/api/admin/departments/[id]`、`/api/admin/users`、`/api/admin/users/[id]`、`/api/admin/users/[id]/roles` 的 malformed JSON 从 generic 500 改为 `400 VALIDATION_ERROR`；最新生产部署五条线上样本均返回 400。 |
 | 认证与通用接口 JSON 分类 | `1a521a4` 将同一处理方式扩展到 `/api/auth/login`、`/api/auth/register`、`/api/auth/change-password`、`/api/profile`、`/api/client-errors`；`cdc118c` 将 public API allowlist 改为精确匹配并放行旧注册入口 `/api/auth`。`dpl_6ZME8coENZdgts2ThnPkjq21xez4` 线上验收中 `/api/auth` 与 `/api/auth/register` malformed JSON 均为 400，`/api/auth/me`、`/api/auth/login-extra`、`/api/health-extra` 未登录仍为 401。 |
+| 配置中心写接口 JSON 分类 | `ff9f4bd` 复用既有配置 schema，让 `/api/configs`、`/api/configs/[id]`、`/api/configs/[id]/rollback` 的 malformed JSON 进入 400 校验分支；`dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 三条线上样本均返回 400。 |
 | 首页快速跳转噪声 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上快速从 `/` 跳到 `/configs?tab=role-access`，`fastNavigationConsoleMessages=[]`，不再把被导航中止的 dashboard fetch 当作页面错误噪声。 |
 | 聚合接口边界 | `/api/admin/org` POST/PATCH 不再承载旧写逻辑，误用时返回 `405`、`Allow: GET`、`ORG_AGGREGATE_READ_ONLY`；写操作复用 `/api/admin/users` 与 `/api/admin/departments`。 |
 | 登录 route 预热 | `dpl_7J1TDiARGGbW39XuDRzM8jrrkSuQ` 上 `/login` 自动触发 `GET /api/auth/login` 200；无 header 的 GET 返回 204，不触发数据库预热；有 `X-Login-Prewarm: 1` 才预热。 |
 | 函数区域 | `cb176af` 在 `vercel.json` 固化 `"regions": ["sin1"]`；最终部署 `dpl_GPh5F5bZDMwGsTAHuGewTDboEgUe` 的 `vercel inspect` 显示 functions 在 `[sin1]`，`/api/health` 返回 `x-vercel-id hnd1::sin1`。 |
 | 冷登录现状 | 预热后提交阶段 `X-Login-Timing total` 为 166.0ms、120.0ms、112.1ms；`6aac024` 缓存 auth context HMAC key 后，生产登录 route total 为 315.0ms、154.5ms、124.5ms、110.3ms、109.8ms，其中 `auth_context_cookie` 首次 13.8ms、后续 0.4-0.5ms。首次样本 wall time 仍为 2551ms，继续归类为冷启动/外部等待风险。 |
-| 配置中心拆包 | `c74ad23` 复用既有 `next/dynamic` 方案，把配置编辑弹窗/表单改为打开时加载；最新生产部署 `dpl_6ZME8coENZdgts2ThnPkjq21xez4` 登录态 `/configs` 200，页面 chunk 61,052 bytes；最新构建仍为 `/configs` 18kB / 159kB。 |
-| 组织管理拆包 | `0d15f8c` 复用同一动态加载方案，把 `/admin/org` 的组织工作台延后加载；最新生产部署 `dpl_6ZME8coENZdgts2ThnPkjq21xez4` 登录态 `/admin/org` 200，页面 chunk 9,078 bytes；最新构建仍为 `/admin/org` 3.78kB / 107kB。 |
+| 配置中心拆包 | `c74ad23` 复用既有 `next/dynamic` 方案，把配置编辑弹窗/表单改为打开时加载；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 登录态 `/configs` 200，页面 chunk 61,052 bytes；最新构建仍为 `/configs` 18kB / 159kB。 |
+| 组织管理拆包 | `0d15f8c` 复用同一动态加载方案，把 `/admin/org` 的组织工作台延后加载；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 登录态 `/admin/org` 200，页面 chunk 9,078 bytes；最新构建仍为 `/admin/org` 3.78kB / 107kB。 |
 | 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require，以及本地 webpack cache 可能提示 big string 序列化。 |
-| 部署产物 | 最新成功生产部署为 `dpl_6ZME8coENZdgts2ThnPkjq21xez4`，上传 102.8KB；项目根仍是 `product-truth/product-code`，`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
+| 部署产物 | 最新成功生产部署为 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e`，上传 104.9KB；项目根仍是 `product-truth/product-code`，`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
 | Sharp 构建脚本 | `7eded60` 只批准 `sharp` 进入 `pnpm.onlyBuiltDependencies`；`dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` 执行 `sharp@0.34.5 install/check.js` 并完成，后续生产构建不再出现 ignored build scripts warning。 |
-| 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，64 个测试文件 / 342 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
+| 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，67 个测试文件 / 345 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
 | Lint 命令噪声 | `pnpm lint` 从 `next lint` 切到 ESLint CLI，覆盖 `app/components/lib/types` 与根运行配置文件；命令通过且不再输出 Next 16 废弃提示。 |
 | 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 
