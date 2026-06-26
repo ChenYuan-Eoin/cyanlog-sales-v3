@@ -71,7 +71,7 @@ describe('POST /api/tenders/ocr', () => {
     const res = await POST(makeFormRequest(makeFile('a.txt')))
     expect(res.status).toBe(401)
     const body = await res.json()
-    expect(body.code).toBe('UNAUTHORIZED')
+    expect(body.error.code).toBe('UNAUTHORIZED')
   })
 
   it('未提供文件 → 400 MISSING_FILE', async () => {
@@ -79,7 +79,7 @@ describe('POST /api/tenders/ocr', () => {
     const res = await POST(makeFormRequest(null))
     expect(res.status).toBe(400)
     const body = await res.json()
-    expect(body.code).toBe('MISSING_FILE')
+    expect(body.error.code).toBe('MISSING_FILE')
   })
 
   it('无效表单数据 → 400 INVALID_FORM 且不解析文件或写数据库', async () => {
@@ -90,7 +90,7 @@ describe('POST /api/tenders/ocr', () => {
     const res = await POST(makeMalformedFormRequest())
     expect(res.status).toBe(400)
     const body = await res.json()
-    expect(body.code).toBe('INVALID_FORM')
+    expect(body.error.code).toBe('INVALID_FORM')
     expect(parseDocument).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
@@ -132,6 +132,6 @@ describe('POST /api/tenders/ocr', () => {
     const res = await POST(makeFormRequest(makeFile('a.txt')))
     expect(res.status).toBe(500)
     const body = await res.json()
-    expect(body.code).toBe('DB_ERROR')
+    expect(body.error.code).toBe('DB_ERROR')
   })
 })

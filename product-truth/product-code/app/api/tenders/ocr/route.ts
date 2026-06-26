@@ -16,7 +16,13 @@ const ocrFormSchema = z.object({
 })
 
 function errorResponse(message: string, status: number, code?: string) {
-  return NextResponse.json({ error: message, code }, { status })
+  return NextResponse.json({
+    success: false,
+    error: {
+      code: code || 'OCR_ERROR',
+      message,
+    },
+  }, { status })
 }
 
 // POST /api/tenders/ocr - 解析招标文件

@@ -30,7 +30,13 @@ const uploadFormSchema = z.object({
 })
 
 function errorResponse(message: string, status: number, code?: string) {
-  return NextResponse.json({ error: message, code }, { status })
+  return NextResponse.json({
+    success: false,
+    error: {
+      code: code || 'UPLOAD_ERROR',
+      message,
+    },
+  }, { status })
 }
 
 // 确保存储桶存在，不存在则自动创建
@@ -152,10 +158,13 @@ export async function POST(req: NextRequest) {
       .getPublicUrl(fileName)
 
     return NextResponse.json({
-      url: publicUrl,
-      fileName,
-      size: file.size,
-      type: file.type,
+      success: true,
+      data: {
+        url: publicUrl,
+        fileName,
+        size: file.size,
+        type: file.type,
+      },
     }, { status: 201 })
 
   } catch (error) {

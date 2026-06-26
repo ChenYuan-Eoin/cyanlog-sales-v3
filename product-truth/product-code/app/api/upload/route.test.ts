@@ -58,7 +58,7 @@ describe('POST /api/upload validation', () => {
     const body = await res.json()
 
     expect(res.status).toBe(401)
-    expect(body.code).toBe('UNAUTHORIZED')
+    expect(body.error.code).toBe('UNAUTHORIZED')
   })
 
   it('无效表单数据返回 400 且不访问 Storage', async () => {
@@ -66,7 +66,7 @@ describe('POST /api/upload validation', () => {
     const body = await res.json()
 
     expect(res.status).toBe(400)
-    expect(body.code).toBe('INVALID_FORM')
+    expect(body.error.code).toBe('INVALID_FORM')
     expect(supabaseAdmin.storage.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.listBuckets).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.createBucket).not.toHaveBeenCalled()
@@ -77,7 +77,7 @@ describe('POST /api/upload validation', () => {
     const body = await res.json()
 
     expect(res.status).toBe(400)
-    expect(body.code).toBe('NO_FILE')
+    expect(body.error.code).toBe('NO_FILE')
     expect(supabaseAdmin.storage.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.listBuckets).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.createBucket).not.toHaveBeenCalled()
@@ -91,9 +91,31 @@ describe('POST /api/upload validation', () => {
     const body = await res.json()
 
     expect(res.status).toBe(400)
-    expect(body.code).toBe('INVALID_TYPE')
+    expect(body.error.code).toBe('INVALID_TYPE')
     expect(supabaseAdmin.storage.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.listBuckets).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.createBucket).not.toHaveBeenCalled()
+  })
+
+  it('上传成功返回 common success envelope', async () => {
+    const storageBucket = {
+      upload: vi.fn().mockResolvedValue({ error: null }),
+      getPublicUrl: vi.fn().mockReturnValue({
+        data: { publicUrl: 'https://cdn.example.com/avatars/user-1_logo.png' },
+      }),
+    }
+    ;(supabaseAdmin.storage.from as any).mockReturnValue(storageBucket)
+
+    const res = await POST(makeFormRequest({
+      file: makeFile('logo.png'),
+      folder: 'avatars',
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.success).toBe(true)
+    expect(body.data.url).toBe('https://cdn.example.com/avatars/user-1_logo.png')
+    expect(body.data.fileName).toMatch(/^avatars\/user-1_.*\.png$/)
+    expect(body.url).toBeUndefined()
   })
 })

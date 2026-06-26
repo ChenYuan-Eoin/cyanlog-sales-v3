@@ -62,11 +62,12 @@ export function ImageUpload({
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || `上传失败 (${response.status})`)
+        const errorMessage = data.error?.message || data.error || `上传失败 (${response.status})`
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
-      onChange(data.url)
+      onChange(data.data?.url || data.url)
     } catch (err) {
       const message = err instanceof Error ? err.message : '上传失败'
       setError(message)
