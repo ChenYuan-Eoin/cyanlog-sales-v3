@@ -1,33 +1,10 @@
 'use client'
 
-import { useEffect, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import * as Sentry from '@sentry/nextjs'
 
 import { Button } from '@/components/ui/button'
-
-async function reportBoundaryError(error: Error & { digest?: string }) {
-  try {
-    await fetch('/api/client-errors', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        kind: 'error',
-        message: error.message,
-        stack: error.stack,
-        context: {
-          digest: error.digest,
-          source: 'error-boundary',
-        },
-      }),
-      keepalive: true,
-    })
-  } catch {
-    // Ignore reporting failures in the boundary itself.
-  }
-}
+import { scheduleBoundaryReport, warmHomeRecovery as primeHomeRecovery } from './error-recovery'
 
 export default function GlobalError({
   error,
@@ -38,16 +15,20 @@ export default function GlobalError({
 }) {
   const router = useRouter()
   const [isNavigatingHome, startHomeNavigation] = useTransition()
+  const homeWarmupStarted = useRef(false)
+
+  const handleHomeWarmup = useCallback(() => {
+    if (homeWarmupStarted.current) return
+
+    homeWarmupStarted.current = true
+    primeHomeRecovery(router)
+  }, [router])
 
   useEffect(() => {
-    Sentry.captureException(error, {
-      tags: {
-        source: 'error-boundary',
-      },
-    })
+    handleHomeWarmup()
+  }, [handleHomeWarmup])
 
-    void reportBoundaryError(error)
-  }, [error])
+  useEffect(() => scheduleBoundaryReport(error), [error])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
@@ -61,7 +42,10 @@ export default function GlobalError({
           <Button
             variant="outline"
             disabled={isNavigatingHome}
+            onFocus={handleHomeWarmup}
+            onPointerEnter={handleHomeWarmup}
             onClick={() => {
+              handleHomeWarmup()
               startHomeNavigation(() => {
                 router.replace('/')
               })
