@@ -109,6 +109,10 @@ function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
+function isFetchFailedError(error: unknown) {
+  return error instanceof TypeError && error.message === 'Failed to fetch'
+}
+
 export default function HomePage() {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -205,6 +209,16 @@ export default function HomePage() {
         clearClientSession()
         router.push('/login')
         setLoading(false)
+        return
+      }
+      if (isFetchFailedError(error)) {
+        window.setTimeout(() => {
+          if (!mounted || controller.signal.aborted) {
+            return
+          }
+          console.error('[Dashboard] initial load error', error)
+          setLoading(false)
+        }, 100)
         return
       }
       console.error('[Dashboard] initial load error', error)
