@@ -146,6 +146,8 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 通用资产上传与拖拽反馈 | `7d7561a` 复用既有 `/api/upload` 和 `ImageUpload` 组件，没有新增第二套头像/主题图片上传链路；坏 multipart、缺失文件、非图片文件会在进入 Storage 前返回 400。`dpl_65KRcDFdHHcYMEjePwueSjNYXuJ5` 线上 3 条坏表单样本均为 400；浏览器 `/profile` 编辑态显示头像上传控件，`dragover` 后 drop zone 切到 `bg-blue-50 border-blue-500`，`dragleave` 后恢复普通态。 |
 | 错误边界返回首页恢复 | `778073d` 复用既有首页预热资产 `primeHomeInitialData`，错误页挂载时先 `router.prefetch('/')` 并预热首页数据；错误上报延后到下一轮任务并优先使用 `sendBeacon`，避免错误态下和“返回首页”操作争抢网络。`dpl_54XuYRed9j38EJuAzyBQ5vwVc8Z6` 上 `/` 与用户截图合同详情 URL 均正常渲染，合同详情不再出现 `页面发生错误`。 |
 | 剩余表单解析边界 | `6b0bd77` 处理 `app/api` 中剩余裸 `formData()`：登录表单、商品创建、合同创建 FormData 分支和标书 OCR 上传。坏 multipart 均进入 400 校验分支，不再落入 generic 500 或提前触发可避免的 RPC/组织/数据库/OCR 解析。`dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew` 线上四条坏表单样本均返回 400。 |
+| 组织/角色刷新闭环 | `632f286` 没有新增第二套组织管理实现，而是复用 `/api/admin/org`、`/api/roles`、`browser-cache` 和既有组织权限 UI，把组织结构与角色权限缓存作为同一数据域失效。浏览器在本地生产服务和线上 Preview `dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t` 均验证通过：飞书未配置反馈可见；新增带 ADMIN 角色的临时成员后，组织页和管理员角色页都立即可见；UI 删除后管理员角色页剩余匹配行数为 0；临时成员清理复核为 0。 |
+| 生产切流阻塞 | `632f286` 已提交并推送，Git 集成生成的 Preview `dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t` 已 Ready；但 `vercel deploy --prod` 和 `vercel promote` 均被 Vercel 限额 `api-deployments-free-per-day` 拦截。因此 `sales.cyanlog.icu` 仍指向旧 production `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`，本条不能写成生产主域完成。 |
 | 合同详情错误边界复核 | `dpl_8ppMSoM9i8vFdLSeLfPZebFkQiV5` 上用浏览器打开用户截图中的 `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`，页面渲染标题、基本信息、审核任务和 AI 风险点，不再显示 `页面发生错误`。 |
 | 首页快速跳转噪声 | `dpl_DcsLG4sdNEDESWJiwF12SErXE8iA` 上快速从 `/` 跳到 `/configs?tab=role-access`，`fastNavigationConsoleMessages=[]`，不再把被导航中止的 dashboard fetch 当作页面错误噪声。 |
 | 聚合接口边界 | `/api/admin/org` POST/PATCH 不再承载旧写逻辑，误用时返回 `405`、`Allow: GET`、`ORG_AGGREGATE_READ_ONLY`；写操作复用 `/api/admin/users` 与 `/api/admin/departments`。 |
@@ -155,6 +157,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 配置中心拆包 | `c74ad23` 复用既有 `next/dynamic` 方案，把配置编辑弹窗/表单改为打开时加载；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 登录态 `/configs` 200，页面 chunk 61,052 bytes；最新构建仍为 `/configs` 18kB / 159kB。 |
 | 组织管理拆包 | `0d15f8c` 复用同一动态加载方案，把 `/admin/org` 的组织工作台延后加载；最新生产部署 `dpl_GCdMNrSB1RQj1jtxcabmsV6zrr5e` 登录态 `/admin/org` 200，页面 chunk 9,078 bytes；最新构建仍为 `/admin/org` 3.78kB / 107kB。 |
 | 本地构建依赖 | 本地缺失的 `@next/swc-darwin-arm64` 生成包/链接已恢复，`pnpm build` 不再出现 SWC fallback warning；剩余 warning 是 Sentry/OpenTelemetry 动态 require，以及本地 webpack cache 可能提示 big string 序列化。 |
+| Vercel 生产部署额度 | `632f286` 的 Preview 已 Ready，但 production deploy/promote 被免费每日部署额度拦截。 | 等额度恢复或提升额度后，优先 promote/deploy `dpl_7vB2iPaZCwzh4QFMXPbixhv2Jx9t`，再在 `sales.cyanlog.icu` 重跑组织/角色刷新浏览器流。 |
 | 部署产物 | 最新成功生产部署为 `dpl_BpwMSoQQz15UXMk7qf7yTVAkVaew`，上传 184.6KB；项目根仍是 `product-truth/product-code`，`node_modules`、`.next`、`output`、trace/HAR/video 产物未进入部署包。 |
 | Sharp 构建脚本 | `7eded60` 只批准 `sharp` 进入 `pnpm.onlyBuiltDependencies`；`dpl_F8ZGdXqXQU3LDKU9YbatoZE9Yxhm` 执行 `sharp@0.34.5 install/check.js` 并完成，后续生产构建不再出现 ignored build scripts warning。 |
 | 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，82 个测试文件 / 366 个测试通过，且不再输出 Node 24 `--localstorage-file` warning。 |
