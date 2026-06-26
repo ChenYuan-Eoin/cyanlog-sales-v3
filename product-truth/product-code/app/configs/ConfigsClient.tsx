@@ -377,7 +377,13 @@ export default function ConfigsClient({
         setLoading(true)
       }
 
-      if (cached && cacheAgeMs < TAB_BACKGROUND_REFRESH_MS) {
+      const shouldSkipBackgroundRefresh = (
+        cached
+        && cacheAgeMs < TAB_BACKGROUND_REFRESH_MS
+        && tab !== 'org-structure'
+        && tab !== 'role-access'
+      )
+      if (shouldSkipBackgroundRefresh) {
         return
       }
 
@@ -447,7 +453,7 @@ export default function ConfigsClient({
               return rolesJson.data?.roles ?? []
             }),
             loadInflightTabValue<OrgSummaryPayload>(orgCacheKey, async () => {
-              const orgRes = await fetch('/api/admin/org', { headers })
+              const orgRes = await fetch('/api/admin/org', { headers, cache: 'no-store' })
               if (!orgRes.ok) return null
               return orgRes.json()
             }),
@@ -469,7 +475,7 @@ export default function ConfigsClient({
         case 'org-structure': {
           // 只加载 org
           const orgData = await loadInflightTabValue<OrgSummaryPayload>(cacheKey, async () => {
-            const orgRes = await fetch('/api/admin/org', { headers })
+            const orgRes = await fetch('/api/admin/org', { headers, cache: 'no-store' })
             if (!orgRes.ok) return null
             return orgRes.json()
           })
