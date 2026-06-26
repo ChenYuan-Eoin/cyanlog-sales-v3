@@ -10,8 +10,8 @@ Scan rule: count only request body reads through `req/request.json()`, `req/requ
 
 | Class | Count | Meaning |
 |---|---:|---|
-| `schema+guard` | 53 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
-| `guard-only` | 14 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
+| `schema+guard` | 55 | Route reads request body, catches parse failure, and has Zod/safeParse-style schema validation. |
+| `guard-only` | 12 | Route reads request body with parse-failure protection, but validation is manual or implicit rather than centralized Zod schema. |
 | `no-body` | 36 | Route does not read request body. |
 | `unguarded-body` | 0 | No direct unguarded `req/request` body parser was found in the current scan. |
 | `schema-only` | 0 | No route was found with body schema validation but no parse guard in the current scan. |
@@ -26,8 +26,6 @@ These routes are not immediate malformed-body crashers, because they already gua
 | `/api/admin/clause-library/[id]` | `PATCH,DELETE` | Add a named patch schema and keep delete body-free or explicitly validate delete parameters. |
 | `/api/admin/review-strategies` | `GET,POST` | Replace manual strategy payload checks with a reusable review-strategy schema. |
 | `/api/contracts/[id]/analyze` | `POST` | Add schema for analysis options and idempotency controls. |
-| `/api/contracts/[id]/clauses/[clauseId]` | `PATCH` | Add a clause patch schema and reuse existing clause validation rules. |
-| `/api/contracts/[id]/compare-standard` | `POST` | Add schema for standard comparison options. |
 | `/api/contracts/[id]/merge-chunks` | `POST` | Add schema for merge metadata; keep chunk integrity checks close to upload domain. |
 | `/api/contracts/[id]/upload` | `POST` | Keep multipart guard; add explicit file metadata schema where practical. |
 | `/api/contracts/[id]/upload-chunk` | `POST` | Keep multipart guard; add explicit chunk index/name/total schema. |
@@ -51,3 +49,4 @@ These routes are not immediate malformed-body crashers, because they already gua
 - `9b8d765` moved `/api/rules/[id]/test`, `/api/rules/[id]/versions`, and `/api/rules/simulate` from `guard-only` to `schema+guard` with targeted malformed JSON and invalid-shape tests.
 - `5e31674` moved `/api/rules/[id]/rollback` from `guard-only` to `schema+guard` with a positive-integer rollback version schema and targeted malformed JSON / invalid-shape tests.
 - `614449c` reclassified `/api/asks/[askId]/responses` and `/api/contracts/[id]/asks/[askId]/responses` from `guard-only` to `schema+guard` after confirming both routes reuse the existing `submitAskResponse` Zod schema; targeted route tests cover malformed JSON and invalid `response_text` shape before contract access or Supabase work.
+- `bb83afa` moved `/api/contracts/[id]/compare-standard` and `/api/contracts/[id]/clauses/[clauseId]` from `guard-only` to `schema+guard`; targeted tests cover malformed JSON, invalid field types, and invalid clause status before auth/org where applicable and before contract/Supabase work.
