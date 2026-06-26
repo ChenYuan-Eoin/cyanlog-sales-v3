@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useMemo, useState } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { scheduleCorePageWarmup } from '@/lib/core-page-warmup'
@@ -114,6 +114,7 @@ export default function HomePage() {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [agenda, setAgenda] = useState<AgendaItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [todayLabel, setTodayLabel] = useState('今天')
 
   const applyDashboardPayload = useCallback((data: DashboardPayload, nextProfile?: Profile) => {
     const normalizedSpaces = (data.spaces || []).map((space) => ({
@@ -241,13 +242,13 @@ export default function HomePage() {
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
   }
 
-  const todayLabel = useMemo(() => (
-    new Intl.DateTimeFormat('zh-CN', {
+  useEffect(() => {
+    setTodayLabel(new Intl.DateTimeFormat('zh-CN', {
       month: 'long',
       day: 'numeric',
       weekday: 'long',
-    }).format(new Date())
-  ), [])
+    }).format(new Date()))
+  }, [])
 
   return (
     <div className="content-area" style={{ maxWidth: 1440, margin: '0 auto' }}>
