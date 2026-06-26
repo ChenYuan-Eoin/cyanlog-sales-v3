@@ -2,10 +2,24 @@
 // PURPOSE: 修改/删除单条条款
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+
+const clauseStanceSchema = z.enum(['required', 'recommended', 'optional', 'risky', 'dangerous'])
+
+const clauseUpdateSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  category: z.string().trim().min(1).optional(),
+  stance: clauseStanceSchema.optional(),
+  template_text: z.string().trim().min(1).optional(),
+  legal_basis: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+  contract_types: z.array(z.string()).optional(),
+})
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -20,16 +34,15 @@ export async function PATCH(req: NextRequest, { params }: AsyncRouteParams) {
 
     if (!id) return errorResponse('条款ID必填', 400, 'MISSING_ID')
 
-    const body = (await req.json().catch(() => ({}))) as {
-      name?: string
-      category?: string
-      stance?: string
-      template_text?: string
-      legal_basis?: string
-      description?: string
-      tags?: string[]
-      contract_types?: string[]
+    const parsed = clauseUpdateSchema.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) {
+      const fields = parsed.error.flatten().fieldErrors
+      if (fields.stance) {
+        return errorResponse('立场值不合法', 400, 'INVALID_STANCE')
+      }
+      return errorResponse('请求参数无效', 400, 'INVALID_FIELDS')
     }
+    const body = parsed.data
 
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (body.name !== undefined) update.name = body.name

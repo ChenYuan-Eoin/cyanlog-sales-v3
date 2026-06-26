@@ -2,9 +2,19 @@
 // PURPOSE: 列出 / 创建 / 切换审核策略（强势/平衡/弱势）
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+
+const reviewStrategySchema = z.object({
+  code: z.enum(['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE']),
+  name: z.string().trim().min(1),
+  description: z.string().nullable().optional(),
+  risk_threshold: z.number().min(0).max(100).optional(),
+  enabled_categories: z.array(z.string()).optional(),
+  is_default: z.boolean().optional(),
+})
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -43,20 +53,21 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
 
-    const body = (await req.json().catch(() => ({}))) as {
-      code?: string
-      name?: string
-      description?: string
-      risk_threshold?: number
-      enabled_categories?: string[]
-      is_default?: boolean
+    const parsed = reviewStrategySchema.safeParse(await req.json().catch(() => ({})))
+    if (!parsed.success) {
+      const fields = parsed.error.flatten().fieldErrors
+      if (fields.code) {
+        return errorResponse('策略代码不合法', 400, 'INVALID_CODE')
+      }
+      if (fields.name) {
+        return errorResponse('策略名称必填', 400, 'MISSING_NAME')
+      }
+      return errorResponse('请求参数无效', 400, 'INVALID_FIELDS')
     }
+    const body = parsed.data
 
-    if (!body.code || !['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE'].includes(body.code)) {
+    if (!body.code) {
       return errorResponse('策略代码不合法', 400, 'INVALID_CODE')
-    }
-    if (!body.name) {
-      return errorResponse('策略名称必填', 400, 'MISSING_NAME')
     }
 
     // upsert

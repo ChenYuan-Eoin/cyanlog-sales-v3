@@ -2,9 +2,23 @@
 // PURPOSE: 增删改查条款库
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+
+const clauseStanceSchema = z.enum(['required', 'recommended', 'optional', 'risky', 'dangerous'])
+
+const clauseCreateSchema = z.object({
+  name: z.string().trim().min(1),
+  category: z.string().trim().min(1),
+  stance: clauseStanceSchema.default('recommended'),
+  contract_types: z.array(z.string()).default([]),
+  template_text: z.string().trim().min(1),
+  legal_basis: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  tags: z.array(z.string()).default([]),
+})
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -49,23 +63,18 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
 
-    const body = (await req.json().catch(() => ({}))) as {
-      name?: string
-      category?: string
-      stance?: string
-      contract_types?: string[]
-      template_text?: string
-      legal_basis?: string
-      description?: string
-      tags?: string[]
+    const parsed = clauseCreateSchema.safeParse(await req.json().catch(() => ({})))
+    if (!parsed.success) {
+      const fields = parsed.error.flatten().fieldErrors
+      if (fields.stance) {
+        return errorResponse('立场值不合法', 400, 'INVALID_STANCE')
+      }
+      if (fields.name || fields.category || fields.template_text) {
+        return errorResponse('缺少必填字段', 400, 'MISSING_FIELDS')
+      }
+      return errorResponse('请求参数无效', 400, 'INVALID_FIELDS')
     }
-
-    if (!body.name || !body.category || !body.template_text) {
-      return errorResponse('缺少必填字段', 400, 'MISSING_FIELDS')
-    }
-    if (!['required', 'recommended', 'optional', 'risky', 'dangerous'].includes(body.stance || 'recommended')) {
-      return errorResponse('立场值不合法', 400, 'INVALID_STANCE')
-    }
+    const body = parsed.data
 
     const { data, error } = await supabaseAdmin
       .from('clause_library')
