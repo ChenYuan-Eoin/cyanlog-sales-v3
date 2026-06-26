@@ -105,6 +105,10 @@ const STATUS_MAP: Record<string, { label: string; pillClass: string }> = {
   LOW: { label: '低', pillClass: 'pill outline' },
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
 export default function HomePage() {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -174,6 +178,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let mounted = true
+    const controller = new AbortController()
     ;(async () => {
       const token = localStorage.getItem('token')
       if (!token) {
@@ -182,7 +187,7 @@ export default function HomePage() {
         return
       }
 
-      const initialData = await loadHomeInitialData(token)
+      const initialData = await loadHomeInitialData(token, { signal: controller.signal })
       const profileRow = initialData.profile as Profile | undefined
       const dashboardPayload = initialData.dashboard as DashboardPayload
 
@@ -193,7 +198,7 @@ export default function HomePage() {
         setLoading(false)
       }
     })().catch((error) => {
-      if (!mounted) {
+      if (!mounted || isAbortError(error)) {
         return
       }
       if (error instanceof HomeInitialAuthError) {
@@ -205,7 +210,10 @@ export default function HomePage() {
       console.error('[Dashboard] initial load error', error)
       setLoading(false)
     })
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+      controller.abort()
+    }
   }, [applyDashboardPayload, router])
 
   useEffect(() => {

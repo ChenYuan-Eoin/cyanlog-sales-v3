@@ -44,19 +44,34 @@ export class HomeInitialLoadError extends Error {
   }
 }
 
-export async function loadHomeInitialData(token: string): Promise<HomeInitialData> {
+type HomeInitialLoadOptions = {
+  signal?: AbortSignal
+}
+
+function throwIfAborted(signal: AbortSignal | undefined) {
+  if (signal?.aborted) {
+    throw new DOMException('Home initial data load aborted', 'AbortError')
+  }
+}
+
+export async function loadHomeInitialData(token: string, options: HomeInitialLoadOptions = {}): Promise<HomeInitialData> {
+  const signal = options.signal
+  throwIfAborted(signal)
+
   const cacheKey = scopedCacheKey(token, 'home:initial')
   const profileCacheKey = scopedCacheKey(token, 'home:profile')
   const cached = readBrowserCache<HomeInitialData>(cacheKey, HOME_INITIAL_CACHE_MS)
   if (cached) return cached
 
-  const inflight = homeInitialInflight.get(cacheKey)
-  if (inflight) return inflight
+  if (!signal) {
+    const inflight = homeInitialInflight.get(cacheKey)
+    if (inflight) return inflight
+  }
 
   const request = (async () => {
     const authHeaders = { Authorization: `Bearer ${token}` }
     const cachedProfile = readBrowserCache<unknown>(profileCacheKey, HOME_INITIAL_CACHE_MS)
-    const profileRequest = fetch('/api/auth/me', { headers: authHeaders })
+    const profileRequest = fetch('/api/auth/me', { headers: authHeaders, signal })
       .then(async (profileRes) => {
         if (profileRes.status === 401) throw new HomeInitialAuthError()
         if (!profileRes.ok) throw new HomeInitialLoadError('Profile load failed')
@@ -66,7 +81,7 @@ export async function loadHomeInitialData(token: string): Promise<HomeInitialDat
         writeBrowserCache(profileCacheKey, profilePayload.user)
         return profilePayload.user
       })
-    const dashboardRes = await fetch('/api/dashboard', { headers: authHeaders })
+    const dashboardRes = await fetch('/api/dashboard', { headers: authHeaders, signal })
 
     if (dashboardRes.status === 401) {
       throw new HomeInitialAuthError()
@@ -88,10 +103,14 @@ export async function loadHomeInitialData(token: string): Promise<HomeInitialDat
     writeBrowserCache(cacheKey, value)
     return value
   })().finally(() => {
-    homeInitialInflight.delete(cacheKey)
+    if (!signal) {
+      homeInitialInflight.delete(cacheKey)
+    }
   })
 
-  homeInitialInflight.set(cacheKey, request)
+  if (!signal) {
+    homeInitialInflight.set(cacheKey, request)
+  }
   return request
 }
 
