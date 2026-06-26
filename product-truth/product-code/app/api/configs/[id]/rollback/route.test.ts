@@ -38,7 +38,7 @@ describe('POST /api/configs/[id]/rollback validation', () => {
     const body = await res.json()
 
     expect(res.status).toBe(400)
-    expect(body.code).toBe('INVALID_DATA')
+    expect(body.error.code).toBe('V001')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 })

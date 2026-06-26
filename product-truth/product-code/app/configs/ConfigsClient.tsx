@@ -291,6 +291,28 @@ function normalizeInitialRouteState(routeState?: ConfigsRouteState) {
   return { tab, ruleId, mode }
 }
 
+function getApiErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') return fallback
+
+  const data = payload as { error?: unknown; message?: unknown }
+  if (typeof data.error === 'string') return data.error
+  if (data.error && typeof data.error === 'object') {
+    const error = data.error as { message?: unknown }
+    if (typeof error.message === 'string') return error.message
+  }
+  if (typeof data.message === 'string') return data.message
+  return fallback
+}
+
+function unwrapListResponse<T>(payload: unknown): T[] {
+  if (Array.isArray(payload)) return payload as T[]
+  if (payload && typeof payload === 'object') {
+    const data = (payload as { data?: unknown }).data
+    if (Array.isArray(data)) return data as T[]
+  }
+  return []
+}
+
 export default function ConfigsClient({
   initialData,
   orgId: _orgId,
@@ -617,7 +639,7 @@ export default function ConfigsClient({
 
     if (!orgRes.ok) {
       const data = await orgRes.json().catch(() => ({}))
-      setError(typeof data.error === 'string' ? data.error : '组织数据刷新失败')
+      setError(getApiErrorMessage(data, '组织数据刷新失败'))
       return
     }
 
@@ -632,7 +654,7 @@ export default function ConfigsClient({
       writeBrowserCache(cacheKeys.roles, nextRoles)
     } else if (loadedTabsRef.current.has('role-access')) {
       const data = await rolesRes.json().catch(() => ({}))
-      setError(typeof data.error === 'string' ? `组织已刷新，角色列表刷新失败：${data.error}` : '组织已刷新，角色列表刷新失败')
+      setError(`组织已刷新，角色列表刷新失败：${getApiErrorMessage(data, '角色列表刷新失败')}`)
     }
 
     setLoadedTabs(prev => {
@@ -769,7 +791,7 @@ export default function ConfigsClient({
         })
       } else {
         const data = await res.json().catch(() => ({}))
-        setError(data.error || '保存失败')
+        setError(getApiErrorMessage(data, '保存失败'))
       }
     } catch {
       setError('网络错误')
@@ -856,7 +878,7 @@ export default function ConfigsClient({
 
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error || '保存失败')
+        setError(getApiErrorMessage(data, '保存失败'))
         return
       }
 
@@ -933,7 +955,7 @@ export default function ConfigsClient({
 
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error || '保存失败')
+        setError(getApiErrorMessage(data, '保存失败'))
         return
       }
 
@@ -976,7 +998,7 @@ export default function ConfigsClient({
 
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error || '发布失败')
+        setError(getApiErrorMessage(data, '发布失败'))
         return
       }
 
@@ -999,7 +1021,7 @@ export default function ConfigsClient({
       }
 
       const data = await res.json()
-      setVersions(data)
+      setVersions(unwrapListResponse<{ version: number; status: string; created_at: string }>(data))
       setVersionConfigId(id)
       setIsVersionOpen(true)
     } catch {
@@ -1023,7 +1045,7 @@ export default function ConfigsClient({
 
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error || '回滚失败')
+        setError(getApiErrorMessage(data, '回滚失败'))
         return
       }
 
@@ -1156,7 +1178,7 @@ export default function ConfigsClient({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError(data.error || '保存 SKU 失败')
+        setError(getApiErrorMessage(data, '保存 SKU 失败'))
         return
       }
 
@@ -1180,7 +1202,7 @@ export default function ConfigsClient({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError(data.error || '删除 SKU 失败')
+        setError(getApiErrorMessage(data, '删除 SKU 失败'))
         return
       }
 

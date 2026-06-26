@@ -1,10 +1,12 @@
 // REQ: F009-F012
 // PURPOSE: 配置回滚 API
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
+import { errorResponse, successResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -13,10 +15,6 @@ interface RouteParams {
 const rollbackSchema = z.object({
   version: z.number().int().min(1, '版本号必须大于等于1'),
 })
-
-function errorResponse(message: string, status: number, code?: string) {
-  return NextResponse.json({ error: message, code }, { status })
-}
 
 // 获取当前用户的组织 ID
 async function getCurrentOrgId(userId: string): Promise<string | null> {
@@ -58,15 +56,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     if (!validated.success) {
       return errorResponse(
-        '请求参数无效: ' + validated.error.issues.map((e) => e.message).join(', '),
-        400,
-        'INVALID_DATA'
+        createApiError(
+          'VALIDATION_ERROR',
+          '请求参数无效: ' + validated.error.issues.map((e) => e.message).join(', ')
+        )
       )
     }
 
     const hasAccess = await verifyConfigAccess(id, user.id)
     if (!hasAccess) {
-      return errorResponse('配置不存在或无权限', 404, 'NOT_FOUND')
+      return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
     }
 
     const targetVersion = validated.data.version
@@ -80,7 +79,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       .single()
 
     if (!versionRecord) {
-      return errorResponse(`版本 ${targetVersion} 不存在`, 404, 'VERSION_NOT_FOUND')
+      return errorResponse(createApiError('NOT_FOUND', `版本 ${targetVersion} 不存在`))
     }
 
     // 执行回滚：将当前配置更新为目标版本的值
@@ -97,11 +96,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     if (error) {
       console.error('Rollback config error:', error)
-      return errorResponse('回滚配置失败', 500, 'DB_ERROR')
+      return errorResponse(createApiError('DB_ERROR', '回滚配置失败'))
     }
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       message: `已回滚到版本 ${targetVersion}`,
       config: updated,
       rollbackFrom: versionRecord,
@@ -109,9 +107,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
-      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
     console.error('Rollback config error:', error)
-    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
+    return errorResponse(createApiError('INTERNAL_ERROR'))
   }
 }

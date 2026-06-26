@@ -1,16 +1,14 @@
 // REQ: F009-F012
 // PURPOSE: 获取配置版本历史 API
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { errorResponse, successResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 interface RouteParams {
   params: Promise<{ id: string }>
-}
-
-function errorResponse(message: string, status: number, code?: string) {
-  return NextResponse.json({ error: message, code }, { status })
 }
 
 // 获取当前用户的组织 ID
@@ -50,7 +48,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     const hasAccess = await verifyConfigAccess(id, user.id)
     if (!hasAccess) {
-      return errorResponse('配置不存在或无权限', 404, 'NOT_FOUND')
+      return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
     }
 
     const { data: versions, error } = await supabaseAdmin
@@ -61,16 +59,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     if (error) {
       console.error('Get config versions error:', error)
-      return errorResponse('获取版本历史失败', 500, 'DB_ERROR')
+      return errorResponse(createApiError('DB_ERROR', '获取版本历史失败'))
     }
 
-    return NextResponse.json(versions)
+    return successResponse(versions || [])
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
-      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
     console.error('Get config versions error:', error)
-    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
+    return errorResponse(createApiError('INTERNAL_ERROR'))
   }
 }

@@ -1,19 +1,17 @@
 // REQ: F009-F012
 // PURPOSE: 配置详情、更新、删除 API
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { configUpdateSchema } from '@/lib/configs/validation'
 import { validateConfigValue } from '@/lib/configs/validation'
 import { mergeStoredAIConfigValue, sanitizeConfigRow } from '@/lib/configs/runtime'
+import { errorResponse, successResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 
 interface RouteParams {
   params: Promise<{ id: string }>
-}
-
-function errorResponse(message: string, status: number, code?: string) {
-  return NextResponse.json({ error: message, code }, { status })
 }
 
 // 获取当前用户的组织 ID
@@ -57,18 +55,18 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     const { ok, config } = await verifyConfigAccess(id, user.id)
     if (!ok) {
-      return errorResponse('配置不存在或无权限', 404, 'NOT_FOUND')
+      return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
     }
 
     // 对 AI_CONFIG 类型的 api_key 进行脱敏处理
-    return NextResponse.json(sanitizeConfigRow(config as { type: string; value?: Record<string, unknown> | null }))
+    return successResponse(sanitizeConfigRow(config as { type: string; value?: Record<string, unknown> | null }))
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
-      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
     console.error('Get config error:', error)
-    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
+    return errorResponse(createApiError('INTERNAL_ERROR'))
   }
 }
 
@@ -80,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
     const { ok, config } = await verifyConfigAccess(id, user.id)
     if (!ok) {
-      return errorResponse('配置不存在或无权限', 404, 'NOT_FOUND')
+      return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
     }
 
     const body = await req.json().catch(() => null)
@@ -88,9 +86,10 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
     if (!validated.success) {
       return errorResponse(
-        '配置数据无效: ' + validated.error.issues.map((e) => e.message).join(', '),
-        400,
-        'INVALID_DATA'
+        createApiError(
+          'VALIDATION_ERROR',
+          '配置数据无效: ' + validated.error.issues.map((e) => e.message).join(', ')
+        )
       )
     }
 
@@ -113,7 +112,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     if (nextValue) {
       const valueValidation = validateConfigValue(type, nextValue)
       if (!valueValidation.valid) {
-        return errorResponse(`配置值验证失败: ${valueValidation.error}`, 400, 'INVALID_VALUE')
+        return errorResponse(createApiError('VALIDATION_ERROR', `配置值验证失败: ${valueValidation.error}`))
       }
     }
 
@@ -130,17 +129,17 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
     if (error) {
       console.error('Update config error:', error)
-      return errorResponse('更新配置失败', 500, 'DB_ERROR')
+      return errorResponse(createApiError('DB_ERROR', '更新配置失败'))
     }
 
-    return NextResponse.json(updated)
+    return successResponse(updated)
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
-      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
     console.error('Update config error:', error)
-    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
+    return errorResponse(createApiError('INTERNAL_ERROR'))
   }
 }
 
@@ -152,23 +151,23 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
     const { ok } = await verifyConfigAccess(id, user.id)
     if (!ok) {
-      return errorResponse('配置不存在或无权限', 404, 'NOT_FOUND')
+      return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
     }
 
     const { error } = await supabaseAdmin.from('configs').delete().eq('id', id)
 
     if (error) {
       console.error('Delete config error:', error)
-      return errorResponse('删除配置失败', 500, 'DB_ERROR')
+      return errorResponse(createApiError('DB_ERROR', '删除配置失败'))
     }
 
-    return NextResponse.json({ success: true })
+    return successResponse({ deleted: true })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
-      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
+      return errorResponse(createApiError('UNAUTHORIZED'))
     }
     console.error('Delete config error:', error)
-    return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
+    return errorResponse(createApiError('INTERNAL_ERROR'))
   }
 }
