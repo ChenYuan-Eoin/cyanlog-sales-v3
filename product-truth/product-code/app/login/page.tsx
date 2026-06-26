@@ -21,8 +21,9 @@ export default function LoginPage() {
     const runPrewarm = () => {
       const controller = new AbortController()
       prewarmAbortRef.current = controller
-      void fetch('/api/auth/prewarm', {
-        method: 'POST',
+      void fetch('/api/auth/login', {
+        method: 'GET',
+        headers: { 'X-Login-Prewarm': '1' },
         cache: 'no-store',
         signal: controller.signal,
       }).catch(() => {

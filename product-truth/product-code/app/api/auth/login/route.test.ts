@@ -36,13 +36,20 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { checkLoginRateLimit, recordLoginAttempt } from '@/lib/rate-limit'
 import bcrypt from 'bcryptjs'
 import { AUTH_CONTEXT_COOKIE_NAME, readAuthContextCookieValue } from '@/lib/auth-context-cookie'
-import { POST } from './route'
+import { GET, POST } from './route'
 
 function makeRequest(body: any): any {
   return {
     json: async () => body,
     method: 'POST',
     headers: new Headers({ 'content-type': 'application/json', 'x-forwarded-for': '127.0.0.1' }),
+  }
+}
+
+function makeGetRequest(headers: Record<string, string> = {}): any {
+  return {
+    method: 'GET',
+    headers: new Headers(headers),
   }
 }
 
@@ -323,5 +330,59 @@ describe('POST /api/auth/login', () => {
       expect(res.status).toBe(200)
       expect(body.mustChangePassword).toBe(true)
     })
+  })
+})
+
+describe('GET /api/auth/login', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('预热登录 route 与 Supabase 候选查询路径', async () => {
+    const query = makeChain({ data: { id: 'u-1' }, error: null })
+    query.limit = vi.fn().mockReturnValue(query)
+    query.maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'u-1' }, error: null })
+    ;(supabaseAdmin.from as any).mockReturnValue(query)
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: {}, error: null })
+
+    const res = await GET(makeGetRequest({ 'x-login-prewarm': '1' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(res.headers.get('X-Login-Prewarm')).toBe('1')
+    expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
+    expect(query.select).toHaveBeenCalledWith('id')
+    expect(query.limit).toHaveBeenCalledWith(1)
+    expect(query.maybeSingle).toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'get_login_candidate_v1',
+      expect.objectContaining({
+        p_email: '__prewarm__@invalid.local',
+        p_ip_address: 'prewarm',
+        p_account_limit: 5,
+        p_ip_limit: 15,
+      })
+    )
+  })
+
+  it('预热失败仍返回成功', async () => {
+    ;(supabaseAdmin.from as any).mockImplementation(() => {
+      throw new Error('prewarm failed')
+    })
+
+    const res = await GET(makeGetRequest({ 'x-login-prewarm': '1' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+  })
+
+  it('缺少预热 header 时不访问数据库', async () => {
+    const res = await GET(makeGetRequest())
+
+    expect(res.status).toBe(204)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 })

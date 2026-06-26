@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { primeAuthCache } from '@/lib/auth'
 import { primeDefaultOrgCache } from '@/lib/scoped-access'
+import { warmLoginRuntime } from '@/lib/login-prewarm'
 import {
   cacheDashboardPayload,
   getCachedDashboardPayload,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/rate-limit'
 
 export const preferredRegion = 'sin1'
+export const runtime = 'nodejs'
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
@@ -573,6 +575,30 @@ async function createLoginSuccessResponse(
 }
 
 // POST /api/auth/login - 用户登录
+export async function GET(req: NextRequest) {
+  if (req.headers.get('x-login-prewarm') !== '1') {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    })
+  }
+
+  try {
+    await warmLoginRuntime()
+  } catch {
+    // Login remains functional if opportunistic prewarm fails.
+  }
+
+  return NextResponse.json({ ok: true }, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'X-Login-Prewarm': '1',
+    },
+  })
+}
+
 export async function POST(req: NextRequest) {
   const timing = createLoginServerTiming()
   const withTiming = (response: NextResponse) => timing.attach(response)
