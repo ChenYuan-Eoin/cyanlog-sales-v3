@@ -126,7 +126,18 @@ export async function POST(
       .from('contracts')
       .getPublicUrl(storagePath)
 
-    // 更新合同记录
+    const { data: latestVersion } = await supabaseAdmin
+      .from('contract_versions')
+      .select('id, version_number')
+      .eq('contract_id', contractId)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const nextVersionNumber = (latestVersion?.version_number || 0) + 1
+    const versionSource = latestVersion ? 'manual_revision' : 'original'
+
+    // 更新合同记录。上传成功后进入待审核状态，避免停留在 DRAFT 导致无法发起审核。
     const { error: updateError } = await supabaseAdmin
       .from('contracts')
       .update({
@@ -142,6 +153,7 @@ export async function POST(
           source: 'text-extraction',
           completed_at: new Date().toISOString(),
         },
+        status: 'PENDING',
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)
@@ -162,6 +174,35 @@ export async function POST(
       })
     }
 
+    const { error: versionError } = await supabaseAdmin
+      .from('contract_versions')
+      .insert({
+        contract_id: contractId,
+        version_number: nextVersionNumber,
+        source: versionSource,
+        storage_path: storagePath,
+        file_size: file.size,
+        mime_type: file.type || 'application/octet-stream',
+        parent_version_id: latestVersion?.id || null,
+        change_summary: latestVersion ? '用户上传新的合同版本' : '用户上传合同源文件',
+        uploaded_by: user.id,
+      })
+
+    if (versionError) {
+      await logError({
+        req,
+        source: 'api',
+        userId: user.id,
+        message: versionError.message,
+        error: versionError,
+        context: {
+          route: '/api/contracts/[id]/upload',
+          contractId,
+          phase: 'create_contract_version',
+        },
+      })
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -170,6 +211,9 @@ export async function POST(
         fileSize: file.size,
         fileType: file.type,
         storagePath,
+        versionNumber: nextVersionNumber,
+        versionSource,
+        status: 'PENDING',
       },
       message: '上传成功',
     })

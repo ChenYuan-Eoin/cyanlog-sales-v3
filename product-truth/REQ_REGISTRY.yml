@@ -11,7 +11,7 @@
 ---
 
 version: "2026-06-09"
-last_updated: "2026-06-11T19:00:00Z"
+last_updated: "2026-06-30T00:00:00+08:00"
 
 requirements:
   # ═══════════════════════════════════════════════════════════════
@@ -78,56 +78,62 @@ requirements:
     description: 折扣审批、审批流转、超时处理
 
   F008:
-    name: OCR招标文件解析
-    module: 合同审核
-    source: 合同审核.md#5
+    name: OCR基础能力（F014标书解析复用）
+    module: 标书中心 / 共享OCR
+    source: feature-packets/F014-tender-ocr.md
     status: completed
-    priority: P0
-    derive_doc: product-truth/feature-packets/F005-derive.md
+    priority: P1
+    feature_packet: product-truth/feature-packets/F014-tender-ocr.md
+    legacy_source: product-truth/feature-packets/F005-derive.md#15
     code_locations:
       - app/api/tenders/ocr/route.ts
-    description: PaddleOCR、文本提取、结构化（详见 F005-derive.md §15）
+    description: |
+      历史 F008 曾被收纳在 F005-derive.md 的合同审核合并文档中。
+      当前边界：不属于合同审核主链路，只作为 F014 标书 OCR 解析复用的共享/历史 OCR 能力。
+      合同审核第一阶段以合同文件版本、SkillBundle、RiskFinding 和 Word 批注为主，不依赖 F008。
 
   # ═══════════════════════════════════════════════════════════════
   # 合同审核 (Contract Review)
   # ═══════════════════════════════════════════════════════════════
 
   F005v2:
-    name: 合同中心 V2 (ONES Contract)
+    name: 合同中心第一阶段业务骨架
     module: 合同中心
     source: feature-packets/F005v2-contract-center.md
-    status: design_confirmed
+    status: confirmed
     priority: P0
     feature_packet: product-truth/feature-packets/F005v2-contract-center.md
     code_locations:
       - app/contracts/page.tsx                    # 首页工作台
       - app/contracts/draft/page.tsx              # AI 智能起草
-      - app/contracts/[id]/review/page.tsx        # 三段式风险审核
+      - app/contracts/[id]/review/page.tsx        # 多流风险审核工作台
       - app/contracts/[id]/compare/page.tsx       # 文档精准比对
-      - app/admin/contract-policies/page.tsx      # 策略配置中心
+      - app/admin/contract-policies/page.tsx      # 合同规则配置入口
       - app/api/contracts/dashboard/route.ts      # 首页仪表盘
       - app/api/contracts/drafts/route.ts         # 草稿 CRUD
       - app/api/contracts/[id]/review/route.ts    # 审核结果
       - app/api/contracts/[id]/risk-cards/route.ts # 风险卡片
       - app/api/contracts/[id]/ai-chat/route.ts   # AI 对话
-      - app/api/contracts/[id]/compare/route.ts # 比对任务
+      - app/api/contracts/[id]/compare/route.ts   # 比对任务
       - app/api/contract-policies/rules/route.ts  # 规则配置
     description: |
-      基于合同中心 PRD (2026-06-18) 和原型文件的 V2 升级：
-      - 首页工作台（金刚区 + 资产看板 + 任务流）
-      - AI 智能起草（CRM 联动 + 填空式引导 + 实时预览）
-      - 智能风险审核（三段式布局 + 风险卡片 + 一键修复 + AI 对话）
-      - 文档精准比对（语义对齐 + AI 变更解读）
-      - 策略配置中心（规则原子化 + 3 级阈值 + 版本管理 + 灰度发布）
-    parent_doc: product-truth/feature-packets/F005-derive.md
+      合同审核商业产品第一阶段执行面：
+      - 合同版本、ReviewRun、RiskFinding、NegotiationTask、CustomerFeedback
+      - 多流审核工作台：原文/批注、风险队列、销售谈判、客户反馈、输出审计
+      - 消费 F006 SkillBundle、F009 规则快照、F012 模型策略
+      - 批注为主、报告为辅；禁止把文本粘贴审核作为主链路
+    parent_doc: product-truth/00-master/PROJECT-主文档.md#5
+    legacy_docs:
+      - product-truth/feature-packets/F005-derive.md
+      - product-truth/feature-packets/F005-derive-v2.md
 
   F005:
-    name: 合同审核（完整设计）
+    name: 合同审核（执行面）
     module: 合同审核
-    source: 合同审核.md#2
+    source: feature-packets/F005v2-contract-center.md
     status: in_progress
     priority: P0
-    derive_doc: product-truth/feature-packets/F005-derive.md
+    feature_packet: product-truth/feature-packets/F005v2-contract-center.md
     code_locations:
       - app/api/contracts/route.ts
       - app/api/contracts/[id]/route.ts
@@ -139,16 +145,17 @@ requirements:
       - app/contracts/new/page.tsx
       - app/contracts/[id]/page.tsx
     description: |
-      合同审核完整设计（2026-06-10补强）：
-      - 用户地图：销售/法务/财务/管理员 4角色旅程 + 状态感知 + 通知矩阵
-      - ASK升级：两段式ASK清单 + 3状态机 + 硬关单 + rolling报告
-      - 页面结构：详情页布局 + ASK清单标签页 + 报告版本标签页
-    design_doc: product-truth/01-business-truth/合同审核.md
+      合同审核执行面：
+      - 合同文件与版本流
+      - ReviewRun 绑定 SkillBundle / RuleSnapshot / ModelPolicy
+      - RiskFinding 复核、销售谈判、客户反馈、再审核、审计归档
+      - Word 批注主路径和报告辅助路径的工作台承接
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     design_v2:
       upgrade_id: F005-v2-derive
-      name: F005-F009 整合派生设计
-      status: design_confirmed
+      name: F005-F009 整合派生设计（历史资产）
+      status: confirmed
+      superseded_by: product-truth/00-master/PROJECT-主文档.md#5 + F005/F006/F007/F009/F012
       created_at: "2026-06-17"
       derive_doc: product-truth/feature-packets/F005-derive.md
       new_code_locations_pending:
@@ -173,45 +180,45 @@ requirements:
         - /api/asks/:id/ai-verdict        # v2 移除
       upgraded_endpoints:
         - path: /api/contracts/:id/export
-          change: 软提醒 → 硬关单（422 PENDING_ASKS_BLOCK）
+          change: ASK 硬阻断已下线；导出改为消费 RiskFinding / CommentPatch / contract_annotations 并生成批注版 ContractVersion
       design_decisions_v2:
         - 一次回答（移除 PARTIAL/INSUFFICIENT/VERIFIED 状态）
-        - 必填（硬关单，422 拒绝）
-        - 上传人触发+澄清人入报（报告显式含 ASK 列表+姓名+角色+时间）
-        - 0 风险说明（no_ask_reason 字段）
-        - rolling 版本（report_versions 表，响应即升版）
+        - ASK 仅保留为历史澄清资产，不作为合同审核主对象或导出阻断条件
+        - 风险事实以 RiskFinding 为主，谈判动作以 NegotiationTask 为主，批注意图以 CommentPatch / contract_annotations 为主
+        - 0 风险说明并入 ReviewRun 摘要和输出一致性校验
+        - rolling 版本由 contract_versions 承载，批注版使用 review_revision
       downstream_impact:
-        - F007: 报告生成消费侧适配 (新 askContext 参数 + 升版触发)
-        - F005 analyze: 审核完成后自动调 generate
-        - F005 page: 新增"ASK 清单"标签页 + 报告版本入口
+        - F007: 导出消费 contract_annotations，写入 Word 原生批注并登记 review_revision 版本
+        - F005 analyze: 审核完成后沉淀 RiskFinding、NegotiationTask 所需字段和批注草稿
+        - F005 page: 合同详情页改为审核工作台，展示风险、批注、谈判任务和版本输出
 
   F006:
-    name: 合同规则引擎（完整设计）
-    module: 配置中心
-    source: 配置中心.md#4.1
-    status: in_progress
+    name: 合同审核 Skill 运行时
+    module: 合同审核
+    source: feature-packets/F006-contract-review-skill-runtime.md
+    status: confirmed
     priority: P0
-    derive_doc: product-truth/feature-packets/F005-derive.md
+    feature_packet: product-truth/feature-packets/F006-contract-review-skill-runtime.md
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     code_locations:
       - app/api/contracts/[id]/analyze/route.ts
+      - lib/contract-analysis.ts
       - lib/rules/engine.ts
+      - lib/rules/flexible-engine.ts
     description: |
-      规则引擎完整设计（详见 F005-derive.md §4-7）：
-      - 规则分类：结构化规则(100%精确) vs 语义规则(AI理解)
-      - 柔性化 3 级阈值（下限/建议区间/红线）+ 多套规则集可重叠
-      - 版本管理：版本链 + 回滚机制 + 保存即生效
-      - 测试沙箱：测试用例管理 + 回归测试
-      - 命中率统计：触发率统计 + 低命中率告警
-      - 12 条核心规则（ONES 15 条款 + 12 条 UI 可见）
+      合同审核 Skill 运行时：
+      - 从 F009 已发布规则、知识库模板、条款库和 F012 模型策略编译 SkillBundle
+      - 执行结构化规则、语义规则、模板对比和模型调用
+      - 生成 ReviewEvidence、RiskFinding 和 F007 可消费的 CommentPatchDraft
+      - 历史 ReviewRun 必须绑定不可漂移的 SkillBundle / RuleSnapshot / ModelPolicy
 
   F007:
-    name: Word批注生成
+    name: Word原生批注与报告输出
     module: 合同审核
-    source: 合同审核.md#3
-    status: completed
+    source: feature-packets/F007-word-annotation-export.md
+    status: confirmed
     priority: P0
-    derive_doc: product-truth/feature-packets/F005-derive.md
+    feature_packet: product-truth/feature-packets/F007-word-annotation-export.md
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     code_locations:
       - app/contracts/[id]/page.tsx
@@ -219,10 +226,11 @@ requirements:
       - lib/export/word-generator.py
       - lib/export/word-generator.ts
     description: |
-      Word 报告 + 批注导出（详见 F005-derive.md §14）：
-      - 报告版（纯报告）
-      - 批注版（原合同 + 报告内容批注）
-      - ONES 命名格式：合同审核_{订单类型}_{公司全称}_V1_预览表.docx
+      Word 原生批注与报告辅助：
+      - 主产物是原合同新版本 + Word 原生批注
+      - 报告只作为辅助、兜底和归档
+      - 批注和报告必须引用同一 RiskFinding
+      - 批注失败需展示降级原因，不得伪装成功
 
   # ═══════════════════════════════════════════════════════════════
   # 配置中心 (Config Center)
@@ -231,23 +239,23 @@ requirements:
     name: 合同审核规则配置
     module: 配置中心
     source: PROJECT-主文档.md#5
-    status: in_progress
+    status: confirmed
     priority: P1
-    derive_doc: product-truth/feature-packets/F005-derive.md
+    feature_packet: product-truth/feature-packets/F009-contract-rule-config.md
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     code_locations:
       - app/configs/page.tsx
       - app/api/rules/route.ts
       - app/api/rules/[id]/route.ts
+      - app/api/contract-policies/rules/route.ts
       - supabase/migrations/002_add_rules_table.sql
+      - supabase/migrations/20260625162638_contract_rule_engine_alignment.sql
     description: |
-      合同规则生产面（详见 F005-derive.md §4-7）：
-      - 结构化/语义规则 CRUD
-      - 柔性化 3 级阈值 UI（拖拽调整）
-      - 规则版本 + 回滚 + 保存即生效
-      - 测试用例 + 回归测试
-      - 命中率统计
-      注意：F009 与 F006 合并到 F005-derive.md，不再独立维护
+      合同审核规则配置：
+      - 结构化/语义/混合规则维护
+      - 规则版本、发布、回滚、审计和测试
+      - 规则与模板、条款库、话术、处理角色、谈判要求关联
+      - 发布 RuleSnapshot 给 F006 编译 SkillBundle
 
   F010:
     name: 报价规则配置

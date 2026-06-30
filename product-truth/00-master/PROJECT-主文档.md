@@ -136,35 +136,26 @@
     [ 2686- 2693] 4.8.2 报价计算
     [ 2694- 2699] 4.8.3 导出
   [ 2700- 2726] 4.9 MVP范围与优先级
-[ 2727- 3257] 第5章：合同审核（核心）
-  [ 2732- 2741] 5.0 需求追溯表（Traceability Table）
-  [ 2742- 2844] 5.1 合同审核产品电路（本地LM Studio+qwen3.5-9b）
-  [ 2845- 2969] 5.2 Word批注生成技术实现
-    [ 2849- 2854] 5.2.1 技术方案选型
-    [ 2855- 2860] 5.2.2 批注生成核心实现
-    [ 2861- 2866] 5.2.3 位置定位算法
-    [ 2867- 2969] 5.2.4 双方案设计：Word批注 + 审核报告兜底
-  [ 2970- 3176] 5.3 红绿灯Skill规则配置
-    [ 2974- 2979] 5.3.1 规则配置模型
-    [ 2980- 3169] 5.3.2 规则配置界面（YAML编辑器）
-    [ 3170- 3176] 5.3.3 规则引擎执行
-  [ 3177- 3257] 5.4 OCR招标文件解析
-    [ 3179- 3184] 5.4.1 OCR技术选型
-    [ 3185- 3247] 5.4.2 PaddleOCR部署配置
-    [ 3248- 3257] 5.4.3 OCR解析与结构化
-[ 3258- 3466] 第6章：配置中心
-  [ 3263- 3272] 6.0 需求追溯表（Traceability Table）
-  [ 3273- 3279] 6.1 为什么配置中心是核心
-  [ 3280- 3291] 6.2 配置分类
-  [ 3292- 3318] 6.3 数据模型
-  [ 3319- 3396] 6.4 配置类型详细设计
-    [ 3321- 3364] 6.4.1 合同审核规则配置（红绿灯规则）
-    [ 3365- 3370] 6.4.2 税率规则配置
-    [ 3371- 3396] 6.4.3 审批权限配置
-  [ 3397- 3420] 6.5 配置版本与回滚
-  [ 3421- 3437] 6.6 配置变更流程
-  [ 3438- 3449] 6.7 API接口
-  [ 3450- 3466] 6.8 MVP范围
+[ 3282- 3474] 第5章：合同审核（核心）
+  [ 3290- 3319] 5.0 阶段定位与硬边界
+  [ 3320- 3337] 5.1 第一阶段多流业务图景
+  [ 3338- 3361] 5.2 核心对象模型
+  [ 3362- 3380] 5.3 规则 / Skill / 模型调用链
+  [ 3381- 3403] 5.4 风险项生命周期
+  [ 3404- 3417] 5.5 前端工作台目标形态
+  [ 3418- 3429] 5.6 Word 批注与报告的产品口径
+  [ 3430- 3441] 5.7 F0xx 研发依据映射
+  [ 3442- 3457] 5.8 产品与模块闭环
+  [ 3458- 3474] 5.9 研发准备门禁
+[ 3475- 3915] 第6章：配置中心
+  [ 3482- 3528] 6.0 配置中心三层架构
+  [ 3529- 3541] 6.1 第一层：可配置能力域
+  [ 3542- 3745] 6.2 第二层：模块具体配置
+  [ 3746- 3811] 6.3 第三层：业务工作区域
+  [ 3812- 3845] 6.4 配置版本与生效机制
+  [ 3846- 3873] 6.5 配置变更流程
+  [ 3874- 3888] 6.6 API接口
+  [ 3889- 3915] 6.7 MVP范围
 [ 3467- 3713] 第7章：标书中心
   [ 3472- 3484] 7.0 需求追溯表
   [ 3485- 3577] 7.1 标书中心产品电路（从招标网/筑龙AI提炼）
@@ -3290,105 +3281,193 @@ interface CRMIntegration {
 
 ## 第5章：合同审核（核心）
 
-**【产品模块章】** 给产品/算法/后端阅读
-**【本章输出物】**：高阶架构、关键决策、需求追溯。详情见派生文档。
+**【产品模块章】** 给产品/算法/后端/前端阅读
+**【本章输出物】**：合同审核商业产品第一阶段的产品真相、业务骨架、对象边界和研发门禁。研发细节由 F0xx 文档承接。
 
-> **📌 重要提示**：本章内容已**重构**到派生文档（Derived Doc），与原设计发生重大变更。
-> 所有详细设计、数据模型、API、UI、阶段计划请查阅：
->
-> **📄 派生文档**：`product-truth/feature-packets/F005-derive.md`
->
-> 该派生文档整合了 F005 / F006 / F007 / F008 / F009 全部内容，并基于 ONES 内部合同助手 skill (v2.2.2) 调研做了 2.0 重构。
+> **本章是合同审核的主文档真相。**
+> F005 / F006 / F007 / F009 / F012 是研发执行真相；旧派生文档只作为历史资产和迁移参考，不能再替代 F0xx 研发依据。
 
-### 5.0 关键决策（v2 重大变更 · 2026-06-17）
+### 5.0 阶段定位与硬边界
 
-| # | 决策 | 答案 |
-|---|------|------|
-| 1 | 规则集产品化 | 不需要刻意做产品化展示，只要能让他找到就好了 |
-| 2 | 变体词典初始数据 | 1.2 万词（用 ONES skill 推导） |
-| 3 | 知识库来源 | 现有 cases/documents/qualifications 全部迁移 |
-| 4 | 树状深度 | 至少 6 层（Notion 风格，最好无限层） |
-| 5 | 体系架构 | 简化版先做，后期做全 |
-| 6 | 多租户隔离 | 必须实现（即使简化版） |
-| 7 | 权限模型 | 权限点 + 资源级 ACL（细化到个人和页面） |
-| 8 | 提醒机制 | 在报告内做强提醒（不发飞书/钉钉/邮件/站内信） |
-| 9 | 模板与规则配置 | 12 合同模板 + 15 规则直接导入 |
-| 10 | 生效机制 | 规则级点击保存确认 → 立即生效（写审计日志） |
-| 11 | 规则柔性化 | 3 级阈值（下限/建议区间/红线），强提醒不阻塞 |
-| 12 | 多套规则集 | 可重叠（按金额/客户类型/场景自动选） |
-| 13 | 判不出 = 无效 | 授权版本（买断/订阅×公有云/私有部署）判不出 → 合同无效（强阻塞） |
-| 14 | 变体识别 | 1.2 万词词典 + LLM（"Enterprise" ≈ "私有部署"） |
-| 15 | 知识库 Notion 化 | 树状 6+ 层、富文本 blocks、页面级权限 |
-
-### 5.1 12 条核心规则（ONES 15 条款，UI 隐藏 3 条）
-
-| # | 规则 | 类别 | 默认阈值（可调） |
-|---|------|------|----------------|
-| 1 | 付款节奏 | payment | 下限 30% / 建议 30-100% / 红线 <25% |
-| 2 | 终止退款 | termination | 不退款 / 仅退未消耗 / 全额退款 |
-| 3 | 税率 | tax | 软件 13% / 订阅 6% / 错套红线 |
-| 4 | 默示验收期 | acceptance | 5 工作日 / 7-15 / >30 红线 |
-| 5 | 验收不通过 | acceptance | 整改重交 / 2 次后解除 / 直接解除红线 |
-| 6 | 违约金 | breach | ≤50% / 50-100% 警示 / >100% 红线 |
-| 7 | 间接损失 | liability | 排除 / 需补 / 承担间接红线 |
-| 8 | 责任 Cap | liability | ≤50% / 50-100% / >100% 红线 |
-| 9 | 保密期 | confidentiality | 5 年 / 3-7 年 / 单向永久红线 |
-| 10 | 主体·收款·金额 | general | 全对 / 旧版模板 / 错主体红线 |
-| 11 | IP 归属 | ip | ONES 保留 / 二次开发让 / 客户主张红线 |
-| 12 | 数据安全 | data | 客户所有 / 加密本地化 / AI 训练无授权红线 |
-| 13 | SLA | service | 公有云 99.5% / 99.9% 评估 / 承诺可用性红线 |
-| 14 | 续约 | subscription | 书面 / 自动续期+通知 / 永久锁价红线 |
-| 15 | 争议解决 | general | 深圳 SCIA / 北京上海 / 境外红线 |
-
-### 5.2 架构总览
+本阶段不是单线程 MVP，也不是终版商业产品。本阶段目标是建立合同审核商业产品的第一阶段业务骨架：
 
 ```
-[第 1 层：规则维护层] (法务操作)
-  └─ 12 条核心规则 + 多套规则集 + 变体词典
-
-[第 2 层：合同摄入层]
-  └─ OCR 解析 + 基础信息抽取
-
-[第 3 层：品类分流层]
-  └─ 变体识别（强阻塞：判不出 = 合同无效）
-  └─ 12 模板自动选择
-
-[第 4 层：AI 降级层] (配置中心可配)
-  ├─ Layer 1 本地 LLM
-  ├─ Layer 2 云端 LLM
-  ├─ Layer 3 规则引擎（保底）
-  └─ Layer 4 人工补判
-
-[第 5 层：执行层]
-  ├─ 规则引擎扫描
-  └─ AI 语义分析
-
-[第 6 层：结果聚合层]
-  ├─ 二次验证 6 项
-  └─ 三表生成
-
-[第 7 层：输出层]
-  ├─ 报告三 Tab（页面内）
-  ├─ .md 下载
-  └─ .docx 下载（带批注）
+合同文件与版本流
+  + 配置中心规则流
+  + 知识库/标准模板/条款库流
+  + Skill Bundle 编译流
+  + 模型运行时流
+  + 审核运行流
+  + 风险项处理流
+  + 销售谈判/客户反馈流
+  + Word 批注/报告输出流
+  + 审计复盘流
 ```
 
-### 5.3 需求追溯表
+允许第一阶段少做能力，但不允许把关键结构写死：
 
-| REQ | 名称 | 状态 | 派生文档章节 |
-|-----|------|------|-------------|
-| F005 | 合同审核（完整设计） | in_progress | §1-3, §8-9, §14 |
-| F006 | 合同规则引擎 | in_progress | §4-7 |
-| F007 | Word 批注生成 | completed | §14 |
-| F008 | OCR 招标文件解析 | completed | §15 |
-| F009 | 合同审核规则配置 | in_progress | §4-7, §11 |
+| 不允许写死的内容 | 第一阶段要求 |
+|------------------|--------------|
+| 合同类型 | 支持按合同类型/场景选择规则、模板和 Skill |
+| 规则集 | 支持多规则集、版本、发布、回滚和快照 |
+| Skill | Skill 是配置发布后的运行包，不是代码里固定 prompt |
+| 模型 | 本地模型、云端模型、规则兜底必须由 F012 配置控制 |
+| 风险处理人 | 风险可分派给销售、法务、财务、交付、管理员 |
+| 批注输出 | Word 批注是主产物，报告是辅助和兜底 |
+| 客户反馈 | 客户可接受、拒绝、反建议，触发再审核或升级 |
+| 知识库模板 | 模板、条款和案例必须可版本化引用和快照 |
 
-### 5.4 引用与链接
+### 5.1 第一阶段多流业务图景
 
-- **📄 派生文档（详情）**：`product-truth/feature-packets/F005-derive.md`
-- **业务文档**：`product-truth/01-business-truth/合同审核.md`
-- **REQs**：`product-truth/REQ_REGISTRY.yml` F005/F006/F007/F008/F009
-- **ONES skill 参考**：`/Users/nsss/.paseo/ones-skills/ones-internal-skills-main/`
+合同审核围绕同一份合同并行推进多个业务流，不按“上传 -> 审核 -> 报告”单线理解。
+
+| 业务流 | 主对象 | 写入者 | 消费者 | 第一阶段结果 |
+|--------|--------|--------|--------|--------------|
+| 合同文件与版本流 | ContractVersion | 销售/法务/客户回传 | 审核、批注、归档 | 原文件、解析文本、客户回传版、批注版可追溯 |
+| 配置中心规则流 | RuleSet / RuleUnit / RuleSnapshot | 法务/管理员 | Skill 编译、审核执行 | 已发布规则成为唯一审核依据 |
+| 知识库与模板流 | KnowledgeTemplate / ClauseLibrary / TemplateSnapshot | 法务/运营 | Skill 编译、模板对比 | 标准模板和条款库作为审核依据 |
+| Skill 编译流 | SkillBundle | 系统编译，管理员发布 | ReviewRun | 规则、模板、知识、模型策略组成版本化运行包 |
+| 模型运行流 | ModelPolicy / ModelInvocation | F012 配置，运行时记录 | Skill 执行、审计 | 本地/云端/规则兜底可配置、可追踪 |
+| 审核运行流 | ReviewRun | 销售/法务触发 | 风险项、批注、报告 | 每次审核绑定合同版本、规则快照、Skill、模型策略 |
+| 风险项处理流 | RiskFinding | 审核引擎/人工 | 销售、法务、财务、交付 | 风险可分派、复核、谈判、关闭、升级 |
+| 销售谈判流 | NegotiationTask | 风险项生成/人工创建 | 销售、销售经理、法务 | 给销售谈判依据、建议话术和让步边界 |
+| 客户反馈流 | CustomerFeedback | 销售录入/客户回传 | 再审核、升级、归档 | 接受/拒绝/反建议会影响风险状态 |
+| Word 批注/报告流 | CommentPatch / AnnotatedDocument / ReviewReport | F007 | 销售、客户、法务、归档 | 批注为主，报告为辅，两者使用同一审核事实 |
+| 审计复盘流 | AuditEvent / ReviewEvidence | 系统 | 管理员、法务、运营 | 谁、何时、依据什么、生成什么结果可追溯 |
+
+### 5.2 核心对象模型
+
+第一阶段研发必须围绕以下对象建模，不能只围绕页面和接口建模：
+
+| 对象 | 定义 | 所属 F 文档 |
+|------|------|-------------|
+| `Contract` | 合同业务主对象，承载来源、组织、当前状态 | F005 |
+| `ContractVersion` | 合同文件版本，包含原文件、解析文本、客户回传版、批注版 | F005 / F007 |
+| `ReviewRun` | 一次审核运行，绑定合同版本、Skill、规则快照、模型策略 | F005 / F006 |
+| `RiskFinding` | 单个风险项，必须有来源、证据、状态、责任人和处理结果 | F005 / F006 |
+| `NegotiationTask` | 销售谈判任务，来自必须谈判的风险项 | F005 |
+| `CustomerFeedback` | 客户对批注或条款的反馈，驱动再审核或升级 | F005 |
+| `RuleUnit` | 单条结构化/语义/混合审核规则 | F009 |
+| `RuleSet` | 规则集合，可按合同类型、金额、客户类型、场景生效 | F009 |
+| `RuleSnapshot` | 已发布规则快照，ReviewRun 使用后不可漂移 | F009 / F006 |
+| `KnowledgeTemplate` | 标准合同模板、条款模板、案例、话术等知识资产 | F005 / F009 / F006 |
+| `TemplateSnapshot` | 审核时引用的模板或条款库快照 | F006 |
+| `SkillBundle` | 由规则、模板、知识库、输出 schema、模型策略编译出的运行包 | F006 |
+| `ModelPolicy` | 本地/云端/规则兜底的路由策略与参数 | F012 |
+| `ModelInvocation` | 每次模型调用的审计记录 | F012 / F006 |
+| `CommentPatch` | 写入 Word 的批注意图，绑定 RiskFinding 和原文定位 | F007 |
+| `AnnotatedDocument` | 带原生批注的新文件版本 | F007 |
+| `ReviewReport` | 审核报告，作为批注失败、内部复核和归档的辅助产物 | F007 |
+
+### 5.3 规则 / Skill / 模型调用链
+
+审核依据必须来自配置中心发布的事实，不允许由通用 prompt 自由判断。
+
+```
+F009 配置中心规则
+  -> 发布 RuleSet / RuleSnapshot
+  -> 引用知识库模板、条款库、变体词典、测试用例
+  -> F006 编译 SkillBundle
+  -> F012 注入已发布 ModelPolicy
+  -> F005 创建 ReviewRun 并绑定快照
+  -> F006 执行结构化规则、语义规则、模板对比、模型调用
+  -> 生成 RiskFinding / ReviewEvidence
+  -> F007 生成 CommentPatch / AnnotatedDocument / ReviewReport
+  -> F005 推动人工复核、销售谈判、客户反馈、再审核
+```
+
+`ONES 业务运营` 是面向业务用户的 AI 角色名称，职责是解释风险、生成谈判建议、辅助批注和报告，不拥有规则事实，不替代配置中心和人工决策。
+
+### 5.4 风险项生命周期
+
+风险项是业务对象，不是报告里的文本。
+
+```
+DETECTED
+  -> NEEDS_OWNER_REVIEW
+  -> COMMENT_PROPOSED
+  -> INTERNAL_APPROVED
+  -> SENT_TO_CUSTOMER
+  -> CUSTOMER_ACCEPTED
+  -> RESOLVED
+
+DETECTED
+  -> NEEDS_NEGOTIATION
+  -> NEGOTIATING
+  -> CUSTOMER_COUNTERED
+  -> RE_REVIEW_REQUIRED
+  -> ESCALATED / RESOLVED / WAIVED
+```
+
+必须谈判的风险项要生成 `NegotiationTask`，系统提供依据、底线、建议话术和客户反馈记录；不能用“直接批注给客户点同意/不同意”绕过销售谈判。
+
+### 5.5 前端工作台目标形态
+
+合同审核前端不是文本框审核页面。第一阶段应形成可扩展工作台：
+
+| 区域 | 目的 | 第一阶段要求 |
+|------|------|--------------|
+| 合同版本区 | 查看原文件、解析文本、客户回传版、批注版 | 能切换版本并看当前 ReviewRun 绑定版本 |
+| 原文/批注区 | 显示源文件内容和风险定位 | 支持定位风险证据和批注意图 |
+| 风险队列 | 展示 RiskFinding 状态和责任人 | 支持分派、复核、关闭、升级 |
+| 销售谈判区 | 给销售处理必须谈判风险 | 显示谈判依据、话术、让步边界、客户反馈 |
+| `ONES 业务运营` | AI 辅助解释与生成建议 | 只基于当前 Skill/规则/证据回答 |
+| 输出区 | 下载批注文件和报告 | 批注为主，报告为辅，降级原因可见 |
+| 审计区 | 展示规则、Skill、模型、处理人 | 能追溯 ReviewRun 的依据和结果 |
+
+### 5.6 Word 批注与报告的产品口径
+
+Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使用同一套审核事实：
+
+| 输出 | 作用 | 约束 |
+|------|------|------|
+| `AnnotatedDocument` | 给销售、客户、法务协作的主产物 | 基于原文件生成新版本，批注绑定 RiskFinding |
+| `ReviewReport` | 内部复核、归档、批注失败兜底 | 不得产生与批注不同的风险结论 |
+| `CommentPatch` | 批注生成前的结构化意图 | 必须包含位置、原文片段、风险、建议、作者 |
+
+如果无法精确定位原文，允许降级为段落级批注或报告，但必须记录降级原因，且不得把降级产物标记为最终完整能力。
+
+### 5.7 F0xx 研发依据映射
+
+| REQ | 研发真相 | 职责 |
+|-----|----------|------|
+| F005 / F005v2 | `feature-packets/F005v2-contract-center.md` | 合同中心工作台、合同版本、ReviewRun、风险处理、销售谈判、客户反馈 |
+| F006 | `feature-packets/F006-contract-review-skill-runtime.md` | SkillBundle 编译与运行、规则执行、模板对比、审核证据、输出 schema |
+| F007 | `feature-packets/F007-word-annotation-export.md` | Word 原生批注、CommentPatch、批注文件版本、报告辅助 |
+| F009 | `feature-packets/F009-contract-rule-config.md` | 规则配置、发布、回滚、测试、规则快照 |
+| F012 | `feature-packets/F012-ai-runtime-config.md` | 本地模型、云端模型、规则兜底、路由、调用审计 |
+
+旧 `F005-derive.md` / `F005-derive-v2.md` 只作为历史资产。噪音项结论直接在本节和对应 F0xx 文档中收敛，不再新增平行说明文档。
+
+### 5.8 产品与模块闭环
+
+合同审核噪音项不只做文件归档，必须先按产品愿景和模块边界完成闭环：
+
+| 噪音域 | 产品结论 | 模块闭环 |
+|--------|----------|----------|
+| 旧单线程审核 | 不符合商业产品第一阶段骨架 | F005 必须按合同版本、风险处理、谈判、客户反馈、输出和审计组织 |
+| 旧规则/模板/词典 | 是审核依据资产，必须保留 | F009 负责配置，F006 负责编译和执行，F005 只消费结果 |
+| 旧 Word 输出 | “批注为主、报告为辅”成立，但文末摘要方案废弃 | F007 负责原生批注和报告兜底 |
+| 旧 AI 降级 | 作为模型运行时能力保留 | F012 负责策略和审计，F006 负责受控调用 |
+| F008 OCR | 不属于合同审核第一阶段主链路 | 归 F014 标书中心/共享 OCR，不作为 F005 验收依据 |
+| 重复派生文档 | 没有产品增量 | 只保留 legacy source；重复副本待确认后物理归档或删除 |
+
+后续任何研发拆解、物理删除、移动归档、旧链接替换，都以本节结论和对应 F0xx 文档为准，避免再制造平行说明文档。
+
+### 5.9 研发准备门禁
+
+进入代码实现前必须同时满足：
+
+| 门禁 | 验收标准 |
+|------|----------|
+| D1 多流业务图景 | 上述 10 条业务流在主文档和 F005 中一致 |
+| D2 核心对象 | F005/F006/F007/F009/F012 均引用同一套对象名和边界 |
+| D3 规则/Skill/模型链 | F009 发布规则，F006 编译 Skill，F012 注入模型策略，F005 绑定 ReviewRun |
+| D4 前端工作台 | 前端不再以文本框审核为主，按版本/原文/风险/谈判/输出/审计组织 |
+| D5 数据/API 草案 | 每个 F 文档列出第一阶段 API 和数据对象，不以旧占位接口验收 |
+| D6 复用方案 | 明确复用现有规则表、配置中心、合同上传、风险卡片、AI 降级链和导出资产 |
+| D7 非目标声明 | 客户门户、批量审核、复杂客户协商、商业化套餐等后续能力不得伪完成 |
+| D8 噪音处理 | 历史资产结论必须直接收敛在主文档 5.8 和对应 F0xx 文档中，不新增平行日志 |
 
 ---
 
@@ -4746,7 +4825,7 @@ reminderRules:
 |---------|---------|---------|------|
 | /api/auth/* | AuthService | 无认证 | /api/auth/login |
 | /api/quotes/* | QuoteService | 需认证+授权 | /api/quotes/123 |
-| /api/contracts/* | ContractService | 需认证+授权 | /api/contracts/upload |
+| /api/contracts/* | ContractService | 需认证+授权 | /api/contracts/{id}/review |
 | /api/tenders/* | TenderService | 需认证+授权 | /api/tenders/456 |
 | /api/ai/analyze | AIService | 需认证+超时60s | /api/ai/analyze |
 | /api/calendar/* | ScheduleService | 公开（token验证） | /api/calendar/abc123.ics |
@@ -6668,45 +6747,42 @@ Response 200:
 
 ### A.4 合同审核API
 
-#### A.4.1 提交审核
+#### A.4.1 发起审核
 ```
-POST /api/contracts/{contractId}/review
+POST /api/contracts/{contractId}/analyze
 Headers:
-  X-User-Id: a1b2c3d4
-  X-Auth-Token: x7k9m2p4q8r5t6v3w1y2z4a6b8c9d0e
-Content-Type: multipart/form-data
+  Authorization: Bearer {token}
 
-Request:
-- file: 合同文档.docx
-
-Response 202:
+Response 200:
 {
   "reviewId": "rev_789",
-  "status": "processing",
-  "estimatedTime": 30
+  "jobId": "job_789",
+  "status": "COMPLETED",
+  "message": "结构化审核已完成"
 }
 ```
 
-#### A.2.2 获取审核结果
+上传文件不走该接口。当前实现为 `POST /api/contracts` 创建合同草稿，再调用 `POST /api/contracts/{contractId}/upload` 上传源文件并创建 `ContractVersion`；上传完成后合同状态进入 `PENDING`。
+
+#### A.4.2 获取审核工作台
 ```
 GET /api/contracts/{contractId}/review
 Headers:
-  X-User-Id: a1b2c3d4
-  X-Auth-Token: x7k9m2p4q8r5t6v3w1y2z4a6b8c9d0e
+  Authorization: Bearer {token}
 
 Response 200:
 {
   "success": true,
   "data": {
-    "reviewId": "rev_789",
-    "status": "completed",
-    "score": 75,
-    "summary": {
-      "redCount": 2,
-      "yellowCount": 5,
-      "greenCount": 10
+    "reviewRun": {
+      "id": "rev_789",
+      "status": "COMPLETED",
+      "skill_bundle_id": "contract-rules:published",
+      "rule_snapshot_id": "contract_rules_v2:published",
+      "model_policy_id": "rule-engine"
     },
-    "issues": [
+    "stats": { "red": 2, "yellow": 5, "green": 10, "open": 7 },
+    "riskFindings": [
       {
         "id": "iss_001",
         "ruleId": "R1.1",
@@ -11290,25 +11366,46 @@ Response 200:
 
 #### X.43.5 合同审核API详细定义
 
-**上传合同**
+**创建合同草稿**
 ```
-POST /api/contracts/upload
+POST /api/contracts
 Authorization: Bearer {token}
-Content-Type: multipart/form-data
+Content-Type: application/json
 
-Form Data:
-- projectId: proj_123
-- file: [二进制文件]
-- description: "客户回传的第一版合同"
+Request:
+{
+  "title": "客户回传的第一版合同",
+  "description": "客户回传的第一版合同"
+}
 
 Response 201:
 {
   "success": true,
   "data": {
     "id": "cont_123",
-    "code": "CT-2024-001",
-    "projectId": "proj_123",
-    "status": "DRAFT",
+    "status": "DRAFT"
+  }
+}
+```
+
+**上传合同源文件并创建版本**
+```
+POST /api/contracts/{contractId}/upload
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
+
+Form Data:
+- file: [二进制文件]
+
+Response 200:
+{
+  "success": true,
+  "data": {
+    "fileName": "招商银行采购合同.docx",
+    "storagePath": "contracts/cont_123/original.docx",
+    "versionNumber": 1,
+    "versionSource": "original",
+    "status": "PENDING",
     "originalDoc": {
       "url": "https://storage.example.com/docs/cont_123.docx",
       "name": "招商银行采购合同.docx",
@@ -11326,64 +11423,43 @@ Response 201:
 }
 ```
 
-**执行AI审核**
+**执行审核**
 ```
-POST /api/contracts/{contractId}/review
+POST /api/contracts/{contractId}/analyze
 Authorization: Bearer {token}
 Content-Type: application/json
 
 Request:
 {
-  "ruleSetId": "default",
-  "aiModel": "qwen2.5:14b",
-  "priority": "normal"  // normal, high, urgent
+  "strategy": "BALANCED"
 }
 
-Response 202:
+Response 200:
 {
-  "success": true,
-  "data": {
-    "reviewId": "rev_123",
-    "status": "PROCESSING",
-    "estimatedSeconds": 30,
-    "progressUrl": "/api/contracts/reviews/rev_123/progress"
-  }
+  "reviewId": "rev_123",
+  "jobId": "job_123",
+  "status": "COMPLETED",
+  "message": "结构化审核已完成"
 }
 
-// 查询审核进度
-GET /api/contracts/reviews/{reviewId}/progress
+// 获取审核工作台
+GET /api/contracts/{contractId}/review
 
 Response 200:
 {
   "success": true,
   "data": {
-    "reviewId": "rev_123",
-    "status": "PROCESSING",  // PROCESSING, COMPLETED, FAILED
-    "progress": {
-      "stage": "AI_ANALYSIS",
-      "percent": 75,
-      "message": "正在进行AI深度分析"
-    }
-  }
-}
-
-// 获取审核结果
-GET /api/contracts/{contractId}/reviews/{reviewId}
-
-Response 200:
-{
-  "success": true,
-  "data": {
-    "id": "rev_123",
-    "contractId": "cont_123",
+    "id": "cont_123",
     "status": "COMPLETED",
-    "score": 72,
-    "summary": {
-      "redCount": 2,
-      "yellowCount": 5,
-      "greenCount": 10
+    "reviewRun": {
+      "id": "rev_123",
+      "status": "COMPLETED",
+      "skill_bundle_id": "contract-rules:published",
+      "rule_snapshot_id": "contract_rules_v2:published",
+      "model_policy_id": "rule-engine"
     },
-    "issues": [
+    "stats": { "red": 2, "yellow": 5, "green": 10, "open": 7 },
+    "riskFindings": [
       {
         "id": "iss_001",
         "ruleId": "R1.1",
@@ -15236,4 +15312,3 @@ AI服务层
 - 细粒度框架实现教程。
 
 ---
-

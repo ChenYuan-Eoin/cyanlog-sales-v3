@@ -1,7 +1,7 @@
 # F005-F009 合同审核 & 规则配置 派生文档
 
 **REQ ID**: F005 / F006 / F007 / F008 / F009
-**Status**: design_in_progress
+**Status**: duplicate_legacy_reference
 **Created**: 2026-06-17
 **Purpose**: 整合 F005-F009 全部内容（合同审核主流程、规则配置、Word 导出、OCR、条款库、模板管理）
 **Parent Doc**: `product-truth/00-master/PROJECT-主文档.md` 第 5 章
@@ -10,9 +10,9 @@
 - `product-truth/01-business-truth/配置中心.md`
 - `ONES` 内部 `ones-contract-assistant` skill (v2.2.2) 调研
 
-> **本文档是 Product Truth 派生文档（Derived Doc）**。
-> 母文档（PROJECT-主文档.md）只保留高层架构和链接，详情/数据模型/接口/UI/Phase 全部在本文档。
-> 修改时同时维护母文档的指针链接。
+> **重复副本声明**：本文档原始内容与 `F005-derive.md` 完全一致，没有独立设计价值。
+> 当前只作为待确认归档/删除的历史副本保留，不再作为合同审核第一阶段研发真相。
+> 可复用内容统一从 `F005-derive.md` 摘录到主文档第 5 章和对应 F0xx 文档。
 
 ---
 

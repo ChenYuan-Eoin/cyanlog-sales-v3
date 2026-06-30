@@ -14,6 +14,62 @@ import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 
+type ContractReviewRow = {
+  id: string
+  status?: string | null
+  results?: unknown
+  rule_version?: number | null
+  created_at?: string | null
+  completed_at?: string | null
+}
+
+type ContractVersionRow = {
+  id: string
+  contract_id: string
+  version_number: number
+  source: 'original' | 'review_revision' | 'manual_revision'
+  storage_path: string
+  file_size: number | null
+  mime_type: string | null
+  parent_version_id: string | null
+  change_summary: string | null
+  review_id: string | null
+  created_at: string | null
+}
+
+type RiskCardRow = {
+  id: string
+  review_id?: string | null
+  contract_id: string
+  rule_id?: string | null
+  rule_code?: string | null
+  rule_version?: number | null
+  level: 'red' | 'yellow' | 'green' | 'white'
+  title: string
+  description?: string | null
+  suggestion?: string | null
+  evidence?: unknown
+  status: string
+  clause_ref?: string | null
+  position_start?: number | null
+  position_end?: number | null
+  created_at?: string | null
+}
+
+type AnnotationRow = {
+  id: string
+  contract_id: string
+  start_offset: number
+  end_offset: number
+  selected_text: string | null
+  comment: string
+  category: string | null
+  priority: string | null
+  status: string
+  author_id: string | null
+  created_at: string | null
+}
+
 const reviewConclusionSchema = z.object({
   conclusion: z.enum(['APPROVED', 'REJECTED', 'ESCALATED']),
   conclusion_reason: z.string().trim().max(1000, '原因不能超过 1000 字').optional().nullable(),
@@ -65,10 +121,96 @@ export async function GET(
     }
 
     const riskOrder: Record<string, number> = { red: 0, yellow: 1, green: 2, white: 3 }
-    const orderedRiskCards = [...(riskCards || [])].sort((left: { level: string; created_at?: string }, right: { level: string; created_at?: string }) => (
+    const orderedRiskCards = ([...(riskCards || [])] as RiskCardRow[]).sort((left, right) => (
       (riskOrder[left.level] ?? 9) - (riskOrder[right.level] ?? 9)
       || new Date(left.created_at || 0).getTime() - new Date(right.created_at || 0).getTime()
     ))
+
+    const [
+      versionsResult,
+      annotationsResult,
+      jobsResult,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('contract_versions')
+        .select('id, contract_id, version_number, source, storage_path, file_size, mime_type, parent_version_id, change_summary, review_id, created_at')
+        .eq('contract_id', id)
+        .order('version_number', { ascending: false }),
+      supabaseAdmin
+        .from('contract_annotations')
+        .select('id, contract_id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
+        .eq('contract_id', id)
+        .order('created_at', { ascending: true }),
+      supabaseAdmin
+        .from('contract_analysis_jobs')
+        .select('*')
+        .eq('contract_id', id)
+        .order('created_at', { ascending: false }),
+    ])
+
+    if (versionsResult.error) {
+      return errorResponse(createApiError('DB_ERROR', '获取合同版本失败'))
+    }
+
+    if (annotationsResult.error) {
+      return errorResponse(createApiError('DB_ERROR', '获取合同批注失败'))
+    }
+
+    if (jobsResult.error) {
+      return errorResponse(createApiError('DB_ERROR', '获取审核任务失败'))
+    }
+
+    const versions = (versionsResult.data || []) as ContractVersionRow[]
+    const annotations = (annotationsResult.data || []) as AnnotationRow[]
+    const jobs = jobsResult.data || []
+    const latestReview = (contract.contract_reviews?.[0] || null) as ContractReviewRow | null
+    const outputVersions = versions.filter((version) => version.source === 'review_revision')
+    const sourceVersions = versions.filter((version) => version.source !== 'review_revision')
+    const currentVersion = sourceVersions[0] || versions[0] || null
+    const latestJob = jobs[0] || null
+
+    const reviewRun = latestReview ? {
+      id: latestReview.id,
+      status: latestReview.status || 'PENDING',
+      contract_version_id: currentVersion?.id || null,
+      skill_bundle_id: `contract-rules:${latestReview.rule_version ?? 'published'}`,
+      rule_snapshot_id: latestReview.rule_version
+        ? `contract_rules_v2:v${latestReview.rule_version}`
+        : 'contract_rules_v2:published',
+      model_policy_id: latestJob?.provider || 'rule-engine',
+      started_at: latestJob?.started_at || latestReview.created_at || null,
+      completed_at: latestJob?.completed_at || latestReview.completed_at || null,
+    } : null
+
+    const riskFindings = orderedRiskCards.map((card) => ({
+      id: card.id,
+      rule_id: card.rule_id || null,
+      rule_code: card.rule_code || null,
+      rule_version: card.rule_version || null,
+      severity: card.level,
+      title: card.title,
+      description: card.description || '',
+      suggestion: card.suggestion || '',
+      evidence: card.evidence || { snippets: [] },
+      status: card.status,
+      clause_ref: card.clause_ref || null,
+      position: {
+        start: card.position_start ?? null,
+        end: card.position_end ?? null,
+      },
+    }))
+
+    const negotiationTasks = orderedRiskCards
+      .filter((card) => (card.level === 'red' || card.level === 'yellow') && card.status === 'open')
+      .map((card) => ({
+        id: `negotiation-${card.id}`,
+        risk_id: card.id,
+        required: card.level === 'red',
+        owner_role: 'sales',
+        status: 'pending',
+        title: card.level === 'red' ? '必须谈判' : '建议谈判',
+        objective: card.suggestion || card.description || card.title,
+      }))
 
     // 3. 统计信息
     const stats = {
@@ -83,7 +225,15 @@ export async function GET(
       ...contract,
       riskCards: orderedRiskCards,
       stats,
-      latestReview: contract.contract_reviews?.[0] || null,
+      latestReview,
+      latestJob,
+      versions,
+      currentVersion,
+      reviewRun,
+      riskFindings,
+      negotiationTasks,
+      annotations,
+      outputs: outputVersions,
     })
   })
 }

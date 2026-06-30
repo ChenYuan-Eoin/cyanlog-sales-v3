@@ -677,9 +677,22 @@ export async function saveStructuredReport(
 ): Promise<void> {
   await supabaseAdmin.from('contract_clauses').delete().eq('review_id', reviewId)
   await supabaseAdmin.from('contract_risk_cards').delete().eq('review_id', reviewId)
+  await supabaseAdmin
+    .from('contract_annotations')
+    .delete()
+    .eq('contract_id', contractId)
+    .eq('category', 'risk_finding')
 
   if (report.result.risks.length > 0) {
-    const riskRows = report.result.risks.map((risk) => ({
+    const riskRows = report.result.risks.map((risk) => {
+      const evidence = risk.evidence?.find(Boolean)
+      const matchedClause = report.clauses.find((clause) => (
+        (evidence && clause.clauseText.includes(evidence))
+        || clause.clauseText.includes(risk.title)
+        || Boolean(clause.clauseTitle && risk.description.includes(clause.clauseTitle))
+      )) || report.clauses[0]
+
+      return {
       review_id: reviewId,
       contract_id: contractId,
       rule_id: risk.ruleId || null,
@@ -697,9 +710,57 @@ export async function saveStructuredReport(
         counterparty: risk.counterparty || null,
       },
       status: 'open',
-    }))
-    const { error: riskError } = await supabaseAdmin.from('contract_risk_cards').insert(riskRows)
+      clause_ref: matchedClause?.clauseNumber || matchedClause?.clauseTitle || null,
+      position_start: matchedClause?.startOffset ?? null,
+      position_end: matchedClause?.endOffset ?? null,
+    }
+    })
+    const { data: insertedRisks, error: riskError } = await supabaseAdmin
+      .from('contract_risk_cards')
+      .insert(riskRows)
+      .select('id, title, description, suggestion, level, evidence, position_start, position_end')
     if (riskError) throw riskError
+
+    const annotationRows = (insertedRisks || [])
+      .filter((risk) => risk.level === 'red' || risk.level === 'yellow')
+      .map((risk) => {
+        const evidence = risk.evidence as { snippets?: string[] } | null
+        const selectedText = evidence?.snippets?.find(Boolean)
+          || report.clauses.find((clause) => (
+            clause.startOffset === risk.position_start
+            && clause.endOffset === risk.position_end
+          ))?.clauseText
+          || risk.title
+        const startOffset = typeof risk.position_start === 'number' && risk.position_start >= 0
+          ? risk.position_start
+          : 0
+        const endOffset = typeof risk.position_end === 'number' && risk.position_end > startOffset
+          ? risk.position_end
+          : startOffset + Math.max(selectedText.length, 1)
+
+        return {
+          contract_id: contractId,
+          start_offset: startOffset,
+          end_offset: endOffset,
+          selected_text: selectedText,
+          comment: [
+            `【${risk.level === 'red' ? '红线风险' : '需谈判风险'}】${risk.title}`,
+            risk.description ? `问题：${risk.description}` : null,
+            risk.suggestion ? `建议：${risk.suggestion}` : null,
+            `RiskFinding: ${risk.id}`,
+          ].filter(Boolean).join('\n'),
+          category: 'risk_finding',
+          priority: risk.level === 'red' ? 'urgent' : 'high',
+          status: 'open',
+        }
+      })
+
+    if (annotationRows.length > 0) {
+      const { error: annotationError } = await supabaseAdmin
+        .from('contract_annotations')
+        .insert(annotationRows)
+      if (annotationError) throw annotationError
+    }
   }
 
   if (report.clauses.length > 0) {

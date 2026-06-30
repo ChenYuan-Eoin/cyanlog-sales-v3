@@ -76,7 +76,7 @@ const quickActions = [
     icon: UploadIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
-    href: '/contracts/upload',
+    href: '/contracts/new',
     description: '上传并审核',
   },
   {
@@ -86,7 +86,7 @@ const quickActions = [
     icon: EyeIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
-    href: '/contracts/upload',
+    href: '/contracts/new',
     description: '选择合同审核',
   },
   {
@@ -96,7 +96,7 @@ const quickActions = [
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
-    href: '#',
+    href: '/contracts',
     description: '先选择合同后点击比对',
   },
 ]
@@ -292,15 +292,15 @@ export default function ContractCenterPage() {
       if (action.id === 'review') {
         return {
           ...action,
-          href: '/admin/rule-review',
-          description: '进入规则审核工作台',
+          href: '/contracts/new',
+          description: '上传合同进入审核工作台',
         }
       }
 
       if (action.id === 'compare') {
         return {
           ...action,
-          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/upload',
+          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/new',
           description: compareTarget ? '选择合同进行比对' : '先完成合同审核',
         }
       }

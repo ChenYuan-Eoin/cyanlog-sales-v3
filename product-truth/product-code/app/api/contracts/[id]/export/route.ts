@@ -7,11 +7,23 @@ import { requireAuth } from '@/lib/auth'
 import { generateWordDocument } from '@/lib/export/word-generator'
 import fs from 'fs'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { logError } from '@/lib/error-log'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
+}
+
+function buildContentDisposition(filename: string) {
+  const asciiFallback = filename
+    .replace(/[^\x20-\x7E]/g, '-')
+    .replace(/[\\"]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 140) || 'contract-review.docx'
+  const encodedFilename = encodeURIComponent(filename)
+
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedFilename}`
 }
 
 // POST /api/contracts/:id/export - 导出带批注的Word文档
@@ -46,6 +58,7 @@ export async function POST(
       .from('contracts')
       .select('*, contract_reviews(*)')
       .eq('id', id)
+      .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
       .maybeSingle()
 
@@ -79,29 +92,6 @@ export async function POST(
       }>
     }
 
-    // ===== 硬关单检查：ASK 清单未回应阻断导出 =====
-    const { data: pendingAsks, error: askError } = await supabaseAdmin
-      .from('ask_items')
-      .select('id, ask_code, question_text')
-      .eq('contract_id', id)
-      .eq('status', 'pending')
-
-    if (askError) {
-      console.error('[Export] ASK check error:', askError)
-    }
-
-    if (pendingAsks && pendingAsks.length > 0) {
-      return NextResponse.json({
-        error: '合同有未回应的 ASK 问题，请先处理',
-        code: 'PENDING_ASKS_BLOCK',
-        details: {
-          pending_count: pendingAsks.length,
-          items: pendingAsks.map((a) => ({ id: a.id, code: a.ask_code, question: a.question_text })),
-        },
-      }, { status: 422 })
-    }
-    // ===== 硬关单检查结束 =====
-
     // 获取结构化报告字段
     const riskSummary = (latestReview as unknown as { risk_summary?: {
       total_clauses: number
@@ -126,18 +116,26 @@ export async function POST(
     const effectivenessAnalysis = (latestReview as unknown as { effectiveness_analysis?: string }).effectiveness_analysis
 
     // 加载合同条款（按 position 排序）
-    const { data: clauses } = await supabaseAdmin
+    const { data: clauses, error: clausesError } = await supabaseAdmin
       .from('contract_clauses')
       .select('id, clause_number, clause_title, clause_text, risk_level, risk_category, risk_description, legal_basis, suggestion, position')
       .eq('review_id', latestReview.id)
       .order('position', { ascending: true })
 
+    if (clausesError) {
+      return errorResponse('加载合同条款失败', 500, 'CLAUSES_QUERY_FAILED')
+    }
+
     // 加载批注
-    const { data: annotations } = await supabaseAdmin
+    const { data: annotations, error: annotationsError } = await supabaseAdmin
       .from('contract_annotations')
       .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
       .eq('contract_id', id)
       .order('created_at', { ascending: true })
+
+    if (annotationsError) {
+      return errorResponse('加载合同批注失败', 500, 'ANNOTATIONS_QUERY_FAILED')
+    }
 
     // 加载策略名称
     let strategyName = ''
@@ -164,14 +162,39 @@ export async function POST(
       strategy_code: riskSummary?.strategy_code,
     }
 
+    const { data: versions, error: versionError } = await supabaseAdmin
+      .from('contract_versions')
+      .select('id, version_number, source')
+      .eq('contract_id', id)
+      .order('version_number', { ascending: false })
+
+    if (versionError) {
+      return errorResponse('获取合同版本失败', 500, 'VERSION_QUERY_FAILED')
+    }
+
+    const latestVersion = versions?.[0] || null
+    const sourceVersion = versions?.find((version) => version.source !== 'review_revision') || latestVersion
+    const nextVersionNumber = (latestVersion?.version_number || 0) + 1
+
     // 下载原始合同文件
     const { data: fileData, error: fileError } = await supabaseAdmin.storage
       .from('contracts')
       .download(contract.storage_path)
 
     if (fileError) {
-      console.error('Download file error:', fileError)
-      // Continue without original file - will create new document
+      await logError({
+        req,
+        source: 'api',
+        userId: user.id,
+        message: fileError.message,
+        error: fileError,
+        context: {
+          route,
+          requestId,
+          contractId: id,
+          phase: 'download_source_contract',
+        },
+      })
     }
 
     // Save to temp file if download succeeded
@@ -201,16 +224,50 @@ export async function POST(
 
     // Read the generated file
     const fileBuffer = fs.readFileSync(exportResult.outputPath)
+    const outputStoragePath = `reviewed/${id}/v${nextVersionNumber}-${Date.now()}-ones-review.docx`
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('contracts')
+      .upload(outputStoragePath, fileBuffer, {
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      fs.unlinkSync(exportResult.outputPath)
+      return errorResponse('批注版文件写入失败', 500, 'EXPORT_UPLOAD_FAILED')
+    }
+
+    const { error: insertVersionError } = await supabaseAdmin
+      .from('contract_versions')
+      .insert({
+        contract_id: id,
+        version_number: nextVersionNumber,
+        source: 'review_revision',
+        storage_path: outputStoragePath,
+        file_size: fileBuffer.length,
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        parent_version_id: sourceVersion?.id || null,
+        change_summary: 'ONES 业务运营基于风险项生成 Word 批注版本',
+        uploaded_by: user.id,
+        review_id: latestReview.id,
+      })
+
+    if (insertVersionError) {
+      fs.unlinkSync(exportResult.outputPath)
+      await supabaseAdmin.storage.from('contracts').remove([outputStoragePath])
+      return errorResponse('批注版版本登记失败', 500, 'EXPORT_VERSION_FAILED')
+    }
 
     // Clean up temp output file
     fs.unlinkSync(exportResult.outputPath)
 
     // Return file as download
     const headers = new Headers()
+    const sourceFilename = String(contract.filename || 'contract').replace(/\.[^.]+$/, '')
     headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
     headers.set(
       'Content-Disposition',
-      `attachment; filename="contract-${contract.filename}-审核结果.docx"`
+      buildContentDisposition(`${sourceFilename}-审核结果.docx`)
     )
 
     logRouteDone(
@@ -223,6 +280,7 @@ export async function POST(
       startedAt,
       {
         reviewId: latestReview.id,
+        versionNumber: nextVersionNumber,
       }
     )
 

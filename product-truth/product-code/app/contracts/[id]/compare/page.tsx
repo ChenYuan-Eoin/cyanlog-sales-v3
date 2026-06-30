@@ -254,7 +254,7 @@ export default function ContractComparePage() {
                 <Link href={`/contracts/${contractId}`}>
                   <Button variant="outline">返回合同</Button>
                 </Link>
-                <Link href="/contracts/upload">
+                <Link href="/contracts/new">
                   <Button>上传合同</Button>
                 </Link>
               </div>

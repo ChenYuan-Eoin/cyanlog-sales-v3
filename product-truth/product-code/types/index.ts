@@ -56,7 +56,7 @@ export interface Contract {
   storage_path: string
   size: number
   mime_type: string
-  status: 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
+  status: 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
   parsed_text: string | null
   ocr_status?: 'PENDING' | 'PARSING' | 'COMPLETED' | 'FAILED'
   ocr_result?: {
