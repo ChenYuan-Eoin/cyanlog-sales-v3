@@ -1,9 +1,9 @@
 {
   "version": "1.0",
   "id": "goal-20260630083435",
-  "status": "approved",
+  "status": "complete",
   "createdAt": "2026-06-30T08:34:35.441Z",
-  "updatedAt": "2026-06-30T09:54:59.639Z",
+  "updatedAt": "2026-06-30T09:55:56.975Z",
   "sourceGoal": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "objective": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "successCriteria": [
@@ -102,8 +102,8 @@
     ]
   },
   "phase": {
-    "current": "verify",
-    "gate": "G4",
+    "current": "complete",
+    "gate": null,
     "history": [
       {
         "at": "2026-06-30T08:34:35.441Z",
@@ -140,6 +140,12 @@
         "phase": "verify",
         "gate": "G4",
         "reason": "phase command"
+      },
+      {
+        "at": "2026-06-30T09:55:56.975Z",
+        "phase": "complete",
+        "gate": null,
+        "reason": "completion audit passed"
       }
     ]
   },
@@ -393,6 +399,18 @@
           "unverified items",
           "risk and rollback notes"
         ]
+      },
+      {
+        "at": "2026-06-30T09:55:56.944Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "pushed branch verified final harness commit",
+        "detail": "Pushed final Harness trust-helper commit 929d0f0 to origin/codex/audit-remediation-61-issues. git ls-remote origin refs/heads/codex/audit-remediation-61-issues returned 929d0f08cffdc8b3565d63221677e3fb1f9548d3, matching local HEAD. This push contained only Harness/document-governance control-plane updates and runtime evidence; no product deployment was run.",
+        "satisfies": [
+          "pushed branch verified",
+          "validation commands and results",
+          "risk and rollback notes"
+        ]
       }
     ]
   },
@@ -402,5 +420,7 @@
     "originalGoalHash": "324c952a5c7c62521812c0886658d4dc29026973d96460c09434016a98825beb",
     "revisionPolicy": "user-approved-only",
     "agentMayRedefineGoal": false
-  }
+  },
+  "completedAt": "2026-06-30T09:55:56.974Z",
+  "completedBy": "codex"
 }
