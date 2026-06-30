@@ -690,15 +690,23 @@ export default function ConfigsClient({
     if (activeTabLoading && tabId === activeTab) {
       return '...'
     }
+    if (!loadedTabs.has(tabId)) {
+      return '...'
+    }
     return String(moduleCounts[tabId] || 0)
-  }, [activeTab, activeTabLoading, moduleCounts])
+  }, [activeTab, activeTabLoading, loadedTabs, moduleCounts])
 
   const formatSectionCount = useCallback((sectionTabs: ConfigTabId[]) => {
     if (activeTabLoading && sectionTabs.includes(activeTab)) {
       return '...'
     }
-    return String(sectionTabs.reduce((total, tab) => total + (moduleCounts[tab] || 0), 0))
-  }, [activeTab, activeTabLoading, moduleCounts])
+    const knownTotal = sectionTabs.reduce((total, tab) => total + (moduleCounts[tab] || 0), 0)
+    const hasUnloadedTabs = sectionTabs.some((tab) => !loadedTabs.has(tab))
+    if (hasUnloadedTabs) {
+      return knownTotal > 0 ? `${knownTotal}+` : '...'
+    }
+    return String(knownTotal)
+  }, [activeTab, activeTabLoading, loadedTabs, moduleCounts])
 
   const activeModuleMetrics = useMemo(() => {
     switch (activeTab) {
