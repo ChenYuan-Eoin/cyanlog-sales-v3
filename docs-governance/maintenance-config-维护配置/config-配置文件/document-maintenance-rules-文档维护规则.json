@@ -52,6 +52,52 @@
       "tocMustBeScriptGenerated": true,
       "appendixMustFollowIndependentNumbering": true,
       "renameMustSyncRegistry": true
+    },
+    "documentInventory": {
+      "scanRoots": [
+        "docs-governance",
+        "governance",
+        "product-truth"
+      ],
+      "excludeRoots": [
+        "product-truth/product-code",
+        "docs-governance/archive"
+      ],
+      "newDocumentPolicy": {
+        "requireRegisteredOrAllowedFamily": true,
+        "allowedFamilies": [
+          {
+            "id": "feature-packet",
+            "root": "product-truth/feature-packets",
+            "filenamePattern": "^(F\\d{3}[A-Za-z0-9_-]*|_TEMPLATE)\\.md$"
+          },
+          {
+            "id": "implementation-truth",
+            "root": "product-truth/04-implementation-truth",
+            "filenamePattern": "^[A-Za-z0-9_.\\-\\[\\]\\/]+\\.md$"
+          },
+          {
+            "id": "design-truth",
+            "root": "product-truth/03-design-truth",
+            "filenamePattern": "^[A-Za-z0-9_.\\-\\[\\]\\/]+\\.md$"
+          },
+          {
+            "id": "governance-truth",
+            "root": "governance/truth-docs-治理真相文档",
+            "filenamePattern": "^[A-Z0-9_.\\-]+\\.md$"
+          },
+          {
+            "id": "runtime-assets",
+            "root": "governance/runtime-assets",
+            "filenamePattern": "^[A-Z0-9_.\\-]+\\.md$"
+          },
+          {
+            "id": "archive",
+            "root": "docs-governance/archive",
+            "filenamePattern": "^.+\\.md$"
+          }
+        ]
+      }
     }
   }
 }

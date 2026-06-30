@@ -88,6 +88,27 @@ function checkStaleRuntimeRefs(repoRoot) {
   }
 }
 
+function checkDocumentGovernance(repoRoot) {
+  const validatorPath = path.join(
+    repoRoot,
+    'docs-governance/maintenance-config-维护配置/scripts-脚本程序/validate-doc-governance.js'
+  );
+  if (!fs.existsSync(validatorPath)) {
+    fail('document governance validator exists', path.relative(repoRoot, validatorPath));
+    return;
+  }
+
+  const result = spawnSync('node', [validatorPath], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  });
+  if (result.status === 0) {
+    pass('document governance validation', result.stdout.trim());
+  } else {
+    fail('document governance validation', (result.stderr || result.stdout || '').trim());
+  }
+}
+
 function checkGitHooks(repoRoot) {
   const result = spawnSync('git', ['config', '--get', 'core.hooksPath'], {
     cwd: repoRoot,
@@ -306,6 +327,7 @@ function main() {
   checkGitHooks(repoRoot);
   checkHarnessCore(repoRoot);
   checkCodexAdapter(repoRoot);
+  checkDocumentGovernance(repoRoot);
   checkStaleRuntimeRefs(repoRoot);
   printAndExit();
 }

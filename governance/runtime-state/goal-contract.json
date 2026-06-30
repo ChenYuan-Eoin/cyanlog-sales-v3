@@ -3,7 +3,7 @@
   "id": "goal-20260630083435",
   "status": "approved",
   "createdAt": "2026-06-30T08:34:35.441Z",
-  "updatedAt": "2026-06-30T08:36:07.206Z",
+  "updatedAt": "2026-06-30T09:50:24.210Z",
   "sourceGoal": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "objective": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "successCriteria": [
@@ -26,7 +26,27 @@
     "researchable": [],
     "askUser": [],
     "blocked": [],
-    "safeAssumptions": []
+    "safeAssumptions": [],
+    "researchFindings": [],
+    "userAnswers": [],
+    "requiredChecks": [
+      {
+        "id": "repo-pattern-scan",
+        "description": "inspect existing codebase, governance docs, helpers, scripts, and local patterns before implementation"
+      },
+      {
+        "id": "reuse-or-library-scan",
+        "description": "look for existing project utilities, proven libraries, or platform-native features before writing new logic"
+      },
+      {
+        "id": "best-practice-check",
+        "description": "use authoritative local docs or primary external docs when technical facts, APIs, or standards may be stale"
+      },
+      {
+        "id": "user-intent-boundary-check",
+        "description": "ask the user or stop when intent, authority, scope, or risk cannot be inferred safely"
+      }
+    ]
   },
   "autonomyBudget": {
     "level": "A1",
@@ -82,8 +102,8 @@
     ]
   },
   "phase": {
-    "current": "execute",
-    "gate": "G3",
+    "current": "verify",
+    "gate": "G4",
     "history": [
       {
         "at": "2026-06-30T08:34:35.441Z",
@@ -114,25 +134,39 @@
         "phase": "execute",
         "gate": "G3",
         "reason": "phase command"
+      },
+      {
+        "at": "2026-06-30T09:50:24.209Z",
+        "phase": "verify",
+        "gate": "G4",
+        "reason": "phase command"
       }
     ]
   },
   "checkpoints": [
     {
       "name": "intake contract reviewed",
-      "status": "pending"
+      "status": "pass",
+      "detail": "Current goal contract, active gates, control-plane scope, and completion-audit blockers were reviewed before further changes.",
+      "updatedAt": "2026-06-30T09:46:17.891Z"
     },
     {
       "name": "research findings summarized",
-      "status": "pending"
+      "status": "pass",
+      "detail": "Found two concrete gaps: document-governance new-doc enforcement and Codex hook/config inheritance for worktrees; both were implemented and verified locally.",
+      "updatedAt": "2026-06-30T09:46:17.920Z"
     },
     {
       "name": "execution plan approved or bounded",
-      "status": "pending"
+      "status": "pass",
+      "detail": "Execution remained bounded to Harness/document-governance control-plane files; no business code, deployment, database, billing, or remote git mutation was performed.",
+      "updatedAt": "2026-06-30T09:46:17.949Z"
     },
     {
       "name": "verification evidence collected",
-      "status": "pending"
+      "status": "pass",
+      "detail": "diff --check, node --check, selftest, doc-governance, ready, PreToolUse document-governance block, UserPromptSubmit A0 intake, completion audit, and portable worktree setup were verified. Commit, push, and new-session verification remain separate completion criteria.",
+      "updatedAt": "2026-06-30T09:50:24.157Z"
     }
   ],
   "stopConditions": [
@@ -219,9 +253,116 @@
         "status": "pass",
         "summary": "Stop evidence checkpoint emitted",
         "detail": "Direct Stop adapter call exited 0 and printed Harness evidence checkpoint for phase=execute gates=G3."
+      },
+      {
+        "at": "2026-06-30T09:04:49.491Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Action evaluation matrix enforced before high-impact actions",
+        "detail": "selftest and ready passed; PreToolUse now blocks vercel deploy as target drift with full matrix, blocks product-code Write as target drift/scope mismatch, and prints high-impact preflight matrix before allowed .codex/hooks.json control-plane Write."
+      },
+      {
+        "at": "2026-06-30T09:41:21.028Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Completion audit enforcement verified",
+        "detail": "Changed Harness runtime, Codex adapter, selftest, worktree setup, and Harness guide. Verified selftest ok, ready ok, Stop prints completion audit, phase complete is blocked by missing evidence/checkpoints, complete is blocked by missing evidence/checkpoints, direct goal-contract Write is blocked as runtime-state. Unverified: real new Codex thread/worktree inheritance after this uncommitted change, Harness-only commit, push, and post-push session verification. Rollback path: revert Harness control-plane edits only; no business app, deploy, database, billing, or remote git action was executed.",
+        "satisfies": [
+          "selftest passes",
+          "ready passes",
+          "Stop checkpoint emitted",
+          "validation commands and results",
+          "changed files summary",
+          "unverified items",
+          "risk and rollback notes"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:41:56.618Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "UserPromptSubmit auto-enters A0 in clean repo",
+        "detail": "Copied Harness control plane into a temporary git repo, ran .codex/hooks/harness-adapter.js UserPromptSubmit with prompt 开发一个长任务 Harness, and harness-goal status reported mode=enforcing phase=intake activeGates=G0 status=draft autonomy=A0. This verifies adapter-level A0 intake without modifying the current repo.",
+        "satisfies": [
+          "A0 blocks real Codex command",
+          "generic goal contract and autonomy gates implemented",
+          "Codex hooks trusted and loaded"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:46:17.845Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Worktree Codex hook inheritance verified",
+        "detail": "Ran setup-worktree-harness.sh against a temporary directory. It linked .claude/settings.json, .codex/hooks.json, and .codex/config.toml back to /Users/nsss/Price-v3. This verifies migration script coverage for Codex hooks/config at filesystem level; full new worktree ready check still requires committed changes.",
+        "satisfies": [
+          "generic goal contract and autonomy gates implemented",
+          "validation commands and results",
+          "unverified items"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:46:17.851Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Document governance is machine-enforced",
+        "detail": "Added documentInventory newDocumentPolicy, validate-doc-governance.js, doctor integration, package script, and PreToolUse document_governance matrix row. Verified doc-governance script passed for 3 changed markdown files, ready passed with document governance validation, selftest passed, and direct PreToolUse Write docs-governance/random-new-doc.md exited 2 with document-governance registration block.",
+        "satisfies": [
+          "generic goal contract and autonomy gates implemented",
+          "ready passes",
+          "selftest passes",
+          "validation commands and results",
+          "risk and rollback notes"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:47:02.084Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Portable worktree harness setup verified",
+        "detail": "Updated setup-worktree-harness.sh to derive SOURCE_ROOT from the script location, write portable .claude/settings.json with relative extends, copy .codex/hooks.json and .codex/config.toml instead of absolute symlinks, and set PRICE_V3_WORKSPACE_ROOT to the target worktree. Verified against a temporary directory; reran diff --check, node --check, selftest, doc-governance, and ready successfully.",
+        "satisfies": [
+          "generic goal contract and autonomy gates implemented",
+          "validation commands and results",
+          "unverified items",
+          "risk and rollback notes"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:48:19.199Z",
+        "type": "research",
+        "status": "pass",
+        "summary": "Required research checks completed before extending Harness",
+        "detail": "Repo pattern scan: inspected project-governance registry, document-maintenance rules, generate-toc script, harness-doctor, harness-core, harness-goal, selftest, setup-worktree-harness, and docs guide. Reuse scan: reused existing registry, doctor, PreToolUse matrix, npm harness package, and docs-governance maintenance config instead of creating a parallel governance system. Best-practice check: kept enforcement in machine gates and validators with authoritative local registry/rules; no external unstable API was needed. User-intent boundary check: avoided deployment, database, billing, business-code mutation, commit, and push because those remain outside autonomous safe scope.",
+        "satisfies": [
+          "research-check:repo-pattern-scan",
+          "research-check:reuse-or-library-scan",
+          "research-check:best-practice-check",
+          "research-check:user-intent-boundary-check",
+          "validation commands and results"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:48:59.891Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Required research gate enforced",
+        "detail": "Added default researchPlan.requiredChecks for repo-pattern-scan, reuse-or-library-scan, best-practice-check, and user-intent-boundary-check. canEnterPhase(execute) now requires passing research-check evidence. Updated selftest to prove execute blocks until research-check evidence is recorded. Updated Harness guide with required check keys. Verified diff --check, node --check, selftest, doc-governance, ready, and completion audit.",
+        "satisfies": [
+          "generic goal contract and autonomy gates implemented",
+          "validation commands and results",
+          "selftest passes",
+          "ready passes",
+          "risk and rollback notes"
+        ]
       }
     ]
   },
   "approvedAt": "2026-06-30T08:34:35.469Z",
-  "approvedBy": "codex-goal-continuation"
+  "approvedBy": "codex-goal-continuation",
+  "sovereignty": {
+    "originalGoalHash": "324c952a5c7c62521812c0886658d4dc29026973d96460c09434016a98825beb",
+    "revisionPolicy": "user-approved-only",
+    "agentMayRedefineGoal": false
+  }
 }

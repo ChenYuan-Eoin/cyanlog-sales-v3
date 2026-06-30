@@ -4,6 +4,8 @@ const {
   AUTONOMY_LEVELS,
   approveContract,
   clearGoal,
+  completeGoal,
+  completionAudit,
   loadContract,
   loadState,
   paths,
@@ -11,6 +13,7 @@ const {
   repoRootFromRegistry,
   setPhase,
   startGoal,
+  updateCheckpoint,
   validateContract
 } = require('./harness-core');
 
@@ -82,13 +85,29 @@ function printTemplate() {
   }, null, 2));
 }
 
+function printAudit(audit, asJson = false) {
+  if (asJson) {
+    console.log(JSON.stringify(audit, null, 2));
+    return;
+  }
+  console.log(`Harness completion audit: ${audit.status}`);
+  console.log(`goal=${audit.goalId || '-'}`);
+  console.log(`phase=${audit.phase || '-'}`);
+  for (const row of audit.rows || []) {
+    console.log(`- ${row.id}: ${row.status} | ${row.detail}`);
+  }
+}
+
 function usage() {
   console.error([
     'Usage:',
     '  harness-goal.js start [--level A0|A1|A2|A3] [--success csv] [--scope csv] <goal>',
     '  harness-goal.js approve [--level A1|A2|A3] [--by name]',
     '  harness-goal.js phase <intake|research|contract_review|execute|verify|approval|blocked|complete>',
-    '  harness-goal.js evidence --status pass|fail|info --type command|note --summary text [--detail text]',
+    '  harness-goal.js checkpoint --name text --status pending|pass|blocked [--detail text]',
+    '  harness-goal.js evidence --status pass|fail|info --type command|note --summary text [--detail text] [--satisfies csv]',
+    '  harness-goal.js audit [--json]',
+    '  harness-goal.js complete [--by name]',
     '  harness-goal.js status [--json]',
     '  harness-goal.js template',
     '  harness-goal.js clear'
@@ -110,7 +129,8 @@ function main() {
         forbiddenScopes: options.forbiddenScope || options.forbiddenScopes,
         nonGoals: options.nonGoals,
         researchable: options.researchable,
-        askUser: options.askUser
+        askUser: options.askUser,
+        requiredChecks: options.requiredChecks
       });
       console.log(`Harness phase=intake gate=G0`);
       console.log(`Goal contract written: ${paths(repoRoot).contractPath}`);
@@ -142,9 +162,33 @@ function main() {
         type: options.type || 'note',
         status: options.status || 'info',
         summary,
-        detail: options.detail || ''
+        detail: options.detail || '',
+        satisfies: options.satisfies
       });
       console.log(`Evidence recorded: ${evidence.status} ${evidence.summary}`);
+      return;
+    }
+
+    if (command === 'checkpoint') {
+      const checkpoint = updateCheckpoint(repoRoot, {
+        name: options.name || rest.join(' '),
+        status: options.status,
+        detail: options.detail || ''
+      });
+      console.log(`Checkpoint updated: ${checkpoint.name || checkpoint.id}=${checkpoint.status}`);
+      return;
+    }
+
+    if (command === 'audit') {
+      const audit = completionAudit(repoRoot);
+      printAudit(audit, Boolean(options.json));
+      process.exit(audit.ok ? 0 : 2);
+    }
+
+    if (command === 'complete') {
+      const result = completeGoal(repoRoot, { by: options.by });
+      printAudit(result.audit, Boolean(options.json));
+      console.log(`Goal complete: ${result.contract.id}`);
       return;
     }
 

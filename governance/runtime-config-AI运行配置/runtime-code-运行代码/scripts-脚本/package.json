@@ -5,6 +5,7 @@
   "scripts": {
     "doctor": "node harness-doctor.js",
     "doctor:strict": "node harness-doctor.js --strict",
+    "doc-governance": "node ../../../../docs-governance/maintenance-config-维护配置/scripts-脚本程序/validate-doc-governance.js",
     "goal": "node harness-goal.js",
     "ready": "node harness-doctor.js --strict",
     "selftest": "node harness-selftest.js",

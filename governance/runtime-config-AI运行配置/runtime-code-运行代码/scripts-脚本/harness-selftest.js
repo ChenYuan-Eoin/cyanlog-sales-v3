@@ -23,6 +23,42 @@ function makeSettings(repoRoot) {
       G5: { phase: 'approval', tools: ['Read', 'Grep', 'Glob', 'AskUserQuestion'] }
     }
   });
+  writeJson(core.paths(repoRoot).registryPath, {
+    version: 'selftest',
+    documents: [
+      {
+        id: 'doc-guide',
+        path: 'docs-governance/guide-文档维护指南.md',
+        kind: 'file',
+        enabled: true,
+        maintained: true
+      },
+      {
+        id: 'design-truth',
+        path: 'product-truth/03-design-truth',
+        kind: 'directory',
+        enabled: true,
+        maintained: true
+      }
+    ]
+  });
+  writeJson(core.paths(repoRoot).documentRulesPath, {
+    version: 1,
+    rules: {
+      documentInventory: {
+        newDocumentPolicy: {
+          requireRegisteredOrAllowedFamily: true,
+          allowedFamilies: [
+            {
+              id: 'feature-packet',
+              root: 'product-truth/feature-packets',
+              filenamePattern: '^(F\\d{3}[A-Za-z0-9_-]*|_TEMPLATE)\\.md$'
+            }
+          ]
+        }
+      }
+    }
+  });
 }
 
 function main() {
@@ -33,6 +69,7 @@ function main() {
   assert.strictEqual(started.state.mode, 'enforcing');
   assert.deepStrictEqual(started.state.activeGates, ['G0']);
   assert.strictEqual(started.contract.status, 'draft');
+  assert.ok(started.contract.successCriteria.length > 0);
 
   assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'Read' }).ok, true);
   const blockedBash = core.evaluateToolUse(repoRoot, {
@@ -50,6 +87,22 @@ function main() {
   assert.ok(approved.autonomyBudget.allowed.includes('run local verification commands'));
   assert.ok(approved.autonomyBudget.allowed.includes('edit scoped workspace files after contract approval'));
 
+  assert.throws(() => core.setPhase(repoRoot, 'execute'), /allowedScopes/);
+
+  const scopedContract = core.loadContract(repoRoot);
+  scopedContract.boundaries.allowedScopes = ['governance/runtime-config-AI运行配置'];
+  core.saveContract(repoRoot, scopedContract);
+  assert.throws(() => core.setPhase(repoRoot, 'execute'), /research-check/);
+
+  const researchContract = core.loadContract(repoRoot);
+  core.recordEvidence(repoRoot, {
+    type: 'research',
+    status: 'pass',
+    summary: 'selftest research checks',
+    detail: 'Repository pattern scan, reuse scan, best-practice check, and user-intent boundary check were satisfied for selftest.',
+    satisfies: researchContract.researchPlan.requiredChecks.map((item) => `research-check:${item.id || item}`)
+  });
+
   const execution = core.setPhase(repoRoot, 'execute');
   assert.deepStrictEqual(execution.state.activeGates, ['G3']);
   assert.deepStrictEqual(execution.state.activeHooks, ['UserPromptSubmit', 'PreToolUse', 'Stop']);
@@ -65,6 +118,15 @@ function main() {
   });
   assert.strictEqual(destructive.ok, false);
   assert.strictEqual(destructive.risk, 'destructive git reset');
+  assert.ok(destructive.matrix.rows.some((row) => row.id === 'external_side_effect'));
+
+  const driftDeploy = core.evaluateToolUse(repoRoot, {
+    tool_name: 'Bash',
+    tool_input: { cmd: 'vercel deploy -y' }
+  });
+  assert.strictEqual(driftDeploy.ok, false);
+  assert.match(driftDeploy.reason, /target drift/);
+  assert.strictEqual(driftDeploy.matrix.targetObject, 'business-deploy');
 
   const runtimeStateEdit = core.evaluateToolUse(repoRoot, {
     tool_name: 'Write',
@@ -80,15 +142,43 @@ function main() {
   assert.strictEqual(controlPlaneEdit.ok, false);
   assert.match(controlPlaneEdit.reason, /control-plane edit requires explicit allowed scope/);
 
-  const contract = core.loadContract(repoRoot);
-  contract.boundaries.allowedScopes = ['harness-control-plane'];
-  core.saveContract(repoRoot, contract);
+  const harnessScopedContract = core.loadContract(repoRoot);
+  harnessScopedContract.boundaries.allowedScopes = ['harness-control-plane'];
+  core.saveContract(repoRoot, harnessScopedContract);
 
   const scopedControlPlaneEdit = core.evaluateToolUse(repoRoot, {
     tool_name: 'Write',
     tool_input: { file_path: path.join(repoRoot, '.codex/hooks.json') }
   });
   assert.strictEqual(scopedControlPlaneEdit.ok, true);
+  assert.strictEqual(scopedControlPlaneEdit.matrix.highImpact, true);
+
+  const businessAppDrift = core.evaluateToolUse(repoRoot, {
+    tool_name: 'Write',
+    tool_input: { file_path: path.join(repoRoot, 'product-truth/product-code/app/page.tsx') }
+  });
+  assert.strictEqual(businessAppDrift.ok, false);
+  assert.match(businessAppDrift.reason, /target drift/);
+  assert.strictEqual(businessAppDrift.matrix.targetObject, 'business-app');
+
+  const docContract = core.loadContract(repoRoot);
+  docContract.boundaries.allowedScopes = ['harness-control-plane', 'product-truth/feature-packets'];
+  core.saveContract(repoRoot, docContract);
+
+  const randomDoc = core.evaluateToolUse(repoRoot, {
+    tool_name: 'Write',
+    tool_input: { file_path: path.join(repoRoot, 'docs-governance/random-new-doc.md') }
+  });
+  assert.strictEqual(randomDoc.ok, false);
+  assert.match(randomDoc.reason, /document-governance registration/);
+  assert.ok(randomDoc.matrix.rows.some((row) => row.id === 'document_governance' && row.status === 'block'));
+
+  const allowedFeaturePacket = core.evaluateToolUse(repoRoot, {
+    tool_name: 'Write',
+    tool_input: { file_path: path.join(repoRoot, 'product-truth/feature-packets/F999-selftest.md') }
+  });
+  assert.strictEqual(allowedFeaturePacket.ok, true);
+  assert.ok(allowedFeaturePacket.matrix.rows.some((row) => row.id === 'document_governance' && row.status === 'pass'));
 
   const runtimeStateStillBlocked = core.evaluateToolUse(repoRoot, {
     tool_name: 'Write',
@@ -104,6 +194,33 @@ function main() {
   });
   assert.strictEqual(evidence.status, 'pass');
   assert.strictEqual(fs.existsSync(core.paths(repoRoot).evidenceLedgerPath), true);
+
+  const blockedCompletion = core.completionAudit(repoRoot);
+  assert.strictEqual(blockedCompletion.ok, false);
+  assert.ok(blockedCompletion.rows.some((row) => row.id === 'checkpoints' && row.status === 'block'));
+  assert.throws(() => core.setPhase(repoRoot, 'complete'), /completion audit failed/);
+
+  const completionContract = core.loadContract(repoRoot);
+  for (const checkpoint of completionContract.checkpoints) {
+    core.updateCheckpoint(repoRoot, { name: checkpoint.name, status: 'pass', detail: 'selftest checkpoint satisfied' });
+  }
+  const criteriaContract = core.loadContract(repoRoot);
+  core.recordEvidence(repoRoot, {
+    type: 'completion',
+    status: 'pass',
+    summary: 'selftest completion evidence',
+    detail: 'Satisfies every success criterion and required evidence class for the selftest goal.',
+    satisfies: [
+      ...criteriaContract.successCriteria,
+      ...criteriaContract.evidence.required
+    ]
+  });
+  core.setPhase(repoRoot, 'verify');
+  const passingCompletion = core.completionAudit(repoRoot);
+  assert.strictEqual(passingCompletion.ok, true);
+  const completed = core.completeGoal(repoRoot, { by: 'selftest' });
+  assert.strictEqual(completed.contract.status, 'complete');
+  assert.strictEqual(completed.state.mode, 'permissive');
 
   const checks = core.runtimeValidation(repoRoot);
   assert.deepStrictEqual(checks, []);

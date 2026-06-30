@@ -100,6 +100,7 @@ function userPromptSubmit(payload) {
 
 function deny(result) {
   console.error(`\n🚫 CODEX HARNESS INTERCEPTED: ${result.reason}`);
+  printMatrix(result.matrix, 'Action evaluation matrix');
   const details = {
     gate: result.gate,
     phase: result.phase,
@@ -116,10 +117,25 @@ function deny(result) {
   process.exit(result.exitCode || 2);
 }
 
+function printMatrix(matrix, title = 'Action evaluation matrix') {
+  if (!matrix?.rows?.length) {
+    return;
+  }
+  const lines = matrix.rows.map((row) => {
+    const action = row.action ? ` | action=${row.action}` : '';
+    return `   - ${row.id}: ${row.status} | ${row.detail}${action}`;
+  });
+  const header = `[Harness ${title}] target=${matrix.targetObject} impact=${matrix.impact}`;
+  console.error([header, ...lines].join('\n'));
+}
+
 function preToolUse(payload) {
   const result = core.evaluateToolUse(ROOT, payload);
   if (!result.ok) {
     deny(result);
+  }
+  if (result.matrix?.highImpact) {
+    printMatrix(result.matrix, 'high-impact preflight');
   }
 }
 
@@ -128,11 +144,20 @@ function stop() {
   if (!state.longTask?.enabled) {
     return;
   }
+  const contract = core.loadContract(ROOT);
+  const audit = core.completionAudit(ROOT);
+  const auditLines = (audit.rows || []).map((row) => `   - ${row.id}: ${row.status} | ${row.detail}`);
   console.log([
     '[Harness evidence checkpoint]',
     `phase=${state.phase || '-'} gates=${(state.activeGates || []).join(',') || '-'}`,
-    'Before ending the turn, report changed files, validation evidence, unverified items, risk, and rollback notes.'
+    'Before ending the turn, report changed files, validation evidence, unverified items, risk, and rollback notes.',
+    `[Harness completion audit] status=${audit.status}`,
+    ...auditLines
   ].join('\n'));
+  if (!audit.ok && (state.phase === 'complete' || contract?.status === 'complete')) {
+    console.error('🚫 CODEX HARNESS INTERCEPTED: completion was claimed but completion audit failed');
+    process.exit(2);
+  }
 }
 
 const payload = readStdinJson();

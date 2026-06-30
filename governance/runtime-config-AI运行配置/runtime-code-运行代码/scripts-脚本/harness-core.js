@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { loadRegistry } = require('./project-registry');
 
 const PHASE_TO_GATE = {
@@ -70,6 +71,34 @@ const HIGH_RISK_PATTERNS = [
   { pattern: /\b(curl|wget|http)\b[^;\n]*\b(POST|PUT|PATCH|DELETE)\b/i, reason: 'external write request' }
 ];
 
+const MATRIX_STATUS = {
+  PASS: 'pass',
+  INFO: 'info',
+  BLOCK: 'block',
+  APPROVAL: 'requires_approval'
+};
+
+const COMPLETION_PASS_STATUSES = new Set(['pass', 'passed', 'done', 'complete', 'completed']);
+
+const DEFAULT_REQUIRED_RESEARCH_CHECKS = [
+  {
+    id: 'repo-pattern-scan',
+    description: 'inspect existing codebase, governance docs, helpers, scripts, and local patterns before implementation'
+  },
+  {
+    id: 'reuse-or-library-scan',
+    description: 'look for existing project utilities, proven libraries, or platform-native features before writing new logic'
+  },
+  {
+    id: 'best-practice-check',
+    description: 'use authoritative local docs or primary external docs when technical facts, APIs, or standards may be stale'
+  },
+  {
+    id: 'user-intent-boundary-check',
+    description: 'ask the user or stop when intent, authority, scope, or risk cannot be inferred safely'
+  }
+];
+
 function repoRootFromRegistry() {
   return loadRegistry().repoRoot;
 }
@@ -78,6 +107,8 @@ function paths(repoRoot = repoRootFromRegistry()) {
   return {
     repoRoot,
     settingsPath: path.join(repoRoot, 'governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json'),
+    registryPath: path.join(repoRoot, 'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json'),
+    documentRulesPath: path.join(repoRoot, 'docs-governance/maintenance-config-维护配置/config-配置文件/document-maintenance-rules-文档维护规则.json'),
     statePath: path.join(repoRoot, 'governance/runtime-state/harness-state.json'),
     contractPath: path.join(repoRoot, 'governance/runtime-state/goal-contract.json'),
     evidenceLedgerPath: path.join(repoRoot, 'governance/runtime-state/evidence-ledger.jsonl')
@@ -123,6 +154,20 @@ function parseCsv(value) {
     .filter(Boolean);
 }
 
+function hashText(value) {
+  return crypto
+    .createHash('sha256')
+    .update(String(value || ''), 'utf8')
+    .digest('hex');
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function autonomyAllowedItems(level) {
   const normalized = normalizeAutonomyLevel(level);
   const autonomy = AUTONOMY_LEVELS[normalized];
@@ -139,6 +184,7 @@ function makeGoalContract(goalText, options = {}) {
   const now = nowIso();
   const level = normalizeAutonomyLevel(options.level || options.autonomy || 'A0');
   const autonomy = AUTONOMY_LEVELS[level];
+  const successCriteria = parseCsv(options.success);
 
   return {
     version: '1.0',
@@ -148,13 +194,28 @@ function makeGoalContract(goalText, options = {}) {
     updatedAt: now,
     sourceGoal: goalText,
     objective: goalText,
-    successCriteria: parseCsv(options.success),
+    successCriteria: successCriteria.length ? successCriteria : [
+      'goal contract reviewed before execution',
+      'unknowns classified as researchable, user-intent, safe assumptions, or blocked',
+      'bounded execution evidence collected',
+      'completion audit passes before complete'
+    ],
     nonGoals: parseCsv(options.nonGoals),
     researchPlan: {
       researchable: parseCsv(options.researchable),
       askUser: parseCsv(options.askUser),
+      requiredChecks: parseCsv(options.requiredChecks).length
+        ? parseCsv(options.requiredChecks).map((id) => ({ id, description: id }))
+        : DEFAULT_REQUIRED_RESEARCH_CHECKS,
       blocked: [],
-      safeAssumptions: []
+      safeAssumptions: [],
+      researchFindings: [],
+      userAnswers: []
+    },
+    sovereignty: {
+      originalGoalHash: hashText(goalText),
+      revisionPolicy: 'user-approved-only',
+      agentMayRedefineGoal: false
     },
     autonomyBudget: {
       level,
@@ -214,6 +275,47 @@ function makeGoalContract(goalText, options = {}) {
   };
 }
 
+function ensureContractDefaults(contract) {
+  if (!contract) {
+    return contract;
+  }
+  contract.sourceGoal = contract.sourceGoal || contract.objective || '';
+  contract.successCriteria = contract.successCriteria?.length ? contract.successCriteria : [
+    'goal contract reviewed before execution',
+    'unknowns classified as researchable, user-intent, safe assumptions, or blocked',
+    'bounded execution evidence collected',
+    'completion audit passes before complete'
+  ];
+  contract.researchPlan = contract.researchPlan || {};
+  contract.researchPlan.researchable = contract.researchPlan.researchable || [];
+  contract.researchPlan.askUser = contract.researchPlan.askUser || [];
+  contract.researchPlan.requiredChecks = contract.researchPlan.requiredChecks || DEFAULT_REQUIRED_RESEARCH_CHECKS;
+  contract.researchPlan.blocked = contract.researchPlan.blocked || [];
+  contract.researchPlan.safeAssumptions = contract.researchPlan.safeAssumptions || [];
+  contract.researchPlan.researchFindings = contract.researchPlan.researchFindings || [];
+  contract.researchPlan.userAnswers = contract.researchPlan.userAnswers || [];
+  contract.sovereignty = contract.sovereignty || {
+    originalGoalHash: hashText(contract.sourceGoal),
+    revisionPolicy: 'user-approved-only',
+    agentMayRedefineGoal: false
+  };
+  contract.evidence = contract.evidence || { required: [], collected: [] };
+  contract.evidence.required = contract.evidence.required?.length ? contract.evidence.required : [
+    'changed files summary',
+    'validation commands and results',
+    'unverified items',
+    'risk and rollback notes'
+  ];
+  contract.evidence.collected = contract.evidence.collected || [];
+  contract.checkpoints = contract.checkpoints?.length ? contract.checkpoints : [
+    { name: 'intake contract reviewed', status: 'pending' },
+    { name: 'research findings summarized', status: 'pending' },
+    { name: 'execution plan approved or bounded', status: 'pending' },
+    { name: 'verification evidence collected', status: 'pending' }
+  ];
+  return contract;
+}
+
 function loadSettings(repoRoot) {
   return readJson(paths(repoRoot).settingsPath, {});
 }
@@ -233,10 +335,11 @@ function saveState(repoRoot, state) {
 }
 
 function loadContract(repoRoot) {
-  return readJson(paths(repoRoot).contractPath, null);
+  return ensureContractDefaults(readJson(paths(repoRoot).contractPath, null));
 }
 
 function saveContract(repoRoot, contract) {
+  ensureContractDefaults(contract);
   contract.updatedAt = nowIso();
   writeJson(paths(repoRoot).contractPath, contract);
 }
@@ -250,6 +353,12 @@ function validateContract(contract) {
   if (!contract.objective || !String(contract.objective).trim()) {
     errors.push('objective is required');
   }
+  if (!contract.sourceGoal || !String(contract.sourceGoal).trim()) {
+    errors.push('sourceGoal is required');
+  }
+  if (!contract.successCriteria || !contract.successCriteria.length) {
+    errors.push('successCriteria are required');
+  }
   try {
     normalizeAutonomyLevel(contract.autonomyBudget?.level);
   } catch (error) {
@@ -262,6 +371,108 @@ function validateContract(contract) {
     errors.push('evidence.required is required');
   }
   return errors;
+}
+
+function isPassStatus(status) {
+  return COMPLETION_PASS_STATUSES.has(String(status || '').toLowerCase());
+}
+
+function evidenceEntries(contract) {
+  return contract?.evidence?.collected || [];
+}
+
+function evidenceSatisfies(entry, target) {
+  const normalizedTarget = normalizeText(target);
+  if (!normalizedTarget) {
+    return false;
+  }
+  const satisfies = Array.isArray(entry?.satisfies)
+    ? entry.satisfies
+    : parseCsv(entry?.satisfies);
+  if (satisfies.some((item) => normalizeText(item) === normalizedTarget || item === '*')) {
+    return true;
+  }
+  const haystack = normalizeText([
+    entry?.type,
+    entry?.summary,
+    entry?.detail
+  ].filter(Boolean).join(' '));
+  return haystack.includes(normalizedTarget);
+}
+
+function hasPassingEvidence(contract, target) {
+  return evidenceEntries(contract).some((entry) => isPassStatus(entry.status) && evidenceSatisfies(entry, target));
+}
+
+function evaluateIntakeReadiness(contract) {
+  const findings = [];
+  const researchPlan = contract?.researchPlan || {};
+
+  if (!contract?.successCriteria?.length) {
+    findings.push({
+      level: 'block',
+      name: 'success criteria',
+      detail: 'successCriteria must be defined before execution'
+    });
+  }
+
+  const level = normalizeAutonomyLevel(contract?.autonomyBudget?.level || 'A0');
+  if (AUTONOMY_LEVELS[level].canEdit && !(contract?.boundaries?.allowedScopes || []).length) {
+    findings.push({
+      level: 'block',
+      name: 'allowed scopes',
+      detail: 'allowedScopes must be defined before autonomous edits'
+    });
+  }
+
+  for (const item of researchPlan.blocked || []) {
+    findings.push({
+      level: 'block',
+      name: 'blocked unknown',
+      detail: String(item)
+    });
+  }
+
+  for (const item of researchPlan.askUser || []) {
+    if (!hasPassingEvidence(contract, `user-answer:${item}`) && !hasPassingEvidence(contract, item)) {
+      findings.push({
+        level: 'block',
+        name: 'user intent question',
+        detail: `requires user answer before execution: ${item}`
+      });
+    }
+  }
+
+  for (const item of researchPlan.researchable || []) {
+    if (!hasPassingEvidence(contract, `research:${item}`) && !hasPassingEvidence(contract, item)) {
+      findings.push({
+        level: 'block',
+        name: 'researchable unknown',
+        detail: `requires research evidence before execution: ${item}`
+      });
+    }
+  }
+
+  for (const item of researchPlan.requiredChecks || []) {
+    const id = typeof item === 'string' ? item : item.id;
+    if (!id) {
+      findings.push({
+        level: 'block',
+        name: 'required research check',
+        detail: 'required research check is missing id'
+      });
+      continue;
+    }
+    if (!hasPassingEvidence(contract, `research-check:${id}`) && !hasPassingEvidence(contract, id)) {
+      findings.push({
+        level: 'block',
+        name: 'required research check',
+        detail: `requires evidence before execution: research-check:${id}`
+      });
+    }
+  }
+
+  return findings;
 }
 
 function canEnterPhase(contract, phase) {
@@ -286,11 +497,21 @@ function canEnterPhase(contract, phase) {
     if (!['approved', 'active'].includes(contract.status)) {
       return { ok: false, reason: 'contract must be approved before execute phase' };
     }
+    const blockers = evaluateIntakeReadiness(contract).filter((item) => item.level === 'block');
+    if (blockers.length) {
+      return { ok: false, reason: blockers.map((item) => `${item.name}: ${item.detail}`).join('; ') };
+    }
   }
   return { ok: true };
 }
 
-function setPhase(repoRoot, phase, reason = 'manual phase switch') {
+function setPhase(repoRoot, phase, reason = 'manual phase switch', options = {}) {
+  if (phase === 'complete' && !options.skipCompletionAudit) {
+    const audit = completionAudit(repoRoot);
+    if (!audit.ok) {
+      throw new Error(`completion audit failed: ${audit.blockers.join('; ')}`);
+    }
+  }
   const gate = PHASE_TO_GATE[phase];
   const contract = loadContract(repoRoot);
   const allowed = canEnterPhase(contract, phase);
@@ -386,6 +607,32 @@ function clearGoal(repoRoot) {
   return state;
 }
 
+function checkpointStatusOk(status) {
+  return isPassStatus(status);
+}
+
+function updateCheckpoint(repoRoot, options = {}) {
+  const contract = loadContract(repoRoot);
+  if (!contract) {
+    throw new Error('goal contract is required');
+  }
+  const name = options.name || options.id;
+  if (!name) {
+    throw new Error('checkpoint name is required');
+  }
+  contract.checkpoints = contract.checkpoints || [];
+  let checkpoint = contract.checkpoints.find((item) => item.id === name || item.name === name);
+  if (!checkpoint) {
+    checkpoint = { name, status: 'pending' };
+    contract.checkpoints.push(checkpoint);
+  }
+  checkpoint.status = options.status || checkpoint.status || 'pending';
+  checkpoint.detail = options.detail || checkpoint.detail || '';
+  checkpoint.updatedAt = nowIso();
+  saveContract(repoRoot, contract);
+  return checkpoint;
+}
+
 function activeGate(state) {
   if (!state || state.mode === 'permissive' || !state.mode) {
     return null;
@@ -464,6 +711,222 @@ function normalizeRepoRelative(repoRoot, filePath) {
   return path.relative(repoRoot, absolute).replace(/\\/g, '/');
 }
 
+function normalizedScopes(contract) {
+  return (contract?.boundaries?.allowedScopes || [])
+    .map((scope) => String(scope || '').replace(/\/+$/, ''))
+    .filter(Boolean);
+}
+
+function scopeAllowsPath(contract, rel) {
+  if (!rel) {
+    return false;
+  }
+  const scopes = normalizedScopes(contract);
+  return scopes.some((scope) => {
+    if (scope === '.' || scope === '*') {
+      return true;
+    }
+    if (scope === 'harness-control-plane') {
+      return isControlPlanePath(rel);
+    }
+    return rel === scope || rel.startsWith(`${scope}/`);
+  });
+}
+
+function isControlPlanePath(rel) {
+  const stateFiles = [
+    'governance/runtime-state/harness-state.json',
+    'governance/runtime-state/goal-contract.json',
+    'governance/runtime-state/evidence-ledger.jsonl'
+  ];
+  if (stateFiles.includes(rel)) {
+    return true;
+  }
+  const controlPrefixes = [
+    '.codex/',
+    'governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json',
+    'governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/',
+    'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-'
+  ];
+  return controlPrefixes.some((prefix) => rel === prefix || rel.startsWith(prefix));
+}
+
+function contractLooksHarnessScoped(contract) {
+  const scopes = normalizedScopes(contract).join(' ');
+  const text = [
+    contract?.objective,
+    contract?.sourceGoal,
+    scopes
+  ].filter(Boolean).join(' ').toLowerCase();
+  return text.includes('harness') || text.includes('codex') || scopes.includes('harness-control-plane');
+}
+
+function commandTargetObject(command) {
+  if (/\b(vercel|netlify|wrangler|firebase|railway|render)\b[^;\n]*(--prod|deploy|publish)/.test(command)) {
+    return 'business-deploy';
+  }
+  if (/\bsupabase\b[^;\n]*(db\s+(push|reset)|migration\s+up|functions\s+deploy)/.test(command)) {
+    return 'database-provider';
+  }
+  if (/\b(stripe|resend)\b[^;\n]*(create|delete|update|deploy|webhook)/.test(command)) {
+    return 'billing-or-messaging-provider';
+  }
+  if (/\bgit\s+push(\s|$)/.test(command)) {
+    return 'remote-git';
+  }
+  if (/\b(curl|wget|http)\b[^;\n]*\b(POST|PUT|PATCH|DELETE)\b/i.test(command)) {
+    return 'external-http-write';
+  }
+  return '';
+}
+
+function actionTargetObject(repoRoot, payload, command) {
+  const rel = normalizeRepoRelative(repoRoot, payloadFilePath(payload));
+  if (rel) {
+    if ([
+      'governance/runtime-state/harness-state.json',
+      'governance/runtime-state/goal-contract.json',
+      'governance/runtime-state/evidence-ledger.jsonl'
+    ].includes(rel)) {
+      return 'harness-runtime-state';
+    }
+    if (isControlPlanePath(rel)) {
+      return 'harness-control-plane';
+    }
+    if (rel.startsWith('product-truth/product-code/')) {
+      return 'business-app';
+    }
+    if (rel.startsWith('product-truth/')) {
+      return 'product-truth';
+    }
+    return 'repository-file';
+  }
+  return commandTargetObject(command) || 'repository-local';
+}
+
+function actionImpact(category, targetObject, commandRisk, controlRisk) {
+  if (commandRisk || controlRisk) {
+    return 'high';
+  }
+  if (['business-deploy', 'database-provider', 'billing-or-messaging-provider', 'remote-git', 'external-http-write'].includes(targetObject)) {
+    return 'high';
+  }
+  if (targetObject === 'harness-control-plane' || targetObject === 'harness-runtime-state') {
+    return 'high';
+  }
+  if (category === 'edit' || category === 'command') {
+    return 'medium';
+  }
+  return 'low';
+}
+
+function matrixRow(id, label, status, detail, action = '') {
+  return {
+    id,
+    label,
+    status,
+    detail,
+    action,
+    blocking: status === MATRIX_STATUS.BLOCK || status === MATRIX_STATUS.APPROVAL
+  };
+}
+
+function targetDriftRisk(contract, targetObject, category) {
+  if (!contractLooksHarnessScoped(contract)) {
+    return '';
+  }
+  const blockedTargets = new Set([
+    'business-app',
+    'business-deploy',
+    'database-provider',
+    'billing-or-messaging-provider',
+    'external-http-write'
+  ]);
+  if (blockedTargets.has(targetObject)) {
+    return `target drift: Harness goal cannot autonomously act on ${targetObject}`;
+  }
+  if (category === 'command' && targetObject === 'remote-git') {
+    return 'target drift: Harness goal cannot autonomously mutate remote git';
+  }
+  return '';
+}
+
+function scopeRisk(contract, category, rel) {
+  const scopes = normalizedScopes(contract);
+  if (category !== 'edit' || !rel || scopes.length === 0) {
+    return '';
+  }
+  if (scopeAllowsPath(contract, rel)) {
+    return '';
+  }
+  return `scope mismatch: ${rel} is outside allowedScopes`;
+}
+
+function pathWithin(rel, root) {
+  const normalizedRoot = String(root || '').replace(/\/+$/, '');
+  return rel === normalizedRoot || rel.startsWith(`${normalizedRoot}/`);
+}
+
+function isMarkdownPath(rel) {
+  return /\.md$/i.test(rel);
+}
+
+function registeredDocumentAllows(repoRoot, rel) {
+  const registry = readJson(paths(repoRoot).registryPath, null);
+  const documents = registry?.documents || [];
+  return documents.some((entry) => {
+    if (entry.enabled === false || !entry.path) {
+      return false;
+    }
+    const entryPath = String(entry.path).replace(/\/+$/, '');
+    if (entry.kind === 'directory') {
+      return pathWithin(rel, entryPath);
+    }
+    return rel === entryPath;
+  });
+}
+
+function familyAllowsNewDocument(rules, rel) {
+  const families = rules?.rules?.documentInventory?.newDocumentPolicy?.allowedFamilies || [];
+  return families.some((family) => {
+    if (!pathWithin(rel, family.root)) {
+      return false;
+    }
+    const filePart = rel.slice(String(family.root).replace(/\/+$/, '').length + 1);
+    try {
+      return new RegExp(family.filenamePattern).test(filePart);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function documentEditRisk(repoRoot, payload, category) {
+  if (category !== 'edit') {
+    return '';
+  }
+  const rel = normalizeRepoRelative(repoRoot, payloadFilePath(payload));
+  if (!rel || !isMarkdownPath(rel)) {
+    return '';
+  }
+  if (pathWithin(rel, 'product-truth/product-code')) {
+    return '';
+  }
+  const absolute = path.join(repoRoot, rel);
+  if (fs.existsSync(absolute)) {
+    return '';
+  }
+  const rules = readJson(paths(repoRoot).documentRulesPath, null);
+  const policy = rules?.rules?.documentInventory?.newDocumentPolicy;
+  if (!policy?.requireRegisteredOrAllowedFamily) {
+    return '';
+  }
+  if (registeredDocumentAllows(repoRoot, rel) || familyAllowsNewDocument(rules, rel)) {
+    return '';
+  }
+  return `new document requires document-governance registration or allowed family: ${rel}`;
+}
+
 function controlPlaneEditRisk(repoRoot, contract, payload) {
   const rel = normalizeRepoRelative(repoRoot, payloadFilePath(payload));
   if (!rel) {
@@ -479,24 +942,130 @@ function controlPlaneEditRisk(repoRoot, contract, payload) {
     return `direct edit to Harness runtime state is forbidden: ${rel}`;
   }
 
-  const controlPrefixes = [
-    '.codex/',
-    'governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json',
-    'governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/',
-    'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-'
-  ];
-  const isControlPlane = controlPrefixes.some((prefix) => rel === prefix || rel.startsWith(prefix));
-  if (!isControlPlane) {
+  if (!isControlPlanePath(rel)) {
     return '';
   }
 
-  const scopes = contract?.boundaries?.allowedScopes || [];
-  const explicitlyAllowed = scopes.includes('harness-control-plane') ||
-    scopes.some((scope) => rel === scope || rel.startsWith(`${scope.replace(/\/+$/, '')}/`));
-  if (!explicitlyAllowed) {
+  if (!scopeAllowsPath(contract, rel)) {
     return `control-plane edit requires explicit allowed scope: ${rel}`;
   }
   return '';
+}
+
+function buildActionEvaluationMatrix(repoRoot, details) {
+  const {
+    state,
+    gate,
+    gateId,
+    contract,
+    payload,
+    rawToolName,
+    toolName,
+    category,
+    level,
+    autonomy,
+    allowedTools,
+    command,
+    commandRisk,
+    controlRisk,
+    documentRisk
+  } = details;
+  const rel = normalizeRepoRelative(repoRoot, payloadFilePath(payload));
+  const targetObject = actionTargetObject(repoRoot, payload, command);
+  const impact = actionImpact(category, targetObject, commandRisk, controlRisk);
+  const driftRisk = targetDriftRisk(contract, targetObject, category);
+  const scopedRisk = scopeRisk(contract, category, rel);
+  const externalTargets = new Set([
+    'business-deploy',
+    'database-provider',
+    'billing-or-messaging-provider',
+    'remote-git',
+    'external-http-write'
+  ]);
+  const gateAllowsTool = allowedTools.includes('*') ||
+    allowedTools.includes(toolName) ||
+    allowedTools.includes(rawToolName);
+
+  const rows = [
+    matrixRow(
+      'target_object',
+      'Target object',
+      driftRisk ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+      driftRisk || `target=${targetObject}; objective=${contract?.objective || '-'}; path=${rel || '-'}`
+    ),
+    matrixRow(
+      'action_type',
+      'Action type',
+      MATRIX_STATUS.INFO,
+      `tool=${rawToolName || toolName}; normalized=${toolName}; category=${category}; impact=${impact}`
+    ),
+    matrixRow(
+      'autonomy',
+      'Autonomy budget',
+      (category === 'edit' && !autonomy.canEdit) || (category === 'command' && !autonomy.canRunLocalCommands && gate?.phase !== 'research' && gate?.phase !== 'verify')
+        ? MATRIX_STATUS.BLOCK
+        : MATRIX_STATUS.PASS,
+      `level=${level}; canEdit=${autonomy.canEdit}; canRunLocalCommands=${autonomy.canRunLocalCommands}`
+    ),
+    matrixRow(
+      'gate',
+      'Stage gate',
+      gateAllowsTool ? MATRIX_STATUS.PASS : MATRIX_STATUS.BLOCK,
+      `gate=${gateId}; phase=${gate?.phase || state.phase || '-'}; allowed=${allowedTools.join(',') || '-'}`
+    ),
+    matrixRow(
+      'scope',
+      'Allowed scope',
+      scopedRisk ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+      scopedRisk || `allowedScopes=${normalizedScopes(contract).join(',') || '-'}; path=${rel || '-'}`
+    ),
+    matrixRow(
+      'external_side_effect',
+      'External side effect',
+      externalTargets.has(targetObject) || commandRisk
+        ? MATRIX_STATUS.APPROVAL
+        : MATRIX_STATUS.PASS,
+      commandRisk || `target=${targetObject}; command=${command || '-'}`
+    ),
+    matrixRow(
+      'control_plane',
+      'Control-plane protection',
+      controlRisk ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+      controlRisk || `target=${targetObject}; controlPlane=${targetObject === 'harness-control-plane' || targetObject === 'harness-runtime-state'}`
+    ),
+    matrixRow(
+      'document_governance',
+      'Document governance',
+      documentRisk ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+      documentRisk || (rel && isMarkdownPath(rel) ? 'markdown path conforms to document governance' : 'not a markdown document write')
+    ),
+    matrixRow(
+      'rollback',
+      'Rollback path',
+      impact === 'high' ? MATRIX_STATUS.INFO : MATRIX_STATUS.PASS,
+      impact === 'high'
+        ? 'high-impact action requires explicit rollback note before completion'
+        : 'low/medium impact action; standard git rollback is sufficient'
+    ),
+    matrixRow(
+      'evidence',
+      'Evidence requirement',
+      MATRIX_STATUS.INFO,
+      impact === 'high'
+        ? 'record command, result, target, risk, and rollback in evidence ledger'
+        : 'record validation evidence before claiming completion'
+    )
+  ];
+
+  return {
+    targetObject,
+    impact,
+    highImpact: impact === 'high',
+    driftRisk,
+    scopeRisk: scopedRisk,
+    documentRisk,
+    rows
+  };
 }
 
 function evaluateToolUse(repoRoot, payload = {}) {
@@ -522,10 +1091,71 @@ function evaluateToolUse(repoRoot, payload = {}) {
   }
 
   const allowedTools = gate.tools || gate.allowedTools || [];
+  const contract = loadContract(repoRoot);
+  const level = normalizeAutonomyLevel(contract?.autonomyBudget?.level || 'A0');
+  const autonomy = AUTONOMY_LEVELS[level];
+  const category = toolCategory(toolName);
+  const command = commandTextFromPayload(payload);
+  const commandRisk = detectCommandRisk(command);
+  const controlRisk = category === 'edit' ? controlPlaneEditRisk(repoRoot, contract, payload) : '';
+  const documentRisk = documentEditRisk(repoRoot, payload, category);
+  const actionMatrix = buildActionEvaluationMatrix(repoRoot, {
+    state,
+    gate,
+    gateId,
+    contract,
+    payload,
+    rawToolName,
+    toolName,
+    category,
+    level,
+    autonomy,
+    allowedTools,
+    command,
+    commandRisk,
+    controlRisk,
+    documentRisk
+  });
+
+  if (actionMatrix.driftRisk) {
+    return {
+      ok: false,
+      reason: actionMatrix.driftRisk,
+      matrix: actionMatrix,
+      gate: gateId,
+      phase: gate.phase || state.phase || '-',
+      tool: rawToolName || toolName,
+      command,
+      exitCode: 2
+    };
+  }
+
+  if (controlRisk) {
+    return { ok: false, reason: controlRisk, matrix: actionMatrix, gate: gateId, tool: toolName, exitCode: 2 };
+  }
+
+  if (documentRisk) {
+    return { ok: false, reason: documentRisk, matrix: actionMatrix, gate: gateId, tool: toolName, exitCode: 2 };
+  }
+
+  if (actionMatrix.scopeRisk) {
+    return {
+      ok: false,
+      reason: actionMatrix.scopeRisk,
+      matrix: actionMatrix,
+      gate: gateId,
+      phase: gate.phase || state.phase || '-',
+      tool: rawToolName || toolName,
+      command,
+      exitCode: 2
+    };
+  }
+
   if (!allowedTools.includes('*') && !allowedTools.includes(toolName) && !allowedTools.includes(rawToolName)) {
     return {
       ok: false,
       reason: 'tool is not allowed in current gate',
+      matrix: actionMatrix,
       gate: gateId,
       phase: gate.phase || state.phase || '-',
       tool: rawToolName || toolName,
@@ -534,29 +1164,18 @@ function evaluateToolUse(repoRoot, payload = {}) {
     };
   }
 
-  const contract = loadContract(repoRoot);
-  const level = normalizeAutonomyLevel(contract?.autonomyBudget?.level || 'A0');
-  const autonomy = AUTONOMY_LEVELS[level];
-  const category = toolCategory(toolName);
   if (category === 'edit' && !autonomy.canEdit) {
-    return { ok: false, reason: `autonomy ${level} does not allow edits`, gate: gateId, tool: toolName, exitCode: 2 };
-  }
-  if (category === 'edit') {
-    const controlRisk = controlPlaneEditRisk(repoRoot, contract, payload);
-    if (controlRisk) {
-      return { ok: false, reason: controlRisk, gate: gateId, tool: toolName, exitCode: 2 };
-    }
+    return { ok: false, reason: `autonomy ${level} does not allow edits`, matrix: actionMatrix, gate: gateId, tool: toolName, exitCode: 2 };
   }
   if (category === 'command' && !autonomy.canRunLocalCommands && gate.phase !== 'research' && gate.phase !== 'verify') {
-    return { ok: false, reason: `autonomy ${level} does not allow commands in ${gate.phase}`, gate: gateId, tool: toolName, exitCode: 2 };
+    return { ok: false, reason: `autonomy ${level} does not allow commands in ${gate.phase}`, matrix: actionMatrix, gate: gateId, tool: toolName, exitCode: 2 };
   }
 
-  const command = commandTextFromPayload(payload);
-  const commandRisk = detectCommandRisk(command);
   if (commandRisk) {
     return {
       ok: false,
       reason: 'high-risk command requires explicit user approval',
+      matrix: actionMatrix,
       risk: commandRisk,
       command,
       gate: gateId,
@@ -564,7 +1183,143 @@ function evaluateToolUse(repoRoot, payload = {}) {
     };
   }
 
-  return { ok: true, gate: gateId, phase: gate.phase || state.phase || '-', tool: toolName };
+  return { ok: true, matrix: actionMatrix, gate: gateId, phase: gate.phase || state.phase || '-', tool: toolName };
+}
+
+function auditRow(id, label, status, detail) {
+  return {
+    id,
+    label,
+    status,
+    detail,
+    blocking: status === MATRIX_STATUS.BLOCK || status === MATRIX_STATUS.APPROVAL
+  };
+}
+
+function latestFailingEvidence(contract) {
+  return evidenceEntries(contract).filter((entry) => String(entry.status || '').toLowerCase() === 'fail');
+}
+
+function completionAudit(repoRoot) {
+  const state = loadState(repoRoot);
+  const contract = loadContract(repoRoot);
+  const rows = [];
+
+  if (!contract) {
+    rows.push(auditRow('goal_contract', 'Goal contract', MATRIX_STATUS.BLOCK, 'goal contract is missing'));
+    return {
+      ok: false,
+      status: 'blocked',
+      rows,
+      blockers: rows.filter((row) => row.blocking).map((row) => row.detail),
+      warnings: []
+    };
+  }
+
+  const validationErrors = validateContract(contract);
+  rows.push(auditRow(
+    'goal_contract',
+    'Goal contract',
+    validationErrors.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+    validationErrors.length ? validationErrors.join('; ') : `contract=${contract.id}; status=${contract.status}`
+  ));
+
+  const sovereigntyErrors = [];
+  if (!contract.sovereignty?.originalGoalHash) {
+    sovereigntyErrors.push('sovereignty.originalGoalHash is missing');
+  } else if (hashText(contract.sourceGoal) !== contract.sovereignty.originalGoalHash) {
+    sovereigntyErrors.push('sourceGoal hash changed after intake');
+  }
+  if (contract.sovereignty?.agentMayRedefineGoal !== false) {
+    sovereigntyErrors.push('agentMayRedefineGoal must be false');
+  }
+  if (contract.sourceGoal && contract.objective && contract.sourceGoal !== contract.objective && !(contract.revisions || []).some((item) => item.approvedBy === 'user')) {
+    sovereigntyErrors.push('objective differs from sourceGoal without user-approved revision');
+  }
+  rows.push(auditRow(
+    'goal_sovereignty',
+    'Goal sovereignty',
+    sovereigntyErrors.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+    sovereigntyErrors.length ? sovereigntyErrors.join('; ') : 'source goal preserved; agent cannot redefine goal'
+  ));
+
+  const readinessBlockers = evaluateIntakeReadiness(contract).filter((item) => item.level === 'block');
+  rows.push(auditRow(
+    'intake_readiness',
+    'Intake readiness',
+    readinessBlockers.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+    readinessBlockers.length ? readinessBlockers.map((item) => `${item.name}: ${item.detail}`).join('; ') : 'research/user-intent/assumption split is executable'
+  ));
+
+  const incompleteCheckpoints = (contract.checkpoints || []).filter((item) => !checkpointStatusOk(item.status));
+  rows.push(auditRow(
+    'checkpoints',
+    'Checkpoints',
+    incompleteCheckpoints.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+    incompleteCheckpoints.length
+      ? `pending=${incompleteCheckpoints.map((item) => item.name || item.id).join(', ')}`
+      : 'all checkpoints completed'
+  ));
+
+  const missingCriteria = (contract.successCriteria || []).filter((criterion) => !hasPassingEvidence(contract, criterion));
+  rows.push(auditRow(
+    'success_criteria',
+    'Success criteria',
+    missingCriteria.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+    missingCriteria.length ? `missing evidence for: ${missingCriteria.join('; ')}` : 'each success criterion has passing evidence'
+  ));
+
+  const missingRequiredEvidence = (contract.evidence?.required || []).filter((item) => !hasPassingEvidence(contract, item));
+  rows.push(auditRow(
+    'required_evidence',
+    'Required evidence',
+    missingRequiredEvidence.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+    missingRequiredEvidence.length ? `missing: ${missingRequiredEvidence.join('; ')}` : 'all required evidence classes are present'
+  ));
+
+  const failingEvidence = latestFailingEvidence(contract);
+  rows.push(auditRow(
+    'failing_evidence',
+    'Failing evidence',
+    failingEvidence.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
+    failingEvidence.length ? `unresolved failing evidence: ${failingEvidence.map((item) => item.summary || item.type).join('; ')}` : 'no failing evidence recorded'
+  ));
+
+  const completionPhaseOk = ['verify', 'evidence', 'complete'].includes(contract.phase?.current || state.phase || '');
+  rows.push(auditRow(
+    'completion_phase',
+    'Completion phase',
+    completionPhaseOk ? MATRIX_STATUS.PASS : MATRIX_STATUS.BLOCK,
+    completionPhaseOk
+      ? `phase=${contract.phase?.current || state.phase}`
+      : `phase=${contract.phase?.current || state.phase || '-'}; move to verify/evidence before completion`
+  ));
+
+  const blockers = rows.filter((row) => row.blocking).map((row) => row.detail);
+  const warnings = rows.filter((row) => row.status === MATRIX_STATUS.INFO).map((row) => row.detail);
+  return {
+    ok: blockers.length === 0,
+    status: blockers.length ? 'blocked' : 'pass',
+    goalId: contract.id,
+    phase: contract.phase?.current || state.phase || '-',
+    rows,
+    blockers,
+    warnings
+  };
+}
+
+function completeGoal(repoRoot, options = {}) {
+  const audit = completionAudit(repoRoot);
+  if (!audit.ok) {
+    throw new Error(`completion audit failed: ${audit.blockers.join('; ')}`);
+  }
+  const contract = loadContract(repoRoot);
+  contract.status = 'complete';
+  contract.completedAt = nowIso();
+  contract.completedBy = options.by || 'user';
+  saveContract(repoRoot, contract);
+  const result = setPhase(repoRoot, 'complete', 'completion audit passed', { skipCompletionAudit: true });
+  return { ...result, audit };
 }
 
 function recordEvidence(repoRoot, entry) {
@@ -580,6 +1335,10 @@ function recordEvidence(repoRoot, entry) {
     summary: entry.summary || '',
     detail: entry.detail || ''
   };
+  const satisfies = Array.isArray(entry.satisfies) ? entry.satisfies : parseCsv(entry.satisfies);
+  if (satisfies.length) {
+    normalized.satisfies = satisfies;
+  }
   contract.evidence = contract.evidence || { required: [], collected: [] };
   contract.evidence.collected = contract.evidence.collected || [];
   contract.evidence.collected.push(normalized);
@@ -632,14 +1391,20 @@ function runtimeValidation(repoRoot) {
 module.exports = {
   AUTONOMY_LEVELS,
   HIGH_RISK_PATTERNS,
+  MATRIX_STATUS,
   PHASE_TO_GATE,
   activeGate,
+  actionTargetObject,
   approveContract,
   autonomyAllowedItems,
+  buildActionEvaluationMatrix,
   canEnterPhase,
   clearGoal,
   commandTextFromPayload,
+  completeGoal,
+  completionAudit,
   detectCommandRisk,
+  evaluateIntakeReadiness,
   evaluateToolUse,
   loadContract,
   loadSettings,
@@ -656,6 +1421,7 @@ module.exports = {
   saveState,
   setPhase,
   startGoal,
+  updateCheckpoint,
   validateContract,
   writeJson
 };

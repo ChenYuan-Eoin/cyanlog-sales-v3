@@ -105,6 +105,23 @@ managed_documents:
 4. 目录、规则、脚本入口变更后，需同步更新本指南与维护配置文件。
 5. 被管理文档改名或换位置后，先更新上方 `yaml` 与运行时注册表，再执行 `python3 docs-governance/maintenance-config-维护配置/scripts-脚本/sync_governance.py`（如脚本存在）。
 6. **禁止随便新建文档**：补充内容时，必须先评估应归入哪个已有文档（主文档、本指南、harness治理指南）。如确实需要新建文档，必须与项目负责人确认后再执行。
+7. 新增 Markdown 文档必须通过文档治理机器校验：路径必须是运行时注册表中的被管理文档、被管理目录，或 `document-maintenance-rules-文档维护规则.json` 中声明的允许文档族。
+
+### 文档治理机器入口
+
+文档治理不依赖人工记忆。新增、改名或移动文档后，必须运行：
+
+```bash
+npm run doc-governance --prefix governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本
+```
+
+该命令会检查当前 Git 变更中的 Markdown 文档：
+
+1. 是否属于注册表文档、注册表目录或允许文档族。
+2. 是否包含顶层 `# title`。
+3. 是否避开 `product-truth/product-code` 业务代码目录。
+
+`npm run ready --prefix governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本` 会自动包含该检查。Codex `PreToolUse` 也会在创建新的 `.md` 文件前执行 `document_governance` 矩阵行，不允许绕开文档治理随手新增文档。
 
 ## 规则分层
 
