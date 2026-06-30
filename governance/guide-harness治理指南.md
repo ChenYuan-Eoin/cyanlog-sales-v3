@@ -254,8 +254,21 @@ Harness ready 必须同时满足：
 5. 当前会话或新会话实际触发过 `UserPromptSubmit` / `PreToolUse` / `Stop` 生命周期接入
 6. 最终交付时，Harness 相关文件已经与业务脏改分离，并以独立 commit 推送到远端分支
 7. worktree 继承脚本不得写死本机绝对路径；Codex hooks/config 与 Claude settings 必须能在新 worktree 中复现
+8. 新 worktree 若要通过 Codex `ready --strict`，必须登记 Codex project trust 和 hook trust；使用 `codex-trust-worktree.js` 生成或写入 trust 配置
 
 任一条件缺失时，只能说“代码级 Harness 已准备/结构检查通过”，不能说“已部署、生效、可自治挂机”。
+
+新 worktree 迁移推荐入口：
+
+```bash
+bash governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/setup-worktree-harness.sh <worktree-path> --trust-codex
+```
+
+如只想查看需要写入的 trust 配置，不修改用户全局配置：
+
+```bash
+node governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/codex-trust-worktree.js --target <worktree-path>
+```
 
 ### 收尾证据
 

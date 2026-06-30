@@ -5,9 +5,10 @@
 set -euo pipefail
 
 WORKTREE_PATH="${1:-}"
+TRUST_CODEX="${2:-}"
 
 if [ -z "$WORKTREE_PATH" ]; then
-  echo "Usage: $0 <worktree-path>"
+  echo "Usage: $0 <worktree-path> [--trust-codex]"
   exit 1
 fi
 
@@ -46,5 +47,12 @@ done
 ENV_FILE="$CLAUDE_DIR/.env"
 echo "PRICE_V3_WORKSPACE_ROOT=$TARGET_ROOT" > "$ENV_FILE"
 echo "PRICE_V3_HARNESS_STRICT=true" >> "$ENV_FILE"
+
+if [ "$TRUST_CODEX" = "--trust-codex" ]; then
+  node "$SCRIPT_DIR/codex-trust-worktree.js" --write --target "$TARGET_ROOT"
+else
+  echo "ℹ️ 如需让 Codex ready --strict 在该 worktree 通过，请执行:"
+  echo "   node \"$SCRIPT_DIR/codex-trust-worktree.js\" --write --target \"$TARGET_ROOT\""
+fi
 
 echo "✅ Worktree harness setup complete: $WORKTREE_PATH"
