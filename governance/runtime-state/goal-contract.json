@@ -3,7 +3,7 @@
   "id": "goal-20260630083435",
   "status": "approved",
   "createdAt": "2026-06-30T08:34:35.441Z",
-  "updatedAt": "2026-06-30T09:50:24.210Z",
+  "updatedAt": "2026-06-30T09:51:11.381Z",
   "sourceGoal": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "objective": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "successCriteria": [
@@ -353,6 +353,19 @@
           "validation commands and results",
           "selftest passes",
           "ready passes",
+          "risk and rollback notes"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:51:11.380Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Harness-only commit created",
+        "detail": "Created local Harness-only commit 77a4875 chore: enforce harness completion governance. Commit contains only .codex Harness adapter, docs-governance document governance rules/validator/docs, governance Harness runtime/docs, and runtime-state goal/evidence/harness-state files. It excludes product-truth/product-code business changes, REQ/product docs dirty work, behavior-log.jsonl, and feedback.json.",
+        "satisfies": [
+          "Harness-only commit created",
+          "validation commands and results",
+          "changed files summary",
           "risk and rollback notes"
         ]
       }
