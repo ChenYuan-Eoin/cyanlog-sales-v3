@@ -3,7 +3,12 @@
 // 检查：编辑文件对应的需求是否已确认
 
 const fs = require('fs');
-const yaml = require('js-yaml'); // 需要 npm install js-yaml
+let yaml;
+try {
+  yaml = require('../scripts-脚本/node_modules/js-yaml');
+} catch {
+  yaml = require('js-yaml');
+}
 const {
   isWithinDocument,
   resolveEnabledDocumentPath
@@ -18,7 +23,7 @@ function parseRequirements() {
   }
 
   const content = fs.readFileSync(REQUIREMENTS_FILE, 'utf-8');
-  const data = yaml.load(content);
+  const data = yaml.loadAll(content).find((doc) => doc && doc.requirements) || {};
 
   // YAML 格式: requirements.F001.status
   const reqs = [];

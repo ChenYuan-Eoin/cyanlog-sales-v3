@@ -4,21 +4,30 @@
 
 set -euo pipefail
 
-WORKSPACE_ROOT="/Users/nsss/Price-v3"
+WORKSPACE_ROOT="${PRICE_V3_WORKSPACE_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 STATE_FILE="$WORKSPACE_ROOT/governance/runtime-state/harness-state.json"
+SETTINGS_FILE="$WORKSPACE_ROOT/governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json"
 
 ACTION="${1:-status}"
 GATE_ID="${2:-}"
 
 function get_status() {
-  if [ -f "$STATE_FILE" ]; then
-    local mode=$(cat "$STATE_FILE" | grep -o '"mode": "[^"]*"' | cut -d'"' -f4)
-    local activeGates=$(cat "$STATE_FILE" | grep -o '"activeGates": \[[^\]]*\]' | grep -o '"[^"]*"' | grep -v 'activeGates' | tr '\n' ' ')
-    echo "Mode: $mode"
-    echo "Active Gates: $activeGates"
-  else
-    echo "Status: unknown (state file not found)"
-  fi
+  node - "$STATE_FILE" "$SETTINGS_FILE" <<'NODE'
+const fs = require('fs');
+const [statePath, settingsPath] = process.argv.slice(2);
+if (!fs.existsSync(statePath)) {
+  console.log('Status: unknown (state file not found)');
+  process.exit(0);
+}
+const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+const settings = fs.existsSync(settingsPath)
+  ? JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+  : {};
+console.log(`Mode: ${state.mode || '-'}`);
+console.log(`Phase: ${state.phase || '-'}`);
+console.log(`Active Gates: ${(state.activeGates || []).join(' ') || '-'}`);
+console.log(`Available Gates: ${Object.keys(settings.gates || {}).join(' ') || '-'}`);
+NODE
 }
 
 function switch_gate() {
@@ -29,26 +38,39 @@ function switch_gate() {
     exit 1
   fi
 
-  # 使用Node.js修改JSON（更可靠）
-  node -e "
+  node - "$WORKSPACE_ROOT" "$STATE_FILE" "$SETTINGS_FILE" "$gate" <<'NODE'
 const fs = require('fs');
-const state = JSON.parse(fs.readFileSync('$STATE_FILE', 'utf8'));
+const path = require('path');
+const [repoRoot, statePath, settingsPath, gate] = process.argv.slice(2);
+const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+const core = require(path.join(repoRoot, 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js'));
 
-if ('$gate' === 'none') {
-  state.activeGates = [];
-  state.mode = 'permissive';
-} else if (state.gates && state.gates['$gate']) {
-  state.activeGates = ['$gate'];
-  state.mode = 'enforcing';
+if (gate === 'none') {
+  try {
+    core.setPhase(repoRoot, 'idle', 'gate controller');
+  } catch (error) {
+    console.error(`❌ Cannot switch gate: ${error.message}`);
+    process.exit(1);
+  }
+} else if (settings.gates && settings.gates[gate]) {
+  const phase = settings.gates[gate].phase;
+  if (!phase) {
+    console.error(`❌ Gate has no phase: ${gate}`);
+    process.exit(1);
+  }
+  try {
+    core.setPhase(repoRoot, phase, 'gate controller');
+  } catch (error) {
+    console.error(`❌ Cannot switch gate: ${error.message}`);
+    process.exit(1);
+  }
 } else {
-  console.error('❌ Unknown gate: $gate');
+  console.error(`❌ Unknown gate: ${gate}`);
   process.exit(1);
 }
 
-state.lastActivity = new Date().toISOString();
-fs.writeFileSync('$STATE_FILE', JSON.stringify(state, null, 2));
-console.log('✅ Gate switched to: $gate');
-"
+console.log(`✅ Gate switched to: ${gate}`);
+NODE
 }
 
 case "$ACTION" in

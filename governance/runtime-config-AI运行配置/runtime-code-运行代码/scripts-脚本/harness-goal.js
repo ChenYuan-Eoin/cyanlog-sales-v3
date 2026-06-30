@@ -1,0 +1,175 @@
+#!/usr/bin/env node
+
+const {
+  AUTONOMY_LEVELS,
+  approveContract,
+  clearGoal,
+  loadContract,
+  loadState,
+  paths,
+  recordEvidence,
+  repoRootFromRegistry,
+  setPhase,
+  startGoal,
+  validateContract
+} = require('./harness-core');
+
+function parseOptions(args) {
+  const options = {};
+  const rest = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg.startsWith('--')) {
+      const key = arg.slice(2);
+      const next = args[i + 1];
+      if (!next || next.startsWith('--')) {
+        options[key] = true;
+      } else {
+        options[key] = next;
+        i += 1;
+      }
+    } else {
+      rest.push(arg);
+    }
+  }
+  return { options, rest };
+}
+
+function printStatus(repoRoot, asJson = false) {
+  const p = paths(repoRoot);
+  const state = loadState(repoRoot);
+  const contract = loadContract(repoRoot);
+  if (asJson) {
+    console.log(JSON.stringify({ statePath: p.statePath, contractPath: contract ? p.contractPath : null, state, contract }, null, 2));
+    return;
+  }
+
+  console.log('Harness goal status');
+  console.log(`state=${p.statePath}`);
+  console.log(`contract=${contract ? p.contractPath : '-'}`);
+  console.log(`mode=${state.mode || '-'}`);
+  console.log(`phase=${state.phase || '-'}`);
+  console.log(`activeGates=${(state.activeGates || []).join(',') || '-'}`);
+  if (contract) {
+    console.log(`id=${contract.id || '-'}`);
+    console.log(`objective=${contract.objective || '-'}`);
+    console.log(`status=${contract.status || '-'}`);
+    console.log(`autonomy=${contract.autonomyBudget?.level || '-'}`);
+    console.log(`evidence=${contract.evidence?.collected?.length || 0}`);
+    const errors = validateContract(contract);
+    console.log(`contractValid=${errors.length ? 'no' : 'yes'}`);
+    if (errors.length) {
+      console.log(`contractErrors=${errors.join('; ')}`);
+    }
+  }
+}
+
+function printTemplate() {
+  console.log(JSON.stringify({
+    objective: 'Concrete outcome to achieve',
+    successCriteria: ['Measurable condition that proves completion'],
+    nonGoals: ['Explicitly out of scope'],
+    researchable: ['Facts the agent may investigate independently'],
+    askUser: ['Intent or authority questions that require the user'],
+    autonomyLevel: Object.keys(AUTONOMY_LEVELS),
+    allowedScopes: ['Paths or product areas the task may touch'],
+    forbiddenScopes: ['Paths or areas the task must not touch'],
+    stopConditions: [
+      'high-risk action required',
+      'user intent unclear',
+      'verification unavailable'
+    ]
+  }, null, 2));
+}
+
+function usage() {
+  console.error([
+    'Usage:',
+    '  harness-goal.js start [--level A0|A1|A2|A3] [--success csv] [--scope csv] <goal>',
+    '  harness-goal.js approve [--level A1|A2|A3] [--by name]',
+    '  harness-goal.js phase <intake|research|contract_review|execute|verify|approval|blocked|complete>',
+    '  harness-goal.js evidence --status pass|fail|info --type command|note --summary text [--detail text]',
+    '  harness-goal.js status [--json]',
+    '  harness-goal.js template',
+    '  harness-goal.js clear'
+  ].join('\n'));
+}
+
+function main() {
+  const repoRoot = repoRootFromRegistry();
+  const [command, ...args] = process.argv.slice(2);
+  const { options, rest } = parseOptions(args);
+
+  try {
+    if (command === 'start') {
+      const goalText = rest.join(' ');
+      const { contract } = startGoal(repoRoot, goalText, {
+        level: options.level,
+        success: options.success,
+        scopes: options.scope || options.scopes,
+        forbiddenScopes: options.forbiddenScope || options.forbiddenScopes,
+        nonGoals: options.nonGoals,
+        researchable: options.researchable,
+        askUser: options.askUser
+      });
+      console.log(`Harness phase=intake gate=G0`);
+      console.log(`Goal contract written: ${paths(repoRoot).contractPath}`);
+      console.log(`Goal id=${contract.id}`);
+      console.log(`Autonomy=${contract.autonomyBudget.level}`);
+      return;
+    }
+
+    if (command === 'approve') {
+      const contract = approveContract(repoRoot, {
+        level: options.level,
+        by: options.by
+      });
+      console.log(`Goal contract approved: ${contract.id}`);
+      console.log(`Autonomy=${contract.autonomyBudget.level}`);
+      return;
+    }
+
+    if (command === 'phase') {
+      const phase = rest[0] || '';
+      const result = setPhase(repoRoot, phase, 'phase command');
+      console.log(`Harness phase=${phase} gate=${result.gate || 'none'}`);
+      return;
+    }
+
+    if (command === 'evidence') {
+      const summary = options.summary || rest.join(' ');
+      const evidence = recordEvidence(repoRoot, {
+        type: options.type || 'note',
+        status: options.status || 'info',
+        summary,
+        detail: options.detail || ''
+      });
+      console.log(`Evidence recorded: ${evidence.status} ${evidence.summary}`);
+      return;
+    }
+
+    if (!command || command === 'status') {
+      printStatus(repoRoot, Boolean(options.json));
+      return;
+    }
+
+    if (command === 'template') {
+      printTemplate();
+      return;
+    }
+
+    if (command === 'clear') {
+      clearGoal(repoRoot);
+      console.log('Harness goal cleared');
+      return;
+    }
+
+    usage();
+    process.exit(1);
+  } catch (error) {
+    console.error(`Harness goal error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+main();

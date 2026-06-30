@@ -1,10 +1,28 @@
 {
   "version": "1.0",
-  "status": "permissive",
-  "mode": "permissive",
+  "status": "enforcing",
+  "mode": "enforcing",
+  "phase": "execute",
   "startedAt": "2026-06-11T00:00:00Z",
   "configPath": "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
-  "activeHooks": ["UserPromptSubmit", "PreToolUse", "SessionEnd"],
-  "activeGates": [],
-  "lastActivity": "2026-06-11T00:00:00Z"
+  "activeHooks": [
+    "UserPromptSubmit",
+    "PreToolUse",
+    "Stop"
+  ],
+  "activeGates": [
+    "G3"
+  ],
+  "longTask": {
+    "enabled": true,
+    "contractPath": "governance/runtime-state/goal-contract.json"
+  },
+  "currentGoal": {
+    "id": "goal-20260630083435",
+    "objective": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
+    "contractPath": "governance/runtime-state/goal-contract.json",
+    "status": "approved",
+    "autonomy": "A1"
+  },
+  "lastActivity": "2026-06-30T08:35:20.659Z"
 }

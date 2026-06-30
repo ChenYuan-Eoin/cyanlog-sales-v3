@@ -9,8 +9,8 @@ function checkFileImports(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
 
-    const governanceImport = /import.*from\s+['"](governance|harness-manager-治理管理)\//;
-    const governanceRequire = /require\(['"](governance|harness-manager-治理管理)\//;
+    const governanceImport = /import.*from\s+['"](governance|docs-governance)\//;
+    const governanceRequire = /require\(['"](governance|docs-governance)\//;
 
     if (governanceImport.test(content) || governanceRequire.test(content)) {
       return {
@@ -20,7 +20,7 @@ function checkFileImports(filePath) {
     }
 
     if (isWithinDocument(filePath, 'product-src')) {
-      const governanceRelative = /import.*from\s+['"](\.\.\/)+((governance)|(harness-manager-治理管理))\//;
+      const governanceRelative = /import.*from\s+['"](\.\.\/)+((governance)|(docs-governance))\//;
       if (governanceRelative.test(content)) {
         return {
           ok: false,

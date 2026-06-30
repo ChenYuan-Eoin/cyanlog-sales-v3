@@ -18,20 +18,20 @@ const { isWithinDocument } = require('../scripts-脚本/project-registry');
 
 // 检测模式
 const VIOLATION_PATTERNS = [
-  // ES6 import from governance
-  /import\s+.*?\s+from\s+['"]\.\.\/(governance|harness-manager-治理管理)\//,
-  /import\s+.*?\s+from\s+['"](governance|harness-manager-治理管理)\//,
+  // ES6 import from harness governance roots
+  /import\s+.*?\s+from\s+['"]\.\.\/(governance|docs-governance)\//,
+  /import\s+.*?\s+from\s+['"](governance|docs-governance)\//,
 
-  // CommonJS require governance
-  /require\(['"]\.\.\/(governance|harness-manager-治理管理)\//,
-  /require\(['"](governance|harness-manager-治理管理)\//,
+  // CommonJS require from harness governance roots
+  /require\(['"]\.\.\/(governance|docs-governance)\//,
+  /require\(['"](governance|docs-governance)\//,
 
   // 动态 import
-  /import\(['"]\.\.\/(governance|harness-manager-治理管理)\//,
-  /import\(['"](governance|harness-manager-治理管理)\//,
+  /import\(['"]\.\.\/(governance|docs-governance)\//,
+  /import\(['"](governance|docs-governance)\//,
 
-  // 相对路径跨越到 governance
-  /from\s+['"](\.\.\/)+((governance)|(harness-manager-治理管理))\//,
+  // 相对路径跨越到 harness governance roots
+  /from\s+['"](\.\.\/)+((governance)|(docs-governance))\//,
 ];
 
 function checkImportIsolation(filePath) {

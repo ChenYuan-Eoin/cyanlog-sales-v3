@@ -11,7 +11,7 @@ from pathlib import Path
 from collections import OrderedDict
 
 REGISTRY_RELATIVE_PATH = Path(
-    'harness-manager-治理管理/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json'
+    'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json'
 )
 
 def find_repo_root(start_path: Path):

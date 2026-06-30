@@ -1,0 +1,41 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/harness-adapter.js\" UserPromptSubmit",
+            "timeout": 10,
+            "statusMessage": "Checking Harness intake"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/harness-adapter.js\" PreToolUse",
+            "timeout": 10,
+            "statusMessage": "Checking Harness gate"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/harness-adapter.js\" Stop",
+            "timeout": 10,
+            "statusMessage": "Checking Harness evidence"
+          }
+        ]
+      }
+    ]
+  }
+}

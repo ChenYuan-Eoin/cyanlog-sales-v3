@@ -119,6 +119,103 @@ python3 ./scripts/sync_governance.py
 2. `legacy-skills/` 目录保留仅作历史参考，实际运行以 settings.json 内联配置为准。
 3. 如需新增 skill，直接修改 `settings-claude运行配置.json`，无需创建单独文件。
 
+## 长任务 Harness 运行契约
+
+长任务 Harness 的职责不是描述产品如何实现，而是控制 AI 在收到目标后的工作方式。
+
+### 目标入口
+
+用户输入目标后，AI 不应直接进入实现。必须先形成目标合约：
+
+1. `objective`：要达成的可验证结果
+2. `successCriteria`：完成判定
+3. `nonGoals`：明确不做的范围
+4. `researchPlan.researchable`：可由 AI 自行调研的事实
+5. `researchPlan.askUser`：只能由用户意图决定的问题
+6. `autonomyBudget.level`：自治级别
+7. `boundaries`：可碰、不可碰、高风险范围
+8. `stopConditions`：必须停下的条件
+9. `evidence.required`：收尾必须提供的证据
+
+机器可读目标合约由 `runtime-state/goal-contract.json` 承载；空闲时该文件可以不存在。
+
+Codex 项目 hook 在识别到目标型 prompt 且当前没有活跃长任务时，应自动进入 `A0/intake`，写入初始目标合约，并阻止命令执行和编辑，直到目标合约被审查并显式 approve。
+
+### 自治级别
+
+| 级别 | 名称 | 可自治范围 | 必须停下 |
+|---|---|---|---|
+| A0 | intake_read_only | 读文件、梳理目标、提出问题 | 任何编辑、命令执行、外部副作用 |
+| A1 | bounded_local_work | 已批准合约内的本地编辑和本地验证 | 部署、数据库、账单、认证、远程 git、破坏性命令 |
+| A2 | broad_local_work | 更宽的本地实现与验证 | 生产/外部写入/敏感数据/依赖大改 |
+| A3 | release_sensitive_work | 发布相邻准备工作 | 真正发布、生产变更、供应商侧写入 |
+
+自治级别只放宽本地工作，不授权生产、副作用或破坏性操作。
+
+### 阶段门
+
+| 阶段 | Gate | 目的 | 写权限 |
+|---|---|---|---|
+| intake | G0 | 目标澄清和边界识别 | 否 |
+| research | G1 | 只读调研和低风险本地检查 | 否 |
+| contract_review | G2 | 合约审查与用户意图确认 | 否 |
+| execute | G3 | 已批准合约内执行 | 是，受自治级别和风险策略限制 |
+| verify | G4 | 验证与证据收集 | 否 |
+| approval | G5 | 高风险动作等待用户确认 | 否 |
+
+进入 `execute/G3` 必须满足：目标合约有效、合约状态为 `approved` 或 `active`、自治级别允许编辑。
+
+### 风险硬拦截
+
+以下操作不得在自治过程中直接执行：
+
+- 递归强制删除、批量删除
+- `git reset --hard`、`git clean -f`、force push、远程 push
+- 部署、发布、生产环境写入
+- 数据库 schema/data 破坏性变更
+- 账单、认证、消息供应商写入
+- 权限弱化、`sudo`、读取未授权 secret
+
+这些风险由 `harness-core.js` 统一定义，Codex adapter、Claude gate enforcer 和 doctor 必须调用同一套策略。
+
+### 执行入口
+
+| 入口 | 文件 | 职责 |
+|---|---|---|
+| Core policy | `runtime-code-运行代码/scripts-脚本/harness-core.js` | 合约、阶段、自治、风险、证据的唯一运行策略 |
+| Goal CLI | `runtime-code-运行代码/scripts-脚本/harness-goal.js` | start/approve/phase/evidence/status/clear |
+| Doctor | `runtime-code-运行代码/scripts-脚本/harness-doctor.js` | 检查执行链和运行态一致性 |
+| Selftest | `runtime-code-运行代码/scripts-脚本/harness-selftest.js` | 离线验证核心策略 |
+| Codex adapter | `.codex/hooks/harness-adapter.js` | Codex 生命周期事件接入 |
+| Claude enforcer | `runtime-code-运行代码/hooks-钩子/claude-pretool-gate-enforcer.js` | Claude PreToolUse 接入 |
+
+### 生效判定
+
+不得把“文件已修改”或普通 doctor 的 `0 failure(s)` 当成 Harness 已生效。
+
+本 Harness 的“部署”是治理运行时部署：项目配置被 Codex 加载、hook 被信任、变更被提交并推送到远端分支、推送后可在新 Codex 会话中复查。它不是产品应用的 Vercel/生产发布；只有用户明确要求产品发布时，才允许进入生产部署流程。
+
+Harness ready 必须同时满足：
+
+1. `npm test` 通过，证明核心策略离线自洽
+2. `npm run ready` 通过，等价于 `harness-doctor.js --strict`
+3. Codex 项目 hooks 已在 `/hooks` 中被用户审查并信任
+4. `harness-goal status` 显示目标契约和阶段门处于预期状态
+5. 当前会话或新会话实际触发过 `UserPromptSubmit` / `PreToolUse` / `Stop` 生命周期接入
+6. 最终交付时，Harness 相关文件已经与业务脏改分离，并以独立 commit 推送到远端分支
+
+任一条件缺失时，只能说“代码级 Harness 已准备/结构检查通过”，不能说“已部署、生效、可自治挂机”。
+
+### 收尾证据
+
+长任务结束时必须说明：
+
+1. 改了哪些文件
+2. 跑了哪些验证，结果是什么
+3. 哪些内容没有验证
+4. 剩余风险和回滚路径
+5. 是否触发过高风险拦截或人工确认
+
 ## Claude 插件（Marketplace Plugins）治理
 
 本项目的 Claude Code 插件能力来自 Claude Marketplace（项目级 scope）。

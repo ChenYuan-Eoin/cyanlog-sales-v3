@@ -1,0 +1,227 @@
+{
+  "version": "1.0",
+  "id": "goal-20260630083435",
+  "status": "approved",
+  "createdAt": "2026-06-30T08:34:35.441Z",
+  "updatedAt": "2026-06-30T08:36:07.206Z",
+  "sourceGoal": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
+  "objective": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
+  "successCriteria": [
+    "final completion definition documented",
+    "harness control-plane scope separated",
+    "generic goal contract and autonomy gates implemented",
+    "Codex hooks trusted and loaded",
+    "ready passes",
+    "selftest passes",
+    "A0 blocks real Codex command",
+    "A1 allows bounded real Codex command",
+    "high-risk command blocked",
+    "Stop checkpoint emitted",
+    "Harness-only commit created",
+    "pushed branch verified",
+    "new Codex session verifies runtime"
+  ],
+  "nonGoals": [],
+  "researchPlan": {
+    "researchable": [],
+    "askUser": [],
+    "blocked": [],
+    "safeAssumptions": []
+  },
+  "autonomyBudget": {
+    "level": "A1",
+    "name": "bounded_local_work",
+    "allowed": [
+      "read repository files",
+      "inspect existing scripts and configuration",
+      "summarize risks and unknowns",
+      "run local verification commands",
+      "edit scoped workspace files after contract approval"
+    ],
+    "requiresApproval": [
+      "source edits before contract approval",
+      "database/auth/billing changes",
+      "deployments and external writes",
+      "destructive filesystem or git operations",
+      "production data access",
+      "new dependencies or package-manager lockfile churn"
+    ],
+    "forbiddenAutonomous": [
+      "delete broad directory trees",
+      "force push or rewrite git history",
+      "deploy to production",
+      "mutate remote databases",
+      "change billing/auth providers",
+      "read secrets beyond explicitly requested config"
+    ]
+  },
+  "boundaries": {
+    "allowedScopes": [
+      "harness-control-plane",
+      ".codex",
+      "governance/runtime-config-AI运行配置",
+      "governance/runtime-state",
+      "governance/guide-harness治理指南.md",
+      "docs-governance/maintenance-config-维护配置"
+    ],
+    "forbiddenScopes": [],
+    "highRiskActions": [
+      "recursive forced deletion",
+      "bulk deletion",
+      "destructive git reset",
+      "destructive git clean",
+      "remote git mutation",
+      "forced mutation",
+      "privileged command",
+      "broad permission weakening",
+      "deployment command",
+      "database or edge-function mutation",
+      "billing or messaging provider mutation",
+      "destructive SQL",
+      "external write request"
+    ]
+  },
+  "phase": {
+    "current": "execute",
+    "gate": "G3",
+    "history": [
+      {
+        "at": "2026-06-30T08:34:35.441Z",
+        "phase": "intake",
+        "gate": "G0",
+        "reason": "goal started"
+      },
+      {
+        "at": "2026-06-30T08:34:35.442Z",
+        "phase": "intake",
+        "gate": "G0",
+        "reason": "goal started"
+      },
+      {
+        "at": "2026-06-30T08:34:35.496Z",
+        "phase": "execute",
+        "gate": "G3",
+        "reason": "phase command"
+      },
+      {
+        "at": "2026-06-30T08:34:58.995Z",
+        "phase": "intake",
+        "gate": "G0",
+        "reason": "phase command"
+      },
+      {
+        "at": "2026-06-30T08:35:20.659Z",
+        "phase": "execute",
+        "gate": "G3",
+        "reason": "phase command"
+      }
+    ]
+  },
+  "checkpoints": [
+    {
+      "name": "intake contract reviewed",
+      "status": "pending"
+    },
+    {
+      "name": "research findings summarized",
+      "status": "pending"
+    },
+    {
+      "name": "execution plan approved or bounded",
+      "status": "pending"
+    },
+    {
+      "name": "verification evidence collected",
+      "status": "pending"
+    }
+  ],
+  "stopConditions": [
+    "required user intent is unknown",
+    "requested action crosses forbidden scope",
+    "high-risk action is needed",
+    "verification cannot be run or is failing repeatedly",
+    "implementation requires production credentials or deployment"
+  ],
+  "evidence": {
+    "required": [
+      "changed files summary",
+      "validation commands and results",
+      "unverified items",
+      "risk and rollback notes"
+    ],
+    "collected": [
+      {
+        "at": "2026-06-30T08:36:06.964Z",
+        "type": "note",
+        "status": "pass",
+        "summary": "Final completion definition documented",
+        "detail": "Harness guide defines deployment as Codex governance runtime deployment: hooks loaded and trusted, Harness-only commit pushed, and new Codex session verification; product Vercel production deploy is out of scope unless explicitly requested."
+      },
+      {
+        "at": "2026-06-30T08:36:06.991Z",
+        "type": "note",
+        "status": "pass",
+        "summary": "Harness control-plane scope separated",
+        "detail": "Harness scope is .codex, governance/runtime-config-AI运行配置, governance/runtime-state, governance/guide-harness治理指南.md, and docs-governance maintenance config; product-truth/product-code dirty changes are excluded from Harness commit."
+      },
+      {
+        "at": "2026-06-30T08:36:07.017Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Codex project hooks trusted and loaded",
+        "detail": "Codex app-server hooks/list for cwd=/Users/nsss/Price-v3 reports project pre_tool_use, user_prompt_submit, and stop hooks from /Users/nsss/Price-v3/.codex/hooks.json with trustStatus=trusted."
+      },
+      {
+        "at": "2026-06-30T08:36:07.045Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Harness selftest passed",
+        "detail": "npm run selftest --prefix governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本 exited 0 and printed harness selftest ok."
+      },
+      {
+        "at": "2026-06-30T08:36:07.072Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Harness ready passed",
+        "detail": "npm run ready --prefix governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本 exited 0 with Harness readiness: READY and 0 failures, 0 warnings."
+      },
+      {
+        "at": "2026-06-30T08:36:07.098Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "A0 blocks real Codex command in new session",
+        "detail": "Codex exec thread 019f17aa-e004-7a70-bfca-536dcd53102c attempted echo harness-final-a0 in G0/intake and PreToolUse blocked Bash before execution."
+      },
+      {
+        "at": "2026-06-30T08:36:07.126Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "A1 allows bounded real Codex command in new session",
+        "detail": "Codex exec thread 019f17ab-2802-7462-a473-e46b78cba637 ran /bin/zsh -lc echo harness-final-a1, exited 0, and printed harness-final-a1."
+      },
+      {
+        "at": "2026-06-30T08:36:07.155Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "High-risk command blocked",
+        "detail": "Direct PreToolUse adapter call for git reset --hard HEAD exited 2 with risk destructive git reset; command was not executed."
+      },
+      {
+        "at": "2026-06-30T08:36:07.180Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Harness runtime state direct edit blocked",
+        "detail": "Direct PreToolUse adapter call for Write governance/runtime-state/harness-state.json exited 2: direct edit to Harness runtime state is forbidden."
+      },
+      {
+        "at": "2026-06-30T08:36:07.205Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "Stop evidence checkpoint emitted",
+        "detail": "Direct Stop adapter call exited 0 and printed Harness evidence checkpoint for phase=execute gates=G3."
+      }
+    ]
+  },
+  "approvedAt": "2026-06-30T08:34:35.469Z",
+  "approvedBy": "codex-goal-continuation"
+}

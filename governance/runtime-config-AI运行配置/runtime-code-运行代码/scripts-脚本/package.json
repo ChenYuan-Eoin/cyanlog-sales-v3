@@ -2,6 +2,14 @@
   "name": "harness-runtime",
   "version": "1.0.0",
   "description": "Governance harness runtime dependencies",
+  "scripts": {
+    "doctor": "node harness-doctor.js",
+    "doctor:strict": "node harness-doctor.js --strict",
+    "goal": "node harness-goal.js",
+    "ready": "node harness-doctor.js --strict",
+    "selftest": "node harness-selftest.js",
+    "test": "node harness-selftest.js"
+  },
   "dependencies": {
     "js-yaml": "^4.1.0"
   }
