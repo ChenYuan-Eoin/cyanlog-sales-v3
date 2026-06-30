@@ -318,7 +318,11 @@ function main() {
     if (state.mode === 'enforcing' && !(state.activeGates || []).length) {
       fail('harness state active gate', 'mode=enforcing but activeGates is empty');
     } else if (state.mode === 'permissive') {
-      warn('harness state mode', 'permissive mode does not enforce gates');
+      if (state.phase === 'complete' || state.phase === 'idle') {
+        pass('harness state mode', `permissive after ${state.phase}`);
+      } else {
+        warn('harness state mode', 'permissive mode does not enforce gates');
+      }
     } else {
       pass('harness state active gate', (state.activeGates || []).join(',') || '-');
     }
