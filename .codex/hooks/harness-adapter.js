@@ -58,6 +58,16 @@ function shouldAdviseIntake(prompt) {
   return /目标|开始|实现|开发|修复|增强|重构|上线|部署|review|audit|build|implement|fix|ship/i.test(prompt);
 }
 
+function shouldStartReadOnlyVerification(prompt) {
+  if (!prompt) {
+    return false;
+  }
+  const text = String(prompt);
+  const asksVerification = /只读验证|最终复验|复验|read-only verification|verify/i.test(text);
+  const forbidsMutation = /不要修改|不修改|不要提交|不提交|不要推送|不推送|不要部署|不部署|read-only|do not modify|no modify|no commit|no push|no deploy/i.test(text);
+  return asksVerification && forbidsMutation;
+}
+
 function userPromptSubmit(payload) {
   const state = core.loadState(ROOT);
   if (state.longTask?.enabled || state.mode === 'enforcing') {
@@ -74,6 +84,21 @@ function userPromptSubmit(payload) {
     'text',
     'input'
   ]) || payload.rawInput || '');
+  if (shouldStartReadOnlyVerification(prompt)) {
+    const { contract } = core.startGoal(ROOT, prompt, {
+      level: 'A0',
+      success: 'read-only verification completed',
+      scopes: 'harness-control-plane'
+    });
+    core.setPhase(ROOT, 'verify', 'read-only verification prompt');
+    console.log([
+      '[Harness read-only verification started]',
+      `goal=${contract.id}`,
+      'phase=verify gate=G4 autonomy=A0',
+      'Only read and local verification commands are allowed. Edits, deployment, remote mutation, and destructive commands remain blocked.'
+    ].join('\n'));
+    return;
+  }
   if (!shouldAdviseIntake(prompt)) {
     return;
   }

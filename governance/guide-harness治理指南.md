@@ -141,6 +141,8 @@ python3 ./scripts/sync_governance.py
 
 Codex 项目 hook 在识别到目标型 prompt 且当前没有活跃长任务时，应自动进入 `A0/intake`，写入初始目标合约，并阻止命令执行和编辑，直到目标合约被审查并显式 approve。
 
+例外：当 prompt 明确声明为只读验证/复验，并同时声明不修改、不提交、不推送、不部署时，Codex hook 可以直接进入 `G4/verify`。该模式只允许读取和本地验证命令，仍然禁止编辑、部署、远程写入和破坏性命令，用于新会话/新 worktree 的 post-push 验证，避免验证任务被普通 A0 intake 卡死。
+
 ### 自治级别
 
 | 级别 | 名称 | 可自治范围 | 必须停下 |

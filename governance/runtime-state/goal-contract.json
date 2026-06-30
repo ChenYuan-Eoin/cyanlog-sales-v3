@@ -3,7 +3,7 @@
   "id": "goal-20260630083435",
   "status": "complete",
   "createdAt": "2026-06-30T08:34:35.441Z",
-  "updatedAt": "2026-06-30T09:55:56.975Z",
+  "updatedAt": "2026-06-30T09:58:55.550Z",
   "sourceGoal": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "objective": "把 Harness 做成项目级可执行控制系统：进入项目治理，被 Codex 真实加载，可复用，可审计，可提交，可在后续线程持续生效",
   "successCriteria": [
@@ -408,6 +408,18 @@
         "detail": "Pushed final Harness trust-helper commit 929d0f0 to origin/codex/audit-remediation-61-issues. git ls-remote origin refs/heads/codex/audit-remediation-61-issues returned 929d0f08cffdc8b3565d63221677e3fb1f9548d3, matching local HEAD. This push contained only Harness/document-governance control-plane updates and runtime evidence; no product deployment was run.",
         "satisfies": [
           "pushed branch verified",
+          "validation commands and results",
+          "risk and rollback notes"
+        ]
+      },
+      {
+        "at": "2026-06-30T09:58:55.549Z",
+        "type": "command",
+        "status": "pass",
+        "summary": "read-only verification prompts enter G4",
+        "detail": "Updated Codex harness adapter so prompts that explicitly say read-only verification/recheck and forbid modification, commit, push, and deploy start in G4/verify instead of A0/intake. Verified in a temporary clean git repo: UserPromptSubmit produced phase=verify activeGates=G4 autonomy=A0. Local node --check, selftest, doc-governance, and ready all passed.",
+        "satisfies": [
+          "new Codex session verifies runtime",
           "validation commands and results",
           "risk and rollback notes"
         ]
