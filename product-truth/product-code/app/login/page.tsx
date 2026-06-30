@@ -14,8 +14,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
   const [error, setError] = useState('')
   const prewarmAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
 
   useEffect(() => {
     const runPrewarm = () => {
@@ -177,6 +182,7 @@ export default function LoginPage() {
                 placeholder="name@company.com"
                 autoComplete="username"
                 inputMode="email"
+                disabled={!hydrated || loading}
                 required
               />
             </div>
@@ -191,6 +197,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="current-password"
+                disabled={!hydrated || loading}
                 required
               />
             </div>
@@ -211,7 +218,7 @@ export default function LoginPage() {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading}
+              disabled={!hydrated || loading}
               style={{ marginTop: 8, marginBottom: 12 }}
             >
               {loading ? '登录中...' : '进入工作台'}
