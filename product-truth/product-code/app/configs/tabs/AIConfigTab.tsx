@@ -28,6 +28,18 @@ type RuntimeProvider = {
   health_check_required: boolean
   base_url_configured: boolean
   credential_state: 'configured' | 'missing' | 'not_required'
+  runtime_state:
+    | 'builtin_ready'
+    | 'missing_base_url'
+    | 'missing_credential'
+    | 'unreachable_in_vercel'
+    | 'local_health_ok'
+    | 'local_health_failed'
+    | 'ready_to_call'
+  runtime_reason: string
+  runtime_action: string | null
+  runtime_environment: string
+  local_endpoint: boolean
 }
 
 type RuntimePolicy = {
@@ -39,6 +51,29 @@ type RuntimePolicy = {
   timeout_ms: number
   provider_chain: RuntimeProvider[]
   source_config_ids: string[]
+}
+
+function runtimeStateLabel(state: RuntimeProvider['runtime_state']) {
+  const labels: Record<RuntimeProvider['runtime_state'], string> = {
+    builtin_ready: '兜底可用',
+    missing_base_url: '地址缺失',
+    missing_credential: '密钥缺失',
+    unreachable_in_vercel: '生产不可达',
+    local_health_ok: '本地可达',
+    local_health_failed: '本地不可达',
+    ready_to_call: '具备调用条件',
+  }
+  return labels[state]
+}
+
+function runtimeStateClass(state: RuntimeProvider['runtime_state']) {
+  if (state === 'ready_to_call' || state === 'local_health_ok') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  }
+  if (state === 'missing_base_url' || state === 'missing_credential' || state === 'unreachable_in_vercel') {
+    return 'border-red-200 bg-red-50 text-red-700'
+  }
+  return 'border-amber-200 bg-amber-50 text-amber-800'
 }
 
 export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelete }: AIConfigTabProps) {
@@ -77,8 +112,11 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
 
   const externalProviders = runtimePolicy?.provider_chain.filter((provider) => provider.provider_kind !== 'builtin') ?? []
   const hasExternalProvider = externalProviders.length > 0
-  const hasUsableExternalProvider = externalProviders.some((provider) => (
-    provider.base_url_configured && provider.credential_state === 'configured'
+  const hasCallableExternalProvider = externalProviders.some((provider) => (
+    provider.runtime_state === 'ready_to_call' || provider.runtime_state === 'local_health_ok'
+  ))
+  const hasProductionBlockedLocalProvider = externalProviders.some((provider) => (
+    provider.runtime_state === 'unreachable_in_vercel'
   ))
 
   return (
@@ -183,29 +221,31 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
             </div>
 
             <div className={`rounded-lg border px-3 py-2 ${
-              hasUsableExternalProvider
+              hasCallableExternalProvider
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                 : hasExternalProvider
                   ? 'border-amber-200 bg-amber-50 text-amber-800'
                   : 'border-amber-200 bg-amber-50 text-amber-800'
             }`}>
-              {hasUsableExternalProvider
-                ? '外部模型 Provider 与密钥已配置，语义审核可进入正式模型链。'
+              {hasCallableExternalProvider
+                ? '外部模型 Provider 已具备运行时调用条件，语义审核可进入正式模型链。'
                 : hasExternalProvider
-                  ? '外部模型 Provider 已发布，但密钥或地址未完整配置；当前不能按正式模型链验收。'
+                  ? hasProductionBlockedLocalProvider
+                    ? '存在本地模型 Provider，但在 Vercel 生产环境不可达；当前不能按正式模型链验收。'
+                    : '外部模型 Provider 已发布，但密钥、地址或运行时健康检查未通过；当前不能按正式模型链验收。'
                   : '当前仅有内置规则引擎兜底；这不是模拟，但语义模型能力尚未配置。'}
             </div>
 
             <div className={`rounded-lg border px-3 py-2 ${
               hasExternalProvider
-                ? hasUsableExternalProvider
+                ? hasCallableExternalProvider
                   ? 'border-slate-200 bg-white text-slate-600'
                   : 'border-red-200 bg-red-50 text-red-700'
                 : 'border-amber-200 bg-amber-50 text-amber-800'
             }`}>
               {hasExternalProvider
-                ? hasUsableExternalProvider
-                  ? '验收口径：下一步仍需用真实合同触发一次模型调用并记录调用证据。'
+                ? hasCallableExternalProvider
+                  ? '验收口径：仍需用真实合同触发一次模型调用，并确认 semantic_review invocation 为 completed。'
                   : '验收口径：请先在 AI 模型配置中补齐密钥与地址，再进行真实模型调用验收。'
                 : '验收口径：规则引擎可审计，但不能替代大模型审核目标。'}
             </div>
@@ -223,6 +263,14 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
                   </div>
                   <div className="mt-2 space-y-1 text-xs text-slate-500">
                     <div className="truncate">{provider.provider_kind} / {provider.model}</div>
+                    <div className={`rounded border px-2 py-1 ${runtimeStateClass(provider.runtime_state)}`}>
+                      {runtimeStateLabel(provider.runtime_state)} · {provider.runtime_reason}
+                    </div>
+                    {provider.runtime_action && (
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">
+                        处理：{provider.runtime_action}
+                      </div>
+                    )}
                     <div>
                       {provider.timeout_ms / 1000}s · {provider.health_check_required ? '需健康检查' : '无需健康检查'} · {
                         provider.credential_state === 'not_required'
@@ -233,7 +281,10 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
                       }
                     </div>
                     {provider.provider_kind !== 'builtin' && (
-                      <div>{provider.base_url_configured ? '地址已配置' : '地址缺失'}</div>
+                      <div>
+                        {provider.base_url_configured ? '地址已配置' : '地址缺失'} · {provider.runtime_environment}
+                        {provider.local_endpoint ? ' · 本地端点' : ''}
+                      </div>
                     )}
                     <div className="line-clamp-2">阶段: {provider.stages.join(', ')}</div>
                   </div>

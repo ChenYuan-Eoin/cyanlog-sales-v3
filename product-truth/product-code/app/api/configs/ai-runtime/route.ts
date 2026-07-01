@@ -8,6 +8,8 @@ import { createApiError } from '@/lib/api/errors'
 import { listPublishedAIProviders } from '@/lib/configs/runtime'
 import { resolvePublishedModelPolicy } from '@/lib/contracts/model-policy'
 import type { AuthUser } from '@/lib/auth'
+import type { PublishedAIProviderConfig } from '@/lib/configs/runtime'
+import { assessProviderRuntime, type AIRuntimeAssessment } from '@/lib/configs/ai-runtime-readiness'
 
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
@@ -15,6 +17,18 @@ export async function GET(req: NextRequest) {
       const policy = await resolvePublishedModelPolicy(orgId, user.id)
       const providerConfigs = await listPublishedAIProviders(orgId)
       const providerConfigById = new Map(providerConfigs.map((config) => [config.config_id, config]))
+      const runtimeAssessments = new Map<string, AIRuntimeAssessment>()
+
+      await Promise.all(policy.provider_chain.map(async (provider) => {
+        const providerConfig: PublishedAIProviderConfig | null = provider.source_config_id
+          ? providerConfigById.get(provider.source_config_id) || null
+          : null
+        runtimeAssessments.set(`${provider.level}:${provider.profile}:${provider.model}`, await assessProviderRuntime({
+          providerKind: provider.provider_kind,
+          baseUrl: providerConfig?.base_url,
+          apiKey: providerConfig?.api_key,
+        }))
+      }))
 
       return successResponse({
         id: policy.id,
@@ -53,6 +67,7 @@ export async function GET(req: NextRequest) {
               : providerConfig?.api_key
                 ? 'configured'
                 : 'missing',
+            ...runtimeAssessments.get(`${provider.level}:${provider.profile}:${provider.model}`),
           }
         }),
         source_config_ids: policy.source_config_ids,
