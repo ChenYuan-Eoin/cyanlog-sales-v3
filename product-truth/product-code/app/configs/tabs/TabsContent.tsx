@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import type { ProductRecord, Config, OrgSummaryPayload, FeishuSyncFeedback } from '../types'
+import type { ProductRecord, Config, OrgSummaryPayload, FeishuSyncFeedback, RuntimePolicy } from '../types'
 import type { ContractPolicyRule } from '@/types/rules'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
@@ -58,6 +58,8 @@ export interface TabsContentProps {
   onDeleteRule: (id: string) => void
   // config-based tabs (tax, approval, ai, theme)
   configs: Config[]
+  aiRuntimePolicy: RuntimePolicy | null
+  aiRuntimeError: string
   onNewConfig: (type: Config['type']) => void
   onEditConfig: (config: Config) => void
   onPublishConfig: (id: string) => void
@@ -95,6 +97,8 @@ export default function TabsContent({
   onSaveRule,
   onDeleteRule,
   configs,
+  aiRuntimePolicy,
+  aiRuntimeError,
   onNewConfig,
   onEditConfig,
   onPublishConfig,
@@ -203,6 +207,8 @@ export default function TabsContent({
       return (
         <AIConfigTab
           configs={aiConfigs}
+          runtimePolicy={aiRuntimePolicy}
+          runtimeError={aiRuntimeError}
           onNew={() => onNewConfig('AI_CONFIG')}
           onEdit={onEditConfig}
           onPublish={onPublishConfig}

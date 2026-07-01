@@ -14,7 +14,7 @@ import {
   UsersIcon,
   FileTextIcon,
 } from '@/components/icons'
-import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback } from './types'
+import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback, RuntimePolicy } from './types'
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
@@ -252,6 +252,10 @@ function clearOrgAccessBrowserCache(token: string | null) {
   return cacheKeys
 }
 
+function aiRuntimeCacheKey(token: string | null) {
+  return scopedCacheKey(token, 'configs:ai-runtime')
+}
+
 type ConfigRoleRecord = {
   id: string
   code: string
@@ -340,6 +344,8 @@ export default function ConfigsClient({
   // 优先使用服务端预取的数据，避免客户端重复请求
   const [rules, setRules] = useState<ContractPolicyRule[]>(initialData?.rules || [])
   const [configs, setConfigs] = useState<Config[]>(initialData?.configs || [])
+  const [aiRuntimePolicy, setAiRuntimePolicy] = useState<RuntimePolicy | null>(initialData?.aiRuntimePolicy || null)
+  const [aiRuntimeError, setAiRuntimeError] = useState('')
   const [products, setProducts] = useState<ProductRecord[]>(initialData?.products || [])
   const [loading, setLoading] = useState(!initialData)  // 有初始数据则不显示 loading
   const [error, setError] = useState('')
@@ -391,6 +397,12 @@ export default function ConfigsClient({
       const cachedEntry = options?.force ? null : readBrowserCacheEntry<unknown>(cacheKey)
       const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
       const cached = cacheAgeMs <= TAB_CACHE_TTL_MS ? cachedEntry?.value : null
+      const runtimeCacheKey = aiRuntimeCacheKey(token)
+      const cachedRuntimeEntry = tab === 'ai' && !options?.force
+        ? readBrowserCacheEntry<RuntimePolicy>(runtimeCacheKey)
+        : null
+      const runtimeCacheAgeMs = cachedRuntimeEntry ? Date.now() - cachedRuntimeEntry.savedAt : Number.POSITIVE_INFINITY
+      const cachedRuntimePolicy = runtimeCacheAgeMs <= TAB_CACHE_TTL_MS ? cachedRuntimeEntry?.value : null
       let didLoad = Boolean(cached)
 
       if (cached) {
@@ -406,6 +418,10 @@ export default function ConfigsClient({
           case 'ai':
           case 'theme':
             setConfigs(cached as Config[])
+            if (tab === 'ai' && cachedRuntimePolicy) {
+              setAiRuntimePolicy(cachedRuntimePolicy)
+              setAiRuntimeError('')
+            }
             break
           case 'role-access':
             setRoles(cached as ConfigRoleRecord[])
@@ -423,6 +439,7 @@ export default function ConfigsClient({
       const shouldSkipBackgroundRefresh = (
         cached
         && cacheAgeMs < TAB_BACKGROUND_REFRESH_MS
+        && (tab !== 'ai' || (cachedRuntimePolicy && runtimeCacheAgeMs < TAB_BACKGROUND_REFRESH_MS))
         && tab !== 'org-structure'
         && tab !== 'role-access'
         && !options?.force
@@ -478,7 +495,6 @@ export default function ConfigsClient({
 
         case 'tax':
         case 'approval':
-        case 'ai':
         case 'theme': {
           // 这些 tab 共享 configs 数据 (分页格式)
           const nextConfigs = await loadInflightTabValue<Config[]>(cacheKey, async () => {
@@ -493,6 +509,46 @@ export default function ConfigsClient({
             setConfigs(nextConfigs)
             writeBrowserCache(cacheKey, nextConfigs)
             didLoad = true
+          }
+          break
+        }
+
+        case 'ai': {
+          const [configsResult, runtimeResult] = await Promise.allSettled([
+            loadInflightTabValue<Config[]>(cacheKey, async () => {
+              const configsJson = await fetchJsonOrThrow<{ data?: Config[] }>(
+                '/api/configs',
+                { headers },
+                '配置项加载失败'
+              )
+              return configsJson.data ?? []
+            }),
+            loadInflightTabValue<RuntimePolicy>(runtimeCacheKey, async () => {
+              const runtimeJson = await fetchJsonOrThrow<{ data?: RuntimePolicy }>(
+                '/api/configs/ai-runtime',
+                { headers, cache: 'no-store' },
+                'AI 运行时策略加载失败'
+              )
+              return runtimeJson.data ?? null
+            }),
+          ])
+
+          if (configsResult.status === 'fulfilled' && configsResult.value) {
+            setConfigs(configsResult.value)
+            writeBrowserCache(cacheKey, configsResult.value)
+            didLoad = true
+          } else if (configsResult.status === 'rejected') {
+            throw configsResult.reason
+          }
+
+          if (runtimeResult.status === 'fulfilled' && runtimeResult.value) {
+            setAiRuntimePolicy(runtimeResult.value)
+            setAiRuntimeError('')
+            writeBrowserCache(runtimeCacheKey, runtimeResult.value)
+          } else if (runtimeResult.status === 'rejected') {
+            setAiRuntimeError(runtimeResult.reason instanceof Error
+              ? runtimeResult.reason.message
+              : 'AI 运行时策略加载失败')
           }
           break
         }
@@ -569,6 +625,11 @@ export default function ConfigsClient({
       clearOrgAccessBrowserCache(token)
     } else {
       deleteBrowserCache(scopedCacheKey(token, `configs:${tab}`))
+      if (tab === 'ai') {
+        deleteBrowserCache(aiRuntimeCacheKey(token))
+        setAiRuntimePolicy(null)
+        setAiRuntimeError('')
+      }
     }
 
     loadedTabsRef.current = new Set(
@@ -1419,6 +1480,8 @@ export default function ConfigsClient({
                 onSaveRule={handleSaveRule}
                 onDeleteRule={handleDeleteRule}
                 configs={configs}
+                aiRuntimePolicy={aiRuntimePolicy}
+                aiRuntimeError={aiRuntimeError}
                 onNewConfig={openNewConfig}
                 onEditConfig={openEditConfig}
                 onPublishConfig={handlePublishConfig}

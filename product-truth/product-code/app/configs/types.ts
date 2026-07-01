@@ -44,6 +44,47 @@ export interface ConfigsInitialData {
   rules?: ContractPolicyRule[]
   roles?: unknown[]
   configs?: Config[]
+  aiRuntimePolicy?: RuntimePolicy | null
+}
+
+export type AIRuntimeState =
+  | 'builtin_ready'
+  | 'missing_base_url'
+  | 'missing_credential'
+  | 'unreachable_in_vercel'
+  | 'local_health_ok'
+  | 'local_health_failed'
+  | 'ready_to_call'
+
+export interface RuntimeProvider {
+  profile: string
+  provider_kind: 'openai_compatible' | 'builtin'
+  provider: string
+  model: string
+  level: number
+  timeout_ms: number
+  stages: string[]
+  role: 'primary' | 'fallback'
+  capabilities: string[]
+  health_check_required: boolean
+  base_url_configured: boolean
+  credential_state: 'configured' | 'missing' | 'not_required'
+  runtime_state: AIRuntimeState
+  runtime_reason: string
+  runtime_action: string | null
+  runtime_environment: string
+  local_endpoint: boolean
+}
+
+export interface RuntimePolicy {
+  id: string
+  key: string
+  version: number
+  status: string
+  is_current: boolean
+  timeout_ms: number
+  provider_chain: RuntimeProvider[]
+  source_config_ids: string[]
 }
 
 export interface ScopedRoleAssignment {

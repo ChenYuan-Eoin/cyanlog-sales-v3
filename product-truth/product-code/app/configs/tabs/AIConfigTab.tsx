@@ -1,56 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import ConfigStatusBadge from './ConfigStatusBadge'
-import type { Config } from '../types'
+import type { Config, RuntimePolicy, RuntimeProvider } from '../types'
 
 interface AIConfigTabProps {
   configs: Config[]
+  runtimePolicy: RuntimePolicy | null
+  runtimeError: string
   onNew: () => void
   onEdit: (config: Config) => void
   onPublish: (id: string) => void
   onDelete: (id: string) => void
-}
-
-type RuntimeProvider = {
-  profile: string
-  provider_kind: 'openai_compatible' | 'builtin'
-  provider: string
-  model: string
-  level: number
-  timeout_ms: number
-  stages: string[]
-  role: 'primary' | 'fallback'
-  capabilities: string[]
-  health_check_required: boolean
-  base_url_configured: boolean
-  credential_state: 'configured' | 'missing' | 'not_required'
-  runtime_state:
-    | 'builtin_ready'
-    | 'missing_base_url'
-    | 'missing_credential'
-    | 'unreachable_in_vercel'
-    | 'local_health_ok'
-    | 'local_health_failed'
-    | 'ready_to_call'
-  runtime_reason: string
-  runtime_action: string | null
-  runtime_environment: string
-  local_endpoint: boolean
-}
-
-type RuntimePolicy = {
-  id: string
-  key: string
-  version: number
-  status: string
-  is_current: boolean
-  timeout_ms: number
-  provider_chain: RuntimeProvider[]
-  source_config_ids: string[]
 }
 
 function runtimeStateLabel(state: RuntimeProvider['runtime_state']) {
@@ -76,40 +39,7 @@ function runtimeStateClass(state: RuntimeProvider['runtime_state']) {
   return 'border-amber-200 bg-amber-50 text-amber-800'
 }
 
-export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelete }: AIConfigTabProps) {
-  const [runtimePolicy, setRuntimePolicy] = useState<RuntimePolicy | null>(null)
-  const [runtimeError, setRuntimeError] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadRuntimePolicy() {
-      setRuntimeError('')
-      try {
-        const token = localStorage.getItem('token')
-        const response = await fetch('/api/configs/ai-runtime', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          cache: 'no-store',
-        })
-        const payload = await response.json().catch(() => ({}))
-        if (!response.ok) {
-          throw new Error(typeof payload.error === 'string' ? payload.error : '运行时策略加载失败')
-        }
-        if (!cancelled) {
-          setRuntimePolicy(payload.data as RuntimePolicy)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setRuntimeError(error instanceof Error ? error.message : '运行时策略加载失败')
-        }
-      }
-    }
-
-    void loadRuntimePolicy()
-    return () => {
-      cancelled = true
-    }
-  }, [configs.length])
-
+export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNew, onEdit, onPublish, onDelete }: AIConfigTabProps) {
   const externalProviders = runtimePolicy?.provider_chain.filter((provider) => provider.provider_kind !== 'builtin') ?? []
   const hasExternalProvider = externalProviders.length > 0
   const hasCallableExternalProvider = externalProviders.some((provider) => (
