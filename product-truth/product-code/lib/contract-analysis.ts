@@ -1,9 +1,10 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOrgIdForUser } from '@/lib/configs/runtime'
 import { executeRules } from '@/lib/rules/engine'
+import { reviewWithFailoverSync, type SyncReviewResult } from '@/lib/ai/failover'
 import { logError } from '@/lib/error-log'
 import { buildCommentPatchesFromRiskCards } from '@/lib/contracts/comment-patch'
-import { getOrCompilePublishedContractSkillBundle } from '@/lib/contracts/skill-bundle'
+import { getOrCompilePublishedContractSkillBundle, type ContractSkillBundle } from '@/lib/contracts/skill-bundle'
 import { recordModelInvocation, selectReviewExecutionProvider } from '@/lib/contracts/model-policy'
 
 export interface ContractAnalysisJobRecord {
@@ -660,6 +661,165 @@ function generateEffectivenessAnalysis(c: ComplianceCheck, r: RiskSummary): stri
   return lines.join('\n')
 }
 
+type AnalysisRisk = ContractAnalysisResult['risks'][number]
+
+function normalizeRiskText(value: string | undefined): string {
+  return (value || '')
+    .replace(/\s+/g, '')
+    .replace(/[，。；：、,.!?！？;:]/g, '')
+    .toLowerCase()
+    .slice(0, 120)
+}
+
+function riskFingerprint(risk: AnalysisRisk): string {
+  if (risk.ruleCode) return `rule:${risk.ruleCode}`
+  return [
+    normalizeRiskText(risk.title),
+    normalizeRiskText(risk.description),
+  ].filter(Boolean).join('|')
+}
+
+function mergeReviewRisks(
+  ruleRisks: AnalysisRisk[],
+  semanticRisks: AnalysisRisk[]
+): { risks: AnalysisRisk[]; added: number } {
+  const seen = new Set<string>()
+  const merged: AnalysisRisk[] = []
+
+  for (const risk of ruleRisks) {
+    const key = riskFingerprint(risk)
+    if (key) seen.add(key)
+    merged.push(risk)
+  }
+
+  let added = 0
+  for (const risk of semanticRisks) {
+    const key = riskFingerprint(risk)
+    if (key && seen.has(key)) continue
+    if (key) seen.add(key)
+    merged.push(risk)
+    added += 1
+  }
+
+  return { risks: merged, added }
+}
+
+function shouldUseSemanticRisks(result: SyncReviewResult): boolean {
+  return result.providerKind === 'openai_compatible' && !result.degraded
+}
+
+function buildCombinedSummary(ruleSummary: string, semanticResult: SyncReviewResult | null): string {
+  if (!semanticResult) return ruleSummary
+  if (!shouldUseSemanticRisks(semanticResult)) {
+    return `${ruleSummary}\n\n语义审核：外部模型未完成正式调用，已按规则引擎兜底；请查看模型调用记录确认降级原因。`
+  }
+  return `${ruleSummary}\n\n语义审核（${semanticResult.provider}/${semanticResult.model}）：${semanticResult.summary}`
+}
+
+async function runSemanticReviewStage(input: {
+  text: string
+  orgId: string
+  skillBundle: ContractSkillBundle
+  contractId: string
+  reviewId?: string
+  requestedBy?: string | null
+  reviewTrigger?: string
+}): Promise<{
+  result: SyncReviewResult | null
+  invocationId: string | null
+  addedRiskCount: number
+  risks: AnalysisRisk[]
+}> {
+  const semanticProvider = selectReviewExecutionProvider(input.skillBundle.model_policy, 'semantic_review')
+  const startedAt = performance.now()
+
+  try {
+    const semanticResult = await reviewWithFailoverSync(input.text, {
+      orgId: input.orgId,
+      preferredProvider: semanticProvider.profile,
+    }, 1)
+    const latencyMs = performance.now() - startedAt
+    const usableRisks = shouldUseSemanticRisks(semanticResult) ? semanticResult.risks : []
+
+    const invocation = await recordModelInvocation({
+      orgId: input.orgId,
+      contractId: input.contractId,
+      reviewId: input.reviewId || null,
+      skillBundleId: input.skillBundle.id,
+      modelPolicyId: input.skillBundle.model_policy_id,
+      provider: semanticResult.provider,
+      model: semanticResult.model,
+      phase: 'semantic_review',
+      status: semanticResult.degraded ? 'degraded' : 'completed',
+      degraded: semanticResult.degraded,
+      fallbackReason: semanticResult.degraded
+        ? semanticResult.providerKind === 'builtin'
+          ? 'semantic_review_degraded_to_rule_engine'
+          : 'semantic_review_external_model_unavailable'
+        : null,
+      latencyMs,
+      requestMeta: {
+        phase: 'semantic_contract_review',
+        model_policy_stage: 'semantic_review',
+        intended_provider_profile: semanticProvider.profile,
+        intended_provider_model: semanticProvider.model,
+        review_trigger: input.reviewTrigger || 'initial_generate',
+      },
+      responseMeta: {
+        provider_kind: semanticResult.providerKind,
+        risk_count: semanticResult.risks.length,
+        usable_risk_count: usableRisks.length,
+        summary_available: Boolean(semanticResult.summary),
+      },
+    })
+
+    return {
+      result: semanticResult,
+      invocationId: invocation.id,
+      addedRiskCount: usableRisks.length,
+      risks: usableRisks,
+    }
+  } catch (error) {
+    const latencyMs = performance.now() - startedAt
+    const invocation = await recordModelInvocation({
+      orgId: input.orgId,
+      contractId: input.contractId,
+      reviewId: input.reviewId || null,
+      skillBundleId: input.skillBundle.id,
+      modelPolicyId: input.skillBundle.model_policy_id,
+      provider: semanticProvider.provider,
+      model: semanticProvider.model,
+      phase: 'semantic_review',
+      status: 'failed',
+      degraded: true,
+      fallbackReason: 'semantic_review_failed_before_rule_merge',
+      latencyMs,
+      requestMeta: {
+        phase: 'semantic_contract_review',
+        model_policy_stage: 'semantic_review',
+        intended_provider_profile: semanticProvider.profile,
+        review_trigger: input.reviewTrigger || 'initial_generate',
+      },
+      responseMeta: {},
+      errorMessage: formatAnalysisError(error),
+    })
+
+    return {
+      result: {
+        risks: [],
+        summary: '语义审核执行失败，已保留结构化规则审核结果。',
+        provider: semanticProvider.provider,
+        model: semanticProvider.model,
+        providerKind: semanticProvider.provider_kind,
+        degraded: true,
+      },
+      invocationId: invocation.id,
+      addedRiskCount: 0,
+      risks: [],
+    }
+  }
+}
+
 export async function runStructuredAnalysis(
   contractId: string,
   options?: ReviewOptions
@@ -671,7 +831,7 @@ export async function runStructuredAnalysis(
         requestedBy: options?.requestedBy,
       })
     : null
-  const executionProvider = skillBundle
+  const structuredProvider = skillBundle
     ? selectReviewExecutionProvider(skillBundle.model_policy, 'structured_rules')
     : null
 
@@ -679,13 +839,31 @@ export async function runStructuredAnalysis(
   const ruleResult = await executeRules(context.text, context.orgId)
   const analysisLatencyMs = performance.now() - analysisStartedAt
 
+  let semanticStage: Awaited<ReturnType<typeof runSemanticReviewStage>> | null = null
+  if (skillBundle && context.orgId) {
+    semanticStage = await runSemanticReviewStage({
+      text: context.text,
+      orgId: context.orgId,
+      skillBundle,
+      contractId,
+      reviewId: options?.reviewId,
+      requestedBy: options?.requestedBy,
+      reviewTrigger: options?.reviewTrigger,
+    })
+  }
+
+  const merged = mergeReviewRisks(ruleResult.risks, semanticStage?.risks || [])
+  const structuredDegraded = ruleResult.appliedRules === 0
+
   const result: ContractAnalysisResult = {
-    risks: ruleResult.risks,
-    summary: ruleResult.summary,
+    risks: merged.risks,
+    summary: buildCombinedSummary(ruleResult.summary, semanticStage?.result || null),
     appliedRules: ruleResult.appliedRules,
     matchedRules: ruleResult.matchedRules,
-    provider: executionProvider?.provider || 'rule-engine',
-    degraded: ruleResult.appliedRules === 0,
+    provider: semanticStage?.result && shouldUseSemanticRisks(semanticStage.result)
+      ? `${structuredProvider?.provider || 'rule-engine'}+${semanticStage.result.provider}`
+      : structuredProvider?.provider || 'rule-engine',
+    degraded: structuredDegraded || Boolean(semanticStage?.result?.degraded),
   }
 
   let runtime: ReviewRuntimeBinding | undefined
@@ -696,11 +874,12 @@ export async function runStructuredAnalysis(
       reviewId: options?.reviewId || null,
       skillBundleId: skillBundle.id,
       modelPolicyId: skillBundle.model_policy_id,
-      provider: executionProvider?.provider || 'rule-engine',
-      model: executionProvider?.model || 'rule-engine',
-      status: result.degraded ? 'degraded' : 'completed',
-      degraded: result.degraded,
-      fallbackReason: executionProvider?.provider_kind === 'builtin'
+      provider: structuredProvider?.provider || 'rule-engine',
+      model: structuredProvider?.model || 'rule-engine',
+      phase: 'structured_rules',
+      status: structuredDegraded ? 'degraded' : 'completed',
+      degraded: structuredDegraded,
+      fallbackReason: structuredProvider?.provider_kind === 'builtin'
         ? 'rule_engine_selected_by_model_policy'
         : null,
       latencyMs: analysisLatencyMs,
@@ -714,7 +893,9 @@ export async function runStructuredAnalysis(
       responseMeta: {
         applied_rules: result.appliedRules,
         matched_rules: result.matchedRules,
-        risk_count: result.risks.length,
+        risk_count: ruleResult.risks.length,
+        semantic_risk_count: semanticStage?.result?.risks.length || 0,
+        semantic_merged_risk_count: merged.added,
       },
     })
 
@@ -722,9 +903,12 @@ export async function runStructuredAnalysis(
       skill_bundle_id: skillBundle.id,
       model_policy_id: skillBundle.model_policy_id,
       rule_snapshot_ids: skillBundle.rule_snapshot_ids,
-      model_invocation_ids: [invocation.id],
-      provider: executionProvider?.provider || 'rule-engine',
-      model: executionProvider?.model || 'rule-engine',
+      model_invocation_ids: [invocation.id, semanticStage?.invocationId]
+        .filter((id): id is string => Boolean(id)),
+      provider: result.provider,
+      model: semanticStage?.result && shouldUseSemanticRisks(semanticStage.result)
+        ? semanticStage.result.model
+        : structuredProvider?.model || 'rule-engine',
       review_trigger: options?.reviewTrigger,
     }
   }

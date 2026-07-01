@@ -13,6 +13,8 @@ function makeResult(
       risks,
       summary: `summary from ${provider}`,
       provider,
+      model: `${provider}-model`,
+      providerKind: provider === 'rule-engine' ? 'builtin' : 'openai_compatible',
       degraded,
     },
   }

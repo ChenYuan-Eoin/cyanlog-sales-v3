@@ -77,6 +77,7 @@ export type ReviewEvidenceModelInvocation = {
   id: string
   provider?: string | null
   model?: string | null
+  phase?: string | null
   status?: string | null
   degraded?: boolean | null
   fallback_reason?: string | null
@@ -233,6 +234,15 @@ function firstProviderFromPolicy(modelPolicy: ReviewEvidenceModelPolicy): { prov
   }
 }
 
+function representativeInvocation(
+  modelInvocations: ReviewEvidenceModelInvocation[]
+): ReviewEvidenceModelInvocation | null {
+  return modelInvocations.find((invocation) => invocation.phase === 'semantic_review')
+    || modelInvocations.find((invocation) => invocation.degraded || invocation.status === 'failed')
+    || modelInvocations[0]
+    || null
+}
+
 function evidenceStatus(
   risks: ReviewEvidenceRisk[],
   refs: RuleSnapshotRef[]
@@ -277,7 +287,7 @@ export function buildReviewRunEvidence(input: {
 
   const boundSnapshotIds = latestReview.rule_snapshot_ids || skillBundle?.rule_snapshot_ids || null
   const refs = filterRefsByBoundSnapshots(buildSnapshotRefs(rules, snapshots), boundSnapshotIds)
-  const invocation = modelInvocations[0] || null
+  const invocation = representativeInvocation(modelInvocations)
   const modelInvocationIds = latestReview.model_invocation_ids?.length
     ? latestReview.model_invocation_ids
     : modelInvocations.map((item) => item.id)
@@ -309,7 +319,13 @@ export function buildReviewRunEvidence(input: {
       provider,
       source: modelPolicy ? 'model_policies' : (latestJob?.provider ? 'analysis_job.provider' : 'fallback'),
       model: invocation?.model || policyProvider?.model || null,
-      degraded: Boolean(invocation?.degraded ?? latestJob?.degraded),
+      degraded: Boolean(
+        invocation?.degraded
+        ?? (
+          modelInvocations.some((item) => item.degraded || item.status === 'failed')
+          || latestJob?.degraded
+        )
+      ),
       status: invocation?.status || latestJob?.status || modelPolicy?.status || null,
       last_error: invocation?.error_message || latestJob?.last_error || null,
       invocation_id: invocation?.id || null,

@@ -167,4 +167,72 @@ describe('buildReviewRunEvidence', () => {
       },
     })
   })
+
+  it('surfaces semantic review degradation when structured rules also completed', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-real',
+        status: 'COMPLETED',
+        skill_bundle_id: 'skill-1',
+        model_policy_id: 'policy-1',
+        rule_snapshot_ids: ['snapshot-1'],
+        model_invocation_ids: ['invocation-structured', 'invocation-semantic'],
+      },
+      latestJob: { provider: 'rule-engine', degraded: true, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
+      rules: [{ id: 'rule-1', code: 'R001', version: 2, engine_type: 'structured' }],
+      snapshots: [{
+        id: 'snapshot-1',
+        rule_id: 'rule-1',
+        version: 2,
+        status: 'published',
+        released_at: '2026-07-01T01:00:00.000Z',
+      }],
+      skillBundle: {
+        id: 'skill-1',
+        version: 3,
+        rule_snapshot_ids: ['snapshot-1'],
+        model_policy_id: 'policy-1',
+        status: 'published',
+      },
+      modelPolicy: {
+        id: 'policy-1',
+        version: 4,
+        status: 'published',
+        provider_chain: [{
+          provider: 'openai-compatible',
+          provider_kind: 'openai_compatible',
+          model: 'gpt-review',
+          profile: 'sales_cloud',
+        }],
+      },
+      modelInvocations: [{
+        id: 'invocation-structured',
+        provider: 'rule-engine',
+        model: 'rule-engine',
+        phase: 'structured_rules',
+        status: 'completed',
+        degraded: false,
+        fallback_reason: 'rule_engine_selected_by_model_policy',
+      }, {
+        id: 'invocation-semantic',
+        provider: 'AI_LEVEL_3',
+        model: 'rule-engine',
+        phase: 'semantic_review',
+        status: 'degraded',
+        degraded: true,
+        fallback_reason: 'semantic_review_degraded_to_rule_engine',
+      }],
+    })
+
+    expect(evidence?.model_policy).toMatchObject({
+      provider: 'AI_LEVEL_3',
+      model: 'rule-engine',
+      degraded: true,
+      status: 'degraded',
+      invocation_id: 'invocation-semantic',
+      fallback_reason: 'semantic_review_degraded_to_rule_engine',
+    })
+  })
 })

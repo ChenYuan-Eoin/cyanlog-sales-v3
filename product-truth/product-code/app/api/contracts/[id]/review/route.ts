@@ -411,7 +411,7 @@ export async function GET(
     if (latestReview?.model_invocation_ids?.length) {
       const { data, error } = await supabaseAdmin
         .from('model_invocations')
-        .select('id, provider, model, status, degraded, fallback_reason, error_message, created_at')
+        .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, created_at')
         .in('id', latestReview.model_invocation_ids)
         .order('created_at', { ascending: false })
 
@@ -422,7 +422,7 @@ export async function GET(
     } else if (latestReview?.id) {
       const { data, error } = await supabaseAdmin
         .from('model_invocations')
-        .select('id, provider, model, status, degraded, fallback_reason, error_message, created_at')
+        .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, created_at')
         .eq('review_id', latestReview.id)
         .order('created_at', { ascending: false })
         .limit(5)

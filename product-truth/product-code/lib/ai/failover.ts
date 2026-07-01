@@ -34,6 +34,8 @@ export interface SyncReviewResult {
   }>
   summary: string
   provider: string
+  model: string
+  providerKind: 'openai_compatible' | 'builtin' | 'manual'
   degraded: boolean
 }
 
@@ -339,7 +341,13 @@ async function withTimeout<T>(
 export async function reviewWithFailover(
   contractText: string,
   options?: string | ReviewOptions
-): Promise<{ stream: ReadableStream; provider: string; degraded: boolean }> {
+): Promise<{
+  stream: ReadableStream
+  provider: string
+  model: string
+  providerKind: AIProvider['providerKind'] | 'manual'
+  degraded: boolean
+}> {
   const { preferredProvider, orgId } = normalizeOptions(options)
   const errors: string[] = []
   const providers = buildProviderChain(await loadProviders(orgId), contractText, preferredProvider)
@@ -360,6 +368,8 @@ export async function reviewWithFailover(
       return {
         stream,
         provider: provider.id,
+        model: provider.config.model,
+        providerKind: provider.providerKind,
         degraded: provider.providerKind === 'builtin',
       }
     } catch (error) {
@@ -391,6 +401,8 @@ export async function reviewWithFailover(
   return {
     stream: fallbackStream,
     provider: 'manual-fallback',
+    model: 'manual-review',
+    providerKind: 'manual',
     degraded: true,
   }
 }
@@ -410,7 +422,7 @@ export async function reviewWithFailoverSync(
       ? undefined
       : normalizedOptions.preferredProvider
 
-    const { stream, provider, degraded } = await reviewWithFailover(contractText, {
+    const { stream, provider, model, providerKind, degraded } = await reviewWithFailover(contractText, {
       ...normalizedOptions,
       preferredProvider: effectivePreferredProvider,
     })
@@ -437,6 +449,8 @@ export async function reviewWithFailoverSync(
         risks: validation.data.risks,
         summary: validation.data.summary,
         provider,
+        model,
+        providerKind,
         degraded,
       }
     }
@@ -456,6 +470,8 @@ export async function reviewWithFailoverSync(
     }],
     summary: `AI 审核输出格式异常，已降级到人工审核建议（已尝试 ${attemptedProviders.size} 个 provider）`,
     provider: 'manual-fallback',
+    model: 'manual-review',
+    providerKind: 'manual',
     degraded: true,
   }
 }
