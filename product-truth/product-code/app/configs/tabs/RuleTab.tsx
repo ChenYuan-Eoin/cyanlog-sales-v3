@@ -157,73 +157,47 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     )
   }
 
-  if (activeTab === 'list') {
-    return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-1">
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)_300px]">
+      <Card className="min-w-0">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">合同审核规则 ({rules.length})</CardTitle>
+          <Button size="sm" onClick={handleNewRule}>
+            <PlusIcon className="h-4 w-4 mr-1" />
+            新建
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {sortedRules.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-slate-500">暂无规则</p>
+              <p className="mt-1 text-sm text-slate-400">创建后将进入 F006 SkillBundle 编译输入</p>
+            </div>
+          ) : (
+            <div className="max-h-[720px] space-y-2 overflow-y-auto pr-1">
+              {sortedRules.map(renderRuleButton)}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="min-w-0 space-y-4">
+        {activeTab === 'test' ? (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">合同审核规则 ({rules.length})</CardTitle>
-              <Button size="sm" onClick={handleNewRule}>
-                <PlusIcon className="h-4 w-4 mr-1" />
-                新建
+              <CardTitle className="text-base">规则测试：{selectedRule?.name || '全部规则'}</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setActiveTab('design')}>
+                返回设计
               </Button>
             </CardHeader>
             <CardContent>
-              {sortedRules.length === 0 ? (
-                <div className="py-8 text-center">
-                  <p className="text-slate-500">暂无规则</p>
-                  <p className="mt-1 text-sm text-slate-400">创建后将立即作为合同审核控制面规则生效</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {sortedRules.map(renderRuleButton)}
-                </div>
-              )}
+              <RuleTestSandbox ruleId={selectedRule?.id} />
             </CardContent>
           </Card>
-        </div>
-
-        <div className="lg:col-span-2">
-          <Card className="h-full">
-            <CardContent className="grid min-h-[360px] place-items-center py-12 text-center">
-              <div>
-                <p className="text-slate-600">选择左侧规则查看详情，或新建付款比例、账期、条款语义规则。</p>
-                <Button className="mt-4" onClick={handleNewRule}>
-                  <PlusIcon className="h-4 w-4 mr-1" />
-                  新建规则
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  if (activeTab === 'design') {
-    return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-1">
+        ) : activeTab === 'design' ? (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">规则列表</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setActiveTab('list')}>
-                返回
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {sortedRules.map(renderRuleButton)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-4 lg:col-span-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <CardTitle className="min-w-0 truncate text-base">
                 {selectedRule ? `编辑规则：${selectedRule.code} ${selectedRule.name}` : '新建合同审核规则'}
               </CardTitle>
               <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
@@ -240,39 +214,94 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               />
             </CardContent>
           </Card>
-        </div>
+        ) : (
+          <Card className="h-full">
+            <CardContent className="grid min-h-[420px] place-items-center py-12 text-center">
+              <div>
+                <p className="text-slate-600">选择左侧规则查看详情，或新建付款比例、账期、条款语义规则。</p>
+                <Button className="mt-4" onClick={handleNewRule}>
+                  <PlusIcon className="h-4 w-4 mr-1" />
+                  新建规则
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
-    )
-  }
 
-  return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <div className="space-y-4 lg:col-span-1">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">规则列表</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setActiveTab('design')}>
-              返回设计
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {sortedRules.map(renderRuleButton)}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="text-base">运行摘要</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('list')}
+              className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'list' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+            >
+              浏览
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('design')}
+              className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'design' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+            >
+              设计
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('test')}
+              className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'test' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+            >
+              测试
+            </button>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-medium text-slate-500">规则资产</div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">{rules.length}</div>
+                <div className="text-[11px] text-slate-500">总数</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-slate-900">{rules.filter((rule) => rule.is_active).length}</div>
+                <div className="text-[11px] text-slate-500">启用</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-slate-900">{rules.filter((rule) => rule.engine_type === 'hybrid').length}</div>
+                <div className="text-[11px] text-slate-500">混合</div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      <div className="space-y-4 lg:col-span-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">测试规则：{selectedRule?.name || '全部规则'}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RuleTestSandbox ruleId={selectedRule?.id} />
-          </CardContent>
-        </Card>
-      </div>
+          {selectedRule ? (
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-medium text-slate-500">当前规则</div>
+                <div className="mt-1 font-medium text-slate-900">{selectedRule.code} · {selectedRule.name}</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{categoryMap[selectedRule.category]?.label || selectedRule.category}</Badge>
+                <Badge variant="outline">{engineMap[selectedRule.engine_type] || selectedRule.engine_type}</Badge>
+                <Badge variant={selectedRule.is_active ? 'default' : 'secondary'}>{selectedRule.is_active ? '生效' : '停用'}</Badge>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
+                {formatThreshold(selectedRule)}
+              </div>
+              <Button className="w-full" variant="outline" onClick={() => setActiveTab('test')}>
+                <PlayIcon className="h-4 w-4 mr-1" />
+                测试当前规则
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-500">
+              选择规则后显示 Skill 转译摘要
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

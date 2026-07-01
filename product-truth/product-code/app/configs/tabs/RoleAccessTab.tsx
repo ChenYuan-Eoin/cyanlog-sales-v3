@@ -103,9 +103,9 @@ export default function RoleAccessTab({
   }, [rolesWithStats, selectedRole, selectedRoleId])
 
   return (
-    <div className="flex flex-col gap-6 2xl:flex-row">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
       {/* 左侧角色列表 */}
-      <div className="w-full shrink-0 2xl:w-[280px]">
+      <div className="min-w-0">
         <div className="rounded-lg border bg-white">
           <div className="border-b px-4 py-3">
             <h3 className="font-medium text-slate-900">角色列表</h3>
@@ -170,8 +170,8 @@ export default function RoleAccessTab({
         </div>
       </div>
 
-      {/* 右侧角色详情 */}
-      <div className="flex-1 min-w-0 overflow-hidden">
+      {/* 中间角色详情 */}
+      <div className="min-w-0 overflow-hidden">
         {selectedRole ? (
           <RoleDetailPanel
             role={selectedRole}
@@ -189,6 +189,62 @@ export default function RoleAccessTab({
             <p className="mt-2 text-slate-500">从左侧列表选择一个角色查看详情</p>
           </div>
         )}
+      </div>
+
+      <div className="min-w-0 space-y-4">
+        <div className="rounded-lg border bg-white p-4">
+          <h3 className="font-medium text-slate-900">权限摘要</h3>
+          {selectedRole ? (
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">角色编码</span>
+                <span className="font-mono text-xs text-slate-700">{selectedRole.code}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">直接成员</span>
+                <span className="font-semibold text-slate-900">{selectedRole.memberCount}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">权限点</span>
+                <span className="font-semibold text-slate-900">
+                  {selectedRole.isSuperAdmin ? '全部' : (selectedRole.permissions?.length ?? 0)}
+                </span>
+              </div>
+              <div className="rounded-lg border border-slate-200 px-3 py-2 text-xs leading-5 text-slate-500">
+                {selectedRole.description || '当前角色暂无描述。成员分配和权限设置会影响合同审核、配置中心和组织管理入口。'}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
+              请选择角色
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border bg-white p-4">
+          <h3 className="font-medium text-slate-900">组织作用域</h3>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-slate-50 px-2 py-3">
+              <div className="text-lg font-semibold text-slate-900">{departments.length}</div>
+              <div className="mt-1 text-[11px] text-slate-500">部门</div>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-2 py-3">
+              <div className="text-lg font-semibold text-slate-900">{users.length}</div>
+              <div className="mt-1 text-[11px] text-slate-500">成员</div>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-2 py-3">
+              <div className="text-lg font-semibold text-slate-900">{spaces.length}</div>
+              <div className="mt-1 text-[11px] text-slate-500">空间</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onRefresh()}
+            className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            刷新组织与角色
+          </button>
+        </div>
       </div>
     </div>
   )

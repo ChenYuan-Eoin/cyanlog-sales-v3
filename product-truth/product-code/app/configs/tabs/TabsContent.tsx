@@ -34,13 +34,10 @@ const OrgStructureTab = dynamic(() => import('./OrgStructureTab'), {
 })
 const RoleAccessTab = dynamic(() => import('./RoleAccessTab'), {
   loading: () => (
-    <div className="flex gap-6">
-      <div className="w-[280px]">
-        <CardSkeleton />
-      </div>
-      <div className="flex-1">
-        <CardSkeleton />
-      </div>
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
+      <CardSkeleton />
+      <CardSkeleton />
+      <CardSkeleton />
     </div>
   ),
 })
@@ -130,25 +127,19 @@ export default function TabsContent({
         return (
           <div className="space-y-4">
             <StatsSkeleton count={3} />
-            <div className="flex gap-6">
-              <div className="w-[260px]">
-                <CardSkeleton />
-              </div>
-              <div className="flex-1">
-                <CardSkeleton />
-              </div>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
             </div>
           </div>
         )
       case 'role-access':
         return (
-          <div className="flex gap-6">
-            <div className="w-[280px]">
-              <CardSkeleton />
-            </div>
-            <div className="flex-1">
-              <CardSkeleton />
-            </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
           </div>
         )
       default:

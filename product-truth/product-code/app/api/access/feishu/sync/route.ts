@@ -65,7 +65,7 @@ async function fetchFeishuDepartments(token: string) {
     const url = new URL('https://open.feishu.cn/open-apis/contact/v3/departments')
     url.searchParams.set('department_id_type', 'department_id')
     url.searchParams.set('user_id_type', 'user_id')
-    url.searchParams.set('page_size', '100')
+    url.searchParams.set('page_size', '50')
     if (pageToken) {
       url.searchParams.set('page_token', pageToken)
     }

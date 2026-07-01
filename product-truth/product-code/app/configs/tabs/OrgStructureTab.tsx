@@ -719,72 +719,8 @@ export default function OrgStructureTab({
           <StatCard icon={<UsersIcon size={18} />} label="成员" value={stats.userCount} />
           <StatCard icon={<BuildingIcon size={18} />} label="销售空间" value={stats.spaceCount} />
         </div>
-        <div className="flex gap-2">
-          <DepartmentFormDialog
-            departments={departments}
-            users={users}
-            onSubmit={async (values) => {
-              const res = await fetch('/api/admin/departments', {
-                method: 'POST',
-                headers: buildAuthHeaders(true),
-                body: JSON.stringify({
-                  name: values.name,
-                  code: values.code,
-                  parent_id: values.parent_id,
-                  leader_id: values.leader_id,
-                }),
-              })
-              const result = await res.json()
-              if (!res.ok) {
-                error(result.error || '创建部门失败')
-                throw new Error(result.error)
-              }
-              success('部门创建成功')
-              await onRefresh?.()
-            }}
-            trigger={
-              <Button variant="outline" size="sm">
-                <PlusIcon className="h-4 w-4 mr-1" />
-                添加部门
-              </Button>
-            }
-          />
-          <UserFormDialog
-            departments={departments}
-            roles={orgSummary?.roles ?? []}
-            onSubmit={async (values) => {
-              const res = await fetch('/api/admin/users', {
-                method: 'POST',
-                headers: buildAuthHeaders(true),
-                body: JSON.stringify({ ...values, status: 'active' }),
-              })
-              const result = await res.json()
-              if (!res.ok) {
-                error(result.error || '创建用户失败')
-                throw new Error(result.error)
-              }
-              const tempPassword = result.data?.tempPassword
-              success(tempPassword ? `用户创建成功，临时密码：${tempPassword}` : '用户创建成功')
-              await onRefresh?.()
-            }}
-            trigger={
-              <Button variant="outline" size="sm">
-                <UserPlusIcon className="h-4 w-4 mr-1" />
-                添加成员
-              </Button>
-            }
-          />
-          <Button
-            onClick={onFeishuSync}
-            disabled={feishuSyncing}
-            variant="outline"
-            size="sm"
-            title="从飞书通讯录同步部门结构；当前 MVP 不导入成员"
-            aria-busy={feishuSyncing}
-          >
-            <RefreshCwIcon className={`mr-1 h-4 w-4 ${feishuSyncing ? 'animate-spin' : ''}`} />
-            {feishuSyncing ? '同步中...' : '同步飞书部门'}
-          </Button>
+        <div className="text-sm text-slate-500">
+          {selectedDept ? `当前筛选：${selectedDept.name}` : '当前筛选：全部成员'}
         </div>
       </div>
 
@@ -807,22 +743,21 @@ export default function OrgStructureTab({
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-medium">暂无组织架构数据</p>
           <p className="mt-1 text-amber-700">
-            当前组织没有可显示的部门或成员。请先添加部门/成员，或使用上方同步入口导入部门结构。
+            当前组织没有可显示的部门或成员。请先添加部门/成员，或使用右侧同步入口导入部门结构。
           </p>
         </div>
       )}
 
-      {/* 左右分栏布局 */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      {/* 三栏布局 */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_300px]">
         {/* 左侧部门树 */}
-        <div className="w-full lg:w-[260px] shrink-0">
+        <div className="min-w-0">
           <div className="rounded-lg border bg-white">
             <div className="border-b px-4 py-3">
               <h3 className="font-medium text-slate-900">部门结构</h3>
               <p className="text-xs text-slate-500 mt-1">点击选择部门</p>
             </div>
-            <div className="p-2 max-h-[600px] overflow-y-auto">
-              {/* 全部成员选项 */}
+            <div className="p-2 max-h-[680px] overflow-y-auto">
               <button
                 onClick={() => setSelectedDeptId(null)}
                 className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition mb-2 ${
@@ -851,8 +786,8 @@ export default function OrgStructureTab({
           </div>
         </div>
 
-        {/* 右侧成员列表 */}
-        <div className="flex-1 min-w-0">
+        {/* 中间成员列表 */}
+        <div className="min-w-0">
           <div className="rounded-lg border bg-white">
             <div className="border-b px-6 py-4">
               <div className="flex items-center justify-between">
@@ -886,6 +821,97 @@ export default function OrgStructureTab({
                 onAssignRole={setAssigningUser}
                 onRefresh={onRefresh}
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-4">
+          <div className="rounded-lg border bg-white p-4">
+            <h3 className="font-medium text-slate-900">组织操作</h3>
+            <div className="mt-4 grid gap-2">
+          <DepartmentFormDialog
+            departments={departments}
+            users={users}
+            onSubmit={async (values) => {
+              const res = await fetch('/api/admin/departments', {
+                method: 'POST',
+                headers: buildAuthHeaders(true),
+                body: JSON.stringify({
+                  name: values.name,
+                  code: values.code,
+                  parent_id: values.parent_id,
+                  leader_id: values.leader_id,
+                }),
+              })
+              const result = await res.json()
+              if (!res.ok) {
+                error(result.error || '创建部门失败')
+                throw new Error(result.error)
+              }
+              success('部门创建成功')
+              await onRefresh?.()
+            }}
+            trigger={
+              <Button variant="outline" size="sm" className="w-full justify-center">
+                <PlusIcon className="h-4 w-4 mr-1" />
+                添加部门
+              </Button>
+            }
+          />
+          <UserFormDialog
+            departments={departments}
+            roles={orgSummary?.roles ?? []}
+            onSubmit={async (values) => {
+              const res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: buildAuthHeaders(true),
+                body: JSON.stringify({ ...values, status: 'active' }),
+              })
+              const result = await res.json()
+              if (!res.ok) {
+                error(result.error || '创建用户失败')
+                throw new Error(result.error)
+              }
+              const tempPassword = result.data?.tempPassword
+              success(tempPassword ? `用户创建成功，临时密码：${tempPassword}` : '用户创建成功')
+              await onRefresh?.()
+            }}
+            trigger={
+              <Button variant="outline" size="sm" className="w-full justify-center">
+                <UserPlusIcon className="h-4 w-4 mr-1" />
+                添加成员
+              </Button>
+            }
+          />
+          <Button
+            onClick={onFeishuSync}
+            disabled={feishuSyncing}
+            variant="outline"
+            size="sm"
+            title="从飞书通讯录同步部门结构；当前 MVP 不导入成员"
+            aria-busy={feishuSyncing}
+            className="w-full justify-center"
+          >
+            <RefreshCwIcon className={`mr-1 h-4 w-4 ${feishuSyncing ? 'animate-spin' : ''}`} />
+            {feishuSyncing ? '同步中...' : '同步飞书部门'}
+          </Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-white p-4">
+            <h3 className="font-medium text-slate-900">当前上下文</h3>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">部门</span>
+                <span className="font-medium text-slate-900">{selectedDept?.name || '全部成员'}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">筛选成员</span>
+                <span className="font-semibold text-slate-900">{stats.filteredCount}</span>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-500">
+                飞书同步当前只导入部门结构；成员同步需要飞书通讯录权限和成员映射策略，不应静默伪造成员数据。
+              </div>
             </div>
           </div>
         </div>

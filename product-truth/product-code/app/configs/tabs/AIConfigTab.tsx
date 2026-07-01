@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,9 +15,75 @@ interface AIConfigTabProps {
   onDelete: (id: string) => void
 }
 
+type RuntimeProvider = {
+  profile: string
+  provider_kind: 'openai_compatible' | 'builtin'
+  provider: string
+  model: string
+  level: number
+  timeout_ms: number
+  stages: string[]
+  role: 'primary' | 'fallback'
+  capabilities: string[]
+  health_check_required: boolean
+  base_url_configured: boolean
+  credential_state: 'configured' | 'missing' | 'not_required'
+}
+
+type RuntimePolicy = {
+  id: string
+  key: string
+  version: number
+  status: string
+  is_current: boolean
+  timeout_ms: number
+  provider_chain: RuntimeProvider[]
+  source_config_ids: string[]
+}
+
 export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelete }: AIConfigTabProps) {
+  const [runtimePolicy, setRuntimePolicy] = useState<RuntimePolicy | null>(null)
+  const [runtimeError, setRuntimeError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRuntimePolicy() {
+      setRuntimeError('')
+      try {
+        const token = localStorage.getItem('token')
+        const response = await fetch('/api/configs/ai-runtime', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: 'no-store',
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(typeof payload.error === 'string' ? payload.error : '运行时策略加载失败')
+        }
+        if (!cancelled) {
+          setRuntimePolicy(payload.data as RuntimePolicy)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRuntimeError(error instanceof Error ? error.message : '运行时策略加载失败')
+        }
+      }
+    }
+
+    void loadRuntimePolicy()
+    return () => {
+      cancelled = true
+    }
+  }, [configs.length])
+
+  const externalProviders = runtimePolicy?.provider_chain.filter((provider) => provider.provider_kind !== 'builtin') ?? []
+  const hasExternalProvider = externalProviders.length > 0
+  const hasUsableExternalProvider = externalProviders.some((provider) => (
+    provider.base_url_configured && provider.credential_state === 'configured'
+  ))
+
   return (
-    <Card>
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <Card className="min-w-0">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>AI 模型配置（3级降级链）</CardTitle>
         <Button onClick={onNew}>+ 新增模型</Button>
@@ -41,7 +108,9 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
                 <div className="truncate">模型: {config.value?.model as string}</div>
                 <div className="truncate">地址: {(config.value?.base_url as string) || '（内置）'}</div>
                 <div>超时: {(config.value?.timeout_ms as number) / 1000}s</div>
-                {typeof config.value?.api_key === 'string' && config.value.api_key.length > 0 && <div className="font-mono text-slate-400">{config.value.api_key}</div>}
+                <div>
+                  密钥: {typeof config.value?.api_key === 'string' && config.value.api_key.length > 0 ? '已保存' : '未配置'}
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -80,5 +149,101 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
         </div>
       </CardContent>
     </Card>
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle className="text-base">合同审核运行时策略</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        {runtimeError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+            {runtimeError}
+          </div>
+        )}
+
+        {!runtimePolicy && !runtimeError && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-8 text-center text-slate-500">
+            运行时策略加载中
+          </div>
+        )}
+
+        {runtimePolicy && (
+          <>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-medium text-slate-900">{runtimePolicy.key}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    v{runtimePolicy.version} · {runtimePolicy.status} · {runtimePolicy.timeout_ms / 1000}s
+                  </div>
+                </div>
+                <Badge variant={runtimePolicy.is_current ? 'default' : 'secondary'}>
+                  {runtimePolicy.is_current ? '当前' : '历史'}
+                </Badge>
+              </div>
+            </div>
+
+            <div className={`rounded-lg border px-3 py-2 ${
+              hasUsableExternalProvider
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : hasExternalProvider
+                  ? 'border-amber-200 bg-amber-50 text-amber-800'
+                  : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}>
+              {hasUsableExternalProvider
+                ? '外部模型 Provider 与密钥已配置，语义审核可进入正式模型链。'
+                : hasExternalProvider
+                  ? '外部模型 Provider 已发布，但密钥或地址未完整配置；当前不能按正式模型链验收。'
+                  : '当前仅有内置规则引擎兜底；这不是模拟，但语义模型能力尚未配置。'}
+            </div>
+
+            <div className={`rounded-lg border px-3 py-2 ${
+              hasExternalProvider
+                ? hasUsableExternalProvider
+                  ? 'border-slate-200 bg-white text-slate-600'
+                  : 'border-red-200 bg-red-50 text-red-700'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}>
+              {hasExternalProvider
+                ? hasUsableExternalProvider
+                  ? '验收口径：下一步仍需用真实合同触发一次模型调用并记录调用证据。'
+                  : '验收口径：请先在 AI 模型配置中补齐密钥与地址，再进行真实模型调用验收。'
+                : '验收口径：规则引擎可审计，但不能替代大模型审核目标。'}
+            </div>
+
+            <div className="space-y-2">
+              {runtimePolicy.provider_chain.map((provider) => (
+                <div key={`${provider.level}-${provider.profile}-${provider.model}`} className="rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 font-medium text-slate-900">
+                      Level {provider.level} · {provider.profile}
+                    </div>
+                    <Badge variant={provider.role === 'primary' ? 'default' : 'secondary'}>
+                      {provider.role}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 space-y-1 text-xs text-slate-500">
+                    <div className="truncate">{provider.provider_kind} / {provider.model}</div>
+                    <div>
+                      {provider.timeout_ms / 1000}s · {provider.health_check_required ? '需健康检查' : '无需健康检查'} · {
+                        provider.credential_state === 'not_required'
+                          ? '无需密钥'
+                          : provider.credential_state === 'configured'
+                            ? '密钥已配置'
+                            : '密钥缺失'
+                      }
+                    </div>
+                    {provider.provider_kind !== 'builtin' && (
+                      <div>{provider.base_url_configured ? '地址已配置' : '地址缺失'}</div>
+                    )}
+                    <div className="line-clamp-2">阶段: {provider.stages.join(', ')}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+    </div>
   )
 }

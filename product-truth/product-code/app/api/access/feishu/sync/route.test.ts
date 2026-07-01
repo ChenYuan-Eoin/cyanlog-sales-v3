@@ -115,4 +115,33 @@ describe('POST /api/access/feishu/sync', () => {
     expect(body.error).toBe('invalid app')
     consoleError.mockRestore()
   })
+
+  it('请求飞书部门列表时使用不超过上游限制的 page_size', async () => {
+    process.env.FEISHU_APP_ID = 'app-id'
+    process.env.FEISHU_APP_SECRET = 'app-secret'
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        tenant_access_token: 'tenant-token',
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 999,
+        msg: 'department failed',
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await POST(makeRequest())
+
+    const departmentUrl = new URL(String(fetchMock.mock.calls[1][0]))
+    expect(departmentUrl.searchParams.get('page_size')).toBe('50')
+    consoleError.mockRestore()
+  })
 })

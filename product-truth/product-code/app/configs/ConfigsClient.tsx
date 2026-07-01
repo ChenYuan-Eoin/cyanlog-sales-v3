@@ -376,11 +376,11 @@ export default function ConfigsClient({
   useEffect(() => { loadedTabsRef.current = loadedTabs }, [loadedTabs])
 
   // 按需加载指定 tab 的数据
-  const loadTabData = useCallback(async (tab: ConfigTabId) => {
+  const loadTabData = useCallback(async (tab: ConfigTabId, options?: { force?: boolean }) => {
     // 防重复请求：如果已经在加载该 tab，则跳过
-    if (loadingTabRef.current === tab) return
+    if (loadingTabRef.current === tab && !options?.force) return
     // 如果已经加载过，则跳过
-    if (loadedTabsRef.current.has(tab)) return
+    if (loadedTabsRef.current.has(tab) && !options?.force) return
 
     loadingTabRef.current = tab
     setError('')
@@ -388,7 +388,7 @@ export default function ConfigsClient({
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
       const cacheKey = scopedCacheKey(token, `configs:${tab}`)
-      const cachedEntry = readBrowserCacheEntry<unknown>(cacheKey)
+      const cachedEntry = options?.force ? null : readBrowserCacheEntry<unknown>(cacheKey)
       const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
       const cached = cacheAgeMs <= TAB_CACHE_TTL_MS ? cachedEntry?.value : null
       let didLoad = Boolean(cached)
@@ -425,6 +425,7 @@ export default function ConfigsClient({
         && cacheAgeMs < TAB_BACKGROUND_REFRESH_MS
         && tab !== 'org-structure'
         && tab !== 'role-access'
+        && !options?.force
       )
       if (shouldSkipBackgroundRefresh) {
         return
@@ -562,6 +563,25 @@ export default function ConfigsClient({
     }
   }, [])
 
+  const refreshTabData = useCallback(async (tab: ConfigTabId) => {
+    const token = localStorage.getItem('token')
+    if (tab === 'org-structure' || tab === 'role-access') {
+      clearOrgAccessBrowserCache(token)
+    } else {
+      deleteBrowserCache(scopedCacheKey(token, `configs:${tab}`))
+    }
+
+    loadedTabsRef.current = new Set(
+      Array.from(loadedTabsRef.current).filter((loadedTab) => (
+        tab === 'org-structure' || tab === 'role-access'
+          ? loadedTab !== 'org-structure' && loadedTab !== 'role-access'
+          : loadedTab !== tab
+      ))
+    )
+    setLoadedTabs(new Set(loadedTabsRef.current))
+    await loadTabData(tab, { force: true })
+  }, [loadTabData])
+
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
     const tab = searchParams.get('tab')
@@ -603,47 +623,6 @@ export default function ConfigsClient({
       void loadTabData(activeTab)
     }
   }, [activeTab, tabReady, loadTabData])
-
-  // 兼容原有调用：全部加载（供刷新按钮等使用）
-  async function fetchData() {
-    setLoading(true)
-    setError('')
-    try {
-      const token = localStorage.getItem('token')
-      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
-
-      const [rulesRes, configsRes, rolesRes, productsRes, orgRes] = await Promise.all([
-        fetch('/api/contract-policies/rules', { headers }),
-        fetch('/api/configs', { headers }),
-        fetch('/api/roles', { headers }),
-        fetch('/api/products', { headers }),
-        fetch('/api/admin/org', { headers }),
-      ])
-
-      const failedResponse = [rulesRes, configsRes, rolesRes, productsRes, orgRes].find((res) => !res.ok)
-      if (failedResponse) {
-        throw new Error(await readResponseErrorMessage(failedResponse, '配置中心数据刷新失败'))
-      }
-
-      const [rulesJson, configsJson, rolesData, productsJson, orgData] = await Promise.all([
-        rulesRes.json(),
-        configsRes.json(),
-        rolesRes.json(),
-        productsRes.json(),
-        orgRes.json(),
-      ])
-
-      setRules(rulesJson.data ?? [])
-      setConfigs(configsJson.data ?? [])
-      setRoles(rolesData.data?.roles ?? [])
-      setProducts(productsJson.data ?? [])
-      setOrgSummary(orgData)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '网络错误')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const refreshOrgSummary = useCallback(async () => {
     const token = localStorage.getItem('token')
@@ -928,9 +907,12 @@ export default function ConfigsClient({
       })
       if (refreshed.ok) {
         const data = await refreshed.json()
-        setRules(data.data || [])
+        const nextRules = data.data || []
+        setRules(nextRules)
+        writeBrowserCache(scopedCacheKey(token, 'configs:rules'), nextRules)
+        setLoadedTabs(prev => new Set(prev).add('rules'))
       } else {
-        await fetchData()
+        await refreshTabData('rules')
       }
     } catch {
       setError('网络错误')
@@ -952,7 +934,7 @@ export default function ConfigsClient({
         return
       }
 
-      await fetchData()
+      await refreshTabData('rules')
     } catch {
       setError('网络错误')
     }
@@ -1002,7 +984,7 @@ export default function ConfigsClient({
 
       setIsConfigEditOpen(false)
       setEditingConfig(null)
-      await fetchData()
+      await refreshTabData(activeTab)
     } catch {
       setError('网络错误')
     }
@@ -1023,7 +1005,7 @@ export default function ConfigsClient({
         return
       }
 
-      await fetchData()
+      await refreshTabData(activeTab)
     } catch {
       setError('网络错误')
     }
@@ -1043,7 +1025,7 @@ export default function ConfigsClient({
         return
       }
 
-      await fetchData()
+      await refreshTabData(activeTab)
     } catch {
       setError('网络错误')
     }
@@ -1092,7 +1074,7 @@ export default function ConfigsClient({
 
       setIsVersionOpen(false)
       setVersionConfigId(null)
-      await fetchData()
+      await refreshTabData(activeTab)
     } catch {
       setError('网络错误')
     }
@@ -1225,7 +1207,7 @@ export default function ConfigsClient({
 
       setIsProductEditOpen(false)
       setEditingProduct(null)
-      await fetchData()
+      await refreshTabData('price-list')
     } catch {
       setError('网络错误')
     }
@@ -1247,7 +1229,7 @@ export default function ConfigsClient({
         return
       }
 
-      await fetchData()
+      await refreshTabData('price-list')
     } catch {
       setError('网络错误')
     }
