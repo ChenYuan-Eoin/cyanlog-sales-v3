@@ -10,9 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 
-// 合同上传 — 完整信息录入 + 文件上传（分两阶段）
-// Phase 1: 录入合同信息 → POST /api/contracts 创建
-// Phase 2: 上传文件 → 自动跳转到详情页并触发审核
+// 发起合同审核 — 完整信息录入 + 源文件上传（分两阶段）
+// Phase 1: 登记审核对象 → POST /api/contracts 创建
+// Phase 2: 上传源文件 → 提交审核 → 启动分析 → 进入审核工作台
 
 type Phase = 'info' | 'file' | 'done'
 
@@ -183,6 +183,28 @@ export default function NewContractPage() {
     }
   }
 
+  async function submitContractForReview(cid: string, token: string) {
+    const res = await fetch(`/api/contracts/${cid}/submit`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(readApiError(data, '提交审核失败'))
+    }
+  }
+
+  async function startContractAnalysis(cid: string, token: string) {
+    const res = await fetch(`/api/contracts/${cid}/analyze`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(readApiError(data, '启动审核失败'))
+    }
+  }
+
   async function handleUploadAndStart() {
     if (!file || !contractId) {
       setError('请选择合同文件')
@@ -194,13 +216,19 @@ export default function NewContractPage() {
 
     try {
       const token = localStorage.getItem('token')
+      if (!token) {
+        setError('请先登录')
+        setLoading(false)
+        return
+      }
+
       const formData = new FormData()
       formData.append('file', file)
 
       // 上传文件
       const uploadRes = await fetch(`/api/contracts/${contractId}/upload`, {
         method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       })
 
@@ -211,10 +239,12 @@ export default function NewContractPage() {
         return
       }
 
-      // 跳转到详情页
+      await submitContractForReview(contractId, token)
+      await startContractAnalysis(contractId, token)
+
       router.push(`/contracts/${contractId}`)
-    } catch {
-      setError('网络错误，请稍后重试')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '网络错误，请稍后重试')
       setLoading(false)
     }
   }
@@ -227,13 +257,13 @@ export default function NewContractPage() {
       <div className="p-8 max-w-3xl mx-auto">
         <div className="mb-6 flex items-center gap-2">
           <Badge variant="outline">Step 1/2</Badge>
-          <span className="text-sm text-slate-500">录入合同信息</span>
+          <span className="text-sm text-slate-500">登记审核对象</span>
         </div>
 
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">创建合同</h1>
+          <h1 className="text-2xl font-bold">发起合同审核</h1>
           <Link href="/contracts">
-            <Button variant="outline" size="sm">返回列表</Button>
+            <Button variant="outline" size="sm">返回合同中心</Button>
           </Link>
         </div>
 
@@ -391,7 +421,7 @@ export default function NewContractPage() {
 
               <div className="flex gap-4 pt-2">
                 <Button type="submit" disabled={loading}>
-                  {loading ? '创建中...' : '下一步：上传合同文件'}
+                  {loading ? '创建中...' : '下一步：上传合同源文件'}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => router.push('/contracts')}>
                   取消
@@ -411,11 +441,11 @@ export default function NewContractPage() {
     <div className="p-8 max-w-2xl mx-auto">
       <div className="mb-6 flex items-center gap-2">
         <Badge variant="outline">Step 2/2</Badge>
-        <span className="text-sm text-slate-500">上传合同文件</span>
+        <span className="text-sm text-slate-500">上传源文件并启动审核</span>
       </div>
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">上传合同文件</h1>
+        <h1 className="text-2xl font-bold">上传合同源文件</h1>
         <button
           onClick={() => {
             setPhase('info')
@@ -457,7 +487,7 @@ export default function NewContractPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>合同文件</CardTitle>
+          <CardTitle>合同源文件</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div
@@ -512,7 +542,7 @@ export default function NewContractPage() {
               onClick={handleUploadAndStart}
               disabled={!file || loading}
             >
-              {loading ? '上传中...' : '上传并提交审核'}
+              {loading ? '处理中...' : '上传并发起审核'}
             </Button>
             <Button
               variant="outline"

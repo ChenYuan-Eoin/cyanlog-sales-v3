@@ -272,7 +272,7 @@ export default function ContractEditPage() {
             <span className="mx-2">/</span>
             <span>编辑</span>
           </div>
-          <h1 className="text-2xl font-bold">编辑合同</h1>
+          <h1 className="text-2xl font-bold">合同版本与信息</h1>
         </div>
         <div className="flex gap-2">
           <Link href={`/contracts/${contractId}`}>
@@ -493,30 +493,29 @@ export default function ContractEditPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">合同文件</CardTitle>
+              <CardTitle className="text-base">合同源文件与客户回传版</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {hasFile ? (
                 <div>
                   <p className="text-sm font-medium">{contract.filename}</p>
-                  <p className="text-xs text-slate-500">已上传</p>
+                  <p className="text-xs text-slate-500">当前审核源文件</p>
                 </div>
               ) : (
-                <div>
-                  <p className="text-sm text-slate-500 mb-2">尚未上传合同文件</p>
-                  <label className="block">
-                    <input
-                      type="file"
-                      accept=".pdf,.docx"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                    <Button variant="outline" className="w-full" disabled={uploading}>
-                      <span>{uploading ? '上传中...' : '上传文件'}</span>
-                    </Button>
-                  </label>
-                </div>
+                <p className="text-sm text-slate-500">尚未上传合同源文件</p>
               )}
+              <label className={uploading ? 'block cursor-not-allowed opacity-60' : 'block cursor-pointer'}>
+                <input
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  disabled={uploading}
+                />
+                <span className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50">
+                  {uploading ? '上传中...' : hasFile ? '上传客户回传版' : '补充合同源文件'}
+                </span>
+              </label>
             </CardContent>
           </Card>
 

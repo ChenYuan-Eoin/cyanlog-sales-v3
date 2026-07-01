@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowLeftIcon, UploadIcon, FileTextIcon, AlertCircleIcon, PauseIcon, PlayIcon, XIcon } from 'lucide-react'
@@ -35,6 +35,8 @@ function readApiError(payload: unknown, fallback: string): string {
 
 export default function ContractUploadPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isCompareIntent = searchParams.get('intent') === 'compare'
   const [files, setFiles] = useState<File[]>([])
   const [currentFileIndex, setCurrentFileIndex] = useState(0)
   const [contractId, setContractId] = useState<string | null>(null)
@@ -120,6 +122,11 @@ export default function ContractUploadPage() {
       const message = '请先登录'
       setErrorMsg(message)
       toastError(message)
+      return
+    }
+
+    if (isCompareIntent) {
+      router.push(`/contracts/${completedContractId}/compare-standard`)
       return
     }
 
@@ -357,7 +364,16 @@ export default function ContractUploadPage() {
               <ArrowLeftIcon className="h-4 w-4" />
             </Button>
           </Link>
-          <h1 className="text-xl font-bold">上传合同</h1>
+          <div>
+            <h1 className="text-xl font-bold">
+              {isCompareIntent ? '创建文档比对材料' : '批量导入合同审核'}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {isCompareIntent
+                ? '上传客户回传版或待比对合同，进入标准合同对照工作台。'
+                : '上传合同源文件，系统将创建审核运行并进入合同工作台。'}
+            </p>
+          </div>
         </div>
 
         {/* Error Alert */}
@@ -398,7 +414,7 @@ export default function ContractUploadPage() {
             />
             <UploadIcon className="h-10 w-10 text-slate-400 mx-auto mb-3" />
             <p className="text-sm text-slate-600 mb-1">
-              点击选择文件或拖拽到此处
+              {isCompareIntent ? '点击选择待比对合同或拖拽到此处' : '点击选择合同源文件或拖拽到此处'}
             </p>
             <p className="text-xs text-slate-400">
               支持 PDF、DOCX 格式，单个文件最大 500MB
@@ -479,7 +495,7 @@ export default function ContractUploadPage() {
                   {finalizingReview ? (
                     <Button variant="outline" disabled>
                       <FileTextIcon className="h-4 w-4 mr-1" />
-                      生成审核中...
+                      {isCompareIntent ? '准备比对中...' : '生成审核中...'}
                     </Button>
                   ) : (
                     <>
@@ -515,7 +531,11 @@ export default function ContractUploadPage() {
                   onClick={handleUpload}
                   disabled={currentFileIndex >= files.length}
                 >
-                  {currentFileIndex >= files.length ? '全部完成' : `开始上传 (${files.length - currentFileIndex}个)`}
+                  {currentFileIndex >= files.length
+                    ? '全部完成'
+                    : isCompareIntent
+                      ? `上传并进入比对 (${files.length - currentFileIndex}个)`
+                      : `上传并发起审核 (${files.length - currentFileIndex}个)`}
                 </Button>
               )}
             </div>
@@ -527,6 +547,11 @@ export default function ContractUploadPage() {
           <p>• 支持大文件分块上传，单个文件最大 500MB</p>
           <p>• 支持断点续传，上传中断后可继续</p>
           <p>• 3个分块并发上传，提高传输速度</p>
+          <p>
+            {isCompareIntent
+              ? '• 比对材料会复用合同版本资产，上传后进入标准模板对照，不自动启动风险审核。'
+              : '• 上传完成后会提交审核并启动分析，进入风险定位、谈判任务和批注输出链路。'}
+          </p>
         </div>
       </div>
     </div>

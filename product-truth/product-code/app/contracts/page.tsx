@@ -23,6 +23,7 @@ import {
   FilterIcon,
   ChevronRightIcon,
   XIcon,
+  ShieldCheckIcon,
 } from 'lucide-react'
 import type { Contract } from '@/types'
 import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
@@ -44,10 +45,7 @@ type QuickAction = {
   description: string
 }
 
-type ResolvedQuickAction = QuickAction & {
-  disabled?: boolean
-  disabledReason?: string
-}
+type ResolvedQuickAction = QuickAction
 
 type ContractsCachePayload = {
   contracts: Contract[]
@@ -104,23 +102,23 @@ const quickActions: QuickAction[] = [
   },
   {
     id: 'upload',
-    title: '上传合同',
-    shortTitle: '上传',
+    title: '批量导入',
+    shortTitle: '导入',
     icon: UploadIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
     href: '/contracts/upload',
-    description: '上传并审核',
+    description: '多文件上传审核',
   },
   {
     id: 'review',
-    title: '风险审核',
+    title: '发起合同审核',
     shortTitle: '审核',
     icon: EyeIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
     href: '/contracts/new',
-    description: '选择合同审核',
+    description: '上传源文件并绑定规则',
   },
   {
     id: 'compare',
@@ -129,8 +127,8 @@ const quickActions: QuickAction[] = [
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
-    href: '/contracts',
-    description: '先选择合同后点击比对',
+    href: '/contracts/upload?intent=compare',
+    description: '上传回传版并对照模板',
   },
 ]
 
@@ -338,33 +336,25 @@ export default function ContractCenterPage() {
   }, [contracts, drafts])
 
   const resolvedQuickActions = useMemo<ResolvedQuickAction[]>(() => {
-    const reviewTarget = contracts.find((contract) => contract.status !== 'COMPLETED') || contracts[0]
     const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED')
     return quickActions.map((action) => {
       if (action.id === 'review') {
         return {
           ...action,
-          href: reviewTarget ? `/contracts/${reviewTarget.id}` : '/contracts',
-          description: reviewTarget ? '进入合同审核工作台' : '需先上传合同',
-          disabled: !reviewTarget,
-          disabledReason: '需先上传合同',
+          href: '/contracts/new',
+          description: '发起新的合同审核',
         }
       }
 
       if (action.id === 'compare') {
         return {
           ...action,
-          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts',
-          description: compareTarget ? '选择合同进行比对' : '需先完成审核',
-          disabled: !compareTarget,
-          disabledReason: '需先有审核完成的合同',
+          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/upload?intent=compare',
+          description: compareTarget ? '进入最近完成合同的比对工作台' : '上传合同后创建比对任务',
         }
       }
 
-      return {
-        ...action,
-        disabled: false,
-      }
+      return action
     })
   }, [contracts])
 
@@ -414,6 +404,7 @@ export default function ContractCenterPage() {
   }, [contracts, drafts, taskFilter])
 
   const isMobile = viewMode === 'mobile'
+  const listUnavailable = !loading && Boolean(loadError) && filteredTasks.length === 0
 
   return (
     <div className="min-h-full bg-slate-50 pb-24 md:pb-8">
@@ -454,31 +445,17 @@ export default function ContractCenterPage() {
             {/* 桌面端快捷操作 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
               {resolvedQuickActions.slice(0, 3).map((action) => (
-                action.disabled ? (
-                  <Button
-                    key={action.id}
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5"
-                    disabled
-                    title={action.disabledReason}
-                  >
+                <Link key={action.id} href={action.href} prefetch={false}>
+                  <Button size="sm" variant="outline" className="gap-1.5">
                     <action.icon className="h-4 w-4" />
                     {action.shortTitle}
                   </Button>
-                ) : (
-                  <Link key={action.id} href={action.href} prefetch={false}>
-                    <Button size="sm" variant="outline" className="gap-1.5">
-                      <action.icon className="h-4 w-4" />
-                      {action.shortTitle}
-                    </Button>
-                  </Link>
-                )
+                </Link>
               ))}
               <Link href="/contracts/new" prefetch={false}>
                 <Button size="sm" className="gap-1.5">
                   <PlusIcon className="h-4 w-4" />
-                  新建
+                  新建审核
                 </Button>
               </Link>
             </div>
@@ -495,27 +472,8 @@ export default function ContractCenterPage() {
           {!isMobile && (
             <div className="grid grid-cols-4 gap-3 mt-4">
               {resolvedQuickActions.map((action) => (
-                action.disabled ? (
-                  <div
-                    key={action.id}
-                    role="button"
-                    aria-disabled="true"
-                    title={action.disabledReason}
-                    className="group cursor-not-allowed"
-                  >
-                    <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 opacity-70 transition-all">
-                      <div className="w-10 h-10 rounded-lg bg-slate-300 flex items-center justify-center shrink-0">
-                        <action.icon className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-700 text-sm">{action.title}</p>
-                        <p className="text-xs text-slate-500 truncate">{action.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <Link key={action.id} href={action.href} prefetch={false} className="group">
-                    <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
+                <Link key={action.id} href={action.href} prefetch={false} className="group">
+                  <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
                     <div className={`w-10 h-10 rounded-lg ${action.color} ${action.hoverColor} flex items-center justify-center shrink-0`}>
                       <action.icon className="h-5 w-5 text-white" />
                     </div>
@@ -524,8 +482,7 @@ export default function ContractCenterPage() {
                       <p className="text-xs text-slate-500 truncate">{action.description}</p>
                     </div>
                   </div>
-                  </Link>
-                )
+                </Link>
               ))}
             </div>
           )}
@@ -534,77 +491,83 @@ export default function ContractCenterPage() {
 
       {/* 主内容区 */}
       <main className="mx-auto max-w-[1480px] px-4 md:px-6 py-4 md:py-6">
-        {/* 统计卡片 - 桌面端完整 / 移动端简化 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
-          <StatCard
-            icon={<FileTextIcon className="h-4 w-4 md:h-5 md:w-5 text-slate-500" />}
-            label="全部合同"
-            value={stats.total}
-            isMobile={isMobile}
-          />
-          <StatCard
-            icon={<ClockIcon className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />}
-            label="进行中"
-            value={stats.pending}
-            highlight={stats.pending > 0}
-            isMobile={isMobile}
-          />
-          <StatCard
-            icon={<AlertTriangleIcon className="h-4 w-4 md:h-5 md:w-5 text-rose-500" />}
-            label="需关注"
-            value={stats.needAttention}
-            alert={stats.needAttention > 0}
-            isMobile={isMobile}
-          />
-          <StatCard
-            icon={<ZapIcon className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />}
-            label="已完成"
-            value={stats.completed}
-            isMobile={isMobile}
-          />
-        </div>
+        <ReviewLaunchPanel isMobile={isMobile} />
 
-        {/* 状态筛选标签 */}
-        <div className="mb-4 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-          <Tabs value={taskFilter} onValueChange={(v) => setTaskFilter(v as TaskFilter)}>
-            <TabsList className={`${isMobile ? 'w-full' : ''} bg-white border`}>
-              <TabsTrigger value="all" className="text-xs md:text-sm">
-                全部
-                {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{stats.total}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="draft" className="text-xs md:text-sm">起草中</TabsTrigger>
-              <TabsTrigger value="pending" className="text-xs md:text-sm">待审核</TabsTrigger>
-              <TabsTrigger value="review" className="text-xs md:text-sm">已完成</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        {/* 列表内容 */}
-        {loading ? (
-          <LoadingState message="加载合同中..." />
-        ) : loadError && filteredTasks.length === 0 ? (
+        {listUnavailable ? (
           <LoadErrorState message={loadError} onRetry={() => void fetchData(1, { query: searchQuery })} />
-        ) : filteredTasks.length === 0 ? (
-          <EmptyState isMobile={isMobile} />
         ) : (
-          <div className="space-y-2 md:space-y-3">
-            {loadError && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {loadError}
-              </div>
-            )}
-            {filteredTasks.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
+          <>
+            {/* 统计卡片 - 桌面端完整 / 移动端简化 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+              <StatCard
+                icon={<FileTextIcon className="h-4 w-4 md:h-5 md:w-5 text-slate-500" />}
+                label="全部合同"
+                value={stats.total}
                 isMobile={isMobile}
               />
-            ))}
-          </div>
+              <StatCard
+                icon={<ClockIcon className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />}
+                label="进行中"
+                value={stats.pending}
+                highlight={stats.pending > 0}
+                isMobile={isMobile}
+              />
+              <StatCard
+                icon={<AlertTriangleIcon className="h-4 w-4 md:h-5 md:w-5 text-rose-500" />}
+                label="需关注"
+                value={stats.needAttention}
+                alert={stats.needAttention > 0}
+                isMobile={isMobile}
+              />
+              <StatCard
+                icon={<ZapIcon className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />}
+                label="已完成"
+                value={stats.completed}
+                isMobile={isMobile}
+              />
+            </div>
+
+            {/* 状态筛选标签 */}
+            <div className="mb-4 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+              <Tabs value={taskFilter} onValueChange={(v) => setTaskFilter(v as TaskFilter)}>
+                <TabsList className={`${isMobile ? 'w-full' : ''} bg-white border`}>
+                  <TabsTrigger value="all" className="text-xs md:text-sm">
+                    全部
+                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{stats.total}</span>}
+                  </TabsTrigger>
+                  <TabsTrigger value="draft" className="text-xs md:text-sm">起草中</TabsTrigger>
+                  <TabsTrigger value="pending" className="text-xs md:text-sm">待审核</TabsTrigger>
+                  <TabsTrigger value="review" className="text-xs md:text-sm">已完成</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            {/* 列表内容 */}
+            {loading ? (
+              <LoadingState message="加载合同中..." />
+            ) : filteredTasks.length === 0 ? (
+              <EmptyState isMobile={isMobile} />
+            ) : (
+              <div className="space-y-2 md:space-y-3">
+                {loadError && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {loadError}
+                  </div>
+                )}
+                {filteredTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    isMobile={isMobile}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* 分页控件 */}
-        {!loading && filteredTasks.length > 0 && totalPages > 1 && (
+        {!listUnavailable && !loading && filteredTasks.length > 0 && totalPages > 1 && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t border-slate-200">
             <p className="text-xs text-slate-500">
               已加载到第 {page} / {totalPages} 页
@@ -629,37 +592,69 @@ export default function ContractCenterPage() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-20 safe-area-pb">
           <div className="flex items-center justify-around">
             {resolvedQuickActions.map((action) => (
-              action.disabled ? (
-                <button
-                  key={action.id}
-                  type="button"
-                  disabled
-                  title={action.disabledReason}
-                  className="flex flex-col items-center gap-1 py-1 px-3 opacity-50"
-                >
-                  <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center shadow-md">
-                    <action.icon className="h-5 w-5 text-white" />
-                  </div>
-                  <span className="text-[10px] font-medium text-slate-700">{action.shortTitle}</span>
-                </button>
-              ) : (
-                <Link
-                  key={action.id}
-                  href={action.href}
-                  prefetch={false}
-                  className="flex flex-col items-center gap-1 py-1 px-3 active:scale-95 transition-transform"
-                >
-                  <div className={`w-10 h-10 rounded-full ${action.color} flex items-center justify-center shadow-md`}>
-                    <action.icon className="h-5 w-5 text-white" />
-                  </div>
-                  <span className="text-[10px] font-medium text-slate-700">{action.shortTitle}</span>
-                </Link>
-              )
+              <Link
+                key={action.id}
+                href={action.href}
+                prefetch={false}
+                className="flex flex-col items-center gap-1 py-1 px-3 active:scale-95 transition-transform"
+              >
+                <div className={`w-10 h-10 rounded-full ${action.color} flex items-center justify-center shadow-md`}>
+                  <action.icon className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-[10px] font-medium text-slate-700">{action.shortTitle}</span>
+              </Link>
             ))}
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
+  return (
+    <section className="mb-4 rounded-lg border border-indigo-100 bg-white p-4 shadow-sm md:mb-6 md:p-5">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-indigo-600">
+            <ShieldCheckIcon className="h-5 w-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-slate-950`}>
+              发起合同审核
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+              上传合同源文件，绑定已发布规则、Skill 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。
+            </p>
+          </div>
+        </div>
+        <Link href="/contracts/new" prefetch={false} className="shrink-0">
+          <Button className="w-full gap-1.5 md:w-auto">
+            <PlusIcon className="h-4 w-4" />
+            发起审核
+          </Button>
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
+        <div className="rounded-md bg-slate-50 px-3 py-2">
+          <span className="font-medium text-slate-900">源文件</span>
+          <span className="ml-1">docx / pdf</span>
+        </div>
+        <div className="rounded-md bg-slate-50 px-3 py-2">
+          <span className="font-medium text-slate-900">审核依据</span>
+          <span className="ml-1">规则快照 / Skill</span>
+        </div>
+        <div className="rounded-md bg-slate-50 px-3 py-2">
+          <span className="font-medium text-slate-900">业务处理</span>
+          <span className="ml-1">复核 / 谈判</span>
+        </div>
+        <div className="rounded-md bg-slate-50 px-3 py-2">
+          <span className="font-medium text-slate-900">输出</span>
+          <span className="ml-1">批注版 / 报告</span>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -774,9 +769,14 @@ function LoadErrorState({
       <AlertTriangleIcon className="mx-auto h-8 w-8 text-rose-500" />
       <p className="mt-3 text-sm font-medium text-rose-900">合同数据加载失败</p>
       <p className="mx-auto mt-1 max-w-md text-sm text-rose-700">{message}</p>
-      <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
-        重试
-      </Button>
+      <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          重试
+        </Button>
+        <Link href="/contracts/new" prefetch={false}>
+          <Button size="sm">发起新审核</Button>
+        </Link>
+      </div>
     </div>
   )
 }
@@ -789,12 +789,12 @@ function EmptyState({ isMobile }: { isMobile: boolean }) {
         <FileTextIcon className={`${isMobile ? 'h-8 w-8' : 'h-10 w-10'} text-slate-300`} />
       </div>
       <p className={`text-slate-500 ${isMobile ? 'text-sm' : 'text-base'}`}>暂无合同记录</p>
-      <p className="text-xs text-slate-400 mt-1">点击上方按钮创建新合同</p>
+      <p className="text-xs text-slate-400 mt-1">可以直接发起合同审核，上传源文件后生成审核运行。</p>
       {!isMobile && (
-        <Link href="/contracts/draft" prefetch={false}>
+        <Link href="/contracts/new" prefetch={false}>
           <Button variant="outline" size="sm" className="mt-4">
             <PlusIcon className="h-4 w-4 mr-1" />
-            创建合同
+            发起审核
           </Button>
         </Link>
       )}
