@@ -141,6 +141,7 @@ describe('runStructuredAnalysis', () => {
             version: 2,
             clause_category: 'payment',
             target_field: 'first_payment_rate',
+            field_hints: ['付款', '账期', '首付款'],
           },
           {
             id: 'snapshot-2',
@@ -149,6 +150,25 @@ describe('runStructuredAnalysis', () => {
             version: 1,
             clause_category: 'termination',
             target_field: 'termination_refund',
+            field_hints: ['退款', '退还', '终止'],
+          },
+          {
+            id: 'snapshot-4',
+            rule_id: 'rule-4',
+            code: 'R004',
+            version: 2,
+            clause_category: 'acceptance',
+            target_field: 'acceptance_silent_days',
+            field_hints: ['验收', '默示验收', '视为验收'],
+          },
+          {
+            id: 'snapshot-11',
+            rule_id: 'rule-11',
+            code: 'R011',
+            version: 2,
+            clause_category: 'ip',
+            target_field: 'ip_ownership_clause',
+            field_hints: ['知识产权', '源代码', '二次开发'],
           },
         ],
       },
@@ -195,7 +215,7 @@ describe('runStructuredAnalysis', () => {
       if (table === 'contracts') {
         return makeThenableQuery({
           data: {
-            parsed_text: '第一条 付款条款：验收后付款。\n第二条 退款条款：客户可要求全额退款。',
+            parsed_text: '第一条 付款条款：验收后付款。\n第二条 退款条款：客户可要求全额退款。\n第三条 验收条款：乙方提交成果后，如甲方3日内未提出异议，视为验收通过。',
             filename: 'contract.docx',
             created_by: 'u-1',
           },
@@ -224,20 +244,22 @@ describe('runStructuredAnalysis', () => {
           repo: 'suoyidev/ones-internal-skills',
           commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
         }),
-        rules: [
+        rules: expect.arrayContaining([
           expect.objectContaining({
             code: 'R001',
             version: 2,
             clause_category: 'payment',
             target_field: 'first_payment_rate',
+            field_hints: ['付款', '账期', '首付款'],
           }),
           expect.objectContaining({
             code: 'R002',
             version: 1,
             clause_category: 'termination',
             target_field: 'termination_refund',
+            field_hints: ['退款', '退还', '终止'],
           }),
-        ],
+        ]),
       }),
     }, 1)
     expect(report.result.risks).toHaveLength(2)
@@ -312,7 +334,7 @@ describe('runStructuredAnalysis', () => {
         title: '验收周期过短',
         description: '验收周期过短，可能导致甲方无法充分评估成果质量。',
         suggestion: '建议将验收周期延长至 15 个工作日。',
-        evidence: ['第二条 退款条款：客户可要求全额退款。'],
+        evidence: ['第三条 验收条款：乙方提交成果后，如甲方3日内未提出异议，视为验收通过。'],
       }],
       summary: '语义审核完成',
       provider: 'AI_LEVEL_2',

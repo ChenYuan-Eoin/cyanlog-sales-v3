@@ -36,11 +36,20 @@ const ONES_SKILL_REFERENCES = [
 ]
 
 const ONES_SKILL_EVAL_CASES = [
-  'evals/payment-schedule',
-  'evals/acceptance-silent-period',
-  'evals/confidentiality-period',
-  'evals/sla-redline',
-  'evals/dispute-resolution',
+  'eval1_private_deploy_redline',
+  'eval2_tax_mixed_contract',
+  'eval3_amount_consistency',
+  'eval4_domestic_hospital_no_dpa_negative',
+  'eval5_standard_template_no_fabricated_risks_negative',
+  'eval6_product_name_v7',
+  'eval7_dispute_resolution_foreign_arbitration',
+  'eval8_sla_compensation_and_7x24',
+  'eval9_version_compare',
+  'eval10_confidentiality_8_years',
+  'eval11_ip_ownership_redline',
+  'eval12_cross_border_data',
+  'eval13_add_on_order',
+  'eval14_amount_uppercase',
 ]
 
 type RuleRow = {
@@ -165,7 +174,7 @@ function outputSchema(): JsonRecord {
       required: ['risk_finding_id', 'selected_text', 'comment', 'priority', 'author'],
       output: 'word_native_comment',
       author: 'ONES 业务运营',
-      fallback_when_position_missing: 'paragraph_level_comment_or_report_only',
+      fallback_when_position_missing: 'manual_location_required_or_report_only',
     },
     report_summary: {
       role: 'auxiliary',
@@ -299,6 +308,7 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
             engine_type: rule.engine_type || 'structured',
             target_field: rule.target_field,
             clause_category: rule.clause_category,
+            field_hints: rule.field_hints || [],
           }
         : null
     })
@@ -323,10 +333,29 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
     external_skill_references: ONES_SKILL_REFERENCES.map((reference) => ({
       path: reference,
       source: `${ONES_CONTRACT_SKILL_SOURCE.repo}/${reference}`,
+      commit: ONES_CONTRACT_SKILL_SOURCE.commit,
     })),
     output_schema_reference: 'references/13-结构化输出schema.md',
     second_verification_reference: 'references/09-二次验证清单.md',
+    second_verification: {
+      source: `${ONES_CONTRACT_SKILL_SOURCE.repo}/references/09-二次验证清单.md`,
+      required_checks: schema.validation,
+      enforcement: 'model_output_runtime_validation',
+    },
     report_style_reference: 'references/12-报告样式标准.md',
+    templates: {
+      report: {
+        reference: 'references/12-报告样式标准.md',
+        role: 'auxiliary',
+        must_use_same_fact_set_as_comments: true,
+      },
+      comment: {
+        primary_output: 'word_native_comment',
+        author: 'ONES 业务运营',
+        must_bind: ['RiskFinding', 'RuleSnapshot', 'evidence_text', 'source_range', 'Word comment anchor'],
+        on_location_missing: 'manual_location_required',
+      },
+    },
     comment_template: {
       primary_output: 'word_native_comment',
       author: 'ONES 业务运营',
@@ -348,6 +377,18 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
     ],
     rules: snapshotRefs,
     template_references: templateRefs,
+    eval_results: {
+      source: `${ONES_CONTRACT_SKILL_SOURCE.repo}/skills/${ONES_CONTRACT_SKILL_SOURCE.skill}/evals/evals.json`,
+      commit: ONES_CONTRACT_SKILL_SOURCE.commit,
+      gate: 'bundle_static_completeness',
+      status: missingCanonicalRules.length === 0 ? 'runtime_eval_not_run' : 'failed',
+      total_cases: ONES_SKILL_EVAL_CASES.length,
+      passed_cases: 0,
+      failed_cases: missingCanonicalRules.length === 0 ? [] : ['canonical_rule_completeness'],
+      runtime_eval_status: 'not_run',
+      case_ids: ONES_SKILL_EVAL_CASES,
+      note: 'Source eval cases are recorded for traceability. Runtime model-quality eval has not been executed in this bundle and must not be presented as passed.',
+    },
     model_policy: {
       id: modelPolicy.id,
       version: modelPolicy.version,

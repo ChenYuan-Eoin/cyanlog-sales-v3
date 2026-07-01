@@ -382,7 +382,7 @@ export async function GET(
     if (latestReview?.skill_bundle_id) {
       const { data, error } = await supabaseAdmin
         .from('contract_skill_bundles')
-        .select('id, version, rule_snapshot_ids, template_snapshot_ids, model_policy_id, compiled_hash, status, published_at')
+        .select('id, version, rule_snapshot_ids, template_snapshot_ids, model_policy_id, output_schema, eval_case_ids, release_meta, compiled_from, compiled_hash, status, published_at')
         .eq('id', latestReview.skill_bundle_id)
         .maybeSingle()
 

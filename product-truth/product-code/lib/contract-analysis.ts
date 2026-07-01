@@ -739,6 +739,9 @@ function extractRuntimeSnapshotRefs(skillBundle: ContractSkillBundle) {
         version: typeof record.version === 'number' ? record.version : null,
         category: typeof record.clause_category === 'string' ? record.clause_category : null,
         targetField: typeof record.target_field === 'string' ? record.target_field : null,
+        fieldHints: Array.isArray(record.field_hints)
+          ? record.field_hints.filter((hint): hint is string => typeof hint === 'string')
+          : [],
       }
     })
     .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref?.id))
@@ -881,6 +884,7 @@ async function runSemanticReviewStage(input: {
       version: ref.version,
       clause_category: ref.category,
       target_field: ref.targetField,
+      field_hints: ref.fieldHints,
     }))
     const semanticResult = await reviewWithFailoverSync(input.text, {
       orgId: input.orgId,
@@ -927,7 +931,11 @@ async function runSemanticReviewStage(input: {
         risk_count: semanticResult.risks.length,
         usable_risk_count: usableRisks.length,
         summary_available: Boolean(semanticResult.summary),
+        attempt_errors: semanticResult.attemptErrors || [],
       },
+      errorMessage: semanticResult.degraded && semanticResult.attemptErrors?.length
+        ? semanticResult.attemptErrors.join('\n')
+        : null,
     })
 
     return {

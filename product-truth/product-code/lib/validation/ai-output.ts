@@ -69,6 +69,20 @@ export interface ValidationResult {
   retryable: boolean
 }
 
+export type RuntimeRuleConstraint = {
+  code?: string | null
+  clause_category?: string | null
+  target_field?: string | null
+  field_hints?: string[] | null
+}
+
+export type AIOutputRuntimeConstraints = {
+  contractText?: string
+  rules?: RuntimeRuleConstraint[]
+  requireEvidenceInSource?: boolean
+  requireRuleEvidenceHint?: boolean
+}
+
 const MAX_RETRIES = 3
 
 /**
@@ -77,7 +91,8 @@ const MAX_RETRIES = 3
  */
 export async function validateAIOutputWithRetry(
   rawOutput: string,
-  retryFn?: () => Promise<string>
+  retryFn?: () => Promise<string>,
+  constraints?: AIOutputRuntimeConstraints
 ): Promise<ValidationResult> {
   let lastError = ''
 
@@ -88,7 +103,7 @@ export async function validateAIOutputWithRetry(
       return { valid: false, error: 'No output to validate', retryable: false }
     }
 
-    const result = validateAIOutput(textToValidate)
+    const result = validateAIOutput(textToValidate, constraints)
 
     if (result.valid) {
       return result
@@ -113,7 +128,10 @@ export async function validateAIOutputWithRetry(
 /**
  * 单次校验AI输出
  */
-export function validateAIOutput(rawOutput: string): ValidationResult {
+export function validateAIOutput(
+  rawOutput: string,
+  constraints: AIOutputRuntimeConstraints = {}
+): ValidationResult {
   try {
     // 尝试从文本中提取JSON
     const jsonStr = extractJSON(rawOutput)
@@ -125,6 +143,10 @@ export function validateAIOutput(rawOutput: string): ValidationResult {
     const validated = AIReviewOutputSchema.safeParse(parsed)
 
     if (validated.success) {
+      const runtimeValidation = validateRuntimeConstraints(validated.data, constraints)
+      if (!runtimeValidation.valid) {
+        return runtimeValidation
+      }
       return { valid: true, data: validated.data, retryable: false }
     }
 
@@ -150,6 +172,104 @@ export function validateAIOutput(rawOutput: string): ValidationResult {
       retryable: true,
     }
   }
+}
+
+function normalizeRuleCode(value: string | null | undefined) {
+  return (value || '').trim().toUpperCase().replace(/@V\d+$/, '')
+}
+
+function normalizeEvidenceText(value: string) {
+  return value
+    .replace(/\s+/g, '')
+    .replace(/[，。；：、,.!?！？;:（）()【】\[\]《》"“”'‘’]/g, '')
+    .toLowerCase()
+}
+
+function sourceContainsEvidence(source: string, evidence: string) {
+  const trimmed = evidence.trim()
+  if (trimmed.length === 0) return false
+  if (source.includes(trimmed)) return true
+  const normalizedSource = normalizeEvidenceText(source)
+  const normalizedEvidence = normalizeEvidenceText(trimmed)
+  return normalizedEvidence.length >= 6 && normalizedSource.includes(normalizedEvidence)
+}
+
+function meaningfulEvidence(evidence: string) {
+  const normalized = normalizeEvidenceText(evidence)
+  if (normalized.length < 6) return false
+  if (/^\d+(\.\d+)?%?$/.test(normalized)) return false
+  return true
+}
+
+function ruleHints(rule: RuntimeRuleConstraint | undefined) {
+  if (!rule) return []
+  return [
+    ...(Array.isArray(rule.field_hints) ? rule.field_hints : []),
+    rule.clause_category,
+    rule.target_field,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map(normalizeEvidenceText)
+    .filter((value) => value.length >= 2)
+}
+
+function evidenceMatchesRuleHints(evidenceItems: string[], rule: RuntimeRuleConstraint | undefined) {
+  const hints = ruleHints(rule)
+  if (hints.length === 0) return true
+  return evidenceItems.some((evidence) => {
+    const normalizedEvidence = normalizeEvidenceText(evidence)
+    return hints.some((hint) => normalizedEvidence.includes(hint))
+  })
+}
+
+function validateRuntimeConstraints(
+  data: AIReviewOutput,
+  constraints: AIOutputRuntimeConstraints
+): ValidationResult {
+  const rules = constraints.rules || []
+  const rulesByCode = new Map(
+    rules
+      .filter((rule) => normalizeRuleCode(rule.code))
+      .map((rule) => [normalizeRuleCode(rule.code), rule])
+  )
+  const allowedRuleCodes = new Set(rulesByCode.keys())
+  const errors: string[] = []
+
+  for (const [index, risk] of data.risks.entries()) {
+    const path = `risks.${index}`
+    const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
+
+    if (allowedRuleCodes.size > 0 && !allowedRuleCodes.has(normalizedRuleCode)) {
+      errors.push(`${path}.ruleCode: ${risk.ruleCode} is not in current SkillBundle`)
+    }
+
+    const evidence = risk.evidence || []
+    const weakEvidence = evidence.filter((item) => !meaningfulEvidence(item))
+    if (weakEvidence.length > 0) {
+      errors.push(`${path}.evidence: evidence is too short or generic`)
+    }
+
+    if (constraints.requireEvidenceInSource && constraints.contractText) {
+      const missing = evidence.filter((item) => !sourceContainsEvidence(constraints.contractText || '', item))
+      if (missing.length > 0) {
+        errors.push(`${path}.evidence: evidence is not a continuous source fragment`)
+      }
+    }
+
+    if (constraints.requireRuleEvidenceHint && !evidenceMatchesRuleHints(evidence, rulesByCode.get(normalizedRuleCode))) {
+      errors.push(`${path}.evidence: evidence does not match rule field hints`)
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      valid: false,
+      error: `Runtime validation failed: ${errors.join('; ')}`,
+      retryable: true,
+    }
+  }
+
+  return { valid: true, data, retryable: false }
 }
 
 // ─── 工具函数 ──────────────────────────────────────────

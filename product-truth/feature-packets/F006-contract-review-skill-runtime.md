@@ -241,6 +241,7 @@ interface RiskFinding {
 
 - `contract_skill_bundles`：由已发布 `contract_rules_v2`、`contract_rule_snapshots`、`clause_library` 引用、输出 schema 和当前 `model_policy_id` 编译得到；使用内容 hash 去重，避免重复生成同一运行包。
 - `contract_skill_bundles.compiled_from.external_skill_source`：记录 `suoyidev/ones-internal-skills` / `ones-contract-assistant` 的 repo、commit、version、references 和产品化 override；运行时事实仍以配置中心发布后的 `RuleSnapshot` 为准，不直接读取外部 repo。
+- `contract_skill_bundles.compiled_from.eval_results`：第一阶段只能记录外部仓库 eval case 覆盖和静态规则完整性；如果没有真实执行 runtime/model-quality eval，状态必须标记为 `runtime_eval_not_run`，并在 ReviewRun 证据中展示为未验收，不能写成全部通过。
 - `contract_reviews.skill_bundle_id`：每次初审和再审核都会绑定真实 SkillBundle id。
 - `contract_reviews.rule_snapshot_ids`：每次审核运行记录当次消费的规则快照 id，后续规则变更不影响历史 ReviewRun。
 - `contract_reviews.model_policy_id` / `model_invocation_ids`：F006 执行时消费 F012 发布策略，并把模型/规则兜底调用审计写回 ReviewRun。
@@ -250,6 +251,7 @@ interface RiskFinding {
 
 - 独立 `POST /api/contract-skills/compile` 和 `GET /api/contract-skills/published` API 尚未产品化。
 - `template_snapshot_ids` 当前以条款库引用为主，标准合同模板快照、变体词典快照和 eval case 门禁尚未完整建模。
+- `ones-internal-skills` 的 eval case 已作为发布证据来源记录，但尚未形成可自动运行、可阻断发布的回归门禁。
 - 第一阶段 ReviewRun 可追溯规则/Skill/模型依据，但还不是完整商业产品形态的 Skill 编辑、模拟、发布、回滚控制台。
 
 ---
@@ -261,6 +263,7 @@ interface RiskFinding {
 - [x] `ReviewRun` 必须绑定 `SkillBundle`，不允许无版本通用审核
 - [x] 风险项必须包含规则/模板/模型依据之一
 - [ ] 模板对比结果能说明匹配、偏离、缺失和引用来源
+- [ ] 外部 skill eval case 能真实运行并作为发布门禁；未运行时 ReviewRun 必须显示 `runtime_eval_not_run`
 - [x] 模型输出不符合 Skill schema、缺少规则编号或缺少原文证据时进入降级/人工复核，不伪装成功
 - [x] F007 能消费 F006 输出的 `CommentPatchDraft`
 - [x] 历史 ReviewRun 可查看其当时使用的规则、SkillBundle 和模型策略

@@ -55,7 +55,7 @@ export default function AdminOrgPage() {
   }, [fetchOrgData])
 
   const handleFeishuSync = useCallback(async () => {
-    if (!await confirmAction('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。本阶段不会导入成员。', { confirmText: '开始导入' })) return
+    if (!await confirmAction('从飞书导入组织架构？系统会刷新 source=feishu 的部门，并按可访问范围导入成员与主部门关系。', { confirmText: '开始导入' })) return
     setFeishuSyncing(true)
     setFeishuFeedback(null)
 

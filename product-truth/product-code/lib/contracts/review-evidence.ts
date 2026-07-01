@@ -60,6 +60,10 @@ export type ReviewEvidenceSkillBundle = {
   rule_snapshot_ids?: string[] | null
   template_snapshot_ids?: string[] | null
   model_policy_id?: string | null
+  output_schema?: unknown
+  eval_case_ids?: string[] | null
+  release_meta?: unknown
+  compiled_from?: unknown
   compiled_hash?: string | null
   status?: string | null
   published_at?: string | null
@@ -112,6 +116,33 @@ export type ReviewRunEvidence = {
   completed_at: string | null
   evidence_status: ReviewRunEvidenceStatus
   rule_snapshot_refs: RuleSnapshotRef[]
+  skill_bundle: {
+    id: string
+    version: number | null
+    status: string | null
+    published_at: string | null
+    compiled_hash: string | null
+    external_source: {
+      repo: string | null
+      commit: string | null
+      version: string | null
+      product_override: string | null
+    }
+    rules: {
+      expected: number | null
+      actual: number
+      missing: string[]
+    }
+    references: string[]
+    output_schema_version: string | null
+    second_verification_required: boolean
+    comment_author: string | null
+    eval_status: string | null
+    eval_gate: string | null
+    eval_total_cases: number | null
+    eval_passed_cases: number | null
+    eval_failed_cases: string[]
+  } | null
   model_policy: {
     id: string
     provider: string
@@ -195,11 +226,71 @@ function summarizeBoundRuleSnapshotId(snapshotIds: string[] | null | undefined, 
   return summarizeRuleSnapshotId(refs)
 }
 
+function arrayOfStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+}
+
+function nestedRecord(record: Record<string, unknown> | null, key: string): Record<string, unknown> | null {
+  return asRecord(record?.[key])
+}
+
+function buildSkillBundleSummary(
+  skillBundle: ReviewEvidenceSkillBundle,
+  refs: RuleSnapshotRef[]
+): ReviewRunEvidence['skill_bundle'] {
+  if (!skillBundle) return null
+
+  const compiledFrom = asRecord(skillBundle.compiled_from)
+  const outputSchema = asRecord(skillBundle.output_schema)
+  const externalSource = nestedRecord(compiledFrom, 'external_skill_source')
+  const completeness = nestedRecord(compiledFrom, 'canonical_rule_completeness')
+  const secondVerification = nestedRecord(compiledFrom, 'second_verification')
+  const commentTemplate = nestedRecord(compiledFrom, 'comment_template')
+  const evalResults = nestedRecord(compiledFrom, 'eval_results')
+  const externalRefs = Array.isArray(compiledFrom?.external_skill_references)
+    ? compiledFrom.external_skill_references
+      .map((item) => stringValue(asRecord(item)?.path))
+      .filter((item): item is string => Boolean(item))
+    : []
+
+  return {
+    id: skillBundle.id,
+    version: skillBundle.version ?? null,
+    status: skillBundle.status ?? null,
+    published_at: skillBundle.published_at ?? null,
+    compiled_hash: skillBundle.compiled_hash ?? null,
+    external_source: {
+      repo: stringValue(externalSource?.repo),
+      commit: stringValue(externalSource?.commit),
+      version: stringValue(externalSource?.version),
+      product_override: stringValue(externalSource?.product_override),
+    },
+    rules: {
+      expected: numberValue(completeness?.expected),
+      actual: numberValue(completeness?.actual) ?? refs.length,
+      missing: arrayOfStrings(completeness?.missing),
+    },
+    references: externalRefs,
+    output_schema_version: stringValue(compiledFrom?.output_schema_version)
+      || stringValue(outputSchema?.schema_version),
+    second_verification_required: Boolean(secondVerification?.required_checks || secondVerification?.enforcement),
+    comment_author: stringValue(commentTemplate?.author),
+    eval_status: stringValue(evalResults?.status),
+    eval_gate: stringValue(evalResults?.gate),
+    eval_total_cases: numberValue(evalResults?.total_cases),
+    eval_passed_cases: numberValue(evalResults?.passed_cases),
+    eval_failed_cases: arrayOfStrings(evalResults?.failed_cases),
+  }
+}
+
 function buildSnapshotRefs(
   rules: ReviewEvidenceRule[],
-  snapshots: ReviewEvidenceSnapshot[]
+  snapshots: ReviewEvidenceSnapshot[],
+  boundSnapshotIds?: string[] | null
 ): RuleSnapshotRef[] {
-  return rules
+  const refs = rules
     .map((rule) => {
       const snapshot = findSnapshotForRule(rule, snapshots)
       if (!snapshot) return null
@@ -214,6 +305,29 @@ function buildSnapshotRefs(
       }
     })
     .filter((ref): ref is RuleSnapshotRef => Boolean(ref))
+
+  const refsBySnapshotId = new Map(refs.map((ref) => [ref.id, ref]))
+  const coveredRuleIds = new Set(refs.map((ref) => ref.rule_id))
+  const bound = boundSnapshotIds && boundSnapshotIds.length > 0
+    ? new Set(boundSnapshotIds)
+    : null
+
+  snapshots.forEach((snapshot) => {
+    if (refsBySnapshotId.has(snapshot.id)) return
+    if (!bound?.has(snapshot.id) && coveredRuleIds.has(snapshot.rule_id)) return
+
+    refsBySnapshotId.set(snapshot.id, {
+      id: snapshot.id,
+      rule_id: snapshot.rule_id,
+      rule_code: extractSnapshotCode(snapshot),
+      version: snapshot.version ?? numberValue(asRecord(snapshot.config_snapshot)?.version),
+      engine_type: extractSnapshotEngineType(snapshot),
+      released_at: snapshotReleasedAt(snapshot),
+      source: 'published_snapshot',
+    })
+  })
+
+  return Array.from(refsBySnapshotId.values())
 }
 
 function filterRefsByBoundSnapshots(refs: RuleSnapshotRef[], snapshotIds: string[] | null | undefined): RuleSnapshotRef[] {
@@ -286,7 +400,7 @@ export function buildReviewRunEvidence(input: {
   if (!latestReview) return null
 
   const boundSnapshotIds = latestReview.rule_snapshot_ids || skillBundle?.rule_snapshot_ids || null
-  const refs = filterRefsByBoundSnapshots(buildSnapshotRefs(rules, snapshots), boundSnapshotIds)
+  const refs = filterRefsByBoundSnapshots(buildSnapshotRefs(rules, snapshots, boundSnapshotIds), boundSnapshotIds)
   const invocation = representativeInvocation(modelInvocations)
   const modelInvocationIds = latestReview.model_invocation_ids?.length
     ? latestReview.model_invocation_ids
@@ -314,6 +428,7 @@ export function buildReviewRunEvidence(input: {
     completed_at: latestJob?.completed_at || latestReview.completed_at || null,
     evidence_status: status,
     rule_snapshot_refs: refs,
+    skill_bundle: buildSkillBundleSummary(skillBundle ?? null, refs),
     model_policy: {
       id: modelPolicyId,
       provider,

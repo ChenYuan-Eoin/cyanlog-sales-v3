@@ -236,11 +236,14 @@ async function fetchFeishuUsersByDepartment(token: string, departmentId: string)
 async function fetchFeishuUsers(token: string, departments: FeishuDepartment[]) {
   const usersByExternalId = new Map<string, FeishuUserWithSource>()
   const warnings: SyncWarning[] = []
+  const departmentIds = Array.from(new Set([
+    '0',
+    ...departments
+      .map((department) => externalDepartmentId(department))
+      .filter((departmentId): departmentId is string => Boolean(departmentId)),
+  ]))
 
-  for (const department of departments) {
-    const departmentId = externalDepartmentId(department)
-    if (!departmentId) continue
-
+  for (const departmentId of departmentIds) {
     try {
       const users = await fetchFeishuUsersByDepartment(token, departmentId)
       for (const user of users) {
@@ -582,22 +585,33 @@ export async function POST(req: NextRequest) {
     const userResult = await fetchFeishuUsers(token, departmentResult.departments)
     const userWrite = await syncUsersToDatabase(orgId, userResult.users, departmentWrite.synced)
     const warnings = [...departmentResult.warnings, ...userResult.warnings]
+    if (departmentResult.departments.length === 0) {
+      warnings.push({
+        scope: 'departments',
+        sourceId: '0',
+        message: '飞书只返回 root 或 0 个可访问部门；请检查通讯录部门读取权限和应用可见范围。',
+      })
+    }
     const syncStatus = warnings.length > 0 ? 'partial' : 'completed'
+    const departmentFailed = warnings.filter((warning) => warning.scope === 'departments').length
+    const memberFailed = warnings.filter((warning) => warning.scope === 'members').length
 
     return NextResponse.json({
-      success: true,
+      success: syncStatus === 'completed',
       connector: FEISHU_CONNECTOR,
       scope: FEISHU_SYNC_SCOPE,
       sync_status: syncStatus,
       departments: {
         imported: departmentWrite.imported,
         updated: departmentWrite.updated,
+        failed: departmentFailed,
         total: departmentResult.departments.length,
       },
       members: {
         imported: userWrite.imported,
         updated: userWrite.updated,
         skipped: userWrite.skipped,
+        failed: memberFailed,
         total: userWrite.total,
       },
       warnings,

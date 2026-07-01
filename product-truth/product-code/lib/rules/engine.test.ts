@@ -388,6 +388,119 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
     expect(result.source).toContain('永久')
   })
 
+  it('R009 保密期按规则单位比较，8 年不应被当成 2920 年红线', () => {
+    const rule = makeFlexibleRule({
+      code: 'R009',
+      name: '保密期',
+      category: 'duration',
+      engine_type: 'hybrid',
+      target_field: 'confidentiality_years',
+      clause_category: 'confidentiality',
+      field_hints: ['保密期', '保密义务', '永久'],
+      level_a: {
+        operator: '<=',
+        threshold: 7,
+        unit: 'year',
+        action: 'auto_accept',
+      },
+      level_b: {
+        operator: '<=',
+        threshold: 10,
+        unit: 'year',
+        action: 'negotiate_with_counterparty',
+      },
+      level_c: {
+        operator: '>',
+        threshold: 10,
+        unit: 'year',
+        action: 'block_or_escalate',
+      },
+    })
+
+    const result = evaluateFlexibleRule(rule, '双方约定保密期为 8 年，期满后义务终止。')
+
+    expect(result.risk_label).toBe('yellow')
+    expect(result.level).toBe('B')
+    expect(result.source).toContain('保密期为 8 年')
+  })
+
+  it('R004 默示验收期应从同一条款句段提取期限证据', () => {
+    const rule = makeFlexibleRule({
+      code: 'R004',
+      name: '默示验收期',
+      category: 'duration',
+      engine_type: 'hybrid',
+      target_field: 'acceptance_silent_days',
+      clause_category: 'acceptance',
+      field_hints: ['验收', '默示验收', '视为验收'],
+      level_a: {
+        operator: '>=',
+        threshold: 7,
+        unit: 'day',
+        action: 'auto_accept',
+      },
+      level_b: {
+        operator: '<',
+        threshold: 7,
+        unit: 'day',
+        action: 'negotiate_with_counterparty',
+      },
+      level_c: {
+        operator: '<=',
+        threshold: 1,
+        unit: 'day',
+        action: 'block_or_escalate',
+      },
+    })
+
+    const result = evaluateFlexibleRule(
+      rule,
+      '第三条 验收条款：乙方提交成果后，如甲方 3 日内未提出书面异议，视为自动验收通过。第四条 违约责任：另行约定。'
+    )
+
+    expect(result.risk_label).toBe('yellow')
+    expect(result.level).toBe('B')
+    expect(result.source).toContain('3 日内')
+    expect(result.source).toContain('自动验收')
+    expect(result.source).not.toContain('第四条')
+  })
+
+  it('R004 默示验收期不应把下一条款标题误判为期限', () => {
+    const rule = makeFlexibleRule({
+      code: 'R004',
+      name: '默示验收期',
+      category: 'duration',
+      engine_type: 'hybrid',
+      target_field: 'acceptance_silent_days',
+      clause_category: 'acceptance',
+      field_hints: ['验收', '默示验收', '视为验收'],
+    })
+
+    const result = evaluateFlexibleRule(rule, '本合同约定自动验收通过。第四条 违约责任：另行约定。')
+
+    expect(result.risk_label).toBe('white')
+    expect(result.matched).toBe(false)
+    expect(result.source).toBe('')
+  })
+
+  it('文本规则不能把规则词或 hint 当成合同原文证据', () => {
+    const rule = makeFlexibleRule({
+      code: 'R099',
+      name: '通用文本规则',
+      category: 'text',
+      engine_type: 'structured',
+      target_field: 'generic_text_check',
+      clause_category: 'generic',
+      field_hints: ['合规'],
+    })
+
+    const result = evaluateFlexibleRule(rule, '本合同约定双方应合规履约。')
+
+    expect(result.risk_label).toBe('white')
+    expect(result.matched).toBe(false)
+    expect(result.source).toBe('')
+  })
+
   it('R013 SLA 不应把产品名 ONES 误判为 SLA 命中', () => {
     const rule = makeFlexibleRule({
       code: 'R013',

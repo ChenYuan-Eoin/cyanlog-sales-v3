@@ -66,12 +66,30 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return errorResponse(createApiError('BUSINESS_RULE_VIOLATION', '配置已处于发布状态'))
     }
 
+    const now = new Date().toISOString()
+    const { error: archiveError } = await supabaseAdmin
+      .from('configs')
+      .update({
+        status: 'ARCHIVED',
+        updated_at: now,
+      })
+      .eq('org_id', config.org_id)
+      .eq('type', config.type)
+      .eq('key', config.key)
+      .eq('status', 'PUBLISHED')
+      .neq('id', id)
+
+    if (archiveError) {
+      console.error('Archive previous config error:', archiveError)
+      return errorResponse(createApiError('DB_ERROR', '归档旧发布配置失败'))
+    }
+
     // 更新状态为已发布
     const { data: updated, error } = await supabaseAdmin
       .from('configs')
       .update({
         status: 'PUBLISHED',
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
       .eq('id', id)
       .select()

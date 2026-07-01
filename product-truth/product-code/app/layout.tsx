@@ -67,7 +67,7 @@ export default async function RootLayout({
       <body className="antialiased">
         <BrandingProvider value={theme}>
           <ClientErrorMonitor />
-          <RuntimeThemeLoader />
+          <RuntimeThemeLoader initialTheme={theme} />
           <AppShell>{children}</AppShell>
           {enableVercelTelemetry ? <Analytics /> : null}
           {enableVercelTelemetry ? <SpeedInsights /> : null}

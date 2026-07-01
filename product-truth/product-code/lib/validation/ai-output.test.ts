@@ -104,6 +104,78 @@ describe('validateAIOutput', () => {
     const result = validateAIOutput(markdownOutput)
     expect(result.valid).toBe(true)
   })
+
+  it('rejects risks whose rule code is not in the current SkillBundle', () => {
+    const output = JSON.stringify({
+      risks: [{
+        ruleCode: 'R999',
+        level: 'red',
+        title: '未知规则',
+        description: '未知规则命中',
+        suggestion: '人工复核',
+        evidence: ['第一条 付款条款：账期为120天'],
+      }],
+      summary: 'test',
+    })
+
+    const result = validateAIOutput(output, {
+      contractText: '第一条 付款条款：账期为120天。',
+      rules: [{ code: 'R001', field_hints: ['付款', '账期'] }],
+      requireEvidenceInSource: true,
+      requireRuleEvidenceHint: true,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('not in current SkillBundle')
+  })
+
+  it('rejects evidence that is not a continuous source fragment', () => {
+    const output = JSON.stringify({
+      risks: [{
+        ruleCode: 'R001',
+        level: 'yellow',
+        title: '付款周期过长',
+        description: '付款周期过长',
+        suggestion: '缩短付款周期',
+        evidence: ['签约后180天付款'],
+      }],
+      summary: 'test',
+    })
+
+    const result = validateAIOutput(output, {
+      contractText: '第一条 付款条款：验收后30日内付款。',
+      rules: [{ code: 'R001', field_hints: ['付款', '账期'] }],
+      requireEvidenceInSource: true,
+      requireRuleEvidenceHint: true,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('continuous source fragment')
+  })
+
+  it('rejects cross-clause evidence that does not match rule hints', () => {
+    const output = JSON.stringify({
+      risks: [{
+        ruleCode: 'R009',
+        level: 'red',
+        title: '保密期',
+        description: '错误地用付款条款触发保密期',
+        suggestion: '人工复核',
+        evidence: ['第二条 付款条款：合同签订后180日内支付全部款项'],
+      }],
+      summary: 'test',
+    })
+
+    const result = validateAIOutput(output, {
+      contractText: '第二条 付款条款：合同签订后180日内支付全部款项。',
+      rules: [{ code: 'R009', field_hints: ['保密期', '保密义务', '永久'] }],
+      requireEvidenceInSource: true,
+      requireRuleEvidenceHint: true,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('rule field hints')
+  })
 })
 
 describe('validateAIOutputWithRetry', () => {

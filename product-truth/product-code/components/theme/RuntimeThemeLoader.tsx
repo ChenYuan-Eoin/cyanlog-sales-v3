@@ -119,9 +119,16 @@ function scheduleBackgroundRefresh(callback: () => void) {
   window.setTimeout(callback, BACKGROUND_REFRESH_DELAY_MS)
 }
 
-export function RuntimeThemeLoader() {
+export function RuntimeThemeLoader({
+  initialTheme,
+}: {
+  initialTheme?: ReturnType<typeof sanitizeThemeValue>
+}) {
   useEffect(() => {
     let cancelled = false
+    if (initialTheme) {
+      applyTheme(initialTheme)
+    }
 
     async function loadTheme() {
       const token = window.localStorage.getItem('token')
@@ -162,11 +169,12 @@ export function RuntimeThemeLoader() {
             | { data?: Array<{ value?: Record<string, unknown>; status?: string; updated_at?: string }> }
             | Array<{ value?: Record<string, unknown>; status?: string; updated_at?: string }>
           const configs = Array.isArray(payload) ? payload : (payload.data || [])
-          // 优先使用已发布配置，如果没有则使用最新更新的配置
-          const publishedConfig = configs.find(c => c.status === 'PUBLISHED')
-          const latestConfig = configs.sort((a, b) =>
+          const sortedConfigs = [...configs].sort((a, b) =>
             new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
-          )[0]
+          )
+          // 优先使用最新已发布配置，如果没有则使用最新更新的配置
+          const publishedConfig = sortedConfigs.find(c => c.status === 'PUBLISHED')
+          const latestConfig = sortedConfigs[0]
           const themeConfig = publishedConfig || latestConfig
           const theme = sanitizeThemeValue(themeConfig?.value)
 
@@ -204,7 +212,7 @@ export function RuntimeThemeLoader() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [initialTheme])
 
   return null
 }

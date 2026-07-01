@@ -19,6 +19,7 @@ export interface ReviewOptions {
       version?: number | null
       clause_category?: string | null
       target_field?: string | null
+      field_hints?: string[] | null
     }>
   }
 }
@@ -48,6 +49,7 @@ export interface SyncReviewResult {
   model: string
   providerKind: 'openai_compatible' | 'builtin' | 'manual'
   degraded: boolean
+  attemptErrors?: string[]
 }
 
 export interface TextGenerationResult {
@@ -282,7 +284,12 @@ function buildSkillBoundPrompt(provider: AIProvider, skillContext?: ReviewOption
     : '你是 ONES 业务运营合同审核角色，负责把合同风险转化为可追溯的风险项、销售谈判建议和 Word 批注意图。'
   const rules = (skillContext?.rules || [])
     .filter((rule) => rule.code)
-    .map((rule) => `${rule.code}@v${rule.version ?? 'x'} ${rule.clause_category || ''} ${rule.target_field || ''}`.trim())
+    .map((rule) => {
+      const hints = Array.isArray(rule.field_hints) && rule.field_hints.length > 0
+        ? ` hints=${rule.field_hints.join('/')}`
+        : ''
+      return `${rule.code}@v${rule.version ?? 'x'} ${rule.clause_category || ''} ${rule.target_field || ''}${hints}`.trim()
+    })
     .join('\n')
 
   return [
@@ -431,6 +438,7 @@ export async function reviewWithFailover(
   model: string
   providerKind: AIProvider['providerKind'] | 'manual'
   degraded: boolean
+  attemptErrors: string[]
 }> {
   const normalizedOptions = normalizeOptions(options)
   const { preferredProvider, orgId, skillContext } = normalizedOptions
@@ -439,6 +447,7 @@ export async function reviewWithFailover(
 
   for (const provider of providers) {
     if (!(await isProviderHealthy(provider))) {
+      errors.push(`${provider.id}: health_check_failed`)
       continue
     }
 
@@ -456,6 +465,7 @@ export async function reviewWithFailover(
         model: provider.config.model,
         providerKind: provider.providerKind,
         degraded: provider.providerKind === 'builtin',
+        attemptErrors: [...errors],
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -489,6 +499,7 @@ export async function reviewWithFailover(
     model: 'manual-review',
     providerKind: 'manual',
     degraded: true,
+    attemptErrors: [...errors],
   }
 }
 
@@ -500,6 +511,7 @@ export async function reviewWithFailoverSync(
   const normalizedOptions = normalizeOptions(options)
   let lastError: string | undefined
   const attemptedProviders = new Set<string>()
+  const attemptErrors: string[] = []
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     const effectivePreferredProvider = normalizedOptions.preferredProvider
@@ -507,12 +519,13 @@ export async function reviewWithFailoverSync(
       ? undefined
       : normalizedOptions.preferredProvider
 
-    const { stream, provider, model, providerKind, degraded } = await reviewWithFailover(contractText, {
+    const { stream, provider, model, providerKind, degraded, attemptErrors: providerAttemptErrors } = await reviewWithFailover(contractText, {
       ...normalizedOptions,
       preferredProvider: effectivePreferredProvider,
     })
 
     attemptedProviders.add(provider)
+    attemptErrors.push(...providerAttemptErrors)
 
     const reader = stream.getReader()
     const decoder = new TextDecoder()
@@ -528,7 +541,12 @@ export async function reviewWithFailoverSync(
       reader.releaseLock()
     }
 
-    const validation = validateAIOutput(fullText)
+    const validation = validateAIOutput(fullText, {
+      contractText,
+      rules: normalizedOptions.skillContext?.rules,
+      requireEvidenceInSource: Boolean(normalizedOptions.skillContext),
+      requireRuleEvidenceHint: Boolean(normalizedOptions.skillContext),
+    })
     if (validation.valid && validation.data) {
       return {
         risks: validation.data.risks,
@@ -537,10 +555,14 @@ export async function reviewWithFailoverSync(
         model,
         providerKind,
         degraded,
+        attemptErrors: [...attemptErrors],
       }
     }
 
     lastError = validation.error
+    if (lastError) {
+      attemptErrors.push(`${provider}: output_validation_failed: ${lastError}`)
+    }
     if (provider === 'manual-fallback') {
       break
     }
@@ -558,6 +580,7 @@ export async function reviewWithFailoverSync(
     model: 'manual-review',
     providerKind: 'manual',
     degraded: true,
+    attemptErrors: [...attemptErrors],
   }
 }
 

@@ -129,6 +129,39 @@ describe('buildReviewRunEvidence', () => {
         rule_snapshot_ids: ['snapshot-1'],
         model_policy_id: 'policy-1',
         status: 'published',
+        compiled_hash: 'hash-1',
+        output_schema: { schema_version: 'f006.review.v1' },
+        compiled_from: {
+          external_skill_source: {
+            repo: 'suoyidev/ones-internal-skills',
+            commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+            version: '2.2.2',
+            product_override: 'annotation-first',
+          },
+          external_skill_references: [
+            { path: 'references/09-二次验证清单.md' },
+            { path: 'references/13-结构化输出schema.md' },
+          ],
+          canonical_rule_completeness: {
+            expected: 15,
+            actual: 15,
+            missing: [],
+          },
+          output_schema_version: 'f006.review.v1',
+          second_verification: {
+            enforcement: 'model_output_runtime_validation',
+          },
+          comment_template: {
+            author: 'ONES 业务运营',
+          },
+          eval_results: {
+            gate: 'bundle_static_completeness',
+            status: 'runtime_eval_not_run',
+            total_cases: 14,
+            passed_cases: 0,
+            failed_cases: [],
+          },
+        },
       },
       modelPolicy: {
         id: 'policy-1',
@@ -157,6 +190,29 @@ describe('buildReviewRunEvidence', () => {
       model_invocation_ids: ['invocation-1'],
       rule_snapshot_id: 'contract_rule_snapshots:snapshot-1',
       evidence_status: 'snapshot_bound',
+      skill_bundle: {
+        id: 'skill-1',
+        version: 3,
+        compiled_hash: 'hash-1',
+        external_source: {
+          repo: 'suoyidev/ones-internal-skills',
+          commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+          version: '2.2.2',
+        },
+        rules: {
+          expected: 15,
+          actual: 15,
+          missing: [],
+        },
+        references: ['references/09-二次验证清单.md', 'references/13-结构化输出schema.md'],
+        output_schema_version: 'f006.review.v1',
+        second_verification_required: true,
+        comment_author: 'ONES 业务运营',
+        eval_status: 'runtime_eval_not_run',
+        eval_gate: 'bundle_static_completeness',
+        eval_total_cases: 14,
+        eval_passed_cases: 0,
+      },
       model_policy: {
         id: 'policy-1',
         provider: 'rule-engine',
@@ -165,6 +221,62 @@ describe('buildReviewRunEvidence', () => {
         invocation_id: 'invocation-1',
         fallback_reason: 'rule_engine_selected_by_model_policy',
       },
+    })
+  })
+
+  it('keeps all bound ReviewRun snapshots even when current risks reference only one rule', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-bound',
+        status: 'DEGRADED',
+        skill_bundle_id: 'skill-1',
+        rule_snapshot_ids: ['snapshot-1', 'snapshot-2', 'snapshot-3'],
+      },
+      latestJob: { provider: 'rule-engine', degraded: true, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
+      rules: [{ id: 'rule-1', code: 'R001', version: 2, engine_type: 'structured' }],
+      snapshots: [{
+        id: 'snapshot-1',
+        rule_id: 'rule-1',
+        version: 2,
+        status: 'published',
+        config_snapshot: { code: 'R001', engine_type: 'structured', version: 2 },
+      }, {
+        id: 'snapshot-2',
+        rule_id: 'rule-2',
+        version: 2,
+        status: 'published',
+        config_snapshot: { code: 'R002', engine_type: 'structured', version: 2 },
+      }, {
+        id: 'snapshot-3',
+        rule_id: 'rule-3',
+        version: 2,
+        status: 'published',
+        config_snapshot: { code: 'R003', engine_type: 'semantic', version: 2 },
+      }],
+      skillBundle: {
+        id: 'skill-1',
+        version: 3,
+        rule_snapshot_ids: ['snapshot-1', 'snapshot-2', 'snapshot-3'],
+        status: 'published',
+        compiled_from: {
+          canonical_rule_completeness: {
+            expected: 3,
+            actual: 3,
+            missing: [],
+          },
+        },
+      },
+    })
+
+    expect(evidence?.rule_snapshot_id).toBe('contract_rule_snapshots:bound:3')
+    expect(evidence?.evidence_status).toBe('snapshot_bound')
+    expect(evidence?.rule_snapshot_refs.map((ref) => ref.rule_code)).toEqual(['R001', 'R002', 'R003'])
+    expect(evidence?.skill_bundle?.rules).toMatchObject({
+      expected: 3,
+      actual: 3,
+      missing: [],
     })
   })
 

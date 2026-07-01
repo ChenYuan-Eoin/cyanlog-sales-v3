@@ -20,12 +20,25 @@ vi.mock('@/lib/supabase', () => ({
 import { requireAuth } from '@/lib/auth'
 import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 import { POST } from './route'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const originalFeishuAppId = process.env.FEISHU_APP_ID
 const originalFeishuAppSecret = process.env.FEISHU_APP_SECRET
 
 function makeRequest(): any {
   return new Request('https://example.test/api/access/feishu/sync', { method: 'POST' })
+}
+
+function makeThenableQuery(result: unknown): any {
+  const query: any = {
+    select: vi.fn(() => query),
+    eq: vi.fn(() => query),
+    order: vi.fn(() => query),
+    then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
+      Promise.resolve(result).then(resolve, reject)
+    ),
+  }
+  return query
 }
 
 function restoreFeishuEnv() {
@@ -143,5 +156,62 @@ describe('POST /api/access/feishu/sync', () => {
     const departmentUrl = new URL(String(fetchMock.mock.calls[1][0]))
     expect(departmentUrl.searchParams.get('page_size')).toBe('50')
     consoleError.mockRestore()
+  })
+
+  it('飞书只返回 root 或 0 个部门时返回 partial 而不是 completed', async () => {
+    process.env.FEISHU_APP_ID = 'app-id'
+    process.env.FEISHU_APP_SECRET = 'app-secret'
+    vi.mocked(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'departments') {
+        return makeThenableQuery({ data: [], error: null })
+      }
+      if (table === 'users') {
+        return makeThenableQuery({ data: [], error: null })
+      }
+      return makeThenableQuery({ data: [], error: null })
+    })
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        tenant_access_token: 'tenant-token',
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: {
+          items: [],
+          has_more: false,
+        },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: {
+          items: [],
+          has_more: false,
+        },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    )
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(false)
+    expect(body.sync_status).toBe('partial')
+    expect(body.message).toBe('飞书返回 0 个可访问部门')
+    expect(body.departments.failed).toBe(1)
+    expect(body.members.failed).toBe(0)
+    expect(body.warnings[0].message).toContain('0 个可访问部门')
   })
 })

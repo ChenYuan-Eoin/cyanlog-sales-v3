@@ -318,7 +318,7 @@ function extractDurationField(
 ): ExtractedField | null {
   const targetedPatterns: Record<string, RegExp[]> = {
     acceptance_silent_days: [
-      /(?:默示验收|视为验收|自动验收)[^0-9一二三四五六七八九十百]{0,30}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日)?/i,
+      /(?:默示验收|视为验收|自动验收)[^0-9一二三四五六七八九十百。；\n]{0,30}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日)/i,
       /([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日)\s*(?:内|后)?[^。；\n]{0,20}(?:默示验收|视为验收|自动验收)/i,
     ],
     payment_term_days: [
@@ -487,6 +487,13 @@ function compare(
   }
 }
 
+function normalizeThresholdForExtractedUnit(threshold: number, thresholdUnit: string, extractedUnit: string): number {
+  if (extractedUnit !== 'day') return threshold
+  if (thresholdUnit === 'year') return threshold * 365
+  if (thresholdUnit === 'month') return threshold * 30
+  return threshold
+}
+
 /**
  * 执行单条规则的 Level A/B/C 判定
  *
@@ -527,9 +534,25 @@ export function evaluateFlexibleRule(
 
   const actualValue = extracted.value
 
+  const levelCThreshold = normalizeThresholdForExtractedUnit(
+    rule.level_c.threshold,
+    rule.level_c.unit,
+    extracted.unit
+  )
+  const levelBThreshold = normalizeThresholdForExtractedUnit(
+    rule.level_b.threshold,
+    rule.level_b.unit,
+    extracted.unit
+  )
+  const levelAThreshold = normalizeThresholdForExtractedUnit(
+    rule.level_a.threshold,
+    rule.level_a.unit,
+    extracted.unit
+  )
+
   // 按优先级判定：C -> B -> A
   // Level C (🔴 红线)
-  if (compare(rule.level_c.operator, actualValue, rule.level_c.threshold)) {
+  if (compare(rule.level_c.operator, actualValue, levelCThreshold)) {
     return {
       level: 'C',
       matched: true,
@@ -546,7 +569,7 @@ export function evaluateFlexibleRule(
   }
 
   // Level B (🟡 偏离)
-  if (compare(rule.level_b.operator, actualValue, rule.level_b.threshold)) {
+  if (compare(rule.level_b.operator, actualValue, levelBThreshold)) {
     return {
       level: 'B',
       matched: true,
@@ -564,7 +587,7 @@ export function evaluateFlexibleRule(
   }
 
   // Level A (🟢 通过)
-  if (compare(rule.level_a.operator, actualValue, rule.level_a.threshold)) {
+  if (compare(rule.level_a.operator, actualValue, levelAThreshold)) {
     return {
       level: 'A',
       matched: true,
@@ -615,15 +638,15 @@ function buildRuleHints(rule: FlexibleRule): string[] {
 function evaluateTextRule(
   rule: FlexibleRule,
   contractText: string,
-  hints: string[]
+  _hints: string[]
 ): LevelMatchResult {
   const text = contractText.toLowerCase()
   const target = rule.target_field || rule.clause_category || rule.code
-  const matchedHints = hints.filter((hint) => text.includes(hint.toLowerCase()))
-  const matched = matchedHints.length > 0
-  const source = matchedHints.join('、')
+  const hasSourceEvidence = (evidence: string) => evidence.trim().length >= 6
 
-  const redResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult => ({
+  const redResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult | null => {
+    if (!hasSourceEvidence(evidence)) return null
+    return {
     level: 'C',
     matched: true,
     operator: rule.level_c.operator,
@@ -635,9 +658,12 @@ function evaluateTextRule(
     action: rule.level_c.action,
     message: rule.level_c.message || message,
     risk_label: 'red',
-  })
+    }
+  }
 
-  const greenResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult => ({
+  const greenResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult | null => {
+    if (!hasSourceEvidence(evidence)) return null
+    return {
     level: 'A',
     matched: true,
     operator: rule.level_a.operator,
@@ -649,7 +675,8 @@ function evaluateTextRule(
     action: rule.level_a.action,
     message,
     risk_label: 'green',
-  })
+    }
+  }
 
   const noTextRisk = (): LevelMatchResult => ({
     level: null,
@@ -698,6 +725,8 @@ function evaluateTextRule(
     && dangerHints.some((hint) => text.includes(hint))
 
   if (containsDanger) {
+    const evidence = contextForTerms(dangerHints)
+    if (!hasSourceEvidence(evidence)) return noTextRisk()
     return {
       level: 'C',
       matched: true,
@@ -705,7 +734,7 @@ function evaluateTextRule(
       threshold: rule.level_c.threshold,
       actual_value: 1,
       unit: 'text',
-      source: dangerHints.filter((hint) => text.includes(hint)).join('、'),
+      source: evidence,
       confidence: 0.85,
       action: rule.level_c.action,
       message: rule.level_c.message || `${rule.name}存在高风险表述`,
@@ -719,12 +748,12 @@ function evaluateTextRule(
     const refundTerms = ['按未消耗', '退还未使用', '退还未消耗', '不予退还', '不退费', '全额退款']
     const context = contextForTerms(subjectTerms)
     if (includesAny(['不予退还', '不退费', '全额退款'])) {
-      return redResult(`${rule.name}存在终止退款红线`, context || source, 0.88)
+      return redResult(`${rule.name}存在终止退款红线`, context, 0.88) || noTextRisk()
     }
     if (!includesAny(refundTerms)) {
-      return redResult(`${rule.name}未明确终止退款口径`, context || source)
+      return redResult(`${rule.name}未明确终止退款口径`, context) || noTextRisk()
     }
-    return greenResult(`${rule.name}已明确终止退款口径`, context || source)
+    return greenResult(`${rule.name}已明确终止退款口径`, context) || noTextRisk()
   }
 
   if (target === 'acceptance_failure_clause') {
@@ -733,21 +762,21 @@ function evaluateTextRule(
     const dangerTerms = ['全额退款', '立即解除', '单方解除', '间接损失']
     const context = contextForTerms(subjectTerms)
     if (includesAny(dangerTerms)) {
-      return redResult(`${rule.name}存在验收失败红线`, context || source, 0.88)
+      return redResult(`${rule.name}存在验收失败红线`, context, 0.88) || noTextRisk()
     }
-    return greenResult(`${rule.name}已约定验收失败处理`, context || source)
+    return greenResult(`${rule.name}已约定验收失败处理`, context) || noTextRisk()
   }
 
   if (target === 'indirect_loss_clause') {
     const dangerTerms = ['间接损失', '可得利益', '商誉', '惩罚性赔偿', '一切损失']
     if (!includesAny(dangerTerms)) return noTextRisk()
-    return redResult(`${rule.name}包含不应承担的间接或扩张损失`, contextForTerms(dangerTerms), 0.9)
+    return redResult(`${rule.name}包含不应承担的间接或扩张损失`, contextForTerms(dangerTerms), 0.9) || noTextRisk()
   }
 
   if (target === 'entity_payment_amount_consistency') {
     const dangerTerms = ['收款账户不一致', '主体不一致', '金额不一致', '大写金额不一致', '另行指定账户']
     if (!includesAny(dangerTerms)) return noTextRisk()
-    return redResult(`${rule.name}存在主体、账户或金额一致性风险`, contextForTerms(dangerTerms), 0.9)
+    return redResult(`${rule.name}存在主体、账户或金额一致性风险`, contextForTerms(dangerTerms), 0.9) || noTextRisk()
   }
 
   if (target === 'ip_ownership_clause') {
@@ -755,9 +784,9 @@ function evaluateTextRule(
     const ownershipTerms = ['归甲方', '归乙方', '归双方', '归买方', '归卖方', '归属甲方', '归属乙方', '归属双方', '所有权归', '享有所有权']
     const evidence = contextForTerms([...subjectTerms, ...ownershipTerms])
     if (hasNegatedContext(subjectTerms) || !includesAny(subjectTerms) || !includesAny(ownershipTerms)) {
-      return redResult(`${rule.name}缺失或未明确`, evidence)
+      return redResult(`${rule.name}缺失或未明确`, evidence) || noTextRisk()
     }
-    return greenResult(`${rule.name}已明确`, evidence)
+    return greenResult(`${rule.name}已明确`, evidence) || noTextRisk()
   }
 
   if (target === 'data_security_clause') {
@@ -766,9 +795,9 @@ function evaluateTextRule(
     const dangerTerms = ['用于训练', 'AI训练', '跨境', '境外', '无法删除', '永久保留']
     const context = contextForTerms(subjectTerms)
     if (includesAny(dangerTerms)) {
-      return redResult(`${rule.name}存在数据安全红线`, context, 0.9)
+      return redResult(`${rule.name}存在数据安全红线`, context, 0.9) || noTextRisk()
     }
-    return greenResult(`${rule.name}已覆盖数据安全要求`, context)
+    return greenResult(`${rule.name}已覆盖数据安全要求`, context) || noTextRisk()
   }
 
   if (target === 'renewal_clause') {
@@ -777,9 +806,9 @@ function evaluateTextRule(
     const dangerTerms = ['自动续约', '自动续期', '无权退出', '不得退出', '锁价', '单方涨价']
     const context = contextForTerms(subjectTerms)
     if (includesAny(dangerTerms) && !includesAny(['提前通知', '书面通知', '退出权', '不续约'])) {
-      return redResult(`${rule.name}存在自动续约或退出权风险`, context, 0.88)
+      return redResult(`${rule.name}存在自动续约或退出权风险`, context, 0.88) || noTextRisk()
     }
-    return greenResult(`${rule.name}已明确续约安排`, context)
+    return greenResult(`${rule.name}已明确续约安排`, context) || noTextRisk()
   }
 
   if (target === 'dispute_resolution_clause') {
@@ -787,9 +816,9 @@ function evaluateTextRule(
     const resolutionTerms = ['仲裁委员会', '仲裁', '管辖法院', '人民法院', '诉讼', '争议解决方式', '管辖地']
     const evidence = contextForTerms([...subjectTerms, ...resolutionTerms])
     if (hasNegatedContext(subjectTerms) || !includesAny(resolutionTerms)) {
-      return redResult(`${rule.name}缺失或未明确`, evidence)
+      return redResult(`${rule.name}缺失或未明确`, evidence) || noTextRisk()
     }
-    return greenResult(`${rule.name}已明确`, evidence)
+    return greenResult(`${rule.name}已明确`, evidence) || noTextRisk()
   }
 
   if (target === 'change_process_clause') {
@@ -798,32 +827,16 @@ function evaluateTextRule(
     const dangerTerms = ['口头', '单方变更', '无需书面', '电话确认']
     const evidence = contextForTerms([...subjectTerms, ...writtenTerms, ...dangerTerms])
     if (includesAny(dangerTerms)) {
-      return redResult(`${rule.name}存在口头或单方变更风险`, evidence, 0.9)
+      return redResult(`${rule.name}存在口头或单方变更风险`, evidence, 0.9) || noTextRisk()
     }
     if (hasNegatedContext([...subjectTerms, ...writtenTerms]) || !includesAny(subjectTerms) || !includesAny(writtenTerms)) {
-      return redResult(`${rule.name}缺失书面授权流程`, evidence)
+      return redResult(`${rule.name}缺失书面授权流程`, evidence) || noTextRisk()
     }
-    return greenResult(`${rule.name}已明确书面授权流程`, evidence)
+    return greenResult(`${rule.name}已明确书面授权流程`, evidence) || noTextRisk()
   }
 
   if (rule.engine_type === 'semantic' || rule.engine_type === 'hybrid') {
     return noTextRisk()
-  }
-
-  if (matched) {
-    return {
-      level: 'A',
-      matched: true,
-      operator: rule.level_a.operator,
-      threshold: rule.level_a.threshold,
-      actual_value: 1,
-      unit: 'text',
-      source,
-      confidence: Math.min(0.95, 0.55 + matchedHints.length * 0.1),
-      action: rule.level_a.action,
-      message: `${rule.name}已找到相关条款或表述`,
-      risk_label: 'green',
-    }
   }
 
   return noTextRisk()

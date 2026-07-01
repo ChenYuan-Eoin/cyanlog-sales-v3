@@ -4,8 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { DEFAULT_THEME, sanitizeThemeValue, type UIThemeConfigValue } from '@/lib/ui-theme-shared'
 import { getOrgIdForToken } from '@/lib/configs/runtime'
 
-const DEFAULT_ORG_ID = '00000000-0000-0000-0000-000000000001'
-const THEME_QUERY_TIMEOUT_MS = 150
+const THEME_QUERY_TIMEOUT_MS = 800
 
 async function loadPublishedThemeByOrgId(orgId: string) {
   const { data } = await supabaseAdmin
@@ -21,12 +20,25 @@ async function loadPublishedThemeByOrgId(orgId: string) {
   return sanitizeThemeValue((data?.value ?? undefined) as Record<string, unknown> | undefined)
 }
 
+async function loadLatestPublishedTheme() {
+  const { data } = await supabaseAdmin
+    .from('configs')
+    .select('value')
+    .eq('type', 'UI_THEME')
+    .eq('status', 'PUBLISHED')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  return sanitizeThemeValue((data?.value ?? undefined) as Record<string, unknown> | undefined)
+}
+
 async function getPublishedUIThemeInternal(token?: string): Promise<Required<UIThemeConfigValue>> {
   const orgId = await getOrgIdForToken(token)
   if (orgId) {
     return loadPublishedThemeByOrgId(orgId)
   }
-  return loadPublishedThemeByOrgId(DEFAULT_ORG_ID)
+  return loadLatestPublishedTheme()
 }
 
 export const getPublishedUITheme = cache(async (token?: string) => {

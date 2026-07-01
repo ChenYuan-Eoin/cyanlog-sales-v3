@@ -10,19 +10,18 @@ import {
   CardContent,
 } from '@/components/ui/card'
 import {
-  PenToolIcon,
   GitCompareIcon,
   FileTextIcon,
   AlertTriangleIcon,
   ClockIcon,
   ZapIcon,
-  UploadIcon,
   SearchIcon,
   PlusIcon,
   FilterIcon,
   ChevronRightIcon,
   XIcon,
   ShieldCheckIcon,
+  MessageSquareTextIcon,
 } from 'lucide-react'
 import type { Contract } from '@/types'
 import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
@@ -34,7 +33,7 @@ type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'
 
 type QuickAction = {
-  id: 'draft' | 'batchReview' | 'review' | 'compare'
+  id: 'review' | 'continue' | 'annotations' | 'compare'
   title: string
   shortTitle: string
   icon: React.ComponentType<{ className?: string }>
@@ -90,16 +89,6 @@ async function readResponseError(response: Response, fallback: string) {
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
 const quickActions: QuickAction[] = [
   {
-    id: 'draft',
-    title: '起草合同',
-    shortTitle: '起草',
-    icon: PenToolIcon,
-    color: 'bg-indigo-600',
-    hoverColor: 'hover:bg-indigo-700',
-    href: '/contracts/draft',
-    description: 'AI智能生成',
-  },
-  {
     id: 'review',
     title: '发起审核',
     shortTitle: '审核',
@@ -110,6 +99,26 @@ const quickActions: QuickAction[] = [
     description: '上传源文件并新建审核运行',
   },
   {
+    id: 'continue',
+    title: '继续审核',
+    shortTitle: '继续',
+    icon: ClockIcon,
+    color: 'bg-indigo-600',
+    hoverColor: 'hover:bg-indigo-700',
+    href: '/contracts/new',
+    description: '进入最近的进行中审核运行',
+  },
+  {
+    id: 'annotations',
+    title: '查看批注版',
+    shortTitle: '批注',
+    icon: MessageSquareTextIcon,
+    color: 'bg-slate-800',
+    hoverColor: 'hover:bg-slate-900',
+    href: '/contracts/new',
+    description: '查看已生成的 Word 批注版本',
+  },
+  {
     id: 'compare',
     title: '文档比对',
     shortTitle: '比对',
@@ -118,16 +127,6 @@ const quickActions: QuickAction[] = [
     hoverColor: 'hover:bg-emerald-700',
     href: '/contracts/upload?intent=compare',
     description: '完成审核后对照回传版',
-  },
-  {
-    id: 'batchReview',
-    title: '批量发起审核',
-    shortTitle: '批量',
-    icon: UploadIcon,
-    color: 'bg-slate-800',
-    hoverColor: 'hover:bg-slate-900',
-    href: '/contracts/upload',
-    description: '多文件创建审核运行',
   },
 ]
 
@@ -335,6 +334,10 @@ export default function ContractCenterPage() {
   }, [contracts, drafts])
 
   const resolvedQuickActions = useMemo<ResolvedQuickAction[]>(() => {
+    const continuingTarget = contracts.find((contract) => (
+      contract.status === 'PENDING' || contract.status === 'PARSING' || contract.status === 'ANALYZING'
+    ))
+    const annotatedTarget = contracts.find((contract) => contract.status === 'COMPLETED')
     const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED')
     return quickActions.map((action) => {
       if (action.id === 'review') {
@@ -342,6 +345,22 @@ export default function ContractCenterPage() {
           ...action,
           href: '/contracts/new',
           description: '上传源文件并创建 ReviewRun',
+        }
+      }
+
+      if (action.id === 'continue') {
+        return {
+          ...action,
+          href: continuingTarget ? `/contracts/${continuingTarget.id}` : '/contracts/new',
+          description: continuingTarget ? '进入最近的进行中审核运行' : '暂无进行中审核，可先发起审核',
+        }
+      }
+
+      if (action.id === 'annotations') {
+        return {
+          ...action,
+          href: annotatedTarget ? `/contracts/${annotatedTarget.id}?panel=evidence` : '/contracts/new',
+          description: annotatedTarget ? '查看最近完成合同的批注版和导出记录' : '需先完成一份合同审核',
         }
       }
 

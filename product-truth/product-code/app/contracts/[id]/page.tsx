@@ -57,6 +57,33 @@ type ReviewRun = {
     released_at: string | null
     source: 'published_snapshot'
   }>
+  skill_bundle?: {
+    id: string
+    version: number | null
+    status: string | null
+    published_at: string | null
+    compiled_hash: string | null
+    external_source: {
+      repo: string | null
+      commit: string | null
+      version: string | null
+      product_override: string | null
+    }
+    rules: {
+      expected: number | null
+      actual: number
+      missing: string[]
+    }
+    references: string[]
+    output_schema_version: string | null
+    second_verification_required: boolean
+    comment_author: string | null
+    eval_status: string | null
+    eval_gate: string | null
+    eval_total_cases: number | null
+    eval_passed_cases: number | null
+    eval_failed_cases: string[]
+  } | null
   model_policy?: {
     id: string
     provider: string
@@ -282,6 +309,21 @@ function buildReviewHealth(data: WorkbenchData) {
   if (data.reviewRun?.evidence_status && data.reviewRun.evidence_status !== 'snapshot_bound') {
     issues.push(`证据状态为 ${evidenceStatusLabel[data.reviewRun.evidence_status]}。`)
   }
+  if (data.reviewRun?.skill_bundle) {
+    const bundle = data.reviewRun.skill_bundle
+    if (!bundle.external_source.commit) {
+      issues.push('SkillBundle 缺少外部规则仓库 commit，不能证明使用了指定审核 skill。')
+    }
+    if (bundle.rules.missing.length > 0 || (bundle.rules.expected !== null && bundle.rules.actual < bundle.rules.expected)) {
+      issues.push(`SkillBundle 规则不完整：缺少 ${bundle.rules.missing.join('、') || '未记录规则明细'}。`)
+    }
+    if (!bundle.second_verification_required) {
+      issues.push('SkillBundle 未声明二次验证要求，模型输出不能直接作为有效审核结果。')
+    }
+    if (bundle.eval_status && bundle.eval_status !== 'passed') {
+      issues.push(`SkillBundle eval 状态为 ${bundle.eval_status}，不能视为模型质量已验收。`)
+    }
+  }
   if (data.reviewRun?.status === 'DEGRADED') {
     issues.push('ReviewRun 状态为 DEGRADED，本次结果不能作为无条件审核完成。')
   }
@@ -356,6 +398,13 @@ export default function ContractWorkbenchPage() {
   const [analyzing, setAnalyzing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>('review')
+
+  useEffect(() => {
+    const panel = new URLSearchParams(window.location.search).get('panel')
+    if (panel === 'summary' || panel === 'assistant' || panel === 'evidence') {
+      setSidePanelMode(panel)
+    }
+  }, [])
 
   const selectedRisk = useMemo(() => {
     if (!data) return null
@@ -1059,6 +1108,14 @@ function EvidencePanel({
       <InfoLine label="规则快照" value={reviewRun?.rule_snapshot_id || '未绑定'} />
       <InfoLine label="快照数量" value={String(reviewRun?.rule_snapshot_refs?.length ?? 0)} />
       <InfoLine label="技能包" value={reviewRun?.skill_bundle_id || '未生成'} />
+      <InfoLine label="Skill 来源" value={reviewRun?.skill_bundle?.external_source.commit || '未记录'} />
+      <InfoLine
+        label="规则完整性"
+        value={reviewRun?.skill_bundle
+          ? `${reviewRun.skill_bundle.rules.actual}/${reviewRun.skill_bundle.rules.expected ?? '未知'}`
+          : '未记录'}
+      />
+      <InfoLine label="Skill eval" value={reviewRun?.skill_bundle?.eval_status || '未记录'} />
       <InfoLine label="模型策略" value={reviewRun?.model_policy_id || 'rule-engine'} />
       <InfoLine
         label="模型来源"
@@ -1074,6 +1131,16 @@ function EvidencePanel({
       {latestJob?.last_error && (
         <p className="rounded-md border border-red-200 bg-red-50 p-3 text-red-700">
           {latestJob.last_error}
+        </p>
+      )}
+      {reviewRun?.model_policy?.last_error && (
+        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-red-700">
+          {reviewRun.model_policy.last_error}
+        </p>
+      )}
+      {reviewRun?.model_policy?.fallback_reason && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-700">
+          {reviewRun.model_policy.fallback_reason}
         </p>
       )}
     </div>
