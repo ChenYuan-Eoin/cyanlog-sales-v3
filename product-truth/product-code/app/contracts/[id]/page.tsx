@@ -329,20 +329,30 @@ export default function ContractWorkbenchPage() {
     return () => window.clearInterval(timer)
   }, [data, fetchWorkbench])
 
-  async function handleAnalyze() {
+  async function handleStartReview() {
+    if (!data) return
+
     setAnalyzing(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/contracts/${contractId}/analyze`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const isRerun = data.status === 'COMPLETED' || data.status === 'FAILED' || Boolean(data.reviewRun?.id)
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+      const response = await fetch(
+        isRerun ? `/api/contracts/${contractId}/review-runs` : `/api/contracts/${contractId}/analyze`,
+        {
+          method: 'POST',
+          headers: isRerun
+            ? { ...headers, 'Content-Type': 'application/json' }
+            : headers,
+          body: isRerun ? JSON.stringify({ trigger_event: 'manual_rerun' }) : undefined,
+        }
+      )
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
-        toastError(extractApiError(payload, '启动审核失败'))
+        toastError(extractApiError(payload, isRerun ? '启动再审核失败' : '启动审核失败'))
         return
       }
-      toastSuccess('已启动合同审核')
+      toastSuccess(isRerun ? '已启动合同再审核' : '已启动合同审核')
       await fetchWorkbench()
     } catch {
       toastError('网络错误，启动审核失败')
@@ -416,16 +426,23 @@ export default function ContractWorkbenchPage() {
     )
   }
 
-  const canAnalyze = data.status === 'PENDING' || data.status === 'FAILED'
   const isBusy = data.status === 'PARSING' || data.status === 'ANALYZING'
-  const canExport = data.status === 'COMPLETED' && (data.annotations.length > 0 || data.riskFindings.length > 0)
   const selectedSnippet = firstEvidence(selectedRisk)
   const redCount = data.stats?.red || data.riskFindings.filter((risk) => risk.severity === 'red').length
   const yellowCount = data.stats?.yellow || data.riskFindings.filter((risk) => risk.severity === 'yellow').length
   const displayName = data.filename?.trim() || data.title?.trim() || '未命名合同审核'
   const hasSourceAsset = Boolean(data.parsed_text?.trim()) || data.versions.length > 0 || Boolean(data.storage_path)
+  const canStartReview = hasSourceAsset && !isBusy && (
+    data.status === 'PENDING' || data.status === 'FAILED' || data.status === 'COMPLETED'
+  )
+  const canExport = data.status === 'COMPLETED' && (data.annotations.length > 0 || data.riskFindings.length > 0)
   const versionActionLabel = hasSourceAsset ? '上传客户回传版' : '补充合同源文件'
   const openRiskCount = data.stats?.open || data.riskFindings.filter((risk) => risk.status === 'open').length
+  const reviewActionLabel = data.status === 'COMPLETED'
+    ? '重新审查'
+    : data.status === 'FAILED'
+      ? '再次审核'
+      : '发起审核'
 
   return (
     <div className="space-y-6 p-6 xl:p-8">
@@ -453,10 +470,10 @@ export default function ContractWorkbenchPage() {
               返回
             </Button>
           </Link>
-          {canAnalyze && (
-            <Button onClick={handleAnalyze} disabled={analyzing || isBusy}>
+          {data.status !== 'DRAFT' && (
+            <Button onClick={handleStartReview} disabled={!canStartReview || analyzing}>
               {analyzing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <BotIcon className="mr-2 h-4 w-4" />}
-              发起审核
+              {isBusy ? '审核中' : reviewActionLabel}
             </Button>
           )}
           <Button onClick={handleExport} disabled={!canExport || exporting} variant="outline">
