@@ -61,6 +61,7 @@ draft
 - `published` 后必须生成不可变快照。
 - `ReviewRun` 绑定 `SkillBundle` 后，后续规则或模型配置变化不能影响历史结果。
 - `archived` 只影响新审核，不影响历史追溯。
+- 当 F009 从 `ones-internal-skills` 等规则源导入新版本并生成新的 `RuleSnapshot` 后，新建或再审核的 `ReviewRun` 必须重新计算 `SkillBundle.compiled_hash`；若快照集合变化，不得继续复用旧 current bundle。
 
 ---
 

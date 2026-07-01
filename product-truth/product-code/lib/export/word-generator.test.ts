@@ -19,6 +19,7 @@ async function writeMinimalDocx(filePath: string, text: string) {
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
     '<Default Extension="xml" ContentType="application/xml"/>',
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+    '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>',
     '</Types>',
   ].join(''))
   zip.file('_rels/.rels', [
@@ -29,12 +30,18 @@ async function writeMinimalDocx(filePath: string, text: string) {
   ].join(''))
   zip.file('word/document.xml', [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-    `<w:document xmlns:w="${W_NS}"><w:body>`,
+    `<w:document xmlns:w="${W_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>`,
     `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
-    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>',
+    '<w:sectPr><w:footerReference w:type="default" r:id="rIdFooter1"/><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>',
     '</w:body></w:document>',
   ].join(''))
-  zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${REL_NS}"/>`)
+  zip.file('word/footer1.xml', `<?xml version="1.0" encoding="UTF-8"?><w:ftr xmlns:w="${W_NS}"><w:p><w:r><w:t>源文件页脚</w:t></w:r></w:p></w:ftr>`)
+  zip.file('word/_rels/document.xml.rels', [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<Relationships xmlns="${REL_NS}">`,
+    '<Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>',
+    '</Relationships>',
+  ].join(''))
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer' })
   fs.writeFileSync(filePath, buffer)
@@ -72,17 +79,38 @@ describe('generateWordDocument', () => {
 
     expect(result.success).toBe(true)
     expect(result.outputPath).toBeTruthy()
+    expect(result.mode).toBe('source_comments')
     tempFiles.push(result.outputPath!)
 
     const outputZip = await JSZip.loadAsync(fs.readFileSync(result.outputPath!))
     const commentsXml = await outputZip.file('word/comments.xml')?.async('string')
     const documentXml = await outputZip.file('word/document.xml')?.async('string')
     const relsXml = await outputZip.file('word/_rels/document.xml.rels')?.async('string')
+    const footerXml = await outputZip.file('word/footer1.xml')?.async('string')
 
     expect(commentsXml).toContain('ONES 业务运营')
     expect(commentsXml).toContain('付款周期过长')
     expect(documentXml).toContain('<w:commentRangeStart')
     expect(documentXml).toContain('<w:commentReference')
     expect(relsXml).toContain('/relationships/comments')
+    expect(relsXml).toContain('/relationships/footer')
+    expect(footerXml).toContain('源文件页脚')
+  })
+
+  it('does not masquerade a generated report as source-file comments in strict mode', async () => {
+    const result = await generateWordDocument('/tmp/missing-ones-source.docx', {
+      risks: [
+        {
+          level: 'red',
+          title: '付款节奏',
+          description: '首期比例低于标准',
+          suggestion: '补充首期付款安排',
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.outputPath).toBeUndefined()
+    expect(result.error).toContain('缺少可写入批注的源文件')
   })
 })

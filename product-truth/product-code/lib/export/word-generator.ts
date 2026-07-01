@@ -70,6 +70,7 @@ export interface ExportData {
 export interface WordExportResult {
   success: boolean
   outputPath?: string
+  mode?: 'source_comments' | 'report_fallback'
   error?: string
 }
 
@@ -77,6 +78,10 @@ type NormalizedComment = {
   body: string
   selectedText: string
   level: string
+}
+
+type GenerateWordDocumentOptions = {
+  allowReportFallback?: boolean
 }
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -347,11 +352,12 @@ async function createReportDocx(outputPath: string, data: ExportData | ExportCom
 }
 
 /**
- * Generate Word document with structured report + native Word comments.
+ * Generate a Word-native commented copy from the uploaded source docx.
  */
 export async function generateWordDocument(
   inputDocxPath: string,
-  data: ExportData | ExportComment[]
+  data: ExportData | ExportComment[],
+  options: GenerateWordDocumentOptions = {}
 ): Promise<WordExportResult> {
   try {
     const tempDir = os.tmpdir()
@@ -368,20 +374,33 @@ export async function generateWordDocument(
     if (actualInputPath) {
       try {
         await addNativeComments(actualInputPath, outputPath, comments)
-        return { success: true, outputPath }
+        return { success: true, outputPath, mode: 'source_comments' }
       } catch (error) {
+        if (!options.allowReportFallback) {
+          return {
+            success: false,
+            error: `源文件批注失败，未生成报告伪装为批注版：${error instanceof Error ? error.message : String(error)}`,
+          }
+        }
         await createReportDocx(
           outputPath,
           data,
           comments,
           `源文件无法写入 Word 原生批注，已生成降级报告：${error instanceof Error ? error.message : String(error)}`
         )
-        return { success: true, outputPath }
+        return { success: true, outputPath, mode: 'report_fallback' }
+      }
+    }
+
+    if (!options.allowReportFallback) {
+      return {
+        success: false,
+        error: '缺少可写入批注的源文件，未生成报告伪装为批注版',
       }
     }
 
     await createReportDocx(outputPath, data, comments, '源文件不是可写 docx，已生成批注报告版本。')
-    return { success: true, outputPath }
+    return { success: true, outputPath, mode: 'report_fallback' }
   } catch (error) {
     return {
       success: false,

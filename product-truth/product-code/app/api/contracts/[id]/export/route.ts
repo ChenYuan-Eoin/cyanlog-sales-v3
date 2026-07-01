@@ -311,7 +311,7 @@ export async function POST(
       })
     }
 
-    // Generate Word document with structured report + comments
+    // Generate a source-docx-derived Word document with native comments.
     const exportResult = await exportTiming.measure('docx_generate', () => generateWordDocument(inputPath, exportData))
 
     // Clean up temp input file
@@ -324,6 +324,13 @@ export async function POST(
         exportResult.error || '文档生成失败',
         500,
         'EXPORT_FAILED'
+      )
+    }
+    if (exportResult.mode !== 'source_comments') {
+      return errorResponse(
+        '未生成源文件批注版，请检查源文件格式',
+        500,
+        'EXPORT_NOT_SOURCE_COMMENTS'
       )
     }
     const outputPath = exportResult.outputPath
