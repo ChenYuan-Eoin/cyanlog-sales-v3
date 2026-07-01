@@ -305,7 +305,7 @@ Bug 合并规则：
 - 旧合同详情：`/contracts/44301b16-6551-4720-afa5-f1d80b1604de` 不再复现错误边界，但仍缺正文和批注产物，属于合同审核产品闭环未完成。
 - 文档比对 GET 结果页：`/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare` 显示 50 条差异、双栏原文/对比文档和 AI 差异解读；浏览器 console 无错误。
 - 文档比对 POST 发起页：`/contracts/13aca6c2-e902-4458-9e94-6d8db8ae7a09/compare` 点击开始比对后 API 返回 201，页面显示 20 条差异；浏览器 console 无错误。
-- 文档比对阻断态：缺解析文本且缺源文件时显示“暂不能发起文档比对”，提供返回合同、上传新版本、重新选择；API 错误可解释。
+- 文档比对阻断态：缺解析文本且缺源文件时显示“暂不能发起文档比对”，提供返回合同、补充可比对文件、重新选择；API 错误可解释。
 - 手机 390x844：合同中心无主内容遮挡，底部起草/上传/审核/比对入口可见；比对结果页可打开并显示差异，console 无错误。
 - iPad 820x1180：配置中心组织与角色页可见真实数据；超管添加成员弹窗可打开并显示 24 个候选人；未执行实际添加/移除，避免污染数据。
 - 飞书同步：未配置环境下会先确认“本阶段不会导入成员”，确认后显示缺少 `FEISHU_APP_ID / FEISHU_APP_SECRET` 和配置指引；真实导入仍需凭据与线上验证。
@@ -528,7 +528,7 @@ Bug 合并规则：
 修复内容：
 
 - `app/contracts/page.tsx`：合同中心“上传合同”主入口改为 `/contracts/upload`，复用既有分片上传、进度、拖拽、提交审核与审核启动链路；旧 `/contracts/new` 保留为合同档案/元数据补录，不再作为“上传并审核”的主入口。
-- `app/contracts/[id]/compare/page.tsx`：无可比合同时“上传合同”进入 `/contracts/upload`；当前合同缺源文件时“上传新版本”进入 `/contracts/{id}/edit`，避免新合同上传和当前合同版本替换混用。
+- `app/contracts/[id]/compare/page.tsx`：无可比合同时引导补充回传件/候选合同；当前合同缺源文件时“补充可比对文件”进入 `/contracts/{id}/edit`，避免新合同上传和当前合同版本替换混用。
 - `app/api/contracts/[id]/merge-chunks/route.ts`：分片合并成功后补写 `contract_versions`，返回 `versionNumber` 和 `versionSource`，与非分片 `/upload` 路由保持同一合同版本事实。
 - `app/api/contracts/[id]/merge-chunks/route.test.ts`：补充成功路径，验证主上传链路合并后会创建版本记录。
 - `app/api/contracts/[id]/compare/route.ts` 与 `app/contracts/[id]/compare/page.tsx`：文档比对按同报价、同客户或 legacy 同上传者关系过滤候选和已有结果，避免 Hemory 等跨产品样本被默认拿来比对。
@@ -546,7 +546,7 @@ Bug 合并规则：
 
 仍需验收：
 
-- 线上 Production 复验上传入口、比对页上传跳转、当前合同编辑页上传新版本。
+- 线上 Production 复验发起审核入口、比对页补充可比对文件跳转、当前合同编辑页补充文件。
 - 合同审核商业闭环仍缺真实 `ASK 生成 -> ASK 回应 -> 再审核/报告升版 -> AnnotatedDocument/Report` 完整验收；`CommentPatch` 已补适配层，但 Word/WPS 打开验收仍未完成。
 
 ### 0.3.6 品牌主题默认回退与配置中心复验
@@ -765,7 +765,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 测试命令噪声 | `pnpm test:run` 固化 `NODE_OPTIONS=--no-experimental-webstorage` 后，当时 hook 全量测试为 102 个测试文件 / 427 个测试通过，且不再输出 Node 24 `--localstorage-file` warning；当前批次验收以 0.3 为准。 |
 | Lint 命令噪声 | `pnpm lint` 从 `next lint` 切到 ESLint CLI，覆盖 `app/components/lib/types` 与根运行配置文件；命令通过且不再输出 Next 16 废弃提示。 |
 | E2E 命令与知识库新建入口 | 当前批次没有新增第二套 E2E runner 或知识库页面，复用既有 `@playwright/test`、`playwright.config.ts`、`e2e/critical-path.spec.ts`、`app/knowledge/page.tsx` 和 `app/knowledge/new/page.tsx`。`package.json` 补齐 `test:e2e`、`test:e2e:headed`、`test:e2e:install`；`playwright.config.ts` 改为显式 `BASE_URL` 时不启动本地 dev server；`e2e/README.md` 的凭证统一为 `e2e-admin@huarun.com / E2ETestPassword123!`。验证：`BASE_URL=http://localhost:3012 pnpm test:e2e --list` 成功列出 1 个文件 / 8 条 E2E；`pnpm exec tsc --noEmit`、`pnpm lint`、`pnpm build` 均通过。知识库本地生产浏览器验证：登录后 `/knowledge` 桌面有 `新建` 按钮，点击进入 `/knowledge/new`，显示“新建知识库页面”表单且 console error 为 0；390px 移动视口 `/knowledge` 与 `/knowledge/new` 均 `scrollWidth=clientWidth=390`，点击新建同样进入创建页。该结果关闭本地 B5/B6 复现，但仍需线上域名复验后才能从 F027 关闭。 |
-| 合同审核入口收口 | 当前本地批次复用既有合同主工作台 `/contracts/[id]`、上传页、提交 API 和编辑页，没有新增第三套审核页面。`/contracts/[id]/review` 改为服务端重定向主工作台；`/contracts/upload` 上传完成跳转和 `/api/contracts/[id]/submit` 返回的 `reviewUrl` 统一为 `/contracts/{id}`；主工作台“上传新版本”从 `/contracts/new` 改为 `/contracts/{id}/edit`。质量门禁：`pnpm exec tsc --noEmit`、`pnpm lint`、`pnpm build` 均通过。真实浏览器本地 production 验证：登录后访问 `/contracts/44301b16-6551-4720-afa5-f1d80b1604de/review` 最终 URL 为 `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`，页面展示审批情况、风险定位、谈判任务、原文与风险定位、版本与产物、Word 批注，console error 为 0；390px 手机视口 `scrollWidth=clientWidth=390` 且无 `页面发生错误`；点击“上传新版本”进入 `/contracts/44301b16-6551-4720-afa5-f1d80b1604de/edit`，console error 为 0。该结果关闭本地 BUG-P1-025 复现，并修正同问题域下当前合同版本上传入口；仍需线上域名复验。 |
+| 合同审核入口收口 | 当前本地批次复用既有合同主工作台 `/contracts/[id]`、上传页、提交 API 和编辑页，没有新增第三套审核页面。`/contracts/[id]/review` 改为服务端重定向主工作台；`/contracts/upload` 上传完成跳转和 `/api/contracts/[id]/submit` 返回的 `reviewUrl` 统一为 `/contracts/{id}`；主工作台不再使用“上传新版本”作为审核动作，补充客户回传件/候选合同进入 `/contracts/{id}/edit` 的 `ContractVersion` 版本流。质量门禁：`pnpm exec tsc --noEmit`、`pnpm lint`、`pnpm build` 均通过。真实浏览器本地 production 验证：登录后访问 `/contracts/44301b16-6551-4720-afa5-f1d80b1604de/review` 最终 URL 为 `/contracts/44301b16-6551-4720-afa5-f1d80b1604de`，页面展示审批情况、风险定位、谈判任务、原文与风险定位、版本与产物、Word 批注，console error 为 0；390px 手机视口 `scrollWidth=clientWidth=390` 且无 `页面发生错误`；点击补充文件入口进入 `/contracts/44301b16-6551-4720-afa5-f1d80b1604de/edit`，console error 为 0。该结果关闭本地 BUG-P1-025 复现，并修正同问题域下当前合同版本补充入口；仍需线上域名复验。 |
 | 临时产物治理 | 7 个历史 `.playwright-mcp` log/snapshot 文件已从 Git 移除，并补齐 `.gitignore` / `.vercelignore`。 |
 
 这次复用了既有组织权限 UI、`/api/admin/users`、`/api/admin/departments`、`/api/admin/org` 读取聚合和 Supabase migration 链路；新增的是部门主管字段入库、聚合只读边界、软删除部门过滤和组织 tab 缓存再验证，没有新增第二套组织管理工作台。

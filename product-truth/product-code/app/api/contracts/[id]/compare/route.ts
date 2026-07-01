@@ -298,7 +298,7 @@ export async function POST(
     if (!canCompareContracts(contract, compareContract)) {
       return errorResponse(createApiError(
         'VALIDATION_ERROR',
-        '对比合同与当前合同缺少同客户、同报价或同上传者的关系，请选择同一客户/报价下的合同版本或重新上传新版本'
+        '对比合同与当前合同缺少同客户、同报价或同上传者的关系，请选择同一客户/报价下的合同版本，或补充同一业务背景下的回传件/候选合同'
       ))
     }
     if (contract.status !== 'COMPLETED' || compareContract.status !== 'COMPLETED') {

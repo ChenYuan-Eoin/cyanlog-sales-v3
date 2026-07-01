@@ -34,7 +34,7 @@ type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'
 
 type QuickAction = {
-  id: 'draft' | 'upload' | 'review' | 'compare'
+  id: 'draft' | 'batchReview' | 'review' | 'compare'
   title: string
   shortTitle: string
   icon: React.ComponentType<{ className?: string }>
@@ -120,14 +120,14 @@ const quickActions: QuickAction[] = [
     description: '完成审核后对照回传版',
   },
   {
-    id: 'upload',
-    title: '合同资料导入',
-    shortTitle: '导入',
+    id: 'batchReview',
+    title: '批量发起审核',
+    shortTitle: '批量',
     icon: UploadIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
     href: '/contracts/upload',
-    description: '批量归档，不替代审核入口',
+    description: '多文件创建审核运行',
   },
 ]
 
@@ -624,7 +624,7 @@ function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
         <Link href="/contracts/new" prefetch={false} className="shrink-0">
           <Button className="w-full gap-1.5 md:w-auto">
             <PlusIcon className="h-4 w-4" />
-            上传合同并发起审核
+            上传源文件并发起审核
           </Button>
         </Link>
       </div>

@@ -225,7 +225,7 @@ export async function POST(
         file_size: totalSize,
         mime_type: fileType || 'application/octet-stream',
         parent_version_id: latestVersion?.id || null,
-        change_summary: latestVersion ? '用户分片上传新的合同版本' : '用户分片上传合同源文件',
+        change_summary: latestVersion ? '用户分片补充合同文件' : '用户分片上传合同源文件',
         uploaded_by: user.id,
       })
 

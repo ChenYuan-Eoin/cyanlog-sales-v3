@@ -252,12 +252,16 @@ function SourceTextPreview({
 }) {
   const normalized = text.trim() || '当前还没有可展示的合同正文。请先上传可解析的 docx、pdf 或文本文件。'
   const index = selectedText ? normalized.indexOf(selectedText) : -1
+  const contentClassName = 'whitespace-pre-wrap break-words font-sans text-sm leading-7 text-slate-800'
+  const pageClassName = 'mx-auto min-h-[640px] max-w-[760px] rounded-sm bg-white px-6 py-8 shadow-sm ring-1 ring-slate-200 md:px-10 md:py-12'
 
   if (index < 0) {
     return (
-      <pre className="max-h-[680px] whitespace-pre-wrap break-words rounded-md bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-        {normalized}
-      </pre>
+      <div className="max-h-[760px] overflow-auto rounded-lg bg-slate-100 p-3 md:p-6">
+        <div className={pageClassName}>
+          <pre className={contentClassName}>{normalized}</pre>
+        </div>
+      </div>
     )
   }
 
@@ -266,11 +270,15 @@ function SourceTextPreview({
   const after = normalized.slice(index + selectedText.length)
 
   return (
-    <pre className="max-h-[680px] whitespace-pre-wrap break-words rounded-md bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-      {before}
-      <mark className="rounded bg-amber-200 px-1 text-slate-950">{matched}</mark>
-      {after}
-    </pre>
+    <div className="max-h-[760px] overflow-auto rounded-lg bg-slate-100 p-3 md:p-6">
+      <div className={pageClassName}>
+        <pre className={contentClassName}>
+          {before}
+          <mark className="rounded bg-amber-200 px-1 text-slate-950">{matched}</mark>
+          {after}
+        </pre>
+      </div>
+    </div>
   )
 }
 
@@ -437,7 +445,7 @@ export default function ContractWorkbenchPage() {
     data.status === 'PENDING' || data.status === 'FAILED' || data.status === 'COMPLETED'
   )
   const canExport = data.status === 'COMPLETED' && (data.annotations.length > 0 || data.riskFindings.length > 0)
-  const versionActionLabel = hasSourceAsset ? '导入客户回传文件' : '补充审核源文件'
+  const versionActionLabel = hasSourceAsset ? '导入客户回传件' : '补充审核源文件'
   const openRiskCount = data.stats?.open || data.riskFindings.filter((risk) => risk.status === 'open').length
   const reviewActionLabel = data.status === 'COMPLETED'
     ? '重新审查'
@@ -525,12 +533,9 @@ export default function ContractWorkbenchPage() {
                     以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。
                   </p>
                 </div>
-                <Link href={`/contracts/${contractId}/edit`}>
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <UploadIcon className="h-4 w-4" />
-                    {versionActionLabel}
-                  </Button>
-                </Link>
+                <Badge variant="outline">
+                  当前版本用于审核定位
+                </Badge>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {data.versions.length === 0 ? (
@@ -552,7 +557,20 @@ export default function ContractWorkbenchPage() {
                       {riskTone[selectedRisk.severity].label}
                     </Badge>
                   </div>
-                  <div className="mt-1 leading-6">{selectedRisk.suggestion || selectedRisk.description}</div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-3">
+                    <div className="rounded bg-white/70 p-2">
+                      <div className="text-[11px] font-medium text-blue-700">原文内容</div>
+                      <p className="mt-1 line-clamp-4 leading-5">{selectedSnippet || '未记录原文片段'}</p>
+                    </div>
+                    <div className="rounded bg-white/70 p-2">
+                      <div className="text-[11px] font-medium text-blue-700">批注建议</div>
+                      <p className="mt-1 line-clamp-4 leading-5">{selectedRisk.suggestion || '暂未生成修改建议'}</p>
+                    </div>
+                    <div className="rounded bg-white/70 p-2">
+                      <div className="text-[11px] font-medium text-blue-700">风险说明</div>
+                      <p className="mt-1 line-clamp-4 leading-5">{selectedRisk.description || '未记录风险说明'}</p>
+                    </div>
+                  </div>
                   {selectedRisk.rule_code && (
                     <div className="mt-2 font-mono text-xs text-blue-700">
                       {selectedRisk.rule_code}
@@ -719,7 +737,7 @@ function ReviewPanel({
         )}
         {risks.length === 0 ? (
           <div className="rounded-md border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
-            暂无风险项。上传合同并发起审核后会生成风险定位。
+            暂无风险项。上传源文件并发起审核后会生成风险定位。
           </div>
         ) : visibleRisks.length === 0 ? (
           <div className="rounded-md border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
@@ -746,12 +764,19 @@ function ReviewPanel({
                   <p className="mt-2 line-clamp-2 text-xs leading-5 opacity-80">
                     {risk.description || risk.suggestion || '未记录风险描述'}
                   </p>
+                  {risk.suggestion && (
+                    <div className="mt-2 rounded bg-white/70 p-2 text-[11px] leading-5 opacity-90">
+                      <span className="font-medium">批注建议：</span>
+                      <span>{risk.suggestion}</span>
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px] opacity-70">
                     {risk.rule_code && <span className="font-mono">{risk.rule_code}</span>}
                     {risk.clause_ref && <span>{risk.clause_ref}</span>}
                     {(risk.position.start !== null || risk.position.end !== null) && (
                       <span>原文定位</span>
                     )}
+                    <span>复核反馈待接入</span>
                     <span>{risk.status}</span>
                   </div>
                 </button>

@@ -219,7 +219,7 @@ export default function ContractComparePage() {
       ))
       if (missingTextContract) {
         const name = missingTextContract.filename || '所选合同'
-        setError(`无法发起比对：${name} 缺少源文件和可比对的解析文本。请上传可复制文本的 docx/pdf，或重新上传新版本后再比对。`)
+        setError(`无法发起比对：${name} 缺少源文件和可比对的解析文本。请补充可复制文本的 docx/pdf 回传件或候选合同后再比对。`)
         return
       }
 
@@ -341,7 +341,7 @@ export default function ContractComparePage() {
             <div className="space-y-4">
               <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
                 {excludedCandidateCount > 0
-                  ? `已排除 ${excludedCandidateCount} 份非同客户/同报价的已完成合同。请上传同一客户或同一报价下的新版本后再比对。`
+                  ? `已排除 ${excludedCandidateCount} 份非同客户/同报价的已完成合同。请补充同一客户或同一报价下的回传件/候选合同后再比对。`
                   : '当前没有可用于比对的已完成合同。请先上传或完成另一份合同审核。'}
               </p>
               <div className="flex items-center justify-between gap-3">
@@ -717,7 +717,7 @@ function CompareBlockingState({
           </Link>
           <Link href={`/contracts/${contractId}/edit`}>
             <Button variant="outline" className="w-full">
-              上传新版本
+              补充可比对文件
             </Button>
           </Link>
           <Button className="w-full" onClick={onReset}>
