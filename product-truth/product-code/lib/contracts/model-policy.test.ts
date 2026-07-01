@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isModelPolicyCurrentForPublishedProviders,
   selectReviewExecutionProvider,
   type ContractModelPolicy,
   type ModelPolicyProvider,
 } from './model-policy'
+import type { PublishedAIProviderConfig } from '@/lib/configs/runtime'
 
 const ruleProvider: ModelPolicyProvider = {
   profile: 'rule_engine',
@@ -62,6 +64,49 @@ function policy(providerChain: ModelPolicyProvider[]): ContractModelPolicy {
   }
 }
 
+function publishedProvider(overrides: Partial<PublishedAIProviderConfig> = {}): PublishedAIProviderConfig {
+  return {
+    config_id: '11111111-1111-4111-8111-111111111111',
+    key: 'AI_LEVEL_2',
+    display_name: '云端模型',
+    level: 2,
+    name: '云端模型',
+    profile: 'sales_cloud_backup',
+    provider_kind: 'openai_compatible',
+    base_url: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    api_key: 'test-key',
+    model: 'gemini-3.5-flash',
+    timeout_ms: 20000,
+    enabled: true,
+    routing: {
+      max_pages: 80,
+      strategy: 'chunked',
+    },
+    ...overrides,
+  }
+}
+
+function publishedRuleProvider(): PublishedAIProviderConfig {
+  return {
+    config_id: '22222222-2222-4222-8222-222222222222',
+    key: 'AI_LEVEL_3',
+    display_name: '规则引擎',
+    level: 3,
+    name: '规则引擎',
+    profile: 'rule_engine',
+    provider_kind: 'builtin',
+    base_url: '',
+    api_key: undefined,
+    model: 'rule-engine',
+    timeout_ms: 15000,
+    enabled: true,
+    routing: {
+      max_pages: 999,
+      strategy: 'rule',
+    },
+  }
+}
+
 describe('selectReviewExecutionProvider', () => {
   it('uses rule engine for structured rule execution even when AI providers exist', () => {
     const selected = selectReviewExecutionProvider(policy([aiProvider, ruleProvider]), 'structured_rules')
@@ -78,5 +123,55 @@ describe('selectReviewExecutionProvider', () => {
   it('falls back to rule engine when no AI provider can run the requested stage', () => {
     const selected = selectReviewExecutionProvider(policy([ruleProvider]), 'semantic_review')
     expect(selected.provider).toBe('rule-engine')
+  })
+})
+
+describe('isModelPolicyCurrentForPublishedProviders', () => {
+  it('accepts a policy generated from the current published providers', () => {
+    const currentProvider: ModelPolicyProvider = {
+      ...aiProvider,
+      profile: 'sales_cloud_backup',
+      model: 'gemini-3.5-flash',
+      level: 2,
+      timeout_ms: 20000,
+      capabilities: ['semantic_clause_review', 'comment_patch_draft', 'report_summary'],
+      routing: {
+        max_pages: 80,
+        strategy: 'chunked',
+      },
+    }
+    const currentRuleProvider: ModelPolicyProvider = {
+      ...ruleProvider,
+      level: 3,
+      source_config_id: '22222222-2222-4222-8222-222222222222',
+      capabilities: ['deterministic_rule_scan', 'fallback_without_external_model'],
+      routing: {
+        max_pages: 999,
+        strategy: 'rule',
+      },
+    }
+    const currentPolicy = {
+      ...policy([currentProvider, currentRuleProvider]),
+      source_config_ids: [
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222',
+      ],
+    }
+
+    expect(
+      isModelPolicyCurrentForPublishedProviders(currentPolicy, [
+        publishedProvider(),
+        publishedRuleProvider(),
+      ])
+    ).toBe(true)
+  })
+
+  it('rejects a stale policy when the published provider model changed', () => {
+    const stalePolicy = {
+      ...policy([aiProvider, { ...ruleProvider, level: 3 }]),
+      source_config_ids: ['11111111-1111-4111-8111-111111111111'],
+    }
+
+    expect(isModelPolicyCurrentForPublishedProviders(stalePolicy, [publishedProvider()])).toBe(false)
   })
 })

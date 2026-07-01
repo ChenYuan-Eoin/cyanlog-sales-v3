@@ -226,6 +226,55 @@ function isCompleteModelPolicy(policy: ContractModelPolicy) {
     ))
 }
 
+function sameStringList(left: string[], right: string[]) {
+  if (left.length !== right.length) return false
+  return left.every((value, index) => value === right[index])
+}
+
+function sameRouting(
+  left: ModelPolicyProvider['routing'] | undefined,
+  right: ModelPolicyProvider['routing'] | undefined
+) {
+  if (!left && !right) return true
+  if (!left || !right) return false
+  return left.max_pages === right.max_pages && left.strategy === right.strategy
+}
+
+function sameProvider(left: ModelPolicyProvider, right: ModelPolicyProvider) {
+  return left.profile === right.profile
+    && left.provider_kind === right.provider_kind
+    && left.provider === right.provider
+    && left.model === right.model
+    && left.level === right.level
+    && left.timeout_ms === right.timeout_ms
+    && left.role === right.role
+    && left.data_boundary === right.data_boundary
+    && left.health_check_required === right.health_check_required
+    && left.source_config_id === right.source_config_id
+    && sameStringList(left.stages, right.stages)
+    && sameStringList(left.capabilities, right.capabilities)
+    && sameRouting(left.routing, right.routing)
+}
+
+export function isModelPolicyCurrentForPublishedProviders(
+  policy: ContractModelPolicy,
+  providers: PublishedAIProviderConfig[]
+) {
+  const expectedChain = buildProviderChain(providers)
+  if (policy.provider_chain.length !== expectedChain.length) {
+    return false
+  }
+
+  const expectedSourceConfigIds = expectedChain
+    .map((provider) => provider.source_config_id)
+    .filter((id): id is string => Boolean(id))
+  if (!sameStringList(policy.source_config_ids, expectedSourceConfigIds)) {
+    return false
+  }
+
+  return expectedChain.every((expected, index) => sameProvider(policy.provider_chain[index], expected))
+}
+
 async function fetchCurrentModelPolicy(orgId: string) {
   const { data, error } = await supabaseAdmin
     .from('model_policies')
@@ -247,10 +296,19 @@ export async function resolvePublishedModelPolicy(
   requestedBy?: string | null
 ): Promise<ContractModelPolicy> {
   const current = await fetchCurrentModelPolicy(orgId)
-  if (current && isCompleteModelPolicy(current)) return current
+  const providers = await listPublishedAIProviders(orgId).catch(() => null)
+  if (
+    current
+    && isCompleteModelPolicy(current)
+    && (
+      providers === null
+      || isModelPolicyCurrentForPublishedProviders(current, providers)
+    )
+  ) {
+    return current
+  }
 
-  const providers = await listPublishedAIProviders(orgId).catch(() => [])
-  const configuredProviderChain = providers.length > 0
+  const configuredProviderChain = providers && providers.length > 0
     ? buildProviderChain(providers)
     : current?.provider_chain.length
       ? current.provider_chain
