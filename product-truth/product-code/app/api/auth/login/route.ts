@@ -30,7 +30,7 @@ export const runtime = 'nodejs'
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 const LOGIN_SLOW_TIMING_THRESHOLD_MS = 500
-const DEFAULT_LOGIN_RPC_DEADLINE_MS = 900
+const DEFAULT_LOGIN_RPC_DEADLINE_MS = 1800
 const DEFAULT_LOGIN_TRANSPORT_DEADLINE_MS = 2500
 
 type LoginRateLimit = Awaited<ReturnType<typeof checkLoginRateLimit>>

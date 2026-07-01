@@ -23,6 +23,7 @@ import { error as toastError, success as toastSuccess } from '@/lib/toast'
 type ContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
 type RiskSeverity = 'red' | 'yellow' | 'green' | 'white'
 type SidePanelMode = 'review' | 'summary' | 'assistant' | 'evidence'
+type RiskFilter = 'all' | RiskSeverity
 
 type ContractVersion = {
   id: string
@@ -436,7 +437,7 @@ export default function ContractWorkbenchPage() {
     data.status === 'PENDING' || data.status === 'FAILED' || data.status === 'COMPLETED'
   )
   const canExport = data.status === 'COMPLETED' && (data.annotations.length > 0 || data.riskFindings.length > 0)
-  const versionActionLabel = hasSourceAsset ? '上传客户回传版' : '补充合同源文件'
+  const versionActionLabel = hasSourceAsset ? '导入客户回传文件' : '补充审核源文件'
   const openRiskCount = data.stats?.open || data.riskFindings.filter((risk) => risk.status === 'open').length
   const reviewActionLabel = data.status === 'COMPLETED'
     ? '重新审查'
@@ -475,6 +476,14 @@ export default function ContractWorkbenchPage() {
               {analyzing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <BotIcon className="mr-2 h-4 w-4" />}
               {isBusy ? '审核中' : reviewActionLabel}
             </Button>
+          )}
+          {data.status === 'DRAFT' && !hasSourceAsset && (
+            <Link href={`/contracts/${contractId}/edit`}>
+              <Button className="gap-1.5">
+                <UploadIcon className="h-4 w-4" />
+                补充审核源文件
+              </Button>
+            </Link>
           )}
           <Button onClick={handleExport} disabled={!canExport || exporting} variant="outline">
             {exporting ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
@@ -667,6 +676,18 @@ function ReviewPanel({
   onSelectRisk: (riskId: string) => void
   negotiationTasks: NegotiationTask[]
 }) {
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all')
+  const riskFilters: Array<{ value: RiskFilter; label: string; count: number }> = [
+    { value: 'all', label: '全部', count: risks.length },
+    { value: 'red', label: '红线', count: risks.filter((risk) => risk.severity === 'red').length },
+    { value: 'yellow', label: '需谈判', count: risks.filter((risk) => risk.severity === 'yellow').length },
+    { value: 'green', label: '通过', count: risks.filter((risk) => risk.severity === 'green').length },
+    { value: 'white', label: '提示', count: risks.filter((risk) => risk.severity === 'white').length },
+  ]
+  const visibleRisks = riskFilter === 'all'
+    ? risks
+    : risks.filter((risk) => risk.severity === riskFilter)
+
   return (
     <div className="space-y-5">
       <section>
@@ -674,13 +695,39 @@ function ReviewPanel({
           <h3 className="text-sm font-semibold text-slate-950">风险定位</h3>
           <Badge variant="outline">{risks.length}</Badge>
         </div>
+        {risks.length > 0 && (
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {riskFilters.map((filter) => {
+              const active = filter.value === riskFilter
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setRiskFilter(filter.value)}
+                  className={`rounded-md border px-2.5 py-2 text-left text-xs transition ${
+                    active
+                      ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  <span className="font-medium">{filter.label}</span>
+                  <span className="ml-1 text-slate-400">{filter.count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
         {risks.length === 0 ? (
           <div className="rounded-md border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
             暂无风险项。上传合同并发起审核后会生成风险定位。
           </div>
+        ) : visibleRisks.length === 0 ? (
+          <div className="rounded-md border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
+            当前分类暂无风险项。
+          </div>
         ) : (
           <div className="space-y-2">
-            {risks.map((risk) => {
+            {visibleRisks.map((risk) => {
               const tone = riskTone[risk.severity]
               const active = selectedRiskId === risk.id
               return (
@@ -702,6 +749,9 @@ function ReviewPanel({
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px] opacity-70">
                     {risk.rule_code && <span className="font-mono">{risk.rule_code}</span>}
                     {risk.clause_ref && <span>{risk.clause_ref}</span>}
+                    {(risk.position.start !== null || risk.position.end !== null) && (
+                      <span>原文定位</span>
+                    )}
                     <span>{risk.status}</span>
                   </div>
                 </button>
@@ -922,10 +972,15 @@ function VersionOutputPanel({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <WorkflowIcon className="h-4 w-4" />
-            版本与产物
-          </CardTitle>
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <WorkflowIcon className="h-4 w-4" />
+              版本与产物
+            </CardTitle>
+            <p className="mt-1 text-sm text-slate-500">
+              客户谈判后的回传文件会形成新的 ContractVersion，不作为发起审核入口。
+            </p>
+          </div>
           <Link href={`/contracts/${contractId}/edit`}>
             <Button size="sm" variant="outline" className="gap-1.5">
               <UploadIcon className="h-4 w-4" />

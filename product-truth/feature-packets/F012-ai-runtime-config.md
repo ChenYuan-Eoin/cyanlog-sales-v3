@@ -139,10 +139,56 @@
 
 第一阶段已落地：
 
-- `model_policies`：从已发布 `AI_CONFIG` 配置解析为运行策略，包含 providers、routing、fallback、timeouts、schema_policy、status、version 和发布审计字段。
+- `model_policies`：从已发布 `AI_CONFIG` 配置解析为运行策略，包含 provider_chain、阶段路由、fallback、timeouts、schema 失败处理、status、version 和发布审计字段。
 - `model_invocations`：每次合同审核运行记录 provider、model、policy_id、skill_bundle_id、review_id、fallback_reason、duration/status 和输入/输出摘要。
 - `contract_reviews.model_policy_id` / `model_invocation_ids`：ReviewRun 绑定当次使用的模型策略和调用审计。
 - 规则兜底作为内置 provider 明确进入策略链，而不是在业务代码里静默当作“AI 成功”。
+
+当前 `ModelPolicy` 对象最低要求：
+
+```ts
+interface ModelPolicy {
+  key: 'CONTRACT_REVIEW_DEFAULT'
+  version: number
+  status: 'draft' | 'published' | 'archived'
+  is_current: boolean
+  provider_chain: Array<{
+    profile: string
+    provider_kind: 'openai_compatible' | 'builtin'
+    provider: string
+    model: string
+    level: number
+    timeout_ms: number
+    stages: Array<'structured_rules' | 'template_compare' | 'semantic_review' | 'comment_patch_draft' | 'report_summary' | 'rule_fallback'>
+    role: 'primary' | 'fallback'
+    capabilities: string[]
+    data_boundary: 'contract_text_redacted' | 'contract_text_allowed' | 'rules_only'
+    health_check_required: boolean
+    source_config_id: string | null
+  }>
+  routing_policy: {
+    policy_version: 'f012.model-policy.v1'
+    stage_order: string[]
+    stage_provider_strategy: Record<string, string>
+  }
+  fallback_policy: {
+    policy_version: 'f012.fallback.v1'
+    final_fallback: 'rule_engine'
+    on_timeout: string
+    on_provider_error: string
+    on_schema_error: string
+  }
+  audit_policy: {
+    policy_version: 'f012.audit.v1'
+    record_invocation: true
+    require_skill_bundle_id: true
+    require_model_policy_id: true
+    required_spans: string[]
+  }
+}
+```
+
+结构化规则阶段可以由 `rule-engine` 执行；语义审核、批注意图和报告摘要阶段必须通过已发布 provider 策略选择模型，缺失或失败时才降级到规则兜底或人工复核。
 
 仍未关闭的后续项：
 

@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/card'
 import {
   PenToolIcon,
-  EyeIcon,
   GitCompareIcon,
   FileTextIcon,
   AlertTriangleIcon,
@@ -101,24 +100,14 @@ const quickActions: QuickAction[] = [
     description: 'AI智能生成',
   },
   {
-    id: 'upload',
-    title: '批量导入',
-    shortTitle: '导入',
-    icon: UploadIcon,
-    color: 'bg-slate-800',
-    hoverColor: 'hover:bg-slate-900',
-    href: '/contracts/upload',
-    description: '多文件上传审核',
-  },
-  {
     id: 'review',
-    title: '发起合同审核',
+    title: '发起审核',
     shortTitle: '审核',
-    icon: EyeIcon,
+    icon: ShieldCheckIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
     href: '/contracts/new',
-    description: '上传源文件并绑定规则',
+    description: '上传源文件并新建审核运行',
   },
   {
     id: 'compare',
@@ -128,7 +117,17 @@ const quickActions: QuickAction[] = [
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
     href: '/contracts/upload?intent=compare',
-    description: '上传回传版并对照模板',
+    description: '完成审核后对照回传版',
+  },
+  {
+    id: 'upload',
+    title: '合同资料导入',
+    shortTitle: '导入',
+    icon: UploadIcon,
+    color: 'bg-slate-800',
+    hoverColor: 'hover:bg-slate-900',
+    href: '/contracts/upload',
+    description: '批量归档，不替代审核入口',
   },
 ]
 
@@ -342,7 +341,7 @@ export default function ContractCenterPage() {
         return {
           ...action,
           href: '/contracts/new',
-          description: '发起新的合同审核',
+          description: '上传源文件并创建 ReviewRun',
         }
       }
 
@@ -350,7 +349,7 @@ export default function ContractCenterPage() {
         return {
           ...action,
           href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/upload?intent=compare',
-          description: compareTarget ? '进入最近完成合同的比对工作台' : '上传合同后创建比对任务',
+          description: compareTarget ? '进入最近完成合同的比对工作台' : '需先完成一份合同审核',
         }
       }
 
@@ -452,12 +451,6 @@ export default function ContractCenterPage() {
                   </Button>
                 </Link>
               ))}
-              <Link href="/contracts/new" prefetch={false}>
-                <Button size="sm" className="gap-1.5">
-                  <PlusIcon className="h-4 w-4" />
-                  新建审核
-                </Button>
-              </Link>
             </div>
 
             {/* 移动端筛选按钮 */}
@@ -621,17 +614,17 @@ function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
           </div>
           <div className="min-w-0">
             <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-slate-950`}>
-              发起合同审核
+              合同审核工作台入口
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              上传合同源文件，绑定已发布规则、Skill 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。
+              新建 ReviewRun，上传合同源文件，绑定已发布规则、SkillBundle 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。
             </p>
           </div>
         </div>
         <Link href="/contracts/new" prefetch={false} className="shrink-0">
           <Button className="w-full gap-1.5 md:w-auto">
             <PlusIcon className="h-4 w-4" />
-            发起审核
+            上传合同并发起审核
           </Button>
         </Link>
       </div>
@@ -646,7 +639,7 @@ function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
           <span className="ml-1">规则快照 / Skill</span>
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-2">
-          <span className="font-medium text-slate-900">业务处理</span>
+          <span className="font-medium text-slate-900">风险定位</span>
           <span className="ml-1">复核 / 谈判</span>
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-2">

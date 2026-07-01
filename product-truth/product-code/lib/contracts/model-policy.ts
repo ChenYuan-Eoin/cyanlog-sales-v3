@@ -5,6 +5,14 @@ type JsonRecord = Record<string, unknown>
 
 const MODEL_POLICY_KEY = 'CONTRACT_REVIEW_DEFAULT'
 
+export type ModelPolicyStage =
+  | 'structured_rules'
+  | 'template_compare'
+  | 'semantic_review'
+  | 'comment_patch_draft'
+  | 'report_summary'
+  | 'rule_fallback'
+
 export type ModelPolicyProvider = {
   profile: string
   provider_kind: 'openai_compatible' | 'builtin'
@@ -12,6 +20,11 @@ export type ModelPolicyProvider = {
   model: string
   level: number
   timeout_ms: number
+  stages: ModelPolicyStage[]
+  role: 'primary' | 'fallback'
+  capabilities: string[]
+  data_boundary: 'contract_text_redacted' | 'contract_text_allowed' | 'rules_only'
+  health_check_required: boolean
   routing?: {
     max_pages: number
     strategy: 'full' | 'chunked' | 'rule'
@@ -67,14 +80,46 @@ function asRecord(value: unknown): JsonRecord {
     : {}
 }
 
+function asStageList(value: unknown, fallback: ModelPolicyStage[]): ModelPolicyStage[] {
+  if (!Array.isArray(value)) return fallback
+  const allowed = new Set<ModelPolicyStage>([
+    'structured_rules',
+    'template_compare',
+    'semantic_review',
+    'comment_patch_draft',
+    'report_summary',
+    'rule_fallback',
+  ])
+  const stages = value.filter((stage): stage is ModelPolicyStage => (
+    typeof stage === 'string' && allowed.has(stage as ModelPolicyStage)
+  ))
+  return stages.length > 0 ? stages : fallback
+}
+
+function asStringList(value: unknown, fallback: string[]) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : fallback
+}
+
 function normalizeProvider(row: PublishedAIProviderConfig): ModelPolicyProvider {
+  const isBuiltin = row.provider_kind === 'builtin' || row.model === 'rule-engine'
   return {
     profile: String(row.profile || row.key || row.name || 'provider'),
-    provider_kind: row.provider_kind || 'openai_compatible',
-    provider: row.provider_kind === 'builtin' ? 'builtin' : 'openai-compatible',
+    provider_kind: isBuiltin ? 'builtin' : 'openai_compatible',
+    provider: isBuiltin ? 'rule-engine' : 'openai-compatible',
     model: row.model || 'unknown',
     level: Number(row.level || 1),
     timeout_ms: Number(row.timeout_ms || 45000),
+    stages: isBuiltin
+      ? ['structured_rules', 'rule_fallback']
+      : ['semantic_review', 'comment_patch_draft', 'report_summary'],
+    role: isBuiltin ? 'fallback' : 'primary',
+    capabilities: isBuiltin
+      ? ['deterministic_rule_scan', 'fallback_without_external_model']
+      : ['semantic_clause_review', 'comment_patch_draft', 'report_summary'],
+    data_boundary: isBuiltin ? 'rules_only' : 'contract_text_allowed',
+    health_check_required: !isBuiltin,
     routing: row.routing,
     source_config_id: row.config_id,
   }
@@ -88,6 +133,11 @@ function ruleEngineProvider(level = 99): ModelPolicyProvider {
     model: 'rule-engine',
     level,
     timeout_ms: 15000,
+    stages: ['structured_rules', 'rule_fallback'],
+    role: 'fallback',
+    capabilities: ['deterministic_rule_scan', 'schema_repair', 'fallback_without_external_model'],
+    data_boundary: 'rules_only',
+    health_check_required: false,
     routing: {
       max_pages: 1,
       strategy: 'rule',
@@ -113,6 +163,27 @@ function normalizeProviderChain(value: unknown): ModelPolicyProvider[] {
       model,
       level: Number(record.level || 1),
       timeout_ms: Number(record.timeout_ms || 45000),
+      stages: asStageList(
+        record.stages,
+        record.provider_kind === 'builtin'
+          ? ['structured_rules', 'rule_fallback']
+          : ['semantic_review', 'comment_patch_draft', 'report_summary']
+      ),
+      role: record.role === 'fallback' ? 'fallback' : 'primary',
+      capabilities: asStringList(
+        record.capabilities,
+        record.provider_kind === 'builtin'
+          ? ['deterministic_rule_scan', 'fallback_without_external_model']
+          : ['semantic_clause_review', 'comment_patch_draft', 'report_summary']
+      ),
+      data_boundary: record.data_boundary === 'contract_text_redacted'
+        ? 'contract_text_redacted'
+        : record.data_boundary === 'rules_only'
+          ? 'rules_only'
+          : 'contract_text_allowed',
+      health_check_required: typeof record.health_check_required === 'boolean'
+        ? record.health_check_required
+        : record.provider_kind !== 'builtin',
       routing: asRecord(record.routing) as ModelPolicyProvider['routing'],
       source_config_id: typeof record.source_config_id === 'string' ? record.source_config_id : null,
     })
@@ -134,10 +205,25 @@ function normalizeModelPolicy(row: ModelPolicyRow): ContractModelPolicy {
 
 function buildProviderChain(providers: PublishedAIProviderConfig[]): ModelPolicyProvider[] {
   const chain = providers.map(normalizeProvider)
+  return ensureRuleEngineProvider(chain)
+}
+
+function ensureRuleEngineProvider(chain: ModelPolicyProvider[]): ModelPolicyProvider[] {
   if (!chain.some((provider) => provider.provider_kind === 'builtin' && provider.model === 'rule-engine')) {
     chain.push(ruleEngineProvider(chain.length + 1))
   }
   return chain.sort((left, right) => left.level - right.level)
+}
+
+function isCompleteModelPolicy(policy: ContractModelPolicy) {
+  return policy.routing_policy.policy_version === 'f012.model-policy.v1'
+    && policy.fallback_policy.policy_version === 'f012.fallback.v1'
+    && policy.audit_policy.policy_version === 'f012.audit.v1'
+    && policy.provider_chain.every((provider) => (
+      provider.stages.length > 0
+      && provider.capabilities.length > 0
+      && typeof provider.health_check_required === 'boolean'
+    ))
 }
 
 async function fetchCurrentModelPolicy(orgId: string) {
@@ -161,14 +247,20 @@ export async function resolvePublishedModelPolicy(
   requestedBy?: string | null
 ): Promise<ContractModelPolicy> {
   const current = await fetchCurrentModelPolicy(orgId)
-  if (current) return current
+  if (current && isCompleteModelPolicy(current)) return current
 
   const providers = await listPublishedAIProviders(orgId).catch(() => [])
-  const providerChain = buildProviderChain(providers)
+  const configuredProviderChain = providers.length > 0
+    ? buildProviderChain(providers)
+    : current?.provider_chain.length
+      ? current.provider_chain
+      : buildProviderChain([])
+  const providerChain = ensureRuleEngineProvider([...configuredProviderChain])
   const sourceConfigIds = providerChain
     .map((provider) => provider.source_config_id)
     .filter((id): id is string => Boolean(id))
   const primary = providerChain[0] || ruleEngineProvider(1)
+  const nextVersion = current ? current.version + 1 : 1
 
   const { data, error } = await supabaseAdmin
     .from('model_policies')
@@ -176,24 +268,61 @@ export async function resolvePublishedModelPolicy(
       org_id: orgId,
       key: MODEL_POLICY_KEY,
       name: '合同审核默认模型策略',
-      version: 1,
+      version: nextVersion,
       status: 'published',
-      is_current: true,
+      is_current: !current,
       provider_chain: providerChain,
       routing_policy: {
+        policy_version: 'f012.model-policy.v1',
         strategy: primary.routing?.strategy || 'rule',
         max_pages: primary.routing?.max_pages || 1,
+        stage_order: [
+          'structured_rules',
+          'template_compare',
+          'semantic_review',
+          'comment_patch_draft',
+          'report_summary',
+        ],
+        stage_provider_strategy: {
+          structured_rules: 'rule_engine_first',
+          template_compare: 'rule_and_template_snapshot',
+          semantic_review: 'first_available_ai_provider_then_rule_fallback',
+          comment_patch_draft: 'schema_validated_ai_or_rule_template',
+          report_summary: 'same_fact_set_as_comment_patch',
+        },
+        data_boundary: {
+          external_model_contract_text: 'allowed_only_by_published_provider_policy',
+          fallback_without_external_model: true,
+        },
       },
       timeout_ms: primary.timeout_ms || 45000,
       fallback_policy: {
+        policy_version: 'f012.fallback.v1',
         fallback_order: providerChain.map((provider) => provider.profile),
         final_fallback: 'rule_engine',
+        on_timeout: 'next_provider_then_rule_fallback',
+        on_provider_error: 'next_provider_then_rule_fallback',
         on_schema_error: 'retry_then_rule_fallback',
+        max_attempts_per_provider: 1,
+        preserve_review_run: true,
       },
       audit_policy: {
+        policy_version: 'f012.audit.v1',
         record_invocation: true,
         require_skill_bundle_id: true,
         require_model_policy_id: true,
+        record_provider_chain: true,
+        record_stage: true,
+        record_latency_ms: true,
+        required_spans: [
+          'structured_rules',
+          'template_compare',
+          'semantic_review',
+          'comment_patch_draft',
+          'report_summary',
+        ],
+        redact_api_key: true,
+        persist_request_response_summary_only: true,
       },
       source_config_ids: sourceConfigIds,
       created_by: requestedBy || null,
@@ -209,14 +338,50 @@ export async function resolvePublishedModelPolicy(
     throw error
   }
 
-  return normalizeModelPolicy(data as ModelPolicyRow)
+  if (!current) {
+    return normalizeModelPolicy(data as ModelPolicyRow)
+  }
+
+  const inserted = normalizeModelPolicy(data as ModelPolicyRow)
+  const { error: clearError } = await supabaseAdmin
+    .from('model_policies')
+    .update({ is_current: false })
+    .eq('id', current.id)
+  if (clearError) {
+    return current
+  }
+
+  const { data: promoted, error: promoteError } = await supabaseAdmin
+    .from('model_policies')
+    .update({ is_current: true })
+    .eq('id', inserted.id)
+    .select('*')
+    .single()
+  if (promoteError) {
+    await supabaseAdmin
+      .from('model_policies')
+      .update({ is_current: true })
+      .eq('id', current.id)
+    throw promoteError
+  }
+
+  return normalizeModelPolicy(promoted as ModelPolicyRow)
 }
 
-export function selectReviewExecutionProvider(policy: ContractModelPolicy): ModelPolicyProvider {
+export function selectReviewExecutionProvider(
+  policy: ContractModelPolicy,
+  stage: ModelPolicyStage = 'structured_rules'
+): ModelPolicyProvider {
+  const candidates = policy.provider_chain.filter((provider) => provider.stages.includes(stage))
   const ruleProvider = policy.provider_chain.find((provider) => (
     provider.provider_kind === 'builtin' && provider.model === 'rule-engine'
   ))
-  return ruleProvider || policy.provider_chain[0] || ruleEngineProvider()
+  if (stage === 'structured_rules' || stage === 'rule_fallback') {
+    return ruleProvider || candidates[0] || policy.provider_chain[0] || ruleEngineProvider()
+  }
+
+  const aiProvider = candidates.find((provider) => provider.provider_kind !== 'builtin')
+  return aiProvider || candidates[0] || ruleProvider || policy.provider_chain[0] || ruleEngineProvider()
 }
 
 export async function recordModelInvocation(input: InvocationInput) {

@@ -140,12 +140,32 @@ interface SkillBundle {
   version: number
   org_id: string
   status: 'draft' | 'published' | 'compiled' | 'archived'
+  key: 'CONTRACT_REVIEW_DEFAULT' | string
+  is_current: boolean
   rule_snapshot_ids: string[]
   template_snapshot_ids: string[]
   variant_dictionary_snapshot_id?: string
-  output_schema: Record<string, unknown>
+  output_schema: {
+    schema_version: 'f006.review.v1'
+    required_outputs: Array<'risk_findings' | 'negotiation_tasks' | 'review_evidence' | 'comment_patch_drafts' | 'report_summary'>
+    review_run_binding: Record<string, unknown>
+    risk_finding: Record<string, unknown>
+    negotiation_task: Record<string, unknown>
+    comment_patch_draft: Record<string, unknown>
+    report_summary: Record<string, unknown>
+    validation: Record<string, unknown>
+  }
   model_policy_id: string
   eval_case_ids: string[]
+  compiled_from: {
+    product_phase: 'contract_review_first_stage'
+    execution_plan: string[]
+    rules: Array<Record<string, unknown>>
+    template_references: Array<Record<string, unknown>>
+    model_policy: Record<string, unknown>
+  }
+  release_meta: Record<string, unknown>
+  compiled_hash: string
 }
 
 interface ReviewEvidence {

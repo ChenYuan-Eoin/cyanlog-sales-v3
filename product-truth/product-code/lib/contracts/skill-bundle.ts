@@ -99,18 +99,47 @@ function outputSchema(): JsonRecord {
     schema_version: 'f006.review.v1',
     required_outputs: [
       'risk_findings',
+      'negotiation_tasks',
       'review_evidence',
       'comment_patch_drafts',
       'report_summary',
     ],
+    review_run_binding: {
+      required: ['contract_version_id', 'skill_bundle_id', 'rule_snapshot_ids', 'model_policy_id'],
+      immutable_after_start: true,
+    },
     risk_finding: {
-      required: ['level', 'title', 'description', 'suggestion', 'evidence'],
+      required: ['level', 'status', 'title', 'description', 'suggestion', 'evidence'],
       levels: ['red', 'yellow', 'green', 'white'],
+      statuses: [
+        'detected',
+        'needs_owner_review',
+        'needs_negotiation',
+        'resolved',
+        'waived',
+        'escalated',
+      ],
       evidence: ['snippets', 'start_offset', 'end_offset', 'clause_ref', 'template_reference'],
+      source_trace: ['rule_snapshot_id', 'rule_code', 'rule_version', 'model_invocation_id'],
+    },
+    negotiation_task: {
+      required: ['risk_finding_id', 'required', 'owner_role', 'objective', 'standard'],
+      required_when: 'risk_finding.level in red,yellow or rule.requires_negotiation',
+      output: 'sales_negotiation_task',
     },
     comment_patch_draft: {
-      required: ['risk_finding_id', 'selected_text', 'comment', 'priority'],
+      required: ['risk_finding_id', 'selected_text', 'comment', 'priority', 'author'],
       output: 'word_native_comment',
+      author: 'ONES 业务运营',
+      fallback_when_position_missing: 'paragraph_level_comment_or_report_only',
+    },
+    report_summary: {
+      role: 'auxiliary',
+      must_use_same_fact_set_as_comments: true,
+    },
+    validation: {
+      on_schema_error: 'retry_then_rule_fallback_or_human_review',
+      forbid_unversioned_prompt_result: true,
     },
   }
 }
@@ -242,16 +271,31 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
   }))
   const schema = outputSchema()
   const compiledFrom = {
+    product_phase: 'contract_review_first_stage',
+    skill_key: SKILL_BUNDLE_KEY,
+    execution_plan: [
+      'structured_rules',
+      'template_compare',
+      'semantic_review',
+      'comment_patch_draft',
+      'negotiation_task_generation',
+      'report_summary',
+    ],
     rules: snapshotRefs,
-    templates: templateRefs,
+    template_references: templateRefs,
     model_policy: {
       id: modelPolicy.id,
       version: modelPolicy.version,
+      routing_policy: modelPolicy.routing_policy,
+      fallback_policy: modelPolicy.fallback_policy,
       provider_chain: modelPolicy.provider_chain.map((provider) => ({
         profile: provider.profile,
         provider_kind: provider.provider_kind,
         model: provider.model,
         level: provider.level,
+        stages: provider.stages,
+        role: provider.role,
+        capabilities: provider.capabilities,
       })),
     },
     output_schema_version: schema.schema_version,
@@ -287,9 +331,14 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       model_policy_id: modelPolicy.id,
       eval_case_ids: [],
       release_meta: {
+        product_scope: 'F005_CONTRACT_REVIEW_WORKBENCH',
+        runtime_owner: 'F006',
+        model_owner: 'F012',
         release_type: 'auto_compile_from_published_assets',
         rule_count: snapshotRefs.length,
         template_reference_count: templateRefs.length,
+        output_schema_version: schema.schema_version,
+        audit_required: true,
         compiled_by: requestedBy || 'system',
       },
       compiled_from: compiledFrom,

@@ -672,7 +672,7 @@ export async function runStructuredAnalysis(
       })
     : null
   const executionProvider = skillBundle
-    ? selectReviewExecutionProvider(skillBundle.model_policy)
+    ? selectReviewExecutionProvider(skillBundle.model_policy, 'structured_rules')
     : null
 
   const analysisStartedAt = performance.now()
@@ -706,6 +706,7 @@ export async function runStructuredAnalysis(
       latencyMs: analysisLatencyMs,
       requestMeta: {
         phase: 'structured_contract_review',
+        model_policy_stage: 'structured_rules',
         rule_snapshot_count: skillBundle.rule_snapshot_ids.length,
         output_schema_version: skillBundle.output_schema.schema_version,
         review_trigger: options?.reviewTrigger || 'initial_generate',
