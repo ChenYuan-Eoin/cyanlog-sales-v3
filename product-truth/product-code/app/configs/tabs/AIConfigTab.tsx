@@ -118,49 +118,54 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
   const hasProductionBlockedLocalProvider = externalProviders.some((provider) => (
     provider.runtime_state === 'unreachable_in_vercel'
   ))
+  const routeRows = [
+    { pages: '≤ 15 页', level: 1, strategy: '整体送入本地', stage: 'semantic_review' },
+    { pages: '15 - 40 页', level: 1, strategy: '分段送入本地', stage: 'comment_patch_draft' },
+    { pages: '> 40 页', level: 2, strategy: '强制云端', stage: 'report_summary' },
+  ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
       <Card className="min-w-0">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>AI 模型配置（3级降级链）</CardTitle>
-        <Button onClick={onNew}>+ 新增模型</Button>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          {configs.map((config) => (
-            <div key={config.id} className="rounded-lg border p-4">
-              <div className="flex items-baseline justify-between mb-3">
-                <div className="text-sm font-semibold text-slate-900">
-                  Level {(config.value?.level as number)} · {config.name}
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle className="text-base">模型 Provider ({configs.length})</CardTitle>
+          <Button size="sm" onClick={onNew}>+ 新增</Button>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-[720px] space-y-3 overflow-y-auto pr-1">
+            {configs.map((config) => (
+              <div key={config.id} className="rounded-lg border p-4">
+                <div className="flex items-baseline justify-between mb-3">
+                  <div className="text-sm font-semibold text-slate-900">
+                    Level {(config.value?.level as number)} · {config.name}
+                  </div>
+                  <div className="flex gap-1">
+                    <ConfigStatusBadge status={config.status} />
+                    {config.value?.enabled === true && <Badge className="bg-emerald-100 text-emerald-700">启用</Badge>}
+                  </div>
                 </div>
-                <div className="flex gap-1">
-                  <ConfigStatusBadge status={config.status} />
-                  {config.value?.enabled === true && <Badge className="bg-emerald-100 text-emerald-700">启用</Badge>}
-                </div>
-              </div>
 
-              <div className="text-xs text-slate-600 space-y-1.5 mb-4">
-                <div className="truncate">画像: {(config.value?.profile as string) || '未设置'}</div>
-                <div className="truncate">类型: {(config.value?.provider_kind as string) || 'openai_compatible'}</div>
-                <div className="truncate">模型: {config.value?.model as string}</div>
-                <div className="truncate">地址: {(config.value?.base_url as string) || '（内置）'}</div>
-                <div>超时: {(config.value?.timeout_ms as number) / 1000}s</div>
-                <div>
-                  密钥: {typeof config.value?.api_key === 'string' && config.value.api_key.length > 0 ? '已保存' : '未配置'}
+                <div className="text-xs text-slate-600 space-y-1.5 mb-4">
+                  <div className="truncate">画像: {(config.value?.profile as string) || '未设置'}</div>
+                  <div className="truncate">类型: {(config.value?.provider_kind as string) || 'openai_compatible'}</div>
+                  <div className="truncate">模型: {config.value?.model as string}</div>
+                  <div className="truncate">地址: {(config.value?.base_url as string) || '（内置）'}</div>
+                  <div>超时: {(config.value?.timeout_ms as number) / 1000}s</div>
+                  <div>
+                    密钥: {typeof config.value?.api_key === 'string' && config.value.api_key.length > 0 ? '已保存' : '未配置'}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => onEdit(config)}>编辑</Button>
+                  {config.status !== 'PUBLISHED' && (
+                    <Button variant="outline" size="sm" onClick={() => onPublish(config.id)}>发布</Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => onDelete(config.id)}>删除</Button>
                 </div>
               </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => onEdit(config)}>编辑</Button>
-                {config.status !== 'PUBLISHED' && (
-                  <Button variant="outline" size="sm" onClick={() => onPublish(config.id)}>发布</Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => onDelete(config.id)}>删除</Button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
         {configs.length === 0 && (
           <div className="text-center py-12">
@@ -168,26 +173,65 @@ export default function AIConfigTab({ configs, onNew, onEdit, onPublish, onDelet
             <p className="text-sm text-slate-400 mt-2">点击上方按钮创建第一条 AI 配置</p>
           </div>
         )}
+        </CardContent>
+      </Card>
 
-        <div className="rounded-md border mt-4">
-          <div className="px-4 py-2 bg-slate-50 border-b text-xs font-medium text-slate-700">路由策略（按文档页数）</div>
-          <div className="divide-y">
-            {[
-              { pages: '≤ 15 页', level: 1, strategy: '整体送入本地' },
-              { pages: '15 - 40 页', level: 1, strategy: '分段送入本地' },
-              { pages: '> 40 页', level: 2, strategy: '强制云端' },
-            ].map((row, idx) => (
-              <div key={idx} className="flex items-center justify-between px-4 py-2 text-sm">
-                <span className="font-mono text-slate-700">{row.pages}</span>
-                <span className="text-xs text-slate-500">{row.strategy}</span>
-                <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Level {row.level}</span>
-              </div>
-            ))}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="text-base">路由与执行策略</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <div className="rounded-lg border border-slate-200">
+            <div className="border-b bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700">
+              文档规模路由
+            </div>
+            <div className="divide-y">
+              {routeRows.map((row) => (
+                <div key={row.pages} className="grid grid-cols-[72px_1fr_72px] items-center gap-3 px-4 py-3">
+                  <span className="font-mono text-xs text-slate-700">{row.pages}</span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-slate-900">{row.strategy}</div>
+                    <div className="truncate text-xs text-slate-500">{row.stage}</div>
+                  </div>
+                  <span className="justify-self-end rounded bg-blue-50 px-2 py-0.5 font-mono text-xs text-blue-700">
+                    Level {row.level}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
-    <Card className="min-w-0">
+
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
+              <div className="text-lg font-semibold text-slate-900">{configs.length}</div>
+              <div className="text-[11px] text-slate-500">档位</div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
+              <div className="text-lg font-semibold text-slate-900">
+                {configs.filter((config) => config.value?.enabled === true).length}
+              </div>
+              <div className="text-[11px] text-slate-500">启用</div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
+              <div className="text-lg font-semibold text-slate-900">
+                {configs.filter((config) => config.status === 'PUBLISHED').length}
+              </div>
+              <div className="text-[11px] text-slate-500">发布</div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <div className="text-xs font-medium text-slate-500">消费边界</div>
+            <div className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+              <p>F012 只决定模型路由、超时、降级和审计。</p>
+              <p>F009/F006 决定审核规则、输出结构和风险事实。</p>
+              <p>正式验收必须看到 semantic_review 的模型调用证据。</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="text-base">合同审核运行时策略</CardTitle>
       </CardHeader>
