@@ -38,7 +38,7 @@ vi.mock('@/lib/supabase', () => ({
 
 import { POST } from './route'
 import { requireAuth } from '@/lib/auth'
-import { enqueueContractAnalysisJob, processContractAnalysisJob } from '@/lib/contract-analysis'
+import { enqueueContractAnalysisJob, processContractAnalysisJob, runStructuredAnalysis } from '@/lib/contract-analysis'
 import { resolveIdParam } from '@/lib/route-params'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -142,6 +142,47 @@ describe('POST /api/contracts/[id]/analyze', () => {
       jobId: 'job-1',
       reviewId: 'review-1',
       status: 'COMPLETED',
+    })
+  })
+
+  it('降级审核必须在响应主状态中显式返回 DEGRADED', async () => {
+    const contractQuery = makeChain('maybeSingle', {
+      data: { id: 'contract-1', status: 'PENDING', storage_path: 'contracts/a.docx', created_by: 'u-owner' },
+      error: null,
+    })
+    const recentReviewQuery = makeChain('single', {
+      data: null,
+      error: { code: 'PGRST116', message: 'No rows' },
+    })
+    const updateQuery = makeUpdateChain()
+    const reviewInsertQuery = makeInsertChain({
+      data: { id: 'review-1' },
+      error: null,
+    })
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(runStructuredAnalysis as any).mockResolvedValueOnce({
+      result: {
+        summary: 'skill missing',
+        degraded: true,
+        degradationReasons: ['skill_not_applied'],
+      },
+    })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(contractQuery)
+      .mockReturnValueOnce(recentReviewQuery)
+      .mockReturnValueOnce(updateQuery)
+      .mockReturnValueOnce(reviewInsertQuery)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'contract-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({
+      status: 'DEGRADED',
+      degraded: true,
+      degradationReasons: ['skill_not_applied'],
     })
   })
 

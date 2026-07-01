@@ -143,6 +143,52 @@ describe('POST /api/contracts/[id]/review-runs', () => {
     }))
   })
 
+  it('降级再审核必须在响应主状态中显式返回 DEGRADED', async () => {
+    const contractQuery = makeQuery({
+      data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },
+      error: null,
+    })
+    const parentReviewQuery = makeQuery({
+      data: { id: 'review-parent' },
+      error: null,
+    })
+    const updateQuery = makeUpdate({
+      data: { id: 'contract-1' },
+      error: null,
+    })
+    const reviewInsertQuery = makeInsert({
+      data: { id: 'review-rerun' },
+      error: null,
+    })
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(runStructuredAnalysis as any).mockResolvedValueOnce({
+      result: {
+        summary: 'rule fallback only',
+        degraded: true,
+        degradationReasons: ['model_output_invalid_or_unavailable'],
+      },
+    })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(contractQuery)
+      .mockReturnValueOnce(parentReviewQuery)
+      .mockReturnValueOnce(updateQuery)
+      .mockReturnValueOnce(reviewInsertQuery)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const res = await POST(makeRequest({ trigger_event: 'manual_rerun' }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({
+      status: 'DEGRADED',
+      degraded: true,
+      degradationReasons: ['model_output_invalid_or_unavailable'],
+    })
+  })
+
   it('拒绝正在审核中的合同重复创建再审核', async () => {
     const contractQuery = makeQuery({
       data: { id: 'contract-1', status: 'ANALYZING', created_by: 'u-owner', org_id: 'org-1' },

@@ -128,9 +128,10 @@ export async function POST(
     }
 
     const job = await enqueueContractAnalysisJob(id, review.id, user.id)
-    let responseStatus: 'PARSING' | 'COMPLETED' | 'FAILED' = 'PARSING'
+    let responseStatus: 'PARSING' | 'COMPLETED' | 'DEGRADED' | 'FAILED' = 'PARSING'
     let responseMessage = '再审核任务已创建'
     let processingError: string | undefined
+    let degradationReasons: string[] = []
 
     let reviewOptions: ReviewOptions | undefined
     let strategyId: string | undefined
@@ -158,8 +159,11 @@ export async function POST(
       })
       await saveStructuredReport(review.id, id, structuredReport, strategyId)
       await markContractAnalysisCompleted(job, structuredReport.result)
-      responseStatus = 'COMPLETED'
-      responseMessage = '再审核已完成'
+      degradationReasons = structuredReport.result.degradationReasons || []
+      responseStatus = structuredReport.result.degraded ? 'DEGRADED' : 'COMPLETED'
+      responseMessage = structuredReport.result.degraded
+        ? '再审核已完成，但存在降级或未绑定项，需要人工复核'
+        : '再审核已完成'
     } catch (error) {
       processingError = formatAnalysisError(error)
       await markContractAnalysisFailed(job, error)
@@ -191,6 +195,8 @@ export async function POST(
       triggerEvent: options.trigger_event,
       status: responseStatus,
       message: responseMessage,
+      degraded: responseStatus === 'DEGRADED',
+      degradationReasons: responseStatus === 'DEGRADED' ? degradationReasons : undefined,
       processingError,
     })
   } catch (error) {

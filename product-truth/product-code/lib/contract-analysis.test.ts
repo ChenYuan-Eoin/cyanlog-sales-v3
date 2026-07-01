@@ -165,6 +165,7 @@ describe('runStructuredAnalysis', () => {
         title: '付款风险',
         description: '首付款比例偏低',
         suggestion: '提高首付款比例',
+        evidence: ['第一条 付款条款：验收后付款。'],
       }],
       summary: '规则审核完成',
       appliedRules: 15,
@@ -247,5 +248,91 @@ describe('runStructuredAnalysis', () => {
       'invocation-structured',
       'invocation-semantic',
     ])
+  })
+
+  it('degrades the review when a red or yellow risk cannot bind to source text', async () => {
+    vi.mocked(executeRules).mockResolvedValueOnce({
+      risks: [{
+        ruleCode: 'R011',
+        level: 'red',
+        title: 'IP 归属',
+        description: 'IP 归属缺失或未明确',
+        suggestion: '必须修改合同条款',
+      }],
+      summary: '发现未定位风险',
+      appliedRules: 15,
+      matchedRules: 1,
+    })
+    vi.mocked(reviewWithFailoverSync).mockResolvedValueOnce({
+      risks: [],
+      summary: '无额外语义风险',
+      provider: 'AI_LEVEL_2',
+      model: 'gpt-review',
+      providerKind: 'openai_compatible',
+      degraded: false,
+    })
+
+    const report = await runStructuredAnalysis('contract-1', {
+      reviewId: 'review-1',
+      requestedBy: 'u-1',
+      reviewTrigger: 'manual_rerun',
+    })
+
+    expect(report.result.degraded).toBe(true)
+    expect(report.result.degradationReasons).toContain('source_location_unbound')
+    expect(recordModelInvocation).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: 'structured_rules',
+      status: 'degraded',
+      degraded: true,
+      fallbackReason: 'source_location_unbound',
+      responseMeta: expect.objectContaining({
+        unlocated_commentable_risk_count: 1,
+      }),
+    }))
+  })
+
+  it('deduplicates rule and semantic findings by business rule code and keeps the stronger sourced finding', async () => {
+    vi.mocked(executeRules).mockResolvedValueOnce({
+      risks: [{
+        ruleCode: 'R004',
+        level: 'yellow',
+        title: '默示验收期',
+        description: '默示验收期偏离建议区间',
+        suggestion: '建议协商调整',
+      }],
+      summary: '发现旧规则命中',
+      appliedRules: 15,
+      matchedRules: 1,
+    })
+    vi.mocked(reviewWithFailoverSync).mockResolvedValueOnce({
+      risks: [{
+        ruleCode: 'R004@v2',
+        ruleVersion: 2,
+        level: 'red',
+        title: '验收周期过短',
+        description: '验收周期过短，可能导致甲方无法充分评估成果质量。',
+        suggestion: '建议将验收周期延长至 15 个工作日。',
+        evidence: ['第二条 退款条款：客户可要求全额退款。'],
+      }],
+      summary: '语义审核完成',
+      provider: 'AI_LEVEL_2',
+      model: 'gpt-review',
+      providerKind: 'openai_compatible',
+      degraded: false,
+    })
+
+    const report = await runStructuredAnalysis('contract-1', {
+      reviewId: 'review-1',
+      requestedBy: 'u-1',
+      reviewTrigger: 'manual_rerun',
+    })
+
+    expect(report.result.risks).toHaveLength(1)
+    expect(report.result.risks[0]).toMatchObject({
+      ruleCode: 'R004@v2',
+      level: 'red',
+      title: '验收周期过短',
+    })
+    expect(report.result.degraded).toBe(false)
   })
 })

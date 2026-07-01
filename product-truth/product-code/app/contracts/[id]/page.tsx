@@ -282,6 +282,9 @@ function buildReviewHealth(data: WorkbenchData) {
   if (data.reviewRun?.evidence_status && data.reviewRun.evidence_status !== 'snapshot_bound') {
     issues.push(`证据状态为 ${evidenceStatusLabel[data.reviewRun.evidence_status]}。`)
   }
+  if (data.reviewRun?.status === 'DEGRADED') {
+    issues.push('ReviewRun 状态为 DEGRADED，本次结果不能作为无条件审核完成。')
+  }
   if (data.latestJob?.degraded || data.reviewRun?.model_policy?.degraded) {
     issues.push(`审核执行发生降级：${data.latestJob?.provider || data.reviewRun?.model_policy?.provider || '未记录执行器'}。`)
   }
@@ -518,7 +521,7 @@ export default function ContractWorkbenchPage() {
       : '发起审核'
   const statusMeta = statusMap[data.status] || { label: data.status, variant: 'secondary' as const }
   const statusLabel = data.status === 'COMPLETED' && reviewHealth.degraded
-    ? '审核完成（需复核）'
+    ? '审核降级（需复核）'
     : statusMeta.label
   const statusVariant = data.status === 'COMPLETED' && reviewHealth.degraded
     ? 'destructive'

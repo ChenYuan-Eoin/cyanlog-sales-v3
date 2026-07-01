@@ -41,6 +41,7 @@ export interface ContractAnalysisResult {
   matchedRules: number
   provider: string
   degraded: boolean
+  degradationReasons?: string[]
 }
 
 export interface ClauseMatch {
@@ -242,6 +243,7 @@ export async function markContractAnalysisRunning(job: ContractAnalysisJobRecord
 
 export async function markContractAnalysisCompleted(job: ContractAnalysisJobRecord, result: ContractAnalysisResult) {
   const now = new Date().toISOString()
+  const reviewStatus = result.degraded ? 'DEGRADED' : 'COMPLETED'
 
   await Promise.all([
     supabaseAdmin
@@ -254,7 +256,7 @@ export async function markContractAnalysisCompleted(job: ContractAnalysisJobReco
     supabaseAdmin
       .from('contract_reviews')
       .update({
-        status: 'COMPLETED',
+        status: reviewStatus,
         results: result,
         completed_at: now,
       })
@@ -750,37 +752,65 @@ function normalizeRiskText(value: string | undefined): string {
     .slice(0, 120)
 }
 
+function normalizeRuleCode(value: string | undefined) {
+  return (value || '').trim().toUpperCase().replace(/@V\d+$/, '')
+}
+
 function riskFingerprint(risk: AnalysisRisk): string {
-  if (risk.ruleCode) return `rule:${risk.ruleCode}`
+  const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
+  if (normalizedRuleCode) return `rule:${normalizedRuleCode}`
   return [
     normalizeRiskText(risk.title),
     normalizeRiskText(risk.description),
   ].filter(Boolean).join('|')
 }
 
+function riskMergeScore(risk: AnalysisRisk) {
+  const severityScore = risk.level === 'red' ? 30 : risk.level === 'yellow' ? 20 : 10
+  const evidenceScore = evidenceCandidates(risk).length > 0 ? 2 : 0
+  const versionedCodeScore = risk.ruleCode?.includes('@v') ? 1 : 0
+  return severityScore + evidenceScore + versionedCodeScore
+}
+
+function shouldReplaceRisk(existing: AnalysisRisk, candidate: AnalysisRisk) {
+  return riskMergeScore(candidate) > riskMergeScore(existing)
+}
+
 function mergeReviewRisks(
   ruleRisks: AnalysisRisk[],
   semanticRisks: AnalysisRisk[]
 ): { risks: AnalysisRisk[]; added: number } {
-  const seen = new Set<string>()
-  const merged: AnalysisRisk[] = []
+  const slots: Array<{ key: string | null; risk: AnalysisRisk }> = []
 
-  for (const risk of ruleRisks) {
+  const addRisk = (risk: AnalysisRisk) => {
     const key = riskFingerprint(risk)
-    if (key) seen.add(key)
-    merged.push(risk)
+    if (!key) {
+      slots.push({ key: null, risk })
+      return true
+    }
+
+    const existingIndex = slots.findIndex((slot) => slot.key === key)
+    if (existingIndex < 0) {
+      slots.push({ key, risk })
+      return true
+    }
+
+    if (shouldReplaceRisk(slots[existingIndex].risk, risk)) {
+      slots[existingIndex] = { key, risk }
+      return true
+    }
+
+    return false
   }
+
+  for (const risk of ruleRisks) addRisk(risk)
 
   let added = 0
   for (const risk of semanticRisks) {
-    const key = riskFingerprint(risk)
-    if (key && seen.has(key)) continue
-    if (key) seen.add(key)
-    merged.push(risk)
-    added += 1
+    if (addRisk(risk)) added += 1
   }
 
-  return { risks: merged, added }
+  return { risks: slots.map((slot) => slot.risk), added }
 }
 
 function shouldUseSemanticRisks(result: SyncReviewResult): boolean {
@@ -793,6 +823,39 @@ function buildCombinedSummary(ruleSummary: string, semanticResult: SyncReviewRes
     return `${ruleSummary}\n\n语义审核：外部模型未完成正式调用，已按规则引擎兜底；请查看模型调用记录确认降级原因。`
   }
   return `${ruleSummary}\n\n语义审核（${semanticResult.provider}/${semanticResult.model}）：${semanticResult.summary}`
+}
+
+function buildDegradationReasons(input: {
+  skillBundle: ContractSkillBundle | null
+  structuredDegraded: boolean
+  unlocatedCommentableRiskCount?: number
+  semanticResult?: SyncReviewResult | null
+}) {
+  const reasons: string[] = []
+  if (!input.skillBundle) {
+    reasons.push('skill_not_applied')
+  }
+  if (input.structuredDegraded) {
+    reasons.push('rule_engine_no_rules_applied')
+  }
+  if (input.unlocatedCommentableRiskCount && input.unlocatedCommentableRiskCount > 0) {
+    reasons.push('source_location_unbound')
+  }
+  if (input.semanticResult?.degraded) {
+    reasons.push(
+      input.semanticResult.provider === 'manual-fallback'
+        ? 'model_output_invalid_or_unavailable'
+        : 'semantic_review_degraded'
+    )
+  }
+  return reasons
+}
+
+function countUnlocatedCommentableRisks(risks: AnalysisRisk[], clauses: ClauseMatch[]) {
+  return risks.filter((risk) => {
+    if (risk.level !== 'red' && risk.level !== 'yellow') return false
+    return locateRiskSource(risk, clauses).status !== 'located'
+  }).length
 }
 
 async function runSemanticReviewStage(input: {
@@ -947,7 +1010,15 @@ export async function runStructuredAnalysis(
   }
 
   const merged = mergeReviewRisks(ruleResult.risks, semanticStage?.risks || [])
+  const clauses = extractClauses(context.text)
+  const unlocatedCommentableRiskCount = countUnlocatedCommentableRisks(merged.risks, clauses)
   const structuredDegraded = ruleResult.appliedRules === 0
+  const degradationReasons = buildDegradationReasons({
+    skillBundle,
+    structuredDegraded,
+    unlocatedCommentableRiskCount,
+    semanticResult: semanticStage?.result || null,
+  })
 
   const result: ContractAnalysisResult = {
     risks: merged.risks,
@@ -957,7 +1028,8 @@ export async function runStructuredAnalysis(
     provider: semanticStage?.result && shouldUseSemanticRisks(semanticStage.result)
       ? `${structuredProvider?.provider || 'rule-engine'}+${semanticStage.result.provider}`
       : structuredProvider?.provider || 'rule-engine',
-    degraded: structuredDegraded || Boolean(semanticStage?.result?.degraded),
+    degraded: degradationReasons.length > 0,
+    degradationReasons,
   }
 
   let runtime: ReviewRuntimeBinding | undefined
@@ -971,11 +1043,15 @@ export async function runStructuredAnalysis(
       provider: structuredProvider?.provider || 'rule-engine',
       model: structuredProvider?.model || 'rule-engine',
       phase: 'structured_rules',
-      status: structuredDegraded ? 'degraded' : 'completed',
-      degraded: structuredDegraded,
-      fallbackReason: structuredProvider?.provider_kind === 'builtin'
-        ? 'rule_engine_selected_by_model_policy'
-        : null,
+      status: structuredDegraded || unlocatedCommentableRiskCount > 0 ? 'degraded' : 'completed',
+      degraded: structuredDegraded || unlocatedCommentableRiskCount > 0,
+      fallbackReason: structuredDegraded
+        ? structuredProvider?.provider_kind === 'builtin'
+          ? 'rule_engine_selected_by_model_policy'
+          : 'rule_engine_degraded'
+        : unlocatedCommentableRiskCount > 0
+          ? 'source_location_unbound'
+          : null,
       latencyMs: analysisLatencyMs,
       requestMeta: {
         phase: 'structured_contract_review',
@@ -990,6 +1066,7 @@ export async function runStructuredAnalysis(
         risk_count: ruleResult.risks.length,
         semantic_risk_count: semanticStage?.result?.risks.length || 0,
         semantic_merged_risk_count: merged.added,
+        unlocated_commentable_risk_count: unlocatedCommentableRiskCount,
       },
     })
 
@@ -1008,7 +1085,6 @@ export async function runStructuredAnalysis(
     }
   }
 
-  const clauses = extractClauses(context.text)
   applyRiskFactsToClauses(clauses, result.risks)
   const clauseMatches = await matchClauseLibrary(clauses, context.orgId)
   for (const clause of clauses) {
