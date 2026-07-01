@@ -544,6 +544,24 @@ Bug 合并规则：
 - DB 复核：`contract_versions` 写入 version 1、source `original`、storage_path 与文件大小正确；随后通过 DELETE 清理测试合同，复核 `contracts=0`、`contract_versions=0`。
 - 本地生产浏览器/API：旧污染比对 `/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare` 不再展示 Hemory 差异，页面显示已排除 3 份非同客户/同报价合同；直接 POST Hemory 比对返回 400。
 
+### 0.3.6 发起审核用户地图补充修复
+
+用户最新截图显示 `/contracts/new` 仍要求先填写“合同基本信息”和必填乙方，实际体验是资料登记先于审核目标。这与主文档 5.5 和 F005v2 的 ReviewRun 导向不一致。
+
+修复口径：
+
+- `app/contracts/new/page.tsx`：改为单合同发起审核入口，源文件上传成为首屏和唯一前置条件；业务上下文保留为可选补充区。
+- 复用现有 `POST /api/contracts`、`POST /api/contracts/{id}/upload`、`POST /api/contracts/{id}/submit`、`POST /api/contracts/{id}/analyze` 链路，不新增并行上传资产。
+- 未填写乙方时使用“待识别客户”占位，后续由 CRM、报价转合同或文件解析回填；不得再使用浏览器原生必填校验阻断上传。
+- 主文档和 F005v2 已补充“上传源文件是唯一前置条件”的验收口径。
+
+验收标准：
+
+- `/contracts/new` 首屏是“合同源文件”上传区和“上传源文件并发起审核”按钮，不出现 Step 1/2 和“下一步：上传合同源文件”。
+- `party_b_name` 输入框不是 required；用户不填乙方也能在选择文件后发起审核。
+- 桌面和移动端页面无横向溢出，业务上下文位于上传目标之后。
+- 本地生产构建、浏览器模拟和线上 Production 复验后才能从“已修复”进入“已验证”。
+
 仍需验收：
 
 - 线上 Production 复验发起审核入口、比对页补充可比对文件跳转、当前合同编辑页补充文件。

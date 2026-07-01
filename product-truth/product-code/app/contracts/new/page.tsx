@@ -1,20 +1,16 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import Link from 'next/link'
 
-// 发起合同审核 — 完整信息录入 + 源文件上传（分两阶段）
-// Phase 1: 登记审核对象 → POST /api/contracts 创建
-// Phase 2: 上传源文件 → 提交审核 → 启动分析 → 进入审核工作台
-
-type Phase = 'info' | 'file' | 'done'
+// 发起合同审核：上传源文件是唯一前置条件；业务上下文由 CRM、文件解析或人工补录提供。
 
 interface ContractForm {
   contract_no: string
@@ -75,11 +71,43 @@ function readApiError(payload: unknown, fallback: string): string {
   return fallback
 }
 
+function optionalText(value: string): string | undefined {
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function optionalAmount(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function buildContractPayload(form: ContractForm, file: File) {
+  const notes = [
+    optionalText(form.notes),
+    `审核源文件: ${file.name}`,
+  ].filter(Boolean).join('\n')
+
+  return {
+    contract_no: optionalText(form.contract_no),
+    party_a_name: optionalText(form.party_a_name),
+    party_b_name: optionalText(form.party_b_name) ?? '待识别客户',
+    party_b_contact: optionalText(form.party_b_contact),
+    contract_date: optionalText(form.contract_date),
+    effective_date: optionalText(form.effective_date),
+    expiry_date: optionalText(form.expiry_date),
+    contract_amount: optionalAmount(form.contract_amount),
+    tax_amount: optionalAmount(form.tax_amount),
+    payment_terms: optionalText(form.payment_terms),
+    delivery_terms: optionalText(form.delivery_terms),
+    notes: notes || undefined,
+  }
+}
+
 export default function NewContractPage() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [phase, setPhase] = useState<Phase>('info')
-  const [contractId, setContractId] = useState<string | null>(null)
   const [form, setForm] = useState<ContractForm>(initialForm)
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -88,6 +116,18 @@ export default function NewContractPage() {
 
   const handleInputChange = useCallback((field: keyof ContractForm, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
+    setError('')
+  }, [])
+
+  const selectFile = useCallback((selectedFile: File) => {
+    const validationError = validateReviewFile(selectedFile)
+    if (validationError) {
+      setError(validationError)
+      setFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+    setFile(selectedFile)
     setError('')
   }, [])
 
@@ -104,82 +144,13 @@ export default function NewContractPage() {
     e.preventDefault()
     setDragActive(false)
     if (e.dataTransfer.files?.[0]) {
-      const selectedFile = e.dataTransfer.files[0]
-      const validationError = validateReviewFile(selectedFile)
-      if (validationError) {
-        setError(validationError)
-        return
-      }
-      setFile(selectedFile)
-      setError('')
+      selectFile(e.dataTransfer.files[0])
     }
-  }, [])
+  }, [selectFile])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
-      const selectedFile = e.target.files[0]
-      const validationError = validateReviewFile(selectedFile)
-      if (validationError) {
-        setError(validationError)
-        setFile(null)
-        if (fileInputRef.current) fileInputRef.current.value = ''
-        return
-      }
-      setFile(selectedFile)
-      setError('')
-    }
-  }
-
-  async function handleCreateContract(e: React.FormEvent) {
-    e.preventDefault()
-    if (!form.party_b_name) {
-      setError('乙方名称不能为空')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
-    try {
-      const token = localStorage.getItem('token')
-      const payload = {
-        ...form,
-        contract_amount: form.contract_amount ? Number(form.contract_amount) : undefined,
-        tax_amount: form.tax_amount ? Number(form.tax_amount) : undefined,
-        contract_date: form.contract_date || undefined,
-        effective_date: form.effective_date || undefined,
-        expiry_date: form.expiry_date || undefined,
-      }
-
-      const res = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(payload),
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        setError(readApiError(data, '创建失败'))
-        setLoading(false)
-        return
-      }
-
-      const createdContractId = data?.data?.contract_id || data?.contract_id || data?.data?.id || data?.id
-      if (!createdContractId) {
-        setError('创建成功但未返回合同ID')
-        setLoading(false)
-        return
-      }
-
-      setContractId(createdContractId)
-      setPhase('file')
-    } catch {
-      setError('网络错误，请稍后重试')
-    } finally {
-      setLoading(false)
+      selectFile(e.target.files[0])
     }
   }
 
@@ -205,9 +176,10 @@ export default function NewContractPage() {
     }
   }
 
-  async function handleUploadAndStart() {
-    if (!file || !contractId) {
-      setError('请选择合同文件')
+  async function handleUploadAndStart(e?: React.FormEvent) {
+    e?.preventDefault()
+    if (!file) {
+      setError('请先选择合同源文件')
       return
     }
 
@@ -222,10 +194,35 @@ export default function NewContractPage() {
         return
       }
 
+      const createRes = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(buildContractPayload(form, file)),
+      })
+      const createData = await createRes.json().catch(() => ({}))
+      if (!createRes.ok) {
+        setError(readApiError(createData, '创建审核任务失败'))
+        setLoading(false)
+        return
+      }
+
+      const contractId =
+        createData?.data?.contract_id ||
+        createData?.contract_id ||
+        createData?.data?.id ||
+        createData?.id
+      if (!contractId) {
+        setError('创建成功但未返回合同ID')
+        setLoading(false)
+        return
+      }
+
       const formData = new FormData()
       formData.append('file', file)
 
-      // 上传文件
       const uploadRes = await fetch(`/api/contracts/${contractId}/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -249,40 +246,152 @@ export default function NewContractPage() {
     }
   }
 
-  // ───────────────────────────────────────────
-  // Phase 1: 合同信息录入
-  // ───────────────────────────────────────────
-  if (phase === 'info') {
-    return (
-      <div className="p-8 max-w-3xl mx-auto">
-        <div className="mb-6 flex items-center gap-2">
-          <Badge variant="outline">Step 1/2</Badge>
-          <span className="text-sm text-slate-500">登记审核对象</span>
-        </div>
-
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">发起合同审核</h1>
-          <Link href="/contracts">
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <Badge variant="outline" className="w-fit">单合同审核</Badge>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-950">发起合同审核</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                先上传合同源文件形成可审核版本，客户、金额、日期等业务上下文可由 CRM 或文件解析回填。
+              </p>
+            </div>
+          </div>
+          <Link href="/contracts" className="shrink-0">
             <Button variant="outline" size="sm">返回合同中心</Button>
           </Link>
-        </div>
+        </header>
 
         {error && (
-          <Card className="mb-4 border-red-200">
+          <Card className="border-red-200 bg-red-50">
             <CardContent className="py-3">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm font-medium text-red-700">{error}</p>
             </CardContent>
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>合同基本信息</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateContract} className="space-y-5">
-              {/* 编号 + 甲方 */}
-              <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleUploadAndStart} className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <CardTitle>合同源文件</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="contract-file"
+                />
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      fileInputRef.current?.click()
+                    }
+                  }}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors sm:p-12 ${
+                    dragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-white'
+                  } ${file ? 'border-green-500 bg-green-50' : ''}`}
+                >
+                  {file ? (
+                    <div className="space-y-3">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-white text-sm font-semibold text-green-700 shadow-sm">
+                        DOC
+                      </div>
+                      <div>
+                        <p className="break-all text-base font-semibold text-green-800">{file.name}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                          {file.type ? ` · ${file.type}` : ''}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setFile(null)
+                          if (fileInputRef.current) fileInputRef.current.value = ''
+                        }}
+                      >
+                        重新选择
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-600">
+                        PDF
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">拖拽或选择合同文件</p>
+                        <p className="mt-1 text-sm text-slate-500">支持 PDF、DOCX，最大 50MB</p>
+                      </div>
+                      <Button type="button" variant="outline" size="sm">
+                        选择文件
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button type="submit" disabled={!file || loading} className="sm:min-w-48">
+                    {loading ? '正在发起审核...' : '上传源文件并发起审核'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setFile(null)
+                      if (fileInputRef.current) fileInputRef.current.value = ''
+                    }}
+                    disabled={!file || loading}
+                  >
+                    清除文件
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>审核上下文</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-slate-600">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="font-medium text-slate-900">当前阶段</p>
+                  <p className="mt-1">文件先行，先创建 ContractVersion 与 ReviewRun，再进入合同工作台。</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="font-medium text-slate-900">上下文来源</p>
+                  <p className="mt-1">CRM 对接、报价转合同和文件解析会逐步回填客户、金额、日期和联系人。</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="font-medium text-slate-900">审核依据</p>
+                  <p className="mt-1">进入审核后按已发布规则、SkillBundle 和模型策略执行，不依赖临时输入文本。</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>业务上下文（可选）</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="contract_no">合同编号</Label>
                   <Input
@@ -303,18 +412,14 @@ export default function NewContractPage() {
                 </div>
               </div>
 
-              {/* 乙方 + 联系人 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="party_b_name">
-                    乙方（客户）<span className="text-red-500 ml-1">*</span>
-                  </Label>
+                  <Label htmlFor="party_b_name">乙方（客户）</Label>
                   <Input
                     id="party_b_name"
-                    placeholder="客户公司名称"
+                    placeholder="可由 CRM 或文件解析补齐"
                     value={form.party_b_name}
                     onChange={e => handleInputChange('party_b_name', e.target.value)}
-                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -328,8 +433,7 @@ export default function NewContractPage() {
                 </div>
               </div>
 
-              {/* 金额 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="contract_amount">合同金额（元）</Label>
                   <Input
@@ -354,8 +458,7 @@ export default function NewContractPage() {
                 </div>
               </div>
 
-              {/* 日期 */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="contract_date">签约日期</Label>
                   <Input
@@ -385,7 +488,6 @@ export default function NewContractPage() {
                 </div>
               </div>
 
-              {/* 条款 */}
               <div className="space-y-2">
                 <Label htmlFor="payment_terms">付款条款</Label>
                 <Textarea
@@ -418,149 +520,10 @@ export default function NewContractPage() {
                   rows={2}
                 />
               </div>
-
-              <div className="flex gap-4 pt-2">
-                <Button type="submit" disabled={loading}>
-                  {loading ? '创建中...' : '下一步：上传合同源文件'}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => router.push('/contracts')}>
-                  取消
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </form>
       </div>
-    )
-  }
-
-  // ───────────────────────────────────────────
-  // Phase 2: 文件上传
-  // ───────────────────────────────────────────
-  return (
-    <div className="p-8 max-w-2xl mx-auto">
-      <div className="mb-6 flex items-center gap-2">
-        <Badge variant="outline">Step 2/2</Badge>
-        <span className="text-sm text-slate-500">上传源文件并启动审核</span>
-      </div>
-
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">上传合同源文件</h1>
-        <button
-          onClick={() => {
-            setPhase('info')
-            setFile(null)
-            setError('')
-          }}
-          className="text-sm text-slate-500 hover:text-slate-700 underline"
-        >
-          ← 返回修改信息
-        </button>
-      </div>
-
-      {/* 已录入信息预览 */}
-      <Card className="mb-6">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-slate-500">已录入信息</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-slate-500">乙方：</span>{form.party_b_name}</div>
-            {form.party_a_name && <div><span className="text-slate-500">甲方：</span>{form.party_a_name}</div>}
-            {form.contract_amount && (
-              <div><span className="text-slate-500">金额：</span>
-                ¥{Number(form.contract_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-              </div>
-            )}
-            {form.contract_date && <div><span className="text-slate-500">签约日：</span>{form.contract_date}</div>}
-          </div>
-        </CardContent>
-      </Card>
-
-      {error && (
-        <Card className="mb-4 border-red-200">
-          <CardContent className="py-3">
-            <p className="text-sm text-red-600">{error}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>合同源文件</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-lg p-10 text-center transition-colors ${
-              dragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-300'
-            } ${file ? 'border-green-500 bg-green-50' : ''}`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx"
-              onChange={handleFileChange}
-              className="hidden"
-              id="contract-file"
-            />
-            <label htmlFor="contract-file" className="cursor-pointer block">
-              {file ? (
-                <div className="space-y-2">
-                  <div className="text-lg font-medium text-green-700">{file.name}</div>
-                  <div className="text-sm text-slate-500">
-                    {(file.size / 1024 / 1024).toFixed(2)} MB · {file.type || '未知类型'}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={e => {
-                      e.preventDefault()
-                      setFile(null)
-                      if (fileInputRef.current) fileInputRef.current.value = ''
-                    }}
-                    className="text-sm text-slate-400 hover:text-red-500 underline mt-2"
-                  >
-                    重新选择
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <div className="text-4xl mb-3">📄</div>
-                  <p className="text-slate-600 font-medium mb-1">拖拽合同文件到此处</p>
-                  <p className="text-xs text-slate-400 mb-3">或点击选择文件</p>
-                  <p className="text-xs text-slate-400">支持 PDF、DOCX，最大 50MB</p>
-                </div>
-              )}
-            </label>
-          </div>
-
-          <div className="flex gap-4">
-            <Button
-              onClick={handleUploadAndStart}
-              disabled={!file || loading}
-            >
-              {loading ? '处理中...' : '上传并发起审核'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setFile(null)
-                if (fileInputRef.current) fileInputRef.current.value = ''
-              }}
-              disabled={!file}
-            >
-              清除文件
-            </Button>
-          </div>
-
-          <p className="text-xs text-slate-400">
-            上传后将自动解析合同文本并启动AI审核，预计 30 秒完成。
-          </p>
-        </CardContent>
-      </Card>
     </div>
   )
 }
