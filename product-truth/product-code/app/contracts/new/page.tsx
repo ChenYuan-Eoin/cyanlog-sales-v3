@@ -386,11 +386,11 @@ export default function NewContractPage() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>业务上下文（可选）</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
+          <details className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <summary className="cursor-pointer px-6 py-4 text-base font-semibold text-slate-950">
+              业务上下文（可选，CRM 或解析未回填时再补充）
+            </summary>
+            <div className="space-y-5 border-t border-slate-100 px-6 py-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="contract_no">合同编号</Label>
@@ -520,8 +520,8 @@ export default function NewContractPage() {
                   rows={2}
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </details>
         </form>
       </div>
     </div>

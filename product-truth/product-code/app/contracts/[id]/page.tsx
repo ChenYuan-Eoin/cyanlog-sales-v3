@@ -82,6 +82,13 @@ type RiskFinding = {
   evidence?: {
     snippets?: string[]
     counterparty?: string | null
+    source_range?: {
+      start?: number | null
+      end?: number | null
+    } | null
+    location_status?: string | null
+    location_reason?: string | null
+    rule_snapshot_id?: string | null
   }
   status: string
   clause_ref: string | null
@@ -240,7 +247,61 @@ function extractApiError(payload: unknown, fallback: string) {
 }
 
 function firstEvidence(risk: RiskFinding | null) {
-  return risk?.evidence?.snippets?.find((snippet) => snippet.trim().length > 0) || risk?.title || ''
+  return risk?.evidence?.snippets?.find((snippet) => snippet.trim().length > 0) || ''
+}
+
+function needsManualRiskLocation(risk: RiskFinding) {
+  const hasEvidence = Boolean(firstEvidence(risk))
+  const hasOffsets = risk.position.start !== null && risk.position.end !== null
+  return risk.severity !== 'green' && (
+    risk.evidence?.location_status === 'manual_required'
+    || !hasEvidence
+    || !hasOffsets
+  )
+}
+
+function needsManualAnnotationLocation(annotation: Annotation) {
+  return (
+    !annotation.selected_text?.trim()
+    || annotation.comment.includes('LocationStatus: manual_required')
+    || annotation.comment.includes('【需人工定位】')
+  )
+}
+
+function buildReviewHealth(data: WorkbenchData) {
+  const issues: string[] = []
+  const manualRiskCount = data.riskFindings.filter(needsManualRiskLocation).length
+  const manualAnnotationCount = data.annotations.filter(needsManualAnnotationLocation).length
+
+  if ((data.status === 'COMPLETED' || data.riskFindings.length > 0) && !data.reviewRun?.skill_bundle_id) {
+    issues.push('缺少 SkillBundle 绑定，不能证明结果来自已发布审核规则。')
+  }
+  if ((data.status === 'COMPLETED' || data.riskFindings.length > 0) && !data.reviewRun?.rule_snapshot_refs?.length) {
+    issues.push('缺少规则快照引用，风险项不能追溯到配置中心规则版本。')
+  }
+  if (data.reviewRun?.evidence_status && data.reviewRun.evidence_status !== 'snapshot_bound') {
+    issues.push(`证据状态为 ${evidenceStatusLabel[data.reviewRun.evidence_status]}。`)
+  }
+  if (data.latestJob?.degraded || data.reviewRun?.model_policy?.degraded) {
+    issues.push(`审核执行发生降级：${data.latestJob?.provider || data.reviewRun?.model_policy?.provider || '未记录执行器'}。`)
+  }
+  if (data.latestJob?.last_error || data.reviewRun?.model_policy?.last_error) {
+    issues.push(`最近审核错误：${data.latestJob?.last_error || data.reviewRun?.model_policy?.last_error}`)
+  }
+  if (manualRiskCount > 0) {
+    issues.push(`${manualRiskCount} 个风险项没有可验证的原文定位，不能自动写入源文件批注。`)
+  }
+  if (manualAnnotationCount > 0) {
+    issues.push(`${manualAnnotationCount} 条 Word 批注意图需要人工定位，导出前必须处理。`)
+  }
+
+  return {
+    issues,
+    manualRiskCount,
+    manualAnnotationCount,
+    degraded: issues.length > 0,
+    exportBlocked: manualRiskCount > 0 || manualAnnotationCount > 0,
+  }
 }
 
 function SourceTextPreview({
@@ -444,7 +505,10 @@ export default function ContractWorkbenchPage() {
   const canStartReview = hasSourceAsset && !isBusy && (
     data.status === 'PENDING' || data.status === 'FAILED' || data.status === 'COMPLETED'
   )
-  const canExport = data.status === 'COMPLETED' && (data.annotations.length > 0 || data.riskFindings.length > 0)
+  const reviewHealth = buildReviewHealth(data)
+  const canExport = data.status === 'COMPLETED'
+    && (data.annotations.length > 0 || data.riskFindings.length > 0)
+    && !reviewHealth.exportBlocked
   const versionActionLabel = hasSourceAsset ? '导入客户回传件' : '补充审核源文件'
   const openRiskCount = data.stats?.open || data.riskFindings.filter((risk) => risk.status === 'open').length
   const reviewActionLabel = data.status === 'COMPLETED'
@@ -452,6 +516,13 @@ export default function ContractWorkbenchPage() {
     : data.status === 'FAILED'
       ? '再次审核'
       : '发起审核'
+  const statusMeta = statusMap[data.status] || { label: data.status, variant: 'secondary' as const }
+  const statusLabel = data.status === 'COMPLETED' && reviewHealth.degraded
+    ? '审核完成（需复核）'
+    : statusMeta.label
+  const statusVariant = data.status === 'COMPLETED' && reviewHealth.degraded
+    ? 'destructive'
+    : statusMeta.variant
 
   return (
     <div className="space-y-6 p-6 xl:p-8">
@@ -464,8 +535,8 @@ export default function ContractWorkbenchPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="max-w-[760px] truncate text-2xl font-bold text-slate-950">{displayName}</h1>
-            <Badge variant={statusMap[data.status]?.variant || 'secondary'}>
-              {statusMap[data.status]?.label || data.status}
+            <Badge variant={statusVariant}>
+              {statusLabel}
             </Badge>
           </div>
           <p className="mt-2 text-sm text-slate-500">
@@ -493,7 +564,12 @@ export default function ContractWorkbenchPage() {
               </Button>
             </Link>
           )}
-          <Button onClick={handleExport} disabled={!canExport || exporting} variant="outline">
+          <Button
+            onClick={handleExport}
+            disabled={!canExport || exporting}
+            variant="outline"
+            title={reviewHealth.exportBlocked ? '存在未定位批注，不能导出源文件批注版' : undefined}
+          >
             {exporting ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
             导出批注版
           </Button>
@@ -507,15 +583,19 @@ export default function ContractWorkbenchPage() {
         <MetricCard label="批注数量" value={data.annotations.length} tone="text-blue-600" />
       </div>
 
-      {data.latestJob?.degraded && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          当前结果来自降级路径：{data.latestJob.provider || '未记录执行器'}。建议在人工复核前检查规则和模型配置。
-        </div>
-      )}
-
-      {data.latestJob?.last_error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          最近审核错误：{data.latestJob.last_error}
+      {reviewHealth.degraded && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <div className="flex items-start gap-2">
+            <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-none" />
+            <div>
+              <p className="font-medium">当前审核结果未达到正式验收状态</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {reviewHealth.issues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 
@@ -553,9 +633,14 @@ export default function ContractWorkbenchPage() {
                 <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-medium">{selectedRisk.title}</div>
-                    <Badge variant={riskTone[selectedRisk.severity].badge}>
-                      {riskTone[selectedRisk.severity].label}
-                    </Badge>
+                    <div className="flex flex-wrap gap-2">
+                      {needsManualRiskLocation(selectedRisk) && (
+                        <Badge variant="destructive">需人工定位</Badge>
+                      )}
+                      <Badge variant={riskTone[selectedRisk.severity].badge}>
+                        {riskTone[selectedRisk.severity].label}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="mt-3 grid gap-2 md:grid-cols-3">
                     <div className="rounded bg-white/70 p-2">
@@ -575,6 +660,12 @@ export default function ContractWorkbenchPage() {
                     <div className="mt-2 font-mono text-xs text-blue-700">
                       {selectedRisk.rule_code}
                       {selectedRisk.rule_version ? ` · v${selectedRisk.rule_version}` : ''}
+                      {selectedRisk.evidence?.rule_snapshot_id ? ` · ${selectedRisk.evidence.rule_snapshot_id}` : ''}
+                    </div>
+                  )}
+                  {selectedRisk.evidence?.location_reason && (
+                    <div className="mt-2 text-xs text-blue-800">
+                      定位状态：{selectedRisk.evidence.location_status || '未记录'}；{selectedRisk.evidence.location_reason}
                     </div>
                   )}
                 </div>
@@ -748,6 +839,7 @@ function ReviewPanel({
             {visibleRisks.map((risk) => {
               const tone = riskTone[risk.severity]
               const active = selectedRiskId === risk.id
+              const manualLocation = needsManualRiskLocation(risk)
               return (
                 <button
                   key={risk.id}
@@ -759,7 +851,10 @@ function ReviewPanel({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="line-clamp-1 text-sm font-semibold">{risk.title}</span>
-                    <Badge variant={tone.badge}>{tone.label}</Badge>
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      {manualLocation && <Badge variant="destructive">需定位</Badge>}
+                      <Badge variant={tone.badge}>{tone.label}</Badge>
+                    </div>
                   </div>
                   <p className="mt-2 line-clamp-2 text-xs leading-5 opacity-80">
                     {risk.description || risk.suggestion || '未记录风险描述'}
@@ -773,9 +868,7 @@ function ReviewPanel({
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px] opacity-70">
                     {risk.rule_code && <span className="font-mono">{risk.rule_code}</span>}
                     {risk.clause_ref && <span>{risk.clause_ref}</span>}
-                    {(risk.position.start !== null || risk.position.end !== null) && (
-                      <span>原文定位</span>
-                    )}
+                    <span>{manualLocation ? '未完成原文定位' : '已绑定原文定位'}</span>
                     <span>复核反馈待接入</span>
                     <span>{risk.status}</span>
                   </div>
@@ -1071,17 +1164,28 @@ function AnnotationsPanel({ annotations }: { annotations: Annotation[] }) {
           <p className="text-sm text-slate-500">审核完成后会在这里展示可写入 Word 的批注。</p>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
-            {annotations.map((annotation) => (
-              <div key={annotation.id} className="rounded-md border border-slate-200 p-3 text-sm">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="font-medium text-slate-900">{annotation.selected_text || '风险批注'}</span>
-                  <Badge variant={annotation.priority === 'urgent' ? 'destructive' : 'secondary'}>
-                    {annotation.priority || 'normal'}
-                  </Badge>
+            {annotations.map((annotation) => {
+              const manualLocation = needsManualAnnotationLocation(annotation)
+              return (
+                <div
+                  key={annotation.id}
+                  className={`rounded-md border p-3 text-sm ${
+                    manualLocation ? 'border-amber-200 bg-amber-50' : 'border-slate-200'
+                  }`}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-900">{annotation.selected_text || '未定位批注'}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {manualLocation && <Badge variant="destructive">需人工定位</Badge>}
+                      <Badge variant={annotation.priority === 'urgent' ? 'destructive' : 'secondary'}>
+                        {annotation.priority || 'normal'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="whitespace-pre-wrap leading-6 text-slate-600">{annotation.comment}</p>
                 </div>
-                <p className="whitespace-pre-wrap leading-6 text-slate-600">{annotation.comment}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </CardContent>

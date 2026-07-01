@@ -10,6 +10,17 @@ import { validateAIOutput } from '@/lib/validation/ai-output'
 export interface ReviewOptions {
   preferredProvider?: string
   orgId?: string
+  skillContext?: {
+    source?: unknown
+    outputSchema?: unknown
+    compiledFrom?: unknown
+    rules?: Array<{
+      code?: string | null
+      version?: number | null
+      clause_category?: string | null
+      target_field?: string | null
+    }>
+  }
 }
 
 export interface AIProvider {
@@ -36,6 +47,14 @@ export interface SyncReviewResult {
   provider: string
   model: string
   providerKind: 'openai_compatible' | 'builtin' | 'manual'
+  degraded: boolean
+}
+
+export interface TextGenerationResult {
+  text: string
+  provider: string
+  model: string
+  providerKind: 'openai_compatible' | 'manual'
   degraded: boolean
 }
 
@@ -257,9 +276,45 @@ function truncateTextForProvider(contractText: string, provider: AIProvider): st
   return contractText.substring(0, inputLimit)
 }
 
+function buildSkillBoundPrompt(provider: AIProvider, skillContext?: ReviewOptions['skillContext']) {
+  const base = isLocalEndpoint(provider.config.base_url)
+    ? '你是 ONES 业务运营合同审核角色。'
+    : '你是 ONES 业务运营合同审核角色，负责把合同风险转化为可追溯的风险项、销售谈判建议和 Word 批注意图。'
+  const rules = (skillContext?.rules || [])
+    .filter((rule) => rule.code)
+    .map((rule) => `${rule.code}@v${rule.version ?? 'x'} ${rule.clause_category || ''} ${rule.target_field || ''}`.trim())
+    .join('\n')
+
+  return [
+    base,
+    '只能依据配置中心已发布规则、SkillBundle、模型策略和合同原文判断，不得编造未在原文中出现的数字、日期、主体或条款。',
+    '输出必须是 JSON 对象，不要 Markdown，不要解释性前后缀。',
+    'JSON schema:',
+    '{',
+    '  "risks": [',
+    '    {',
+    '      "ruleCode": "R001-R015 中的规则编码",',
+    '      "ruleVersion": 1,',
+    '      "level": "red|yellow|green",',
+    '      "title": "风险标题",',
+    '      "description": "问题描述，必须对应规则和证据",',
+    '      "suggestion": "销售谈判或合同修改建议",',
+    '      "counterparty": "可选，对价或谈判口径",',
+    '      "evidence": ["合同原文中的连续片段，禁止摘要或改写"]',
+    '    }',
+    '  ],',
+    '  "summary": "总体评估"',
+    '}',
+    '二次校验要求：每个风险必须有规则编码、原文证据、风险说明、建议动作；证据不能只是产品名、公司名、单个数字或通用词。',
+    rules ? `可用规则快照:\n${rules}` : '可用规则快照：缺失，必须返回空 risks 并说明 skill 未绑定。',
+    skillContext?.source ? `Skill 来源: ${JSON.stringify(skillContext.source).slice(0, 1200)}` : '',
+  ].filter(Boolean).join('\n')
+}
+
 async function callOpenAICompatibleProvider(
   provider: AIProvider,
   contractText: string,
+  skillContext?: ReviewOptions['skillContext'],
   abortSignal?: AbortSignal
 ): Promise<ReadableStream> {
   const gateway = createOpenAI({
@@ -267,12 +322,7 @@ async function callOpenAICompatibleProvider(
     apiKey: provider.config.api_key || 'not-needed',
   })
 
-  const prompt = isLocalEndpoint(provider.config.base_url)
-    ? `你是法务合同审核助手。识别合同风险并以 JSON 格式返回：
-{\n  "risks": [{\n    "level": "red|yellow|green",\n    "title": "风险标题",\n    "description": "问题描述",\n    "suggestion": "建议"\n  }],\n  "summary": "总体评估"\n}`
-    : `你是一位专业的法务合同审核专家。请分析合同内容并识别风险。
-请按以下 JSON 格式返回：
-{\n  "risks": [\n    {\n      "level": "red|yellow|green",\n      "title": "风险标题（简短）",\n      "description": "问题详细描述",\n      "suggestion": "建议处理方式"\n    }\n  ],\n  "summary": "总体评估摘要"\n}`
+  const prompt = buildSkillBoundPrompt(provider, skillContext)
 
   const result = await generateText({
     model: gateway.chat(provider.config.model),
@@ -295,6 +345,33 @@ async function callOpenAICompatibleProvider(
       controller.close()
     },
   })
+}
+
+async function callTextGenerationProvider(
+  provider: AIProvider,
+  system: string,
+  prompt: string,
+  abortSignal?: AbortSignal
+): Promise<string> {
+  if (provider.providerKind !== 'openai_compatible') {
+    throw new Error('内置规则引擎不支持合同正文生成')
+  }
+
+  const gateway = createOpenAI({
+    baseURL: provider.config.base_url,
+    apiKey: provider.config.api_key || 'not-needed',
+  })
+
+  const result = await generateText({
+    model: gateway.chat(provider.config.model),
+    system,
+    messages: [{ role: 'user', content: prompt }],
+    maxOutputTokens: isLocalEndpoint(provider.config.base_url) ? 4000 : 8000,
+    temperature: 0.2,
+    abortSignal,
+  })
+
+  return result.text.trim()
 }
 
 async function callRuleEngineProvider(contractText: string, orgId?: string): Promise<ReadableStream> {
@@ -322,13 +399,14 @@ async function callProvider(
   provider: AIProvider,
   contractText: string,
   orgId?: string,
+  skillContext?: ReviewOptions['skillContext'],
   abortSignal?: AbortSignal
 ): Promise<ReadableStream> {
   if (provider.providerKind === 'builtin' || provider.config.model === 'rule-engine') {
     return callRuleEngineProvider(contractText, orgId)
   }
 
-  return callOpenAICompatibleProvider(provider, contractText, abortSignal)
+  return callOpenAICompatibleProvider(provider, contractText, skillContext, abortSignal)
 }
 
 async function withTimeout<T>(
@@ -354,7 +432,8 @@ export async function reviewWithFailover(
   providerKind: AIProvider['providerKind'] | 'manual'
   degraded: boolean
 }> {
-  const { preferredProvider, orgId } = normalizeOptions(options)
+  const normalizedOptions = normalizeOptions(options)
+  const { preferredProvider, orgId, skillContext } = normalizedOptions
   const errors: string[] = []
   const providers = buildProviderChain(await loadProviders(orgId), contractText, preferredProvider)
 
@@ -366,7 +445,7 @@ export async function reviewWithFailover(
     const abortController = new AbortController()
     try {
       const stream = await withTimeout(
-        callProvider(provider, contractText, orgId, abortController.signal),
+        callProvider(provider, contractText, orgId, skillContext, abortController.signal),
         provider.timeout,
         abortController
       )
@@ -480,4 +559,62 @@ export async function reviewWithFailoverSync(
     providerKind: 'manual',
     degraded: true,
   }
+}
+
+export async function generateTextWithFailover(
+  prompt: string,
+  options?: string | (ReviewOptions & { system?: string }),
+  maxRetries: number = 1
+): Promise<TextGenerationResult> {
+  const normalizedOptions = normalizeOptions(options)
+  const system = typeof options === 'object' && options.system
+    ? options.system
+    : '你是企业合同起草助手。请直接输出合同正文，不要输出解释、Markdown 或 JSON。'
+  const providers = buildProviderChain(
+    await loadProviders(normalizedOptions.orgId),
+    prompt,
+    normalizedOptions.preferredProvider
+  ).filter((provider) => provider.providerKind === 'openai_compatible')
+
+  const attemptedProviders = new Set<string>()
+  let lastError: string | undefined
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    for (const provider of providers) {
+      if (attemptedProviders.has(provider.id) && attempt === 0) {
+        continue
+      }
+      if (!(await isProviderHealthy(provider))) {
+        continue
+      }
+
+      const abortController = new AbortController()
+      try {
+        const text = await withTimeout(
+          callTextGenerationProvider(provider, system, prompt, abortController.signal),
+          provider.timeout,
+          abortController
+        )
+
+        if (text.length < 10) {
+          throw new Error('模型返回内容为空')
+        }
+
+        return {
+          text,
+          provider: provider.id,
+          model: provider.config.model,
+          providerKind: 'openai_compatible',
+          degraded: false,
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        lastError = `${provider.id}: ${message}`
+        attemptedProviders.add(provider.id)
+        markProviderUnhealthy(provider.id)
+      }
+    }
+  }
+
+  throw new Error(lastError || '没有可用的文本生成模型')
 }

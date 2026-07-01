@@ -193,7 +193,7 @@ export async function POST(
     const { data: riskCardsForPatches, error: riskCardsError } = await exportTiming.measure('risk_patches_load', () => (
       supabaseAdmin
         .from('contract_risk_cards')
-        .select('id, level, title, description, suggestion, evidence, status, position_start, position_end')
+        .select('id, rule_id, rule_code, rule_version, level, title, description, suggestion, evidence, status, position_start, position_end')
         .eq('contract_id', id)
         .eq('review_id', latestReview.id)
         .order('created_at', { ascending: true })

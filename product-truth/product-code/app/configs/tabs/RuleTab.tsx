@@ -31,6 +31,27 @@ const engineMap: Record<string, string> = {
   hybrid: '混合',
 }
 
+const clauseCategoryMap: Record<string, { label: string; order: number }> = {
+  payment: { label: '付款与结算', order: 10 },
+  termination: { label: '终止与退款', order: 20 },
+  tax: { label: '税务与发票', order: 30 },
+  acceptance: { label: '验收与交付', order: 40 },
+  breach: { label: '违约责任', order: 50 },
+  liability: { label: '责任边界', order: 60 },
+  confidentiality: { label: '保密义务', order: 70 },
+  business_integrity: { label: '主体与金额一致性', order: 80 },
+  ip: { label: '知识产权', order: 90 },
+  data_security: { label: '数据安全', order: 100 },
+  sla: { label: 'SLA 与服务承诺', order: 110 },
+  renewal: { label: '续约与退出', order: 120 },
+  dispute: { label: '争议解决', order: 130 },
+}
+
+function clauseCategoryLabel(value?: string | null) {
+  if (!value) return '未分类'
+  return clauseCategoryMap[value]?.label || value
+}
+
 function formatThreshold(rule: ContractPolicyRule) {
   const unit = rule.level_a_unit || rule.level_b_unit || rule.level_c_unit || ''
   return `A ${rule.level_a_operator} ${rule.level_a_threshold}${unit} / B ${rule.level_b_operator} ${rule.level_b_threshold}${unit} / C ${rule.level_c_operator} ${rule.level_c_threshold}${unit}`
@@ -46,6 +67,21 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     () => [...rules].sort((left, right) => (right.priority || 0) - (left.priority || 0)),
     [rules]
   )
+  const groupedRules = useMemo(() => {
+    const groups = new Map<string, ContractPolicyRule[]>()
+    for (const rule of sortedRules) {
+      const key = rule.clause_category || 'uncategorized'
+      groups.set(key, [...(groups.get(key) || []), rule])
+    }
+    return Array.from(groups.entries())
+      .map(([key, items]) => ({
+        key,
+        label: clauseCategoryLabel(key),
+        order: clauseCategoryMap[key]?.order ?? 999,
+        rules: items,
+      }))
+      .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label, 'zh-CN'))
+  }, [sortedRules])
 
   useEffect(() => {
     const focusKey = `${ruleMode || ''}:${focusRuleId || ''}:${rules.length}`
@@ -119,6 +155,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <Badge variant="outline" className="text-[10px]">
                   {engineMap[rule.engine_type] || rule.engine_type}
                 </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {clauseCategoryLabel(rule.clause_category)}
+                </Badge>
                 <span className="text-[11px] text-slate-400">v{rule.version}</span>
               </div>
               <p className="mt-2 text-xs text-slate-500 line-clamp-2">
@@ -174,8 +213,18 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               <p className="mt-1 text-sm text-slate-400">创建后将进入 F006 SkillBundle 编译输入</p>
             </div>
           ) : (
-            <div className="max-h-[720px] space-y-2 overflow-y-auto pr-1">
-              {sortedRules.map(renderRuleButton)}
+            <div className="max-h-[720px] space-y-4 overflow-y-auto pr-1">
+              {groupedRules.map((group) => (
+                <section key={group.key} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <h3 className="text-xs font-semibold text-slate-700">{group.label}</h3>
+                    <Badge variant="outline" className="text-[10px]">{group.rules.length}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {group.rules.map(renderRuleButton)}
+                  </div>
+                </section>
+              ))}
             </div>
           )}
         </CardContent>
@@ -284,8 +333,14 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{categoryMap[selectedRule.category]?.label || selectedRule.category}</Badge>
+                <Badge variant="outline">{clauseCategoryLabel(selectedRule.clause_category)}</Badge>
                 <Badge variant="outline">{engineMap[selectedRule.engine_type] || selectedRule.engine_type}</Badge>
                 <Badge variant={selectedRule.is_active ? 'default' : 'secondary'}>{selectedRule.is_active ? '生效' : '停用'}</Badge>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
+                <div className="font-medium text-slate-900">Skill 转译字段</div>
+                <div className="mt-1">目标字段：{selectedRule.target_field || '未配置'}</div>
+                <div>命中提示：{selectedRule.field_hints?.length ? selectedRule.field_hints.join(' / ') : '未配置'}</div>
               </div>
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
                 {formatThreshold(selectedRule)}

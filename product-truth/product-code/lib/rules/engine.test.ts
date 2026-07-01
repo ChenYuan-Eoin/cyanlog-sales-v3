@@ -282,88 +282,156 @@ function makeFlexibleRule(overrides: Partial<FlexibleRule>): FlexibleRule {
 }
 
 describe('柔性规则引擎 - 合同审核事实判定', () => {
-  it('R009 不应把“未约定知识产权归属”误判为通过', () => {
+  it('R001 付款节奏不应把服务费 6% 误判为首付款比例', () => {
     const rule = makeFlexibleRule({
-      code: 'R009',
-      name: '知识产权归属',
-      category: 'text',
-      engine_type: 'semantic',
-      field_hints: ['知识产权', '归属', '源代码'],
-    })
-
-    const result = evaluateFlexibleRule(rule, '双方未约定知识产权归属，后续另行协商。')
-
-    expect(result.risk_label).toBe('red')
-    expect(result.level).toBe('C')
-    expect(result.source).toContain('知识产权')
-  })
-
-  it('R012 不应把“未约定争议解决方式”误判为通过', () => {
-    const rule = makeFlexibleRule({
-      code: 'R012',
-      name: '争议解决方式',
-      category: 'text',
-      engine_type: 'semantic',
-      field_hints: ['争议解决', '仲裁', '管辖法院'],
-    })
-
-    const result = evaluateFlexibleRule(rule, '本合同未约定争议解决方式。')
-
-    expect(result.risk_label).toBe('red')
-    expect(result.level).toBe('C')
-  })
-
-  it('R015 应把口头变更识别为红线风险', () => {
-    const rule = makeFlexibleRule({
-      code: 'R015',
-      name: '变更流程',
-      category: 'text',
-      engine_type: 'semantic',
-      field_hints: ['合同变更', '书面形式', '授权代表'],
-    })
-
-    const result = evaluateFlexibleRule(rule, '合同变更可由双方业务人员口头确认后执行。')
-
-    expect(result.risk_label).toBe('red')
-    expect(result.level).toBe('C')
-    expect(result.source).toContain('口头')
-  })
-
-  it('结构化比例规则只有关键词但无数值时不应判绿', () => {
-    const rule = makeFlexibleRule({
-      code: 'R005',
-      name: '违约金上限',
+      code: 'R001',
+      name: '付款节奏',
       category: 'ratio',
-      engine_type: 'structured',
-      target_field: 'penalty_rate',
-      field_hints: ['违约金', '违约责任'],
+      engine_type: 'hybrid',
+      target_field: 'payment_schedule',
+      clause_category: 'payment',
+      field_hints: ['首期', '首付款', '预付款', '付款节奏'],
     })
 
-    const result = evaluateFlexibleRule(rule, '双方应按照合同约定承担违约责任。')
+    const result = evaluateFlexibleRule(rule, '服务费率为合同总价的 6%，甲方应在验收后 30 个工作日内支付。')
 
     expect(result.risk_label).toBe('white')
     expect(result.matched).toBe(false)
   })
 
-  it('保密期限不应复用合同期限数值', () => {
+  it('R001 付款节奏只在首付款上下文中提取比例', () => {
     const rule = makeFlexibleRule({
-      code: 'R010',
-      name: '保密期限',
-      category: 'duration',
-      engine_type: 'structured',
-      target_field: 'confidentiality_days',
-      field_hints: ['保密期限', '保密义务'],
+      code: 'R001',
+      name: '付款节奏',
+      category: 'ratio',
+      engine_type: 'hybrid',
+      target_field: 'payment_schedule',
+      clause_category: 'payment',
+      field_hints: ['首期', '首付款', '预付款', '付款节奏'],
       level_a: {
-        operator: '<=',
-        threshold: 1095,
-        unit: 'day',
-        action: 'auto_approve',
+        operator: '>=',
+        threshold: 30,
+        unit: 'percent',
+        action: 'auto_accept',
+      },
+      level_b: {
+        operator: '>=',
+        threshold: 15,
+        unit: 'percent',
+        action: 'negotiate_with_counterparty',
+      },
+      level_c: {
+        operator: '<',
+        threshold: 15,
+        unit: 'percent',
+        action: 'block_or_escalate',
       },
     })
 
-    const result = evaluateFlexibleRule(rule, '合同期限为5年，未单独约定保密期限。')
+    const result = evaluateFlexibleRule(rule, '付款节奏：首付款 10%，验收合格后支付尾款 90%。')
+
+    expect(result.risk_label).toBe('red')
+    expect(result.level).toBe('C')
+    expect(result.source).toContain('首付款 10%')
+  })
+
+  it('R009 保密期不应复用合同期限数值', () => {
+    const rule = makeFlexibleRule({
+      code: 'R009',
+      name: '保密期',
+      category: 'duration',
+      engine_type: 'hybrid',
+      target_field: 'confidentiality_years',
+      clause_category: 'confidentiality',
+      field_hints: ['保密期', '保密义务', '永久'],
+    })
+
+    const result = evaluateFlexibleRule(rule, '合同期限为 5 年，未单独约定保密期。')
 
     expect(result.risk_label).toBe('white')
     expect(result.matched).toBe(false)
+  })
+
+  it('R009 保密期能识别永久保密为红线', () => {
+    const rule = makeFlexibleRule({
+      code: 'R009',
+      name: '保密期',
+      category: 'duration',
+      engine_type: 'hybrid',
+      target_field: 'confidentiality_years',
+      clause_category: 'confidentiality',
+      field_hints: ['保密期', '保密义务', '永久'],
+      level_a: {
+        operator: '<=',
+        threshold: 2555,
+        unit: 'day',
+        action: 'auto_accept',
+      },
+      level_b: {
+        operator: '<=',
+        threshold: 3650,
+        unit: 'day',
+        action: 'negotiate_with_counterparty',
+      },
+      level_c: {
+        operator: '>',
+        threshold: 3650,
+        unit: 'day',
+        action: 'block_or_escalate',
+      },
+    })
+
+    const result = evaluateFlexibleRule(rule, '双方同意保密义务永久有效。')
+
+    expect(result.risk_label).toBe('red')
+    expect(result.level).toBe('C')
+    expect(result.source).toContain('永久')
+  })
+
+  it('R013 SLA 不应把产品名 ONES 误判为 SLA 命中', () => {
+    const rule = makeFlexibleRule({
+      code: 'R013',
+      name: 'SLA 承诺',
+      category: 'enum',
+      engine_type: 'hybrid',
+      target_field: 'sla_commitment',
+      clause_category: 'sla',
+      field_hints: ['SLA', '可用性', '99.5%', '7×24', '营业损失'],
+      level_c: {
+        operator: 'contains',
+        threshold: 0,
+        unit: 'text',
+        action: 'block_or_escalate',
+      },
+    })
+
+    const result = evaluateFlexibleRule(rule, '乙方为甲方提供 ONES 系统服务，具体功能以订单为准。')
+
+    expect(result.risk_label).toBe('white')
+    expect(result.matched).toBe(false)
+  })
+
+  it('R013 SLA 能识别高风险服务可用性承诺', () => {
+    const rule = makeFlexibleRule({
+      code: 'R013',
+      name: 'SLA 承诺',
+      category: 'enum',
+      engine_type: 'hybrid',
+      target_field: 'sla_commitment',
+      clause_category: 'sla',
+      field_hints: ['SLA', '可用性', '99.5%', '7×24', '营业损失'],
+      level_c: {
+        operator: 'contains',
+        threshold: 0,
+        unit: 'text',
+        action: 'block_or_escalate',
+      },
+    })
+
+    const result = evaluateFlexibleRule(rule, '乙方承诺系统可用性不低于 99.9%，并承担甲方营业损失。')
+
+    expect(result.risk_label).toBe('red')
+    expect(result.level).toBe('C')
+    expect(result.source).toContain('可用性')
   })
 })

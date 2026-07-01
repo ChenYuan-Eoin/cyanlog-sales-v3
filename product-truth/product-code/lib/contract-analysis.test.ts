@@ -128,7 +128,30 @@ describe('runStructuredAnalysis', () => {
       },
       eval_case_ids: [],
       release_meta: {},
-      compiled_from: {},
+      compiled_from: {
+        external_skill_source: {
+          repo: 'suoyidev/ones-internal-skills',
+          commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+        },
+        rules: [
+          {
+            id: 'snapshot-1',
+            rule_id: 'rule-1',
+            code: 'R001',
+            version: 2,
+            clause_category: 'payment',
+            target_field: 'first_payment_rate',
+          },
+          {
+            id: 'snapshot-2',
+            rule_id: 'rule-2',
+            code: 'R002',
+            version: 1,
+            clause_category: 'termination',
+            target_field: 'termination_refund',
+          },
+        ],
+      },
       compiled_hash: 'hash-1',
       published_at: null,
     })
@@ -149,10 +172,13 @@ describe('runStructuredAnalysis', () => {
     })
     vi.mocked(reviewWithFailoverSync).mockResolvedValue({
       risks: [{
+        ruleCode: 'R002',
+        ruleVersion: 1,
         level: 'red',
         title: '语义风险',
         description: '存在宽泛退款承诺',
         suggestion: '删除全额退款承诺',
+        evidence: ['客户可要求全额退款'],
       }],
       summary: '语义审核完成',
       provider: 'AI_LEVEL_2',
@@ -192,6 +218,26 @@ describe('runStructuredAnalysis', () => {
     expect(reviewWithFailoverSync).toHaveBeenCalledWith(expect.any(String), {
       orgId: 'org-1',
       preferredProvider: 'sales_cloud',
+      skillContext: expect.objectContaining({
+        source: expect.objectContaining({
+          repo: 'suoyidev/ones-internal-skills',
+          commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+        }),
+        rules: [
+          expect.objectContaining({
+            code: 'R001',
+            version: 2,
+            clause_category: 'payment',
+            target_field: 'first_payment_rate',
+          }),
+          expect.objectContaining({
+            code: 'R002',
+            version: 1,
+            clause_category: 'termination',
+            target_field: 'termination_refund',
+          }),
+        ],
+      }),
     }, 1)
     expect(report.result.risks).toHaveLength(2)
     expect(report.result.provider).toBe('rule-engine+AI_LEVEL_2')

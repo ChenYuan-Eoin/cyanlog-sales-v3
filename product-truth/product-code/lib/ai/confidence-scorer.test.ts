@@ -12,10 +12,13 @@ describe('calculateConfidence', () => {
     const validOutput = JSON.stringify({
       risks: [
         {
+          ruleCode: 'R001',
+          ruleVersion: 2,
           level: 'red',
           title: '账期过长',
           description: '合同第3条约定账期为120天，超过标准90天',
           suggestion: '建议缩短至60天',
+          evidence: ['账期为120天'],
         },
       ],
       summary: '合同存在账期过长的风险，建议缩短账期',
@@ -30,10 +33,13 @@ describe('calculateConfidence', () => {
     const inconsistentOutput = JSON.stringify({
       risks: [
         {
+          ruleCode: 'R006',
+          ruleVersion: 2,
           level: 'red',
           title: '违约金过高',
           description: '违约金比例为10%',
           suggestion: '建议降低',
+          evidence: ['违约金比例为10%'],
         },
       ],
       summary: '合同整体无重大风险', // 摘要未提及违约金

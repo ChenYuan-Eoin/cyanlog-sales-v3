@@ -142,7 +142,7 @@ export function extractField(
   fieldHints?: string[],
   targetField?: string
 ): ExtractedField | null {
-  const text = contractText.toLowerCase()
+  const text = contractText
 
   switch (category) {
     case 'ratio':
@@ -152,9 +152,9 @@ export function extractField(
     case 'duration':
       return extractDurationField(text, fieldHints, targetField)
     case 'enum':
-      return extractEnumField(text, fieldHints)
+      return extractEnumField(text, fieldHints, targetField)
     case 'text':
-      return extractTextField(text, fieldHints)
+      return extractTextField(text, fieldHints, targetField)
     default:
       return null
   }
@@ -205,9 +205,25 @@ function extractRatioField(
   targetField?: string
 ): ExtractedField | null {
   const targetedPatterns: Record<string, RegExp[]> = {
+    payment_schedule: [
+      /(?:首付|首付款|首期款|首期|定金|预付款)[^0-9%]{0,40}(\d+(?:\.\d+)?)\s*%/i,
+      /(\d+(?:\.\d+)?)\s*%\s*(?:作为|为|的)?\s*(?:首付|首付款|首期款|首期|定金|预付款)/i,
+    ],
     first_payment_rate: [
       /(?:首付|首付款|首期款|首期|定金|预付款)[^0-9%]{0,20}(\d+(?:\.\d+)?)\s*%/i,
       /(\d+(?:\.\d+)?)\s*%\s*(?:作为|为|的)?\s*(?:首付|首付款|首期款|首期|定金|预付款)/i,
+    ],
+    tax_rate: [
+      /(?:税率|增值税税率)[^0-9%]{0,20}(\d+(?:\.\d+)?)\s*%/i,
+      /(\d+(?:\.\d+)?)\s*%\s*(?:增值税|税率|专票|发票)/i,
+    ],
+    breach_penalty_cap: [
+      /(?:违约金|赔偿上限|违约责任|日违约金)[^0-9%万]{0,40}(\d+(?:\.\d+)?)\s*%/i,
+      /(?:违约金|逾期付款违约金|日违约金)[^万]{0,20}万分之([一二三四五六七八九十百0-9.]+)/i,
+    ],
+    liability_cap: [
+      /(?:责任总额|责任上限|赔偿上限|赔偿责任)[^0-9%]{0,40}(\d+(?:\.\d+)?)\s*%/i,
+      /(\d+(?:\.\d+)?)\s*%\s*(?:作为|为|的)?\s*(?:责任上限|赔偿上限|责任总额)/i,
     ],
     warranty_deposit_rate: [
       /(?:质保金|质量保证金|保证金)[^0-9%]{0,20}(\d+(?:\.\d+)?)\s*%/i,
@@ -301,6 +317,10 @@ function extractDurationField(
   targetField?: string
 ): ExtractedField | null {
   const targetedPatterns: Record<string, RegExp[]> = {
+    acceptance_silent_days: [
+      /(?:默示验收|视为验收|自动验收)[^0-9一二三四五六七八九十百]{0,30}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日)?/i,
+      /([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日)\s*(?:内|后)?[^。；\n]{0,20}(?:默示验收|视为验收|自动验收)/i,
+    ],
     payment_term_days: [
       /(?:账期|付款期限|付款周期|付款期)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日|月|年)?/i,
       /([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(工作日?|自然日?|天|日|月|年)\s*(?:内|后)?\s*(?:付款|支付)/i,
@@ -318,6 +338,9 @@ function extractDurationField(
     ],
     confidentiality_days: [
       /(?:保密期限|保密期|保密义务)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?/i,
+    ],
+    confidentiality_years: [
+      /(?:保密期限|保密期|保密义务)[^0-9一二三四五六七八九十百永久]{0,30}(永久|[0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(年|月|天|日)?/i,
     ],
     non_compete_days: [
       /(?:竞业限制|竞业禁止|不竞争)[^0-9一二三四五六七八九十百]{0,20}([0-9一二三四五六七八九十百]+)\s*(?:个)?\s*(天|日|月|年)?/i,
@@ -345,7 +368,7 @@ function extractDurationField(
       const value = parseChineseNumber(match[1])
       const unit = match[2] || '天'
       // 统一转换为天
-      let normalizedValue = value
+      let normalizedValue = match[1] === '永久' ? 36500 : value
       if (unit.includes('月')) normalizedValue = value * 30
       if (unit.includes('年')) normalizedValue = value * 365
 
@@ -367,8 +390,24 @@ function extractDurationField(
  */
 function extractEnumField(
   text: string,
-  hints?: string[]
+  hints?: string[],
+  targetField?: string
 ): ExtractedField | null {
+  if (targetField === 'sla_commitment') {
+    const terms = ['SLA', '可用性', '99.5%', '99.9%', '7×24', '7x24', '营业损失', '服务费']
+    const lower = text.toLowerCase()
+    const term = terms.find((item) => lower.includes(item.toLowerCase()))
+    if (!term) return null
+    const index = lower.indexOf(term.toLowerCase())
+    return {
+      name: targetField,
+      value: 1,
+      unit: 'match',
+      source: text.slice(Math.max(0, index - 30), Math.min(text.length, index + term.length + 50)).trim(),
+      confidence: 0.85,
+    }
+  }
+
   // 枚举类型通常是匹配特定关键词
   if (hints && hints.length > 0) {
     for (const hint of hints) {
@@ -391,7 +430,8 @@ function extractEnumField(
  */
 function extractTextField(
   text: string,
-  hints?: string[]
+  hints?: string[],
+  _targetField?: string
 ): ExtractedField | null {
   // 文本类型：检查是否包含特定关键词
   if (hints && hints.length > 0) {
@@ -403,7 +443,7 @@ function extractTextField(
     }
     const confidence = matchCount / hints.length
     return {
-      name: 'text',
+          name: 'text',
       value: confidence > 0.3 ? 1 : 0,  // 匹配率>30%认为命中
       unit: 'confidence',
       source: hints.join(', '),
@@ -578,6 +618,7 @@ function evaluateTextRule(
   hints: string[]
 ): LevelMatchResult {
   const text = contractText.toLowerCase()
+  const target = rule.target_field || rule.clause_category || rule.code
   const matchedHints = hints.filter((hint) => text.includes(hint.toLowerCase()))
   const matched = matchedHints.length > 0
   const source = matchedHints.join('、')
@@ -610,8 +651,30 @@ function evaluateTextRule(
     risk_label: 'green',
   })
 
+  const noTextRisk = (): LevelMatchResult => ({
+    level: null,
+    matched: false,
+    operator: rule.level_a.operator,
+    threshold: rule.level_a.threshold,
+    actual_value: 0,
+    unit: 'text',
+    source: '',
+    confidence: 0.4,
+    action: 'auto_approve',
+    message: `${rule.name}未发现明确风险表述`,
+    risk_label: 'white',
+  })
+
   const includesAny = (terms: string[]) => terms.some((term) => text.includes(term.toLowerCase()))
-  const matchedTerms = (terms: string[]) => terms.filter((term) => text.includes(term.toLowerCase()))
+  const contextForTerms = (terms: string[]) => {
+    for (const term of terms) {
+      const index = text.indexOf(term.toLowerCase())
+      if (index >= 0) {
+        return contractText.slice(Math.max(0, index - 40), Math.min(contractText.length, index + term.length + 80)).trim()
+      }
+    }
+    return ''
+  }
   const hasNegatedContext = (terms: string[]) => {
     const negations = ['未约定', '未明确', '未载明', '未说明', '没有约定', '无约定', '缺失', '不明确', '待定']
     return terms.some((term) => {
@@ -650,38 +713,101 @@ function evaluateTextRule(
     }
   }
 
-  if (rule.code === 'R009') {
+  if (target === 'termination_refund_clause') {
+    const subjectTerms = ['终止', '解除', '退费', '退款', '未消耗', '未使用']
+    if (!includesAny(subjectTerms)) return noTextRisk()
+    const refundTerms = ['按未消耗', '退还未使用', '退还未消耗', '不予退还', '不退费', '全额退款']
+    const context = contextForTerms(subjectTerms)
+    if (includesAny(['不予退还', '不退费', '全额退款'])) {
+      return redResult(`${rule.name}存在终止退款红线`, context || source, 0.88)
+    }
+    if (!includesAny(refundTerms)) {
+      return redResult(`${rule.name}未明确终止退款口径`, context || source)
+    }
+    return greenResult(`${rule.name}已明确终止退款口径`, context || source)
+  }
+
+  if (target === 'acceptance_failure_clause') {
+    const subjectTerms = ['验收不通过', '验收未通过', '不合格', '整改', '重交', '全额退款', '解除合同']
+    if (!includesAny(subjectTerms)) return noTextRisk()
+    const dangerTerms = ['全额退款', '立即解除', '单方解除', '间接损失']
+    const context = contextForTerms(subjectTerms)
+    if (includesAny(dangerTerms)) {
+      return redResult(`${rule.name}存在验收失败红线`, context || source, 0.88)
+    }
+    return greenResult(`${rule.name}已约定验收失败处理`, context || source)
+  }
+
+  if (target === 'indirect_loss_clause') {
+    const dangerTerms = ['间接损失', '可得利益', '商誉', '惩罚性赔偿', '一切损失']
+    if (!includesAny(dangerTerms)) return noTextRisk()
+    return redResult(`${rule.name}包含不应承担的间接或扩张损失`, contextForTerms(dangerTerms), 0.9)
+  }
+
+  if (target === 'entity_payment_amount_consistency') {
+    const dangerTerms = ['收款账户不一致', '主体不一致', '金额不一致', '大写金额不一致', '另行指定账户']
+    if (!includesAny(dangerTerms)) return noTextRisk()
+    return redResult(`${rule.name}存在主体、账户或金额一致性风险`, contextForTerms(dangerTerms), 0.9)
+  }
+
+  if (target === 'ip_ownership_clause') {
     const subjectTerms = ['知识产权', '著作权', '专利', '源代码', '定制开发成果', '技术成果', '归属']
     const ownershipTerms = ['归甲方', '归乙方', '归双方', '归买方', '归卖方', '归属甲方', '归属乙方', '归属双方', '所有权归', '享有所有权']
-    const evidenceTerms = matchedTerms([...subjectTerms, ...ownershipTerms])
+    const evidence = contextForTerms([...subjectTerms, ...ownershipTerms])
     if (hasNegatedContext(subjectTerms) || !includesAny(subjectTerms) || !includesAny(ownershipTerms)) {
-      return redResult(`${rule.name}缺失或未明确`, evidenceTerms.join('、'))
+      return redResult(`${rule.name}缺失或未明确`, evidence)
     }
-    return greenResult(`${rule.name}已明确`, evidenceTerms.join('、'))
+    return greenResult(`${rule.name}已明确`, evidence)
   }
 
-  if (rule.code === 'R012') {
+  if (target === 'data_security_clause') {
+    const subjectTerms = ['客户数据', '个人信息', 'AI训练', '跨境', '境外', 'DPA', '删除']
+    if (!includesAny(subjectTerms)) return noTextRisk()
+    const dangerTerms = ['用于训练', 'AI训练', '跨境', '境外', '无法删除', '永久保留']
+    const context = contextForTerms(subjectTerms)
+    if (includesAny(dangerTerms)) {
+      return redResult(`${rule.name}存在数据安全红线`, context, 0.9)
+    }
+    return greenResult(`${rule.name}已覆盖数据安全要求`, context)
+  }
+
+  if (target === 'renewal_clause') {
+    const subjectTerms = ['续约', '自动续期', '自动续约', '续期']
+    if (!includesAny(subjectTerms)) return noTextRisk()
+    const dangerTerms = ['自动续约', '自动续期', '无权退出', '不得退出', '锁价', '单方涨价']
+    const context = contextForTerms(subjectTerms)
+    if (includesAny(dangerTerms) && !includesAny(['提前通知', '书面通知', '退出权', '不续约'])) {
+      return redResult(`${rule.name}存在自动续约或退出权风险`, context, 0.88)
+    }
+    return greenResult(`${rule.name}已明确续约安排`, context)
+  }
+
+  if (target === 'dispute_resolution_clause') {
     const subjectTerms = ['争议解决', '仲裁', '管辖', '诉讼', '法院']
     const resolutionTerms = ['仲裁委员会', '仲裁', '管辖法院', '人民法院', '诉讼', '争议解决方式', '管辖地']
-    const evidenceTerms = matchedTerms([...subjectTerms, ...resolutionTerms])
+    const evidence = contextForTerms([...subjectTerms, ...resolutionTerms])
     if (hasNegatedContext(subjectTerms) || !includesAny(resolutionTerms)) {
-      return redResult(`${rule.name}缺失或未明确`, evidenceTerms.join('、'))
+      return redResult(`${rule.name}缺失或未明确`, evidence)
     }
-    return greenResult(`${rule.name}已明确`, evidenceTerms.join('、'))
+    return greenResult(`${rule.name}已明确`, evidence)
   }
 
-  if (rule.code === 'R015') {
+  if (target === 'change_process_clause') {
     const subjectTerms = ['合同变更', '变更流程', '补充协议']
     const writtenTerms = ['书面', '补充协议', '双方签字', '双方盖章', '授权代表', '加盖公章', '签署']
     const dangerTerms = ['口头', '单方变更', '无需书面', '电话确认']
-    const evidenceTerms = matchedTerms([...subjectTerms, ...writtenTerms, ...dangerTerms])
+    const evidence = contextForTerms([...subjectTerms, ...writtenTerms, ...dangerTerms])
     if (includesAny(dangerTerms)) {
-      return redResult(`${rule.name}存在口头或单方变更风险`, evidenceTerms.join('、'), 0.9)
+      return redResult(`${rule.name}存在口头或单方变更风险`, evidence, 0.9)
     }
     if (hasNegatedContext([...subjectTerms, ...writtenTerms]) || !includesAny(subjectTerms) || !includesAny(writtenTerms)) {
-      return redResult(`${rule.name}缺失书面授权流程`, evidenceTerms.join('、'))
+      return redResult(`${rule.name}缺失书面授权流程`, evidence)
     }
-    return greenResult(`${rule.name}已明确书面授权流程`, evidenceTerms.join('、'))
+    return greenResult(`${rule.name}已明确书面授权流程`, evidence)
+  }
+
+  if (rule.engine_type === 'semantic' || rule.engine_type === 'hybrid') {
+    return noTextRisk()
   }
 
   if (matched) {
@@ -700,36 +826,7 @@ function evaluateTextRule(
     }
   }
 
-  const requiredMissingCodes = new Set(['R009', 'R012', 'R015'])
-  if (requiredMissingCodes.has(rule.code)) {
-    return {
-      level: 'C',
-      matched: true,
-      operator: rule.level_c.operator,
-      threshold: rule.level_c.threshold,
-      actual_value: 0,
-      unit: 'text',
-      source: '',
-      confidence: 0.75,
-      action: rule.level_c.action,
-      message: rule.level_c.message || `${rule.name}缺失或未明确`,
-      risk_label: 'red',
-    }
-  }
-
-  return {
-    level: null,
-    matched: false,
-    operator: rule.level_a.operator,
-    threshold: rule.level_a.threshold,
-    actual_value: 0,
-    unit: 'text',
-    source: '',
-    confidence: 0.4,
-    action: 'auto_approve',
-    message: `${rule.name}未发现明确风险表述`,
-    risk_label: 'white',
-  }
+  return noTextRisk()
 }
 
 // ═══════════════════════════════════════════════════════════════

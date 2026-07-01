@@ -6,10 +6,13 @@ describe('detectHallucination', () => {
     const aiOutput = JSON.stringify({
       risks: [
         {
+          ruleCode: 'R009',
+          ruleVersion: 2,
           level: 'red',
           title: '虚构条款',
           description: '合同包含不存在的保密条款',
           suggestion: '删除',
+          evidence: ['保密条款'],
         },
       ],
       summary: '存在虚构条款',
@@ -27,10 +30,13 @@ describe('detectHallucination', () => {
     const aiOutput = JSON.stringify({
       risks: [
         {
+          ruleCode: 'R001',
+          ruleVersion: 2,
           level: 'red',
           title: '账期',
           description: '账期',
           suggestion: '缩短',
+          evidence: ['账期是120天'],
         },
       ],
       summary: '账期',

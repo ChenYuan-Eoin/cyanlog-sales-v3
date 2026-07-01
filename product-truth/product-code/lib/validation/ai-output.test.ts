@@ -30,10 +30,13 @@ describe('validateAIOutput', () => {
     const validOutput = JSON.stringify({
       risks: [
         {
+          ruleCode: 'R001',
+          ruleVersion: 2,
           level: 'red',
           title: '账期过长',
           description: '账期为120天',
           suggestion: '建议缩短',
+          evidence: ['账期为120天'],
         },
       ],
       summary: '总体评估',
@@ -61,10 +64,12 @@ describe('validateAIOutput', () => {
     const invalidOutput = JSON.stringify({
       risks: [
         {
+          ruleCode: 'R001',
           level: 'purple', // invalid
           title: 'test',
           description: 'test',
           suggestion: 'test',
+          evidence: ['test'],
         },
       ],
       summary: 'test',
@@ -72,6 +77,25 @@ describe('validateAIOutput', () => {
 
     const result = validateAIOutput(invalidOutput)
     expect(result.valid).toBe(false)
+  })
+
+  it('should reject risks without rule code and source evidence', () => {
+    const invalidOutput = JSON.stringify({
+      risks: [
+        {
+          level: 'red',
+          title: '账期过长',
+          description: '账期为120天',
+          suggestion: '建议缩短',
+        },
+      ],
+      summary: 'test',
+    })
+
+    const result = validateAIOutput(invalidOutput)
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('ruleCode')
+    expect(result.error).toContain('evidence')
   })
 
   it('should extract JSON from markdown code block', () => {

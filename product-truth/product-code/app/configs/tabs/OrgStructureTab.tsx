@@ -888,12 +888,12 @@ export default function OrgStructureTab({
             disabled={feishuSyncing}
             variant="outline"
             size="sm"
-            title="从飞书通讯录同步部门结构；当前 MVP 不导入成员"
+            title="从飞书通讯录同步部门、成员和主部门关系"
             aria-busy={feishuSyncing}
             className="w-full justify-center"
           >
             <RefreshCwIcon className={`mr-1 h-4 w-4 ${feishuSyncing ? 'animate-spin' : ''}`} />
-            {feishuSyncing ? '同步中...' : '同步飞书部门'}
+            {feishuSyncing ? '同步中...' : '同步飞书组织'}
           </Button>
             </div>
           </div>
@@ -910,7 +910,7 @@ export default function OrgStructureTab({
                 <span className="font-semibold text-slate-900">{stats.filteredCount}</span>
               </div>
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-500">
-                飞书同步当前只导入部门结构；成员同步需要飞书通讯录权限和成员映射策略，不应静默伪造成员数据。
+                飞书同步会导入部门结构、成员和主部门映射；若通讯录权限不足，将显示部分同步或失败原因，不静默伪造成员数据。
               </div>
             </div>
           </div>

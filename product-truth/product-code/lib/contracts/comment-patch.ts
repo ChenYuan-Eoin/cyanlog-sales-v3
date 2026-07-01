@@ -3,6 +3,9 @@ export type RiskLevel = 'red' | 'yellow' | 'green' | 'white'
 export type RiskCardCommentSource = {
   id: string
   level: RiskLevel
+  rule_id?: string | null
+  rule_code?: string | null
+  rule_version?: number | null
   title: string
   description?: string | null
   suggestion?: string | null
@@ -43,19 +46,53 @@ function evidenceSnippets(evidence: unknown): string[] {
   ))
 }
 
-function riskSelectedText(risk: RiskCardCommentSource) {
-  return evidenceSnippets(risk.evidence)[0] || risk.title
+function evidenceRecord(evidence: unknown): Record<string, unknown> {
+  return evidence && typeof evidence === 'object' && !Array.isArray(evidence)
+    ? evidence as Record<string, unknown>
+    : {}
 }
 
-function patchOffsets(risk: RiskCardCommentSource, selectedText: string) {
-  const start = typeof risk.position_start === 'number' && risk.position_start >= 0
-    ? risk.position_start
-    : 0
-  const end = typeof risk.position_end === 'number' && risk.position_end > start
-    ? risk.position_end
-    : start + Math.max(selectedText.length, 1)
+function evidenceLocationStatus(evidence: unknown): string {
+  const status = evidenceRecord(evidence).location_status
+  return typeof status === 'string' ? status : ''
+}
 
-  return { start, end }
+function evidenceRuleSnapshotId(evidence: unknown): string | null {
+  const snapshotId = evidenceRecord(evidence).rule_snapshot_id
+  return typeof snapshotId === 'string' && snapshotId.trim() ? snapshotId : null
+}
+
+function isGenericEvidence(value: string) {
+  const normalized = value.trim()
+  if (normalized.length < 2) return true
+  return ['ONES', '书面', '合同', '有效期', '6%', '0'].includes(normalized)
+}
+
+function riskSelectedText(risk: RiskCardCommentSource) {
+  return evidenceSnippets(risk.evidence)[0] || ''
+}
+
+function patchLocation(risk: RiskCardCommentSource, selectedText: string) {
+  const hasOffsets = typeof risk.position_start === 'number'
+    && typeof risk.position_end === 'number'
+    && risk.position_start >= 0
+    && risk.position_end > risk.position_start
+  const hasEvidence = selectedText.trim().length > 0 && !isGenericEvidence(selectedText)
+  const status = evidenceLocationStatus(risk.evidence)
+  const located = hasOffsets && hasEvidence && status !== 'manual_required'
+
+  return {
+    located,
+    start: located ? risk.position_start as number : 0,
+    end: located ? risk.position_end as number : 0,
+    reason: located
+      ? 'located'
+      : status === 'manual_required'
+        ? 'source evidence could not be matched'
+        : !hasEvidence
+          ? 'missing or generic evidence_text'
+          : 'missing source range',
+  }
 }
 
 export function buildCommentPatchesFromRiskCards(input: {
@@ -71,20 +108,25 @@ export function buildCommentPatchesFromRiskCards(input: {
     .filter((risk) => !existingRiskIds.has(risk.id))
     .map((risk) => {
       const selectedText = riskSelectedText(risk)
-      const { start, end } = patchOffsets(risk, selectedText)
+      const location = patchLocation(risk, selectedText)
       const isRed = risk.level === 'red'
+      const ruleSnapshotId = evidenceRuleSnapshotId(risk.evidence)
 
       return {
         risk_id: risk.id,
         annotation: {
           contract_id: input.contractId,
-          start_offset: start,
-          end_offset: end,
-          selected_text: selectedText,
+          start_offset: location.start,
+          end_offset: location.end,
+          selected_text: location.located ? selectedText : '',
           comment: [
-            `【${isRed ? '红线风险' : '需谈判风险'}】${risk.title}`,
+            `【${location.located ? (isRed ? '红线风险' : '需谈判风险') : '需人工定位'}】${risk.title}`,
             risk.description ? `问题：${risk.description}` : null,
             risk.suggestion ? `建议：${risk.suggestion}` : null,
+            location.located ? `证据原文：${selectedText}` : `定位状态：需人工定位（${location.reason}）`,
+            risk.rule_code ? `规则：${risk.rule_code}${risk.rule_version ? ` v${risk.rule_version}` : ''}` : null,
+            ruleSnapshotId ? `RuleSnapshot: ${ruleSnapshotId}` : null,
+            location.located ? `SourceRange: ${location.start}-${location.end}` : 'LocationStatus: manual_required',
             `RiskFinding: ${risk.id}`,
           ].filter(Boolean).join('\n'),
           category: 'risk_finding',

@@ -881,9 +881,9 @@ export default function ConfigsClient({
     }
   }
 
-  // 飞书同步：当前 MVP 只同步部门结构，成员导入需单独设计。
+  // 飞书同步：同步部门树、成员和主部门关系；上游权限不足时服务端返回 partial。
   async function handleFeishuSync() {
-    if (!await confirmAction('从飞书导入部门结构？现有部门树将保留，source=feishu 的记录会被刷新。本阶段不会导入成员。', { confirmText: '开始导入' })) return
+    if (!await confirmAction('从飞书导入组织架构？系统会刷新 source=feishu 的部门，并按可访问范围导入成员与主部门关系。', { confirmText: '开始导入' })) return
     setFeishuSyncing(true)
     setFeishuFeedback(null)
     try {

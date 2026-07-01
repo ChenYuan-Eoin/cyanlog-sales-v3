@@ -99,6 +99,12 @@ export interface ReviewRuntimeBinding {
   skill_bundle_id: string
   model_policy_id: string
   rule_snapshot_ids: string[]
+  rule_snapshot_refs?: Array<{
+    id: string
+    rule_id?: string | null
+    code?: string | null
+    version?: number | null
+  }>
   model_invocation_ids: string[]
   provider: string
   model: string
@@ -466,14 +472,8 @@ function applyRiskFactsToClauses(
   for (const risk of risks) {
     if (risk.level === 'green') continue
 
-    const evidence = risk.evidence?.find(Boolean)
-    const matchedClause = clauses.find((clause) => (
-      (evidence && clause.clauseText.includes(evidence))
-      || clause.clauseText.includes(risk.title)
-      || Boolean(clause.clauseTitle && risk.description.includes(clause.clauseTitle))
-    ))
-
-    const clause = matchedClause || clauses[0]
+    const location = locateRiskSource(risk, clauses)
+    const clause = location.clause
     if (!clause) continue
 
     clause.riskLevel = riskLevelMap[risk.level]
@@ -663,6 +663,85 @@ function generateEffectivenessAnalysis(c: ComplianceCheck, r: RiskSummary): stri
 
 type AnalysisRisk = ContractAnalysisResult['risks'][number]
 
+type RiskSourceLocation = {
+  snippet: string | null
+  clause: ClauseMatch | null
+  startOffset: number | null
+  endOffset: number | null
+  status: 'located' | 'manual_required'
+  reason: string
+}
+
+function isGenericEvidenceSnippet(snippet: string) {
+  const normalized = snippet.trim()
+  if (normalized.length < 2) return true
+  return ['ONES', '书面', '合同', '有效期', '6%', '0'].includes(normalized)
+}
+
+function evidenceCandidates(risk: AnalysisRisk) {
+  return (risk.evidence || [])
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0 && !isGenericEvidenceSnippet(item))
+}
+
+function locateRiskSource(risk: AnalysisRisk, clauses: ClauseMatch[]): RiskSourceLocation {
+  for (const snippet of evidenceCandidates(risk)) {
+    for (const clause of clauses) {
+      const localIndex = clause.clauseText.indexOf(snippet)
+      if (localIndex >= 0) {
+        const startOffset = clause.startOffset + localIndex
+        return {
+          snippet,
+          clause,
+          startOffset,
+          endOffset: startOffset + snippet.length,
+          status: 'located',
+          reason: 'evidence_text_exact_match',
+        }
+      }
+    }
+  }
+
+  return {
+    snippet: evidenceCandidates(risk)[0] || null,
+    clause: null,
+    startOffset: null,
+    endOffset: null,
+    status: 'manual_required',
+    reason: risk.evidence?.length ? 'evidence_text_not_found_in_clauses' : 'missing_evidence_text',
+  }
+}
+
+function runtimeRuleSnapshotRef(
+  runtime: ReviewRuntimeBinding | undefined,
+  risk: AnalysisRisk
+) {
+  const refs = runtime?.rule_snapshot_refs || []
+  return refs.find((ref) => (
+    (risk.ruleId && ref.rule_id === risk.ruleId)
+    || (risk.ruleCode && ref.code === risk.ruleCode)
+  )) || null
+}
+
+function extractRuntimeSnapshotRefs(skillBundle: ContractSkillBundle) {
+  const compiledFrom = skillBundle.compiled_from || {}
+  const rules = Array.isArray(compiledFrom.rules) ? compiledFrom.rules : []
+  return rules
+    .map((rule) => {
+      if (!rule || typeof rule !== 'object') return null
+      const record = rule as Record<string, unknown>
+      return {
+        id: typeof record.id === 'string' ? record.id : '',
+        rule_id: typeof record.rule_id === 'string' ? record.rule_id : null,
+        code: typeof record.code === 'string' ? record.code : null,
+        version: typeof record.version === 'number' ? record.version : null,
+        category: typeof record.clause_category === 'string' ? record.clause_category : null,
+        targetField: typeof record.target_field === 'string' ? record.target_field : null,
+      }
+    })
+    .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref?.id))
+}
+
 function normalizeRiskText(value: string | undefined): string {
   return (value || '')
     .replace(/\s+/g, '')
@@ -734,9 +813,21 @@ async function runSemanticReviewStage(input: {
   const startedAt = performance.now()
 
   try {
+    const skillRules = extractRuntimeSnapshotRefs(input.skillBundle).map((ref) => ({
+      code: ref.code,
+      version: ref.version,
+      clause_category: ref.category,
+      target_field: ref.targetField,
+    }))
     const semanticResult = await reviewWithFailoverSync(input.text, {
       orgId: input.orgId,
       preferredProvider: semanticProvider.profile,
+      skillContext: {
+        source: input.skillBundle.compiled_from.external_skill_source,
+        compiledFrom: input.skillBundle.compiled_from,
+        outputSchema: input.skillBundle.output_schema,
+        rules: skillRules,
+      },
     }, 1)
     const latencyMs = performance.now() - startedAt
     const usableRisks = shouldUseSemanticRisks(semanticResult) ? semanticResult.risks : []
@@ -763,6 +854,9 @@ async function runSemanticReviewStage(input: {
         model_policy_stage: 'semantic_review',
         intended_provider_profile: semanticProvider.profile,
         intended_provider_model: semanticProvider.model,
+        skill_bundle_id: input.skillBundle.id,
+        skill_bundle_version: input.skillBundle.version,
+        skill_rule_count: skillRules.length,
         review_trigger: input.reviewTrigger || 'initial_generate',
       },
       responseMeta: {
@@ -903,6 +997,7 @@ export async function runStructuredAnalysis(
       skill_bundle_id: skillBundle.id,
       model_policy_id: skillBundle.model_policy_id,
       rule_snapshot_ids: skillBundle.rule_snapshot_ids,
+      rule_snapshot_refs: extractRuntimeSnapshotRefs(skillBundle),
       model_invocation_ids: [invocation.id, semanticStage?.invocationId]
         .filter((id): id is string => Boolean(id)),
       provider: result.provider,
@@ -944,12 +1039,8 @@ export async function saveStructuredReport(
 
   if (report.result.risks.length > 0) {
     const riskRows = report.result.risks.map((risk) => {
-      const evidence = risk.evidence?.find(Boolean)
-      const matchedClause = report.clauses.find((clause) => (
-        (evidence && clause.clauseText.includes(evidence))
-        || clause.clauseText.includes(risk.title)
-        || Boolean(clause.clauseTitle && risk.description.includes(clause.clauseTitle))
-      )) || report.clauses[0]
+      const sourceLocation = locateRiskSource(risk, report.clauses)
+      const snapshotRef = runtimeRuleSnapshotRef(report.runtime, risk)
 
       return {
       review_id: reviewId,
@@ -965,19 +1056,27 @@ export async function saveStructuredReport(
       detected_by: risk.ruleCode ? 'rule' : 'ai',
       confidence: report.result.degraded ? 0.5 : 0.8,
       evidence: {
-        snippets: risk.evidence || [],
+        snippets: sourceLocation.snippet ? [sourceLocation.snippet] : [],
         counterparty: risk.counterparty || null,
+        source_range: sourceLocation.status === 'located'
+          ? { start: sourceLocation.startOffset, end: sourceLocation.endOffset }
+          : null,
+        location_status: sourceLocation.status,
+        location_reason: sourceLocation.reason,
+        rule_snapshot_id: snapshotRef?.id || null,
+        rule_code: risk.ruleCode || null,
+        rule_version: risk.ruleVersion || null,
       },
       status: 'open',
-      clause_ref: matchedClause?.clauseNumber || matchedClause?.clauseTitle || null,
-      position_start: matchedClause?.startOffset ?? null,
-      position_end: matchedClause?.endOffset ?? null,
+      clause_ref: sourceLocation.clause?.clauseNumber || sourceLocation.clause?.clauseTitle || null,
+      position_start: sourceLocation.startOffset,
+      position_end: sourceLocation.endOffset,
     }
     })
     const { data: insertedRisks, error: riskError } = await supabaseAdmin
       .from('contract_risk_cards')
       .insert(riskRows)
-      .select('id, title, description, suggestion, level, evidence, status, position_start, position_end')
+      .select('id, rule_id, rule_code, rule_version, title, description, suggestion, level, evidence, status, position_start, position_end')
     if (riskError) throw riskError
 
     const annotationRows = buildCommentPatchesFromRiskCards({

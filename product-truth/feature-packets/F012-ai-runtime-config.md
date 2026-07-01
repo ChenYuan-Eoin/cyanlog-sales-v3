@@ -142,6 +142,7 @@
 - `model_policies`：从已发布 `AI_CONFIG` 配置解析为运行策略，包含 provider_chain、阶段路由、fallback、timeouts、schema 失败处理、status、version 和发布审计字段。
 - `model_invocations`：每次合同审核运行记录 provider、model、policy_id、skill_bundle_id、review_id、fallback_reason、duration/status 和输入/输出摘要。
 - `contract_reviews.model_policy_id` / `model_invocation_ids`：ReviewRun 绑定当次使用的模型策略和调用审计。
+- 模型提示由 F006 `SkillBundle` 生成，必须携带外部 skill 来源、已发布规则快照、输出 schema 和二次校验要求；模型输出缺少规则编号、原文证据或 schema 不合格时不得持久化为有效风险。
 - 规则兜底作为内置 provider 明确进入策略链，而不是在业务代码里静默当作“AI 成功”。
 
 当前 `ModelPolicy` 对象最低要求：
@@ -221,5 +222,5 @@ interface ModelPolicy {
 - [x] 消费侧只读取已发布 AI 配置，缺失时显式降级到内置规则兜底策略
 - [x] F006 调用模型时必须带 `skill_bundle_id` 和 `model_policy_id`
 - [x] 每次模型调用生成 `model_invocation_id`
-- [ ] 输出 schema 校验失败时进入重试、降级或人工复核，不伪装成功
+- [x] 输出 schema 校验失败时进入重试、降级或人工复核，不伪装成功
 - [x] 历史 ReviewRun 可查看当时使用的模型策略、provider、降级原因

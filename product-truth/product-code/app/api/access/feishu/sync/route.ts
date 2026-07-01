@@ -1,11 +1,16 @@
 // REQ: F003 自主可控 + RBAC
-// PURPOSE: 飞书部门结构同步
+// PURPOSE: 飞书组织架构同步
 // 权限要求: 组织管理员（SUPER_ADMIN / SALES_OPS / ADMIN 或拥有 admin:access/org:write 权限）
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments } from '@/lib/scoped-access'
+import {
+  ensureDefaultOrganizationMembership,
+  syncPrimaryDepartmentMembership,
+  syncUserSalesSpaces,
+} from '@/lib/admin/org-membership'
 
 type FeishuDepartment = {
   department_id?: string
@@ -21,15 +26,46 @@ type FeishuDepartment = {
   }
 }
 
+type FeishuUser = {
+  user_id?: string
+  open_id?: string
+  union_id?: string
+  name?: string
+  en_name?: string
+  email?: string
+  mobile?: string
+  department_ids?: string[]
+  departments?: string[]
+  job_title?: string
+  avatar?: {
+    avatar_72?: string
+    avatar_url?: string
+  }
+  status?: {
+    is_resigned?: boolean
+    is_frozen?: boolean
+  }
+}
+
+type FeishuUserWithSource = FeishuUser & {
+  sourceDepartmentId: string
+}
+
 type SyncedDepartment = {
   id: string
   path: string
   depth: number
 }
 
+type SyncWarning = {
+  scope: 'departments' | 'members'
+  sourceId?: string
+  message: string
+}
+
 const FEISHU_CONNECTOR = 'feishu'
-const FEISHU_SYNC_SCOPE = 'departments'
-const FEISHU_CONFIG_HINT = '请在 Vercel Production/Preview 环境变量和本地 .env.local 配置 FEISHU_APP_ID、FEISHU_APP_SECRET 后重新部署；当前 MVP 仅同步部门结构，不会导入成员。'
+const FEISHU_SYNC_SCOPE = 'departments_and_members'
+const FEISHU_CONFIG_HINT = '请在 Vercel Production/Preview 环境变量和本地 .env.local 配置 FEISHU_APP_ID、FEISHU_APP_SECRET 后重新部署；飞书应用需要通讯录部门读取和成员读取权限。'
 
 function externalDepartmentId(department: FeishuDepartment) {
   return department.department_id || department.open_department_id || ''
@@ -37,6 +73,24 @@ function externalDepartmentId(department: FeishuDepartment) {
 
 function departmentName(department: FeishuDepartment) {
   return department.name || department.i18n_name?.zh_cn || department.i18n_name?.en_us || externalDepartmentId(department)
+}
+
+function externalUserId(user: FeishuUser) {
+  return user.user_id || user.open_id || user.union_id || user.email || user.mobile || ''
+}
+
+function userDisplayName(user: FeishuUser) {
+  return user.name || user.en_name || user.email || user.mobile || externalUserId(user)
+}
+
+function normalizeEmail(email: string | undefined) {
+  const trimmed = email?.trim().toLowerCase()
+  return trimmed || null
+}
+
+function normalizePhone(phone: string | undefined) {
+  const trimmed = phone?.replace(/\s+/g, '').trim()
+  return trimmed || null
 }
 
 async function getTenantAccessToken(appId: string, appSecret: string) {
@@ -57,12 +111,12 @@ async function getTenantAccessToken(appId: string, appSecret: string) {
   return data.tenant_access_token
 }
 
-async function fetchFeishuDepartments(token: string) {
+async function fetchFeishuDepartmentChildren(token: string, parentDepartmentId: string) {
   const departments: FeishuDepartment[] = []
   let pageToken = ''
 
   do {
-    const url = new URL('https://open.feishu.cn/open-apis/contact/v3/departments')
+    const url = new URL(`https://open.feishu.cn/open-apis/contact/v3/departments/${encodeURIComponent(parentDepartmentId)}/children`)
     url.searchParams.set('department_id_type', 'department_id')
     url.searchParams.set('user_id_type', 'user_id')
     url.searchParams.set('page_size', '50')
@@ -86,7 +140,7 @@ async function fetchFeishuDepartments(token: string) {
     } | null
 
     if (!res.ok || data?.code !== 0) {
-      throw new Error(data?.msg || '获取飞书部门列表失败')
+      throw new Error(data?.msg || `获取飞书部门子节点失败：${parentDepartmentId}`)
     }
 
     departments.push(...(data.data?.items || []).filter((department) => (
@@ -96,6 +150,139 @@ async function fetchFeishuDepartments(token: string) {
   } while (pageToken)
 
   return departments
+}
+
+async function fetchFeishuDepartments(token: string) {
+  const departments: FeishuDepartment[] = []
+  const byExternalId = new Map<string, FeishuDepartment>()
+  const warnings: SyncWarning[] = []
+  const visited = new Set<string>()
+
+  async function visit(parentDepartmentId: string, isRoot = false) {
+    if (visited.has(parentDepartmentId)) return
+    visited.add(parentDepartmentId)
+
+    let children: FeishuDepartment[] = []
+    try {
+      children = await fetchFeishuDepartmentChildren(token, parentDepartmentId)
+    } catch (error) {
+      if (isRoot) {
+        throw error
+      }
+      warnings.push({
+        scope: 'departments',
+        sourceId: parentDepartmentId,
+        message: error instanceof Error ? error.message : '飞书子部门读取失败',
+      })
+      return
+    }
+
+    for (const department of children) {
+      const externalId = externalDepartmentId(department)
+      if (!externalId || byExternalId.has(externalId)) {
+        continue
+      }
+      byExternalId.set(externalId, department)
+      departments.push(department)
+      await visit(externalId)
+    }
+  }
+
+  await visit('0', true)
+
+  return { departments, warnings }
+}
+
+async function fetchFeishuUsersByDepartment(token: string, departmentId: string) {
+  const users: FeishuUser[] = []
+  let pageToken = ''
+
+  do {
+    const url = new URL('https://open.feishu.cn/open-apis/contact/v3/users/find_by_department')
+    url.searchParams.set('department_id', departmentId)
+    url.searchParams.set('department_id_type', 'department_id')
+    url.searchParams.set('user_id_type', 'user_id')
+    url.searchParams.set('page_size', '50')
+    if (pageToken) {
+      url.searchParams.set('page_token', pageToken)
+    }
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    const data = await res.json().catch(() => null) as {
+      code?: number
+      msg?: string
+      data?: {
+        items?: FeishuUser[]
+        has_more?: boolean
+        page_token?: string
+      }
+    } | null
+
+    if (!res.ok || data?.code !== 0) {
+      throw new Error(data?.msg || `获取飞书部门成员失败：${departmentId}`)
+    }
+
+    users.push(...(data.data?.items || []))
+    pageToken = data.data?.has_more ? (data.data.page_token || '') : ''
+  } while (pageToken)
+
+  return users
+}
+
+async function fetchFeishuUsers(token: string, departments: FeishuDepartment[]) {
+  const usersByExternalId = new Map<string, FeishuUserWithSource>()
+  const warnings: SyncWarning[] = []
+
+  for (const department of departments) {
+    const departmentId = externalDepartmentId(department)
+    if (!departmentId) continue
+
+    try {
+      const users = await fetchFeishuUsersByDepartment(token, departmentId)
+      for (const user of users) {
+        if (user.status?.is_resigned || user.status?.is_frozen) {
+          continue
+        }
+        const userId = externalUserId(user)
+        if (!userId) {
+          warnings.push({
+            scope: 'members',
+            sourceId: departmentId,
+            message: '飞书成员缺少 user_id/open_id/email/mobile，已跳过',
+          })
+          continue
+        }
+
+        const existing = usersByExternalId.get(userId)
+        const departmentIds = Array.from(new Set([
+          ...(existing?.department_ids || []),
+          ...(existing?.departments || []),
+          ...(user.department_ids || []),
+          ...(user.departments || []),
+          departmentId,
+        ]))
+
+        usersByExternalId.set(userId, {
+          ...existing,
+          ...user,
+          department_ids: departmentIds,
+          sourceDepartmentId: existing?.sourceDepartmentId || departmentId,
+        })
+      }
+    } catch (error) {
+      warnings.push({
+        scope: 'members',
+        sourceId: departmentId,
+        message: error instanceof Error ? error.message : '飞书成员读取失败',
+      })
+    }
+  }
+
+  return { users: Array.from(usersByExternalId.values()), warnings }
 }
 
 async function loadExistingFeishuDepartments(orgId: string) {
@@ -209,7 +396,135 @@ async function syncDepartmentsToDatabase(orgId: string, departments: FeishuDepar
     }
   }
 
-  return { imported, updated }
+  return { imported, updated, synced }
+}
+
+async function loadExistingUsers(orgId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('id, email, phone, employee_id')
+    .eq('org_id', orgId)
+
+  if (error) {
+    throw new Error('读取已有成员失败')
+  }
+
+  const byEmployeeId = new Map<string, { id: string }>()
+  const byEmail = new Map<string, { id: string }>()
+  const byPhone = new Map<string, { id: string }>()
+
+  for (const row of data || []) {
+    const user = { id: row.id as string }
+    if (row.employee_id) byEmployeeId.set(String(row.employee_id), user)
+    if (row.email) byEmail.set(String(row.email).toLowerCase(), user)
+    if (row.phone) byPhone.set(String(row.phone).replace(/\s+/g, ''), user)
+  }
+
+  return { byEmployeeId, byEmail, byPhone }
+}
+
+async function syncUsersToDatabase(
+  orgId: string,
+  users: FeishuUserWithSource[],
+  syncedDepartments: Map<string, SyncedDepartment>
+) {
+  const existing = await loadExistingUsers(orgId)
+  let imported = 0
+  let updated = 0
+  let skipped = 0
+
+  for (const feishuUser of users) {
+    const externalId = externalUserId(feishuUser)
+    const email = normalizeEmail(feishuUser.email)
+    const phone = normalizePhone(feishuUser.mobile)
+    const departmentExternalIds = Array.from(new Set([
+      ...(feishuUser.department_ids || []),
+      ...(feishuUser.departments || []),
+      feishuUser.sourceDepartmentId,
+    ].filter(Boolean)))
+    const departmentIds = departmentExternalIds
+      .map((departmentId) => syncedDepartments.get(departmentId)?.id)
+      .filter((departmentId): departmentId is string => Boolean(departmentId))
+
+    if (!externalId || departmentIds.length === 0 || (!email && !phone)) {
+      skipped += 1
+      continue
+    }
+
+    const matched = existing.byEmployeeId.get(externalId)
+      || (email ? existing.byEmail.get(email) : null)
+      || (phone ? existing.byPhone.get(phone) : null)
+      || null
+    const primaryDeptId = departmentIds[0]
+    const avatarUrl = feishuUser.avatar?.avatar_72 || feishuUser.avatar?.avatar_url || null
+    const payload = {
+      org_id: orgId,
+      employee_id: externalId,
+      display_name: userDisplayName(feishuUser),
+      primary_dept_id: primaryDeptId,
+      status: 'active',
+      updated_at: new Date().toISOString(),
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
+      ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+      ...(feishuUser.job_title ? { title: feishuUser.job_title } : {}),
+    }
+
+    let userId = matched?.id
+    if (userId) {
+      const { error } = await supabaseAdmin
+        .from('users')
+        .update(payload)
+        .eq('id', userId)
+        .eq('org_id', orgId)
+      if (error) {
+        throw new Error(`更新飞书成员失败：${userDisplayName(feishuUser)}`)
+      }
+      updated += 1
+    } else {
+      const { data, error } = await supabaseAdmin
+        .from('users')
+        .insert(payload)
+        .select('id')
+        .single()
+      if (error || !data?.id) {
+        throw new Error(`写入飞书成员失败：${userDisplayName(feishuUser)}`)
+      }
+      userId = data.id
+      imported += 1
+    }
+
+    if (!userId) {
+      throw new Error(`飞书成员缺少数据库记录：${userDisplayName(feishuUser)}`)
+    }
+
+    const syncedUserId = userId
+    await ensureDefaultOrganizationMembership(syncedUserId, orgId)
+    await syncPrimaryDepartmentMembership(syncedUserId, primaryDeptId)
+    await syncUserSalesSpaces(syncedUserId, orgId, primaryDeptId)
+
+    const extraDepartmentRows = departmentIds
+      .slice(1)
+      .map((departmentId) => ({
+        user_id: syncedUserId,
+        department_id: departmentId,
+        is_primary: false,
+      }))
+    if (extraDepartmentRows.length > 0) {
+      const { error } = await supabaseAdmin
+        .from('user_departments')
+        .upsert(extraDepartmentRows, { onConflict: 'user_id,department_id' })
+      if (error) {
+        throw new Error(`写入飞书成员部门关系失败：${userDisplayName(feishuUser)}`)
+      }
+    }
+
+    existing.byEmployeeId.set(externalId, { id: syncedUserId })
+    if (email) existing.byEmail.set(email, { id: syncedUserId })
+    if (phone) existing.byPhone.set(phone, { id: syncedUserId })
+  }
+
+  return { imported, updated, skipped, total: users.length }
 }
 
 export async function POST(req: NextRequest) {
@@ -262,17 +577,35 @@ export async function POST(req: NextRequest) {
   try {
     const orgId = await getDefaultOrgId(user.id)
     const token = await getTenantAccessToken(appId, appSecret)
-    const departments = await fetchFeishuDepartments(token)
-    const result = await syncDepartmentsToDatabase(orgId, departments)
+    const departmentResult = await fetchFeishuDepartments(token)
+    const departmentWrite = await syncDepartmentsToDatabase(orgId, departmentResult.departments)
+    const userResult = await fetchFeishuUsers(token, departmentResult.departments)
+    const userWrite = await syncUsersToDatabase(orgId, userResult.users, departmentWrite.synced)
+    const warnings = [...departmentResult.warnings, ...userResult.warnings]
+    const syncStatus = warnings.length > 0 ? 'partial' : 'completed'
 
     return NextResponse.json({
       success: true,
       connector: FEISHU_CONNECTOR,
       scope: FEISHU_SYNC_SCOPE,
-      imported: result.imported,
-      updated: result.updated,
-      total: departments.length,
-      message: departments.length === 0 ? '飞书返回 0 个可访问部门' : '飞书部门同步完成',
+      sync_status: syncStatus,
+      departments: {
+        imported: departmentWrite.imported,
+        updated: departmentWrite.updated,
+        total: departmentResult.departments.length,
+      },
+      members: {
+        imported: userWrite.imported,
+        updated: userWrite.updated,
+        skipped: userWrite.skipped,
+        total: userWrite.total,
+      },
+      warnings,
+      message: departmentResult.departments.length === 0
+        ? '飞书返回 0 个可访问部门'
+        : syncStatus === 'partial'
+          ? '飞书组织架构部分同步完成'
+          : '飞书组织架构同步完成',
     })
   } catch (error) {
     console.error('[FeishuSync] sync failed:', error)

@@ -8,6 +8,40 @@ import {
 type JsonRecord = Record<string, unknown>
 
 const SKILL_BUNDLE_KEY = 'CONTRACT_REVIEW_DEFAULT'
+const ONES_CONTRACT_SKILL_SOURCE = {
+  repo: 'suoyidev/ones-internal-skills',
+  url: 'https://github.com/suoyidev/ones-internal-skills',
+  commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+  skill: 'ones-contract-assistant',
+  version: '2.2.2',
+  last_updated: '2026-06-16',
+  product_override: 'ONES Sales 第一阶段采用批注为主、报告为辅；原仓库中“原合同逐字审查已取消”的口径在本产品内被替换为 Word 原生批注主路径。',
+}
+
+const ONES_SKILL_REFERENCES = [
+  'references/01-条款红黄绿标准.md',
+  'references/02-让步梯度与对价.md',
+  'references/03-标准话术库.md',
+  'references/04-实战口径.md',
+  'references/05-审批流转指引.md',
+  'references/06-税率自检清单.md',
+  'references/07-业务实操清单.md',
+  'references/08-多版本对比标准.md',
+  'references/09-二次验证清单.md',
+  'references/10-产品名称标准清单.md',
+  'references/11-逻辑审查清单.md',
+  'references/12-报告样式标准.md',
+  'references/13-结构化输出schema.md',
+  'references/14-品类分流.md',
+]
+
+const ONES_SKILL_EVAL_CASES = [
+  'evals/payment-schedule',
+  'evals/acceptance-silent-period',
+  'evals/confidentiality-period',
+  'evals/sla-redline',
+  'evals/dispute-resolution',
+]
 
 type RuleRow = {
   id: string
@@ -109,7 +143,7 @@ function outputSchema(): JsonRecord {
       immutable_after_start: true,
     },
     risk_finding: {
-      required: ['level', 'status', 'title', 'description', 'suggestion', 'evidence'],
+      required: ['level', 'status', 'title', 'description', 'suggestion', 'evidence', 'source_trace'],
       levels: ['red', 'yellow', 'green', 'white'],
       statuses: [
         'detected',
@@ -140,6 +174,15 @@ function outputSchema(): JsonRecord {
     validation: {
       on_schema_error: 'retry_then_rule_fallback_or_human_review',
       forbid_unversioned_prompt_result: true,
+      second_verification_reference: 'references/09-二次验证清单.md',
+      required_checks: [
+        'risk_location_matches_source_text',
+        'original_summary_is_faithful',
+        'numbers_and_dates_are_not_hallucinated',
+        'risk_description_matches_rule',
+        'suggestion_is_actionable_for_sales_negotiation',
+        'no_unreferenced_extrapolation',
+      ],
     },
   }
 }
@@ -270,9 +313,31 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
     updated_at: template.updated_at,
   }))
   const schema = outputSchema()
+  const ruleCodes = new Set(rules.map((rule) => rule.code))
+  const missingCanonicalRules = Array.from({ length: 15 }, (_, index) => `R${String(index + 1).padStart(3, '0')}`)
+    .filter((code) => !ruleCodes.has(code))
   const compiledFrom = {
     product_phase: 'contract_review_first_stage',
     skill_key: SKILL_BUNDLE_KEY,
+    external_skill_source: ONES_CONTRACT_SKILL_SOURCE,
+    external_skill_references: ONES_SKILL_REFERENCES.map((reference) => ({
+      path: reference,
+      source: `${ONES_CONTRACT_SKILL_SOURCE.repo}/${reference}`,
+    })),
+    output_schema_reference: 'references/13-结构化输出schema.md',
+    second_verification_reference: 'references/09-二次验证清单.md',
+    report_style_reference: 'references/12-报告样式标准.md',
+    comment_template: {
+      primary_output: 'word_native_comment',
+      author: 'ONES 业务运营',
+      must_bind: ['RiskFinding', 'RuleSnapshot', 'evidence_text', 'source_range', 'Word comment anchor'],
+      on_location_missing: 'manual_location_required',
+    },
+    canonical_rule_completeness: {
+      expected: 15,
+      actual: ruleCodes.size,
+      missing: missingCanonicalRules,
+    },
     execution_plan: [
       'structured_rules',
       'template_compare',
@@ -329,15 +394,20 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       template_snapshot_ids: [],
       output_schema: schema,
       model_policy_id: modelPolicy.id,
-      eval_case_ids: [],
+      eval_case_ids: ONES_SKILL_EVAL_CASES,
       release_meta: {
         product_scope: 'F005_CONTRACT_REVIEW_WORKBENCH',
         runtime_owner: 'F006',
         model_owner: 'F012',
         release_type: 'auto_compile_from_published_assets',
+        external_skill_source: ONES_CONTRACT_SKILL_SOURCE,
+        external_reference_count: ONES_SKILL_REFERENCES.length,
         rule_count: snapshotRefs.length,
+        canonical_rule_count: ruleCodes.size,
+        canonical_rule_missing: missingCanonicalRules,
         template_reference_count: templateRefs.length,
         output_schema_version: schema.schema_version,
+        second_verification_required: true,
         audit_required: true,
         compiled_by: requestedBy || 'system',
       },

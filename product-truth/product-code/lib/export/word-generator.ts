@@ -78,6 +78,9 @@ type NormalizedComment = {
   body: string
   selectedText: string
   level: string
+  startOffset: number | null
+  endOffset: number | null
+  manualLocationRequired: boolean
 }
 
 type GenerateWordDocumentOptions = {
@@ -130,6 +133,10 @@ function normalizeComments(data: ExportData | ExportComment[]): NormalizedCommen
       body: safeText(annotation.comment),
       selectedText: safeText(annotation.selected_text),
       level: safeText(annotation.priority || 'high'),
+      startOffset: typeof annotation.start_offset === 'number' ? annotation.start_offset : null,
+      endOffset: typeof annotation.end_offset === 'number' ? annotation.end_offset : null,
+      manualLocationRequired: safeText(annotation.comment).includes('LocationStatus: manual_required')
+        || !safeText(annotation.selected_text).trim(),
     }))
     .filter((comment) => comment.body.trim())
 
@@ -148,6 +155,9 @@ function normalizeComments(data: ExportData | ExportComment[]): NormalizedCommen
         body: bodyLines.join('\n'),
         selectedText: title,
         level,
+        startOffset: null,
+        endOffset: null,
+        manualLocationRequired: false,
       }
     })
     .filter((comment) => comment.body.trim())
@@ -201,10 +211,100 @@ function injectCommentReference(paragraphXml: string, commentId: number) {
   )
 }
 
+function occurrenceIndexes(value: string, search: string) {
+  if (!search) return []
+  const indexes: number[] = []
+  let fromIndex = 0
+  while (fromIndex < value.length) {
+    const index = value.indexOf(search, fromIndex)
+    if (index < 0) break
+    indexes.push(index)
+    fromIndex = index + Math.max(search.length, 1)
+  }
+  return indexes
+}
+
+function injectCommentReferenceAtText(
+  paragraphXml: string,
+  selectedText: string,
+  commentId: number,
+  occurrenceIndex = 0
+) {
+  const runMatches = Array.from(paragraphXml.matchAll(/<w:r\b[\s\S]*?<\/w:r>/g))
+  let remainingOccurrence = occurrenceIndex
+
+  for (const runMatch of runMatches) {
+    const runXml = runMatch[0]
+    const textMatch = runXml.match(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/)
+    if (!textMatch) continue
+
+    const [, attrs, rawText] = textMatch
+    const decoded = decodeXmlText(rawText)
+    let selectedIndex = -1
+    let searchFrom = 0
+    while (searchFrom < decoded.length) {
+      const currentIndex = decoded.indexOf(selectedText, searchFrom)
+      if (currentIndex < 0) break
+      if (remainingOccurrence === 0) {
+        selectedIndex = currentIndex
+        break
+      }
+      remainingOccurrence -= 1
+      searchFrom = currentIndex + Math.max(selectedText.length, 1)
+    }
+    if (selectedIndex < 0) continue
+
+    const before = decoded.slice(0, selectedIndex)
+    const selected = decoded.slice(selectedIndex, selectedIndex + selectedText.length)
+    const after = decoded.slice(selectedIndex + selectedText.length)
+    const makeRun = (value: string) => (
+      value
+        ? runXml.replace(textMatch[0], `<w:t${attrs}>${escapeXml(value)}</w:t>`)
+        : ''
+    )
+
+    const replacement = [
+      makeRun(before),
+      `<w:commentRangeStart w:id="${commentId}"/>`,
+      makeRun(selected),
+      `<w:commentRangeEnd w:id="${commentId}"/>`,
+      `<w:r><w:commentReference w:id="${commentId}"/></w:r>`,
+      makeRun(after),
+    ].join('')
+
+    const runIndex = runMatch.index ?? -1
+    if (runIndex < 0) break
+    return {
+      xml: [
+        paragraphXml.slice(0, runIndex),
+        replacement,
+        paragraphXml.slice(runIndex + runXml.length),
+      ].join(''),
+      mode: 'selected_text' as const,
+    }
+  }
+
+  return {
+    xml: injectCommentReference(paragraphXml, commentId),
+    mode: 'paragraph' as const,
+  }
+}
+
 function addCommentAnchors(documentXml: string, comments: NormalizedComment[], firstId: number) {
   const paragraphMatches = Array.from(documentXml.matchAll(/<w:p\b[\s\S]*?<\/w:p>/g))
+  let textCursor = 0
   const textParagraphs = paragraphMatches
-    .map((match, index) => ({ index, text: paragraphText(match[0]) }))
+    .map((match, index) => {
+      const text = paragraphText(match[0])
+      const paragraph = {
+        index,
+        text,
+        startOffset: textCursor,
+        endOffset: textCursor + text.length,
+      }
+      textCursor += text.length + 1
+      return paragraph
+    })
     .filter((paragraph) => paragraph.text.trim())
 
   if (textParagraphs.length === 0) {
@@ -212,20 +312,64 @@ function addCommentAnchors(documentXml: string, comments: NormalizedComment[], f
   }
 
   const updatedParagraphs = paragraphMatches.map((match) => match[0])
-  const usedTargets = new Set<number>()
 
   comments.forEach((comment, index) => {
     const selectedText = comment.selectedText.trim()
-    const bySelectedText = selectedText
-      ? textParagraphs.find((paragraph) => !usedTargets.has(paragraph.index) && paragraph.text.includes(selectedText))
-      : undefined
-    const fallback = textParagraphs[Math.min(index, textParagraphs.length - 1)]
-    const target = bySelectedText || fallback
-    usedTargets.add(target.index)
-    updatedParagraphs[target.index] = injectCommentReference(
+    if (comment.manualLocationRequired || !selectedText) {
+      throw new Error(`批注「${comment.body.split('\n')[0]}」缺少可写入 Word 的原文定位，需人工定位`)
+    }
+
+    const candidates = textParagraphs.filter((paragraph) => (
+      paragraph.text.includes(selectedText)
+    ))
+    if (candidates.length === 0) {
+      throw new Error(`批注「${comment.body.split('\n')[0]}」未在源文件中找到证据原文：${selectedText}`)
+    }
+
+    const hasSourceRange = typeof comment.startOffset === 'number'
+      && typeof comment.endOffset === 'number'
+      && comment.endOffset > comment.startOffset
+    let target = candidates[0]
+    let occurrenceIndex = 0
+
+    if (hasSourceRange) {
+      const rangedCandidates = candidates.filter((paragraph) => (
+        comment.startOffset! >= paragraph.startOffset && comment.endOffset! <= paragraph.endOffset
+      ))
+      if (rangedCandidates.length !== 1) {
+        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文与 source range 不匹配，需人工定位：${selectedText}`)
+      }
+      target = rangedCandidates[0]
+      const indexes = occurrenceIndexes(target.text, selectedText)
+      const relativeStart = comment.startOffset! - target.startOffset
+      const exactOccurrence = indexes.indexOf(relativeStart)
+      if (exactOccurrence >= 0) {
+        occurrenceIndex = exactOccurrence
+      } else if (indexes.length === 1) {
+        occurrenceIndex = 0
+      } else {
+        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${selectedText}`)
+      }
+    } else {
+      if (candidates.length > 1) {
+        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文不唯一，需人工定位：${selectedText}`)
+      }
+      const indexes = occurrenceIndexes(target.text, selectedText)
+      if (indexes.length > 1) {
+        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${selectedText}`)
+      }
+    }
+
+    const injected = injectCommentReferenceAtText(
       updatedParagraphs[target.index],
-      firstId + index
+      selectedText,
+      firstId + index,
+      occurrenceIndex
     )
+    if (injected.mode === 'paragraph' && occurrenceIndexes(target.text, selectedText).length > 1) {
+      throw new Error(`批注「${comment.body.split('\n')[0]}」无法精确锚定重复证据原文，需人工定位：${selectedText}`)
+    }
+    updatedParagraphs[target.index] = injected.xml
   })
 
   let output = ''

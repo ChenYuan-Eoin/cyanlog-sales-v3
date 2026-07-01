@@ -11,7 +11,8 @@ const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types'
 
 const tempFiles: string[] = []
 
-async function writeMinimalDocx(filePath: string, text: string) {
+async function writeMinimalDocx(filePath: string, text: string | string[]) {
+  const paragraphs = Array.isArray(text) ? text : [text]
   const zip = new JSZip()
   zip.file('[Content_Types].xml', [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -31,7 +32,7 @@ async function writeMinimalDocx(filePath: string, text: string) {
   zip.file('word/document.xml', [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
     `<w:document xmlns:w="${W_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>`,
-    `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
+    ...paragraphs.map((paragraph) => `<w:p><w:r><w:t>${paragraph}</w:t></w:r></w:p>`),
     '<w:sectPr><w:footerReference w:type="default" r:id="rIdFooter1"/><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>',
     '</w:body></w:document>',
   ].join(''))
@@ -112,5 +113,64 @@ describe('generateWordDocument', () => {
     expect(result.success).toBe(false)
     expect(result.outputPath).toBeUndefined()
     expect(result.error).toContain('缺少可写入批注的源文件')
+  })
+
+  it('blocks export when a risk annotation needs manual source positioning', async () => {
+    const inputPath = path.join(os.tmpdir(), `ones-input-manual-${Date.now()}.docx`)
+    tempFiles.push(inputPath)
+    await writeMinimalDocx(inputPath, '付款周期为 120 天，质保期为 24 个月。')
+
+    const result = await generateWordDocument(inputPath, {
+      risks: [],
+      annotations: [
+        {
+          id: 'annotation-manual',
+          start_offset: 0,
+          end_offset: 0,
+          selected_text: '',
+          comment: '【需人工定位】【红线风险】付款周期过长\nLocationStatus: manual_required',
+          category: 'risk_finding',
+          priority: 'urgent',
+          status: 'open',
+          author_id: null,
+          created_at: new Date('2026-06-30T00:00:00Z').toISOString(),
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('需人工定位')
+    expect(result.outputPath).toBeUndefined()
+  })
+
+  it('blocks export when the same evidence text appears in multiple places without source range', async () => {
+    const inputPath = path.join(os.tmpdir(), `ones-input-duplicate-${Date.now()}.docx`)
+    tempFiles.push(inputPath)
+    await writeMinimalDocx(inputPath, [
+      '付款周期为 120 天，甲方提出账期。',
+      '付款周期为 120 天，乙方接受账期。',
+    ])
+
+    const result = await generateWordDocument(inputPath, {
+      risks: [],
+      annotations: [
+        {
+          id: 'annotation-duplicate',
+          start_offset: 0,
+          end_offset: 0,
+          selected_text: '付款周期为 120 天',
+          comment: '【红线风险】付款周期过长',
+          category: 'risk_finding',
+          priority: 'urgent',
+          status: 'open',
+          author_id: null,
+          created_at: new Date('2026-06-30T00:00:00Z').toISOString(),
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('证据原文不唯一')
+    expect(result.outputPath).toBeUndefined()
   })
 })

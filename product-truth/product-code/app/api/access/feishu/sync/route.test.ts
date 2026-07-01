@@ -88,10 +88,10 @@ describe('POST /api/access/feishu/sync', () => {
     expect(res.status).toBe(503)
     expect(body.code).toBe('FEISHU_NOT_CONFIGURED')
     expect(body.connector).toBe('feishu')
-    expect(body.scope).toBe('departments')
+    expect(body.scope).toBe('departments_and_members')
     expect(body.missing).toEqual(['FEISHU_APP_ID', 'FEISHU_APP_SECRET'])
     expect(body.hint).toContain('Vercel')
-    expect(body.hint).toContain('仅同步部门结构')
+    expect(body.hint).toContain('成员读取权限')
   })
 
   it('飞书上游失败时保留同步域上下文', async () => {
@@ -111,7 +111,7 @@ describe('POST /api/access/feishu/sync', () => {
     expect(res.status).toBe(502)
     expect(body.code).toBe('FEISHU_SYNC_FAILED')
     expect(body.connector).toBe('feishu')
-    expect(body.scope).toBe('departments')
+    expect(body.scope).toBe('departments_and_members')
     expect(body.error).toBe('invalid app')
     consoleError.mockRestore()
   })

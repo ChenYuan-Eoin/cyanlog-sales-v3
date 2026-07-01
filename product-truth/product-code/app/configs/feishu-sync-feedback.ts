@@ -5,9 +5,26 @@ export type FeishuSyncResponse = {
   connector?: string
   scope?: string
   success?: boolean
+  sync_status?: 'completed' | 'partial'
   imported?: number
   updated?: number
   total?: number
+  departments?: {
+    imported?: number
+    updated?: number
+    total?: number
+  }
+  members?: {
+    imported?: number
+    updated?: number
+    skipped?: number
+    total?: number
+  }
+  warnings?: Array<{
+    scope?: string
+    sourceId?: string
+    message?: string
+  }>
   message?: string
   error?: string
   hint?: string
@@ -19,15 +36,22 @@ function asNumber(value: unknown) {
 }
 
 export function buildFeishuSuccessFeedback(data: FeishuSyncResponse): FeishuSyncFeedback {
-  const imported = asNumber(data.imported)
-  const updated = asNumber(data.updated)
-  const total = asNumber(data.total)
+  const departmentImported = asNumber(data.departments?.imported ?? data.imported)
+  const departmentUpdated = asNumber(data.departments?.updated ?? data.updated)
+  const departmentTotal = asNumber(data.departments?.total ?? data.total)
+  const memberImported = asNumber(data.members?.imported)
+  const memberUpdated = asNumber(data.members?.updated)
+  const memberSkipped = asNumber(data.members?.skipped)
+  const memberTotal = asNumber(data.members?.total)
+  const isPartial = data.sync_status === 'partial' || (data.warnings?.length ?? 0) > 0
 
   return {
-    status: 'success',
-    title: typeof data.message === 'string' ? data.message : '飞书部门同步完成',
-    message: `新增 ${imported} 个，更新 ${updated} 个，总计 ${total} 个部门；组织架构已刷新。`,
-    detail: '当前 MVP 仅同步部门结构，不会导入成员档案。',
+    status: isPartial ? 'warning' : 'success',
+    title: typeof data.message === 'string' ? data.message : '飞书组织架构同步完成',
+    message: `部门新增 ${departmentImported} 个、更新 ${departmentUpdated} 个、总计 ${departmentTotal} 个；成员新增 ${memberImported} 个、更新 ${memberUpdated} 个、跳过 ${memberSkipped} 个、总计 ${memberTotal} 个。`,
+    detail: isPartial
+      ? `部分飞书数据未同步：${data.warnings?.map((warning) => warning.message).filter(Boolean).slice(0, 3).join('；') || '请检查飞书通讯录权限范围。'}`
+      : '部门、成员和主部门关系已刷新。',
   }
 }
 

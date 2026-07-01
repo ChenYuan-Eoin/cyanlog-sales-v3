@@ -51,7 +51,9 @@ describe('comment patch adapter', () => {
     expect(patches[0].annotation.comment).toContain('红线风险')
     expect(patches[0].annotation.comment).toContain('RiskFinding: 11111111-1111-4111-8111-111111111111')
     expect(patches[1].annotation.priority).toBe('high')
-    expect(patches[1].annotation.selected_text).toBe('质保期限偏长')
+    expect(patches[1].annotation.selected_text).toBe('')
+    expect(patches[1].annotation.comment).toContain('【需人工定位】')
+    expect(patches[1].annotation.comment).toContain('LocationStatus: manual_required')
   })
 
   it('does not duplicate existing comment patches or closed risk findings', () => {

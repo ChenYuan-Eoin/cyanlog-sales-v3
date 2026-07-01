@@ -99,7 +99,7 @@ F009 发布的规则必须能被 F006 编译为 `SkillBundle`。因此每条规�
 | 命中率统计 | 统计触发率、等级分布、平均执行时间，用于后续运营优化，不作为第一阶段阻塞项 |
 | 让步与话术 | 可作为 `message_template`、`negotiation_script`、`bottom_line` 字段，不写死在审核执行代码 |
 
-第一阶段预置规则种子按 R001-R015 管理，编码稳定、内容可配置。当前标准源为 `suoyidev/ones-internal-skills` 的 `ones-contract-assistant` 条款速查表；导入后配置中心发布的 `RuleSnapshot` 才是运行时事实源，审核链路不得在运行时直接读取外部 repo。
+第一阶段预置规则种子按 R001-R015 管理，编码稳定、内容可配置。当前标准源为 `suoyidev/ones-internal-skills` 的 `ones-contract-assistant` 条款速查表（当前对齐 commit `f8b0c27f5c19a499c1563923ca372a2171aaca58`）；导入后配置中心发布的 `RuleSnapshot` 才是运行时事实源，审核链路不得在运行时直接读取外部 repo。配置中心必须按 `clause_category` 业务域展示规则，并同时显示 `target_field`、`field_hints`、版本和启用状态，避免 R001-R015 被平铺成不可维护的规则清单。
 
 | 编码 | 名称 | 默认归属 | 关键判断 |
 |------|------|----------|----------|

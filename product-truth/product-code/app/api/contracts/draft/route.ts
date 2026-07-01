@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
-import { reviewWithFailoverSync } from '@/lib/ai/failover'
+import { generateTextWithFailover } from '@/lib/ai/failover'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 
@@ -151,9 +151,11 @@ ${body.key_terms ? `关键条款要求：${body.key_terms}` : ''}
 3. 直接输出合同正文，不要任何解释`
 
       try {
-        const aiResult = await reviewWithFailoverSync(prompt, { orgId })
-        // 解析 AI 输出（取响应文本）
-        generatedContent = aiResult.summary || ''
+        const aiResult = await generateTextWithFailover(prompt, {
+          orgId,
+          system: '你是企业合同起草助手。请根据用户给出的合同类型、双方主体、签署目的和关键条款，直接输出完整合同正文；不要输出解释、Markdown、JSON 或审核风险清单。',
+        })
+        generatedContent = aiResult.text
       } catch {
         // AI 失败时用条款库生成
         const { data: library } = await supabaseAdmin
