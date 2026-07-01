@@ -26,8 +26,8 @@ pnpm test:e2e
 - 测试环境已有种子数据
 - 测试用户凭证写在 `e2e/critical-path.spec.ts`:
   ```ts
-  email: 'test-admin@cyanlog.icu'
-  password: 'TestPassword123!'
+  email: 'e2e-admin@huarun.com'
+  password: 'E2ETestPassword123!'
   ```
 - 默认 baseURL 是 `http://localhost:3000`，可设 `BASE_URL` 覆盖
 
@@ -41,8 +41,10 @@ pnpm test:e2e
 pnpm test:e2e:headed
 
 # 指向已运行的服务器
-BASE_URL=http://localhost:3000 pnpm test:e2e
+BASE_URL=http://localhost:3012 pnpm test:e2e
 ```
+
+设置 `BASE_URL` 时，Playwright 不会再自动启动 `pnpm dev`，适合指向本地生产服务、Preview 或线上域名做验收。
 
 ## 限制
 

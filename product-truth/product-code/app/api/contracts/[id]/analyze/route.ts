@@ -194,7 +194,12 @@ export async function POST(
     try {
       // 改用结构化分析（保留 AI 模型和规则引擎不改动）
       await markContractAnalysisRunning(job)
-      const structuredReport = await runStructuredAnalysis(id, reviewOptions)
+      const structuredReport = await runStructuredAnalysis(id, {
+        ...reviewOptions,
+        reviewId: review.id,
+        requestedBy: user.id,
+        reviewTrigger: 'initial_generate',
+      })
       await saveStructuredReport(review.id, id, structuredReport, strategyId)
       await markContractAnalysisCompleted(job, structuredReport.result)
       responseStatus = 'COMPLETED'

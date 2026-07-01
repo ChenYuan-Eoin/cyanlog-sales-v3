@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
+import { firstRelatedRow, type OneOrMany } from '@/lib/ask/relations'
 
 // 报告版本类型定义
 interface ReportVersion {
@@ -14,9 +15,9 @@ interface ReportVersion {
   no_ask_reason?: string
   created_at: string
   is_current: boolean
-  users?: {
+  users?: OneOrMany<{
     name: string
-  }[]
+  }>
 }
 
 interface RouteParams {
@@ -65,16 +66,19 @@ export async function GET(
     }
 
     // 格式化结果
-    const formattedVersions = (versions as ReportVersion[] | null)?.map((v) => ({
-      id: v.id,
-      version: v.version,
-      trigger_event: v.trigger_event,
-      trigger_ask_code: v.trigger_ask_id ? `ASK-${v.trigger_ask_id.slice(0, 8)}` : null,
-      trigger_user_name: v.users?.[0]?.name || 'System',
-      no_ask_reason: v.no_ask_reason,
-      created_at: v.created_at,
-      is_current: v.is_current,
-    })) || []
+    const formattedVersions = (versions as ReportVersion[] | null)?.map((v) => {
+      const triggerUser = firstRelatedRow(v.users)
+      return {
+        id: v.id,
+        version: v.version,
+        trigger_event: v.trigger_event,
+        trigger_ask_code: v.trigger_ask_id ? `ASK-${v.trigger_ask_id.slice(0, 8)}` : null,
+        trigger_user_name: triggerUser?.name || 'System',
+        no_ask_reason: v.no_ask_reason,
+        created_at: v.created_at,
+        is_current: v.is_current,
+      }
+    }) || []
 
     return NextResponse.json({
       success: true,

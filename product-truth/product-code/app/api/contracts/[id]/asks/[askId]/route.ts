@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
+import { firstRelatedRow, type OneOrMany } from '@/lib/ask/relations'
 
 // ASK关联用户类型 - 匹配数据库查询返回的结构
 interface AskWithUser {
@@ -22,10 +23,10 @@ interface AskWithUser {
   qualified_std?: string
   trigger_user_id?: string
   closed_reason?: string
-  users?: {
+  users?: OneOrMany<{
     name?: string
     email?: string
-  }[]
+  }>
 }
 
 interface RouteParams {
@@ -70,7 +71,7 @@ export async function GET(
         closed_reason,
         created_at,
         updated_at,
-        ask_responses (
+        ask_responses!ask_responses_ask_id_fkey (
           id,
           responder_id,
           responder_role,
@@ -94,12 +95,13 @@ export async function GET(
     }
 
     const typedAsk = ask as AskWithUser
-    const triggerUser = typedAsk.users?.[0]
+    const triggerUser = firstRelatedRow(typedAsk.users)
 
     return NextResponse.json({
       success: true,
       data: {
         ...typedAsk,
+        users: triggerUser ? [triggerUser] : [],
         trigger_user_name: triggerUser?.name || triggerUser?.email,
       },
     })

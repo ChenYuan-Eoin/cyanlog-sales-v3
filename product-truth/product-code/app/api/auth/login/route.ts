@@ -30,6 +30,8 @@ export const runtime = 'nodejs'
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 const LOGIN_SLOW_TIMING_THRESHOLD_MS = 500
+const DEFAULT_LOGIN_RPC_DEADLINE_MS = 900
+const DEFAULT_LOGIN_TRANSPORT_DEADLINE_MS = 2500
 
 type LoginRateLimit = Awaited<ReturnType<typeof checkLoginRateLimit>>
 
@@ -111,12 +113,39 @@ type LoginWithPasswordResult =
 
 type LoginServerTiming = ReturnType<typeof createLoginServerTiming>
 
+type LoginRpcAttempt = {
+  result: LoginWithPasswordResult | null
+  timedOut: boolean
+  durationMs: number
+}
+
+class LoginTransportTimeoutError extends Error {
+  constructor(readonly stage: string) {
+    super(`Login transport timed out during ${stage}`)
+    this.name = 'LoginTransportTimeoutError'
+  }
+}
+
 function formatServerTimingDuration(durationMs: number) {
   return Math.max(0, durationMs).toFixed(1)
 }
 
 function toRoundedDuration(durationMs: number) {
   return Number(formatServerTimingDuration(durationMs))
+}
+
+function getLoginRpcDeadlineMs() {
+  const configured = Number(process.env.LOGIN_RPC_DEADLINE_MS)
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_LOGIN_RPC_DEADLINE_MS
+}
+
+function getLoginTransportDeadlineMs() {
+  const configured = Number(process.env.LOGIN_TRANSPORT_DEADLINE_MS)
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_LOGIN_TRANSPORT_DEADLINE_MS
 }
 
 function logSlowLoginTiming(metrics: Array<{ name: string; durationMs: number }>) {
@@ -492,6 +521,102 @@ async function loadLoginWithPasswordFromRpc(
   return null
 }
 
+async function loadLoginWithPasswordWithDeadline(
+  email: string | undefined,
+  phone: string | undefined,
+  password: string,
+  ipAddress: string,
+  token: string,
+  expiresAt: Date
+): Promise<LoginRpcAttempt> {
+  const startedAt = performance.now()
+  const deadlineMs = getLoginRpcDeadlineMs()
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+  const rpcPromise = loadLoginWithPasswordFromRpc(
+    email,
+    phone,
+    password,
+    ipAddress,
+    token,
+    expiresAt
+  )
+    .then((result) => ({ type: 'result' as const, result }))
+    .catch(() => ({ type: 'result' as const, result: null }))
+
+  const timeoutPromise = new Promise<{ type: 'timeout' }>((resolve) => {
+    timeoutId = setTimeout(() => resolve({ type: 'timeout' }), deadlineMs)
+  })
+
+  const outcome = await Promise.race([rpcPromise, timeoutPromise])
+  if (timeoutId) clearTimeout(timeoutId)
+
+  const durationMs = performance.now() - startedAt
+  if (outcome.type === 'timeout') {
+    void rpcPromise
+    return {
+      result: null,
+      timedOut: true,
+      durationMs,
+    }
+  }
+
+  return {
+    result: outcome.result,
+    timedOut: false,
+    durationMs,
+  }
+}
+
+async function runWithLoginTransportDeadline<T>(
+  stage: string,
+  task: () => PromiseLike<T> | T
+): Promise<T> {
+  const deadlineMs = getLoginTransportDeadlineMs()
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+  const taskPromise = Promise.resolve()
+    .then(task)
+    .then(
+      (value) => ({ type: 'result' as const, value }),
+      (error) => ({ type: 'error' as const, error })
+    )
+
+  const timeoutPromise = new Promise<{ type: 'timeout' }>((resolve) => {
+    timeoutId = setTimeout(() => resolve({ type: 'timeout' }), deadlineMs)
+  })
+
+  const outcome = await Promise.race([taskPromise, timeoutPromise])
+  if (timeoutId) clearTimeout(timeoutId)
+
+  if (outcome.type === 'timeout') {
+    void taskPromise
+    throw new LoginTransportTimeoutError(stage)
+  }
+
+  if (outcome.type === 'error') {
+    throw outcome.error
+  }
+
+  return outcome.value
+}
+
+async function measureLoginTransport<T>(
+  timing: LoginServerTiming,
+  name: string,
+  task: () => PromiseLike<T> | T
+): Promise<T> {
+  const startedAt = performance.now()
+  try {
+    return await timing.measure(name, () => runWithLoginTransportDeadline(name, task))
+  } catch (error) {
+    if (error instanceof LoginTransportTimeoutError) {
+      timing.add(`${name}_timeout`, performance.now() - startedAt)
+    }
+    throw error
+  }
+}
+
 async function loadLoginCandidateFromRpc(
   email: string | undefined,
   phone: string | undefined,
@@ -667,7 +792,7 @@ export async function POST(req: NextRequest) {
 
     let token = uuidv4()
     let expiresAt = createSessionExpiry()
-    const loginWithPassword = await timing.measure('login_rpc', () => loadLoginWithPasswordFromRpc(
+    const loginRpcAttempt = await timing.measure('login_rpc', () => loadLoginWithPasswordWithDeadline(
       email,
       phone,
       password,
@@ -675,6 +800,10 @@ export async function POST(req: NextRequest) {
       token,
       expiresAt
     ))
+    if (loginRpcAttempt.timedOut) {
+      timing.add('login_rpc_timeout', loginRpcAttempt.durationMs)
+    }
+    const loginWithPassword = loginRpcAttempt.result
     if (loginWithPassword) {
       attachRpcStageTiming(timing, loginWithPassword.rpcTiming)
     }
@@ -708,9 +837,11 @@ export async function POST(req: NextRequest) {
       return withTiming(response)
     }
 
-    const loginCandidate = await timing.measure('candidate_rpc', () => loadLoginCandidateFromRpc(email, phone, ipAddress))
+    const loginCandidate = loginRpcAttempt.timedOut
+      ? null
+      : await measureLoginTransport(timing, 'candidate_rpc', () => loadLoginCandidateFromRpc(email, phone, ipAddress))
     const rateLimit = loginCandidate?.rateLimit
-      ?? (await timing.measure('rate_limit', () => checkLoginRateLimit(identifier, ipAddress)))
+      ?? (await measureLoginTransport(timing, 'rate_limit', () => checkLoginRateLimit(identifier, ipAddress)))
     if (!rateLimit.allowed) {
       const response = errorResponse(
         '登录尝试过于频繁，请稍后再试',
@@ -726,20 +857,20 @@ export async function POST(req: NextRequest) {
     let user = loginCandidate?.user ?? null
     let userError: unknown = null
     if (!loginCandidate) {
-      const userResult = await timing.measure('user_query', () => queryLoginUser(email, phone))
+      const userResult = await measureLoginTransport(timing, 'user_query', () => queryLoginUser(email, phone))
       user = userResult.data as LoginUserRow | null
       userError = userResult.error
     }
 
     if (userError || !user) {
-      await timing.measure('record_attempt', () => recordLoginAttempt(identifier, ipAddress, false))
+      await measureLoginTransport(timing, 'record_attempt', () => recordLoginAttempt(identifier, ipAddress, false))
       return withTiming(errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED'))
     }
 
     // 验证密码
     const isValid = await timing.measure('bcrypt_compare', () => bcrypt.compare(password, user.password_hash))
     if (!isValid) {
-      await timing.measure('record_attempt', () => recordLoginAttempt(identifier, ipAddress, false))
+      await measureLoginTransport(timing, 'record_attempt', () => recordLoginAttempt(identifier, ipAddress, false))
       return withTiming(errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED'))
     }
 
@@ -747,7 +878,7 @@ export async function POST(req: NextRequest) {
     token = uuidv4()
     expiresAt = createSessionExpiry()
 
-    const { error: tokenError } = await timing.measure('token_insert', () => (
+    const { error: tokenError } = await measureLoginTransport(timing, 'token_insert', () => (
       supabaseAdmin.from('auth_tokens').insert({
         id: uuidv4(),
         token,
@@ -768,6 +899,10 @@ export async function POST(req: NextRequest) {
     const response = await createLoginSuccessResponse(user, token, expiresAt, undefined, undefined, undefined, timing)
     return withTiming(response)
   } catch (error) {
+    if (error instanceof LoginTransportTimeoutError) {
+      console.warn('[auth/login] transport timeout', { stage: error.stage })
+      return withTiming(errorResponse('登录服务暂时不可用，请稍后重试', 503, 'LOGIN_TRANSPORT_TIMEOUT'))
+    }
     console.error('Login error:', error)
     return withTiming(errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR'))
   }

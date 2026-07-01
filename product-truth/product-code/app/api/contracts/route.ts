@@ -19,7 +19,10 @@ export async function GET(req: NextRequest) {
     // 构建查询
     let query = supabaseAdmin
       .from('contracts')
-      .select('id, filename, status, created_at, updated_at', includeTotal ? { count: 'exact' } : undefined)
+      .select(
+        'id, filename, status, contract_no, quote_id, party_b_name, created_by, created_at, updated_at',
+        includeTotal ? { count: 'exact' } : undefined
+      )
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })
       .range(offset, rangeEnd)

@@ -14,6 +14,7 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { listAccessibleUserIds } from '@/lib/scoped-access'
+import { extractContractText } from '@/lib/contracts/text-extraction'
 
 const compareSchema = z.object({
   baseline_type: z.enum(['template', 'previous_version', 'uploaded']),
@@ -25,10 +26,25 @@ type ComparableContract = {
   id: string
   filename: string | null
   status: string | null
+  contract_no: string | null
+  quote_id: string | null
+  party_b_name: string | null
   parsed_text: string | null
+  storage_path: string | null
+  mime_type: string | null
   created_by: string
   org_id: string
 }
+
+type ComparableContractWithText = ComparableContract & {
+  parsed_text: string
+}
+
+type ComparableTextFailureReason = 'missing_source' | 'download_failed' | 'download_timeout' | 'extract_failed'
+
+type ComparableTextResult =
+  | { ok: true; contract: ComparableContractWithText }
+  | { ok: false; contract: ComparableContract; reason: ComparableTextFailureReason }
 
 type DiffInsert = {
   comparison_id: string
@@ -55,6 +71,18 @@ const HIGH_RISK_TERMS = [
   '责任',
 ]
 
+const TEXT_EXTRACTION_TIMEOUT_MS = 8000
+const DOWNLOAD_TIMEOUT = Symbol('download-timeout')
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof DOWNLOAD_TIMEOUT> {
+  return Promise.race([
+    promise,
+    new Promise<typeof DOWNLOAD_TIMEOUT>((resolve) => {
+      setTimeout(() => resolve(DOWNLOAD_TIMEOUT), ms)
+    }),
+  ])
+}
+
 function splitComparableText(text: string): string[] {
   return text
     .replace(/\r/g, '\n')
@@ -66,6 +94,37 @@ function splitComparableText(text: string): string[] {
 
 function normalizeLine(line: string): string {
   return line.replace(/\s+/g, '').toLowerCase()
+}
+
+function normalizeComparableField(value: string | null | undefined): string {
+  return (value || '').replace(/\s+/g, '').toLowerCase()
+}
+
+function hasStructuredCompareIdentity(contract: ComparableContract): boolean {
+  return Boolean(contract.quote_id || normalizeComparableField(contract.party_b_name))
+}
+
+function canCompareContracts(contract: ComparableContract, compareContract: ComparableContract): boolean {
+  if (contract.id === compareContract.id) return false
+  if (contract.org_id !== compareContract.org_id) return false
+
+  if (contract.quote_id && compareContract.quote_id && contract.quote_id === compareContract.quote_id) {
+    return true
+  }
+
+  const partyName = normalizeComparableField(contract.party_b_name)
+  const comparePartyName = normalizeComparableField(compareContract.party_b_name)
+  if (partyName && comparePartyName && partyName === comparePartyName) {
+    return true
+  }
+
+  // Legacy uploads may lack quote/customer metadata. Keep them comparable only inside
+  // the same uploader scope instead of mixing arbitrary completed contracts.
+  if (!hasStructuredCompareIdentity(contract) && !hasStructuredCompareIdentity(compareContract)) {
+    return contract.created_by === compareContract.created_by
+  }
+
+  return false
 }
 
 function inferRiskLevel(text: string): 'red' | 'yellow' | 'green' {
@@ -122,13 +181,87 @@ function comparisonSummary(diffRows: DiffInsert[], baselineName?: string | null,
 async function loadComparableContract(id: string, orgId: string, accessibleUserIds: string[]) {
   const { data } = await supabaseAdmin
     .from('contracts')
-    .select('id, filename, status, parsed_text, created_by, org_id')
+    .select('id, filename, status, contract_no, quote_id, party_b_name, parsed_text, storage_path, mime_type, created_by, org_id')
     .eq('id', id)
     .eq('org_id', orgId)
     .in('created_by', accessibleUserIds)
     .maybeSingle()
 
   return data as ComparableContract | null
+}
+
+async function ensureComparableText(contract: ComparableContract): Promise<ComparableTextResult> {
+  if (contract.parsed_text?.trim()) {
+    return { ok: true, contract: { ...contract, parsed_text: contract.parsed_text } }
+  }
+
+  if (!contract.storage_path) {
+    return { ok: false, contract, reason: 'missing_source' }
+  }
+
+  const downloadResult = await withTimeout(
+    supabaseAdmin.storage.from('contracts').download(contract.storage_path),
+    TEXT_EXTRACTION_TIMEOUT_MS
+  )
+
+  if (downloadResult === DOWNLOAD_TIMEOUT) {
+    return { ok: false, contract, reason: 'download_timeout' }
+  }
+
+  if (downloadResult.error || !downloadResult.data) {
+    return { ok: false, contract, reason: 'download_failed' }
+  }
+
+  let extractedText: string | null = null
+  try {
+    const fileBuffer = Buffer.from(await downloadResult.data.arrayBuffer())
+    extractedText = extractContractText(
+      fileBuffer,
+      contract.filename || contract.storage_path,
+      contract.mime_type || undefined
+    )
+  } catch {
+    return { ok: false, contract, reason: 'extract_failed' }
+  }
+
+  if (!extractedText?.trim()) {
+    return { ok: false, contract, reason: 'extract_failed' }
+  }
+
+  // Backfill best-effort. The compare can still proceed with extracted text if persistence fails.
+  await supabaseAdmin
+    .from('contracts')
+    .update({
+      parsed_text: extractedText,
+      ocr_status: 'COMPLETED',
+      ocr_result: {
+        raw_text: extractedText,
+        confidence: 0.8,
+        source: 'compare-lazy-text-extraction',
+        completed_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', contract.id)
+    .eq('org_id', contract.org_id)
+
+  return { ok: true, contract: { ...contract, parsed_text: extractedText } }
+}
+
+function comparableTextFailureMessage(result: ComparableTextResult) {
+  if (result.ok) return '合同缺少可比对的解析文本'
+
+  const name = result.contract.filename || '所选合同'
+  switch (result.reason) {
+    case 'missing_source':
+      return `${name} 缺少源文件和可比对的解析文本`
+    case 'download_timeout':
+      return `${name} 源文件读取超时，请稍后重试或重新上传`
+    case 'download_failed':
+      return `${name} 源文件读取失败，请检查文件是否仍存在`
+    case 'extract_failed':
+      return `${name} 无法提取可比对文本，请上传可复制文本的 docx/pdf`
+  }
 }
 
 // POST - 发起比对
@@ -162,11 +295,25 @@ export async function POST(
     if (contract.id === compareContract.id) {
       return errorResponse(createApiError('VALIDATION_ERROR', '不能与同一份合同比对'))
     }
+    if (!canCompareContracts(contract, compareContract)) {
+      return errorResponse(createApiError(
+        'VALIDATION_ERROR',
+        '对比合同与当前合同缺少同客户、同报价或同上传者的关系，请选择同一客户/报价下的合同版本或重新上传新版本'
+      ))
+    }
     if (contract.status !== 'COMPLETED' || compareContract.status !== 'COMPLETED') {
       return errorResponse(createApiError('VALIDATION_ERROR', '只能比对已完成审核的合同'))
     }
-    if (!contract.parsed_text?.trim() || !compareContract.parsed_text?.trim()) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '合同缺少可比对的解析文本'))
+    const [baselineResult, compareResult] = await Promise.all([
+      ensureComparableText(contract),
+      ensureComparableText(compareContract),
+    ])
+
+    if (!baselineResult.ok || !compareResult.ok) {
+      return errorResponse(createApiError(
+        'VALIDATION_ERROR',
+        comparableTextFailureMessage(!baselineResult.ok ? baselineResult : compareResult)
+      ))
     }
 
     const { data: comparison, error } = await supabaseAdmin
@@ -186,7 +333,7 @@ export async function POST(
       return errorResponse(createApiError('DB_ERROR', '创建比对任务失败'))
     }
 
-    const diffRows = buildDiffRows(comparison.id, contract.parsed_text, compareContract.parsed_text)
+    const diffRows = buildDiffRows(comparison.id, baselineResult.contract.parsed_text, compareResult.contract.parsed_text)
     const summary = comparisonSummary(diffRows, contract.filename, compareContract.filename)
     const recommendation = diffRows.some((row) => row.risk_level === 'red')
       ? '存在高风险差异，建议法务复核后再签署。'
@@ -261,6 +408,17 @@ export async function GET(
 
     if (!comparison) {
       return successResponse(null)
+    }
+
+    if (comparison.compare_doc_id) {
+      const [contract, compareContract] = await Promise.all([
+        loadComparableContract(id, orgId, accessibleUserIds),
+        loadComparableContract(comparison.compare_doc_id, orgId, accessibleUserIds),
+      ])
+
+      if (!contract || !compareContract || !canCompareContracts(contract, compareContract)) {
+        return successResponse(null)
+      }
     }
 
     return successResponse({

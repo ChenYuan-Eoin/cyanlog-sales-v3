@@ -132,7 +132,7 @@ export default function ContractUploadPage() {
       const completedIndex = currentFileIndexRef.current
       const fileCount = filesRef.current.length
       if (completedIndex >= fileCount - 1) {
-        router.push(`/contracts/${completedContractId}/review`)
+        router.push(`/contracts/${completedContractId}`)
       } else {
         // 继续上传下一个文件
         const nextIndex = completedIndex + 1

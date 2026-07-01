@@ -2,6 +2,9 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getOrgIdForUser } from '@/lib/configs/runtime'
 import { executeRules } from '@/lib/rules/engine'
 import { logError } from '@/lib/error-log'
+import { buildCommentPatchesFromRiskCards } from '@/lib/contracts/comment-patch'
+import { getOrCompilePublishedContractSkillBundle } from '@/lib/contracts/skill-bundle'
+import { recordModelInvocation, selectReviewExecutionProvider } from '@/lib/contracts/model-policy'
 
 export interface ContractAnalysisJobRecord {
   id: string
@@ -81,10 +84,24 @@ export interface StructuredReport {
   compliance_check: ComplianceCheck
   effectiveness_analysis: string
   clauses: ClauseMatch[]
+  runtime?: ReviewRuntimeBinding
 }
 
 export interface ReviewOptions {
   strategyCode?: 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE'
+  reviewId?: string
+  requestedBy?: string | null
+  reviewTrigger?: string
+}
+
+export interface ReviewRuntimeBinding {
+  skill_bundle_id: string
+  model_policy_id: string
+  rule_snapshot_ids: string[]
+  model_invocation_ids: string[]
+  provider: string
+  model: string
+  review_trigger?: string
 }
 
 export function formatAnalysisError(error: unknown): string {
@@ -329,9 +346,14 @@ export async function processQueuedContractAnalysisJobs(workerId: string, limit:
 export async function processContractAnalysisJob(job: ContractAnalysisJobRecord) {
   try {
     await markContractAnalysisRunning(job)
-    const result = await runContractAnalysis(job.contract_id)
-    await markContractAnalysisCompleted(job, result)
-    return result
+    const structuredReport = await runStructuredAnalysis(job.contract_id, {
+      reviewId: job.review_id,
+      requestedBy: job.requested_by,
+      reviewTrigger: 'worker',
+    })
+    await saveStructuredReport(job.review_id, job.contract_id, structuredReport)
+    await markContractAnalysisCompleted(job, structuredReport.result)
+    return structuredReport.result
   } catch (error) {
     await markContractAnalysisFailed(job, error)
     throw error
@@ -643,15 +665,67 @@ export async function runStructuredAnalysis(
   options?: ReviewOptions
 ): Promise<StructuredReport> {
   const context = await fetchContractContext(contractId)
+  const skillBundle = context.orgId
+    ? await getOrCompilePublishedContractSkillBundle({
+        orgId: context.orgId,
+        requestedBy: options?.requestedBy,
+      })
+    : null
+  const executionProvider = skillBundle
+    ? selectReviewExecutionProvider(skillBundle.model_policy)
+    : null
+
+  const analysisStartedAt = performance.now()
   const ruleResult = await executeRules(context.text, context.orgId)
+  const analysisLatencyMs = performance.now() - analysisStartedAt
 
   const result: ContractAnalysisResult = {
     risks: ruleResult.risks,
     summary: ruleResult.summary,
     appliedRules: ruleResult.appliedRules,
     matchedRules: ruleResult.matchedRules,
-    provider: 'rule-engine',
+    provider: executionProvider?.provider || 'rule-engine',
     degraded: ruleResult.appliedRules === 0,
+  }
+
+  let runtime: ReviewRuntimeBinding | undefined
+  if (skillBundle && context.orgId) {
+    const invocation = await recordModelInvocation({
+      orgId: context.orgId,
+      contractId,
+      reviewId: options?.reviewId || null,
+      skillBundleId: skillBundle.id,
+      modelPolicyId: skillBundle.model_policy_id,
+      provider: executionProvider?.provider || 'rule-engine',
+      model: executionProvider?.model || 'rule-engine',
+      status: result.degraded ? 'degraded' : 'completed',
+      degraded: result.degraded,
+      fallbackReason: executionProvider?.provider_kind === 'builtin'
+        ? 'rule_engine_selected_by_model_policy'
+        : null,
+      latencyMs: analysisLatencyMs,
+      requestMeta: {
+        phase: 'structured_contract_review',
+        rule_snapshot_count: skillBundle.rule_snapshot_ids.length,
+        output_schema_version: skillBundle.output_schema.schema_version,
+        review_trigger: options?.reviewTrigger || 'initial_generate',
+      },
+      responseMeta: {
+        applied_rules: result.appliedRules,
+        matched_rules: result.matchedRules,
+        risk_count: result.risks.length,
+      },
+    })
+
+    runtime = {
+      skill_bundle_id: skillBundle.id,
+      model_policy_id: skillBundle.model_policy_id,
+      rule_snapshot_ids: skillBundle.rule_snapshot_ids,
+      model_invocation_ids: [invocation.id],
+      provider: executionProvider?.provider || 'rule-engine',
+      model: executionProvider?.model || 'rule-engine',
+      review_trigger: options?.reviewTrigger,
+    }
   }
 
   const clauses = extractClauses(context.text)
@@ -666,7 +740,7 @@ export async function runStructuredAnalysis(
   const compliance_check = await performComplianceCheck(clauses, context.orgId)
   const effectiveness_analysis = generateEffectivenessAnalysis(compliance_check, risk_summary)
 
-  return { result, risk_summary, compliance_check, effectiveness_analysis, clauses }
+  return { result, risk_summary, compliance_check, effectiveness_analysis, clauses, runtime }
 }
 
 export async function saveStructuredReport(
@@ -718,42 +792,13 @@ export async function saveStructuredReport(
     const { data: insertedRisks, error: riskError } = await supabaseAdmin
       .from('contract_risk_cards')
       .insert(riskRows)
-      .select('id, title, description, suggestion, level, evidence, position_start, position_end')
+      .select('id, title, description, suggestion, level, evidence, status, position_start, position_end')
     if (riskError) throw riskError
 
-    const annotationRows = (insertedRisks || [])
-      .filter((risk) => risk.level === 'red' || risk.level === 'yellow')
-      .map((risk) => {
-        const evidence = risk.evidence as { snippets?: string[] } | null
-        const selectedText = evidence?.snippets?.find(Boolean)
-          || report.clauses.find((clause) => (
-            clause.startOffset === risk.position_start
-            && clause.endOffset === risk.position_end
-          ))?.clauseText
-          || risk.title
-        const startOffset = typeof risk.position_start === 'number' && risk.position_start >= 0
-          ? risk.position_start
-          : 0
-        const endOffset = typeof risk.position_end === 'number' && risk.position_end > startOffset
-          ? risk.position_end
-          : startOffset + Math.max(selectedText.length, 1)
-
-        return {
-          contract_id: contractId,
-          start_offset: startOffset,
-          end_offset: endOffset,
-          selected_text: selectedText,
-          comment: [
-            `【${risk.level === 'red' ? '红线风险' : '需谈判风险'}】${risk.title}`,
-            risk.description ? `问题：${risk.description}` : null,
-            risk.suggestion ? `建议：${risk.suggestion}` : null,
-            `RiskFinding: ${risk.id}`,
-          ].filter(Boolean).join('\n'),
-          category: 'risk_finding',
-          priority: risk.level === 'red' ? 'urgent' : 'high',
-          status: 'open',
-        }
-      })
+    const annotationRows = buildCommentPatchesFromRiskCards({
+      contractId,
+      risks: insertedRisks || [],
+    }).map((patch) => patch.annotation)
 
     if (annotationRows.length > 0) {
       const { error: annotationError } = await supabaseAdmin
@@ -791,6 +836,11 @@ export async function saveStructuredReport(
     compliance_check: report.compliance_check as unknown as Record<string, unknown>,
     effectiveness_analysis: report.effectiveness_analysis,
     report_version: 2,
+    skill_bundle_id: report.runtime?.skill_bundle_id || null,
+    model_policy_id: report.runtime?.model_policy_id || null,
+    rule_snapshot_ids: report.runtime?.rule_snapshot_ids || [],
+    model_invocation_ids: report.runtime?.model_invocation_ids || [],
+    review_trigger: report.runtime?.review_trigger || null,
   }).eq('id', reviewId)
   if (reviewError) throw reviewError
 }

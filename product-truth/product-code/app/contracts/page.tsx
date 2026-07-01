@@ -33,6 +33,22 @@ import { LoadingState } from '@/components/ui/LoadingState'
 type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'
 
+type QuickAction = {
+  id: 'draft' | 'upload' | 'review' | 'compare'
+  title: string
+  shortTitle: string
+  icon: React.ComponentType<{ className?: string }>
+  color: string
+  hoverColor: string
+  href: string
+  description: string
+}
+
+type ResolvedQuickAction = QuickAction & {
+  disabled?: boolean
+  disabledReason?: string
+}
+
 type ContractsCachePayload = {
   contracts: Contract[]
   drafts: Contract[]
@@ -57,8 +73,25 @@ function mergeContractsById(existing: Contract[], incoming: Contract[]) {
   return Array.from(merged.values())
 }
 
+function readApiError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== 'object') return fallback
+  const data = payload as { error?: unknown; message?: unknown }
+  if (typeof data.error === 'string') return data.error
+  if (data.error && typeof data.error === 'object') {
+    const error = data.error as { message?: unknown }
+    if (typeof error.message === 'string') return error.message
+  }
+  if (typeof data.message === 'string') return data.message
+  return fallback
+}
+
+async function readResponseError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null)
+  return `${readApiError(payload, fallback)}（${response.status}）`
+}
+
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
-const quickActions = [
+const quickActions: QuickAction[] = [
   {
     id: 'draft',
     title: '起草合同',
@@ -76,7 +109,7 @@ const quickActions = [
     icon: UploadIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
-    href: '/contracts/new',
+    href: '/contracts/upload',
     description: '上传并审核',
   },
   {
@@ -105,6 +138,7 @@ export default function ContractCenterPage() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [drafts, setDrafts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [taskFilter, setTaskFilter] = useState<TaskFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('desktop')
@@ -149,6 +183,7 @@ export default function ContractCenterPage() {
     const query = (options.query || '').trim()
 
     try {
+      setLoadError('')
       if (append) {
         setLoadingMore(true)
       }
@@ -167,7 +202,7 @@ export default function ContractCenterPage() {
         )
 
         if (!res.ok) {
-          throw new Error('搜索合同失败')
+          throw new Error(await readResponseError(res, '搜索合同失败'))
         }
 
         const data = await res.json()
@@ -202,7 +237,13 @@ export default function ContractCenterPage() {
 
       if (token) {
         const payload = await loadContractsListForCache(token, pageNum, pageSize)
-        if (!payload) return
+        if (!payload) {
+          if (!cached) {
+            throw new Error('合同列表加载失败，请检查登录状态或接口权限')
+          }
+          setLoadError('合同列表刷新失败，当前显示的是缓存数据')
+          return
+        }
 
         applyContractsPayload({
           contracts: payload.contracts as Contract[],
@@ -237,6 +278,15 @@ export default function ContractCenterPage() {
         nextDrafts = draftsData.data || []
       }
 
+      if (!contractsRes.ok || !draftsRes.ok) {
+        const failedResponse = !contractsRes.ok ? contractsRes : draftsRes
+        if (!cached) {
+          throw new Error(await readResponseError(failedResponse, '合同数据加载失败'))
+        }
+        setLoadError('合同数据刷新失败，当前显示的是缓存数据')
+        return
+      }
+
       applyContractsPayload({
         contracts: nextContracts,
         drafts: nextDrafts,
@@ -251,6 +301,7 @@ export default function ContractCenterPage() {
         })
       }
     } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '加载合同数据失败')
       handleError(err, '加载合同数据失败')
     } finally {
       setLoading(false)
@@ -286,26 +337,34 @@ export default function ContractCenterPage() {
     return { total, pending, needAttention, completed }
   }, [contracts, drafts])
 
-  const resolvedQuickActions = useMemo(() => {
+  const resolvedQuickActions = useMemo<ResolvedQuickAction[]>(() => {
+    const reviewTarget = contracts.find((contract) => contract.status !== 'COMPLETED') || contracts[0]
     const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED')
     return quickActions.map((action) => {
       if (action.id === 'review') {
         return {
           ...action,
-          href: '/contracts/new',
-          description: '上传合同进入审核工作台',
+          href: reviewTarget ? `/contracts/${reviewTarget.id}` : '/contracts',
+          description: reviewTarget ? '进入合同审核工作台' : '需先上传合同',
+          disabled: !reviewTarget,
+          disabledReason: '需先上传合同',
         }
       }
 
       if (action.id === 'compare') {
         return {
           ...action,
-          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/new',
-          description: compareTarget ? '选择合同进行比对' : '先完成合同审核',
+          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts',
+          description: compareTarget ? '选择合同进行比对' : '需先完成审核',
+          disabled: !compareTarget,
+          disabledReason: '需先有审核完成的合同',
         }
       }
 
-      return action
+      return {
+        ...action,
+        disabled: false,
+      }
     })
   }, [contracts])
 
@@ -395,12 +454,26 @@ export default function ContractCenterPage() {
             {/* 桌面端快捷操作 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
               {resolvedQuickActions.slice(0, 3).map((action) => (
-                <Link key={action.id} href={action.href} prefetch={false}>
-                  <Button size="sm" variant="outline" className="gap-1.5">
+                action.disabled ? (
+                  <Button
+                    key={action.id}
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    disabled
+                    title={action.disabledReason}
+                  >
                     <action.icon className="h-4 w-4" />
                     {action.shortTitle}
                   </Button>
-                </Link>
+                ) : (
+                  <Link key={action.id} href={action.href} prefetch={false}>
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <action.icon className="h-4 w-4" />
+                      {action.shortTitle}
+                    </Button>
+                  </Link>
+                )
               ))}
               <Link href="/contracts/new" prefetch={false}>
                 <Button size="sm" className="gap-1.5">
@@ -422,8 +495,27 @@ export default function ContractCenterPage() {
           {!isMobile && (
             <div className="grid grid-cols-4 gap-3 mt-4">
               {resolvedQuickActions.map((action) => (
-                <Link key={action.id} href={action.href} prefetch={false} className="group">
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
+                action.disabled ? (
+                  <div
+                    key={action.id}
+                    role="button"
+                    aria-disabled="true"
+                    title={action.disabledReason}
+                    className="group cursor-not-allowed"
+                  >
+                    <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 opacity-70 transition-all">
+                      <div className="w-10 h-10 rounded-lg bg-slate-300 flex items-center justify-center shrink-0">
+                        <action.icon className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-700 text-sm">{action.title}</p>
+                        <p className="text-xs text-slate-500 truncate">{action.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <Link key={action.id} href={action.href} prefetch={false} className="group">
+                    <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
                     <div className={`w-10 h-10 rounded-lg ${action.color} ${action.hoverColor} flex items-center justify-center shrink-0`}>
                       <action.icon className="h-5 w-5 text-white" />
                     </div>
@@ -432,7 +524,8 @@ export default function ContractCenterPage() {
                       <p className="text-xs text-slate-500 truncate">{action.description}</p>
                     </div>
                   </div>
-                </Link>
+                  </Link>
+                )
               ))}
             </div>
           )}
@@ -489,10 +582,17 @@ export default function ContractCenterPage() {
         {/* 列表内容 */}
         {loading ? (
           <LoadingState message="加载合同中..." />
+        ) : loadError && filteredTasks.length === 0 ? (
+          <LoadErrorState message={loadError} onRetry={() => void fetchData(1, { query: searchQuery })} />
         ) : filteredTasks.length === 0 ? (
           <EmptyState isMobile={isMobile} />
         ) : (
           <div className="space-y-2 md:space-y-3">
+            {loadError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {loadError}
+              </div>
+            )}
             {filteredTasks.map((task) => (
               <TaskItem
                 key={task.id}
@@ -529,17 +629,32 @@ export default function ContractCenterPage() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-20 safe-area-pb">
           <div className="flex items-center justify-around">
             {resolvedQuickActions.map((action) => (
-              <Link
-                key={action.id}
-                href={action.href}
-                prefetch={false}
-                className="flex flex-col items-center gap-1 py-1 px-3 active:scale-95 transition-transform"
-              >
-                <div className={`w-10 h-10 rounded-full ${action.color} flex items-center justify-center shadow-md`}>
-                  <action.icon className="h-5 w-5 text-white" />
-                </div>
-                <span className="text-[10px] font-medium text-slate-700">{action.shortTitle}</span>
-              </Link>
+              action.disabled ? (
+                <button
+                  key={action.id}
+                  type="button"
+                  disabled
+                  title={action.disabledReason}
+                  className="flex flex-col items-center gap-1 py-1 px-3 opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center shadow-md">
+                    <action.icon className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-[10px] font-medium text-slate-700">{action.shortTitle}</span>
+                </button>
+              ) : (
+                <Link
+                  key={action.id}
+                  href={action.href}
+                  prefetch={false}
+                  className="flex flex-col items-center gap-1 py-1 px-3 active:scale-95 transition-transform"
+                >
+                  <div className={`w-10 h-10 rounded-full ${action.color} flex items-center justify-center shadow-md`}>
+                    <action.icon className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-[10px] font-medium text-slate-700">{action.shortTitle}</span>
+                </Link>
+              )
             ))}
           </div>
         </div>
@@ -644,6 +759,25 @@ function TaskItem({
         </CardContent>
       </Card>
     </Link>
+  )
+}
+
+function LoadErrorState({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry: () => void
+}) {
+  return (
+    <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-6 text-center">
+      <AlertTriangleIcon className="mx-auto h-8 w-8 text-rose-500" />
+      <p className="mt-3 text-sm font-medium text-rose-900">合同数据加载失败</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-rose-700">{message}</p>
+      <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+        重试
+      </Button>
+    </div>
   )
 }
 

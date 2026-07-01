@@ -53,7 +53,7 @@ export async function POST(
         contractId: id,
         status: 'PENDING',
         message: '合同已处于待审核状态',
-        reviewUrl: `/contracts/${id}/review`,
+        reviewUrl: `/contracts/${id}`,
       })
     }
 
@@ -84,7 +84,7 @@ export async function POST(
       status: updated.status,
       filename: updated.filename,
       message: '合同已提交审核',
-      reviewUrl: `/contracts/${updated.id}/review`,
+      reviewUrl: `/contracts/${updated.id}`,
     })
   })
 }

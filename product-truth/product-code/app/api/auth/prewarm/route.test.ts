@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/supabase', () => ({
@@ -11,12 +10,13 @@ vi.mock('@/lib/supabase', () => ({
 import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
-function makeUserQuery(result: unknown) {
-  const chain: any = {}
-  chain.select = vi.fn().mockReturnValue(chain)
-  chain.limit = vi.fn().mockReturnValue(chain)
-  chain.maybeSingle = vi.fn().mockResolvedValue(result)
-  return chain
+const prewarmRpcResponse = {
+  data: {},
+  error: null,
+  count: null,
+  status: 200,
+  statusText: 'OK',
+  success: true as const,
 }
 
 describe('POST /api/auth/prewarm', () => {
@@ -24,32 +24,19 @@ describe('POST /api/auth/prewarm', () => {
     vi.clearAllMocks()
   })
 
-  it('预热 users 查询、登录候选 RPC 和主登录 RPC 无副作用分支', async () => {
-    const query = makeUserQuery({ data: { id: 'u-1' }, error: null })
-    ;(supabaseAdmin.from as any).mockReturnValue(query)
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: {}, error: null })
+  it('预热主登录 RPC 无副作用分支', async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue(prewarmRpcResponse)
 
     const res = await POST()
     const body = await res.json()
 
     expect(res.status).toBe(200)
     expect(body.ok).toBe(true)
-    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('users_query')
-    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('candidate_rpc')
     expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('login_rpc')
-    expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
-    expect(query.select).toHaveBeenCalledWith('id')
-    expect(query.limit).toHaveBeenCalledWith(1)
-    expect(query.maybeSingle).toHaveBeenCalled()
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'get_login_candidate_v1',
-      expect.objectContaining({
-        p_email: '__prewarm__@invalid.local',
-        p_ip_address: 'prewarm',
-        p_account_limit: 5,
-        p_ip_limit: 15,
-      })
-    )
+    expect(res.headers.get('X-Login-Prewarm-Timing')).not.toContain('users_query')
+    expect(res.headers.get('X-Login-Prewarm-Timing')).not.toContain('candidate_rpc')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       'login_with_password_v1',
       expect.objectContaining({
@@ -65,7 +52,7 @@ describe('POST /api/auth/prewarm', () => {
   })
 
   it('预热失败仍返回成功', async () => {
-    ;(supabaseAdmin.from as any).mockImplementation(() => {
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(() => {
       throw new Error('prewarm failed')
     })
 

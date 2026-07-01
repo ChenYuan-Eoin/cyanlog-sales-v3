@@ -66,11 +66,11 @@ export type BrandAssetVariant = 'full' | 'symbol'
 export type BrandSurfaceTone = 'light' | 'dark'
 
 export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
-  brandName: 'Cyanlog',
-  brandShortName: 'CY',
-  productTitle: 'Cyanlog Sales',
-  productSubtitle: '智能销售支撑平台',
-  loginTitle: '企业销售支撑平台',
+  brandName: 'ONES Sales',
+  brandShortName: 'OS',
+  productTitle: 'ONES Sales',
+  productSubtitle: '智能协作平台',
+  loginTitle: '企业协作支撑平台',
   loginSubtitle: '使用企业账号进入工作台首页',
 
   // 新品牌资产配置

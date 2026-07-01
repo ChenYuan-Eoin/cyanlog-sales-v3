@@ -15,8 +15,8 @@ import { themeToCssVariables } from "@/lib/ui-theme-shared";
 const FAVICON_VERSION = "20260626";
 
 export const metadata: Metadata = {
-  title: "Cyanlog Sales",
-  description: "智能销售支撑平台",
+  title: "ONES Sales",
+  description: "智能协作平台",
   icons: {
     icon: [
       { url: `/favicon.ico?v=${FAVICON_VERSION}`, sizes: '32x32', type: 'image/x-icon' },

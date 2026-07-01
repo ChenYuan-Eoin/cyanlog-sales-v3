@@ -10,7 +10,7 @@ import {
 } from '@/lib/tech-architecture/data'
 
 export const metadata = {
-  title: '技术架构 - Cyanlog Sales',
+  title: '技术架构 - ONES Sales',
   description: '系统技术架构全景：服务调用、API 网关、事件总线、缓存、部署、安全',
 }
 

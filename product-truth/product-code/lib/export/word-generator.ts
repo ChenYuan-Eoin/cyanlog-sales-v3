@@ -250,7 +250,11 @@ async function ensureCommentsRelationship(zip: JSZip) {
   }
 
   const relationship = `<Relationship Id="${relId}" Type="${COMMENTS_REL_TYPE}" Target="comments.xml"/>`
-  return relsXml.replace('</Relationships>', `${relationship}</Relationships>`)
+  if (relsXml.includes('</Relationships>')) {
+    return relsXml.replace('</Relationships>', `${relationship}</Relationships>`)
+  }
+
+  return relsXml.replace(/<Relationships([^>]*)\/>/, `<Relationships$1>${relationship}</Relationships>`)
 }
 
 async function ensureCommentsContentType(zip: JSZip) {

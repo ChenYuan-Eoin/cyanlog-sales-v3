@@ -10,6 +10,10 @@ import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/li
 import { logError } from '@/lib/error-log'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import {
+  buildCommentPatchesFromRiskCards,
+  extractRiskFindingId,
+} from '@/lib/contracts/comment-patch'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -26,12 +30,55 @@ function buildContentDisposition(filename: string) {
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedFilename}`
 }
 
+function formatDuration(durationMs: number) {
+  return Math.max(0, durationMs).toFixed(1)
+}
+
+function createExportTiming() {
+  const metrics: Array<{ name: string; durationMs: number }> = []
+
+  return {
+    async measure<T>(name: string, task: () => PromiseLike<T> | T): Promise<T> {
+      const start = performance.now()
+      try {
+        return await task()
+      } finally {
+        metrics.push({ name, durationMs: performance.now() - start })
+      }
+    },
+    measureSync<T>(name: string, task: () => T): T {
+      const start = performance.now()
+      try {
+        return task()
+      } finally {
+        metrics.push({ name, durationMs: performance.now() - start })
+      }
+    },
+    headerValue() {
+      return metrics
+        .map((metric) => `${metric.name};dur=${formatDuration(metric.durationMs)}`)
+        .join(', ')
+    },
+    toJSON() {
+      return Object.fromEntries(
+        metrics.map((metric) => [metric.name, Number(formatDuration(metric.durationMs))])
+      )
+    },
+    attach(headers: Headers) {
+      const value = this.headerValue()
+      headers.set('Server-Timing', value)
+      headers.set('X-Export-Timing', value)
+    },
+  }
+}
+
 // POST /api/contracts/:id/export - 导出带批注的Word文档
 export async function POST(
   req: NextRequest,
   { params }: AsyncRouteParams
 ) {
   const startedAt = Date.now()
+  const exportTiming = createExportTiming()
   const requestId = getRequestId(req)
   const route = '/api/contracts/[id]/export'
   let routeId = ''
@@ -54,13 +101,15 @@ export async function POST(
     }
 
     // 获取合同和审核结果
-    const { data: contract, error: contractError } = await supabaseAdmin
-      .from('contracts')
-      .select('*, contract_reviews(*)')
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .in('created_by', accessibleUserIds)
-      .maybeSingle()
+    const { data: contract, error: contractError } = await exportTiming.measure('review_data_load', () => (
+      supabaseAdmin
+        .from('contracts')
+        .select('*, contract_reviews(*)')
+        .eq('id', id)
+        .eq('org_id', orgId)
+        .in('created_by', accessibleUserIds)
+        .maybeSingle()
+    ))
 
     if (contractError || !contract) {
       return errorResponse('合同不存在', 404, 'NOT_FOUND')
@@ -116,25 +165,75 @@ export async function POST(
     const effectivenessAnalysis = (latestReview as unknown as { effectiveness_analysis?: string }).effectiveness_analysis
 
     // 加载合同条款（按 position 排序）
-    const { data: clauses, error: clausesError } = await supabaseAdmin
-      .from('contract_clauses')
-      .select('id, clause_number, clause_title, clause_text, risk_level, risk_category, risk_description, legal_basis, suggestion, position')
-      .eq('review_id', latestReview.id)
-      .order('position', { ascending: true })
+    const { data: clauses, error: clausesError } = await exportTiming.measure('clauses_load', () => (
+      supabaseAdmin
+        .from('contract_clauses')
+        .select('id, clause_number, clause_title, clause_text, risk_level, risk_category, risk_description, legal_basis, suggestion, position')
+        .eq('review_id', latestReview.id)
+        .order('position', { ascending: true })
+    ))
 
     if (clausesError) {
       return errorResponse('加载合同条款失败', 500, 'CLAUSES_QUERY_FAILED')
     }
 
     // 加载批注
-    const { data: annotations, error: annotationsError } = await supabaseAdmin
-      .from('contract_annotations')
-      .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
-      .eq('contract_id', id)
-      .order('created_at', { ascending: true })
+    const { data: annotations, error: annotationsError } = await exportTiming.measure('annotations_load', () => (
+      supabaseAdmin
+        .from('contract_annotations')
+        .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
+        .eq('contract_id', id)
+        .order('created_at', { ascending: true })
+    ))
 
     if (annotationsError) {
       return errorResponse('加载合同批注失败', 500, 'ANNOTATIONS_QUERY_FAILED')
+    }
+
+    const { data: riskCardsForPatches, error: riskCardsError } = await exportTiming.measure('risk_patches_load', () => (
+      supabaseAdmin
+        .from('contract_risk_cards')
+        .select('id, level, title, description, suggestion, evidence, status, position_start, position_end')
+        .eq('contract_id', id)
+        .eq('review_id', latestReview.id)
+        .order('created_at', { ascending: true })
+    ))
+
+    if (riskCardsError) {
+      return errorResponse('加载风险批注意图失败', 500, 'RISK_PATCH_QUERY_FAILED')
+    }
+
+    let exportAnnotations = annotations || []
+    const existingRiskIds = new Set(
+      exportAnnotations
+        .map((annotation) => extractRiskFindingId(annotation.comment))
+        .filter((riskId): riskId is string => Boolean(riskId))
+    )
+    const missingCommentPatches = buildCommentPatchesFromRiskCards({
+      contractId: id,
+      risks: riskCardsForPatches || [],
+      existingRiskIds,
+    })
+
+    if (missingCommentPatches.length > 0) {
+      const { data: insertedAnnotations, error: patchInsertError } = await exportTiming.measure('comment_patch_insert', () => (
+        supabaseAdmin
+          .from('contract_annotations')
+          .insert(missingCommentPatches.map((patch) => ({
+            ...patch.annotation,
+            author_id: user.id,
+          })))
+          .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
+      ))
+
+      if (patchInsertError) {
+        return errorResponse('生成风险批注意图失败', 500, 'COMMENT_PATCH_INSERT_FAILED')
+      }
+
+      exportAnnotations = [
+        ...exportAnnotations,
+        ...(insertedAnnotations || []),
+      ]
     }
 
     // 加载策略名称
@@ -157,16 +256,18 @@ export async function POST(
       compliance_check: complianceCheck,
       effectiveness_analysis: effectivenessAnalysis,
       clauses: clauses || [],
-      annotations: annotations || [],
+      annotations: exportAnnotations,
       strategy_name: strategyName,
       strategy_code: riskSummary?.strategy_code,
     }
 
-    const { data: versions, error: versionError } = await supabaseAdmin
-      .from('contract_versions')
-      .select('id, version_number, source')
-      .eq('contract_id', id)
-      .order('version_number', { ascending: false })
+    const { data: versions, error: versionError } = await exportTiming.measure('versions_load', () => (
+      supabaseAdmin
+        .from('contract_versions')
+        .select('id, version_number, source')
+        .eq('contract_id', id)
+        .order('version_number', { ascending: false })
+    ))
 
     if (versionError) {
       return errorResponse('获取合同版本失败', 500, 'VERSION_QUERY_FAILED')
@@ -177,9 +278,11 @@ export async function POST(
     const nextVersionNumber = (latestVersion?.version_number || 0) + 1
 
     // 下载原始合同文件
-    const { data: fileData, error: fileError } = await supabaseAdmin.storage
-      .from('contracts')
-      .download(contract.storage_path)
+    const { data: fileData, error: fileError } = await exportTiming.measure('storage_download', () => (
+      supabaseAdmin.storage
+        .from('contracts')
+        .download(contract.storage_path)
+    ))
 
     if (fileError) {
       await logError({
@@ -200,14 +303,16 @@ export async function POST(
     // Save to temp file if download succeeded
     let inputPath = ''
     if (fileData) {
-      const tempInputPath = `/tmp/contract-${id}-input.docx`
-      const buffer = Buffer.from(await fileData.arrayBuffer())
-      fs.writeFileSync(tempInputPath, buffer)
-      inputPath = tempInputPath
+      inputPath = await exportTiming.measure('source_temp_write', async () => {
+        const tempInputPath = `/tmp/contract-${id}-input.docx`
+        const buffer = Buffer.from(await fileData.arrayBuffer())
+        fs.writeFileSync(tempInputPath, buffer)
+        return tempInputPath
+      })
     }
 
     // Generate Word document with structured report + comments
-    const exportResult = await generateWordDocument(inputPath, exportData)
+    const exportResult = await exportTiming.measure('docx_generate', () => generateWordDocument(inputPath, exportData))
 
     // Clean up temp input file
     if (inputPath && fs.existsSync(inputPath)) {
@@ -221,45 +326,70 @@ export async function POST(
         'EXPORT_FAILED'
       )
     }
+    const outputPath = exportResult.outputPath
 
     // Read the generated file
-    const fileBuffer = fs.readFileSync(exportResult.outputPath)
+    const fileBuffer = exportTiming.measureSync('output_file_read', () => fs.readFileSync(outputPath))
     const outputStoragePath = `reviewed/${id}/v${nextVersionNumber}-${Date.now()}-ones-review.docx`
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('contracts')
-      .upload(outputStoragePath, fileBuffer, {
-        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        upsert: false,
-      })
+    const { error: uploadError } = await exportTiming.measure('storage_upload', () => (
+      supabaseAdmin.storage
+        .from('contracts')
+        .upload(outputStoragePath, fileBuffer, {
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          upsert: false,
+        })
+    ))
 
     if (uploadError) {
-      fs.unlinkSync(exportResult.outputPath)
+      fs.unlinkSync(outputPath)
       return errorResponse('批注版文件写入失败', 500, 'EXPORT_UPLOAD_FAILED')
     }
 
-    const { error: insertVersionError } = await supabaseAdmin
-      .from('contract_versions')
-      .insert({
-        contract_id: id,
-        version_number: nextVersionNumber,
-        source: 'review_revision',
-        storage_path: outputStoragePath,
-        file_size: fileBuffer.length,
-        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        parent_version_id: sourceVersion?.id || null,
-        change_summary: 'ONES 业务运营基于风险项生成 Word 批注版本',
-        uploaded_by: user.id,
-        review_id: latestReview.id,
-      })
+    const { error: insertVersionError } = await exportTiming.measure('version_register', () => (
+      supabaseAdmin
+        .from('contract_versions')
+        .insert({
+          contract_id: id,
+          version_number: nextVersionNumber,
+          source: 'review_revision',
+          storage_path: outputStoragePath,
+          file_size: fileBuffer.length,
+          mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          parent_version_id: sourceVersion?.id || null,
+          change_summary: 'ONES 业务运营基于风险项生成 Word 批注版本',
+          uploaded_by: user.id,
+          review_id: latestReview.id,
+        })
+    ))
 
     if (insertVersionError) {
-      fs.unlinkSync(exportResult.outputPath)
+      fs.unlinkSync(outputPath)
       await supabaseAdmin.storage.from('contracts').remove([outputStoragePath])
       return errorResponse('批注版版本登记失败', 500, 'EXPORT_VERSION_FAILED')
     }
 
+    const { error: reportLinkError } = await exportTiming.measure('report_version_link', () => (
+      supabaseAdmin
+        .from('report_versions')
+        .update({ report_file_url: outputStoragePath })
+        .eq('contract_id', id)
+        .eq('is_current', true)
+    ))
+
+    if (reportLinkError) {
+      fs.unlinkSync(outputPath)
+      await supabaseAdmin.storage.from('contracts').remove([outputStoragePath])
+      await supabaseAdmin
+        .from('contract_versions')
+        .delete()
+        .eq('contract_id', id)
+        .eq('version_number', nextVersionNumber)
+        .eq('source', 'review_revision')
+      return errorResponse('报告版本关联批注文件失败', 500, 'EXPORT_REPORT_LINK_FAILED')
+    }
+
     // Clean up temp output file
-    fs.unlinkSync(exportResult.outputPath)
+    fs.unlinkSync(outputPath)
 
     // Return file as download
     const headers = new Headers()
@@ -269,6 +399,7 @@ export async function POST(
       'Content-Disposition',
       buildContentDisposition(`${sourceFilename}-审核结果.docx`)
     )
+    exportTiming.attach(headers)
 
     logRouteDone(
       {
@@ -281,6 +412,7 @@ export async function POST(
       {
         reviewId: latestReview.id,
         versionNumber: nextVersionNumber,
+        exportTiming: exportTiming.toJSON(),
       }
     )
 

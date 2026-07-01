@@ -7,6 +7,18 @@ select
   'UI_THEME_DEFAULT',
   '默认界面主题',
   jsonb_build_object(
+    'brandName', 'ONES Sales',
+    'brandShortName', 'OS',
+    'productTitle', 'ONES Sales',
+    'productSubtitle', '智能协作平台',
+    'loginTitle', '企业协作支撑平台',
+    'loginSubtitle', '使用企业账号进入工作台首页',
+    'brandAssets', jsonb_build_object(
+      'fullLogo', jsonb_build_object('light', '', 'dark', ''),
+      'symbol', jsonb_build_object('light', '', 'dark', ''),
+      'favicon', ''
+    ),
+    'appearance', 'system',
     'primary', '#2563eb',
     'primaryForeground', '#ffffff',
     'secondary', '#eff6ff',

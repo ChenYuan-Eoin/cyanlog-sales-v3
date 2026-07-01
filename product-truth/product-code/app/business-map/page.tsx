@@ -4,7 +4,7 @@ import { StateMachineView } from '@/components/business-map/StateMachineView'
 import { modules, links, stateMachines, entryRules } from '@/lib/business-map/data'
 
 export const metadata = {
-  title: '业务地图 - Cyanlog Sales',
+  title: '业务地图 - ONES Sales',
   description: '销售系统全景图：核心模块、业务链路、状态机',
 }
 

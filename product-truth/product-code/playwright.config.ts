@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+
 /**
  * Playwright E2E 配置
  * 覆盖 3 条核心路径：登录、配置中心、报价中心
@@ -23,7 +25,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
 
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL,
     // 不在 trace 中记录密码等敏感信息
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
@@ -38,11 +40,11 @@ export default defineConfig({
   ],
 
   // 本地开发时自动启动 dev server
-  webServer: process.env.CI
+  webServer: process.env.CI || process.env.BASE_URL
     ? undefined
     : {
         command: 'pnpm dev',
-        url: 'http://localhost:3000',
+        url: baseURL,
         reuseExistingServer: true,
         timeout: 60_000,
       },

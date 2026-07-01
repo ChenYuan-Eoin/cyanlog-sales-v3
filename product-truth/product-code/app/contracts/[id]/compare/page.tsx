@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   ArrowLeftIcon,
+  AlertTriangleIcon,
   DownloadIcon,
   GitCompareIcon,
   SparklesIcon,
@@ -41,7 +42,72 @@ interface ContractOption {
   id: string
   filename: string
   status: string
+  contract_no?: string | null
+  quote_id?: string | null
+  party_b_name?: string | null
+  created_by?: string | null
   updated_at: string
+}
+
+interface ContractDetail {
+  id: string
+  filename?: string | null
+  status?: string | null
+  contract_no?: string | null
+  quote_id?: string | null
+  party_b_name?: string | null
+  created_by?: string | null
+  parsed_text?: string | null
+  storage_path?: string | null
+}
+
+function readApiError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== 'object') return fallback
+  const data = payload as { error?: unknown; message?: unknown }
+  if (typeof data.error === 'string') return data.error
+  if (data.error && typeof data.error === 'object') {
+    const error = data.error as { message?: unknown }
+    if (typeof error.message === 'string') return error.message
+  }
+  if (typeof data.message === 'string') return data.message
+  return fallback
+}
+
+function normalizeComparableField(value: string | null | undefined): string {
+  return (value || '').replace(/\s+/g, '').toLowerCase()
+}
+
+function hasStructuredCompareIdentity(contract: Pick<ContractDetail, 'quote_id' | 'party_b_name'>) {
+  return Boolean(contract.quote_id || normalizeComparableField(contract.party_b_name))
+}
+
+function isRelatedCompareCandidate(baseline: ContractDetail, candidate: ContractOption) {
+  if (baseline.id === candidate.id) return false
+
+  if (baseline.quote_id && candidate.quote_id && baseline.quote_id === candidate.quote_id) {
+    return true
+  }
+
+  const partyName = normalizeComparableField(baseline.party_b_name)
+  const candidatePartyName = normalizeComparableField(candidate.party_b_name)
+  if (partyName && candidatePartyName && partyName === candidatePartyName) {
+    return true
+  }
+
+  if (!hasStructuredCompareIdentity(baseline) && !hasStructuredCompareIdentity(candidate)) {
+    return Boolean(baseline.created_by && baseline.created_by === candidate.created_by)
+  }
+
+  return false
+}
+
+async function fetchContractDetail(contractId: string, headers: HeadersInit) {
+  const response = await fetch(`/api/contracts/${contractId}`, { headers })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(readApiError(payload, '获取合同详情失败'))
+  }
+  return payload as ContractDetail
 }
 
 export default function ContractComparePage() {
@@ -56,6 +122,7 @@ export default function ContractComparePage() {
   const [selectedDiffId, setSelectedDiffId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'dual' | 'merge'>('dual')
   const [candidateContracts, setCandidateContracts] = useState<ContractOption[]>([])
+  const [excludedCandidateCount, setExcludedCandidateCount] = useState(0)
   const [selectedCompareDocId, setSelectedCompareDocId] = useState('')
   const [startingComparison, setStartingComparison] = useState(false)
 
@@ -97,18 +164,26 @@ export default function ContractComparePage() {
   const fetchCandidateContracts = useCallback(async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/contracts?page=1&pageSize=100&status=COMPLETED', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+      const [baselineContract, res] = await Promise.all([
+        fetchContractDetail(contractId, headers),
+        fetch('/api/contracts?page=1&pageSize=100&status=COMPLETED', { headers }),
+      ])
       if (!res.ok) {
         return
       }
 
       const data = await res.json()
-      const options = ((data.data?.data || []) as ContractOption[])
+      const allOptions = ((data.data?.data || []) as ContractOption[])
         .filter((contract) => contract.id !== contractId)
+      const options = allOptions.filter((contract) => isRelatedCompareCandidate(baselineContract, contract))
       setCandidateContracts(options)
-      setSelectedCompareDocId((current) => current || options[0]?.id || '')
+      setExcludedCandidateCount(allOptions.length - options.length)
+      setSelectedCompareDocId((current) => (
+        current && options.some((contract) => contract.id === current)
+          ? current
+          : options[0]?.id || ''
+      ))
     } catch {
       // The empty state remains actionable through upload when candidates cannot be loaded.
     }
@@ -133,10 +208,25 @@ export default function ContractComparePage() {
     setError('')
     try {
       const token = localStorage.getItem('token')
+      const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+      const [baselineContract, compareContract] = await Promise.all([
+        fetchContractDetail(contractId, authHeaders),
+        fetchContractDetail(selectedCompareDocId, authHeaders),
+      ])
+
+      const missingTextContract = [baselineContract, compareContract].find((contract) => (
+        !contract.parsed_text?.trim() && !contract.storage_path
+      ))
+      if (missingTextContract) {
+        const name = missingTextContract.filename || '所选合同'
+        setError(`无法发起比对：${name} 缺少源文件和可比对的解析文本。请上传可复制文本的 docx/pdf，或重新上传新版本后再比对。`)
+        return
+      }
+
       const res = await fetch(`/api/contracts/${contractId}/compare`, {
         method: 'POST',
         headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...authHeaders,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -147,7 +237,7 @@ export default function ContractComparePage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null)
-        setError(data?.error?.message || data?.error || '发起比对失败')
+        setError(readApiError(data, '发起比对失败'))
         return
       }
 
@@ -195,9 +285,11 @@ export default function ContractComparePage() {
 
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-red-600">{error}</div>
-      </div>
+      <CompareBlockingState
+        contractId={contractId}
+        message={error}
+        onReset={() => setError('')}
+      />
     )
   }
 
@@ -248,13 +340,15 @@ export default function ContractComparePage() {
           ) : (
             <div className="space-y-4">
               <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                当前没有可用于比对的已完成合同。请先上传或完成另一份合同审核。
+                {excludedCandidateCount > 0
+                  ? `已排除 ${excludedCandidateCount} 份非同客户/同报价的已完成合同。请上传同一客户或同一报价下的新版本后再比对。`
+                  : '当前没有可用于比对的已完成合同。请先上传或完成另一份合同审核。'}
               </p>
               <div className="flex items-center justify-between gap-3">
                 <Link href={`/contracts/${contractId}`}>
                   <Button variant="outline">返回合同</Button>
                 </Link>
-                <Link href="/contracts/new">
+                <Link href="/contracts/upload">
                   <Button>上传合同</Button>
                 </Link>
               </div>
@@ -589,6 +683,48 @@ export default function ContractComparePage() {
           </div>
         </div>
       </main>
+    </div>
+  )
+}
+
+function CompareBlockingState({
+  contractId,
+  message,
+  onReset,
+}: {
+  contractId: string
+  message: string
+  onReset: () => void
+}) {
+  return (
+    <div className="flex h-screen items-center justify-center bg-slate-50 p-6">
+      <div className="w-full max-w-lg rounded-lg border border-amber-200 bg-white p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50">
+            <AlertTriangleIcon className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-slate-900">暂不能发起文档比对</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <Link href={`/contracts/${contractId}`}>
+            <Button variant="outline" className="w-full">
+              返回合同
+            </Button>
+          </Link>
+          <Link href={`/contracts/${contractId}/edit`}>
+            <Button variant="outline" className="w-full">
+              上传新版本
+            </Button>
+          </Link>
+          <Button className="w-full" onClick={onReset}>
+            重新选择
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

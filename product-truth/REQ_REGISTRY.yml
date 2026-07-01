@@ -8,12 +8,156 @@
 #   - design_confirmed: 设计已确认，等待开发（冻结设计方案）
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
----
 
 version: "2026-06-09"
-last_updated: "2026-06-30T00:00:00+08:00"
+last_updated: "2026-06-30T12:00:00+08:00"
+
+audit_supplement:
+  source: "2026-06-30 用户线上截图与项目整体审查"
+  purpose: >
+    将既有 F0xx 需求清单补成可验收的需求治理索引。
+    本注册表不替代 Feature Packet；它负责说明每个需求当前归属、实现证据、
+    验收缺口和跨域问题映射。
+  registry_rules:
+    - 需求按产品愿景和模块边界归集，不按 Bug 标题机械合并。
+    - 功能状态不能只看是否有代码；必须同时看设计、实现、测试、浏览器验收和线上证据。
+    - 配置中心是控制面，合同/报价/审批等业务模块是执行面，不能互相写穿。
+    - 错误态、权限失败、组织上下文失败不能被前端渲染成真实空数据。
+    - 临时排查文档、截图、trace 和历史资产必须有归档/复用/删除结论，不得成为新的长期 truth。
+  objective_tree:
+    primary_goal:
+      id: G0
+      name: 商业产品第一阶段闭环恢复
+      description: >
+        把 ONES Sales 从功能堆叠和临时修补恢复为可持续迭代的商业产品第一阶段。
+        第一阶段不追求终版大而全，但合同审核、配置中心、组织权限、规则/Skill、
+        数据/API、前端体验、性能发布必须按同一套需求来源、设计约束和验收证据闭环。
+      doc_policy: "文档补全是问题域支撑动作，不作为独立主目标；补文档必须能指导代码、测试、浏览器和线上验收。"
+      merge_policy: "Bug 合并按同一根因、同一对象、同一接口/状态机、同一验收证据判断，不按标题相似度机械合并。"
+    child_goals:
+      G1:
+        name: 需求与问题资产治理
+        problem_domains: [PD01, PD09, PD10]
+        related_reqs: [F027]
+        acceptance: "每个 P0/P1 问题都有 REQ、Bug ID、证据、修复批次、验收标准和收尾结论。"
+      G2:
+        name: 合同审核产品闭环
+        problem_domains: [PD04, PD05, PD07]
+        related_reqs: [F005v2, F005, F007]
+        acceptance: "真实合同能走通上传/解析、ReviewRun、RiskFinding、谈判、Word 批注、报告归档的第一阶段闭环。"
+      G3:
+        name: 审核规则与 Skill 闭环
+        problem_domains: [PD03, PD06]
+        related_reqs: [F006, F009, F012]
+        acceptance: "ReviewRun 绑定 RuleSnapshot、SkillBundle、ModelPolicy，规则变更不影响历史结果。"
+      G4:
+        name: 配置中心数据底座
+        problem_domains: [PD02, PD03, PD08]
+        related_reqs: [F000, F009, F011, F012]
+        acceptance: "生产数据存在时不显示 0；401/403/500/未配置/未发布都有清晰错误态。"
+      G5:
+        name: 组织权限与外部同步
+        problem_domains: [PD02, PD08]
+        related_reqs: [F003, F011]
+        acceptance: "超管、管理员、普通用户视角验收通过；新增/删除/分配后组织页和角色页同步刷新。"
+      G6:
+        name: 合同中心信息架构
+        problem_domains: [PD04, PD05]
+        related_reqs: [F005v2, F005]
+        acceptance: "起草、上传、风险审核、文档比对四个入口在不同合同状态下均有明确页面和阻断提示。"
+      G7:
+        name: API 与数据一致性
+        problem_domains: [PD02, PD03, PD06, PD09]
+        related_reqs: [F003, F005, F009, F011, F012, F027]
+        acceptance: "错误不被吞为空数据；坏请求返回可预期 400；关键 API 有测试和线上样本。"
+      G8:
+        name: 前端体验与响应式
+        problem_domains: [PD04, PD09]
+        related_reqs: [F005v2, F027]
+        acceptance: "真实浏览器覆盖桌面、iPad、手机；无遮挡、横向溢出、不可点击和错误边界。"
+      G9:
+        name: 性能与稳定性
+        problem_domains: [PD09, PD10]
+        related_reqs: [F021, F027]
+        acceptance: "trace、Server-Timing、build size、线上样本能证明主要瓶颈和修复收益。"
+      G10:
+        name: 发布与验收治理
+        problem_domains: [PD09, PD10]
+        related_reqs: [F027]
+        acceptance: "lint、typecheck、test、build、浏览器、移动端、Vercel Ready/Production 证据齐全。"
+      G11:
+        name: 文档与噪音治理
+        problem_domains: [PD01, PD10]
+        related_reqs: [F021, F027]
+        acceptance: "不新增平行噪音；删除前有结论和确认；保留内容能被主文档或 F0xx 引用。"
+  active_problem_domains:
+    PD01:
+      name: 需求治理与追踪断层
+      related_reqs: [F027, F000, F005v2]
+      requirement_gap: "缺少从产品愿景、模块目标、F0xx、代码、测试、线上证据到 Bug 的强绑定。"
+    PD02:
+      name: 身份、组织上下文与假空态
+      related_reqs: [F003, F011, F027]
+      requirement_gap: "生产库存在数据时，前端不得因 401/403/ORG_CONTEXT 失败显示 0 或 seed 提示。"
+    PD03:
+      name: 配置中心控制面失真
+      related_reqs: [F000, F009, F010, F011, F012]
+      requirement_gap: "主题、品牌、规则、角色、组织等配置必须区分真实空、未授权、加载失败和未发布。"
+    PD04:
+      name: 合同中心入口语义混乱
+      related_reqs: [F005v2, F005, F007]
+      requirement_gap: "上传合同、风险审核、文档比对不能退化到同一个页面或同一种空态。"
+    PD05:
+      name: 合同审核商业产品对象未闭环
+      related_reqs: [F005v2, F005, F006, F007, F009, F012]
+      requirement_gap: "ReviewRun、RiskFinding、NegotiationTask、CustomerFeedback、CommentPatch 等对象不能只停留在 UI 文案或合成字段。"
+    PD06:
+      name: 规则、Skill、模型调用链未固化
+      related_reqs: [F006, F009, F012]
+      requirement_gap: "审核依据必须来自配置中心发布规则和 SkillBundle，不得由通用 prompt 或硬编码规则替代。"
+    PD07:
+      name: Word 批注与报告输出未形成验收闭环
+      related_reqs: [F007, F005]
+      requirement_gap: "批注为主、报告为辅必须可下载、可追溯、可降级说明，并绑定同一 RiskFinding。"
+    PD08:
+      name: 外部组织同步边界不清
+      related_reqs: [F011, F003]
+      requirement_gap: "飞书同步必须区分未配置、无权限、上游失败、MVP 仅同步部门等状态。"
+    PD09:
+      name: 真实验收门禁不足
+      related_reqs: [F027]
+      requirement_gap: "完成定义必须包含 build/test/lint、真实浏览器、移动端、线上部署和角色矩阵。"
+    PD10:
+      name: 噪音、外部依赖与非代码产物治理
+      related_reqs: [F027, F021]
+      requirement_gap: "本地依赖、构建产物、output 证据、历史文档必须区分 ignored、tracked、Vercel 上传和可复用资产。"
 
 requirements:
+  # ═══════════════════════════════════════════════════════════════
+  # 配置中心共享架构 (Config Center Shared Architecture)
+  # ═══════════════════════════════════════════════════════════════
+  F000:
+    name: 配置中心共享架构
+    module: 配置中心
+    source: PROJECT-主文档.md#6.0-6.4
+    status: confirmed
+    priority: P0
+    feature_packet: product-truth/feature-packets/F000-config-center-architecture.md
+    code_locations:
+      - app/configs/page.tsx
+      - lib/configs/types.ts
+      - lib/configs/runtime.ts
+    description: >
+      配置中心的共享架构真相，不是独立业务页面。
+      约束 F001/F009/F010/F011/F012 的配置拥有权、版本发布、生效回滚和消费边界，
+      防止配置中心退化为若干无领域边界的 Tab CRUD。
+    audit_supplement:
+      current_gap: "线上截图显示多个配置域被渲染成 0，说明实现仍需按 F000 明确控制面、执行面、错误态和空态边界。"
+      acceptance_requirements:
+        - "配置中心每个能力域必须能说明谁可写、谁消费、发布版本是什么、失败时如何呈现。"
+        - "业务页面只消费已发布配置，不直接修改配置事实。"
+        - "未授权、组织上下文失败、接口错误不得展示为真实空配置。"
+
   # ═══════════════════════════════════════════════════════════════
   # 报价中心 (Quotes Center)
   # ═══════════════════════════════════════════════════════════════
@@ -65,6 +209,15 @@ requirements:
       - app/api/access/feishu/sync/route.ts
       - app/configs/page.tsx
     description: 登录认证、角色权限、用户管理（自主可控 + 可配置 RBAC）
+    audit_supplement:
+      status_caveat: "completed 状态需要复核；线上配置中心 0 数据与飞书 Unauthorized 暴露出会话、默认组织、权限解析与错误呈现仍可能不闭环。"
+      supplemental_requirements:
+        - "登录成功用户必须解析到稳定 org context；缺默认组织时要返回可诊断错误或自动修复路径。"
+        - "认证、鉴权、组织上下文失败必须有统一错误码，不得被消费页面吞掉。"
+        - "Feishu 同步调用前必须先区分登录态、角色权限、组织上下文和外部配置状态。"
+      acceptance_requirements:
+        - "使用超管、管理员、普通销售、缺默认组织用户分别验证 `/api/auth/me`、`/api/admin/org`、配置中心和合同中心。"
+        - "401/403/ORG_CONTEXT_MISSING 在前端显示为错误态或修复指引，不显示为 0 数据。"
 
   F004:
     name: 三级审批
@@ -122,6 +275,17 @@ requirements:
       - 多流审核工作台：原文/批注、风险队列、销售谈判、客户反馈、输出审计
       - 消费 F006 SkillBundle、F009 规则快照、F012 模型策略
       - 批注为主、报告为辅；禁止把文本粘贴审核作为主链路
+    audit_supplement:
+      current_gap: "当前合同中心入口仍把风险审核、文档比对在无前置对象时退回上传/新建，产品语义与本需求不一致。"
+      supplemental_requirements:
+        - "合同中心首页必须区分起草、上传、风险审核、文档比对四类入口的前置条件、目标页面和阻断提示。"
+        - "风险审核入口必须进入 ReviewRun 工作台或选择合同/版本的准备页，不能直接等同上传合同。"
+        - "文档比对入口必须进入版本选择/对比工作台；没有可比版本时显示前置条件，不退回上传。"
+        - "工作台必须同时承载原文/批注、风险队列、谈判任务、客户反馈、输出和审计，而不是单线程文本框。"
+      acceptance_requirements:
+        - "桌面和移动端真实浏览器验证四个入口分别到达不同的业务状态。"
+        - "无合同、无已完成合同、有上传未审核合同、有已审核合同四种状态都有明确 UI。"
+        - "合同审核完成证据必须绑定合同版本、ReviewRun、规则快照/Skill、模型策略和输出物。"
     parent_doc: product-truth/00-master/PROJECT-主文档.md#5
     legacy_docs:
       - product-truth/feature-packets/F005-derive.md
@@ -150,6 +314,16 @@ requirements:
       - ReviewRun 绑定 SkillBundle / RuleSnapshot / ModelPolicy
       - RiskFinding 复核、销售谈判、客户反馈、再审核、审计归档
       - Word 批注主路径和报告辅助路径的工作台承接
+    audit_supplement:
+      current_gap: "现有实现存在合同列表空态、上传/审核链路、详情页、风险卡片和输出物之间的断层；部分对象由旧表或合成字段临时表达。"
+      supplemental_requirements:
+        - "合同列表 API 失败、权限失败和真实无合同必须分开呈现。"
+        - "上传后的合同必须形成 ContractVersion，并能触发 ReviewRun，而不是只生成一个文件记录。"
+        - "RiskFinding 必须有状态、责任人、证据、处理动作、谈判要求和关闭/升级结果。"
+        - "必须谈判风险项必须生成 NegotiationTask，不能只用批注绕过销售谈判。"
+      acceptance_requirements:
+        - "上传 docx/pdf -> 解析 -> 审核 -> 风险复核 -> 批注输出 -> 报告归档路径可在真实浏览器跑通。"
+        - "API、数据库和 UI 三处能追溯同一个合同版本和 ReviewRun。"
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     design_v2:
       upgrade_id: F005-v2-derive
@@ -202,7 +376,11 @@ requirements:
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     code_locations:
       - app/api/contracts/[id]/analyze/route.ts
+      - app/api/contracts/[id]/review-runs/route.ts
       - lib/contract-analysis.ts
+      - lib/contracts/skill-bundle.ts
+      - lib/contracts/model-policy.ts
+      - lib/contracts/review-evidence.ts
       - lib/rules/engine.ts
       - lib/rules/flexible-engine.ts
     description: |
@@ -211,6 +389,15 @@ requirements:
       - 执行结构化规则、语义规则、模板对比和模型调用
       - 生成 ReviewEvidence、RiskFinding 和 F007 可消费的 CommentPatchDraft
       - 历史 ReviewRun 必须绑定不可漂移的 SkillBundle / RuleSnapshot / ModelPolicy
+    audit_supplement:
+      current_gap: "第一阶段已能从已发布规则快照、条款库引用和 F012 ModelPolicy 编译真实 `contract_skill_bundles` 并绑定 ReviewRun；仍缺独立 Skill 编译控制台、模板快照、变体词典快照和 eval case 门禁。"
+      supplemental_requirements:
+        - "F009 发布后的规则、模板、字段抽取提示、话术和测试用例必须编译为 SkillBundle。"
+        - "ReviewRun 必须记录 SkillBundle、RuleSnapshot、TemplateSnapshot、ModelPolicy，不允许只记录当前规则表状态。"
+        - "本地模型、云端模型、规则兜底的调用选择必须由 F012 注入，不由合同审核代码硬编码。"
+      acceptance_requirements:
+        - "给定同一合同版本和同一 SkillBundle，可复现同一批规则/模板依据和模型调用策略。"
+        - "规则配置变更后，新 ReviewRun 使用新快照，旧 ReviewRun 不漂移。"
 
   F007:
     name: Word原生批注与报告输出
@@ -231,6 +418,15 @@ requirements:
       - 报告只作为辅助、兜底和归档
       - 批注和报告必须引用同一 RiskFinding
       - 批注失败需展示降级原因，不得伪装成功
+    audit_supplement:
+      current_gap: "已有导出资产可复用，但 CommentPatch、AnnotatedDocument、ReviewReport 的产品级状态、降级原因和下载验收尚未完全注册为主链路。"
+      supplemental_requirements:
+        - "CommentPatch 必须绑定 RiskFinding、原文定位、批注内容、作者角色和降级策略。"
+        - "AnnotatedDocument 必须作为 ContractVersion 登记，能被后续客户反馈和再审核引用。"
+        - "ReviewReport 只能作为辅助/兜底，不能产生与批注不同的风险结论。"
+      acceptance_requirements:
+        - "至少用一个 docx 样本验证 Word 原生批注可在 Word/WPS 中打开并定位。"
+        - "定位失败时 UI 和 API 返回降级原因，不把报告兜底伪装为完整批注能力。"
 
   # ═══════════════════════════════════════════════════════════════
   # 配置中心 (Config Center)
@@ -256,6 +452,16 @@ requirements:
       - 规则版本、发布、回滚、审计和测试
       - 规则与模板、条款库、话术、处理角色、谈判要求关联
       - 发布 RuleSnapshot 给 F006 编译 SkillBundle
+    audit_supplement:
+      current_gap: "生产库存在 R001-R015，但前端截图显示 0；当前需求需要补充规则存在、发布、消费和错误呈现的分层验收。"
+      supplemental_requirements:
+        - "R001-R015 是预置规则事实，但不能硬编码为审核依据；审核必须消费已发布 RuleSnapshot。"
+        - "规则列表必须区分 active、archived、加载失败、未授权和真实空。"
+        - "规则配置必须能维护字段提示、语义 prompt、消息模板、模板引用、处理角色、是否必须谈判和测试用例。"
+      acceptance_requirements:
+        - "配置中心能看到 R001-R015 active 规则，归档旧规则不混入当前启用统计。"
+        - "风险审核读取的规则版本与配置中心发布版本一致。"
+        - "规则 API 失败时前端显示错误态，不显示 0 条规则。"
 
   F010:
     name: 报价规则配置
@@ -289,6 +495,17 @@ requirements:
       - lib/auth.ts
       - lib/scoped-access.ts
     description: 组织架构、角色权限、作用域分配和数据范围配置，供鉴权、审批与导航消费
+    audit_supplement:
+      current_gap: "生产库有部门、成员、角色和销售空间，但线上组织页显示 0；飞书同步显示 Unauthorized，说明 F011 必须补足数据来源、权限、错误态和外部同步边界。"
+      supplemental_requirements:
+        - "组织结构、角色权限、成员分配、销售空间必须从同一 org context 读取，计数和列表一致。"
+        - "新增/删除成员、分配/移除角色后，组织页与角色页必须同步刷新。"
+        - "飞书同步 MVP 范围必须明确：未配置、无权限、上游失败、仅同步部门、成员同步未纳入时要分别提示。"
+        - "空态文案不得引导生产用户运行 seed，除非已经确认数据库真实为空且处于初始化环境。"
+      acceptance_requirements:
+        - "真实浏览器验证组织架构、角色权限、添加成员、删除成员、角色分配、飞书同步失败态。"
+        - "超管、管理员、普通用户三类角色看到的能力和错误提示符合权限边界。"
+        - "API 返回 401/403/500/ORG_CONTEXT 错误时，前端不渲染为 0 部门 0 成员。"
 
   F012:
     name: AI运行时配置
@@ -301,9 +518,20 @@ requirements:
       - app/configs/page.tsx
       - app/api/configs/route.ts
       - app/api/configs/[id]/route.ts
+      - lib/contracts/model-policy.ts
+      - supabase/migrations/20260701033715_f006_f012_runtime_objects.sql
       - lib/configs/runtime.ts
       - lib/ai/failover.ts
     description: 本地模型、销售云端 OpenAI 兼容模型、路由阈值和降级链配置
+    audit_supplement:
+      current_gap: "第一阶段已能从已发布 AI 配置生成 `model_policies`，合同审核 ReviewRun 会绑定 `model_policy_id` 并记录 `model_invocations`；仍缺完整 Provider/Routing 编辑器、连接测试和健康状态面板。"
+      supplemental_requirements:
+        - "模型 provider、base URL、模型名、密钥引用、超时、页数阈值、降级顺序必须由配置中心发布。"
+        - "F006 执行时只能消费已发布 ModelPolicy，并记录每次模型调用、降级、失败和规则兜底原因。"
+        - "本地模型和云端模型都不可在业务代码里写死为最终策略。"
+      acceptance_requirements:
+        - "配置中心修改模型策略后，新 ReviewRun 能读取新策略，旧 ReviewRun 保留旧策略快照。"
+        - "模型不可用时能降级到规则/备用模型，并在审计区展示原因。"
 
   # ═══════════════════════════════════════════════════════════════
   # 标书中心 (Tender Center)
@@ -494,6 +722,15 @@ requirements:
       将用户反馈的 60+ 项问题按业务根因、代码事实、数据流和用户路径合并为问题域，
       覆盖线上可用性、异常韧性、组织权限、外部同步、配置消费、合同能力、移动端、
       冗余治理、依赖/非代码上传和验证体系；记录修复、验收证据、发布证据和剩余风险。
+    audit_supplement:
+      current_gap: "2026-06-30 新截图说明前一轮 F027 不能视为闭环；需要重跑问题域级审查，并把需求缺口纳入本注册表。"
+      supplemental_requirements:
+        - "F027 的问题域必须反向链接到 F000/F003/F005/F006/F007/F009/F011/F012 等业务需求。"
+        - "每个 Bug 必须有问题域、关联 REQ、代码/文档/数据证据、验收标准和线上验证状态。"
+        - "修复结束信号不是修改数量，而是问题域验收矩阵全绿或剩余风险被明确归档。"
+      acceptance_requirements:
+        - "输出完整问题域 Bug 注册表，包含用户反馈、代码事实、业务影响、修复批次、验收证据。"
+        - "任何完成声明必须同时附 build/test/lint、真实浏览器、移动端、生产部署和清理证据。"
 
   F028:
     name: 预留-F028

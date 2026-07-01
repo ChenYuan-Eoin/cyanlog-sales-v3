@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { canAccessAskByRoles } from '@/lib/ask/permissions'
+import { firstRelatedRow, type OneOrMany } from '@/lib/ask/relations'
 
 // ASK Item 类型定义 - 匹配数据库查询返回的结构
 interface AskItem {
@@ -23,7 +24,7 @@ interface AskItem {
   qualified_std?: string
   trigger_user_id?: string
   closed_reason?: string
-  ask_responses?: AskResponse[]
+  ask_responses?: OneOrMany<AskResponse>
   response?: AskResponse | null
 }
 
@@ -80,7 +81,7 @@ export async function GET(
         closed_reason,
         created_at,
         updated_at,
-        ask_responses (
+        ask_responses!ask_responses_ask_id_fkey (
           id,
           responder_id,
           responder_role,
@@ -107,7 +108,7 @@ export async function GET(
         const { ask_responses, ...item } = ask
         return {
           ...item,
-          response: ask_responses?.[0] || null,
+          response: firstRelatedRow(ask_responses),
         }
       })
 

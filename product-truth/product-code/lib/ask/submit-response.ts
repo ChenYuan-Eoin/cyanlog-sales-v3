@@ -8,6 +8,7 @@ import {
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { canAccessAskByRoles, getAskResponderRole } from '@/lib/ask/permissions'
+import { createAskResponseReportVersion } from '@/lib/ask/report-version'
 
 const askResponseSchema = z.object({
   response_text: z.string().trim().min(1, '回应内容不能为空').max(10_000, '回应内容不能超过 10000 字'),
@@ -146,9 +147,40 @@ export async function submitAskResponse({
       payload: { response_id: response.id },
     })
 
+  const reportResult = await createAskResponseReportVersion({
+    contractId: typedAsk.contract_id,
+    triggerAskId: askId,
+    triggerUserId: user.id,
+    generatedAt: now,
+  })
+
+  if (reportResult.report) {
+    await supabaseAdmin
+      .from('ask_audit_logs')
+      .insert({
+        ask_id: askId,
+        contract_id: typedAsk.contract_id,
+        actor_id: user.id,
+        actor_role: responderRole,
+        event_type: 'report_generated',
+        from_status: 'responded',
+        to_status: 'responded',
+        payload: {
+          response_id: response.id,
+          report_version_id: reportResult.report.id,
+          report_version: reportResult.report.version,
+          trigger_event: 'ask_responded',
+        },
+      })
+  }
+
   return successResponse({
     response,
     ask_status_after: 'responded',
-    message: '回应已提交，报告版本将更新。',
+    report_version: reportResult.report,
+    report_version_error: reportResult.error,
+    message: reportResult.report
+      ? '回应已提交，报告版本已更新。'
+      : '回应已提交，但报告版本更新失败，请刷新报告或联系管理员。',
   }, undefined, 201)
 }

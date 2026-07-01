@@ -2,8 +2,22 @@
 
 import { Input } from '@/components/ui/input'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
+import { sanitizeThemeValue } from '@/lib/ui-theme-shared'
 import type { Config } from '../types'
+
+type ThemeValue = ReturnType<typeof sanitizeThemeValue>
+type ThemeField = keyof ThemeValue
+type ColorThemeField =
+  | 'primary'
+  | 'primaryForeground'
+  | 'secondary'
+  | 'secondaryForeground'
+  | 'background'
+  | 'foreground'
+  | 'border'
+  | 'input'
+  | 'ring'
+  | 'destructive'
 
 interface ThemeEditFormProps {
   config: Partial<Config>
@@ -11,17 +25,17 @@ interface ThemeEditFormProps {
 }
 
 export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) {
-  const value = (config.value as Record<string, unknown>) || { ...DEFAULT_THEME }
+  const value = sanitizeThemeValue(config.value as Record<string, unknown> | undefined)
 
   const updateValue = (patch: Record<string, unknown>) => {
     onChange({ ...config, value: { ...value, ...patch } })
   }
 
-  const setThemeField = (field: string, nextValue: unknown) => {
+  const setThemeField = (field: ThemeField, nextValue: unknown) => {
     updateValue({ [field]: nextValue })
   }
 
-  const colorFields = [
+  const colorFields: Array<{ key: ColorThemeField; label: string }> = [
     { key: 'primary', label: '主按钮背景' },
     { key: 'primaryForeground', label: '主按钮文字' },
     { key: 'secondary', label: '次按钮背景' },
@@ -76,7 +90,7 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
           <Input
             value={String(value.brandName || '')}
             onChange={(e) => setThemeField('brandName', e.target.value)}
-            placeholder="如: Cyanlog"
+            placeholder="如: ONES Sales"
           />
         </div>
         <div>
@@ -84,7 +98,7 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
           <Input
             value={String(value.brandShortName || '')}
             onChange={(e) => setThemeField('brandShortName', e.target.value)}
-            placeholder="如: CY"
+            placeholder="如: OS"
           />
         </div>
         <div>
@@ -92,7 +106,7 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
           <Input
             value={String(value.productTitle || '')}
             onChange={(e) => setThemeField('productTitle', e.target.value)}
-            placeholder="如: Cyanlog Sales"
+            placeholder="如: ONES Sales"
           />
         </div>
         <div>
@@ -100,7 +114,7 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
           <Input
             value={String(value.productSubtitle || '')}
             onChange={(e) => setThemeField('productSubtitle', e.target.value)}
-            placeholder="如: 智能销售支撑平台"
+            placeholder="如: 智能协作平台"
           />
         </div>
         <div>
@@ -108,7 +122,7 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
           <Input
             value={String(value.loginTitle || '')}
             onChange={(e) => setThemeField('loginTitle', e.target.value)}
-            placeholder="如: 企业销售支撑平台"
+            placeholder="如: 企业协作支撑平台"
           />
         </div>
         <div>

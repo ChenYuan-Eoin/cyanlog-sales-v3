@@ -807,11 +807,8 @@ export default function OrgStructureTab({
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-medium">暂无组织架构数据</p>
           <p className="mt-1 text-amber-700">
-            数据库中未找到部门或成员数据。请运行以下命令初始化数据：
+            当前组织没有可显示的部门或成员。请先添加部门/成员，或使用上方同步入口导入部门结构。
           </p>
-          <code className="mt-2 block rounded bg-amber-100 px-3 py-2 font-mono text-xs">
-            node scripts/seed-via-api.mjs
-          </code>
         </div>
       )}
 

@@ -347,30 +347,40 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
         'Content-Type': 'application/json',
       }
 
-      const promises = Array.from(selectedUserIds).map(async userId => {
+      const results = await Promise.all(Array.from(selectedUserIds).map(async userId => {
         const user = users.find(u => u.id === userId)
-        if (!user) return
+        if (!user) return { ok: false, skipped: true }
         const currentRoleIds = user.role_ids || []
-        if (currentRoleIds.includes(roleId)) return
+        if (currentRoleIds.includes(roleId)) return { ok: true, skipped: true }
         const newRoleIds = [...currentRoleIds, roleId]
 
-        return fetch(`/api/admin/users/${userId}/roles`, {
+        const response = await fetch(`/api/admin/users/${userId}/roles`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ role_ids: newRoleIds }),
         })
-      })
 
-      const responses = (await Promise.all(promises)).filter((res): res is Response => Boolean(res))
-      const failed = responses.find((res) => !res.ok)
-      if (failed) {
-        const data = await failed.json().catch(() => ({}))
-        throw new Error(typeof data.error === 'string' ? data.error : '添加成员失败')
+        return { ok: response.ok, response }
+      }))
+
+      const succeededCount = results.filter((item) => item.ok && !item.skipped).length
+      const failed = results.find((item) => item.response && !item.response.ok)
+
+      if (succeededCount > 0) {
+        setDialogOpen(false)
+        await onRefresh?.()
+      }
+
+      if (failed?.response) {
+        const data = await failed.response.json().catch(() => ({}))
+        const message = typeof data.error === 'string' ? data.error : '添加成员失败'
+        throw new Error(succeededCount > 0
+          ? `已添加 ${succeededCount} 人，部分成员失败：${message}`
+          : message)
       }
 
       setDialogOpen(false)
-      success('成员已添加')
-      await onRefresh?.()
+      success(succeededCount > 0 ? `已添加 ${succeededCount} 人` : '成员已是当前角色')
     } catch (err) {
       error(err instanceof Error ? err.message : '添加失败，请重试')
     } finally {

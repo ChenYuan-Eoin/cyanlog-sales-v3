@@ -304,6 +304,20 @@ function getApiErrorMessage(payload: unknown, fallback: string): string {
   return fallback
 }
 
+async function readResponseErrorMessage(response: Response, fallback: string): Promise<string> {
+  const payload = await response.json().catch(() => null)
+  const message = getApiErrorMessage(payload, fallback)
+  return `${message}（${response.status}）`
+}
+
+async function fetchJsonOrThrow<T>(input: RequestInfo | URL, init: RequestInit | undefined, fallback: string): Promise<T> {
+  const response = await fetch(input, init)
+  if (!response.ok) {
+    throw new Error(await readResponseErrorMessage(response, fallback))
+  }
+  return response.json() as Promise<T>
+}
+
 function unwrapListResponse<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[]
   if (payload && typeof payload === 'object') {
@@ -421,12 +435,18 @@ export default function ConfigsClient({
           // 只加载 products (分页格式)
           const nextProducts = await loadInflightTabValue<ProductRecord[]>(cacheKey, async () => {
             if (token) {
-              return (await loadConfigProductsForCache(token) || []) as ProductRecord[]
+              const products = await loadConfigProductsForCache(token)
+              if (!products) {
+                throw new Error('价盘数据加载失败，请检查登录状态或接口权限')
+              }
+              return products as ProductRecord[]
             }
 
-            const productsRes = await fetch('/api/products?summary=1', { headers })
-            if (!productsRes.ok) return null
-            const productsJson = await productsRes.json()
+            const productsJson = await fetchJsonOrThrow<{ data?: ProductRecord[] }>(
+              '/api/products?summary=1',
+              { headers },
+              '价盘数据加载失败'
+            )
             return productsJson.data ?? []
           })
           if (nextProducts) {
@@ -440,9 +460,11 @@ export default function ConfigsClient({
         case 'rules': {
           // 只加载 rules (分页格式)
           const nextRules = await loadInflightTabValue<ContractPolicyRule[]>(cacheKey, async () => {
-            const rulesRes = await fetch('/api/contract-policies/rules', { headers })
-            if (!rulesRes.ok) return null
-            const rulesJson = await rulesRes.json()
+            const rulesJson = await fetchJsonOrThrow<{ data?: ContractPolicyRule[] }>(
+              '/api/contract-policies/rules',
+              { headers },
+              '合同审核规则加载失败'
+            )
             return rulesJson.data ?? []
           })
           if (nextRules) {
@@ -459,9 +481,11 @@ export default function ConfigsClient({
         case 'theme': {
           // 这些 tab 共享 configs 数据 (分页格式)
           const nextConfigs = await loadInflightTabValue<Config[]>(cacheKey, async () => {
-            const configsRes = await fetch('/api/configs', { headers })
-            if (!configsRes.ok) return null
-            const configsJson = await configsRes.json()
+            const configsJson = await fetchJsonOrThrow<{ data?: Config[] }>(
+              '/api/configs',
+              { headers },
+              '配置项加载失败'
+            )
             return configsJson.data ?? []
           })
           if (nextConfigs) {
@@ -476,15 +500,19 @@ export default function ConfigsClient({
           const orgCacheKey = scopedCacheKey(token, 'configs:org-structure')
           const [nextRoles, nextOrgSummary] = await Promise.all([
             loadInflightTabValue<ConfigRoleRecord[]>(cacheKey, async () => {
-              const rolesRes = await fetch('/api/roles', { headers })
-              if (!rolesRes.ok) return null
-              const rolesJson = await rolesRes.json()
+              const rolesJson = await fetchJsonOrThrow<{ data?: { roles?: ConfigRoleRecord[] } }>(
+                '/api/roles',
+                { headers },
+                '角色权限加载失败'
+              )
               return rolesJson.data?.roles ?? []
             }),
             loadInflightTabValue<OrgSummaryPayload>(orgCacheKey, async () => {
-              const orgRes = await fetch('/api/admin/org', { headers, cache: 'no-store' })
-              if (!orgRes.ok) return null
-              return orgRes.json()
+              return fetchJsonOrThrow<OrgSummaryPayload>(
+                '/api/admin/org',
+                { headers, cache: 'no-store' },
+                '组织架构加载失败'
+              )
             }),
           ])
           if (nextRoles) {
@@ -504,9 +532,11 @@ export default function ConfigsClient({
         case 'org-structure': {
           // 只加载 org
           const orgData = await loadInflightTabValue<OrgSummaryPayload>(cacheKey, async () => {
-            const orgRes = await fetch('/api/admin/org', { headers, cache: 'no-store' })
-            if (!orgRes.ok) return null
-            return orgRes.json()
+            return fetchJsonOrThrow<OrgSummaryPayload>(
+              '/api/admin/org',
+              { headers, cache: 'no-store' },
+              '组织架构加载失败'
+            )
           })
           if (orgData) {
             setOrgSummary(orgData)
@@ -521,8 +551,8 @@ export default function ConfigsClient({
       if (didLoad) {
         setLoadedTabs(prev => new Set(prev).add(tab))
       }
-    } catch {
-      setError('加载失败，请重试')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载失败，请重试')
     } finally {
       setLoading(false)
       // 释放锁
@@ -590,32 +620,26 @@ export default function ConfigsClient({
         fetch('/api/admin/org', { headers }),
       ])
 
-      if (rulesRes.ok) {
-        const rulesJson = await rulesRes.json()
-        setRules(rulesJson.data ?? [])
+      const failedResponse = [rulesRes, configsRes, rolesRes, productsRes, orgRes].find((res) => !res.ok)
+      if (failedResponse) {
+        throw new Error(await readResponseErrorMessage(failedResponse, '配置中心数据刷新失败'))
       }
 
-      if (configsRes.ok) {
-        const configsJson = await configsRes.json()
-        setConfigs(configsJson.data ?? [])
-      }
+      const [rulesJson, configsJson, rolesData, productsJson, orgData] = await Promise.all([
+        rulesRes.json(),
+        configsRes.json(),
+        rolesRes.json(),
+        productsRes.json(),
+        orgRes.json(),
+      ])
 
-      if (rolesRes.ok) {
-        const rolesData = await rolesRes.json()
-        setRoles(rolesData.data?.roles ?? [])
-      }
-
-      if (productsRes.ok) {
-        const productsJson = await productsRes.json()
-        setProducts(productsJson.data ?? [])
-      }
-
-      if (orgRes.ok) {
-        const orgData = await orgRes.json()
-        setOrgSummary(orgData)
-      }
-    } catch {
-      setError('网络错误')
+      setRules(rulesJson.data ?? [])
+      setConfigs(configsJson.data ?? [])
+      setRoles(rolesData.data?.roles ?? [])
+      setProducts(productsJson.data ?? [])
+      setOrgSummary(orgData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '网络错误')
     } finally {
       setLoading(false)
     }
@@ -687,6 +711,9 @@ export default function ConfigsClient({
   }), [getConfigsByType, orgSummary?.departments.length, products, rules, roles])
 
   const formatModuleCount = useCallback((tabId: ConfigTabId) => {
+    if (error && tabId === activeTab && !loadedTabs.has(tabId) && !activeTabLoading) {
+      return '!'
+    }
     if (activeTabLoading && tabId === activeTab) {
       return '...'
     }
@@ -694,7 +721,7 @@ export default function ConfigsClient({
       return '...'
     }
     return String(moduleCounts[tabId] || 0)
-  }, [activeTab, activeTabLoading, loadedTabs, moduleCounts])
+  }, [activeTab, activeTabLoading, error, loadedTabs, moduleCounts])
 
   const formatSectionCount = useCallback((sectionTabs: ConfigTabId[]) => {
     if (activeTabLoading && sectionTabs.includes(activeTab)) {
@@ -709,67 +736,73 @@ export default function ConfigsClient({
   }, [activeTab, activeTabLoading, loadedTabs, moduleCounts])
 
   const activeModuleMetrics = useMemo(() => {
+    const countValue = (count: number) => {
+      if (activeTabLoading) return '...'
+      if (!loadedTabs.has(activeTab)) return error ? '加载失败' : '...'
+      return String(count)
+    }
+
     switch (activeTab) {
       case 'price-list':
         return [
-          { label: 'SKU 总数', value: String(products.length) },
-          { label: '启用阶梯价', value: String(products.filter((product) => product.tier_pricing_enabled).length) },
-          { label: '在售 SKU', value: String(products.filter((product) => product.status === 'active').length) },
+          { label: 'SKU 总数', value: countValue(products.length) },
+          { label: '启用阶梯价', value: countValue(products.filter((product) => product.tier_pricing_enabled).length) },
+          { label: '在售 SKU', value: countValue(products.filter((product) => product.status === 'active').length) },
         ]
       case 'rules':
         return [
-          { label: '规则总数', value: String(rules.length) },
-          { label: '启用规则', value: String(rules.filter((rule) => rule.is_active).length) },
-          { label: '语义规则', value: String(rules.filter((rule) => rule.engine_type === 'semantic' || rule.engine_type === 'hybrid').length) },
+          { label: '规则总数', value: countValue(rules.length) },
+          { label: '启用规则', value: countValue(rules.filter((rule) => rule.is_active).length) },
+          { label: '语义规则', value: countValue(rules.filter((rule) => rule.engine_type === 'semantic' || rule.engine_type === 'hybrid').length) },
         ]
       case 'tax': {
         const taxConfigs = getConfigsByType('TAX_RULE')
         return [
-          { label: '税率配置', value: String(taxConfigs.length) },
-          { label: '已发布', value: String(taxConfigs.filter((config) => config.status === 'PUBLISHED').length) },
-          { label: '草稿', value: String(taxConfigs.filter((config) => config.status === 'DRAFT').length) },
+          { label: '税率配置', value: countValue(taxConfigs.length) },
+          { label: '已发布', value: countValue(taxConfigs.filter((config) => config.status === 'PUBLISHED').length) },
+          { label: '草稿', value: countValue(taxConfigs.filter((config) => config.status === 'DRAFT').length) },
         ]
       }
       case 'approval': {
         const approvalConfigs = getConfigsByType('APPROVAL_RULE')
         return [
-          { label: '审批配置', value: String(approvalConfigs.length) },
-          { label: '已发布', value: String(approvalConfigs.filter((config) => config.status === 'PUBLISHED').length) },
-          { label: '草稿', value: String(approvalConfigs.filter((config) => config.status === 'DRAFT').length) },
+          { label: '审批配置', value: countValue(approvalConfigs.length) },
+          { label: '已发布', value: countValue(approvalConfigs.filter((config) => config.status === 'PUBLISHED').length) },
+          { label: '草稿', value: countValue(approvalConfigs.filter((config) => config.status === 'DRAFT').length) },
         ]
       }
       case 'ai': {
         const aiConfigs = getConfigsByType('AI_CONFIG')
         return [
-          { label: '模型档位', value: String(aiConfigs.length) },
-          { label: '启用模型', value: String(aiConfigs.filter((config) => config.value?.enabled === true).length) },
-          { label: '已发布', value: String(aiConfigs.filter((config) => config.status === 'PUBLISHED').length) },
+          { label: '模型档位', value: countValue(aiConfigs.length) },
+          { label: '启用模型', value: countValue(aiConfigs.filter((config) => config.value?.enabled === true).length) },
+          { label: '已发布', value: countValue(aiConfigs.filter((config) => config.status === 'PUBLISHED').length) },
         ]
       }
       case 'theme': {
         const themeConfigs = getConfigsByType('UI_THEME')
         return [
-          { label: '主题方案', value: String(themeConfigs.length) },
-          { label: '已发布', value: String(themeConfigs.filter((config) => config.status === 'PUBLISHED').length) },
-          { label: '草稿', value: String(themeConfigs.filter((config) => config.status === 'DRAFT').length) },
+          { label: '主题方案', value: countValue(themeConfigs.length) },
+          { label: '已发布', value: countValue(themeConfigs.filter((config) => config.status === 'PUBLISHED').length) },
+          { label: '草稿', value: countValue(themeConfigs.filter((config) => config.status === 'DRAFT').length) },
         ]
       }
       case 'org-structure':
         return [
-          { label: '部门总数', value: activeTabLoading ? '...' : String(orgSummary?.departments.length ?? 0) },
-          { label: '成员总数', value: activeTabLoading ? '...' : String(orgSummary?.users.length ?? 0) },
-          { label: '销售空间', value: activeTabLoading ? '...' : String(orgSummary?.spaces.length ?? 0) },
+          { label: '部门总数', value: countValue(orgSummary?.departments.length ?? 0) },
+          { label: '成员总数', value: countValue(orgSummary?.users.length ?? 0) },
+          { label: '销售空间', value: countValue(orgSummary?.spaces.length ?? 0) },
         ]
       case 'role-access':
         return [
-          { label: '角色总数', value: String(roles.length) },
+          { label: '角色总数', value: countValue(roles.length) },
           { label: '能力分组', value: String(PERMISSION_CATALOG.length) },
           { label: '作用域层级', value: String(DATA_SCOPE_LEVELS.length) },
         ]
       default:
         return []
     }
-  }, [activeTab, activeTabLoading, getConfigsByType, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.users.length, products, roles.length, rules])
+  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.users.length, products, roles.length, rules])
 
   function switchSection(sectionId: ConfigSectionId) {
     const nextSection = CONFIG_SECTIONS.find((section) => section.id === sectionId)

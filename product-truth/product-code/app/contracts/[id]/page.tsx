@@ -45,6 +45,27 @@ type ReviewRun = {
   model_policy_id: string
   started_at: string | null
   completed_at: string | null
+  evidence_status?: 'snapshot_bound' | 'partial_snapshot' | 'missing_snapshot'
+  rule_snapshot_refs?: Array<{
+    id: string
+    rule_id: string
+    rule_code: string | null
+    version: number | null
+    engine_type: string | null
+    released_at: string | null
+    source: 'published_snapshot'
+  }>
+  model_policy?: {
+    id: string
+    provider: string
+    source: 'model_policies' | 'analysis_job.provider' | 'fallback'
+    model?: string | null
+    degraded: boolean
+    status: string | null
+    last_error: string | null
+    invocation_id?: string | null
+    fallback_reason?: string | null
+  }
 }
 
 type RiskFinding = {
@@ -82,12 +103,40 @@ type Annotation = {
 
 type NegotiationTask = {
   id: string
-  risk_id: string
+  source: 'ask' | 'risk_card_suggestion'
+  ask_code: string | null
+  risk_id: string | null
   required: boolean
   owner_role: string
   status: string
   title: string
   objective: string
+  standard: string | null
+  response: {
+    responder_name: string
+    responder_role: string
+    response_text: string
+    created_at: string | null
+  } | null
+  closed_reason: string | null
+}
+
+type ReportVersion = {
+  id: string
+  version: number
+  trigger_event: string
+  trigger_ask_id: string | null
+  report_data: {
+    summary?: {
+      total?: number
+      pending?: number
+      responded?: number
+      closed?: number
+    }
+  } | null
+  report_file_url: string | null
+  is_current: boolean
+  created_at: string | null
 }
 
 type WorkbenchData = {
@@ -114,6 +163,8 @@ type WorkbenchData = {
   annotations: Annotation[]
   versions: ContractVersion[]
   outputs: ContractVersion[]
+  currentReport?: ReportVersion | null
+  reportVersions?: ReportVersion[]
   latestReview?: {
     results?: {
       summary?: string
@@ -141,6 +192,26 @@ const riskTone: Record<RiskSeverity, { label: string; className: string; badge: 
   yellow: { label: '需谈判', className: 'border-amber-200 bg-amber-50 text-amber-900', badge: 'secondary' },
   green: { label: '通过', className: 'border-emerald-200 bg-emerald-50 text-emerald-900', badge: 'outline' },
   white: { label: '提示', className: 'border-slate-200 bg-slate-50 text-slate-800', badge: 'outline' },
+}
+
+const evidenceStatusLabel: Record<NonNullable<ReviewRun['evidence_status']>, string> = {
+  snapshot_bound: '已绑定规则快照',
+  partial_snapshot: '部分规则缺快照',
+  missing_snapshot: '缺少规则快照',
+}
+
+const modelPolicySourceLabel: Record<NonNullable<ReviewRun['model_policy']>['source'], string> = {
+  model_policies: '已发布模型策略',
+  'analysis_job.provider': '分析任务记录',
+  fallback: '规则兜底',
+}
+
+const reportTriggerLabel: Record<string, string> = {
+  initial_generate: '初始报告',
+  ask_responded: 'ASK 回应',
+  ask_reopened: 'ASK 重开',
+  ask_closed: 'ASK 关闭',
+  standard_marked: '标准合同标记',
 }
 
 function formatTime(value?: string | null) {
@@ -376,7 +447,7 @@ export default function ContractWorkbenchPage() {
               返回
             </Button>
           </Link>
-          <Link href="/contracts/new">
+          <Link href={`/contracts/${contractId}/edit`}>
             <Button variant="outline">
               <UploadIcon className="mr-2 h-4 w-4" />
               上传新版本
@@ -425,9 +496,18 @@ export default function ContractWorkbenchPage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <InfoLine label="审核运行" value={data.reviewRun?.status || '未开始'} />
+              <InfoLine
+                label="证据状态"
+                value={data.reviewRun?.evidence_status ? evidenceStatusLabel[data.reviewRun.evidence_status] : '未绑定'}
+              />
               <InfoLine label="规则快照" value={data.reviewRun?.rule_snapshot_id || '未绑定'} />
+              <InfoLine label="快照数量" value={String(data.reviewRun?.rule_snapshot_refs?.length ?? 0)} />
               <InfoLine label="技能包" value={data.reviewRun?.skill_bundle_id || '未生成'} />
               <InfoLine label="模型策略" value={data.reviewRun?.model_policy_id || 'rule-engine'} />
+              <InfoLine
+                label="模型来源"
+                value={data.reviewRun?.model_policy?.source ? modelPolicySourceLabel[data.reviewRun.model_policy.source] : '未记录'}
+              />
               <InfoLine label="开始时间" value={formatTime(data.reviewRun?.started_at)} />
               <InfoLine label="完成时间" value={formatTime(data.reviewRun?.completed_at)} />
             </CardContent>
@@ -488,11 +568,36 @@ export default function ContractWorkbenchPage() {
                     <div key={task.id} className="rounded-md border border-slate-200 p-3 text-sm">
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <span className="font-medium text-slate-900">{task.title}</span>
-                        <Badge variant={task.required ? 'destructive' : 'secondary'}>
-                          {task.required ? '强制' : '建议'}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={task.status === 'responded' || task.status === 'closed' ? 'outline' : 'secondary'}>
+                            {task.status === 'responded' ? '已回应' : task.status === 'closed' ? '已关闭' : '待处理'}
+                          </Badge>
+                          <Badge variant={task.required ? 'destructive' : 'secondary'}>
+                            {task.required ? '强制' : '建议'}
+                          </Badge>
+                        </div>
                       </div>
                       <p className="leading-6 text-slate-600">{task.objective}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span>责任角色：{task.owner_role}</span>
+                        {task.ask_code && <span>编号：{task.ask_code}</span>}
+                      </div>
+                      {task.standard && (
+                        <p className="mt-2 rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-600">
+                          合格标准：{task.standard}
+                        </p>
+                      )}
+                      {task.response && (
+                        <div className="mt-2 rounded-md border border-emerald-100 bg-emerald-50 p-2 text-xs leading-5 text-emerald-900">
+                          <div className="font-medium">
+                            {task.response.responder_name}（{task.response.responder_role}）
+                          </div>
+                          <div>{task.response.response_text}</div>
+                        </div>
+                      )}
+                      {task.closed_reason && (
+                        <p className="mt-2 text-xs text-slate-500">关闭原因：{task.closed_reason}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -570,6 +675,28 @@ export default function ContractWorkbenchPage() {
                         <div className="mt-1 text-xs text-slate-500">{formatTime(output.created_at)}</div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">报告版本</p>
+                {!data.currentReport ? (
+                  <p className="text-slate-500">尚未生成审核报告版本。</p>
+                ) : (
+                  <div className="rounded-md border border-slate-200 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-slate-900">报告 v{data.currentReport.version}</span>
+                      <Badge variant="outline">
+                        {reportTriggerLabel[data.currentReport.trigger_event] || data.currentReport.trigger_event}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                      <span>ASK 总数：{data.currentReport.report_data?.summary?.total ?? 0}</span>
+                      <span>已回应：{data.currentReport.report_data?.summary?.responded ?? 0}</span>
+                      <span>待处理：{data.currentReport.report_data?.summary?.pending ?? 0}</span>
+                      <span>已关闭：{data.currentReport.report_data?.summary?.closed ?? 0}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">{formatTime(data.currentReport.created_at)}</p>
                   </div>
                 )}
               </div>

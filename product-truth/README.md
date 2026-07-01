@@ -20,7 +20,7 @@ module: index
 
 ## 开发入口冻结规则
 
-- **母文档** (`PROJECT-主文档.md`): frozen — 只当源头母本，不直接驱动开发
+- **母文档** (`PROJECT-主文档.md`): frozen — 只当源头母本，不直接驱动开发；阶段性纠偏只回写稳定的目标、边界和对象摘要
 - **01-business-truth/**: frozen — 只保留业务背景，不再回填实现细节
 - **治理文档**: 只能位于 `governance/truth-docs-治理真相文档/`
 - **当前唯一 active 入口**:
@@ -43,6 +43,22 @@ module: index
 `主文档母本 -> REQ_REGISTRY.yml -> Feature Packet -> design / implementation truth -> code`
 
 `REQ-F009-F012.md` 被降级，并不表示 `F009-F012` 这些 REQ 被删掉；相反，是把原来错误的“组合稿”拆回到各自独立 REQ 上。
+
+## 当前纠偏目标入口（2026-06-30）
+
+本轮线上问题重开后，需求、Bug 和研发目标按以下路径查阅，不再按临时聊天结论或零散修复标题推进。
+
+| 要查什么 | 权威位置 | 作用 |
+|----------|----------|------|
+| 第一阶段主目标与 G1-G11 子目标 | `00-master/PROJECT-主文档.md#0.4` | 说明当前产品纠偏的主目标、子目标、完成标准和合并规则 |
+| 问题域 PD01-PD10 与需求缺口 | `REQ_REGISTRY.yml#audit_supplement` | 把产品愿景、模块目标、F0xx、验收证据和问题域绑定起来 |
+| 结构化需求清单 | `feature-packets/F027-remediation-governance.md#0.1` | 把用户反馈、主文档和 F0xx 整理成可验收需求 |
+| Bug 修复清单 | `feature-packets/F027-remediation-governance.md#0.2` | 记录 Bug ID、问题域、关联 REQ、证据、修复方向、验收标准和状态 |
+| 用户原始 A-G 问题映射 | `feature-packets/F027-remediation-governance.md#0.2.3` | 保留原始反馈来源，避免合并后看不见用户问题 |
+| 执行批次 | `feature-packets/F027-remediation-governance.md#0.2.2` | 按 B0-B5 批次推进，不以“改了代码”作为完成信号 |
+| 当前执行看板 | `feature-packets/F027-remediation-governance.md#0.2.2.1` | 区分本地已验证、线上待复验、设计缺口、收尾缺口和下一步出口 |
+
+判断完成时必须同时看 `REQ_REGISTRY.yml` 的需求状态、F027 的 Bug/批次状态、对应 F0xx 的研发依据、代码事实和验收证据。单个位置显示“已修复”不能单独证明产品闭环完成。
 
 ## 以后只能往哪回写
 

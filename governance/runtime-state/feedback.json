@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-24T09:35:42.121Z",
+  "timestamp": "2026-06-30T06:50:02.445Z",
   "typecheck": {
     "success": true,
     "errors": 0,
@@ -12,15 +12,14 @@
     "message": "Lint 检查通过"
   },
   "test": {
-    "success": false,
-    "passed": 0,
-    "failed": 1,
-    "message": "测试失败",
-    "details": []
+    "success": true,
+    "passed": 102,
+    "failed": 0,
+    "message": "测试执行完成"
   },
   "summary": {
-    "allPassed": false,
-    "totalErrors": 1,
-    "recommendation": "⚠️ 发现 1 个问题，请修正后再提交"
+    "allPassed": true,
+    "totalErrors": 0,
+    "recommendation": "✅ 所有检查通过，可以提交"
   }
 }

@@ -8,6 +8,9 @@ import { primeCorePageCaches, scheduleCorePageWarmup } from '@/lib/core-page-war
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 
+const LOGIN_PREWARM_DELAY_MS = 100
+const LOGIN_PREWARM_STALE_MS = 4000
+
 export default function LoginPage() {
   const router = useRouter()
   const branding = useBranding()
@@ -17,6 +20,8 @@ export default function LoginPage() {
   const [hydrated, setHydrated] = useState(false)
   const [error, setError] = useState('')
   const prewarmAbortRef = useRef<AbortController | null>(null)
+  const prewarmInFlightRef = useRef(false)
+  const lastPrewarmStartedAtRef = useRef(0)
 
   useEffect(() => {
     setHydrated(true)
@@ -24,6 +29,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     const runPrewarm = () => {
+      const now = Date.now()
+      const hasFreshPrewarm = now - lastPrewarmStartedAtRef.current < LOGIN_PREWARM_STALE_MS
+      if (prewarmInFlightRef.current || hasFreshPrewarm) {
+        return
+      }
+
+      prewarmInFlightRef.current = true
+      lastPrewarmStartedAtRef.current = now
       const controller = new AbortController()
       prewarmAbortRef.current = controller
       void fetch('/api/auth/login', {
@@ -34,25 +47,31 @@ export default function LoginPage() {
       }).catch(() => {
         // Login remains fully functional if opportunistic prewarm fails.
       }).finally(() => {
+        prewarmInFlightRef.current = false
         if (prewarmAbortRef.current === controller) {
           prewarmAbortRef.current = null
         }
       })
     }
 
-    const delayId = window.setTimeout(runPrewarm, 1200)
+    const delayId = window.setTimeout(runPrewarm, LOGIN_PREWARM_DELAY_MS)
+    window.addEventListener('pointerdown', runPrewarm, { passive: true })
+    window.addEventListener('keydown', runPrewarm)
+    window.addEventListener('focusin', runPrewarm)
 
     return () => {
       window.clearTimeout(delayId)
+      window.removeEventListener('pointerdown', runPrewarm)
+      window.removeEventListener('keydown', runPrewarm)
+      window.removeEventListener('focusin', runPrewarm)
       prewarmAbortRef.current?.abort()
       prewarmAbortRef.current = null
+      prewarmInFlightRef.current = false
     }
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    prewarmAbortRef.current?.abort()
-    prewarmAbortRef.current = null
     setError('')
     setLoading(true)
 

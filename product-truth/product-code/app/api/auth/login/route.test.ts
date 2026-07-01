@@ -217,6 +217,89 @@ describe('POST /api/auth/login', () => {
       expect(recordLoginAttempt).toHaveBeenCalledWith('u@x.com', '127.0.0.1', true)
     })
 
+    it('登录 RPC 超时 → 降级到直接登录路径并记录 timeout timing', async () => {
+      const previousDeadline = process.env.LOGIN_RPC_DEADLINE_MS
+      process.env.LOGIN_RPC_DEADLINE_MS = '1'
+      ;(supabaseAdmin.rpc as any).mockImplementation(() => new Promise((resolve) => {
+        setTimeout(() => resolve({ data: null, error: null }), 50)
+      }))
+      ;(checkLoginRateLimit as any).mockResolvedValue({ allowed: true, remainingAttempts: 5 })
+      ;(bcrypt.compare as any).mockResolvedValue(true)
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce(
+          makeChain({
+            data: {
+              id: 'u-timeout',
+              email: 'timeout@x.com',
+              phone: null,
+              display_name: 'Timeout User',
+              org_id: 'org-timeout',
+              password_hash: 'hashed',
+              must_change_password: false,
+            },
+            error: null,
+          })
+        )
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
+
+      try {
+        const res = await POST(makeRequest({ email: 'timeout@x.com', password: 'right' }))
+        const body = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(body.user.id).toBe('u-timeout')
+        expect(res.headers.get('Server-Timing')).toContain('login_rpc_timeout')
+        expect(res.headers.get('X-Login-Timing')).toContain('login_rpc_timeout')
+        expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+        expect(checkLoginRateLimit).toHaveBeenCalledWith('timeout@x.com', '127.0.0.1')
+        expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
+        expect(recordLoginAttempt).toHaveBeenCalledWith('timeout@x.com', '127.0.0.1', true)
+      } finally {
+        if (previousDeadline === undefined) {
+          delete process.env.LOGIN_RPC_DEADLINE_MS
+        } else {
+          process.env.LOGIN_RPC_DEADLINE_MS = previousDeadline
+        }
+      }
+    })
+
+    it('降级登录外部查询超时 → 快速返回 503 并记录超时阶段', async () => {
+      const previousRpcDeadline = process.env.LOGIN_RPC_DEADLINE_MS
+      const previousTransportDeadline = process.env.LOGIN_TRANSPORT_DEADLINE_MS
+      process.env.LOGIN_RPC_DEADLINE_MS = '1'
+      process.env.LOGIN_TRANSPORT_DEADLINE_MS = '1'
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      ;(supabaseAdmin.rpc as any).mockReturnValue(new Promise(() => undefined))
+      ;(checkLoginRateLimit as any).mockReturnValue(new Promise(() => undefined))
+
+      try {
+        const res = await POST(makeRequest({ email: 'timeout@x.com', password: 'right' }))
+        const body = await res.json()
+
+        expect(res.status).toBe(503)
+        expect(body.code).toBe('LOGIN_TRANSPORT_TIMEOUT')
+        expect(res.headers.get('Server-Timing')).toContain('login_rpc_timeout')
+        expect(res.headers.get('Server-Timing')).toContain('rate_limit_timeout')
+        expect(res.headers.get('X-Login-Timing')).toContain('rate_limit_timeout')
+        expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+        expect(checkLoginRateLimit).toHaveBeenCalledWith('timeout@x.com', '127.0.0.1')
+        expect(supabaseAdmin.from).not.toHaveBeenCalled()
+        expect(warn).toHaveBeenCalledWith('[auth/login] transport timeout', { stage: 'rate_limit' })
+      } finally {
+        warn.mockRestore()
+        if (previousRpcDeadline === undefined) {
+          delete process.env.LOGIN_RPC_DEADLINE_MS
+        } else {
+          process.env.LOGIN_RPC_DEADLINE_MS = previousRpcDeadline
+        }
+        if (previousTransportDeadline === undefined) {
+          delete process.env.LOGIN_TRANSPORT_DEADLINE_MS
+        } else {
+          process.env.LOGIN_TRANSPORT_DEADLINE_MS = previousTransportDeadline
+        }
+      }
+    })
+
     it('RPC 命中用户候选 → 200 且跳过旧 rate limit 与 users 查询', async () => {
       ;(supabaseAdmin.rpc as any).mockResolvedValue({
         data: {
@@ -448,11 +531,7 @@ describe('GET /api/auth/login', () => {
     vi.clearAllMocks()
   })
 
-  it('预热登录 route、候选查询 RPC 和主登录 RPC 无副作用分支', async () => {
-    const query = makeChain({ data: { id: 'u-1' }, error: null })
-    query.limit = vi.fn().mockReturnValue(query)
-    query.maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'u-1' }, error: null })
-    ;(supabaseAdmin.from as any).mockReturnValue(query)
+  it('预热登录 route 和主登录 RPC 无副作用分支', async () => {
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: {}, error: null })
 
     const res = await GET(makeGetRequest({ 'x-login-prewarm': '1' }))
@@ -461,22 +540,11 @@ describe('GET /api/auth/login', () => {
     expect(res.status).toBe(200)
     expect(body.ok).toBe(true)
     expect(res.headers.get('X-Login-Prewarm')).toBe('1')
-    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('users_query')
-    expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('candidate_rpc')
     expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('login_rpc')
-    expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
-    expect(query.select).toHaveBeenCalledWith('id')
-    expect(query.limit).toHaveBeenCalledWith(1)
-    expect(query.maybeSingle).toHaveBeenCalled()
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'get_login_candidate_v1',
-      expect.objectContaining({
-        p_email: '__prewarm__@invalid.local',
-        p_ip_address: 'prewarm',
-        p_account_limit: 5,
-        p_ip_limit: 15,
-      })
-    )
+    expect(res.headers.get('X-Login-Prewarm-Timing')).not.toContain('users_query')
+    expect(res.headers.get('X-Login-Prewarm-Timing')).not.toContain('candidate_rpc')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       'login_with_password_v1',
       expect.objectContaining({
@@ -492,7 +560,7 @@ describe('GET /api/auth/login', () => {
   })
 
   it('预热失败仍返回成功', async () => {
-    ;(supabaseAdmin.from as any).mockImplementation(() => {
+    ;(supabaseAdmin.rpc as any).mockImplementation(() => {
       throw new Error('prewarm failed')
     })
 
@@ -506,11 +574,7 @@ describe('GET /api/auth/login', () => {
   it('预热外部等待超时时仍快速返回并记录阶段', async () => {
     process.env.LOGIN_PREWARM_TASK_TIMEOUT_MS = '1'
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const query = makeChain({ data: null, error: null })
-    query.limit = vi.fn().mockReturnValue(query)
-    query.maybeSingle = vi.fn().mockReturnValue(new Promise(() => undefined))
-    ;(supabaseAdmin.from as any).mockReturnValue(query)
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: {}, error: null })
+    ;(supabaseAdmin.rpc as any).mockReturnValue(new Promise(() => undefined))
 
     try {
       const res = await GET(makeGetRequest({ 'x-login-prewarm': '1' }))
@@ -518,12 +582,12 @@ describe('GET /api/auth/login', () => {
 
       expect(res.status).toBe(200)
       expect(body.ok).toBe(true)
-      expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('users_query')
+      expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('login_rpc')
       expect(res.headers.get('X-Login-Prewarm-Timing')).toContain('timed_out')
       expect(warn).toHaveBeenCalledWith('[auth/login] prewarm timeout', expect.objectContaining({
         timeoutMs: 1,
         tasks: expect.arrayContaining([
-          expect.objectContaining({ name: 'users_query' }),
+          expect.objectContaining({ name: 'login_rpc' }),
         ]),
       }))
     } finally {

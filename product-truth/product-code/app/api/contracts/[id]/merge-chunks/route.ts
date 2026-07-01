@@ -167,6 +167,17 @@ export async function POST(
       return errorResponse(createApiError('VALIDATION_ERROR', '文件内容无法解析，请上传可复制文本的 PDF 或 DOCX 文件'))
     }
 
+    const { data: latestVersion } = await supabaseAdmin
+      .from('contract_versions')
+      .select('id, version_number')
+      .eq('contract_id', contractId)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const nextVersionNumber = (latestVersion?.version_number || 0) + 1
+    const versionSource = latestVersion ? 'manual_revision' : 'original'
+
     // 更新合同记录
     const { error: updateError } = await supabaseAdmin
       .from('contracts')
@@ -204,6 +215,36 @@ export async function POST(
       return errorResponse(createApiError('DB_ERROR', '合同文件记录更新失败'))
     }
 
+    const { error: versionError } = await supabaseAdmin
+      .from('contract_versions')
+      .insert({
+        contract_id: contractId,
+        version_number: nextVersionNumber,
+        source: versionSource,
+        storage_path: finalPath,
+        file_size: totalSize,
+        mime_type: fileType || 'application/octet-stream',
+        parent_version_id: latestVersion?.id || null,
+        change_summary: latestVersion ? '用户分片上传新的合同版本' : '用户分片上传合同源文件',
+        uploaded_by: user.id,
+      })
+
+    if (versionError) {
+      await logError({
+        req,
+        source: 'api',
+        userId: user.id,
+        message: versionError.message,
+        error: versionError,
+        context: {
+          route: '/api/contracts/[id]/merge-chunks',
+          contractId,
+          phase: 'create_contract_version',
+        },
+      })
+      return errorResponse(createApiError('DB_ERROR', '合同版本记录创建失败'))
+    }
+
     return successResponse({
       contractId,
       fileUrl: urlData.publicUrl,
@@ -211,6 +252,8 @@ export async function POST(
       fileName,
       fileSize: totalSize,
       fileType,
+      versionNumber: nextVersionNumber,
+      versionSource,
       message: '上传成功',
     })
   } catch (error: unknown) {

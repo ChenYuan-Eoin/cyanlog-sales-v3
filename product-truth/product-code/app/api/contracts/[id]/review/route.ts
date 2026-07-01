@@ -13,12 +13,27 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
+import {
+  buildReviewRunEvidence,
+  type ReviewEvidenceModelInvocation,
+  type ReviewEvidenceModelPolicy,
+  type ReviewEvidenceRule,
+  type ReviewEvidenceSkillBundle,
+  type ReviewEvidenceSnapshot,
+} from '@/lib/contracts/review-evidence'
+import { buildNegotiationTasks } from '@/lib/contracts/negotiation-task'
+import { canAccessAskByRoles } from '@/lib/ask/permissions'
 
 type ContractReviewRow = {
   id: string
   status?: string | null
   results?: unknown
   rule_version?: number | null
+  skill_bundle_id?: string | null
+  model_policy_id?: string | null
+  rule_snapshot_ids?: string[] | null
+  model_invocation_ids?: string[] | null
+  review_trigger?: string | null
   created_at?: string | null
   completed_at?: string | null
 }
@@ -56,6 +71,16 @@ type RiskCardRow = {
   created_at?: string | null
 }
 
+type ContractAnalysisJobRow = {
+  id?: string
+  status?: string | null
+  provider?: string | null
+  degraded?: boolean | null
+  last_error?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+}
+
 type AnnotationRow = {
   id: string
   contract_id: string
@@ -67,6 +92,47 @@ type AnnotationRow = {
   priority: string | null
   status: string
   author_id: string | null
+  created_at: string | null
+}
+
+type AskResponseRow = {
+  id: string
+  responder_id: string
+  responder_role: string
+  responder_name: string
+  response_text: string
+  created_at: string | null
+}
+
+type AskTaskRow = {
+  id: string
+  ask_code?: string | null
+  risk_name?: string | null
+  initial_level: 'red' | 'yellow' | 'green'
+  question_type?: string | null
+  required_roles?: string[] | null
+  question_text: string
+  qualified_std?: string | null
+  status: 'pending' | 'responded' | 'closed'
+  closed_reason?: string | null
+  ask_responses?: AskResponseRow[] | null
+}
+
+type ReportVersionRow = {
+  id: string
+  version: number
+  trigger_event: string
+  trigger_ask_id: string | null
+  report_data: {
+    summary?: {
+      total?: number
+      pending?: number
+      responded?: number
+      closed?: number
+    }
+  } | null
+  report_file_url: string | null
+  is_current: boolean
   created_at: string | null
 }
 
@@ -83,6 +149,12 @@ const reviewConclusionSchema = z.object({
   }
 })
 
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => (
+    typeof value === 'string' && value.trim().length > 0
+  ))))
+}
+
 // GET - 获取审核结果
 export async function GET(
   req: NextRequest,
@@ -92,7 +164,7 @@ export async function GET(
     const { id } = await params
 
     // 1. 获取合同基本信息（包含结论字段）
-    const { contract } = await getAccessibleContract<{
+    const { contract, assignments } = await getAccessibleContract<{
       id: string
       contract_reviews?: Array<{ created_at?: string }>
       [key: string]: unknown
@@ -107,12 +179,19 @@ export async function GET(
         new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
       )
     }
+    const latestReview = (contract.contract_reviews?.[0] || null) as ContractReviewRow | null
 
     // 2. 获取风险卡片
-    const { data: riskCards, error: riskError } = await supabaseAdmin
+    let riskCardsQuery = supabaseAdmin
       .from('contract_risk_cards')
       .select('*')
       .eq('contract_id', id)
+
+    if (latestReview?.id) {
+      riskCardsQuery = riskCardsQuery.eq('review_id', latestReview.id)
+    }
+
+    const { data: riskCards, error: riskError } = await riskCardsQuery
       .order('level', { ascending: false })
       .order('created_at', { ascending: true })
 
@@ -130,6 +209,8 @@ export async function GET(
       versionsResult,
       annotationsResult,
       jobsResult,
+      asksResult,
+      reportVersionsResult,
     ] = await Promise.all([
       supabaseAdmin
         .from('contract_versions')
@@ -146,6 +227,36 @@ export async function GET(
         .select('*')
         .eq('contract_id', id)
         .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('ask_items')
+        .select(`
+          id,
+          ask_code,
+          risk_name,
+          initial_level,
+          question_type,
+          required_roles,
+          question_text,
+          qualified_std,
+          status,
+          closed_reason,
+          ask_responses!ask_responses_ask_id_fkey (
+            id,
+            responder_id,
+            responder_role,
+            responder_name,
+            response_text,
+            created_at
+          )
+        `)
+        .eq('contract_id', id)
+        .order('created_at', { ascending: true }),
+      supabaseAdmin
+        .from('report_versions')
+        .select('id, version, trigger_event, trigger_ask_id, report_data, report_file_url, is_current, created_at')
+        .eq('contract_id', id)
+        .order('version', { ascending: false })
+        .limit(5),
     ])
 
     if (versionsResult.error) {
@@ -160,27 +271,179 @@ export async function GET(
       return errorResponse(createApiError('DB_ERROR', '获取审核任务失败'))
     }
 
+    if (asksResult.error) {
+      return errorResponse(createApiError('DB_ERROR', '获取谈判任务失败'))
+    }
+
+    if (reportVersionsResult.error) {
+      return errorResponse(createApiError('DB_ERROR', '获取报告版本失败'))
+    }
+
     const versions = (versionsResult.data || []) as ContractVersionRow[]
     const annotations = (annotationsResult.data || []) as AnnotationRow[]
-    const jobs = jobsResult.data || []
-    const latestReview = (contract.contract_reviews?.[0] || null) as ContractReviewRow | null
+    const jobs = (jobsResult.data || []) as ContractAnalysisJobRow[]
+    const asks = ((asksResult.data || []) as AskTaskRow[])
+      .filter((ask) => canAccessAskByRoles(ask.required_roles, assignments))
+    const reportVersions = (reportVersionsResult.data || []) as ReportVersionRow[]
     const outputVersions = versions.filter((version) => version.source === 'review_revision')
     const sourceVersions = versions.filter((version) => version.source !== 'review_revision')
     const currentVersion = sourceVersions[0] || versions[0] || null
     const latestJob = jobs[0] || null
 
-    const reviewRun = latestReview ? {
-      id: latestReview.id,
-      status: latestReview.status || 'PENDING',
-      contract_version_id: currentVersion?.id || null,
-      skill_bundle_id: `contract-rules:${latestReview.rule_version ?? 'published'}`,
-      rule_snapshot_id: latestReview.rule_version
-        ? `contract_rules_v2:v${latestReview.rule_version}`
-        : 'contract_rules_v2:published',
-      model_policy_id: latestJob?.provider || 'rule-engine',
-      started_at: latestJob?.started_at || latestReview.created_at || null,
-      completed_at: latestJob?.completed_at || latestReview.completed_at || null,
-    } : null
+    const riskRuleIds = uniqueStrings(orderedRiskCards.map((card) => card.rule_id))
+    const riskRuleCodes = uniqueStrings(orderedRiskCards.map((card) => card.rule_code))
+
+    const ruleQueries: Array<PromiseLike<{
+      data: ReviewEvidenceRule[] | null
+      error: { message?: string } | null
+    }>> = []
+
+    if (riskRuleIds.length > 0) {
+      ruleQueries.push(
+        supabaseAdmin
+          .from('contract_rules_v2')
+          .select('id, code, version, is_active, engine_type, target_field, clause_category, published_at, updated_at')
+          .eq('org_id', orgId)
+          .in('id', riskRuleIds)
+      )
+    }
+
+    if (riskRuleCodes.length > 0) {
+      ruleQueries.push(
+        supabaseAdmin
+          .from('contract_rules_v2')
+          .select('id, code, version, is_active, engine_type, target_field, clause_category, published_at, updated_at')
+          .eq('org_id', orgId)
+          .in('code', riskRuleCodes)
+      )
+    }
+
+    if (ruleQueries.length === 0 && latestReview) {
+      ruleQueries.push(
+        supabaseAdmin
+          .from('contract_rules_v2')
+          .select('id, code, version, is_active, engine_type, target_field, clause_category, published_at, updated_at')
+          .eq('org_id', orgId)
+          .eq('is_active', true)
+          .order('code', { ascending: true })
+      )
+    }
+
+    const ruleResults = await Promise.all(ruleQueries)
+    const ruleError = ruleResults.find((result) => result.error)?.error
+    if (ruleError) {
+      return errorResponse(createApiError('DB_ERROR', '获取规则快照规则失败'))
+    }
+
+    const ruleRows = Array.from(
+      new Map(
+        ruleResults
+          .flatMap((result) => result.data || [])
+          .map((rule) => [rule.id, rule] as const)
+      ).values()
+    )
+
+    let snapshotRows: ReviewEvidenceSnapshot[] = []
+    if (ruleRows.length > 0) {
+      const { data: snapshots, error: snapshotError } = await supabaseAdmin
+        .from('contract_rule_snapshots')
+        .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
+        .in('rule_id', ruleRows.map((rule) => rule.id))
+        .eq('status', 'published')
+        .order('released_at', { ascending: false })
+
+      if (snapshotError) {
+        return errorResponse(createApiError('DB_ERROR', '获取规则快照失败'))
+      }
+
+      snapshotRows = (snapshots || []) as ReviewEvidenceSnapshot[]
+    }
+
+    const boundSnapshotIds = latestReview?.rule_snapshot_ids || []
+    if (boundSnapshotIds.length > 0) {
+      const { data: boundSnapshots, error: boundSnapshotError } = await supabaseAdmin
+        .from('contract_rule_snapshots')
+        .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
+        .in('id', boundSnapshotIds)
+
+      if (boundSnapshotError) {
+        return errorResponse(createApiError('DB_ERROR', '获取绑定规则快照失败'))
+      }
+
+      snapshotRows = Array.from(
+        new Map(
+          [...snapshotRows, ...((boundSnapshots || []) as ReviewEvidenceSnapshot[])]
+            .map((snapshot) => [snapshot.id, snapshot] as const)
+        ).values()
+      )
+    }
+
+    let skillBundle: ReviewEvidenceSkillBundle = null
+    if (latestReview?.skill_bundle_id) {
+      const { data, error } = await supabaseAdmin
+        .from('contract_skill_bundles')
+        .select('id, version, rule_snapshot_ids, template_snapshot_ids, model_policy_id, compiled_hash, status, published_at')
+        .eq('id', latestReview.skill_bundle_id)
+        .maybeSingle()
+
+      if (error) {
+        return errorResponse(createApiError('DB_ERROR', '获取 SkillBundle 失败'))
+      }
+      skillBundle = data as ReviewEvidenceSkillBundle
+    }
+
+    let modelPolicy: ReviewEvidenceModelPolicy = null
+    const modelPolicyId = latestReview?.model_policy_id || skillBundle?.model_policy_id || null
+    if (modelPolicyId) {
+      const { data, error } = await supabaseAdmin
+        .from('model_policies')
+        .select('id, version, provider_chain, status, published_at')
+        .eq('id', modelPolicyId)
+        .maybeSingle()
+
+      if (error) {
+        return errorResponse(createApiError('DB_ERROR', '获取模型策略失败'))
+      }
+      modelPolicy = data as ReviewEvidenceModelPolicy
+    }
+
+    let modelInvocations: ReviewEvidenceModelInvocation[] = []
+    if (latestReview?.model_invocation_ids?.length) {
+      const { data, error } = await supabaseAdmin
+        .from('model_invocations')
+        .select('id, provider, model, status, degraded, fallback_reason, error_message, created_at')
+        .in('id', latestReview.model_invocation_ids)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        return errorResponse(createApiError('DB_ERROR', '获取模型调用记录失败'))
+      }
+      modelInvocations = (data || []) as ReviewEvidenceModelInvocation[]
+    } else if (latestReview?.id) {
+      const { data, error } = await supabaseAdmin
+        .from('model_invocations')
+        .select('id, provider, model, status, degraded, fallback_reason, error_message, created_at')
+        .eq('review_id', latestReview.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      if (error) {
+        return errorResponse(createApiError('DB_ERROR', '获取模型调用记录失败'))
+      }
+      modelInvocations = (data || []) as ReviewEvidenceModelInvocation[]
+    }
+
+    const reviewRun = buildReviewRunEvidence({
+      latestReview,
+      latestJob,
+      currentVersion,
+      risks: orderedRiskCards,
+      rules: ruleRows,
+      snapshots: snapshotRows,
+      skillBundle,
+      modelPolicy,
+      modelInvocations,
+    })
 
     const riskFindings = orderedRiskCards.map((card) => ({
       id: card.id,
@@ -200,17 +463,10 @@ export async function GET(
       },
     }))
 
-    const negotiationTasks = orderedRiskCards
-      .filter((card) => (card.level === 'red' || card.level === 'yellow') && card.status === 'open')
-      .map((card) => ({
-        id: `negotiation-${card.id}`,
-        risk_id: card.id,
-        required: card.level === 'red',
-        owner_role: 'sales',
-        status: 'pending',
-        title: card.level === 'red' ? '必须谈判' : '建议谈判',
-        objective: card.suggestion || card.description || card.title,
-      }))
+    const negotiationTasks = buildNegotiationTasks({
+      risks: orderedRiskCards,
+      asks,
+    })
 
     // 3. 统计信息
     const stats = {
@@ -234,6 +490,8 @@ export async function GET(
       negotiationTasks,
       annotations,
       outputs: outputVersions,
+      currentReport: reportVersions[0] || null,
+      reportVersions,
     })
   })
 }
