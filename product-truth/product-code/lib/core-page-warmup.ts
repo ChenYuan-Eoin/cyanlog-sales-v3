@@ -51,6 +51,7 @@ const CORE_ROUTES = ['/contracts', '/quotes', '/tenders', '/configs', '/schedule
 const warmups = new Map<string, Promise<void>>()
 const contractListWarmups = new Map<string, Promise<ContractsCachePayload | null>>()
 const configProductsWarmups = new Map<string, Promise<unknown[] | null>>()
+const configCenterWarmups = new Map<string, Promise<unknown | null>>()
 const agendaUpcomingWarmups = new Map<string, Promise<AgendaUpcomingCachePayload | null>>()
 const quoteListWarmups = new Map<string, Promise<QuotesCachePayload | null>>()
 const quoteDetailWarmups = new Map<string, Promise<QuoteDetailCachePayload | null>>()
@@ -223,6 +224,57 @@ export async function loadConfigProductsForCache(token: string) {
   return request
 }
 
+export async function loadConfigCenterForCache(token: string) {
+  const cacheKey = scopedCacheKey(token, 'configs:center')
+  const cached = readFreshCache(cacheKey)
+  if (cached) return cached
+
+  const inflight = configCenterWarmups.get(cacheKey)
+  if (inflight) return inflight
+
+  const headers = { Authorization: `Bearer ${token}` }
+  const request = Promise.allSettled([
+    fetch('/api/configs', { headers }),
+    fetch('/api/configs/ai-runtime', { headers, cache: 'no-store' }),
+  ])
+    .then(async ([configsResult, runtimeResult]) => {
+      const payload: {
+        configs?: unknown[]
+        aiRuntimePolicy?: unknown
+      } = {}
+
+      if (configsResult.status === 'fulfilled' && configsResult.value.ok) {
+        const configsJson = await configsResult.value.json().catch(() => null)
+        const configs = Array.isArray(configsJson?.data) ? configsJson.data : []
+        payload.configs = configs
+        for (const tab of ['tax', 'approval', 'ai', 'theme']) {
+          writeBrowserCache(scopedCacheKey(token, `configs:${tab}`), configs)
+        }
+      }
+
+      if (runtimeResult.status === 'fulfilled' && runtimeResult.value.ok) {
+        const runtimeJson = await runtimeResult.value.json().catch(() => null)
+        if (runtimeJson?.data) {
+          payload.aiRuntimePolicy = runtimeJson.data
+          writeBrowserCache(scopedCacheKey(token, 'configs:ai-runtime'), runtimeJson.data)
+        }
+      }
+
+      if (!payload.configs && !payload.aiRuntimePolicy) {
+        return null
+      }
+
+      writeBrowserCache(cacheKey, payload)
+      return payload
+    })
+    .finally(() => {
+      configCenterWarmups.delete(cacheKey)
+    })
+
+  configCenterWarmups.set(cacheKey, request)
+  return request
+}
+
 export async function loadAgendaUpcomingForCache(token: string, limit = 50) {
   const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
   const cached = readFreshCache<AgendaUpcomingCachePayload>(cacheKey)
@@ -380,6 +432,7 @@ async function warmCoreData(token: string) {
     loadQuotesListForCache(token),
     loadTendersListForCache(token),
     loadConfigProductsForCache(token),
+    loadConfigCenterForCache(token),
     loadAgendaUpcomingForCache(token),
   ])
 }
