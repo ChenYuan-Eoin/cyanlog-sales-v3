@@ -2,7 +2,7 @@
 // 运行时顺序：配置中心已发布 AI_CONFIG -> 环境变量默认值 -> 规则引擎 -> 人工建议
 
 import { createOpenAI } from '@ai-sdk/openai'
-import { streamText } from 'ai'
+import { generateText } from 'ai'
 import { listPublishedAIProviders, type PublishedAIProviderConfig } from '@/lib/configs/runtime'
 import { executeRules } from '@/lib/rules/engine'
 import { validateAIOutput } from '@/lib/validation/ai-output'
@@ -274,10 +274,10 @@ async function callOpenAICompatibleProvider(
 请按以下 JSON 格式返回：
 {\n  "risks": [\n    {\n      "level": "red|yellow|green",\n      "title": "风险标题（简短）",\n      "description": "问题详细描述",\n      "suggestion": "建议处理方式"\n    }\n  ],\n  "summary": "总体评估摘要"\n}`
 
-  const result = streamText({
-    model: gateway(provider.config.model),
+  const result = await generateText({
+    model: gateway.chat(provider.config.model),
+    system: prompt,
     messages: [
-      { role: 'system', content: prompt },
       {
         role: 'user',
         content: `请审核以下合同：\n\n${truncateTextForProvider(contractText, provider)}`,
@@ -288,7 +288,13 @@ async function callOpenAICompatibleProvider(
     abortSignal,
   })
 
-  return result.toTextStreamResponse().body!
+  const encoder = new TextEncoder()
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(result.text))
+      controller.close()
+    },
+  })
 }
 
 async function callRuleEngineProvider(contractText: string, orgId?: string): Promise<ReadableStream> {
