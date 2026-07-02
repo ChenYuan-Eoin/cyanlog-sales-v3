@@ -105,6 +105,37 @@ describe('validateAIOutput', () => {
     expect(result.valid).toBe(true)
   })
 
+  it('ignores model reasoning blocks before extracting review JSON', () => {
+    const output = [
+      '<think>{"risks":[{"ruleCode":"R999","level":"red"}],"summary":"bad"}</think>',
+      JSON.stringify({
+        risks: [{
+          ruleCode: 'R001',
+          level: 'yellow',
+          title: '付款账期',
+          description: '付款账期为120天',
+          suggestion: '调整付款账期',
+          evidence: ['第二条 付款条款：乙方验收后120天内付款，账期120天。'],
+        }],
+        summary: 'ok',
+      }),
+    ].join('\n')
+
+    const result = validateAIOutput(output, {
+      contractText: '第二条 付款条款：乙方验收后120天内付款，账期120天。',
+      rules: [{ code: 'R001', version: 3, field_hints: ['付款', '账期'] }],
+      requireEvidenceInSource: true,
+      requireRuleEvidenceHint: true,
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.data?.summary).toBe('ok')
+    expect(result.data?.risks[0]).toMatchObject({
+      ruleCode: 'R001',
+      ruleVersion: 3,
+    })
+  })
+
   it('rejects risks whose rule code is not in the current SkillBundle', () => {
     const output = JSON.stringify({
       risks: [{
@@ -175,6 +206,77 @@ describe('validateAIOutput', () => {
 
     expect(result.valid).toBe(false)
     expect(result.error).toContain('rule field hints')
+  })
+
+  it('can drop invalid risks while keeping source-bound risks for model review', () => {
+    const output = JSON.stringify({
+      risks: [
+        {
+          ruleCode: 'R001',
+          ruleVersion: 1,
+          level: 'yellow',
+          title: '付款账期',
+          description: '付款账期偏长',
+          suggestion: '调整付款账期',
+          evidence: ['第二条 付款条款：乙方验收后120天内付款，账期120天。'],
+        },
+        {
+          ruleCode: 'R009',
+          ruleVersion: 1,
+          level: 'red',
+          title: '保密期',
+          description: '错误复用付款条款判断保密期',
+          suggestion: '人工复核',
+          evidence: ['第二条 付款条款：乙方验收后120天内付款，账期120天。'],
+        },
+      ],
+      summary: 'test',
+    })
+
+    const result = validateAIOutput(output, {
+      contractText: '第二条 付款条款：乙方验收后120天内付款，账期120天。',
+      rules: [
+        { code: 'R001', version: 3, field_hints: ['付款', '账期'] },
+        { code: 'R009', version: 3, field_hints: ['保密期', '保密义务', '永久'] },
+      ],
+      requireEvidenceInSource: true,
+      requireRuleEvidenceHint: true,
+      allowPartialRiskAcceptance: true,
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.data?.risks).toHaveLength(1)
+    expect(result.data?.risks[0]).toMatchObject({
+      ruleCode: 'R001',
+      ruleVersion: 3,
+    })
+    expect(result.droppedRisks).toBe(1)
+    expect(result.warnings?.[0]).toContain('rule field hints')
+  })
+
+  it('still rejects output when every AI risk fails runtime constraints', () => {
+    const output = JSON.stringify({
+      risks: [{
+        ruleCode: 'R009',
+        level: 'red',
+        title: '保密期',
+        description: '错误复用付款条款判断保密期',
+        suggestion: '人工复核',
+        evidence: ['第二条 付款条款：乙方验收后120天内付款，账期120天。'],
+      }],
+      summary: 'test',
+    })
+
+    const result = validateAIOutput(output, {
+      contractText: '第二条 付款条款：乙方验收后120天内付款，账期120天。',
+      rules: [{ code: 'R009', version: 3, field_hints: ['保密期', '保密义务', '永久'] }],
+      requireEvidenceInSource: true,
+      requireRuleEvidenceHint: true,
+      allowPartialRiskAcceptance: true,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.droppedRisks).toBe(1)
   })
 })
 

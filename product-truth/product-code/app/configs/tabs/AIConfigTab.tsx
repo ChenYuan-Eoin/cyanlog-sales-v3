@@ -23,39 +23,188 @@ function runtimeStateLabel(state: RuntimeProvider['runtime_state']) {
     missing_credential: '密钥缺失',
     unreachable_in_vercel: '生产不可达',
     local_health_ok: '本地可达',
+    local_cli_ready: 'CLI 可调用',
+    local_auth_failed: 'Token 未通过',
     local_health_failed: '本地不可达',
+    remote_health_ok: '云端可达',
+    remote_auth_failed: '云端认证失败',
+    remote_health_failed: '云端不可达',
     ready_to_call: '具备调用条件',
+    recent_invocation_passed: '正式调用通过',
+    recent_invocation_partial: '调用部分通过',
+    recent_invocation_failed: '最近调用失败',
   }
   return labels[state]
 }
 
 function runtimeStateClass(state: RuntimeProvider['runtime_state']) {
-  if (state === 'ready_to_call' || state === 'local_health_ok') {
+  if (state === 'ready_to_call' || state === 'local_health_ok' || state === 'remote_health_ok' || state === 'recent_invocation_passed') {
     return 'border-emerald-200 bg-emerald-50 text-emerald-800'
   }
-  if (state === 'missing_base_url' || state === 'missing_credential' || state === 'unreachable_in_vercel') {
+  if (state === 'local_cli_ready' || state === 'recent_invocation_partial') {
+    return 'border-blue-200 bg-blue-50 text-blue-800'
+  }
+  if (
+    state === 'missing_base_url'
+    || state === 'missing_credential'
+    || state === 'unreachable_in_vercel'
+    || state === 'local_auth_failed'
+    || state === 'remote_auth_failed'
+    || state === 'remote_health_failed'
+    || state === 'recent_invocation_failed'
+  ) {
     return 'border-red-200 bg-red-50 text-red-700'
   }
   return 'border-amber-200 bg-amber-50 text-amber-800'
 }
 
+function runtimeStateTone(state: RuntimeProvider['runtime_state']) {
+  if (state === 'ready_to_call' || state === 'local_health_ok' || state === 'remote_health_ok' || state === 'recent_invocation_passed') return 'ok'
+  if (state === 'local_cli_ready' || state === 'recent_invocation_partial') return 'partial'
+  if (state === 'builtin_ready') return 'fallback'
+  return 'blocked'
+}
+
+function canRunModelProvider(provider: RuntimeProvider) {
+  return ['ready_to_call', 'local_health_ok', 'remote_health_ok', 'local_cli_ready', 'recent_invocation_passed', 'recent_invocation_partial'].includes(provider.runtime_state)
+}
+
+function providerRuntimeLabel(provider?: RuntimeProvider) {
+  if (!provider) return '未配置'
+  return `${runtimeStateLabel(provider.runtime_state)} · ${provider.model}`
+}
+
+function providerRuntimeClass(provider?: RuntimeProvider) {
+  if (!provider) return 'border-red-200 bg-red-50 text-red-700'
+  const tone = runtimeStateTone(provider.runtime_state)
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (tone === 'partial') return 'border-blue-200 bg-blue-50 text-blue-800'
+  if (tone === 'fallback') return 'border-slate-200 bg-slate-50 text-slate-700'
+  return 'border-red-200 bg-red-50 text-red-700'
+}
+
+function providerConfigPath(provider?: RuntimeProvider) {
+  if (!provider) return '新增并发布 AI_CONFIG'
+  if (provider.provider_kind === 'builtin') return '内置规则引擎，无需配置 Token'
+  if (provider.runtime_state === 'recent_invocation_failed') return '最近正式调用失败，请更换 Token/模型网关后再触发 ReviewRun'
+  if (provider.runtime_state === 'recent_invocation_passed') {
+    return provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli'
+      ? '最近 ReviewRun 通过本机 CLI 通道；HTTP Token 仍未统一'
+      : '最近 ReviewRun 已通过正式模型调用'
+  }
+  if (provider.runtime_state === 'recent_invocation_partial') {
+    return provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli'
+      ? '最近 ReviewRun 通过本机 CLI；仍需保存 LM Studio Token 验收 HTTP 通道'
+      : '最近 ReviewRun 有模型调用证据，但输出质量需复核'
+  }
+  if (provider.runtime_state === 'remote_health_ok') return '云端网关和 Token 已通过连接测试，仍需 ReviewRun 产出调用证据'
+  if (provider.runtime_state === 'remote_auth_failed') return '云端 Token 未通过，请更换 Token 或模型权限'
+  if (provider.runtime_state === 'remote_health_failed') return '云端网关不可达，请检查 Base URL 和供应商状态'
+  if (provider.local_endpoint) return provider.credential_state === 'configured'
+    ? 'LM Studio HTTP Token 已保存'
+    : '保存 LM Studio Token，或保留本机 CLI 通道'
+  return provider.credential_state === 'configured'
+    ? '云端 API Key 已保存'
+    : '粘贴云端 Token 并重新发布'
+}
+
+function configProviderKind(config: Config) {
+  const model = config.value?.model
+  if (config.value?.provider_kind === 'builtin' || model === 'rule-engine') return 'builtin'
+  return 'openai_compatible'
+}
+
+function isLocalBaseUrl(value: unknown) {
+  if (typeof value !== 'string' || value.trim().length === 0) return false
+  try {
+    const parsed = new URL(value)
+    return ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
+function configCredentialLabel(config: Config) {
+  if (configProviderKind(config) === 'builtin') return '无需密钥'
+  if (typeof config.value?.api_key === 'string' && config.value.api_key.length > 0) return '已保存'
+  return isLocalBaseUrl(config.value?.base_url) ? '未保存 Token' : '未配置'
+}
+
+function latestInvocationText(invocation: RuntimeProvider['latest_invocation'], fallbackModel: string) {
+  if (!invocation) return null
+  const failure = invocation.attempt_errors.find(Boolean) || invocation.error_message || invocation.fallback_reason
+  const parts = [
+    invocation.status || 'unknown',
+    invocation.degraded ? 'degraded' : 'not-degraded',
+    invocation.transport || invocation.provider_kind,
+  ].filter(Boolean)
+  return failure
+    ? `${parts.join(' · ')} · ${failure}`
+    : `${parts.join(' · ')} · ${invocation.model || fallbackModel}`
+}
+
+function providerCredentialLabel(provider: RuntimeProvider) {
+  if (provider.credential_state === 'not_required') return '无需密钥'
+  if (provider.credential_state === 'configured') return '密钥已配置'
+  if (provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli') {
+    return 'CLI 通道可用 / HTTP Token 未配置'
+  }
+  if (provider.local_endpoint && ['local_health_ok', 'recent_invocation_passed', 'recent_invocation_partial'].includes(provider.runtime_state)) {
+    return '本地免密可用'
+  }
+  if (provider.local_endpoint && provider.runtime_state === 'local_cli_ready') return 'CLI 通道可用 / HTTP Token 未配置'
+  return provider.local_endpoint ? '本地 Token 未配置' : '密钥缺失'
+}
+
 export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNew, onEdit, onPublish, onDelete }: AIConfigTabProps) {
   const externalProviders = runtimePolicy?.provider_chain.filter((provider) => provider.provider_kind !== 'builtin') ?? []
   const hasExternalProvider = externalProviders.length > 0
-  const hasCallableExternalProvider = externalProviders.some((provider) => (
-    provider.runtime_state === 'ready_to_call' || provider.runtime_state === 'local_health_ok'
+  const hasCallableExternalProvider = externalProviders.some(canRunModelProvider)
+  const localProvider = runtimePolicy?.provider_chain.find((provider) => provider.runtime_location === 'local')
+  const cloudProvider = runtimePolicy?.provider_chain.find((provider) => provider.runtime_location === 'cloud')
+  const builtinProvider = runtimePolicy?.provider_chain.find((provider) => provider.provider_kind === 'builtin')
+  const localConfig = configs.find((config) => config.key === 'AI_LEVEL_1' || config.value?.level === 1)
+  const cloudConfig = configs.find((config) => config.key === 'AI_LEVEL_2' || config.value?.level === 2)
+  const hasLocalCliFallback = externalProviders.some((provider) => (
+    provider.runtime_state === 'local_cli_ready'
+    || (provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli')
   ))
+  const hasHttpAuthBlock = externalProviders.some((provider) => provider.runtime_state === 'local_auth_failed')
+  const hasRecentInvocationFailed = externalProviders.some((provider) => provider.runtime_state === 'recent_invocation_failed')
   const hasProductionBlockedLocalProvider = externalProviders.some((provider) => (
     provider.runtime_state === 'unreachable_in_vercel'
   ))
+  const tenderCloudState = cloudProvider?.tender_runtime?.runtime_state
+  const tenderCloudEvidencePassed = tenderCloudState === 'recent_invocation_passed'
+  const tenderCloudCallable = tenderCloudState
+    ? ['ready_to_call', 'remote_health_ok', 'recent_invocation_passed', 'recent_invocation_partial'].includes(tenderCloudState)
+    : false
   const routeRows = [
-    { pages: '≤ 15 页', level: 1, strategy: '整体送入本地', stage: 'semantic_review' },
-    { pages: '15 - 40 页', level: 1, strategy: '分段送入本地', stage: 'comment_patch_draft' },
-    { pages: '> 40 页', level: 2, strategy: '强制云端', stage: 'report_summary' },
+    {
+      level: 'L1',
+      title: '本地模型优先',
+      stage: 'semantic_review / rule_translation',
+      target: '合同正文、规则声明优先在本机处理',
+      provider: localProvider,
+    },
+    {
+      level: 'L2',
+      title: '云模型增强',
+      stage: 'long_document_parse / ambiguity_arbitration / low_confidence_review',
+      target: '标书解析、长文本/长 PDF、复杂规则和低置信度仲裁',
+      provider: cloudProvider,
+    },
+    {
+      level: 'L3',
+      title: '规则引擎兜底',
+      stage: 'deterministic_check / evidence_anchor',
+      target: '确定性校验、证据定位和失败可解释',
+      provider: builtinProvider,
+    },
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(360px,1fr)_360px]">
       <Card className="min-w-0">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-base">模型 Provider ({configs.length})</CardTitle>
@@ -77,13 +226,11 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
 
                 <div className="text-xs text-slate-600 space-y-1.5 mb-4">
                   <div className="truncate">画像: {(config.value?.profile as string) || '未设置'}</div>
-                  <div className="truncate">类型: {(config.value?.provider_kind as string) || 'openai_compatible'}</div>
+                  <div className="truncate">类型: {configProviderKind(config)}</div>
                   <div className="truncate">模型: {config.value?.model as string}</div>
                   <div className="truncate">地址: {(config.value?.base_url as string) || '（内置）'}</div>
                   <div>超时: {(config.value?.timeout_ms as number) / 1000}s</div>
-                  <div>
-                    密钥: {typeof config.value?.api_key === 'string' && config.value.api_key.length > 0 ? '已保存' : '未配置'}
-                  </div>
+                  <div>密钥: {configCredentialLabel(config)}</div>
                 </div>
 
                 <div className="flex gap-2">
@@ -113,21 +260,54 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
         <CardContent className="space-y-4 text-sm">
           <div className="rounded-lg border border-slate-200">
             <div className="border-b bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700">
-              文档规模路由
+              L1 / L2 / L3 模型旅程
             </div>
             <div className="divide-y">
               {routeRows.map((row) => (
-                <div key={row.pages} className="grid grid-cols-[72px_1fr_72px] items-center gap-3 px-4 py-3">
-                  <span className="font-mono text-xs text-slate-700">{row.pages}</span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-slate-900">{row.strategy}</div>
-                    <div className="truncate text-xs text-slate-500">{row.stage}</div>
-                  </div>
-                  <span className="justify-self-end rounded bg-blue-50 px-2 py-0.5 font-mono text-xs text-blue-700">
-                    Level {row.level}
+                <div key={row.level} className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-3 px-4 py-3">
+                  <span className="rounded bg-slate-100 px-2 py-1 text-center font-mono text-xs font-semibold text-slate-700">
+                    {row.level}
                   </span>
+                  <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">{row.title}</div>
+                        <div className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-500">{row.target}</div>
+                      </div>
+                      <span className={`shrink-0 rounded border px-2 py-1 text-[11px] font-medium ${providerRuntimeClass(row.provider)}`}>
+                        {providerRuntimeLabel(row.provider)}
+                      </span>
+                    </div>
+                    <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-[1fr_1fr]">
+                      <div className="rounded bg-slate-50 px-2 py-1">
+                        阶段：{row.stage}
+                      </div>
+                      <div className="rounded bg-slate-50 px-2 py-1">
+                        配置：{providerConfigPath(row.provider)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-xs leading-5 text-blue-900">
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-semibold">推荐配置方式</div>
+              <div className="flex shrink-0 gap-2">
+                <Button variant="outline" size="sm" className="h-7 bg-white px-2 text-xs" onClick={() => localConfig ? onEdit(localConfig) : onNew()}>
+                  配置 L1
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 bg-white px-2 text-xs" onClick={() => cloudConfig ? onEdit(cloudConfig) : onNew()}>
+                  配置 L2
+                </Button>
+              </div>
+            </div>
+            <div className="mt-2 space-y-1">
+              <p>L1 本地：LM Studio 保持运行，Base URL 使用 http://127.0.0.1:1234/v1，模型标识使用 gpt-oss-20b。</p>
+              <p>L2 云端：使用 OpenAI-compatible 网关，填入 Base URL、模型 ID 和 Token；Token 只保存在系统配置中，不展示明文。</p>
+              <p>L3 兜底：规则引擎只做确定性校验，不能冒充 AI 审核完成。</p>
             </div>
           </div>
 
@@ -161,7 +341,7 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
         </CardContent>
       </Card>
 
-      <Card className="min-w-0">
+      <Card className="min-w-0 xl:col-span-2 2xl:col-span-1">
       <CardHeader>
         <CardTitle className="text-base">合同审核运行时策略</CardTitle>
       </CardHeader>
@@ -195,33 +375,82 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
             </div>
 
             <div className={`rounded-lg border px-3 py-2 ${
-              hasCallableExternalProvider
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              hasRecentInvocationFailed
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : hasCallableExternalProvider
+                ? hasLocalCliFallback
+                  ? 'border-blue-200 bg-blue-50 text-blue-800'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
                 : hasExternalProvider
                   ? 'border-amber-200 bg-amber-50 text-amber-800'
                   : 'border-amber-200 bg-amber-50 text-amber-800'
             }`}>
-              {hasCallableExternalProvider
-                ? '外部模型 Provider 已具备运行时调用条件，语义审核可进入正式模型链。'
+              {hasRecentInvocationFailed
+                ? '模型链存在最近正式调用失败的档位；当前不能按完整 L1/L2/L3 模型链验收。'
+                : hasCallableExternalProvider
+                ? hasLocalCliFallback
+                  ? '本机已检测到 LM Studio 已加载模型，当前可通过 CLI 通道调用；HTTP Token 尚未统一时只能作为本机验收能力。'
+                  : '外部模型 Provider 已具备运行时调用条件；如果状态来自正式调用通过，可作为本档模型验收证据。'
                 : hasExternalProvider
-                  ? hasProductionBlockedLocalProvider
+                  ? externalProviders.some((provider) => provider.runtime_state === 'recent_invocation_failed')
+                    ? '外部模型 Provider 配置存在，但最近一次正式语义审核调用失败；当前不能按正式模型链验收。'
+                    : hasProductionBlockedLocalProvider
                     ? '存在本地模型 Provider，但在 Vercel 生产环境不可达；当前不能按正式模型链验收。'
+                    : hasHttpAuthBlock
+                      ? '本地模型服务已启动但 HTTP Token 未通过；请保存 LM Studio Token，或确认本机 CLI 通道可用于本地验收。'
                     : '外部模型 Provider 已发布，但密钥、地址或运行时健康检查未通过；当前不能按正式模型链验收。'
                   : '当前仅有内置规则引擎兜底；这不是模拟，但语义模型能力尚未配置。'}
             </div>
 
             <div className={`rounded-lg border px-3 py-2 ${
+              tenderCloudEvidencePassed
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : tenderCloudCallable
+                  ? 'border-blue-200 bg-blue-50 text-blue-800'
+                  : 'border-red-200 bg-red-50 text-red-700'
+            }`}>
+              {cloudProvider
+                ? tenderCloudEvidencePassed
+                  ? '长标书 / 长 PDF 云模型解析已有正式调用通过证据。'
+                  : tenderCloudCallable
+                    ? '长标书 / 长 PDF 云模型配置具备调用条件，但还缺真实上传解析后的 completed 证据。'
+                    : '长标书 / 长 PDF 云模型链路不可验收；云端 Provider 未通过配置、健康或最近调用检查。'
+                : '未找到 L2 云模型 Provider；标书解析和长 PDF 不能按目标运行。'}
+            </div>
+
+            <div className={`rounded-lg border px-3 py-2 ${
               hasExternalProvider
-                ? hasCallableExternalProvider
+                ? hasRecentInvocationFailed
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : hasCallableExternalProvider
                   ? 'border-slate-200 bg-white text-slate-600'
                   : 'border-red-200 bg-red-50 text-red-700'
                 : 'border-amber-200 bg-amber-50 text-amber-800'
             }`}>
               {hasExternalProvider
-                ? hasCallableExternalProvider
-                  ? '验收口径：仍需用真实合同触发一次模型调用，并确认 semantic_review invocation 为 completed。'
+                ? hasRecentInvocationFailed
+                  ? '验收口径：先修复失败模型档位并重新触发 ReviewRun；失败档位不能靠静态配置或旧通过记录验收。'
+                  : hasCallableExternalProvider
+                  ? hasLocalCliFallback
+                    ? '验收口径：本机可以先触发真实 ReviewRun；线上验收仍需要云模型 Token 或可公网访问的模型网关。'
+                    : '验收口径：仍需用真实合同触发一次模型调用，并确认 semantic_review invocation 为 completed。'
                   : '验收口径：请先在 AI 模型配置中补齐密钥与地址，再进行真实模型调用验收。'
                 : '验收口径：规则引擎可审计，但不能替代大模型审核目标。'}
+            </div>
+
+            <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
+              <div className="font-medium text-slate-900">OpenAI-compatible 配置说明</div>
+              <div className="mt-2 space-y-1">
+                <p>LM Studio：Base URL 使用 http://127.0.0.1:1234/v1；如果开启认证，需要填写 Developer 页生成的 Token。</p>
+                <p>
+                  云端网关：从{' '}
+                  <a className="font-medium text-blue-700 underline" href="https://cloud.yiyongai.cn/console/token" target="_blank" rel="noreferrer">
+                    cloud.yiyongai.cn/console/token
+                  </a>
+                  {' '}获取 Key，按供应商给出的 Base URL 和模型 ID 配置到 L2。
+                </p>
+                <p>CC Switch 适合管理 Codex/Claude/Gemini 等开发工具配置；产品运行时仍以本系统发布的 AI_CONFIG / ModelPolicy 为准。</p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -236,7 +465,7 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
                     </Badge>
                   </div>
                   <div className="mt-2 space-y-1 text-xs text-slate-500">
-                    <div className="truncate">{provider.provider_kind} / {provider.model}</div>
+                      <div className="truncate">{provider.runtime_location} / {provider.provider_kind} / {provider.model}</div>
                     <div className={`rounded border px-2 py-1 ${runtimeStateClass(provider.runtime_state)}`}>
                       {runtimeStateLabel(provider.runtime_state)} · {provider.runtime_reason}
                     </div>
@@ -245,14 +474,28 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
                         处理：{provider.runtime_action}
                       </div>
                     )}
+                    {provider.latest_invocation && (
+                      <div className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-600">
+                        最近合同审核：{latestInvocationText(provider.latest_invocation, provider.model)}
+                      </div>
+                    )}
+                    {provider.tender_runtime && (
+                      <div className={`rounded border px-2 py-1 ${runtimeStateClass(provider.tender_runtime.runtime_state)}`}>
+                        标书长文档：{runtimeStateLabel(provider.tender_runtime.runtime_state)} · {provider.tender_runtime.runtime_reason}
+                      </div>
+                    )}
+                    {provider.tender_runtime?.runtime_action && (
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">
+                        标书处理：{provider.tender_runtime.runtime_action}
+                      </div>
+                    )}
+                    {provider.latest_tender_invocation && (
+                      <div className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-600">
+                        最近标书解析：{latestInvocationText(provider.latest_tender_invocation, provider.model)}
+                      </div>
+                    )}
                     <div>
-                      {provider.timeout_ms / 1000}s · {provider.health_check_required ? '需健康检查' : '无需健康检查'} · {
-                        provider.credential_state === 'not_required'
-                          ? '无需密钥'
-                          : provider.credential_state === 'configured'
-                            ? '密钥已配置'
-                            : '密钥缺失'
-                      }
+                      {provider.timeout_ms / 1000}s · {provider.health_check_required ? '需健康检查' : '无需健康检查'} · {providerCredentialLabel(provider)}
                     </div>
                     {provider.provider_kind !== 'builtin' && (
                       <div>

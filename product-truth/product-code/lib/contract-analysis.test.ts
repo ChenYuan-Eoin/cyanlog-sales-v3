@@ -45,6 +45,7 @@ const ruleProvider: ModelPolicyProvider = {
   provider_kind: 'builtin' as const,
   provider: 'rule-engine',
   model: 'rule-engine',
+  runtime_location: 'builtin' as const,
   level: 99,
   timeout_ms: 15000,
   stages: ['structured_rules', 'rule_fallback'],
@@ -64,6 +65,7 @@ const semanticProvider: ModelPolicyProvider = {
   provider_kind: 'openai_compatible' as const,
   provider: 'openai-compatible',
   model: 'gpt-review',
+  runtime_location: 'cloud' as const,
   level: 1,
   timeout_ms: 45000,
   stages: ['semantic_review', 'comment_patch_draft', 'report_summary'],
@@ -76,6 +78,43 @@ const semanticProvider: ModelPolicyProvider = {
     strategy: 'chunked' as const,
   },
   source_config_id: 'config-ai-1',
+}
+
+const backupSemanticProvider: ModelPolicyProvider = {
+  ...semanticProvider,
+  profile: 'sales_cloud_backup',
+  model: 'gemini-2.5-flash-lite',
+  level: 2,
+  source_config_id: 'config-ai-2',
+}
+
+const localSemanticProvider: ModelPolicyProvider = {
+  ...semanticProvider,
+  profile: 'local_primary',
+  model: 'gpt-oss-20b',
+  runtime_location: 'local',
+  level: 1,
+  stages: ['semantic_review', 'comment_patch_draft', 'report_summary'],
+  routing: {
+    max_pages: 15,
+    strategy: 'full',
+  },
+  source_config_id: 'config-local',
+}
+
+const cloudLongDocumentProvider: ModelPolicyProvider = {
+  ...semanticProvider,
+  profile: 'sales_cloud_backup',
+  model: 'gpt-5.5',
+  runtime_location: 'cloud',
+  level: 2,
+  stages: ['semantic_review', 'tender_long_document_parse', 'comment_patch_draft', 'report_summary'],
+  capabilities: ['semantic_clause_review', 'long_document_chunk_parse', 'tender_ocr_enhancement'],
+  routing: {
+    max_pages: 120,
+    strategy: 'chunked',
+  },
+  source_config_id: 'config-cloud-long',
 }
 
 function makeThenableQuery(result: unknown) {
@@ -94,6 +133,99 @@ function makeThenableQuery(result: unknown) {
   return query
 }
 
+function makeSkillBundle(providerChain: ModelPolicyProvider[]) {
+  return {
+    id: 'skill-1',
+    org_id: 'org-1',
+    key: 'CONTRACT_REVIEW_DEFAULT',
+    version: 1,
+    status: 'published' as const,
+    is_current: true,
+    rule_snapshot_ids: ['snapshot-1'],
+    rule_set_snapshot_ids: ['ruleset-snapshot-1'],
+    template_snapshot_ids: [],
+    document_snapshot_ids: ['ruleset-document-1'],
+    output_schema: {},
+    model_policy_id: 'policy-1',
+    model_policy: {
+      id: 'policy-1',
+      org_id: 'org-1',
+      key: 'CONTRACT_REVIEW_DEFAULT',
+      name: '合同审核默认模型策略',
+      version: 1,
+      status: 'published' as const,
+      is_current: true,
+      provider_chain: providerChain,
+      routing_policy: {},
+      timeout_ms: 45000,
+      fallback_policy: {},
+      audit_policy: {},
+      source_config_ids: [],
+      published_at: null,
+    },
+    eval_case_ids: [],
+    release_meta: {},
+    compiled_from: {
+      production_rule_source: {
+        owner: 'F009',
+        source_of_truth: 'config_center_published_rules',
+        rules_table: 'contract_rules_v2',
+        snapshot_table: 'contract_rule_snapshots',
+        precedence: 'production_source_of_truth',
+      },
+      rule_translation_gate: {
+        source_of_truth: 'config_center_published_rules',
+        status: 'ready',
+        total: 1,
+        ready: 1,
+        needs_ai_translation: 0,
+        incomplete_source: 0,
+        official_review_allowed: true,
+        blocking_reasons: [],
+      },
+      rule_set_document_gate: {
+        status: 'ready',
+        total_rule_sets: 1,
+        ready_documents: 1,
+        blocking_reasons: [],
+      },
+      eval_results: {
+        status: 'passed',
+      },
+      rules: [{
+        id: 'snapshot-1',
+        rule_id: 'rule-1',
+        code: 'R001',
+        version: 2,
+        clause_category: 'payment',
+        target_field: 'first_payment_rate',
+        field_hints: ['付款', '账期', '首付款'],
+      }],
+    },
+    compiled_hash: 'hash-1',
+    published_at: null,
+  }
+}
+
+function mockContractText(text: string) {
+  vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === 'contracts') {
+      return makeThenableQuery({
+        data: {
+          parsed_text: text,
+          filename: 'contract.docx',
+          created_by: 'u-1',
+        },
+        error: null,
+      })
+    }
+    if (table === 'clause_library') {
+      return makeThenableQuery({ data: [], error: null })
+    }
+    return makeThenableQuery({ data: null, error: null })
+  })
+}
+
 describe('runStructuredAnalysis', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -107,7 +239,9 @@ describe('runStructuredAnalysis', () => {
       status: 'published',
       is_current: true,
       rule_snapshot_ids: ['snapshot-1'],
+      rule_set_snapshot_ids: ['ruleset-snapshot-1'],
       template_snapshot_ids: [],
+      document_snapshot_ids: ['ruleset-document-1'],
       output_schema: {},
       model_policy_id: 'policy-1',
       model_policy: {
@@ -118,7 +252,7 @@ describe('runStructuredAnalysis', () => {
         version: 1,
         status: 'published',
         is_current: true,
-        provider_chain: [],
+        provider_chain: [semanticProvider, backupSemanticProvider, ruleProvider],
         routing_policy: {},
         timeout_ms: 45000,
         fallback_policy: {},
@@ -126,14 +260,44 @@ describe('runStructuredAnalysis', () => {
         source_config_ids: [],
         published_at: null,
       },
-      eval_case_ids: [],
-      release_meta: {},
-      compiled_from: {
-        external_skill_source: {
-          repo: 'suoyidev/ones-internal-skills',
-          commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
-        },
-        rules: [
+        eval_case_ids: [],
+        release_meta: {},
+        compiled_from: {
+          production_rule_source: {
+            owner: 'F009',
+            source_of_truth: 'config_center_published_rules',
+            rules_table: 'contract_rules_v2',
+            snapshot_table: 'contract_rule_snapshots',
+            precedence: 'production_source_of_truth',
+          },
+          reference_assets: [{
+            kind: 'github_skill_reference',
+            repo: 'suoyidev/ones-internal-skills',
+            commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+            path: 'references/09-二次验证清单.md',
+            usage: 'reference_import_template_and_eval_cases_only',
+          }],
+          rule_translation_gate: {
+            source_of_truth: 'config_center_published_rules',
+            status: 'ready',
+            total: 4,
+            ready: 4,
+            needs_ai_translation: 0,
+            incomplete_source: 0,
+            official_review_allowed: true,
+            blocking_reasons: [],
+          },
+          rule_set_document_gate: {
+            status: 'ready',
+            total_rule_sets: 4,
+            ready_documents: 4,
+            blocking_reasons: [],
+          },
+          eval_results: {
+            status: 'passed',
+            gate: 'runtime_model_quality_eval',
+          },
+          rules: [
           {
             id: 'snapshot-1',
             rule_id: 'rule-1',
@@ -205,6 +369,7 @@ describe('runStructuredAnalysis', () => {
       provider: 'AI_LEVEL_2',
       model: 'gpt-review',
       providerKind: 'openai_compatible',
+      transport: 'openai_compatible_http',
       degraded: false,
     })
     vi.mocked(recordModelInvocation)
@@ -236,14 +401,17 @@ describe('runStructuredAnalysis', () => {
       reviewTrigger: 'manual_rerun',
     })
 
-    expect(reviewWithFailoverSync).toHaveBeenCalledWith(expect.any(String), {
-      orgId: 'org-1',
-      preferredProvider: 'sales_cloud',
-      skillContext: expect.objectContaining({
-        source: expect.objectContaining({
-          repo: 'suoyidev/ones-internal-skills',
-          commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
-        }),
+      expect(reviewWithFailoverSync).toHaveBeenCalledWith(expect.any(String), {
+        orgId: 'org-1',
+        preferredProvider: 'sales_cloud',
+        skillContext: expect.objectContaining({
+          source: expect.objectContaining({
+            source_of_truth: 'config_center_published_rules',
+            production_rule_source: expect.objectContaining({
+              rules_table: 'contract_rules_v2',
+              snapshot_table: 'contract_rule_snapshots',
+            }),
+          }),
         rules: expect.arrayContaining([
           expect.objectContaining({
             code: 'R001',
@@ -272,6 +440,131 @@ describe('runStructuredAnalysis', () => {
     ])
   })
 
+  it('honors an explicit semantic provider profile from the published model policy', async () => {
+    const report = await runStructuredAnalysis('contract-1', {
+      reviewId: 'review-1',
+      requestedBy: 'u-1',
+      reviewTrigger: 'manual_rerun',
+      semanticProviderProfile: 'sales_cloud_backup',
+    })
+
+    expect(reviewWithFailoverSync).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      orgId: 'org-1',
+      preferredProvider: 'sales_cloud_backup',
+    }), 1)
+    expect(recordModelInvocation).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'semantic_review',
+      requestMeta: expect.objectContaining({
+        intended_provider_profile: 'sales_cloud_backup',
+        intended_provider_model: 'gemini-2.5-flash-lite',
+        requested_provider_profile: 'sales_cloud_backup',
+        requested_provider_accepted: true,
+      }),
+    }))
+    expect(report.result.provider).toBe('rule-engine+AI_LEVEL_2')
+  })
+
+  it('does not run or merge semantic AI risks when the SkillBundle is not formally published', async () => {
+    vi.mocked(getOrCompilePublishedContractSkillBundle).mockResolvedValueOnce({
+      id: 'skill-compiled',
+      org_id: 'org-1',
+      key: 'CONTRACT_REVIEW_DEFAULT',
+      version: 2,
+      status: 'compiled',
+      is_current: false,
+      rule_snapshot_ids: ['snapshot-1'],
+      rule_set_snapshot_ids: ['ruleset-snapshot-1'],
+      template_snapshot_ids: [],
+      document_snapshot_ids: ['ruleset-document-1'],
+      output_schema: {},
+      model_policy_id: 'policy-1',
+      model_policy: {
+        id: 'policy-1',
+        org_id: 'org-1',
+        key: 'CONTRACT_REVIEW_DEFAULT',
+        name: '合同审核默认模型策略',
+        version: 1,
+        status: 'published',
+        is_current: true,
+        provider_chain: [semanticProvider, ruleProvider],
+        routing_policy: {},
+        timeout_ms: 45000,
+        fallback_policy: {},
+        audit_policy: {},
+        source_config_ids: [],
+        published_at: null,
+      },
+      eval_case_ids: [],
+      release_meta: {
+        review_gate_status: 'compiled_not_formal',
+      },
+      compiled_from: {
+        rule_translation_gate: {
+          source_of_truth: 'config_center_published_rules',
+          status: 'needs_ai_translation',
+          total: 1,
+          ready: 0,
+          needs_ai_translation: 1,
+          incomplete_source: 0,
+          official_review_allowed: false,
+          blocking_reasons: ['rule_translation_needs_confirmation'],
+        },
+        rule_set_document_gate: {
+          status: 'ready',
+          total_rule_sets: 1,
+          ready_documents: 1,
+          blocking_reasons: [],
+        },
+        eval_results: {
+          status: 'failed',
+          failed_cases: ['rule_translation_needs_confirmation'],
+        },
+        rules: [{
+          id: 'snapshot-1',
+          rule_id: 'rule-1',
+          code: 'R001',
+          version: 2,
+          clause_category: 'payment',
+          target_field: 'first_payment_rate',
+          field_hints: ['付款', '账期', '首付款'],
+        }],
+      },
+      compiled_hash: 'hash-compiled',
+      published_at: null,
+    })
+    vi.mocked(recordModelInvocation).mockReset()
+    vi.mocked(recordModelInvocation).mockResolvedValue({ id: 'invocation-structured' })
+
+    const report = await runStructuredAnalysis('contract-1', {
+      reviewId: 'review-1',
+      requestedBy: 'u-1',
+      reviewTrigger: 'manual_rerun',
+    })
+
+    expect(reviewWithFailoverSync).not.toHaveBeenCalled()
+    expect(report.result.risks).toHaveLength(1)
+    expect(report.result.provider).toBe('rule-engine')
+    expect(report.result.degraded).toBe(true)
+    expect(report.result.degradationReasons).toEqual(expect.arrayContaining([
+      'skill_bundle_not_published',
+      'skill_bundle_not_current',
+      'rule_translation_not_ready',
+      'skill_eval_not_passed',
+    ]))
+    expect(report.runtime?.model_invocation_ids).toEqual(['invocation-structured'])
+    expect(recordModelInvocation).toHaveBeenCalledTimes(1)
+    expect(recordModelInvocation).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'structured_rules',
+      status: 'degraded',
+      degraded: true,
+      fallbackReason: 'skill_bundle_not_formally_ready',
+      responseMeta: expect.objectContaining({
+        rule_translation_status: 'needs_ai_translation',
+        skill_eval_status: 'failed',
+      }),
+    }))
+  })
+
   it('degrades the review when a red or yellow risk cannot bind to source text', async () => {
     vi.mocked(executeRules).mockResolvedValueOnce({
       risks: [{
@@ -291,6 +584,7 @@ describe('runStructuredAnalysis', () => {
       provider: 'AI_LEVEL_2',
       model: 'gpt-review',
       providerKind: 'openai_compatible',
+      transport: 'openai_compatible_http',
       degraded: false,
     })
 
@@ -340,6 +634,7 @@ describe('runStructuredAnalysis', () => {
       provider: 'AI_LEVEL_2',
       model: 'gpt-review',
       providerKind: 'openai_compatible',
+      transport: 'openai_compatible_http',
       degraded: false,
     })
 
@@ -356,5 +651,68 @@ describe('runStructuredAnalysis', () => {
       title: '验收周期过短',
     })
     expect(report.result.degraded).toBe(false)
+  })
+
+  it('routes long contract semantic review to the cloud long-document provider instead of local primary', async () => {
+    const longContract = Array.from({ length: 1200 }, (_, index) => (
+      `第${index + 1}条 付款与验收条款：首付款、账期、退款、验收、知识产权和数据安全需要逐条审核。`
+    )).join('\n')
+    mockContractText(longContract)
+    vi.mocked(getOrCompilePublishedContractSkillBundle).mockResolvedValueOnce(
+      makeSkillBundle([localSemanticProvider, cloudLongDocumentProvider, ruleProvider])
+    )
+    vi.mocked(selectReviewExecutionProvider).mockImplementation((_, stage) => (
+      stage === 'semantic_review' ? localSemanticProvider : ruleProvider
+    ))
+
+    await runStructuredAnalysis('contract-1', {
+      reviewId: 'review-1',
+      requestedBy: 'u-1',
+      reviewTrigger: 'manual_rerun',
+    })
+
+    expect(reviewWithFailoverSync).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      preferredProvider: 'sales_cloud_backup',
+    }), 1)
+    expect(recordModelInvocation).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'semantic_review',
+      requestMeta: expect.objectContaining({
+        intended_provider_profile: 'sales_cloud_backup',
+        intended_provider_model: 'gpt-5.5',
+        provider_selection_reason: 'long_contract_cloud_enhancement',
+        long_contract: true,
+        long_contract_cloud_required: true,
+      }),
+    }))
+  })
+
+  it('does not let local semantic review masquerade as formal AI review when a long contract has no cloud provider', async () => {
+    const longContract = Array.from({ length: 1200 }, (_, index) => (
+      `第${index + 1}条 付款与验收条款：首付款、账期、退款、验收、知识产权和数据安全需要逐条审核。`
+    )).join('\n')
+    mockContractText(longContract)
+    vi.mocked(getOrCompilePublishedContractSkillBundle).mockResolvedValueOnce(
+      makeSkillBundle([localSemanticProvider, ruleProvider])
+    )
+    vi.mocked(selectReviewExecutionProvider).mockImplementation((_, stage) => (
+      stage === 'semantic_review' ? localSemanticProvider : ruleProvider
+    ))
+
+    const report = await runStructuredAnalysis('contract-1', {
+      reviewId: 'review-1',
+      requestedBy: 'u-1',
+      reviewTrigger: 'manual_rerun',
+    })
+
+    expect(reviewWithFailoverSync).not.toHaveBeenCalled()
+    expect(report.result.degraded).toBe(true)
+    expect(report.result.degradationReasons).toContain('long_contract_cloud_provider_unavailable')
+    expect(recordModelInvocation).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'semantic_review',
+      status: 'failed',
+      degraded: true,
+      fallbackReason: 'long_contract_cloud_provider_unavailable',
+      errorMessage: expect.stringContaining('long_contract_cloud_provider_unavailable'),
+    }))
   })
 })

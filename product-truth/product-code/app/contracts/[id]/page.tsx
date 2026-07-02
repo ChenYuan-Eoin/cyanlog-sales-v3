@@ -63,6 +63,13 @@ type ReviewRun = {
     status: string | null
     published_at: string | null
     compiled_hash: string | null
+    production_source: {
+      owner: string | null
+      source_of_truth: string | null
+      rules_table: string | null
+      snapshot_table: string | null
+      precedence: string | null
+    }
     external_source: {
       repo: string | null
       commit: string | null
@@ -78,8 +85,15 @@ type ReviewRun = {
     output_schema_version: string | null
     second_verification_required: boolean
     comment_author: string | null
+    rule_translation_status: string | null
+    rule_translation_ready: boolean
+    rule_translation_blocking_reasons: string[]
+    official_review_allowed: boolean
     eval_status: string | null
     eval_gate: string | null
+    static_eval_status: string | null
+    runtime_eval_status: string | null
+    eval_note: string | null
     eval_total_cases: number | null
     eval_passed_cases: number | null
     eval_failed_cases: string[]
@@ -89,12 +103,37 @@ type ReviewRun = {
     provider: string
     source: 'model_policies' | 'analysis_job.provider' | 'fallback'
     model?: string | null
+    phase?: string | null
+    provider_kind?: string | null
+    transport?: string | null
+    latency_ms?: number | null
+    intended_provider_profile?: string | null
+    intended_provider_model?: string | null
+    attempt_error_count?: number | null
     degraded: boolean
     status: string | null
     last_error: string | null
     invocation_id?: string | null
     fallback_reason?: string | null
   }
+  model_invocations?: Array<{
+    id: string
+    phase: string | null
+    provider: string | null
+    model: string | null
+    status: string | null
+    degraded: boolean
+    transport: string | null
+    provider_kind: string | null
+    latency_ms: number | null
+    dropped_risk_count: number | null
+    validation_warning_count: number | null
+    attempt_error_count: number | null
+    attempt_errors: string[]
+    fallback_reason: string | null
+    error_message: string | null
+    created_at: string | null
+  }>
 }
 
 type RiskFinding = {
@@ -242,6 +281,13 @@ const modelPolicySourceLabel: Record<NonNullable<ReviewRun['model_policy']>['sou
   fallback: '规则兜底',
 }
 
+const modelTransportLabel: Record<string, string> = {
+  openai_compatible_http: 'OpenAI-compatible HTTP',
+  lm_studio_cli: 'LM Studio CLI',
+  builtin_rule_engine: '规则引擎',
+  manual_fallback: '人工兜底',
+}
+
 const reportTriggerLabel: Record<string, string> = {
   initial_generate: '初始报告',
   ask_responded: 'ASK 回应',
@@ -259,6 +305,17 @@ function formatSize(value?: number | null) {
   if (!value) return '未记录'
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
   return `${(value / 1024 / 1024).toFixed(2)} MB`
+}
+
+function formatLatency(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '未记录'
+  if (value < 1000) return `${Math.round(value)}ms`
+  return `${(value / 1000).toFixed(1)}s`
+}
+
+function formatTransport(value?: string | null) {
+  if (!value) return '未记录'
+  return modelTransportLabel[value] || value
 }
 
 function extractApiError(payload: unknown, fallback: string) {
@@ -311,8 +368,11 @@ function buildReviewHealth(data: WorkbenchData) {
   }
   if (data.reviewRun?.skill_bundle) {
     const bundle = data.reviewRun.skill_bundle
-    if (!bundle.external_source.commit) {
-      issues.push('SkillBundle 缺少外部规则仓库 commit，不能证明使用了指定审核 skill。')
+    if (bundle.production_source.source_of_truth !== 'config_center_published_rules') {
+      issues.push('SkillBundle 未声明配置中心发布规则为生产源，不能证明审核依据来自后台规则版本。')
+    }
+    if (!bundle.rule_translation_ready) {
+      issues.push(`规则转译状态为 ${bundle.rule_translation_status || 'missing'}，不能视为正式审核引擎已就绪。`)
     }
     if (bundle.rules.missing.length > 0 || (bundle.rules.expected !== null && bundle.rules.actual < bundle.rules.expected)) {
       issues.push(`SkillBundle 规则不完整：缺少 ${bundle.rules.missing.join('、') || '未记录规则明细'}。`)
@@ -320,8 +380,20 @@ function buildReviewHealth(data: WorkbenchData) {
     if (!bundle.second_verification_required) {
       issues.push('SkillBundle 未声明二次验证要求，模型输出不能直接作为有效审核结果。')
     }
+    if (!bundle.official_review_allowed) {
+      issues.push('SkillBundle 尚未满足正式审核发布门禁，本次结果只能作为降级/复核结果。')
+    }
     if (bundle.eval_status && bundle.eval_status !== 'passed') {
       issues.push(`SkillBundle eval 状态为 ${bundle.eval_status}，不能视为模型质量已验收。`)
+    }
+    if (bundle.runtime_eval_status === 'model_quality_eval_not_run') {
+      issues.push('模型质量 eval 尚未运行，本次结果必须结合模型调用记录和人工复核证据验收。')
+    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_local_cli') {
+      issues.push('最新语义模型通过本机 LM Studio CLI 完成，能证明本地模型运行，但不能证明 OpenAI-compatible HTTP 或线上模型链已验收。')
+    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_partial') {
+      issues.push('最新语义模型调用只达到部分通过：存在被剔除风险或校验警告，必须查看调用链。')
+    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_not_passed') {
+      issues.push('最新语义模型调用未通过运行质量门禁，不能视为 AI 审核完成。')
     }
   }
   if (data.reviewRun?.status === 'DEGRADED') {
@@ -1100,7 +1172,8 @@ function EvidencePanel({
 }) {
   return (
     <div className="space-y-3 text-sm">
-      <InfoLine label="审核运行" value={reviewRun?.status || '未开始'} />
+      <InfoLine label="运行状态" value={reviewRun?.status || '未开始'} />
+      <InfoLine label="运行编号" value={reviewRun?.id || '未绑定'} />
       <InfoLine
         label="证据状态"
         value={reviewRun?.evidence_status ? evidenceStatusLabel[reviewRun.evidence_status] : '未绑定'}
@@ -1108,18 +1181,42 @@ function EvidencePanel({
       <InfoLine label="规则快照" value={reviewRun?.rule_snapshot_id || '未绑定'} />
       <InfoLine label="快照数量" value={String(reviewRun?.rule_snapshot_refs?.length ?? 0)} />
       <InfoLine label="技能包" value={reviewRun?.skill_bundle_id || '未生成'} />
-      <InfoLine label="Skill 来源" value={reviewRun?.skill_bundle?.external_source.commit || '未记录'} />
+      <InfoLine
+        label="规则源"
+        value={reviewRun?.skill_bundle?.production_source.source_of_truth || '未记录'}
+      />
+      <InfoLine
+        label="转译状态"
+        value={reviewRun?.skill_bundle?.rule_translation_status || '未记录'}
+      />
       <InfoLine
         label="规则完整性"
         value={reviewRun?.skill_bundle
           ? `${reviewRun.skill_bundle.rules.actual}/${reviewRun.skill_bundle.rules.expected ?? '未知'}`
           : '未记录'}
       />
-      <InfoLine label="Skill eval" value={reviewRun?.skill_bundle?.eval_status || '未记录'} />
+      <InfoLine label="静态门禁" value={reviewRun?.skill_bundle?.static_eval_status || reviewRun?.skill_bundle?.eval_status || '未记录'} />
+      <InfoLine label="模型质量 eval" value={reviewRun?.skill_bundle?.runtime_eval_status || '未记录'} />
       <InfoLine label="模型策略" value={reviewRun?.model_policy_id || 'rule-engine'} />
       <InfoLine
         label="模型来源"
         value={reviewRun?.model_policy?.source ? modelPolicySourceLabel[reviewRun.model_policy.source] : '未记录'}
+      />
+      <InfoLine label="语义模型" value={reviewRun?.model_policy?.model || '未记录'} />
+      <InfoLine label="调用阶段" value={reviewRun?.model_policy?.phase || '未记录'} />
+      <InfoLine label="调用通道" value={formatTransport(reviewRun?.model_policy?.transport)} />
+      <InfoLine label="调用耗时" value={formatLatency(reviewRun?.model_policy?.latency_ms)} />
+      <InfoLine label="调用记录" value={reviewRun?.model_policy?.invocation_id || '未记录'} />
+      <InfoLine
+        label="目标 Provider"
+        value={reviewRun?.model_policy?.intended_provider_profile || reviewRun?.model_policy?.provider || '未记录'}
+      />
+      <InfoLine label="目标模型" value={reviewRun?.model_policy?.intended_provider_model || '未记录'} />
+      <InfoLine
+        label="尝试错误"
+        value={typeof reviewRun?.model_policy?.attempt_error_count === 'number'
+          ? String(reviewRun.model_policy.attempt_error_count)
+          : '未记录'}
       />
       <InfoLine label="开始时间" value={formatTime(reviewRun?.started_at)} />
       <InfoLine label="完成时间" value={formatTime(reviewRun?.completed_at)} />
@@ -1128,6 +1225,49 @@ function EvidencePanel({
         <InfoLine label="执行状态" value={latestJob?.status || '未记录'} />
         <InfoLine label="降级" value={latestJob?.degraded ? '是' : '否'} />
       </div>
+      {reviewRun?.model_invocations && reviewRun.model_invocations.length > 0 && (
+        <div className="border-t border-slate-200 pt-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">调用链</p>
+          <div className="space-y-2">
+            {reviewRun.model_invocations.map((invocation) => (
+              <div key={invocation.id} className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-slate-900">{invocation.phase || 'unknown'}</span>
+                  <Badge variant={invocation.degraded ? 'secondary' : 'outline'}>
+                    {invocation.status || 'unknown'}
+                  </Badge>
+                </div>
+                <div className="mt-1 truncate">
+                  {invocation.provider || 'provider?'} / {invocation.model || 'model?'} / {formatTransport(invocation.transport)}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
+                  <span>{formatLatency(invocation.latency_ms)}</span>
+                  <span className="font-mono">{invocation.id.slice(0, 8)}</span>
+                  {typeof invocation.dropped_risk_count === 'number' && invocation.dropped_risk_count > 0 && (
+                    <span>剔除风险 {invocation.dropped_risk_count}</span>
+                  )}
+                  {typeof invocation.validation_warning_count === 'number' && invocation.validation_warning_count > 0 && (
+                    <span>校验警告 {invocation.validation_warning_count}</span>
+                  )}
+                  {typeof invocation.attempt_error_count === 'number' && invocation.attempt_error_count > 0 && (
+                    <span>尝试错误 {invocation.attempt_error_count}</span>
+                  )}
+                  {invocation.fallback_reason && <span>{invocation.fallback_reason}</span>}
+                </div>
+                {(invocation.attempt_errors || []).length > 0 && (
+                  <div className="mt-2 space-y-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
+                    {(invocation.attempt_errors || []).map((message) => (
+                      <p key={message} className="break-words font-mono">
+                        {message}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {latestJob?.last_error && (
         <p className="rounded-md border border-red-200 bg-red-50 p-3 text-red-700">
           {latestJob.last_error}

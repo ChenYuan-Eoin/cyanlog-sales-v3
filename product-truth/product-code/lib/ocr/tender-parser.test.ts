@@ -148,6 +148,12 @@ describe('extractTimeline - 时间节点', () => {
     const result = extractTenderInfo('没有任何时间信息')
     expect(result.timeline).toHaveLength(0)
   })
+
+  it('拒绝把长正文片段误判为时间节点', () => {
+    const text = `开标、答疑。付款、验收、质保、违约、保证金、投标截止、开标、答疑。${'付款、验收、质保、违约、保证金、投标截止、开标、答疑。'.repeat(10)}`
+    const result = extractTenderInfo(text)
+    expect(result.timeline).toHaveLength(0)
+  })
 })
 
 describe('TenderKeyInfo - 信心度计算', () => {

@@ -314,6 +314,7 @@ function buildPolicyRule(row, sourceMeta, orgId, existing) {
     semantic_prompt: semanticPromptFor(row, source),
     message_template: {
       source,
+      source_role: 'reference_import',
       levels: {
         level_a: row.levelA,
         level_b: row.levelB,
@@ -325,7 +326,16 @@ function buildPolicyRule(row, sourceMeta, orgId, existing) {
         comment_author: 'ONES 业务运营',
       },
     },
-    published_at: now,
+    business_domain: 'contract_review',
+    risk_level: 'red',
+    lifecycle_status: 'draft',
+    translation_status: 'needs_ai_translation',
+    translation_notes: [{
+      at: now,
+      source: `${SOURCE_REPO}/${SOURCE_SKILL}`,
+      note: 'Imported as reference draft only. Production publication requires config-center AI translation, eval, and manual publish.',
+    }],
+    published_at: null,
     published_by: null,
     priority: meta.priority,
     is_active: true,
@@ -337,6 +347,11 @@ const COMPARE_FIELDS = [
   'code',
   'name',
   'description',
+  'business_domain',
+  'risk_level',
+  'lifecycle_status',
+  'translation_status',
+  'translation_notes',
   'category',
   'applicable_scenarios',
   'scope',
@@ -452,7 +467,7 @@ async function main() {
   console.log(quickRules.map((row) => `${RULE_META[row.number].code}:${row.clause}`).join(', '))
 
   if (!args.apply) {
-    console.log('dry-run only; rerun with --apply to write contract_rules_v2 and snapshots')
+    console.log('dry-run only; rerun with --apply to write config-center draft rules and draft snapshots')
     return
   }
 
@@ -472,9 +487,9 @@ async function main() {
     version: rule.version || 1,
     config_snapshot: rule,
     released_by: null,
-    released_at: new Date().toISOString(),
-    release_note: `Imported from ${SOURCE_REPO}/${SOURCE_SKILL} v${sourceMeta.version || 'unknown'} quick rules`,
-    status: 'published',
+    released_at: null,
+    release_note: `Reference draft imported from ${SOURCE_REPO}/${SOURCE_SKILL} v${sourceMeta.version || 'unknown'} quick rules; not a production publication`,
+    status: 'draft',
   }))
 
   const { error: snapshotError } = await supabase
@@ -482,7 +497,7 @@ async function main() {
     .insert(snapshots)
   if (snapshotError) throw snapshotError
 
-  console.log(`applied=${upsertedRows?.length || 0} snapshots=${snapshots.length}`)
+  console.log(`applied_drafts=${upsertedRows?.length || 0} draft_snapshots=${snapshots.length}`)
 }
 
 main().catch((error) => {

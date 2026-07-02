@@ -36,6 +36,9 @@ export async function GET(req: NextRequest) {
         name,
         category,
         is_active,
+        lifecycle_status,
+        translation_status,
+        published_at,
         priority
       `)
       .eq('org_id', orgId)
@@ -52,18 +55,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '查询失败' }, { status: 500 })
     }
 
+    const ruleRows = rules || []
+    const formallyPublishedRules = ruleRows.filter(isFormallyPublishedRule)
+    const activeDraftRules = ruleRows.filter((r) => r.is_active && !isFormallyPublishedRule(r))
+
     // 计算汇总统计
     const summary = {
-      total_rules: rules?.length || 0,
-      published_rules: rules?.filter(r => r.is_active).length || 0,
+      total_rules: ruleRows.length,
+      active_rules: ruleRows.filter((r) => r.is_active).length,
+      published_rules: formallyPublishedRules.length,
+      draft_rules: activeDraftRules.filter((r) => r.lifecycle_status !== 'published').length,
+      translation_pending_rules: activeDraftRules.filter((r) => r.translation_status !== 'ready').length,
       avg_hit_rate: 0,
-      structured_rules: rules?.filter(r => r.category !== 'text').length || 0,
-      semantic_rules: rules?.filter(r => r.category === 'text').length || 0,
+      structured_rules: ruleRows.filter(r => r.category !== 'text').length,
+      semantic_rules: ruleRows.filter(r => r.category === 'text').length,
     }
 
     return NextResponse.json({
       summary,
-      rules: rules?.map(r => ({
+      rules: ruleRows.map(r => ({
         id: r.id,
         name: r.name,
         rule_code: r.code,
@@ -72,8 +82,11 @@ export async function GET(req: NextRequest) {
         hit_rate: 0,
         total_evaluations: 0,
         trigger_count: 0,
-        status: r.is_active ? 'published' : 'archived',
-      })) || [],
+        status: getRuleRuntimeStatus(r),
+        lifecycle_status: r.lifecycle_status || null,
+        translation_status: r.translation_status || null,
+        published_at: r.published_at || null,
+      })),
       alerts: {
         low_hit_rate: [],
         high_hit_rate: [],
@@ -87,6 +100,29 @@ export async function GET(req: NextRequest) {
     console.error('Get rules stats error:', error)
     return NextResponse.json({ error: '服务器错误' }, { status: 500 })
   }
+}
+
+type RuleStatsRow = {
+  is_active?: boolean | null
+  lifecycle_status?: string | null
+  translation_status?: string | null
+  published_at?: string | null
+}
+
+function isFormallyPublishedRule(rule: RuleStatsRow): boolean {
+  return Boolean(
+    rule.is_active &&
+    rule.lifecycle_status === 'published' &&
+    rule.translation_status === 'ready' &&
+    rule.published_at
+  )
+}
+
+function getRuleRuntimeStatus(rule: RuleStatsRow): 'published' | 'draft' | 'translation_pending' | 'archived' {
+  if (!rule.is_active) return 'archived'
+  if (isFormallyPublishedRule(rule)) return 'published'
+  if (rule.translation_status !== 'ready') return 'translation_pending'
+  return 'draft'
 }
 
 // 获取单规则统计详情
@@ -141,7 +177,10 @@ async function getSingleRuleStats(ruleId: string, orgId: string, startDate: Date
       rule_code: rule.code,
       rule_type: rule.category === 'text' ? 'semantic' : 'structured',
       level: rule.category,
-      status: rule.is_active ? 'published' : 'archived',
+      status: getRuleRuntimeStatus(rule),
+      lifecycle_status: rule.lifecycle_status || null,
+      translation_status: rule.translation_status || null,
+      published_at: rule.published_at || null,
     },
     stats: {
       total_evaluations: 0,

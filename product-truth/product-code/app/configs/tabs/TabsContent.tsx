@@ -56,6 +56,7 @@ export interface TabsContentProps {
   ruleMode?: string | null
   onSaveRule: (rule: Partial<ContractPolicyRule>, id?: string) => void | Promise<void>
   onDeleteRule: (id: string) => void
+  onRefreshRules?: () => void | Promise<void>
   // config-based tabs (tax, approval, ai, theme)
   configs: Config[]
   aiRuntimePolicy: RuntimePolicy | null
@@ -96,6 +97,7 @@ export default function TabsContent({
   ruleMode,
   onSaveRule,
   onDeleteRule,
+  onRefreshRules,
   configs,
   aiRuntimePolicy,
   aiRuntimeError,
@@ -174,6 +176,7 @@ export default function TabsContent({
           ruleMode={ruleMode}
           onSave={onSaveRule}
           onDelete={onDeleteRule}
+          onRefresh={onRefreshRules}
         />
       )
     case 'tax': {

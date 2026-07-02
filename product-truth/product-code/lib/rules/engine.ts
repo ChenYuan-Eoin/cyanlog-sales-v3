@@ -7,17 +7,20 @@ import {
   executeFlexibleRulesCompat,
   generateFlexibleSummary,
   loadFlexibleRules,
+  loadFlexibleRulesFromSnapshots,
   evaluateFlexibleRule,
   extractField,
   type FlexibleAnalysisResults,
   type LoadRulesOptions,
+  type LoadSnapshotRulesOptions,
 } from './flexible-engine'
 
-export type { FlexibleAnalysisResults, LoadRulesOptions }
+export type { FlexibleAnalysisResults, LoadRulesOptions, LoadSnapshotRulesOptions }
 export {
   executeFlexibleRules,
   executeFlexibleRulesCompat,
   loadFlexibleRules,
+  loadFlexibleRulesFromSnapshots,
   evaluateFlexibleRule,
   extractField,
   generateFlexibleSummary,
@@ -52,7 +55,8 @@ export interface AnalysisResults {
  */
 export async function executeRules(
   contractText: string,
-  orgId?: string
+  orgId?: string,
+  options: { ruleSnapshotIds?: string[] } = {}
 ): Promise<AnalysisResults> {
   if (!orgId) {
     console.warn('executeRules called without orgId')
@@ -66,7 +70,9 @@ export async function executeRules(
 
   try {
     // 调用新的柔性化引擎
-    const flexibleResult = await executeFlexibleRulesCompat(contractText, orgId)
+    const flexibleResult = await executeFlexibleRulesCompat(contractText, orgId, {
+      ruleSnapshotIds: options.ruleSnapshotIds,
+    })
 
     return {
       risks: flexibleResult.risks,

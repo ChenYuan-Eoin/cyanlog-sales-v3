@@ -35,8 +35,11 @@ test.describe('路径 1：登录流程', () => {
     await page.fill('input[type="password"]', 'wrong')
     await page.click('button[type="submit"]')
 
-    // 期望看到错误提示
-    await expect(page.locator('text=/错误|失败|invalid/i').first()).toBeVisible({ timeout: 10_000 })
+    // 期望停留在登录页，并给出可访问的失败反馈；具体文案可随认证/限流状态变化。
+    await expect(page).toHaveURL(/\/login/)
+    const alert = page.locator('[role="alert"]').filter({ hasText: /\S/ }).first()
+    await expect(alert).toBeVisible({ timeout: 10_000 })
+    await expect(alert).toContainText(/\S/)
   })
 
   test('登录成功 → 跳转到首页', async ({ page }) => {
@@ -104,16 +107,50 @@ test.describe('路径 2：配置中心新建规则', () => {
     }
   })
 
-  test('组织架构标签页直接提供组织工作台，不要求跳到独立后台', async ({ page }) => {
+  test('组织架构标签页直接提供组织数据与操作闭环', async ({ page }) => {
     await page.goto('/configs?tab=org-structure')
 
-    await expect(page.locator('text=组织架构管理').first()).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator('text=组织工作台').first()).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator('text=新增成员').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: '组织架构', level: 2 })).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('text=/部门总数|部门/').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('text=/成员总数|成员/').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: '组织操作' })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: '添加成员' })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: '同步飞书组织' })).toBeVisible({ timeout: 10_000 })
   })
 })
 
-test.describe('路径 3：报价中心新建报价', () => {
+test.describe('路径 3：合同审核入口体验', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', TEST_USER.email)
+    await page.fill('input[name="password"]', TEST_USER.password)
+    await page.click('button[type="submit"]')
+    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15_000 })
+  })
+
+  test('上传源文件发起审核不应先强制填写客户、金额和日期', async ({ page }) => {
+    await page.goto('/contracts/upload')
+
+    await expect(page.getByRole('heading', { name: '批量发起合同审核' })).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('input[required]:visible, textarea[required]:visible, select[required]:visible')).toHaveCount(0)
+    await expect(page.locator('text=/选择待审核源文件|拖拽到此处/').first()).toBeVisible()
+  })
+
+  test('移动端合同中心与组织架构不应产生横向溢出', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+
+    for (const url of ['/contracts', '/configs?tab=org-structure']) {
+      await page.goto(url)
+      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
+      const hasHorizontalOverflow = await page.evaluate(() => (
+        document.documentElement.scrollWidth > window.innerWidth + 2
+      ))
+      expect(hasHorizontalOverflow, `${url} should not overflow horizontally`).toBe(false)
+    }
+  })
+})
+
+test.describe('路径 4：报价中心新建报价', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login')
     await page.fill('input[name="email"]', TEST_USER.email)

@@ -55,6 +55,16 @@ export const aiRoutingSchema = z.object({
   strategy: z.enum(['full', 'chunked', 'rule']),
 })
 
+export const aiModelStageSchema = z.enum([
+  'structured_rules',
+  'template_compare',
+  'semantic_review',
+  'tender_long_document_parse',
+  'comment_patch_draft',
+  'report_summary',
+  'rule_fallback',
+])
+
 // AI 模型配置值验证 (F012)
 export const aiConfigValueSchema = z.object({
   level: z.number().int().min(1).max(3),
@@ -67,6 +77,7 @@ export const aiConfigValueSchema = z.object({
   timeout_ms: z.number().int().min(1000).max(300000),
   enabled: z.boolean(),
   routing: aiRoutingSchema.optional(),
+  stages: z.array(aiModelStageSchema).optional(),
 }).superRefine((value, ctx) => {
   if (value.provider_kind === 'openai_compatible' && value.base_url.length === 0) {
     ctx.addIssue({

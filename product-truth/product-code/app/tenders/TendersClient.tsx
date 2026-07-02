@@ -22,6 +22,25 @@ interface TenderRecord {
     tenderNo?: string
     budget?: string
     deadline?: string
+    aiRuntime?: {
+      provider?: string
+      model?: string
+      transport?: string
+      chunk_count?: number
+      selected_chunk_count?: number
+      analyzed_chunk_count?: number
+      text_length?: number
+      selected_text_length?: number
+      analyzed_text_length?: number
+      coverage_ratio?: number
+      chunk_coverage_ratio?: number
+      character_coverage_ratio?: number
+      processing_ms?: number
+      concurrency?: number
+      degraded?: boolean
+      attempt_errors?: string[]
+      model_invocation_id?: string
+    }
   }
   confidence?: number
   status: 'pending' | 'processing' | 'completed' | 'failed'
@@ -73,7 +92,7 @@ export default function TendersClient() {
   }, [])
 
   const stats = useMemo(() => {
-    const highConfidence = tenders.filter((t) => (t.confidence ?? 0) >= 0.8).length
+    const highConfidence = tenders.filter((t) => confidencePercent(t.confidence ?? 0) >= 80).length
     const pendingCount = tenders.filter((t) => t.status === 'pending' || t.status === 'processing').length
     const failedCount = tenders.filter((t) => t.status === 'failed').length
     return { highConfidence, pendingCount, failedCount }
@@ -86,7 +105,7 @@ export default function TendersClient() {
           <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-1">标书中心</h1>
           <p className="text-sm text-slate-500">招标文件 OCR 解析、关键信息提取、标书生成</p>
         </div>
-        <Link href="/contracts/new" prefetch={false}>
+        <Link href="/tenders/upload" prefetch={false}>
           <Button>+ 上传招标文件</Button>
         </Link>
       </div>
@@ -105,7 +124,7 @@ export default function TendersClient() {
           <CardContent className="py-12 text-center">
             <p className="text-slate-500 mb-2">暂无标书</p>
             <p className="text-sm text-slate-400 mb-4">上传招标文件后，OCR 会自动解析关键信息</p>
-            <Link href="/contracts/new" prefetch={false}>
+            <Link href="/tenders/upload" prefetch={false}>
               <Button>+ 上传招标文件</Button>
             </Link>
           </CardContent>
@@ -120,6 +139,7 @@ export default function TendersClient() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">预算</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">截止日期</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">置信度</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">AI 证据</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">状态</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">操作</th>
               </tr>
@@ -151,6 +171,9 @@ export default function TendersClient() {
                       <ConfidenceIndicator value={t.confidence ?? 0} />
                     </td>
                     <td className="px-4 py-3">
+                      <RuntimeBadge runtime={keyInfo.aiRuntime} />
+                    </td>
+                    <td className="px-4 py-3">
                       <StatusBadge status={t.status} />
                     </td>
                     <td className="px-4 py-3">
@@ -171,6 +194,11 @@ export default function TendersClient() {
       )}
     </div>
   )
+}
+
+function confidencePercent(value: number) {
+  const pct = value > 1 ? value : value * 100
+  return Math.max(0, Math.min(100, Math.round(pct)))
 }
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
@@ -195,7 +223,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 }
 
 function ConfidenceIndicator({ value }: { value: number }) {
-  const pct = Math.round(value * 100)
+  const pct = confidencePercent(value)
   const color = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500'
   return (
     <div className="flex items-center gap-2 w-24">
@@ -204,6 +232,41 @@ function ConfidenceIndicator({ value }: { value: number }) {
       </div>
       <span className="text-xs text-slate-600 font-mono w-8">{pct}%</span>
     </div>
+  )
+}
+
+function RuntimeBadge({ runtime }: { runtime?: TenderRecord['key_info'] extends infer K ? K extends { aiRuntime?: infer R } ? R : never : never }) {
+  if (!runtime) {
+    return (
+      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+        未验证
+      </span>
+    )
+  }
+
+  const provider = runtime.provider || 'AI'
+  const coverageSource = typeof runtime.character_coverage_ratio === 'number'
+    ? runtime.character_coverage_ratio
+    : runtime.coverage_ratio
+  const coverage = typeof coverageSource === 'number'
+    ? confidencePercent(coverageSource)
+    : null
+  const label = runtime.degraded
+    ? `部分 ${coverage ?? 0}%`
+    : coverage === null
+      ? provider
+      : `${provider} ${coverage}%`
+  const className = runtime.degraded
+    ? 'border-amber-200 bg-amber-50 text-amber-800'
+    : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+
+  return (
+    <span
+      className={`inline-flex max-w-32 rounded-full border px-2 py-0.5 text-xs font-medium ${className}`}
+      title={`${provider} / ${runtime.model || 'unknown'} / ${runtime.transport || 'unknown'} / ${runtime.model_invocation_id || 'no invocation'}`}
+    >
+      <span className="truncate">{label}</span>
+    </span>
   )
 }
 

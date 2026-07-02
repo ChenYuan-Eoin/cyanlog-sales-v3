@@ -17,15 +17,10 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
   const [error, setError] = useState('')
   const prewarmAbortRef = useRef<AbortController | null>(null)
   const prewarmInFlightRef = useRef(false)
   const lastPrewarmStartedAtRef = useRef(0)
-
-  useEffect(() => {
-    setHydrated(true)
-  }, [])
 
   useEffect(() => {
     const runPrewarm = () => {
@@ -201,7 +196,7 @@ export default function LoginPage() {
                 placeholder="name@company.com"
                 autoComplete="username"
                 inputMode="email"
-                disabled={!hydrated || loading}
+                disabled={loading}
                 required
               />
             </div>
@@ -216,13 +211,13 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                disabled={!hydrated || loading}
+                disabled={loading}
                 required
               />
             </div>
 
             {error && (
-              <div style={{
+              <div role="alert" aria-live="polite" style={{
                 padding: '12px 16px',
                 background: 'var(--danger-100)',
                 color: 'var(--danger-700)',
@@ -237,7 +232,7 @@ export default function LoginPage() {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={!hydrated || loading}
+              disabled={loading}
               style={{ marginTop: 8, marginBottom: 12 }}
             >
               {loading ? '登录中...' : '进入工作台'}

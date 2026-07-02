@@ -53,10 +53,10 @@ export async function GET(
           config_snapshot: rule,
           released_by: rule.published_by || null,
           released_at: rule.published_at || rule.updated_at,
-          release_note: '当前线上生效版本',
+          release_note: rule.lifecycle_status === 'published' ? '当前线上生效版本' : '当前草稿版本',
           is_gray_release: false,
           gray_end_at: null,
-          status: 'published',
+          status: rule.lifecycle_status === 'published' ? 'published' : 'draft',
           created_at: rule.created_at,
         }]
 

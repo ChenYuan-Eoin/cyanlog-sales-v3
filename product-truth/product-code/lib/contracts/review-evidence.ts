@@ -7,6 +7,8 @@ export type ReviewEvidenceReview = {
   skill_bundle_id?: string | null
   model_policy_id?: string | null
   rule_snapshot_ids?: string[] | null
+  rule_set_snapshot_ids?: string[] | null
+  rule_set_document_ids?: string[] | null
   model_invocation_ids?: string[] | null
   review_trigger?: string | null
   created_at?: string | null
@@ -37,6 +39,9 @@ export type ReviewEvidenceRule = {
   id: string
   code?: string | null
   version?: number | null
+  is_active?: boolean | null
+  lifecycle_status?: string | null
+  translation_status?: string | null
   engine_type?: string | null
   target_field?: string | null
   clause_category?: string | null
@@ -58,7 +63,9 @@ export type ReviewEvidenceSkillBundle = {
   id: string
   version?: number | null
   rule_snapshot_ids?: string[] | null
+  rule_set_snapshot_ids?: string[] | null
   template_snapshot_ids?: string[] | null
+  document_snapshot_ids?: string[] | null
   model_policy_id?: string | null
   output_schema?: unknown
   eval_case_ids?: string[] | null
@@ -86,6 +93,9 @@ export type ReviewEvidenceModelInvocation = {
   degraded?: boolean | null
   fallback_reason?: string | null
   error_message?: string | null
+  latency_ms?: number | null
+  request_meta?: unknown
+  response_meta?: unknown
   created_at?: string | null
 }
 
@@ -110,36 +120,57 @@ export type ReviewRunEvidence = {
   contract_version_id: string | null
   skill_bundle_id: string
   rule_snapshot_id: string
+  rule_set_snapshot_ids: string[]
+  rule_set_document_ids: string[]
   model_policy_id: string
   model_invocation_ids: string[]
   started_at: string | null
   completed_at: string | null
   evidence_status: ReviewRunEvidenceStatus
   rule_snapshot_refs: RuleSnapshotRef[]
-  skill_bundle: {
-    id: string
-    version: number | null
-    status: string | null
-    published_at: string | null
-    compiled_hash: string | null
-    external_source: {
-      repo: string | null
-      commit: string | null
-      version: string | null
-      product_override: string | null
-    }
+    skill_bundle: {
+      id: string
+      version: number | null
+      status: string | null
+      published_at: string | null
+      compiled_hash: string | null
+      production_source: {
+        owner: string | null
+        source_of_truth: string | null
+        rules_table: string | null
+        snapshot_table: string | null
+        precedence: string | null
+      }
+      external_source: {
+        repo: string | null
+        commit: string | null
+        version: string | null
+        product_override: string | null
+      }
     rules: {
       expected: number | null
       actual: number
       missing: string[]
     }
     references: string[]
-    output_schema_version: string | null
-    second_verification_required: boolean
-    comment_author: string | null
-    eval_status: string | null
-    eval_gate: string | null
-    eval_total_cases: number | null
+      output_schema_version: string | null
+      second_verification_required: boolean
+      comment_author: string | null
+      rule_translation_status: string | null
+      rule_translation_ready: boolean
+      rule_translation_blocking_reasons: string[]
+      rule_set_document_status: string | null
+      rule_set_document_ready: boolean
+      rule_set_document_blocking_reasons: string[]
+      rule_set_count: number | null
+      rule_set_document_count: number | null
+      official_review_allowed: boolean
+      eval_status: string | null
+      eval_gate: string | null
+      static_eval_status: string | null
+      runtime_eval_status: string | null
+      eval_note: string | null
+      eval_total_cases: number | null
     eval_passed_cases: number | null
     eval_failed_cases: string[]
   } | null
@@ -148,12 +179,37 @@ export type ReviewRunEvidence = {
     provider: string
     source: 'model_policies' | 'analysis_job.provider' | 'fallback'
     model?: string | null
+    phase?: string | null
+    provider_kind?: string | null
+    transport?: string | null
+    latency_ms?: number | null
+    intended_provider_profile?: string | null
+    intended_provider_model?: string | null
+    attempt_error_count?: number | null
     degraded: boolean
     status: string | null
     last_error: string | null
     invocation_id?: string | null
     fallback_reason?: string | null
   }
+  model_invocations: Array<{
+    id: string
+    phase: string | null
+    provider: string | null
+    model: string | null
+    status: string | null
+    degraded: boolean
+    transport: string | null
+    provider_kind: string | null
+    latency_ms: number | null
+    dropped_risk_count: number | null
+    validation_warning_count: number | null
+    attempt_error_count: number | null
+    attempt_errors: string[]
+    fallback_reason: string | null
+    error_message: string | null
+    created_at: string | null
+  }>
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -163,6 +219,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function stringListValue(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+}
+
+function sanitizeEvidenceMessage(value: string): string {
+  return value
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/api[_-]?key[=:]\s*[A-Za-z0-9._~+/=-]+/gi, 'api_key=[redacted]')
+    .slice(0, 240)
 }
 
 function numberValue(value: unknown): number | null {
@@ -187,7 +256,7 @@ function findSnapshotForRule(
   rule: ReviewEvidenceRule,
   snapshots: ReviewEvidenceSnapshot[]
 ): ReviewEvidenceSnapshot | null {
-  const sameRule = snapshots.filter((snapshot) => snapshot.rule_id === rule.id)
+  const sameRule = snapshots.filter((snapshot) => snapshot.rule_id === rule.id && snapshot.status === 'published')
   if (sameRule.length === 0) return null
 
   const ruleVersion = rule.version ?? null
@@ -219,6 +288,12 @@ function summarizeRuleSnapshotId(refs: RuleSnapshotRef[]): string {
 
 function summarizeBoundRuleSnapshotId(snapshotIds: string[] | null | undefined, refs: RuleSnapshotRef[]): string {
   if (snapshotIds && snapshotIds.length > 0) {
+    if (refs.length === 0) {
+      return `contract_rule_snapshots:bound_unpublished_or_missing:${snapshotIds.length}`
+    }
+    if (refs.length < snapshotIds.length) {
+      return `contract_rule_snapshots:bound_partial:${refs.length}/${snapshotIds.length}`
+    }
     return snapshotIds.length === 1
       ? `contract_rule_snapshots:${snapshotIds[0]}`
       : `contract_rule_snapshots:bound:${snapshotIds.length}`
@@ -236,24 +311,118 @@ function nestedRecord(record: Record<string, unknown> | null, key: string): Reco
   return asRecord(record?.[key])
 }
 
+type RuntimeModelEvalSummary = {
+  status: string | null
+  note: string | null
+  invocation_id: string | null
+}
+
+function deriveRuntimeModelEvalStatus(
+  modelInvocations: ReviewEvidenceModelInvocation[]
+): RuntimeModelEvalSummary {
+  const semanticInvocation = modelInvocations.find((invocation) => invocation.phase === 'semantic_review')
+  if (!semanticInvocation) {
+    return {
+      status: 'model_quality_eval_not_run',
+      note: 'No semantic_review model invocation was recorded for the latest ReviewRun.',
+      invocation_id: null,
+    }
+  }
+
+  const responseMeta = invocationResponseMeta(semanticInvocation)
+  const providerKind = stringValue(responseMeta?.provider_kind)
+  const transport = stringValue(responseMeta?.transport)
+  const warningCount = Array.isArray(responseMeta?.validation_warnings)
+    ? responseMeta.validation_warnings.length
+    : 0
+  const droppedRiskCount = numberValue(responseMeta?.dropped_risk_count) ?? 0
+  const usableRiskCount = numberValue(responseMeta?.usable_risk_count)
+
+  if (
+    semanticInvocation.status === 'completed'
+    && !semanticInvocation.degraded
+    && providerKind === 'openai_compatible'
+    && transport === 'openai_compatible_http'
+    && warningCount === 0
+    && droppedRiskCount === 0
+  ) {
+    return {
+      status: 'latest_review_model_invocation_passed',
+      note: usableRiskCount === null
+        ? 'Latest semantic_review model invocation completed without degradation or validation warnings.'
+        : `Latest semantic_review model invocation completed with ${usableRiskCount} usable risk(s), no dropped risk, and no validation warning.`,
+      invocation_id: semanticInvocation.id,
+    }
+  }
+
+  if (
+    semanticInvocation.status === 'completed'
+    && !semanticInvocation.degraded
+    && providerKind === 'openai_compatible'
+    && transport === 'lm_studio_cli'
+    && warningCount === 0
+    && droppedRiskCount === 0
+  ) {
+    return {
+      status: 'latest_review_model_invocation_local_cli',
+      note: usableRiskCount === null
+        ? 'Latest semantic_review completed through local LM Studio CLI; this proves local model execution but not OpenAI-compatible HTTP readiness.'
+        : `Latest semantic_review completed through local LM Studio CLI with ${usableRiskCount} usable risk(s); HTTP readiness still requires LM Studio Token verification.`,
+      invocation_id: semanticInvocation.id,
+    }
+  }
+
+  if (semanticInvocation.status === 'completed' && !semanticInvocation.degraded && providerKind === 'openai_compatible') {
+    return {
+      status: 'latest_review_model_invocation_partial',
+      note: `Latest semantic_review model invocation completed, but ${droppedRiskCount} risk(s) were dropped and ${warningCount} validation warning(s) were recorded.`,
+      invocation_id: semanticInvocation.id,
+    }
+  }
+
+  return {
+    status: 'latest_review_model_invocation_not_passed',
+    note: semanticInvocation.degraded
+      ? `Latest semantic_review model invocation degraded: ${semanticInvocation.fallback_reason || semanticInvocation.error_message || 'unknown reason'}.`
+      : `Latest semantic_review model invocation did not use a passing AI provider path: ${providerKind || semanticInvocation.provider || 'unknown'}.`,
+    invocation_id: semanticInvocation.id,
+  }
+}
+
 function buildSkillBundleSummary(
   skillBundle: ReviewEvidenceSkillBundle,
-  refs: RuleSnapshotRef[]
+  refs: RuleSnapshotRef[],
+  runtimeModelEval: RuntimeModelEvalSummary
 ): ReviewRunEvidence['skill_bundle'] {
   if (!skillBundle) return null
 
   const compiledFrom = asRecord(skillBundle.compiled_from)
   const outputSchema = asRecord(skillBundle.output_schema)
+  const productionSource = nestedRecord(compiledFrom, 'production_rule_source')
   const externalSource = nestedRecord(compiledFrom, 'external_skill_source')
   const completeness = nestedRecord(compiledFrom, 'canonical_rule_completeness')
   const secondVerification = nestedRecord(compiledFrom, 'second_verification')
   const commentTemplate = nestedRecord(compiledFrom, 'comment_template')
   const evalResults = nestedRecord(compiledFrom, 'eval_results')
-  const externalRefs = Array.isArray(compiledFrom?.external_skill_references)
-    ? compiledFrom.external_skill_references
+  const ruleTranslationGate = nestedRecord(compiledFrom, 'rule_translation_gate')
+  const ruleSetDocumentGate = nestedRecord(compiledFrom, 'rule_set_document_gate')
+  const releaseMeta = asRecord(skillBundle.release_meta)
+  const referenceAssetItems = Array.isArray(compiledFrom?.reference_assets)
+    ? compiledFrom.reference_assets
+    : Array.isArray(compiledFrom?.external_skill_references)
+      ? compiledFrom.external_skill_references
+      : []
+  const externalRefs = referenceAssetItems
       .map((item) => stringValue(asRecord(item)?.path))
       .filter((item): item is string => Boolean(item))
-    : []
+  const ruleTranslationStatus = stringValue(ruleTranslationGate?.status)
+  const ruleSetDocumentStatus = stringValue(ruleSetDocumentGate?.status)
+  const evalStatus = stringValue(evalResults?.status)
+  const officialReviewAllowed = Boolean(releaseMeta?.official_review_allowed)
+    && skillBundle.status === 'published'
+    && ruleTranslationStatus === 'ready'
+    && ruleSetDocumentStatus === 'ready'
+    && evalStatus === 'passed'
 
   return {
     id: skillBundle.id,
@@ -261,6 +430,13 @@ function buildSkillBundleSummary(
     status: skillBundle.status ?? null,
     published_at: skillBundle.published_at ?? null,
     compiled_hash: skillBundle.compiled_hash ?? null,
+    production_source: {
+      owner: stringValue(productionSource?.owner),
+      source_of_truth: stringValue(productionSource?.source_of_truth),
+      rules_table: stringValue(productionSource?.rules_table),
+      snapshot_table: stringValue(productionSource?.snapshot_table),
+      precedence: stringValue(productionSource?.precedence),
+    },
     external_source: {
       repo: stringValue(externalSource?.repo),
       commit: stringValue(externalSource?.commit),
@@ -277,8 +453,20 @@ function buildSkillBundleSummary(
       || stringValue(outputSchema?.schema_version),
     second_verification_required: Boolean(secondVerification?.required_checks || secondVerification?.enforcement),
     comment_author: stringValue(commentTemplate?.author),
-    eval_status: stringValue(evalResults?.status),
+    rule_translation_status: ruleTranslationStatus,
+    rule_translation_ready: ruleTranslationStatus === 'ready',
+    rule_translation_blocking_reasons: arrayOfStrings(ruleTranslationGate?.blocking_reasons),
+    rule_set_document_status: ruleSetDocumentStatus,
+    rule_set_document_ready: ruleSetDocumentStatus === 'ready',
+    rule_set_document_blocking_reasons: arrayOfStrings(ruleSetDocumentGate?.blocking_reasons),
+    rule_set_count: numberValue(ruleSetDocumentGate?.total_rule_sets),
+    rule_set_document_count: numberValue(ruleSetDocumentGate?.ready_documents),
+    official_review_allowed: officialReviewAllowed,
+    eval_status: evalStatus,
     eval_gate: stringValue(evalResults?.gate),
+    static_eval_status: stringValue(evalResults?.static_eval_status),
+    runtime_eval_status: runtimeModelEval.status || stringValue(evalResults?.runtime_eval_status),
+    eval_note: runtimeModelEval.note || stringValue(evalResults?.note),
     eval_total_cases: numberValue(evalResults?.total_cases),
     eval_passed_cases: numberValue(evalResults?.passed_cases),
     eval_failed_cases: arrayOfStrings(evalResults?.failed_cases),
@@ -290,9 +478,10 @@ function buildSnapshotRefs(
   snapshots: ReviewEvidenceSnapshot[],
   boundSnapshotIds?: string[] | null
 ): RuleSnapshotRef[] {
+  const publishedSnapshots = snapshots.filter((snapshot) => snapshot.status === 'published')
   const refs = rules
     .map((rule) => {
-      const snapshot = findSnapshotForRule(rule, snapshots)
+      const snapshot = findSnapshotForRule(rule, publishedSnapshots)
       if (!snapshot) return null
       return {
         id: snapshot.id,
@@ -312,7 +501,7 @@ function buildSnapshotRefs(
     ? new Set(boundSnapshotIds)
     : null
 
-  snapshots.forEach((snapshot) => {
+  publishedSnapshots.forEach((snapshot) => {
     if (refsBySnapshotId.has(snapshot.id)) return
     if (!bound?.has(snapshot.id) && coveredRuleIds.has(snapshot.rule_id)) return
 
@@ -355,6 +544,45 @@ function representativeInvocation(
     || modelInvocations.find((invocation) => invocation.degraded || invocation.status === 'failed')
     || modelInvocations[0]
     || null
+}
+
+function invocationRequestMeta(invocation: ReviewEvidenceModelInvocation | null): Record<string, unknown> | null {
+  return invocation ? asRecord(invocation.request_meta) : null
+}
+
+function invocationResponseMeta(invocation: ReviewEvidenceModelInvocation | null): Record<string, unknown> | null {
+  return invocation ? asRecord(invocation.response_meta) : null
+}
+
+function invocationAttemptErrorCount(invocation: ReviewEvidenceModelInvocation | null): number | null {
+  const responseMeta = invocationResponseMeta(invocation)
+  const attemptErrors = responseMeta?.attempt_errors
+  return Array.isArray(attemptErrors) ? attemptErrors.length : null
+}
+
+function summarizeInvocation(invocation: ReviewEvidenceModelInvocation) {
+  const responseMeta = invocationResponseMeta(invocation)
+  const attemptErrors = stringListValue(responseMeta?.attempt_errors).map(sanitizeEvidenceMessage)
+  return {
+    id: invocation.id,
+    phase: invocation.phase || null,
+    provider: invocation.provider || null,
+    model: invocation.model || null,
+    status: invocation.status || null,
+    degraded: Boolean(invocation.degraded),
+    transport: stringValue(responseMeta?.transport),
+    provider_kind: stringValue(responseMeta?.provider_kind),
+    latency_ms: invocation.latency_ms ?? null,
+    dropped_risk_count: numberValue(responseMeta?.dropped_risk_count),
+    validation_warning_count: Array.isArray(responseMeta?.validation_warnings)
+      ? responseMeta.validation_warnings.length
+      : null,
+    attempt_error_count: attemptErrors.length,
+    attempt_errors: attemptErrors.slice(0, 3),
+    fallback_reason: invocation.fallback_reason || null,
+    error_message: invocation.error_message || null,
+    created_at: invocation.created_at || null,
+  }
 }
 
 function evidenceStatus(
@@ -400,8 +628,12 @@ export function buildReviewRunEvidence(input: {
   if (!latestReview) return null
 
   const boundSnapshotIds = latestReview.rule_snapshot_ids || skillBundle?.rule_snapshot_ids || null
+  const boundRuleSetSnapshotIds = latestReview.rule_set_snapshot_ids || skillBundle?.rule_set_snapshot_ids || []
+  const boundRuleSetDocumentIds = latestReview.rule_set_document_ids || skillBundle?.document_snapshot_ids || []
   const refs = filterRefsByBoundSnapshots(buildSnapshotRefs(rules, snapshots, boundSnapshotIds), boundSnapshotIds)
   const invocation = representativeInvocation(modelInvocations)
+  const requestMeta = invocationRequestMeta(invocation)
+  const responseMeta = invocationResponseMeta(invocation)
   const modelInvocationIds = latestReview.model_invocation_ids?.length
     ? latestReview.model_invocation_ids
     : modelInvocations.map((item) => item.id)
@@ -422,18 +654,31 @@ export function buildReviewRunEvidence(input: {
     contract_version_id: currentVersion?.id || null,
     skill_bundle_id: skillBundleId,
     rule_snapshot_id: summarizeBoundRuleSnapshotId(boundSnapshotIds, refs),
+    rule_set_snapshot_ids: boundRuleSetSnapshotIds,
+    rule_set_document_ids: boundRuleSetDocumentIds,
     model_policy_id: modelPolicyId,
     model_invocation_ids: modelInvocationIds,
     started_at: latestJob?.started_at || latestReview.created_at || null,
     completed_at: latestJob?.completed_at || latestReview.completed_at || null,
     evidence_status: status,
     rule_snapshot_refs: refs,
-    skill_bundle: buildSkillBundleSummary(skillBundle ?? null, refs),
+    skill_bundle: buildSkillBundleSummary(
+      skillBundle ?? null,
+      refs,
+      deriveRuntimeModelEvalStatus(modelInvocations)
+    ),
     model_policy: {
       id: modelPolicyId,
       provider,
       source: modelPolicy ? 'model_policies' : (latestJob?.provider ? 'analysis_job.provider' : 'fallback'),
       model: invocation?.model || policyProvider?.model || null,
+      phase: invocation?.phase || null,
+      provider_kind: stringValue(responseMeta?.provider_kind),
+      transport: stringValue(responseMeta?.transport),
+      latency_ms: invocation?.latency_ms ?? null,
+      intended_provider_profile: stringValue(requestMeta?.intended_provider_profile),
+      intended_provider_model: stringValue(requestMeta?.intended_provider_model),
+      attempt_error_count: invocationAttemptErrorCount(invocation),
       degraded: Boolean(
         invocation?.degraded
         ?? (
@@ -446,5 +691,6 @@ export function buildReviewRunEvidence(input: {
       invocation_id: invocation?.id || null,
       fallback_reason: invocation?.fallback_reason || null,
     },
+    model_invocations: modelInvocations.map(summarizeInvocation),
   }
 }

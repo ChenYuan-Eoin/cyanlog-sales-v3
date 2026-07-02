@@ -15,12 +15,36 @@ export interface TenderTimeline {
   date: string
 }
 
+export interface TenderAIRuntimeInfo {
+  source?: 'cloud_model' | string
+  provider?: string
+  model?: string
+  transport?: string
+  chunk_count?: number
+  selected_chunk_count?: number
+  analyzed_chunk_count?: number
+  text_length?: number
+  selected_text_length?: number
+  analyzed_text_length?: number
+  coverage_ratio?: number
+  chunk_coverage_ratio?: number
+  character_coverage_ratio?: number
+  processing_ms?: number
+  concurrency?: number
+  business_signal_count?: number
+  business_signal_domains?: number
+  degraded?: boolean
+  attempt_errors?: string[]
+  model_invocation_id?: string
+}
+
 export interface TenderKeyInfo extends OCRResult {
   // 基础字段继承自 OCRResult (tenderNo, tenderName, budget, deadline, publisher, contact)
   scores: TenderScore[]
   technicalRequirements: string[]
   commercialTerms: string[]
   timeline: TenderTimeline[]
+  aiRuntime?: TenderAIRuntimeInfo
 }
 
 /**
@@ -173,9 +197,15 @@ function extractTimeline(text: string): TenderTimeline[] {
       const dateMatch = value.match(datePattern)
       if (dateMatch) {
         timeline.push({ event, date: dateMatch[0] })
-      } else if (value.length >= 5) {
-        // 没有标准日期格式，但有内容（如"另行通知"）
-        timeline.push({ event, date: value.trim() })
+      } else {
+        const fallback = value.replace(/\s+/g, ' ').trim()
+        if (
+          fallback.length >= 2
+          && fallback.length <= 30
+          && /(另行通知|待通知|详见|以.*为准|见公告|见招标文件)/.test(fallback)
+        ) {
+          timeline.push({ event, date: fallback })
+        }
       }
     }
   }

@@ -35,6 +35,10 @@ export class DocumentChunker {
     }
   }
 
+  private stepSize(): number {
+    return Math.max(1, this.config.chunkSize - this.config.overlap)
+  }
+
   /**
    * 分块
    */
@@ -55,8 +59,9 @@ export class DocumentChunker {
   private fixedChunk(text: string, metadata: Record<string, unknown>): Chunk[] {
     const chunks: Chunk[] = []
     let index = 0
+    const step = this.stepSize()
 
-    for (let i = 0; i < text.length; i += this.config.chunkSize - this.config.overlap) {
+    for (let i = 0; i < text.length; i += step) {
       const content = text.slice(i, i + this.config.chunkSize)
       if (content.trim()) {
         chunks.push({ index: index++, content, metadata })
@@ -66,21 +71,58 @@ export class DocumentChunker {
     return chunks
   }
 
+  private splitOversizedUnit(text: string): string[] {
+    const units: string[] = []
+    const step = this.stepSize()
+    for (let i = 0; i < text.length; i += step) {
+      const content = text.slice(i, i + this.config.chunkSize).trim()
+      if (content) units.push(content)
+    }
+    return units
+  }
+
+  private paragraphUnits(text: string): string[] {
+    return text
+      .split(/\n\s*\n/)
+      .flatMap((paragraph) => {
+        const trimmed = paragraph.trim()
+        if (!trimmed) return []
+        if (trimmed.length <= this.config.chunkSize) return [trimmed]
+
+        const lines = trimmed
+          .split(/\n+/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+
+        if (lines.length <= 1) {
+          return this.splitOversizedUnit(trimmed)
+        }
+
+        return lines.flatMap((line) => (
+          line.length > this.config.chunkSize
+            ? this.splitOversizedUnit(line)
+            : [line]
+        ))
+      })
+  }
+
   /**
    * 段落分块（按换行/段落切分）
    */
   private paragraphChunk(text: string, metadata: Record<string, unknown>): Chunk[] {
-    const paragraphs = text.split(/\n\s*\n/)
+    const units = this.paragraphUnits(text)
     const chunks: Chunk[] = []
     let index = 0
     let buffer = ''
 
-    for (const para of paragraphs) {
-      if ((buffer + para).length > this.config.chunkSize && buffer) {
+    for (const unit of units) {
+      const next = buffer ? `${buffer}\n\n${unit}` : unit
+      if (next.length > this.config.chunkSize && buffer) {
         chunks.push({ index: index++, content: buffer.trim(), metadata })
-        buffer = ''
+        buffer = unit
+      } else {
+        buffer = next
       }
-      buffer += para + '\n\n'
     }
 
     if (buffer.trim()) {

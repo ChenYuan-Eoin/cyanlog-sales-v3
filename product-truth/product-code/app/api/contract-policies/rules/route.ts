@@ -13,20 +13,36 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { inferRuleLifecycleStatus, inferRuleTranslationStatus } from '@/lib/contracts/rule-publication'
+
+const messageTemplateSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  suggestion: z.string().optional(),
+  comment: z.string().optional(),
+  negotiation_action: z.string().optional(),
+  negotiation_required: z.boolean().optional(),
+  owner_role: z.string().optional(),
+  bottom_line: z.string().optional(),
+}).optional().nullable()
 
 // 规则创建/更新验证
 const ruleSchema = z.object({
   code: z.string().min(1, '规则编码不能为空'),
   name: z.string().min(1, '规则名称不能为空'),
+  rule_set_id: z.string().uuid().optional().nullable(),
   description: z.string().optional(),
+  business_domain: z.string().min(1).optional().default('contract_review'),
+  risk_level: z.enum(['green', 'yellow', 'red']).optional().default('yellow'),
   category: z.enum(['ratio', 'amount', 'duration', 'enum', 'text']),
   engine_type: z.enum(['structured', 'semantic', 'hybrid']).default('structured'),
   target_field: z.string().optional().nullable(),
   clause_category: z.string().optional().nullable(),
   field_hints: z.array(z.string()).optional(),
   semantic_prompt: z.string().optional().nullable(),
-  applicable_scenarios: z.array(z.string()).optional(),
-  scope: z.enum(['org', 'dept', 'user']).optional(),
+  message_template: messageTemplateSchema,
+  applicable_scenarios: z.array(z.string()).optional().default(['standard_contract_review']),
+  scope: z.enum(['org', 'dept', 'user']).optional().default('org'),
 
   // Level A
   level_a_operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in']),
@@ -111,9 +127,12 @@ export async function POST(req: NextRequest) {
       .insert({
         org_id: orgId,
         created_by: user.id,
-        published_at: new Date().toISOString(),
-        published_by: user.id,
         ...parsed.data,
+        published_at: null,
+        published_by: null,
+        lifecycle_status: inferRuleLifecycleStatus(parsed.data),
+        translation_status: inferRuleTranslationStatus(parsed.data),
+        translation_notes: [],
         version: 1,
       })
       .select()
@@ -127,10 +146,10 @@ export async function POST(req: NextRequest) {
       rule_id: rule.id,
       version: rule.version || 1,
       config_snapshot: rule,
-      released_by: user.id,
-      released_at: new Date().toISOString(),
-      release_note: '创建规则并立即生效',
-      status: 'published',
+      released_by: null,
+      released_at: null,
+      release_note: '创建规则草稿，待转译确认后发布',
+      status: 'draft',
     })
 
     return createdResponse(rule)

@@ -70,7 +70,7 @@ describe('buildReviewRunEvidence', () => {
         { rule_id: 'rule-missing', rule_code: 'R999' },
       ],
       rules: [{ id: 'rule-1', code: 'R001', version: 1 }],
-      snapshots: [{ id: 'snapshot-1', rule_id: 'rule-1', version: 1 }],
+      snapshots: [{ id: 'snapshot-1', rule_id: 'rule-1', version: 1, status: 'published' }],
     })
 
     expect(evidence?.evidence_status).toBe('partial_snapshot')
@@ -102,6 +102,33 @@ describe('buildReviewRunEvidence', () => {
     })
   })
 
+  it('does not treat draft bound snapshots as formal published evidence', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-draft-bound',
+        status: 'COMPLETED',
+        rule_snapshot_ids: ['snapshot-draft'],
+      },
+      latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 3 }],
+      rules: [{ id: 'rule-1', code: 'R001', version: 3, engine_type: 'hybrid' }],
+      snapshots: [{
+        id: 'snapshot-draft',
+        rule_id: 'rule-1',
+        version: 3,
+        status: 'draft',
+        created_at: '2026-07-01T00:00:00.000Z',
+        config_snapshot: { code: 'R001', engine_type: 'hybrid', version: 3 },
+      }],
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.rule_snapshot_refs).toEqual([])
+    expect(evidence?.rule_snapshot_id).toBe('contract_rule_snapshots:bound_unpublished_or_missing:1')
+    expect(evidence?.skill_bundle_id).toBe('contract-skill:ruleset:missing')
+  })
+
   it('prefers real SkillBundle, ModelPolicy, and ModelInvocation bindings when present', () => {
     const evidence = buildReviewRunEvidence({
       latestReview: {
@@ -130,20 +157,33 @@ describe('buildReviewRunEvidence', () => {
         model_policy_id: 'policy-1',
         status: 'published',
         compiled_hash: 'hash-1',
-        output_schema: { schema_version: 'f006.review.v1' },
-        compiled_from: {
-          external_skill_source: {
-            repo: 'suoyidev/ones-internal-skills',
-            commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
-            version: '2.2.2',
-            product_override: 'annotation-first',
-          },
-          external_skill_references: [
-            { path: 'references/09-二次验证清单.md' },
-            { path: 'references/13-结构化输出schema.md' },
-          ],
-          canonical_rule_completeness: {
-            expected: 15,
+          output_schema: { schema_version: 'f006.review.v1' },
+          compiled_from: {
+            production_rule_source: {
+              owner: 'F009',
+              source_of_truth: 'config_center_published_rules',
+              rules_table: 'contract_rules_v2',
+              snapshot_table: 'contract_rule_snapshots',
+              precedence: 'production_source_of_truth',
+            },
+            reference_assets: [
+              {
+                kind: 'github_skill_reference',
+                repo: 'suoyidev/ones-internal-skills',
+                commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+                path: 'references/09-二次验证清单.md',
+                usage: 'reference_import_template_and_eval_cases_only',
+              },
+              {
+                kind: 'github_skill_reference',
+                repo: 'suoyidev/ones-internal-skills',
+                commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
+                path: 'references/13-结构化输出schema.md',
+                usage: 'reference_import_template_and_eval_cases_only',
+              },
+            ],
+            canonical_rule_completeness: {
+              expected: 15,
             actual: 15,
             missing: [],
           },
@@ -151,12 +191,21 @@ describe('buildReviewRunEvidence', () => {
           second_verification: {
             enforcement: 'model_output_runtime_validation',
           },
-          comment_template: {
-            author: 'ONES 业务运营',
-          },
-          eval_results: {
-            gate: 'bundle_static_completeness',
-            status: 'runtime_eval_not_run',
+            comment_template: {
+              author: 'ONES 业务运营',
+            },
+            rule_translation_gate: {
+              status: 'ready',
+              total: 15,
+              ready: 15,
+              needs_ai_translation: 0,
+              incomplete_source: 0,
+              official_review_allowed: true,
+              blocking_reasons: [],
+            },
+            eval_results: {
+              gate: 'bundle_static_completeness',
+              status: 'runtime_eval_not_run',
             total_cases: 14,
             passed_cases: 0,
             failed_cases: [],
@@ -178,9 +227,20 @@ describe('buildReviewRunEvidence', () => {
         id: 'invocation-1',
         provider: 'rule-engine',
         model: 'rule-engine',
+        phase: 'semantic_review',
         status: 'completed',
         degraded: false,
         fallback_reason: 'rule_engine_selected_by_model_policy',
+        latency_ms: 120,
+        request_meta: {
+          intended_provider_profile: 'rule_engine',
+          intended_provider_model: 'rule-engine',
+        },
+        response_meta: {
+          provider_kind: 'builtin',
+          transport: 'builtin_rule_engine',
+          attempt_errors: [],
+        },
       }],
     })
 
@@ -191,25 +251,30 @@ describe('buildReviewRunEvidence', () => {
       rule_snapshot_id: 'contract_rule_snapshots:snapshot-1',
       evidence_status: 'snapshot_bound',
       skill_bundle: {
-        id: 'skill-1',
-        version: 3,
-        compiled_hash: 'hash-1',
-        external_source: {
-          repo: 'suoyidev/ones-internal-skills',
-          commit: 'f8b0c27f5c19a499c1563923ca372a2171aaca58',
-          version: '2.2.2',
-        },
-        rules: {
-          expected: 15,
+          id: 'skill-1',
+          version: 3,
+          compiled_hash: 'hash-1',
+          production_source: {
+            owner: 'F009',
+            source_of_truth: 'config_center_published_rules',
+            rules_table: 'contract_rules_v2',
+            snapshot_table: 'contract_rule_snapshots',
+            precedence: 'production_source_of_truth',
+          },
+          rules: {
+            expected: 15,
           actual: 15,
           missing: [],
         },
         references: ['references/09-二次验证清单.md', 'references/13-结构化输出schema.md'],
-        output_schema_version: 'f006.review.v1',
-        second_verification_required: true,
-        comment_author: 'ONES 业务运营',
-        eval_status: 'runtime_eval_not_run',
-        eval_gate: 'bundle_static_completeness',
+          output_schema_version: 'f006.review.v1',
+          second_verification_required: true,
+          comment_author: 'ONES 业务运营',
+          rule_translation_status: 'ready',
+          rule_translation_ready: true,
+          official_review_allowed: false,
+          eval_status: 'runtime_eval_not_run',
+          eval_gate: 'bundle_static_completeness',
         eval_total_cases: 14,
         eval_passed_cases: 0,
       },
@@ -218,9 +283,30 @@ describe('buildReviewRunEvidence', () => {
         provider: 'rule-engine',
         source: 'model_policies',
         model: 'rule-engine',
+        phase: 'semantic_review',
+        provider_kind: 'builtin',
+        transport: 'builtin_rule_engine',
+        latency_ms: 120,
+        intended_provider_profile: 'rule_engine',
+        intended_provider_model: 'rule-engine',
+        attempt_error_count: 0,
         invocation_id: 'invocation-1',
         fallback_reason: 'rule_engine_selected_by_model_policy',
       },
+      model_invocations: [{
+        id: 'invocation-1',
+        phase: 'semantic_review',
+        provider: 'rule-engine',
+        model: 'rule-engine',
+        status: 'completed',
+        degraded: false,
+        transport: 'builtin_rule_engine',
+        provider_kind: 'builtin',
+        latency_ms: 120,
+        fallback_reason: 'rule_engine_selected_by_model_policy',
+        error_message: null,
+        created_at: null,
+      }],
     })
   })
 
@@ -335,6 +421,11 @@ describe('buildReviewRunEvidence', () => {
         status: 'degraded',
         degraded: true,
         fallback_reason: 'semantic_review_degraded_to_rule_engine',
+        latency_ms: 450,
+        response_meta: {
+          provider_kind: 'builtin',
+          transport: 'builtin_rule_engine',
+        },
       }],
     })
 
@@ -343,8 +434,170 @@ describe('buildReviewRunEvidence', () => {
       model: 'rule-engine',
       degraded: true,
       status: 'degraded',
+      transport: 'builtin_rule_engine',
+      latency_ms: 450,
       invocation_id: 'invocation-semantic',
       fallback_reason: 'semantic_review_degraded_to_rule_engine',
     })
+    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_not_passed')
+  })
+
+  it('keeps LM Studio CLI semantic invocation separate from HTTP model readiness', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-model-pass',
+        status: 'COMPLETED',
+        skill_bundle_id: 'skill-1',
+        model_policy_id: 'policy-1',
+        rule_snapshot_ids: ['snapshot-1'],
+        model_invocation_ids: ['invocation-structured', 'invocation-semantic'],
+      },
+      latestJob: { provider: 'rule-engine+AI_LEVEL_1', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 3 }],
+      rules: [{ id: 'rule-1', code: 'R001', version: 3, engine_type: 'hybrid' }],
+      snapshots: [{
+        id: 'snapshot-1',
+        rule_id: 'rule-1',
+        version: 3,
+        status: 'published',
+        released_at: '2026-07-02T01:00:00.000Z',
+      }],
+      skillBundle: {
+        id: 'skill-1',
+        version: 10,
+        rule_snapshot_ids: ['snapshot-1'],
+        model_policy_id: 'policy-1',
+        status: 'published',
+        compiled_from: {
+          rule_translation_gate: { status: 'ready', official_review_allowed: true, blocking_reasons: [] },
+          eval_results: {
+            status: 'passed',
+            runtime_eval_status: 'model_quality_eval_not_run',
+            note: 'Static publication eval only.',
+          },
+        },
+        release_meta: { official_review_allowed: true },
+      },
+      modelPolicy: {
+        id: 'policy-1',
+        version: 8,
+        status: 'published',
+        provider_chain: [{
+          provider: 'openai-compatible',
+          provider_kind: 'openai_compatible',
+          model: 'gpt-oss-20b',
+          profile: 'AI_LEVEL_1',
+        }],
+      },
+      modelInvocations: [{
+        id: 'invocation-structured',
+        provider: 'rule-engine',
+        model: 'rule-engine',
+        phase: 'structured_rules',
+        status: 'completed',
+        degraded: false,
+        response_meta: {
+          provider_kind: 'builtin',
+          transport: 'builtin_rule_engine',
+        },
+      }, {
+        id: 'invocation-semantic',
+        provider: 'AI_LEVEL_1',
+        model: 'gpt-oss-20b',
+        phase: 'semantic_review',
+        status: 'completed',
+        degraded: false,
+        latency_ms: 28000,
+        response_meta: {
+          provider_kind: 'openai_compatible',
+          transport: 'lm_studio_cli',
+          usable_risk_count: 3,
+          dropped_risk_count: 0,
+          validation_warnings: [],
+        },
+      }],
+    })
+
+    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_local_cli')
+    expect(evidence?.skill_bundle?.eval_note).toContain('local LM Studio CLI with 3 usable risk')
+    expect(evidence?.model_policy).toMatchObject({
+      provider: 'AI_LEVEL_1',
+      model: 'gpt-oss-20b',
+      status: 'completed',
+      degraded: false,
+      transport: 'lm_studio_cli',
+      latency_ms: 28000,
+      invocation_id: 'invocation-semantic',
+    })
+  })
+
+  it('marks runtime model quality passed only from clean OpenAI-compatible HTTP semantic invocation', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-model-pass-http',
+        status: 'COMPLETED',
+        skill_bundle_id: 'skill-1',
+        model_policy_id: 'policy-1',
+        rule_snapshot_ids: ['snapshot-1'],
+        model_invocation_ids: ['invocation-structured', 'invocation-semantic'],
+      },
+      latestJob: { provider: 'rule-engine+AI_LEVEL_1', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 3 }],
+      rules: [{ id: 'rule-1', code: 'R001', version: 3, engine_type: 'hybrid' }],
+      snapshots: [{
+        id: 'snapshot-1',
+        rule_id: 'rule-1',
+        version: 3,
+        status: 'published',
+      }],
+      skillBundle: {
+        id: 'skill-1',
+        version: 10,
+        rule_snapshot_ids: ['snapshot-1'],
+        model_policy_id: 'policy-1',
+        status: 'published',
+        compiled_from: {
+          rule_translation_gate: { status: 'ready', official_review_allowed: true, blocking_reasons: [] },
+          eval_results: {
+            status: 'passed',
+            runtime_eval_status: 'model_quality_eval_not_run',
+            note: 'Static publication eval only.',
+          },
+        },
+        release_meta: { official_review_allowed: true },
+      },
+      modelInvocations: [{
+        id: 'invocation-structured',
+        provider: 'rule-engine',
+        model: 'rule-engine',
+        phase: 'structured_rules',
+        status: 'completed',
+        degraded: false,
+        response_meta: {
+          provider_kind: 'builtin',
+          transport: 'builtin_rule_engine',
+        },
+      }, {
+        id: 'invocation-semantic',
+        provider: 'AI_LEVEL_1',
+        model: 'gpt-oss-20b',
+        phase: 'semantic_review',
+        status: 'completed',
+        degraded: false,
+        latency_ms: 28000,
+        response_meta: {
+          provider_kind: 'openai_compatible',
+          transport: 'openai_compatible_http',
+          usable_risk_count: 3,
+          dropped_risk_count: 0,
+          validation_warnings: [],
+        },
+      }],
+    })
+
+    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_passed')
+    expect(evidence?.skill_bundle?.eval_note).toContain('3 usable risk')
   })
 })

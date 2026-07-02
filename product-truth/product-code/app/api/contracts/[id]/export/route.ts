@@ -213,6 +213,7 @@ export async function POST(
       contractId: id,
       risks: riskCardsForPatches || [],
       existingRiskIds,
+      sourceText: typeof contract.parsed_text === 'string' ? contract.parsed_text : undefined,
     })
 
     if (missingCommentPatches.length > 0) {

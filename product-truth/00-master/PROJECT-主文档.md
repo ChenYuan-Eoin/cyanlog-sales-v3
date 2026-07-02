@@ -3349,6 +3349,16 @@ interface CRMIntegration {
 | 客户反馈 | 客户可接受、拒绝、反建议，触发再审核或升级 |
 | 知识库模板 | 模板、条款和案例必须可版本化引用和快照 |
 
+模型配置的第一阶段口径是“三层模型旅程”，不是环境变量说明页：
+
+- L1 本地模型：优先使用用户本机 LM Studio / OpenAI-compatible 服务，配置项为 `base_url + model + token`。本机服务已加载模型不等于应用 HTTP 可调用；若返回 401，配置中心必须提示保存 LM Studio Developer Token 或明确当前仅可走本机 CLI 通道。
+- L2 云模型：使用 OpenAI-compatible 云端网关作为增强和仲裁层，Token 由用户从供应商控制台显式粘贴保存，例如云端 Token 控制台；系统不得从浏览器页面猜测或抓取密钥。
+- L3 规则引擎：只做确定性校验、证据定位和降级兜底，不能冒充 AI 审核完成。
+
+配置中心必须提供 L1/L2/L3 快速套用、保存前连接测试和模型发现。连接测试只验证当前表单的 OpenAI-compatible HTTP 或内置规则引擎状态，不保存密钥，不写入 `ModelInvocation`，也不能替代真实 `ReviewRun` 的模型调用证据。若 LM Studio HTTP 返回 401，测试结果必须显示 Token 未通过，不能用本机 CLI fallback 掩盖认证失败；若云端 OpenAI-compatible `/models` 返回 401/403，必须显示 Token 或权限不可用；若 `/models` 通过，页面可展示并点选模型 ID，但仍需 ReviewRun 证明正式语义审核调用成功。ReviewRun 中 `semantic_review` 的 `model_invocation` 必须展示 `transport`：`openai_compatible_http` 才能证明 HTTP 模型链通过，`lm_studio_cli` 只能证明本机模型执行，不等同线上或 HTTP 接入验收完成。长合同、长 PDF 的 `semantic_review` 还必须展示 L2 云端 Provider 选择原因、文本长度、页数估计、chunk/字符覆盖率和降级原因；缺少可用云端 Provider 或覆盖不完整时，不能宣称正式 AI 审核完成。
+
+CC Switch 可作为 Provider 配置体验参考，但它管理的是 Codex/Claude/Gemini 等开发工具配置；合同审核生产运行事实只能来自配置中心发布的 `AI_CONFIG -> ModelPolicy -> ModelInvocation`。
+
 ### 5.1 第一阶段多流业务图景
 
 合同审核围绕同一份合同并行推进多个业务流，不按“上传 -> 审核 -> 报告”单线理解。
@@ -3381,6 +3391,7 @@ interface CRMIntegration {
 | `CustomerFeedback` | 客户对批注或条款的反馈，驱动再审核或升级 | F005 |
 | `RuleUnit` | 单条结构化/语义/混合审核规则 | F009 |
 | `RuleSet` | 规则集合，可按合同类型、金额、客户类型、场景生效 | F009 |
+| `RuleSetDocument` | 规则集的 Markdown/自然语言声明资产，作为高效维护入口，经 AI/人工转译后生成 RuleUnit | F009 / F006 |
 | `RuleSnapshot` | 已发布规则快照，ReviewRun 使用后不可漂移 | F009 / F006 |
 | `KnowledgeTemplate` | 标准合同模板、条款模板、案例、话术等知识资产 | F005 / F009 / F006 |
 | `TemplateSnapshot` | 审核时引用的模板或条款库快照 | F006 |
@@ -3397,6 +3408,8 @@ interface CRMIntegration {
 
 ```
 F009 配置中心规则
+  -> 维护 RuleSetDocument / RuleSet / RuleUnit
+  -> AI/人工转译为可执行 RuleUnit
   -> 发布 RuleSet / RuleSnapshot
   -> 引用知识库模板、条款库、变体词典、测试用例
   -> F006 编译 SkillBundle
@@ -3451,6 +3464,24 @@ DETECTED
 | 输出区 | 下载批注文件和报告 | 批注为主，报告为辅；存在未定位批注或降级执行时不得伪装成完整“审核完成” |
 | 审计区 | 展示规则、Skill、模型、处理人 | 能追溯 ReviewRun 的依据和结果 |
 
+配置中心、合同工作台和组织权限页可以使用三栏，但三栏不是视觉形式本身。三栏必须同时满足两个目标：
+
+| 栏位 | 目标 | 禁止退化 |
+|------|------|----------|
+| 左栏：对象导航 | 高密度列出规则集、角色、合同版本、风险队列等业务对象，并显示数量、状态、阻断点 | 只放大卡片或低密度菜单 |
+| 中栏：主工作区 | 完成当前对象的核心编辑、测试、预览、复核或对比动作 | 把复杂表单平铺成需要反复滚动的页面 |
+| 右栏：闭环与证据 | 串联影响范围、发布状态、运行证据、下一步动作和阻断原因 | 重复展示摘要，或只放无操作价值的统计卡片 |
+
+规则配置页的主对象是 `RuleSet / RuleSetDocument`，不是散点规则表单。规则资产必须可视化维护：左栏是知识库式树状规则集目录，中栏是规则集下的规则列表和状态，右栏是当前规则的结构化详情、约束条件、适用范围、测试结果和转译差异。Markdown/自然语言声明只是规则集的一种高效编辑来源，AI 转译结果必须以 `RuleUnit / SkillUnit / EngineRule` 形式明示出来，支持人工确认、字段级修正、测试和发布；不得把“输入一段文档然后系统黑盒解析”为最终产品形态。
+
+规则状态必须按运行事实拆开展示：`is_active=true` 只表示规则可维护/未停用，不等于生产发布；进入正式合同审核必须同时满足 `is_active=true`、`lifecycle_status='published'`、`translation_status='ready'`、`published_at` 存在并绑定已发布快照。配置中心、规则统计、SkillBundle 编译、ReviewRun 证据和底层规则引擎必须使用同一口径；未发布、未转译或缺发布时间的规则只能进入设计/测试/沙箱，不能被展示为“可正式审核”。
+
+R001-R015 的第一阶段预置规则必须按规则集资产管理，而不是平铺表单。`RuleSetDocument` 是高效维护入口，允许 Markdown/自然语言声明，但正式审核只能消费已经发布并转译 ready 的 `RuleUnit`、`RuleSnapshot`、`RuleSetSnapshot` 和文档快照。R001 `付款节奏` 是复合规则，至少要同时覆盖首付款比例和账期/验收后付款天数；例如 `账期>30工作日` 必须由确定性规则引擎命中，不能完全依赖模型自由判断。
+
+文档比对不是“上传两个文件”的占位入口。第一阶段必须至少支持 Word/PDF 两类合同版本的可解释比对：明确基准版本和候选版本，展示新增、删除、修改、移动/语义变化，提供差异列表、双栏定位、上一处/下一处导航和导出；比对结果可进入 RiskFinding、NegotiationTask 或客户反馈再审核链路。
+
+品牌与主题属于配置中心运行时发布能力。`BrandProfile` 应定义产品名、侧边栏标识、浏览器 favicon、默认 logo 和批注作者展示；`ThemeRelease` 只定义颜色、间距、组件视觉变量。多主题存在时只有一个 published/active 版本可被运行时消费，浏览器 favicon 和侧边栏 logo 必须来自同一已发布品牌版本，不能各页面各自读取临时图片。
+
 ### 5.6 Word 批注与报告的产品口径
 
 Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使用同一套审核事实：
@@ -3462,6 +3493,8 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 | `CommentPatch` | 批注生成前的结构化意图 | 必须包含位置、原文片段、风险、建议、作者 |
 
 批注成功必须绑定 `RiskFinding -> RuleSnapshot -> evidence_text -> source range -> Word comment anchor`。只有能在源文件中找到原文片段的 L1/L2/L3 定位才可写入 Word 原生批注；无法绑定原文片段时必须标记 `manual_location_required`，工作台显示“需人工定位”，并禁止把产物登记为完整批注版。报告只能作为辅助或兜底产物，不得伪装成源文件批注成功。
+
+当前研发验收口径：一条合格的合同审核链路必须同时证明 `ReviewRun.status=COMPLETED`、绑定 SkillBundle / RuleSnapshot / RuleSetSnapshot / RuleSetDocument / ModelPolicy、存在 `semantic_review` 的真实 `ModelInvocation`，且 Word 导出包内存在 `word/comments.xml`、`document.xml` 的 `w:commentRangeStart` / `w:commentReference`。若只跑规则引擎、只生成报告、缺少模型调用证据、缺少规则集文档绑定或批注无法定位，都不能宣称完整合同审核完成。
 
 ### 5.7 F0xx 研发依据映射
 
@@ -3504,6 +3537,9 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 | D6 复用方案 | 明确复用现有规则表、配置中心、合同上传、风险卡片、AI 降级链和导出资产 |
 | D7 非目标声明 | 客户门户、批量审核、复杂客户协商、商业化套餐等后续能力不得伪完成 |
 | D8 噪音处理 | 历史资产结论必须直接收敛在主文档 5.8 和对应 F0xx 文档中，不新增平行日志 |
+| D9 规则集管理 | F009 必须支持规则集/规则集文档的维护、转译、测试和发布；不得只按散点规则表单验收 |
+| D10 品牌运行时 | F000 必须明确 BrandProfile/ThemeRelease 的 active 发布语义，favicon、logo、产品名读取同一发布版本 |
+| D11 文档比对 | F005 必须定义 Word/PDF 比对的基准/候选版本、差异类型、导航、导出和进入风险闭环的规则 |
 
 ---
 
@@ -3702,8 +3738,8 @@ approval_flow:
 
 | 配置项 | 配置类型 | 配置说明 |
 |--------|---------|---------|
-| **本地模型连接** | 文本 | OpenAI兼容API的URL、模型名称 |
-| **云端模型备用** | 文本 | 云端API Key、模型名称（备用） |
+| **本地模型连接** | 文本 + 连接测试 | OpenAI兼容API的URL、模型名称、可选Token；通过 `/models` 校验 |
+| **云端模型备用** | 文本 + 连接测试 | 云端Base URL、API Key、模型名称；通过 HTTPS `/models` 校验并发现模型 |
 | **路由阈值** | 数值 | 本地/云端切换的页数阈值 |
 | **调用参数** | 数值 | Temperature、Max Tokens等 |
 
@@ -3713,12 +3749,14 @@ approval_flow:
 ai_config:
   local_model:
     url: "http://localhost:1234/v1"
-    model_name: "gemma-4-e4b"
-    timeout_seconds: 45
+    model_name: "gpt-oss-20b"
+    token_ref: "AI_LEVEL_1_TOKEN"
+    timeout_seconds: 120
   
   cloud_model_backup:
-    api_key: "${CLOUD_API_KEY}"
-    model_name: "claude-opus-4"
+    base_url: "https://cloud.yiyongai.cn/v1"
+    api_key_ref: "AI_LEVEL_2_TOKEN"
+    model_name: "provider-model-id"
   
   routing:
     local_max_pages: 15
@@ -3978,11 +4016,14 @@ interface ConfigVersion {
 ```
 输入层（招标文件解析电路）
 ├── 多格式 ingestion：
-│   ├── PDF → 文本提取（OCR fallback图片页）
+│   ├── PDF → 文本层提取；扫描件/图片页需进入 OCR/视觉模型待补链路，不得伪装成完整解析
 │   ├── Word → 结构化解析（标题层级识别）
-│   └── 图片 → OCR → 版面分析（表格/文字分离）
+│   └── 图片 → OCR → 版面分析（表格/文字分离，P1 能力）
 │
-├── AI提取引擎（本地模型接口，不上云）：
+├── AI提取引擎（F012 模型策略：本地优先，长文本/长 PDF 走授权云端增强）：
+│   ├── OpenAI-compatible 云端地址允许填写供应商根域名，运行时统一规范化到 `/v1`
+│   ├── 长文分块选择必须覆盖首尾、高信号关键词段和全局采样段，不允许只取前 N 段静默成功
+│   ├── 每次解析必须记录 provider/model/transport、字符覆盖率、chunk 覆盖率、耗时、并发和 `model_invocation_id`
 │   ├── 评分标准提取：
 │   │   ├── 商务分（价格、资质、案例权重）
 │   │   ├── 技术分（实施方案、团队、工期）
@@ -4018,7 +4059,7 @@ interface ConfigVersion {
 │
 ├── 技术方案生成（AI辅助）：
 │   ├── 输入：招标文件技术章节 + 公司能力标签
-│   ├── 模型：Ollama本地Qwen2.5（不上传敏感数据）
+│   ├── 模型：F012 Provider Chain（L1 本地快速初筛；L2 云端长文本增强；L3 规则兜底）
 │   ├── 输出：技术方案初稿（实施计划、团队配置、服务承诺）
 │   └── 人工审核：技术经理修改后定稿
 │
@@ -4045,7 +4086,7 @@ interface ConfigVersion {
 
 与竞品的差异设计：
 1. 数据打通：招标网的标书是"孤岛"，我们和企业案例库/报价系统打通
-2. 隐私优先：AI分析本地运行（Ollama），不上传招标文件到云端
+2. 模型分级：默认本地优先；长文本、长 PDF、复杂标书解析经配置中心发布的 L2 云端 OpenAI-compatible Provider 处理，并记录 provider/model/transport、字符覆盖率、chunk 覆盖率、耗时和 `model_invocation_id` 证据；覆盖不完整时必须显式降级
 3. 渐进式填充：技术标先行（不报价），商务标后补，支持分阶段投标
 ```
 
@@ -5653,12 +5694,12 @@ interface AuditLog {
 
 - 所有数据存储在中国大陆境内
 - 使用本地部署的MinIO（可选阿里云OSS国内节点）
-- Ollama本地模型，不调用海外API
+- 本地模型优先；长文本、长 PDF、标书解析等需要 L2 云端增强时，必须使用配置中心显式发布的 OpenAI-compatible Provider，并记录授权、模型调用和降级原因
 
 #### 14.4.2 合同数据保密
 
 - 合同文本加密存储，仅授权人员可解密查看
-- 合同审核AI分析在本地完成，不上传云端
+- 合同审核 AI 分析默认本地优先；长合同、长 PDF 的云端增强必须由已发布模型策略授权，按最小必要文本和分块覆盖执行，并写入 `model_invocations`，不能静默上传或伪装为本地完成
 - 合同导出操作记录审计日志
 - 员工离职自动回收数据访问权限
 
@@ -6973,7 +7014,7 @@ Response 200:
     "localModel": {
       "status": "healthy",
       "latency": 120,
-      "modelName": "gemma-4-e4b"
+      "modelName": "gpt-oss-20b"
     },
     "cloudModel": {
       "status": "available",

@@ -65,6 +65,14 @@ export interface AIRoutingConfig {
 
 export type AIProviderKind = 'openai_compatible' | 'builtin'
 export type AIProfile = 'local_primary' | 'cloud_primary' | 'sales_cloud_backup' | 'rule_engine' | 'custom'
+export type AIModelStage =
+  | 'structured_rules'
+  | 'template_compare'
+  | 'semantic_review'
+  | 'tender_long_document_parse'
+  | 'comment_patch_draft'
+  | 'report_summary'
+  | 'rule_fallback'
 
 // AI 模型配置值 (F012)
 export interface AIConfigValue {
@@ -78,6 +86,7 @@ export interface AIConfigValue {
   timeout_ms: number
   enabled: boolean
   routing?: AIRoutingConfig
+  stages?: AIModelStage[]
 }
 
 export type UIThemeValue = UIThemeConfigValue

@@ -12,12 +12,13 @@ function makeResult(
     result: {
       risks,
       summary: `summary from ${provider}`,
-      provider,
-      model: `${provider}-model`,
-      providerKind: provider === 'rule-engine' ? 'builtin' : 'openai_compatible',
-      degraded,
-    },
-  }
+	      provider,
+	      model: `${provider}-model`,
+	      providerKind: provider === 'rule-engine' ? 'builtin' : 'openai_compatible',
+	      transport: provider === 'rule-engine' ? 'builtin_rule_engine' : 'openai_compatible_http',
+	      degraded,
+	    },
+	  }
 }
 
 describe('Arbitrator consistency calculation', () => {

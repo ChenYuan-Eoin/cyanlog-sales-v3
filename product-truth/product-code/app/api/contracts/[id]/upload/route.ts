@@ -172,6 +172,8 @@ export async function POST(
           phase: 'update_contract',
         },
       })
+      await supabaseAdmin.storage.from('contracts').remove([storagePath])
+      return errorResponse(createApiError('DB_ERROR', '合同文件记录更新失败'))
     }
 
     const { error: versionError } = await supabaseAdmin
@@ -201,6 +203,7 @@ export async function POST(
           phase: 'create_contract_version',
         },
       })
+      return errorResponse(createApiError('DB_ERROR', '合同版本记录创建失败'))
     }
 
     return NextResponse.json({

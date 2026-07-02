@@ -67,10 +67,13 @@ export interface ValidationResult {
   data?: AIReviewOutput
   error?: string
   retryable: boolean
+  warnings?: string[]
+  droppedRisks?: number
 }
 
 export type RuntimeRuleConstraint = {
   code?: string | null
+  version?: number | null
   clause_category?: string | null
   target_field?: string | null
   field_hints?: string[] | null
@@ -81,6 +84,7 @@ export type AIOutputRuntimeConstraints = {
   rules?: RuntimeRuleConstraint[]
   requireEvidenceInSource?: boolean
   requireRuleEvidenceHint?: boolean
+  allowPartialRiskAcceptance?: boolean
 }
 
 const MAX_RETRIES = 3
@@ -147,7 +151,7 @@ export function validateAIOutput(
       if (!runtimeValidation.valid) {
         return runtimeValidation
       }
-      return { valid: true, data: validated.data, retryable: false }
+      return runtimeValidation
     }
 
     // 分析错误类型，决定是否可重试
@@ -222,6 +226,55 @@ function evidenceMatchesRuleHints(evidenceItems: string[], rule: RuntimeRuleCons
   })
 }
 
+function normalizeRuntimeRisk(
+  risk: AIReviewOutput['risks'][number],
+  rule: RuntimeRuleConstraint | undefined
+): AIReviewOutput['risks'][number] {
+  const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
+  return {
+    ...risk,
+    ruleCode: normalizedRuleCode || risk.ruleCode,
+    ruleVersion: typeof rule?.version === 'number' ? rule.version : risk.ruleVersion,
+  }
+}
+
+function validateRuntimeRisk(input: {
+  risk: AIReviewOutput['risks'][number]
+  index: number
+  constraints: AIOutputRuntimeConstraints
+  rulesByCode: Map<string, RuntimeRuleConstraint>
+  allowedRuleCodes: Set<string>
+}): string[] {
+  const { risk, index, constraints, rulesByCode, allowedRuleCodes } = input
+  const path = `risks.${index}`
+  const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
+  const rule = rulesByCode.get(normalizedRuleCode)
+  const errors: string[] = []
+
+  if (allowedRuleCodes.size > 0 && !allowedRuleCodes.has(normalizedRuleCode)) {
+    errors.push(`${path}.ruleCode: ${risk.ruleCode} is not in current SkillBundle`)
+  }
+
+  const evidence = risk.evidence || []
+  const weakEvidence = evidence.filter((item) => !meaningfulEvidence(item))
+  if (weakEvidence.length > 0) {
+    errors.push(`${path}.evidence: evidence is too short or generic`)
+  }
+
+  if (constraints.requireEvidenceInSource && constraints.contractText) {
+    const missing = evidence.filter((item) => !sourceContainsEvidence(constraints.contractText || '', item))
+    if (missing.length > 0) {
+      errors.push(`${path}.evidence: evidence is not a continuous source fragment`)
+    }
+  }
+
+  if (constraints.requireRuleEvidenceHint && !evidenceMatchesRuleHints(evidence, rule)) {
+    errors.push(`${path}.evidence: evidence does not match rule field hints`)
+  }
+
+  return errors
+}
+
 function validateRuntimeConstraints(
   data: AIReviewOutput,
   constraints: AIOutputRuntimeConstraints
@@ -234,42 +287,61 @@ function validateRuntimeConstraints(
   )
   const allowedRuleCodes = new Set(rulesByCode.keys())
   const errors: string[] = []
+  const acceptedRisks: AIReviewOutput['risks'] = []
+  let rejectedRiskCount = 0
 
   for (const [index, risk] of data.risks.entries()) {
-    const path = `risks.${index}`
     const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
+    const rule = rulesByCode.get(normalizedRuleCode)
+    const riskErrors = validateRuntimeRisk({
+      risk,
+      index,
+      constraints,
+      rulesByCode,
+      allowedRuleCodes,
+    })
 
-    if (allowedRuleCodes.size > 0 && !allowedRuleCodes.has(normalizedRuleCode)) {
-      errors.push(`${path}.ruleCode: ${risk.ruleCode} is not in current SkillBundle`)
+    if (riskErrors.length > 0) {
+      errors.push(...riskErrors)
+      rejectedRiskCount += 1
+      continue
     }
 
-    const evidence = risk.evidence || []
-    const weakEvidence = evidence.filter((item) => !meaningfulEvidence(item))
-    if (weakEvidence.length > 0) {
-      errors.push(`${path}.evidence: evidence is too short or generic`)
-    }
-
-    if (constraints.requireEvidenceInSource && constraints.contractText) {
-      const missing = evidence.filter((item) => !sourceContainsEvidence(constraints.contractText || '', item))
-      if (missing.length > 0) {
-        errors.push(`${path}.evidence: evidence is not a continuous source fragment`)
-      }
-    }
-
-    if (constraints.requireRuleEvidenceHint && !evidenceMatchesRuleHints(evidence, rulesByCode.get(normalizedRuleCode))) {
-      errors.push(`${path}.evidence: evidence does not match rule field hints`)
-    }
+    acceptedRisks.push(normalizeRuntimeRisk(risk, rule))
   }
 
   if (errors.length > 0) {
+    if (constraints.allowPartialRiskAcceptance && acceptedRisks.length > 0) {
+      return {
+        valid: true,
+        data: {
+          ...data,
+          risks: acceptedRisks,
+        },
+        retryable: false,
+        warnings: errors,
+        droppedRisks: rejectedRiskCount,
+      }
+    }
+
     return {
       valid: false,
       error: `Runtime validation failed: ${errors.join('; ')}`,
       retryable: true,
+      warnings: errors,
+      droppedRisks: rejectedRiskCount,
     }
   }
 
-  return { valid: true, data, retryable: false }
+  return {
+    valid: true,
+    data: {
+      ...data,
+      risks: acceptedRisks,
+    },
+    retryable: false,
+    droppedRisks: 0,
+  }
 }
 
 // ─── 工具函数 ──────────────────────────────────────────
@@ -279,8 +351,12 @@ function validateRuntimeConstraints(
  * 策略：找最外层的完整JSON对象
  */
 function extractJSON(text: string): string | null {
+  const withoutReasoning = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+
   // 先尝试整个文本是否是JSON
-  const trimmed = text.trim()
+  const trimmed = withoutReasoning.trim()
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     return trimmed
   }
@@ -297,14 +373,14 @@ function extractJSON(text: string): string | null {
   // 找最外层的大括号
   let depth = 0
   let start = -1
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '{') {
+  for (let i = 0; i < withoutReasoning.length; i++) {
+    if (withoutReasoning[i] === '{') {
       if (depth === 0) start = i
       depth++
-    } else if (text[i] === '}') {
+    } else if (withoutReasoning[i] === '}') {
       depth--
       if (depth === 0 && start !== -1) {
-        return text.slice(start, i + 1)
+        return withoutReasoning.slice(start, i + 1)
       }
     }
   }

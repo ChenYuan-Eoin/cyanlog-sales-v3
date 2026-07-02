@@ -921,12 +921,15 @@ export default function ConfigsClient({
         code: rule.code,
         name: rule.name,
         description: rule.description || '',
+        business_domain: rule.business_domain || 'contract_review',
+        risk_level: rule.risk_level || 'yellow',
         category: rule.category || 'duration',
         engine_type: rule.engine_type || (rule.category === 'text' ? 'semantic' : 'structured'),
         target_field: rule.target_field || null,
         clause_category: rule.clause_category || null,
         field_hints: rule.field_hints || [],
         semantic_prompt: rule.semantic_prompt || null,
+        message_template: rule.message_template || {},
         applicable_scenarios: rule.applicable_scenarios || [],
         scope: rule.scope || 'org',
         level_a_operator: rule.level_a_operator || '<=',
@@ -1479,6 +1482,7 @@ export default function ConfigsClient({
                 ruleMode={ruleMode}
                 onSaveRule={handleSaveRule}
                 onDeleteRule={handleDeleteRule}
+                onRefreshRules={() => refreshTabData('rules')}
                 configs={configs}
                 aiRuntimePolicy={aiRuntimePolicy}
                 aiRuntimeError={aiRuntimeError}

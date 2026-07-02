@@ -25,10 +25,31 @@ const reviewRunSchema = z.object({
   ]).default('manual_rerun'),
   strategy: z.enum(['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE']).optional(),
   strategy_id: z.string().trim().min(1).optional(),
+  semantic_provider_profile: z.string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
 })
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
+}
+
+function hasFormalReviewGateFailure(reasons: string[]) {
+  return reasons.some((reason) => (
+    reason === 'skill_bundle_not_published'
+    || reason === 'skill_bundle_not_current'
+    || reason === 'rule_translation_gate_missing'
+    || reason === 'rule_translation_not_ready'
+    || reason === 'ruleset_document_gate_missing'
+    || reason === 'ruleset_document_not_ready'
+    || reason === 'skill_eval_missing'
+    || reason === 'skill_eval_not_run'
+    || reason === 'skill_eval_not_passed'
+    || reason === 'skill_bundle_not_formally_ready'
+  ))
 }
 
 export async function POST(
@@ -133,7 +154,7 @@ export async function POST(
     let processingError: string | undefined
     let degradationReasons: string[] = []
 
-    let reviewOptions: ReviewOptions | undefined
+    const reviewOptions: ReviewOptions = {}
     let strategyId: string | undefined
     if (options.strategy_id) {
       strategyId = options.strategy_id
@@ -146,7 +167,10 @@ export async function POST(
         .limit(1)
         .maybeSingle()
       if (strategyData) strategyId = strategyData.id
-      reviewOptions = { strategyCode: options.strategy }
+      reviewOptions.strategyCode = options.strategy
+    }
+    if (options.semantic_provider_profile) {
+      reviewOptions.semanticProviderProfile = options.semantic_provider_profile
     }
 
     try {
@@ -162,7 +186,9 @@ export async function POST(
       degradationReasons = structuredReport.result.degradationReasons || []
       responseStatus = structuredReport.result.degraded ? 'DEGRADED' : 'COMPLETED'
       responseMessage = structuredReport.result.degraded
-        ? '再审核已完成，但存在降级或未绑定项，需要人工复核'
+        ? hasFormalReviewGateFailure(degradationReasons)
+          ? '再审核已降级：配置中心规则发布或 SkillBundle 未通过正式门，不能作为正式审核完成'
+          : '再审核已完成，但存在降级或未绑定项，需要人工复核'
         : '再审核已完成'
     } catch (error) {
       processingError = formatAnalysisError(error)
@@ -193,6 +219,7 @@ export async function POST(
       reviewId: review.id,
       parentReviewId: parentReview?.id || null,
       triggerEvent: options.trigger_event,
+      semanticProviderProfile: options.semantic_provider_profile || null,
       status: responseStatus,
       message: responseMessage,
       degraded: responseStatus === 'DEGRADED',

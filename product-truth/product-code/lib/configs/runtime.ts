@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import type { AIConfigValue, AIProviderKind, ConfigType, TaxRuleValue } from '@/lib/configs/types'
+import type { AIConfigValue, AIModelStage, AIProviderKind, ConfigType, TaxRuleValue } from '@/lib/configs/types'
+import { normalizeOpenAICompatibleBaseUrl } from '@/lib/ai/openai-compatible'
 
 type JsonRecord = Record<string, unknown>
 
@@ -139,8 +140,25 @@ function normalizeProviderKind(value: JsonRecord): AIProviderKind {
   return 'openai_compatible'
 }
 
+function isLocalEndpoint(baseUrl: string): boolean {
+  if (!baseUrl) return false
+  try {
+    const url = new URL(baseUrl)
+    return ['localhost', '127.0.0.1', '0.0.0.0'].includes(url.hostname)
+  } catch {
+    return false
+  }
+}
+
+function providerTier(config: PublishedAIProviderConfig): number {
+  if (config.provider_kind === 'builtin' || config.model === 'rule-engine') return 3
+  if (isLocalEndpoint(config.base_url) || config.profile?.toLowerCase().includes('local')) return 1
+  return 2
+}
+
 function normalizeAIConfig(row: ConfigRow): PublishedAIProviderConfig {
   const value = row.value || {}
+  const providerKind = normalizeProviderKind(value)
   return {
     config_id: row.id,
     key: row.key,
@@ -148,8 +166,10 @@ function normalizeAIConfig(row: ConfigRow): PublishedAIProviderConfig {
     level: Number(value.level ?? 1),
     name: String(value.name ?? row.name),
     profile: typeof value.profile === 'string' ? value.profile : undefined,
-    provider_kind: normalizeProviderKind(value),
-    base_url: String(value.base_url ?? ''),
+    provider_kind: providerKind,
+    base_url: providerKind === 'openai_compatible'
+      ? normalizeOpenAICompatibleBaseUrl(String(value.base_url ?? ''))
+      : String(value.base_url ?? ''),
     api_key: typeof value.api_key === 'string' ? value.api_key : undefined,
     model: String(value.model ?? ''),
     timeout_ms: Number(value.timeout_ms ?? 45000),
@@ -160,6 +180,9 @@ function normalizeAIConfig(row: ConfigRow): PublishedAIProviderConfig {
           strategy: ((value.routing as JsonRecord).strategy as 'full' | 'chunked' | 'rule' | undefined) ?? 'full',
         }
       : undefined,
+    stages: Array.isArray(value.stages)
+      ? value.stages.filter((stage): stage is AIModelStage => typeof stage === 'string')
+      : undefined,
   }
 }
 
@@ -168,7 +191,10 @@ export async function listPublishedAIProviders(orgId: string): Promise<Published
   return configs
     .map(normalizeAIConfig)
     .filter((config) => config.enabled)
-    .sort((left, right) => left.level - right.level)
+    .sort((left, right) => (
+      providerTier(left) - providerTier(right)
+      || left.level - right.level
+    ))
 }
 
 export async function getPublishedTaxRate(orgId: string): Promise<number> {

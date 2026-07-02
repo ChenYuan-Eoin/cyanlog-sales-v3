@@ -1,0 +1,5 @@
+-- Remote history placeholder.
+-- This migration version already exists in the linked Supabase production
+-- database but the original SQL file was not present in this checkout.
+-- Keep this file so `supabase db push` can compare migration history without
+-- marking a real remote migration as reverted.

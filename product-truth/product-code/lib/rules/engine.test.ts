@@ -335,6 +335,33 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
     expect(result.source).toContain('首付款 10%')
   })
 
+  it('R001 付款节奏能识别账期超过 30 天的红线风险', () => {
+    const rule = makeFlexibleRule({
+      code: 'R001',
+      name: '付款节奏',
+      category: 'ratio',
+      engine_type: 'hybrid',
+      target_field: 'payment_schedule',
+      clause_category: 'payment',
+      field_hints: ['首期', '首付款', '预付款', '付款节奏', '账期', '尾款'],
+      level_c: {
+        operator: '<',
+        threshold: 15,
+        unit: 'percent',
+        action: 'block_or_escalate',
+        message: '触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日',
+      },
+    })
+
+    const result = evaluateFlexibleRule(rule, '第二条 付款条款：乙方验收后120天内付款，账期120天。')
+
+    expect(result.risk_label).toBe('red')
+    expect(result.level).toBe('C')
+    expect(result.actual_value).toBe(120)
+    expect(result.unit).toBe('day')
+    expect(result.source).toContain('120天')
+  })
+
   it('R009 保密期不应复用合同期限数值', () => {
     const rule = makeFlexibleRule({
       code: 'R009',
@@ -483,6 +510,38 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
     expect(result.source).toBe('')
   })
 
+  it('文本规则证据应选择最相关条款，不应跨条款窗口截断', () => {
+    const rule = makeFlexibleRule({
+      code: 'R002',
+      name: '终止退款',
+      category: 'text',
+      engine_type: 'structured',
+      target_field: 'termination_refund_clause',
+      clause_category: 'refund',
+      field_hints: ['终止', '解除', '退费', '退款', '未消耗', '未使用'],
+      level_c: {
+        operator: 'contains',
+        threshold: 0,
+        unit: 'text',
+        action: 'block_or_escalate',
+      },
+    })
+
+    const result = evaluateFlexibleRule(
+      rule,
+      [
+        '第四条 数据安全：客户数据可用于AI训练，服务终止后可永久保留。',
+        '第五条 服务等级：乙方承诺7x24小时可用性。',
+        '第六条 终止退款：任何一方提前解除合同时，未消耗服务费不予退还。',
+      ].join('\n')
+    )
+
+    expect(result.risk_label).toBe('red')
+    expect(result.source).toBe('第六条 终止退款：任何一方提前解除合同时，未消耗服务费不予退还。')
+    expect(result.source).not.toContain('第四条')
+    expect(result.source).not.toContain('第五条')
+  })
+
   it('文本规则不能把规则词或 hint 当成合同原文证据', () => {
     const rule = makeFlexibleRule({
       code: 'R099',
@@ -546,5 +605,37 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
     expect(result.risk_label).toBe('red')
     expect(result.level).toBe('C')
     expect(result.source).toContain('可用性')
+  })
+
+  it('R013 SLA 证据应保留在服务等级条款内', () => {
+    const rule = makeFlexibleRule({
+      code: 'R013',
+      name: 'SLA 承诺',
+      category: 'enum',
+      engine_type: 'hybrid',
+      target_field: 'sla_commitment',
+      clause_category: 'sla',
+      field_hints: ['SLA', '可用性', '99.5%', '7×24', '营业损失'],
+      level_c: {
+        operator: 'contains',
+        threshold: 0,
+        unit: 'text',
+        action: 'block_or_escalate',
+      },
+    })
+
+    const result = evaluateFlexibleRule(
+      rule,
+      [
+        '第四条 数据安全：客户数据可用于AI训练，服务终止后可永久保留。',
+        '第五条 服务等级：乙方承诺7x24小时可用性，若SLA不达标导致营业损失，乙方承担全部赔偿责任。',
+        '第六条 终止退款：任何一方提前解除合同时，未消耗服务费不予退还。',
+      ].join('\n')
+    )
+
+    expect(result.risk_label).toBe('red')
+    expect(result.source).toBe('第五条 服务等级：乙方承诺7x24小时可用性，若SLA不达标导致营业损失，乙方承担全部赔偿责任。')
+    expect(result.source).not.toContain('第四条')
+    expect(result.source).not.toContain('第六条')
   })
 })

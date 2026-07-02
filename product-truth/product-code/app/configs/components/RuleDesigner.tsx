@@ -9,7 +9,9 @@ import type {
   ContractPolicyRule,
   ContractRuleCategory,
   ContractRuleEngineType,
+  ContractRuleMessageTemplate,
   ContractRuleOperator,
+  ContractRuleRiskLevel,
 } from '@/types/rules'
 
 type RuleDraft = Partial<ContractPolicyRule>
@@ -37,6 +39,12 @@ const engineOptions: Array<{ value: ContractRuleEngineType; label: string }> = [
 
 const operatorOptions: ContractRuleOperator[] = ['<=', '>=', '>', '<', '=', 'contains', 'in']
 
+const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> = [
+  { value: 'green', label: '绿色' },
+  { value: 'yellow', label: '黄色' },
+  { value: 'red', label: '红线' },
+]
+
 const actionOptions = [
   { value: 'auto_approve', label: '自动通过' },
   { value: 'suggest_counterparty', label: '建议会签' },
@@ -49,12 +57,24 @@ function createDefaultRule(): RuleDraft {
     code: '',
     name: '',
     description: '',
+    business_domain: 'contract_review',
+    risk_level: 'yellow',
     category: 'duration',
     engine_type: 'structured',
     target_field: 'payment_days',
     clause_category: '',
     field_hints: [],
     semantic_prompt: '',
+    message_template: {
+      title: '',
+      description: '',
+      suggestion: '',
+      comment: '',
+      negotiation_action: '',
+      negotiation_required: false,
+      owner_role: 'sales',
+      bottom_line: '',
+    },
     applicable_scenarios: [],
     scope: 'org',
     level_a_operator: '<=',
@@ -88,11 +108,16 @@ function fromCsv(value: string) {
     .filter(Boolean)
 }
 
+function asMessageTemplate(value: ContractPolicyRule['message_template'] | undefined): ContractRuleMessageTemplate {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
 export default function RuleDesigner({ initialRule, saving = false, onSave, onTest }: RuleDesignerProps) {
   const [draft, setDraft] = useState<RuleDraft>(() => initialRule || createDefaultRule())
   const [fieldHints, setFieldHints] = useState(() => toCsv(initialRule?.field_hints))
   const [scenarios, setScenarios] = useState(() => toCsv(initialRule?.applicable_scenarios))
   const isSemantic = draft.engine_type === 'semantic' || draft.category === 'text'
+  const messageTemplate = useMemo(() => asMessageTemplate(draft.message_template), [draft.message_template])
 
   useEffect(() => {
     const nextDraft = initialRule || createDefaultRule()
@@ -105,14 +130,22 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
     ...draft,
     field_hints: fromCsv(fieldHints),
     applicable_scenarios: fromCsv(scenarios),
+    message_template: messageTemplate,
     level_a_threshold: Number(draft.level_a_threshold ?? 0),
     level_b_threshold: Number(draft.level_b_threshold ?? 0),
     level_c_threshold: Number(draft.level_c_threshold ?? 0),
     priority: Number(draft.priority ?? 100),
-  }), [draft, fieldHints, scenarios])
+  }), [draft, fieldHints, scenarios, messageTemplate])
 
   function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
+  }
+
+  function updateMessageTemplate<K extends keyof ContractRuleMessageTemplate>(
+    key: K,
+    value: ContractRuleMessageTemplate[K]
+  ) {
+    update('message_template', { ...messageTemplate, [key]: value })
   }
 
   return (
@@ -138,6 +171,21 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
             onChange={(event) => update('name', event.target.value)}
             placeholder="付款账期标准"
             required
+          />
+        </Field>
+        <Field label="业务域">
+          <Input
+            value={draft.business_domain || ''}
+            onChange={(event) => update('business_domain', event.target.value)}
+            placeholder="contract_review"
+            required
+          />
+        </Field>
+        <Field label="风险等级">
+          <Select
+            value={draft.risk_level || 'yellow'}
+            onChange={(value) => update('risk_level', value as ContractRuleRiskLevel)}
+            options={riskLevelOptions}
           />
         </Field>
         <Field label="规则分类">
@@ -206,6 +254,81 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
           />
         </Field>
       ) : null}
+
+      <div className="rounded-lg border border-slate-200">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h3 className="text-sm font-medium text-slate-900">批注与谈判模板</h3>
+        </div>
+        <div className="space-y-4 p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="风险标题模板">
+              <Input
+                value={messageTemplate.title || ''}
+                onChange={(event) => updateMessageTemplate('title', event.target.value)}
+                placeholder="如：付款节奏风险"
+              />
+            </Field>
+            <Field label="责任角色">
+              <Input
+                value={messageTemplate.owner_role || ''}
+                onChange={(event) => updateMessageTemplate('owner_role', event.target.value)}
+                placeholder="sales / legal / finance"
+              />
+            </Field>
+          </div>
+          <Field label="风险说明模板">
+            <Textarea
+              value={messageTemplate.description || ''}
+              onChange={(event) => updateMessageTemplate('description', event.target.value)}
+              placeholder="描述命中该规则时应如何解释风险。"
+              rows={3}
+            />
+          </Field>
+          <Field label="批注文案模板">
+            <Textarea
+              value={messageTemplate.comment || ''}
+              onChange={(event) => updateMessageTemplate('comment', event.target.value)}
+              placeholder="写给客户可见的 Word 批注意见。"
+              rows={3}
+            />
+          </Field>
+          <Field label="销售谈判动作">
+            <Textarea
+              value={messageTemplate.negotiation_action || ''}
+              onChange={(event) => updateMessageTemplate('negotiation_action', event.target.value)}
+              placeholder="销售需要向客户争取、确认或让步的动作。"
+              rows={3}
+            />
+          </Field>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="修改建议">
+              <Textarea
+                value={messageTemplate.suggestion || ''}
+                onChange={(event) => updateMessageTemplate('suggestion', event.target.value)}
+                placeholder="内部建议或推荐替代条款。"
+                rows={3}
+              />
+            </Field>
+            <Field label="谈判底线">
+              <Textarea
+                value={messageTemplate.bottom_line || ''}
+                onChange={(event) => updateMessageTemplate('bottom_line', event.target.value)}
+                placeholder="不可突破的商业或法务底线。"
+                rows={3}
+              />
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={Boolean(messageTemplate.negotiation_required)}
+              onChange={(event) => updateMessageTemplate('negotiation_required', event.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            必须进入销售谈判任务
+          </label>
+        </div>
+      </div>
 
       <div className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">

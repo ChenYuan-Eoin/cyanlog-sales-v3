@@ -53,14 +53,37 @@ export type AIRuntimeState =
   | 'missing_credential'
   | 'unreachable_in_vercel'
   | 'local_health_ok'
+  | 'local_cli_ready'
+  | 'local_auth_failed'
   | 'local_health_failed'
+  | 'remote_health_ok'
+  | 'remote_auth_failed'
+  | 'remote_health_failed'
   | 'ready_to_call'
+  | 'recent_invocation_passed'
+  | 'recent_invocation_partial'
+  | 'recent_invocation_failed'
+
+export interface RuntimeInvocationSummary {
+  id?: string
+  provider: string | null
+  model: string | null
+  status: string | null
+  degraded: boolean
+  fallback_reason: string | null
+  error_message: string | null
+  transport: string | null
+  provider_kind: string | null
+  attempt_errors: Array<string | null>
+  created_at: string | null
+}
 
 export interface RuntimeProvider {
   profile: string
   provider_kind: 'openai_compatible' | 'builtin'
   provider: string
   model: string
+  runtime_location: 'local' | 'cloud' | 'builtin'
   level: number
   timeout_ms: number
   stages: string[]
@@ -74,6 +97,15 @@ export interface RuntimeProvider {
   runtime_action: string | null
   runtime_environment: string
   local_endpoint: boolean
+  latest_invocation: RuntimeInvocationSummary | null
+  latest_tender_invocation?: RuntimeInvocationSummary | null
+  tender_runtime?: {
+    runtime_state: AIRuntimeState
+    runtime_reason: string
+    runtime_action: string | null
+    runtime_environment: string
+    local_endpoint: boolean
+  } | null
 }
 
 export interface RuntimePolicy {

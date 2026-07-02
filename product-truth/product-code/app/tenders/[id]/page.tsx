@@ -5,7 +5,6 @@ import { notFound } from 'next/navigation'
 import { supabaseAdmin } from '@/lib/supabase'
 import { resolveRouteParams } from '@/lib/route-params'
 import type { TenderKeyInfo } from '@/lib/ocr/tender-parser'
-import TenderWorkflow from '@/components/tender/TenderWorkflow'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -29,6 +28,7 @@ export default async function TenderDetailPage({ params }: PageProps) {
   const commercial = keyInfo.commercialTerms || []
   const timeline = keyInfo.timeline || []
   const confidence = ocrResult.confidence ?? 0
+  const aiRuntime = keyInfo.aiRuntime || null
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto">
@@ -59,6 +59,8 @@ export default async function TenderDetailPage({ params }: PageProps) {
           </dl>
         </div>
       </section>
+
+      <RuntimeEvidencePanel runtime={aiRuntime} />
 
       {/* 评分标准 */}
       {scores.length > 0 && (
@@ -162,7 +164,7 @@ export default async function TenderDetailPage({ params }: PageProps) {
       {/* 无关键信息提示 */}
       {scores.length === 0 && techReqs.length === 0 && commercial.length === 0 && timeline.length === 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-          ⚠️ 未从文档中识别出评分标准、技术要求、商务条款、时间节点等结构化信息。
+          未从文档中识别出评分标准、技术要求、商务条款、时间节点等结构化信息。
           可能是文档格式特殊或 OCR 文本质量不足。
         </div>
       )}
@@ -172,14 +174,157 @@ export default async function TenderDetailPage({ params }: PageProps) {
         {ocrResult.created_at ? new Date(ocrResult.created_at).toLocaleString('zh-CN') : '未知'}
         · 信心度 {confidence}%
       </footer>
-
-      {/* 工作流引擎 */}
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">标书生成工作流</h2>
-        <TenderWorkflow tenderId={id} />
-      </section>
     </div>
   )
+}
+
+function RuntimeEvidencePanel({ runtime }: { runtime: TenderKeyInfo['aiRuntime'] | null }) {
+  if (!runtime) {
+    return (
+      <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-amber-900">AI 解析证据缺失</h2>
+            <p className="mt-1 text-xs text-amber-800">
+              当前记录没有云模型调用证据，只能按确定性解析结果人工复核。
+            </p>
+          </div>
+          <span className="mt-2 w-fit rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900 md:mt-0">
+            未验证
+          </span>
+        </div>
+      </section>
+    )
+  }
+
+  const totalChunks = runtime.chunk_count ?? 0
+  const analyzedChunks = runtime.analyzed_chunk_count ?? 0
+  const selectedChunks = runtime.selected_chunk_count ?? (totalChunks || analyzedChunks)
+  const displayTotalChunks = totalChunks || selectedChunks
+  const characterCoverage = formatCoverage(runtime.character_coverage_ratio ?? runtime.coverage_ratio, runtime.analyzed_text_length, runtime.text_length)
+  const chunkCoverage = formatCoverage(runtime.chunk_coverage_ratio, analyzedChunks, displayTotalChunks)
+  const chunks = [analyzedChunks, selectedChunks, displayTotalChunks]
+  const chars = [
+    runtime.analyzed_text_length ?? 0,
+    runtime.selected_text_length ?? 0,
+    runtime.text_length ?? 0,
+  ]
+  const statusClass = runtime.degraded
+    ? 'border-amber-200 bg-amber-50 text-amber-900'
+    : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+  const statusLabel = runtime.degraded ? '部分解析' : '完整解析'
+  const invocationId = runtime.model_invocation_id
+
+  return (
+    <section className="mb-6 rounded-lg border bg-white">
+      <div className="flex flex-col gap-3 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">AI 解析证据</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            云模型、分块覆盖率和调用记录用于判断长文本解析是否可信。
+          </p>
+        </div>
+        <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass}`}>
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="grid gap-0 divide-y md:grid-cols-4 md:divide-x md:divide-y-0">
+        <RuntimeMetric label="Provider" value={runtime.provider || 'unknown'} />
+        <RuntimeMetric label="Model" value={runtime.model || 'unknown'} />
+        <RuntimeMetric label="Transport" value={formatTransport(runtime.transport)} />
+        <RuntimeMetric label="字符覆盖" value={characterCoverage} />
+      </div>
+
+      <div className="grid gap-3 border-t px-5 py-4 text-sm text-slate-600 md:grid-cols-4">
+        <div>
+          <span className="text-xs text-slate-500">分块</span>
+          <div className="mt-1 font-mono text-slate-900">
+            {chunks[0]} / {chunks[1]} / {chunks[2]}
+          </div>
+          <div className="mt-0.5 text-xs text-slate-500">成功 / 已选 / 总计</div>
+        </div>
+        <div>
+          <span className="text-xs text-slate-500">正文字符</span>
+          <div className="mt-1 font-mono text-slate-900">
+            {formatNumber(chars[0])} / {formatNumber(chars[1])} / {formatNumber(chars[2])}
+          </div>
+          <div className="mt-0.5 text-xs text-slate-500">成功 / 已选 / 总计 · chunk {chunkCoverage}</div>
+        </div>
+        <div>
+          <span className="text-xs text-slate-500">耗时</span>
+          <div className="mt-1 font-mono text-slate-900">
+            {formatDuration(runtime.processing_ms)}
+          </div>
+          <div className="mt-0.5 text-xs text-slate-500">并发 {runtime.concurrency ?? 0}</div>
+        </div>
+        <div>
+          <span className="text-xs text-slate-500">调用 ID</span>
+          <div className="mt-1 font-mono text-slate-900">
+            {invocationId ? invocationId.slice(0, 8) : '未记录'}
+          </div>
+          <div className="mt-0.5 text-xs text-slate-500">{invocationId || '未写入 model_invocations'}</div>
+        </div>
+        <div className="md:col-span-4">
+          <span className="text-xs text-slate-500">异常</span>
+          <div className="mt-1 text-slate-900">
+            {runtime.attempt_errors?.length ? `${runtime.attempt_errors.length} 条` : '无'}
+          </div>
+          {runtime.attempt_errors?.length ? (
+            <div className="mt-0.5 line-clamp-1 text-xs text-amber-700">{runtime.attempt_errors[0]}</div>
+          ) : (
+            <div className="mt-0.5 text-xs text-slate-500">未记录模型调用错误</div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function RuntimeMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-5 py-4">
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold text-slate-900" title={value}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function computedCoverage(analyzedChunks: number, totalChunks: number) {
+  if (!totalChunks) return null
+  return analyzedChunks / totalChunks
+}
+
+function formatCoverage(value: unknown, analyzedChunks = 0, totalChunks = 0) {
+  const fallback = computedCoverage(analyzedChunks, totalChunks)
+  const source = typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  if (typeof source !== 'number' || !Number.isFinite(source)) return '未知'
+  const normalized = source > 1 ? source : source * 100
+  return `${Math.max(0, Math.min(100, Math.round(normalized)))}%`
+}
+
+function formatTransport(value: unknown) {
+  if (typeof value !== 'string' || !value) return 'unknown'
+  const map: Record<string, string> = {
+    openai_compatible_http: 'HTTP',
+    manual_fallback: 'Fallback',
+    lm_studio_cli: 'LM Studio CLI',
+    builtin_rule_engine: 'Rule Engine',
+  }
+  return map[value] || value
+}
+
+function formatNumber(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0'
+  return Intl.NumberFormat('zh-CN').format(Math.round(value))
+}
+
+function formatDuration(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '未知'
+  if (value < 1000) return `${Math.round(value)}ms`
+  return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}s`
 }
 
 function Field({ label, value }: { label: string; value?: string }) {

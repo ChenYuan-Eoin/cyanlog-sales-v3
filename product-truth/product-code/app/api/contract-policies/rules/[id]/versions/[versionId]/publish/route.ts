@@ -8,6 +8,7 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { missingRulePublicationFields } from '@/lib/contracts/rule-publication'
 
 const publishVersionSchema = z.object({
   gray_release: z.boolean().optional().default(false),
@@ -53,15 +54,50 @@ export async function POST(
       return errorResponse(createApiError('NOT_FOUND', '版本不存在'))
     }
 
+    const configSnapshot = version.config_snapshot && typeof version.config_snapshot === 'object'
+      ? version.config_snapshot as Record<string, unknown>
+      : {}
+    const missingFields = missingRulePublicationFields(configSnapshot)
+    if (missingFields.length > 0) {
+      return errorResponse(
+        createApiError(
+          'VALIDATION_ERROR',
+          `规则尚不能发布，缺少转译字段: ${missingFields.join(', ')}`
+        )
+      )
+    }
+
+    const now = new Date().toISOString()
+    const publishedSnapshot = {
+      ...configSnapshot,
+      id,
+      org_id: orgId,
+      version: version.version,
+      is_active: true,
+      lifecycle_status: 'published',
+      translation_status: 'ready',
+      published_by: user.id,
+      published_at: now,
+      updated_at: now,
+    }
+
+    await supabaseAdmin
+      .from('contract_rule_snapshots')
+      .update({ status: 'rolled_back' })
+      .eq('rule_id', id)
+      .eq('status', 'published')
+      .neq('id', versionId)
+
     // 2. 更新版本状态
     const { error: updateError } = await supabaseAdmin
       .from('contract_rule_snapshots')
       .update({
         status: 'published',
         released_by: user.id,
-        released_at: new Date().toISOString(),
+        released_at: now,
         is_gray_release: gray_release,
         gray_end_at: gray_end_at,
+        config_snapshot: publishedSnapshot,
       })
       .eq('id', versionId)
 
@@ -73,13 +109,7 @@ export async function POST(
     const { error: ruleError } = await supabaseAdmin
       .from('contract_rules_v2')
       .update({
-        version: version.version,
-        ...(version.config_snapshot || {}),
-        org_id: orgId,
-        id,
-        published_by: user.id,
-        published_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        ...publishedSnapshot,
       })
       .eq('id', id)
       .eq('org_id', orgId)

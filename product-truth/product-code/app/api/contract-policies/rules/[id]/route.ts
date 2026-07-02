@@ -11,16 +11,32 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { inferRuleLifecycleStatus, inferRuleTranslationStatus } from '@/lib/contracts/rule-publication'
+
+const messageTemplateSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  suggestion: z.string().optional(),
+  comment: z.string().optional(),
+  negotiation_action: z.string().optional(),
+  negotiation_required: z.boolean().optional(),
+  owner_role: z.string().optional(),
+  bottom_line: z.string().optional(),
+}).optional().nullable()
 
 const updateRuleSchema = z.object({
   name: z.string().min(1).optional(),
+  rule_set_id: z.string().uuid().optional().nullable(),
   description: z.string().optional(),
+  business_domain: z.string().min(1).optional(),
+  risk_level: z.enum(['green', 'yellow', 'red']).optional(),
   category: z.enum(['ratio', 'amount', 'duration', 'enum', 'text']).optional(),
   engine_type: z.enum(['structured', 'semantic', 'hybrid']).optional(),
   target_field: z.string().optional().nullable(),
   clause_category: z.string().optional().nullable(),
   field_hints: z.array(z.string()).optional(),
   semantic_prompt: z.string().optional().nullable(),
+  message_template: messageTemplateSchema,
   applicable_scenarios: z.array(z.string()).optional(),
   scope: z.enum(['org', 'dept', 'user']).optional(),
   is_active: z.boolean().optional(),
@@ -93,13 +109,23 @@ export async function PATCH(
     }
 
     const nextVersion = (oldRule.version || 1) + 1
+    const nextDraft = {
+      ...oldRule,
+      ...parsed.data,
+      version: nextVersion,
+    }
+    const translationStatus = inferRuleTranslationStatus(nextDraft)
+    const lifecycleStatus = inferRuleLifecycleStatus(nextDraft)
     const { data: rule, error } = await supabaseAdmin
       .from('contract_rules_v2')
       .update({
         ...parsed.data,
         version: nextVersion,
-        published_at: new Date().toISOString(),
-        published_by: user.id,
+        published_at: null,
+        published_by: null,
+        lifecycle_status: lifecycleStatus,
+        translation_status: translationStatus,
+        translation_notes: translationStatus === 'ready' ? [] : ['规则保存为草稿，发布前需要完成 AI 转译或人工确认。'],
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -115,10 +141,10 @@ export async function PATCH(
       rule_id: id,
       version: nextVersion,
       config_snapshot: rule,
-      released_by: user.id,
-      released_at: new Date().toISOString(),
-      release_note: '保存规则并立即生效',
-      status: 'published',
+      released_by: null,
+      released_at: null,
+      release_note: '保存规则草稿，待转译确认后发布',
+      status: 'draft',
     })
 
     return successResponse(rule)
@@ -145,8 +171,8 @@ export async function DELETE(
       .update({
         is_active: false,
         version: nextVersion,
-        published_at: new Date().toISOString(),
-        published_by: user.id,
+        lifecycle_status: 'archived',
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .eq('org_id', orgId)
@@ -165,7 +191,7 @@ export async function DELETE(
         released_by: user.id,
         released_at: new Date().toISOString(),
         release_note: '停用规则',
-        status: 'published',
+        status: 'rolled_back',
       })
     }
 

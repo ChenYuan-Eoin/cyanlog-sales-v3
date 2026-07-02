@@ -80,6 +80,58 @@ describe('comment patch adapter', () => {
     expect(patches).toHaveLength(0)
   })
 
+  it('keeps a located comment only when the source range exactly matches evidence text', () => {
+    const patches = buildCommentPatchesFromRiskCards({
+      contractId: 'contract-1',
+      sourceText: '第一条 付款周期为 120 天，甲方应按约付款。',
+      risks: [
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          level: 'red',
+          title: '付款周期过长',
+          evidence: {
+            snippets: ['付款周期为 120 天'],
+            source_range: { start: 4, end: 15 },
+          },
+          status: 'open',
+        },
+      ],
+    })
+
+    expect(patches).toHaveLength(1)
+    expect(patches[0].annotation.selected_text).toBe('付款周期为 120 天')
+    expect(patches[0].annotation.start_offset).toBe(4)
+    expect(patches[0].annotation.end_offset).toBe(15)
+    expect(patches[0].annotation.comment).toContain('SourceRange: 4-15')
+  })
+
+  it('marks stale source ranges as manual instead of producing a false Word anchor', () => {
+    const patches = buildCommentPatchesFromRiskCards({
+      contractId: 'contract-1',
+      sourceText: '第一条 付款周期为 30 天，甲方应按约付款。',
+      risks: [
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          level: 'red',
+          title: '付款周期过长',
+          evidence: {
+            snippets: ['付款周期为 120 天'],
+            source_range: { start: 4, end: 15 },
+          },
+          status: 'open',
+        },
+      ],
+    })
+
+    expect(patches).toHaveLength(1)
+    expect(patches[0].annotation.selected_text).toBe('')
+    expect(patches[0].annotation.start_offset).toBe(0)
+    expect(patches[0].annotation.end_offset).toBe(0)
+    expect(patches[0].annotation.comment).toContain('【需人工定位】')
+    expect(patches[0].annotation.comment).toContain('source range text mismatch')
+    expect(patches[0].annotation.comment).toContain('LocationStatus: manual_required')
+  })
+
   it('extracts RiskFinding identity from persisted annotation comments', () => {
     expect(extractRiskFindingId('建议调整\nRiskFinding: 11111111-1111-4111-8111-111111111111'))
       .toBe('11111111-1111-4111-8111-111111111111')

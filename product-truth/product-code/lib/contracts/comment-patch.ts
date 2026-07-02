@@ -31,6 +31,19 @@ export type CommentPatch = {
   annotation: ContractAnnotationDraft
 }
 
+type SelectedEvidenceAnchor = {
+  text: string
+  start: number | null
+  end: number | null
+}
+
+type PatchLocation = {
+  located: boolean
+  start: number
+  end: number
+  reason: string
+}
+
 export function extractRiskFindingId(comment: string | null | undefined) {
   if (!comment) return null
   const match = comment.match(/\bRiskFinding:\s*([0-9a-fA-F-]{8,})\b/)
@@ -62,36 +75,135 @@ function evidenceRuleSnapshotId(evidence: unknown): string | null {
   return typeof snapshotId === 'string' && snapshotId.trim() ? snapshotId : null
 }
 
+function evidenceSourceRange(evidence: unknown): { start: number; end: number } | null {
+  const sourceRange = evidenceRecord(evidence).source_range
+  if (!sourceRange || typeof sourceRange !== 'object' || Array.isArray(sourceRange)) return null
+  const record = sourceRange as Record<string, unknown>
+  return typeof record.start === 'number' && typeof record.end === 'number' && record.end > record.start
+    ? { start: record.start, end: record.end }
+    : null
+}
+
 function isGenericEvidence(value: string) {
   const normalized = value.trim()
   if (normalized.length < 2) return true
   return ['ONES', '书面', '合同', '有效期', '6%', '0'].includes(normalized)
 }
 
-function riskSelectedText(risk: RiskCardCommentSource) {
-  return evidenceSnippets(risk.evidence)[0] || ''
+function normalizeForScore(value: string) {
+  return value
+    .replace(/\s+/g, '')
+    .replace(/[，。；：、,.!?！？;:（）()【】\[\]《》"“”'‘’]/g, '')
+    .toLowerCase()
 }
 
-function patchLocation(risk: RiskCardCommentSource, selectedText: string) {
-  const hasOffsets = typeof risk.position_start === 'number'
-    && typeof risk.position_end === 'number'
-    && risk.position_start >= 0
-    && risk.position_end > risk.position_start
-  const hasEvidence = selectedText.trim().length > 0 && !isGenericEvidence(selectedText)
-  const status = evidenceLocationStatus(risk.evidence)
-  const located = hasOffsets && hasEvidence && status !== 'manual_required'
+function keywordTokens(risk: RiskCardCommentSource) {
+  return [risk.title, risk.description, risk.suggestion]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .flatMap((value) => value.split(/[\s/|,，。；：:、()（）【】《》"'“”‘’-]+/))
+    .map(normalizeForScore)
+    .filter((value) => value.length >= 2 && value.length <= 12)
+}
+
+function evidenceSegments(snippet: string) {
+  const segments: string[] = []
+  for (const line of snippet.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const sentenceParts = trimmed
+      .split(/(?<=[。；;])/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+    segments.push(...(sentenceParts.length > 0 ? sentenceParts : [trimmed]))
+  }
+  return segments.filter((segment) => (
+    segment.length >= 6
+    && segment.length <= 120
+    && !isGenericEvidence(segment)
+  ))
+}
+
+function segmentScore(segment: string, tokens: string[]) {
+  const normalizedSegment = normalizeForScore(segment)
+  const tokenScore = tokens.reduce((score, token) => (
+    normalizedSegment.includes(token) ? score + Math.min(token.length, 6) : score
+  ), 0)
+  const clauseSignal = /^第.+[条章节款项]/.test(segment.trim()) ? 4 : 0
+  const lengthPenalty = Math.max(0, segment.length - 60) / 20
+  return tokenScore + clauseSignal - lengthPenalty
+}
+
+function riskSelectedEvidence(risk: RiskCardCommentSource): SelectedEvidenceAnchor {
+  const snippet = evidenceSnippets(risk.evidence)[0] || ''
+  if (!snippet.trim()) return { text: '', start: null, end: null }
+
+  const tokens = keywordTokens(risk)
+  const segments = evidenceSegments(snippet)
+  const selectedText = (segments.length > 0
+    ? segments
+      .map((segment) => ({ segment, score: segmentScore(segment, tokens) }))
+      .sort((left, right) => right.score - left.score || left.segment.length - right.segment.length)[0]?.segment
+    : null) || snippet.trim()
+
+  const range = evidenceSourceRange(risk.evidence)
+  const relativeStart = snippet.indexOf(selectedText)
+  if (range && relativeStart >= 0) {
+    return {
+      text: selectedText,
+      start: range.start + relativeStart,
+      end: range.start + relativeStart + selectedText.length,
+    }
+  }
+
+  return {
+    text: selectedText,
+    start: typeof risk.position_start === 'number' ? risk.position_start : null,
+    end: typeof risk.position_end === 'number' ? risk.position_end : null,
+  }
+}
+
+function sourceRangeTextMatches(
+  selectedEvidence: SelectedEvidenceAnchor,
+  sourceText?: string
+): { matched: boolean; reason: string | null } {
+  if (!sourceText) return { matched: true, reason: null }
+  if (typeof selectedEvidence.start !== 'number' || typeof selectedEvidence.end !== 'number') {
+    return { matched: false, reason: 'missing source range' }
+  }
+
+  const actualText = sourceText.slice(selectedEvidence.start, selectedEvidence.end)
+  if (actualText === selectedEvidence.text) return { matched: true, reason: null }
+
+  return { matched: false, reason: 'source range text mismatch' }
+}
+
+function patchLocation(
+  selectedEvidence: SelectedEvidenceAnchor,
+  evidence: unknown,
+  sourceText?: string
+): PatchLocation {
+  const hasOffsets = typeof selectedEvidence.start === 'number'
+    && typeof selectedEvidence.end === 'number'
+    && selectedEvidence.start >= 0
+    && selectedEvidence.end > selectedEvidence.start
+  const hasEvidence = selectedEvidence.text.trim().length > 0 && !isGenericEvidence(selectedEvidence.text)
+  const status = evidenceLocationStatus(evidence)
+  const sourceRangeMatch = hasOffsets && hasEvidence && status !== 'manual_required'
+    ? sourceRangeTextMatches(selectedEvidence, sourceText)
+    : { matched: true, reason: null }
+  const located = hasOffsets && hasEvidence && status !== 'manual_required' && sourceRangeMatch.matched
 
   return {
     located,
-    start: located ? risk.position_start as number : 0,
-    end: located ? risk.position_end as number : 0,
+    start: located ? selectedEvidence.start as number : 0,
+    end: located ? selectedEvidence.end as number : 0,
     reason: located
       ? 'located'
       : status === 'manual_required'
         ? 'source evidence could not be matched'
         : !hasEvidence
           ? 'missing or generic evidence_text'
-          : 'missing source range',
+          : sourceRangeMatch.reason || 'missing source range',
   }
 }
 
@@ -99,6 +211,7 @@ export function buildCommentPatchesFromRiskCards(input: {
   contractId: string
   risks: RiskCardCommentSource[]
   existingRiskIds?: Set<string>
+  sourceText?: string
 }): CommentPatch[] {
   const existingRiskIds = input.existingRiskIds || new Set<string>()
 
@@ -107,8 +220,9 @@ export function buildCommentPatchesFromRiskCards(input: {
     .filter((risk) => !risk.status || risk.status === 'open')
     .filter((risk) => !existingRiskIds.has(risk.id))
     .map((risk) => {
-      const selectedText = riskSelectedText(risk)
-      const location = patchLocation(risk, selectedText)
+      const selectedEvidence = riskSelectedEvidence(risk)
+      const selectedText = selectedEvidence.text
+      const location = patchLocation(selectedEvidence, risk.evidence, input.sourceText)
       const isRed = risk.level === 'red'
       const ruleSnapshotId = evidenceRuleSnapshotId(risk.evidence)
 

@@ -194,6 +194,7 @@ export async function POST(
           source: 'text-extraction',
           completed_at: new Date().toISOString(),
         },
+        status: 'PENDING',
         updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)
@@ -254,6 +255,7 @@ export async function POST(
       fileType,
       versionNumber: nextVersionNumber,
       versionSource,
+      status: 'PENDING',
       message: '上传成功',
     })
   } catch (error: unknown) {

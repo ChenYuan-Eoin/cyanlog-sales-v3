@@ -37,6 +37,8 @@ F006 不是“代码里写一段合同审核 prompt”，也不是“规则引�
 | 组成 | 来源 | 说明 |
 |------|------|------|
 | `rule_snapshot_ids` | F009 | 已发布规则快照，包含结构化/语义/混合规则 |
+| `rule_set_snapshot_ids` | F009 | 已发布规则集快照，冻结规则集版本、规则快照集合和规则集发布状态 |
+| `document_snapshot_ids` | F009 | 规则集声明文档快照，冻结 Markdown/自然语言声明资产和转译状态 |
 | `template_snapshot_ids` | 知识库/模板库 | 标准合同模板、条款模板、案例、话术 |
 | `variant_dictionary_snapshot_id` | 知识库/词典 | 产品、部署、授权、法律、财务术语变体 |
 | `output_schema` | F006 | 风险项、证据、批注意图、报告摘要的结构约束 |
@@ -61,7 +63,7 @@ draft
 - `published` 后必须生成不可变快照。
 - `ReviewRun` 绑定 `SkillBundle` 后，后续规则或模型配置变化不能影响历史结果。
 - `archived` 只影响新审核，不影响历史追溯。
-- 当 F009 从 `ones-internal-skills` 等规则源导入新版本并生成新的 `RuleSnapshot` 后，新建或再审核的 `ReviewRun` 必须重新计算 `SkillBundle.compiled_hash`；若快照集合变化，不得继续复用旧 current bundle。
+- 当 F009 的配置中心规则发布新 `RuleSnapshot` 后，新建或再审核的 `ReviewRun` 必须重新计算 `SkillBundle.compiled_hash`；若快照集合变化，不得继续复用旧 current bundle。`ones-internal-skills` 等 GitHub 资产只能作为参考导入、模板和 eval 样例，不能作为生产规则源头。
 
 ---
 
@@ -144,7 +146,9 @@ interface SkillBundle {
   key: 'CONTRACT_REVIEW_DEFAULT' | string
   is_current: boolean
   rule_snapshot_ids: string[]
+  rule_set_snapshot_ids: string[]
   template_snapshot_ids: string[]
+  document_snapshot_ids: string[]
   variant_dictionary_snapshot_id?: string
   output_schema: {
     schema_version: 'f006.review.v1'
@@ -160,9 +164,21 @@ interface SkillBundle {
   eval_case_ids: string[]
   compiled_from: {
     product_phase: 'contract_review_first_stage'
+    production_rule_source: {
+      owner: 'F009'
+      source_of_truth: 'config_center_published_rules'
+      rules_table: 'contract_rules_v2'
+      snapshot_table: 'contract_rule_snapshots'
+    }
     execution_plan: string[]
     rules: Array<Record<string, unknown>>
+    rule_units: Array<Record<string, unknown>>
+    rule_translation_gate: Record<string, unknown>
+    rule_sets: Array<Record<string, unknown>>
+    rule_set_documents: Array<Record<string, unknown>>
+    rule_set_document_gate: Record<string, unknown>
     template_references: Array<Record<string, unknown>>
+    reference_assets: Array<Record<string, unknown>>
     model_policy: Record<string, unknown>
   }
   release_meta: Record<string, unknown>
@@ -173,6 +189,8 @@ interface ReviewEvidence {
   review_run_id: string
   skill_bundle_id: string
   rule_snapshot_ids: string[]
+  rule_set_snapshot_ids: string[]
+  rule_set_document_ids: string[]
   template_references: Array<{
     template_id: string
     template_version: string
@@ -211,6 +229,7 @@ interface RiskFinding {
 | `POST` | `/api/contract-skills/compile` | 从已发布规则、模板、模型策略编译 SkillBundle |
 | `GET` | `/api/contract-skills/published` | 获取当前组织可用 SkillBundle |
 | `POST` | `/api/contract-skills/:id/evaluate` | 对测试合同运行回归测试 |
+| `POST` | `/api/contract-policies/rules/:id/translate` | 生成配置中心规则的 AI 转译草稿，不直接发布 |
 | `POST` | `/api/contracts/:id/review-runs` | 创建 ReviewRun 并绑定 SkillBundle |
 | `GET` | `/api/contracts/:id/review-runs/:runId/evidence` | 查询审核依据与模型调用证据 |
 
@@ -240,10 +259,20 @@ interface RiskFinding {
 当前阶段已经从“证据适配层”推进到真实运行对象：
 
 - `contract_skill_bundles`：由已发布 `contract_rules_v2`、`contract_rule_snapshots`、`clause_library` 引用、输出 schema 和当前 `model_policy_id` 编译得到；使用内容 hash 去重，避免重复生成同一运行包。
-- `contract_skill_bundles.compiled_from.external_skill_source`：记录 `suoyidev/ones-internal-skills` / `ones-contract-assistant` 的 repo、commit、version、references 和产品化 override；运行时事实仍以配置中心发布后的 `RuleSnapshot` 为准，不直接读取外部 repo。
-- `contract_skill_bundles.compiled_from.eval_results`：第一阶段只能记录外部仓库 eval case 覆盖和静态规则完整性；如果没有真实执行 runtime/model-quality eval，状态必须标记为 `runtime_eval_not_run`，并在 ReviewRun 证据中展示为未验收，不能写成全部通过。
+- `contract_skill_bundles.compiled_from.production_rule_source`：记录生产规则源为 F009 配置中心发布规则，即 `contract_rules_v2` + `contract_rule_snapshots`；这是审核依据的唯一运行时事实源。
+- `contract_skill_bundles.compiled_from.reference_assets`：记录 `suoyidev/ones-internal-skills` / `ones-contract-assistant` 的 repo、commit、version 和 references，仅作为导入参考、模板素材和 eval 样例，不得被页面或模型提示展示为生产规则来源。
+- `contract_skill_bundles.compiled_from.rule_units` / `rule_translation_gate`：把已发布规则转译为 `RuleUnit`，并记录是否达到 `ready`。缺少 `semantic_prompt`、`message_template`、证据要求或发布快照时，状态必须为 `needs_ai_translation` / `incomplete_source`，ReviewRun 只能显示为降级或需复核。
+- 结构化 `message_template` 不要求只有单段自然语言；`levels + outputs` 这样的规则集结构化模板可作为可执行模板，但单纯 `source` 元数据不能通过转译门禁。
+- `contract_skill_bundles.compiled_from.rule_sets` / `rule_set_documents` / `rule_set_document_gate`：F006 必须把规则集资产和最新发布文档一起冻结。缺少发布文档或文档转译未 ready 时，SkillBundle 不能成为正式审核引擎。
+- F006 编译输入只允许读取 `contract_rules_v2.lifecycle_status='published'`、`translation_status='ready'` 且存在 `published_at` 的规则；编译过程不得自动创建 `published` 快照。缺少已发布快照时，`rule_translation_gate` 必须失败或降级，不能把草稿规则伪装成正式审核引擎。
+- `is_active` 不是正式发布口径。F006 正式执行门禁必须按 `is_active=true + lifecycle_status='published' + translation_status='ready' + published_at` 判定；底层 `rule-engine`、语义审核入口、规则统计和 ReviewRun 证据回退查询都必须使用同一口径。若 SkillBundle 未达到 `published/current/translation ready/eval passed`，语义模型不得运行，ReviewRun 必须记录降级原因。
+- AI 转译是草稿动作：它可以补全 `semantic_prompt`、`field_hints`、`message_template`、谈判动作和批注模板，但不能发布规则，也不能改变规则编码、阈值和生产来源。只有人工确认并通过发布 API 的快照才能进入 `SkillBundle`。
+- `contract_skill_bundles.compiled_from.eval_results`：第一阶段必须区分两类 gate：`static_eval_status` 表示配置中心发布规则、RuleUnit 完整性、已发布快照和输出 schema 绑定是否通过；`runtime_eval_status` 表示真实模型质量 eval 是否运行。静态发布检查通过可以让 SkillBundle 成为第一阶段可运行引擎，但如果没有真实执行 runtime/model-quality eval，`runtime_eval_status` 必须标记为 `model_quality_eval_not_run`，并在 ReviewRun 证据中展示为未验收，不能写成模型质量全部通过。
+- `runtime_eval_status` 必须区分调用通道：`latest_review_model_invocation_passed` 只允许来自 `semantic_review` 且 `transport=openai_compatible_http`、无降级、无剔除风险、无校验警告的调用；`transport=lm_studio_cli` 只能标记为本机模型执行证据，不能作为 HTTP 接入或线上模型链通过证据。
+- 长合同、长 PDF 的 `semantic_review` 不是普通本地优先场景：当文本超过本地模型页数阈值或 20,000 字符时，F006 必须通过 F012 选择支持 `tender_long_document_parse` 的 L2 云端 OpenAI-compatible Provider；`model_invocations.request_meta` 必须记录 `provider_selection_reason`、`text_length`、`estimated_page_count`、`long_contract_cloud_required`，`response_meta.input_stats` 必须记录提交字符数、chunk 数和覆盖率。没有云端 Provider、云端不可用或输入覆盖不完整时，ReviewRun 必须降级，不能展示为正式 AI 审核完成。
 - `contract_reviews.skill_bundle_id`：每次初审和再审核都会绑定真实 SkillBundle id。
 - `contract_reviews.rule_snapshot_ids`：每次审核运行记录当次消费的规则快照 id，后续规则变更不影响历史 ReviewRun。
+- `contract_reviews.rule_set_snapshot_ids` / `rule_set_document_ids`：每次审核运行记录当次消费的规则集快照和规则集文档，证明审核依据不是散落代码规则。
 - `contract_reviews.model_policy_id` / `model_invocation_ids`：F006 执行时消费 F012 发布策略，并把模型/规则兜底调用审计写回 ReviewRun。
 - `GET /api/contracts/:id/review`：审核工作台读取 ReviewRun 绑定的 SkillBundle、RuleSnapshot、ModelPolicy、ModelInvocation，而不是按当前表状态临时合成。
 
@@ -251,8 +280,9 @@ interface RiskFinding {
 
 - 独立 `POST /api/contract-skills/compile` 和 `GET /api/contract-skills/published` API 尚未产品化。
 - `template_snapshot_ids` 当前以条款库引用为主，标准合同模板快照、变体词典快照和 eval case 门禁尚未完整建模。
-- `ones-internal-skills` 的 eval case 已作为发布证据来源记录，但尚未形成可自动运行、可阻断发布的回归门禁。
+- `ones-internal-skills` 的 eval case 已作为参考评测资产记录，但尚未形成可自动运行、可阻断发布的回归门禁。
 - 第一阶段 ReviewRun 可追溯规则/Skill/模型依据，但还不是完整商业产品形态的 Skill 编辑、模拟、发布、回滚控制台。
+- 2026-07-02 本地验收样例：同一 ReviewRun 绑定 15 个 `RuleSnapshot`、13 个 `RuleSetSnapshot`、13 个 `RuleSetDocument`，SkillBundle v17 为 `published/current`；`semantic_review` 通过 `AI_LEVEL_1 / gpt-oss-20b / openai_compatible_http` 完成，未降级。该样例证明链路可运行，不代表模型质量 eval 已完成。
 
 ---
 
@@ -263,7 +293,10 @@ interface RiskFinding {
 - [x] `ReviewRun` 必须绑定 `SkillBundle`，不允许无版本通用审核
 - [x] 风险项必须包含规则/模板/模型依据之一
 - [ ] 模板对比结果能说明匹配、偏离、缺失和引用来源
-- [ ] 外部 skill eval case 能真实运行并作为发布门禁；未运行时 ReviewRun 必须显示 `runtime_eval_not_run`
+- [x] 第一阶段静态发布门禁能验证配置中心发布规则、RuleUnit、快照和输出 schema 并生成可运行 SkillBundle
+- [x] SkillBundle 能冻结 `RuleSet`、`RuleSetDocument`、`RuleSnapshot` 并在 ReviewRun 中回写绑定 ids
+- [x] 正式审核只加载 `published + ready + published_at` 的规则，未发布或未转译规则不会被底层规则引擎或语义审核伪装为正式依据
+- [ ] 参考 eval case 能真实运行并作为模型质量门禁；未运行时 ReviewRun 必须显示 `model_quality_eval_not_run`
 - [x] 模型输出不符合 Skill schema、缺少规则编号或缺少原文证据时进入降级/人工复核，不伪装成功
 - [x] F007 能消费 F006 输出的 `CommentPatchDraft`
 - [x] 历史 ReviewRun 可查看其当时使用的规则、SkillBundle 和模型策略

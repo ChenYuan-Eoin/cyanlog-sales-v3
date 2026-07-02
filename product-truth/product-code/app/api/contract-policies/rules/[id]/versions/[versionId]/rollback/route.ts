@@ -8,6 +8,7 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { missingRulePublicationFields } from '@/lib/contracts/rule-publication'
 
 const rollbackVersionSchema = z.object({
   reason: z.string().max(500, '回滚原因不能超过500个字符').optional().default(''),
@@ -52,6 +53,33 @@ export async function POST(
       return errorResponse(createApiError('NOT_FOUND', '版本不存在'))
     }
 
+    const configSnapshot = targetVersion.config_snapshot && typeof targetVersion.config_snapshot === 'object'
+      ? targetVersion.config_snapshot as Record<string, unknown>
+      : {}
+    const missingFields = missingRulePublicationFields(configSnapshot)
+    if (missingFields.length > 0) {
+      return errorResponse(
+        createApiError(
+          'VALIDATION_ERROR',
+          `目标版本尚不能回滚发布，缺少转译字段: ${missingFields.join(', ')}`
+        )
+      )
+    }
+
+    const now = new Date().toISOString()
+    const publishedSnapshot = {
+      ...configSnapshot,
+      id,
+      org_id: orgId,
+      version: targetVersion.version,
+      is_active: true,
+      lifecycle_status: 'published',
+      translation_status: 'ready',
+      published_by: user.id,
+      published_at: now,
+      updated_at: now,
+    }
+
     // 2. 获取当前发布的版本
     const { data: currentVersion } = await supabaseAdmin
       .from('contract_rule_snapshots')
@@ -76,8 +104,9 @@ export async function POST(
       .update({
         status: 'published',
         released_by: user.id,
-        released_at: new Date().toISOString(),
+        released_at: now,
         release_note: `回滚至此版本。原因: ${reason || '未说明'}`,
+        config_snapshot: publishedSnapshot,
       })
       .eq('id', versionId)
 
@@ -89,13 +118,7 @@ export async function POST(
     const { error: ruleError } = await supabaseAdmin
       .from('contract_rules_v2')
       .update({
-        ...(targetVersion.config_snapshot || {}),
-        id,
-        org_id: orgId,
-        version: targetVersion.version,
-        published_by: user.id,
-        published_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        ...publishedSnapshot,
       })
       .eq('id', id)
       .eq('org_id', orgId)

@@ -32,6 +32,8 @@ type ContractReviewRow = {
   skill_bundle_id?: string | null
   model_policy_id?: string | null
   rule_snapshot_ids?: string[] | null
+  rule_set_snapshot_ids?: string[] | null
+  rule_set_document_ids?: string[] | null
   model_invocation_ids?: string[] | null
   review_trigger?: string | null
   created_at?: string | null
@@ -302,7 +304,7 @@ export async function GET(
       ruleQueries.push(
         supabaseAdmin
           .from('contract_rules_v2')
-          .select('id, code, version, is_active, engine_type, target_field, clause_category, published_at, updated_at')
+          .select('id, code, version, is_active, lifecycle_status, translation_status, engine_type, target_field, clause_category, published_at, updated_at')
           .eq('org_id', orgId)
           .in('id', riskRuleIds)
       )
@@ -312,7 +314,7 @@ export async function GET(
       ruleQueries.push(
         supabaseAdmin
           .from('contract_rules_v2')
-          .select('id, code, version, is_active, engine_type, target_field, clause_category, published_at, updated_at')
+          .select('id, code, version, is_active, lifecycle_status, translation_status, engine_type, target_field, clause_category, published_at, updated_at')
           .eq('org_id', orgId)
           .in('code', riskRuleCodes)
       )
@@ -322,9 +324,12 @@ export async function GET(
       ruleQueries.push(
         supabaseAdmin
           .from('contract_rules_v2')
-          .select('id, code, version, is_active, engine_type, target_field, clause_category, published_at, updated_at')
+          .select('id, code, version, is_active, lifecycle_status, translation_status, engine_type, target_field, clause_category, published_at, updated_at')
           .eq('org_id', orgId)
           .eq('is_active', true)
+          .eq('lifecycle_status', 'published')
+          .eq('translation_status', 'ready')
+          .not('published_at', 'is', null)
           .order('code', { ascending: true })
       )
     }
@@ -382,7 +387,7 @@ export async function GET(
     if (latestReview?.skill_bundle_id) {
       const { data, error } = await supabaseAdmin
         .from('contract_skill_bundles')
-        .select('id, version, rule_snapshot_ids, template_snapshot_ids, model_policy_id, output_schema, eval_case_ids, release_meta, compiled_from, compiled_hash, status, published_at')
+        .select('id, version, rule_snapshot_ids, rule_set_snapshot_ids, template_snapshot_ids, document_snapshot_ids, model_policy_id, output_schema, eval_case_ids, release_meta, compiled_from, compiled_hash, status, published_at')
         .eq('id', latestReview.skill_bundle_id)
         .maybeSingle()
 
@@ -411,7 +416,7 @@ export async function GET(
     if (latestReview?.model_invocation_ids?.length) {
       const { data, error } = await supabaseAdmin
         .from('model_invocations')
-        .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, created_at')
+        .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, latency_ms, request_meta, response_meta, created_at')
         .in('id', latestReview.model_invocation_ids)
         .order('created_at', { ascending: false })
 
@@ -422,7 +427,7 @@ export async function GET(
     } else if (latestReview?.id) {
       const { data, error } = await supabaseAdmin
         .from('model_invocations')
-        .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, created_at')
+        .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, latency_ms, request_meta, response_meta, created_at')
         .eq('review_id', latestReview.id)
         .order('created_at', { ascending: false })
         .limit(5)

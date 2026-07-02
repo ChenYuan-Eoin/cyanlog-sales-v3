@@ -7,9 +7,94 @@ import { successResponse, errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { listPublishedAIProviders } from '@/lib/configs/runtime'
 import { resolvePublishedModelPolicy } from '@/lib/contracts/model-policy'
+import { supabaseAdmin } from '@/lib/supabase'
 import type { AuthUser } from '@/lib/auth'
 import type { PublishedAIProviderConfig } from '@/lib/configs/runtime'
-import { assessProviderRuntime, type AIRuntimeAssessment } from '@/lib/configs/ai-runtime-readiness'
+import {
+  assessProviderRuntime,
+  type AIRuntimeAssessment,
+  type RuntimeInvocationEvidence,
+} from '@/lib/configs/ai-runtime-readiness'
+
+type InvocationRow = RuntimeInvocationEvidence & {
+  request_meta?: Record<string, unknown> | null
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function invocationProfiles(invocation: InvocationRow): string[] {
+  const requestMeta = recordValue(invocation.request_meta)
+  return [
+    stringValue(requestMeta.intended_provider_profile),
+    stringValue(requestMeta.requested_provider_profile),
+    stringValue(invocation.provider),
+  ].filter((value): value is string => Boolean(value))
+}
+
+function truncateError(value: string | null | undefined): string | null {
+  if (!value) return null
+  return value.length > 240 ? `${value.slice(0, 240)}...` : value
+}
+
+function sanitizeInvocation(invocation: InvocationRow | undefined) {
+  if (!invocation) return null
+  const responseMeta = recordValue(invocation.response_meta)
+  return {
+    id: invocation.id,
+    provider: invocation.provider || null,
+    model: invocation.model || null,
+    status: invocation.status || null,
+    degraded: Boolean(invocation.degraded),
+    fallback_reason: invocation.fallback_reason || null,
+    error_message: truncateError(invocation.error_message),
+    transport: stringValue(responseMeta.transport),
+    provider_kind: stringValue(responseMeta.provider_kind),
+    attempt_errors: Array.isArray(responseMeta.attempt_errors)
+      ? responseMeta.attempt_errors
+        .filter((item): item is string => typeof item === 'string')
+        .map(truncateError)
+      : [],
+    created_at: invocation.created_at || null,
+  }
+}
+
+async function latestSemanticInvocationsByProfile(orgId: string) {
+  return latestInvocationsByProfile(orgId, 'semantic_review')
+}
+
+async function latestTenderInvocationsByProfile(orgId: string) {
+  return latestInvocationsByProfile(orgId, 'tender_long_document_parse')
+}
+
+async function latestInvocationsByProfile(orgId: string, phase: string) {
+  const { data, error } = await supabaseAdmin
+    .from('model_invocations')
+    .select('id, provider, model, status, degraded, fallback_reason, error_message, request_meta, response_meta, created_at')
+    .eq('org_id', orgId)
+    .eq('phase', phase)
+    .order('created_at', { ascending: false })
+    .limit(80)
+
+  if (error) throw error
+
+  const latest = new Map<string, InvocationRow>()
+  for (const row of (data || []) as InvocationRow[]) {
+    for (const profile of invocationProfiles(row)) {
+      if (!latest.has(profile)) {
+        latest.set(profile, row)
+      }
+    }
+  }
+  return latest
+}
 
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
@@ -17,16 +102,32 @@ export async function GET(req: NextRequest) {
       const policy = await resolvePublishedModelPolicy(orgId, user.id)
       const providerConfigs = await listPublishedAIProviders(orgId)
       const providerConfigById = new Map(providerConfigs.map((config) => [config.config_id, config]))
+      const latestInvocations = await latestSemanticInvocationsByProfile(orgId)
+      const latestTenderInvocations = await latestTenderInvocationsByProfile(orgId)
       const runtimeAssessments = new Map<string, AIRuntimeAssessment>()
+      const tenderRuntimeAssessments = new Map<string, AIRuntimeAssessment>()
 
       await Promise.all(policy.provider_chain.map(async (provider) => {
         const providerConfig: PublishedAIProviderConfig | null = provider.source_config_id
           ? providerConfigById.get(provider.source_config_id) || null
           : null
-        runtimeAssessments.set(`${provider.level}:${provider.profile}:${provider.model}`, await assessProviderRuntime({
+        const latestInvocation = latestInvocations.get(provider.profile)
+        const assessmentKey = `${provider.level}:${provider.profile}:${provider.model}`
+        runtimeAssessments.set(assessmentKey, await assessProviderRuntime({
           providerKind: provider.provider_kind,
           baseUrl: providerConfig?.base_url,
           apiKey: providerConfig?.api_key,
+          model: provider.model,
+          latestInvocation,
+        }))
+        tenderRuntimeAssessments.set(assessmentKey, await assessProviderRuntime({
+          providerKind: provider.provider_kind,
+          baseUrl: providerConfig?.base_url,
+          apiKey: providerConfig?.api_key,
+          model: provider.model,
+          latestInvocation: latestTenderInvocations.get(provider.profile),
+          phaseLabel: 'tender_long_document_parse',
+          readyAction: '上传真实标书或长 PDF，确认 model_invocations 中 tender_long_document_parse 为 completed。',
         }))
       }))
 
@@ -51,6 +152,7 @@ export async function GET(req: NextRequest) {
             provider_kind: provider.provider_kind,
             provider: provider.provider,
             model: provider.model,
+            runtime_location: provider.runtime_location,
             level: provider.level,
             timeout_ms: provider.timeout_ms,
             stages: provider.stages,
@@ -67,6 +169,9 @@ export async function GET(req: NextRequest) {
               : providerConfig?.api_key
                 ? 'configured'
                 : 'missing',
+            latest_invocation: sanitizeInvocation(latestInvocations.get(provider.profile)),
+            latest_tender_invocation: sanitizeInvocation(latestTenderInvocations.get(provider.profile)),
+            tender_runtime: tenderRuntimeAssessments.get(`${provider.level}:${provider.profile}:${provider.model}`),
             ...runtimeAssessments.get(`${provider.level}:${provider.profile}:${provider.model}`),
           }
         }),

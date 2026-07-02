@@ -12,6 +12,7 @@ const ruleProvider: ModelPolicyProvider = {
   provider_kind: 'builtin',
   provider: 'rule-engine',
   model: 'rule-engine',
+  runtime_location: 'builtin',
   level: 99,
   timeout_ms: 15000,
   stages: ['structured_rules', 'rule_fallback'],
@@ -31,6 +32,7 @@ const aiProvider: ModelPolicyProvider = {
   provider_kind: 'openai_compatible',
   provider: 'openai-compatible',
   model: 'qwen-plus',
+  runtime_location: 'cloud',
   level: 1,
   timeout_ms: 45000,
   stages: ['semantic_review', 'comment_patch_draft', 'report_summary'],
@@ -124,6 +126,48 @@ describe('selectReviewExecutionProvider', () => {
     const selected = selectReviewExecutionProvider(policy([ruleProvider]), 'semantic_review')
     expect(selected.provider).toBe('rule-engine')
   })
+
+  it('uses the configured cloud provider for tender and long-document parsing', () => {
+    const cloudProvider: ModelPolicyProvider = {
+      ...aiProvider,
+      profile: 'sales_cloud_backup',
+      runtime_location: 'cloud',
+      level: 2,
+      stages: ['semantic_review', 'tender_long_document_parse', 'comment_patch_draft', 'report_summary'],
+      capabilities: ['semantic_clause_review', 'long_document_chunk_parse', 'tender_ocr_enhancement'],
+    }
+
+    const selected = selectReviewExecutionProvider(policy([cloudProvider, ruleProvider]), 'tender_long_document_parse')
+
+    expect(selected.provider_kind).toBe('openai_compatible')
+    expect(selected.runtime_location).toBe('cloud')
+    expect(selected.profile).toBe('sales_cloud_backup')
+  })
+
+  it('keeps local models first for semantic review but cloud-only for long documents', () => {
+    const localProvider: ModelPolicyProvider = {
+      ...aiProvider,
+      profile: 'local_primary',
+      model: 'gpt-oss-20b',
+      runtime_location: 'local',
+      level: 1,
+      stages: ['semantic_review', 'comment_patch_draft', 'report_summary'],
+    }
+    const cloudProvider: ModelPolicyProvider = {
+      ...aiProvider,
+      profile: 'sales_cloud_backup',
+      model: 'gpt-5.5',
+      runtime_location: 'cloud',
+      level: 2,
+      stages: ['semantic_review', 'tender_long_document_parse', 'comment_patch_draft', 'report_summary'],
+      capabilities: ['semantic_clause_review', 'long_document_chunk_parse', 'tender_ocr_enhancement'],
+    }
+
+    expect(selectReviewExecutionProvider(policy([localProvider, cloudProvider, ruleProvider]), 'semantic_review').profile)
+      .toBe('local_primary')
+    expect(selectReviewExecutionProvider(policy([localProvider, cloudProvider, ruleProvider]), 'tender_long_document_parse').profile)
+      .toBe('sales_cloud_backup')
+  })
 })
 
 describe('isModelPolicyCurrentForPublishedProviders', () => {
@@ -132,9 +176,11 @@ describe('isModelPolicyCurrentForPublishedProviders', () => {
       ...aiProvider,
       profile: 'sales_cloud_backup',
       model: 'gemini-3.5-flash',
+      runtime_location: 'cloud',
       level: 2,
       timeout_ms: 20000,
-      capabilities: ['semantic_clause_review', 'comment_patch_draft', 'report_summary'],
+      stages: ['semantic_review', 'tender_long_document_parse', 'comment_patch_draft', 'report_summary'],
+      capabilities: ['semantic_clause_review', 'long_document_chunk_parse', 'tender_ocr_enhancement', 'comment_patch_draft', 'report_summary'],
       routing: {
         max_pages: 80,
         strategy: 'chunked',
@@ -143,6 +189,7 @@ describe('isModelPolicyCurrentForPublishedProviders', () => {
     const currentRuleProvider: ModelPolicyProvider = {
       ...ruleProvider,
       level: 3,
+      runtime_location: 'builtin',
       source_config_id: '22222222-2222-4222-8222-222222222222',
       capabilities: ['deterministic_rule_scan', 'fallback_without_external_model'],
       routing: {
@@ -173,5 +220,57 @@ describe('isModelPolicyCurrentForPublishedProviders', () => {
     }
 
     expect(isModelPolicyCurrentForPublishedProviders(stalePolicy, [publishedProvider()])).toBe(false)
+  })
+
+  it('requires local providers to be first when LM Studio is published', () => {
+    const localProvider = publishedProvider({
+      config_id: '33333333-3333-4333-8333-333333333333',
+      key: 'AI_LEVEL_1_LOCAL',
+      display_name: 'LM Studio',
+      level: 9,
+      name: 'LM Studio',
+      profile: 'local_primary',
+      base_url: 'http://localhost:1234/v1',
+      model: 'gpt-oss-20b',
+      routing: { max_pages: 15, strategy: 'full' },
+    })
+    const currentPolicy = {
+      ...policy([{
+        ...aiProvider,
+        profile: 'local_primary',
+          model: 'gpt-oss-20b',
+          runtime_location: 'local' as const,
+          level: 9,
+          timeout_ms: 20000,
+          source_config_id: '33333333-3333-4333-8333-333333333333',
+        routing: { max_pages: 15, strategy: 'full' as const },
+        capabilities: ['semantic_clause_review', 'comment_patch_draft', 'report_summary'],
+      }, {
+        ...aiProvider,
+        profile: 'sales_cloud_backup',
+          model: 'gemini-3.5-flash',
+          runtime_location: 'cloud' as const,
+          level: 1,
+          timeout_ms: 20000,
+          source_config_id: '11111111-1111-4111-8111-111111111111',
+        stages: ['semantic_review', 'tender_long_document_parse', 'comment_patch_draft', 'report_summary'],
+        capabilities: ['semantic_clause_review', 'long_document_chunk_parse', 'tender_ocr_enhancement', 'comment_patch_draft', 'report_summary'],
+        routing: { max_pages: 80, strategy: 'chunked' as const },
+        }, {
+          ...ruleProvider,
+          level: 3,
+          source_config_id: null,
+          capabilities: ['deterministic_rule_scan', 'schema_repair', 'fallback_without_external_model'],
+        }]),
+      source_config_ids: [
+        '33333333-3333-4333-8333-333333333333',
+        '11111111-1111-4111-8111-111111111111',
+      ],
+    }
+
+    expect(isModelPolicyCurrentForPublishedProviders(currentPolicy, [
+      publishedProvider({ level: 1 }),
+      localProvider,
+    ])).toBe(true)
   })
 })

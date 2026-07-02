@@ -26,6 +26,14 @@ export interface LoadRulesOptions {
   category?: RuleCategory
   scenario?: string              // 按场景过滤（如 'subscription', 'buyout'）
   isActive?: boolean
+  includeUnpublished?: boolean   // 配置中心草稿/测试可显式打开；正式审核默认只加载已发布规则
+}
+
+export interface LoadSnapshotRulesOptions {
+  orgId: string
+  snapshotIds: string[]
+  category?: RuleCategory
+  scenario?: string
 }
 
 /**
@@ -34,7 +42,13 @@ export interface LoadRulesOptions {
 export async function loadFlexibleRules(
   options: LoadRulesOptions
 ): Promise<FlexibleRule[]> {
-  const { orgId, category, scenario, isActive = true } = options
+  const {
+    orgId,
+    category,
+    scenario,
+    isActive = true,
+    includeUnpublished = false,
+  } = options
 
   let query = supabaseAdmin
     .from('contract_rules_v2')
@@ -42,6 +56,13 @@ export async function loadFlexibleRules(
     .eq('org_id', orgId)
     .eq('is_active', isActive)
     .order('priority', { ascending: false })
+
+  if (!includeUnpublished) {
+    query = query
+      .eq('lifecycle_status', 'published')
+      .eq('translation_status', 'ready')
+      .not('published_at', 'is', null)
+  }
 
   if (category) {
     query = query.eq('category', category)
@@ -65,6 +86,71 @@ export async function loadFlexibleRules(
   }
 
   return filteredRules.map(parseFlexibleRule)
+}
+
+function filterApplicableRules(
+  rules: FlexibleRule[],
+  options: { category?: RuleCategory; scenario?: string }
+): FlexibleRule[] {
+  const { category, scenario } = options
+  let filteredRules = rules
+  if (category) {
+    filteredRules = filteredRules.filter((rule) => rule.category === category)
+  }
+  if (scenario) {
+    filteredRules = filteredRules.filter((rule) =>
+      rule.applicable_scenarios?.includes(scenario) ||
+      rule.applicable_scenarios?.length === 0 ||
+      rule.applicable_scenarios?.includes('all')
+    )
+  }
+  return filteredRules
+}
+
+/**
+ * 从 SkillBundle 绑定的发布快照加载规则。
+ * 正式审核使用该入口，避免 ReviewRun 记录的 snapshot 与实际执行规则漂移。
+ */
+export async function loadFlexibleRulesFromSnapshots(
+  options: LoadSnapshotRulesOptions
+): Promise<FlexibleRule[]> {
+  const { orgId, snapshotIds } = options
+  const uniqueSnapshotIds = Array.from(new Set(snapshotIds.filter(Boolean)))
+  if (uniqueSnapshotIds.length === 0) {
+    return []
+  }
+
+  const { data: snapshots, error } = await supabaseAdmin
+    .from('contract_rule_snapshots')
+    .select('id, rule_id, version, status, config_snapshot')
+    .in('id', uniqueSnapshotIds)
+
+  if (error) {
+    console.error('Failed to load flexible rules from snapshots:', error)
+    return []
+  }
+
+  const rules = (snapshots || [])
+    .filter((snapshot) => snapshot.status === 'published')
+    .map((snapshot) => {
+      const config = snapshot.config_snapshot && typeof snapshot.config_snapshot === 'object'
+        ? snapshot.config_snapshot as Record<string, unknown>
+        : {}
+      return parseFlexibleRule({
+        ...config,
+        id: typeof config.id === 'string' ? config.id : snapshot.rule_id,
+        org_id: typeof config.org_id === 'string' ? config.org_id : orgId,
+        version: typeof config.version === 'number' ? config.version : snapshot.version,
+        is_active: typeof config.is_active === 'boolean' ? config.is_active : true,
+      })
+    })
+    .filter((rule) => rule.org_id === orgId && rule.is_active)
+
+  return filterApplicableRules(rules, options)
+    .sort((left, right) => (
+      right.priority - left.priority
+      || left.code.localeCompare(right.code)
+    ))
 }
 
 /**
@@ -194,6 +280,59 @@ function parseChineseNumber(raw: string): number {
   }
 
   return digitMap[value] ?? 0
+}
+
+function contextSegmentForIndex(sourceText: string, index: number): string {
+  const leftBoundaries = ['\n', '。', '；', ';']
+  const rightBoundaries = ['\n', '。', '；', ';']
+  const startBoundary = Math.max(
+    -1,
+    ...leftBoundaries.map((boundary) => sourceText.lastIndexOf(boundary, Math.max(0, index - 1)))
+  )
+  const rightIndexes = rightBoundaries
+    .map((boundary) => {
+      const found = sourceText.indexOf(boundary, index)
+      return found >= 0 ? found + boundary.length : -1
+    })
+    .filter((found) => found >= 0)
+  const endBoundary = rightIndexes.length > 0
+    ? Math.min(...rightIndexes)
+    : sourceText.length
+  return sourceText.slice(startBoundary + 1, endBoundary).trim()
+}
+
+function contextForTermsInText(sourceText: string, terms: string[]): string {
+  const lowerText = sourceText.toLowerCase()
+  const normalizedTerms = terms
+    .map((term) => term.trim())
+    .filter(Boolean)
+  const candidates = new Map<string, { segment: string; score: number; index: number }>()
+
+  for (const term of normalizedTerms) {
+    const normalizedTerm = term.toLowerCase()
+    let startIndex = lowerText.indexOf(normalizedTerm)
+    while (startIndex >= 0) {
+      const segment = contextSegmentForIndex(sourceText, startIndex)
+      if (segment) {
+        const normalizedSegment = segment.toLowerCase()
+        const score = normalizedTerms.reduce((total, candidateTerm) => (
+          normalizedSegment.includes(candidateTerm.toLowerCase()) ? total + 1 : total
+        ), 0)
+        const existing = candidates.get(segment)
+        if (!existing || score > existing.score) {
+          candidates.set(segment, { segment, score, index: startIndex })
+        }
+      }
+      startIndex = lowerText.indexOf(normalizedTerm, startIndex + Math.max(normalizedTerm.length, 1))
+    }
+  }
+
+  return Array.from(candidates.values())
+    .sort((left, right) => (
+      right.score - left.score
+      || left.segment.length - right.segment.length
+      || left.index - right.index
+    ))[0]?.segment || ''
 }
 
 /**
@@ -398,12 +537,11 @@ function extractEnumField(
     const lower = text.toLowerCase()
     const term = terms.find((item) => lower.includes(item.toLowerCase()))
     if (!term) return null
-    const index = lower.indexOf(term.toLowerCase())
     return {
       name: targetField,
       value: 1,
       unit: 'match',
-      source: text.slice(Math.max(0, index - 30), Math.min(text.length, index + term.length + 50)).trim(),
+      source: contextForTermsInText(text, terms),
       confidence: 0.85,
     }
   }
@@ -512,6 +650,25 @@ export function evaluateFlexibleRule(
 
   if (rule.category === 'text' || rule.engine_type === 'semantic') {
     return evaluateTextRule(rule, contractText, fieldHints)
+  }
+
+  if (rule.target_field === 'payment_schedule') {
+    const paymentTerm = extractDurationField(contractText, fieldHints, 'payment_term_days')
+    if (paymentTerm && paymentTerm.value > 30) {
+      return {
+        level: 'C',
+        matched: true,
+        operator: '>',
+        threshold: 30,
+        actual_value: paymentTerm.value,
+        unit: 'day',
+        source: paymentTerm.source,
+        confidence: paymentTerm.confidence,
+        action: rule.level_c.action,
+        message: rule.level_c.message || `${rule.name}账期超出红线标准`,
+        risk_label: 'red',
+      }
+    }
   }
 
   // 提取字段值
@@ -693,15 +850,7 @@ function evaluateTextRule(
   })
 
   const includesAny = (terms: string[]) => terms.some((term) => text.includes(term.toLowerCase()))
-  const contextForTerms = (terms: string[]) => {
-    for (const term of terms) {
-      const index = text.indexOf(term.toLowerCase())
-      if (index >= 0) {
-        return contractText.slice(Math.max(0, index - 40), Math.min(contractText.length, index + term.length + 80)).trim()
-      }
-    }
-    return ''
-  }
+  const contextForTerms = (terms: string[]) => contextForTermsInText(contractText, terms)
   const hasNegatedContext = (terms: string[]) => {
     const negations = ['未约定', '未明确', '未载明', '未说明', '没有约定', '无约定', '缺失', '不明确', '待定']
     return terms.some((term) => {
@@ -850,6 +999,7 @@ export interface FlexibleExecutionOptions {
   orgId: string
   scenario?: string              // 场景过滤
   category?: RuleCategory        // 类别过滤
+  ruleSnapshotIds?: string[]      // 正式审核绑定 SkillBundle 发布快照
 }
 
 /**
@@ -859,10 +1009,12 @@ export async function executeFlexibleRules(
   contractText: string,
   options: FlexibleExecutionOptions
 ): Promise<RuleExecutionResult[]> {
-  const { orgId, scenario, category } = options
+  const { orgId, scenario, category, ruleSnapshotIds } = options
 
   // 1. 加载规则
-  const rules = await loadFlexibleRules({ orgId, scenario, category })
+  const rules = ruleSnapshotIds && ruleSnapshotIds.length > 0
+    ? await loadFlexibleRulesFromSnapshots({ orgId, scenario, category, snapshotIds: ruleSnapshotIds })
+    : await loadFlexibleRules({ orgId, scenario, category })
 
   if (rules.length === 0) {
     return []
@@ -980,7 +1132,8 @@ export interface FlexibleAnalysisResults {
  */
 export async function executeFlexibleRulesCompat(
   contractText: string,
-  orgId?: string
+  orgId?: string,
+  options: { ruleSnapshotIds?: string[] } = {}
 ): Promise<FlexibleAnalysisResults> {
   if (!orgId) {
     return {
@@ -992,7 +1145,10 @@ export async function executeFlexibleRulesCompat(
     }
   }
 
-  const results = await executeFlexibleRules(contractText, { orgId })
+  const results = await executeFlexibleRules(contractText, {
+    orgId,
+    ruleSnapshotIds: options.ruleSnapshotIds,
+  })
 
   const levelBreakdown = {
     A: results.filter((r) => r.levelResult?.level === 'A').length,

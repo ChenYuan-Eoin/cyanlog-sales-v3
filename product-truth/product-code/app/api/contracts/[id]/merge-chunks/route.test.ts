@@ -157,8 +157,14 @@ describe('POST /api/contracts/[id]/merge-chunks validation', () => {
 
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
+    expect(body.data.status).toBe('PENDING')
     expect(body.data.versionNumber).toBe(3)
     expect(body.data.versionSource).toBe('manual_revision')
+    expect(contractUpdateQuery.update).toHaveBeenCalledWith(expect.objectContaining({
+      filename: 'contract.pdf',
+      parsed_text: 'contract parsed text',
+      status: 'PENDING',
+    }))
     expect(versionInsertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
       contract_id: 'contract-1',
       version_number: 3,

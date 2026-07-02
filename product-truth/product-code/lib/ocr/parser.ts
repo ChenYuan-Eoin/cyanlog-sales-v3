@@ -1,5 +1,13 @@
-// REQ:F008
+// REQ:F008-F014
 // PURPOSE: OCR text extraction and key information parsing
+
+import { extractContractText } from '@/lib/contracts/text-extraction'
+
+const DOCUMENT_PARSE_PLACEHOLDERS = [
+  '[图片OCR需要接入云端视觉 OCR 或本地 OCR 引擎]',
+  '[PDF未能提取可复制文本，可能是扫描件，需要接入云端视觉 OCR]',
+  '[不支持的文件格式]',
+] as const
 
 export interface OCRResult {
   tenderNo?: string
@@ -9,6 +17,10 @@ export interface OCRResult {
   publisher?: string
   contact?: string
   confidence: number
+}
+
+export function isDocumentParsePlaceholder(text: string): boolean {
+  return DOCUMENT_PARSE_PLACEHOLDERS.some((placeholder) => text.trim() === placeholder)
 }
 
 // Extract key information from text using regex patterns
@@ -60,21 +72,18 @@ export function extractKeyInfo(text: string): OCRResult {
   return result
 }
 
-// Parse document content (placeholder for actual PDF parsing)
-export async function parseDocument(buffer: Buffer, mimeType: string): Promise<string> {
-  if (mimeType === 'text/plain') {
-    return buffer.toString('utf-8')
-  }
-
-  if (mimeType === 'application/pdf') {
-    // For now, return a placeholder
-    // In production, use pdf-parse or similar
-    return '[PDF解析需要安装pdf-parse包]'
-  }
+// Parse document content. Text-like PDF/DOCX extraction reuses the contract
+// extractor so tender upload does not silently degrade to placeholder text.
+export async function parseDocument(buffer: Buffer, mimeType: string, fileName = 'document'): Promise<string> {
+  const extracted = extractContractText(buffer, fileName, mimeType)
+  if (extracted) return extracted
 
   if (mimeType.startsWith('image/')) {
-    // For images, would need actual OCR
-    return '[图片OCR需要安装tesseract.js]'
+    return '[图片OCR需要接入云端视觉 OCR 或本地 OCR 引擎]'
+  }
+
+  if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+    return '[PDF未能提取可复制文本，可能是扫描件，需要接入云端视觉 OCR]'
   }
 
   return '[不支持的文件格式]'

@@ -123,7 +123,10 @@ describe('POST /api/contracts/[id]/review-runs', () => {
       .mockReturnValueOnce(reviewInsertQuery)
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
-    const res = await POST(makeRequest({ trigger_event: 'manual_rerun' }), {
+    const res = await POST(makeRequest({
+      trigger_event: 'manual_rerun',
+      semantic_provider_profile: 'sales_cloud_backup',
+    }), {
       params: Promise.resolve({ id: 'contract-1' }),
     })
     const body = await res.json()
@@ -134,12 +137,14 @@ describe('POST /api/contracts/[id]/review-runs', () => {
       reviewId: 'review-rerun',
       parentReviewId: 'review-parent',
       triggerEvent: 'manual_rerun',
+      semanticProviderProfile: 'sales_cloud_backup',
       status: 'COMPLETED',
     })
     expect(runStructuredAnalysis).toHaveBeenCalledWith('contract-1', expect.objectContaining({
       reviewId: 'review-rerun',
       requestedBy: 'u-admin',
       reviewTrigger: 'manual_rerun',
+      semanticProviderProfile: 'sales_cloud_backup',
     }))
   })
 
@@ -186,6 +191,54 @@ describe('POST /api/contracts/[id]/review-runs', () => {
       status: 'DEGRADED',
       degraded: true,
       degradationReasons: ['model_output_invalid_or_unavailable'],
+      message: '再审核已完成，但存在降级或未绑定项，需要人工复核',
+    })
+  })
+
+  it('规则发布或 SkillBundle 未过正式门时不得描述为正式审核完成', async () => {
+    const contractQuery = makeQuery({
+      data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },
+      error: null,
+    })
+    const parentReviewQuery = makeQuery({
+      data: { id: 'review-parent' },
+      error: null,
+    })
+    const updateQuery = makeUpdate({
+      data: { id: 'contract-1' },
+      error: null,
+    })
+    const reviewInsertQuery = makeInsert({
+      data: { id: 'review-rerun' },
+      error: null,
+    })
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(runStructuredAnalysis as any).mockResolvedValueOnce({
+      result: {
+        summary: 'compiled bundle only',
+        degraded: true,
+        degradationReasons: ['skill_bundle_not_published', 'skill_eval_not_passed'],
+      },
+    })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(contractQuery)
+      .mockReturnValueOnce(parentReviewQuery)
+      .mockReturnValueOnce(updateQuery)
+      .mockReturnValueOnce(reviewInsertQuery)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const res = await POST(makeRequest({ trigger_event: 'manual_rerun' }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({
+      status: 'DEGRADED',
+      degraded: true,
+      degradationReasons: ['skill_bundle_not_published', 'skill_eval_not_passed'],
+      message: '再审核已降级：配置中心规则发布或 SkillBundle 未通过正式门，不能作为正式审核完成',
     })
   })
 
