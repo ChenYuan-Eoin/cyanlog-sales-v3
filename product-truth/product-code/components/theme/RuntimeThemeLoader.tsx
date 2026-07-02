@@ -92,11 +92,19 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
   const faviconUrl = resolveFaviconUrl(theme)
   if (faviconUrl) {
     const rels = ['icon', 'shortcut icon', 'apple-touch-icon']
+    document.head
+      .querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+      .forEach((link) => {
+        if (link.dataset.runtimeFavicon !== 'true') {
+          link.remove()
+        }
+      })
     rels.forEach((rel) => {
-      let link = document.head.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null
+      let link = document.head.querySelector(`link[data-runtime-favicon="true"][rel="${rel}"]`) as HTMLLinkElement | null
       if (!link) {
         link = document.createElement('link')
         link.rel = rel
+        link.dataset.runtimeFavicon = 'true'
         document.head.appendChild(link)
       }
       link.href = faviconUrl

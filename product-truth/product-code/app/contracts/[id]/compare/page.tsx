@@ -121,6 +121,7 @@ export default function ContractComparePage() {
   const [error, setError] = useState('')
   const [selectedDiffId, setSelectedDiffId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'dual' | 'merge'>('dual')
+  const [baselineContract, setBaselineContract] = useState<ContractDetail | null>(null)
   const [candidateContracts, setCandidateContracts] = useState<ContractOption[]>([])
   const [excludedCandidateCount, setExcludedCandidateCount] = useState(0)
   const [selectedCompareDocId, setSelectedCompareDocId] = useState('')
@@ -169,6 +170,7 @@ export default function ContractComparePage() {
         fetchContractDetail(contractId, headers),
         fetch('/api/contracts?page=1&pageSize=100&status=COMPLETED', { headers }),
       ])
+      setBaselineContract(baselineContract)
       if (!res.ok) {
         return
       }
@@ -278,7 +280,9 @@ export default function ContractComparePage() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-slate-500">加载比对结果...</div>
+        <div className="rounded-lg border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">
+          正在加载文档比对工作台…
+        </div>
       </div>
     )
   }
@@ -295,67 +299,16 @@ export default function ContractComparePage() {
 
   if (!comparison) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
-              <GitCompareIcon className="h-5 w-5 text-indigo-600" />
-            </div>
-            <div>
-              <h1 className="font-bold text-slate-900">发起文档比对</h1>
-              <p className="text-sm text-slate-500">选择另一份已完成合同作为对比文档。</p>
-            </div>
-          </div>
-
-          {candidateContracts.length > 0 ? (
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-slate-700">
-                对比文档
-                <select
-                  value={selectedCompareDocId}
-                  onChange={(event) => setSelectedCompareDocId(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                >
-                  {candidateContracts.map((contract) => (
-                    <option key={contract.id} value={contract.id}>
-                      {contract.filename || contract.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex items-center justify-between gap-3">
-                <Link href={`/contracts/${contractId}`}>
-                  <Button variant="outline">返回合同</Button>
-                </Link>
-                <Button onClick={handleStartComparison} disabled={!selectedCompareDocId || startingComparison}>
-                  {startingComparison ? (
-                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <GitCompareIcon className="mr-2 h-4 w-4" />
-                  )}
-                  开始比对
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                {excludedCandidateCount > 0
-                  ? `已排除 ${excludedCandidateCount} 份非同客户/同报价的已完成合同。请补充同一客户或同一报价下的回传件/候选合同后再比对。`
-                  : '当前没有可用于比对的已完成合同。请先上传或完成另一份合同审核。'}
-              </p>
-              <div className="flex items-center justify-between gap-3">
-                <Link href={`/contracts/${contractId}`}>
-                  <Button variant="outline">返回合同</Button>
-                </Link>
-                <Link href="/contracts/upload">
-                  <Button>上传合同</Button>
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <CompareSetupWorkspace
+        contractId={contractId}
+        baselineContract={baselineContract}
+        candidateContracts={candidateContracts}
+        excludedCandidateCount={excludedCandidateCount}
+        selectedCompareDocId={selectedCompareDocId}
+        setSelectedCompareDocId={setSelectedCompareDocId}
+        startingComparison={startingComparison}
+        onStartComparison={handleStartComparison}
+      />
     )
   }
 
@@ -488,11 +441,11 @@ export default function ContractComparePage() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部操作栏 */}
         <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <h1 className="font-bold text-slate-900">
-              {comparison.baseline_type === 'template'
-                ? '标准模板 vs 客户回传'
-                : '版本比对'}
+	          <div className="min-w-0 flex items-center gap-4">
+	            <h1 className="font-bold text-slate-900">
+	              {comparison.baseline_type === 'template'
+	                ? '标准模板 vs 客户回传'
+	                : '版本比对'}
             </h1>
             {totalChanges > 0 && (
               <Badge
@@ -550,7 +503,7 @@ export default function ContractComparePage() {
         </div>
 
         {/* 双栏对比区 */}
-        <div className="flex-1 flex overflow-hidden bg-slate-100 p-4 gap-4">
+	      <div className="flex-1 flex overflow-hidden bg-slate-100 p-4 gap-4">
           {/* 左窗格：基准文档 */}
           <div
             ref={leftPaneRef}
@@ -564,8 +517,8 @@ export default function ContractComparePage() {
               <LockIcon className="h-3 w-3 text-slate-300" />
             </div>
             <div className="p-8">
-              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-                系统服务采购协议
+	              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
+	                基准文档
               </h2>
               <div className="space-y-6 text-sm leading-loose text-slate-600">
                 {comparison.diffs?.map((diff) => (
@@ -624,8 +577,8 @@ export default function ContractComparePage() {
               <Edit3Icon className="h-3 w-3 text-indigo-300" />
             </div>
             <div className="p-8">
-              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-                系统服务采购协议
+	              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
+	                对比文档
               </h2>
               <div className="space-y-6 text-sm leading-loose text-slate-600">
                 {comparison.diffs?.map((diff) => (
@@ -683,6 +636,172 @@ export default function ContractComparePage() {
           </div>
         </div>
       </main>
+    </div>
+  )
+}
+
+function CompareSetupWorkspace({
+  contractId,
+  baselineContract,
+  candidateContracts,
+  excludedCandidateCount,
+  selectedCompareDocId,
+  setSelectedCompareDocId,
+  startingComparison,
+  onStartComparison,
+}: {
+  contractId: string
+  baselineContract: ContractDetail | null
+  candidateContracts: ContractOption[]
+  excludedCandidateCount: number
+  selectedCompareDocId: string
+  setSelectedCompareDocId: (value: string) => void
+  startingComparison: boolean
+  onStartComparison: () => void
+}) {
+  const selectedCandidate = candidateContracts.find((contract) => contract.id === selectedCompareDocId)
+  const noCandidateReason = excludedCandidateCount > 0
+    ? `已排除 ${excludedCandidateCount} 份非同客户或同报价的已完成合同。请在当前合同版本流补充客户回传件，或补齐同客户/同报价的候选合同。`
+    : '当前没有可用于比对的已完成合同。请先为当前合同补充客户回传版本，或完成另一份同客户/同报价合同审核。'
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+      <div className="mx-auto flex max-w-[1480px] flex-col gap-4">
+        <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
+              <Link href="/contracts" className="hover:text-slate-900">合同中心</Link>
+              <span>/</span>
+              <Link href={`/contracts/${contractId}`} className="hover:text-slate-900">审核工作台</Link>
+              <span>/</span>
+              <span>文档比对</span>
+            </div>
+            <h1 className="text-2xl font-bold text-slate-950">文档比对工作台</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              先选择基准合同和客户回传/候选版本，再生成差异列表、并排高亮和风险解读。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/contracts/${contractId}`}>
+              <Button variant="outline">
+                <ArrowLeftIcon className="mr-2 h-4 w-4" />
+                返回审核工作台
+              </Button>
+            </Link>
+            <Link href={`/contracts/${contractId}/edit?intent=customer-return&next=compare`}>
+              <Button variant="outline">上传客户回传版</Button>
+            </Link>
+            <Button onClick={onStartComparison} disabled={!selectedCompareDocId || startingComparison}>
+              {startingComparison ? (
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <GitCompareIcon className="mr-2 h-4 w-4" />
+              )}
+              开始比对
+            </Button>
+          </div>
+        </header>
+
+        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)_360px]">
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <LockIcon className="h-4 w-4 text-slate-400" />
+              <h2 className="font-semibold text-slate-950">基准文件</h2>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3 text-sm">
+              <p className="break-words font-medium text-slate-900">
+                {baselineContract?.filename || '当前合同'}
+              </p>
+              <div className="mt-2 space-y-1 text-xs text-slate-500">
+                <p>合同编号：{baselineContract?.contract_no || '未记录'}</p>
+                <p>客户：{baselineContract?.party_b_name || '未记录'}</p>
+                <p>报价：{baselineContract?.quote_id || '未绑定'}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              基准文件来自当前合同版本流，不重新生成源文件。比对只读取可解析文本并保留原始文件作为事实来源。
+            </p>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-semibold text-slate-950">对比版本</h2>
+                <p className="text-sm text-slate-500">优先选择同客户、同报价或当前合同回传版本。</p>
+              </div>
+              <Badge variant={candidateContracts.length > 0 ? 'outline' : 'secondary'}>
+                {candidateContracts.length} 个候选
+              </Badge>
+            </div>
+
+            {candidateContracts.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {candidateContracts.map((contract) => {
+                  const active = contract.id === selectedCompareDocId
+                  return (
+                    <button
+                      key={contract.id}
+                      type="button"
+                      onClick={() => setSelectedCompareDocId(contract.id)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${
+                        active
+                          ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
+                          : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="line-clamp-2 text-sm font-semibold text-slate-900">{contract.filename || contract.id}</p>
+                        {active && <Badge>已选</Badge>}
+                      </div>
+                      <div className="mt-2 space-y-1 text-xs text-slate-500">
+                        <p>客户：{contract.party_b_name || '未记录'}</p>
+                        <p>报价：{contract.quote_id || '未绑定'}</p>
+                        <p>更新时间：{new Date(contract.updated_at).toLocaleString('zh-CN')}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                {noCandidateReason}
+              </div>
+            )}
+          </section>
+
+          <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <GitCompareIcon className="h-4 w-4 text-indigo-500" />
+              <h2 className="font-semibold text-slate-950">输出闭环</h2>
+            </div>
+            <div className="space-y-3 text-sm">
+              <CompareStep done label="1. 选择基准文件" value={baselineContract?.filename || '当前合同'} />
+              <CompareStep done={Boolean(selectedCandidate)} label="2. 选择对比版本" value={selectedCandidate?.filename || '等待选择'} />
+              <CompareStep done={false} label="3. 生成差异列表" value="删除 / 新增 / 修改 / 风险等级" />
+              <CompareStep done={false} label="4. 并排高亮复核" value="左旧右新，差异可跳转" />
+            </div>
+            <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">
+              比对结果不会替代合同审核结论；红线差异仍应进入风险审核或再审核。
+            </p>
+          </aside>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CompareStep({ done, label, value }: { done: boolean; label: string; value: string }) {
+  return (
+    <div className="flex gap-3 rounded-md bg-slate-50 p-3">
+      <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+        done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
+      }`}>
+        {done ? '✓' : '·'}
+      </span>
+      <div className="min-w-0">
+        <p className="font-medium text-slate-900">{label}</p>
+        <p className="mt-0.5 truncate text-xs text-slate-500">{value}</p>
+      </div>
     </div>
   )
 }

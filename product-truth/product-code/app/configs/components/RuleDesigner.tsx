@@ -47,7 +47,7 @@ const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> =
 
 const actionOptions = [
   { value: 'auto_approve', label: '自动通过' },
-  { value: 'suggest_counterparty', label: '建议会签' },
+  { value: 'suggest_counterparty', label: '进入谈判/会签' },
   { value: 'manual_review', label: '人工复核' },
   { value: 'block', label: '阻断' },
 ]
@@ -202,14 +202,14 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
             options={engineOptions}
           />
         </Field>
-        <Field label="目标字段">
+        <Field label="命中字段">
           <Input
             value={draft.target_field || ''}
             onChange={(event) => update('target_field', event.target.value)}
             placeholder="payment_days"
           />
         </Field>
-        <Field label="优先级">
+        <Field label="执行顺序">
           <Input
             type="number"
             value={draft.priority ?? 100}
@@ -228,7 +228,7 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
       </Field>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="字段提示">
+        <Field label="原文命中提示">
           <Input
             value={fieldHints}
             onChange={(event) => setFieldHints(event.target.value)}
@@ -245,7 +245,7 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
       </div>
 
       {isSemantic ? (
-        <Field label="语义提示词">
+        <Field label="审查语义">
           <Textarea
             value={draft.semantic_prompt || ''}
             onChange={(event) => update('semantic_prompt', event.target.value)}
@@ -336,7 +336,7 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
         </div>
         <div className="divide-y divide-slate-100">
           <LevelEditor
-            label="Level A"
+            label="通过档"
             operator={draft.level_a_operator || '<='}
             threshold={draft.level_a_threshold ?? 30}
             unit={draft.level_a_unit || ''}
@@ -347,7 +347,7 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
             onActionChange={(value) => update('level_a_action', value)}
           />
           <LevelEditor
-            label="Level B"
+            label="谈判档"
             operator={draft.level_b_operator || '>'}
             threshold={draft.level_b_threshold ?? 90}
             unit={draft.level_b_unit || ''}
@@ -358,7 +358,7 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
             onActionChange={(value) => update('level_b_action', value)}
           />
           <LevelEditor
-            label="Level C"
+            label="红线档"
             operator={draft.level_c_operator || '>'}
             threshold={draft.level_c_threshold ?? 180}
             unit={draft.level_c_unit || ''}

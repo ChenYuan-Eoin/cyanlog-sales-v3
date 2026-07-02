@@ -24,6 +24,11 @@ type ContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED
 type RiskSeverity = 'red' | 'yellow' | 'green' | 'white'
 type SidePanelMode = 'review' | 'summary' | 'assistant' | 'evidence'
 type RiskFilter = 'all' | RiskSeverity
+type ExportDownload = {
+  url: string
+  filename: string
+  createdAt: string
+} | null
 
 type ContractVersion = {
   id: string
@@ -288,6 +293,37 @@ const modelTransportLabel: Record<string, string> = {
   manual_fallback: '人工兜底',
 }
 
+const ruleSourceLabel: Record<string, string> = {
+  config_center_published_rules: '配置中心发布规则',
+}
+
+const lifecycleLabel: Record<string, string> = {
+  ready: '已就绪',
+  passed: '已通过',
+  completed: '已完成',
+  running: '执行中',
+  failed: '失败',
+  pending: '等待中',
+  latest_review_model_invocation_passed: '最近模型复核已通过',
+  latest_review_model_invocation_partial: '最近模型复核部分通过',
+  latest_review_model_invocation_not_passed: '最近模型复核未通过',
+  latest_review_model_invocation_local_cli: '最近由本地模型完成',
+  model_quality_eval_not_run: '模型质量评测未运行',
+}
+
+const invocationPhaseLabel: Record<string, string> = {
+  structured_rules: '结构化规则扫描',
+  semantic_review: '语义模型复核',
+}
+
+const providerTargetLabel: Record<string, string> = {
+  local_primary: '本地模型优先',
+  sales_cloud_backup: '云端增强模型',
+  AI_LEVEL_1: '本地模型',
+  AI_LEVEL_2: '云端增强模型',
+  'rule-engine': '规则引擎',
+}
+
 const reportTriggerLabel: Record<string, string> = {
   initial_generate: '初始报告',
   ask_responded: 'ASK 回应',
@@ -316,6 +352,31 @@ function formatLatency(value?: number | null) {
 function formatTransport(value?: string | null) {
   if (!value) return '未记录'
   return modelTransportLabel[value] || value
+}
+
+function formatLifecycle(value?: string | null) {
+  if (!value) return '未记录'
+  return lifecycleLabel[value] || value
+}
+
+function formatRuleSource(value?: string | null) {
+  if (!value) return '未记录'
+  return ruleSourceLabel[value] || value
+}
+
+function formatInvocationPhase(value?: string | null) {
+  if (!value) return '未记录'
+  return invocationPhaseLabel[value] || value
+}
+
+function formatProviderTarget(value?: string | null) {
+  if (!value) return '未记录'
+  return providerTargetLabel[value] || value
+}
+
+function formatExecutor(value?: string | null) {
+  if (!value) return '未记录'
+  return value.split('+').map((part) => formatProviderTarget(part)).join(' + ')
 }
 
 function extractApiError(payload: unknown, fallback: string) {
@@ -358,7 +419,7 @@ function buildReviewHealth(data: WorkbenchData) {
   const manualAnnotationCount = data.annotations.filter(needsManualAnnotationLocation).length
 
   if ((data.status === 'COMPLETED' || data.riskFindings.length > 0) && !data.reviewRun?.skill_bundle_id) {
-    issues.push('缺少 SkillBundle 绑定，不能证明结果来自已发布审核规则。')
+    issues.push('缺少规则发布包绑定，不能证明结果来自已发布审核规则。')
   }
   if ((data.status === 'COMPLETED' || data.riskFindings.length > 0) && !data.reviewRun?.rule_snapshot_refs?.length) {
     issues.push('缺少规则快照引用，风险项不能追溯到配置中心规则版本。')
@@ -369,25 +430,25 @@ function buildReviewHealth(data: WorkbenchData) {
   if (data.reviewRun?.skill_bundle) {
     const bundle = data.reviewRun.skill_bundle
     if (bundle.production_source.source_of_truth !== 'config_center_published_rules') {
-      issues.push('SkillBundle 未声明配置中心发布规则为生产源，不能证明审核依据来自后台规则版本。')
+      issues.push('规则发布包未声明配置中心发布规则为生产源，不能证明审核依据来自后台规则版本。')
     }
     if (!bundle.rule_translation_ready) {
       issues.push(`规则转译状态为 ${bundle.rule_translation_status || 'missing'}，不能视为正式审核引擎已就绪。`)
     }
     if (bundle.rules.missing.length > 0 || (bundle.rules.expected !== null && bundle.rules.actual < bundle.rules.expected)) {
-      issues.push(`SkillBundle 规则不完整：缺少 ${bundle.rules.missing.join('、') || '未记录规则明细'}。`)
+      issues.push(`规则发布包不完整：缺少 ${bundle.rules.missing.join('、') || '未记录规则明细'}。`)
     }
     if (!bundle.second_verification_required) {
-      issues.push('SkillBundle 未声明二次验证要求，模型输出不能直接作为有效审核结果。')
+      issues.push('规则发布包未声明二次验证要求，模型输出不能直接作为有效审核结果。')
     }
     if (!bundle.official_review_allowed) {
-      issues.push('SkillBundle 尚未满足正式审核发布门禁，本次结果只能作为降级/复核结果。')
+      issues.push('规则发布包尚未满足正式审核发布门禁，本次结果只能作为降级/复核结果。')
     }
     if (bundle.eval_status && bundle.eval_status !== 'passed') {
-      issues.push(`SkillBundle eval 状态为 ${bundle.eval_status}，不能视为模型质量已验收。`)
+      issues.push(`规则发布包质量评测状态为 ${bundle.eval_status}，不能视为模型质量已验收。`)
     }
     if (bundle.runtime_eval_status === 'model_quality_eval_not_run') {
-      issues.push('模型质量 eval 尚未运行，本次结果必须结合模型调用记录和人工复核证据验收。')
+      issues.push('模型质量评测尚未运行，本次结果必须结合模型调用记录和人工复核证据验收。')
     } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_local_cli') {
       issues.push('最新语义模型通过本机 LM Studio CLI 完成，能证明本地模型运行，但不能证明 OpenAI-compatible HTTP 或线上模型链已验收。')
     } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_partial') {
@@ -397,7 +458,7 @@ function buildReviewHealth(data: WorkbenchData) {
     }
   }
   if (data.reviewRun?.status === 'DEGRADED') {
-    issues.push('ReviewRun 状态为 DEGRADED，本次结果不能作为无条件审核完成。')
+    issues.push('审核运行状态为降级，本次结果不能作为无条件审核完成。')
   }
   if (data.latestJob?.degraded || data.reviewRun?.model_policy?.degraded) {
     issues.push(`审核执行发生降级：${data.latestJob?.provider || data.reviewRun?.model_policy?.provider || '未记录执行器'}。`)
@@ -469,6 +530,7 @@ export default function ContractWorkbenchPage() {
   const [pageError, setPageError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportDownload, setExportDownload] = useState<ExportDownload>(null)
   const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>('review')
 
   useEffect(() => {
@@ -477,6 +539,12 @@ export default function ContractWorkbenchPage() {
       setSidePanelMode(panel)
     }
   }, [])
+
+  useEffect(() => () => {
+    if (exportDownload?.url) {
+      window.URL.revokeObjectURL(exportDownload.url)
+    }
+  }, [exportDownload?.url])
 
   const selectedRisk = useMemo(() => {
     if (!data) return null
@@ -546,7 +614,7 @@ export default function ContractWorkbenchPage() {
         toastError(extractApiError(payload, isRerun ? '启动再审核失败' : '启动审核失败'))
         return
       }
-      toastSuccess(isRerun ? '已启动合同再审核' : '已启动合同审核')
+      toastSuccess(isRerun ? '已启动合同再审核，工作台会持续刷新进度' : '已启动合同审核，工作台会持续刷新进度')
       await fetchWorkbench()
     } catch {
       toastError('网络错误，启动审核失败')
@@ -573,14 +641,24 @@ export default function ContractWorkbenchPage() {
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
+      const filename = `${data.filename}-ONES批注版.docx`
+      setExportDownload((current) => {
+        if (current?.url) {
+          window.URL.revokeObjectURL(current.url)
+        }
+        return {
+          url,
+          filename,
+          createdAt: new Date().toLocaleTimeString('zh-CN'),
+        }
+      })
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `${data.filename}-ONES批注版.docx`
+      anchor.download = filename
       document.body.appendChild(anchor)
       anchor.click()
       document.body.removeChild(anchor)
-      window.URL.revokeObjectURL(url)
-      toastSuccess('已生成 ONES 批注版本')
+      toastSuccess('已生成源文件 Word 批注版，若浏览器未自动下载，可使用页面中的重新下载入口')
       await fetchWorkbench(true)
     } catch {
       toastError('网络错误，导出批注版本失败')
@@ -649,7 +727,7 @@ export default function ContractWorkbenchPage() {
     : statusMeta.variant
 
   return (
-    <div className="space-y-6 p-6 xl:p-8">
+    <div className="space-y-5 p-4 md:p-5 xl:p-8">
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
@@ -668,12 +746,12 @@ export default function ContractWorkbenchPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/contracts">
-            <Button variant="outline">
-              <ArrowLeftIcon className="mr-2 h-4 w-4" />
-              返回
-            </Button>
-          </Link>
+              <Link href="/contracts">
+                <Button variant="outline">
+                  <ArrowLeftIcon className="mr-2 h-4 w-4" />
+                  返回合同中心
+                </Button>
+              </Link>
           {data.status !== 'DRAFT' && (
             <Button onClick={handleStartReview} disabled={!canStartReview || analyzing}>
               {analyzing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <BotIcon className="mr-2 h-4 w-4" />}
@@ -707,6 +785,22 @@ export default function ContractWorkbenchPage() {
         <MetricCard label="批注数量" value={data.annotations.length} tone="text-blue-600" />
       </div>
 
+      <ReviewRunStatusStrip
+        data={data}
+        isBusy={isBusy}
+        analyzing={analyzing}
+        reviewHealth={reviewHealth}
+        canExport={canExport}
+      />
+
+      {(isBusy || analyzing) && (
+        <ReviewProgressPanel data={data} analyzing={analyzing} />
+      )}
+
+      {exportDownload && (
+        <ExportDownloadPanel exportDownload={exportDownload} />
+      )}
+
       {reviewHealth.degraded && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <div className="flex items-start gap-2">
@@ -723,7 +817,7 @@ export default function ContractWorkbenchPage() {
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_420px]">
         <section className="space-y-4">
           <Card>
             <CardHeader className="border-b border-slate-100 pb-4">
@@ -734,7 +828,7 @@ export default function ContractWorkbenchPage() {
                     原文与批注意图
                   </CardTitle>
                   <p className="mt-1 text-sm text-slate-500">
-                    以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。
+                    这里是证据预览与批注意图，不替代源 Word 文件；最终交付必须是源文件原生批注版。
                   </p>
                 </div>
                 <Badge variant="outline">
@@ -801,7 +895,7 @@ export default function ContractWorkbenchPage() {
           <AnnotationsPanel annotations={data.annotations} />
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:overflow-y-auto">
           <Card>
             <CardHeader className="border-b border-slate-100 pb-3">
               <div className="flex items-center justify-between gap-3">
@@ -859,6 +953,149 @@ function MetricCard({ label, value, tone }: { label: string; value: number; tone
         <div className={`mt-1 text-2xl font-semibold ${tone}`}>{value}</div>
       </CardContent>
     </Card>
+  )
+}
+
+function ReviewRunStatusStrip({
+  data,
+  isBusy,
+  analyzing,
+  reviewHealth,
+  canExport,
+}: {
+  data: WorkbenchData
+  isBusy: boolean
+  analyzing: boolean
+  reviewHealth: ReturnType<typeof buildReviewHealth>
+  canExport: boolean
+}) {
+  const statusText = isBusy || analyzing
+    ? '审核运行中'
+    : data.status === 'COMPLETED' && reviewHealth.degraded
+      ? '需人工复核'
+      : data.status === 'COMPLETED'
+        ? '可进入批注输出'
+        : data.status === 'FAILED'
+          ? '审核失败，可再次审核'
+          : '等待发起审核'
+  const outputText = canExport
+    ? '源文件批注版可导出'
+    : reviewHealth.exportBlocked
+      ? '存在未定位风险，暂不能导出源文件批注版'
+      : '审核完成后生成源文件批注版'
+
+  return (
+    <div className="grid gap-3 md:grid-cols-3" aria-live="polite">
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <p className="text-xs font-medium text-slate-500">当前状态</p>
+        <p className="mt-1 text-sm font-semibold text-slate-950">{statusText}</p>
+      </div>
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <p className="text-xs font-medium text-slate-500">审核依据</p>
+        <p className="mt-1 truncate text-sm font-semibold text-slate-950">
+          {data.reviewRun?.skill_bundle_id ? '已绑定规则发布包' : '未绑定规则发布包'}
+        </p>
+      </div>
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <p className="text-xs font-medium text-slate-500">批注输出</p>
+        <p className="mt-1 text-sm font-semibold text-slate-950">{outputText}</p>
+      </div>
+    </div>
+  )
+}
+
+function ReviewProgressPanel({
+  data,
+  analyzing,
+}: {
+  data: WorkbenchData
+  analyzing: boolean
+}) {
+  const steps = [
+    {
+      key: 'version',
+      label: '合同版本',
+      description: data.versions.length > 0 ? `已读取 ${data.versions.length} 个版本` : '等待源文件版本',
+      done: data.versions.length > 0,
+    },
+    {
+      key: 'rules',
+      label: '规则发布包',
+      description: data.reviewRun?.skill_bundle_id ? `已绑定 ${data.reviewRun.skill_bundle_id.slice(0, 8)}` : '等待发布规则与审核包',
+      done: Boolean(data.reviewRun?.skill_bundle_id),
+    },
+    {
+      key: 'model',
+      label: '模型与引擎',
+      description: data.reviewRun?.model_policy?.model
+        ? `${data.reviewRun.model_policy.provider} / ${data.reviewRun.model_policy.model}`
+        : data.latestJob?.provider || '等待模型或规则引擎结果',
+      done: Boolean(data.reviewRun?.model_policy?.model || data.latestJob?.provider),
+    },
+    {
+      key: 'risks',
+      label: '风险定位',
+      description: data.riskFindings.length > 0 ? `已生成 ${data.riskFindings.length} 个风险项` : '正在生成风险项和证据定位',
+      done: data.riskFindings.length > 0,
+    },
+    {
+      key: 'annotations',
+      label: '批注意图',
+      description: data.annotations.length > 0 ? `已生成 ${data.annotations.length} 条批注意图` : '等待可写入源文件的批注意图',
+      done: data.annotations.length > 0,
+    },
+  ]
+
+  return (
+    <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3" aria-live="polite">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-semibold text-indigo-950">{analyzing ? '正在启动审核运行' : '审核运行处理中'}</p>
+          <p className="mt-1 text-sm text-indigo-800">长任务会持续刷新；请等待风险定位、模型调用和批注意图完成。</p>
+        </div>
+        <Badge variant="outline" className="w-fit border-indigo-300 bg-white text-indigo-700">
+          {data.latestJob?.status || data.status}
+        </Badge>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-5">
+        {steps.map((step, index) => (
+          <div key={step.key} className="rounded-md bg-white px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                step.done ? 'bg-emerald-600 text-white' : 'bg-indigo-100 text-indigo-700'
+              }`}>
+                {step.done ? '✓' : index + 1}
+              </span>
+              <span className="text-xs font-semibold text-slate-950">{step.label}</span>
+            </div>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{step.description}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ExportDownloadPanel({ exportDownload }: { exportDownload: NonNullable<ExportDownload> }) {
+  return (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3" aria-live="polite">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-semibold text-emerald-950">源文件批注版已生成</p>
+          <p className="mt-1 text-sm text-emerald-800">
+            已触发浏览器下载；如果没有看到下载，请使用右侧入口重新下载本次生成文件。
+          </p>
+          <p className="mt-1 truncate text-xs text-emerald-700">{exportDownload.filename} · {exportDownload.createdAt}</p>
+        </div>
+        <a
+          href={exportDownload.url}
+          download={exportDownload.filename}
+          className="inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-emerald-700 px-3 text-sm font-medium text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+        >
+          重新下载批注版
+        </a>
+      </div>
+    </div>
   )
 }
 
@@ -1117,7 +1354,7 @@ function AssistantPanel({
           ONES 业务运营
         </div>
         <p className="leading-6">
-          只基于当前合同、规则快照、SkillBundle、模型策略和已生成证据辅助解释，不作为规则事实来源。
+          只基于当前合同、规则版本、模型策略和已生成证据辅助解释，不作为规则事实来源。
         </p>
       </div>
 
@@ -1147,7 +1384,7 @@ function AssistantPanel({
         <h3 className="mb-2 font-semibold text-slate-950">上下文边界</h3>
         <div className="space-y-2 text-slate-600">
           <InfoLine label="审核运行" value={reviewRun?.id || '未绑定'} />
-          <InfoLine label="SkillBundle" value={reviewRun?.skill_bundle_id || '未生成'} />
+          <InfoLine label="规则发布包" value={reviewRun?.skill_bundle_id || '未生成'} />
           <InfoLine label="规则快照" value={reviewRun?.rule_snapshot_id || '未绑定'} />
           <InfoLine label="模型策略" value={reviewRun?.model_policy_id || 'rule-engine'} />
         </div>
@@ -1180,14 +1417,14 @@ function EvidencePanel({
       />
       <InfoLine label="规则快照" value={reviewRun?.rule_snapshot_id || '未绑定'} />
       <InfoLine label="快照数量" value={String(reviewRun?.rule_snapshot_refs?.length ?? 0)} />
-      <InfoLine label="技能包" value={reviewRun?.skill_bundle_id || '未生成'} />
+      <InfoLine label="规则发布包" value={reviewRun?.skill_bundle_id || '未生成'} />
       <InfoLine
         label="规则源"
-        value={reviewRun?.skill_bundle?.production_source.source_of_truth || '未记录'}
+        value={formatRuleSource(reviewRun?.skill_bundle?.production_source.source_of_truth)}
       />
       <InfoLine
         label="转译状态"
-        value={reviewRun?.skill_bundle?.rule_translation_status || '未记录'}
+        value={formatLifecycle(reviewRun?.skill_bundle?.rule_translation_status)}
       />
       <InfoLine
         label="规则完整性"
@@ -1195,21 +1432,21 @@ function EvidencePanel({
           ? `${reviewRun.skill_bundle.rules.actual}/${reviewRun.skill_bundle.rules.expected ?? '未知'}`
           : '未记录'}
       />
-      <InfoLine label="静态门禁" value={reviewRun?.skill_bundle?.static_eval_status || reviewRun?.skill_bundle?.eval_status || '未记录'} />
-      <InfoLine label="模型质量 eval" value={reviewRun?.skill_bundle?.runtime_eval_status || '未记录'} />
+      <InfoLine label="发布门禁" value={formatLifecycle(reviewRun?.skill_bundle?.static_eval_status || reviewRun?.skill_bundle?.eval_status)} />
+      <InfoLine label="模型质量评测" value={formatLifecycle(reviewRun?.skill_bundle?.runtime_eval_status)} />
       <InfoLine label="模型策略" value={reviewRun?.model_policy_id || 'rule-engine'} />
       <InfoLine
         label="模型来源"
         value={reviewRun?.model_policy?.source ? modelPolicySourceLabel[reviewRun.model_policy.source] : '未记录'}
       />
       <InfoLine label="语义模型" value={reviewRun?.model_policy?.model || '未记录'} />
-      <InfoLine label="调用阶段" value={reviewRun?.model_policy?.phase || '未记录'} />
+      <InfoLine label="调用阶段" value={formatInvocationPhase(reviewRun?.model_policy?.phase)} />
       <InfoLine label="调用通道" value={formatTransport(reviewRun?.model_policy?.transport)} />
       <InfoLine label="调用耗时" value={formatLatency(reviewRun?.model_policy?.latency_ms)} />
       <InfoLine label="调用记录" value={reviewRun?.model_policy?.invocation_id || '未记录'} />
       <InfoLine
-        label="目标 Provider"
-        value={reviewRun?.model_policy?.intended_provider_profile || reviewRun?.model_policy?.provider || '未记录'}
+        label="目标通道"
+        value={formatProviderTarget(reviewRun?.model_policy?.intended_provider_profile || reviewRun?.model_policy?.provider)}
       />
       <InfoLine label="目标模型" value={reviewRun?.model_policy?.intended_provider_model || '未记录'} />
       <InfoLine
@@ -1221,8 +1458,8 @@ function EvidencePanel({
       <InfoLine label="开始时间" value={formatTime(reviewRun?.started_at)} />
       <InfoLine label="完成时间" value={formatTime(reviewRun?.completed_at)} />
       <div className="border-t border-slate-200 pt-3">
-        <InfoLine label="最近执行器" value={latestJob?.provider || '未记录'} />
-        <InfoLine label="执行状态" value={latestJob?.status || '未记录'} />
+        <InfoLine label="最近执行器" value={formatExecutor(latestJob?.provider)} />
+        <InfoLine label="执行状态" value={formatLifecycle(latestJob?.status)} />
         <InfoLine label="降级" value={latestJob?.degraded ? '是' : '否'} />
       </div>
       {reviewRun?.model_invocations && reviewRun.model_invocations.length > 0 && (
@@ -1232,13 +1469,13 @@ function EvidencePanel({
             {reviewRun.model_invocations.map((invocation) => (
               <div key={invocation.id} className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-slate-900">{invocation.phase || 'unknown'}</span>
+                  <span className="font-medium text-slate-900">{formatInvocationPhase(invocation.phase)}</span>
                   <Badge variant={invocation.degraded ? 'secondary' : 'outline'}>
-                    {invocation.status || 'unknown'}
+                    {formatLifecycle(invocation.status)}
                   </Badge>
                 </div>
                 <div className="mt-1 truncate">
-                  {invocation.provider || 'provider?'} / {invocation.model || 'model?'} / {formatTransport(invocation.transport)}
+                  {formatProviderTarget(invocation.provider)} / {invocation.model || '模型未记录'} / {formatTransport(invocation.transport)}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
                   <span>{formatLatency(invocation.latency_ms)}</span>
@@ -1306,7 +1543,7 @@ function VersionOutputPanel({
               版本与产物
             </CardTitle>
             <p className="mt-1 text-sm text-slate-500">
-              客户谈判后的回传文件会形成新的 ContractVersion，不作为发起审核入口。
+              客户谈判后的回传文件会形成新的合同版本，不作为发起审核入口。
             </p>
           </div>
           <Link href={`/contracts/${contractId}/edit`}>

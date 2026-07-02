@@ -41,6 +41,9 @@ type QuickAction = {
   hoverColor: string
   href: string
   description: string
+  stateLabel?: string
+  targetName?: string
+  disabled?: boolean
 }
 
 type ResolvedQuickAction = QuickAction
@@ -86,37 +89,46 @@ async function readResponseError(response: Response, fallback: string) {
   return `${readApiError(payload, fallback)}（${response.status}）`
 }
 
+function contractActionName(contract?: Contract) {
+  const withOptionalNumber = contract as (Contract & { contract_no?: string }) | undefined
+  const name = contract?.filename || contract?.title || withOptionalNumber?.contract_no || ''
+  return name.trim() || '未命名合同'
+}
+
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
 const quickActions: QuickAction[] = [
   {
     id: 'review',
-    title: '发起审核',
-    shortTitle: '审核',
+    title: '发起合同审核',
+    shortTitle: '发起',
     icon: ShieldCheckIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
     href: '/contracts/new',
-    description: '上传源文件并新建审核运行',
+    description: '上传合同源文件，创建新的审核任务',
+    stateLabel: '新任务',
   },
   {
     id: 'continue',
-    title: '继续审核',
+    title: '继续进行中审核',
     shortTitle: '继续',
     icon: ClockIcon,
     color: 'bg-indigo-600',
     hoverColor: 'hover:bg-indigo-700',
     href: '/contracts/new',
-    description: '进入最近的进行中审核运行',
+    description: '回到尚未完成的审核运行',
+    stateLabel: '进行中',
   },
   {
     id: 'annotations',
-    title: '查看批注版',
+    title: '查看批注版输出',
     shortTitle: '批注',
     icon: MessageSquareTextIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
     href: '/contracts/new',
-    description: '查看已生成的 Word 批注版本',
+    description: '打开已完成合同的批注、版本和导出记录',
+    stateLabel: '已完成',
   },
   {
     id: 'compare',
@@ -126,7 +138,8 @@ const quickActions: QuickAction[] = [
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
     href: '/contracts/upload?intent=compare',
-    description: '完成审核后对照回传版',
+    description: '以已完成合同为基准，对比客户回传或候选版本',
+    stateLabel: '版本流',
   },
 ]
 
@@ -334,41 +347,51 @@ export default function ContractCenterPage() {
   }, [contracts, drafts])
 
   const resolvedQuickActions = useMemo<ResolvedQuickAction[]>(() => {
-    const continuingTarget = contracts.find((contract) => (
+    const sortedContracts = [...contracts].sort(
+      (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+    )
+    const continuingTarget = sortedContracts.find((contract) => (
       contract.status === 'PENDING' || contract.status === 'PARSING' || contract.status === 'ANALYZING'
     ))
-    const annotatedTarget = contracts.find((contract) => contract.status === 'COMPLETED')
-    const compareTarget = contracts.find((contract) => contract.status === 'COMPLETED')
+    const annotatedTarget = sortedContracts.find((contract) => contract.status === 'COMPLETED')
+    const compareTarget = sortedContracts.find((contract) => contract.status === 'COMPLETED')
     return quickActions.map((action) => {
       if (action.id === 'review') {
         return {
           ...action,
-          href: '/contracts/new',
-          description: '上传源文件并创建 ReviewRun',
+          href: '/contracts/new?from=workbench',
+          description: '上传源文件后直接进入审核工作台',
+          targetName: '新建合同版本',
         }
       }
 
       if (action.id === 'continue') {
         return {
           ...action,
-          href: continuingTarget ? `/contracts/${continuingTarget.id}` : '/contracts/new',
-          description: continuingTarget ? '进入最近的进行中审核运行' : '暂无进行中审核，可先发起审核',
+          href: continuingTarget ? `/contracts/${continuingTarget.id}?from=workbench` : '/contracts/new?from=workbench',
+          description: continuingTarget ? '继续未完成的解析、审核或再审核任务' : '暂无进行中审核，可先发起审核',
+          targetName: continuingTarget ? contractActionName(continuingTarget) : '没有进行中任务',
+          disabled: !continuingTarget,
         }
       }
 
       if (action.id === 'annotations') {
         return {
           ...action,
-          href: annotatedTarget ? `/contracts/${annotatedTarget.id}?panel=evidence` : '/contracts/new',
-          description: annotatedTarget ? '查看最近完成合同的批注版和导出记录' : '需先完成一份合同审核',
+          href: annotatedTarget ? `/contracts/${annotatedTarget.id}?panel=evidence&from=workbench` : '/contracts/new?from=workbench',
+          description: annotatedTarget ? '查看批注意图、输出版本和下载记录' : '需先完成一份合同审核',
+          targetName: annotatedTarget ? contractActionName(annotatedTarget) : '暂无批注版',
+          disabled: !annotatedTarget,
         }
       }
 
       if (action.id === 'compare') {
         return {
           ...action,
-          href: compareTarget ? `/contracts/${compareTarget.id}/compare` : '/contracts/upload?intent=compare',
-          description: compareTarget ? '进入最近完成合同的比对工作台' : '需先完成一份合同审核',
+          href: compareTarget ? `/contracts/${compareTarget.id}/compare?from=workbench` : '/contracts/new?from=workbench',
+          description: compareTarget ? '进入基准合同的版本比对工作台' : '需先完成一份合同审核',
+          targetName: compareTarget ? contractActionName(compareTarget) : '暂无可比对基准',
+          disabled: !compareTarget,
         }
       }
 
@@ -463,12 +486,7 @@ export default function ContractCenterPage() {
             {/* 桌面端快捷操作 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
               {resolvedQuickActions.slice(0, 3).map((action) => (
-                <Link key={action.id} href={action.href} prefetch={false}>
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <action.icon className="h-4 w-4" />
-                    {action.shortTitle}
-                  </Button>
-                </Link>
+                <QuickActionButton key={action.id} action={action} compact />
               ))}
             </div>
 
@@ -484,17 +502,7 @@ export default function ContractCenterPage() {
           {!isMobile && (
             <div className="grid grid-cols-4 gap-3 mt-4">
               {resolvedQuickActions.map((action) => (
-                <Link key={action.id} href={action.href} prefetch={false} className="group">
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
-                    <div className={`w-10 h-10 rounded-lg ${action.color} ${action.hoverColor} flex items-center justify-center shrink-0`}>
-                      <action.icon className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 text-sm">{action.title}</p>
-                      <p className="text-xs text-slate-500 truncate">{action.description}</p>
-                    </div>
-                  </div>
-                </Link>
+                <QuickActionTile key={action.id} action={action} />
               ))}
             </div>
           )}
@@ -604,22 +612,107 @@ export default function ContractCenterPage() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-20 safe-area-pb">
           <div className="flex items-center justify-around">
             {resolvedQuickActions.map((action) => (
-              <Link
-                key={action.id}
-                href={action.href}
-                prefetch={false}
-                className="flex flex-col items-center gap-1 py-1 px-3 active:scale-95 transition-transform"
-              >
-                <div className={`w-10 h-10 rounded-full ${action.color} flex items-center justify-center shadow-md`}>
-                  <action.icon className="h-5 w-5 text-white" />
-                </div>
-                <span className="text-[10px] font-medium text-slate-700">{action.shortTitle}</span>
-              </Link>
+              <QuickActionButton key={action.id} action={action} mobile />
             ))}
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function QuickActionButton({
+  action,
+  compact = false,
+  mobile = false,
+}: {
+  action: ResolvedQuickAction
+  compact?: boolean
+  mobile?: boolean
+}) {
+  const Icon = action.icon
+  if (mobile) {
+    const content = (
+      <>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-full shadow-md ${action.disabled ? 'bg-slate-200' : action.color}`}>
+          <Icon className={`h-5 w-5 ${action.disabled ? 'text-slate-400' : 'text-white'}`} />
+        </div>
+        <span className={`text-[10px] font-medium ${action.disabled ? 'text-slate-400' : 'text-slate-700'}`}>{action.shortTitle}</span>
+      </>
+    )
+    if (action.disabled) {
+      return (
+        <div className="flex flex-col items-center gap-1 px-3 py-1" aria-disabled="true" title={action.description}>
+          {content}
+        </div>
+      )
+    }
+    return (
+      <Link href={action.href} prefetch={false} className="flex flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-95">
+        {content}
+      </Link>
+    )
+  }
+
+  if (action.disabled) {
+    return (
+      <Button size="sm" variant="outline" className="gap-1.5" disabled title={action.description}>
+        <Icon className="h-4 w-4" />
+        {action.shortTitle}
+      </Button>
+    )
+  }
+
+  return (
+    <Link href={action.href} prefetch={false}>
+      <Button size={compact ? 'sm' : 'default'} variant="outline" className="gap-1.5">
+        <Icon className="h-4 w-4" />
+        {action.shortTitle}
+      </Button>
+    </Link>
+  )
+}
+
+function QuickActionTile({ action }: { action: ResolvedQuickAction }) {
+  const Icon = action.icon
+  const body = (
+    <div className={`group flex min-h-[96px] items-start gap-3 rounded-lg border bg-white p-3 ${
+      action.disabled
+        ? 'border-slate-200 opacity-60'
+        : 'border-slate-200 hover:border-indigo-300 hover:shadow-sm'
+    } transition-colors transition-shadow`}>
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${action.disabled ? 'bg-slate-200' : `${action.color} ${action.hoverColor}`}`}>
+        <Icon className={`h-5 w-5 ${action.disabled ? 'text-slate-400' : 'text-white'}`} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-900">{action.title}</p>
+          {action.stateLabel && (
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+              {action.stateLabel}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{action.description}</p>
+        {action.targetName && (
+          <p className="mt-2 truncate text-[11px] font-medium text-slate-700">{action.targetName}</p>
+        )}
+      </div>
+    </div>
+  )
+
+  if (action.disabled) {
+    return (
+      <div aria-disabled="true" title={action.description}>
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <Link href={action.href} prefetch={false} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
+      {body}
+    </Link>
   )
 }
 
@@ -636,7 +729,7 @@ function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
               合同审核工作台入口
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              新建 ReviewRun，上传合同源文件，绑定已发布规则、SkillBundle 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。
+              上传合同源文件，绑定已发布审核规则和模型策略，生成风险定位、销售谈判任务与源文件 Word 批注版本。
             </p>
           </div>
         </div>
@@ -655,7 +748,7 @@ function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-2">
           <span className="font-medium text-slate-900">审核依据</span>
-          <span className="ml-1">规则快照 / Skill</span>
+          <span className="ml-1">发布规则 / 模型</span>
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-2">
           <span className="font-medium text-slate-900">风险定位</span>
@@ -727,7 +820,7 @@ function TaskItem({
       className="group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
       aria-label={`打开${task.meta}${task.name}`}
     >
-      <Card className="cursor-pointer border-slate-200 transition-all group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20">
+      <Card className="cursor-pointer border-slate-200 transition-colors group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20">
         <CardContent className={`${isMobile ? 'p-3' : 'p-4'}`}>
           <div className="flex items-center gap-3">
             {/* 图标 */}

@@ -27,6 +27,8 @@ interface ContractForm {
   notes: string
 }
 
+type UploadStage = 'idle' | 'creating' | 'uploading' | 'submitting' | 'analyzing' | 'done'
+
 const initialForm: ContractForm = {
   contract_no: '',
   party_a_name: '',
@@ -43,6 +45,14 @@ const initialForm: ContractForm = {
 }
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
+
+const uploadStages: Array<{ value: UploadStage; label: string; description: string }> = [
+  { value: 'creating', label: '创建合同任务', description: '生成合同记录和版本容器' },
+  { value: 'uploading', label: '上传源文件', description: '保存原始 DOCX/PDF，不重排文件格式' },
+  { value: 'submitting', label: '提交审核', description: '形成可审核合同版本' },
+  { value: 'analyzing', label: '启动审核运行', description: '绑定发布规则和模型策略' },
+  { value: 'done', label: '进入工作台', description: '跳转到风险定位与批注工作台' },
+]
 
 function validateReviewFile(file: File): string | null {
   const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
@@ -112,6 +122,7 @@ export default function NewContractPage() {
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [stage, setStage] = useState<UploadStage>('idle')
   const [error, setError] = useState('')
 
   const handleInputChange = useCallback((field: keyof ContractForm, value: string) => {
@@ -194,6 +205,7 @@ export default function NewContractPage() {
         return
       }
 
+      setStage('creating')
       const createRes = await fetch('/api/contracts', {
         method: 'POST',
         headers: {
@@ -223,6 +235,7 @@ export default function NewContractPage() {
       const formData = new FormData()
       formData.append('file', file)
 
+      setStage('uploading')
       const uploadRes = await fetch(`/api/contracts/${contractId}/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -236,13 +249,17 @@ export default function NewContractPage() {
         return
       }
 
+      setStage('submitting')
       await submitContractForReview(contractId, token)
+      setStage('analyzing')
       await startContractAnalysis(contractId, token)
 
+      setStage('done')
       router.push(`/contracts/${contractId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '网络错误，请稍后重试')
       setLoading(false)
+      setStage('idle')
     }
   }
 
@@ -267,7 +284,7 @@ export default function NewContractPage() {
         {error && (
           <Card className="border-red-200 bg-red-50">
             <CardContent className="py-3">
-              <p className="text-sm font-medium text-red-700">{error}</p>
+              <p className="text-sm font-medium text-red-700" aria-live="polite">{error}</p>
             </CardContent>
           </Card>
         )}
@@ -287,7 +304,7 @@ export default function NewContractPage() {
                   className="hidden"
                   id="contract-file"
                 />
-                <div
+	                <div
                   role="button"
                   tabIndex={0}
                   onClick={() => fileInputRef.current?.click()}
@@ -303,8 +320,9 @@ export default function NewContractPage() {
                   onDrop={handleDrop}
                   className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors sm:p-12 ${
                     dragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-white'
-                  } ${file ? 'border-green-500 bg-green-50' : ''}`}
-                >
+	                  } ${file ? 'border-green-500 bg-green-50' : ''}`}
+	                  aria-label="选择或拖拽合同源文件"
+	                >
                   {file ? (
                     <div className="space-y-3">
                       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-white text-sm font-semibold text-green-700 shadow-sm">
@@ -347,9 +365,9 @@ export default function NewContractPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button type="submit" disabled={!file || loading} className="sm:min-w-48">
-                    {loading ? '正在发起审核...' : '上传源文件并发起审核'}
-                  </Button>
+	                  <Button type="submit" disabled={!file || loading} className="sm:min-w-48">
+	                    {loading ? `${currentUploadStageLabel(stage)}…` : '上传源文件并发起审核'}
+	                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -365,14 +383,15 @@ export default function NewContractPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>审核上下文</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm text-slate-600">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="font-medium text-slate-900">当前阶段</p>
-                  <p className="mt-1">文件先行，先创建 ContractVersion 与 ReviewRun，再进入合同工作台。</p>
+	            <Card>
+	              <CardHeader>
+	                <CardTitle>审核上下文与进度</CardTitle>
+	              </CardHeader>
+	              <CardContent className="space-y-4 text-sm text-slate-600">
+	                <UploadStageList stage={stage} active={loading} />
+	                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+	                  <p className="font-medium text-slate-900">当前阶段</p>
+                  <p className="mt-1">文件先行，先创建合同版本与审核任务，再进入合同工作台。</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <p className="font-medium text-slate-900">上下文来源</p>
@@ -380,7 +399,7 @@ export default function NewContractPage() {
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <p className="font-medium text-slate-900">审核依据</p>
-                  <p className="mt-1">进入审核后按已发布规则、SkillBundle 和模型策略执行，不依赖临时输入文本。</p>
+                  <p className="mt-1">进入审核后按已发布规则和模型策略执行，不依赖临时输入文本。</p>
                 </div>
               </CardContent>
             </Card>
@@ -523,6 +542,53 @@ export default function NewContractPage() {
             </div>
           </details>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function currentUploadStageLabel(stage: UploadStage) {
+  return uploadStages.find((item) => item.value === stage)?.label || '发起审核'
+}
+
+function UploadStageList({
+  stage,
+  active,
+}: {
+  stage: UploadStage
+  active: boolean
+}) {
+  const currentIndex = uploadStages.findIndex((item) => item.value === stage)
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4" aria-live="polite">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="font-medium text-slate-900">处理进度</p>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+          {active ? '运行中' : '等待上传'}
+        </span>
+      </div>
+      <div className="space-y-3">
+        {uploadStages.map((item, index) => {
+          const completed = currentIndex > index || stage === 'done'
+          const current = active && currentIndex === index
+          return (
+            <div key={item.value} className="flex gap-3">
+              <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                completed
+                  ? 'bg-emerald-600 text-white'
+                  : current
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-400'
+              }`}>
+                {completed ? '✓' : index + 1}
+              </span>
+              <div className="min-w-0">
+                <p className={`text-sm font-medium ${current ? 'text-indigo-700' : 'text-slate-900'}`}>{item.label}</p>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">{item.description}</p>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

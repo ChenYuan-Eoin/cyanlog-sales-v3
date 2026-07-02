@@ -97,6 +97,36 @@ type RuleSetView = {
   asset?: ContractRuleSet
 }
 
+type RuleSetSection = {
+  key: string
+  label: string
+  description: string
+  sets: RuleSetView[]
+}
+
+const ruleSetSectionMeta: Record<string, { label: string; description: string; categories: string[] }> = {
+  overview: {
+    label: '总览',
+    description: '全部规则资产与未归类入口',
+    categories: ['all', 'uncategorized'],
+  },
+  review_logic: {
+    label: '审查逻辑',
+    description: '上下文、主体、验收、SLA 和争议路径',
+    categories: ['business_integrity', 'acceptance', 'sla', 'renewal', 'dispute'],
+  },
+  breach_liability: {
+    label: '违约与责任',
+    description: '付款、税务、违约、责任上限和终止退款',
+    categories: ['payment', 'tax', 'breach', 'liability', 'termination'],
+  },
+  ip_security: {
+    label: '知识产权与数据',
+    description: 'IP 归属、保密、数据安全和客户资料处理',
+    categories: ['ip', 'data_security', 'confidentiality'],
+  },
+}
+
 const clauseCategoryMap: Record<string, { label: string; order: number }> = {
   payment: { label: '付款与结算', order: 10 },
   termination: { label: '终止与退款', order: 20 },
@@ -245,6 +275,21 @@ function ruleExecutionSummary(rule: ContractPolicyRule) {
   ]
 }
 
+function ruleSetPrimaryCategory(ruleSet: RuleSetView) {
+  if (ruleSet.key === 'all') return 'all'
+  const fromRules = ruleSet.rules.find((rule) => rule.clause_category)?.clause_category
+  if (fromRules) return fromRules
+  return ruleSet.code.toLowerCase()
+}
+
+function ruleSetSectionKey(ruleSet: RuleSetView) {
+  const category = ruleSetPrimaryCategory(ruleSet)
+  for (const [sectionKey, meta] of Object.entries(ruleSetSectionMeta)) {
+    if (meta.categories.includes(category)) return sectionKey
+  }
+  return 'overview'
+}
+
 export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete, onRefresh }: RuleTabProps) {
   const [selectedRule, setSelectedRule] = useState<ContractPolicyRule | null>(null)
   const [activeTab, setActiveTab] = useState<'list' | 'design' | 'test'>('list')
@@ -303,17 +348,19 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
         rule.rule_set_id === asset.id
         || (!rule.rule_set_id && ruleSetCode(rule.clause_category || 'uncategorized') === asset.code)
       ))
+      const total = asset.rule_count ?? items.length
+      const ready = asset.ready_rule_count ?? items.filter(isRuleReady).length
       return {
         key: ruleSetKeyForAsset(asset.id),
         label: asset.name,
         code: asset.code,
         order: asset.priority ?? 999,
         rules: items,
-        total: asset.rule_count ?? items.length,
+        total,
         active: items.filter((rule) => rule.is_active).length,
         published: asset.published_rule_count ?? items.filter(isFormallyPublishedRule).length,
-        ready: asset.ready_rule_count ?? items.filter(isRuleReady).length,
-        blocked: asset.blocked_rule_count ?? items.filter((rule) => ruleBlockingReasons(rule).length > 0).length,
+        ready,
+        blocked: asset.blocked_rule_count ?? Math.max(0, total - ready),
         source: 'ruleset' as const,
         asset,
       }
@@ -324,20 +371,25 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     )
     const fallbackSets = Array.from(groups.entries())
       .filter(([key]) => !representedFallbackKeys.has(ruleSetCode(key).toLowerCase()))
-      .map(([key, items]) => ({
-        key,
-        label: clauseCategoryLabel(key),
-        code: ruleSetCode(key),
-        order: clauseCategoryMap[key]?.order ?? 999,
-        rules: items,
-        total: items.length,
-        active: items.filter((rule) => rule.is_active).length,
-        published: items.filter(isFormallyPublishedRule).length,
-        ready: items.filter(isRuleReady).length,
-        blocked: items.filter((rule) => ruleBlockingReasons(rule).length > 0).length,
-        source: 'clause_category' as const,
-      }))
+      .map(([key, items]) => {
+        const ready = items.filter(isRuleReady).length
+        return {
+          key,
+          label: clauseCategoryLabel(key),
+          code: ruleSetCode(key),
+          order: clauseCategoryMap[key]?.order ?? 999,
+          rules: items,
+          total: items.length,
+          active: items.filter((rule) => rule.is_active).length,
+          published: items.filter(isFormallyPublishedRule).length,
+          ready,
+          blocked: Math.max(0, items.length - ready),
+          source: 'clause_category' as const,
+        }
+      })
       .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label, 'zh-CN'))
+
+    const allReady = sortedRules.filter(isRuleReady).length
 
     return [{
       key: 'all',
@@ -348,18 +400,29 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       total: sortedRules.length,
       active: sortedRules.filter((rule) => rule.is_active).length,
       published: sortedRules.filter(isFormallyPublishedRule).length,
-      ready: sortedRules.filter(isRuleReady).length,
-      blocked: sortedRules.filter((rule) => ruleBlockingReasons(rule).length > 0).length,
+      ready: allReady,
+      blocked: Math.max(0, sortedRules.length - allReady),
       source: 'all' as const,
     }, ...assetSets, ...fallbackSets].sort((left, right) => (
       left.key === 'all' ? -1 : right.key === 'all' ? 1 : left.order - right.order || left.label.localeCompare(right.label, 'zh-CN')
     ))
   }, [ruleSetAssets, sortedRules])
 
-  const activeRuleSet = useMemo(
-    () => ruleSets.find((set) => set.key === activeRuleSetKey) || ruleSets[0],
-    [activeRuleSetKey, ruleSets]
-  )
+	  const activeRuleSet = useMemo(
+	    () => ruleSets.find((set) => set.key === activeRuleSetKey) || ruleSets[0],
+	    [activeRuleSetKey, ruleSets]
+	  )
+
+	  const ruleSetSections = useMemo<RuleSetSection[]>(() => {
+	    return Object.entries(ruleSetSectionMeta)
+	      .map(([key, meta]) => ({
+	        key,
+	        label: meta.label,
+	        description: meta.description,
+	        sets: ruleSets.filter((ruleSet) => ruleSetSectionKey(ruleSet) === key),
+	      }))
+	      .filter((section) => section.sets.length > 0)
+	  }, [ruleSets])
 
   const visibleRules = activeRuleSet?.rules || []
   const selectedRuleBlockingReasons = selectedRule ? ruleBlockingReasons(selectedRule) : []
@@ -467,7 +530,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       }
       setFeedback({
         tone: 'success',
-        message: '规则集文档已保存为新版本，需转译确认后才能进入正式 SkillBundle。',
+        message: '规则集文档已保存为新版本，需转译确认后才能进入正式审核引擎。',
       })
       await loadRuleSetAssets()
       await onRefresh?.()
@@ -664,13 +727,13 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_320px]">
-      <Card className="min-w-0">
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-base">
-            规则集目录 ({Math.max(ruleSets.length - 1, 0)})
-            {ruleSetAssetsLoading ? <span className="ml-2 text-xs font-normal text-slate-400">加载中</span> : null}
-          </CardTitle>
+	    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_minmax(360px,1fr)_300px]">
+	      <Card className="min-w-0">
+	        <CardHeader className="flex flex-row items-center justify-between gap-3">
+	          <CardTitle className="text-base">
+	            规则资产目录 ({Math.max(ruleSets.length - 1, 0)})
+	            {ruleSetAssetsLoading ? <span className="ml-2 text-xs font-normal text-slate-400">加载中</span> : null}
+	          </CardTitle>
           <Button size="sm" onClick={handleNewRule}>
             <PlusIcon className="h-4 w-4 mr-1" />
             新建
@@ -680,78 +743,86 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
           {sortedRules.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-slate-500">暂无规则</p>
-              <p className="mt-1 text-sm text-slate-400">创建后将进入 F006 SkillBundle 编译输入</p>
+              <p className="mt-1 text-sm text-slate-400">创建后将进入规则转译与发布检查</p>
             </div>
           ) : (
-            <div className="max-h-[720px] space-y-2 overflow-y-auto pr-1">
-              {ruleSets.map((ruleSet) => (
-                <button
-                  key={ruleSet.key}
-                  type="button"
-                  onClick={() => setActiveRuleSetKey(ruleSet.key)}
-                  className={`w-full rounded-lg border p-3 text-left transition ${
-                    activeRuleSetKey === ruleSet.key
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className={`mt-0.5 rounded-md p-1.5 ${
-                      activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      <FolderTreeIcon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="truncate text-sm font-semibold">{ruleSet.label}</div>
-                        <Badge variant={activeRuleSetKey === ruleSet.key ? 'secondary' : 'outline'} className="text-[10px]">
-                          {ruleSet.total}
-                        </Badge>
-                      </div>
-                      <div className={`mt-1 truncate font-mono text-[11px] ${
-                        activeRuleSetKey === ruleSet.key ? 'text-slate-200' : 'text-slate-400'
-                      }`}>
-                        {ruleSet.code}
-                      </div>
-                      <div className={`mt-1 text-[11px] ${
-                        activeRuleSetKey === ruleSet.key ? 'text-slate-200' : 'text-slate-400'
-                      }`}>
-                        {ruleSet.source === 'ruleset'
-                          ? `文档 v${ruleSet.asset?.latest_document?.version || '-'} · ${ruleSet.asset?.translation_status || 'not_started'}`
-                          : ruleSet.source === 'all'
-                            ? '全部规则资产'
-                            : '临时分类视图，待迁移为 RuleSet'}
-                      </div>
-                      <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
-                        <span className={`rounded px-1.5 py-1 ${
-                          activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
-                        }`}>
-                          发布 {ruleSet.published}
-                        </span>
-                        <span className={`rounded px-1.5 py-1 ${
-                          activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
-                        }`}>
-                          就绪 {ruleSet.ready}
-                        </span>
-                        <span className={`rounded px-1.5 py-1 ${
-                          ruleSet.blocked > 0
-                            ? activeRuleSetKey === ruleSet.key
-                              ? 'bg-rose-500/20 text-rose-100'
-                              : 'bg-rose-50 text-rose-700'
-                            : activeRuleSetKey === ruleSet.key
-                              ? 'bg-emerald-500/20 text-emerald-100'
-                              : 'bg-emerald-50 text-emerald-700'
-                        }`}>
-                          阻断 {ruleSet.blocked}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </CardContent>
+	            <div className="max-h-[720px] space-y-4 overflow-y-auto pr-1">
+	              {ruleSetSections.map((section) => (
+	                <section key={section.key} className="space-y-2">
+	                  <div className="px-1">
+	                    <p className="text-xs font-semibold text-slate-900">{section.label}</p>
+	                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{section.description}</p>
+	                  </div>
+	                  {section.sets.map((ruleSet) => (
+	                    <button
+	                      key={ruleSet.key}
+	                      type="button"
+	                      onClick={() => setActiveRuleSetKey(ruleSet.key)}
+	                      className={`w-full rounded-lg border p-3 text-left transition ${
+	                        activeRuleSetKey === ruleSet.key
+	                          ? 'border-slate-900 bg-slate-900 text-white'
+	                          : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'
+	                      }`}
+	                    >
+	                      <div className="flex items-start gap-3">
+	                        <span className={`mt-0.5 rounded-md p-1.5 ${
+	                          activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-500'
+	                        }`}>
+	                          <FolderTreeIcon className="h-4 w-4" />
+	                        </span>
+	                        <div className="min-w-0 flex-1">
+	                          <div className="flex items-center justify-between gap-2">
+	                            <div className="truncate text-sm font-semibold">{ruleSet.label}</div>
+	                            <Badge variant={activeRuleSetKey === ruleSet.key ? 'secondary' : 'outline'} className="text-[10px]">
+	                              {ruleSet.total}
+	                            </Badge>
+	                          </div>
+	                          <div className={`mt-1 truncate font-mono text-[11px] ${
+	                            activeRuleSetKey === ruleSet.key ? 'text-slate-200' : 'text-slate-400'
+	                          }`}>
+	                            {ruleSet.code}
+	                          </div>
+	                          <div className={`mt-1 text-[11px] ${
+	                            activeRuleSetKey === ruleSet.key ? 'text-slate-200' : 'text-slate-400'
+	                          }`}>
+	                            {ruleSet.source === 'ruleset'
+	                              ? `声明文档 v${ruleSet.asset?.latest_document?.version || '-'} · ${translationMap[ruleSet.asset?.translation_status || 'not_started']?.label || '未转译'}`
+	                              : ruleSet.source === 'all'
+	                                ? '全部规则资产'
+	                                : '旧分类视图，待迁移为规则集资产'}
+	                          </div>
+	                          <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
+	                            <span className={`rounded px-1.5 py-1 ${
+	                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
+	                            }`}>
+	                              发布 {ruleSet.published}
+	                            </span>
+	                            <span className={`rounded px-1.5 py-1 ${
+	                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
+	                            }`}>
+	                              就绪 {ruleSet.ready}
+	                            </span>
+	                            <span className={`rounded px-1.5 py-1 ${
+	                              ruleSet.blocked > 0
+	                                ? activeRuleSetKey === ruleSet.key
+	                                  ? 'bg-rose-500/20 text-rose-100'
+	                                  : 'bg-rose-50 text-rose-700'
+	                                : activeRuleSetKey === ruleSet.key
+	                                  ? 'bg-emerald-500/20 text-emerald-100'
+	                                  : 'bg-emerald-50 text-emerald-700'
+	                            }`}>
+	                              阻断 {ruleSet.blocked}
+	                            </span>
+	                          </div>
+	                        </div>
+	                      </div>
+	                    </button>
+	                  ))}
+	                </section>
+	              ))}
+	            </div>
+	          )}
+	        </CardContent>
       </Card>
 
       <div className="min-w-0 space-y-4">
@@ -794,13 +865,13 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <CardTitle className="truncate text-base">
                   {activeRuleSet?.label || '规则清单'} ({visibleRules.length})
                 </CardTitle>
-              <p className="mt-1 truncate text-xs text-slate-500">
-                {activeRuleSet?.key === 'all'
-                  ? '所有规则集的发布、转译和 Skill 输入状态'
-                  : activeRuleSet?.source === 'ruleset'
-                    ? `${activeRuleSet?.code} · RuleSetDocument / RuleUnit / 发布闭环`
-                    : `${activeRuleSet?.code} · 临时分类视图`}
-              </p>
+	              <p className="mt-1 truncate text-xs text-slate-500">
+	                {activeRuleSet?.key === 'all'
+	                  ? '所有规则集的发布、转译和审核引擎输入状态'
+	                  : activeRuleSet?.source === 'ruleset'
+	                    ? `${activeRuleSet?.code} · 声明文档 / 结构化规则 / 发布闭环`
+	                    : `${activeRuleSet?.code} · 旧分类视图，待迁移为规则集资产`}
+	              </p>
               </div>
               <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
                 <PlayIcon className="h-4 w-4 mr-1" />
@@ -830,7 +901,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
       <Card className="min-w-0">
         <CardHeader>
-          <CardTitle className="text-base">规则集与运行摘要</CardTitle>
+	          <CardTitle className="text-base">规则集发布闭环</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="grid grid-cols-3 gap-2">
@@ -839,21 +910,21 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               onClick={() => setActiveTab('list')}
               className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'list' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
             >
-              浏览
+	              规则清单
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('design')}
               className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'design' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
             >
-              设计
+	              结构化编辑
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('test')}
               className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'test' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
             >
-              测试
+	              模拟测试
             </button>
           </div>
 
@@ -874,11 +945,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <div className="text-xs font-medium text-slate-500">当前规则集</div>
                 <div className="mt-1 font-semibold text-slate-900">{activeRuleSet?.label || '无'}</div>
                 <div className="mt-1 text-[11px] text-slate-500">
-                  {activeRuleSet?.source === 'ruleset'
-                    ? `RuleSet v${activeRuleSet.asset?.version || 1} · ${activeRuleSet.asset?.lifecycle_status || 'draft'} · ${activeRuleSet.asset?.translation_status || 'not_started'}`
-                    : activeRuleSet?.source === 'all'
-                      ? '全部规则资产汇总'
-                      : '仅由 clause_category 临时聚合'}
+	                  {activeRuleSet?.source === 'ruleset'
+	                    ? `规则集 v${activeRuleSet.asset?.version || 1} · ${lifecycleMap[activeRuleSet.asset?.lifecycle_status || 'draft']?.label || '草稿'} · ${translationMap[activeRuleSet.asset?.translation_status || 'not_started']?.label || '未转译'}`
+	                    : activeRuleSet?.source === 'all'
+	                      ? '全部规则资产汇总'
+	                      : '按旧分类临时聚合，建议迁移为规则集资产'}
                 </div>
               </div>
               <Badge variant={activeRuleSet?.blocked ? 'destructive' : 'default'}>
@@ -905,11 +976,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </div>
             {activeRuleSet?.blocked ? (
               <div className="mt-3 rounded border border-rose-200 bg-white px-2 py-1 text-xs text-rose-700">
-                {activeRuleSet.blocked} 条规则仍缺转译、发布或执行字段，不能作为完整 SkillBundle 输入。
+	                {activeRuleSet.blocked} 条规则仍缺转译、发布或执行字段，不能进入正式审核引擎。
               </div>
             ) : (
               <div className="mt-3 rounded border border-emerald-200 bg-white px-2 py-1 text-xs text-emerald-700">
-                当前规则集规则均满足发布、转译和执行字段要求，可进入 SkillBundle 编译检查。
+	                当前规则集规则均满足发布、转译和执行字段要求，可进入审核引擎编译检查。
               </div>
             )}
           </div>
@@ -918,7 +989,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             <div className="rounded-lg border border-slate-200 bg-white p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-xs font-medium text-slate-500">规则集文档资产</div>
+	                  <div className="text-xs font-medium text-slate-500">规则集声明文档</div>
                   <div className="mt-1 font-medium text-slate-900">
                     v{activeRuleSet.asset?.latest_document?.version || '-'} · {activeRuleSet.asset?.latest_document?.status || '未创建'}
                   </div>
@@ -950,12 +1021,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </Button>
               </div>
               <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs leading-5 text-amber-700">
-                文档只是高效维护入口；进入正式审核前必须显示字段级转译差异、人工确认并发布快照。
+	                文档只是高效维护入口；进入正式审核前必须显示字段级转译差异、人工确认并发布快照。
               </div>
             </div>
           ) : activeRuleSet?.source === 'clause_category' ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-700">
-              当前只是旧规则分类视图，尚未绑定 `RuleSetDocument`。迁移应用后这里会显示可维护的规则集文档资产。
+	              当前只是旧规则分类视图，尚未绑定规则集声明文档。迁移应用后这里会显示可维护的规则集文档资产。
             </div>
           ) : null}
 
@@ -1058,7 +1129,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </div>
               ) : null}
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
-                <div className="font-medium text-slate-900">Skill 转译字段</div>
+	                <div className="font-medium text-slate-900">审核引擎字段</div>
                 <div className="mt-1">目标字段：{selectedRule.target_field || '未配置'}</div>
                 <div>命中提示：{selectedRule.field_hints?.length ? selectedRule.field_hints.join(' / ') : '未配置'}</div>
               </div>
@@ -1084,12 +1155,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                   ) : (
                     <CheckCircle2Icon className="h-4 w-4" />
                   )}
-                  {selectedRuleBlockingReasons.length ? '发布/Skill 阻断项' : '正式审核可用'}
+	                  {selectedRuleBlockingReasons.length ? '发布阻断项' : '正式审核可用'}
                 </div>
                 <div className="mt-2">
                   {selectedRuleBlockingReasons.length
                     ? selectedRuleBlockingReasons.join(' / ')
-                    : '规则已启用、已发布、已完成转译并具备进入 SkillBundle 编译检查的基础字段。'}
+	                    : '规则已启用、已发布、已完成转译并具备进入审核引擎编译检查的基础字段。'}
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
@@ -1111,7 +1182,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-500">
-              选择规则后显示 Skill 转译摘要
+	              选择规则后显示结构化字段、发布阻断和模拟测试入口
             </div>
           )}
         </CardContent>

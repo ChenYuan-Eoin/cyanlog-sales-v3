@@ -10,22 +10,13 @@ import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonito
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
 import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
-import { themeToCssVariables } from "@/lib/ui-theme-shared";
+import { resolveFaviconUrl, themeToCssVariables } from "@/lib/ui-theme-shared";
 
 const FAVICON_VERSION = "20260626";
 
 export const metadata: Metadata = {
   title: "ONES Sales",
   description: "智能协作平台",
-  icons: {
-    icon: [
-      { url: `/favicon.ico?v=${FAVICON_VERSION}`, sizes: '32x32', type: 'image/x-icon' },
-      { url: `/favicon.png?v=${FAVICON_VERSION}`, sizes: '32x32', type: 'image/png' },
-      { url: `/favicon.svg?v=${FAVICON_VERSION}`, type: 'image/svg+xml' },
-    ],
-    shortcut: `/favicon.ico?v=${FAVICON_VERSION}`,
-    apple: `/favicon.png?v=${FAVICON_VERSION}`,
-  },
 };
 
 const geistSans = localFont({
@@ -51,6 +42,7 @@ export default async function RootLayout({
   const token = await getServerAuthToken();
   const theme = await getPublishedUITheme(token);
   const themeVariables = themeToCssVariables(theme) as CSSProperties;
+  const faviconUrl = resolveFaviconUrl(theme) || `/favicon.ico?v=${FAVICON_VERSION}`;
 
   return (
     <html
@@ -64,6 +56,11 @@ export default async function RootLayout({
       data-product-subtitle={theme.productSubtitle}
       data-login-subtitle={theme.loginSubtitle}
     >
+      <head>
+        <link data-runtime-favicon="true" rel="icon" href={faviconUrl} />
+        <link data-runtime-favicon="true" rel="shortcut icon" href={faviconUrl} />
+        <link data-runtime-favicon="true" rel="apple-touch-icon" href={faviconUrl} />
+      </head>
       <body className="antialiased">
         <BrandingProvider value={theme}>
           <ClientErrorMonitor />
