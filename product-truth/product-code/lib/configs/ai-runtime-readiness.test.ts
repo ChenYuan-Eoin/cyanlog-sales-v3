@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { assessProviderRuntime, fetchOpenAICompatibleModelIds, isLoopbackAIBaseUrl } from './ai-runtime-readiness'
+import {
+  assessProviderRuntime,
+  fetchOpenAICompatibleModelIds,
+  isLoopbackAIBaseUrl,
+  probeOpenAICompatibleChatCompletion,
+} from './ai-runtime-readiness'
 
 describe('AI runtime readiness', () => {
   it('detects loopback model URLs', () => {
@@ -207,6 +212,74 @@ describe('AI runtime readiness', () => {
     )).resolves.toEqual(['gpt-oss-20b', 'cloud-model'])
   })
 
+  it('probes OpenAI-compatible chat completions with the same token and model', async () => {
+    const requests: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    const okFetch: typeof fetch = async (input, init) => {
+      requests.push({ input, init })
+      expect(String(input)).toBe('https://cloud.yiyongai.cn/v1/chat/completions')
+      expect(init?.headers).toEqual({
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer sk-test',
+      })
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        model: 'gpt-5.5',
+        max_tokens: 128,
+        stream: false,
+      })
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '通过' } }],
+      }), { status: 200 })
+    }
+
+    await expect(probeOpenAICompatibleChatCompletion(
+      'https://cloud.yiyongai.cn',
+      'sk-test',
+      'gpt-5.5',
+      okFetch
+    )).resolves.toMatchObject({
+      ok: true,
+      model: 'gpt-5.5',
+      content_sample: '通过',
+    })
+
+    expect(requests).toHaveLength(1)
+  })
+
+  it('does not treat empty chat completion output as a usable model', async () => {
+    const emptyFetch: typeof fetch = async () => new Response(JSON.stringify({
+      choices: [{ message: { content: '' } }],
+    }), { status: 200 })
+
+    await expect(probeOpenAICompatibleChatCompletion(
+      'http://127.0.0.1:1234/v1',
+      'lmstudio-token',
+      'gpt-oss-20b',
+      emptyFetch
+    )).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('可用正文'),
+    })
+  })
+
+  it('does not treat special reasoning sentinels or length truncation as a usable model', async () => {
+    const truncatedFetch: typeof fetch = async () => new Response(JSON.stringify({
+      choices: [{
+        message: { content: '<|start|>', reasoning: 'Need to answer.' },
+        finish_reason: 'length',
+      }],
+    }), { status: 200 })
+
+    await expect(probeOpenAICompatibleChatCompletion(
+      'http://127.0.0.1:1234/v1',
+      'lmstudio-token',
+      'gpt-oss-20b',
+      truncatedFetch
+    )).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('截断'),
+    })
+  })
+
   it('reports remote auth failures separately from remote reachability failures', async () => {
     const authFailedFetch: typeof fetch = async () => new Response('{}', { status: 401 })
     const unavailableFetch: typeof fetch = async () => new Response('{}', { status: 503 })
@@ -296,6 +369,64 @@ describe('AI runtime readiness', () => {
         },
       },
     })).resolves.toMatchObject({
+      runtime_state: 'recent_invocation_passed',
+      runtime_reason: expect.stringContaining('正式调用已通过'),
+      runtime_action: null,
+    })
+  })
+
+  it('does not let historical cloud invocation success override current remote auth failure', async () => {
+    const authFailedFetch: typeof fetch = async () => new Response('{}', { status: 401 })
+
+    await expect(assessProviderRuntime({
+      providerKind: 'openai_compatible',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'expired-token',
+      model: 'cloud-model',
+      checkRemoteHealth: true,
+      latestInvocation: {
+        id: 'inv-old-success',
+        provider: 'AI_LEVEL_2',
+        model: 'cloud-model',
+        status: 'completed',
+        degraded: false,
+        response_meta: {
+          provider_kind: 'openai_compatible',
+          transport: 'openai_compatible_http',
+          dropped_risk_count: 0,
+          validation_warnings: [],
+        },
+      },
+    }, { NODE_ENV: 'development' }, authFailedFetch)).resolves.toMatchObject({
+      runtime_state: 'remote_auth_failed',
+      runtime_reason: expect.stringContaining('认证失败'),
+      runtime_action: expect.stringContaining('Token'),
+    })
+  })
+
+  it('uses clean invocation evidence after current remote health succeeds', async () => {
+    const okFetch: typeof fetch = async () => new Response('{}', { status: 200 })
+
+    await expect(assessProviderRuntime({
+      providerKind: 'openai_compatible',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'valid-token',
+      model: 'cloud-model',
+      checkRemoteHealth: true,
+      latestInvocation: {
+        id: 'inv-current-success',
+        provider: 'AI_LEVEL_2',
+        model: 'cloud-model',
+        status: 'completed',
+        degraded: false,
+        response_meta: {
+          provider_kind: 'openai_compatible',
+          transport: 'openai_compatible_http',
+          dropped_risk_count: 0,
+          validation_warnings: [],
+        },
+      },
+    }, { NODE_ENV: 'development' }, okFetch)).resolves.toMatchObject({
       runtime_state: 'recent_invocation_passed',
       runtime_reason: expect.stringContaining('正式调用已通过'),
       runtime_action: null,

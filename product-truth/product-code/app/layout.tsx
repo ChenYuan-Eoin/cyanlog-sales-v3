@@ -10,9 +10,9 @@ import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonito
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
 import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
-import { resolveFaviconUrl, themeToCssVariables } from "@/lib/ui-theme-shared";
+import { resolveBrandImageUrl, resolveFaviconUrl, themeToCssVariables } from "@/lib/ui-theme-shared";
 
-const FAVICON_VERSION = "20260626";
+const FAVICON_VERSION = "20260703";
 
 export const metadata: Metadata = {
   title: "ONES Sales",
@@ -34,6 +34,19 @@ const enableVercelTelemetry =
   Boolean(process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL)
   || process.env.ENABLE_VERCEL_TELEMETRY === "1";
 
+function stableHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function withRuntimeFaviconVersion(url: string) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}brand_favicon=${stableHash(url)}`;
+}
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -42,7 +55,9 @@ export default async function RootLayout({
   const token = await getServerAuthToken();
   const theme = await getPublishedUITheme(token);
   const themeVariables = themeToCssVariables(theme) as CSSProperties;
-  const faviconUrl = resolveFaviconUrl(theme) || `/favicon.ico?v=${FAVICON_VERSION}`;
+  const faviconUrl = withRuntimeFaviconVersion(resolveFaviconUrl(theme) || `/favicon.svg?v=${FAVICON_VERSION}`);
+  const faviconIsSvg = faviconUrl.toLowerCase().includes(".svg");
+  const logoUrl = resolveBrandImageUrl(theme, "full", "dark") || resolveBrandImageUrl(theme, "symbol", "dark");
 
   return (
     <html
@@ -51,15 +66,33 @@ export default async function RootLayout({
       style={themeVariables}
       data-brand-name={theme.brandName}
       data-brand-short-name={theme.brandShortName}
-      data-logo-url={theme.logoUrl}
+      data-logo-url={logoUrl}
       data-product-title={theme.productTitle}
       data-product-subtitle={theme.productSubtitle}
       data-login-subtitle={theme.loginSubtitle}
     >
       <head>
-        <link data-runtime-favicon="true" rel="icon" href={faviconUrl} />
-        <link data-runtime-favicon="true" rel="shortcut icon" href={faviconUrl} />
-        <link data-runtime-favicon="true" rel="apple-touch-icon" href={faviconUrl} />
+        <link
+          data-runtime-favicon="true"
+          rel="icon"
+          href={faviconUrl}
+          type={faviconIsSvg ? "image/svg+xml" : "image/png"}
+          sizes={faviconIsSvg ? "any" : "32x32"}
+        />
+        <link
+          data-runtime-favicon="true"
+          rel="shortcut icon"
+          href={faviconUrl}
+          type={faviconIsSvg ? "image/svg+xml" : "image/png"}
+          sizes={faviconIsSvg ? "any" : "32x32"}
+        />
+        <link
+          data-runtime-favicon="true"
+          rel="apple-touch-icon"
+          href={faviconUrl}
+          type={faviconIsSvg ? "image/svg+xml" : "image/png"}
+          sizes="180x180"
+        />
       </head>
       <body className="antialiased">
         <BrandingProvider value={theme}>

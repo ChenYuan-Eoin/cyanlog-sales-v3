@@ -4,7 +4,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -70,7 +70,10 @@ function validateReviewFile(file: File): string | null {
 export default function ContractEditPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const contractId = params.id as string
+  const intent = searchParams.get('intent')
+  const next = searchParams.get('next')
 
   const [contract, setContract] = useState<Contract | null>(null)
   const [items, setItems] = useState<ContractItem[]>([])
@@ -187,7 +190,13 @@ export default function ContractEditPage() {
     try {
       const token = localStorage.getItem('token')
       const formData = new FormData()
+      const uploadPurpose = intent === 'customer-return'
+        ? 'customer-return'
+        : hasFile
+          ? 'manual_revision'
+          : 'source'
       formData.append('file', file)
+      formData.append('purpose', uploadPurpose)
 
       const res = await fetch(`/api/contracts/${contractId}/upload`, {
         method: 'POST',
@@ -201,8 +210,13 @@ export default function ContractEditPage() {
         return
       }
 
-      setSuccess('上传成功')
+      setSuccess(intent === 'customer-return'
+        ? '客户回传版已进入当前合同版本流，正在返回文档比对。'
+        : '上传成功')
       await fetchContract()
+      if (intent === 'customer-return' && next === 'compare') {
+        router.push(`/contracts/${contractId}/compare?from=upload`)
+      }
     } catch {
       setError('网络错误')
     } finally {
@@ -259,6 +273,119 @@ export default function ContractEditPage() {
   }
 
   const hasFile = contract.filename && contract.storage_path
+  const isCustomerReturnIntent = intent === 'customer-return'
+
+  if (isCustomerReturnIntent) {
+    return (
+      <div className="mx-auto max-w-5xl p-4 md:p-8">
+        <div className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="mb-2 text-sm text-slate-500">
+              <Link href="/contracts" className="hover:underline">合同中心</Link>
+              <span className="mx-2">/</span>
+              <Link href={`/contracts/${contractId}`} className="hover:underline">审核工作台</Link>
+              <span className="mx-2">/</span>
+              <Link href={`/contracts/${contractId}/compare`} className="hover:underline">文档比对</Link>
+              <span className="mx-2">/</span>
+              <span>上传客户回传版</span>
+            </div>
+            <h1 className="text-2xl font-bold">上传客户回传版</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              这里只把客户回传文件登记为当前合同的人工/客户版本，不覆盖审核源文件。上传后会回到文档比对工作台选择旧版与新版。
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href={`/contracts/${contractId}/compare`}>
+              <Button variant="outline">返回比对</Button>
+            </Link>
+            <Link href={`/contracts/${contractId}`}>
+              <Button variant="outline">返回审核工作台</Button>
+            </Link>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 rounded border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            {success}
+          </div>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">当前基准文件</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm font-semibold text-slate-950">{contract.filename || '未绑定源文件'}</div>
+                <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                  <div>合同编号：{contract.contract_no || '未记录'}</div>
+                  <div>客户：{contract.party_b_name || '未记录'}</div>
+                  <div>状态：{statusMap[contract.status]?.label || contract.status}</div>
+                  <div>源文件：{hasFile ? '已绑定' : '缺少'}</div>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                {[
+                  ['1', '保留源文件', '当前审核源文件继续作为基准事实。'],
+                  ['2', '登记回传版', '客户文件只进入版本流，不覆盖主合同。'],
+                  ['3', '回到比对', '选择旧版/新版生成差异与风险影响。'],
+                ].map(([step, title, desc]) => (
+                  <div key={step} className="rounded-lg border border-slate-200 p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+                        {step}
+                      </span>
+                      <span className="text-sm font-semibold text-slate-900">{title}</span>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">上传文件</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm leading-6 text-slate-500">
+                支持 PDF 或 DOCX，文件需要可提取文本。大模型审核不会在这里启动；这里仅登记客户回传版本用于文档比对和再审核。
+              </p>
+              <label className={uploading || !hasFile ? 'block cursor-not-allowed opacity-60' : 'block cursor-pointer'}>
+                <input
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  disabled={uploading || !hasFile}
+                />
+                <span className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-slate-900 px-3 text-sm font-medium text-white transition-colors hover:bg-slate-800">
+                  {uploading ? '上传中...' : '选择客户回传文件'}
+                </span>
+              </label>
+              {!hasFile ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  当前合同缺少基准源文件，请先补充源文件后再上传客户回传版。
+                </div>
+              ) : (
+                <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+                  上传成功后会生成 `manual_revision` 版本，并自动回到文档比对工作台。
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -513,9 +640,14 @@ export default function ContractEditPage() {
                   disabled={uploading}
                 />
                 <span className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50">
-                  {uploading ? '上传中...' : hasFile ? '上传客户回传版' : '补充合同源文件'}
+                  {uploading ? '上传中...' : hasFile ? '上传客户回传版/新版本' : '补充合同源文件'}
                 </span>
               </label>
+              {intent === 'customer-return' && (
+                <p className="rounded-md bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-700">
+                  当前上传会作为客户回传/人工修订版本进入版本流，上传后回到文档比对工作台。
+                </p>
+              )}
             </CardContent>
           </Card>
 

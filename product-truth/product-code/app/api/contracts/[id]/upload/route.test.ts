@@ -170,6 +170,70 @@ describe('POST /api/contracts/[id]/upload validation', () => {
     }))
   })
 
+  it('客户回传版只写入版本流，不覆盖合同主源文件', async () => {
+    ;(getDefaultOrgId as any).mockResolvedValue('org-1')
+    ;(listAccessibleUserIds as any).mockResolvedValue({ userIds: ['user-1'] })
+    ;(extractContractText as any).mockReturnValue('customer return parsed text')
+
+    const contractSelectQuery: any = {
+      select: vi.fn(() => contractSelectQuery),
+      eq: vi.fn(() => contractSelectQuery),
+      in: vi.fn(() => contractSelectQuery),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'contract-1', created_by: 'user-1', org_id: 'org-1', status: 'COMPLETED' },
+        error: null,
+      }),
+    }
+    const versionSelectQuery: any = {
+      select: vi.fn(() => versionSelectQuery),
+      eq: vi.fn(() => versionSelectQuery),
+      order: vi.fn(() => versionSelectQuery),
+      limit: vi.fn(() => versionSelectQuery),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { id: 'version-1', version_number: 1 },
+        error: null,
+      }),
+    }
+    const versionInsertQuery: any = {
+      insert: vi.fn().mockResolvedValue({ error: null }),
+    }
+    const contractsFromQueue = [contractSelectQuery]
+    const versionsFromQueue = [versionSelectQuery, versionInsertQuery]
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'contracts') return contractsFromQueue.shift()
+      if (table === 'contract_versions') return versionsFromQueue.shift()
+      throw new Error(`unexpected table ${table}`)
+    })
+    const storage = {
+      upload: vi.fn().mockResolvedValue({ error: null }),
+      getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'https://storage/customer-return.docx' } })),
+      remove: vi.fn().mockResolvedValue({ error: null }),
+    }
+    ;(supabaseAdmin.storage.from as any).mockReturnValue(storage)
+
+    const res = await POST(makeFormRequest({
+      file: makeFile('customer-return.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+      purpose: 'customer-return',
+    }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.data.status).toBe('COMPLETED')
+    expect(body.data.contractUpdated).toBe(false)
+    expect(body.data.versionSource).toBe('manual_revision')
+    expect((supabaseAdmin.from as any).mock.calls.filter(([table]: string[]) => table === 'contracts')).toHaveLength(1)
+    expect(versionInsertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      contract_id: 'contract-1',
+      version_number: 2,
+      source: 'manual_revision',
+      parent_version_id: 'version-1',
+      change_summary: '客户回传版：customer-return.docx',
+      uploaded_by: 'user-1',
+    }))
+  })
+
   it('合同记录更新失败时不得返回上传成功', async () => {
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
     ;(listAccessibleUserIds as any).mockResolvedValue({ userIds: ['user-1'] })

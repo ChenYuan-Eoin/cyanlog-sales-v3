@@ -67,7 +67,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const now = new Date().toISOString()
-    const { error: archiveError } = await supabaseAdmin
+    let archiveQuery = supabaseAdmin
       .from('configs')
       .update({
         status: 'ARCHIVED',
@@ -75,9 +75,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       })
       .eq('org_id', config.org_id)
       .eq('type', config.type)
-      .eq('key', config.key)
       .eq('status', 'PUBLISHED')
       .neq('id', id)
+
+    // UI_THEME is the runtime BrandProfile. Only one profile can be active per org,
+    // regardless of key, so browser favicon/logo/title resolution is unambiguous.
+    if (config.type !== 'UI_THEME') {
+      archiveQuery = archiveQuery.eq('key', config.key)
+    }
+
+    const { error: archiveError } = await archiveQuery
 
     if (archiveError) {
       console.error('Archive previous config error:', archiveError)

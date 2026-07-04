@@ -56,9 +56,11 @@ export type AIRuntimeState =
   | 'local_cli_ready'
   | 'local_auth_failed'
   | 'local_health_failed'
+  | 'local_generation_failed'
   | 'remote_health_ok'
   | 'remote_auth_failed'
   | 'remote_health_failed'
+  | 'remote_generation_failed'
   | 'ready_to_call'
   | 'recent_invocation_passed'
   | 'recent_invocation_partial'
@@ -72,6 +74,11 @@ export interface RuntimeInvocationSummary {
   degraded: boolean
   fallback_reason: string | null
   error_message: string | null
+  intended_provider_profile?: string | null
+  intended_provider_model?: string | null
+  requested_provider_profile?: string | null
+  requested_provider_model?: string | null
+  requested_provider_accepted?: boolean | null
   transport: string | null
   provider_kind: string | null
   attempt_errors: Array<string | null>
@@ -90,6 +97,10 @@ export interface RuntimeProvider {
   role: 'primary' | 'fallback'
   capabilities: string[]
   health_check_required: boolean
+  source_config_id?: string | null
+  source_config_key?: string | null
+  source_kind?: 'database_config' | 'builtin_rule_engine' | 'missing_database_config'
+  source_label?: string
   base_url_configured: boolean
   credential_state: 'configured' | 'missing' | 'not_required'
   runtime_state: AIRuntimeState
@@ -98,7 +109,12 @@ export interface RuntimeProvider {
   runtime_environment: string
   local_endpoint: boolean
   latest_invocation: RuntimeInvocationSummary | null
+  latest_intended_invocation?: RuntimeInvocationSummary | null
+  latest_requested_invocation?: RuntimeInvocationSummary | null
+  latest_related_invocation?: RuntimeInvocationSummary | null
   latest_tender_invocation?: RuntimeInvocationSummary | null
+  latest_tender_intended_invocation?: RuntimeInvocationSummary | null
+  latest_tender_requested_invocation?: RuntimeInvocationSummary | null
   tender_runtime?: {
     runtime_state: AIRuntimeState
     runtime_reason: string
@@ -117,6 +133,13 @@ export interface RuntimePolicy {
   timeout_ms: number
   provider_chain: RuntimeProvider[]
   source_config_ids: string[]
+  source_summary?: {
+    policy_source: 'database_model_policy'
+    provider_config_source: 'database_configs'
+    form_draft_source: 'browser_form_draft'
+    environment_source: 'not_configured' | 'present_not_consumed_by_published_policy'
+    environment_keys_present: string[]
+  }
 }
 
 export interface ScopedRoleAssignment {

@@ -21,8 +21,10 @@ const reviewRunSchema = z.object({
     'manual_rerun',
     'ask_responded',
     'customer_feedback',
+    'customer_version_received',
     'rule_policy_updated',
   ]).default('manual_rerun'),
+  comparison_id: z.string().uuid().optional(),
   strategy: z.enum(['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE']).optional(),
   strategy_id: z.string().trim().min(1).optional(),
   semantic_provider_profile: z.string()
@@ -210,6 +212,7 @@ export async function POST(
         jobId: job.id,
         parentReviewId: parentReview?.id || null,
         triggerEvent: options.trigger_event,
+        comparisonId: options.comparison_id || null,
         finalStatus: responseStatus,
       }
     )
@@ -219,6 +222,7 @@ export async function POST(
       reviewId: review.id,
       parentReviewId: parentReview?.id || null,
       triggerEvent: options.trigger_event,
+      comparisonId: options.comparison_id || null,
       semanticProviderProfile: options.semantic_provider_profile || null,
       status: responseStatus,
       message: responseMessage,

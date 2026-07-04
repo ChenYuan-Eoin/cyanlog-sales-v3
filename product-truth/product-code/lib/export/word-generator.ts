@@ -337,18 +337,23 @@ function addCommentAnchors(documentXml: string, comments: NormalizedComment[], f
         comment.startOffset! >= paragraph.startOffset && comment.endOffset! <= paragraph.endOffset
       ))
       if (rangedCandidates.length !== 1) {
-        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文与 source range 不匹配，需人工定位：${selectedText}`)
-      }
-      target = rangedCandidates[0]
-      const indexes = occurrenceIndexes(target.text, selectedText)
-      const relativeStart = comment.startOffset! - target.startOffset
-      const exactOccurrence = indexes.indexOf(relativeStart)
-      if (exactOccurrence >= 0) {
-        occurrenceIndex = exactOccurrence
-      } else if (indexes.length === 1) {
+        if (candidates.length !== 1 || occurrenceIndexes(candidates[0].text, selectedText).length !== 1) {
+          throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文与 source range 不匹配，需人工定位：${selectedText}`)
+        }
+        target = candidates[0]
         occurrenceIndex = 0
       } else {
-        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${selectedText}`)
+        target = rangedCandidates[0]
+        const indexes = occurrenceIndexes(target.text, selectedText)
+        const relativeStart = comment.startOffset! - target.startOffset
+        const exactOccurrence = indexes.indexOf(relativeStart)
+        if (exactOccurrence >= 0) {
+          occurrenceIndex = exactOccurrence
+        } else if (indexes.length === 1) {
+          occurrenceIndex = 0
+        } else {
+          throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${selectedText}`)
+        }
       }
     } else {
       if (candidates.length > 1) {

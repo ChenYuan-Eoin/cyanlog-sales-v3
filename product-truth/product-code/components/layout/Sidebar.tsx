@@ -66,7 +66,7 @@ export function Sidebar() {
     <>
       {/* Mobile hamburger button - z-index lower than sidebar but higher than overlay */}
       <button
-        className="fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md lg:hidden shadow-lg"
+        className="fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md xl:hidden shadow-lg"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="打开主导航"
         aria-controls="app-sidebar"
@@ -78,7 +78,7 @@ export function Sidebar() {
       {/* Overlay for mobile - only when sidebar is explicitly open */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden touch-none"
+          className="fixed inset-0 bg-black/50 z-30 xl:hidden touch-none"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -90,9 +90,9 @@ export function Sidebar() {
         className={cn(
           'fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white',
           'will-change-transform',
-          'w-[min(20rem,calc(100vw-2rem))] sm:w-80 lg:w-64',
+          'w-[min(20rem,calc(100vw-2rem))] sm:w-80 xl:w-64',
           // Transition only on mobile, desktop is always visible
-          'lg:translate-x-0',
+          'xl:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
         style={{

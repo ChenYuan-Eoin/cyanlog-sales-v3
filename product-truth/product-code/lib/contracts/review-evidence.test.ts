@@ -129,6 +129,65 @@ describe('buildReviewRunEvidence', () => {
     expect(evidence?.skill_bundle_id).toBe('contract-skill:ruleset:missing')
   })
 
+  it('summarizes intended, requested, and actual model providers for ReviewRun evidence', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-provider-routing',
+        status: 'COMPLETED',
+        model_invocation_ids: ['invocation-semantic'],
+      },
+      latestJob: { provider: 'rule-engine+AI_LEVEL_2', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [],
+      rules: [],
+      snapshots: [],
+      modelInvocations: [{
+        id: 'invocation-semantic',
+        provider: 'AI_LEVEL_2',
+        model: 'gpt-5.5',
+        phase: 'semantic_review',
+        status: 'completed',
+        degraded: false,
+        request_meta: {
+          intended_provider_profile: 'local_primary',
+          intended_provider_model: 'gpt-oss-20b',
+          requested_provider_profile: 'local_primary',
+          requested_provider_model: 'gpt-oss-20b',
+          requested_provider_accepted: false,
+        },
+        response_meta: {
+          provider_kind: 'openai_compatible',
+          transport: 'openai_compatible_http',
+          actual_provider_profile: 'AI_LEVEL_2',
+          actual_provider_model: 'gpt-5.5',
+          dropped_risk_count: 0,
+          validation_warnings: [],
+        },
+      }],
+    })
+
+    expect(evidence?.model_policy).toMatchObject({
+      provider: 'AI_LEVEL_2',
+      model: 'gpt-5.5',
+      actual_provider_profile: 'AI_LEVEL_2',
+      actual_provider_model: 'gpt-5.5',
+      intended_provider_profile: 'local_primary',
+      intended_provider_model: 'gpt-oss-20b',
+      requested_provider_profile: 'local_primary',
+      requested_provider_model: 'gpt-oss-20b',
+      requested_provider_accepted: false,
+    })
+    expect(evidence?.model_invocations[0]).toMatchObject({
+      actual_provider_profile: 'AI_LEVEL_2',
+      actual_provider_model: 'gpt-5.5',
+      intended_provider_profile: 'local_primary',
+      intended_provider_model: 'gpt-oss-20b',
+      requested_provider_profile: 'local_primary',
+      requested_provider_model: 'gpt-oss-20b',
+      requested_provider_accepted: false,
+    })
+  })
+
   it('prefers real SkillBundle, ModelPolicy, and ModelInvocation bindings when present', () => {
     const evidence = buildReviewRunEvidence({
       latestReview: {
@@ -440,6 +499,55 @@ describe('buildReviewRunEvidence', () => {
       fallback_reason: 'semantic_review_degraded_to_rule_engine',
     })
     expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_not_passed')
+  })
+
+  it('does not mark completed builtin semantic invocation as AI model quality passed', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-builtin-semantic',
+        status: 'COMPLETED',
+        skill_bundle_id: 'skill-1',
+        model_invocation_ids: ['invocation-semantic'],
+      },
+      latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [],
+      rules: [],
+      snapshots: [],
+      skillBundle: {
+        id: 'skill-1',
+        version: 10,
+        rule_snapshot_ids: [],
+        status: 'published',
+        compiled_from: {
+          rule_translation_gate: { status: 'ready', official_review_allowed: true, blocking_reasons: [] },
+          eval_results: {
+            status: 'passed',
+            runtime_eval_status: 'model_quality_eval_not_run',
+            note: 'Static publication eval only.',
+          },
+        },
+        release_meta: { official_review_allowed: true },
+      },
+      modelInvocations: [{
+        id: 'invocation-semantic',
+        provider: 'rule-engine',
+        model: 'rule-engine',
+        phase: 'semantic_review',
+        status: 'completed',
+        degraded: false,
+        response_meta: {
+          provider_kind: 'builtin',
+          transport: 'builtin_rule_engine',
+          usable_risk_count: 1,
+          dropped_risk_count: 0,
+          validation_warnings: [],
+        },
+      }],
+    })
+
+    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_not_passed')
+    expect(evidence?.skill_bundle?.eval_note).toContain('did not use a passing AI provider path')
   })
 
   it('keeps LM Studio CLI semantic invocation separate from HTTP model readiness', () => {

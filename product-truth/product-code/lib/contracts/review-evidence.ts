@@ -183,8 +183,13 @@ export type ReviewRunEvidence = {
     provider_kind?: string | null
     transport?: string | null
     latency_ms?: number | null
+    actual_provider_profile?: string | null
+    actual_provider_model?: string | null
     intended_provider_profile?: string | null
     intended_provider_model?: string | null
+    requested_provider_profile?: string | null
+    requested_provider_model?: string | null
+    requested_provider_accepted?: boolean | null
     attempt_error_count?: number | null
     degraded: boolean
     status: string | null
@@ -202,6 +207,13 @@ export type ReviewRunEvidence = {
     transport: string | null
     provider_kind: string | null
     latency_ms: number | null
+    actual_provider_profile: string | null
+    actual_provider_model: string | null
+    intended_provider_profile: string | null
+    intended_provider_model: string | null
+    requested_provider_profile: string | null
+    requested_provider_model: string | null
+    requested_provider_accepted: boolean | null
     dropped_risk_count: number | null
     validation_warning_count: number | null
     attempt_error_count: number | null
@@ -561,6 +573,7 @@ function invocationAttemptErrorCount(invocation: ReviewEvidenceModelInvocation |
 }
 
 function summarizeInvocation(invocation: ReviewEvidenceModelInvocation) {
+  const requestMeta = invocationRequestMeta(invocation)
   const responseMeta = invocationResponseMeta(invocation)
   const attemptErrors = stringListValue(responseMeta?.attempt_errors).map(sanitizeEvidenceMessage)
   return {
@@ -573,6 +586,20 @@ function summarizeInvocation(invocation: ReviewEvidenceModelInvocation) {
     transport: stringValue(responseMeta?.transport),
     provider_kind: stringValue(responseMeta?.provider_kind),
     latency_ms: invocation.latency_ms ?? null,
+    actual_provider_profile: stringValue(responseMeta?.actual_provider_profile)
+      || stringValue(responseMeta?.provider_profile)
+      || invocation.provider
+      || null,
+    actual_provider_model: stringValue(responseMeta?.actual_provider_model)
+      || invocation.model
+      || null,
+    intended_provider_profile: stringValue(requestMeta?.intended_provider_profile),
+    intended_provider_model: stringValue(requestMeta?.intended_provider_model),
+    requested_provider_profile: stringValue(requestMeta?.requested_provider_profile),
+    requested_provider_model: stringValue(requestMeta?.requested_provider_model),
+    requested_provider_accepted: typeof requestMeta?.requested_provider_accepted === 'boolean'
+      ? requestMeta.requested_provider_accepted
+      : null,
     dropped_risk_count: numberValue(responseMeta?.dropped_risk_count),
     validation_warning_count: Array.isArray(responseMeta?.validation_warnings)
       ? responseMeta.validation_warnings.length
@@ -676,8 +703,20 @@ export function buildReviewRunEvidence(input: {
       provider_kind: stringValue(responseMeta?.provider_kind),
       transport: stringValue(responseMeta?.transport),
       latency_ms: invocation?.latency_ms ?? null,
+      actual_provider_profile: stringValue(responseMeta?.actual_provider_profile)
+        || stringValue(responseMeta?.provider_profile)
+        || invocation?.provider
+        || null,
+      actual_provider_model: stringValue(responseMeta?.actual_provider_model)
+        || invocation?.model
+        || null,
       intended_provider_profile: stringValue(requestMeta?.intended_provider_profile),
       intended_provider_model: stringValue(requestMeta?.intended_provider_model),
+      requested_provider_profile: stringValue(requestMeta?.requested_provider_profile),
+      requested_provider_model: stringValue(requestMeta?.requested_provider_model),
+      requested_provider_accepted: typeof requestMeta?.requested_provider_accepted === 'boolean'
+        ? requestMeta.requested_provider_accepted
+        : null,
       attempt_error_count: invocationAttemptErrorCount(invocation),
       degraded: Boolean(
         invocation?.degraded

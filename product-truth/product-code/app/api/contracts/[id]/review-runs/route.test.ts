@@ -195,6 +195,54 @@ describe('POST /api/contracts/[id]/review-runs', () => {
     })
   })
 
+  it('允许文档对比完成后以客户回传版本事件创建再审核', async () => {
+    const contractQuery = makeQuery({
+      data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },
+      error: null,
+    })
+    const parentReviewQuery = makeQuery({
+      data: { id: 'review-parent' },
+      error: null,
+    })
+    const updateQuery = makeUpdate({
+      data: { id: 'contract-1' },
+      error: null,
+    })
+    const reviewInsertQuery = makeInsert({
+      data: { id: 'review-from-compare' },
+      error: null,
+    })
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(contractQuery)
+      .mockReturnValueOnce(parentReviewQuery)
+      .mockReturnValueOnce(updateQuery)
+      .mockReturnValueOnce(reviewInsertQuery)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const res = await POST(makeRequest({
+      trigger_event: 'customer_version_received',
+      comparison_id: '33333333-3333-4333-8333-333333333333',
+    }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({
+      reviewId: 'review-from-compare',
+      parentReviewId: 'review-parent',
+      triggerEvent: 'customer_version_received',
+      comparisonId: '33333333-3333-4333-8333-333333333333',
+      status: 'COMPLETED',
+    })
+    expect(runStructuredAnalysis).toHaveBeenCalledWith('contract-1', expect.objectContaining({
+      reviewId: 'review-from-compare',
+      reviewTrigger: 'customer_version_received',
+    }))
+  })
+
   it('规则发布或 SkillBundle 未过正式门时不得描述为正式审核完成', async () => {
     const contractQuery = makeQuery({
       data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },

@@ -22,3 +22,9 @@ export function openAICompatibleModelsUrl(baseUrl: string): URL {
   const base = normalized.endsWith('/') ? normalized : `${normalized}/`
   return new URL('models', base)
 }
+
+export function openAICompatibleChatCompletionsUrl(baseUrl: string): URL {
+  const normalized = normalizeOpenAICompatibleBaseUrl(baseUrl)
+  const base = normalized.endsWith('/') ? normalized : `${normalized}/`
+  return new URL('chat/completions', base)
+}

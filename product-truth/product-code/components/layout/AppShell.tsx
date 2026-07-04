@@ -21,9 +21,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className={cn(
         'min-h-screen bg-background',
         showSidebar
-          ? 'pt-14 pb-4 px-4 md:pt-16 md:pb-6 md:px-6 lg:pt-0 lg:pb-0 lg:px-0'
+          ? 'pt-14 pb-4 px-4 md:pt-16 md:pb-6 md:px-6 xl:pt-0 xl:pb-0 xl:px-0'
           : 'p-0',
-        showSidebar && 'lg:ml-64'
+        showSidebar && 'xl:ml-64'
       )}>
         {children}
       </main>

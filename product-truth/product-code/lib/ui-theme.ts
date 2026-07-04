@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { DEFAULT_THEME, sanitizeThemeValue, type UIThemeConfigValue } from '@/lib/ui-theme-shared'
 import { getOrgIdForToken } from '@/lib/configs/runtime'
 
-const THEME_QUERY_TIMEOUT_MS = 800
+const THEME_QUERY_TIMEOUT_MS = 1500
 
 async function loadPublishedThemeByOrgId(orgId: string) {
   const { data } = await supabaseAdmin

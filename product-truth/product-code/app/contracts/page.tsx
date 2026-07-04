@@ -26,6 +26,12 @@ import {
 import type { Contract } from '@/types'
 import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadContractsListForCache } from '@/lib/core-page-warmup'
+import { deriveReviewWorkflowState } from '@/lib/contracts/review-state-machine'
+import {
+  buildContractCompareHref,
+  buildContractNewReviewHref,
+  buildContractWorkbenchHref,
+} from '@/lib/contracts/review-navigation'
 import { handleError } from '@/lib/toast'
 import { LoadingState } from '@/components/ui/LoadingState'
 
@@ -36,6 +42,10 @@ type QuickAction = {
   id: 'review' | 'continue' | 'annotations' | 'compare'
   title: string
   shortTitle: string
+  workflowLabel: string
+  objectLabel: string
+  outcomeLabel: string
+  boundaryLabel: string
   icon: React.ComponentType<{ className?: string }>
   color: string
   hoverColor: string
@@ -56,6 +66,19 @@ type ContractsCachePayload = {
     hasNext: boolean
     hasPrev: boolean
   }
+}
+
+type TaskItemView = {
+  id: string
+  name: string
+  type: 'draft' | 'contract'
+  status: string
+  statusColor: string
+  updatedAt: string
+  href: string
+  meta: string
+  nextAction: string
+  nextActionDescription: string
 }
 
 const LIST_CACHE_TTL_MS = 5 * 60 * 1000
@@ -101,44 +124,60 @@ const quickActions: QuickAction[] = [
     id: 'review',
     title: '发起合同审核',
     shortTitle: '发起',
+    workflowLabel: '创建新的 ReviewRun',
+    objectLabel: '新的源文件',
+    outcomeLabel: '进入风险定位与批注工作台',
+    boundaryLabel: '不会打开历史批注或旧对比结果',
     icon: ShieldCheckIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
     href: '/contracts/new',
-    description: '上传合同源文件，创建新的审核任务',
+    description: '上传合同源文件，创建新的审核运行，不复用旧批注或旧对比结果',
     stateLabel: '新任务',
   },
   {
     id: 'continue',
-    title: '继续进行中审核',
+    title: '继续合同审核',
     shortTitle: '继续',
+    workflowLabel: '回到未完成 ReviewRun',
+    objectLabel: '未完成审核运行',
+    outcomeLabel: '查看真实处理进度与失败原因',
+    boundaryLabel: '不会创建新的合同或重复导出批注版',
     icon: ClockIcon,
     color: 'bg-indigo-600',
     hoverColor: 'hover:bg-indigo-700',
     href: '/contracts/new',
-    description: '回到尚未完成的审核运行',
+    description: '回到解析中、审核中或待处理的合同，不创建新任务',
     stateLabel: '进行中',
   },
   {
     id: 'annotations',
-    title: '查看批注版输出',
-    shortTitle: '批注',
+    title: '查看批注输出',
+    shortTitle: '输出',
+    workflowLabel: '打开已完成输出',
+    objectLabel: '已完成 ReviewRun',
+    outcomeLabel: '检查证据门禁，满足后导出源文件批注版',
+    boundaryLabel: '不是重新审核，也不是文档对比',
     icon: MessageSquareTextIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
     href: '/contracts/new',
-    description: '打开已完成合同的批注、版本和导出记录',
+    description: '查看已完成合同的风险证据、源文件批注版和导出记录',
     stateLabel: '已完成',
   },
   {
     id: 'compare',
-    title: '文档比对',
+    title: '合同文档对比',
     shortTitle: '比对',
+    workflowLabel: '旧版 / 新版差异复核',
+    objectLabel: '同一合同版本流',
+    outcomeLabel: '选择基准与客户回传件，生成差异列表',
+    boundaryLabel: '比对结果不替代风险审核结论',
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
     href: '/contracts/upload?intent=compare',
-    description: '以已完成合同为基准，对比客户回传或候选版本',
+    description: '以当前合同为基准，对比客户回传版或同客户候选版本',
     stateLabel: '版本流',
   },
 ]
@@ -359,8 +398,8 @@ export default function ContractCenterPage() {
       if (action.id === 'review') {
         return {
           ...action,
-          href: '/contracts/new?from=workbench',
-          description: '上传源文件后直接进入审核工作台',
+          href: buildContractNewReviewHref('workbench'),
+          description: '上传源文件后直接创建新的审核运行，并进入风险定位与批注工作台',
           targetName: '新建合同版本',
         }
       }
@@ -368,8 +407,10 @@ export default function ContractCenterPage() {
       if (action.id === 'continue') {
         return {
           ...action,
-          href: continuingTarget ? `/contracts/${continuingTarget.id}?from=workbench` : '/contracts/new?from=workbench',
-          description: continuingTarget ? '继续未完成的解析、审核或再审核任务' : '暂无进行中审核，可先发起审核',
+          href: continuingTarget
+            ? buildContractWorkbenchHref(continuingTarget.id, { from: 'workbench' })
+            : buildContractNewReviewHref('workbench'),
+          description: continuingTarget ? '继续未完成的解析、审核或再审核任务，不创建新合同' : '暂无进行中 ReviewRun；请先上传源文件发起合同审核',
           targetName: continuingTarget ? contractActionName(continuingTarget) : '没有进行中任务',
           disabled: !continuingTarget,
         }
@@ -378,9 +419,11 @@ export default function ContractCenterPage() {
       if (action.id === 'annotations') {
         return {
           ...action,
-          href: annotatedTarget ? `/contracts/${annotatedTarget.id}?panel=evidence&from=workbench` : '/contracts/new?from=workbench',
-          description: annotatedTarget ? '查看批注意图、输出版本和下载记录' : '需先完成一份合同审核',
-          targetName: annotatedTarget ? contractActionName(annotatedTarget) : '暂无批注版',
+          href: annotatedTarget
+            ? buildContractWorkbenchHref(annotatedTarget.id, { panel: 'evidence', from: 'workbench' })
+            : buildContractNewReviewHref('workbench'),
+          description: annotatedTarget ? '查看风险证据、Word 批注意图、导出门禁和下载记录' : '暂无已完成 ReviewRun；批注输出只来自已完成的源文件审核',
+          targetName: annotatedTarget ? contractActionName(annotatedTarget) : '暂无已完成输出',
           disabled: !annotatedTarget,
         }
       }
@@ -388,8 +431,10 @@ export default function ContractCenterPage() {
       if (action.id === 'compare') {
         return {
           ...action,
-          href: compareTarget ? `/contracts/${compareTarget.id}/compare?from=workbench` : '/contracts/new?from=workbench',
-          description: compareTarget ? '进入基准合同的版本比对工作台' : '需先完成一份合同审核',
+          href: compareTarget
+            ? buildContractCompareHref(compareTarget.id, { from: 'workbench' })
+            : buildContractNewReviewHref('workbench'),
+          description: compareTarget ? '进入基准合同版本流，选择客户回传版或候选合同做差异复核' : '暂无可作为基准的合同版本；先完成审核或补充源文件',
           targetName: compareTarget ? contractActionName(compareTarget) : '暂无可比对基准',
           disabled: !compareTarget,
         }
@@ -410,7 +455,9 @@ export default function ContractCenterPage() {
       updatedAt: d.updated_at,
       href: `/contracts/draft?id=${d.id}`,
       meta: '草稿',
-    }))
+      nextAction: '继续起草',
+      nextActionDescription: '补齐合同信息后再上传源文件或转入审核。',
+    } satisfies TaskItemView))
 
     const contractTasks = contracts.map((c) => {
       const statusMap: Record<string, { label: string; color: string }> = {
@@ -421,6 +468,11 @@ export default function ContractCenterPage() {
         FAILED: { label: '审核失败', color: 'bg-red-100 text-red-700' },
       }
       const status = statusMap[c.status] || { label: c.status, color: 'bg-slate-100 text-slate-600' }
+      const workflowState = deriveReviewWorkflowState({
+        status: c.status,
+        hasSourceAsset: Boolean(c.parsed_text?.trim() || c.storage_path),
+        exportReady: false,
+      })
       return {
         id: c.id,
         name: c.filename,
@@ -428,9 +480,13 @@ export default function ContractCenterPage() {
         status: status.label,
         statusColor: status.color as string,
         updatedAt: c.updated_at,
-        href: `/contracts/${c.id}`,
+        href: workflowState.detailPanel === 'evidence'
+          ? buildContractWorkbenchHref(c.id, { panel: 'evidence', from: 'list' })
+          : buildContractWorkbenchHref(c.id, { from: 'list' }),
         meta: '合同',
-      }
+        nextAction: workflowState.nextActionLabel,
+        nextActionDescription: workflowState.nextActionDescription,
+      } satisfies TaskItemView
     })
 
     const all = [...draftTasks, ...contractTasks].sort(
@@ -483,11 +539,10 @@ export default function ContractCenterPage() {
               </div>
             </div>
 
-            {/* 桌面端快捷操作 */}
+            {/* 桌面端保留少量全局动作，完整状态机放到正文首屏 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
-              {resolvedQuickActions.slice(0, 3).map((action) => (
-                <QuickActionButton key={action.id} action={action} compact />
-              ))}
+              <QuickActionButton action={resolvedQuickActions[0]} compact />
+              <QuickActionButton action={resolvedQuickActions[1]} compact />
             </div>
 
             {/* 移动端筛选按钮 */}
@@ -498,20 +553,12 @@ export default function ContractCenterPage() {
             )}
           </div>
 
-          {/* 桌面端快捷操作大按钮 */}
-          {!isMobile && (
-            <div className="grid grid-cols-4 gap-3 mt-4">
-              {resolvedQuickActions.map((action) => (
-                <QuickActionTile key={action.id} action={action} />
-              ))}
-            </div>
-          )}
         </div>
       </header>
 
       {/* 主内容区 */}
       <main className="mx-auto max-w-[1480px] px-4 md:px-6 py-4 md:py-6">
-        <ReviewLaunchPanel isMobile={isMobile} />
+        <ReviewLaunchPanel isMobile={isMobile} actions={resolvedQuickActions} />
 
         {listUnavailable ? (
           <LoadErrorState message={loadError} onRetry={() => void fetchData(1, { query: searchQuery })} />
@@ -673,50 +720,13 @@ function QuickActionButton({
   )
 }
 
-function QuickActionTile({ action }: { action: ResolvedQuickAction }) {
-  const Icon = action.icon
-  const body = (
-    <div className={`group flex min-h-[96px] items-start gap-3 rounded-lg border bg-white p-3 ${
-      action.disabled
-        ? 'border-slate-200 opacity-60'
-        : 'border-slate-200 hover:border-indigo-300 hover:shadow-sm'
-    } transition-colors transition-shadow`}>
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${action.disabled ? 'bg-slate-200' : `${action.color} ${action.hoverColor}`}`}>
-        <Icon className={`h-5 w-5 ${action.disabled ? 'text-slate-400' : 'text-white'}`} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold text-slate-900">{action.title}</p>
-          {action.stateLabel && (
-            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-              {action.stateLabel}
-            </span>
-          )}
-        </div>
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{action.description}</p>
-        {action.targetName && (
-          <p className="mt-2 truncate text-[11px] font-medium text-slate-700">{action.targetName}</p>
-        )}
-      </div>
-    </div>
-  )
-
-  if (action.disabled) {
-    return (
-      <div aria-disabled="true" title={action.description}>
-        {body}
-      </div>
-    )
-  }
-
-  return (
-    <Link href={action.href} prefetch={false} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
-      {body}
-    </Link>
-  )
-}
-
-function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
+function ReviewLaunchPanel({
+  isMobile,
+  actions,
+}: {
+  isMobile: boolean
+  actions: ResolvedQuickAction[]
+}) {
   return (
     <section className="mb-4 rounded-lg border border-indigo-100 bg-white p-4 shadow-sm md:mb-6 md:p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -726,10 +736,10 @@ function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
           </div>
           <div className="min-w-0">
             <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-slate-950`}>
-              合同审核工作台入口
+              合同审核状态机
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              上传合同源文件，绑定已发布审核规则和模型策略，生成风险定位、销售谈判任务与源文件 Word 批注版本。
+              合同中心只做四类动作：发起新的审核运行、继续未完成运行、查看批注输出与导出门禁、对比客户回传版本。每个入口必须绑定明确对象，不能互相替代。
             </p>
           </div>
         </div>
@@ -741,25 +751,59 @@ function ReviewLaunchPanel({ isMobile }: { isMobile: boolean }) {
         </Link>
       </div>
 
-      <div className="mt-4 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
-        <div className="rounded-md bg-slate-50 px-3 py-2">
-          <span className="font-medium text-slate-900">源文件</span>
-          <span className="ml-1">docx / pdf</span>
-        </div>
-        <div className="rounded-md bg-slate-50 px-3 py-2">
-          <span className="font-medium text-slate-900">审核依据</span>
-          <span className="ml-1">发布规则 / 模型</span>
-        </div>
-        <div className="rounded-md bg-slate-50 px-3 py-2">
-          <span className="font-medium text-slate-900">风险定位</span>
-          <span className="ml-1">复核 / 谈判</span>
-        </div>
-        <div className="rounded-md bg-slate-50 px-3 py-2">
-          <span className="font-medium text-slate-900">输出</span>
-          <span className="ml-1">批注版 / 报告</span>
-        </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+	        {actions.map((action, index) => {
+	          const Icon = action.icon
+	          const content = (
+	            <div className={`h-full rounded-lg border p-3 transition ${
+              action.disabled
+                ? 'border-slate-200 bg-slate-50 opacity-70'
+                : 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm'
+            }`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-[11px] font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <div className="font-semibold text-slate-950">{action.title}</div>
+                </div>
+                <Icon className={`h-4 w-4 ${action.disabled ? 'text-slate-400' : 'text-indigo-600'}`} />
+	              </div>
+	              <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600">
+	                <WorkflowFact label="入口" value={action.stateLabel || action.shortTitle} />
+                <WorkflowFact label="动作" value={action.workflowLabel} />
+                <WorkflowFact label="对象" value={action.objectLabel} />
+                <WorkflowFact label="当前目标" value={action.targetName || '等待选择'} />
+                <WorkflowFact label="结果" value={action.outcomeLabel} />
+	              </div>
+	              <div className={`mt-3 rounded-md px-2 py-1.5 text-[11px] leading-5 ${
+	                action.disabled ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-500'
+	              }`}>
+	                <span className="font-medium">{action.disabled ? '当前不可用：' : '边界：'}</span>
+	                {action.disabled ? action.description : action.boundaryLabel}
+	              </div>
+	            </div>
+	          )
+          if (action.disabled) {
+            return <div key={action.id} aria-disabled="true" title={action.description}>{content}</div>
+          }
+          return (
+            <Link key={action.id} href={action.href} prefetch={false} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
+              {content}
+            </Link>
+          )
+        })}
       </div>
     </section>
+  )
+}
+
+function WorkflowFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2">
+      <span className="text-slate-400">{label}</span>
+      <span className="min-w-0 truncate font-medium text-slate-800">{value}</span>
+    </div>
   )
 }
 
@@ -804,12 +848,14 @@ function TaskItem({
   task: {
     id: string
     name: string
-    type: string
+    type: 'draft' | 'contract'
     status: string
     statusColor: string
     updatedAt: string
     href: string
     meta: string
+    nextAction: string
+    nextActionDescription: string
   }
   isMobile: boolean
 }) {
@@ -842,6 +888,9 @@ function TaskItem({
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${task.statusColor}`}>
                   {task.status}
                 </span>
+                <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                  下一步：{task.nextAction}
+                </span>
                 <span className="text-[10px] text-slate-400">
                   {new Date(task.updatedAt).toLocaleDateString('zh-CN', {
                     month: 'short',
@@ -851,6 +900,9 @@ function TaskItem({
                   })}
                 </span>
               </div>
+              {!isMobile && (
+                <p className="mt-1 truncate text-xs text-slate-500">{task.nextActionDescription}</p>
+              )}
             </div>
 
             {/* 箭头 */}

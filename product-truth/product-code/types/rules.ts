@@ -32,6 +32,8 @@ export type ContractRuleMessageTemplate = {
   negotiation_required?: boolean
   owner_role?: string
   bottom_line?: string
+  levels?: Record<string, string>
+  outputs?: Record<string, string>
 }
 
 export interface ContractPolicyRule {

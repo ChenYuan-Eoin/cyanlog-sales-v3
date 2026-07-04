@@ -76,16 +76,16 @@ export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
   // 新品牌资产配置
   brandAssets: {
     fullLogo: { light: '', dark: '' },
-    symbol: { light: '', dark: '' },
-    favicon: '',
+    symbol: { light: '/favicon.svg', dark: '/favicon.svg' },
+    favicon: '/favicon.svg',
   },
 
   // 默认跟随系统
   appearance: 'system',
 
   // 旧字段（过渡兼容）
-  logoUrl: '',
-  faviconUrl: '',
+  logoUrl: '/favicon.svg',
+  faviconUrl: '/favicon.svg',
 
   primary: '#2563eb',
   primaryForeground: '#ffffff',

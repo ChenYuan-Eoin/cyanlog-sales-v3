@@ -34,7 +34,7 @@ function makeJsonRequest(body: unknown): any {
   }
 }
 
-function installSupabaseMock(contracts: any[]) {
+function installSupabaseMock(contracts: any[], versions: any[] = []) {
   const updates: any[] = []
   const diffInserts: any[] = []
   const comparisonInserts: any[] = []
@@ -50,6 +50,12 @@ function installSupabaseMock(contracts: any[]) {
       updates.push(payload)
       return contractTable
     }),
+  }
+
+  const versionTable: any = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn(async () => ({ data: versions, error: null })),
   }
 
   const comparisonInsertChain: any = {
@@ -86,6 +92,7 @@ function installSupabaseMock(contracts: any[]) {
 
   ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
     if (table === 'contracts') return contractTable
+    if (table === 'contract_versions') return versionTable
     if (table === 'contract_comparisons') return comparisonTable
     if (table === 'comparison_diffs') return diffTable
     throw new Error(`unexpected table ${table}`)
@@ -158,6 +165,171 @@ describe('POST /api/contracts/[id]/compare', () => {
       status: 'completed',
     })
     expect(supabase.diffInserts[0].length).toBeGreaterThan(0)
+  })
+
+  it('将同一条款的内容变化归并为一条修改差异', async () => {
+    const supabase = installSupabaseMock([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        filename: 'baseline.docx',
+        status: 'COMPLETED',
+        parsed_text: '第一条 付款期限为30日\n第二条 服务范围保持不变',
+        storage_path: 'baseline.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        filename: 'compare.docx',
+        status: 'COMPLETED',
+        parsed_text: '第一条 付款期限为60日\n第二条 服务范围保持不变',
+        storage_path: 'compare.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+    ])
+
+    const res = await POST(makeJsonRequest({
+      baseline_type: 'previous_version',
+      compare_doc_id: '22222222-2222-4222-8222-222222222222',
+    }), {
+      params: Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }),
+    })
+    const body = await res.json()
+    const diffs = supabase.diffInserts[0]
+
+    expect(res.status).toBe(201)
+    expect(body.data.diffs).toHaveLength(1)
+    expect(diffs).toHaveLength(1)
+    expect(diffs[0]).toMatchObject({
+      diff_type: 'modified',
+      baseline_text: '第一条 付款期限为30日',
+      compare_text: '第一条 付款期限为60日',
+      risk_level: 'red',
+    })
+  })
+
+  it('尊重 baseline_doc_id，不把路由合同锁死为基准文件', async () => {
+    const supabase = installSupabaseMock([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        filename: 'route-current.docx',
+        status: 'COMPLETED',
+        party_b_name: '同一客户',
+        parsed_text: '这份路由合同不应该成为本次基准',
+        storage_path: 'route-current.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        filename: 'selected-baseline.docx',
+        status: 'COMPLETED',
+        party_b_name: '同一客户',
+        parsed_text: '第一条 付款期限为30日',
+        storage_path: 'selected-baseline.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        filename: 'compare.docx',
+        status: 'COMPLETED',
+        party_b_name: '同一客户',
+        parsed_text: '第一条 付款期限为60日',
+        storage_path: 'compare.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+    ])
+
+    const res = await POST(makeJsonRequest({
+      baseline_type: 'previous_version',
+      baseline_doc_id: '33333333-3333-4333-8333-333333333333',
+      compare_doc_id: '22222222-2222-4222-8222-222222222222',
+    }), {
+      params: Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.data.diffs[0]).toMatchObject({
+      baseline_text: '第一条 付款期限为30日',
+      compare_text: '第一条 付款期限为60日',
+    })
+    expect(supabase.comparisonInserts[0]).toMatchObject({
+      contract_id: '11111111-1111-4111-8111-111111111111',
+      baseline_doc_id: '33333333-3333-4333-8333-333333333333',
+      compare_doc_id: '22222222-2222-4222-8222-222222222222',
+    })
+  })
+
+  it('支持选择当前合同历史版本作为旧文件，再与候选合同比对', async () => {
+    ;(extractContractText as any).mockReturnValue('第一条 付款期限为30日')
+    const supabase = installSupabaseMock([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        filename: 'route-current.docx',
+        status: 'COMPLETED',
+        party_b_name: '同一客户',
+        parsed_text: '当前合同文本不应覆盖历史版本',
+        storage_path: 'route-current.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        filename: 'compare.docx',
+        status: 'COMPLETED',
+        party_b_name: '同一客户',
+        parsed_text: '第一条 付款期限为60日',
+        storage_path: 'compare.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+    ], [
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        contract_id: '11111111-1111-4111-8111-111111111111',
+        version_number: 1,
+        source: 'original',
+        storage_path: 'baseline-v1.docx',
+        file_size: 1024,
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        parent_version_id: null,
+        change_summary: '源文件',
+        review_id: null,
+        created_at: '2026-07-03T00:00:00.000Z',
+      },
+    ])
+
+    const res = await POST(makeJsonRequest({
+      baseline_type: 'previous_version',
+      baseline_doc_id: '33333333-3333-4333-8333-333333333333',
+      compare_doc_id: '22222222-2222-4222-8222-222222222222',
+    }), {
+      params: Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.data.diffs[0]).toMatchObject({
+      baseline_text: '第一条 付款期限为30日',
+      compare_text: '第一条 付款期限为60日',
+    })
+    expect(supabase.storageBucket.download).toHaveBeenCalledWith('baseline-v1.docx')
+    expect(supabase.comparisonInserts[0]).toMatchObject({
+      contract_id: '11111111-1111-4111-8111-111111111111',
+      baseline_doc_id: '33333333-3333-4333-8333-333333333333',
+      compare_doc_id: '22222222-2222-4222-8222-222222222222',
+    })
   })
 
   it('缺少 parsed_text 且没有源文件时返回可解释的校验错误', async () => {

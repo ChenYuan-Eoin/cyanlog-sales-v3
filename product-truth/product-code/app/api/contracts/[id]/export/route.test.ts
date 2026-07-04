@@ -33,6 +33,10 @@ vi.mock('@/lib/export/word-generator', () => ({
   generateWordDocument: vi.fn(),
 }))
 
+vi.mock('@/lib/contracts/model-policy', () => ({
+  recordModelInvocation: vi.fn(),
+}))
+
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
@@ -48,6 +52,7 @@ import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { resolveIdParam } from '@/lib/route-params'
 import { generateWordDocument } from '@/lib/export/word-generator'
 import { supabaseAdmin } from '@/lib/supabase'
+import { recordModelInvocation } from '@/lib/contracts/model-policy'
 
 const tempFiles: string[] = []
 
@@ -89,6 +94,14 @@ function makeInsertResult(result: unknown) {
   }
 }
 
+function makeModelInvocationResult(result: unknown) {
+  const chain: any = {
+    select: vi.fn(() => chain),
+    in: vi.fn().mockResolvedValue(result),
+  }
+  return chain
+}
+
 function makeUpdateResult(result: { error: unknown }) {
   const chain: any = {
     ...result,
@@ -98,7 +111,29 @@ function makeUpdateResult(result: { error: unknown }) {
   return chain
 }
 
-function installSupabaseExportMocks() {
+function installSupabaseExportMocks(options: {
+  versions?: Array<{
+    id: string
+    version_number: number
+    source: string
+    storage_path?: string | null
+    parent_version_id?: string | null
+    review_id?: string | null
+    created_at?: string | null
+  }>
+  downloadBytes?: BlobPart
+  modelInvocations?: Array<{
+    id: string
+    phase: string
+    provider: string
+    model: string
+    status: string
+    degraded: boolean
+    fallback_reason?: string | null
+    error_message?: string | null
+    response_meta?: Record<string, unknown>
+  }>
+} = {}) {
   const contract = {
     id: 'contract-1',
     filename: 'source.docx',
@@ -107,23 +142,41 @@ function installSupabaseExportMocks() {
     contract_reviews: [{
       id: 'review-1',
       created_at: '2026-07-02T01:00:00.000Z',
+      model_invocation_ids: ['invocation-semantic'],
       results: { summary: '审核完成', risks: [] },
     }],
   }
+  const modelInvocations = options.modelInvocations || [{
+    id: 'invocation-semantic',
+    phase: 'semantic_review',
+    provider: 'AI_LEVEL_1',
+    model: 'gpt-oss-20b',
+    status: 'completed',
+    degraded: false,
+    response_meta: {
+      provider_kind: 'openai_compatible',
+      transport: 'openai_compatible_http',
+      validation_warnings: [],
+      dropped_risk_count: 0,
+      usable_risk_count: 1,
+    },
+  }]
 
   const queues: Record<string, any[]> = {
     contracts: [makeSingleResult({ data: contract, error: null })],
     contract_clauses: [makeArrayResult({ data: [], error: null })],
     contract_annotations: [makeArrayResult({ data: [], error: null })],
     contract_risk_cards: [makeArrayResult({ data: [], error: null })],
+    model_invocations: [makeModelInvocationResult({ data: modelInvocations, error: null })],
     contract_versions: [
       makeArrayResult({
-        data: [{ id: 'version-1', version_number: 1, source: 'original' }],
+        data: options.versions || [{ id: 'version-1', version_number: 1, source: 'original' }],
         error: null,
       }),
       makeInsertResult({ error: null }),
     ],
     report_versions: [makeUpdateResult({ error: null })],
+    contract_reviews: [makeUpdateResult({ error: null })],
   }
 
   ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
@@ -134,7 +187,7 @@ function installSupabaseExportMocks() {
 
   const storage = {
     download: vi.fn().mockResolvedValue({
-      data: new Blob(['source docx bytes']),
+      data: new Blob([options.downloadBytes || 'source docx bytes']),
       error: null,
     }),
     upload: vi.fn().mockResolvedValue({ error: null }),
@@ -148,10 +201,14 @@ function installSupabaseExportMocks() {
 describe('POST /api/contracts/[id]/export', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    ;(recordModelInvocation as any).mockReset()
     ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
     ;(listAccessibleUserIds as any).mockResolvedValue({ userIds: ['user-1'] })
     ;(resolveIdParam as any).mockResolvedValue('contract-1')
+    ;(recordModelInvocation as any)
+      .mockResolvedValueOnce({ id: 'invocation-comment-patch' })
+      .mockResolvedValueOnce({ id: 'invocation-report-summary' })
   })
 
   it('拒绝把非源文件批注版当作导出成功', async () => {
@@ -194,11 +251,159 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(res.headers.get('x-export-timing')).toContain('storage_download')
     expect(res.headers.get('x-export-timing')).toContain('docx_generate')
     expect(storage.upload).toHaveBeenCalledWith(
-      expect.stringContaining('reviewed/contract-1/'),
+      expect.stringContaining('reviewed/contract-1/review-review-1/source-version-1.docx'),
       expect.any(Buffer),
       expect.objectContaining({
         contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       })
     )
+    expect(recordModelInvocation).toHaveBeenCalledTimes(2)
+    expect(recordModelInvocation).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      orgId: 'org-1',
+      contractId: 'contract-1',
+      reviewId: 'review-1',
+      provider: 'rule-engine',
+      model: 'source-comment-template',
+      phase: 'comment_patch_draft',
+      status: 'degraded',
+      degraded: true,
+      fallbackReason: 'comment_patch_rule_template_no_external_model',
+      responseMeta: expect.objectContaining({
+        provider_kind: 'builtin',
+        transport: 'builtin_rule_engine',
+        source_comment_mode: 'source_comments',
+      }),
+    }))
+    expect(recordModelInvocation).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      orgId: 'org-1',
+      contractId: 'contract-1',
+      reviewId: 'review-1',
+      provider: 'rule-engine',
+      model: 'review-summary-existing',
+      phase: 'report_summary',
+      status: 'degraded',
+      degraded: true,
+      fallbackReason: 'report_summary_reused_review_result_no_external_model',
+    }))
+    expect(supabaseAdmin.from).toHaveBeenCalledWith('contract_reviews')
+  })
+
+  it('批注意图跨段或过短时返回导出门禁错误，不进入 Word 生成器', async () => {
+    const contract = {
+      id: 'contract-1',
+      filename: 'source.docx',
+      storage_path: 'contract-1/source.docx',
+      parsed_text: '保密义务\n3 年。',
+      contract_reviews: [{
+        id: 'review-1',
+        created_at: '2026-07-02T01:00:00.000Z',
+        results: { summary: '审核完成', risks: [{ level: 'yellow', title: '保密期', description: '偏离', suggestion: '谈判' }] },
+      }],
+    }
+    const queues: Record<string, any[]> = {
+      contracts: [makeSingleResult({ data: contract, error: null })],
+      contract_clauses: [makeArrayResult({ data: [], error: null })],
+      contract_annotations: [makeArrayResult({
+        data: [{
+          id: 'annotation-1',
+          start_offset: 0,
+          end_offset: 6,
+          selected_text: '保密义务\n3',
+          comment: '【需谈判风险】保密期\n证据原文：保密义务\n3',
+          category: 'risk_finding',
+          priority: 'high',
+          status: 'open',
+          author_id: 'user-1',
+          created_at: '2026-07-02T01:00:00.000Z',
+        }],
+        error: null,
+      })],
+      contract_risk_cards: [makeArrayResult({ data: [], error: null })],
+    }
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      const query = queues[table]?.shift()
+      if (!query) throw new Error(`unexpected table ${table}`)
+      return query
+    })
+
+    const res = await POST(makeRequest(), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('EXPORT_GATE_BLOCKED')
+    expect(body.error).toContain('疑似跨段')
+    expect(generateWordDocument).not.toHaveBeenCalled()
+    expect(recordModelInvocation).not.toHaveBeenCalled()
+  })
+
+  it('模型调用缺失或未通过质量门禁时不允许生成正式源文件批注版', async () => {
+    installSupabaseExportMocks({
+      modelInvocations: [{
+        id: 'invocation-semantic',
+        phase: 'semantic_review',
+        provider: 'rule-engine',
+        model: 'fallback',
+        status: 'completed',
+        degraded: true,
+        fallback_reason: 'semantic_model_unavailable',
+        response_meta: {
+          provider_kind: 'builtin',
+          transport: 'builtin_rule_engine',
+          validation_warnings: ['fallback_result'],
+          dropped_risk_count: 1,
+        },
+      }],
+    })
+
+    const res = await POST(makeRequest(), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('EXPORT_MODEL_GATE_BLOCKED')
+    expect(body.error).toContain('semantic_review 已降级')
+    expect(body.error).toContain('OpenAI-compatible HTTP')
+    expect(generateWordDocument).not.toHaveBeenCalled()
+    expect(recordModelInvocation).not.toHaveBeenCalled()
+  })
+
+  it('同一 ReviewRun 已有源文件批注产物时直接复用，不重复生成版本噪音', async () => {
+    const { storage } = installSupabaseExportMocks({
+      versions: [
+        {
+          id: 'version-2',
+          version_number: 2,
+          source: 'review_revision',
+          storage_path: 'reviewed/contract-1/review-review-1/source-version-1.docx',
+          parent_version_id: 'version-1',
+          review_id: 'review-1',
+          created_at: '2026-07-02T02:00:00.000Z',
+        },
+        {
+          id: 'version-1',
+          version_number: 1,
+          source: 'original',
+          storage_path: 'contract-1/source.docx',
+          created_at: '2026-07-02T01:00:00.000Z',
+        },
+      ],
+      downloadBytes: 'existing annotated bytes',
+    })
+
+    const res = await POST(makeRequest(), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = Buffer.from(await res.arrayBuffer())
+
+    expect(res.status).toBe(200)
+    expect(body).toEqual(Buffer.from('existing annotated bytes'))
+    expect(res.headers.get('x-export-reused')).toBe('true')
+    expect(res.headers.get('x-contract-version-number')).toBe('2')
+    expect(generateWordDocument).not.toHaveBeenCalled()
+    expect(recordModelInvocation).not.toHaveBeenCalled()
+    expect(storage.upload).not.toHaveBeenCalled()
   })
 })

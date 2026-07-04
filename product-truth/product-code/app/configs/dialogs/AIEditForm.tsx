@@ -33,6 +33,14 @@ type ProbeResult = {
   local_endpoint: boolean
   probe_scope: string
   available_models?: string[]
+  chat_probe?: {
+    ok: boolean
+    status: number | null
+    latency_ms: number
+    model: string
+    content_sample: string | null
+    error: string | null
+  } | null
   credential_checked: 'provided' | 'missing' | 'not_required'
 }
 
@@ -46,9 +54,11 @@ function runtimeStateLabel(state: AIRuntimeState) {
     local_cli_ready: 'CLI 可调用',
     local_auth_failed: 'Token 未通过',
     local_health_failed: '本地不可达',
+    local_generation_failed: '本地生成失败',
     remote_health_ok: '云端可达',
     remote_auth_failed: '云端认证失败',
     remote_health_failed: '云端不可达',
+    remote_generation_failed: '云端生成失败',
     ready_to_call: '具备调用条件',
     recent_invocation_passed: '正式调用通过',
     recent_invocation_partial: '调用部分通过',
@@ -58,8 +68,14 @@ function runtimeStateLabel(state: AIRuntimeState) {
 }
 
 function runtimeStateClass(state: AIRuntimeState) {
-  if (state === 'ready_to_call' || state === 'local_health_ok' || state === 'remote_health_ok' || state === 'builtin_ready') {
+  if (state === 'recent_invocation_passed') {
     return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  }
+  if (state === 'ready_to_call' || state === 'local_health_ok' || state === 'remote_health_ok') {
+    return 'border-blue-200 bg-blue-50 text-blue-800'
+  }
+  if (state === 'builtin_ready') {
+    return 'border-slate-200 bg-slate-50 text-slate-700'
   }
   if (state === 'local_cli_ready' || state === 'recent_invocation_partial') {
     return 'border-blue-200 bg-blue-50 text-blue-800'
@@ -194,6 +210,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
           base_url: value.base_url || '',
           api_key: value.api_key || '',
           model: value.model || '',
+          timeout_ms: value.timeout_ms || (isLocalLevel ? 120000 : isCloudLevel ? 60000 : 15000),
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -215,6 +232,13 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+        <div className="font-medium">来源口径</div>
+        <p className="mt-1">
+          当前弹窗是表单草稿，测试连接只使用正在输入的 Base URL、Model 和 Token。
+          只有保存并发布后才会进入数据库 AI_CONFIG / ModelPolicy；只有真实 ReviewRun 写入 model_invocations 后，才能算正式模型调用证据。
+        </p>
+      </div>
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="text-sm font-medium text-slate-900">快速套用</div>
         <div className="mt-3 grid grid-cols-3 gap-2">
@@ -339,10 +363,35 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
           <div className={`mt-2 rounded-lg border px-3 py-2 text-xs leading-5 ${runtimeStateClass(probeResult.runtime_state)}`}>
             <div className="font-medium">{runtimeStateLabel(probeResult.runtime_state)}</div>
             <div className="mt-1">{probeResult.runtime_reason}</div>
+            <div className="mt-1 rounded border border-current/20 bg-white/60 px-2 py-1">
+              这是表单草稿连接测试，不是已发布策略，也不是 ReviewRun 运行证据。
+            </div>
             {probeResult.runtime_action ? <div className="mt-1">处理：{probeResult.runtime_action}</div> : null}
             <div className="mt-1">
               {probeResult.runtime_environment} · {probeResult.local_endpoint ? '本地端点' : '外部端点'} · Token {probeResult.credential_checked}
             </div>
+            {probeResult.chat_probe ? (
+              <div className={`mt-2 rounded border px-2 py-1 ${
+                probeResult.chat_probe.ok
+                  ? 'border-emerald-200 bg-white/70 text-emerald-800'
+                  : 'border-rose-200 bg-white/70 text-rose-800'
+              }`}>
+                <div className="font-medium">
+                  表单草稿最小生成测试：{probeResult.chat_probe.ok ? '通过' : '失败'}
+                  {probeResult.chat_probe.model ? ` · ${probeResult.chat_probe.model}` : ''}
+                  {probeResult.chat_probe.latency_ms ? ` · ${probeResult.chat_probe.latency_ms}ms` : ''}
+                </div>
+                <div className="mt-1">
+                  {probeResult.chat_probe.ok
+                    ? `返回样例：${probeResult.chat_probe.content_sample || '已返回内容'}`
+                    : probeResult.chat_probe.error || '模型未返回可用内容'}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 rounded border border-slate-200 bg-white/70 px-2 py-1 text-slate-600">
+                最小生成测试：未执行。内置规则引擎无需执行；外部模型需要填写 Base URL、Token 和模型 ID。
+              </div>
+            )}
             {probeResult.available_models && probeResult.available_models.length > 0 ? (
               <div className="mt-2">
                 <div className="font-medium">发现模型</div>

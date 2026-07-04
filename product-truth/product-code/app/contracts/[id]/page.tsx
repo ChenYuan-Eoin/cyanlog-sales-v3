@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -18,6 +18,15 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { deriveReviewWorkflowState } from '@/lib/contracts/review-state-machine'
+import {
+  buildExportGateIssues,
+  buildReviewHealth,
+  evidenceStatusLabel,
+  firstEvidence,
+  needsManualAnnotationLocation,
+  needsManualRiskLocation,
+} from '@/lib/contracts/review-workbench-state'
 import { error as toastError, success as toastSuccess } from '@/lib/toast'
 
 type ContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
@@ -28,7 +37,10 @@ type ExportDownload = {
   url: string
   filename: string
   createdAt: string
+  reused: boolean
+  versionNumber: string
 } | null
+type ExportPhase = 'idle' | 'checking' | 'generating' | 'downloading'
 
 type ContractVersion = {
   id: string
@@ -112,8 +124,13 @@ type ReviewRun = {
     provider_kind?: string | null
     transport?: string | null
     latency_ms?: number | null
+    actual_provider_profile?: string | null
+    actual_provider_model?: string | null
     intended_provider_profile?: string | null
     intended_provider_model?: string | null
+    requested_provider_profile?: string | null
+    requested_provider_model?: string | null
+    requested_provider_accepted?: boolean | null
     attempt_error_count?: number | null
     degraded: boolean
     status: string | null
@@ -131,6 +148,13 @@ type ReviewRun = {
     transport: string | null
     provider_kind: string | null
     latency_ms: number | null
+    actual_provider_profile: string | null
+    actual_provider_model: string | null
+    intended_provider_profile: string | null
+    intended_provider_model: string | null
+    requested_provider_profile: string | null
+    requested_provider_model: string | null
+    requested_provider_accepted: boolean | null
     dropped_risk_count: number | null
     validation_warning_count: number | null
     attempt_error_count: number | null
@@ -256,6 +280,7 @@ type WorkbenchData = {
     degraded?: boolean
     last_error?: string | null
   } | null
+  payload_scope?: 'summary' | 'full'
 }
 
 const statusMap: Record<ContractStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
@@ -272,12 +297,6 @@ const riskTone: Record<RiskSeverity, { label: string; className: string; badge: 
   yellow: { label: '需谈判', className: 'border-amber-200 bg-amber-50 text-amber-900', badge: 'secondary' },
   green: { label: '通过', className: 'border-emerald-200 bg-emerald-50 text-emerald-900', badge: 'outline' },
   white: { label: '提示', className: 'border-slate-200 bg-slate-50 text-slate-800', badge: 'outline' },
-}
-
-const evidenceStatusLabel: Record<NonNullable<ReviewRun['evidence_status']>, string> = {
-  snapshot_bound: '已绑定规则快照',
-  partial_snapshot: '部分规则缺快照',
-  missing_snapshot: '缺少规则快照',
 }
 
 const modelPolicySourceLabel: Record<NonNullable<ReviewRun['model_policy']>['source'], string> = {
@@ -330,6 +349,7 @@ const reportTriggerLabel: Record<string, string> = {
   ask_reopened: 'ASK 重开',
   ask_closed: 'ASK 关闭',
   standard_marked: '标准合同标记',
+  customer_version_received: '客户回传版本再审核',
 }
 
 function formatTime(value?: string | null) {
@@ -352,6 +372,12 @@ function formatLatency(value?: number | null) {
 function formatTransport(value?: string | null) {
   if (!value) return '未记录'
   return modelTransportLabel[value] || value
+}
+
+function formatBooleanState(value?: boolean | null) {
+  if (value === true) return '是'
+  if (value === false) return '否'
+  return '未记录'
 }
 
 function formatLifecycle(value?: string | null) {
@@ -391,97 +417,6 @@ function extractApiError(payload: unknown, fallback: string) {
   return fallback
 }
 
-function firstEvidence(risk: RiskFinding | null) {
-  return risk?.evidence?.snippets?.find((snippet) => snippet.trim().length > 0) || ''
-}
-
-function needsManualRiskLocation(risk: RiskFinding) {
-  const hasEvidence = Boolean(firstEvidence(risk))
-  const hasOffsets = risk.position.start !== null && risk.position.end !== null
-  return risk.severity !== 'green' && (
-    risk.evidence?.location_status === 'manual_required'
-    || !hasEvidence
-    || !hasOffsets
-  )
-}
-
-function needsManualAnnotationLocation(annotation: Annotation) {
-  return (
-    !annotation.selected_text?.trim()
-    || annotation.comment.includes('LocationStatus: manual_required')
-    || annotation.comment.includes('【需人工定位】')
-  )
-}
-
-function buildReviewHealth(data: WorkbenchData) {
-  const issues: string[] = []
-  const manualRiskCount = data.riskFindings.filter(needsManualRiskLocation).length
-  const manualAnnotationCount = data.annotations.filter(needsManualAnnotationLocation).length
-
-  if ((data.status === 'COMPLETED' || data.riskFindings.length > 0) && !data.reviewRun?.skill_bundle_id) {
-    issues.push('缺少规则发布包绑定，不能证明结果来自已发布审核规则。')
-  }
-  if ((data.status === 'COMPLETED' || data.riskFindings.length > 0) && !data.reviewRun?.rule_snapshot_refs?.length) {
-    issues.push('缺少规则快照引用，风险项不能追溯到配置中心规则版本。')
-  }
-  if (data.reviewRun?.evidence_status && data.reviewRun.evidence_status !== 'snapshot_bound') {
-    issues.push(`证据状态为 ${evidenceStatusLabel[data.reviewRun.evidence_status]}。`)
-  }
-  if (data.reviewRun?.skill_bundle) {
-    const bundle = data.reviewRun.skill_bundle
-    if (bundle.production_source.source_of_truth !== 'config_center_published_rules') {
-      issues.push('规则发布包未声明配置中心发布规则为生产源，不能证明审核依据来自后台规则版本。')
-    }
-    if (!bundle.rule_translation_ready) {
-      issues.push(`规则转译状态为 ${bundle.rule_translation_status || 'missing'}，不能视为正式审核引擎已就绪。`)
-    }
-    if (bundle.rules.missing.length > 0 || (bundle.rules.expected !== null && bundle.rules.actual < bundle.rules.expected)) {
-      issues.push(`规则发布包不完整：缺少 ${bundle.rules.missing.join('、') || '未记录规则明细'}。`)
-    }
-    if (!bundle.second_verification_required) {
-      issues.push('规则发布包未声明二次验证要求，模型输出不能直接作为有效审核结果。')
-    }
-    if (!bundle.official_review_allowed) {
-      issues.push('规则发布包尚未满足正式审核发布门禁，本次结果只能作为降级/复核结果。')
-    }
-    if (bundle.eval_status && bundle.eval_status !== 'passed') {
-      issues.push(`规则发布包质量评测状态为 ${bundle.eval_status}，不能视为模型质量已验收。`)
-    }
-    if (bundle.runtime_eval_status === 'model_quality_eval_not_run') {
-      issues.push('模型质量评测尚未运行，本次结果必须结合模型调用记录和人工复核证据验收。')
-    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_local_cli') {
-      issues.push('最新语义模型通过本机 LM Studio CLI 完成，能证明本地模型运行，但不能证明 OpenAI-compatible HTTP 或线上模型链已验收。')
-    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_partial') {
-      issues.push('最新语义模型调用只达到部分通过：存在被剔除风险或校验警告，必须查看调用链。')
-    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_not_passed') {
-      issues.push('最新语义模型调用未通过运行质量门禁，不能视为 AI 审核完成。')
-    }
-  }
-  if (data.reviewRun?.status === 'DEGRADED') {
-    issues.push('审核运行状态为降级，本次结果不能作为无条件审核完成。')
-  }
-  if (data.latestJob?.degraded || data.reviewRun?.model_policy?.degraded) {
-    issues.push(`审核执行发生降级：${data.latestJob?.provider || data.reviewRun?.model_policy?.provider || '未记录执行器'}。`)
-  }
-  if (data.latestJob?.last_error || data.reviewRun?.model_policy?.last_error) {
-    issues.push(`最近审核错误：${data.latestJob?.last_error || data.reviewRun?.model_policy?.last_error}`)
-  }
-  if (manualRiskCount > 0) {
-    issues.push(`${manualRiskCount} 个风险项没有可验证的原文定位，不能自动写入源文件批注。`)
-  }
-  if (manualAnnotationCount > 0) {
-    issues.push(`${manualAnnotationCount} 条 Word 批注意图需要人工定位，导出前必须处理。`)
-  }
-
-  return {
-    issues,
-    manualRiskCount,
-    manualAnnotationCount,
-    degraded: issues.length > 0,
-    exportBlocked: manualRiskCount > 0 || manualAnnotationCount > 0,
-  }
-}
-
 function SourceTextPreview({
   text,
   selectedText,
@@ -492,11 +427,12 @@ function SourceTextPreview({
   const normalized = text.trim() || '当前还没有可展示的合同正文。请先上传可解析的 docx、pdf 或文本文件。'
   const index = selectedText ? normalized.indexOf(selectedText) : -1
   const contentClassName = 'whitespace-pre-wrap break-words font-sans text-sm leading-7 text-slate-800'
-  const pageClassName = 'mx-auto min-h-[640px] max-w-[760px] rounded-sm bg-white px-6 py-8 shadow-sm ring-1 ring-slate-200 md:px-10 md:py-12'
+  const pageClassName = 'mx-auto min-h-[420px] max-w-full rounded-sm bg-white px-5 py-7 shadow-sm ring-1 ring-slate-200 lg:min-h-[640px] lg:max-w-[760px] lg:px-10 lg:py-12'
+  const shellClassName = 'max-h-[58dvh] overflow-auto rounded-lg bg-slate-100 p-3 md:max-h-[calc(100dvh-260px)] md:p-4 xl:max-h-[760px] xl:p-6'
 
   if (index < 0) {
     return (
-      <div className="max-h-[760px] overflow-auto rounded-lg bg-slate-100 p-3 md:p-6">
+      <div className={shellClassName}>
         <div className={pageClassName}>
           <pre className={contentClassName}>{normalized}</pre>
         </div>
@@ -509,7 +445,7 @@ function SourceTextPreview({
   const after = normalized.slice(index + selectedText.length)
 
   return (
-    <div className="max-h-[760px] overflow-auto rounded-lg bg-slate-100 p-3 md:p-6">
+    <div className={shellClassName}>
       <div className={pageClassName}>
         <pre className={contentClassName}>
           {before}
@@ -523,6 +459,7 @@ function SourceTextPreview({
 
 export default function ContractWorkbenchPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const contractId = params.id as string
   const [data, setData] = useState<WorkbenchData | null>(null)
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
@@ -530,8 +467,14 @@ export default function ContractWorkbenchPage() {
   const [pageError, setPageError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportPhase, setExportPhase] = useState<ExportPhase>('idle')
+  const [exportNotice, setExportNotice] = useState('')
   const [exportDownload, setExportDownload] = useState<ExportDownload>(null)
   const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>('review')
+  const [evidenceRefreshing, setEvidenceRefreshing] = useState(false)
+  const returnHref = '/contracts'
+  const compareReturnHref = `/contracts/${contractId}/compare?from=workbench`
+  const showCompareReturn = searchParams.get('from') === 'compare'
 
   useEffect(() => {
     const panel = new URLSearchParams(window.location.search).get('panel')
@@ -551,10 +494,19 @@ export default function ContractWorkbenchPage() {
     return data.riskFindings.find((risk) => risk.id === selectedRiskId) || data.riskFindings[0] || null
   }, [data, selectedRiskId])
 
-  const fetchWorkbench = useCallback(async (silent = false) => {
+  const fetchWorkbench = useCallback(async ({
+    silent = false,
+    scope = 'full',
+  }: {
+    silent?: boolean
+    scope?: 'summary' | 'full'
+  } = {}) => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/contracts/${contractId}/review`, {
+      const endpoint = scope === 'summary'
+        ? `/api/contracts/${contractId}/review?view=summary`
+        : `/api/contracts/${contractId}/review`
+      const response = await fetch(endpoint, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       const payload = await response.json().catch(() => ({}))
@@ -572,21 +524,40 @@ export default function ContractWorkbenchPage() {
           : nextData.riskFindings[0]?.id || null
       ))
       if (!silent) setPageError('')
+      return nextData
     } catch {
       if (!silent) setPageError('网络错误，请稍后重试')
+      return null
     } finally {
       if (!silent) setLoading(false)
     }
   }, [contractId])
 
   useEffect(() => {
-    void fetchWorkbench()
+    let cancelled = false
+
+    async function loadWorkbench() {
+      const summaryLoaded = await fetchWorkbench({ scope: 'summary' })
+      if (cancelled || !summaryLoaded) return
+
+      setEvidenceRefreshing(true)
+      await fetchWorkbench({ silent: true, scope: 'full' })
+      if (!cancelled) {
+        setEvidenceRefreshing(false)
+      }
+    }
+
+    void loadWorkbench()
+    return () => {
+      cancelled = true
+      setEvidenceRefreshing(false)
+    }
   }, [fetchWorkbench])
 
   useEffect(() => {
     if (!data || (data.status !== 'PARSING' && data.status !== 'ANALYZING')) return
     const timer = window.setInterval(() => {
-      void fetchWorkbench(true)
+      void fetchWorkbench({ silent: true, scope: 'summary' })
     }, 3000)
     return () => window.clearInterval(timer)
   }, [data, fetchWorkbench])
@@ -615,7 +586,7 @@ export default function ContractWorkbenchPage() {
         return
       }
       toastSuccess(isRerun ? '已启动合同再审核，工作台会持续刷新进度' : '已启动合同审核，工作台会持续刷新进度')
-      await fetchWorkbench()
+      await fetchWorkbench({ scope: 'summary' })
     } catch {
       toastError('网络错误，启动审核失败')
     } finally {
@@ -623,11 +594,44 @@ export default function ContractWorkbenchPage() {
     }
   }
 
-  async function handleExport() {
-    if (!data) return
+  async function handleExportForData(currentData: WorkbenchData) {
+    const currentReviewHealth = buildReviewHealth(currentData)
+    if (currentData.payload_scope === 'summary') {
+      setExportNotice('正在补齐规则快照、SkillBundle、模型调用和批注意图门禁。补齐完成后会自动继续导出，不需要重复点击。')
+      setEvidenceRefreshing(true)
+      const hydrated = await fetchWorkbench({ silent: true, scope: 'full' })
+      setEvidenceRefreshing(false)
+      if (hydrated) {
+        await handleExportForData(hydrated)
+      } else {
+        toastError('审核证据包补齐失败，请稍后重试')
+      }
+      return
+    }
+    if (currentData.status !== 'COMPLETED') {
+      setExportNotice('当前合同还没有完成审核运行，暂不能生成源文件批注版。')
+      toastError('当前合同还没有完成审核运行，暂不能导出批注版')
+      return
+    }
+    if (currentData.annotations.length === 0 && currentData.riskFindings.length === 0) {
+      setExportNotice('当前合同还没有可写入 Word 的风险项或批注意图，请先完成审核或重新审查。')
+      setSidePanelMode('review')
+      toastError('当前合同还没有可写入 Word 的风险项或批注意图')
+      return
+    }
+    const blockingExportIssues = buildExportGateIssues(currentData, currentReviewHealth)
+    if (blockingExportIssues.length > 0) {
+      setExportNotice(blockingExportIssues.slice(0, 3).join('；') || '当前结果还没有通过源文件批注导出门禁。')
+      setSidePanelMode('review')
+      toastError(`暂不能导出源文件批注版：${blockingExportIssues.slice(0, 2).join('；') || '当前结果还没有通过源文件批注导出门禁'}`)
+      return
+    }
     setExporting(true)
+    setExportNotice('')
+    setExportPhase('checking')
     try {
       const token = localStorage.getItem('token')
+      setExportPhase('generating')
       const response = await fetch(`/api/contracts/${contractId}/export`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -635,13 +639,18 @@ export default function ContractWorkbenchPage() {
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
-        toastError(extractApiError(payload, '导出批注版本失败'))
+        const message = extractApiError(payload, '导出批注版本失败')
+        setExportNotice(message)
+        toastError(message)
         return
       }
 
+      setExportPhase('downloading')
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
-      const filename = `${data.filename}-ONES批注版.docx`
+      const filename = `${currentData.filename}-ONES批注版.docx`
+      const reused = response.headers.get('x-export-reused') === 'true'
+      const versionNumber = response.headers.get('x-contract-version-number') || ''
       setExportDownload((current) => {
         if (current?.url) {
           window.URL.revokeObjectURL(current.url)
@@ -650,6 +659,8 @@ export default function ContractWorkbenchPage() {
           url,
           filename,
           createdAt: new Date().toLocaleTimeString('zh-CN'),
+          reused,
+          versionNumber,
         }
       })
       const anchor = document.createElement('a')
@@ -658,22 +669,26 @@ export default function ContractWorkbenchPage() {
       document.body.appendChild(anchor)
       anchor.click()
       document.body.removeChild(anchor)
-      toastSuccess('已生成源文件 Word 批注版，若浏览器未自动下载，可使用页面中的重新下载入口')
-      await fetchWorkbench(true)
+      toastSuccess(reused
+        ? '已复用当前 ReviewRun 的源文件 Word 批注版，若浏览器未自动下载，可使用页面中的重新下载入口'
+        : '已生成源文件 Word 批注版，若浏览器未自动下载，可使用页面中的重新下载入口')
+      await fetchWorkbench({ silent: true, scope: 'full' })
     } catch {
+      setExportNotice('网络错误或导出服务超时，请稍后重试。')
       toastError('网络错误，导出批注版本失败')
     } finally {
       setExporting(false)
+      setExportPhase('idle')
     }
   }
 
+  async function handleExport() {
+    if (!data) return
+    await handleExportForData(data)
+  }
+
   if (loading) {
-    return (
-      <div className="flex min-h-[480px] items-center justify-center text-slate-500">
-        <Loader2Icon className="mr-2 h-5 w-5 animate-spin" />
-        加载合同审核工作台...
-      </div>
-    )
+    return <ReviewWorkbenchLoadingPanel />
   }
 
   if (pageError || !data) {
@@ -686,7 +701,7 @@ export default function ContractWorkbenchPage() {
               <p className="text-base font-medium text-slate-900">{pageError || '合同不存在'}</p>
               <p className="mt-1 text-sm text-slate-500">请返回合同中心重新选择合同。</p>
             </div>
-            <Link href="/contracts">
+            <Link href={returnHref}>
               <Button variant="outline">
                 <ArrowLeftIcon className="mr-2 h-4 w-4" />
                 返回合同中心
@@ -704,27 +719,47 @@ export default function ContractWorkbenchPage() {
   const yellowCount = data.stats?.yellow || data.riskFindings.filter((risk) => risk.severity === 'yellow').length
   const displayName = data.filename?.trim() || data.title?.trim() || '未命名合同审核'
   const hasSourceAsset = Boolean(data.parsed_text?.trim()) || data.versions.length > 0 || Boolean(data.storage_path)
-  const canStartReview = hasSourceAsset && !isBusy && (
-    data.status === 'PENDING' || data.status === 'FAILED' || data.status === 'COMPLETED'
-  )
-  const reviewHealth = buildReviewHealth(data)
-  const canExport = data.status === 'COMPLETED'
-    && (data.annotations.length > 0 || data.riskFindings.length > 0)
-    && !reviewHealth.exportBlocked
+	  const isSummaryPayload = data.payload_scope === 'summary'
+	  const reviewHealth = buildReviewHealth(data)
+	  const displayReviewHealth = isSummaryPayload
+	    ? { ...reviewHealth, degraded: false, issues: [] }
+	    : reviewHealth
+	  const exportGateIssues = isSummaryPayload
+	    ? ['规则快照、SkillBundle 和模型调用证据正在后台补齐，完成后再判断源文件批注导出门禁。']
+	    : buildExportGateIssues(data, reviewHealth)
+	  const canExport = !isSummaryPayload && exportGateIssues.length === 0
+  const hasReviewArtifacts = data.annotations.length > 0 || data.riskFindings.length > 0
+  const workflowState = deriveReviewWorkflowState({
+    status: data.status,
+    hasSourceAsset,
+    hasReviewArtifacts,
+    exportReady: canExport,
+    exportBlockedReasons: exportGateIssues,
+    payloadScope: data.payload_scope,
+    reviewRunId: data.reviewRun?.id,
+  })
+  const canStartReview = hasSourceAsset && !isBusy && workflowState.canStartReview
   const versionActionLabel = hasSourceAsset ? '导入客户回传件' : '补充审核源文件'
   const openRiskCount = data.stats?.open || data.riskFindings.filter((risk) => risk.status === 'open').length
   const reviewActionLabel = data.status === 'COMPLETED'
     ? '重新审查'
     : data.status === 'FAILED'
-      ? '再次审核'
-      : '发起审核'
+      ? workflowState.primaryButtonLabel
+      : workflowState.primaryButtonLabel
+  const exportActionLabel = exporting
+    ? '生成批注版'
+    : workflowState.primaryAction === 'export_comments' || workflowState.primaryAction === 'inspect_export_gate'
+      ? workflowState.primaryButtonLabel
+      : canExport
+        ? '导出批注版'
+        : '查看导出原因'
   const statusMeta = statusMap[data.status] || { label: data.status, variant: 'secondary' as const }
-  const statusLabel = data.status === 'COMPLETED' && reviewHealth.degraded
-    ? '审核降级（需复核）'
-    : statusMeta.label
-  const statusVariant = data.status === 'COMPLETED' && reviewHealth.degraded
-    ? 'destructive'
-    : statusMeta.variant
+	  const statusLabel = data.status === 'COMPLETED' && displayReviewHealth.degraded
+	    ? '审核降级（需复核）'
+	    : statusMeta.label
+	  const statusVariant = data.status === 'COMPLETED' && displayReviewHealth.degraded
+	    ? 'destructive'
+	    : statusMeta.variant
 
   return (
     <div className="space-y-5 p-4 md:p-5 xl:p-8">
@@ -742,16 +777,24 @@ export default function ContractWorkbenchPage() {
             </Badge>
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            ONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。
+            ONES 业务运营按后台发布规则和模型策略生成风险定位、谈判任务和源文件 Word 原生批注版本。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-              <Link href="/contracts">
-                <Button variant="outline">
-                  <ArrowLeftIcon className="mr-2 h-4 w-4" />
-                  返回合同中心
-                </Button>
-              </Link>
+          <Link href={returnHref}>
+            <Button variant="outline">
+              <ArrowLeftIcon className="mr-2 h-4 w-4" />
+              返回合同中心
+            </Button>
+          </Link>
+          {showCompareReturn && (
+            <Link href={compareReturnHref}>
+              <Button variant="outline">
+                <WorkflowIcon className="mr-2 h-4 w-4" />
+                回到文档比对
+              </Button>
+            </Link>
+          )}
           {data.status !== 'DRAFT' && (
             <Button onClick={handleStartReview} disabled={!canStartReview || analyzing}>
               {analyzing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <BotIcon className="mr-2 h-4 w-4" />}
@@ -766,17 +809,33 @@ export default function ContractWorkbenchPage() {
               </Button>
             </Link>
           )}
-          <Button
-            onClick={handleExport}
-            disabled={!canExport || exporting}
-            variant="outline"
-            title={reviewHealth.exportBlocked ? '存在未定位批注，不能导出源文件批注版' : undefined}
-          >
-            {exporting ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
-            导出批注版
-          </Button>
+          {hasSourceAsset && (
+            <Link href={`/contracts/${contractId}/compare?from=workbench`}>
+              <Button variant="outline">
+                <WorkflowIcon className="mr-2 h-4 w-4" />
+                文档比对
+              </Button>
+            </Link>
+          )}
+	          <Button
+	            onClick={handleExport}
+	            disabled={exporting}
+	            variant={canExport ? 'default' : 'outline'}
+	            title={!canExport ? exportGateIssues.slice(0, 2).join('；') : undefined}
+	            aria-label="导出源文件 Word 原生批注版"
+	          >
+	            {exporting ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+	            {exportActionLabel}
+	          </Button>
         </div>
       </div>
+
+      <SourceAnnotationDeliveryPanel
+        data={data}
+        canExport={canExport}
+        exportGateIssues={exportGateIssues}
+        exportDownload={exportDownload}
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="红线风险" value={redCount} tone="text-red-600" />
@@ -789,9 +848,14 @@ export default function ContractWorkbenchPage() {
         data={data}
         isBusy={isBusy}
         analyzing={analyzing}
-        reviewHealth={reviewHealth}
+        reviewHealth={displayReviewHealth}
+        exportGateIssues={exportGateIssues}
         canExport={canExport}
       />
+
+	      {(evidenceRefreshing || isSummaryPayload) && (
+	        <EvidenceHydrationPanel />
+	      )}
 
       {(isBusy || analyzing) && (
         <ReviewProgressPanel data={data} analyzing={analyzing} />
@@ -801,7 +865,25 @@ export default function ContractWorkbenchPage() {
         <ExportDownloadPanel exportDownload={exportDownload} />
       )}
 
-      {reviewHealth.degraded && (
+      {(exporting || exportNotice) && (
+        <ExportStatusPanel
+          phase={exportPhase}
+          notice={exportNotice}
+          canExport={canExport}
+          reviewHealth={displayReviewHealth}
+          onOpenReview={() => setSidePanelMode('review')}
+        />
+      )}
+
+	      {!canExport && (
+	        <ExportReadinessPanel
+	          exportGateIssues={exportGateIssues}
+	          hasReviewArtifacts={data.annotations.length > 0 || data.riskFindings.length > 0}
+	          onOpenReview={() => setSidePanelMode('review')}
+	        />
+	      )}
+
+      {reviewHealth.degraded && !isSummaryPayload && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <div className="flex items-start gap-2">
             <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-none" />
@@ -817,7 +899,27 @@ export default function ContractWorkbenchPage() {
         </div>
       )}
 
-      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_420px]">
+      <CompactReviewDock
+        data={data}
+        redCount={redCount}
+        yellowCount={yellowCount}
+        openRiskCount={openRiskCount}
+        selectedRisk={selectedRisk}
+        onModeChange={setSidePanelMode}
+      />
+
+	      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(260px,34vw)] lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[300px_minmax(0,1fr)_380px]">
+        <ReviewNavigationRail
+          data={data}
+          selectedRiskId={selectedRisk?.id || null}
+          onSelectRisk={setSelectedRiskId}
+          redCount={redCount}
+          yellowCount={yellowCount}
+          openRiskCount={openRiskCount}
+          canExport={canExport}
+          exportGateIssues={exportGateIssues}
+        />
+
         <section className="space-y-4">
           <Card>
             <CardHeader className="border-b border-slate-100 pb-4">
@@ -825,10 +927,10 @@ export default function ContractWorkbenchPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <FileTextIcon className="h-4 w-4" />
-                    原文与批注意图
+                    源文件证据预览
                   </CardTitle>
                   <p className="mt-1 text-sm text-slate-500">
-                    这里是证据预览与批注意图，不替代源 Word 文件；最终交付必须是源文件原生批注版。
+                    这里用于定位证据和批注意图，不是交付文件。交付以“源文件原生批注版”为准，不能用重新排版文档替代。
                   </p>
                 </div>
                 <Badge variant="outline">
@@ -860,7 +962,7 @@ export default function ContractWorkbenchPage() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <div className="mt-3 grid gap-2 xl:grid-cols-3">
                     <div className="rounded bg-white/70 p-2">
                       <div className="text-[11px] font-medium text-blue-700">原文内容</div>
                       <p className="mt-1 line-clamp-4 leading-5">{selectedSnippet || '未记录原文片段'}</p>
@@ -895,7 +997,7 @@ export default function ContractWorkbenchPage() {
           <AnnotationsPanel annotations={data.annotations} />
         </section>
 
-        <aside className="space-y-4 md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:overflow-y-auto">
+	        <aside className="space-y-4 sm:sticky sm:top-4 sm:max-h-[calc(100dvh-2rem)] sm:overflow-y-auto">
           <Card>
             <CardHeader className="border-b border-slate-100 pb-3">
               <div className="flex items-center justify-between gap-3">
@@ -906,12 +1008,22 @@ export default function ContractWorkbenchPage() {
             </CardHeader>
             <CardContent className="pt-4">
               {sidePanelMode === 'review' && (
-                <ReviewPanel
-                  risks={data.riskFindings}
-                  selectedRiskId={selectedRisk?.id || null}
-                  onSelectRisk={setSelectedRiskId}
-                  negotiationTasks={data.negotiationTasks}
-                />
+                <>
+                  <div className="xl:hidden">
+                    <ReviewPanel
+                      risks={data.riskFindings}
+                      selectedRiskId={selectedRisk?.id || null}
+                      onSelectRisk={setSelectedRiskId}
+                      negotiationTasks={data.negotiationTasks}
+                    />
+                  </div>
+                  <div className="hidden xl:block">
+                    <RiskDecisionPanel
+                      selectedRisk={selectedRisk}
+                      negotiationTasks={data.negotiationTasks}
+                    />
+                  </div>
+                </>
               )}
               {sidePanelMode === 'summary' && (
                 <SummaryPanel
@@ -956,17 +1068,257 @@ function MetricCard({ label, value, tone }: { label: string; value: number; tone
   )
 }
 
+function SourceAnnotationDeliveryPanel({
+  data,
+  canExport,
+  exportGateIssues,
+  exportDownload,
+}: {
+  data: WorkbenchData
+  canExport: boolean
+  exportGateIssues: string[]
+  exportDownload: ExportDownload
+}) {
+  const latestOriginal = data.versions.find((version) => version.source === 'original')
+  const latestAnnotated = data.outputs[0]
+  const blockedReason = exportGateIssues.slice(0, 2).join('；')
+
+  return (
+    <div className="grid gap-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3 md:grid-cols-[1.15fr_1fr_1fr_1fr]">
+      <div className="rounded-md bg-white px-3 py-3">
+        <div className="text-xs font-medium text-blue-700">主交付物</div>
+        <div className="mt-1 font-semibold text-slate-950">源 Word 原生批注版</div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          以用户上传源文件为事实来源，只写入 Word 批注，不用重新生成版式文档替代。
+        </p>
+      </div>
+      <div className="rounded-md bg-white px-3 py-3">
+        <div className="text-xs font-medium text-blue-700">当前源文件</div>
+        <div className="mt-1 truncate font-semibold text-slate-950">
+          {latestOriginal ? `v${latestOriginal.version_number} 源文件` : data.storage_path ? '已绑定源文件' : '未绑定源文件'}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          {data.mime_type || '文件类型未记录'} · {formatSize(data.size)}
+        </p>
+      </div>
+      <div className="rounded-md bg-white px-3 py-3">
+        <div className="text-xs font-medium text-blue-700">批注输出状态</div>
+        <div className="mt-1 font-semibold text-slate-950">
+          {latestAnnotated ? `最近批注版 v${latestAnnotated.version_number}` : canExport ? '可生成批注版' : '暂不可导出'}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          {exportDownload
+            ? `本次已生成：${exportDownload.createdAt}`
+            : blockedReason || '导出后会登记为合同版本流中的批注产物。'}
+        </p>
+      </div>
+      <div className="rounded-md bg-white px-3 py-3">
+        <div className="text-xs font-medium text-blue-700">操作闭环</div>
+        <div className="mt-1 font-semibold text-slate-950">风险 → 谈判 → 批注 → 回传</div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          红线和需谈判风险先进入审查侧栏，客户修改后作为新版本回到文档比对和再审核。
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function CompactReviewDock({
+  data,
+  redCount,
+  yellowCount,
+  openRiskCount,
+  selectedRisk,
+  onModeChange,
+}: {
+  data: WorkbenchData
+  redCount: number
+  yellowCount: number
+  openRiskCount: number
+  selectedRisk: RiskFinding | null
+  onModeChange: (mode: SidePanelMode) => void
+}) {
+  return (
+    <div className="sm:hidden rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-slate-500">移动审查区</div>
+          <div className="mt-1 truncate text-sm font-semibold text-slate-950">
+            {selectedRisk ? selectedRisk.title : '选择风险后会同步证据、批注和谈判动作'}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center sm:w-64">
+          <MiniStat label="红线" value={redCount} />
+          <MiniStat label="谈判" value={yellowCount} />
+          <MiniStat label="开放" value={openRiskCount} />
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        {[
+          { value: 'review' as const, label: `风险 ${data.riskFindings.length}` },
+          { value: 'summary' as const, label: '概览' },
+          { value: 'assistant' as const, label: '建议' },
+          { value: 'evidence' as const, label: '证据' },
+        ].map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onModeChange(item.value)}
+            className="rounded-md border border-slate-200 px-2 py-2 text-xs font-medium text-slate-600 transition hover:border-indigo-300 hover:text-slate-950"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ReviewWorkbenchLoadingPanel() {
+  const steps = [
+    '读取合同源文件与版本流',
+    '装载最近一次 ReviewRun',
+    '绑定规则发布包与模型调用证据',
+    '整理风险定位、谈判任务和批注意图',
+  ]
+
+  return (
+    <div className="p-4 md:p-6 xl:p-8">
+      <div className="mx-auto max-w-5xl rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+              <Loader2Icon className="h-4 w-4 animate-spin text-blue-600" />
+              正在打开合同审核工作台
+            </div>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              工作台会同时读取合同版本、规则快照、模型调用和批注意图。长合同首次打开可能需要数秒，但每一步都应能解释正在处理什么。
+            </p>
+          </div>
+          <Badge variant="outline">ReviewRun 装载中</Badge>
+        </div>
+        <div className="mt-5 grid gap-2 md:grid-cols-4">
+          {steps.map((step, index) => (
+            <div key={step} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-blue-100 text-[11px] font-semibold text-blue-700">
+                  {index + 1}
+                </span>
+                <span className="text-xs font-semibold text-slate-900">{step}</span>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full w-2/3 animate-pulse rounded-full bg-blue-500" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EvidenceHydrationPanel() {
+  const steps = ['规则快照', 'SkillBundle', '模型调用', '质量门禁']
+
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3" aria-live="polite">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 font-semibold text-blue-950">
+            <Loader2Icon className="h-4 w-4 animate-spin" />
+            正在补齐审核证据包
+          </div>
+          <p className="mt-1 text-sm leading-6 text-blue-800">
+            首屏已先打开。系统正在后台读取规则发布包、模型调用和质量门禁，完成后才会判断正式审核与批注导出状态。
+          </p>
+        </div>
+        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+          {steps.map((step, index) => (
+            <div key={step} className="rounded-md bg-white px-2 py-2 text-blue-800">
+              <div className="font-semibold">{index + 1}</div>
+              <div className="mt-0.5 whitespace-nowrap">{step}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ExportStatusPanel({
+  phase,
+  notice,
+  canExport,
+  reviewHealth,
+  onOpenReview,
+}: {
+  phase: ExportPhase
+  notice: string
+  canExport: boolean
+  reviewHealth: ReturnType<typeof buildReviewHealth>
+  onOpenReview: () => void
+}) {
+  if (notice) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3" aria-live="polite">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="font-semibold text-amber-950">批注版导出未完成</p>
+            <p className="mt-1 text-sm leading-6 text-amber-800">{notice}</p>
+            {reviewHealth.issues.length > 0 && (
+              <p className="mt-1 text-xs leading-5 text-amber-700">
+                当前门禁：{reviewHealth.issues.slice(0, 3).join('；')}
+              </p>
+            )}
+          </div>
+          <Button type="button" variant="outline" className="shrink-0 border-amber-300 bg-white" onClick={onOpenReview}>
+            查看风险定位
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const phaseText: Record<ExportPhase, string> = {
+    idle: '等待导出',
+    checking: '检查风险定位与批注意图',
+    generating: '正在基于源 Word 生成原生批注版',
+    downloading: '批注版已生成，正在交给浏览器下载',
+  }
+
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3" aria-live="polite">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="flex items-center gap-2 font-semibold text-blue-950">
+            <Loader2Icon className="h-4 w-4 animate-spin" />
+            {phaseText[phase]}
+          </div>
+          <p className="mt-1 text-sm leading-6 text-blue-800">
+            这一步会下载源文件、写入 Word 原生批注、上传批注版并登记合同版本。请不要重复点击。
+          </p>
+        </div>
+        <Badge variant={canExport ? 'default' : 'outline'} className="w-fit bg-white text-blue-700">
+          源文件批注版
+        </Badge>
+      </div>
+    </div>
+  )
+}
+
 function ReviewRunStatusStrip({
   data,
   isBusy,
   analyzing,
   reviewHealth,
+  exportGateIssues,
   canExport,
 }: {
   data: WorkbenchData
   isBusy: boolean
   analyzing: boolean
   reviewHealth: ReturnType<typeof buildReviewHealth>
+  exportGateIssues: string[]
   canExport: boolean
 }) {
   const statusText = isBusy || analyzing
@@ -980,8 +1332,10 @@ function ReviewRunStatusStrip({
           : '等待发起审核'
   const outputText = canExport
     ? '源文件批注版可导出'
-    : reviewHealth.exportBlocked
-      ? '存在未定位风险，暂不能导出源文件批注版'
+    : exportGateIssues.length > 0
+      ? exportGateIssues[0]
+      : reviewHealth.exportBlocked
+        ? '存在未定位风险，暂不能导出源文件批注版'
       : '审核完成后生成源文件批注版'
 
   return (
@@ -1085,7 +1439,10 @@ function ExportDownloadPanel({ exportDownload }: { exportDownload: NonNullable<E
           <p className="mt-1 text-sm text-emerald-800">
             已触发浏览器下载；如果没有看到下载，请使用右侧入口重新下载本次生成文件。
           </p>
-          <p className="mt-1 truncate text-xs text-emerald-700">{exportDownload.filename} · {exportDownload.createdAt}</p>
+          <p className="mt-1 truncate text-xs text-emerald-700">
+            {exportDownload.filename} · {exportDownload.reused ? '复用已有批注版' : '新生成批注版'}
+            {exportDownload.versionNumber ? ` v${exportDownload.versionNumber}` : ''} · {exportDownload.createdAt}
+          </p>
         </div>
         <a
           href={exportDownload.url}
@@ -1095,6 +1452,266 @@ function ExportDownloadPanel({ exportDownload }: { exportDownload: NonNullable<E
           重新下载批注版
         </a>
       </div>
+    </div>
+  )
+}
+
+function ExportReadinessPanel({
+  exportGateIssues,
+  hasReviewArtifacts,
+  onOpenReview,
+}: {
+  exportGateIssues: string[]
+  hasReviewArtifacts: boolean
+  onOpenReview: () => void
+}) {
+  const issues = exportGateIssues.length > 0
+    ? exportGateIssues
+    : hasReviewArtifacts
+      ? ['当前结果还没有通过源文件批注导出门禁，请检查审核运行证据。']
+      : ['当前合同还没有可写入 Word 的风险项或批注意图。']
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3" aria-live="polite">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <p className="font-semibold text-amber-950">暂不能导出源文件批注版</p>
+          <p className="mt-1 text-sm text-amber-800">
+            导出按钮只在风险证据可定位、批注意图可写入源 Word 时启用；不会用报告文件伪装成批注版。
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
+            {issues.slice(0, 4).map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        </div>
+        <Button type="button" variant="outline" className="shrink-0 border-amber-300 bg-white" onClick={onOpenReview}>
+          查看需定位风险
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function ReviewNavigationRail({
+  data,
+  selectedRiskId,
+  onSelectRisk,
+  redCount,
+  yellowCount,
+  openRiskCount,
+  canExport,
+  exportGateIssues,
+}: {
+  data: WorkbenchData
+  selectedRiskId: string | null
+  onSelectRisk: (riskId: string) => void
+  redCount: number
+  yellowCount: number
+  openRiskCount: number
+  canExport: boolean
+  exportGateIssues: string[]
+}) {
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all')
+  const visibleRisks = riskFilter === 'all'
+    ? data.riskFindings
+    : data.riskFindings.filter((risk) => risk.severity === riskFilter)
+  const latestVersion = data.versions[0]
+  const latestOutput = data.outputs[0]
+  const filters: Array<{ value: RiskFilter; label: string; count: number }> = [
+    { value: 'all', label: '全部', count: data.riskFindings.length },
+    { value: 'red', label: '红线', count: redCount },
+    { value: 'yellow', label: '谈判', count: yellowCount },
+    { value: 'green', label: '通过', count: data.riskFindings.filter((risk) => risk.severity === 'green').length },
+  ]
+
+  return (
+    <aside className="hidden space-y-4 xl:block">
+      <div className="sticky top-4 max-h-[calc(100dvh-2rem)] space-y-4 overflow-y-auto pr-1">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">审查导航</CardTitle>
+            <p className="text-sm text-slate-500">
+              版本、ReviewRun 和风险队列放在这里，右侧只处理当前风险。
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <MiniStat label="红线" value={redCount} />
+              <MiniStat label="谈判" value={yellowCount} />
+              <MiniStat label="开放" value={openRiskCount} />
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-medium text-slate-500">ReviewRun</div>
+              <div className="mt-1 truncate font-semibold text-slate-950">{data.reviewRun?.id || '未创建'}</div>
+              <div className="mt-1 text-xs text-slate-500">
+                {data.reviewRun?.status || data.status} · {data.reviewRun?.skill_bundle_id ? '已绑定规则包' : '缺少规则包'}
+              </div>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-medium text-slate-500">版本流</div>
+              <div className="mt-1 font-semibold text-slate-950">
+                {latestVersion ? `当前 v${latestVersion.version_number}` : '暂无版本'}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {latestOutput ? `最近批注版 v${latestOutput.version_number}` : '尚未生成批注版'}
+              </div>
+            </div>
+            <div className={`rounded-md border p-3 ${
+              canExport ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
+            }`}>
+              <div className="text-xs font-medium">批注输出</div>
+              <div className="mt-1 font-semibold">{canExport ? '可导出源文件批注版' : '待处理导出门禁'}</div>
+              {!canExport && exportGateIssues[0] && (
+                <p className="mt-1 line-clamp-3 text-xs leading-5">{exportGateIssues[0]}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">风险队列</CardTitle>
+              <Badge variant="outline">{visibleRisks.length}</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {filters.map((filter) => {
+                const active = filter.value === riskFilter
+                return (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setRiskFilter(filter.value)}
+                    className={`rounded-md border px-2 py-1.5 text-left text-xs transition ${
+                      active
+                        ? 'border-blue-500 bg-blue-50 text-blue-900'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="font-medium">{filter.label}</span>
+                    <span className="ml-1 text-slate-400">{filter.count}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {visibleRisks.length === 0 ? (
+              <div className="rounded-md border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500">
+                当前分类暂无风险项。
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {visibleRisks.map((risk) => {
+                  const tone = riskTone[risk.severity]
+                  const active = risk.id === selectedRiskId
+                  const manualLocation = needsManualRiskLocation(risk)
+                  return (
+                    <button
+                      key={risk.id}
+                      type="button"
+                      onClick={() => onSelectRisk(risk.id)}
+                      className={`w-full rounded-md border p-3 text-left transition ${tone.className} ${
+                        active ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="line-clamp-2 text-sm font-semibold">{risk.title}</span>
+                        {manualLocation ? <Badge variant="destructive">定位</Badge> : null}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px] opacity-80">
+                        <span>{tone.label}</span>
+                        {risk.rule_code ? <span className="font-mono">{risk.rule_code}</span> : null}
+                        <span>{risk.status}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </aside>
+  )
+}
+
+function RiskDecisionPanel({
+  selectedRisk,
+  negotiationTasks,
+}: {
+  selectedRisk: RiskFinding | null
+  negotiationTasks: NegotiationTask[]
+}) {
+  const relatedTasks = selectedRisk
+    ? negotiationTasks.filter((task) => task.risk_id === selectedRisk.id)
+    : []
+
+  if (!selectedRisk) {
+    return (
+      <div className="rounded-md border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
+        从左侧风险队列选择一条风险后，这里展示规则依据、批注建议、谈判动作和客户反馈状态。
+      </div>
+    )
+  }
+
+  const tone = riskTone[selectedRisk.severity]
+  const manualLocation = needsManualRiskLocation(selectedRisk)
+  const evidence = firstEvidence(selectedRisk)
+
+  return (
+    <div className="space-y-4 text-sm">
+      <section className={`rounded-md border p-3 ${tone.className}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="text-xs font-medium opacity-75">当前风险</div>
+            <h3 className="mt-1 text-base font-semibold">{selectedRisk.title}</h3>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Badge variant={tone.badge}>{tone.label}</Badge>
+            {manualLocation ? <Badge variant="destructive">需人工定位</Badge> : null}
+          </div>
+        </div>
+        <p className="mt-3 leading-6">{selectedRisk.description || '未记录风险说明'}</p>
+      </section>
+
+      <section className="rounded-md border border-slate-200 p-3">
+        <h3 className="mb-2 font-semibold text-slate-950">证据与规则依据</h3>
+        <div className="space-y-2 text-xs leading-5 text-slate-600">
+          <InfoLine label="规则" value={selectedRisk.rule_code ? `${selectedRisk.rule_code}${selectedRisk.rule_version ? ` · v${selectedRisk.rule_version}` : ''}` : '未绑定'} />
+          <InfoLine label="条款" value={selectedRisk.clause_ref || '未记录'} />
+          <InfoLine label="定位" value={manualLocation ? '需人工定位' : `${selectedRisk.position.start ?? '-'}-${selectedRisk.position.end ?? '-'}`} />
+        </div>
+        <p className="mt-3 rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+          {evidence || '没有可验证的原文证据，不能自动写入源 Word 批注。'}
+        </p>
+      </section>
+
+      <section className="rounded-md border border-slate-200 p-3">
+        <h3 className="mb-2 font-semibold text-slate-950">批注与谈判动作</h3>
+        <p className="rounded-md bg-blue-50 p-3 leading-6 text-blue-950">
+          {selectedRisk.suggestion || '暂未生成可直接写入 Word 的批注建议。'}
+        </p>
+        <div className="mt-3 space-y-2">
+          {relatedTasks.length === 0 ? (
+            <p className="rounded-md bg-slate-50 p-3 text-slate-500">
+              当前风险没有绑定销售谈判任务。红线或需谈判风险后续应在这里完成客户反馈闭环。
+            </p>
+          ) : relatedTasks.map((task) => (
+            <div key={task.id} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-medium">{task.title}</span>
+                <Badge variant={task.required ? 'destructive' : 'secondary'}>
+                  {task.required ? '强制' : '建议'}
+                </Badge>
+              </div>
+              <p className="mt-1 leading-6">{task.objective}</p>
+              <p className="mt-1 text-xs text-amber-800">状态：{task.status}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
@@ -1445,10 +2062,21 @@ function EvidencePanel({
       <InfoLine label="调用耗时" value={formatLatency(reviewRun?.model_policy?.latency_ms)} />
       <InfoLine label="调用记录" value={reviewRun?.model_policy?.invocation_id || '未记录'} />
       <InfoLine
-        label="目标通道"
+        label="实际档位"
+        value={formatProviderTarget(reviewRun?.model_policy?.actual_provider_profile || reviewRun?.model_policy?.provider)}
+      />
+      <InfoLine label="实际模型" value={reviewRun?.model_policy?.actual_provider_model || reviewRun?.model_policy?.model || '未记录'} />
+      <InfoLine
+        label="目标档位"
         value={formatProviderTarget(reviewRun?.model_policy?.intended_provider_profile || reviewRun?.model_policy?.provider)}
       />
       <InfoLine label="目标模型" value={reviewRun?.model_policy?.intended_provider_model || '未记录'} />
+      <InfoLine
+        label="请求档位"
+        value={formatProviderTarget(reviewRun?.model_policy?.requested_provider_profile)}
+      />
+      <InfoLine label="请求模型" value={reviewRun?.model_policy?.requested_provider_model || '未记录'} />
+      <InfoLine label="请求被接受" value={formatBooleanState(reviewRun?.model_policy?.requested_provider_accepted)} />
       <InfoLine
         label="尝试错误"
         value={typeof reviewRun?.model_policy?.attempt_error_count === 'number'
@@ -1475,8 +2103,15 @@ function EvidencePanel({
                   </Badge>
                 </div>
                 <div className="mt-1 truncate">
-                  {formatProviderTarget(invocation.provider)} / {invocation.model || '模型未记录'} / {formatTransport(invocation.transport)}
+                  {formatProviderTarget(invocation.actual_provider_profile || invocation.provider)} / {invocation.actual_provider_model || invocation.model || '模型未记录'} / {formatTransport(invocation.transport)}
                 </div>
+                {(invocation.intended_provider_profile || invocation.requested_provider_profile) && (
+                  <div className="mt-1 grid gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-slate-500 sm:grid-cols-3">
+                    <span>目标: {formatProviderTarget(invocation.intended_provider_profile)} / {invocation.intended_provider_model || '未记录'}</span>
+                    <span>请求: {formatProviderTarget(invocation.requested_provider_profile)} / {invocation.requested_provider_model || '未记录'}</span>
+                    <span>接受: {formatBooleanState(invocation.requested_provider_accepted)}</span>
+                  </div>
+                )}
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
                   <span>{formatLatency(invocation.latency_ms)}</span>
                   <span className="font-mono">{invocation.id.slice(0, 8)}</span>
@@ -1533,6 +2168,11 @@ function VersionOutputPanel({
   contractId: string
   actionLabel: string
 }) {
+  const visibleVersions = data.versions.slice(0, 6)
+  const hiddenVersionCount = Math.max(0, data.versions.length - visibleVersions.length)
+  const visibleOutputs = data.outputs.slice(0, 5)
+  const hiddenOutputCount = Math.max(0, data.outputs.length - visibleOutputs.length)
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -1564,7 +2204,7 @@ function VersionOutputPanel({
           <div className="space-y-2">
             {data.versions.length === 0 ? (
               <p className="text-slate-500">暂无版本记录。</p>
-            ) : data.versions.map((version) => (
+            ) : visibleVersions.map((version) => (
               <div key={version.id} className="rounded-md bg-slate-50 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-slate-900">v{version.version_number}</span>
@@ -1575,20 +2215,33 @@ function VersionOutputPanel({
                 <p className="mt-1 text-xs text-slate-500">{version.change_summary || formatTime(version.created_at)}</p>
               </div>
             ))}
+            {hiddenVersionCount > 0 && (
+              <div className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
+                已收起 {hiddenVersionCount} 个更早版本。版本流需要保持可追溯，但默认只展示最近记录，避免批注产物污染主视图。
+              </div>
+            )}
           </div>
         </div>
         <div className="border-t border-slate-200 pt-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">输出文件</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">源文件批注产物</p>
           {data.outputs.length === 0 ? (
             <p className="text-slate-500">尚未生成 ONES 批注版本。</p>
           ) : (
             <div className="space-y-2">
-              {data.outputs.map((output) => (
+              {visibleOutputs.map((output, index) => (
                 <div key={output.id} className="rounded-md border border-slate-200 px-3 py-2">
-                  <div className="font-medium text-slate-900">批注版 v{output.version_number}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium text-slate-900">批注版 v{output.version_number}</div>
+                    {index === 0 ? <Badge variant="default">最新</Badge> : null}
+                  </div>
                   <div className="mt-1 text-xs text-slate-500">{formatTime(output.created_at)}</div>
                 </div>
               ))}
+              {hiddenOutputCount > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  另有 {hiddenOutputCount} 个历史批注产物已折叠。后续应通过导出幂等和版本归档治理，避免同一 ReviewRun 重复生成大量批注版。
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -226,6 +226,12 @@ const DATA_SCOPE_LEVELS = [
 const TAB_CACHE_TTL_MS = 5 * 60 * 1000
 const TAB_BACKGROUND_REFRESH_MS = 60 * 1000
 const tabDataInflight = new Map<string, Promise<unknown>>()
+const CONFIG_TYPE_BY_TAB: Partial<Record<ConfigTabId, Config['type']>> = {
+  tax: 'TAX_RULE',
+  approval: 'APPROVAL_RULE',
+  ai: 'AI_CONFIG',
+  theme: 'UI_THEME',
+}
 
 function loadInflightTabValue<T>(cacheKey: string, loader: () => Promise<T | null>) {
   const existing = tabDataInflight.get(cacheKey) as Promise<T | null> | undefined
@@ -331,6 +337,18 @@ function unwrapListResponse<T>(payload: unknown): T[] {
   return []
 }
 
+function configsEndpointForType(type: Config['type']) {
+  return `/api/configs?type=${encodeURIComponent(type)}&limit=100`
+}
+
+function mergeConfigsByType(current: Config[], type: Config['type'], nextConfigs: Config[]) {
+  const normalizedNext = nextConfigs.filter((config) => config.type === type)
+  return [
+    ...current.filter((config) => config.type !== type),
+    ...normalizedNext,
+  ]
+}
+
 export default function ConfigsClient({
   initialData,
   orgId: _orgId,
@@ -416,13 +434,20 @@ export default function ConfigsClient({
           case 'tax':
           case 'approval':
           case 'ai':
-          case 'theme':
-            setConfigs(cached as Config[])
+          case 'theme': {
+            const configTypeForTab = CONFIG_TYPE_BY_TAB[tab]
+            const cachedConfigs = cached as Config[]
+            if (configTypeForTab) {
+              setConfigs((current) => mergeConfigsByType(current, configTypeForTab, cachedConfigs))
+            } else {
+              setConfigs(cachedConfigs)
+            }
             if (tab === 'ai' && cachedRuntimePolicy) {
               setAiRuntimePolicy(cachedRuntimePolicy)
               setAiRuntimeError('')
             }
             break
+          }
           case 'role-access':
             setRoles(cached as ConfigRoleRecord[])
             break
@@ -440,6 +465,7 @@ export default function ConfigsClient({
         cached
         && cacheAgeMs < TAB_BACKGROUND_REFRESH_MS
         && (tab !== 'ai' || (cachedRuntimePolicy && runtimeCacheAgeMs < TAB_BACKGROUND_REFRESH_MS))
+        && !CONFIG_TYPE_BY_TAB[tab]
         && tab !== 'org-structure'
         && tab !== 'role-access'
         && !options?.force
@@ -496,17 +522,20 @@ export default function ConfigsClient({
         case 'tax':
         case 'approval':
         case 'theme': {
-          // 这些 tab 共享 configs 数据 (分页格式)
+          const configTypeForTab = CONFIG_TYPE_BY_TAB[tab]
+          if (!configTypeForTab) {
+            throw new Error('配置项类型未定义')
+          }
           const nextConfigs = await loadInflightTabValue<Config[]>(cacheKey, async () => {
             const configsJson = await fetchJsonOrThrow<{ data?: Config[] }>(
-              '/api/configs',
+              configsEndpointForType(configTypeForTab),
               { headers },
               '配置项加载失败'
             )
             return configsJson.data ?? []
           })
           if (nextConfigs) {
-            setConfigs(nextConfigs)
+            setConfigs((current) => mergeConfigsByType(current, configTypeForTab, nextConfigs))
             writeBrowserCache(cacheKey, nextConfigs)
             didLoad = true
           }
@@ -514,10 +543,14 @@ export default function ConfigsClient({
         }
 
         case 'ai': {
+          const configTypeForTab = CONFIG_TYPE_BY_TAB.ai
+          if (!configTypeForTab) {
+            throw new Error('AI 配置项类型未定义')
+          }
           const [configsResult, runtimeResult] = await Promise.allSettled([
             loadInflightTabValue<Config[]>(cacheKey, async () => {
               const configsJson = await fetchJsonOrThrow<{ data?: Config[] }>(
-                '/api/configs',
+                configsEndpointForType(configTypeForTab),
                 { headers },
                 '配置项加载失败'
               )
@@ -534,8 +567,9 @@ export default function ConfigsClient({
           ])
 
           if (configsResult.status === 'fulfilled' && configsResult.value) {
-            setConfigs(configsResult.value)
-            writeBrowserCache(cacheKey, configsResult.value)
+            const nextConfigs = configsResult.value
+            setConfigs((current) => mergeConfigsByType(current, configTypeForTab, nextConfigs))
+            writeBrowserCache(cacheKey, nextConfigs)
             didLoad = true
           } else if (configsResult.status === 'rejected') {
             throw configsResult.reason

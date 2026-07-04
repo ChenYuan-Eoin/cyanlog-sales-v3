@@ -14,9 +14,98 @@ import {
   buildCommentPatchesFromRiskCards,
   extractRiskFindingId,
 } from '@/lib/contracts/comment-patch'
+import { recordModelInvocation } from '@/lib/contracts/model-policy'
+
+type ExportReviewRow = {
+  id: string
+  model_invocation_ids?: string[] | null
+  skill_bundle_id?: string | null
+  model_policy_id?: string | null
+}
+
+type ExportAnnotationRow = {
+  selected_text?: string | null
+  comment?: string | null
+}
+
+type ExportModelInvocationRow = {
+  id: string
+  phase?: string | null
+  provider?: string | null
+  model?: string | null
+  status?: string | null
+  degraded?: boolean | null
+  fallback_reason?: string | null
+  error_message?: string | null
+  response_meta?: unknown
+}
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function numberValue(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function buildSourceCommentExportGateIssues(annotations: ExportAnnotationRow[]) {
+  const manualLocationCount = annotations.filter((annotation) => (
+    !annotation.selected_text?.trim()
+    || annotation.comment?.includes('LocationStatus: manual_required')
+    || annotation.comment?.includes('【需人工定位】')
+  )).length
+  const unsafeAnchorCount = annotations.filter((annotation) => {
+    const selectedText = annotation.selected_text?.trim() || ''
+    if (!selectedText) return false
+    return selectedText.length < 6 || /[\r\n]/.test(selectedText)
+  }).length
+  const issues: string[] = []
+
+  if (manualLocationCount > 0) {
+    issues.push(`${manualLocationCount} 条 Word 批注意图需要人工定位，导出前必须处理。`)
+  }
+  if (unsafeAnchorCount > 0) {
+    issues.push(`${unsafeAnchorCount} 条 Word 批注意图疑似跨段或证据过短，不能稳定写入源文件批注。`)
+  }
+
+  return issues
+}
+
+function buildReviewModelExportGateIssues(invocations: ExportModelInvocationRow[]) {
+  const semanticInvocation = invocations.find((invocation) => invocation.phase === 'semantic_review')
+  if (!semanticInvocation) {
+    return ['缺少 semantic_review 模型调用证据，不能生成正式源文件批注版。']
+  }
+
+  const responseMeta = asRecord(semanticInvocation.response_meta)
+  const providerKind = typeof responseMeta?.provider_kind === 'string' ? responseMeta.provider_kind : null
+  const transport = typeof responseMeta?.transport === 'string' ? responseMeta.transport : null
+  const warningCount = Array.isArray(responseMeta?.validation_warnings)
+    ? responseMeta.validation_warnings.length
+    : 0
+  const droppedRiskCount = numberValue(responseMeta?.dropped_risk_count) ?? 0
+  const issues: string[] = []
+
+  if (semanticInvocation.status !== 'completed') {
+    issues.push(`semantic_review 状态为 ${semanticInvocation.status || 'missing'}，不能视为 AI 审核完成。`)
+  }
+  if (semanticInvocation.degraded) {
+    issues.push(`semantic_review 已降级：${semanticInvocation.fallback_reason || semanticInvocation.error_message || '未记录原因'}。`)
+  }
+  if (providerKind !== 'openai_compatible' || transport !== 'openai_compatible_http') {
+    issues.push(`semantic_review 未通过 OpenAI-compatible HTTP 模型链路：${providerKind || semanticInvocation.provider || 'unknown'} / ${transport || 'unknown'}。`)
+  }
+  if (warningCount > 0 || droppedRiskCount > 0) {
+    issues.push(`semantic_review 存在 ${warningCount} 条校验警告和 ${droppedRiskCount} 个被剔除风险，不能生成正式源文件批注版。`)
+  }
+
+  return issues
 }
 
 function buildContentDisposition(filename: string) {
@@ -28,6 +117,32 @@ function buildContentDisposition(filename: string) {
   const encodedFilename = encodeURIComponent(filename)
 
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedFilename}`
+}
+
+function safeStorageSegment(value: string | null | undefined) {
+  return String(value || 'unknown')
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80) || 'unknown'
+}
+
+function buildDownloadHeaders(input: {
+  filename: string
+  versionNumber?: number | null
+  reusedOutput: boolean
+  outputStoragePath?: string | null
+}) {
+  const headers = new Headers()
+  headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  headers.set('Content-Disposition', buildContentDisposition(input.filename))
+  headers.set('X-Export-Reused', input.reusedOutput ? 'true' : 'false')
+  if (typeof input.versionNumber === 'number') {
+    headers.set('X-Contract-Version-Number', String(input.versionNumber))
+  }
+  if (input.outputStoragePath) {
+    headers.set('X-Contract-Output-Path', input.outputStoragePath)
+  }
+  return headers
 }
 
 function formatDuration(durationMs: number) {
@@ -69,6 +184,101 @@ function createExportTiming() {
       headers.set('Server-Timing', value)
       headers.set('X-Export-Timing', value)
     },
+  }
+}
+
+async function recordExportFallbackInvocations(input: {
+  orgId: string
+  contractId: string
+  review: ExportReviewRow
+  userId: string
+  annotationCount: number
+  generatedPatchCount: number
+  riskCount: number
+  outputStoragePath: string
+  sourceVersionId?: string | null
+  outputVersionNumber: number
+  exportTiming: Record<string, number>
+}) {
+  const common = {
+    orgId: input.orgId,
+    contractId: input.contractId,
+    reviewId: input.review.id,
+    skillBundleId: input.review.skill_bundle_id || null,
+    modelPolicyId: input.review.model_policy_id || null,
+  }
+  const commonRequestMeta = {
+    review_trigger: 'export_source_comments',
+    output_storage_path: input.outputStoragePath,
+    source_version_id: input.sourceVersionId || null,
+    output_version_number: input.outputVersionNumber,
+    requested_by: input.userId,
+  }
+
+  const commentPatchInvocation = await recordModelInvocation({
+    ...common,
+    provider: 'rule-engine',
+    model: 'source-comment-template',
+    phase: 'comment_patch_draft',
+    status: 'degraded',
+    degraded: true,
+    fallbackReason: 'comment_patch_rule_template_no_external_model',
+    requestMeta: {
+      ...commonRequestMeta,
+      phase: 'comment_patch_draft',
+      source: 'contract_risk_cards_and_annotations',
+    },
+    responseMeta: {
+      provider_kind: 'builtin',
+      transport: 'builtin_rule_engine',
+      generated_patch_count: input.generatedPatchCount,
+      annotation_count: input.annotationCount,
+      risk_count: input.riskCount,
+      source_comment_mode: 'source_comments',
+      export_timing: input.exportTiming,
+    },
+  })
+
+  const reportSummaryInvocation = await recordModelInvocation({
+    ...common,
+    provider: 'rule-engine',
+    model: 'review-summary-existing',
+    phase: 'report_summary',
+    status: 'degraded',
+    degraded: true,
+    fallbackReason: 'report_summary_reused_review_result_no_external_model',
+    requestMeta: {
+      ...commonRequestMeta,
+      phase: 'report_summary',
+      source: 'latest_review_results',
+    },
+    responseMeta: {
+      provider_kind: 'builtin',
+      transport: 'builtin_rule_engine',
+      summary_source: 'contract_reviews.results.summary',
+      risk_count: input.riskCount,
+      source_comment_mode: 'source_comments',
+      export_timing: input.exportTiming,
+    },
+  })
+
+  const nextInvocationIds = Array.from(new Set([
+    ...(Array.isArray(input.review.model_invocation_ids) ? input.review.model_invocation_ids : []),
+    commentPatchInvocation.id,
+    reportSummaryInvocation.id,
+  ]))
+
+  const { error } = await supabaseAdmin
+    .from('contract_reviews')
+    .update({ model_invocation_ids: nextInvocationIds })
+    .eq('id', input.review.id)
+
+  if (error) throw error
+
+  return {
+    commentPatchInvocationId: commentPatchInvocation.id,
+    reportSummaryInvocationId: reportSummaryInvocation.id,
+    modelInvocationIds: nextInvocationIds,
   }
 }
 
@@ -237,6 +447,49 @@ export async function POST(
       ]
     }
 
+    const exportGateIssues = buildSourceCommentExportGateIssues(exportAnnotations)
+    if (exportGateIssues.length > 0) {
+      return errorResponse(
+        exportGateIssues.join('；'),
+        400,
+        'EXPORT_GATE_BLOCKED'
+      )
+    }
+
+    const rawModelInvocationIds: unknown[] = Array.isArray(latestReview.model_invocation_ids)
+      ? latestReview.model_invocation_ids
+      : []
+    const modelInvocationIds = rawModelInvocationIds.filter((item): item is string => (
+      typeof item === 'string' && item.length > 0
+    ))
+    if (modelInvocationIds.length === 0) {
+      return errorResponse(
+        'ReviewRun 缺少模型调用证据，不能生成正式源文件批注版。',
+        400,
+        'EXPORT_MODEL_GATE_BLOCKED'
+      )
+    }
+
+    const { data: modelInvocations, error: modelInvocationsError } = await exportTiming.measure('model_invocations_load', () => (
+      supabaseAdmin
+        .from('model_invocations')
+        .select('id, phase, provider, model, status, degraded, fallback_reason, error_message, response_meta')
+        .in('id', modelInvocationIds)
+    ))
+
+    if (modelInvocationsError) {
+      return errorResponse('加载模型调用证据失败', 500, 'MODEL_INVOCATIONS_QUERY_FAILED')
+    }
+
+    const modelGateIssues = buildReviewModelExportGateIssues(modelInvocations || [])
+    if (modelGateIssues.length > 0) {
+      return errorResponse(
+        modelGateIssues.join('；'),
+        400,
+        'EXPORT_MODEL_GATE_BLOCKED'
+      )
+    }
+
     // 加载策略名称
     let strategyName = ''
     if (riskSummary?.strategy_code) {
@@ -265,7 +518,7 @@ export async function POST(
     const { data: versions, error: versionError } = await exportTiming.measure('versions_load', () => (
       supabaseAdmin
         .from('contract_versions')
-        .select('id, version_number, source')
+        .select('id, version_number, source, storage_path, parent_version_id, review_id, created_at')
         .eq('contract_id', id)
         .order('version_number', { ascending: false })
     ))
@@ -277,12 +530,59 @@ export async function POST(
     const latestVersion = versions?.[0] || null
     const sourceVersion = versions?.find((version) => version.source !== 'review_revision') || latestVersion
     const nextVersionNumber = (latestVersion?.version_number || 0) + 1
+    const sourceStoragePath = sourceVersion?.storage_path || contract.storage_path
+    const existingOutput = missingCommentPatches.length === 0
+      ? versions?.find((version) => (
+        version.source === 'review_revision'
+        && version.review_id === latestReview.id
+        && (!sourceVersion?.id || version.parent_version_id === sourceVersion.id)
+        && version.storage_path
+      ))
+      : null
+
+    if (existingOutput?.storage_path) {
+      const { data: existingFile, error: existingFileError } = await exportTiming.measure('existing_output_download', () => (
+        supabaseAdmin.storage
+          .from('contracts')
+          .download(existingOutput.storage_path)
+      ))
+
+      if (!existingFileError && existingFile) {
+        const existingBuffer = Buffer.from(await existingFile.arrayBuffer())
+        const sourceFilename = String(contract.filename || 'contract').replace(/\.[^.]+$/, '')
+        const headers = buildDownloadHeaders({
+          filename: `${sourceFilename}-审核结果.docx`,
+          versionNumber: existingOutput.version_number,
+          reusedOutput: true,
+          outputStoragePath: existingOutput.storage_path,
+        })
+        exportTiming.attach(headers)
+
+        logRouteDone(
+          {
+            route,
+            requestId,
+            userId: user.id,
+            details: { contractId: id },
+          },
+          startedAt,
+          {
+            reviewId: latestReview.id,
+            versionNumber: existingOutput.version_number,
+            reusedOutput: true,
+            exportTiming: exportTiming.toJSON(),
+          }
+        )
+
+        return new NextResponse(existingBuffer, { headers })
+      }
+    }
 
     // 下载原始合同文件
     const { data: fileData, error: fileError } = await exportTiming.measure('storage_download', () => (
       supabaseAdmin.storage
         .from('contracts')
-        .download(contract.storage_path)
+        .download(sourceStoragePath)
     ))
 
     if (fileError) {
@@ -296,6 +596,8 @@ export async function POST(
           route,
           requestId,
           contractId: id,
+          sourceVersionId: sourceVersion?.id || null,
+          sourceStoragePath,
           phase: 'download_source_contract',
         },
       })
@@ -338,7 +640,12 @@ export async function POST(
 
     // Read the generated file
     const fileBuffer = exportTiming.measureSync('output_file_read', () => fs.readFileSync(outputPath))
-    const outputStoragePath = `reviewed/${id}/v${nextVersionNumber}-${Date.now()}-ones-review.docx`
+    const outputStoragePath = [
+      'reviewed',
+      safeStorageSegment(id),
+      `review-${safeStorageSegment(latestReview.id)}`,
+      `source-${safeStorageSegment(sourceVersion?.id || 'contract-storage')}.docx`,
+    ].join('/')
     const { error: uploadError } = await exportTiming.measure('storage_upload', () => (
       supabaseAdmin.storage
         .from('contracts')
@@ -364,7 +671,7 @@ export async function POST(
           file_size: fileBuffer.length,
           mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           parent_version_id: sourceVersion?.id || null,
-          change_summary: 'ONES 业务运营基于风险项生成 Word 批注版本',
+          change_summary: `ONES 业务运营基于风险项生成 Word 批注版本（ReviewRun: ${latestReview.id}）`,
           uploaded_by: user.id,
           review_id: latestReview.id,
         })
@@ -396,17 +703,50 @@ export async function POST(
       return errorResponse('报告版本关联批注文件失败', 500, 'EXPORT_REPORT_LINK_FAILED')
     }
 
+    let exportInvocationEvidence: Awaited<ReturnType<typeof recordExportFallbackInvocations>>
+    try {
+      exportInvocationEvidence = await exportTiming.measure('export_invocation_audit', () => (
+        recordExportFallbackInvocations({
+          orgId,
+          contractId: id,
+          review: latestReview,
+          userId: user.id,
+          annotationCount: exportAnnotations.length,
+          generatedPatchCount: missingCommentPatches.length,
+          riskCount: reviewResults.risks?.length || 0,
+          outputStoragePath,
+          sourceVersionId: sourceVersion?.id || null,
+          outputVersionNumber: nextVersionNumber,
+          exportTiming: exportTiming.toJSON(),
+        })
+      ))
+    } catch (auditError) {
+      fs.unlinkSync(outputPath)
+      await supabaseAdmin.storage.from('contracts').remove([outputStoragePath])
+      await supabaseAdmin
+        .from('contract_versions')
+        .delete()
+        .eq('contract_id', id)
+        .eq('version_number', nextVersionNumber)
+        .eq('source', 'review_revision')
+      return errorResponse(
+        auditError instanceof Error ? auditError.message : '批注导出模型调用证据登记失败',
+        500,
+        'EXPORT_INVOCATION_AUDIT_FAILED'
+      )
+    }
+
     // Clean up temp output file
     fs.unlinkSync(outputPath)
 
     // Return file as download
-    const headers = new Headers()
     const sourceFilename = String(contract.filename || 'contract').replace(/\.[^.]+$/, '')
-    headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-    headers.set(
-      'Content-Disposition',
-      buildContentDisposition(`${sourceFilename}-审核结果.docx`)
-    )
+    const headers = buildDownloadHeaders({
+      filename: `${sourceFilename}-审核结果.docx`,
+      versionNumber: nextVersionNumber,
+      reusedOutput: false,
+      outputStoragePath,
+    })
     exportTiming.attach(headers)
 
     logRouteDone(
@@ -417,12 +757,13 @@ export async function POST(
         details: { contractId: id },
       },
       startedAt,
-      {
-        reviewId: latestReview.id,
-        versionNumber: nextVersionNumber,
-        exportTiming: exportTiming.toJSON(),
-      }
-    )
+          {
+            reviewId: latestReview.id,
+            versionNumber: nextVersionNumber,
+            modelInvocationIds: exportInvocationEvidence.modelInvocationIds,
+            exportTiming: exportTiming.toJSON(),
+          }
+        )
 
     return new NextResponse(fileBuffer, { headers })
   } catch (error) {

@@ -2,15 +2,15 @@
 
 import { useEffect } from 'react'
 
-import { resolveFaviconUrl, sanitizeThemeValue, themeToCssVariables } from '@/lib/ui-theme-shared'
+import { DEFAULT_THEME, resolveBrandImageUrl, resolveFaviconUrl, sanitizeThemeValue, themeToCssVariables } from '@/lib/ui-theme-shared'
 
 // 缓存相关常量
 const THEME_CACHE_KEY = 'runtime_theme_cache'
 const THEME_CACHE_TIMESTAMP_KEY = 'runtime_theme_cache_ts'
-const CACHE_TTL_MS = 60 * 60 * 1000 // 1 小时缓存
-const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+const CACHE_TTL_MS = 10 * 60 * 1000
+const CACHE_REFRESH_INTERVAL_MS = 30 * 1000
 const BACKGROUND_REFRESH_DELAY_MS = 2_000
-const BACKGROUND_REFRESH_TIMEOUT_MS = 1_500
+const BACKGROUND_REFRESH_TIMEOUT_MS = 4_000
 
 let lastRefreshAttemptAt = 0
 
@@ -24,12 +24,26 @@ type CachedThemeEntry = {
   ageMs: number
 }
 
+function stableHash(value: string) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
+  }
+  return Math.abs(hash).toString(36)
+}
+
+function tokenScopedCacheKey(key: string, token: string) {
+  return `${key}:${stableHash(token)}`
+}
+
 function getCachedTheme(token: string): CachedThemeEntry | null {
   if (typeof window === 'undefined') return null
 
   try {
-    const cached = localStorage.getItem(THEME_CACHE_KEY)
-    const timestamp = localStorage.getItem(THEME_CACHE_TIMESTAMP_KEY)
+    const scopedThemeKey = tokenScopedCacheKey(THEME_CACHE_KEY, token)
+    const scopedTimestampKey = tokenScopedCacheKey(THEME_CACHE_TIMESTAMP_KEY, token)
+    const cached = localStorage.getItem(scopedThemeKey)
+    const timestamp = localStorage.getItem(scopedTimestampKey)
 
     if (!cached || !timestamp) return null
 
@@ -38,8 +52,8 @@ function getCachedTheme(token: string): CachedThemeEntry | null {
     const cachedTime = parseInt(timestamp, 10)
     if (now - cachedTime > CACHE_TTL_MS) {
       // 缓存过期，清理
-      localStorage.removeItem(THEME_CACHE_KEY)
-      localStorage.removeItem(THEME_CACHE_TIMESTAMP_KEY)
+      localStorage.removeItem(scopedThemeKey)
+      localStorage.removeItem(scopedTimestampKey)
       return null
     }
 
@@ -56,8 +70,8 @@ function getCachedTheme(token: string): CachedThemeEntry | null {
     }
   } catch {
     // 缓存解析失败，清理
-    localStorage.removeItem(THEME_CACHE_KEY)
-    localStorage.removeItem(THEME_CACHE_TIMESTAMP_KEY)
+    localStorage.removeItem(tokenScopedCacheKey(THEME_CACHE_KEY, token))
+    localStorage.removeItem(tokenScopedCacheKey(THEME_CACHE_TIMESTAMP_KEY, token))
     return null
   }
 }
@@ -67,10 +81,32 @@ function setCachedTheme(theme: ReturnType<typeof sanitizeThemeValue>, token: str
 
   try {
     const cacheData: ThemeCache = { theme, token }
-    localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(cacheData))
-    localStorage.setItem(THEME_CACHE_TIMESTAMP_KEY, String(Date.now()))
+    localStorage.setItem(tokenScopedCacheKey(THEME_CACHE_KEY, token), JSON.stringify(cacheData))
+    localStorage.setItem(tokenScopedCacheKey(THEME_CACHE_TIMESTAMP_KEY, token), String(Date.now()))
   } catch {
     // 存储失败（如 localStorage 已满），静默忽略
+  }
+}
+
+function clearCachedTheme(token: string): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    localStorage.removeItem(tokenScopedCacheKey(THEME_CACHE_KEY, token))
+    localStorage.removeItem(tokenScopedCacheKey(THEME_CACHE_TIMESTAMP_KEY, token))
+  } catch {
+    // 缓存清理失败不能阻塞默认主题回退。
+  }
+}
+
+function withRuntimeFaviconVersion(url: string) {
+  try {
+    const parsed = new URL(url, window.location.origin)
+    parsed.searchParams.set('brand_favicon', stableHash(url))
+    return parsed.toString()
+  } catch {
+    const separator = url.includes('?') ? '&' : '?'
+    return `${url}${separator}brand_favicon=${stableHash(url)}`
   }
 }
 
@@ -83,7 +119,8 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
 
   document.documentElement.dataset.brandName = theme.brandName
   document.documentElement.dataset.brandShortName = theme.brandShortName
-  document.documentElement.dataset.logoUrl = theme.logoUrl
+  document.documentElement.dataset.logoUrl = resolveBrandImageUrl(theme, 'full', 'dark') || resolveBrandImageUrl(theme, 'symbol', 'dark')
+  document.documentElement.dataset.productTitle = theme.productTitle
 
   if (theme.productTitle) {
     document.title = theme.productTitle
@@ -91,23 +128,23 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
 
   const faviconUrl = resolveFaviconUrl(theme)
   if (faviconUrl) {
+    const versionedFaviconUrl = withRuntimeFaviconVersion(faviconUrl)
+    document.documentElement.dataset.faviconUrl = versionedFaviconUrl
     const rels = ['icon', 'shortcut icon', 'apple-touch-icon']
     document.head
-      .querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+      .querySelectorAll<HTMLLinkElement>('link[rel*="icon"]')
       .forEach((link) => {
-        if (link.dataset.runtimeFavicon !== 'true') {
-          link.remove()
-        }
+        link.remove()
       })
     rels.forEach((rel) => {
-      let link = document.head.querySelector(`link[data-runtime-favicon="true"][rel="${rel}"]`) as HTMLLinkElement | null
-      if (!link) {
-        link = document.createElement('link')
-        link.rel = rel
-        link.dataset.runtimeFavicon = 'true'
-        document.head.appendChild(link)
-      }
-      link.href = faviconUrl
+      const link = document.createElement('link')
+      link.rel = rel
+      link.dataset.runtimeFavicon = 'true'
+      link.href = versionedFaviconUrl
+      const isSvg = faviconUrl.toLowerCase().includes('.svg')
+      link.type = isSvg ? 'image/svg+xml' : 'image/png'
+      link.sizes = rel === 'apple-touch-icon' ? '180x180' : isSvg ? 'any' : '32x32'
+      document.head.appendChild(link)
     })
   }
 
@@ -116,6 +153,12 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
     ;(window as unknown as Record<string, unknown>).__RUNTIME_THEME__ = theme
     window.dispatchEvent(new CustomEvent('runtime-theme-applied', { detail: theme }))
   }
+}
+
+function isDefaultBrandProfile(theme: ReturnType<typeof sanitizeThemeValue>) {
+  return theme.brandName === DEFAULT_THEME.brandName
+    && theme.productTitle === DEFAULT_THEME.productTitle
+    && resolveFaviconUrl(theme) === resolveFaviconUrl(DEFAULT_THEME)
 }
 
 function scheduleBackgroundRefresh(callback: () => void) {
@@ -144,8 +187,13 @@ export function RuntimeThemeLoader({
         return
       }
 
-      // 首先尝试从缓存加载主题，避免网络请求
-      const cachedTheme = getCachedTheme(token)
+      const shouldUseCache = !initialTheme || !isDefaultBrandProfile(initialTheme)
+      if (!shouldUseCache) {
+        clearCachedTheme(token)
+      }
+
+      // 首先尝试从缓存加载主题，避免网络请求；默认主题不允许被历史缓存覆盖。
+      const cachedTheme = shouldUseCache ? getCachedTheme(token) : null
       if (cachedTheme) {
         applyTheme(cachedTheme.theme)
       }
@@ -162,7 +210,7 @@ export function RuntimeThemeLoader({
         }, BACKGROUND_REFRESH_TIMEOUT_MS)
 
         try {
-          const response = await fetch('/api/configs?type=UI_THEME', {
+          const response = await fetch('/api/configs?type=UI_THEME&status=PUBLISHED&limit=10', {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -180,10 +228,14 @@ export function RuntimeThemeLoader({
           const sortedConfigs = [...configs].sort((a, b) =>
             new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
           )
-          // 优先使用最新已发布配置，如果没有则使用最新更新的配置
-          const publishedConfig = sortedConfigs.find(c => c.status === 'PUBLISHED')
-          const latestConfig = sortedConfigs[0]
-          const themeConfig = publishedConfig || latestConfig
+          // Runtime only applies the current published BrandProfile. Draft themes stay editable
+          // in config center but must not unexpectedly change favicon/logo/title.
+          const themeConfig = sortedConfigs.find(c => c.status === 'PUBLISHED')
+          if (!themeConfig) {
+            clearCachedTheme(token)
+            applyTheme(initialTheme || DEFAULT_THEME)
+            return
+          }
           const theme = sanitizeThemeValue(themeConfig?.value)
 
           if (cancelled) {
@@ -203,9 +255,6 @@ export function RuntimeThemeLoader({
       }
 
       if (cachedTheme) {
-        if (cachedTheme.ageMs < CACHE_REFRESH_INTERVAL_MS) {
-          return
-        }
         scheduleBackgroundRefresh(() => {
           void refreshTheme()
         })

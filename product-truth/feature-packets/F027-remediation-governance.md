@@ -70,6 +70,51 @@ Bug 合并规则：
 - 状态只能按证据推进：`待确认` -> `已确认` -> `修复中` -> `本地已验证` -> `线上已验证` -> `收尾完成`。
 - `待设计补齐` 不是延期借口；只有对象、接口、状态机或验收口径确实缺失时才使用，并且必须指向对应 F0xx 补齐位置。
 
+### 0.0.1 合同审核产品目标卡验收账本（2026-07-03 执行版）
+
+本账本是本轮“合同审核产品目标拆解执行方案”的执行入口。它不新建平行 PRD，也不替代本文件上方 F027 G1-G11 问题域治理目标；它只把本轮开发拆成可关闭、可复验的小目标卡。
+
+本轮执行顺序固定为：`G0 账本` -> `G1 模型真实性` -> `G2 规则资产` -> `G3 合同状态机` -> `G4 源文件批注工作台` -> `G5 文档对比版本流` -> `G6 品牌主题` -> `G7 性能与发布验收`。
+
+关闭规则：
+
+| 状态 | 含义 | 允许进入下一状态的证据 |
+|---|---|---|
+| 未开始 | 只有目标定义，没有当前代码/数据判断。 | 已完成现状读取，列出涉及页面/API/数据对象。 |
+| 修复中 | 已开始修改或补测试，但未形成完整验收。 | 代码、测试、文档或数据改动可反查到本目标卡。 |
+| 本地已验证 | 本地命令/API/浏览器/文件证据通过。 | 证据写入本节或 `product-truth/04-implementation-truth/manifests/F027/`。 |
+| 线上已验证 | 当前部署版本在生产域名通过。 | Vercel Ready/Production、线上路径、账号/角色、视口和截图/API 证据齐全。 |
+| 收尾完成 | 功能、文档、测试、线上、噪音处理都闭环。 | 临时输出物有保留/归档/删除结论，旧的错误入口或旧文档已收尾。 |
+
+禁止关闭规则：
+
+- 仅“代码有修改”不能关闭目标卡。
+- 仅 `pnpm build` 通过不能关闭业务目标卡。
+- 仅静态配置存在不能关闭模型真实性或规则资产目标卡。
+- 仅页面截图看起来正确不能关闭 Word 批注、文档对比、模型调用或品牌运行时目标卡。
+- 规则引擎 fallback 不能被记为“AI 审核完成”。
+
+证据位置约定：
+
+| 证据类型 | 默认位置 | 要求 |
+|---|---|---|
+| 目标关闭记录 | 本节目标卡 `当前状态/证据位置` 列 | 每次只更新对应目标卡，不能用整体描述覆盖。 |
+| API/DB 证据 | `product-truth/04-implementation-truth/manifests/F027/verification-result.md` | 记录接口、响应关键字段、数据对象 ID、失败原因。 |
+| 浏览器证据 | `product-truth/product-code/output/playwright/` | 桌面和 iPad 视口分开保存，截图必须对应当前代码。 |
+| DOCX 文件证据 | `product-truth/product-code/output/doc/` 或 `product-truth/product-code/output/` | 必须能检查 `word/comments.xml`，必要时补 Word/WPS 人工打开结论。 |
+| 性能证据 | `Server-Timing`、浏览器 trace、构建输出或 `verification-result.md` | 必须拆出具体阶段，不用“感觉快/慢”关闭。 |
+
+| 目标卡 | 当前状态 | 业务目标 | 涉及页面/API/数据对象 | 验收动作 | 失败标准 | 证据位置 |
+|---|---|---|---|---|---|---|
+| G0 目标验收账本 | 本地已验证 | 建立 G1-G7 可追踪目标卡，作为后续关闭口径。 | F027、`REQ_REGISTRY.yml`、F005v2/F006/F007/F009/F012。 | 确认每张卡都有目标、涉及页面/API、验收步骤、失败标准、证据位置；后续关闭只更新对应卡。 | 新增游离文档；目标卡缺少失败标准；用整体“已修改”关闭多卡。 | 本节。 |
+| G1 模型真实性闭环 | 本地已验证 | 证明本地模型、云模型、规则兜底的真实运行状态。 | `/configs?tab=ai-runtime`、`/api/configs/ai-runtime`、`/api/configs/ai-runtime/probe`、`/api/contracts/:id/review`、`/api/contracts/:id/review-runs`、`model_policies`、`model_invocations`。 | 1. 配置中心展示模型配置来源：数据库/环境变量/表单草稿；2. 本地 LM Studio 仅本地可达时显示可用；3. 云端 OpenAI-compatible provider 使用同一 Base URL/Model/Token 做真实 probe；4. 真实合同 ReviewRun 后展示 provider、model、phase、status、degraded、error；5. 本地成功、云端失败、规则兜底三态可区分。 | 测试失败但页面显示正式调用通过；`model_invocations` 无记录却宣称 AI 审核完成；规则兜底被包装成 AI；生产把 `127.0.0.1` 当作可达云能力。 | `product-truth/04-implementation-truth/manifests/F027/verification-result.md`；配置中心浏览器截图；`model_invocations` 查询/API 响应。 |
+| G2 规则资产产品化闭环 | 本地已验证 | 配置中心规则成为生产规则源，而不是复杂表单或黑盒 Markdown。 | `/configs?tab=rules`、RuleTab、RuleDesigner、规则集/分类/规则 API、`contract_rules_v2`、`contract_rule_snapshots`、`contract_skill_bundles`。 | 1. 规则按“规则集 -> 分类 -> 规则”树状组织；2. 规则详情可看业务解释、适用范围、风险等级、触发条件、例外条件、证据要求、批注模板；3. Markdown/自然语言只作为来源；4. AI 转译结果可见、可编辑、可确认；5. 发布后生成 SkillBundle 并绑定规则版本；6. ReviewRun 显示规则集版本和 SkillBundle。 | 用户必须看 JSON 才能维护；未确认转译结果可发布；GitHub/MD 规则直接覆盖系统发布规则；ReviewRun 只记录当前表状态。 | 规则配置浏览器截图；规则发布 API 响应；SkillBundle 数据/API；ReviewRun evidence。 |
+| G3 合同中心状态机闭环 | 本地已验证 | 发起审核、继续审核、查看批注、文档对比不再混淆。 | `/contracts`、`/contracts/upload`、`/contracts/:id`、`/contracts/:id/compare`、review navigation/state machine、`ContractVersion`、`ReviewRun`。 | 1. 合同中心只保留四个主入口：发起合同审核、继续合同审核、查看批注输出、合同文档对比；2. 每个入口绑定明确对象和下一步；3. 返回路径保留 `from`、`panel`、`contractId`; 4. 继续审核不新建合同，查看批注不进入报告页，文档对比不替代风险审核。 | 四个入口打开后仍像同一个上传/报告页；返回跳错页面；继续审核创建新合同；对比覆盖或替代 ReviewRun。 | `verification-result.md` G3 行；桌面/iPad 浏览器截图；导航单测；合同中心 API/状态机证据。 |
+| G4 源文件批注工作台闭环 | 本地已验证 | 审核结果以源 Word 批注为主，报告为辅。 | `/contracts/:id` 工作台、`/api/contracts/:id/review`、`/api/contracts/:id/export`、`RiskFinding`、`CommentPatch`、`contract_annotations`、DOCX `word/comments.xml`。 | 1. 桌面三栏：左版本/ReviewRun/风险队列，中源文件正文/锚点/高亮，右风险详情/规则依据/处理动作；2. iPad 保持正文和审查侧栏并行可见；3. 每个风险绑定 `evidence_text` 和 source range；4. 不能定位证据时标记人工定位，不生成正式批注；5. 导出基于源 DOCX 写入 Word 原生批注。 | 导出按钮无响应；重新生成导致原文件格式丢失；无法在 `comments.xml` 找到批注；证据不在原文仍生成正式批注；页面以报告为主。 | `verification-result.md` G4 行；DOCX zip/xml 检查；工作台桌面/iPad 截图；导出 API timing；模型/锚点双门禁 API 证据。 |
+| G5 文档对比版本流闭环 | 本地已验证 | 文档对比成为合同版本流的一部分。 | `/contracts/:id/compare`、`/api/contracts/:id/compare`、`compare-standard`、`ContractVersion`、客户回传版/人工修订版上传。 | 1. 基准文件可选择，不能锁死；2. 新文件来自客户回传版或人工修订版；3. 对比结果绑定 ContractVersion；4. 展示新增/删除/修改/风险变化；5. 对比完成后可进入再审核；6. 返回审核工作台保留 compare 上下文。 | 基准文件锁死；没有候选就只显示死路；结果不绑定版本；对比覆盖原合同；对比页面替代 ReviewRun。 | `verification-result.md` G5 行；对比选择页/结果页桌面与 iPad 截图；compare API `document_pair` 响应；再审核入口和 ReviewRun API 单测证据。 |
+| G6 品牌主题治理闭环 | 本地已验证 | 全站只认一个 active BrandProfile。 | `/configs?tab=theme`、`/api/configs/:id/publish`、`RuntimeThemeLoader`、`AppShell`、`Sidebar`、`app/layout.tsx`、`BrandProfile/UI_THEME`、favicon。 | 1. 发布 UI_THEME 时归档同组织其他 active 主题；2. 登录页、侧栏、合同中心、favicon 使用同一 BrandProfile；3. HTML head favicon 指向 active profile；4. 草稿主题不影响线上运行时；5. 刷新后 logo/favicon/name 仍一致。 | 同组织多个 active；浏览器仍显示 Vercel 默认图标；页面 logo 与配置中心不一致；草稿污染运行时。 | `verification-result.md` G6 行；主题发布 API 测试；本地 API active 计数；合同中心 HTML head/favicon 证据；配置中心主题页截图。 |
+| G7 性能与发布验收闭环 | 本地已验证 | 所有目标完成后再整体发布，不用单点修改冒充完成。 | `/api/auth/login`、`/contracts`、`/contracts/:id`、`/configs`、长审核进度、测试/构建/Vercel。 | 1. 冷登录拆解 Server-Timing；2. 长审核显示阶段进度；3. 记录 `/contracts`、`/contracts/:id`、`/configs` 首屏大小和加载时间；4. 跑 `pnpm tsc --noEmit`、`pnpm build`、关键 Vitest；5. 桌面/iPad 浏览器验收合同中心、审核工作台、文档对比、配置中心、品牌主题；6. 用户要求时才 commit/push/deploy；部署后 Vercel Production Ready 再声明线上可验收。 | 审核长时间只有 loading；只跑 build 就说完成；没有 iPad 视口；没有 DOCX 文件证据；未部署却说线上可验收。 | `verification-result.md` G7 行；本地 production 浏览器截图；DOCX 输出；冷登录 timing 记录。未执行 commit/push/Vercel 部署。 |
+
 ---
 
 ## 0.1 重整后的需求清单

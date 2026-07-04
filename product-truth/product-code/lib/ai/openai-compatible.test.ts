@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOpenAICompatibleBaseUrl, openAICompatibleModelsUrl } from './openai-compatible'
+import {
+  normalizeOpenAICompatibleBaseUrl,
+  openAICompatibleChatCompletionsUrl,
+  openAICompatibleModelsUrl,
+} from './openai-compatible'
 
 describe('OpenAI-compatible base URL helpers', () => {
   it('normalizes root provider URLs to the /v1 API base', () => {
@@ -14,5 +18,9 @@ describe('OpenAI-compatible base URL helpers', () => {
 
   it('builds a normalized models endpoint URL', () => {
     expect(String(openAICompatibleModelsUrl('https://cloud.yiyongai.cn'))).toBe('https://cloud.yiyongai.cn/v1/models')
+  })
+
+  it('builds a normalized chat completions endpoint URL', () => {
+    expect(String(openAICompatibleChatCompletionsUrl('https://cloud.yiyongai.cn'))).toBe('https://cloud.yiyongai.cn/v1/chat/completions')
   })
 })

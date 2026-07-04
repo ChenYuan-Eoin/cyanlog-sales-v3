@@ -173,4 +173,42 @@ describe('generateWordDocument', () => {
     expect(result.error).toContain('证据原文不唯一')
     expect(result.outputPath).toBeUndefined()
   })
+
+  it('anchors by unique source text when stored source range is stale', async () => {
+    const inputPath = path.join(os.tmpdir(), `ones-input-stale-range-${Date.now()}.docx`)
+    tempFiles.push(inputPath)
+    await writeMinimalDocx(inputPath, [
+      '第一条 合同基础信息。',
+      '若提前解除合同，则合同费用按照实际服务时间进行结算。',
+    ])
+
+    const result = await generateWordDocument(inputPath, {
+      risks: [],
+      annotations: [
+        {
+          id: 'annotation-stale-range',
+          start_offset: 800,
+          end_offset: 826,
+          selected_text: '若提前解除合同，则合同费用按照实际服务时间进行结算。',
+          comment: '【红线风险】终止退款\nRiskFinding: 22222222-2222-4222-8222-222222222222',
+          category: 'risk_finding',
+          priority: 'urgent',
+          status: 'open',
+          author_id: null,
+          created_at: new Date('2026-06-30T00:00:00Z').toISOString(),
+        },
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.mode).toBe('source_comments')
+    tempFiles.push(result.outputPath!)
+
+    const outputZip = await JSZip.loadAsync(fs.readFileSync(result.outputPath!))
+    const commentsXml = await outputZip.file('word/comments.xml')?.async('string')
+    const documentXml = await outputZip.file('word/document.xml')?.async('string')
+
+    expect(commentsXml).toContain('终止退款')
+    expect(documentXml).toContain('<w:commentRangeStart')
+  })
 })

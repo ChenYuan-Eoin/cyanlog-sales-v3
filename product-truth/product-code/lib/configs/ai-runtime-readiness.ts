@@ -1,5 +1,9 @@
 import { probeLmStudioCliModel } from '@/lib/ai/lm-studio-cli'
-import { normalizeOpenAICompatibleBaseUrl, openAICompatibleModelsUrl } from '@/lib/ai/openai-compatible'
+import {
+  normalizeOpenAICompatibleBaseUrl,
+  openAICompatibleChatCompletionsUrl,
+  openAICompatibleModelsUrl,
+} from '@/lib/ai/openai-compatible'
 
 export type AIRuntimeState =
   | 'builtin_ready'
@@ -10,9 +14,11 @@ export type AIRuntimeState =
   | 'local_cli_ready'
   | 'local_auth_failed'
   | 'local_health_failed'
+  | 'local_generation_failed'
   | 'remote_health_ok'
   | 'remote_auth_failed'
   | 'remote_health_failed'
+  | 'remote_generation_failed'
   | 'ready_to_call'
   | 'recent_invocation_passed'
   | 'recent_invocation_partial'
@@ -36,6 +42,15 @@ export type RuntimeInvocationEvidence = {
   error_message?: string | null
   response_meta?: Record<string, unknown> | null
   created_at?: string | null
+}
+
+export type OpenAICompatibleChatProbeResult = {
+  ok: boolean
+  status: number | null
+  latency_ms: number
+  model: string
+  content_sample: string | null
+  error: string | null
 }
 
 type AssessmentMessageOptions = {
@@ -146,6 +161,154 @@ export async function fetchOpenAICompatibleModelIds(
   }
 }
 
+function extractChatCompletionContent(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const choices = (payload as { choices?: unknown }).choices
+  if (!Array.isArray(choices) || choices.length === 0) return ''
+  const first = choices[0]
+  if (!first || typeof first !== 'object') return ''
+  const message = (first as { message?: unknown }).message
+  if (message && typeof message === 'object') {
+    const content = (message as { content?: unknown }).content
+    if (typeof content === 'string') return content
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => {
+          if (typeof part === 'string') return part
+          if (!part || typeof part !== 'object') return ''
+          const text = (part as { text?: unknown }).text
+          return typeof text === 'string' ? text : ''
+        })
+        .join('')
+    }
+  }
+  const text = (first as { text?: unknown }).text
+  return typeof text === 'string' ? text : ''
+}
+
+function extractChatCompletionFinishReason(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null
+  const choices = (payload as { choices?: unknown }).choices
+  if (!Array.isArray(choices) || choices.length === 0) return null
+  const first = choices[0]
+  if (!first || typeof first !== 'object') return null
+  const finishReason = (first as { finish_reason?: unknown }).finish_reason
+  return typeof finishReason === 'string' ? finishReason : null
+}
+
+function normalizeProbeContent(content: string): string {
+  return content
+    .replace(/<\|[^|]+?\|>/g, '')
+    .trim()
+}
+
+export async function probeOpenAICompatibleChatCompletion(
+  baseUrl: string,
+  apiKey: string | undefined,
+  model: string | undefined,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 8000
+): Promise<OpenAICompatibleChatProbeResult> {
+  const normalizedModel = model?.trim() || ''
+  const startedAt = Date.now()
+  if (!normalizedModel) {
+    return {
+      ok: false,
+      status: null,
+      latency_ms: 0,
+      model: '',
+      content_sample: null,
+      error: '缺少模型 ID，无法执行最小生成测试。',
+    }
+  }
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const headers = authHeaders(apiKey)
+    const response = await fetchImpl(openAICompatibleChatCompletionsUrl(baseUrl), {
+      method: 'POST',
+      signal: controller.signal,
+      headers: headers
+        ? { 'Content-Type': 'application/json', ...headers }
+        : { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: normalizedModel,
+        messages: [
+          {
+            role: 'user',
+            content: '请只输出 JSON：{"ok":true}',
+          },
+        ],
+        temperature: 0,
+        max_tokens: 128,
+        stream: false,
+      }),
+    })
+    clearTimeout(timeout)
+
+    const payload = await response.json().catch(() => null)
+    const finishReason = extractChatCompletionFinishReason(payload)
+    const content = normalizeProbeContent(extractChatCompletionContent(payload))
+    const latencyMs = Date.now() - startedAt
+    if (!response.ok) {
+      const errorMessage = payload && typeof payload === 'object'
+        ? (payload as { error?: { message?: unknown } }).error?.message
+        : null
+      return {
+        ok: false,
+        status: response.status,
+        latency_ms: latencyMs,
+        model: normalizedModel,
+        content_sample: content || null,
+        error: typeof errorMessage === 'string'
+          ? errorMessage
+          : `最小生成请求失败，HTTP ${response.status}。`,
+      }
+    }
+
+    if (finishReason === 'length') {
+      return {
+        ok: false,
+        status: response.status,
+        latency_ms: latencyMs,
+        model: normalizedModel,
+        content_sample: content || null,
+        error: '模型最小生成被输出长度截断，无法证明该模型可用。',
+      }
+    }
+
+    if (!content) {
+      return {
+        ok: false,
+        status: response.status,
+        latency_ms: latencyMs,
+        model: normalizedModel,
+        content_sample: null,
+        error: '模型没有返回可用正文内容，不能作为真实可用模型验收。',
+      }
+    }
+
+    return {
+      ok: true,
+      status: response.status,
+      latency_ms: latencyMs,
+      model: normalizedModel,
+      content_sample: content.slice(0, 80),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      status: null,
+      latency_ms: Date.now() - startedAt,
+      model: normalizedModel,
+      content_sample: null,
+      error: error instanceof Error ? error.message : '最小生成请求失败。',
+    }
+  }
+}
+
 function authHeaders(apiKey?: string): HeadersInit | undefined {
   if (!apiKey || apiKey === 'not-needed') {
     return undefined
@@ -196,6 +359,32 @@ function tenderLongDocumentQualityIssues(responseMeta: Record<string, unknown>):
   }
 
   return issues
+}
+
+function remoteHealthAssessment(
+  health: HealthResult,
+  environment: string,
+  readyAction?: string
+): AIRuntimeAssessment {
+  return {
+    runtime_state: health === 'ok'
+      ? 'remote_health_ok'
+      : health === 'auth_failed'
+        ? 'remote_auth_failed'
+        : 'remote_health_failed',
+    runtime_reason: health === 'ok'
+      ? '云端 Provider /models 连接测试通过。'
+      : health === 'auth_failed'
+        ? '云端 Provider 返回认证失败，Token 或权限不可用。'
+        : '云端 Provider /models 连接测试失败或超时。',
+    runtime_action: health === 'ok'
+      ? readyAction || '保存并发布此模型配置后，用真实合同触发 ReviewRun 验证 semantic_review 调用证据。'
+      : health === 'auth_failed'
+        ? '请检查 Token 是否来自正确控制台、是否具备模型访问权限，或更换模型网关。'
+        : '请检查 Base URL、网络可达性和供应商服务状态。',
+    runtime_environment: environment,
+    local_endpoint: false,
+  }
 }
 
 function assessLatestInvocation(
@@ -386,9 +575,6 @@ export async function assessProviderRuntime(
     }
   }
 
-  const invocationAssessment = assessLatestInvocation(input.latestInvocation, environment, false, input)
-  if (invocationAssessment) return invocationAssessment
-
   if (input.checkRemoteHealth) {
     const remoteProbe = canProbeRemoteProvider(baseUrl)
     if (!remoteProbe.ok) {
@@ -402,25 +588,16 @@ export async function assessProviderRuntime(
     }
 
     const health = await checkOpenAICompatibleModelsEndpoint(baseUrl, input.apiKey, fetchImpl, 3000)
-    return {
-      runtime_state: health === 'ok'
-        ? 'remote_health_ok'
-        : health === 'auth_failed'
-          ? 'remote_auth_failed'
-          : 'remote_health_failed',
-      runtime_reason: health === 'ok'
-        ? '云端 Provider /models 连接测试通过。'
-        : health === 'auth_failed'
-          ? '云端 Provider 返回认证失败，Token 或权限不可用。'
-          : '云端 Provider /models 连接测试失败或超时。',
-      runtime_action: health === 'ok'
-        ? input.readyAction || '保存并发布此模型配置后，用真实合同触发 ReviewRun 验证 semantic_review 调用证据。'
-        : health === 'auth_failed'
-          ? '请检查 Token 是否来自正确控制台、是否具备模型访问权限，或更换模型网关。'
-          : '请检查 Base URL、网络可达性和供应商服务状态。',
-      runtime_environment: environment,
-      local_endpoint: false,
+    if (health !== 'ok') {
+      return remoteHealthAssessment(health, environment, input.readyAction)
     }
+  }
+
+  const invocationAssessment = assessLatestInvocation(input.latestInvocation, environment, false, input)
+  if (invocationAssessment) return invocationAssessment
+
+  if (input.checkRemoteHealth) {
+    return remoteHealthAssessment('ok', environment, input.readyAction)
   }
 
   return {

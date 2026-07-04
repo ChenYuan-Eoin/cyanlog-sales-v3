@@ -126,7 +126,7 @@ export default function ContractUploadPage() {
     }
 
     if (isCompareIntent) {
-      router.push(`/contracts/${completedContractId}/compare-standard`)
+      router.push(`/contracts/${completedContractId}/compare?from=upload`)
       return
     }
 

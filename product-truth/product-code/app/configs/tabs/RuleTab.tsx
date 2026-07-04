@@ -17,6 +17,23 @@ import {
   TrashIcon,
 } from 'lucide-react'
 import type { ContractPolicyRule, ContractRuleSet } from '@/types/rules'
+import {
+  asRecord,
+  buildRuleSetSections,
+  buildRuleSetViews,
+  clauseCategoryLabel,
+  fallbackRuleSetKey,
+  formatRuleValue,
+  formatThreshold,
+  isFormallyPublishedRule,
+  ruleBlockingReasons,
+  ruleExecutionSummary,
+  ruleSetKeyForAsset,
+  ruleSetPrimaryCategory,
+  type JsonRecord,
+  type RuleSetSection,
+  type RuleSetView,
+} from '@/lib/contracts/rule-asset-model'
 import RuleDesigner from '../components/RuleDesigner'
 import RuleTestSandbox from '../components/RuleTestSandbox'
 
@@ -64,8 +81,6 @@ const riskLevelMap: Record<string, { label: string; className: string }> = {
   red: { label: '红线', className: 'border-rose-200 bg-rose-50 text-rose-700' },
 }
 
-type JsonRecord = Record<string, unknown>
-
 type TranslationDiffItem = {
   field: string
   before: unknown
@@ -82,109 +97,7 @@ type TranslationDraftState = {
   modelInvocationId: string | null
 }
 
-type RuleSetView = {
-  key: string
-  label: string
-  code: string
-  order: number
-  rules: ContractPolicyRule[]
-  total: number
-  active: number
-  published: number
-  ready: number
-  blocked: number
-  source: 'all' | 'ruleset' | 'clause_category'
-  asset?: ContractRuleSet
-}
-
-type RuleSetSection = {
-  key: string
-  label: string
-  description: string
-  sets: RuleSetView[]
-}
-
-const ruleSetSectionMeta: Record<string, { label: string; description: string; categories: string[] }> = {
-  overview: {
-    label: '总览',
-    description: '全部规则资产与未归类入口',
-    categories: ['all', 'uncategorized'],
-  },
-  review_logic: {
-    label: '审查逻辑',
-    description: '上下文、主体、验收、SLA 和争议路径',
-    categories: ['business_integrity', 'acceptance', 'sla', 'renewal', 'dispute'],
-  },
-  breach_liability: {
-    label: '违约与责任',
-    description: '付款、税务、违约、责任上限和终止退款',
-    categories: ['payment', 'tax', 'breach', 'liability', 'termination'],
-  },
-  ip_security: {
-    label: '知识产权与数据',
-    description: 'IP 归属、保密、数据安全和客户资料处理',
-    categories: ['ip', 'data_security', 'confidentiality'],
-  },
-}
-
-const clauseCategoryMap: Record<string, { label: string; order: number }> = {
-  payment: { label: '付款与结算', order: 10 },
-  termination: { label: '终止与退款', order: 20 },
-  tax: { label: '税务与发票', order: 30 },
-  acceptance: { label: '验收与交付', order: 40 },
-  breach: { label: '违约责任', order: 50 },
-  liability: { label: '责任边界', order: 60 },
-  confidentiality: { label: '保密义务', order: 70 },
-  business_integrity: { label: '主体与金额一致性', order: 80 },
-  ip: { label: '知识产权', order: 90 },
-  data_security: { label: '数据安全', order: 100 },
-  sla: { label: 'SLA 与服务承诺', order: 110 },
-  renewal: { label: '续约与退出', order: 120 },
-  dispute: { label: '争议解决', order: 130 },
-}
-
-function clauseCategoryLabel(value?: string | null) {
-  if (!value) return '未分类'
-  return clauseCategoryMap[value]?.label || value
-}
-
-function ruleSetCode(value: string) {
-  if (value === 'uncategorized') return 'UNCATEGORIZED'
-  return value.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
-}
-
-function ruleSetKeyForAsset(ruleSetId: string) {
-  return `ruleset:${ruleSetId}`
-}
-
-function fallbackRuleSetKey(clauseCategory?: string | null) {
-  return clauseCategory || 'uncategorized'
-}
-
-function asRecord(value: unknown): JsonRecord {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as JsonRecord
-    : {}
-}
-
-function formatRuleValue(value: unknown, fallback = '未配置'): string {
-  if (typeof value === 'string') return value.trim() || fallback
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  if (Array.isArray(value)) {
-    const text: string = value
-      .map((item) => formatRuleValue(item, ''))
-      .filter(Boolean)
-      .join(' / ')
-    return text || fallback
-  }
-  if (value && typeof value === 'object') {
-    const entries: string[] = Object.entries(value as JsonRecord)
-      .map(([key, item]) => `${key}: ${formatRuleValue(item, '')}`)
-      .filter((item) => !item.endsWith(': '))
-    return entries.join('；') || fallback
-  }
-  return fallback
-}
+const EMPTY_RULES: ContractPolicyRule[] = []
 
 function translationFieldLabel(field: string) {
   const labels: Record<string, string> = {
@@ -197,97 +110,122 @@ function translationFieldLabel(field: string) {
   return labels[field] || field
 }
 
-function isRuleReady(rule: ContractPolicyRule) {
-  return rule.translation_status === 'ready'
-}
 
-function isFormallyPublishedRule(rule: ContractPolicyRule) {
-  return Boolean(
-    rule.is_active &&
-    rule.lifecycle_status === 'published' &&
-    rule.translation_status === 'ready' &&
-    rule.published_at
-  )
-}
-
-function ruleBlockingReasons(rule: ContractPolicyRule) {
-  const reasons: string[] = []
-  if (!rule.is_active) reasons.push('已停用')
-  if (!rule.business_domain) reasons.push('缺业务域')
-  if (!rule.clause_category) reasons.push('缺规则集')
-  if (!rule.field_hints?.length) reasons.push('缺命中提示')
-  if ((rule.engine_type === 'structured' || rule.engine_type === 'hybrid') && !rule.target_field) {
-    reasons.push('缺目标字段')
-  }
-  if ((rule.engine_type === 'semantic' || rule.engine_type === 'hybrid') && !rule.semantic_prompt) {
-    reasons.push('缺语义规则')
-  }
-  if (!rule.message_template || Object.values(rule.message_template).every((value) => (
-    !(typeof value === 'string' && value.trim().length > 0) && value !== true
-  ))) {
-    reasons.push('缺批注/谈判模板')
-  }
-  if (!isRuleReady(rule)) reasons.push('未完成转译')
-  if (rule.lifecycle_status !== 'published') reasons.push('未正式发布')
-  if (rule.lifecycle_status === 'published' && !rule.published_at) reasons.push('缺发布时间')
-  return reasons
-}
-
-function formatThreshold(rule: ContractPolicyRule) {
-  const unit = rule.level_a_unit || rule.level_b_unit || rule.level_c_unit || ''
-  return `A ${rule.level_a_operator} ${rule.level_a_threshold}${unit} / B ${rule.level_b_operator} ${rule.level_b_threshold}${unit} / C ${rule.level_c_operator} ${rule.level_c_threshold}${unit}`
-}
-
-function ruleExecutionSummary(rule: ContractPolicyRule) {
-  const template = asRecord(rule.message_template)
-  const levels = asRecord(template.levels)
-  const outputs = asRecord(template.outputs)
-  const trigger = rule.field_hints?.length
-    ? rule.field_hints.join(' / ')
-    : rule.target_field || '未配置'
-  const risk = rule.semantic_prompt || formatThreshold(rule)
-  const exceptions = rule.level_a_action
-    ? `A档处理：${rule.level_a_action}`
-    : '未配置'
-  const evidence = [
-    'evidence_text exact match',
-    'source range required',
-    ...(rule.field_hints || []).slice(0, 4),
-  ].join(' / ')
-  const negotiation = formatRuleValue(
-    template.negotiation_action || template.owner_role || rule.level_b_counterparty,
-    rule.level_b_action === 'negotiate_with_counterparty'
-      ? '销售需围绕风险项取得对价或客户确认，并记录谈判结果。'
-      : '未配置'
-  )
-  const commentTemplate = formatRuleValue(
-    template.comment || template.suggestion || template.description || template.title || outputs || levels,
-    '未配置'
-  )
-
-  return [
-    { label: '触发条件', value: trigger },
-    { label: '风险条件', value: risk },
-    { label: '例外条件', value: exceptions },
-    { label: '证据要求', value: evidence },
-    { label: '谈判动作', value: negotiation },
-    { label: '批注模板', value: commentTemplate },
+function RuleSetReleasePipeline({ activeRuleSet }: { activeRuleSet?: RuleSetView }) {
+  const hasRuleSetDocument = Boolean(activeRuleSet?.asset?.latest_document)
+  const hasRules = Boolean(activeRuleSet?.total)
+  const translationReady = Boolean(activeRuleSet?.ready && activeRuleSet.ready === activeRuleSet.total)
+  const formallyPublished = Boolean(activeRuleSet?.published && activeRuleSet.published === activeRuleSet.total)
+  const engineReady = hasRules && translationReady && formallyPublished && !activeRuleSet?.blocked
+  const steps = [
+    {
+      label: '规则集文档',
+      value: hasRuleSetDocument ? `v${activeRuleSet?.asset?.latest_document?.version || '-'}` : '可选文档源',
+      done: hasRuleSetDocument || activeRuleSet?.source !== 'ruleset',
+    },
+    {
+      label: '结构化规则',
+      value: `${activeRuleSet?.total || 0} 条`,
+      done: hasRules,
+    },
+      {
+        label: '转译确认',
+        value: `${activeRuleSet?.ready || 0} 转译就绪`,
+        done: translationReady,
+      },
+      {
+        label: '正式可用',
+        value: `${activeRuleSet?.published || 0} 通过门禁`,
+        done: formallyPublished,
+      },
+    {
+      label: '正式审核',
+      value: engineReady ? '可用' : '仍有门禁',
+      done: engineReady,
+    },
   ]
+
+  return (
+    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium text-indigo-700">发布流水线</div>
+          <div className="mt-1 text-sm font-semibold text-slate-950">维护规则集 → 转译确认 → 发布版本 → 正式审核可用</div>
+        </div>
+        <Badge variant={engineReady ? 'default' : 'outline'}>{engineReady ? '闭环' : '待处理'}</Badge>
+      </div>
+      <div className="space-y-2">
+        {steps.map((step, index) => (
+          <div key={step.label} className="flex items-center gap-2 rounded-md bg-white px-2 py-2 text-xs">
+            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+              step.done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
+            }`}>
+              {step.done ? '✓' : index + 1}
+            </span>
+            <span className="min-w-0 flex-1 font-medium text-slate-800">{step.label}</span>
+            <span className="max-w-24 truncate text-slate-500">{step.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
-function ruleSetPrimaryCategory(ruleSet: RuleSetView) {
-  if (ruleSet.key === 'all') return 'all'
-  const fromRules = ruleSet.rules.find((rule) => rule.clause_category)?.clause_category
-  if (fromRules) return fromRules
-  return ruleSet.code.toLowerCase()
-}
+function RuleAssetProductMap({ activeRuleSet }: { activeRuleSet?: RuleSetView }) {
+  const steps = [
+    {
+      label: '规则集目录',
+      value: activeRuleSet?.label || '未选择',
+      done: Boolean(activeRuleSet),
+    },
+    {
+      label: '规则声明',
+      value: activeRuleSet?.asset?.latest_document ? `文档 v${activeRuleSet.asset.latest_document.version}` : '可维护 Markdown / 自然语言',
+      done: Boolean(activeRuleSet?.asset?.latest_document) || activeRuleSet?.source !== 'ruleset',
+    },
+    {
+      label: '结构化 RuleUnit',
+      value: `${activeRuleSet?.ready || 0}/${activeRuleSet?.total || 0} 转译就绪`,
+      done: Boolean(activeRuleSet?.total && activeRuleSet.ready === activeRuleSet.total),
+    },
+    {
+      label: '发布版本',
+      value: `${activeRuleSet?.published || 0}/${activeRuleSet?.total || 0} 正式可用`,
+      done: Boolean(activeRuleSet?.total && activeRuleSet.published === activeRuleSet.total),
+    },
+    {
+      label: '审核引擎',
+      value: activeRuleSet?.blocked ? '仍有门禁' : activeRuleSet?.total ? '可进入编译检查' : '待补规则',
+      done: Boolean(activeRuleSet?.total && !activeRuleSet.blocked),
+    },
+  ]
 
-function ruleSetSectionKey(ruleSet: RuleSetView) {
-  const category = ruleSetPrimaryCategory(ruleSet)
-  for (const [sectionKey, meta] of Object.entries(ruleSetSectionMeta)) {
-    if (meta.categories.includes(category)) return sectionKey
-  }
-  return 'overview'
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium text-slate-500">规则资产产品化路径</div>
+          <div className="mt-1 text-sm font-semibold text-slate-950">不是黑盒解析，必须能看到每一步生成了什么</div>
+        </div>
+        <Badge variant={activeRuleSet?.blocked ? 'destructive' : 'outline'}>
+          {activeRuleSet?.blocked ? '未闭环' : '路径清晰'}
+        </Badge>
+      </div>
+      <div className="mt-3 space-y-2">
+        {steps.map((step, index) => (
+          <div key={step.label} className="flex items-center gap-2 rounded-md bg-slate-50 px-2 py-2 text-xs">
+            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+              step.done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
+            }`}>
+              {step.done ? '✓' : index + 1}
+            </span>
+            <span className="w-20 shrink-0 font-medium text-slate-800">{step.label}</span>
+            <span className="min-w-0 truncate text-slate-500">{step.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete, onRefresh }: RuleTabProps) {
@@ -337,95 +275,31 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }, [loadRuleSetAssets])
 
   const ruleSets = useMemo<RuleSetView[]>(() => {
-    const groups = new Map<string, ContractPolicyRule[]>()
-    for (const rule of sortedRules) {
-      const key = rule.clause_category || 'uncategorized'
-      groups.set(key, [...(groups.get(key) || []), rule])
-    }
-
-    const assetSets = ruleSetAssets.map((asset) => {
-      const items = sortedRules.filter((rule) => (
-        rule.rule_set_id === asset.id
-        || (!rule.rule_set_id && ruleSetCode(rule.clause_category || 'uncategorized') === asset.code)
-      ))
-      const total = asset.rule_count ?? items.length
-      const ready = asset.ready_rule_count ?? items.filter(isRuleReady).length
-      return {
-        key: ruleSetKeyForAsset(asset.id),
-        label: asset.name,
-        code: asset.code,
-        order: asset.priority ?? 999,
-        rules: items,
-        total,
-        active: items.filter((rule) => rule.is_active).length,
-        published: asset.published_rule_count ?? items.filter(isFormallyPublishedRule).length,
-        ready,
-        blocked: asset.blocked_rule_count ?? Math.max(0, total - ready),
-        source: 'ruleset' as const,
-        asset,
-      }
-    })
-
-    const representedFallbackKeys = new Set(
-      ruleSetAssets.map((asset) => asset.code.toLowerCase())
-    )
-    const fallbackSets = Array.from(groups.entries())
-      .filter(([key]) => !representedFallbackKeys.has(ruleSetCode(key).toLowerCase()))
-      .map(([key, items]) => {
-        const ready = items.filter(isRuleReady).length
-        return {
-          key,
-          label: clauseCategoryLabel(key),
-          code: ruleSetCode(key),
-          order: clauseCategoryMap[key]?.order ?? 999,
-          rules: items,
-          total: items.length,
-          active: items.filter((rule) => rule.is_active).length,
-          published: items.filter(isFormallyPublishedRule).length,
-          ready,
-          blocked: Math.max(0, items.length - ready),
-          source: 'clause_category' as const,
-        }
-      })
-      .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label, 'zh-CN'))
-
-    const allReady = sortedRules.filter(isRuleReady).length
-
-    return [{
-      key: 'all',
-      label: '全部规则集',
-      code: 'ALL',
-      order: 0,
-      rules: sortedRules,
-      total: sortedRules.length,
-      active: sortedRules.filter((rule) => rule.is_active).length,
-      published: sortedRules.filter(isFormallyPublishedRule).length,
-      ready: allReady,
-      blocked: Math.max(0, sortedRules.length - allReady),
-      source: 'all' as const,
-    }, ...assetSets, ...fallbackSets].sort((left, right) => (
-      left.key === 'all' ? -1 : right.key === 'all' ? 1 : left.order - right.order || left.label.localeCompare(right.label, 'zh-CN')
-    ))
+    return buildRuleSetViews(sortedRules, ruleSetAssets)
   }, [ruleSetAssets, sortedRules])
 
-	  const activeRuleSet = useMemo(
-	    () => ruleSets.find((set) => set.key === activeRuleSetKey) || ruleSets[0],
-	    [activeRuleSetKey, ruleSets]
-	  )
+  const activeRuleSet = useMemo(
+    () => ruleSets.find((set) => set.key === activeRuleSetKey) || ruleSets[0],
+    [activeRuleSetKey, ruleSets]
+  )
 
-	  const ruleSetSections = useMemo<RuleSetSection[]>(() => {
-	    return Object.entries(ruleSetSectionMeta)
-	      .map(([key, meta]) => ({
-	        key,
-	        label: meta.label,
-	        description: meta.description,
-	        sets: ruleSets.filter((ruleSet) => ruleSetSectionKey(ruleSet) === key),
-	      }))
-	      .filter((section) => section.sets.length > 0)
-	  }, [ruleSets])
+  const ruleSetSections = useMemo<RuleSetSection[]>(() => buildRuleSetSections(ruleSets), [ruleSets])
 
-  const visibleRules = activeRuleSet?.rules || []
+  const visibleRules = activeRuleSet?.rules || EMPTY_RULES
   const selectedRuleBlockingReasons = selectedRule ? ruleBlockingReasons(selectedRule) : []
+  const activeRuleSetBlockedRules = useMemo(() => (
+    visibleRules
+      .map((rule) => ({ rule, reasons: ruleBlockingReasons(rule) }))
+      .filter((item) => item.reasons.length > 0)
+  ), [visibleRules])
+  const designerRuleSetContext = useMemo(() => {
+    if (!activeRuleSet || activeRuleSet.key === 'all') return undefined
+    return {
+      id: activeRuleSet.asset?.id || null,
+      label: activeRuleSet.label,
+      clauseCategory: ruleSetPrimaryCategory(activeRuleSet),
+    }
+  }, [activeRuleSet])
 
   useEffect(() => {
     const document = activeRuleSet?.asset?.latest_document
@@ -530,7 +404,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       }
       setFeedback({
         tone: 'success',
-        message: '规则集文档已保存为新版本，需转译确认后才能进入正式审核引擎。',
+        message: '规则集文档已保存为新版本，需转译确认后才能进入正式审核。',
       })
       await loadRuleSetAssets()
       await onRefresh?.()
@@ -574,7 +448,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       setActiveTab('list')
       setFeedback({
         tone: 'success',
-        message: 'AI 转译草稿已生成，请先核对字段差异，再人工确认应用。',
+        message: '执行草稿已生成，请先核对字段差异，再人工确认应用。',
       })
       await onRefresh?.()
     } catch {
@@ -694,7 +568,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               size="icon"
               variant="ghost"
               className="h-7 w-7"
-              title="AI 转译草稿"
+              title="生成执行草稿"
               disabled={translatingRuleId === rule.id}
               onClick={() => void handleTranslateRule(rule)}
             >
@@ -727,11 +601,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }
 
   return (
-	    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_minmax(360px,1fr)_300px]">
+	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
 	      <Card className="min-w-0">
 	        <CardHeader className="flex flex-row items-center justify-between gap-3">
 	          <CardTitle className="text-base">
-	            规则资产目录 ({Math.max(ruleSets.length - 1, 0)})
+	            规则集树 ({Math.max(ruleSets.length - 1, 0)})
 	            {ruleSetAssetsLoading ? <span className="ml-2 text-xs font-normal text-slate-400">加载中</span> : null}
 	          </CardTitle>
           <Button size="sm" onClick={handleNewRule}>
@@ -791,17 +665,17 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 	                                ? '全部规则资产'
 	                                : '旧分类视图，待迁移为规则集资产'}
 	                          </div>
-	                          <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
-	                            <span className={`rounded px-1.5 py-1 ${
-	                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
-	                            }`}>
-	                              发布 {ruleSet.published}
-	                            </span>
-	                            <span className={`rounded px-1.5 py-1 ${
-	                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
-	                            }`}>
-	                              就绪 {ruleSet.ready}
-	                            </span>
+		                          <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
+		                            <span className={`rounded px-1.5 py-1 ${
+		                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
+		                            }`}>
+		                              正式可用 {ruleSet.published}
+		                            </span>
+		                            <span className={`rounded px-1.5 py-1 ${
+		                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
+		                            }`}>
+		                              转译就绪 {ruleSet.ready}
+		                            </span>
 	                            <span className={`rounded px-1.5 py-1 ${
 	                              ruleSet.blocked > 0
 	                                ? activeRuleSetKey === ruleSet.key
@@ -811,7 +685,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 	                                  ? 'bg-emerald-500/20 text-emerald-100'
 	                                  : 'bg-emerald-50 text-emerald-700'
 	                            }`}>
-	                              阻断 {ruleSet.blocked}
+	                              待处理 {ruleSet.total === 0 ? ruleSet.total : ruleSet.blocked}
 	                            </span>
 	                          </div>
 	                        </div>
@@ -842,7 +716,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle className="min-w-0 truncate text-base">
-                {selectedRule ? `编辑规则：${selectedRule.code} ${selectedRule.name}` : '新建合同审核规则'}
+                {selectedRule
+                  ? `编辑规则：${selectedRule.code} ${selectedRule.name}`
+                  : designerRuleSetContext?.label
+                    ? `新建规则：${designerRuleSetContext.label}`
+                    : '新建合同审核规则'}
               </CardTitle>
               <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
                 <PlayIcon className="h-4 w-4 mr-1" />
@@ -852,6 +730,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             <CardContent>
               <RuleDesigner
                 initialRule={selectedRule || undefined}
+                defaultRuleSet={designerRuleSetContext}
                 saving={saving}
                 onSave={handleSaveRule}
                 onTest={() => setActiveTab('test')}
@@ -867,9 +746,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </CardTitle>
 	              <p className="mt-1 truncate text-xs text-slate-500">
 	                {activeRuleSet?.key === 'all'
-	                  ? '所有规则集的发布、转译和审核引擎输入状态'
+	                  ? '所有规则集的发布、转译和正式审核输入状态'
 	                  : activeRuleSet?.source === 'ruleset'
-	                    ? `${activeRuleSet?.code} · 声明文档 / 结构化规则 / 发布闭环`
+		                    ? `${activeRuleSet?.code} · 声明文档 / 结构化规则 / 发布门禁`
 	                    : `${activeRuleSet?.code} · 旧分类视图，待迁移为规则集资产`}
 	              </p>
               </div>
@@ -901,7 +780,10 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
       <Card className="min-w-0">
         <CardHeader>
-	          <CardTitle className="text-base">规则集发布闭环</CardTitle>
+		          <CardTitle className="text-base">规则集闭环</CardTitle>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+	            这一栏只回答三件事：这个规则集能否用于正式审核、为什么被阻断、下一步由谁处理。
+          </p>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="grid grid-cols-3 gap-2">
@@ -910,21 +792,21 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               onClick={() => setActiveTab('list')}
               className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'list' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
             >
-	              规则清单
+			              规则清单
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('design')}
               className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'design' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
             >
-	              结构化编辑
+			              维护规则
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('test')}
               className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'test' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
             >
-	              模拟测试
+			              测试命中
             </button>
           </div>
 
@@ -952,9 +834,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 	                      : '按旧分类临时聚合，建议迁移为规则集资产'}
                 </div>
               </div>
-              <Badge variant={activeRuleSet?.blocked ? 'destructive' : 'default'}>
-                {activeRuleSet?.blocked ? '有阻断' : '可发布'}
-              </Badge>
+	              <Badge variant={!activeRuleSet?.total || activeRuleSet?.blocked ? 'destructive' : 'default'}>
+	                {!activeRuleSet?.total ? '待补规则' : activeRuleSet?.blocked ? '不能正式审核' : '正式可用'}
+	              </Badge>
             </div>
             <div className="mt-3 grid grid-cols-4 gap-2 text-center">
               <div>
@@ -965,25 +847,79 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <div className="text-lg font-semibold text-slate-900">{activeRuleSet?.active || 0}</div>
                 <div className="text-[11px] text-slate-500">启用</div>
               </div>
-              <div>
-                <div className="text-lg font-semibold text-slate-900">{activeRuleSet?.published || 0}</div>
-                <div className="text-[11px] text-slate-500">发布</div>
-              </div>
-              <div>
-                <div className="text-lg font-semibold text-slate-900">{activeRuleSet?.ready || 0}</div>
-                <div className="text-[11px] text-slate-500">就绪</div>
-              </div>
+	              <div>
+	                <div className="text-lg font-semibold text-slate-900">{activeRuleSet?.published || 0}</div>
+	                <div className="text-[11px] text-slate-500">正式可用</div>
+	              </div>
+	              <div>
+	                <div className="text-lg font-semibold text-slate-900">{activeRuleSet?.ready || 0}</div>
+	                <div className="text-[11px] text-slate-500">转译就绪</div>
+	              </div>
             </div>
-            {activeRuleSet?.blocked ? (
+            {!activeRuleSet?.total ? (
               <div className="mt-3 rounded border border-rose-200 bg-white px-2 py-1 text-xs text-rose-700">
-	                {activeRuleSet.blocked} 条规则仍缺转译、发布或执行字段，不能进入正式审核引擎。
+		                当前规则集还没有规则，不能进入正式审核。
+              </div>
+            ) : activeRuleSet?.blocked ? (
+              <div className="mt-3 rounded border border-rose-200 bg-white px-2 py-1 text-xs text-rose-700">
+		                {activeRuleSet.blocked} 条规则仍缺转译、发布或执行字段，不能进入正式审核。
               </div>
             ) : (
               <div className="mt-3 rounded border border-emerald-200 bg-white px-2 py-1 text-xs text-emerald-700">
-	                当前规则集规则均满足发布、转译和执行字段要求，可进入审核引擎编译检查。
+	                当前规则集规则均满足发布、转译和执行字段要求，可进入正式审核编译检查。
               </div>
-            )}
-          </div>
+	            )}
+	          </div>
+
+          <RuleAssetProductMap activeRuleSet={activeRuleSet} />
+
+          {activeRuleSetBlockedRules.length > 0 ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-medium text-rose-700">发布门禁明细</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {activeRuleSetBlockedRules.length} 条规则需要处理
+                  </div>
+                </div>
+                <Badge variant="destructive">不能正式审核</Badge>
+              </div>
+              <div className="mt-3 space-y-2">
+                {activeRuleSetBlockedRules.slice(0, 6).map(({ rule, reasons }) => (
+                  <button
+                    key={rule.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRule(rule)
+                      setActiveTab('design')
+                    }}
+                    className="w-full rounded-md border border-rose-100 bg-white px-3 py-2 text-left transition hover:border-rose-300"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-xs font-semibold text-slate-900">
+                        {rule.code} · {rule.name}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-rose-600">修正规则</span>
+                    </div>
+                    <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-rose-700">
+                      {reasons.join(' / ')}
+                    </div>
+                  </button>
+                ))}
+                {activeRuleSetBlockedRules.length > 6 ? (
+                  <div className="rounded-md border border-dashed border-rose-200 bg-white px-3 py-2 text-[11px] text-rose-700">
+                    还有 {activeRuleSetBlockedRules.length - 6} 条阻断规则。请先处理当前列表中的高优先级规则。
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : activeRuleSet?.total ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-700">
+	              当前规则集没有发布阻断项；下一步应进入规则集发布、审核引擎编译和评测验收。
+            </div>
+          ) : null}
+
+          <RuleSetReleasePipeline activeRuleSet={activeRuleSet} />
 
           {activeRuleSet?.source === 'ruleset' ? (
             <div className="rounded-lg border border-slate-200 bg-white p-3">
@@ -1021,7 +957,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </Button>
               </div>
               <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs leading-5 text-amber-700">
-	                文档只是高效维护入口；进入正式审核前必须显示字段级转译差异、人工确认并发布快照。
+	                文档只是高效维护入口；进入正式审核前必须显示字段级转译差异、人工确认并发布版本。
               </div>
             </div>
           ) : activeRuleSet?.source === 'clause_category' ? (
@@ -1076,7 +1012,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs leading-5 text-slate-700">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium text-slate-900">AI 转译草稿待确认</div>
+                      <div className="font-medium text-slate-900">执行草稿待确认</div>
                       <div className="mt-1 text-slate-500">
                         {translationDraft.modelInvocationId
                           ? `模型调用：${translationDraft.modelInvocationId}`
@@ -1129,7 +1065,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </div>
               ) : null}
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
-	                <div className="font-medium text-slate-900">审核引擎字段</div>
+	                <div className="font-medium text-slate-900">RuleUnit 字段（可视化）</div>
                 <div className="mt-1">目标字段：{selectedRule.target_field || '未配置'}</div>
                 <div>命中提示：{selectedRule.field_hints?.length ? selectedRule.field_hints.join(' / ') : '未配置'}</div>
               </div>
@@ -1160,7 +1096,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <div className="mt-2">
                   {selectedRuleBlockingReasons.length
                     ? selectedRuleBlockingReasons.join(' / ')
-	                    : '规则已启用、已发布、已完成转译并具备进入审核引擎编译检查的基础字段。'}
+	                    : '规则已启用、已发布、已完成转译并具备进入正式审核编译检查的基础字段。'}
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
@@ -1177,7 +1113,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 onClick={() => void handleTranslateRule(selectedRule)}
               >
                 <SparklesIcon className="h-4 w-4 mr-1" />
-                AI 转译草稿
+                AI 转译为 RuleUnit 草稿
               </Button>
             </div>
           ) : (

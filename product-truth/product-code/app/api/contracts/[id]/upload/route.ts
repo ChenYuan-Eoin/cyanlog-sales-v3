@@ -25,6 +25,7 @@ function isFile(value: unknown): value is File {
 
 const contractUploadFormSchema = z.object({
   file: z.custom<File>(isFile),
+  purpose: z.enum(['source', 'manual_revision', 'customer-return']).optional(),
 })
 
 function hasAllowedFileType(file: File): boolean {
@@ -52,12 +53,15 @@ export async function POST(
 
     const parsed = contractUploadFormSchema.safeParse({
       file: formData.get('file'),
+      purpose: formData.get('purpose') || undefined,
     })
     if (!parsed.success) {
       return errorResponse(createApiError('MISSING_FIELD', '未提供文件'))
     }
 
     const { file } = parsed.data
+    const uploadPurpose = parsed.data.purpose || 'source'
+    const isVersionOnlyUpload = uploadPurpose === 'manual_revision' || uploadPurpose === 'customer-return'
 
     // 验证文件类型
     if (!hasAllowedFileType(file)) {
@@ -135,45 +139,56 @@ export async function POST(
       .maybeSingle()
 
     const nextVersionNumber = (latestVersion?.version_number || 0) + 1
-    const versionSource = latestVersion ? 'manual_revision' : 'original'
-
-    // 更新合同记录。上传成功后进入待审核状态，避免停留在 DRAFT 导致无法发起审核。
-    const { error: updateError } = await supabaseAdmin
-      .from('contracts')
-      .update({
-        filename: file.name,
-        storage_path: storagePath,
-        size: file.size,
-        mime_type: file.type || 'application/octet-stream',
-        parsed_text: parsedText,
-        ocr_status: 'COMPLETED',
-        ocr_result: {
-          raw_text: parsedText,
-          confidence: 0.8,
-          source: 'text-extraction',
-          completed_at: new Date().toISOString(),
-        },
-        status: 'PENDING',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', contractId)
-      .eq('org_id', orgId)
-
-    if (updateError) {
-      await logError({
-        req,
-        source: 'api',
-        userId: user.id,
-        message: updateError.message,
-        error: updateError,
-        context: {
-          route: '/api/contracts/[id]/upload',
-          contractId,
-          phase: 'update_contract',
-        },
-      })
+    if (isVersionOnlyUpload && !latestVersion) {
       await supabaseAdmin.storage.from('contracts').remove([storagePath])
-      return errorResponse(createApiError('DB_ERROR', '合同文件记录更新失败'))
+      return errorResponse(createApiError(
+        'VALIDATION_ERROR',
+        '当前合同缺少源文件版本，不能直接上传客户回传版'
+      ))
+    }
+
+    const versionSource = isVersionOnlyUpload || latestVersion ? 'manual_revision' : 'original'
+    const now = new Date().toISOString()
+
+    if (!isVersionOnlyUpload) {
+      // 源文件上传更新合同主记录。客户回传/人工修订只进入版本流，不能污染审核源文件。
+      const { error: updateError } = await supabaseAdmin
+        .from('contracts')
+        .update({
+          filename: file.name,
+          storage_path: storagePath,
+          size: file.size,
+          mime_type: file.type || 'application/octet-stream',
+          parsed_text: parsedText,
+          ocr_status: 'COMPLETED',
+          ocr_result: {
+            raw_text: parsedText,
+            confidence: 0.8,
+            source: 'text-extraction',
+            completed_at: now,
+          },
+          status: 'PENDING',
+          updated_at: now,
+        })
+        .eq('id', contractId)
+        .eq('org_id', orgId)
+
+      if (updateError) {
+        await logError({
+          req,
+          source: 'api',
+          userId: user.id,
+          message: updateError.message,
+          error: updateError,
+          context: {
+            route: '/api/contracts/[id]/upload',
+            contractId,
+            phase: 'update_contract',
+          },
+        })
+        await supabaseAdmin.storage.from('contracts').remove([storagePath])
+        return errorResponse(createApiError('DB_ERROR', '合同文件记录更新失败'))
+      }
     }
 
     const { error: versionError } = await supabaseAdmin
@@ -186,7 +201,11 @@ export async function POST(
         file_size: file.size,
         mime_type: file.type || 'application/octet-stream',
         parent_version_id: latestVersion?.id || null,
-        change_summary: latestVersion ? '用户补充合同文件' : '用户上传合同源文件',
+        change_summary: uploadPurpose === 'customer-return'
+          ? `客户回传版：${file.name}`
+          : versionSource === 'manual_revision'
+            ? `人工补充版本：${file.name}`
+            : '用户上传合同源文件',
         uploaded_by: user.id,
       })
 
@@ -216,9 +235,10 @@ export async function POST(
         storagePath,
         versionNumber: nextVersionNumber,
         versionSource,
-        status: 'PENDING',
+        contractUpdated: !isVersionOnlyUpload,
+        status: isVersionOnlyUpload ? contract.status : 'PENDING',
       },
-      message: '上传成功',
+      message: isVersionOnlyUpload ? '版本上传成功' : '上传成功',
     })
   } catch (error: unknown) {
     const err = error as Error

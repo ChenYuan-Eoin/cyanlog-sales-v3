@@ -1,6 +1,6 @@
 'use client'
 
-import { cloneElement, isValidElement, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import { cloneElement, isValidElement, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +18,11 @@ type RuleDraft = Partial<ContractPolicyRule>
 
 interface RuleDesignerProps {
   initialRule?: ContractPolicyRule
+  defaultRuleSet?: {
+    id?: string | null
+    label?: string
+    clauseCategory?: string
+  }
   saving?: boolean
   onSave: (rule: RuleDraft) => void | Promise<void>
   onTest?: () => void
@@ -32,12 +37,21 @@ const categoryOptions: Array<{ value: ContractRuleCategory; label: string }> = [
 ]
 
 const engineOptions: Array<{ value: ContractRuleEngineType; label: string }> = [
-  { value: 'structured', label: '结构化' },
-  { value: 'semantic', label: '语义' },
-  { value: 'hybrid', label: '混合' },
+  { value: 'structured', label: '结构化字段校验' },
+  { value: 'semantic', label: 'AI 语义审查' },
+  { value: 'hybrid', label: '字段 + 语义混合' },
 ]
 
 const operatorOptions: ContractRuleOperator[] = ['<=', '>=', '>', '<', '=', 'contains', 'in']
+const operatorLabels: Record<ContractRuleOperator, string> = {
+  '<=': '不超过',
+  '>=': '不少于',
+  '>': '超过',
+  '<': '少于',
+  '=': '等于',
+  contains: '包含',
+  in: '属于',
+}
 
 const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> = [
   { value: 'green', label: '绿色' },
@@ -45,14 +59,38 @@ const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> =
   { value: 'red', label: '红线' },
 ]
 
-const actionOptions = [
-  { value: 'auto_approve', label: '自动通过' },
-  { value: 'suggest_counterparty', label: '进入谈判/会签' },
-  { value: 'manual_review', label: '人工复核' },
-  { value: 'block', label: '阻断' },
+const clauseCategoryOptions = [
+  { value: '', label: '选择规则集目录' },
+  { value: 'business_integrity', label: '审查逻辑 / 主体与金额一致性' },
+  { value: 'acceptance', label: '审查逻辑 / 验收与交付' },
+  { value: 'sla', label: '审查逻辑 / SLA 与服务承诺' },
+  { value: 'dispute', label: '审查逻辑 / 争议解决' },
+  { value: 'payment', label: '违约与责任 / 付款与结算' },
+  { value: 'breach', label: '违约与责任 / 违约责任' },
+  { value: 'liability', label: '违约与责任 / 责任边界' },
+  { value: 'termination', label: '违约与责任 / 终止与退款' },
+  { value: 'tax', label: '违约与责任 / 税务与发票' },
+  { value: 'ip', label: '知识产权与数据 / 知识产权' },
+  { value: 'data_security', label: '知识产权与数据 / 数据安全' },
+  { value: 'confidentiality', label: '知识产权与数据 / 保密义务' },
 ]
 
-function createDefaultRule(): RuleDraft {
+const actionOptions = [
+  { value: 'auto_approve', label: '验收通过' },
+  { value: 'suggest_counterparty', label: '进入销售谈判' },
+  { value: 'manual_review', label: '人工复核' },
+  { value: 'block', label: '红线阻断' },
+]
+
+function formatOperatorLabel(value: ContractRuleOperator | undefined) {
+  return value ? operatorLabels[value] || value : ''
+}
+
+function formatActionLabel(value: string | null | undefined) {
+  return actionOptions.find((option) => option.value === value)?.label || value || '未配置'
+}
+
+function createDefaultRule(defaultRuleSet?: RuleDesignerProps['defaultRuleSet']): RuleDraft {
   return {
     code: '',
     name: '',
@@ -62,7 +100,8 @@ function createDefaultRule(): RuleDraft {
     category: 'duration',
     engine_type: 'structured',
     target_field: 'payment_days',
-    clause_category: '',
+    rule_set_id: defaultRuleSet?.id || null,
+    clause_category: defaultRuleSet?.clauseCategory || '',
     field_hints: [],
     semantic_prompt: '',
     message_template: {
@@ -112,19 +151,30 @@ function asMessageTemplate(value: ContractPolicyRule['message_template'] | undef
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
 
-export default function RuleDesigner({ initialRule, saving = false, onSave, onTest }: RuleDesignerProps) {
-  const [draft, setDraft] = useState<RuleDraft>(() => initialRule || createDefaultRule())
+export default function RuleDesigner({ initialRule, defaultRuleSet, saving = false, onSave, onTest }: RuleDesignerProps) {
+  const defaultRuleSetId = defaultRuleSet?.id || null
+  const defaultRuleSetLabel = defaultRuleSet?.label || ''
+  const defaultRuleSetClauseCategory = defaultRuleSet?.clauseCategory || ''
+  const [draft, setDraft] = useState<RuleDraft>(() => initialRule || createDefaultRule({
+    id: defaultRuleSetId,
+    label: defaultRuleSetLabel,
+    clauseCategory: defaultRuleSetClauseCategory,
+  }))
   const [fieldHints, setFieldHints] = useState(() => toCsv(initialRule?.field_hints))
   const [scenarios, setScenarios] = useState(() => toCsv(initialRule?.applicable_scenarios))
   const isSemantic = draft.engine_type === 'semantic' || draft.category === 'text'
   const messageTemplate = useMemo(() => asMessageTemplate(draft.message_template), [draft.message_template])
 
   useEffect(() => {
-    const nextDraft = initialRule || createDefaultRule()
+    const nextDraft = initialRule || createDefaultRule({
+      id: defaultRuleSetId,
+      label: defaultRuleSetLabel,
+      clauseCategory: defaultRuleSetClauseCategory,
+    })
     setDraft(nextDraft)
     setFieldHints(toCsv(nextDraft.field_hints))
     setScenarios(toCsv(nextDraft.applicable_scenarios))
-  }, [initialRule])
+  }, [defaultRuleSetClauseCategory, defaultRuleSetId, defaultRuleSetLabel, initialRule])
 
   const normalizedDraft = useMemo<RuleDraft>(() => ({
     ...draft,
@@ -136,6 +186,34 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
     level_c_threshold: Number(draft.level_c_threshold ?? 0),
     priority: Number(draft.priority ?? 100),
   }), [draft, fieldHints, scenarios, messageTemplate])
+
+  const ruleUnitPreview = useMemo(() => {
+    const hints = fromCsv(fieldHints)
+    const scenariosList = fromCsv(scenarios)
+    const trigger = hints.length > 0
+      ? hints.join(' / ')
+      : draft.target_field || '未配置命中提示'
+    const structuredRisk = `通过：${formatOperatorLabel(draft.level_a_operator)} ${draft.level_a_threshold ?? 0}${draft.level_a_unit || ''}；需谈判：${formatOperatorLabel(draft.level_b_operator)} ${draft.level_b_threshold ?? 0}${draft.level_b_unit || ''}；红线：${formatOperatorLabel(draft.level_c_operator)} ${draft.level_c_threshold ?? 0}${draft.level_c_unit || ''}`
+
+    return [
+      {
+        label: '规则集',
+        value: clauseCategoryOptions.find((item) => item.value === draft.clause_category)?.label || draft.clause_category || '未归类',
+      },
+      { label: '触发条件', value: trigger },
+      { label: '风险条件', value: draft.semantic_prompt || structuredRisk },
+      { label: '例外/通过条件', value: formatActionLabel(draft.level_a_action) },
+      { label: '证据要求', value: 'evidence_text 必须 exact match，导出前必须有 source range' },
+      {
+        label: '谈判动作',
+        value: messageTemplate.negotiation_required
+          ? (messageTemplate.negotiation_action || '必须形成销售谈判任务')
+          : '非强制谈判',
+      },
+      { label: '批注模板', value: messageTemplate.comment || messageTemplate.suggestion || '未配置客户可见批注模板' },
+      { label: '适用场景', value: scenariosList.length ? scenariosList.join(' / ') : '全组织默认适用' },
+    ]
+  }, [draft, fieldHints, messageTemplate, scenarios])
 
   function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -157,7 +235,12 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
       }}
     >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="规则编码">
+        {!initialRule && defaultRuleSet?.label ? (
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800 md:col-span-2">
+            当前会在“{defaultRuleSet.label}”下创建规则，保存后进入转译确认和发布门禁。
+          </div>
+        ) : null}
+        <Field label="规则编码（可由系统生成）">
           <Input
             value={draft.code || ''}
             onChange={(event) => update('code', event.target.value)}
@@ -173,12 +256,11 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
             required
           />
         </Field>
-        <Field label="业务域">
-          <Input
-            value={draft.business_domain || ''}
-            onChange={(event) => update('business_domain', event.target.value)}
-            placeholder="contract_review"
-            required
+        <Field label="规则集目录">
+          <Select
+            value={draft.clause_category || ''}
+            onChange={(value) => update('clause_category', value)}
+            options={clauseCategoryOptions}
           />
         </Field>
         <Field label="风险等级">
@@ -188,32 +270,18 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
             options={riskLevelOptions}
           />
         </Field>
-        <Field label="规则分类">
+        <Field label="命中类型">
           <Select
             value={draft.category || 'duration'}
             onChange={(value) => update('category', value as ContractRuleCategory)}
             options={categoryOptions}
           />
         </Field>
-        <Field label="执行引擎">
+        <Field label="执行方式">
           <Select
             value={draft.engine_type || 'structured'}
             onChange={(value) => update('engine_type', value as ContractRuleEngineType)}
             options={engineOptions}
-          />
-        </Field>
-        <Field label="命中字段">
-          <Input
-            value={draft.target_field || ''}
-            onChange={(event) => update('target_field', event.target.value)}
-            placeholder="payment_days"
-          />
-        </Field>
-        <Field label="执行顺序">
-          <Input
-            type="number"
-            value={draft.priority ?? 100}
-            onChange={(event) => update('priority', Number(event.target.value))}
           />
         </Field>
       </div>
@@ -228,14 +296,14 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
       </Field>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="原文命中提示">
+        <Field label="原文定位线索 / 关键词">
           <Input
             value={fieldHints}
             onChange={(event) => setFieldHints(event.target.value)}
-            placeholder="payment_days, account_period"
+            placeholder="首期 / 账期 / 尾款 / 验收后付款"
           />
         </Field>
-        <Field label="适用场景">
+        <Field label="适用合同/场景">
           <Input
             value={scenarios}
             onChange={(event) => setScenarios(event.target.value)}
@@ -243,6 +311,37 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
           />
         </Field>
       </div>
+
+      <details className="rounded-lg border border-slate-200 bg-slate-50">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800">
+          系统字段（高级）
+          <span className="ml-2 text-xs font-normal text-slate-500">只在需要调整 RuleUnit 映射、执行顺序或底层字段时打开</span>
+        </summary>
+        <div className="grid grid-cols-1 gap-4 border-t border-slate-200 p-4 md:grid-cols-3">
+          <Field label="业务域">
+            <Input
+              value={draft.business_domain || ''}
+              onChange={(event) => update('business_domain', event.target.value)}
+              placeholder="contract_review"
+              required
+            />
+          </Field>
+          <Field label="系统定位字段">
+            <Input
+              value={draft.target_field || ''}
+              onChange={(event) => update('target_field', event.target.value)}
+              placeholder="payment_days"
+            />
+          </Field>
+          <Field label="执行顺序">
+            <Input
+              type="number"
+              value={draft.priority ?? 100}
+              onChange={(event) => update('priority', Number(event.target.value))}
+            />
+          </Field>
+        </div>
+      </details>
 
       {isSemantic ? (
         <Field label="审查语义">
@@ -330,6 +429,23 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
         </div>
       </div>
 
+      <div className="rounded-lg border border-indigo-200 bg-indigo-50/60">
+        <div className="border-b border-indigo-100 px-4 py-3">
+          <h3 className="text-sm font-medium text-slate-900">RuleUnit 执行单元预览</h3>
+          <p className="mt-1 text-xs text-slate-600">
+            保存后进入转译、人工确认、发布和引擎编译；这里用于确认规则不是黑盒文档。
+          </p>
+        </div>
+        <div className="grid gap-2 p-4 md:grid-cols-2">
+          {ruleUnitPreview.map((item) => (
+            <div key={item.label} className="rounded-md border border-white/70 bg-white px-3 py-2">
+              <div className="text-[11px] font-medium text-indigo-700">{item.label}</div>
+              <div className="mt-1 min-h-5 break-words text-sm leading-5 text-slate-800">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
           <h3 className="text-sm font-medium text-slate-900">风险等级阈值</h3>
@@ -413,26 +529,34 @@ export default function RuleDesigner({ initialRule, saving = false, onSave, onTe
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
+  const generatedId = useId()
+  const childId = isValidElement(children)
+    ? (children.props as { id?: string }).id
+    : undefined
+  const fieldId = childId || generatedId
   const labeledChildren = isValidElement(children)
-    ? cloneElement(children as ReactElement<{ 'aria-label'?: string }>, {
+    ? cloneElement(children as ReactElement<{ id?: string; 'aria-label'?: string }>, {
+        id: fieldId,
         'aria-label': (children.props as { 'aria-label'?: string })['aria-label'] || label,
       })
     : children
 
   return (
     <div className="space-y-2">
-      <Label className="text-xs font-medium text-slate-500">{label}</Label>
+      <Label htmlFor={fieldId} className="text-xs font-medium text-slate-500">{label}</Label>
       {labeledChildren}
     </div>
   )
 }
 
 function Select<T extends string>({
+  id,
   value,
   onChange,
   options,
   'aria-label': ariaLabel,
 }: {
+  id?: string
   value: T
   onChange: (value: string) => void
   options: Array<{ value: T; label: string }>
@@ -440,6 +564,7 @@ function Select<T extends string>({
 }) {
   return (
     <select
+      id={id}
       value={value}
       aria-label={ariaLabel}
       onChange={(event) => onChange(event.target.value)}
@@ -485,7 +610,7 @@ function LevelEditor({
           className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
           {operatorOptions.map((option) => (
-            <option key={option} value={option}>{option}</option>
+            <option key={option} value={option}>{operatorLabels[option]}</option>
           ))}
         </select>
       </Field>
@@ -500,7 +625,7 @@ function LevelEditor({
         <Input
           value={unit}
           onChange={(event) => onUnitChange(event.target.value)}
-          placeholder="day"
+          placeholder="天 / % / 元"
         />
       </Field>
       <Field label="处理动作">
