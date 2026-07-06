@@ -22,6 +22,13 @@ function textValue(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function feedbackStatusValue(value: unknown) {
+  const text = textValue(value)
+  return ['accepted', 'rejected', 'special_approval', 'needs_customer_confirmation'].includes(text)
+    ? text
+    : ''
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; cardId: string }> }
@@ -50,12 +57,13 @@ export async function POST(
     const action = textValue((body as { action?: unknown }).action) || 'auto_fix'
     const note = textValue((body as { note?: unknown }).note)
     const proposedValue = textValue((body as { proposed_value?: unknown }).proposed_value)
+    const feedbackStatus = feedbackStatusValue((body as { feedback_status?: unknown }).feedback_status)
     const isControlNote = action === 'control_note' || Boolean(note || proposedValue)
     const now = new Date().toISOString()
 
     if (isControlNote) {
-      if (!note && !proposedValue) {
-        return errorResponse(createApiError('VALIDATION_ERROR', '请补充风险可控化说明或建议数值'))
+      if (!note && !proposedValue && !feedbackStatus) {
+        return errorResponse(createApiError('VALIDATION_ERROR', '请补充风险可控化说明、建议数值或客户反馈状态'))
       }
       if (note.length > 1200 || proposedValue.length > 300) {
         return errorResponse(createApiError('VALIDATION_ERROR', '风险可控化说明过长'))
@@ -66,6 +74,7 @@ export async function POST(
         control_note: note || null,
         proposed_value: proposedValue || null,
         control_status: 'needs_customer_confirmation',
+        customer_feedback_status: feedbackStatus || 'needs_customer_confirmation',
         control_source: 'manual_review_note',
         controlled_by: user.id,
         controlled_at: now,
@@ -93,7 +102,7 @@ export async function POST(
             type: 'control_note',
             note: note || null,
             proposed_value: proposedValue || null,
-            status: 'needs_customer_confirmation',
+            status: feedbackStatus || 'needs_customer_confirmation',
             risk_status_preserved: riskCard.status,
           },
           created_at: now,

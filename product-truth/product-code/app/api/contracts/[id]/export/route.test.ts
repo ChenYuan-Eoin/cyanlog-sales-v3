@@ -112,6 +112,8 @@ function makeUpdateResult(result: { error: unknown }) {
 }
 
 function installSupabaseExportMocks(options: {
+  annotations?: Array<Record<string, unknown>>
+  riskCards?: Array<Record<string, unknown>>
   versions?: Array<{
     id: string
     version_number: number
@@ -119,6 +121,7 @@ function installSupabaseExportMocks(options: {
     storage_path?: string | null
     parent_version_id?: string | null
     review_id?: string | null
+    change_summary?: string | null
     created_at?: string | null
   }>
   downloadBytes?: BlobPart
@@ -165,8 +168,8 @@ function installSupabaseExportMocks(options: {
   const queues: Record<string, any[]> = {
     contracts: [makeSingleResult({ data: contract, error: null })],
     contract_clauses: [makeArrayResult({ data: [], error: null })],
-    contract_annotations: [makeArrayResult({ data: [], error: null })],
-    contract_risk_cards: [makeArrayResult({ data: [], error: null })],
+    contract_annotations: [makeArrayResult({ data: options.annotations || [], error: null })],
+    contract_risk_cards: [makeArrayResult({ data: options.riskCards || [], error: null })],
     model_invocations: [makeModelInvocationResult({ data: modelInvocations, error: null })],
     contract_versions: [
       makeArrayResult({
@@ -288,6 +291,54 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(supabaseAdmin.from).toHaveBeenCalledWith('contract_reviews')
   })
 
+  it('传给 Word 生成器的批注为客户侧修改建议，不泄露内部追踪字段', async () => {
+    installSupabaseExportMocks({
+      annotations: [{
+        id: 'annotation-1',
+        start_offset: 0,
+        end_offset: 10,
+        selected_text: '付款周期为 120 天',
+        comment: [
+          '【红线风险】付款周期过长',
+          '问题：付款周期超过 90 天',
+          '建议：要求改为 30 天内付款',
+          '证据原文：付款周期为 120 天',
+          '规则：R001 v2',
+          'RuleSnapshot: snapshot-1',
+          'SourceRange: 0-10',
+          'RiskFinding: 11111111-1111-4111-8111-111111111111',
+        ].join('\n'),
+        category: 'risk_finding',
+        priority: 'urgent',
+        status: 'open',
+        author_id: 'user-1',
+        created_at: '2026-07-02T01:00:00.000Z',
+      }],
+    })
+    const outputPath = path.join(os.tmpdir(), `ones-customer-comments-${Date.now()}.docx`)
+    fs.writeFileSync(outputPath, Buffer.from([5, 6, 7]))
+    tempFiles.push(outputPath)
+    ;(generateWordDocument as any).mockResolvedValue({
+      success: true,
+      outputPath,
+      mode: 'source_comments',
+    })
+
+    const res = await POST(makeRequest(), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+
+    expect(res.status).toBe(200)
+    const exportPayload = (generateWordDocument as any).mock.calls[0][1]
+    expect(exportPayload.annotations[0].comment).toContain('【必须修改】付款周期过长')
+    expect(exportPayload.annotations[0].comment).toContain('建议修改为：要求改为 30 天内付款')
+    expect(exportPayload.annotations[0].comment).not.toContain('RiskFinding')
+    expect(exportPayload.annotations[0].comment).not.toContain('SourceRange')
+    expect(exportPayload.annotations[0].comment).not.toContain('RuleSnapshot')
+    expect(exportPayload.annotations[0].comment).not.toContain('证据原文')
+    expect(exportPayload.annotations[0].comment).not.toContain('规则：')
+  })
+
   it('批注意图跨段或过短时返回导出门禁错误，不进入 Word 生成器', async () => {
     const contract = {
       id: 'contract-1',
@@ -394,6 +445,7 @@ describe('POST /api/contracts/[id]/export', () => {
           storage_path: 'reviewed/contract-1/review-review-1/source-version-1.docx',
           parent_version_id: 'version-1',
           review_id: 'review-1',
+          change_summary: 'customer-comment-v2：ONES 业务运营基于风险项生成客户侧 Word 原生批注版本',
           created_at: '2026-07-02T02:00:00.000Z',
         },
         {

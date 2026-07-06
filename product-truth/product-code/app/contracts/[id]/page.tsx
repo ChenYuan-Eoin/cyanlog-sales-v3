@@ -7,6 +7,8 @@ import {
   AlertTriangleIcon,
   ArrowLeftIcon,
   BotIcon,
+  CheckCircleIcon,
+  CopyIcon,
   DownloadIcon,
   FileTextIcon,
   Loader2Icon,
@@ -14,11 +16,13 @@ import {
   ShieldCheckIcon,
   UploadIcon,
   WorkflowIcon,
+  XCircleIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { buildCustomerFacingWordComment } from '@/lib/contracts/comment-patch'
 import { deriveReviewWorkflowState } from '@/lib/contracts/review-state-machine'
 import {
   buildExportGateIssues,
@@ -34,6 +38,7 @@ type ContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED
 type RiskSeverity = 'red' | 'yellow' | 'green' | 'white'
 type SidePanelMode = 'review' | 'summary' | 'assistant' | 'evidence'
 type RiskFilter = 'all' | RiskSeverity
+type CustomerFeedbackStatus = 'needs_customer_confirmation' | 'accepted' | 'rejected' | 'special_approval'
 type ExportDownload = {
   url: string
   filename: string
@@ -190,6 +195,7 @@ type RiskFinding = {
     control_note?: string | null
     proposed_value?: string | null
     control_status?: string | null
+    customer_feedback_status?: CustomerFeedbackStatus | string | null
   } | null
   status: string
   clause_ref: string | null
@@ -427,6 +433,52 @@ function riskControlNoteValue(risk: RiskFinding | null) {
   return risk?.fix_action?.control_note?.trim() || ''
 }
 
+function riskFeedbackStatusValue(risk: RiskFinding | null): CustomerFeedbackStatus {
+  const status = risk?.fix_action?.customer_feedback_status
+  if (status === 'accepted' || status === 'rejected' || status === 'special_approval') return status
+  return 'needs_customer_confirmation'
+}
+
+function riskTaskStatus(risk: RiskFinding) {
+  const feedbackStatus = riskFeedbackStatusValue(risk)
+  if (feedbackStatus === 'accepted') return { label: '已采纳', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
+  if (feedbackStatus === 'rejected') return { label: '已反驳', className: 'border-rose-200 bg-rose-50 text-rose-700' }
+  if (feedbackStatus === 'special_approval') return { label: '需特批', className: 'border-violet-200 bg-violet-50 text-violet-700' }
+  if (riskControlNoteValue(risk)) return { label: '已反馈', className: 'border-blue-200 bg-blue-50 text-blue-700' }
+  if (risk.severity === 'green') return { label: '已通过', className: 'border-emerald-200 bg-white text-emerald-700' }
+  return { label: risk.severity === 'red' ? '待强谈' : '待谈判', className: 'border-amber-200 bg-amber-50 text-amber-700' }
+}
+
+function negotiationImpact(risk: RiskFinding) {
+  if (risk.description?.trim()) return risk.description.trim()
+  if (/付款|回款|收款|账期|批次|比例|尾款|验收|结算/.test(`${risk.title}\n${risk.suggestion}`)) {
+    return '如果不明确付款比例、账期或验收节点，回款责任会变成不可执行或难追责。'
+  }
+  return '如果不处理该条款，后续履约、回款或责任边界可能无法落到可执行文本。'
+}
+
+function negotiationScript(risk: RiskFinding) {
+  const suggestion = risk.suggestion?.trim()
+  if (suggestion) {
+    return `关于“${risk.title}”，这条需要调整成可执行、双方可确认的口径：${suggestion}`
+  }
+  return `关于“${risk.title}”，这条目前存在风险，需要客户确认是否按我方合规口径修订后回传。`
+}
+
+function negotiationBottomLine(risk: RiskFinding) {
+  const text = `${risk.title}\n${risk.description}\n${risk.suggestion}`
+  if (/付款|回款|收款|账期|批次|比例|尾款|验收|结算/.test(text)) {
+    return '底线：必须明确金额/比例、触发节点和付款期限；不能只保留“双方另行协商”。'
+  }
+  if (/知识产权|IP|源代码|源码|著作权/.test(text)) {
+    return '底线：保留我方既有 IP 和通用技术资产，不接受笼统转让或排他授权。'
+  }
+  if (/违约|赔偿|责任|SLA|可用性/.test(text)) {
+    return '底线：责任上限、违约金和服务承诺必须对等、可计算、可追溯。'
+  }
+  return '底线：客户可以补充业务原因，但必须回传明确文本，不能停留在口头确认。'
+}
+
 function SourceTextPreview({
   text,
   selectedText,
@@ -483,6 +535,7 @@ export default function ContractWorkbenchPage() {
   const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>('review')
   const [evidenceRefreshing, setEvidenceRefreshing] = useState(false)
   const [riskControlNote, setRiskControlNote] = useState('')
+  const [riskFeedbackStatus, setRiskFeedbackStatus] = useState<CustomerFeedbackStatus>('needs_customer_confirmation')
   const [riskControlSaving, setRiskControlSaving] = useState(false)
   const returnHref = '/contracts'
   const compareReturnHref = `/contracts/${contractId}/compare?from=workbench`
@@ -508,6 +561,7 @@ export default function ContractWorkbenchPage() {
 
   useEffect(() => {
     setRiskControlNote(riskControlNoteValue(selectedRisk))
+    setRiskFeedbackStatus(riskFeedbackStatusValue(selectedRisk))
   }, [selectedRisk])
 
   const fetchWorkbench = useCallback(async ({
@@ -703,11 +757,11 @@ export default function ContractWorkbenchPage() {
     await handleExportForData(data)
   }
 
-  async function handleSaveRiskControlNote(note: string) {
+  async function handleSaveRiskControlNote(note: string, feedbackStatus: CustomerFeedbackStatus) {
     if (!selectedRisk) return
     const trimmed = note.trim()
-    if (!trimmed) {
-      toastError('请先补充风险可控化说明')
+    if (!trimmed && feedbackStatus === 'needs_customer_confirmation') {
+      toastError('请先补充客户反馈或选择处理状态')
       return
     }
 
@@ -723,6 +777,7 @@ export default function ContractWorkbenchPage() {
         body: JSON.stringify({
           action: 'control_note',
           note: trimmed,
+          feedback_status: feedbackStatus,
         }),
       })
       const payload = await response.json().catch(() => ({}))
@@ -730,7 +785,7 @@ export default function ContractWorkbenchPage() {
         toastError(extractApiError(payload, '保存风险可控说明失败'))
         return
       }
-      toastSuccess('已保存风险可控说明，后续导出批注版会写入该口径')
+      toastSuccess('已保存谈判反馈，后续导出批注版会按客户侧口径写入')
       await fetchWorkbench({ silent: true, scope: 'full' })
     } catch {
       toastError('网络错误，保存风险可控说明失败')
@@ -1014,32 +1069,24 @@ export default function ContractWorkbenchPage() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2 xl:grid-cols-3">
-                    <div className="rounded bg-white/70 p-2">
-                      <div className="text-[11px] font-medium text-blue-700">原文内容</div>
-                      <p className="mt-1 line-clamp-4 leading-5">{selectedSnippet || '未记录原文片段'}</p>
+                  <div className="mt-3 grid gap-2 xl:grid-cols-[1fr_1fr_0.9fr]">
+                    <div className="rounded border border-red-100 bg-white/80 p-2">
+                      <div className="text-[11px] font-medium text-red-700">原文风险点</div>
+                      <p className="mt-1 line-clamp-4 leading-5 text-red-900">
+                        {selectedSnippet || '未记录原文片段，需人工定位后再导出正式批注。'}
+                      </p>
+                    </div>
+                    <div className="rounded border border-emerald-100 bg-white/80 p-2">
+                      <div className="text-[11px] font-medium text-emerald-700">建议修改为</div>
+                      <p className="mt-1 line-clamp-4 leading-5 text-emerald-900">
+                        {selectedRisk.suggestion || riskControlNoteValue(selectedRisk) || '待补充可直接写入客户侧批注的修改口径。'}
+                      </p>
                     </div>
                     <div className="rounded bg-white/70 p-2">
-                      <div className="text-[11px] font-medium text-blue-700">批注建议</div>
-                      <p className="mt-1 line-clamp-4 leading-5">{selectedRisk.suggestion || '暂未生成修改建议'}</p>
-                    </div>
-                    <div className="rounded bg-white/70 p-2">
-                      <div className="text-[11px] font-medium text-blue-700">风险说明</div>
-                      <p className="mt-1 line-clamp-4 leading-5">{selectedRisk.description || '未记录风险说明'}</p>
+                      <div className="text-[11px] font-medium text-blue-700">谈判目的</div>
+                      <p className="mt-1 line-clamp-4 leading-5">{negotiationImpact(selectedRisk)}</p>
                     </div>
                   </div>
-                  {selectedRisk.rule_code && (
-                    <div className="mt-2 font-mono text-xs text-blue-700">
-                      {selectedRisk.rule_code}
-                      {selectedRisk.rule_version ? ` · v${selectedRisk.rule_version}` : ''}
-                      {selectedRisk.evidence?.rule_snapshot_id ? ` · ${selectedRisk.evidence.rule_snapshot_id}` : ''}
-                    </div>
-                  )}
-                  {selectedRisk.evidence?.location_reason && (
-                    <div className="mt-2 text-xs text-blue-800">
-                      定位状态：{selectedRisk.evidence.location_status || '未记录'}；{selectedRisk.evidence.location_reason}
-                    </div>
-                  )}
                 </div>
               )}
               <SourceTextPreview text={data.parsed_text || ''} selectedText={selectedSnippet} />
@@ -1073,8 +1120,10 @@ export default function ContractWorkbenchPage() {
                         selectedRisk={selectedRisk}
                         negotiationTasks={data.negotiationTasks}
                         controlNote={riskControlNote}
+                        feedbackStatus={riskFeedbackStatus}
                         controlSaving={riskControlSaving}
                         onControlNoteChange={setRiskControlNote}
+                        onFeedbackStatusChange={setRiskFeedbackStatus}
                         onSaveControlNote={handleSaveRiskControlNote}
                       />
                     </div>
@@ -1084,8 +1133,10 @@ export default function ContractWorkbenchPage() {
                       selectedRisk={selectedRisk}
                       negotiationTasks={data.negotiationTasks}
                       controlNote={riskControlNote}
+                      feedbackStatus={riskFeedbackStatus}
                       controlSaving={riskControlSaving}
                       onControlNoteChange={setRiskControlNote}
+                      onFeedbackStatusChange={setRiskFeedbackStatus}
                       onSaveControlNote={handleSaveRiskControlNote}
                     />
                   </div>
@@ -1598,7 +1649,7 @@ function ReviewNavigationRail({
           <CardHeader className="pb-3">
             <CardTitle className="text-base">审查导航</CardTitle>
             <p className="text-sm text-slate-500">
-              版本、ReviewRun 和风险队列放在这里，右侧只处理当前风险。
+              版本和 ReviewRun 放在这里；风险队列按销售谈判任务推进。
             </p>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -1638,7 +1689,7 @@ function ReviewNavigationRail({
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base">风险队列</CardTitle>
+              <CardTitle className="text-base">谈判任务队列</CardTitle>
               <Badge variant="outline">{visibleRisks.length}</Badge>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -1673,6 +1724,7 @@ function ReviewNavigationRail({
                   const tone = riskTone[risk.severity]
                   const active = risk.id === selectedRiskId
                   const manualLocation = needsManualRiskLocation(risk)
+                  const taskStatus = riskTaskStatus(risk)
                   return (
                     <button
                       key={risk.id}
@@ -1684,12 +1736,16 @@ function ReviewNavigationRail({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="line-clamp-2 text-sm font-semibold">{risk.title}</span>
-                        {manualLocation ? <Badge variant="destructive">定位</Badge> : null}
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${taskStatus.className}`}>
+                          {taskStatus.label}
+                        </span>
                       </div>
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 opacity-80">
+                        {risk.description || risk.suggestion || '等待客户反馈或回传版本。'}
+                      </p>
                       <div className="mt-2 flex flex-wrap gap-2 text-[11px] opacity-80">
                         <span>{tone.label}</span>
-                        {risk.rule_code ? <span className="font-mono">{risk.rule_code}</span> : null}
-                        <span>{risk.status}</span>
+                        <span>{manualLocation ? '需人工定位' : '已定位原文'}</span>
                       </div>
                     </button>
                   )
@@ -1707,16 +1763,20 @@ function RiskDecisionPanel({
   selectedRisk,
   negotiationTasks,
   controlNote,
+  feedbackStatus,
   controlSaving,
   onControlNoteChange,
+  onFeedbackStatusChange,
   onSaveControlNote,
 }: {
   selectedRisk: RiskFinding | null
   negotiationTasks: NegotiationTask[]
   controlNote: string
+  feedbackStatus: CustomerFeedbackStatus
   controlSaving: boolean
   onControlNoteChange: (value: string) => void
-  onSaveControlNote: (value: string) => Promise<void>
+  onFeedbackStatusChange: (value: CustomerFeedbackStatus) => void
+  onSaveControlNote: (value: string, feedbackStatus: CustomerFeedbackStatus) => Promise<void>
 }) {
   const relatedTasks = selectedRisk
     ? negotiationTasks.filter((task) => task.risk_id === selectedRisk.id)
@@ -1725,104 +1785,149 @@ function RiskDecisionPanel({
   if (!selectedRisk) {
     return (
       <div className="rounded-md border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
-        从左侧风险队列选择一条风险后，这里展示规则依据、批注建议、谈判动作和客户反馈状态。
+        从左侧谈判任务队列选择一条风险后，这里会显示问题解释、谈判口径和客户反馈填回。
       </div>
     )
   }
 
   const tone = riskTone[selectedRisk.severity]
   const manualLocation = needsManualRiskLocation(selectedRisk)
-  const evidence = firstEvidence(selectedRisk)
   const savedControlNote = riskControlNoteValue(selectedRisk)
+  const taskStatus = riskTaskStatus(selectedRisk)
+  const script = negotiationScript(selectedRisk)
+  const bottomLine = negotiationBottomLine(selectedRisk)
+  const impact = negotiationImpact(selectedRisk)
   const isPaymentRisk = /付款|回款|收款|账期|批次|比例|尾款|验收|结算/.test(
     `${selectedRisk.title}\n${selectedRisk.description}\n${selectedRisk.suggestion}`
   )
+  const feedbackOptions: Array<{
+    value: CustomerFeedbackStatus
+    label: string
+    description: string
+    icon: ComponentType<{ className?: string }>
+  }> = [
+    { value: 'accepted', label: '客户已同意', description: '准备再审核并导出最终批注版', icon: CheckCircleIcon },
+    { value: 'rejected', label: '客户有反馈', description: '记录原因，等待回传版本再判断', icon: MessageSquareTextIcon },
+    { value: 'special_approval', label: '要求特批', description: '保留风险，转人工审批裁决', icon: XCircleIcon },
+  ]
+
+  async function handleCopyScript() {
+    try {
+      await navigator.clipboard.writeText(script)
+      toastSuccess('谈判口径已复制')
+    } catch {
+      toastError('复制失败，请手动选择文本')
+    }
+  }
 
   return (
     <div className="space-y-4 text-sm">
       <section className={`rounded-md border p-3 ${tone.className}`}>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="text-xs font-medium opacity-75">当前风险</div>
+            <div className="text-xs font-medium opacity-75">第一步：看懂问题</div>
             <h3 className="mt-1 text-base font-semibold">{selectedRisk.title}</h3>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <Badge variant={tone.badge}>{tone.label}</Badge>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${taskStatus.className}`}>
+              {taskStatus.label}
+            </span>
             {manualLocation ? <Badge variant="destructive">需人工定位</Badge> : null}
           </div>
         </div>
-        <p className="mt-3 leading-6">{selectedRisk.description || '未记录风险说明'}</p>
+        <p className="mt-3 leading-6">{impact}</p>
       </section>
 
       <section className="rounded-md border border-slate-200 p-3">
-        <h3 className="mb-2 font-semibold text-slate-950">证据与规则依据</h3>
-        <div className="space-y-2 text-xs leading-5 text-slate-600">
-          <InfoLine label="规则" value={selectedRisk.rule_code ? `${selectedRisk.rule_code}${selectedRisk.rule_version ? ` · v${selectedRisk.rule_version}` : ''}` : '未绑定'} />
-          <InfoLine label="条款" value={selectedRisk.clause_ref || '未记录'} />
-          <InfoLine label="定位" value={manualLocation ? '需人工定位' : `${selectedRisk.position.start ?? '-'}-${selectedRisk.position.end ?? '-'}`} />
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-semibold text-slate-950">第二步：谈判口径</h3>
+          <Button type="button" size="sm" variant="outline" onClick={() => void handleCopyScript()}>
+            <CopyIcon className="mr-2 h-4 w-4" />
+            复制
+          </Button>
         </div>
+        <p className="mt-3 rounded-md bg-blue-50 p-3 leading-6 text-blue-950">
+          {script}
+        </p>
         <p className="mt-3 rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">
-          {evidence || '没有可验证的原文证据，不能自动写入源 Word 批注。'}
+          {bottomLine}
         </p>
-      </section>
-
-      <section className="rounded-md border border-slate-200 p-3">
-        <h3 className="mb-2 font-semibold text-slate-950">批注与谈判动作</h3>
-        <p className="rounded-md bg-blue-50 p-3 leading-6 text-blue-950">
-          {selectedRisk.suggestion || '暂未生成可直接写入 Word 的批注建议。'}
-        </p>
-        <div className="mt-3 space-y-2">
-          {relatedTasks.length === 0 ? (
-            <p className="rounded-md bg-slate-50 p-3 text-slate-500">
-              当前风险没有绑定销售谈判任务。红线或需谈判风险后续应在这里完成客户反馈闭环。
-            </p>
-          ) : relatedTasks.map((task) => (
+        {relatedTasks.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {relatedTasks.length === 0 ? (
+              <p className="rounded-md bg-slate-50 p-3 text-slate-500">
+                当前风险没有绑定销售谈判任务。红线或需谈判风险后续应在这里完成客户反馈闭环。
+              </p>
+            ) : relatedTasks.map((task) => (
             <div key={task.id} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950">
               <div className="flex items-start justify-between gap-2">
                 <span className="font-medium">{task.title}</span>
                 <Badge variant={task.required ? 'destructive' : 'secondary'}>
-                  {task.required ? '强制' : '建议'}
-                </Badge>
-              </div>
-              <p className="mt-1 leading-6">{task.objective}</p>
-              <p className="mt-1 text-xs text-amber-800">状态：{task.status}</p>
+                {task.required ? '强制' : '建议'}
+              </Badge>
+            </div>
+            <p className="mt-1 leading-6">{task.objective}</p>
+              <p className="mt-1 text-xs text-amber-800">状态：{task.status === 'responded' ? '已回应' : task.status === 'closed' ? '已关闭' : '待处理'}</p>
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </section>
 
       <section className="rounded-md border border-amber-200 bg-amber-50/70 p-3">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="font-semibold text-amber-950">补充可控化说明</h3>
+            <h3 className="font-semibold text-amber-950">第三步：谈判记录与反馈</h3>
             <p className="mt-1 text-xs leading-5 text-amber-800">
-              产品不直接替你“处理”风险；这里记录销售/法务要向客户确认的口径，并写入批注版，引导风险变成可确认、可回传、可再审核的事项。
+              产品不在页面里直接替你改合同；这里记录客户反馈和可控化参数，后续写入客户侧批注版，并进入回传版本再审核。
             </p>
           </div>
           {savedControlNote && <Badge variant="outline" className="border-amber-300 bg-white">已保存</Badge>}
+        </div>
+        <div className="mt-3 grid gap-2">
+          {feedbackOptions.map((option) => {
+            const active = feedbackStatus === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onFeedbackStatusChange(option.value)}
+                className={`flex items-start gap-2 rounded-md border bg-white p-2 text-left transition ${
+                  active ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <option.icon className={`mt-0.5 h-4 w-4 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
+                <span>
+                  <span className="block font-medium text-slate-950">{option.label}</span>
+                  <span className="text-xs leading-5 text-slate-500">{option.description}</span>
+                </span>
+              </button>
+            )
+          })}
         </div>
         <Textarea
           className="mt-3 min-h-24 bg-white"
           value={controlNote}
           onChange={(event) => onControlNoteChange(event.target.value)}
           placeholder={isPaymentRisk
-            ? '例如：回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；客户需在回传版中明确比例和账期。'
-            : '例如：请客户确认该条款调整为双方书面确认后生效，未确认前保留为需谈判风险。'}
+            ? '例如：客户确认回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；回传版需明确比例和账期。'
+            : '例如：客户同意改为双方书面确认后生效；如果不同意，请写清原因或特批依据。'}
           maxLength={1200}
         />
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-amber-800">
-            保存后不会关闭风险；导出批注版时会作为客户确认说明写入 Word 原生批注。
+            保存后不会直接关闭风险；客户回传后应再审核，导出时只写客户能理解的修改口径。
           </p>
           <Button
             type="button"
             size="sm"
-            onClick={() => void onSaveControlNote(controlNote)}
-            disabled={controlSaving || !controlNote.trim()}
+            onClick={() => void onSaveControlNote(controlNote, feedbackStatus)}
+            disabled={controlSaving || (!controlNote.trim() && feedbackStatus === 'needs_customer_confirmation')}
             className="shrink-0"
           >
             {controlSaving ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareTextIcon className="mr-2 h-4 w-4" />}
-            保存说明
+            保存反馈
           </Button>
         </div>
       </section>
@@ -1893,7 +1998,7 @@ function ReviewPanel({
     <div className="space-y-5">
       <section>
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-950">风险定位</h3>
+          <h3 className="text-sm font-semibold text-slate-950">谈判任务队列</h3>
           <Badge variant="outline">{risks.length}</Badge>
         </div>
         {risks.length > 0 && (
@@ -1932,6 +2037,7 @@ function ReviewPanel({
               const tone = riskTone[risk.severity]
               const active = selectedRiskId === risk.id
               const manualLocation = needsManualRiskLocation(risk)
+              const taskStatus = riskTaskStatus(risk)
               return (
                 <button
                   key={risk.id}
@@ -1948,6 +2054,11 @@ function ReviewPanel({
                       <Badge variant={tone.badge}>{tone.label}</Badge>
                     </div>
                   </div>
+                  <div className="mt-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${taskStatus.className}`}>
+                      {taskStatus.label}
+                    </span>
+                  </div>
                   <p className="mt-2 line-clamp-2 text-xs leading-5 opacity-80">
                     {risk.description || risk.suggestion || '未记录风险描述'}
                   </p>
@@ -1958,11 +2069,8 @@ function ReviewPanel({
                     </div>
                   )}
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px] opacity-70">
-                    {risk.rule_code && <span className="font-mono">{risk.rule_code}</span>}
-                    {risk.clause_ref && <span>{risk.clause_ref}</span>}
                     <span>{manualLocation ? '未完成原文定位' : '已绑定原文定位'}</span>
-                    <span>复核反馈待接入</span>
-                    <span>{risk.status}</span>
+                    {riskControlNoteValue(risk) && <span>已有反馈</span>}
                   </div>
                 </button>
               )
@@ -2370,7 +2478,7 @@ function AnnotationsPanel({ annotations }: { annotations: Annotation[] }) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <MessageSquareTextIcon className="h-4 w-4" />
-          Word 批注
+          客户侧批注预览
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -2380,6 +2488,7 @@ function AnnotationsPanel({ annotations }: { annotations: Annotation[] }) {
           <div className="grid gap-3 lg:grid-cols-2">
             {annotations.map((annotation) => {
               const manualLocation = needsManualAnnotationLocation(annotation)
+              const customerComment = buildCustomerFacingWordComment(annotation.comment) || annotation.comment
               return (
                 <div
                   key={annotation.id}
@@ -2396,7 +2505,7 @@ function AnnotationsPanel({ annotations }: { annotations: Annotation[] }) {
                       </Badge>
                     </div>
                   </div>
-                  <p className="whitespace-pre-wrap leading-6 text-slate-600">{annotation.comment}</p>
+                  <p className="whitespace-pre-wrap leading-6 text-slate-600">{customerComment}</p>
                 </div>
               )
             })}

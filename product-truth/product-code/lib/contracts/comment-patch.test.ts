@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appendRiskControlCommentLines,
   buildCommentPatchesFromRiskCards,
+  buildCustomerFacingWordComment,
   extractRiskFindingId,
 } from './comment-patch'
 
@@ -137,6 +138,29 @@ describe('comment patch adapter', () => {
     expect(extractRiskFindingId('建议调整\nRiskFinding: 11111111-1111-4111-8111-111111111111'))
       .toBe('11111111-1111-4111-8111-111111111111')
     expect(extractRiskFindingId('普通批注')).toBeNull()
+  })
+
+  it('sanitizes internal annotation metadata before writing customer-facing Word comments', () => {
+    const comment = [
+      '【红线风险】IP 归属',
+      '问题：客户主张 ONES 产品 IP / 交付源代码',
+      '建议：必须修改合同条款',
+      '证据原文：2.1 主合同项下的产品标准',
+      '规则：R011 v3',
+      'RuleSnapshot: snapshot-1',
+      'SourceRange: 866-933',
+      'RiskFinding: 4edab676-7434-418e-b87a-7bacbbce882c',
+    ].join('\n')
+
+    const customerComment = buildCustomerFacingWordComment(comment)
+
+    expect(customerComment).toContain('【必须修改】IP 归属')
+    expect(customerComment).toContain('建议修改为：必须修改合同条款')
+    expect(customerComment).not.toContain('RiskFinding')
+    expect(customerComment).not.toContain('SourceRange')
+    expect(customerComment).not.toContain('RuleSnapshot')
+    expect(customerComment).not.toContain('证据原文')
+    expect(customerComment).not.toContain('规则：')
   })
 
   it('writes manual control notes into Word comment text without closing the risk', () => {

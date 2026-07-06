@@ -142,7 +142,7 @@ function riskChangeLabel(diff: DiffItem) {
     return diff.risk_level === 'red' || diff.risk_level === 'yellow' ? '新增风险' : '新增低风险内容'
   }
   if (diff.diff_type === 'deleted') {
-    return diff.risk_level === 'red' || diff.risk_level === 'yellow' ? '风险可能已移除' : '删除低风险内容'
+    return diff.risk_level === 'red' || diff.risk_level === 'yellow' ? '[实质修改] 内容被删除或替换' : '删除低风险内容'
   }
   if (diff.risk_level === 'red') return '风险加重或红线变化'
   if (diff.risk_level === 'yellow') return '需关注变化'
@@ -771,7 +771,7 @@ export default function ContractComparePage() {
           <div className="p-4 m-4 bg-indigo-600 rounded-xl text-white shadow-lg">
             <div className="flex items-center gap-2 mb-2">
               <SparklesIcon className="h-4 w-4" />
-              <span className="text-xs font-bold">AI 差异深度解读</span>
+              <span className="text-xs font-bold">AI 差异披露摘要</span>
             </div>
             <p className="text-xs leading-relaxed opacity-90">
               {comparison.ai_summary}
@@ -806,8 +806,8 @@ export default function ContractComparePage() {
               ) : null}
             </div>
             <div className="grid gap-2 text-xs text-slate-500 lg:grid-cols-2">
-              <DocumentPill label="旧文件 / 基准" meta={documentPair?.baseline} fallback="当前合同" />
-              <DocumentPill label="新文件 / 回传" meta={documentPair?.compare} fallback="对比文件" />
+              <DocumentPill label="基准文件" meta={documentPair?.baseline} fallback="当前合同" />
+              <DocumentPill label="回传文件" meta={documentPair?.compare} fallback="对比文件" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -866,7 +866,7 @@ export default function ContractComparePage() {
         </header>
 
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
-          当前是差异片段视图：只展示可解析文本的变化片段和高亮，不把合同编号、客户、报价等属性写进左右文件画布。后续原文件还原应接入 Word/PDF 渲染层。
+          当前是文本镜像审计视图：只展示可解析文本的变化片段和高亮，不把合同编号、客户、报价等属性写进左右文件画布。后续原件级还原应接入 Word/PDF 渲染层。
         </div>
 
         {/* 差异高亮说明 */}
@@ -916,13 +916,13 @@ export default function ContractComparePage() {
           >
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                旧文件 / 基准
+                1:1 原件预览（基准）
               </span>
               <FileTextIcon className="h-3 w-3 text-slate-300" />
             </div>
             <div className="p-8">
 	              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-	                旧文件 / 基准
+	                1:1 原件预览（基准）
               </h2>
               <div className="space-y-6 text-sm leading-loose text-slate-600">
                 {visibleDiffs.map((diff) => (
@@ -943,7 +943,7 @@ export default function ContractComparePage() {
                       </div>
                     ) : diff.diff_type === 'modified' ? (
                       <div className="space-y-2">
-                        <h4 className="font-bold text-slate-800">条款内容</h4>
+                        <h4 className="font-bold text-slate-800">原件片段</h4>
                         <p className="bg-red-50/50 p-2 rounded">
                           <span className="bg-red-100 text-red-800 line-through decoration-red-400">
                             {diff.baseline_text}
@@ -952,7 +952,7 @@ export default function ContractComparePage() {
                       </div>
                     ) : (
                       <div>
-                        <h4 className="font-bold text-slate-800 mb-2">条款内容</h4>
+                        <h4 className="font-bold text-slate-800 mb-2">原件片段</h4>
                         <p>{diff.baseline_text || '（无变化）'}</p>
                       </div>
                     )}
@@ -976,13 +976,13 @@ export default function ContractComparePage() {
           >
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
-                新文件 / 回传
+                1:1 原件预览（回传）
               </span>
               <Edit3Icon className="h-3 w-3 text-indigo-300" />
             </div>
             <div className="p-8">
 	              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-	                新文件 / 回传
+	                1:1 原件预览（回传）
               </h2>
               <div className="space-y-6 text-sm leading-loose text-slate-600">
                 {visibleDiffs.map((diff) => (
@@ -1002,7 +1002,7 @@ export default function ContractComparePage() {
                       </div>
                     ) : diff.diff_type === 'modified' ? (
                       <div className="space-y-2">
-                        <h4 className="font-bold text-slate-800">条款内容</h4>
+                        <h4 className="font-bold text-slate-800">回传片段</h4>
                         <p className="bg-green-50/50 p-2 rounded">
                           <span className="bg-green-100 text-green-800 underline decoration-green-400">
                             {diff.compare_text}
@@ -1016,7 +1016,7 @@ export default function ContractComparePage() {
                       </div>
                     ) : (
                       <div>
-                        <h4 className="font-bold text-slate-800 mb-2">条款内容</h4>
+                        <h4 className="font-bold text-slate-800 mb-2">回传片段</h4>
                         <p>{diff.compare_text || '（保持原样）'}</p>
                       </div>
                     )}
@@ -1046,7 +1046,7 @@ export default function ContractComparePage() {
       <aside className="hidden w-80 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex">
         <div className="border-b border-slate-100 p-4">
           <div className="text-xs font-medium text-slate-500">复核闭环</div>
-          <h2 className="mt-1 text-base font-semibold text-slate-950">差异影响判断</h2>
+          <h2 className="mt-1 text-base font-semibold text-slate-950">AI 差异披露与合规建议</h2>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             对比只定位版本差异；红线或需谈判变化应回到审核工作台发起再审核。
           </p>
@@ -1104,6 +1104,12 @@ export default function ContractComparePage() {
           <div className="rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-semibold text-slate-900">版本流动作</div>
             <div className="mt-3 space-y-2">
+              <Button className="w-full" variant="destructive" disabled>
+                驳回用印（风险拦截）
+              </Button>
+              <Button className="w-full" variant="outline" disabled>
+                接受差异（特批通过）
+              </Button>
               <Link href={buildContractsCenterHref()}>
                 <Button className="w-full" variant="outline">返回合同中心</Button>
               </Link>
@@ -1158,7 +1164,7 @@ function CompareClosureStrip({
 }) {
   return (
     <section className="border-b border-slate-200 bg-white px-4 py-3 xl:hidden">
-      <div className="grid gap-3 min-[700px]:grid-cols-[220px_minmax(0,1fr)_180px]">
+      <div className="grid gap-3 min-[700px]:grid-cols-[220px_minmax(0,1fr)_210px]">
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">
             <div className="text-lg font-semibold text-slate-950">{totalChanges}</div>
@@ -1175,7 +1181,7 @@ function CompareClosureStrip({
         </div>
         <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-semibold text-slate-950">差异复核闭环</span>
+            <span className="font-semibold text-slate-950">AI 差异披露与合规建议</span>
             <Badge variant={selectedDiff?.risk_level === 'red' ? 'destructive' : 'outline'}>
               {selectedDiff ? `${selectedIndex + 1}/${visibleCount} · ${riskLabel(selectedDiff.risk_level)}` : '暂无差异'}
             </Badge>
@@ -1183,8 +1189,21 @@ function CompareClosureStrip({
           <p className="mt-1 line-clamp-2 text-slate-600">
             {selectedDiff?.semantic_change || '比对只定位版本差异；红线或需谈判变化需要回到审核工作台进入再审核。'}
           </p>
+          {selectedDiff && (
+            <p className="mt-1 line-clamp-1 font-medium text-slate-700">
+              风险变化：{riskChangeLabel(selectedDiff)}
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" variant="destructive" disabled>
+              驳回用印
+            </Button>
+            <Button size="sm" variant="outline" disabled>
+              接受差异
+            </Button>
+          </div>
           <Button size="sm" disabled={!canStartReview || startingRerun} onClick={onStartReReview}>
             {startingRerun && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
             进入风险再审核
@@ -1251,10 +1270,10 @@ function ComparePairPrimer({
   ]
 
   return (
-    <section className="grid gap-3 rounded-xl border border-indigo-100 bg-white p-4 shadow-sm md:grid-cols-3">
+    <section className="flex flex-col gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
       {steps.map((step, index) => (
-        <div key={step.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center justify-between gap-3">
+        <div key={step.label} className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex items-center gap-2">
             <div className="flex items-center gap-2">
               <span className={`grid h-6 w-6 place-items-center rounded-full text-[11px] font-semibold ${
                 step.done ? 'bg-emerald-600 text-white' : 'bg-indigo-100 text-indigo-700'
@@ -1263,10 +1282,9 @@ function ComparePairPrimer({
               </span>
               <span className="text-sm font-semibold text-slate-950">{step.label}</span>
             </div>
-            <Badge variant={step.done ? 'default' : 'outline'}>{step.done ? '已就绪' : '待完成'}</Badge>
+            <Badge variant={step.done ? 'default' : 'outline'} className="ml-auto shrink-0">{step.done ? '已就绪' : '待完成'}</Badge>
           </div>
-          <p className="mt-3 truncate text-sm font-medium text-slate-800">{step.value}</p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">{step.description}</p>
+          <p className="mt-1 truncate text-xs font-medium text-slate-800">{step.value}</p>
         </div>
       ))}
     </section>
@@ -1466,14 +1484,14 @@ function CompareSetupWorkspace({
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <main className="space-y-4">
-            <section className="grid gap-3 lg:grid-cols-3">
+            <section className="grid gap-3 lg:grid-cols-[minmax(220px,0.85fr)_minmax(320px,1.15fr)_240px]">
               <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <FileTextIcon className="h-4 w-4 text-indigo-500" />
-                    <h2 className="font-semibold text-slate-950">旧文件</h2>
+                    <h2 className="font-semibold text-slate-950">基准文件</h2>
                   </div>
-                  <Badge variant="outline">默认当前合同</Badge>
+                  <Badge variant="outline">可切换</Badge>
                 </div>
                 <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedBaselineName}</p>
                 <div className="mt-3 space-y-1 text-xs text-slate-500">
@@ -1488,7 +1506,7 @@ function CompareSetupWorkspace({
                   className="mt-4 w-full"
                   onClick={() => setShowAdvancedSelection((value) => !value)}
                 >
-                  {showAdvancedSelection ? '收起高级选择' : '更换旧文件 / 高级选择'}
+                  {showAdvancedSelection ? '收起属性选择' : '系统版本库 / 基准切换'}
                 </Button>
               </div>
 
@@ -1498,7 +1516,7 @@ function CompareSetupWorkspace({
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <UploadIcon className="h-4 w-4 text-indigo-500" />
-                    <h2 className="font-semibold text-slate-950">新文件 / 客户回传</h2>
+                    <h2 className="font-semibold text-slate-950">回传文件（上传为主）</h2>
                   </div>
                   <Badge variant={hasCompareSource ? 'default' : 'outline'}>
                     {hasCompareSource ? '已选择' : '待上传'}
@@ -1508,7 +1526,7 @@ function CompareSetupWorkspace({
                   <>
                     <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedCompareName}</p>
                     <p className="mt-2 text-xs leading-5 text-slate-500">
-                      已明确本次比对的新文件来源。需要替换时可以上传新回传件，或在高级选择中改用已有版本。
+                      已明确本次比对的新文件来源。需要替换时优先重新上传回传件；已有版本只作为属性选择。
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={resetCompareSource}>
@@ -1525,7 +1543,7 @@ function CompareSetupWorkspace({
                   <>
                     <p className="text-sm font-semibold text-slate-900">还没有新文件</p>
                     <p className="mt-2 text-xs leading-5 text-slate-500">
-                      对比应以新上传的客户回传版为主。没有明确回传件时，不把所有历史版本和候选合同摊在主页面。
+                      对比应以实时上传的客户回传版为主。没有明确回传件时，不把历史版本和候选合同摊在文件画布里。
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Link href={uploadHref}>
@@ -1553,14 +1571,14 @@ function CompareSetupWorkspace({
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <GitCompareIcon className="h-4 w-4 text-indigo-500" />
-                    <h2 className="font-semibold text-slate-950">开始比对</h2>
+                    <h2 className="font-semibold text-slate-950">执行全文审计</h2>
                   </div>
                   <Badge variant={hasCompareSource ? 'default' : 'outline'}>
                     {hasCompareSource ? '可开始' : '等待新文件'}
                   </Badge>
                 </div>
                 <p className="text-xs leading-5 text-slate-500">
-                  输出只包含差异列表、并排高亮和风险影响，不覆盖原合同，也不替代 ReviewRun。
+                  执行 1:1 全文比对审计，输出差异列表、并排高亮和风险影响，不覆盖原合同。
                 </p>
                 <Button
                   type="button"
@@ -1573,7 +1591,7 @@ function CompareSetupWorkspace({
                   ) : (
                     <GitCompareIcon className="mr-2 h-4 w-4" />
                   )}
-                  开始比对
+                  执行审计
                 </Button>
               </div>
             </section>

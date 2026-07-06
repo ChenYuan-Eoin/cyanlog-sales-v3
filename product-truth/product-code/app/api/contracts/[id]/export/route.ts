@@ -13,6 +13,7 @@ import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 import {
   appendRiskControlCommentLines,
   buildCommentPatchesFromRiskCards,
+  buildCustomerFacingWordComment,
   extractRiskFindingId,
   type RiskCardCommentSource,
 } from '@/lib/contracts/comment-patch'
@@ -543,7 +544,13 @@ export async function POST(
       compliance_check: complianceCheck,
       effectiveness_analysis: effectivenessAnalysis,
       clauses: clauses || [],
-      annotations: exportAnnotations,
+      annotations: exportAnnotations.map((annotation) => ({
+        ...annotation,
+        comment: buildCustomerFacingWordComment(annotation.comment) || annotation.comment || '',
+        selected_text: annotation.selected_text || '',
+        priority: annotation.priority || 'high',
+        status: annotation.status || 'open',
+      })),
       strategy_name: strategyName,
       strategy_code: riskSummary?.strategy_code,
     }
@@ -551,7 +558,7 @@ export async function POST(
     const { data: versions, error: versionError } = await exportTiming.measure('versions_load', () => (
       supabaseAdmin
         .from('contract_versions')
-        .select('id, version_number, source, storage_path, parent_version_id, review_id, created_at')
+        .select('id, version_number, source, storage_path, parent_version_id, review_id, change_summary, created_at')
         .eq('contract_id', id)
         .order('version_number', { ascending: false })
     ))
@@ -570,6 +577,7 @@ export async function POST(
         && version.review_id === latestReview.id
         && (!sourceVersion?.id || version.parent_version_id === sourceVersion.id)
         && version.storage_path
+        && String(version.change_summary || '').includes('customer-comment-v2')
       ))
       : null
 
@@ -704,7 +712,7 @@ export async function POST(
           file_size: fileBuffer.length,
           mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           parent_version_id: sourceVersion?.id || null,
-          change_summary: `ONES 业务运营基于风险项生成 Word 批注版本（ReviewRun: ${latestReview.id}）`,
+          change_summary: `customer-comment-v2：ONES 业务运营基于风险项生成客户侧 Word 原生批注版本（ReviewRun: ${latestReview.id}）`,
           uploaded_by: user.id,
           review_id: latestReview.id,
         })

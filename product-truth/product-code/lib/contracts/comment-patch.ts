@@ -139,6 +139,67 @@ export function appendRiskControlCommentLines(comment: string, risk: RiskCardCom
   return [comment.trim(), ...missingLines].filter(Boolean).join('\n')
 }
 
+function commentLineValue(lines: string[], label: string) {
+  const prefix = `${label}：`
+  return textValue(lines.find((line) => line.startsWith(prefix))?.slice(prefix.length))
+}
+
+function commentTitle(firstLine: string) {
+  return textValue(firstLine.replace(/^【[^】]+】/, '')) || '风险条款'
+}
+
+function commentSeverity(firstLine: string) {
+  if (firstLine.includes('红线')) return 'red'
+  if (firstLine.includes('需谈判')) return 'yellow'
+  return 'yellow'
+}
+
+function fallbackSuggestion(title: string, severity: string) {
+  if (severity === 'red') {
+    return `请按我方合规要求修订“${title}”相关条款后回传确认。`
+  }
+  return `请按双方确认后的可控口径修订“${title}”相关条款；如无法采纳，请回传原因。`
+}
+
+export function buildCustomerFacingWordComment(comment: string | null | undefined) {
+  const lines = safeLines(comment)
+  if (lines.length === 0) return ''
+
+  const firstLine = lines[0]
+  const title = commentTitle(firstLine)
+  const severity = commentSeverity(firstLine)
+  const suggestion = commentLineValue(lines, '建议')
+    || commentLineValue(lines, '建议修改为')
+    || commentLineValue(lines, '建议数值/口径')
+  const controlNote = commentLineValue(lines, '可控化说明')
+  const controlAction = commentLineValue(lines, '可控化动作')
+  const proposedValue = commentLineValue(lines, '建议数值/口径')
+  const nextSuggestion = suggestion || proposedValue || controlNote || controlAction || fallbackSuggestion(title, severity)
+
+  return [
+    `【${severity === 'red' ? '必须修改' : '建议修改'}】${title}`,
+    `建议修改为：${nextSuggestion}`,
+    controlNote && controlNote !== nextSuggestion ? `补充确认口径：${controlNote}` : null,
+    severity === 'red'
+      ? '处理要求：请按上述口径修订后回传确认。'
+      : '处理建议：如无法直接采纳，请反馈原因或补充参数后回传。',
+  ].filter((line): line is string => Boolean(line)).join('\n')
+}
+
+function safeLines(comment: string | null | undefined) {
+  return String(comment || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^证据原文：/.test(line))
+    .filter((line) => !/^规则：/.test(line))
+    .filter((line) => !/^RuleSnapshot:/.test(line))
+    .filter((line) => !/^SourceRange:/.test(line))
+    .filter((line) => !/^RiskFinding:/.test(line))
+    .filter((line) => !/^LocationStatus:/.test(line))
+    .filter((line) => !/^定位状态：/.test(line))
+}
+
 function isGenericEvidence(value: string) {
   const normalized = value.trim()
   if (normalized.length < 2) return true
