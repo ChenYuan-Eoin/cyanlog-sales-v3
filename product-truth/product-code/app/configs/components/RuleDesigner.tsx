@@ -164,6 +164,11 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
   const [scenarios, setScenarios] = useState(() => toCsv(initialRule?.applicable_scenarios))
   const isSemantic = draft.engine_type === 'semantic' || draft.category === 'text'
   const messageTemplate = useMemo(() => asMessageTemplate(draft.message_template), [draft.message_template])
+  const messageLevels = useMemo(() => (
+    messageTemplate.levels && typeof messageTemplate.levels === 'object' && !Array.isArray(messageTemplate.levels)
+      ? messageTemplate.levels
+      : {}
+  ), [messageTemplate.levels])
 
   useEffect(() => {
     const nextDraft = initialRule || createDefaultRule({
@@ -202,7 +207,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
       },
       { label: '触发条件', value: trigger },
       { label: '风险条件', value: draft.semantic_prompt || structuredRisk },
-      { label: '例外/通过条件', value: formatActionLabel(draft.level_a_action) },
+      { label: '例外/通过条件', value: messageLevels.exception || formatActionLabel(draft.level_a_action) },
       { label: '证据要求', value: 'evidence_text 必须 exact match，导出前必须有 source range' },
       {
         label: '谈判动作',
@@ -213,7 +218,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
       { label: '批注模板', value: messageTemplate.comment || messageTemplate.suggestion || '未配置客户可见批注模板' },
       { label: '适用场景', value: scenariosList.length ? scenariosList.join(' / ') : '全组织默认适用' },
     ]
-  }, [draft, fieldHints, messageTemplate, scenarios])
+  }, [draft, fieldHints, messageLevels.exception, messageTemplate, scenarios])
 
   function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -224,6 +229,10 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
     value: ContractRuleMessageTemplate[K]
   ) {
     update('message_template', { ...messageTemplate, [key]: value })
+  }
+
+  function updateMessageTemplateLevel(key: string, value: string) {
+    updateMessageTemplate('levels', { ...messageLevels, [key]: value })
   }
 
   return (
@@ -343,16 +352,51 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
         </div>
       </details>
 
-      {isSemantic ? (
-        <Field label="审查语义">
-          <Textarea
-            value={draft.semantic_prompt || ''}
-            onChange={(event) => update('semantic_prompt', event.target.value)}
-            placeholder="描述需要从合同条款中识别的风险语义。"
-            rows={4}
-          />
-        </Field>
-      ) : null}
+      <div className="rounded-lg border border-slate-200">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h3 className="text-sm font-medium text-slate-900">核心逻辑定义</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            规则可以来自文档，但正式执行前必须在这里变成可见、可改、可测试的结构化 RuleUnit。
+          </p>
+        </div>
+        <div className="space-y-4 p-4">
+          <Field label="触发条件（Trigger）">
+            <Textarea
+              value={fieldHints}
+              onChange={(event) => setFieldHints(event.target.value)}
+              placeholder="合同类型 = 采购；供应商性质 = 新进；命中词：首付款 / 账期 / 验收"
+              rows={3}
+            />
+          </Field>
+          <Field label="风险条件（Risk）">
+            <Textarea
+              value={draft.semantic_prompt || ''}
+              onChange={(event) => update('semantic_prompt', event.target.value)}
+              placeholder={isSemantic ? '描述需要从合同条款中识别的风险语义。' : '例如：预付款比例 > 30%，或账期 > 30 个工作日。'}
+              rows={4}
+              className="border-rose-200 bg-rose-50/70 text-slate-900 focus-visible:ring-rose-300"
+            />
+          </Field>
+          <Field label="例外条件（Exception）">
+            <Textarea
+              value={messageLevels.exception || ''}
+              onChange={(event) => updateMessageTemplateLevel('exception', event.target.value)}
+              placeholder="例如：项目所在地为海外，或已上传特批签报附件。"
+              rows={3}
+              className="border-emerald-200 bg-emerald-50/70 text-slate-900 focus-visible:ring-emerald-300"
+            />
+          </Field>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-medium text-slate-500">转译结果（自然语言预览）</div>
+            <p className="mt-2 text-sm leading-6 text-slate-800">
+              当系统识别到“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置触发线索'}”时，
+              若满足“{draft.semantic_prompt || `${formatOperatorLabel(draft.level_b_operator)} ${draft.level_b_threshold ?? 0}${draft.level_b_unit || ''}`}”，
+              则触发{riskLevelOptions.find((item) => item.value === draft.risk_level)?.label || '黄色'}风险；
+              {messageLevels.exception ? `但如果满足例外条件“${messageLevels.exception}”，则按例外流程处理。` : '当前尚未配置例外条件。'}
+            </p>
+          </div>
+        </div>
+      </div>
 
       <div className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">

@@ -37,6 +37,12 @@ describe('contract review navigation', () => {
     })).toBe('/contracts/contract-1/compare?from=workbench&comparison_id=cmp-1')
   })
 
+  it('can return to compare setup without locking a comparison result', () => {
+    expect(buildContractCompareHref('contract-1', {
+      from: 'compare',
+    })).toBe('/contracts/contract-1/compare?from=compare')
+  })
+
   it('routes customer return upload into the version flow before compare', () => {
     expect(buildCustomerReturnUploadHref('contract-1')).toBe('/contracts/contract-1/edit?intent=customer-return&next=compare')
   })

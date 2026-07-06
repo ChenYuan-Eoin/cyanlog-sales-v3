@@ -4,17 +4,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
+  FileTextIcon,
+  FolderIcon,
   FolderTreeIcon,
   GitBranchIcon,
   PlayIcon,
   PlusIcon,
+  SearchIcon,
   SparklesIcon,
   TrashIcon,
+  XIcon,
 } from 'lucide-react'
 import type { ContractPolicyRule, ContractRuleSet } from '@/types/rules'
 import {
@@ -234,6 +246,14 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   const [activeRuleSetKey, setActiveRuleSetKey] = useState<string>('all')
   const [ruleSetAssets, setRuleSetAssets] = useState<ContractRuleSet[]>([])
   const [ruleSetAssetsLoading, setRuleSetAssetsLoading] = useState(false)
+  const [treeQuery, setTreeQuery] = useState('')
+  const [createRuleSetOpen, setCreateRuleSetOpen] = useState(false)
+  const [creatingRuleSet, setCreatingRuleSet] = useState(false)
+  const [newRuleSetDraft, setNewRuleSetDraft] = useState({
+    name: '',
+    code: '',
+    description: '',
+  })
   const [savingRuleSetDocument, setSavingRuleSetDocument] = useState(false)
   const [ruleSetDocumentDraft, setRuleSetDocumentDraft] = useState({ title: '', content: '' })
   const [saving, setSaving] = useState(false)
@@ -284,6 +304,36 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   )
 
   const ruleSetSections = useMemo<RuleSetSection[]>(() => buildRuleSetSections(ruleSets), [ruleSets])
+  const visibleRuleSetSections = useMemo<RuleSetSection[]>(() => {
+    const query = treeQuery.trim().toLowerCase()
+    if (!query) return ruleSetSections
+
+    return ruleSetSections
+      .map((section) => ({
+        ...section,
+        sets: section.sets
+          .map((ruleSet) => {
+            const ruleSetMatched = [
+              ruleSet.label,
+              ruleSet.code,
+              ruleSet.asset?.description || '',
+            ].some((value) => value.toLowerCase().includes(query))
+            const matchedRules = ruleSet.rules.filter((rule) => [
+              rule.code,
+              rule.name,
+              rule.description || '',
+              rule.clause_category || '',
+            ].some((value) => value.toLowerCase().includes(query)))
+            return ruleSetMatched
+              ? ruleSet
+              : matchedRules.length > 0
+                ? { ...ruleSet, rules: matchedRules }
+                : null
+          })
+          .filter(Boolean) as RuleSetView[],
+      }))
+      .filter((section) => section.sets.length > 0)
+  }, [ruleSetSections, treeQuery])
 
   const visibleRules = activeRuleSet?.rules || EMPTY_RULES
   const selectedRuleBlockingReasons = selectedRule ? ruleBlockingReasons(selectedRule) : []
@@ -351,12 +401,72 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     setActiveTab('design')
   }
 
+  const handleSelectRuleSet = (ruleSet: RuleSetView) => {
+    setActiveRuleSetKey(ruleSet.key)
+    setSelectedRule(null)
+    setTranslationDraft(null)
+    setActiveTab('list')
+  }
+
   const handleSelectRule = (rule: ContractPolicyRule) => {
     if (translationDraft?.ruleId !== rule.id) {
       setTranslationDraft(null)
     }
     setSelectedRule(rule)
-    setActiveTab('list')
+    setActiveRuleSetKey(rule.rule_set_id
+      ? ruleSetKeyForAsset(rule.rule_set_id)
+      : fallbackRuleSetKey(rule.clause_category))
+    setActiveTab('design')
+  }
+
+  const handleCreateRuleSet = async () => {
+    const name = newRuleSetDraft.name.trim()
+    const code = newRuleSetDraft.code.trim().toUpperCase().replace(/[^A-Z0-9_-]+/g, '_')
+    if (!name || !code) {
+      setFeedback({ tone: 'error', message: '请填写规则集名称和编码。' })
+      return
+    }
+
+    setCreatingRuleSet(true)
+    setFeedback(null)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/contract-policies/rule-sets', {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          code,
+          description: newRuleSetDraft.description.trim() || undefined,
+          applicable_scenario: 'standard_contract_review',
+          priority: 100,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setFeedback({
+          tone: 'error',
+          message: data?.error?.message || data?.message || '创建规则集失败',
+        })
+        return
+      }
+      setCreateRuleSetOpen(false)
+      setNewRuleSetDraft({ name: '', code: '', description: '' })
+      setFeedback({ tone: 'success', message: '规则集已创建，请在该规则集下新建规则并完成转译、测试和发布。' })
+      await loadRuleSetAssets()
+      await onRefresh?.()
+      const createdId = data?.data?.id || data?.id
+      if (createdId) {
+        setActiveRuleSetKey(ruleSetKeyForAsset(createdId))
+      }
+    } catch {
+      setFeedback({ tone: 'error', message: '创建规则集请求失败' })
+    } finally {
+      setCreatingRuleSet(false)
+    }
   }
 
   const handleSaveRule = async (rule: Partial<ContractPolicyRule>) => {
@@ -601,17 +711,50 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }
 
   return (
-	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+    <>
+	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
 	      <Card className="min-w-0">
-	        <CardHeader className="flex flex-row items-center justify-between gap-3">
-	          <CardTitle className="text-base">
-	            规则集树 ({Math.max(ruleSets.length - 1, 0)})
-	            {ruleSetAssetsLoading ? <span className="ml-2 text-xs font-normal text-slate-400">加载中</span> : null}
-	          </CardTitle>
-          <Button size="sm" onClick={handleNewRule}>
-            <PlusIcon className="h-4 w-4 mr-1" />
-            新建
-          </Button>
+	        <CardHeader className="space-y-3">
+            <div className="flex flex-row items-center justify-between gap-3">
+	            <CardTitle className="text-base">
+	              规则资产树 ({Math.max(ruleSets.length - 1, 0)})
+	              {ruleSetAssetsLoading ? <span className="ml-2 text-xs font-normal text-slate-400">加载中</span> : null}
+	            </CardTitle>
+            </div>
+            <div className="relative">
+              <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={treeQuery}
+                onChange={(event) => setTreeQuery(event.target.value)}
+                placeholder="搜索规则库、规则集、规则..."
+                className="pl-9 pr-9"
+              />
+              {treeQuery ? (
+                <button
+                  type="button"
+                  aria-label="清空搜索"
+                  onClick={() => setTreeQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                >
+                  <XIcon className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled
+                title="规则库是应用级配置根节点，当前第一阶段固定为默认审核库。"
+              >
+                <FolderIcon className="h-4 w-4 mr-1" />
+                新建规则库
+              </Button>
+              <Button size="sm" onClick={() => setCreateRuleSetOpen(true)}>
+                <PlusIcon className="h-4 w-4 mr-1" />
+                新建规则集
+              </Button>
+            </div>
         </CardHeader>
         <CardContent>
           {sortedRules.length === 0 ? (
@@ -620,77 +763,113 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               <p className="mt-1 text-sm text-slate-400">创建后将进入规则转译与发布检查</p>
             </div>
           ) : (
-	            <div className="max-h-[720px] space-y-4 overflow-y-auto pr-1">
-	              {ruleSetSections.map((section) => (
+	            <div className="max-h-[760px] space-y-4 overflow-y-auto pr-1">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <div className="flex items-center gap-2 px-2 py-1.5">
+                    <FolderIcon className="h-4 w-4 text-slate-500" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-slate-950">默认审核库</div>
+                      <div className="text-[11px] text-slate-500">应用当前合同审核规则资产根节点</div>
+                    </div>
+                    <Badge variant="outline">{rules.length}</Badge>
+                  </div>
+                </div>
+	              {visibleRuleSetSections.map((section) => (
 	                <section key={section.key} className="space-y-2">
 	                  <div className="px-1">
 	                    <p className="text-xs font-semibold text-slate-900">{section.label}</p>
 	                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{section.description}</p>
 	                  </div>
 	                  {section.sets.map((ruleSet) => (
-	                    <button
-	                      key={ruleSet.key}
-	                      type="button"
-	                      onClick={() => setActiveRuleSetKey(ruleSet.key)}
-	                      className={`w-full rounded-lg border p-3 text-left transition ${
-	                        activeRuleSetKey === ruleSet.key
-	                          ? 'border-slate-900 bg-slate-900 text-white'
-	                          : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'
-	                      }`}
-	                    >
-	                      <div className="flex items-start gap-3">
-	                        <span className={`mt-0.5 rounded-md p-1.5 ${
-	                          activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-500'
-	                        }`}>
-	                          <FolderTreeIcon className="h-4 w-4" />
-	                        </span>
-	                        <div className="min-w-0 flex-1">
-	                          <div className="flex items-center justify-between gap-2">
-	                            <div className="truncate text-sm font-semibold">{ruleSet.label}</div>
-	                            <Badge variant={activeRuleSetKey === ruleSet.key ? 'secondary' : 'outline'} className="text-[10px]">
-	                              {ruleSet.total}
-	                            </Badge>
-	                          </div>
-	                          <div className={`mt-1 truncate font-mono text-[11px] ${
-	                            activeRuleSetKey === ruleSet.key ? 'text-slate-200' : 'text-slate-400'
+                      <div key={ruleSet.key} className="space-y-1">
+	                      <button
+	                        type="button"
+	                        onClick={() => handleSelectRuleSet(ruleSet)}
+	                        className={`w-full rounded-lg border p-3 text-left transition ${
+	                          activeRuleSetKey === ruleSet.key && !selectedRule
+	                            ? 'border-slate-900 bg-slate-900 text-white'
+	                            : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'
+	                        }`}
+	                      >
+	                        <div className="flex items-start gap-3">
+	                          <span className={`mt-0.5 rounded-md p-1.5 ${
+	                            activeRuleSetKey === ruleSet.key && !selectedRule ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-500'
 	                          }`}>
-	                            {ruleSet.code}
-	                          </div>
-	                          <div className={`mt-1 text-[11px] ${
-	                            activeRuleSetKey === ruleSet.key ? 'text-slate-200' : 'text-slate-400'
-	                          }`}>
-	                            {ruleSet.source === 'ruleset'
-	                              ? `声明文档 v${ruleSet.asset?.latest_document?.version || '-'} · ${translationMap[ruleSet.asset?.translation_status || 'not_started']?.label || '未转译'}`
-	                              : ruleSet.source === 'all'
-	                                ? '全部规则资产'
-	                                : '旧分类视图，待迁移为规则集资产'}
-	                          </div>
-		                          <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
-		                            <span className={`rounded px-1.5 py-1 ${
-		                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
-		                            }`}>
-		                              正式可用 {ruleSet.published}
-		                            </span>
-		                            <span className={`rounded px-1.5 py-1 ${
-		                              activeRuleSetKey === ruleSet.key ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
-		                            }`}>
-		                              转译就绪 {ruleSet.ready}
-		                            </span>
-	                            <span className={`rounded px-1.5 py-1 ${
-	                              ruleSet.blocked > 0
-	                                ? activeRuleSetKey === ruleSet.key
-	                                  ? 'bg-rose-500/20 text-rose-100'
-	                                  : 'bg-rose-50 text-rose-700'
-	                                : activeRuleSetKey === ruleSet.key
-	                                  ? 'bg-emerald-500/20 text-emerald-100'
-	                                  : 'bg-emerald-50 text-emerald-700'
+	                            <FolderTreeIcon className="h-4 w-4" />
+	                          </span>
+	                          <div className="min-w-0 flex-1">
+	                            <div className="flex items-center justify-between gap-2">
+	                              <div className="truncate text-sm font-semibold">{ruleSet.label}</div>
+	                              <Badge variant={activeRuleSetKey === ruleSet.key && !selectedRule ? 'secondary' : 'outline'} className="text-[10px]">
+	                                {ruleSet.total}
+	                              </Badge>
+	                            </div>
+	                            <div className={`mt-1 truncate font-mono text-[11px] ${
+	                              activeRuleSetKey === ruleSet.key && !selectedRule ? 'text-slate-200' : 'text-slate-400'
 	                            }`}>
-	                              待处理 {ruleSet.total === 0 ? ruleSet.total : ruleSet.blocked}
-	                            </span>
+	                              {ruleSet.code}
+	                            </div>
+                              <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
+                                <span className={`rounded px-1.5 py-1 ${
+                                  activeRuleSetKey === ruleSet.key && !selectedRule ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
+                                }`}>
+                                  发布 {ruleSet.published}
+                                </span>
+                                <span className={`rounded px-1.5 py-1 ${
+                                  activeRuleSetKey === ruleSet.key && !selectedRule ? 'bg-white/10 text-slate-100' : 'bg-slate-50 text-slate-500'
+                                }`}>
+                                  转译 {ruleSet.ready}
+                                </span>
+                                <span className={`rounded px-1.5 py-1 ${
+                                  ruleSet.blocked > 0
+                                    ? activeRuleSetKey === ruleSet.key && !selectedRule
+                                      ? 'bg-rose-500/20 text-rose-100'
+                                      : 'bg-rose-50 text-rose-700'
+                                    : activeRuleSetKey === ruleSet.key && !selectedRule
+                                      ? 'bg-emerald-500/20 text-emerald-100'
+                                      : 'bg-emerald-50 text-emerald-700'
+                                }`}>
+                                  待处理 {ruleSet.total === 0 ? ruleSet.total : ruleSet.blocked}
+                                </span>
+                              </div>
 	                          </div>
 	                        </div>
-	                      </div>
-	                    </button>
+	                      </button>
+                        <div className="ml-5 space-y-1 border-l border-slate-100 pl-2">
+                          {ruleSet.rules.slice(0, treeQuery ? 20 : 8).map((rule) => {
+                            const active = selectedRule?.id === rule.id
+                            const blocked = ruleBlockingReasons(rule).length > 0
+                            return (
+                              <button
+                                key={rule.id}
+                                type="button"
+                                onClick={() => handleSelectRule(rule)}
+                                className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition ${
+                                  active
+                                    ? 'bg-blue-50 text-blue-800 ring-1 ring-blue-100'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                                }`}
+                              >
+                                <FileTextIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                <span className="min-w-0 flex-1 truncate">
+                                  <span className="font-mono text-[11px] text-slate-400">{rule.code}</span>
+                                  <span className="ml-1 font-medium">{rule.name}</span>
+                                </span>
+                                <span title={blocked ? '测试/发布未通过' : '测试/发布可用'}>{blocked ? '❌' : '✅'}</span>
+                              </button>
+                            )
+                          })}
+                          {ruleSet.rules.length > (treeQuery ? 20 : 8) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectRuleSet(ruleSet)}
+                              className="w-full rounded-md px-2 py-1 text-left text-[11px] text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+                            >
+                              还有 {ruleSet.rules.length - (treeQuery ? 20 : 8)} 条，点击规则集查看全部
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
 	                  ))}
 	                </section>
 	              ))}
@@ -776,9 +955,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </CardContent>
           </Card>
         )}
-      </div>
-
-      <Card className="min-w-0">
+	      <Card className="min-w-0">
         <CardHeader>
 		          <CardTitle className="text-base">规则集闭环</CardTitle>
           <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -1122,7 +1299,64 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </div>
           )}
         </CardContent>
-      </Card>
-    </div>
-  )
+	      </Card>
+	    </div>
+	  </div>
+
+    <Dialog open={createRuleSetOpen} onOpenChange={setCreateRuleSetOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>新建规则集</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-500" htmlFor="new-rule-set-name">
+              规则集名称
+            </label>
+            <Input
+              id="new-rule-set-name"
+              value={newRuleSetDraft.name}
+              onChange={(event) => setNewRuleSetDraft((current) => ({ ...current, name: event.target.value }))}
+              placeholder="如：验收与交付规则集"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-500" htmlFor="new-rule-set-code">
+              规则集编码
+            </label>
+            <Input
+              id="new-rule-set-code"
+              value={newRuleSetDraft.code}
+              onChange={(event) => setNewRuleSetDraft((current) => ({ ...current, code: event.target.value }))}
+              placeholder="如：ACCEPTANCE"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-500" htmlFor="new-rule-set-description">
+              业务说明
+            </label>
+            <Textarea
+              id="new-rule-set-description"
+              value={newRuleSetDraft.description}
+              onChange={(event) => setNewRuleSetDraft((current) => ({ ...current, description: event.target.value }))}
+              placeholder="说明这个规则集覆盖哪些合同风险、由谁维护、发布后服务哪个审核场景。"
+              rows={4}
+            />
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+            规则集创建后只是资产目录；进入正式审核前仍需补齐规则、转译确认、测试通过和发布版本。
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setCreateRuleSetOpen(false)}>
+            取消
+          </Button>
+          <Button type="button" disabled={creatingRuleSet} onClick={() => void handleCreateRuleSet()}>
+            {creatingRuleSet ? '创建中...' : '创建规则集'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
+	  )
 }

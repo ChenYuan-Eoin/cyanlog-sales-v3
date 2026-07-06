@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  buildContractCompareHref,
   buildContractWorkbenchHref,
   buildContractsCenterHref,
   buildCustomerReturnUploadHref,
@@ -247,6 +248,13 @@ export default function ContractComparePage() {
   const isSyncing = useRef(false)
 
   const fetchComparison = useCallback(async () => {
+    if (!comparisonId) {
+      setComparison(null)
+      setSelectedDiffId(null)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setError('')
     try {
@@ -277,6 +285,27 @@ export default function ContractComparePage() {
     }
   }, [contractId, comparisonId])
 
+  const openComparisonResult = useCallback((payload: unknown) => {
+    const data = payload && typeof payload === 'object'
+      ? payload as { data?: { id?: unknown }; id?: unknown }
+      : {}
+    const nextComparisonId = typeof data.data?.id === 'string'
+      ? data.data.id
+      : typeof data.id === 'string'
+        ? data.id
+        : ''
+
+    if (!nextComparisonId) {
+      setError('比对已创建，但返回结果缺少 comparison_id，无法打开结果页。')
+      return
+    }
+
+    router.push(buildContractCompareHref(contractId, {
+      from: 'compare',
+      comparisonId: nextComparisonId,
+    }))
+  }, [contractId, router])
+
   const fetchCandidateContracts = useCallback(async () => {
     try {
       const token = localStorage.getItem('token')
@@ -300,8 +329,7 @@ export default function ContractComparePage() {
         })
         setSelectedCompareVersionId((current) => {
           if (current && versions.some((version) => version.id === current)) return current
-          const newestManual = versions.find((version) => version.source === 'manual_revision')
-          return newestManual?.id || ''
+          return ''
         })
       }
       if (!res.ok) {
@@ -383,13 +411,13 @@ export default function ContractComparePage() {
           }),
         })
 
+        const data = await res.json().catch(() => null)
         if (!res.ok) {
-          const data = await res.json().catch(() => null)
           setError(readApiError(data, '发起版本比对失败'))
           return
         }
 
-        await fetchComparison()
+        openComparisonResult(data)
         return
       }
 
@@ -428,19 +456,19 @@ export default function ContractComparePage() {
         }),
       })
 
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        const data = await res.json().catch(() => null)
         setError(readApiError(data, '发起比对失败'))
         return
       }
 
-      await fetchComparison()
+      openComparisonResult(data)
     } catch {
       setError('网络错误')
     } finally {
       setStartingComparison(false)
     }
-  }, [contractId, fetchComparison, selectedBaselineDocId, selectedBaselineVersionId, selectedCompareDocId, selectedCompareVersionId])
+  }, [contractId, openComparisonResult, selectedBaselineDocId, selectedBaselineVersionId, selectedCompareDocId, selectedCompareVersionId])
 
   const handleStartReReview = useCallback(async () => {
     if (!comparison || (comparison.diffs || []).length === 0) return
@@ -620,6 +648,11 @@ export default function ContractComparePage() {
             <Link href={buildContractWorkbenchHref(contractId, { panel: 'review', from: 'compare' })}>
               <Button variant="ghost" size="sm">
                 返回审核工作台
+              </Button>
+            </Link>
+            <Link href={buildContractCompareHref(contractId, { from: 'compare' })}>
+              <Button variant="ghost" size="sm">
+                返回文件选择
               </Button>
             </Link>
           </div>
@@ -831,6 +864,10 @@ export default function ContractComparePage() {
             </Button>
           </div>
         </header>
+
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
+          当前是差异片段视图：只展示可解析文本的变化片段和高亮，不把合同编号、客户、报价等属性写进左右文件画布。后续原文件还原应接入 Word/PDF 渲染层。
+        </div>
 
         {/* 差异高亮说明 */}
         <div className="h-10 bg-slate-50 border-b border-slate-200 flex items-center px-4 gap-6 text-xs">
@@ -1073,6 +1110,9 @@ export default function ContractComparePage() {
               <Link href={buildContractWorkbenchHref(contractId, { panel: 'review', from: 'compare' })}>
                 <Button className="w-full" variant="outline">返回审核工作台</Button>
               </Link>
+              <Link href={buildContractCompareHref(contractId, { from: 'compare' })}>
+                <Button className="w-full" variant="outline">返回文件选择</Button>
+              </Link>
               <Button className="w-full" disabled={totalChanges === 0 || startingRerun} onClick={handleStartReReview}>
                 {startingRerun && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
                 进入风险再审核
@@ -1194,13 +1234,13 @@ function ComparePairPrimer({
       label: '旧文件',
       value: baselineName,
       done: true,
-      description: '默认当前合同，也可以切换历史版本或人工确认的候选合同。',
+      description: '默认使用当前合同源文件；需要时再进入高级选择切换旧稿。',
     },
     {
       label: '新文件 / 回传',
-      value: hasCompareSource ? selectedCompareName : '等待上传或选择客户回传版',
+      value: hasCompareSource ? selectedCompareName : '等待上传客户回传版',
       done: hasCompareSource,
-      description: '优先使用当前合同的客户回传版本。',
+      description: '主路径是上传新文件；已有回传件只作为可选属性。',
     },
     {
       label: '输出',
@@ -1346,6 +1386,7 @@ function CompareSetupWorkspace({
   startingComparison: boolean
   onStartComparison: () => void
 }) {
+  const [showAdvancedSelection, setShowAdvancedSelection] = useState(false)
   const selectedBaselineCandidate = candidateContracts.find((contract) => contract.id === selectedBaselineDocId)
   const selectedBaselineVersion = versionOptions.find((version) => version.id === selectedBaselineVersionId)
   const selectedCandidate = candidateContracts.find((contract) => contract.id === selectedCompareDocId)
@@ -1357,9 +1398,19 @@ function CompareSetupWorkspace({
   const selectedBaselineName = selectedBaselineVersion
     ? `v${selectedBaselineVersion.version_number} ${selectedBaselineVersion.source === 'original' ? '源文件' : '客户回传版'}`
     : selectedBaselineCandidate?.filename || baselineContract?.filename || '当前合同'
+  const selectedCompareName = selectedVersion
+    ? `v${selectedVersion.version_number} 客户回传版`
+    : selectedCandidate?.filename || ''
+  const hasCompareSource = Boolean(selectedVersion || selectedCandidate)
+  const hasExistingCompareOptions = comparableVersions.length > 0 || recommendedCandidates.length > 0 || manualConfirmCandidates.length > 0
+  const uploadHref = buildCustomerReturnUploadHref(contractId, 'compare')
   const noCandidateReason = excludedCandidateCount > 0
-    ? `已发现 ${excludedCandidateCount} 份关系不明确的已完成合同。你仍可人工确认参与比对，但系统会把它标记为候选关系。`
-    : '当前没有可用于比对的已完成合同。请先为当前合同补充客户回传版本，或完成另一份同客户/同报价合同审核。'
+    ? `系统发现 ${excludedCandidateCount} 份关系不明确的已完成合同，但不会默认展示为新文件。请优先上传客户回传版；确认同一业务文件时再进入高级选择。`
+    : '当前没有可明确比对的新文件。请上传客户回传版或人工修订版后再开始比对。'
+  const resetCompareSource = () => {
+    setSelectedCompareDocId('')
+    setSelectedCompareVersionId('')
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6">
@@ -1375,7 +1426,7 @@ function CompareSetupWorkspace({
             </div>
             <h1 className="text-2xl font-bold text-slate-950">文档比对工作台</h1>
             <p className="mt-1 text-sm text-slate-500">
-              先选择旧文件和新文件，再生成差异列表、并排高亮和风险解读。
+              主路径是确认旧文件、上传客户回传/新文件、开始比对。版本和候选合同只作为属性辅助，不默认占用文件画布。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1390,13 +1441,13 @@ function CompareSetupWorkspace({
                 返回审核工作台
               </Button>
             </Link>
-            <Link href={buildCustomerReturnUploadHref(contractId, 'compare')}>
-              <Button variant="outline">
+            <Link href={uploadHref}>
+              <Button variant={hasCompareSource ? 'outline' : 'default'}>
                 <UploadIcon className="mr-2 h-4 w-4" />
-                上传客户回传版
+                上传新文件 / 客户回传版
               </Button>
             </Link>
-            <Button onClick={onStartComparison} disabled={!(selectedCompareVersionId || selectedCompareDocId) || startingComparison}>
+            <Button onClick={onStartComparison} disabled={!hasCompareSource || startingComparison}>
               {startingComparison ? (
                 <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -1409,221 +1460,288 @@ function CompareSetupWorkspace({
 
         <ComparePairPrimer
           baselineName={selectedBaselineName}
-          selectedCompareName={selectedVersion ? `v${selectedVersion.version_number} 客户回传版` : selectedCandidate?.filename || ''}
-          hasCompareSource={Boolean(selectedVersion || selectedCandidate)}
+          selectedCompareName={selectedCompareName}
+          hasCompareSource={hasCompareSource}
         />
 
-        <CompareCapabilityPanel hasBaselineSource={Boolean(selectedBaselineName)} hasCompareSource={Boolean(selectedVersion || selectedCandidate)} />
-
-        <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <FileTextIcon className="h-4 w-4 text-indigo-500" />
-              <h2 className="font-semibold text-slate-950">旧文件（可选择）</h2>
-            </div>
-            <div className="mb-3 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-800">
-              旧文件不会被锁定为当前合同。可以选择当前合同、历史版本，或人工确认另一份候选合同作为对比旧稿。
-            </div>
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedBaselineDocId('')
-                  setSelectedBaselineVersionId('')
-                }}
-                className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
-                  !selectedBaselineDocId && !selectedBaselineVersionId
-                    ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
-                    : 'border-slate-200 bg-slate-50 hover:border-indigo-200'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="break-words font-medium text-slate-900">
-                    当前合同：{baselineContract?.filename || '未命名文件'}
-                  </p>
-                  {!selectedBaselineDocId && !selectedBaselineVersionId && <Badge>已选</Badge>}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <main className="space-y-4">
+            <section className="grid gap-3 lg:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <FileTextIcon className="h-4 w-4 text-indigo-500" />
+                    <h2 className="font-semibold text-slate-950">旧文件</h2>
+                  </div>
+                  <Badge variant="outline">默认当前合同</Badge>
                 </div>
-                <div className="mt-2 space-y-1 text-xs text-slate-500">
+                <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedBaselineName}</p>
+                <div className="mt-3 space-y-1 text-xs text-slate-500">
                   <p>合同编号：{baselineContract?.contract_no || '未记录'}</p>
                   <p>客户：{baselineContract?.party_b_name || '未记录'}</p>
                   <p>报价：{baselineContract?.quote_id || '未绑定'}</p>
                 </div>
-              </button>
-
-              {baselineOptions.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-medium text-slate-500">当前合同版本流（可作为旧稿）</div>
-                  {baselineOptions.map((version) => {
-                    const active = version.id === selectedBaselineVersionId
-                    const disabled = version.id === selectedCompareVersionId
-                    return (
-                      <button
-                        key={version.id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => {
-                          setSelectedBaselineVersionId(version.id)
-                          setSelectedBaselineDocId('')
-                        }}
-                        className={`w-full rounded-lg border p-3 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                          active
-                            ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
-                            : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="font-semibold text-slate-900">
-                            v{version.version_number} · {version.source === 'original' ? '源文件' : '客户回传版'}
-                          </span>
-                          {active ? <Badge>已选</Badge> : disabled ? <Badge variant="outline">已作为新文件</Badge> : null}
-                        </div>
-                        <p className="mt-1 text-slate-500">{version.change_summary || '当前合同版本'}</p>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              {candidateContracts.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500">
-                    <span>其他候选合同（可作为旧稿）</span>
-                    <span>推荐 {recommendedCandidates.length} / 需确认 {manualConfirmCandidates.length}</span>
-                  </div>
-                  {candidateContracts.slice(0, 8).map((contract) => {
-                    const active = contract.id === selectedBaselineDocId
-                    const disabled = contract.id === selectedCompareDocId
-                    return (
-                      <button
-                        key={contract.id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => {
-                          setSelectedBaselineDocId(contract.id)
-                          setSelectedBaselineVersionId('')
-                        }}
-                        className={`w-full rounded-lg border p-3 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                          active
-                            ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
-                            : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="line-clamp-2 font-semibold text-slate-900">{contract.filename || contract.id}</span>
-                          {active ? (
-                            <Badge>已选</Badge>
-                          ) : (
-                            <Badge variant={contract.relation_status === 'recommended' ? 'default' : 'outline'}>
-                              {contract.relation_status === 'recommended' ? '推荐' : '需确认'}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="mt-1 text-slate-500">客户：{contract.party_b_name || '未记录'}</p>
-                        <p className="mt-1 text-slate-500">关系：{contract.relation_reason}</p>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            <p className="mt-3 text-xs leading-5 text-slate-500">
-              旧文件可以是当前合同、历史版本或人工确认的候选合同；系统只读取可解析文本并保留所选原始文件作为本次对比来源。
-            </p>
-          </section>
-
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="font-semibold text-slate-950">新文件 / 客户回传版</h2>
-                <p className="text-sm text-slate-500">优先选择当前合同版本流中的客户回传件；候选合同必须人工确认属于同一业务文件。</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 w-full"
+                  onClick={() => setShowAdvancedSelection((value) => !value)}
+                >
+                  {showAdvancedSelection ? '收起高级选择' : '更换旧文件 / 高级选择'}
+                </Button>
               </div>
-              <Badge variant={comparableVersions.length > 0 ? 'outline' : 'secondary'}>
-                {comparableVersions.length} 个回传版本
-              </Badge>
-            </div>
 
-            {comparableVersions.length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {comparableVersions.map((version) => {
-                  const active = version.id === selectedCompareVersionId
-                  return (
+              <div className={`rounded-lg border bg-white p-4 shadow-sm ${
+                hasCompareSource ? 'border-emerald-200' : 'border-amber-200'
+              }`}>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <UploadIcon className="h-4 w-4 text-indigo-500" />
+                    <h2 className="font-semibold text-slate-950">新文件 / 客户回传</h2>
+                  </div>
+                  <Badge variant={hasCompareSource ? 'default' : 'outline'}>
+                    {hasCompareSource ? '已选择' : '待上传'}
+                  </Badge>
+                </div>
+                {hasCompareSource ? (
+                  <>
+                    <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedCompareName}</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      已明确本次比对的新文件来源。需要替换时可以上传新回传件，或在高级选择中改用已有版本。
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={resetCompareSource}>
+                        清除选择
+                      </Button>
+                      <Link href={uploadHref}>
+                        <Button type="button" variant="outline" size="sm">
+                          重新上传
+                        </Button>
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-slate-900">还没有新文件</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      对比应以新上传的客户回传版为主。没有明确回传件时，不把所有历史版本和候选合同摊在主页面。
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Link href={uploadHref}>
+                        <Button type="button" size="sm">
+                          <UploadIcon className="mr-2 h-4 w-4" />
+                          上传新文件
+                        </Button>
+                      </Link>
+                      {hasExistingCompareOptions && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAdvancedSelection(true)}
+                        >
+                          选择已有回传
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <GitCompareIcon className="h-4 w-4 text-indigo-500" />
+                    <h2 className="font-semibold text-slate-950">开始比对</h2>
+                  </div>
+                  <Badge variant={hasCompareSource ? 'default' : 'outline'}>
+                    {hasCompareSource ? '可开始' : '等待新文件'}
+                  </Badge>
+                </div>
+                <p className="text-xs leading-5 text-slate-500">
+                  输出只包含差异列表、并排高亮和风险影响，不覆盖原合同，也不替代 ReviewRun。
+                </p>
+                <Button
+                  type="button"
+                  className="mt-4 w-full"
+                  onClick={onStartComparison}
+                  disabled={!hasCompareSource || startingComparison}
+                >
+                  {startingComparison ? (
+                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <GitCompareIcon className="mr-2 h-4 w-4" />
+                  )}
+                  开始比对
+                </Button>
+              </div>
+            </section>
+
+            {!hasCompareSource && (
+              <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                {noCandidateReason}
+              </section>
+            )}
+
+            {showAdvancedSelection && (
+              <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="font-semibold text-slate-950">高级选择</h2>
+                    <p className="text-sm text-slate-500">
+                      只在明确知道要比较哪两个已有文件时使用。普通路径建议直接上传客户回传版。
+                    </p>
+                  </div>
+                  <Badge variant="outline">已有回传 {comparableVersions.length} / 候选 {candidateContracts.length}</Badge>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold text-slate-900">旧文件来源</div>
                     <button
-                      key={version.id}
                       type="button"
                       onClick={() => {
-                        setSelectedCompareVersionId(version.id)
-                        setSelectedCompareDocId('')
+                        setSelectedBaselineDocId('')
+                        setSelectedBaselineVersionId('')
                       }}
-                      className={`rounded-lg border p-3 text-left transition-colors ${
-                        active
+                      className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
+                        !selectedBaselineDocId && !selectedBaselineVersionId
                           ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
-                          : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
+                          : 'border-slate-200 bg-slate-50 hover:border-indigo-200'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-sm font-semibold text-slate-900">v{version.version_number} 客户回传版</p>
-                        {active && <Badge>已选</Badge>}
+                        <p className="break-words font-medium text-slate-900">
+                          当前合同：{baselineContract?.filename || '未命名文件'}
+                        </p>
+                        {!selectedBaselineDocId && !selectedBaselineVersionId && <Badge>已选</Badge>}
                       </div>
-                      <div className="mt-2 space-y-1 text-xs text-slate-500">
-                        <p>{version.change_summary || '客户回传或人工修订版本'}</p>
-                        <p>类型：{version.mime_type || '未记录'}</p>
-                        <p>创建：{version.created_at ? new Date(version.created_at).toLocaleString('zh-CN') : '未记录'}</p>
-                      </div>
+                      <p className="mt-2 text-xs text-slate-500">默认旧稿，适用于大多数客户回传对比。</p>
                     </button>
-                  )
-                })}
-              </div>
-            ) : candidateContracts.length > 0 ? (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-                  当前合同还没有客户回传版本。下方候选合同可作为新文件参与比对；推荐项可直接使用，关系未识别项需要人工确认。
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {candidateContracts.map((contract) => {
-                    const active = contract.id === selectedCompareDocId
-                    const disabled = contract.id === selectedBaselineDocId
-                    return (
-                      <button
-                        key={contract.id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => {
-                          setSelectedCompareDocId(contract.id)
-                          setSelectedCompareVersionId('')
-                        }}
-                        className={`rounded-lg border p-3 text-left transition-colors ${
-                          active
-                            ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
-                            : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="line-clamp-2 text-sm font-semibold text-slate-900">{contract.filename || contract.id}</p>
-                          {active ? (
-                            <Badge>已选</Badge>
-                          ) : (
-                            <Badge variant={contract.relation_status === 'recommended' ? 'default' : 'outline'}>
-                              {contract.relation_status === 'recommended' ? '推荐' : '需确认'}
-                            </Badge>
-                          )}
+
+                    {baselineOptions.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-slate-500">当前合同版本流</div>
+                        {baselineOptions.map((version) => {
+                          const active = version.id === selectedBaselineVersionId
+                          const disabled = version.id === selectedCompareVersionId
+                          return (
+                            <button
+                              key={version.id}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => {
+                                setSelectedBaselineVersionId(version.id)
+                                setSelectedBaselineDocId('')
+                              }}
+                              className={`w-full rounded-lg border p-3 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                active
+                                  ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
+                                  : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="font-semibold text-slate-900">
+                                  v{version.version_number} · {version.source === 'original' ? '源文件' : '客户回传版'}
+                                </span>
+                                {active ? <Badge>已选</Badge> : disabled ? <Badge variant="outline">已作为新文件</Badge> : null}
+                              </div>
+                              <p className="mt-1 text-slate-500">{version.change_summary || '当前合同版本'}</p>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold text-slate-900">新文件来源</div>
+                    {comparableVersions.length > 0 ? (
+                      <div className="space-y-2">
+                        {comparableVersions.map((version) => {
+                          const active = version.id === selectedCompareVersionId
+                          return (
+                            <button
+                              key={version.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedCompareVersionId(version.id)
+                                setSelectedCompareDocId('')
+                              }}
+                              className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                                active
+                                  ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
+                                  : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="line-clamp-2 text-sm font-semibold text-slate-900">
+                                  v{version.version_number} 客户回传版
+                                </p>
+                                {active && <Badge>已选</Badge>}
+                              </div>
+                              <div className="mt-2 space-y-1 text-xs text-slate-500">
+                                <p>{version.change_summary || '客户回传或人工修订版本'}</p>
+                                <p>类型：{version.mime_type || '未记录'}</p>
+                                <p>创建：{version.created_at ? new Date(version.created_at).toLocaleString('zh-CN') : '未记录'}</p>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                        当前合同版本流没有客户回传版。建议上传新文件；如果必须从候选合同中选择，请只选确认属于同一业务文件的合同。
+                      </div>
+                    )}
+
+                    {candidateContracts.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500">
+                          <span>候选合同（人工确认后作为新文件）</span>
+                          <span>推荐 {recommendedCandidates.length} / 需确认 {manualConfirmCandidates.length}</span>
                         </div>
-                        <div className="mt-2 space-y-1 text-xs text-slate-500">
-                          <p>客户：{contract.party_b_name || '未记录'}</p>
-                          <p>报价：{contract.quote_id || '未绑定'}</p>
-                          <p>关系：{contract.relation_reason}</p>
-                          <p>更新时间：{new Date(contract.updated_at).toLocaleString('zh-CN')}</p>
-                        </div>
-                      </button>
-                    )
-                  })}
+                        {candidateContracts.slice(0, 8).map((contract) => {
+                          const active = contract.id === selectedCompareDocId
+                          const disabled = contract.id === selectedBaselineDocId
+                          return (
+                            <button
+                              key={contract.id}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => {
+                                setSelectedCompareDocId(contract.id)
+                                setSelectedCompareVersionId('')
+                              }}
+                              className={`w-full rounded-lg border p-3 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                active
+                                  ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
+                                  : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="line-clamp-2 font-semibold text-slate-900">{contract.filename || contract.id}</span>
+                                {active ? (
+                                  <Badge>已选</Badge>
+                                ) : (
+                                  <Badge variant={contract.relation_status === 'recommended' ? 'default' : 'outline'}>
+                                    {contract.relation_status === 'recommended' ? '推荐' : '需确认'}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="mt-1 text-slate-500">客户：{contract.party_b_name || '未记录'}</p>
+                              <p className="mt-1 text-slate-500">关系：{contract.relation_reason}</p>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-                {noCandidateReason}
-              </div>
+              </section>
             )}
-          </section>
+          </main>
 
           <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
@@ -1631,65 +1749,18 @@ function CompareSetupWorkspace({
               <h2 className="font-semibold text-slate-950">输出闭环</h2>
             </div>
             <div className="space-y-3 text-sm">
-              <CompareStep done label="1. 选择旧文件（可切换）" value={selectedBaselineName} />
-              <CompareStep done={Boolean(selectedVersion || selectedCandidate)} label="2. 选择新文件" value={selectedVersion ? `v${selectedVersion.version_number} 客户回传版` : selectedCandidate?.filename || '等待选择'} />
+              <CompareStep done label="1. 确认旧文件" value={selectedBaselineName} />
+              <CompareStep done={hasCompareSource} label="2. 上传/选择新文件" value={hasCompareSource ? selectedCompareName : '等待上传客户回传版'} />
               <CompareStep done={false} label="3. 生成差异列表" value="删除 / 新增 / 修改 / 风险等级" />
               <CompareStep done={false} label="4. 并排高亮复核" value="左旧右新，差异可跳转" />
             </div>
             <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">
-              比对结果不会替代合同审核结论；红线差异仍应进入风险审核或再审核。
+              文件属性只用于辅助选择和记录关系，不参与左右文件画布渲染。比对结果不会替代合同审核结论；红线差异仍应进入风险审核或再审核。
             </p>
           </aside>
         </div>
       </div>
     </div>
-  )
-}
-
-function CompareCapabilityPanel({
-  hasBaselineSource,
-  hasCompareSource,
-}: {
-  hasBaselineSource: boolean
-  hasCompareSource: boolean
-}) {
-  const items = [
-    { label: '旧文件', value: hasBaselineSource ? '已选择旧文件' : '等待选择旧文件', done: hasBaselineSource },
-    { label: '新文件', value: hasCompareSource ? '已选择客户回传或候选版本' : '等待上传客户回传版', done: hasCompareSource },
-    { label: '差异列表', value: '删除 / 新增 / 修改 / 风险等级', done: false },
-    { label: '并排高亮', value: '左旧右新，同步滚动定位差异', done: false },
-    { label: '闭环动作', value: '红线差异进入再审核，普通差异进入版本记录', done: false },
-  ]
-
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-950">对比产品化目标</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            对比页必须围绕文件工作，而不是只让用户选一个版本。Word/PDF 都应走“旧文件、新文件、差异列表、并排高亮、回到再审核”的闭环。
-          </p>
-        </div>
-        <Badge variant={hasCompareSource ? 'default' : 'outline'}>
-          {hasCompareSource ? '可以发起比对' : '缺少新文件'}
-        </Badge>
-      </div>
-      <div className="mt-3 grid gap-2 md:grid-cols-5">
-        {items.map((item, index) => (
-          <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <span className={`grid h-5 w-5 place-items-center rounded-full text-[11px] font-semibold ${
-                item.done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
-              }`}>
-                {item.done ? '✓' : index + 1}
-              </span>
-              <span className="text-xs font-semibold text-slate-950">{item.label}</span>
-            </div>
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.value}</p>
-          </div>
-        ))}
-      </div>
-    </section>
   )
 }
 

@@ -21,7 +21,7 @@ import {
   ChevronRightIcon,
   XIcon,
   ShieldCheckIcon,
-  MessageSquareTextIcon,
+  PenToolIcon,
 } from 'lucide-react'
 import type { Contract } from '@/types'
 import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
@@ -39,7 +39,7 @@ type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
 type ViewMode = 'desktop' | 'mobile'
 
 type QuickAction = {
-  id: 'review' | 'continue' | 'annotations' | 'compare'
+  id: 'review' | 'compare' | 'draft'
   title: string
   shortTitle: string
   workflowLabel: string
@@ -122,63 +122,48 @@ function contractActionName(contract?: Contract) {
 const quickActions: QuickAction[] = [
   {
     id: 'review',
-    title: '发起合同审核',
-    shortTitle: '发起',
-    workflowLabel: '创建新的 ReviewRun',
-    objectLabel: '新的源文件',
-    outcomeLabel: '进入风险定位与批注工作台',
-    boundaryLabel: '不会打开历史批注或旧对比结果',
+    title: '合同审核',
+    shortTitle: '审核',
+    workflowLabel: '上传源文件并创建 ReviewRun',
+    objectLabel: 'DOCX / PDF 源文件',
+    outcomeLabel: '风险定位、AI 批注、源文件批注版',
+    boundaryLabel: '审核自动消费配置中心已发布规则，不在这里选择规则版本',
     icon: ShieldCheckIcon,
     color: 'bg-rose-600',
     hoverColor: 'hover:bg-rose-700',
     href: '/contracts/new',
-    description: '上传合同源文件，创建新的审核运行，不复用旧批注或旧对比结果',
-    stateLabel: '新任务',
-  },
-  {
-    id: 'continue',
-    title: '继续合同审核',
-    shortTitle: '继续',
-    workflowLabel: '回到未完成 ReviewRun',
-    objectLabel: '未完成审核运行',
-    outcomeLabel: '查看真实处理进度与失败原因',
-    boundaryLabel: '不会创建新的合同或重复导出批注版',
-    icon: ClockIcon,
-    color: 'bg-indigo-600',
-    hoverColor: 'hover:bg-indigo-700',
-    href: '/contracts/new',
-    description: '回到解析中、审核中或待处理的合同，不创建新任务',
-    stateLabel: '进行中',
-  },
-  {
-    id: 'annotations',
-    title: '查看批注输出',
-    shortTitle: '输出',
-    workflowLabel: '打开已完成输出',
-    objectLabel: '已完成 ReviewRun',
-    outcomeLabel: '检查证据门禁，满足后导出源文件批注版',
-    boundaryLabel: '不是重新审核，也不是文档对比',
-    icon: MessageSquareTextIcon,
-    color: 'bg-slate-800',
-    hoverColor: 'hover:bg-slate-900',
-    href: '/contracts/new',
-    description: '查看已完成合同的风险证据、源文件批注版和导出记录',
-    stateLabel: '已完成',
+    description: '上传合同源文件，系统自动绑定已发布规则、SkillBundle 和模型策略',
+    stateLabel: '源文件审核',
   },
   {
     id: 'compare',
     title: '合同文档对比',
-    shortTitle: '比对',
-    workflowLabel: '旧版 / 新版差异复核',
-    objectLabel: '同一合同版本流',
-    outcomeLabel: '选择基准与客户回传件，生成差异列表',
-    boundaryLabel: '比对结果不替代风险审核结论',
+    shortTitle: '对比',
+    workflowLabel: '选择旧文件和新文件',
+    objectLabel: '合同版本流或客户回传件',
+    outcomeLabel: '差异列表、并排高亮、风险变化判断',
+    boundaryLabel: '对比不替代审核；红线或需谈判变化进入再审核',
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
     href: '/contracts/upload?intent=compare',
-    description: '以当前合同为基准，对比客户回传版或同客户候选版本',
-    stateLabel: '版本流',
+    description: '选择旧文件和新文件进行差异复核，文件属性只作为面板信息，不污染文件画布',
+    stateLabel: '旧/新文件',
+  },
+  {
+    id: 'draft',
+    title: 'AI 起草合同',
+    shortTitle: '起草',
+    workflowLabel: '输入需求生成合同草稿',
+    objectLabel: '客户需求、模板、条款限制',
+    outcomeLabel: '可编辑合同草稿，可进入审核或对比',
+    boundaryLabel: '起草是独立路径，不等同于上传审核或版本对比',
+    icon: PenToolIcon,
+    color: 'bg-indigo-600',
+    hoverColor: 'hover:bg-indigo-700',
+    href: '/contracts/draft',
+    description: '描述业务需求，结合模板和条款限制生成可修改、可审核的合同草稿',
+    stateLabel: '需求起草',
   },
 ]
 
@@ -389,10 +374,6 @@ export default function ContractCenterPage() {
     const sortedContracts = [...contracts].sort(
       (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
     )
-    const continuingTarget = sortedContracts.find((contract) => (
-      contract.status === 'PENDING' || contract.status === 'PARSING' || contract.status === 'ANALYZING'
-    ))
-    const annotatedTarget = sortedContracts.find((contract) => contract.status === 'COMPLETED')
     const compareTarget = sortedContracts.find((contract) => contract.status === 'COMPLETED')
     return quickActions.map((action) => {
       if (action.id === 'review') {
@@ -404,38 +385,14 @@ export default function ContractCenterPage() {
         }
       }
 
-      if (action.id === 'continue') {
-        return {
-          ...action,
-          href: continuingTarget
-            ? buildContractWorkbenchHref(continuingTarget.id, { from: 'workbench' })
-            : buildContractNewReviewHref('workbench'),
-          description: continuingTarget ? '继续未完成的解析、审核或再审核任务，不创建新合同' : '暂无进行中 ReviewRun；请先上传源文件发起合同审核',
-          targetName: continuingTarget ? contractActionName(continuingTarget) : '没有进行中任务',
-          disabled: !continuingTarget,
-        }
-      }
-
-      if (action.id === 'annotations') {
-        return {
-          ...action,
-          href: annotatedTarget
-            ? buildContractWorkbenchHref(annotatedTarget.id, { panel: 'evidence', from: 'workbench' })
-            : buildContractNewReviewHref('workbench'),
-          description: annotatedTarget ? '查看风险证据、Word 批注意图、导出门禁和下载记录' : '暂无已完成 ReviewRun；批注输出只来自已完成的源文件审核',
-          targetName: annotatedTarget ? contractActionName(annotatedTarget) : '暂无已完成输出',
-          disabled: !annotatedTarget,
-        }
-      }
-
       if (action.id === 'compare') {
         return {
           ...action,
           href: compareTarget
             ? buildContractCompareHref(compareTarget.id, { from: 'workbench' })
             : buildContractNewReviewHref('workbench'),
-          description: compareTarget ? '进入基准合同版本流，选择客户回传版或候选合同做差异复核' : '暂无可作为基准的合同版本；先完成审核或补充源文件',
-          targetName: compareTarget ? contractActionName(compareTarget) : '暂无可比对基准',
+          description: compareTarget ? '进入旧文件/新文件选择页，文件属性在面板展示，不写进文件画布' : '暂无可作为版本流入口的合同；请先上传源文件或完成一个合同版本',
+          targetName: compareTarget ? contractActionName(compareTarget) : '缺少合同版本流',
           disabled: !compareTarget,
         }
       }
@@ -542,7 +499,7 @@ export default function ContractCenterPage() {
             {/* 桌面端保留少量全局动作，完整状态机放到正文首屏 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
               <QuickActionButton action={resolvedQuickActions[0]} compact />
-              <QuickActionButton action={resolvedQuickActions[1]} compact />
+              <QuickActionButton action={resolvedQuickActions[2]} compact />
             </div>
 
             {/* 移动端筛选按钮 */}
@@ -736,10 +693,10 @@ function ReviewLaunchPanel({
           </div>
           <div className="min-w-0">
             <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-slate-950`}>
-              合同审核状态机
+              合同中心
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              合同中心只做四类动作：发起新的审核运行、继续未完成运行、查看批注输出与导出门禁、对比客户回传版本。每个入口必须绑定明确对象，不能互相替代。
+              一级入口只保留合同审核、文档对比、AI 起草合同。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
             </p>
           </div>
         </div>
@@ -751,7 +708,7 @@ function ReviewLaunchPanel({
         </Link>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
 	        {actions.map((action, index) => {
 	          const Icon = action.icon
 	          const content = (

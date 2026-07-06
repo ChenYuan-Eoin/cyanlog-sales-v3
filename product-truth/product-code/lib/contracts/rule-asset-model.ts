@@ -220,9 +220,10 @@ export function ruleExecutionSummary(rule: ContractPolicyRule) {
     ? rule.field_hints.join(' / ')
     : rule.target_field || '未配置'
   const risk = rule.semantic_prompt || formatThreshold(rule)
-  const exceptions = rule.level_a_action
-    ? `A档处理：${rule.level_a_action}`
-    : '未配置'
+  const exceptions = formatRuleValue(
+    levels.exception,
+    rule.level_a_action ? `A档处理：${rule.level_a_action}` : '未配置'
+  )
   const evidence = [
     'evidence_text exact match',
     'source range required',

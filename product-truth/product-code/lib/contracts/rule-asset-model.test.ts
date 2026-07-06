@@ -200,7 +200,15 @@ describe('rule asset model', () => {
   })
 
   it('exposes a non-black-box RuleUnit execution summary', () => {
-    const summary = ruleExecutionSummary(rule())
+    const summary = ruleExecutionSummary(rule({
+      message_template: {
+        comment: '付款节奏不符合红线，需要修改条款。',
+        negotiation_action: '销售需取得客户确认并保留对价。',
+        levels: {
+          exception: '项目所在地为海外且已上传特批签报附件。',
+        },
+      },
+    }))
 
     expect(summary.map((item) => item.label)).toEqual([
       '触发条件',
@@ -210,6 +218,7 @@ describe('rule asset model', () => {
       '谈判动作',
       '批注模板',
     ])
+    expect(summary.find((item) => item.label === '例外条件')?.value).toContain('海外')
     expect(summary.find((item) => item.label === '证据要求')?.value).toContain('evidence_text exact match')
     expect(summary.find((item) => item.label === '谈判动作')?.value).toContain('客户确认')
   })
