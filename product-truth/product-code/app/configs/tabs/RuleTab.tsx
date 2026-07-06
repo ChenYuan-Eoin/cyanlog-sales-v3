@@ -14,8 +14,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  AlertTriangleIcon,
-  CheckCircle2Icon,
   ChevronRightIcon,
   FileTextIcon,
   FolderIcon,
@@ -35,11 +33,9 @@ import {
   buildRuleSetViews,
   clauseCategoryLabel,
   fallbackRuleSetKey,
-  formatRuleValue,
   formatThreshold,
   isFormallyPublishedRule,
   ruleBlockingReasons,
-  ruleExecutionSummary,
   ruleSetKeyForAsset,
   ruleSetPrimaryCategory,
   type JsonRecord,
@@ -110,18 +106,6 @@ type TranslationDraftState = {
 }
 
 const EMPTY_RULES: ContractPolicyRule[] = []
-
-function translationFieldLabel(field: string) {
-  const labels: Record<string, string> = {
-    target_field: '目标字段',
-    clause_category: '规则集',
-    field_hints: '命中提示',
-    semantic_prompt: '语义规则',
-    message_template: '批注/谈判模板',
-  }
-  return labels[field] || field
-}
-
 
 function RuleSetReleasePipeline({ activeRuleSet }: { activeRuleSet?: RuleSetView }) {
   const hasRuleSetDocument = Boolean(activeRuleSet?.asset?.latest_document)
@@ -258,7 +242,6 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   const [ruleSetDocumentDraft, setRuleSetDocumentDraft] = useState({ title: '', content: '' })
   const [saving, setSaving] = useState(false)
   const [translatingRuleId, setTranslatingRuleId] = useState<string | null>(null)
-  const [applyingTranslation, setApplyingTranslation] = useState(false)
   const [translationDraft, setTranslationDraft] = useState<TranslationDraftState | null>(null)
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
   const handledFocusRef = useRef<string | null>(null)
@@ -336,7 +319,6 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }, [ruleSetSections, treeQuery])
 
   const visibleRules = activeRuleSet?.rules || EMPTY_RULES
-  const selectedRuleBlockingReasons = selectedRule ? ruleBlockingReasons(selectedRule) : []
   const activeRuleSetBlockedRules = useMemo(() => (
     visibleRules
       .map((rule) => ({ rule, reasons: ruleBlockingReasons(rule) }))
@@ -350,6 +332,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       clauseCategory: ruleSetPrimaryCategory(activeRuleSet),
     }
   }, [activeRuleSet])
+  const showRuleSetClosure = activeTab === 'list' && !selectedRule
 
   useEffect(() => {
     const document = activeRuleSet?.asset?.latest_document
@@ -568,50 +551,6 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     }
   }
 
-  const handleApplyTranslationDraft = async () => {
-    if (!translationDraft || !selectedRule) return
-    setApplyingTranslation(true)
-    setFeedback(null)
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`/api/contract-policies/rules/${translationDraft.ruleId}/translate`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          apply: true,
-          translation: translationDraft.translation,
-          source_model_invocation_id: translationDraft.modelInvocationId || undefined,
-        }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        setFeedback({
-          tone: 'error',
-          message: data?.error?.message || data?.message || '应用转译草稿失败',
-        })
-        return
-      }
-      const updatedRule = data?.data?.rule as ContractPolicyRule | undefined
-      if (updatedRule) {
-        setSelectedRule(updatedRule)
-      }
-      setTranslationDraft(null)
-      setActiveTab('design')
-      setFeedback({
-        tone: 'success',
-        message: '转译草稿已人工确认并写入规则，发布前仍需测试和版本发布。',
-      })
-      await onRefresh?.()
-    } catch {
-      setFeedback({ tone: 'error', message: '应用转译草稿请求失败' })
-    } finally {
-      setApplyingTranslation(false)
-    }
-  }
-
   const renderRuleButton = (rule: ContractPolicyRule) => {
     const category = categoryMap[rule.category] || categoryMap.text
     const lifecycle = lifecycleMap[rule.lifecycle_status || 'draft'] || lifecycleMap.draft
@@ -712,8 +651,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   return (
     <>
-	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-	      <Card className="min-w-0">
+	    <div className={`grid grid-cols-1 gap-4 ${showRuleSetClosure ? 'xl:grid-cols-[320px_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}>
+	      <Card className={activeTab === 'list' ? 'min-w-0' : 'hidden'}>
 	        <CardHeader className="space-y-3">
             <div className="flex flex-row items-center justify-between gap-3">
 	            <CardTitle className="text-base">
@@ -955,6 +894,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </CardContent>
           </Card>
         )}
+	      {showRuleSetClosure ? (
 	      <Card className="min-w-0">
         <CardHeader>
 		          <CardTitle className="text-base">规则集闭环</CardTitle>
@@ -964,27 +904,27 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('list')}
-              className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'list' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
-            >
-			              规则清单
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('design')}
-              className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'design' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
-            >
-			              维护规则
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('test')}
-              className={`rounded-lg border px-2 py-2 text-xs font-medium ${activeTab === 'test' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
-            >
-			              测试命中
-            </button>
+	            <button
+	              type="button"
+	              onClick={() => setActiveTab('list')}
+	              className="rounded-lg border border-slate-900 bg-slate-900 px-2 py-2 text-xs font-medium text-white"
+	            >
+				              规则清单
+	            </button>
+	            <button
+	              type="button"
+	              onClick={() => setActiveTab('design')}
+	              className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600"
+	            >
+				              维护规则
+	            </button>
+	            <button
+	              type="button"
+	              onClick={() => setActiveTab('test')}
+	              className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600"
+	            >
+				              测试命中
+	            </button>
           </div>
 
           {feedback ? (
@@ -1161,146 +1101,13 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </div>
           </div>
 
-          {selectedRule ? (
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs font-medium text-slate-500">当前规则</div>
-                <div className="mt-1 font-medium text-slate-900">{selectedRule.code} · {selectedRule.name}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{categoryMap[selectedRule.category]?.label || selectedRule.category}</Badge>
-                <Badge variant="outline">{clauseCategoryLabel(selectedRule.clause_category)}</Badge>
-                <Badge variant="outline">{engineMap[selectedRule.engine_type] || selectedRule.engine_type}</Badge>
-                <Badge variant={lifecycleMap[selectedRule.lifecycle_status || 'draft']?.variant || 'secondary'}>
-                  {lifecycleMap[selectedRule.lifecycle_status || 'draft']?.label || '草稿'}
-                </Badge>
-                <Badge variant={translationMap[selectedRule.translation_status || 'not_started']?.variant || 'secondary'}>
-                  {translationMap[selectedRule.translation_status || 'not_started']?.label || '未转译'}
-                </Badge>
-                <Badge variant="outline" className={riskLevelMap[selectedRule.risk_level || 'yellow']?.className}>
-                  {riskLevelMap[selectedRule.risk_level || 'yellow']?.label || '黄色'}
-                </Badge>
-                <Badge variant={selectedRule.is_active ? 'outline' : 'secondary'}>{selectedRule.is_active ? '启用' : '停用'}</Badge>
-                <Badge variant={isFormallyPublishedRule(selectedRule) ? 'default' : 'outline'}>
-                  {isFormallyPublishedRule(selectedRule) ? '进入正式审核' : '不进入正式审核'}
-                </Badge>
-              </div>
-              {translationDraft?.ruleId === selectedRule.id ? (
-                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs leading-5 text-slate-700">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-slate-900">执行草稿待确认</div>
-                      <div className="mt-1 text-slate-500">
-                        {translationDraft.modelInvocationId
-                          ? `模型调用：${translationDraft.modelInvocationId}`
-                          : '来源：人工草稿'}
-                      </div>
-                    </div>
-                    <Badge variant="outline">{translationDraft.translationStatus}</Badge>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {translationDraft.diff.length === 0 ? (
-                      <div className="rounded border border-indigo-100 bg-white px-2 py-1 text-slate-500">
-                        暂无字段差异
-                      </div>
-                    ) : translationDraft.diff.map((item) => (
-                      <div key={item.field} className="rounded border border-indigo-100 bg-white p-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-slate-800">{translationFieldLabel(item.field)}</span>
-                          <Badge variant={item.changed ? 'default' : 'outline'} className="text-[10px]">
-                            {item.changed ? '变更' : '无变化'}
-                          </Badge>
-                        </div>
-                        <div className="mt-2 grid grid-cols-[48px_minmax(0,1fr)] gap-2">
-                          <span className="text-slate-400">当前</span>
-                          <span className="break-words text-slate-500">{formatRuleValue(item.before)}</span>
-                          <span className="text-slate-400">草稿</span>
-                          <span className="break-words text-slate-800">{formatRuleValue(item.after)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      className="flex-1"
-                      size="sm"
-                      disabled={applyingTranslation}
-                      onClick={() => void handleApplyTranslationDraft()}
-                    >
-                      {applyingTranslation ? '应用中...' : '应用转译草稿'}
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      size="sm"
-                      variant="outline"
-                      disabled={applyingTranslation}
-                      onClick={() => setTranslationDraft(null)}
-                    >
-                      丢弃草稿
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-              <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
-	                <div className="font-medium text-slate-900">RuleUnit 字段（可视化）</div>
-                <div className="mt-1">目标字段：{selectedRule.target_field || '未配置'}</div>
-                <div>命中提示：{selectedRule.field_hints?.length ? selectedRule.field_hints.join(' / ') : '未配置'}</div>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="font-medium text-slate-900">执行单元摘要</div>
-                <div className="mt-2 space-y-2">
-                  {ruleExecutionSummary(selectedRule).map((item) => (
-                    <div key={item.label} className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-xs leading-5">
-                      <div className="text-slate-500">{item.label}</div>
-                      <div className="min-w-0 break-words text-slate-700">{item.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className={`rounded-lg border p-3 text-xs leading-5 ${
-                selectedRuleBlockingReasons.length
-                  ? 'border-rose-200 bg-rose-50 text-rose-700'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-              }`}>
-                <div className="flex items-center gap-2 font-medium">
-                  {selectedRuleBlockingReasons.length ? (
-                    <AlertTriangleIcon className="h-4 w-4" />
-                  ) : (
-                    <CheckCircle2Icon className="h-4 w-4" />
-                  )}
-	                  {selectedRuleBlockingReasons.length ? '发布阻断项' : '正式审核可用'}
-                </div>
-                <div className="mt-2">
-                  {selectedRuleBlockingReasons.length
-                    ? selectedRuleBlockingReasons.join(' / ')
-	                    : '规则已启用、已发布、已完成转译并具备进入正式审核编译检查的基础字段。'}
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
-                {formatThreshold(selectedRule)}
-              </div>
-              <Button className="w-full" variant="outline" onClick={() => setActiveTab('test')}>
-                <PlayIcon className="h-4 w-4 mr-1" />
-                测试当前规则
-              </Button>
-              <Button
-                className="w-full"
-                variant="outline"
-                disabled={translatingRuleId === selectedRule.id}
-                onClick={() => void handleTranslateRule(selectedRule)}
-              >
-                <SparklesIcon className="h-4 w-4 mr-1" />
-                AI 转译为 RuleUnit 草稿
-              </Button>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-500">
-	              选择规则后显示结构化字段、发布阻断和模拟测试入口
-            </div>
-          )}
-        </CardContent>
-	      </Card>
-	    </div>
+	          <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-500">
+		            选择左侧规则后，直接进入结构化规则配置器；规则集闭环只在总览态显示。
+	          </div>
+	        </CardContent>
+		      </Card>
+	      ) : null}
+    </div>
 	  </div>
 
     <Dialog open={createRuleSetOpen} onOpenChange={setCreateRuleSetOpen}>

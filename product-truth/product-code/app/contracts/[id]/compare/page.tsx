@@ -1,16 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef, type ChangeEvent } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  buildCompareBaselineUploadHref,
   buildContractCompareHref,
   buildContractWorkbenchHref,
   buildContractsCenterHref,
-  buildCustomerReturnUploadHref,
 } from '@/lib/contracts/review-navigation'
 import {
   ArrowLeftIcon,
@@ -58,6 +56,9 @@ interface ComparisonDocumentMeta {
   filename: string | null
   source: 'current_contract' | 'contract' | 'version' | 'unknown'
   source_label: string
+  storage_path?: string | null
+  mime_type?: string | null
+  file_url?: string | null
   version_number?: number
   created_at?: string | null
 }
@@ -105,6 +106,21 @@ interface ContractVersionOption {
 
 type DiffFilter = 'all' | 'red' | 'yellow' | 'green' | 'deleted' | 'added' | 'modified'
 type ComparePrecision = 'strict' | 'semantic'
+
+type CompareUploadTarget = 'baseline' | 'compare'
+
+const COMPARE_ALLOWED_EXTENSIONS = ['.pdf', '.docx']
+
+function validateCompareUploadFile(file: File): string | null {
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
+  if (!COMPARE_ALLOWED_EXTENSIONS.includes(extension)) {
+    return `不支持的文件类型: ${extension}，请上传 PDF 或 DOCX 文件。`
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    return `文件大小超过 50MB 限制: ${(file.size / 1024 / 1024).toFixed(2)} MB。`
+  }
+  return null
+}
 
 const diffFilters: Array<{ value: DiffFilter; label: string }> = [
   { value: 'all', label: '全部' },
@@ -245,10 +261,17 @@ export default function ContractComparePage() {
   const [startingComparison, setStartingComparison] = useState(false)
   const [startingRerun, setStartingRerun] = useState(false)
   const [rerunNotice, setRerunNotice] = useState('')
+  const [setupError, setSetupError] = useState('')
+  const [setupSuccess, setSetupSuccess] = useState('')
+  const [uploadingTarget, setUploadingTarget] = useState<CompareUploadTarget | null>(null)
 
   const leftPaneRef = useRef<HTMLDivElement>(null)
   const rightPaneRef = useRef<HTMLDivElement>(null)
   const isSyncing = useRef(false)
+  const pendingUploadedVersionRef = useRef<{
+    target: CompareUploadTarget
+    versionNumber: number | null
+  } | null>(null)
 
   const fetchComparison = useCallback(async () => {
     if (!comparisonId) {
@@ -371,6 +394,82 @@ export default function ContractComparePage() {
   }, [comparison, comparisonId, fetchCandidateContracts])
 
   useEffect(() => {
+    const pending = pendingUploadedVersionRef.current
+    if (!pending || versionOptions.length === 0) return
+    const uploadedVersion = versionOptions.find((version) => (
+      pending.versionNumber !== null && version.version_number === pending.versionNumber
+    ))
+    if (!uploadedVersion) return
+
+    if (pending.target === 'baseline') {
+      setSelectedBaselineDocId('')
+      setSelectedBaselineVersionId(uploadedVersion.id)
+    } else {
+      setSelectedCompareDocId('')
+      setSelectedCompareVersionId(uploadedVersion.id)
+    }
+    pendingUploadedVersionRef.current = null
+  }, [versionOptions])
+
+  useEffect(() => {
+    if (comparisonId || comparison || selectedCompareDocId || selectedCompareVersionId) return
+    if (searchParams.get('from') !== 'upload') return
+    const latestManualRevision = versionOptions.find((version) => version.source === 'manual_revision')
+    if (latestManualRevision) {
+      setSelectedCompareVersionId(latestManualRevision.id)
+    }
+  }, [comparison, comparisonId, searchParams, selectedCompareDocId, selectedCompareVersionId, versionOptions])
+
+  const handleUploadCompareFile = useCallback(async (target: CompareUploadTarget, file: File) => {
+    const validationError = validateCompareUploadFile(file)
+    if (validationError) {
+      setSetupError(validationError)
+      setSetupSuccess('')
+      return
+    }
+
+    setUploadingTarget(target)
+    setSetupError('')
+    setSetupSuccess('')
+    try {
+      const token = localStorage.getItem('token')
+      const formData = new FormData()
+      const purpose = target === 'compare'
+        ? 'customer-return'
+        : versionOptions.length > 0
+          ? 'manual_revision'
+          : 'source'
+      formData.append('file', file)
+      formData.append('purpose', purpose)
+
+      const res = await fetch(`/api/contracts/${contractId}/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) {
+        setSetupError(readApiError(payload, target === 'baseline' ? '旧文件上传失败' : '新文件上传失败'))
+        return
+      }
+
+      const versionNumber = Number(payload?.data?.versionNumber)
+      pendingUploadedVersionRef.current = {
+        target,
+        versionNumber: Number.isFinite(versionNumber) ? versionNumber : null,
+      }
+      await fetchCandidateContracts()
+      setSetupSuccess(target === 'baseline'
+        ? '旧文件已上传并作为本次比对基准。'
+        : '新文件已上传并作为本次客户回传版。')
+    } catch {
+      setSetupError(target === 'baseline' ? '旧文件上传失败，请稍后重试。' : '新文件上传失败，请稍后重试。')
+    } finally {
+      setUploadingTarget(null)
+    }
+  }, [contractId, fetchCandidateContracts, versionOptions.length])
+
+  useEffect(() => {
     if (!comparison) return
     const filtered = filterDiffs(comparison.diffs || [], diffFilter)
     if (!filtered.length) {
@@ -386,12 +485,13 @@ export default function ContractComparePage() {
 
   const handleStartComparison = useCallback(async () => {
     if (!selectedCompareDocId && !selectedCompareVersionId) {
-      setError('请先选择一个新文件、客户回传版本或确认一份候选合同，再开始比对。')
+      setSetupError('请先上传或选择新文件 / 客户回传版，再开始比对。')
       return
     }
 
     setStartingComparison(true)
     setError('')
+    setSetupError('')
     try {
       const token = localStorage.getItem('token')
       const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
@@ -614,13 +714,17 @@ export default function ContractComparePage() {
         setSelectedBaselineVersionId={setSelectedBaselineVersionId}
         selectedCompareDocId={selectedCompareDocId}
         setSelectedCompareDocId={setSelectedCompareDocId}
-            selectedCompareVersionId={selectedCompareVersionId}
-            setSelectedCompareVersionId={setSelectedCompareVersionId}
-            comparePrecision={comparePrecision}
-            setComparePrecision={setComparePrecision}
-            startingComparison={startingComparison}
-            onStartComparison={handleStartComparison}
-          />
+        selectedCompareVersionId={selectedCompareVersionId}
+        setSelectedCompareVersionId={setSelectedCompareVersionId}
+        comparePrecision={comparePrecision}
+        setComparePrecision={setComparePrecision}
+        startingComparison={startingComparison}
+        uploadingTarget={uploadingTarget}
+        setupError={setupError}
+        setupSuccess={setupSuccess}
+        onUploadFile={handleUploadCompareFile}
+        onStartComparison={handleStartComparison}
+      />
     )
   }
 
@@ -881,7 +985,7 @@ export default function ContractComparePage() {
         </header>
 
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
-          当前是文本镜像审计视图：只展示可解析文本的变化片段和高亮，不把合同编号、客户、报价等属性写进左右文件画布。后续原件级还原应接入 Word/PDF 渲染层。
+          当前下方是文本差异审计镜像；PDF 文件会优先显示原件预览，DOCX 需接入 Word 渲染层后才能在浏览器内完整 1:1 还原。
         </div>
 
         {/* 差异高亮说明 */}
@@ -931,14 +1035,12 @@ export default function ContractComparePage() {
           >
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                1:1 原件预览（基准）
+                文件源（基准）
               </span>
               <FileTextIcon className="h-3 w-3 text-slate-300" />
             </div>
             <div className="p-8">
-	              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-	                1:1 原件预览（基准）
-              </h2>
+              <DocumentSourcePreview meta={documentPair?.baseline} fallback="当前合同基准文件" />
               <div className="space-y-6 text-sm leading-loose text-slate-600">
                 {visibleDiffs.map((diff) => (
                   <div
@@ -991,14 +1093,12 @@ export default function ContractComparePage() {
           >
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
-                1:1 原件预览（回传）
+                文件源（回传）
               </span>
               <Edit3Icon className="h-3 w-3 text-indigo-300" />
             </div>
             <div className="p-8">
-	              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-	                1:1 原件预览（回传）
-              </h2>
+              <DocumentSourcePreview meta={documentPair?.compare} fallback="客户回传文件" />
               <div className="space-y-6 text-sm leading-loose text-slate-600">
                 {visibleDiffs.map((diff) => (
                   <div
@@ -1254,6 +1354,53 @@ function DocumentPill({
   )
 }
 
+function DocumentSourcePreview({
+  meta,
+  fallback,
+}: {
+  meta?: ComparisonDocumentMeta | null
+  fallback: string
+}) {
+  const isPdf = Boolean(meta?.file_url && meta?.mime_type?.includes('pdf'))
+
+  return (
+    <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium text-slate-500">{sourceLabel(meta)}</div>
+          <div className="mt-1 truncate text-sm font-semibold text-slate-900">{meta?.label || fallback}</div>
+          <div className="mt-1 truncate text-xs text-slate-500">
+            {meta?.mime_type || '未知类型'} · {meta?.storage_path || '未返回文件路径'}
+          </div>
+        </div>
+        {meta?.file_url ? (
+          <a
+            href={meta.file_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            打开原件
+          </a>
+        ) : (
+          <Badge variant="outline">无文件源</Badge>
+        )}
+      </div>
+      {isPdf ? (
+        <iframe
+          title={`${meta?.label || fallback} 预览`}
+          src={meta?.file_url || ''}
+          className="mt-3 h-[360px] w-full rounded-md border border-slate-200 bg-white"
+        />
+      ) : (
+        <p className="mt-3 rounded-md bg-white px-3 py-2 text-xs leading-5 text-slate-500">
+          DOCX 原貌预览不能用文本卡片代替；当前仅展示下方可解析文本差异，完整原貌请打开源文件。
+        </p>
+      )}
+    </div>
+  )
+}
+
 function ComparePairPrimer({
   baselineName,
   selectedCompareName,
@@ -1403,6 +1550,10 @@ function CompareSetupWorkspace({
   comparePrecision,
   setComparePrecision,
   startingComparison,
+  uploadingTarget,
+  setupError,
+  setupSuccess,
+  onUploadFile,
   onStartComparison,
 }: {
   contractId: string
@@ -1421,6 +1572,10 @@ function CompareSetupWorkspace({
   comparePrecision: ComparePrecision
   setComparePrecision: (value: ComparePrecision) => void
   startingComparison: boolean
+  uploadingTarget: CompareUploadTarget | null
+  setupError: string
+  setupSuccess: string
+  onUploadFile: (target: CompareUploadTarget, file: File) => void | Promise<void>
   onStartComparison: () => void
 }) {
   const [showAdvancedSelection, setShowAdvancedSelection] = useState(false)
@@ -1440,8 +1595,6 @@ function CompareSetupWorkspace({
     : selectedCandidate?.filename || ''
   const hasCompareSource = Boolean(selectedVersion || selectedCandidate)
   const hasExistingCompareOptions = comparableVersions.length > 0 || recommendedCandidates.length > 0 || manualConfirmCandidates.length > 0
-  const uploadHref = buildCustomerReturnUploadHref(contractId, 'compare')
-  const baselineUploadHref = buildCompareBaselineUploadHref(contractId)
   const precisionOptions: Array<{ value: ComparePrecision; title: string; desc: string }> = [
     { value: 'strict', title: '严格审计', desc: '更敏感地披露删改、标点、断句和疑似格式造成的实质变化。' },
     { value: 'semantic', title: '标准审计', desc: '弱化格式噪声，优先关注文字、金额、责任和条款实质变化。' },
@@ -1452,6 +1605,13 @@ function CompareSetupWorkspace({
   const resetCompareSource = () => {
     setSelectedCompareDocId('')
     setSelectedCompareVersionId('')
+  }
+  const handleFileInput = (target: CompareUploadTarget) => (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      void onUploadFile(target, file)
+    }
+    event.currentTarget.value = ''
   }
 
   return (
@@ -1483,18 +1643,6 @@ function CompareSetupWorkspace({
                 返回审核工作台
               </Button>
             </Link>
-            <Link href={baselineUploadHref}>
-              <Button variant="outline">
-                <UploadIcon className="mr-2 h-4 w-4" />
-                上传本地基准件
-              </Button>
-            </Link>
-            <Link href={uploadHref}>
-              <Button variant={hasCompareSource ? 'outline' : 'default'}>
-                <UploadIcon className="mr-2 h-4 w-4" />
-                上传新文件 / 客户回传版
-              </Button>
-            </Link>
             <Button onClick={onStartComparison} disabled={!hasCompareSource || startingComparison}>
               {startingComparison ? (
                 <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -1512,9 +1660,19 @@ function CompareSetupWorkspace({
           hasCompareSource={hasCompareSource}
         />
 
+        {(setupError || setupSuccess) && (
+          <div className={`rounded-lg border px-4 py-3 text-sm ${
+            setupError
+              ? 'border-rose-200 bg-rose-50 text-rose-700'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          }`}>
+            {setupError || setupSuccess}
+          </div>
+        )}
+
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <main className="space-y-4">
-            <section className="grid gap-3 lg:grid-cols-[minmax(240px,0.9fr)_minmax(320px,1.1fr)_280px]">
+            <section className="grid gap-3 lg:grid-cols-[minmax(260px,0.9fr)_minmax(320px,1.1fr)_280px]">
               <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -1530,12 +1688,23 @@ function CompareSetupWorkspace({
                   <p>报价：{baselineContract?.quote_id || '未绑定'}</p>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                  <Link href={baselineUploadHref}>
-                    <Button type="button" size="sm" className="w-full">
+                  <label className={`inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md bg-slate-950 px-3 text-sm font-medium text-white transition hover:bg-slate-800 ${
+                    uploadingTarget === 'baseline' ? 'pointer-events-none opacity-70' : ''
+                  }`}>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx"
+                      className="sr-only"
+                      disabled={uploadingTarget !== null}
+                      onChange={handleFileInput('baseline')}
+                    />
+                    {uploadingTarget === 'baseline' ? (
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
                       <UploadIcon className="mr-2 h-4 w-4" />
-                      上传本地基准
-                    </Button>
-                  </Link>
+                    )}
+                    上传旧文件
+                  </label>
                   <Button
                     type="button"
                     variant="outline"
@@ -1563,18 +1732,25 @@ function CompareSetupWorkspace({
                 {hasCompareSource ? (
                   <>
                     <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedCompareName}</p>
-                    <p className="mt-2 text-xs leading-5 text-slate-500">
-                      已明确本次比对的新文件来源。需要替换时优先重新上传回传件；已有版本只作为属性选择。
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    已明确本次比对的新文件来源。需要替换时直接在这里重新上传；已有版本只作为属性选择。
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={resetCompareSource}>
                         清除选择
                       </Button>
-                      <Link href={uploadHref}>
-                        <Button type="button" variant="outline" size="sm">
-                          重新上传
-                        </Button>
-                      </Link>
+                      <label className={`inline-flex h-8 cursor-pointer items-center rounded-md border border-slate-200 px-3 text-xs font-medium transition hover:bg-slate-50 ${
+                        uploadingTarget === 'compare' ? 'pointer-events-none opacity-70' : ''
+                      }`}>
+                        <input
+                          type="file"
+                          accept=".pdf,.docx"
+                          className="sr-only"
+                          disabled={uploadingTarget !== null}
+                          onChange={handleFileInput('compare')}
+                        />
+                        {uploadingTarget === 'compare' ? '上传中...' : '重新上传'}
+                      </label>
                     </div>
                   </>
                 ) : (
@@ -1584,12 +1760,23 @@ function CompareSetupWorkspace({
                       对比应以实时上传的客户回传版为主。没有明确回传件时，不把历史版本和候选合同摊在文件画布里。
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <Link href={uploadHref}>
-                        <Button type="button" size="sm">
+                      <label className={`inline-flex h-9 cursor-pointer items-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition hover:bg-blue-700 ${
+                        uploadingTarget === 'compare' ? 'pointer-events-none opacity-70' : ''
+                      }`}>
+                        <input
+                          type="file"
+                          accept=".pdf,.docx"
+                          className="sr-only"
+                          disabled={uploadingTarget !== null}
+                          onChange={handleFileInput('compare')}
+                        />
+                        {uploadingTarget === 'compare' ? (
+                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
                           <UploadIcon className="mr-2 h-4 w-4" />
-                          上传新文件
-                        </Button>
-                      </Link>
+                        )}
+                        上传新文件
+                      </label>
                       {hasExistingCompareOptions && (
                         <Button
                           type="button"
@@ -1888,13 +2075,8 @@ function CompareBlockingState({
               返回审核工作台
             </Button>
           </Link>
-          <Link href={buildCustomerReturnUploadHref(contractId, 'compare')}>
-            <Button variant="outline" className="w-full">
-              补充可比对文件
-            </Button>
-          </Link>
           <Button className="w-full" onClick={onReset}>
-            重新选择
+            返回工作台补充文件
           </Button>
         </div>
       </div>

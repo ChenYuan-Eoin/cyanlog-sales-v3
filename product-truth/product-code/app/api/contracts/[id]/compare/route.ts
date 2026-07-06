@@ -68,6 +68,9 @@ type ComparisonDocumentMeta = {
   filename: string | null
   source: 'current_contract' | 'contract' | 'version' | 'unknown'
   source_label: string
+  storage_path?: string | null
+  mime_type?: string | null
+  file_url?: string | null
   version_number?: number
   created_at?: string | null
 }
@@ -396,12 +399,16 @@ function versionDocumentMeta(
   sourceLabel: string
 ): ComparisonDocumentMeta {
   const baseName = contract.filename || '合同源文件'
+  const { data: publicUrl } = supabaseAdmin.storage.from('contracts').getPublicUrl(version.storage_path)
   return {
     id: version.id,
     label: `${baseName} v${version.version_number}`,
     filename: baseName,
     source: 'version',
     source_label: sourceLabel,
+    storage_path: version.storage_path,
+    mime_type: version.mime_type,
+    file_url: publicUrl.publicUrl,
     version_number: version.version_number,
     created_at: version.created_at,
   }
@@ -412,12 +419,18 @@ function contractDocumentMeta(
   source: ComparisonDocumentMeta['source'],
   sourceLabel: string
 ): ComparisonDocumentMeta {
+  const publicUrl = contract.storage_path
+    ? supabaseAdmin.storage.from('contracts').getPublicUrl(contract.storage_path).data.publicUrl
+    : null
   return {
     id: contract.id,
     label: contract.filename || contract.contract_no || '合同文件',
     filename: contract.filename,
     source,
     source_label: sourceLabel,
+    storage_path: contract.storage_path,
+    mime_type: contract.mime_type,
+    file_url: publicUrl,
   }
 }
 

@@ -1016,7 +1016,7 @@ export default function ContractWorkbenchPage() {
         onModeChange={setSidePanelMode}
       />
 
-	      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(260px,34vw)] lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[300px_minmax(0,1fr)_380px]">
+	      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[220px_320px_minmax(0,1fr)]">
         <ReviewNavigationRail
           data={data}
           selectedRiskId={selectedRisk?.id || null}
@@ -1024,18 +1024,82 @@ export default function ContractWorkbenchPage() {
           redCount={redCount}
           yellowCount={yellowCount}
           openRiskCount={openRiskCount}
-          canExport={canExport}
-          exportGateIssues={exportGateIssues}
         />
 
-        <section className="space-y-4">
+	        <aside className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
+          <Card>
+            <CardHeader className="border-b border-slate-100 pb-3">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base">任务跟进</CardTitle>
+                <Badge variant="outline">{data.reviewRun?.status || '未开始'}</Badge>
+              </div>
+              <SidePanelTabs value={sidePanelMode} onChange={setSidePanelMode} />
+            </CardHeader>
+            <CardContent className="pt-4">
+              {sidePanelMode === 'review' && (
+                <>
+                  <RiskDecisionPanel
+                    selectedRisk={selectedRisk}
+                    negotiationTasks={data.negotiationTasks}
+                    controlNote={riskControlNote}
+                    feedbackStatus={riskFeedbackStatus}
+                    controlSaving={riskControlSaving}
+                    onControlNoteChange={setRiskControlNote}
+                    onFeedbackStatusChange={setRiskFeedbackStatus}
+                    onSaveControlNote={handleSaveRiskControlNote}
+                    canStartReview={canStartReview}
+                    analyzing={analyzing}
+                    onStartReview={handleStartReview}
+                    canExport={canExport}
+                    exporting={exporting}
+                    onExport={handleExport}
+                    exportGateIssues={exportGateIssues}
+                  />
+                  <div className="mt-4 xl:hidden">
+                    <ReviewPanel
+                      risks={data.riskFindings}
+                      selectedRiskId={selectedRisk?.id || null}
+                      onSelectRisk={setSelectedRiskId}
+                      negotiationTasks={data.negotiationTasks}
+                    />
+                  </div>
+                </>
+              )}
+              {sidePanelMode === 'summary' && (
+                <SummaryPanel
+                  data={data}
+                  redCount={redCount}
+                  yellowCount={yellowCount}
+                  openRiskCount={openRiskCount}
+                />
+              )}
+              {sidePanelMode === 'assistant' && (
+                <AssistantPanel
+                  selectedRisk={selectedRisk}
+                  reviewRun={data.reviewRun}
+                  latestSummary={data.latestReview?.results?.summary}
+                />
+              )}
+              {sidePanelMode === 'evidence' && (
+                <EvidencePanel reviewRun={data.reviewRun} latestJob={data.latestJob} />
+              )}
+            </CardContent>
+          </Card>
+          <VersionOutputPanel
+            data={data}
+            contractId={contractId}
+            actionLabel={versionActionLabel}
+          />
+        </aside>
+
+        <section className="space-y-3">
           <Card>
             <CardHeader className="border-b border-slate-100 pb-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <FileTextIcon className="h-4 w-4" />
-                    源文件证据预览
+                    源文件与批注预览
                   </CardTitle>
                   <p className="mt-1 text-sm text-slate-500">
                     这里用于定位证据和批注意图，不是交付文件。交付以“源文件原生批注版”为准，不能用重新排版文档替代。
@@ -1096,94 +1160,6 @@ export default function ContractWorkbenchPage() {
 
           <AnnotationsPanel annotations={data.annotations} />
         </section>
-
-	        <aside className="space-y-4 sm:sticky sm:top-4 sm:max-h-[calc(100dvh-2rem)] sm:overflow-y-auto">
-          <Card>
-            <CardHeader className="border-b border-slate-100 pb-3">
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base">任务跟进</CardTitle>
-                <Badge variant="outline">{data.reviewRun?.status || '未开始'}</Badge>
-              </div>
-              <SidePanelTabs value={sidePanelMode} onChange={setSidePanelMode} />
-            </CardHeader>
-            <CardContent className="pt-4">
-              {sidePanelMode === 'review' && (
-                <>
-                  <div className="xl:hidden">
-                    <RiskDecisionPanel
-                      selectedRisk={selectedRisk}
-                      negotiationTasks={data.negotiationTasks}
-                      controlNote={riskControlNote}
-                      feedbackStatus={riskFeedbackStatus}
-                      controlSaving={riskControlSaving}
-                      onControlNoteChange={setRiskControlNote}
-                      onFeedbackStatusChange={setRiskFeedbackStatus}
-                      onSaveControlNote={handleSaveRiskControlNote}
-                      canStartReview={canStartReview}
-                      analyzing={analyzing}
-                      onStartReview={handleStartReview}
-                      canExport={canExport}
-                      exporting={exporting}
-                      onExport={handleExport}
-                      exportGateIssues={exportGateIssues}
-                    />
-                    <div className="mt-4">
-                      <ReviewPanel
-                        risks={data.riskFindings}
-                        selectedRiskId={selectedRisk?.id || null}
-                        onSelectRisk={setSelectedRiskId}
-                        negotiationTasks={data.negotiationTasks}
-                      />
-                    </div>
-                  </div>
-                  <div className="hidden xl:block">
-                    <RiskDecisionPanel
-                      selectedRisk={selectedRisk}
-                      negotiationTasks={data.negotiationTasks}
-                      controlNote={riskControlNote}
-                      feedbackStatus={riskFeedbackStatus}
-                      controlSaving={riskControlSaving}
-                      onControlNoteChange={setRiskControlNote}
-                      onFeedbackStatusChange={setRiskFeedbackStatus}
-                      onSaveControlNote={handleSaveRiskControlNote}
-                      canStartReview={canStartReview}
-                      analyzing={analyzing}
-                      onStartReview={handleStartReview}
-                      canExport={canExport}
-                      exporting={exporting}
-                      onExport={handleExport}
-                      exportGateIssues={exportGateIssues}
-                    />
-                  </div>
-                </>
-              )}
-              {sidePanelMode === 'summary' && (
-                <SummaryPanel
-                  data={data}
-                  redCount={redCount}
-                  yellowCount={yellowCount}
-                  openRiskCount={openRiskCount}
-                />
-              )}
-              {sidePanelMode === 'assistant' && (
-                <AssistantPanel
-                  selectedRisk={selectedRisk}
-                  reviewRun={data.reviewRun}
-                  latestSummary={data.latestReview?.results?.summary}
-                />
-              )}
-              {sidePanelMode === 'evidence' && (
-                <EvidencePanel reviewRun={data.reviewRun} latestJob={data.latestJob} />
-              )}
-            </CardContent>
-          </Card>
-
-          <VersionOutputPanel
-            data={data}
-            contractId={contractId}
-            actionLabel={versionActionLabel}
-          />
-        </aside>
       </div>
     </div>
   )
@@ -1669,8 +1645,6 @@ function ReviewNavigationRail({
   redCount,
   yellowCount,
   openRiskCount,
-  canExport,
-  exportGateIssues,
 }: {
   data: WorkbenchData
   selectedRiskId: string | null
@@ -1678,15 +1652,11 @@ function ReviewNavigationRail({
   redCount: number
   yellowCount: number
   openRiskCount: number
-  canExport: boolean
-  exportGateIssues: string[]
 }) {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all')
   const visibleRisks = riskFilter === 'all'
     ? data.riskFindings
     : data.riskFindings.filter((risk) => risk.severity === riskFilter)
-  const latestVersion = data.versions[0]
-  const latestOutput = data.outputs[0]
   const filters: Array<{ value: RiskFilter; label: string; count: number }> = [
     { value: 'all', label: '全部', count: data.riskFindings.length },
     { value: 'red', label: '红线', count: redCount },
@@ -1701,17 +1671,12 @@ function ReviewNavigationRail({
           <CardHeader className="border-b border-slate-100 pb-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <CardTitle className="text-base">谈判任务导航</CardTitle>
-                <p className="mt-1 text-xs text-slate-500">点选风险后，右侧直接跟进谈判、反馈、重审和导出。</p>
+                <CardTitle className="text-sm">风险导航</CardTitle>
+                <p className="mt-1 text-xs text-slate-500">只负责定位风险项。</p>
               </div>
               <Badge variant="outline">{visibleRisks.length}</Badge>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <MiniStat label="红线" value={redCount} />
-              <MiniStat label="谈判" value={yellowCount} />
-              <MiniStat label="开放" value={openRiskCount} />
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid grid-cols-1 gap-1.5">
               {filters.map((filter) => {
                 const active = filter.value === riskFilter
                 return (
@@ -1719,40 +1684,22 @@ function ReviewNavigationRail({
                     key={filter.value}
                     type="button"
                     onClick={() => setRiskFilter(filter.value)}
-                    className={`rounded-md border px-2 py-1.5 text-left text-xs transition ${
+                    className={`flex items-center justify-between rounded-md border px-2 py-1.5 text-left text-xs transition ${
                       active
                         ? 'border-blue-500 bg-blue-50 text-blue-900'
                         : 'border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
                   >
                     <span className="font-medium">{filter.label}</span>
-                    <span className="ml-1 text-slate-400">{filter.count}</span>
+                    <span className="text-slate-400">{filter.count}</span>
                   </button>
                 )
               })}
             </div>
-            <div className="mt-3 grid gap-2 text-xs text-slate-600">
-              <div className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1.5">
-                <span>ReviewRun</span>
-                <span className="max-w-[150px] truncate font-medium text-slate-900">
-                  {data.reviewRun?.status || data.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1.5">
-                <span>版本流</span>
-                <span className="font-medium text-slate-900">
-                  {latestVersion ? `v${latestVersion.version_number}` : '暂无版本'}
-                  {latestOutput ? ` / 批注v${latestOutput.version_number}` : ''}
-                </span>
-              </div>
-              <div className={`rounded-md border px-2 py-1.5 ${
-                canExport ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
-              }`}>
-                <div className="font-medium">{canExport ? '批注版可导出' : '批注版待处理'}</div>
-                {!canExport && exportGateIssues[0] && (
-                  <p className="mt-1 line-clamp-2 leading-5">{exportGateIssues[0]}</p>
-                )}
-              </div>
+            <div className="mt-3 grid grid-cols-3 gap-1 text-center">
+              <TrafficLightPill label="红线" value={redCount} tone={redCount > 0 ? 'red' : 'slate'} />
+              <TrafficLightPill label="谈判" value={yellowCount} tone={yellowCount > 0 ? 'amber' : 'slate'} />
+              <TrafficLightPill label="开放" value={openRiskCount} tone={openRiskCount > 0 ? 'blue' : 'slate'} />
             </div>
           </CardHeader>
           <CardContent className="pt-3">
@@ -1772,17 +1719,17 @@ function ReviewNavigationRail({
                       key={risk.id}
                       type="button"
                       onClick={() => onSelectRisk(risk.id)}
-                      className={`w-full rounded-md border p-3 text-left transition ${tone.className} ${
+                      className={`w-full rounded-md border p-2 text-left transition ${tone.className} ${
                         active ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-slate-300'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="line-clamp-2 text-sm font-semibold">{risk.title}</span>
+                        <span className="line-clamp-2 text-xs font-semibold">{risk.title}</span>
                         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${taskStatus.className}`}>
                           {taskStatus.label}
                         </span>
                       </div>
-                      <p className="mt-2 line-clamp-2 text-xs leading-5 opacity-80">
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-4 opacity-80">
                         {risk.description || risk.suggestion || '等待客户反馈或回传版本。'}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2 text-[11px] opacity-80">

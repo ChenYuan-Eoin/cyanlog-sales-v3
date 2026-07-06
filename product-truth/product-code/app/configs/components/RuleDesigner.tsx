@@ -59,22 +59,6 @@ const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> =
   { value: 'red', label: '红线' },
 ]
 
-const clauseCategoryOptions = [
-  { value: '', label: '选择规则集目录' },
-  { value: 'business_integrity', label: '审查逻辑 / 主体与金额一致性' },
-  { value: 'acceptance', label: '审查逻辑 / 验收与交付' },
-  { value: 'sla', label: '审查逻辑 / SLA 与服务承诺' },
-  { value: 'dispute', label: '审查逻辑 / 争议解决' },
-  { value: 'payment', label: '违约与责任 / 付款与结算' },
-  { value: 'breach', label: '违约与责任 / 违约责任' },
-  { value: 'liability', label: '违约与责任 / 责任边界' },
-  { value: 'termination', label: '违约与责任 / 终止与退款' },
-  { value: 'tax', label: '违约与责任 / 税务与发票' },
-  { value: 'ip', label: '知识产权与数据 / 知识产权' },
-  { value: 'data_security', label: '知识产权与数据 / 数据安全' },
-  { value: 'confidentiality', label: '知识产权与数据 / 保密义务' },
-]
-
 const actionOptions = [
   { value: 'auto_approve', label: '验收通过' },
   { value: 'suggest_counterparty', label: '进入销售谈判' },
@@ -84,10 +68,6 @@ const actionOptions = [
 
 function formatOperatorLabel(value: ContractRuleOperator | undefined) {
   return value ? operatorLabels[value] || value : ''
-}
-
-function formatActionLabel(value: string | null | undefined) {
-  return actionOptions.find((option) => option.value === value)?.label || value || '未配置'
 }
 
 function createDefaultRule(defaultRuleSet?: RuleDesignerProps['defaultRuleSet']): RuleDraft {
@@ -162,7 +142,6 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
   }))
   const [fieldHints, setFieldHints] = useState(() => toCsv(initialRule?.field_hints))
   const [scenarios, setScenarios] = useState(() => toCsv(initialRule?.applicable_scenarios))
-  const isSemantic = draft.engine_type === 'semantic' || draft.category === 'text'
   const messageTemplate = useMemo(() => asMessageTemplate(draft.message_template), [draft.message_template])
   const messageLevels = useMemo(() => (
     messageTemplate.levels && typeof messageTemplate.levels === 'object' && !Array.isArray(messageTemplate.levels)
@@ -192,34 +171,6 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
     priority: Number(draft.priority ?? 100),
   }), [draft, fieldHints, scenarios, messageTemplate])
 
-  const ruleUnitPreview = useMemo(() => {
-    const hints = fromCsv(fieldHints)
-    const scenariosList = fromCsv(scenarios)
-    const trigger = hints.length > 0
-      ? hints.join(' / ')
-      : draft.target_field || '未配置命中提示'
-    const structuredRisk = `通过：${formatOperatorLabel(draft.level_a_operator)} ${draft.level_a_threshold ?? 0}${draft.level_a_unit || ''}；需谈判：${formatOperatorLabel(draft.level_b_operator)} ${draft.level_b_threshold ?? 0}${draft.level_b_unit || ''}；红线：${formatOperatorLabel(draft.level_c_operator)} ${draft.level_c_threshold ?? 0}${draft.level_c_unit || ''}`
-
-    return [
-      {
-        label: '规则集',
-        value: clauseCategoryOptions.find((item) => item.value === draft.clause_category)?.label || draft.clause_category || '未归类',
-      },
-      { label: '触发条件', value: trigger },
-      { label: '风险条件', value: draft.semantic_prompt || structuredRisk },
-      { label: '例外/通过条件', value: messageLevels.exception || formatActionLabel(draft.level_a_action) },
-      { label: '证据要求', value: 'evidence_text 必须 exact match，导出前必须有 source range' },
-      {
-        label: '谈判动作',
-        value: messageTemplate.negotiation_required
-          ? (messageTemplate.negotiation_action || '必须形成销售谈判任务')
-          : '非强制谈判',
-      },
-      { label: '批注模板', value: messageTemplate.comment || messageTemplate.suggestion || '未配置客户可见批注模板' },
-      { label: '适用场景', value: scenariosList.length ? scenariosList.join(' / ') : '全组织默认适用' },
-    ]
-  }, [draft, fieldHints, messageLevels.exception, messageTemplate, scenarios])
-
   function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
   }
@@ -237,266 +188,141 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
   return (
     <form
-      className="space-y-6"
+      className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault()
         void onSave(normalizedDraft)
       }}
     >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
         {!initialRule && defaultRuleSet?.label ? (
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800 md:col-span-2">
+          <div className="mb-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
             当前会在“{defaultRuleSet.label}”下创建规则，保存后进入转译确认和发布门禁。
           </div>
         ) : null}
-        <Field label="规则编码（可由系统生成）">
-          <Input
-            value={draft.code || ''}
-            onChange={(event) => update('code', event.target.value)}
-            placeholder="PAYMENT_DAYS_STANDARD"
-            required
-          />
-        </Field>
-        <Field label="规则名称">
-          <Input
-            value={draft.name || ''}
-            onChange={(event) => update('name', event.target.value)}
-            placeholder="付款账期标准"
-            required
-          />
-        </Field>
-        <Field label="规则集目录">
-          <Select
-            value={draft.clause_category || ''}
-            onChange={(value) => update('clause_category', value)}
-            options={clauseCategoryOptions}
-          />
-        </Field>
-        <Field label="风险等级">
-          <Select
-            value={draft.risk_level || 'yellow'}
-            onChange={(value) => update('risk_level', value as ContractRuleRiskLevel)}
-            options={riskLevelOptions}
-          />
-        </Field>
-        <Field label="命中类型">
-          <Select
-            value={draft.category || 'duration'}
-            onChange={(value) => update('category', value as ContractRuleCategory)}
-            options={categoryOptions}
-          />
-        </Field>
-        <Field label="执行方式">
-          <Select
-            value={draft.engine_type || 'structured'}
-            onChange={(value) => update('engine_type', value as ContractRuleEngineType)}
-            options={engineOptions}
-          />
-        </Field>
-      </div>
-
-      <Field label="规则描述">
-        <Textarea
-          value={draft.description || ''}
-          onChange={(event) => update('description', event.target.value)}
-          placeholder="说明规则适用的合同场景、风险判断依据和审批处理方式。"
-          rows={3}
-        />
-      </Field>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="原文定位线索 / 关键词">
-          <Input
-            value={fieldHints}
-            onChange={(event) => setFieldHints(event.target.value)}
-            placeholder="首期 / 账期 / 尾款 / 验收后付款"
-          />
-        </Field>
-        <Field label="适用合同/场景">
-          <Input
-            value={scenarios}
-            onChange={(event) => setScenarios(event.target.value)}
-            placeholder="标准销售合同, 框架协议"
-          />
-        </Field>
-      </div>
-
-      <details className="rounded-lg border border-slate-200 bg-slate-50">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800">
-          系统字段（高级）
-          <span className="ml-2 text-xs font-normal text-slate-500">只在需要调整 RuleUnit 映射、执行顺序或底层字段时打开</span>
-        </summary>
-        <div className="grid grid-cols-1 gap-4 border-t border-slate-200 p-4 md:grid-cols-3">
-          <Field label="业务域">
+        <div className="grid gap-3 md:grid-cols-[120px_minmax(0,1fr)_120px]">
+          <Field label="ID / 编码">
             <Input
-              value={draft.business_domain || ''}
-              onChange={(event) => update('business_domain', event.target.value)}
-              placeholder="contract_review"
+              value={draft.code || ''}
+              onChange={(event) => update('code', event.target.value)}
+              placeholder="R1001"
               required
+              className="bg-white font-mono"
             />
           </Field>
-          <Field label="系统定位字段">
+          <Field label="规则名称">
+            <Input
+              value={draft.name || ''}
+              onChange={(event) => update('name', event.target.value)}
+              placeholder="预付款超标审查"
+              required
+              className="bg-white"
+            />
+          </Field>
+          <Field label="状态">
+            <select
+              value={draft.is_active === false ? 'disabled' : 'enabled'}
+              onChange={(event) => update('is_active', event.target.value === 'enabled')}
+              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+            >
+              <option value="enabled">启用</option>
+              <option value="disabled">停用</option>
+            </select>
+          </Field>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h3 className="text-sm font-semibold text-slate-950">触发器配置</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            规则器只看可执行条件：关键词定位、语义判断、数值字段。规则来源可以是 Markdown，但这里必须可见可改。
+          </p>
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-2">
+          <Field label="关键词 / 原文定位线索">
+            <Input
+              value={fieldHints}
+              onChange={(event) => setFieldHints(event.target.value)}
+              placeholder="首付款, 账期, 验收后付款"
+            />
+          </Field>
+          <Field label="适用范围">
+            <Input
+              value={scenarios}
+              onChange={(event) => setScenarios(event.target.value)}
+              placeholder="标准销售合同, 框架协议"
+            />
+          </Field>
+          <Field label="触发方式">
+            <Select
+              value={draft.category || 'duration'}
+              onChange={(value) => update('category', value as ContractRuleCategory)}
+              options={categoryOptions}
+            />
+          </Field>
+          <Field label="执行引擎">
+            <Select
+              value={draft.engine_type || 'structured'}
+              onChange={(value) => update('engine_type', value as ContractRuleEngineType)}
+              options={engineOptions}
+            />
+          </Field>
+          <Field label="数值字段">
             <Input
               value={draft.target_field || ''}
               onChange={(event) => update('target_field', event.target.value)}
-              placeholder="payment_days"
+              placeholder="payment_schedule / payment_days"
             />
           </Field>
-          <Field label="执行顺序">
-            <Input
-              type="number"
-              value={draft.priority ?? 100}
-              onChange={(event) => update('priority', Number(event.target.value))}
+          <Field label="默认风险等级">
+            <Select
+              value={draft.risk_level || 'yellow'}
+              onChange={(value) => update('risk_level', value as ContractRuleRiskLevel)}
+              options={riskLevelOptions}
             />
           </Field>
-        </div>
-      </details>
-
-      <div className="rounded-lg border border-slate-200">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-medium text-slate-900">核心逻辑定义</h3>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            规则可以来自文档，但正式执行前必须在这里变成可见、可改、可测试的结构化 RuleUnit。
-          </p>
-        </div>
-        <div className="space-y-4 p-4">
-          <Field label="触发条件（Trigger）">
-            <Textarea
-              value={fieldHints}
-              onChange={(event) => setFieldHints(event.target.value)}
-              placeholder="合同类型 = 采购；供应商性质 = 新进；命中词：首付款 / 账期 / 验收"
-              rows={3}
-            />
-          </Field>
-          <Field label="风险条件（Risk）">
-            <Textarea
-              value={draft.semantic_prompt || ''}
-              onChange={(event) => update('semantic_prompt', event.target.value)}
-              placeholder={isSemantic ? '描述需要从合同条款中识别的风险语义。' : '例如：预付款比例 > 30%，或账期 > 30 个工作日。'}
-              rows={4}
-              className="border-rose-200 bg-rose-50/70 text-slate-900 focus-visible:ring-rose-300"
-            />
-          </Field>
-          <Field label="例外条件（Exception）">
-            <Textarea
-              value={messageLevels.exception || ''}
-              onChange={(event) => updateMessageTemplateLevel('exception', event.target.value)}
-              placeholder="例如：项目所在地为海外，或已上传特批签报附件。"
-              rows={3}
-              className="border-emerald-200 bg-emerald-50/70 text-slate-900 focus-visible:ring-emerald-300"
-            />
-          </Field>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-            <div className="text-xs font-medium text-slate-500">转译结果（自然语言预览）</div>
+          <div className="lg:col-span-2">
+            <Field label="语义触发条件">
+              <Textarea
+                value={draft.semantic_prompt || ''}
+                onChange={(event) => update('semantic_prompt', event.target.value)}
+                placeholder="描述 AI 需要识别的条款语义，例如：客户单方终止后要求全额退款且不计息。"
+                rows={3}
+                className="border-rose-200 bg-rose-50/70 text-slate-900 focus-visible:ring-rose-300"
+              />
+            </Field>
+          </div>
+          <div className="lg:col-span-2">
+            <Field label="例外条件 / 白名单">
+              <Textarea
+                value={messageLevels.exception || ''}
+                onChange={(event) => updateMessageTemplateLevel('exception', event.target.value)}
+                placeholder="例如：已上传特批签报，或项目所在地为海外。"
+                rows={2}
+                className="border-emerald-200 bg-emerald-50/70 text-slate-900 focus-visible:ring-emerald-300"
+              />
+            </Field>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 lg:col-span-2">
+            <div className="text-xs font-medium text-slate-500">实时转译预览</div>
             <p className="mt-2 text-sm leading-6 text-slate-800">
-              当系统识别到“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置触发线索'}”时，
-              若满足“{draft.semantic_prompt || `${formatOperatorLabel(draft.level_b_operator)} ${draft.level_b_threshold ?? 0}${draft.level_b_unit || ''}`}”，
-              则触发{riskLevelOptions.find((item) => item.value === draft.risk_level)?.label || '黄色'}风险；
-              {messageLevels.exception ? `但如果满足例外条件“${messageLevels.exception}”，则按例外流程处理。` : '当前尚未配置例外条件。'}
+              命中“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置触发线索'}”后，
+              由{engineOptions.find((item) => item.value === draft.engine_type)?.label || '规则引擎'}判断：
+              {draft.semantic_prompt || `${formatOperatorLabel(draft.level_b_operator)} ${draft.level_b_threshold ?? 0}${draft.level_b_unit || ''}`}。
+              {messageLevels.exception ? ` 满足例外“${messageLevels.exception}”时不进入红线。` : ' 尚未配置例外。'}
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-lg border border-slate-200">
+      <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-medium text-slate-900">批注与谈判模板</h3>
-        </div>
-        <div className="space-y-4 p-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="风险标题模板">
-              <Input
-                value={messageTemplate.title || ''}
-                onChange={(event) => updateMessageTemplate('title', event.target.value)}
-                placeholder="如：付款节奏风险"
-              />
-            </Field>
-            <Field label="责任角色">
-              <Input
-                value={messageTemplate.owner_role || ''}
-                onChange={(event) => updateMessageTemplate('owner_role', event.target.value)}
-                placeholder="sales / legal / finance"
-              />
-            </Field>
-          </div>
-          <Field label="风险说明模板">
-            <Textarea
-              value={messageTemplate.description || ''}
-              onChange={(event) => updateMessageTemplate('description', event.target.value)}
-              placeholder="描述命中该规则时应如何解释风险。"
-              rows={3}
-            />
-          </Field>
-          <Field label="批注文案模板">
-            <Textarea
-              value={messageTemplate.comment || ''}
-              onChange={(event) => updateMessageTemplate('comment', event.target.value)}
-              placeholder="写给客户可见的 Word 批注意见。"
-              rows={3}
-            />
-          </Field>
-          <Field label="销售谈判动作">
-            <Textarea
-              value={messageTemplate.negotiation_action || ''}
-              onChange={(event) => updateMessageTemplate('negotiation_action', event.target.value)}
-              placeholder="销售需要向客户争取、确认或让步的动作。"
-              rows={3}
-            />
-          </Field>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="修改建议">
-              <Textarea
-                value={messageTemplate.suggestion || ''}
-                onChange={(event) => updateMessageTemplate('suggestion', event.target.value)}
-                placeholder="内部建议或推荐替代条款。"
-                rows={3}
-              />
-            </Field>
-            <Field label="谈判底线">
-              <Textarea
-                value={messageTemplate.bottom_line || ''}
-                onChange={(event) => updateMessageTemplate('bottom_line', event.target.value)}
-                placeholder="不可突破的商业或法务底线。"
-                rows={3}
-              />
-            </Field>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={Boolean(messageTemplate.negotiation_required)}
-              onChange={(event) => updateMessageTemplate('negotiation_required', event.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
-            />
-            必须进入销售谈判任务
-          </label>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-indigo-200 bg-indigo-50/60">
-        <div className="border-b border-indigo-100 px-4 py-3">
-          <h3 className="text-sm font-medium text-slate-900">RuleUnit 执行单元预览</h3>
-          <p className="mt-1 text-xs text-slate-600">
-            保存后进入转译、人工确认、发布和引擎编译；这里用于确认规则不是黑盒文档。
-          </p>
-        </div>
-        <div className="grid gap-2 p-4 md:grid-cols-2">
-          {ruleUnitPreview.map((item) => (
-            <div key={item.label} className="rounded-md border border-white/70 bg-white px-3 py-2">
-              <div className="text-[11px] font-medium text-indigo-700">{item.label}</div>
-              <div className="mt-1 min-h-5 break-words text-sm leading-5 text-slate-800">{item.value}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-slate-200">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-medium text-slate-900">风险等级阈值</h3>
+          <h3 className="text-sm font-semibold text-slate-950">红绿灯等级定义</h3>
         </div>
         <div className="divide-y divide-slate-100">
           <LevelEditor
-            label="通过档"
+            label="绿色通过"
             operator={draft.level_a_operator || '<='}
             threshold={draft.level_a_threshold ?? 30}
             unit={draft.level_a_unit || ''}
@@ -507,7 +333,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             onActionChange={(value) => update('level_a_action', value)}
           />
           <LevelEditor
-            label="谈判档"
+            label="黄色谈判"
             operator={draft.level_b_operator || '>'}
             threshold={draft.level_b_threshold ?? 90}
             unit={draft.level_b_unit || ''}
@@ -518,7 +344,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             onActionChange={(value) => update('level_b_action', value)}
           />
           <LevelEditor
-            label="红线档"
+            label="红线阻断"
             operator={draft.level_c_operator || '>'}
             threshold={draft.level_c_threshold ?? 180}
             unit={draft.level_c_unit || ''}
@@ -529,34 +355,49 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             onActionChange={(value) => update('level_c_action', value)}
           />
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="B 级会签建议">
-          <Input
-            value={draft.level_b_counterparty || ''}
-            onChange={(event) => update('level_b_counterparty', event.target.value)}
-            placeholder="法务、财务或销售负责人"
-          />
-        </Field>
-        <Field label="C 级阻断提示">
-          <Input
-            value={draft.level_c_message || ''}
-            onChange={(event) => update('level_c_message', event.target.value)}
-            placeholder="超过红线阈值，需重新谈判条款"
-          />
-        </Field>
-      </div>
-
-      <label className="flex items-center gap-2 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={draft.is_active ?? true}
-          onChange={(event) => update('is_active', event.target.checked)}
-          className="h-4 w-4 rounded border-slate-300"
-        />
-        启用规则
-      </label>
+      <section className="rounded-lg border border-slate-200">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h3 className="text-sm font-semibold text-slate-950">输出模板</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            这里是给审核引擎和 Word 批注生成读取的模板，不是让业务人员填写长报告。
+          </p>
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-2">
+          <Field label="批注标题">
+            <Input
+              value={messageTemplate.title || ''}
+              onChange={(event) => updateMessageTemplate('title', event.target.value)}
+              placeholder="预付款比例超标"
+            />
+          </Field>
+          <Field label="客户侧修改建议模板">
+            <Textarea
+              value={messageTemplate.suggestion || ''}
+              onChange={(event) => updateMessageTemplate('suggestion', event.target.value)}
+              placeholder="建议修改为：{recommended_clause}"
+              rows={3}
+            />
+          </Field>
+          <Field label="Word 批注文案模板">
+            <Textarea
+              value={messageTemplate.comment || ''}
+              onChange={(event) => updateMessageTemplate('comment', event.target.value)}
+              placeholder="请将该条款调整为双方可确认的付款节奏。"
+              rows={3}
+            />
+          </Field>
+          <Field label="谈判动作模板">
+            <Textarea
+              value={messageTemplate.negotiation_action || ''}
+              onChange={(event) => updateMessageTemplate('negotiation_action', event.target.value)}
+              placeholder="销售需要确认的客户反馈、可接受底线和下一步动作。"
+              rows={3}
+            />
+          </Field>
+        </div>
+      </section>
 
       <div className="flex flex-wrap items-center justify-end gap-3">
         {onTest ? (
