@@ -12,12 +12,23 @@ import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function textValue(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; cardId: string }> }
 ) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { id: contractId, cardId } = await params
+    const body = await req.json().catch(() => ({}))
     const { contract } = await getAccessibleContract(contractId, user.id, orgId, 'id')
 
     if (!contract) {
@@ -36,6 +47,68 @@ export async function POST(
       return errorResponse(createApiError('NOT_FOUND', '风险卡片不存在'))
     }
 
+    const action = textValue((body as { action?: unknown }).action) || 'auto_fix'
+    const note = textValue((body as { note?: unknown }).note)
+    const proposedValue = textValue((body as { proposed_value?: unknown }).proposed_value)
+    const isControlNote = action === 'control_note' || Boolean(note || proposedValue)
+    const now = new Date().toISOString()
+
+    if (isControlNote) {
+      if (!note && !proposedValue) {
+        return errorResponse(createApiError('VALIDATION_ERROR', '请补充风险可控化说明或建议数值'))
+      }
+      if (note.length > 1200 || proposedValue.length > 300) {
+        return errorResponse(createApiError('VALIDATION_ERROR', '风险可控化说明过长'))
+      }
+
+      const fixAction = {
+        ...objectValue(riskCard.fix_action),
+        control_note: note || null,
+        proposed_value: proposedValue || null,
+        control_status: 'needs_customer_confirmation',
+        control_source: 'manual_review_note',
+        controlled_by: user.id,
+        controlled_at: now,
+      }
+
+      const { error: updateError } = await supabaseAdmin
+        .from('contract_risk_cards')
+        .update({
+          fix_action: fixAction,
+          updated_at: now,
+        })
+        .eq('id', cardId)
+
+      if (updateError) {
+        return errorResponse(createApiError('DB_ERROR', '保存风险可控说明失败'))
+      }
+
+      await supabaseAdmin
+        .from('contract_risk_card_fixes')
+        .insert({
+          risk_card_id: cardId,
+          contract_id: contractId,
+          fixed_by: user.id,
+          fix_action: {
+            type: 'control_note',
+            note: note || null,
+            proposed_value: proposedValue || null,
+            status: 'needs_customer_confirmation',
+            risk_status_preserved: riskCard.status,
+          },
+          created_at: now,
+        })
+
+      return successResponse({
+        message: '已保存风险可控化说明',
+        riskCard: {
+          id: riskCard.id,
+          status: riskCard.status,
+          fix_action: fixAction,
+        },
+      })
+    }
+
     // 2. 检查是否支持自动修复
     if (!riskCard.auto_fixable) {
       return errorResponse(createApiError('VALIDATION_ERROR', '该风险不支持自动修复'))
@@ -47,8 +120,8 @@ export async function POST(
       .update({
         status: 'fixed',
         fixed_by: user.id,
-        fixed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        fixed_at: now,
+        updated_at: now,
       })
       .eq('id', cardId)
 
@@ -64,7 +137,7 @@ export async function POST(
         contract_id: contractId,
         fixed_by: user.id,
         fix_action: riskCard.fix_action || {},
-        created_at: new Date().toISOString(),
+        created_at: now,
       })
 
     return successResponse({
@@ -72,7 +145,7 @@ export async function POST(
       riskCard: {
         id: riskCard.id,
         status: 'fixed',
-        fixed_at: new Date().toISOString(),
+        fixed_at: now,
       },
     })
   })

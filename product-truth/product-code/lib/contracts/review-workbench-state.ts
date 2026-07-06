@@ -188,8 +188,16 @@ export function buildExportGateIssues(data: WorkbenchReviewDataLike, reviewHealt
   if (data.annotations.length === 0 && data.riskFindings.length === 0) {
     issues.push('当前没有可写入 Word 的风险项或批注意图。')
   }
-  if (reviewHealth.degraded) {
-    issues.push(...reviewHealth.issues)
+  if (reviewHealth.exportBlocked) {
+    if (reviewHealth.manualRiskCount > 0) {
+      issues.push(`${reviewHealth.manualRiskCount} 个风险项没有可验证的原文定位，不能自动写入源文件批注。`)
+    }
+    if (reviewHealth.manualAnnotationCount > 0) {
+      issues.push(`${reviewHealth.manualAnnotationCount} 条 Word 批注意图需要人工定位，导出前必须处理。`)
+    }
+    if (reviewHealth.wordUnsafeAnnotationCount > 0) {
+      issues.push(`${reviewHealth.wordUnsafeAnnotationCount} 条 Word 批注意图疑似跨段或证据过短，不能稳定写入源文件批注。`)
+    }
   }
   return Array.from(new Set(issues))
 }

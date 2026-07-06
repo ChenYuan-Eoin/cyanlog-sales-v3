@@ -66,6 +66,7 @@ type RiskCardRow = {
   description?: string | null
   suggestion?: string | null
   evidence?: unknown
+  fix_action?: unknown
   status: string
   clause_ref?: string | null
   position_start?: number | null
@@ -480,6 +481,7 @@ export async function GET(
       description: card.description || '',
       suggestion: card.suggestion || '',
       evidence: card.evidence || { snippets: [] },
+      fix_action: card.fix_action || null,
       status: card.status,
       clause_ref: card.clause_ref || null,
       position: {

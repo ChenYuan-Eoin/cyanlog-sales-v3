@@ -11,8 +11,10 @@ import { logError } from '@/lib/error-log'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 import {
+  appendRiskControlCommentLines,
   buildCommentPatchesFromRiskCards,
   extractRiskFindingId,
+  type RiskCardCommentSource,
 } from '@/lib/contracts/comment-patch'
 import { recordModelInvocation } from '@/lib/contracts/model-policy'
 
@@ -24,6 +26,7 @@ type ExportReviewRow = {
 }
 
 type ExportAnnotationRow = {
+  id?: string
   selected_text?: string | null
   comment?: string | null
 }
@@ -199,6 +202,7 @@ async function recordExportFallbackInvocations(input: {
   sourceVersionId?: string | null
   outputVersionNumber: number
   exportTiming: Record<string, number>
+  modelGateIssues: string[]
 }) {
   const common = {
     orgId: input.orgId,
@@ -236,6 +240,7 @@ async function recordExportFallbackInvocations(input: {
       risk_count: input.riskCount,
       source_comment_mode: 'source_comments',
       export_timing: input.exportTiming,
+      model_gate_warnings: input.modelGateIssues,
     },
   })
 
@@ -259,6 +264,7 @@ async function recordExportFallbackInvocations(input: {
       risk_count: input.riskCount,
       source_comment_mode: 'source_comments',
       export_timing: input.exportTiming,
+      model_gate_warnings: input.modelGateIssues,
     },
   })
 
@@ -403,7 +409,7 @@ export async function POST(
     const { data: riskCardsForPatches, error: riskCardsError } = await exportTiming.measure('risk_patches_load', () => (
       supabaseAdmin
         .from('contract_risk_cards')
-        .select('id, rule_id, rule_code, rule_version, level, title, description, suggestion, evidence, status, position_start, position_end')
+        .select('id, rule_id, rule_code, rule_version, level, title, description, suggestion, evidence, fix_action, status, position_start, position_end')
         .eq('contract_id', id)
         .eq('review_id', latestReview.id)
         .order('created_at', { ascending: true })
@@ -447,6 +453,43 @@ export async function POST(
       ]
     }
 
+    const riskById = new Map(
+      ((riskCardsForPatches || []) as RiskCardCommentSource[]).map((risk) => [risk.id, risk] as const)
+    )
+    const annotationControlUpdates = exportAnnotations
+      .map((annotation) => {
+        const riskId = extractRiskFindingId(annotation.comment)
+        const risk = riskId ? riskById.get(riskId) : null
+        if (!annotation.id || !risk) return null
+        const nextComment = appendRiskControlCommentLines(annotation.comment || '', risk)
+        return nextComment !== annotation.comment
+          ? { id: annotation.id, comment: nextComment }
+          : null
+      })
+      .filter((item): item is { id: string; comment: string } => Boolean(item))
+
+    if (annotationControlUpdates.length > 0) {
+      const updateResults = await exportTiming.measure('control_comment_update', async () => (
+        Promise.all(annotationControlUpdates.map((item) => (
+          supabaseAdmin
+            .from('contract_annotations')
+            .update({ comment: item.comment })
+            .eq('id', item.id)
+        )))
+      ))
+      const updateError = updateResults.find((result) => result.error)?.error
+      if (updateError) {
+        return errorResponse('同步风险可控说明到批注意图失败', 500, 'CONTROL_COMMENT_UPDATE_FAILED')
+      }
+
+      const updateById = new Map(annotationControlUpdates.map((item) => [item.id, item.comment] as const))
+      exportAnnotations = exportAnnotations.map((annotation) => (
+        annotation.id && updateById.has(annotation.id)
+          ? { ...annotation, comment: updateById.get(annotation.id) || annotation.comment }
+          : annotation
+      ))
+    }
+
     const exportGateIssues = buildSourceCommentExportGateIssues(exportAnnotations)
     if (exportGateIssues.length > 0) {
       return errorResponse(
@@ -462,32 +505,22 @@ export async function POST(
     const modelInvocationIds = rawModelInvocationIds.filter((item): item is string => (
       typeof item === 'string' && item.length > 0
     ))
-    if (modelInvocationIds.length === 0) {
-      return errorResponse(
-        'ReviewRun 缺少模型调用证据，不能生成正式源文件批注版。',
-        400,
-        'EXPORT_MODEL_GATE_BLOCKED'
-      )
-    }
+    let modelGateIssues = modelInvocationIds.length === 0
+      ? ['ReviewRun 缺少模型调用证据，本次只导出已定位批注意图，不能视为正式 AI 审核完成。']
+      : []
+    if (modelInvocationIds.length > 0) {
+      const { data: modelInvocations, error: modelInvocationsError } = await exportTiming.measure('model_invocations_load', () => (
+        supabaseAdmin
+          .from('model_invocations')
+          .select('id, phase, provider, model, status, degraded, fallback_reason, error_message, response_meta')
+          .in('id', modelInvocationIds)
+      ))
 
-    const { data: modelInvocations, error: modelInvocationsError } = await exportTiming.measure('model_invocations_load', () => (
-      supabaseAdmin
-        .from('model_invocations')
-        .select('id, phase, provider, model, status, degraded, fallback_reason, error_message, response_meta')
-        .in('id', modelInvocationIds)
-    ))
+      if (modelInvocationsError) {
+        return errorResponse('加载模型调用证据失败', 500, 'MODEL_INVOCATIONS_QUERY_FAILED')
+      }
 
-    if (modelInvocationsError) {
-      return errorResponse('加载模型调用证据失败', 500, 'MODEL_INVOCATIONS_QUERY_FAILED')
-    }
-
-    const modelGateIssues = buildReviewModelExportGateIssues(modelInvocations || [])
-    if (modelGateIssues.length > 0) {
-      return errorResponse(
-        modelGateIssues.join('；'),
-        400,
-        'EXPORT_MODEL_GATE_BLOCKED'
-      )
+      modelGateIssues = buildReviewModelExportGateIssues(modelInvocations || [])
     }
 
     // 加载策略名称
@@ -531,7 +564,7 @@ export async function POST(
     const sourceVersion = versions?.find((version) => version.source !== 'review_revision') || latestVersion
     const nextVersionNumber = (latestVersion?.version_number || 0) + 1
     const sourceStoragePath = sourceVersion?.storage_path || contract.storage_path
-    const existingOutput = missingCommentPatches.length === 0
+    const existingOutput = missingCommentPatches.length === 0 && annotationControlUpdates.length === 0
       ? versions?.find((version) => (
         version.source === 'review_revision'
         && version.review_id === latestReview.id
@@ -644,7 +677,7 @@ export async function POST(
       'reviewed',
       safeStorageSegment(id),
       `review-${safeStorageSegment(latestReview.id)}`,
-      `source-${safeStorageSegment(sourceVersion?.id || 'contract-storage')}.docx`,
+      `source-${safeStorageSegment(sourceVersion?.id || 'contract-storage')}-${Date.now()}.docx`,
     ].join('/')
     const { error: uploadError } = await exportTiming.measure('storage_upload', () => (
       supabaseAdmin.storage
@@ -718,6 +751,7 @@ export async function POST(
           sourceVersionId: sourceVersion?.id || null,
           outputVersionNumber: nextVersionNumber,
           exportTiming: exportTiming.toJSON(),
+          modelGateIssues,
         })
       ))
     } catch (auditError) {

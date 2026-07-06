@@ -145,7 +145,7 @@ describe('review workbench state', () => {
     expect(buildExportGateIssues(data, health).join('\n')).toContain('疑似跨段或证据过短')
   })
 
-  it('does not treat rule-engine-only or missing snapshots as formal review output', () => {
+  it('marks rule-engine-only or missing snapshots as degraded but does not block safe source-comment export', () => {
     const data = baseReviewData({
       reviewRun: {
         status: 'DEGRADED',
@@ -170,8 +170,10 @@ describe('review workbench state', () => {
     const gateIssues = buildExportGateIssues(data, health)
 
     expect(health.degraded).toBe(true)
-    expect(gateIssues.join('\n')).toContain('缺少规则发布包绑定')
-    expect(gateIssues.join('\n')).toContain('缺少规则快照引用')
-    expect(gateIssues.join('\n')).toContain('审核执行发生降级：rule-engine')
+    expect(health.issues.join('\n')).toContain('缺少规则发布包绑定')
+    expect(health.issues.join('\n')).toContain('缺少规则快照引用')
+    expect(health.issues.join('\n')).toContain('审核执行发生降级：rule-engine')
+    expect(health.exportBlocked).toBe(false)
+    expect(gateIssues).toEqual([])
   })
 })

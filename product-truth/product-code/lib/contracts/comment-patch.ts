@@ -10,6 +10,7 @@ export type RiskCardCommentSource = {
   description?: string | null
   suggestion?: string | null
   evidence?: unknown
+  fix_action?: unknown
   status?: string | null
   position_start?: number | null
   position_end?: number | null
@@ -82,6 +83,60 @@ function evidenceSourceRange(evidence: unknown): { start: number; end: number } 
   return typeof record.start === 'number' && typeof record.end === 'number' && record.end > record.start
     ? { start: record.start, end: record.end }
     : null
+}
+
+function valueRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function textValue(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : ''
+}
+
+function riskControlNote(risk: RiskCardCommentSource) {
+  const action = valueRecord(risk.fix_action)
+  return textValue(action.control_note)
+}
+
+function riskProposedValue(risk: RiskCardCommentSource) {
+  const action = valueRecord(risk.fix_action)
+  return textValue(action.proposed_value)
+}
+
+function isPaymentControlRisk(risk: RiskCardCommentSource) {
+  const text = `${risk.title || ''}\n${risk.description || ''}\n${risk.suggestion || ''}`
+  return /付款|回款|收款|账期|批次|比例|尾款|验收|结算/.test(text)
+}
+
+export function buildRiskControlCommentLines(risk: RiskCardCommentSource) {
+  const note = riskControlNote(risk)
+  const proposedValue = riskProposedValue(risk)
+  if (note || proposedValue) {
+    return [
+      note ? `可控化说明：${note}` : null,
+      proposedValue ? `建议数值/口径：${proposedValue}` : null,
+      '处理边界：该说明用于销售与客户确认，确认前风险仍保持开放，客户回传后需再审核。',
+    ].filter((line): line is string => Boolean(line))
+  }
+
+  if (isPaymentControlRisk(risk)) {
+    return [
+      '可控化动作：请补充明确回款批次、付款比例、账期或验收节点，并让客户书面确认。',
+      '处理边界：没有明确数值或客户确认前，不得标记为风险已解决。',
+    ]
+  }
+
+  return []
+}
+
+export function appendRiskControlCommentLines(comment: string, risk: RiskCardCommentSource) {
+  const lines = buildRiskControlCommentLines(risk)
+  if (lines.length === 0) return comment
+  const missingLines = lines.filter((line) => !comment.includes(line))
+  if (missingLines.length === 0) return comment
+  return [comment.trim(), ...missingLines].filter(Boolean).join('\n')
 }
 
 function isGenericEvidence(value: string) {
@@ -237,6 +292,7 @@ export function buildCommentPatchesFromRiskCards(input: {
             `【${location.located ? (isRed ? '红线风险' : '需谈判风险') : '需人工定位'}】${risk.title}`,
             risk.description ? `问题：${risk.description}` : null,
             risk.suggestion ? `建议：${risk.suggestion}` : null,
+            ...buildRiskControlCommentLines(risk),
             location.located ? `证据原文：${selectedText}` : `定位状态：需人工定位（${location.reason}）`,
             risk.rule_code ? `规则：${risk.rule_code}${risk.rule_version ? ` v${risk.rule_version}` : ''}` : null,
             ruleSnapshotId ? `RuleSnapshot: ${ruleSnapshotId}` : null,

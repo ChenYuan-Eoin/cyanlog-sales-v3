@@ -251,7 +251,7 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(res.headers.get('x-export-timing')).toContain('storage_download')
     expect(res.headers.get('x-export-timing')).toContain('docx_generate')
     expect(storage.upload).toHaveBeenCalledWith(
-      expect.stringContaining('reviewed/contract-1/review-review-1/source-version-1.docx'),
+      expect.stringContaining('reviewed/contract-1/review-review-1/source-version-1-'),
       expect.any(Buffer),
       expect.objectContaining({
         contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -338,7 +338,7 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(recordModelInvocation).not.toHaveBeenCalled()
   })
 
-  it('模型调用缺失或未通过质量门禁时不允许生成正式源文件批注版', async () => {
+  it('模型调用未通过质量门禁时仍可导出已定位批注版，但审计记录模型门禁警告', async () => {
     installSupabaseExportMocks({
       modelInvocations: [{
         id: 'invocation-semantic',
@@ -356,18 +356,32 @@ describe('POST /api/contracts/[id]/export', () => {
         },
       }],
     })
+    const outputPath = path.join(os.tmpdir(), `ones-degraded-source-comments-${Date.now()}.docx`)
+    fs.writeFileSync(outputPath, Buffer.from([9, 8, 7]))
+    tempFiles.push(outputPath)
+    ;(generateWordDocument as any).mockResolvedValue({
+      success: true,
+      outputPath,
+      mode: 'source_comments',
+    })
 
     const res = await POST(makeRequest(), {
       params: Promise.resolve({ id: 'contract-1' }),
     })
-    const body = await res.json()
+    const body = Buffer.from(await res.arrayBuffer())
 
-    expect(res.status).toBe(400)
-    expect(body.code).toBe('EXPORT_MODEL_GATE_BLOCKED')
-    expect(body.error).toContain('semantic_review 已降级')
-    expect(body.error).toContain('OpenAI-compatible HTTP')
-    expect(generateWordDocument).not.toHaveBeenCalled()
-    expect(recordModelInvocation).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(body).toEqual(Buffer.from([9, 8, 7]))
+    expect(generateWordDocument).toHaveBeenCalled()
+    expect(recordModelInvocation).toHaveBeenCalledTimes(2)
+    expect(recordModelInvocation).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      responseMeta: expect.objectContaining({
+        model_gate_warnings: expect.arrayContaining([
+          expect.stringContaining('semantic_review 已降级'),
+          expect.stringContaining('OpenAI-compatible HTTP'),
+        ]),
+      }),
+    }))
   })
 
   it('同一 ReviewRun 已有源文件批注产物时直接复用，不重复生成版本噪音', async () => {

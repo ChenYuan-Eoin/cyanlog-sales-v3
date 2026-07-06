@@ -18,6 +18,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
 import { deriveReviewWorkflowState } from '@/lib/contracts/review-state-machine'
 import {
   buildExportGateIssues,
@@ -185,6 +186,11 @@ type RiskFinding = {
     location_reason?: string | null
     rule_snapshot_id?: string | null
   }
+  fix_action?: {
+    control_note?: string | null
+    proposed_value?: string | null
+    control_status?: string | null
+  } | null
   status: string
   clause_ref: string | null
   position: {
@@ -417,6 +423,10 @@ function extractApiError(payload: unknown, fallback: string) {
   return fallback
 }
 
+function riskControlNoteValue(risk: RiskFinding | null) {
+  return risk?.fix_action?.control_note?.trim() || ''
+}
+
 function SourceTextPreview({
   text,
   selectedText,
@@ -472,6 +482,8 @@ export default function ContractWorkbenchPage() {
   const [exportDownload, setExportDownload] = useState<ExportDownload>(null)
   const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>('review')
   const [evidenceRefreshing, setEvidenceRefreshing] = useState(false)
+  const [riskControlNote, setRiskControlNote] = useState('')
+  const [riskControlSaving, setRiskControlSaving] = useState(false)
   const returnHref = '/contracts'
   const compareReturnHref = `/contracts/${contractId}/compare?from=workbench`
   const showCompareReturn = searchParams.get('from') === 'compare'
@@ -493,6 +505,10 @@ export default function ContractWorkbenchPage() {
     if (!data) return null
     return data.riskFindings.find((risk) => risk.id === selectedRiskId) || data.riskFindings[0] || null
   }, [data, selectedRiskId])
+
+  useEffect(() => {
+    setRiskControlNote(riskControlNoteValue(selectedRisk))
+  }, [selectedRisk])
 
   const fetchWorkbench = useCallback(async ({
     silent = false,
@@ -685,6 +701,42 @@ export default function ContractWorkbenchPage() {
   async function handleExport() {
     if (!data) return
     await handleExportForData(data)
+  }
+
+  async function handleSaveRiskControlNote(note: string) {
+    if (!selectedRisk) return
+    const trimmed = note.trim()
+    if (!trimmed) {
+      toastError('请先补充风险可控化说明')
+      return
+    }
+
+    setRiskControlSaving(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/contracts/${contractId}/risk-cards/${selectedRisk.id}/fix`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'control_note',
+          note: trimmed,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toastError(extractApiError(payload, '保存风险可控说明失败'))
+        return
+      }
+      toastSuccess('已保存风险可控说明，后续导出批注版会写入该口径')
+      await fetchWorkbench({ silent: true, scope: 'full' })
+    } catch {
+      toastError('网络错误，保存风险可控说明失败')
+    } finally {
+      setRiskControlSaving(false)
+    }
   }
 
   if (loading) {
@@ -1016,11 +1068,25 @@ export default function ContractWorkbenchPage() {
                       onSelectRisk={setSelectedRiskId}
                       negotiationTasks={data.negotiationTasks}
                     />
+                    <div className="mt-4">
+                      <RiskDecisionPanel
+                        selectedRisk={selectedRisk}
+                        negotiationTasks={data.negotiationTasks}
+                        controlNote={riskControlNote}
+                        controlSaving={riskControlSaving}
+                        onControlNoteChange={setRiskControlNote}
+                        onSaveControlNote={handleSaveRiskControlNote}
+                      />
+                    </div>
                   </div>
                   <div className="hidden xl:block">
                     <RiskDecisionPanel
                       selectedRisk={selectedRisk}
                       negotiationTasks={data.negotiationTasks}
+                      controlNote={riskControlNote}
+                      controlSaving={riskControlSaving}
+                      onControlNoteChange={setRiskControlNote}
+                      onSaveControlNote={handleSaveRiskControlNote}
                     />
                   </div>
                 </>
@@ -1640,9 +1706,17 @@ function ReviewNavigationRail({
 function RiskDecisionPanel({
   selectedRisk,
   negotiationTasks,
+  controlNote,
+  controlSaving,
+  onControlNoteChange,
+  onSaveControlNote,
 }: {
   selectedRisk: RiskFinding | null
   negotiationTasks: NegotiationTask[]
+  controlNote: string
+  controlSaving: boolean
+  onControlNoteChange: (value: string) => void
+  onSaveControlNote: (value: string) => Promise<void>
 }) {
   const relatedTasks = selectedRisk
     ? negotiationTasks.filter((task) => task.risk_id === selectedRisk.id)
@@ -1659,6 +1733,10 @@ function RiskDecisionPanel({
   const tone = riskTone[selectedRisk.severity]
   const manualLocation = needsManualRiskLocation(selectedRisk)
   const evidence = firstEvidence(selectedRisk)
+  const savedControlNote = riskControlNoteValue(selectedRisk)
+  const isPaymentRisk = /付款|回款|收款|账期|批次|比例|尾款|验收|结算/.test(
+    `${selectedRisk.title}\n${selectedRisk.description}\n${selectedRisk.suggestion}`
+  )
 
   return (
     <div className="space-y-4 text-sm">
@@ -1710,6 +1788,42 @@ function RiskDecisionPanel({
               <p className="mt-1 text-xs text-amber-800">状态：{task.status}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="rounded-md border border-amber-200 bg-amber-50/70 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="font-semibold text-amber-950">补充可控化说明</h3>
+            <p className="mt-1 text-xs leading-5 text-amber-800">
+              产品不直接替你“处理”风险；这里记录销售/法务要向客户确认的口径，并写入批注版，引导风险变成可确认、可回传、可再审核的事项。
+            </p>
+          </div>
+          {savedControlNote && <Badge variant="outline" className="border-amber-300 bg-white">已保存</Badge>}
+        </div>
+        <Textarea
+          className="mt-3 min-h-24 bg-white"
+          value={controlNote}
+          onChange={(event) => onControlNoteChange(event.target.value)}
+          placeholder={isPaymentRisk
+            ? '例如：回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；客户需在回传版中明确比例和账期。'
+            : '例如：请客户确认该条款调整为双方书面确认后生效，未确认前保留为需谈判风险。'}
+          maxLength={1200}
+        />
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-amber-800">
+            保存后不会关闭风险；导出批注版时会作为客户确认说明写入 Word 原生批注。
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void onSaveControlNote(controlNote)}
+            disabled={controlSaving || !controlNote.trim()}
+            className="shrink-0"
+          >
+            {controlSaving ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareTextIcon className="mr-2 h-4 w-4" />}
+            保存说明
+          </Button>
         </div>
       </section>
     </div>

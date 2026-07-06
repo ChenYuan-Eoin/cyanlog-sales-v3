@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  appendRiskControlCommentLines,
   buildCommentPatchesFromRiskCards,
   extractRiskFindingId,
 } from './comment-patch'
@@ -136,5 +137,51 @@ describe('comment patch adapter', () => {
     expect(extractRiskFindingId('建议调整\nRiskFinding: 11111111-1111-4111-8111-111111111111'))
       .toBe('11111111-1111-4111-8111-111111111111')
     expect(extractRiskFindingId('普通批注')).toBeNull()
+  })
+
+  it('writes manual control notes into Word comment text without closing the risk', () => {
+    const patches = buildCommentPatchesFromRiskCards({
+      contractId: 'contract-1',
+      sourceText: '第一条 回款批次和付款比例待双方确认。',
+      risks: [
+        {
+          id: '66666666-6666-4666-8666-666666666666',
+          level: 'yellow',
+          title: '回款批次不明确',
+          description: '合同未明确分批回款比例',
+          suggestion: '要求客户确认回款批次',
+          evidence: {
+            snippets: ['回款批次和付款比例待双方确认'],
+            source_range: { start: 4, end: 18 },
+          },
+          fix_action: {
+            control_note: '回款按 3/3/4 分三期，首期验收后 15 个工作日内支付。',
+          },
+          status: 'open',
+        },
+      ],
+    })
+
+    expect(patches).toHaveLength(1)
+    expect(patches[0].annotation.comment).toContain('可控化说明：回款按 3/3/4 分三期')
+    expect(patches[0].annotation.comment).toContain('确认前风险仍保持开放')
+  })
+
+  it('appends control notes to existing comments only once', () => {
+    const comment = '【需谈判风险】回款批次不明确\nRiskFinding: 77777777-7777-4777-8777-777777777777'
+    const risk = {
+      id: '77777777-7777-4777-8777-777777777777',
+      level: 'yellow' as const,
+      title: '回款批次不明确',
+      fix_action: {
+        control_note: '请客户确认三期回款比例。',
+      },
+    }
+
+    const once = appendRiskControlCommentLines(comment, risk)
+    const twice = appendRiskControlCommentLines(once, risk)
+
+    expect(once).toContain('可控化说明：请客户确认三期回款比例。')
+    expect(twice.match(/可控化说明/g)).toHaveLength(1)
   })
 })
