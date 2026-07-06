@@ -212,9 +212,11 @@ export default function ContractEditPage() {
 
       setSuccess(intent === 'customer-return'
         ? '客户回传版已进入当前合同版本流，正在返回文档比对。'
-        : '上传成功')
+        : intent === 'compare-baseline'
+          ? '本地基准件已进入当前合同版本流，正在返回文档比对。'
+          : '上传成功')
       await fetchContract()
-      if (intent === 'customer-return' && next === 'compare') {
+      if ((intent === 'customer-return' || intent === 'compare-baseline') && next === 'compare') {
         router.push(`/contracts/${contractId}/compare?from=upload`)
       }
     } catch {
@@ -274,8 +276,17 @@ export default function ContractEditPage() {
 
   const hasFile = contract.filename && contract.storage_path
   const isCustomerReturnIntent = intent === 'customer-return'
+  const isCompareBaselineIntent = intent === 'compare-baseline'
+  const isCompareUploadIntent = isCustomerReturnIntent || isCompareBaselineIntent
+  const uploadTitle = isCompareBaselineIntent ? '上传本地基准件' : '上传客户回传版'
+  const uploadCrumb = isCompareBaselineIntent ? '上传本地基准件' : '上传客户回传版'
+  const uploadDescription = isCompareBaselineIntent
+    ? '这里上传可作为旧稿/基准的本地文件。若当前合同还没有源文件，它会补成源文件；已有源文件时会作为人工基准候选进入版本流。'
+    : '这里只把客户回传文件登记为当前合同的人工/客户版本，不覆盖审核源文件。上传后会回到文档比对工作台选择旧版与新版。'
+  const uploadButtonLabel = isCompareBaselineIntent ? '选择本地基准文件' : '选择客户回传文件'
+  const disableCompareUpload = uploading || (isCustomerReturnIntent && !hasFile)
 
-  if (isCustomerReturnIntent) {
+  if (isCompareUploadIntent) {
     return (
       <div className="mx-auto max-w-5xl p-4 md:p-8">
         <div className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-5 md:flex-row md:items-start md:justify-between">
@@ -287,11 +298,11 @@ export default function ContractEditPage() {
               <span className="mx-2">/</span>
               <Link href={`/contracts/${contractId}/compare`} className="hover:underline">文档比对</Link>
               <span className="mx-2">/</span>
-              <span>上传客户回传版</span>
+              <span>{uploadCrumb}</span>
             </div>
-            <h1 className="text-2xl font-bold">上传客户回传版</h1>
+            <h1 className="text-2xl font-bold">{uploadTitle}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              这里只把客户回传文件登记为当前合同的人工/客户版本，不覆盖审核源文件。上传后会回到文档比对工作台选择旧版与新版。
+              {uploadDescription}
             </p>
           </div>
           <div className="flex gap-2">
@@ -333,8 +344,8 @@ export default function ContractEditPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 {[
-                  ['1', '保留源文件', '当前审核源文件继续作为基准事实。'],
-                  ['2', '登记回传版', '客户文件只进入版本流，不覆盖主合同。'],
+                  ['1', isCompareBaselineIntent ? '确定旧稿来源' : '保留源文件', isCompareBaselineIntent ? '上传件作为本次对比旧文件候选，不锁死为唯一基准。' : '当前审核源文件继续作为基准事实。'],
+                  ['2', isCompareBaselineIntent ? '登记基准候选' : '登记回传版', isCompareBaselineIntent ? '已有源文件时登记为人工版本，后续可在比对页切换。' : '客户文件只进入版本流，不覆盖主合同。'],
                   ['3', '回到比对', '选择旧版/新版生成差异与风险影响。'],
                 ].map(([step, title, desc]) => (
                   <div key={step} className="rounded-lg border border-slate-200 p-3">
@@ -357,27 +368,29 @@ export default function ContractEditPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm leading-6 text-slate-500">
-                支持 PDF 或 DOCX，文件需要可提取文本。大模型审核不会在这里启动；这里仅登记客户回传版本用于文档比对和再审核。
+                支持 PDF 或 DOCX，文件需要可提取文本。这里仅登记文件版本用于文档比对，不在上传页启动审核。
               </p>
-              <label className={uploading || !hasFile ? 'block cursor-not-allowed opacity-60' : 'block cursor-pointer'}>
+              <label className={disableCompareUpload ? 'block cursor-not-allowed opacity-60' : 'block cursor-pointer'}>
                 <input
                   type="file"
                   accept=".pdf,.docx"
                   onChange={handleFileUpload}
                   className="hidden"
-                  disabled={uploading || !hasFile}
+                  disabled={disableCompareUpload}
                 />
                 <span className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-slate-900 px-3 text-sm font-medium text-white transition-colors hover:bg-slate-800">
-                  {uploading ? '上传中...' : '选择客户回传文件'}
+                  {uploading ? '上传中...' : uploadButtonLabel}
                 </span>
               </label>
-              {!hasFile ? (
+              {isCustomerReturnIntent && !hasFile ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                   当前合同缺少基准源文件，请先补充源文件后再上传客户回传版。
                 </div>
               ) : (
                 <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
-                  上传成功后会生成 `manual_revision` 版本，并自动回到文档比对工作台。
+                  {isCompareBaselineIntent
+                    ? '上传成功后会作为源文件或人工基准候选进入版本流，并自动回到文档比对工作台。'
+                    : '上传成功后会生成客户回传版本，并自动回到文档比对工作台。'}
                 </div>
               )}
             </CardContent>
@@ -646,6 +659,11 @@ export default function ContractEditPage() {
               {intent === 'customer-return' && (
                 <p className="rounded-md bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-700">
                   当前上传会作为客户回传/人工修订版本进入版本流，上传后回到文档比对工作台。
+                </p>
+              )}
+              {intent === 'compare-baseline' && (
+                <p className="rounded-md bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-700">
+                  当前上传会作为本地基准候选进入版本流；没有源文件时会先补充源文件，上传后回到文档比对工作台。
                 </p>
               )}
             </CardContent>

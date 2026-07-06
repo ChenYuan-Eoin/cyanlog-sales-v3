@@ -55,3 +55,10 @@ export function buildCustomerReturnUploadHref(contractId: string, next: 'compare
   params.set('next', next)
   return appendSearch(`/contracts/${contractId}/edit`, params)
 }
+
+export function buildCompareBaselineUploadHref(contractId: string) {
+  const params = new URLSearchParams()
+  params.set('intent', 'compare-baseline')
+  params.set('next', 'compare')
+  return appendSearch(`/contracts/${contractId}/edit`, params)
+}

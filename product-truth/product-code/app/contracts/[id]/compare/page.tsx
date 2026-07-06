@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  buildCompareBaselineUploadHref,
   buildContractCompareHref,
   buildContractWorkbenchHref,
   buildContractsCenterHref,
@@ -103,6 +104,7 @@ interface ContractVersionOption {
 }
 
 type DiffFilter = 'all' | 'red' | 'yellow' | 'green' | 'deleted' | 'added' | 'modified'
+type ComparePrecision = 'strict' | 'semantic'
 
 const diffFilters: Array<{ value: DiffFilter; label: string }> = [
   { value: 'all', label: '全部' },
@@ -239,6 +241,7 @@ export default function ContractComparePage() {
   const [selectedBaselineVersionId, setSelectedBaselineVersionId] = useState('')
   const [selectedCompareDocId, setSelectedCompareDocId] = useState('')
   const [selectedCompareVersionId, setSelectedCompareVersionId] = useState('')
+  const [comparePrecision, setComparePrecision] = useState<ComparePrecision>('strict')
   const [startingComparison, setStartingComparison] = useState(false)
   const [startingRerun, setStartingRerun] = useState(false)
   const [rerunNotice, setRerunNotice] = useState('')
@@ -408,6 +411,7 @@ export default function ContractComparePage() {
             baseline_type: 'previous_version',
             baseline_doc_id: selectedBaselineVersionId || undefined,
             compare_version_id: selectedCompareVersionId,
+            precision: comparePrecision,
           }),
         })
 
@@ -453,6 +457,7 @@ export default function ContractComparePage() {
           baseline_doc_id: baselineDocId,
           compare_doc_id: selectedCompareDocId,
           manual_confirmed: true,
+          precision: comparePrecision,
         }),
       })
 
@@ -468,7 +473,15 @@ export default function ContractComparePage() {
     } finally {
       setStartingComparison(false)
     }
-  }, [contractId, openComparisonResult, selectedBaselineDocId, selectedBaselineVersionId, selectedCompareDocId, selectedCompareVersionId])
+  }, [
+    comparePrecision,
+    contractId,
+    openComparisonResult,
+    selectedBaselineDocId,
+    selectedBaselineVersionId,
+    selectedCompareDocId,
+    selectedCompareVersionId,
+  ])
 
   const handleStartReReview = useCallback(async () => {
     if (!comparison || (comparison.diffs || []).length === 0) return
@@ -601,11 +614,13 @@ export default function ContractComparePage() {
         setSelectedBaselineVersionId={setSelectedBaselineVersionId}
         selectedCompareDocId={selectedCompareDocId}
         setSelectedCompareDocId={setSelectedCompareDocId}
-        selectedCompareVersionId={selectedCompareVersionId}
-        setSelectedCompareVersionId={setSelectedCompareVersionId}
-        startingComparison={startingComparison}
-        onStartComparison={handleStartComparison}
-      />
+            selectedCompareVersionId={selectedCompareVersionId}
+            setSelectedCompareVersionId={setSelectedCompareVersionId}
+            comparePrecision={comparePrecision}
+            setComparePrecision={setComparePrecision}
+            startingComparison={startingComparison}
+            onStartComparison={handleStartComparison}
+          />
     )
   }
 
@@ -1385,6 +1400,8 @@ function CompareSetupWorkspace({
   setSelectedCompareDocId,
   selectedCompareVersionId,
   setSelectedCompareVersionId,
+  comparePrecision,
+  setComparePrecision,
   startingComparison,
   onStartComparison,
 }: {
@@ -1401,6 +1418,8 @@ function CompareSetupWorkspace({
   setSelectedCompareDocId: (value: string) => void
   selectedCompareVersionId: string
   setSelectedCompareVersionId: (value: string) => void
+  comparePrecision: ComparePrecision
+  setComparePrecision: (value: ComparePrecision) => void
   startingComparison: boolean
   onStartComparison: () => void
 }) {
@@ -1422,6 +1441,11 @@ function CompareSetupWorkspace({
   const hasCompareSource = Boolean(selectedVersion || selectedCandidate)
   const hasExistingCompareOptions = comparableVersions.length > 0 || recommendedCandidates.length > 0 || manualConfirmCandidates.length > 0
   const uploadHref = buildCustomerReturnUploadHref(contractId, 'compare')
+  const baselineUploadHref = buildCompareBaselineUploadHref(contractId)
+  const precisionOptions: Array<{ value: ComparePrecision; title: string; desc: string }> = [
+    { value: 'strict', title: '严格审计', desc: '更敏感地披露删改、标点、断句和疑似格式造成的实质变化。' },
+    { value: 'semantic', title: '标准审计', desc: '弱化格式噪声，优先关注文字、金额、责任和条款实质变化。' },
+  ]
   const noCandidateReason = excludedCandidateCount > 0
     ? `系统发现 ${excludedCandidateCount} 份关系不明确的已完成合同，但不会默认展示为新文件。请优先上传客户回传版；确认同一业务文件时再进入高级选择。`
     : '当前没有可明确比对的新文件。请上传客户回传版或人工修订版后再开始比对。'
@@ -1459,6 +1483,12 @@ function CompareSetupWorkspace({
                 返回审核工作台
               </Button>
             </Link>
+            <Link href={baselineUploadHref}>
+              <Button variant="outline">
+                <UploadIcon className="mr-2 h-4 w-4" />
+                上传本地基准件
+              </Button>
+            </Link>
             <Link href={uploadHref}>
               <Button variant={hasCompareSource ? 'outline' : 'default'}>
                 <UploadIcon className="mr-2 h-4 w-4" />
@@ -1484,7 +1514,7 @@ function CompareSetupWorkspace({
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <main className="space-y-4">
-            <section className="grid gap-3 lg:grid-cols-[minmax(220px,0.85fr)_minmax(320px,1.15fr)_240px]">
+            <section className="grid gap-3 lg:grid-cols-[minmax(240px,0.9fr)_minmax(320px,1.1fr)_280px]">
               <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -1499,15 +1529,23 @@ function CompareSetupWorkspace({
                   <p>客户：{baselineContract?.party_b_name || '未记录'}</p>
                   <p>报价：{baselineContract?.quote_id || '未绑定'}</p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 w-full"
-                  onClick={() => setShowAdvancedSelection((value) => !value)}
-                >
-                  {showAdvancedSelection ? '收起属性选择' : '系统版本库 / 基准切换'}
-                </Button>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                  <Link href={baselineUploadHref}>
+                    <Button type="button" size="sm" className="w-full">
+                      <UploadIcon className="mr-2 h-4 w-4" />
+                      上传本地基准
+                    </Button>
+                  </Link>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setShowAdvancedSelection((value) => !value)}
+                  >
+                    {showAdvancedSelection ? '收起属性选择' : '系统版本库 / 基准切换'}
+                  </Button>
+                </div>
               </div>
 
               <div className={`rounded-lg border bg-white p-4 shadow-sm ${
@@ -1580,6 +1618,25 @@ function CompareSetupWorkspace({
                 <p className="text-xs leading-5 text-slate-500">
                   执行 1:1 全文比对审计，输出差异列表、并排高亮和风险影响，不覆盖原合同。
                 </p>
+                <div className="mt-3 space-y-2">
+                  <div className="text-xs font-medium text-slate-500">审计精度</div>
+                  {precisionOptions.map((option) => {
+                    const active = option.value === comparePrecision
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setComparePrecision(option.value)}
+                        className={`w-full rounded-md border p-2 text-left transition ${
+                          active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-slate-950">{option.title}</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">{option.desc}</span>
+                      </button>
+                    )
+                  })}
+                </div>
                 <Button
                   type="button"
                   className="mt-4 w-full"

@@ -21,11 +21,14 @@ const compareSchema = z.object({
   baseline_doc_id: z.string().uuid().optional(),
   compare_doc_id: z.string().uuid().optional(),
   compare_version_id: z.string().uuid().optional(),
+  precision: z.enum(['strict', 'semantic']).default('semantic'),
   manual_confirmed: z.boolean().optional(),
 }).refine((value) => Boolean(value.compare_doc_id || value.compare_version_id), {
   message: '必须选择对比合同或对比版本',
   path: ['compare_doc_id'],
 })
+
+type ComparePrecision = z.infer<typeof compareSchema>['precision']
 
 type ComparableContract = {
   id: string
@@ -121,12 +124,13 @@ function splitComparableText(text: string): string[] {
     .slice(0, 240)
 }
 
-function normalizeLine(line: string): string {
+function normalizeLine(line: string, precision: ComparePrecision = 'semantic'): string {
+  if (precision === 'strict') return line.trim().toLowerCase()
   return line.replace(/\s+/g, '').toLowerCase()
 }
 
-function comparableBigrams(line: string): string[] {
-  const normalized = normalizeLine(line)
+function comparableBigrams(line: string, precision: ComparePrecision): string[] {
+  const normalized = normalizeLine(line, precision)
   if (!normalized) return []
   if (normalized.length <= 2) return [normalized]
 
@@ -137,9 +141,9 @@ function comparableBigrams(line: string): string[] {
   return tokens
 }
 
-function lineSimilarity(left: string, right: string): number {
-  const leftTokens = comparableBigrams(left)
-  const rightTokens = comparableBigrams(right)
+function lineSimilarity(left: string, right: string, precision: ComparePrecision): number {
+  const leftTokens = comparableBigrams(left, precision)
+  const rightTokens = comparableBigrams(right, precision)
   if (leftTokens.length === 0 || rightTokens.length === 0) return 0
 
   const rightCounts = new Map<string, number>()
@@ -194,17 +198,22 @@ function inferRiskLevel(text: string): 'red' | 'yellow' | 'green' {
   return HIGH_RISK_TERMS.some((term) => text.includes(term)) ? 'red' : 'yellow'
 }
 
-function buildDiffRows(comparisonId: string, baselineText: string, compareText: string): DiffInsert[] {
+function buildDiffRows(
+  comparisonId: string,
+  baselineText: string,
+  compareText: string,
+  precision: ComparePrecision = 'semantic'
+): DiffInsert[] {
   const baselineLines = splitComparableText(baselineText)
   const compareLines = splitComparableText(compareText)
   const matchedCompareIndexes = new Set<number>()
   const unmatchedBaselineLines: string[] = []
   const rows: DiffInsert[] = []
-  const similarLineThreshold = 0.5
+  const similarLineThreshold = precision === 'strict' ? 0.72 : 0.5
 
   for (const line of baselineLines) {
     const exactIndex = compareLines.findIndex((compareLine, index) => (
-      !matchedCompareIndexes.has(index) && normalizeLine(compareLine) === normalizeLine(line)
+      !matchedCompareIndexes.has(index) && normalizeLine(compareLine, precision) === normalizeLine(line, precision)
     ))
 
     if (exactIndex >= 0) {
@@ -222,7 +231,7 @@ function buildDiffRows(comparisonId: string, baselineText: string, compareText: 
     compareLines.forEach((compareLine, index) => {
       if (matchedCompareIndexes.has(index)) return
 
-      const score = lineSimilarity(line, compareLine)
+      const score = lineSimilarity(line, compareLine, precision)
       if (score > bestScore) {
         bestScore = score
         bestCompareIndex = index
@@ -648,7 +657,12 @@ export async function POST(
       return errorResponse(createApiError('DB_ERROR', '创建比对任务失败'))
     }
 
-    const diffRows = buildDiffRows(comparison.id, baselineResult.contract.parsed_text, compareResult.contract.parsed_text)
+    const diffRows = buildDiffRows(
+      comparison.id,
+      baselineResult.contract.parsed_text,
+      compareResult.contract.parsed_text,
+      parsed.data.precision
+    )
     const summary = comparisonSummary(diffRows, baselineName, compareName)
     const recommendation = diffRows.some((row) => row.risk_level === 'red')
       ? '存在高风险差异，建议法务复核后再签署。'

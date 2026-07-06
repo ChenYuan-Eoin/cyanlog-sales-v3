@@ -4,6 +4,7 @@ import {
   buildContractNewReviewHref,
   buildContractsCenterHref,
   buildContractWorkbenchHref,
+  buildCompareBaselineUploadHref,
   buildCustomerReturnUploadHref,
 } from './review-navigation'
 
@@ -45,5 +46,9 @@ describe('contract review navigation', () => {
 
   it('routes customer return upload into the version flow before compare', () => {
     expect(buildCustomerReturnUploadHref('contract-1')).toBe('/contracts/contract-1/edit?intent=customer-return&next=compare')
+  })
+
+  it('routes baseline upload into the compare baseline flow', () => {
+    expect(buildCompareBaselineUploadHref('contract-1')).toBe('/contracts/contract-1/edit?intent=compare-baseline&next=compare')
   })
 })
