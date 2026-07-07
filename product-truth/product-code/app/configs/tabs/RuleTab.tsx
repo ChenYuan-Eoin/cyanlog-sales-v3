@@ -14,7 +14,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  ChevronRightIcon,
   FileTextIcon,
   FolderIcon,
   FolderTreeIcon,
@@ -31,9 +30,7 @@ import {
   asRecord,
   buildRuleSetSections,
   buildRuleSetViews,
-  clauseCategoryLabel,
   fallbackRuleSetKey,
-  formatThreshold,
   isFormallyPublishedRule,
   ruleBlockingReasons,
   ruleSetKeyForAsset,
@@ -54,20 +51,6 @@ interface RuleTabProps {
   onRefresh?: () => void | Promise<void>
 }
 
-const categoryMap: Record<string, { label: string; className: string }> = {
-  ratio: { label: '比例类', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  amount: { label: '金额类', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  duration: { label: '时限类', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  enum: { label: '枚举类', className: 'bg-slate-50 text-slate-700 border-slate-200' },
-  text: { label: '条款语义', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-}
-
-const engineMap: Record<string, string> = {
-  structured: '结构化',
-  semantic: '语义',
-  hybrid: '混合',
-}
-
 const lifecycleMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   draft: { label: '草稿', variant: 'secondary' },
   needs_translation: { label: '待转译', variant: 'destructive' },
@@ -81,12 +64,6 @@ const translationMap: Record<string, { label: string; variant: 'default' | 'seco
   needs_ai_translation: { label: '需转译', variant: 'destructive' },
   ready: { label: '转译就绪', variant: 'default' },
   failed: { label: '转译失败', variant: 'destructive' },
-}
-
-const riskLevelMap: Record<string, { label: string; className: string }> = {
-  green: { label: '绿色', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
-  yellow: { label: '黄色', className: 'border-amber-200 bg-amber-50 text-amber-700' },
-  red: { label: '红线', className: 'border-rose-200 bg-rose-50 text-rose-700' },
 }
 
 type TranslationDiffItem = {
@@ -224,6 +201,48 @@ function RuleAssetProductMap({ activeRuleSet }: { activeRuleSet?: RuleSetView })
   )
 }
 
+function RuleSetDetailEmptyState({
+  activeRuleSet,
+  visibleRules,
+  onNewRule,
+}: {
+  activeRuleSet?: RuleSetView
+  visibleRules: ContractPolicyRule[]
+  onNewRule: () => void
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <div className="min-w-0">
+          <CardTitle className="truncate text-base">
+            {activeRuleSet?.label || '规则库'}
+          </CardTitle>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            左侧已经包含规则集与规则列表；选择具体规则后，右侧只展示该规则的触发器、判定器、证据和输出动作。
+          </p>
+        </div>
+        <Button size="sm" onClick={onNewRule}>
+          <PlusIcon className="h-4 w-4 mr-1" />
+          新建规则
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div className="grid min-h-[420px] place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+          <div className="max-w-md">
+            <FolderTreeIcon className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+            <p className="font-semibold text-slate-900">
+              {visibleRules.length > 0 ? '请选择左侧某条规则' : '当前规则集暂无规则'}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              不再展示三到四屏的规则集闭环说明。规则集健康度留在树节点徽标里，规则维护回到单条规则对象。
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete, onRefresh }: RuleTabProps) {
   const [selectedRule, setSelectedRule] = useState<ContractPolicyRule | null>(null)
   const [activeTab, setActiveTab] = useState<'list' | 'design' | 'test'>('list')
@@ -332,7 +351,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       clauseCategory: ruleSetPrimaryCategory(activeRuleSet),
     }
   }, [activeRuleSet])
-  const showRuleSetClosure = activeTab === 'list' && !selectedRule
+  const showRuleSetClosure = false
 
   useEffect(() => {
     const document = activeRuleSet?.asset?.latest_document
@@ -341,6 +360,14 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       content: document?.content_markdown || '',
     })
   }, [activeRuleSet?.key, activeRuleSet?.label, activeRuleSet?.asset?.latest_document])
+
+  useEffect(() => {
+    if (selectedRule || activeTab !== 'list' || ruleMode === 'new' || focusRuleId) return
+    const firstRule = activeRuleSet?.rules[0]
+    if (!firstRule) return
+    setSelectedRule(firstRule)
+    setActiveTab('design')
+  }, [activeRuleSet, activeTab, focusRuleId, ruleMode, selectedRule])
 
   useEffect(() => {
     const focusKey = `${ruleMode || ''}:${focusRuleId || ''}:${rules.length}`
@@ -386,9 +413,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   const handleSelectRuleSet = (ruleSet: RuleSetView) => {
     setActiveRuleSetKey(ruleSet.key)
-    setSelectedRule(null)
+    setSelectedRule(ruleSet.rules[0] || null)
     setTranslationDraft(null)
-    setActiveTab('list')
+    setActiveTab(ruleSet.rules.length > 0 ? 'design' : 'list')
   }
 
   const handleSelectRule = (rule: ContractPolicyRule) => {
@@ -551,108 +578,10 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     }
   }
 
-  const renderRuleButton = (rule: ContractPolicyRule) => {
-    const category = categoryMap[rule.category] || categoryMap.text
-    const lifecycle = lifecycleMap[rule.lifecycle_status || 'draft'] || lifecycleMap.draft
-    const translation = translationMap[rule.translation_status || 'not_started'] || translationMap.not_started
-    const riskLevel = riskLevelMap[rule.risk_level || 'yellow'] || riskLevelMap.yellow
-    const formalPublished = isFormallyPublishedRule(rule)
-    const isSelected = selectedRule?.id === rule.id
-    return (
-      <div
-        key={rule.id}
-        className={`rounded-lg border bg-white transition ${
-          isSelected ? 'border-indigo-400 ring-1 ring-indigo-100' : 'border-slate-200 hover:border-indigo-200'
-        }`}
-      >
-        <button
-          onClick={() => handleSelectRule(rule)}
-          className="w-full text-left p-3"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-[11px] text-slate-400">{rule.code}</span>
-                <span className="font-medium text-sm text-slate-900">{rule.name}</span>
-                <Badge variant={lifecycle.variant} className="text-[10px]">
-                  {lifecycle.label}
-                </Badge>
-                <Badge variant={translation.variant} className="text-[10px]">
-                  {translation.label}
-                </Badge>
-                <Badge variant={rule.is_active ? 'outline' : 'secondary'} className="text-[10px]">
-                  {rule.is_active ? '启用' : '停用'}
-                </Badge>
-                <Badge variant={formalPublished ? 'default' : 'outline'} className="text-[10px]">
-                  {formalPublished ? '可正式审核' : '不进正式审核'}
-                </Badge>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className={`text-[10px] ${category.className}`}>
-                  {category.label}
-                </Badge>
-                <Badge variant="outline" className="text-[10px]">
-                  {engineMap[rule.engine_type] || rule.engine_type}
-                </Badge>
-                <Badge variant="outline" className="text-[10px]">
-                  {clauseCategoryLabel(rule.clause_category)}
-                </Badge>
-                <Badge variant="outline" className={`text-[10px] ${riskLevel.className}`}>
-                  {riskLevel.label}
-                </Badge>
-                <span className="text-[11px] text-slate-400">v{rule.version}</span>
-              </div>
-              <p className="mt-2 text-xs text-slate-500 line-clamp-2">
-                {rule.description || formatThreshold(rule)}
-              </p>
-            </div>
-            <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-300" />
-          </div>
-        </button>
-        <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
-          <span className="text-[11px] text-slate-400 truncate">{formatThreshold(rule)}</span>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              title="生成执行草稿"
-              disabled={translatingRuleId === rule.id}
-              onClick={() => void handleTranslateRule(rule)}
-            >
-              <SparklesIcon className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              title="版本管理"
-              onClick={() => window.open(`/admin/contract-policies/rules/${rule.id}/versions`, '_self')}
-            >
-              <GitBranchIcon className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-red-600 hover:text-red-700"
-              title="停用规则"
-              onClick={() => onDelete(rule.id)}
-            >
-              <TrashIcon className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <>
-	    <div className={`grid grid-cols-1 gap-4 ${showRuleSetClosure ? 'xl:grid-cols-[320px_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}>
-	      <Card className={activeTab === 'list' ? 'min-w-0' : 'hidden'}>
+	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+	      <Card className="min-w-0">
 	        <CardHeader className="space-y-3">
             <div className="flex flex-row items-center justify-between gap-3">
 	            <CardTitle className="text-base">
@@ -830,7 +759,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               <RuleTestSandbox ruleId={selectedRule?.id} />
             </CardContent>
           </Card>
-        ) : activeTab === 'design' ? (
+        ) : selectedRule || activeTab === 'design' ? (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle className="min-w-0 truncate text-base">
@@ -840,10 +769,37 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                     ? `新建规则：${designerRuleSetContext.label}`
                     : '新建合同审核规则'}
               </CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
-                <PlayIcon className="h-4 w-4 mr-1" />
-                测试
-              </Button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {selectedRule ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={translatingRuleId === selectedRule.id}
+                      onClick={() => void handleTranslateRule(selectedRule)}
+                    >
+                      <SparklesIcon className="h-4 w-4 mr-1" />
+                      转译
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(`/admin/contract-policies/rules/${selectedRule.id}/versions`, '_self')}
+                    >
+                      <GitBranchIcon className="h-4 w-4 mr-1" />
+                      版本
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-red-600" onClick={() => onDelete(selectedRule.id)}>
+                      <TrashIcon className="h-4 w-4 mr-1" />
+                      停用
+                    </Button>
+                  </>
+                ) : null}
+                <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
+                  <PlayIcon className="h-4 w-4 mr-1" />
+                  测试
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <RuleDesigner
@@ -856,43 +812,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3">
-              <div className="min-w-0">
-                <CardTitle className="truncate text-base">
-                  {activeRuleSet?.label || '规则清单'} ({visibleRules.length})
-                </CardTitle>
-	              <p className="mt-1 truncate text-xs text-slate-500">
-	                {activeRuleSet?.key === 'all'
-	                  ? '所有规则集的发布、转译和正式审核输入状态'
-	                  : activeRuleSet?.source === 'ruleset'
-		                    ? `${activeRuleSet?.code} · 声明文档 / 结构化规则 / 发布门禁`
-	                    : `${activeRuleSet?.code} · 旧分类视图，待迁移为规则集资产`}
-	              </p>
-              </div>
-              <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
-                <PlayIcon className="h-4 w-4 mr-1" />
-                测试
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {visibleRules.length === 0 ? (
-                <div className="grid min-h-[320px] place-items-center py-12 text-center">
-                  <div>
-                    <p className="text-slate-600">当前规则集暂无规则。</p>
-                    <Button className="mt-4" onClick={handleNewRule}>
-                      <PlusIcon className="h-4 w-4 mr-1" />
-                      新建规则
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="max-h-[720px] space-y-2 overflow-y-auto pr-1">
-                  {visibleRules.map(renderRuleButton)}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <RuleSetDetailEmptyState
+            activeRuleSet={activeRuleSet}
+            visibleRules={visibleRules}
+            onNewRule={handleNewRule}
+          />
         )}
 	      {showRuleSetClosure ? (
 	      <Card className="min-w-0">

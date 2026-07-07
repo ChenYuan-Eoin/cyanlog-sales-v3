@@ -66,6 +66,7 @@ export interface TabsContentProps {
   onPublishConfig: (id: string) => void
   onFetchVersions: (id: string) => void
   onDeleteConfig: (id: string) => void
+  onRefreshConfigs?: () => void | Promise<void>
   // org-structure
   orgSummary: OrgSummaryPayload | null
   feishuSyncing: boolean
@@ -106,6 +107,7 @@ export default function TabsContent({
   onPublishConfig,
   onFetchVersions,
   onDeleteConfig,
+  onRefreshConfigs,
   orgSummary,
   feishuSyncing,
   feishuFeedback,
@@ -229,6 +231,7 @@ export default function TabsContent({
           onPublish={onPublishConfig}
           onVersions={onFetchVersions}
           onDelete={onDeleteConfig}
+          onRefresh={onRefreshConfigs}
         />
       )
     }

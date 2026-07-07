@@ -1,7 +1,10 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { ImageUpload } from '@/components/ui/ImageUpload'
 import { resolveBrandImageUrl, resolveFaviconUrl, sanitizeThemeValue } from '@/lib/ui-theme-shared'
 import ConfigStatusBadge from './ConfigStatusBadge'
 import type { Config } from '../types'
@@ -13,41 +16,224 @@ interface ThemeTabProps {
   onPublish: (id: string) => void
   onVersions: (id: string) => void
   onDelete: (id: string) => void
+  onRefresh?: () => void | Promise<void>
 }
 
-export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions, onDelete }: ThemeTabProps) {
+interface BrandProfileDraft {
+  brandName: string
+  brandShortName: string
+  productTitle: string
+  productSubtitle: string
+  loginTitle: string
+  loginSubtitle: string
+  fullLogoLight: string
+  fullLogoDark: string
+  symbolLight: string
+  symbolDark: string
+  favicon: string
+}
+
+export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions, onDelete, onRefresh }: ThemeTabProps) {
   const sortedConfigs = [...configs].sort((left, right) =>
     new Date(right.updated_at || 0).getTime() - new Date(left.updated_at || 0).getTime()
   )
   const publishedConfigs = sortedConfigs.filter((config) => config.status === 'PUBLISHED')
   const activeConfig = publishedConfigs[0] || null
-  const activeTheme = activeConfig
-    ? sanitizeThemeValue(activeConfig.value as Record<string, unknown> | undefined)
-    : null
+  const activeTheme = useMemo(() => (
+    activeConfig
+      ? sanitizeThemeValue(activeConfig.value as Record<string, unknown> | undefined)
+      : null
+  ), [activeConfig])
   const activeFavicon = activeTheme ? resolveFaviconUrl(activeTheme) : ''
   const activeLogo = activeTheme ? resolveBrandImageUrl(activeTheme, 'full', 'dark') || resolveBrandImageUrl(activeTheme, 'symbol', 'dark') : ''
+  const initialBrandDraft = useMemo<BrandProfileDraft>(() => ({
+    brandName: activeTheme?.brandName || 'ONES Sales',
+    brandShortName: activeTheme?.brandShortName || 'OS',
+    productTitle: activeTheme?.productTitle || 'ONES Sales',
+    productSubtitle: activeTheme?.productSubtitle || '智能协作平台',
+    loginTitle: activeTheme?.loginTitle || '企业协作支撑平台',
+    loginSubtitle: activeTheme?.loginSubtitle || '使用企业账号进入工作台首页',
+    fullLogoLight: activeTheme?.brandAssets.fullLogo.light || '',
+    fullLogoDark: activeTheme?.brandAssets.fullLogo.dark || '',
+    symbolLight: activeTheme?.brandAssets.symbol.light || '',
+    symbolDark: activeTheme?.brandAssets.symbol.dark || '',
+    favicon: activeTheme?.brandAssets.favicon || '',
+  }), [activeTheme])
+  const [brandDraft, setBrandDraft] = useState<BrandProfileDraft>(initialBrandDraft)
+  const [isBrandEditing, setIsBrandEditing] = useState(false)
+  const [isBrandSaving, setIsBrandSaving] = useState(false)
+  const [brandError, setBrandError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setBrandDraft(initialBrandDraft)
+    setBrandError(null)
+    setIsBrandEditing(false)
+  }, [activeConfig?.id, initialBrandDraft])
+
+  async function handleSaveBrandProfile() {
+    if (!activeConfig || !activeTheme) return
+    setIsBrandSaving(true)
+    setBrandError(null)
+    try {
+      const token = localStorage.getItem('token')
+      const nextValue = {
+        ...activeTheme,
+        brandName: brandDraft.brandName.trim(),
+        brandShortName: brandDraft.brandShortName.trim(),
+        productTitle: brandDraft.productTitle.trim(),
+        productSubtitle: brandDraft.productSubtitle.trim(),
+        loginTitle: brandDraft.loginTitle.trim(),
+        loginSubtitle: brandDraft.loginSubtitle.trim(),
+        brandAssets: {
+          fullLogo: {
+            light: brandDraft.fullLogoLight.trim(),
+            dark: brandDraft.fullLogoDark.trim(),
+          },
+          symbol: {
+            light: brandDraft.symbolLight.trim(),
+            dark: brandDraft.symbolDark.trim(),
+          },
+          favicon: brandDraft.favicon.trim(),
+        },
+        logoUrl: brandDraft.symbolDark.trim() || brandDraft.fullLogoDark.trim() || brandDraft.symbolLight.trim() || brandDraft.fullLogoLight.trim(),
+        faviconUrl: brandDraft.favicon.trim(),
+      }
+      const response = await fetch(`/api/configs/${activeConfig.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          name: activeConfig.name,
+          value: nextValue,
+          description: activeConfig.description || '',
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        const message = data.error?.message || data.error || '品牌资料保存失败'
+        setBrandError(message)
+        return
+      }
+
+      setIsBrandEditing(false)
+      await onRefresh?.()
+    } catch {
+      setBrandError('网络错误，品牌资料未保存')
+    } finally {
+      setIsBrandSaving(false)
+    }
+  }
+
+  const updateBrandDraft = (patch: Partial<BrandProfileDraft>) => {
+    setBrandDraft((current) => ({ ...current, ...patch }))
+  }
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle>品牌主题 Profile</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">同一组织只允许一个已发布主题作为当前 BrandProfile，favicon、Logo 和浏览器标题都从这里读取。</p>
+          <CardTitle>界面主题</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">主题只管理颜色、圆角和外观变量；Logo、Favicon 和浏览器标题来自独立 BrandProfile。</p>
         </div>
         <Button onClick={onNew} className="w-full sm:w-auto">+ 新增主题</Button>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900">品牌资料（BrandProfile）</div>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                这里统一维护浏览器标题、侧栏品牌、登录页文案、Logo 和 Favicon；UI 主题只决定颜色和圆角。
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {isBrandEditing ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setBrandDraft(initialBrandDraft)
+                    setIsBrandEditing(false)
+                    setBrandError(null)
+                  }}>
+                    取消
+                  </Button>
+                  <Button size="sm" onClick={handleSaveBrandProfile} disabled={!activeConfig || isBrandSaving}>
+                    {isBrandSaving ? '保存中...' : '保存品牌资料'}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setIsBrandEditing(true)} disabled={!activeConfig}>
+                  编辑品牌资料
+                </Button>
+              )}
+            </div>
+          </div>
+          {activeConfig ? (
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid gap-3 md:grid-cols-2">
+                {isBrandEditing ? (
+                  <>
+                    <BrandInput label="品牌名称" value={brandDraft.brandName} onChange={(value) => updateBrandDraft({ brandName: value })} />
+                    <BrandInput label="品牌简称" value={brandDraft.brandShortName} onChange={(value) => updateBrandDraft({ brandShortName: value })} />
+                    <BrandInput label="浏览器标题" value={brandDraft.productTitle} onChange={(value) => updateBrandDraft({ productTitle: value })} />
+                    <BrandInput label="侧栏副标题" value={brandDraft.productSubtitle} onChange={(value) => updateBrandDraft({ productSubtitle: value })} />
+                    <BrandInput label="登录页标题" value={brandDraft.loginTitle} onChange={(value) => updateBrandDraft({ loginTitle: value })} />
+                    <BrandInput label="登录页副标题" value={brandDraft.loginSubtitle} onChange={(value) => updateBrandDraft({ loginSubtitle: value })} />
+                  </>
+                ) : (
+                  <>
+                    <BrandReadField label="品牌名称" value={activeTheme?.brandName || '未配置'} />
+                    <BrandReadField label="品牌简称" value={activeTheme?.brandShortName || '未配置'} />
+                    <BrandReadField label="浏览器标题" value={activeTheme?.productTitle || '未配置'} />
+                    <BrandReadField label="侧栏副标题" value={activeTheme?.productSubtitle || '未配置'} />
+                    <BrandReadField label="登录页标题" value={activeTheme?.loginTitle || '未配置'} />
+                    <BrandReadField label="登录页副标题" value={activeTheme?.loginSubtitle || '未配置'} />
+                  </>
+                )}
+              </div>
+              <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">运行时资产</div>
+                {isBrandEditing ? (
+                  <div className="space-y-3">
+                    <BrandAssetUpload label="完整 Logo（浅色背景）" folder="logos" value={brandDraft.fullLogoLight} onChange={(value) => updateBrandDraft({ fullLogoLight: value })} />
+                    <BrandAssetUpload label="完整 Logo（深色背景）" folder="logos" value={brandDraft.fullLogoDark} onChange={(value) => updateBrandDraft({ fullLogoDark: value })} />
+                    <BrandAssetUpload label="折叠图标（浅色背景）" folder="logos" value={brandDraft.symbolLight} onChange={(value) => updateBrandDraft({ symbolLight: value })} square />
+                    <BrandAssetUpload label="折叠图标（深色背景）" folder="logos" value={brandDraft.symbolDark} onChange={(value) => updateBrandDraft({ symbolDark: value })} square />
+                    <BrandAssetUpload label="浏览器 Favicon" folder="favicons" value={brandDraft.favicon} onChange={(value) => updateBrandDraft({ favicon: value })} square />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <BrandAssetPreview label="侧栏 Logo" value={activeLogo} fallback={activeTheme?.brandShortName || 'OS'} />
+                    <BrandAssetPreview label="浏览器 Favicon" value={activeFavicon} fallback="ico" square />
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              先新增并发布一个主题配置，系统会以该运行时配置承载当前阶段的 BrandProfile；后续可独立迁移为品牌资料配置表。
+            </div>
+          )}
+          {brandError ? (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {brandError}
+            </div>
+          ) : null}
+        </div>
+
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="text-xs font-medium text-slate-500">当前生效 BrandProfile</div>
+              <div className="text-xs font-medium text-slate-500">当前生效 UITheme</div>
               <div className="mt-1 text-base font-semibold text-slate-900">
                 {activeConfig ? activeConfig.name : '未发布主题'}
               </div>
               <div className="mt-1 text-sm text-slate-500">
                 {activeTheme
-                  ? `${activeTheme.brandName} · ${activeTheme.productTitle} · ${activeConfig?.key}`
-                  : '发布一个主题后，运行时才会更新 favicon、侧栏 Logo 和浏览器标题。'}
+                  ? `${activeConfig?.key} · ${activeTheme.appearance} · radius ${activeTheme.radiusMd}/${activeTheme.radiusLg}`
+                  : '发布一个主题后，运行时只更新颜色、圆角和外观变量。'}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -79,9 +265,9 @@ export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions
             </div>
           ) : null}
           <div className="mt-3 grid gap-2 text-xs md:grid-cols-3">
-            <ThemeRuntimeFact label="浏览器标题" value={activeTheme?.productTitle || '未发布'} ready={Boolean(activeTheme?.productTitle)} />
-            <ThemeRuntimeFact label="侧栏 Logo" value={activeLogo ? '已绑定品牌资产' : '使用缩写兜底'} ready={Boolean(activeLogo)} />
-            <ThemeRuntimeFact label="Favicon" value={activeFavicon || '未绑定 favicon'} ready={Boolean(activeFavicon)} />
+            <ThemeRuntimeFact label="主题外观" value={activeTheme?.appearance || '未发布'} ready={Boolean(activeTheme)} />
+            <ThemeRuntimeFact label="品牌资产" value={activeLogo || activeFavicon ? '来自 BrandProfile 运行时源' : '等待 BrandProfile 配置入口'} ready={Boolean(activeLogo || activeFavicon)} />
+            <ThemeRuntimeFact label="边界" value="主题不编辑 logo/favicon" ready />
           </div>
         </div>
         {configs.length === 0 ? (
@@ -109,13 +295,12 @@ export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions
                         ) : null}
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
-                        <span>品牌：{theme.brandName}</span>
-                        <span>标题：{theme.productTitle}</span>
-                        <span>副标题：{theme.productSubtitle}</span>
+                        <span>外观：{theme.appearance}</span>
+                        <span>按钮圆角：{theme.radiusMd}px</span>
+                        <span>卡片圆角：{theme.radiusLg}px</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <span>Logo：{logo ? '已配置' : '未配置'}</span>
-                        <span>Favicon：{favicon ? '已配置' : '未配置'}</span>
+                        <span>品牌资产：{logo || favicon ? '运行时读取，主题不编辑' : '未接入独立 BrandProfile 配置'}</span>
                         <span>更新：{new Date(config.updated_at).toLocaleString('zh-CN')}</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -173,6 +358,87 @@ function ThemeRuntimeFact({
     }`}>
       <div className="font-medium">{label}</div>
       <div className="mt-1 truncate">{value}</div>
+    </div>
+  )
+}
+
+function BrandInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="space-y-1 text-sm">
+      <span className="font-medium text-slate-700">{label}</span>
+      <Input value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  )
+}
+
+function BrandReadField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 truncate text-sm font-medium text-slate-800">{value}</div>
+    </div>
+  )
+}
+
+function BrandAssetUpload({
+  label,
+  folder,
+  value,
+  onChange,
+  square,
+}: {
+  label: string
+  folder: 'logos' | 'favicons'
+  value: string
+  onChange: (value: string) => void
+  square?: boolean
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs font-medium text-slate-600">{label}</div>
+      <ImageUpload
+        value={value}
+        onChange={onChange}
+        folder={folder}
+        square={square}
+        previewHeight={square ? 36 : 40}
+        maxSizeMB={2}
+        showUrlInput
+      />
+    </div>
+  )
+}
+
+function BrandAssetPreview({
+  label,
+  value,
+  fallback,
+  square,
+}: {
+  label: string
+  value: string
+  fallback: string
+  square?: boolean
+}) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-2">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className={`mt-2 flex ${square ? 'h-16' : 'h-20'} items-center justify-center rounded border border-slate-100 bg-slate-50`}>
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" className="max-h-full max-w-full object-contain" />
+        ) : (
+          <span className="rounded bg-slate-900 px-2 py-1 text-xs font-semibold text-white">{fallback}</span>
+        )}
+      </div>
     </div>
   )
 }

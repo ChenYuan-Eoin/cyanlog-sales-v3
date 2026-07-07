@@ -1525,6 +1525,7 @@ export default function ConfigsClient({
                 onPublishConfig={handlePublishConfig}
                 onFetchVersions={handleFetchVersions}
                 onDeleteConfig={handleDeleteConfig}
+                onRefreshConfigs={() => refreshTabData(activeTab)}
                 orgSummary={orgSummary}
                 feishuSyncing={feishuSyncing}
                 feishuFeedback={feishuFeedback}

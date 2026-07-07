@@ -1,7 +1,6 @@
 'use client'
 
 import { Input } from '@/components/ui/input'
-import { ImageUpload } from '@/components/ui/ImageUpload'
 import { sanitizeThemeValue } from '@/lib/ui-theme-shared'
 import type { Config } from '../types'
 
@@ -48,23 +47,6 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
     { key: 'destructive', label: '危险态' },
   ]
 
-  const getBrandAssets = () => {
-    return (value.brandAssets as { fullLogo?: { light?: string; dark?: string }; symbol?: { light?: string; dark?: string }; favicon?: string }) || { fullLogo: {}, symbol: {}, favicon: '' }
-  }
-
-  const updateBrandAsset = (path: string[], url: string) => {
-    const current = getBrandAssets()
-    if (path.length === 2) {
-      const [section, variant] = path
-      const sectionData = (current[section as keyof typeof current] as Record<string, string>) || {}
-      updateValue({
-        brandAssets: { ...current, [section]: { ...sectionData, [variant]: url } }
-      })
-    } else if (path.length === 1) {
-      updateValue({ brandAssets: { ...current, [path[0]]: url } })
-    }
-  }
-
   return (
     <div className="space-y-4">
       <div>
@@ -85,53 +67,8 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
         />
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <label className="text-sm font-medium">品牌名称</label>
-          <Input
-            value={String(value.brandName || '')}
-            onChange={(e) => setThemeField('brandName', e.target.value)}
-            placeholder="如: ONES Sales"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">品牌简称</label>
-          <Input
-            value={String(value.brandShortName || '')}
-            onChange={(e) => setThemeField('brandShortName', e.target.value)}
-            placeholder="如: OS"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">浏览器标题</label>
-          <Input
-            value={String(value.productTitle || '')}
-            onChange={(e) => setThemeField('productTitle', e.target.value)}
-            placeholder="如: ONES Sales"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">侧栏副标题</label>
-          <Input
-            value={String(value.productSubtitle || '')}
-            onChange={(e) => setThemeField('productSubtitle', e.target.value)}
-            placeholder="如: 智能协作平台"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">登录页标题</label>
-          <Input
-            value={String(value.loginTitle || '')}
-            onChange={(e) => setThemeField('loginTitle', e.target.value)}
-            placeholder="如: 企业协作支撑平台"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">登录页副标题</label>
-          <Input
-            value={String(value.loginSubtitle || '')}
-            onChange={(e) => setThemeField('loginSubtitle', e.target.value)}
-            placeholder="如: 使用企业账号进入工作台首页"
-          />
+        <div className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+          品牌名称、侧栏 Logo、浏览器标题和 Favicon 不属于 UI 主题。主题只管理颜色、圆角和外观密度；品牌资产应由独立 BrandProfile 发布后统一生效。
         </div>
         <div>
           <label className="text-sm font-medium">主题外观</label>
@@ -144,86 +81,9 @@ export default function ThemeEditForm({ config, onChange }: ThemeEditFormProps) 
             <option value="light">强制亮色</option>
             <option value="dark">强制暗色</option>
           </select>
-          <p className="text-xs text-slate-500 mt-1">决定 Logo 调用亮色版还是暗色版</p>
+          <p className="text-xs text-slate-500 mt-1">只影响明暗色和视觉变量，不选择 Logo 版本。</p>
         </div>
 
-        <div className="col-span-2 border-t pt-6 mt-4">
-          <h4 className="text-base font-semibold mb-4">品牌资产配置</h4>
-
-          <div className="mb-6">
-            <p className="text-sm font-medium text-slate-700 mb-3">完整 Logo</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="min-w-0 overflow-hidden p-4 bg-white border rounded-lg">
-                <label className="text-sm font-medium">亮色版</label>
-                <p className="text-xs text-slate-500 mb-3">用于浅色背景</p>
-                <ImageUpload
-                  value={String(getBrandAssets().fullLogo?.light || '')}
-                  onChange={(url) => updateBrandAsset(['fullLogo', 'light'], url)}
-                  folder="logos"
-                  showUrlInput={false}
-                />
-              </div>
-              <div className="min-w-0 overflow-hidden p-4 bg-slate-800 border border-slate-700 rounded-lg">
-                <label className="text-sm font-medium text-white">暗色版</label>
-                <p className="text-xs text-slate-400 mb-3">用于深色背景</p>
-                <ImageUpload
-                  value={String(getBrandAssets().fullLogo?.dark || '')}
-                  onChange={(url) => updateBrandAsset(['fullLogo', 'dark'], url)}
-                  folder="logos"
-                  showUrlInput={false}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <p className="text-sm font-medium text-slate-700 mb-3">图标符号（侧边栏折叠、移动端）</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="min-w-0 overflow-hidden p-4 bg-white border rounded-lg">
-                <label className="text-sm font-medium">亮色版</label>
-                <p className="text-xs text-slate-500 mb-3">浅色背景使用</p>
-                <ImageUpload
-                  value={String(getBrandAssets().symbol?.light || '')}
-                  onChange={(url) => updateBrandAsset(['symbol', 'light'], url)}
-                  folder="logos"
-                  showUrlInput={false}
-                />
-              </div>
-              <div className="min-w-0 overflow-hidden p-4 bg-slate-800 border border-slate-700 rounded-lg">
-                <label className="text-sm font-medium text-white">暗色版</label>
-                <p className="text-xs text-slate-400 mb-3">深色背景使用</p>
-                <ImageUpload
-                  value={String(getBrandAssets().symbol?.dark || '')}
-                  onChange={(url) => updateBrandAsset(['symbol', 'dark'], url)}
-                  folder="logos"
-                  showUrlInput={false}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <p className="text-sm font-medium text-slate-700 mb-3">浏览器 Favicon</p>
-            <div className="min-w-0 max-w-sm overflow-hidden p-4 bg-white border rounded-lg">
-              <label className="text-sm font-medium">Favicon 图标</label>
-              <p className="text-xs text-slate-500 mb-3">1:1 正方形，建议 32×32 或 64×64 像素</p>
-              <ImageUpload
-                value={String(getBrandAssets().favicon || '')}
-                onChange={(url) => updateBrandAsset(['favicon'], url)}
-                folder="favicons"
-                accept="image/png,image/x-icon,image/svg+xml"
-                square={true}
-                previewHeight={48}
-                showUrlInput={false}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="hidden">
-          <Input value={String(value.logoUrl || '')} onChange={(e) => setThemeField('logoUrl', e.target.value)} />
-          <Input value={String(value.faviconUrl || '')} onChange={(e) => setThemeField('faviconUrl', e.target.value)} />
-        </div>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {colorFields.map((field) => (
