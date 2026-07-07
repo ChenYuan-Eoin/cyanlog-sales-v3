@@ -393,13 +393,21 @@ function selectBaselineVersion(versions: ComparableVersion[], compareVersion: Co
   )) || versions.find((version) => version.id !== compareVersion.id) || null
 }
 
-function versionDocumentMeta(
+async function contractFileAccessUrl(storagePath: string | null | undefined) {
+  if (!storagePath) return null
+  const { data } = await supabaseAdmin.storage
+    .from('contracts')
+    .createSignedUrl(storagePath, 60 * 60)
+
+  return data?.signedUrl || null
+}
+
+async function versionDocumentMeta(
   contract: ComparableContract,
   version: ComparableVersion,
   sourceLabel: string
-): ComparisonDocumentMeta {
+): Promise<ComparisonDocumentMeta> {
   const baseName = contract.filename || '合同源文件'
-  const { data: publicUrl } = supabaseAdmin.storage.from('contracts').getPublicUrl(version.storage_path)
   return {
     id: version.id,
     label: `${baseName} v${version.version_number}`,
@@ -408,20 +416,17 @@ function versionDocumentMeta(
     source_label: sourceLabel,
     storage_path: version.storage_path,
     mime_type: version.mime_type,
-    file_url: publicUrl.publicUrl,
+    file_url: await contractFileAccessUrl(version.storage_path),
     version_number: version.version_number,
     created_at: version.created_at,
   }
 }
 
-function contractDocumentMeta(
+async function contractDocumentMeta(
   contract: ComparableContract,
   source: ComparisonDocumentMeta['source'],
   sourceLabel: string
-): ComparisonDocumentMeta {
-  const publicUrl = contract.storage_path
-    ? supabaseAdmin.storage.from('contracts').getPublicUrl(contract.storage_path).data.publicUrl
-    : null
+): Promise<ComparisonDocumentMeta> {
   return {
     id: contract.id,
     label: contract.filename || contract.contract_no || '合同文件',
@@ -430,7 +435,7 @@ function contractDocumentMeta(
     source_label: sourceLabel,
     storage_path: contract.storage_path,
     mime_type: contract.mime_type,
-    file_url: publicUrl,
+    file_url: await contractFileAccessUrl(contract.storage_path),
   }
 }
 
@@ -454,18 +459,18 @@ async function resolveComparisonDocumentMeta({
   if (!docId || docId === currentContract.id) {
     const originalVersion = currentVersions.find((version) => version.source === 'original')
     return originalVersion
-      ? versionDocumentMeta(currentContract, originalVersion, currentSourceLabel)
-      : contractDocumentMeta(currentContract, 'current_contract', currentSourceLabel)
+      ? await versionDocumentMeta(currentContract, originalVersion, currentSourceLabel)
+      : await contractDocumentMeta(currentContract, 'current_contract', currentSourceLabel)
   }
 
   const version = currentVersions.find((item) => item.id === docId)
   if (version) {
-    return versionDocumentMeta(currentContract, version, fallbackSourceLabel)
+    return await versionDocumentMeta(currentContract, version, fallbackSourceLabel)
   }
 
   const contract = await loadComparableContract(docId, orgId, accessibleUserIds)
   if (contract) {
-    return contractDocumentMeta(contract, 'contract', fallbackSourceLabel)
+    return await contractDocumentMeta(contract, 'contract', fallbackSourceLabel)
   }
 
   return {

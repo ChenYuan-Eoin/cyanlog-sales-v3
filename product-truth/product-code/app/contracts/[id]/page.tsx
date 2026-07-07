@@ -32,6 +32,7 @@ import {
   needsManualAnnotationLocation,
   needsManualRiskLocation,
 } from '@/lib/contracts/review-workbench-state'
+import { SourceDocumentPreview, type SourceDocumentPreviewFile } from '@/components/contracts/source-document-preview'
 import { error as toastError, success as toastSuccess } from '@/lib/toast'
 
 type ContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
@@ -54,6 +55,7 @@ type ContractVersion = {
   version_number: number
   source: 'original' | 'review_revision' | 'manual_revision'
   storage_path: string
+  file_url?: string | null
   file_size: number | null
   mime_type: string | null
   parent_version_id: string | null
@@ -262,6 +264,7 @@ type WorkbenchData = {
   title?: string | null
   status: ContractStatus
   storage_path?: string
+  file_url?: string | null
   size?: number
   mime_type?: string
   parsed_text?: string | null
@@ -316,6 +319,44 @@ const modelPolicySourceLabel: Record<NonNullable<ReviewRun['model_policy']>['sou
   model_policies: '已发布模型策略',
   'analysis_job.provider': '分析任务记录',
   fallback: '规则兜底',
+}
+
+function reviewStrategyCode(style: ReviewStyle): 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE' {
+  if (style === 'strict') return 'AGGRESSIVE'
+  if (style === 'business') return 'CONSERVATIVE'
+  return 'BALANCED'
+}
+
+function reviewVersionSourceLabel(source: ContractVersion['source']) {
+  if (source === 'original') return '源文件'
+  if (source === 'manual_revision') return '客户/人工版本'
+  return '批注版'
+}
+
+function pickReviewSourcePreviewFile(data: WorkbenchData): SourceDocumentPreviewFile | null {
+  const sourceVersion = [...data.versions]
+    .filter((version) => version.source === 'original' || version.source === 'manual_revision')
+    .sort((a, b) => b.version_number - a.version_number)[0]
+
+  if (sourceVersion) {
+    return {
+      label: `v${sourceVersion.version_number} · ${reviewVersionSourceLabel(sourceVersion.source)} · ${data.filename}`,
+      fileUrl: sourceVersion.file_url || null,
+      mimeType: sourceVersion.mime_type || data.mime_type || null,
+      storagePath: sourceVersion.storage_path || null,
+    }
+  }
+
+  if (data.file_url || data.storage_path) {
+    return {
+      label: data.filename || data.title || '合同源文件',
+      fileUrl: data.file_url || null,
+      mimeType: data.mime_type || null,
+      storagePath: data.storage_path || null,
+    }
+  }
+
+  return null
 }
 
 const modelTransportLabel: Record<string, string> = {
@@ -480,46 +521,6 @@ function negotiationBottomLine(risk: RiskFinding) {
   return '底线：客户可以补充业务原因，但必须回传明确文本，不能停留在口头确认。'
 }
 
-function SourceTextPreview({
-  text,
-  selectedText,
-}: {
-  text: string
-  selectedText: string
-}) {
-  const normalized = text.trim() || '当前还没有可展示的合同正文。请先上传可解析的 docx、pdf 或文本文件。'
-  const index = selectedText ? normalized.indexOf(selectedText) : -1
-  const contentClassName = 'whitespace-pre-wrap break-words font-sans text-sm leading-7 text-slate-800'
-  const pageClassName = 'mx-auto min-h-[420px] max-w-full rounded-sm bg-white px-5 py-7 shadow-sm ring-1 ring-slate-200 lg:min-h-[640px] lg:max-w-[760px] lg:px-10 lg:py-12'
-  const shellClassName = 'max-h-[58dvh] overflow-auto rounded-lg bg-slate-100 p-3 md:max-h-[calc(100dvh-260px)] md:p-4 xl:max-h-[760px] xl:p-6'
-
-  if (index < 0) {
-    return (
-      <div className={shellClassName}>
-        <div className={pageClassName}>
-          <pre className={contentClassName}>{normalized}</pre>
-        </div>
-      </div>
-    )
-  }
-
-  const before = normalized.slice(0, index)
-  const matched = normalized.slice(index, index + selectedText.length)
-  const after = normalized.slice(index + selectedText.length)
-
-  return (
-    <div className={shellClassName}>
-      <div className={pageClassName}>
-        <pre className={contentClassName}>
-          {before}
-          <mark className="rounded bg-amber-200 px-1 text-slate-950">{matched}</mark>
-          {after}
-        </pre>
-      </div>
-    </div>
-  )
-}
-
 export default function ContractWorkbenchPage() {
   const params = useParams()
   const searchParams = useSearchParams()
@@ -646,10 +647,10 @@ export default function ContractWorkbenchPage() {
         isRerun ? `/api/contracts/${contractId}/review-runs` : `/api/contracts/${contractId}/analyze`,
         {
           method: 'POST',
-          headers: isRerun
-            ? { ...headers, 'Content-Type': 'application/json' }
-            : headers,
-          body: isRerun ? JSON.stringify({ trigger_event: 'manual_rerun' }) : undefined,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: isRerun
+            ? JSON.stringify({ trigger_event: 'manual_rerun', strategy: reviewStrategyCode(reviewStyle) })
+            : JSON.stringify({ strategy: reviewStrategyCode(reviewStyle) }),
         }
       )
       const payload = await response.json().catch(() => ({}))
@@ -869,6 +870,7 @@ export default function ContractWorkbenchPage() {
 	  const statusVariant = data.status === 'COMPLETED' && displayReviewHealth.degraded
 	    ? 'destructive'
 	    : statusMeta.variant
+  const sourcePreviewFile = pickReviewSourcePreviewFile(data)
 
   return (
     <div className="space-y-5 p-4 md:p-5 xl:p-8">
@@ -999,7 +1001,7 @@ export default function ContractWorkbenchPage() {
         onModeChange={setSidePanelMode}
       />
 
-	      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[180px_300px_minmax(0,1fr)] 2xl:grid-cols-[200px_320px_minmax(0,1fr)]">
+	      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[220px_320px_minmax(0,1fr)] 2xl:grid-cols-[240px_340px_minmax(0,1fr)]">
         <ReviewNavigationRail
           data={data}
           selectedRiskId={selectedRisk?.id || null}
@@ -1133,7 +1135,13 @@ export default function ContractWorkbenchPage() {
                   </div>
                 </div>
               )}
-              <SourceTextPreview text={data.parsed_text || ''} selectedText={selectedSnippet} />
+              <SourceDocumentPreview
+                file={sourcePreviewFile}
+                title="源文件原件与批注定位预览"
+                selectedText={selectedSnippet}
+                fallbackLabel="未绑定可渲染源文件"
+                minHeightClassName="min-h-[calc(100dvh-260px)]"
+              />
             </CardContent>
           </Card>
 

@@ -608,17 +608,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </button>
               ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled
-                title="规则库是应用级配置根节点；第一阶段固定为默认审核库，规则集就是规则列表容器。"
-              >
-                <FolderIcon className="h-4 w-4 mr-1" />
-                新建审核库
-              </Button>
-              <Button size="sm" onClick={() => setCreateRuleSetOpen(true)}>
+            <div>
+              <Button size="sm" className="w-full" onClick={() => setCreateRuleSetOpen(true)}>
                 <PlusIcon className="h-4 w-4 mr-1" />
                 新建规则集
               </Button>
@@ -636,8 +627,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                   <div className="flex items-center gap-2 px-2 py-1.5">
                     <FolderIcon className="h-4 w-4 text-slate-500" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-slate-950">默认审核库</div>
-                      <div className="text-[11px] text-slate-500">应用当前合同审核规则资产根节点</div>
+                      <div className="truncate text-sm font-semibold text-slate-950">合同审核规则集</div>
+                      <div className="text-[11px] text-slate-500">选择规则集后展开具体规则；选择规则后编辑触发、判定和输出</div>
                     </div>
                     <Badge variant="outline">{rules.length}</Badge>
                   </div>

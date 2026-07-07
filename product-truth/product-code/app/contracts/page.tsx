@@ -72,6 +72,8 @@ type TaskItemView = {
   id: string
   name: string
   type: 'draft' | 'contract'
+  moduleLabel: '合同审核' | '合同起草' | '文档对比'
+  versionLabel: string
   status: string
   statusColor: string
   updatedAt: string
@@ -118,6 +120,18 @@ function contractActionName(contract?: Contract) {
   return name.trim() || '未命名合同'
 }
 
+function contractVersionLabel(contract: Contract) {
+  const versions = (contract as Contract & {
+    contract_versions?: Array<{ version_number?: number | null; source?: string | null; created_at?: string | null }>
+  }).contract_versions || []
+  const latestVersion = versions.reduce<number | null>((latest, version) => {
+    const value = Number(version.version_number)
+    if (!Number.isFinite(value)) return latest
+    return latest === null ? value : Math.max(latest, value)
+  }, null)
+  return latestVersion ? `v${latestVersion}` : 'v1'
+}
+
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
 const quickActions: QuickAction[] = [
   {
@@ -152,7 +166,7 @@ const quickActions: QuickAction[] = [
   },
   {
     id: 'draft',
-    title: 'AI 起草合同',
+    title: '合同起草',
     shortTitle: '起草',
     workflowLabel: '输入需求生成合同草稿',
     objectLabel: '客户需求、模板、条款限制',
@@ -407,6 +421,8 @@ export default function ContractCenterPage() {
       id: d.id,
       name: d.title || '未命名草稿',
       type: 'draft' as const,
+      moduleLabel: '合同起草' as const,
+      versionLabel: '草案 v1',
       status: '起草中' as const,
       statusColor: 'bg-slate-100 text-slate-600' as const,
       updatedAt: d.updated_at,
@@ -434,6 +450,8 @@ export default function ContractCenterPage() {
         id: c.id,
         name: c.filename,
         type: 'contract' as const,
+        moduleLabel: '合同审核' as const,
+        versionLabel: contractVersionLabel(c),
         status: status.label,
         statusColor: status.color as string,
         updatedAt: c.updated_at,
@@ -806,6 +824,8 @@ function TaskItem({
     id: string
     name: string
     type: 'draft' | 'contract'
+    moduleLabel: '合同审核' | '合同起草' | '文档对比'
+    versionLabel: string
     status: string
     statusColor: string
     updatedAt: string
@@ -837,9 +857,12 @@ function TaskItem({
                 <p className={`font-medium text-slate-900 truncate ${isMobile ? 'text-sm' : 'text-sm'}`}>
                   {task.name}
                 </p>
-                {!isMobile && (
-                  <span className="text-[10px] text-slate-400 shrink-0">{task.meta}</span>
-                )}
+                <span className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                  {task.moduleLabel}
+                </span>
+                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-500">
+                  {task.versionLabel}
+                </span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${task.statusColor}`}>

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('contracts')
       .select(
-        'id, filename, status, contract_no, quote_id, party_b_name, created_by, created_at, updated_at',
+        'id, filename, status, contract_no, quote_id, party_b_name, created_by, created_at, updated_at, storage_path, parsed_text, contract_versions(version_number, source, created_at)',
         includeTotal ? { count: 'exact' } : undefined
       )
       .eq('org_id', orgId)

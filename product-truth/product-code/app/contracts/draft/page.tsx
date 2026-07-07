@@ -16,6 +16,8 @@ import {
   SaveIcon,
   LoaderIcon,
   FileTextIcon,
+  DownloadIcon,
+  UploadIcon,
 } from 'lucide-react'
 import type { ContractTemplateParam } from '../types'
 import { success, error } from '@/lib/toast'
@@ -35,6 +37,7 @@ export default function ContractDraftPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const [draft, setDraft] = useState<DraftData>({
     title: '',
@@ -217,6 +220,47 @@ export default function ContractDraftPage() {
       setGenerating(false)
     }
   }, [draft])
+
+  const handleExportDocx = useCallback(async () => {
+    if (!generatedContent.trim()) {
+      error('请先生成合同正文')
+      return
+    }
+    setExporting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/contracts/draft/export', {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: draft.title || '合同草稿',
+          content: generatedContent,
+        }),
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        error(payload.error || '导出失败')
+        return
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${draft.title || '合同草稿'}-草稿.docx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      success('已导出可编辑 DOCX')
+    } catch {
+      error('导出失败')
+    } finally {
+      setExporting(false)
+    }
+  }, [draft.title, generatedContent])
 
   const groupedParams = useMemo(() => {
     const enums = params.filter((p) => p.param_type === 'enum')
@@ -484,6 +528,24 @@ export default function ContractDraftPage() {
                 </>
               )}
             </Button>
+            {generatedContent ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="outline" onClick={handleExportDocx} disabled={exporting}>
+                  {exporting ? (
+                    <LoaderIcon className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <DownloadIcon className="mr-1.5 h-4 w-4" />
+                  )}
+                  导出 DOCX
+                </Button>
+                <Link href="/contracts/new" prefetch={false}>
+                  <Button type="button" variant="outline" className="w-full">
+                    <UploadIcon className="mr-1.5 h-4 w-4" />
+                    转入审核
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
           </div>
         </aside>
 

@@ -28,6 +28,22 @@ interface ContractForm {
 }
 
 type UploadStage = 'idle' | 'creating' | 'uploading' | 'submitting' | 'analyzing' | 'done'
+type ReviewStyle = 'strict' | 'balanced' | 'business'
+
+const reviewStyleOptions: Array<{
+  value: ReviewStyle
+  label: string
+  description: string
+  strategy: 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE'
+}> = [
+  { value: 'strict', label: '严审', description: '红线、格式和证据定位更敏感，适合用印前审计。', strategy: 'AGGRESSIVE' },
+  { value: 'balanced', label: '均衡', description: '按发布规则默认阈值执行，适合大多数合同审核。', strategy: 'BALANCED' },
+  { value: 'business', label: '商务', description: '优先输出谈判口径和可控风险建议，适合销售现场沟通。', strategy: 'CONSERVATIVE' },
+]
+
+function reviewStyleStrategy(style: ReviewStyle) {
+  return reviewStyleOptions.find((option) => option.value === style)?.strategy || 'BALANCED'
+}
 
 const initialForm: ContractForm = {
   contract_no: '',
@@ -93,10 +109,12 @@ function optionalAmount(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-function buildContractPayload(form: ContractForm, file: File) {
+function buildContractPayload(form: ContractForm, file: File, reviewStyle: ReviewStyle) {
+  const styleLabel = reviewStyleOptions.find((option) => option.value === reviewStyle)?.label || '均衡'
   const notes = [
     optionalText(form.notes),
     `审核源文件: ${file.name}`,
+    `审核风格: ${styleLabel}`,
   ].filter(Boolean).join('\n')
 
   return {
@@ -124,6 +142,7 @@ export default function NewContractPage() {
   const [loading, setLoading] = useState(false)
   const [stage, setStage] = useState<UploadStage>('idle')
   const [error, setError] = useState('')
+  const [reviewStyle, setReviewStyle] = useState<ReviewStyle>('balanced')
 
   const handleInputChange = useCallback((field: keyof ContractForm, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -176,10 +195,14 @@ export default function NewContractPage() {
     }
   }
 
-  async function startContractAnalysis(cid: string, token: string) {
+  async function startContractAnalysis(cid: string, token: string, style: ReviewStyle) {
     const res = await fetch(`/api/contracts/${cid}/analyze`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ strategy: reviewStyleStrategy(style) }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
@@ -212,7 +235,7 @@ export default function NewContractPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(buildContractPayload(form, file)),
+        body: JSON.stringify(buildContractPayload(form, file, reviewStyle)),
       })
       const createData = await createRes.json().catch(() => ({}))
       if (!createRes.ok) {
@@ -252,7 +275,7 @@ export default function NewContractPage() {
       setStage('submitting')
       await submitContractForReview(contractId, token)
       setStage('analyzing')
-      await startContractAnalysis(contractId, token)
+      await startContractAnalysis(contractId, token, reviewStyle)
 
       setStage('done')
       router.push(`/contracts/${contractId}`)
@@ -362,6 +385,35 @@ export default function NewContractPage() {
                       </Button>
                     </div>
                   )}
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">审核风格</p>
+                    <Badge variant="outline">随本次 ReviewRun 生效</Badge>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {reviewStyleOptions.map((option) => {
+                      const active = option.value === reviewStyle
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setReviewStyle(option.value)}
+                          className={`rounded-md border px-3 py-2 text-left transition ${
+                            active
+                              ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200'
+                          }`}
+                        >
+                          <span className="text-sm font-semibold">{option.label}</span>
+                          <span className={`mt-1 block text-xs leading-5 ${active ? 'text-slate-200' : 'text-slate-500'}`}>
+                            {option.description}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">

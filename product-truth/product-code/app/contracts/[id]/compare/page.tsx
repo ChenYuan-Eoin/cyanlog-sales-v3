@@ -10,6 +10,7 @@ import {
   buildContractWorkbenchHref,
   buildContractsCenterHref,
 } from '@/lib/contracts/review-navigation'
+import { SourceDocumentPreview, type SourceDocumentPreviewFile } from '@/components/contracts/source-document-preview'
 import {
   ArrowLeftIcon,
   AlertTriangleIcon,
@@ -173,18 +174,14 @@ function sourceLabel(meta?: ComparisonDocumentMeta | null) {
   return meta.source_label
 }
 
-function isPdfDocument(meta?: ComparisonDocumentMeta | null) {
-  const path = `${meta?.filename || ''} ${meta?.storage_path || ''}`.toLowerCase()
-  return Boolean(meta?.mime_type?.includes('pdf') || path.includes('.pdf'))
-}
-
-function isDocxDocument(meta?: ComparisonDocumentMeta | null) {
-  const path = `${meta?.filename || ''} ${meta?.storage_path || ''}`.toLowerCase()
-  return Boolean(
-    meta?.mime_type?.includes('wordprocessingml')
-    || meta?.mime_type?.includes('msword')
-    || path.includes('.docx')
-  )
+function toSourcePreviewFile(meta?: ComparisonDocumentMeta | null, fallback = '未绑定文件'): SourceDocumentPreviewFile | null {
+  if (!meta) return null
+  return {
+    label: meta.label || meta.filename || fallback,
+    fileUrl: meta.file_url || null,
+    mimeType: meta.mime_type || null,
+    storagePath: meta.storage_path || null,
+  }
 }
 
 function readApiError(payload: unknown, fallback: string) {
@@ -999,7 +996,7 @@ export default function ContractComparePage() {
         </header>
 
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
-          PDF 直接内嵌；私有 DOCX 不再交给 Office 外链预览，避免 File not found。DOCX 以打开源文件 + 文本证据定位复核，后续接文件坐标渲染层。
+          PDF 直接内嵌；私有 DOCX 使用签名源文件做浏览器页级渲染，并保留打开原件与文本证据定位复核入口。当前差异定位仍以文本证据为准。
         </div>
 
         {/* 差异高亮说明 */}
@@ -1054,7 +1051,13 @@ export default function ContractComparePage() {
               <FileTextIcon className="h-3 w-3 text-slate-300" />
             </div>
             <div className="p-3">
-              <DocumentSourcePreview meta={documentPair?.baseline} fallback="当前合同基准文件" />
+              <SourceDocumentPreview
+                file={toSourcePreviewFile(documentPair?.baseline, '当前合同基准文件')}
+                title="旧文件原件预览"
+                selectedText={selectedDiff?.baseline_text || ''}
+                fallbackLabel="当前合同基准文件"
+                minHeightClassName="min-h-[640px]"
+              />
               <DocumentDiffEvidence side="baseline" diff={selectedDiff} />
             </div>
           </div>
@@ -1072,7 +1075,13 @@ export default function ContractComparePage() {
               <Edit3Icon className="h-3 w-3 text-indigo-300" />
             </div>
             <div className="p-3">
-              <DocumentSourcePreview meta={documentPair?.compare} fallback="客户回传文件" />
+              <SourceDocumentPreview
+                file={toSourcePreviewFile(documentPair?.compare, '客户回传文件')}
+                title="新文件原件预览"
+                selectedText={selectedDiff?.compare_text || ''}
+                fallbackLabel="客户回传文件"
+                minHeightClassName="min-h-[640px]"
+              />
               <DocumentDiffEvidence side="compare" diff={selectedDiff} />
             </div>
           </div>
@@ -1280,67 +1289,6 @@ function DocumentPill({
         <div className="text-[11px] font-medium text-slate-500">{label} · {sourceLabel(meta)}</div>
         <div className="truncate text-xs font-semibold text-slate-800">{meta?.label || fallback}</div>
       </div>
-    </div>
-  )
-}
-
-function DocumentSourcePreview({
-  meta,
-  fallback,
-}: {
-  meta?: ComparisonDocumentMeta | null
-  fallback: string
-}) {
-  const canPreviewPdf = Boolean(meta?.file_url && isPdfDocument(meta))
-  const isDocx = isDocxDocument(meta)
-  const previewUrl = canPreviewPdf ? meta?.file_url || '' : ''
-
-  return (
-    <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-medium text-slate-500">{sourceLabel(meta)}</div>
-          <div className="mt-1 truncate text-sm font-semibold text-slate-900">{meta?.label || fallback}</div>
-          <div className="mt-1 truncate text-xs text-slate-500">
-            {meta?.mime_type || '未知类型'} · {meta?.storage_path || '未返回文件路径'}
-          </div>
-        </div>
-        {meta?.file_url ? (
-          <a
-            href={meta.file_url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            打开原件
-          </a>
-        ) : (
-          <Badge variant="outline">无文件源</Badge>
-        )}
-      </div>
-      {previewUrl ? (
-        <iframe
-          title={`${meta?.label || fallback} 预览`}
-          src={previewUrl}
-          className="mt-3 h-[620px] w-full rounded-md border border-slate-200 bg-white"
-        />
-      ) : isDocx ? (
-        <div className="mt-3 rounded-md border border-blue-100 bg-white p-4">
-          <div className="flex items-start gap-3">
-            <FileTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900">DOCX 原文件已绑定，未使用外部预览器</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                当前文件通常是私有存储地址，交给 Office 在线预览会出现 File not found。请用“打开原件”查看源文件；下方文本证据只辅助定位差异，不替代 1:1 渲染。
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <p className="mt-3 rounded-md bg-white px-3 py-2 text-xs leading-5 text-slate-500">
-          当前文件没有可用的浏览器原件预览地址。请打开源文件复核；系统不会用文本片段冒充原文页面。
-        </p>
-      )}
     </div>
   )
 }
