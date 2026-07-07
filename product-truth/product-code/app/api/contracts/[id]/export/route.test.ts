@@ -339,7 +339,39 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(exportPayload.annotations[0].comment).not.toContain('规则：')
   })
 
-  it('批注意图跨段或过短时返回导出门禁错误，不进入 Word 生成器', async () => {
+  it('批注意图跨段但存在稳定片段时允许进入 Word 生成器', async () => {
+    installSupabaseExportMocks({
+      annotations: [{
+        id: 'annotation-1',
+        start_offset: 0,
+        end_offset: 31,
+        selected_text: '若提前解除合同，则合同费用按照实际服务时间进行结算。\n客户口头确认。',
+        comment: '【需谈判风险】终止退款\n证据原文：若提前解除合同，则合同费用按照实际服务时间进行结算。',
+        category: 'risk_finding',
+        priority: 'high',
+        status: 'open',
+        author_id: 'user-1',
+        created_at: '2026-07-02T01:00:00.000Z',
+      }],
+    })
+    const outputPath = path.join(os.tmpdir(), `ones-multiline-source-comments-${Date.now()}.docx`)
+    fs.writeFileSync(outputPath, Buffer.from([7, 7, 7]))
+    tempFiles.push(outputPath)
+    ;(generateWordDocument as any).mockResolvedValue({
+      success: true,
+      outputPath,
+      mode: 'source_comments',
+    })
+
+    const res = await POST(makeRequest(), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(generateWordDocument).toHaveBeenCalled()
+  })
+
+  it('批注意图过短时返回导出门禁错误，不进入 Word 生成器', async () => {
     const contract = {
       id: 'contract-1',
       filename: 'source.docx',
@@ -359,7 +391,7 @@ describe('POST /api/contracts/[id]/export', () => {
           id: 'annotation-1',
           start_offset: 0,
           end_offset: 6,
-          selected_text: '保密义务\n3',
+          selected_text: '保密\n3',
           comment: '【需谈判风险】保密期\n证据原文：保密义务\n3',
           category: 'risk_finding',
           priority: 'high',
@@ -445,7 +477,7 @@ describe('POST /api/contracts/[id]/export', () => {
           storage_path: 'reviewed/contract-1/review-review-1/source-version-1.docx',
           parent_version_id: 'version-1',
           review_id: 'review-1',
-          change_summary: 'customer-comment-v2：ONES 业务运营基于风险项生成客户侧 Word 原生批注版本',
+          change_summary: 'customer-comment-v4：ONES 业务运营基于风险项生成客户侧 Word 原生批注版本',
           created_at: '2026-07-02T02:00:00.000Z',
         },
         {

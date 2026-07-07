@@ -191,7 +191,7 @@ export async function POST(
       }
     }
 
-    const { error: versionError } = await supabaseAdmin
+    const { data: insertedVersion, error: versionError } = await supabaseAdmin
       .from('contract_versions')
       .insert({
         contract_id: contractId,
@@ -208,6 +208,8 @@ export async function POST(
             : '用户上传合同源文件',
         uploaded_by: user.id,
       })
+      .select('id, version_number, source')
+      .single()
 
     if (versionError) {
       await logError({
@@ -233,8 +235,9 @@ export async function POST(
         fileSize: file.size,
         fileType: file.type,
         storagePath,
-        versionNumber: nextVersionNumber,
-        versionSource,
+        versionId: insertedVersion?.id || null,
+        versionNumber: insertedVersion?.version_number || nextVersionNumber,
+        versionSource: insertedVersion?.source || versionSource,
         contractUpdated: !isVersionOnlyUpload,
         status: isVersionOnlyUpload ? contract.status : 'PENDING',
       },

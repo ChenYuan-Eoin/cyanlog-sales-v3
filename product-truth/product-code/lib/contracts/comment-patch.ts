@@ -166,6 +166,10 @@ export function buildCustomerFacingWordComment(comment: string | null | undefine
   if (lines.length === 0) return ''
 
   const firstLine = lines[0]
+  if (/^【(必须修改|建议修改)】/.test(firstLine) && lines.some((line) => line.startsWith('建议修改为：'))) {
+    return lines.join('\n')
+  }
+
   const title = commentTitle(firstLine)
   const severity = commentSeverity(firstLine)
   const suggestion = commentLineValue(lines, '建议')

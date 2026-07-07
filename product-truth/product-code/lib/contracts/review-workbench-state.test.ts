@@ -124,13 +124,26 @@ describe('review workbench state', () => {
     expect(gateIssues.join('\n')).toContain('Word 批注意图需要人工定位')
   })
 
-  it('blocks export when Word comment anchor is too short or spans paragraphs', () => {
+  it('allows multiline evidence when it contains a stable Word comment anchor', () => {
     const data = baseReviewData({
       annotations: [
         {
-          selected_text: '付款\n期限',
-          comment: '跨段文本不适合作为 Word 原生批注锚点。',
+          selected_text: '若提前解除合同，则合同费用按照实际服务时间进行结算。\n客户口头确认。',
+          comment: '跨段文本可以用稳定片段锚定。',
         },
+      ],
+    })
+
+    const health = buildReviewHealth(data)
+
+    expect(data.annotations.some(hasWordUnsafeAnnotationAnchor)).toBe(false)
+    expect(health.wordUnsafeAnnotationCount).toBe(0)
+    expect(buildExportGateIssues(data, health)).toEqual([])
+  })
+
+  it('blocks export when Word comment anchor is too short', () => {
+    const data = baseReviewData({
+      annotations: [
         {
           selected_text: '付款',
           comment: '证据过短，容易错位。',
@@ -141,7 +154,7 @@ describe('review workbench state', () => {
     const health = buildReviewHealth(data)
 
     expect(data.annotations.every(hasWordUnsafeAnnotationAnchor)).toBe(true)
-    expect(health.wordUnsafeAnnotationCount).toBe(2)
+    expect(health.wordUnsafeAnnotationCount).toBe(1)
     expect(buildExportGateIssues(data, health).join('\n')).toContain('疑似跨段或证据过短')
   })
 

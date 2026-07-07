@@ -465,10 +465,20 @@ export default function ContractComparePage() {
         return
       }
 
-      const versionNumber = Number(payload?.data?.versionNumber)
+      const versionId = typeof payload?.data?.versionId === 'string' ? payload.data.versionId : ''
+      const versionNumber = Number(payload?.data?.versionNumber ?? payload?.data?.version_number)
       pendingUploadedVersionRef.current = {
         target,
         versionNumber: Number.isFinite(versionNumber) ? versionNumber : null,
+      }
+      if (versionId) {
+        if (target === 'baseline') {
+          setSelectedBaselineDocId('')
+          setSelectedBaselineVersionId(versionId)
+        } else {
+          setSelectedCompareDocId('')
+          setSelectedCompareVersionId(versionId)
+        }
       }
       await fetchCandidateContracts()
       setSetupSuccess(target === 'baseline'

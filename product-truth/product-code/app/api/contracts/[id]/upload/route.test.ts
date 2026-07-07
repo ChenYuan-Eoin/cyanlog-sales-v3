@@ -132,7 +132,12 @@ describe('POST /api/contracts/[id]/upload validation', () => {
       error: null,
     }
     const versionInsertQuery: any = {
-      insert: vi.fn().mockResolvedValue({ error: null }),
+      insert: vi.fn(() => versionInsertQuery),
+      select: vi.fn(() => versionInsertQuery),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'version-created-1', version_number: 1, source: 'original' },
+        error: null,
+      }),
     }
     const contractsFromQueue = [contractSelectQuery, contractUpdateQuery]
     const versionsFromQueue = [versionSelectQuery, versionInsertQuery]
@@ -157,6 +162,8 @@ describe('POST /api/contracts/[id]/upload validation', () => {
 
     expect(res.status).toBe(200)
     expect(body.data.status).toBe('PENDING')
+    expect(body.data.versionId).toBe('version-created-1')
+    expect(body.data.versionNumber).toBe(1)
     expect(contractUpdateQuery.update).toHaveBeenCalledWith(expect.objectContaining({
       filename: 'contract.docx',
       parsed_text: 'contract parsed text',
@@ -195,7 +202,12 @@ describe('POST /api/contracts/[id]/upload validation', () => {
       }),
     }
     const versionInsertQuery: any = {
-      insert: vi.fn().mockResolvedValue({ error: null }),
+      insert: vi.fn(() => versionInsertQuery),
+      select: vi.fn(() => versionInsertQuery),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'version-created-2', version_number: 2, source: 'manual_revision' },
+        error: null,
+      }),
     }
     const contractsFromQueue = [contractSelectQuery]
     const versionsFromQueue = [versionSelectQuery, versionInsertQuery]
@@ -221,6 +233,8 @@ describe('POST /api/contracts/[id]/upload validation', () => {
 
     expect(res.status).toBe(200)
     expect(body.data.status).toBe('COMPLETED')
+    expect(body.data.versionId).toBe('version-created-2')
+    expect(body.data.versionNumber).toBe(2)
     expect(body.data.contractUpdated).toBe(false)
     expect(body.data.versionSource).toBe('manual_revision')
     expect((supabaseAdmin.from as any).mock.calls.filter(([table]: string[]) => table === 'contracts')).toHaveLength(1)

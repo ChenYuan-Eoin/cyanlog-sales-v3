@@ -163,6 +163,16 @@ describe('comment patch adapter', () => {
     expect(customerComment).not.toContain('规则：')
   })
 
+  it('keeps already customer-facing Word comments stable', () => {
+    const comment = [
+      '【必须修改】付款周期过长',
+      '建议修改为：要求改为 30 天内付款',
+      '处理要求：请按上述口径修订后回传确认。',
+    ].join('\n')
+
+    expect(buildCustomerFacingWordComment(comment)).toBe(comment)
+  })
+
   it('writes manual control notes into Word comment text without closing the risk', () => {
     const patches = buildCommentPatchesFromRiskCards({
       contractId: 'contract-1',

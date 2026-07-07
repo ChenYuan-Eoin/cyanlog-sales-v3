@@ -5,6 +5,8 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 import JSZip from 'jszip'
+import { buildCustomerFacingWordComment } from '../contracts/comment-patch'
+import { wordCommentAnchorCandidates } from '../contracts/word-comment-anchor'
 
 export interface ExportComment {
   level: 'red' | 'yellow' | 'green'
@@ -83,6 +85,13 @@ type NormalizedComment = {
   manualLocationRequired: boolean
 }
 
+type TextParagraph = {
+  index: number
+  text: string
+  startOffset: number
+  endOffset: number
+}
+
 type GenerateWordDocumentOptions = {
   allowReportFallback?: boolean
 }
@@ -129,15 +138,18 @@ function normalizeComments(data: ExportData | ExportComment[]): NormalizedCommen
 
   const annotationComments = (payload.annotations || [])
     .filter((annotation) => !annotation.status || annotation.status === 'open')
-    .map((annotation) => ({
-      body: safeText(annotation.comment),
-      selectedText: safeText(annotation.selected_text),
-      level: safeText(annotation.priority || 'high'),
-      startOffset: typeof annotation.start_offset === 'number' ? annotation.start_offset : null,
-      endOffset: typeof annotation.end_offset === 'number' ? annotation.end_offset : null,
-      manualLocationRequired: safeText(annotation.comment).includes('LocationStatus: manual_required')
-        || !safeText(annotation.selected_text).trim(),
-    }))
+    .map((annotation) => {
+      const rawComment = safeText(annotation.comment)
+      return {
+        body: buildCustomerFacingWordComment(rawComment) || rawComment,
+        selectedText: safeText(annotation.selected_text),
+        level: safeText(annotation.priority || 'high'),
+        startOffset: typeof annotation.start_offset === 'number' ? annotation.start_offset : null,
+        endOffset: typeof annotation.end_offset === 'number' ? annotation.end_offset : null,
+        manualLocationRequired: rawComment.includes('LocationStatus: manual_required')
+          || !safeText(annotation.selected_text).trim(),
+      }
+    })
     .filter((comment) => comment.body.trim())
 
   if (annotationComments.length > 0) return annotationComments
@@ -164,15 +176,43 @@ function normalizeComments(data: ExportData | ExportComment[]): NormalizedCommen
 }
 
 function createCommentXml(id: number, body: string) {
-  const paragraphs = (body.split(/\r?\n/) || ['']).map((line) => (
-    `<w:p><w:r><w:t xml:space="preserve">${escapeXml(line)}</w:t></w:r></w:p>`
-  )).join('')
+  const paragraphs = commentBodyParagraphXml(body)
 
   return [
     `<w:comment w:id="${id}" w:author="${escapeXml(AUTHOR)}" w:initials="${INITIALS}" w:date="${new Date().toISOString()}">`,
     paragraphs,
     '</w:comment>',
   ].join('')
+}
+
+function commentBodyParagraphXml(body: string) {
+  return (body.split(/\r?\n/) || ['']).map((line) => (
+    `<w:p><w:r><w:t xml:space="preserve">${escapeXml(line)}</w:t></w:r></w:p>`
+  )).join('')
+}
+
+function commentTextLines(commentXml: string) {
+  return [...commentXml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)]
+    .map((match) => decodeXmlText(match[1] || '').trim())
+    .filter(Boolean)
+}
+
+function shouldSanitizeExistingComment(body: string) {
+  return /(^|\n)【(红线风险|需谈判风险|需人工定位)】/.test(body)
+    || /(^|\n)(证据原文|规则|RuleSnapshot|SourceRange|RiskFinding|LocationStatus|定位状态)[：:]/.test(body)
+}
+
+function sanitizeExistingCommentsXml(existingXml: string | null) {
+  if (!existingXml) return existingXml
+  return existingXml.replace(/<w:comment\b[\s\S]*?<\/w:comment>/g, (commentXml) => {
+    const openTag = commentXml.match(/^<w:comment\b[^>]*>/)?.[0]
+    if (!openTag) return commentXml
+    const body = commentTextLines(commentXml).join('\n')
+    if (!shouldSanitizeExistingComment(body)) return commentXml
+    const sanitizedBody = buildCustomerFacingWordComment(body)
+    if (!sanitizedBody) return commentXml
+    return `${openTag}${commentBodyParagraphXml(sanitizedBody)}</w:comment>`
+  })
 }
 
 function maxCommentId(commentsXml: string) {
@@ -184,12 +224,13 @@ function maxCommentId(commentsXml: string) {
 }
 
 function appendCommentsXml(existingXml: string | null, comments: NormalizedComment[], firstId: number) {
+  const sanitizedExistingXml = sanitizeExistingCommentsXml(existingXml)
   const commentNodes = comments
     .map((comment, index) => createCommentXml(firstId + index, comment.body))
     .join('')
 
-  if (existingXml && existingXml.includes('</w:comments>')) {
-    return existingXml.replace('</w:comments>', `${commentNodes}</w:comments>`)
+  if (sanitizedExistingXml && sanitizedExistingXml.includes('</w:comments>')) {
+    return sanitizedExistingXml.replace('</w:comments>', `${commentNodes}</w:comments>`)
   }
 
   return [
@@ -222,6 +263,65 @@ function occurrenceIndexes(value: string, search: string) {
     fromIndex = index + Math.max(search.length, 1)
   }
   return indexes
+}
+
+function resolveAnchorTarget(
+  comment: NormalizedComment,
+  anchorText: string,
+  textParagraphs: TextParagraph[]
+) {
+  const candidates = textParagraphs.filter((paragraph) => (
+    paragraph.text.includes(anchorText)
+  ))
+  if (candidates.length === 0) {
+    throw new Error(`批注「${comment.body.split('\n')[0]}」未在源文件中找到证据原文：${anchorText}`)
+  }
+
+  const selectedText = comment.selectedText.trim()
+  const anchorOffsetInSelected = selectedText.indexOf(anchorText)
+  const hasSourceRange = typeof comment.startOffset === 'number'
+    && typeof comment.endOffset === 'number'
+    && comment.endOffset > comment.startOffset
+    && anchorOffsetInSelected >= 0
+  let target = candidates[0]
+  let occurrenceIndex = 0
+
+  if (hasSourceRange) {
+    const anchorStart = comment.startOffset! + anchorOffsetInSelected
+    const anchorEnd = anchorStart + anchorText.length
+    const rangedCandidates = candidates.filter((paragraph) => (
+      anchorStart >= paragraph.startOffset && anchorEnd <= paragraph.endOffset
+    ))
+    if (rangedCandidates.length !== 1) {
+      if (candidates.length !== 1 || occurrenceIndexes(candidates[0].text, anchorText).length !== 1) {
+        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文与 source range 不匹配，需人工定位：${anchorText}`)
+      }
+      target = candidates[0]
+      occurrenceIndex = 0
+    } else {
+      target = rangedCandidates[0]
+      const indexes = occurrenceIndexes(target.text, anchorText)
+      const relativeStart = anchorStart - target.startOffset
+      const exactOccurrence = indexes.indexOf(relativeStart)
+      if (exactOccurrence >= 0) {
+        occurrenceIndex = exactOccurrence
+      } else if (indexes.length === 1) {
+        occurrenceIndex = 0
+      } else {
+        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${anchorText}`)
+      }
+    }
+  } else {
+    if (candidates.length > 1) {
+      throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文不唯一，需人工定位：${anchorText}`)
+    }
+    const indexes = occurrenceIndexes(target.text, anchorText)
+    if (indexes.length > 1) {
+      throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${anchorText}`)
+    }
+  }
+
+  return { target, occurrenceIndex, anchorText }
 }
 
 function injectCommentReferenceAtText(
@@ -318,61 +418,35 @@ function addCommentAnchors(documentXml: string, comments: NormalizedComment[], f
     if (comment.manualLocationRequired || !selectedText) {
       throw new Error(`批注「${comment.body.split('\n')[0]}」缺少可写入 Word 的原文定位，需人工定位`)
     }
-
-    const candidates = textParagraphs.filter((paragraph) => (
-      paragraph.text.includes(selectedText)
-    ))
-    if (candidates.length === 0) {
-      throw new Error(`批注「${comment.body.split('\n')[0]}」未在源文件中找到证据原文：${selectedText}`)
+    const anchorTexts = wordCommentAnchorCandidates(selectedText)
+    if (anchorTexts.length === 0) {
+      throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文过短，需人工定位：${selectedText}`)
     }
 
-    const hasSourceRange = typeof comment.startOffset === 'number'
-      && typeof comment.endOffset === 'number'
-      && comment.endOffset > comment.startOffset
-    let target = candidates[0]
-    let occurrenceIndex = 0
-
-    if (hasSourceRange) {
-      const rangedCandidates = candidates.filter((paragraph) => (
-        comment.startOffset! >= paragraph.startOffset && comment.endOffset! <= paragraph.endOffset
-      ))
-      if (rangedCandidates.length !== 1) {
-        if (candidates.length !== 1 || occurrenceIndexes(candidates[0].text, selectedText).length !== 1) {
-          throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文与 source range 不匹配，需人工定位：${selectedText}`)
-        }
-        target = candidates[0]
-        occurrenceIndex = 0
-      } else {
-        target = rangedCandidates[0]
-        const indexes = occurrenceIndexes(target.text, selectedText)
-        const relativeStart = comment.startOffset! - target.startOffset
-        const exactOccurrence = indexes.indexOf(relativeStart)
-        if (exactOccurrence >= 0) {
-          occurrenceIndex = exactOccurrence
-        } else if (indexes.length === 1) {
-          occurrenceIndex = 0
-        } else {
-          throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${selectedText}`)
-        }
-      }
-    } else {
-      if (candidates.length > 1) {
-        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文不唯一，需人工定位：${selectedText}`)
-      }
-      const indexes = occurrenceIndexes(target.text, selectedText)
-      if (indexes.length > 1) {
-        throw new Error(`批注「${comment.body.split('\n')[0]}」证据原文在同一段内不唯一，需人工定位：${selectedText}`)
+    let resolved: ReturnType<typeof resolveAnchorTarget> | null = null
+    let lastError: Error | null = null
+    for (const anchorText of anchorTexts) {
+      try {
+        resolved = resolveAnchorTarget(comment, anchorText, textParagraphs)
+        break
+      } catch (error) {
+        lastError = error as Error
       }
     }
+    if (!resolved) {
+      throw lastError || new Error(`批注「${comment.body.split('\n')[0]}」未在源文件中找到证据原文：${selectedText}`)
+    }
+
+    const { target, occurrenceIndex, anchorText } = resolved
 
     const injected = injectCommentReferenceAtText(
       updatedParagraphs[target.index],
-      selectedText,
+      anchorText,
       firstId + index,
       occurrenceIndex
     )
-    if (injected.mode === 'paragraph' && occurrenceIndexes(target.text, selectedText).length > 1) {
-      throw new Error(`批注「${comment.body.split('\n')[0]}」无法精确锚定重复证据原文，需人工定位：${selectedText}`)
+    if (injected.mode === 'paragraph' && occurrenceIndexes(target.text, anchorText).length > 1) {
+      throw new Error(`批注「${comment.body.split('\n')[0]}」无法精确锚定重复证据原文，需人工定位：${anchorText}`)
     }
     updatedParagraphs[target.index] = injected.xml
   })

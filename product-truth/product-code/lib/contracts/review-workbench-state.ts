@@ -1,3 +1,5 @@
+import { hasUsableWordCommentAnchor } from './word-comment-anchor'
+
 export type WorkbenchRiskSeverity = 'red' | 'yellow' | 'green' | 'white'
 export type WorkbenchContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED' | string
 
@@ -100,10 +102,7 @@ export function needsManualAnnotationLocation(annotation: WorkbenchAnnotationLik
 export function hasWordUnsafeAnnotationAnchor(annotation: WorkbenchAnnotationLike) {
   const selectedText = annotation.selected_text?.trim() || ''
   if (!selectedText) return false
-  return (
-    selectedText.length < 6
-    || /[\r\n]/.test(selectedText)
-  )
+  return !hasUsableWordCommentAnchor(selectedText)
 }
 
 export function buildReviewHealth(data: WorkbenchReviewDataLike): ReviewHealth {

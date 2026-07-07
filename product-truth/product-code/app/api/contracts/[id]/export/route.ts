@@ -18,6 +18,7 @@ import {
   type RiskCardCommentSource,
 } from '@/lib/contracts/comment-patch'
 import { recordModelInvocation } from '@/lib/contracts/model-policy'
+import { hasUsableWordCommentAnchor } from '@/lib/contracts/word-comment-anchor'
 
 type ExportReviewRow = {
   id: string
@@ -67,7 +68,7 @@ function buildSourceCommentExportGateIssues(annotations: ExportAnnotationRow[]) 
   const unsafeAnchorCount = annotations.filter((annotation) => {
     const selectedText = annotation.selected_text?.trim() || ''
     if (!selectedText) return false
-    return selectedText.length < 6 || /[\r\n]/.test(selectedText)
+    return !hasUsableWordCommentAnchor(selectedText)
   }).length
   const issues: string[] = []
 
@@ -577,7 +578,7 @@ export async function POST(
         && version.review_id === latestReview.id
         && (!sourceVersion?.id || version.parent_version_id === sourceVersion.id)
         && version.storage_path
-        && String(version.change_summary || '').includes('customer-comment-v2')
+        && String(version.change_summary || '').includes('customer-comment-v4')
       ))
       : null
 
@@ -712,7 +713,7 @@ export async function POST(
           file_size: fileBuffer.length,
           mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           parent_version_id: sourceVersion?.id || null,
-          change_summary: `customer-comment-v2：ONES 业务运营基于风险项生成客户侧 Word 原生批注版本（ReviewRun: ${latestReview.id}）`,
+          change_summary: `customer-comment-v4：ONES 业务运营基于风险项生成客户侧 Word 原生批注版本（ReviewRun: ${latestReview.id}）`,
           uploaded_by: user.id,
           review_id: latestReview.id,
         })
