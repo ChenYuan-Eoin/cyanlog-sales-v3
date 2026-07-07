@@ -54,9 +54,9 @@ const operatorLabels: Record<ContractRuleOperator, string> = {
 }
 
 const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> = [
-  { value: 'green', label: '证据不足时默认通过' },
-  { value: 'yellow', label: '证据不足时进入谈判' },
-  { value: 'red', label: '证据不足时红线复核' },
+  { value: 'green', label: '证据不足：不拦截' },
+  { value: 'yellow', label: '证据不足：进入谈判' },
+  { value: 'red', label: '证据不足：红线复核' },
 ]
 
 const actionOptions = [
@@ -236,30 +236,29 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
         </div>
       </section>
 
-      <section className="grid gap-2 rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs leading-5 text-indigo-900 md:grid-cols-4">
-        <div>
-          <div className="font-semibold">适用范围</div>
-          <p className="mt-1 text-indigo-800">决定规则在哪些合同或业务场景启用，不负责命中原文。</p>
-        </div>
-        <div>
-          <div className="font-semibold">关键词/语义定位</div>
-          <p className="mt-1 text-indigo-800">负责找到合同证据锚点，找不到就不能写正式批注。</p>
-        </div>
-        <div>
-          <div className="font-semibold">判定器</div>
-          <p className="mt-1 text-indigo-800">按字段、语义或混合方式计算红绿灯，不是给人看的备注。</p>
-        </div>
-        <div>
-          <div className="font-semibold">输出动作</div>
-          <p className="mt-1 text-indigo-800">只把客户能执行的修改建议写入批注，内部依据留在审计页。</p>
+      <section className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3">
+        <div className="flex flex-col gap-3 text-xs leading-5 text-indigo-900 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="font-semibold">机器执行骨架</div>
+            <p className="mt-1 text-indigo-800">
+              规则只按这条链路运行：启用边界 → 原文定位 → 判定器 → 红绿灯 → 批注/谈判动作。
+            </p>
+          </div>
+          <div className="grid gap-2 md:grid-cols-5">
+            {['适用范围', '关键词/语义', '字段/阈值', '红绿灯', '修改建议'].map((item, index) => (
+              <div key={item} className="rounded-md bg-white/80 px-2 py-1.5 text-center font-medium text-indigo-900">
+                {index + 1}. {item}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">1. 触发器与定位器</h3>
+          <h3 className="text-sm font-semibold text-slate-950">1. 启用边界与证据定位</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            适用范围只决定规则在哪些业务里启用；关键词只负责定位原文；判定类型、字段、阈值决定红绿灯结果。
+            适用范围不是命中条件；关键词和语义定位负责找到原文证据；判定类型、字段、阈值才决定红绿灯结果。
           </p>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-2">
@@ -280,7 +279,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               placeholder="标准销售合同, 框架协议；不直接参与命中"
             />
           </Field>
-          <Field label="判定类型">
+          <Field label="判定器类型">
             <Select
               value={draft.category || 'duration'}
               onChange={(value) => update('category', value as ContractRuleCategory)}
@@ -294,14 +293,14 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               options={engineOptions}
             />
           </Field>
-          <Field label="判定字段">
+          <Field label="判定字段 / 指标">
             <Input
               value={draft.target_field || ''}
               onChange={(event) => update('target_field', event.target.value)}
               placeholder="payment_schedule / payment_days"
             />
           </Field>
-          <Field label="无法判定兜底等级">
+          <Field label="证据不足兜底">
             <Select
               value={draft.risk_level || 'yellow'}
               onChange={(value) => update('risk_level', value as ContractRuleRiskLevel)}
@@ -310,7 +309,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
           </Field>
           {showSemanticPrompt ? (
           <div className="lg:col-span-2">
-            <Field label="语义定位/判定补充">
+            <Field label="语义定位/判定补充（给 AI 读）">
               <Textarea
                 value={draft.semantic_prompt || ''}
                 onChange={(event) => update('semantic_prompt', event.target.value)}
@@ -333,7 +332,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             </Field>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 lg:col-span-2">
-            <div className="text-xs font-medium text-slate-500">实时转译预览（仅解释当前配置，不是发布结果）</div>
+            <div className="text-xs font-medium text-slate-500">机器执行摘要（只读预览，不是发布结果）</div>
             <p className="mt-2 text-sm leading-6 text-slate-800">
               在{scenarios || '全部适用范围'}内，先用“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置定位线索'}”定位证据，
               再由{engineOptions.find((item) => item.value === draft.engine_type)?.label || '规则引擎'}按“{categoryOptions.find((item) => item.value === draft.category)?.label || '未配置判定类型'}”判断：
@@ -346,7 +345,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">2. 判定器与红绿灯结果</h3>
+          <h3 className="text-sm font-semibold text-slate-950">2. 红绿灯等级定义</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             红绿灯来自判定器输出，不来自上面的解释文案；每一档都必须有阈值和处理动作。
           </p>
@@ -390,20 +389,20 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">3. 客户批注与销售动作</h3>
+          <h3 className="text-sm font-semibold text-slate-950">3. 修改建议与输出动作</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             客户侧只看到可执行修改建议；销售侧看到谈判口径；内部审核说明不写进客户批注。
           </p>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-2">
-          <Field label="客户侧批注标题">
+          <Field label="风险标题">
             <Input
               value={messageTemplate.title || ''}
               onChange={(event) => updateMessageTemplate('title', event.target.value)}
               placeholder="预付款比例超标"
             />
           </Field>
-          <Field label="客户侧修改建议">
+          <Field label="修改建议（写入批注）">
             <Textarea
               value={messageTemplate.suggestion || ''}
               onChange={(event) => updateMessageTemplate('suggestion', event.target.value)}
@@ -411,7 +410,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               rows={3}
             />
           </Field>
-          <Field label="内部审核备注（不写入客户批注）">
+          <Field label="内部审计备注（不导出）">
             <Textarea
               value={messageTemplate.comment || ''}
               onChange={(event) => updateMessageTemplate('comment', event.target.value)}
@@ -433,7 +432,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
       <div className="flex flex-wrap items-center justify-end gap-3">
         {onTest ? (
           <Button type="button" variant="outline" onClick={onTest}>
-            测试规则命中
+            测试当前规则
           </Button>
         ) : null}
         <Button type="submit" disabled={saving}>

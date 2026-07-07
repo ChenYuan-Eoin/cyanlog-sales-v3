@@ -393,13 +393,9 @@ function selectBaselineVersion(versions: ComparableVersion[], compareVersion: Co
   )) || versions.find((version) => version.id !== compareVersion.id) || null
 }
 
-async function contractFileAccessUrl(storagePath: string | null | undefined) {
+function contractFileAccessUrl(contractId: string, storagePath: string | null | undefined) {
   if (!storagePath) return null
-  const { data } = await supabaseAdmin.storage
-    .from('contracts')
-    .createSignedUrl(storagePath, 60 * 60)
-
-  return data?.signedUrl || null
+  return `/api/contracts/${contractId}/file?path=${encodeURIComponent(storagePath)}`
 }
 
 async function versionDocumentMeta(
@@ -416,7 +412,7 @@ async function versionDocumentMeta(
     source_label: sourceLabel,
     storage_path: version.storage_path,
     mime_type: version.mime_type,
-    file_url: await contractFileAccessUrl(version.storage_path),
+    file_url: contractFileAccessUrl(contract.id, version.storage_path),
     version_number: version.version_number,
     created_at: version.created_at,
   }
@@ -435,7 +431,7 @@ async function contractDocumentMeta(
     source_label: sourceLabel,
     storage_path: contract.storage_path,
     mime_type: contract.mime_type,
-    file_url: await contractFileAccessUrl(contract.storage_path),
+    file_url: contractFileAccessUrl(contract.id, contract.storage_path),
   }
 }
 

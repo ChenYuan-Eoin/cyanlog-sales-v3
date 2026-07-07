@@ -39,6 +39,10 @@ function isDocx(file: SourceDocumentPreviewFile | null | undefined) {
   )
 }
 
+function needsAuthorizedPreviewFetch(url: string | null | undefined) {
+  return Boolean(url?.startsWith('/api/'))
+}
+
 function normalizeNeedle(text?: string) {
   const normalized = (text || '').replace(/\s+/g, '')
   if (normalized.length <= 0) return ''
@@ -113,13 +117,20 @@ export function SourceDocumentPreview({
 }: SourceDocumentPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const selectedTextRef = useRef(selectedText)
+  const [authorizedPreviewUrl, setAuthorizedPreviewUrl] = useState('')
+  const [authorizedPreviewError, setAuthorizedPreviewError] = useState('')
+  const [authorizedPreviewLoading, setAuthorizedPreviewLoading] = useState(false)
   const [docxState, setDocxState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
   const [docxError, setDocxError] = useState('')
   const [evidenceFocusState, setEvidenceFocusState] = useState<EvidenceFocusState>('idle')
   const [evidencePageNumber, setEvidencePageNumber] = useState<number | null>(null)
   const [renderedPageCount, setRenderedPageCount] = useState<number | null>(null)
-  const canPreviewPdf = Boolean(file?.fileUrl && isPdf(file))
-  const canPreviewDocx = Boolean(file?.fileUrl && isDocx(file))
+  const rawFileUrl = file?.fileUrl || ''
+  const requiresAuthorizedPreview = needsAuthorizedPreviewFetch(rawFileUrl)
+  const effectiveFileUrl = requiresAuthorizedPreview ? authorizedPreviewUrl : rawFileUrl
+  const waitingForAuthorizedPreview = Boolean(requiresAuthorizedPreview && rawFileUrl && authorizedPreviewLoading && !authorizedPreviewUrl)
+  const canPreviewPdf = Boolean(effectiveFileUrl && isPdf(file))
+  const canPreviewDocx = Boolean(effectiveFileUrl && isDocx(file))
   const locator = inferDocumentLocator(selectedText)
   const evidenceNeedle = useMemo(() => normalizeNeedle(selectedText), [selectedText])
   const renderModeLabel = canPreviewPdf
@@ -131,6 +142,10 @@ export function SourceDocumentPreview({
         : '文本定位降级'
   const renderStatusLabel = canPreviewPdf
     ? '浏览器内嵌'
+    : waitingForAuthorizedPreview
+      ? '授权读取中'
+      : authorizedPreviewError
+        ? '读取失败'
     : canPreviewDocx
       ? docxState === 'ready'
         ? '已渲染'
@@ -142,7 +157,7 @@ export function SourceDocumentPreview({
       : '降级'
   const renderStatusVariant = canPreviewPdf || (canPreviewDocx && docxState === 'ready')
     ? 'default'
-    : docxState === 'failed'
+    : docxState === 'failed' || authorizedPreviewError
       ? 'destructive'
       : 'outline'
 
@@ -152,19 +167,64 @@ export function SourceDocumentPreview({
 
   useEffect(() => {
     let cancelled = false
+    let objectUrl = ''
+
+    setAuthorizedPreviewUrl('')
+    setAuthorizedPreviewError('')
+    setAuthorizedPreviewLoading(false)
+
+    if (!rawFileUrl || !requiresAuthorizedPreview) {
+      return
+    }
+
+    async function loadAuthorizedPreview() {
+      setAuthorizedPreviewLoading(true)
+      try {
+        const token = window.localStorage.getItem('token')
+        if (!token) {
+          throw new Error('未找到登录 token，无法读取私有文件预览。')
+        }
+        const response = await fetch(rawFileUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) {
+          throw new Error(`文件读取失败：${response.status}`)
+        }
+        const blob = await response.blob()
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setAuthorizedPreviewUrl(objectUrl)
+      } catch (error) {
+        if (!cancelled) {
+          setAuthorizedPreviewError(error instanceof Error ? error.message : '文件读取失败')
+        }
+      } finally {
+        if (!cancelled) setAuthorizedPreviewLoading(false)
+      }
+    }
+
+    void loadAuthorizedPreview()
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [rawFileUrl, requiresAuthorizedPreview])
+
+  useEffect(() => {
+    let cancelled = false
     const container = containerRef.current
     if (!container) return
     container.innerHTML = ''
     setDocxError('')
 
-    if (!canPreviewDocx || !file?.fileUrl) {
+    if (!canPreviewDocx || !effectiveFileUrl) {
       setDocxState('idle')
       setEvidenceFocusState('idle')
       setEvidencePageNumber(null)
       setRenderedPageCount(null)
       return
     }
-    const docxFileUrl = file.fileUrl
+    const docxFileUrl = effectiveFileUrl
 
     async function renderDocx() {
       setDocxState('loading')
@@ -216,7 +276,7 @@ export function SourceDocumentPreview({
     return () => {
       cancelled = true
     }
-  }, [canPreviewDocx, file?.fileUrl])
+  }, [canPreviewDocx, effectiveFileUrl])
 
   useEffect(() => {
     if (!canPreviewDocx || docxState !== 'ready') {
@@ -254,9 +314,9 @@ export function SourceDocumentPreview({
             {file?.storagePath ? ` · ${file.storagePath}` : ''}
           </p>
         </div>
-        {file?.fileUrl ? (
+        {effectiveFileUrl ? (
           <a
-            href={file.fileUrl}
+            href={effectiveFileUrl}
             target="_blank"
             rel="noreferrer"
             className="inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[0.8rem] font-medium text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
@@ -291,10 +351,17 @@ export function SourceDocumentPreview({
         </div>
       ) : null}
 
-      {canPreviewPdf ? (
+      {waitingForAuthorizedPreview ? (
+        <div className="flex min-h-[320px] items-center justify-center bg-slate-50 p-4">
+          <div className="inline-flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            <Loader2Icon className="h-4 w-4 animate-spin" />
+            正在读取私有源文件预览
+          </div>
+        </div>
+      ) : canPreviewPdf ? (
         <iframe
           title={`${file?.label || fallbackLabel} PDF 原件预览`}
-          src={file?.fileUrl || ''}
+          src={effectiveFileUrl}
           className={`${frameHeightClassName} w-full bg-white`}
         />
       ) : canPreviewDocx ? (
@@ -321,7 +388,9 @@ export function SourceDocumentPreview({
       ) : (
         <div className="p-4">
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-800">
-            当前文件没有可直接渲染的原件地址，页面只能提供条款定位降级，不能冒充 1:1 原文。请打开原件复核；正式导出只在源文件上增加批注层。
+            {authorizedPreviewError
+              ? `源文件读取失败：${authorizedPreviewError}。页面不能冒充 1:1 原文，请稍后重试或重新上传。`
+              : '当前文件没有可直接渲染的原件地址，页面只能提供条款定位降级，不能冒充 1:1 原文。请打开原件复核；正式导出只在源文件上增加批注层。'}
           </div>
         </div>
       )}

@@ -159,13 +159,9 @@ function uniqueStrings(values: Array<string | null | undefined>) {
   ))))
 }
 
-async function contractFileAccessUrl(storagePath: string | null | undefined) {
+function contractFileAccessUrl(contractId: string, storagePath: string | null | undefined) {
   if (!storagePath) return null
-  const { data } = await supabaseAdmin.storage
-    .from('contracts')
-    .createSignedUrl(storagePath, 60 * 60)
-
-  return data?.signedUrl || null
+  return `/api/contracts/${contractId}/file?path=${encodeURIComponent(storagePath)}`
 }
 
 // GET - 获取审核结果
@@ -300,7 +296,7 @@ export async function GET(
 
     const versions = await Promise.all(((versionsResult.data || []) as ContractVersionRow[]).map(async (version) => ({
       ...version,
-      file_url: await contractFileAccessUrl(version.storage_path),
+      file_url: contractFileAccessUrl(id, version.storage_path),
     })))
     const annotations = (annotationsResult.data || []) as AnnotationRow[]
     const jobs = (jobsResult.data || []) as ContractAnalysisJobRow[]
@@ -519,7 +515,7 @@ export async function GET(
 
     return successResponse({
       ...contract,
-      file_url: await contractFileAccessUrl(typeof contract.storage_path === 'string' ? contract.storage_path : null),
+      file_url: contractFileAccessUrl(id, typeof contract.storage_path === 'string' ? contract.storage_path : null),
       riskCards: orderedRiskCards,
       stats,
       latestReview,

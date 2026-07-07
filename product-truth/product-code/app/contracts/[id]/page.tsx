@@ -995,7 +995,7 @@ export default function ContractWorkbenchPage() {
         onModeChange={setSidePanelMode}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[180px_300px_minmax(0,1fr)] 2xl:grid-cols-[200px_320px_minmax(0,1fr)]">
+      <div className="grid gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[150px_280px_minmax(0,1fr)] 2xl:grid-cols-[160px_300px_minmax(0,1fr)]">
         <ReviewNavigationRail
           data={data}
           selectedRiskId={selectedRisk?.id || null}
