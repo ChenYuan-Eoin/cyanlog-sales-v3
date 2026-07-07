@@ -995,21 +995,18 @@ export default function ContractWorkbenchPage() {
         onModeChange={setSidePanelMode}
       />
 
-	      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[220px_320px_minmax(0,1fr)] 2xl:grid-cols-[240px_340px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[180px_300px_minmax(0,1fr)] 2xl:grid-cols-[200px_320px_minmax(0,1fr)]">
         <ReviewNavigationRail
           data={data}
           selectedRiskId={selectedRisk?.id || null}
           onSelectRisk={setSelectedRiskId}
-          redCount={redCount}
-          yellowCount={yellowCount}
-          openRiskCount={openRiskCount}
         />
 
         <aside className="space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
           <Card>
             <CardHeader className="border-b border-slate-100 pb-3">
               <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base">任务跟进</CardTitle>
+                <CardTitle className="text-base">谈判跟进</CardTitle>
                 <Badge variant="outline">{data.reviewRun?.status || '未开始'}</Badge>
               </div>
               <SidePanelTabs value={sidePanelMode} onChange={setSidePanelMode} />
@@ -1534,25 +1531,21 @@ function ReviewNavigationRail({
   data,
   selectedRiskId,
   onSelectRisk,
-  redCount,
-  yellowCount,
-  openRiskCount,
 }: {
   data: WorkbenchData
   selectedRiskId: string | null
   onSelectRisk: (riskId: string) => void
-  redCount: number
-  yellowCount: number
-  openRiskCount: number
 }) {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all')
   const visibleRisks = riskFilter === 'all'
     ? data.riskFindings
     : data.riskFindings.filter((risk) => risk.severity === riskFilter)
+  const redRiskCount = data.riskFindings.filter((risk) => risk.severity === 'red').length
+  const yellowRiskCount = data.riskFindings.filter((risk) => risk.severity === 'yellow').length
   const filters: Array<{ value: RiskFilter; label: string; count: number }> = [
     { value: 'all', label: '全部', count: data.riskFindings.length },
-    { value: 'red', label: '红线', count: redCount },
-    { value: 'yellow', label: '谈判', count: yellowCount },
+    { value: 'red', label: '红线', count: redRiskCount },
+    { value: 'yellow', label: '谈判', count: yellowRiskCount },
     { value: 'green', label: '通过', count: data.riskFindings.filter((risk) => risk.severity === 'green').length },
   ]
 
@@ -1564,7 +1557,7 @@ function ReviewNavigationRail({
             <div className="flex items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-sm">风险导航</CardTitle>
-                <p className="mt-1 text-xs text-slate-500">只负责定位风险项。</p>
+                <p className="mt-1 text-xs text-slate-500">只负责定位。</p>
               </div>
               <Badge variant="outline">{visibleRisks.length}</Badge>
             </div>
@@ -1587,11 +1580,6 @@ function ReviewNavigationRail({
                   </button>
                 )
               })}
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-1 text-center">
-              <TrafficLightPill label="红线" value={redCount} tone={redCount > 0 ? 'red' : 'slate'} />
-              <TrafficLightPill label="谈判" value={yellowCount} tone={yellowCount > 0 ? 'amber' : 'slate'} />
-              <TrafficLightPill label="开放" value={openRiskCount} tone={openRiskCount > 0 ? 'blue' : 'slate'} />
             </div>
           </CardHeader>
           <CardContent className="pt-3">

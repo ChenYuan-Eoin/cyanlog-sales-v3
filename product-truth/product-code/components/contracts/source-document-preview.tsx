@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { AlertTriangleIcon, ExternalLinkIcon, FileTextIcon, Loader2Icon } from 'lucide-react'
+import { AlertTriangleIcon, ExternalLinkIcon, FileTextIcon, Loader2Icon, MapPinIcon } from 'lucide-react'
+import { inferDocumentLocator } from '@/lib/contracts/document-locator'
 
 export interface SourceDocumentPreviewFile {
   label: string
@@ -42,6 +43,8 @@ export function SourceDocumentPreview({
   const [docxError, setDocxError] = useState('')
   const canPreviewPdf = Boolean(file?.fileUrl && isPdf(file))
   const canPreviewDocx = Boolean(file?.fileUrl && isDocx(file))
+  const locator = inferDocumentLocator(selectedText)
+  const renderModeLabel = canPreviewPdf ? 'PDF 原件' : canPreviewDocx ? 'DOCX 页级渲染' : '文本定位降级'
 
   useEffect(() => {
     let cancelled = false
@@ -103,8 +106,9 @@ export function SourceDocumentPreview({
           <div className="flex items-center gap-2">
             <FileTextIcon className="h-4 w-4 text-slate-500" />
             <span className="text-sm font-semibold text-slate-950">{title}</span>
-            {canPreviewPdf ? <Badge variant="outline">PDF 原件</Badge> : null}
-            {canPreviewDocx ? <Badge variant="outline">DOCX 页级渲染</Badge> : null}
+            <Badge variant={canPreviewPdf || canPreviewDocx ? 'outline' : 'secondary'}>
+              {renderModeLabel}
+            </Badge>
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">
             {file?.label || fallbackLabel}
@@ -125,6 +129,23 @@ export function SourceDocumentPreview({
           <Badge variant="outline">无可访问文件</Badge>
         )}
       </div>
+
+      {locator.mode !== 'missing' ? (
+        <div className="border-b border-slate-100 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-1 font-semibold text-slate-900">
+              <MapPinIcon className="h-3.5 w-3.5 text-indigo-500" />
+              {locator.clauseLabel}
+            </span>
+            <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-500">
+              {locator.pageLabel}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-slate-500">
+              证据：{locator.evidencePreview}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {canPreviewPdf ? (
         <iframe
@@ -151,23 +172,13 @@ export function SourceDocumentPreview({
               </div>
             </div>
           ) : null}
-          {selectedText ? (
-            <div className="mb-3 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs leading-5 text-blue-900">
-              当前定位证据：{selectedText}
-            </div>
-          ) : null}
           <div ref={containerRef} className="ones-docx-preview-surface min-h-[680px] overflow-auto" />
         </div>
       ) : (
         <div className="p-4">
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-800">
-            当前文件没有可直接渲染的原件地址，不能用文本片段冒充 1:1 原文。请打开原件复核；正式导出只在源文件上增加批注层。
+            当前文件没有可直接渲染的原件地址，页面只能提供条款定位降级，不能冒充 1:1 原文。请打开原件复核；正式导出只在源文件上增加批注层。
           </div>
-          {selectedText ? (
-            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-              证据定位：{selectedText}
-            </div>
-          ) : null}
         </div>
       )}
     </div>

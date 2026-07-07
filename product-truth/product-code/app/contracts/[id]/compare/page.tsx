@@ -10,6 +10,7 @@ import {
   buildContractWorkbenchHref,
   buildContractsCenterHref,
 } from '@/lib/contracts/review-navigation'
+import { inferDocumentLocator } from '@/lib/contracts/document-locator'
 import { SourceDocumentPreview, type SourceDocumentPreviewFile } from '@/components/contracts/source-document-preview'
 import {
   ArrowLeftIcon,
@@ -1302,7 +1303,7 @@ function DocumentDiffEvidence({
 }) {
   if (!diff) {
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+      <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
         当前筛选下没有差异证据。
       </div>
     )
@@ -1311,20 +1312,24 @@ function DocumentDiffEvidence({
   const text = side === 'baseline' ? diff.baseline_text : diff.compare_text
   const label = side === 'baseline' ? '旧文件文本证据' : '新文件文本证据'
   const tone = side === 'baseline' ? 'border-red-100 bg-red-50 text-red-900' : 'border-emerald-100 bg-emerald-50 text-emerald-900'
+  const locator = inferDocumentLocator(text)
+  const locatorLabel = locator.mode === 'missing' ? '无对应文本' : locator.clauseLabel
 
   return (
-    <div className={`rounded-lg border p-4 ${tone}`}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold">{label}</div>
+    <div className={`mt-2 rounded-md border px-3 py-2 ${tone}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 text-xs font-semibold">
+          {label} · {locatorLabel}
+          {locator.mode !== 'missing' ? (
+            <span className="ml-2 font-normal opacity-75">{locator.pageLabel}</span>
+          ) : null}
+        </div>
         <Badge variant={diff.risk_level === 'red' ? 'destructive' : 'outline'}>
           {riskLabel(diff.risk_level)}
         </Badge>
       </div>
-      <p className="whitespace-pre-wrap text-sm leading-6">
-        {text || '无对应文本；请以原件预览和右侧差异说明为准。'}
-      </p>
-      <p className="mt-3 text-xs leading-5 opacity-75">
-        文本证据只用于定位和解释差异，不替代原件预览。正式 1:1 高亮需要文件坐标层支持。
+      <p className="mt-1 truncate text-xs opacity-85">
+        {locator.evidencePreview || '无对应文本；请以原件预览和右侧差异说明为准。'}
       </p>
     </div>
   )
