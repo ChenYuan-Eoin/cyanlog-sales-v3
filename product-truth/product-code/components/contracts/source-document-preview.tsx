@@ -18,6 +18,8 @@ export interface SourceDocumentPreviewProps {
   selectedText?: string
   fallbackLabel?: string
   minHeightClassName?: string
+  surfaceMinHeightClassName?: string
+  frameHeightClassName?: string
 }
 
 type EvidenceFocusState = 'idle' | 'found' | 'missing'
@@ -106,6 +108,8 @@ export function SourceDocumentPreview({
   selectedText,
   fallbackLabel = '未绑定文件',
   minHeightClassName = 'min-h-[680px]',
+  surfaceMinHeightClassName = 'min-h-[680px]',
+  frameHeightClassName = 'h-[720px]',
 }: SourceDocumentPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const selectedTextRef = useRef(selectedText)
@@ -291,7 +295,7 @@ export function SourceDocumentPreview({
         <iframe
           title={`${file?.label || fallbackLabel} PDF 原件预览`}
           src={file?.fileUrl || ''}
-          className="h-[720px] w-full bg-white"
+          className={`${frameHeightClassName} w-full bg-white`}
         />
       ) : canPreviewDocx ? (
         <div className="relative bg-slate-100 p-3">
@@ -312,7 +316,7 @@ export function SourceDocumentPreview({
               </div>
             </div>
           ) : null}
-          <div ref={containerRef} className="ones-docx-preview-surface min-h-[680px] overflow-auto" />
+          <div ref={containerRef} className={`ones-docx-preview-surface ${surfaceMinHeightClassName} overflow-auto`} />
         </div>
       ) : (
         <div className="p-4">

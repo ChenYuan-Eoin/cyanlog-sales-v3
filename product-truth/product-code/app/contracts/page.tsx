@@ -992,14 +992,13 @@ function TaskItem({
     },
   }[task.moduleLabel]
   const ModuleIcon = moduleStyle.icon
-  const titlePrefix = `${moduleStyle.short} · ${task.versionLabel}`
 
   return (
     <Link
       href={task.href}
       prefetch={false}
       className="group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-      aria-label={`打开${task.meta}${task.name}`}
+      aria-label={`打开${task.moduleLabel} ${task.versionLabel} ${task.name}`}
     >
       <Card className="relative overflow-hidden cursor-pointer border-slate-200 transition-colors group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20">
         <div className={`absolute inset-y-0 left-0 w-1 ${moduleStyle.bar}`} aria-hidden="true" />
@@ -1013,11 +1012,12 @@ function TaskItem({
             {/* 内容 */}
             <div className="flex-1 min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.versionBadge}`}>
-                  {titlePrefix}
+                <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.badge}`}>
+                  <ModuleIcon className="h-3 w-3" />
+                  任务：{task.moduleLabel}
                 </span>
-                <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.badge}`}>
-                  {task.moduleLabel}
+                <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.versionBadge}`}>
+                  版本：{task.versionLabel}
                 </span>
                 <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
                   {task.objectLabel}
@@ -1033,7 +1033,7 @@ function TaskItem({
               </div>
               <div className="mt-2 flex min-w-0 items-center gap-2">
                 <p className={`truncate font-semibold text-slate-900 ${isMobile ? 'text-sm' : 'text-base'}`}>
-                  <span className="sr-only">{titlePrefix} </span>
+                  <span className="sr-only">{task.moduleLabel} {task.versionLabel} </span>
                   {task.name}
                 </p>
               </div>

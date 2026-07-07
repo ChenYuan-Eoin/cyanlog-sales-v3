@@ -99,6 +99,7 @@ interface ContractVersionOption {
   storage_path: string
   file_size: number | null
   mime_type: string | null
+  file_url?: string | null
   parent_version_id: string | null
   change_summary: string | null
   review_id: string | null
@@ -181,6 +182,23 @@ function toSourcePreviewFile(meta?: ComparisonDocumentMeta | null, fallback = '�
     fileUrl: meta.file_url || null,
     mimeType: meta.mime_type || null,
     storagePath: meta.storage_path || null,
+  }
+}
+
+function versionSourceLabel(version?: ContractVersionOption | null) {
+  if (!version) return '未选择'
+  if (version.source === 'original') return '源文件'
+  if (version.source === 'manual_revision') return '客户回传/人工版本'
+  return '批注输出版'
+}
+
+function toVersionPreviewFile(version?: ContractVersionOption | null): SourceDocumentPreviewFile | null {
+  if (!version) return null
+  return {
+    label: `v${version.version_number} · ${versionSourceLabel(version)}`,
+    fileUrl: version.file_url || null,
+    mimeType: version.mime_type || null,
+    storagePath: version.storage_path || null,
   }
 }
 
@@ -1462,6 +1480,33 @@ function CompareSetupWorkspace({
   const selectedCompareName = selectedVersion
     ? `v${selectedVersion.version_number} 客户回传版`
     : selectedCandidate?.filename || ''
+  const baselinePreviewFile = selectedBaselineVersion
+    ? toVersionPreviewFile(selectedBaselineVersion)
+    : selectedBaselineCandidate
+      ? {
+          label: selectedBaselineCandidate.filename || '旧文件候选合同',
+          fileUrl: null,
+          mimeType: null,
+          storagePath: null,
+        }
+      : baselineContract
+        ? {
+            label: baselineContract.filename || '当前合同',
+            fileUrl: null,
+            mimeType: null,
+            storagePath: baselineContract.storage_path || null,
+          }
+        : null
+  const comparePreviewFile = selectedVersion
+    ? toVersionPreviewFile(selectedVersion)
+    : selectedCandidate
+      ? {
+          label: selectedCandidate.filename || '候选新文件',
+          fileUrl: null,
+          mimeType: null,
+          storagePath: null,
+        }
+      : null
   const hasCompareSource = Boolean(selectedVersion || selectedCandidate)
   const hasExistingCompareOptions = comparableVersions.length > 0 || recommendedCandidates.length > 0 || manualConfirmCandidates.length > 0
   const precisionOptions: Array<{ value: ComparePrecision; title: string; desc: string }> = [
@@ -1661,22 +1706,22 @@ function CompareSetupWorkspace({
                     </Badge>
                   </div>
                   <div className="grid gap-2 md:grid-cols-2">
-                  {precisionOptions.map((option) => {
-                    const active = option.value === comparePrecision
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setComparePrecision(option.value)}
-                        className={`w-full rounded-md border p-2 text-left transition ${
-                          active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <span className="block text-sm font-semibold text-slate-950">{option.title}</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-500">{option.desc}</span>
-                      </button>
-                    )
-                  })}
+                    {precisionOptions.map((option) => {
+                      const active = option.value === comparePrecision
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setComparePrecision(option.value)}
+                          className={`w-full rounded-md border p-2 text-left transition ${
+                            active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold text-slate-950">{option.title}</span>
+                          <span className="mt-1 block text-xs leading-5 text-slate-500">{option.desc}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                   <Button
                     type="button"
@@ -1692,6 +1737,82 @@ function CompareSetupWorkspace({
                     开始比对
                   </Button>
                 </div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="font-semibold text-slate-950">当前参与比对的文件事实</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    旧文件和新文件在这里直接呈现。能渲染原件就页级预览，不能渲染就明确降级，不把候选属性伪装成文件画布。
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">旧：{selectedBaselineName}</Badge>
+                  <Badge variant={hasCompareSource ? 'default' : 'outline'}>
+                    新：{hasCompareSource ? selectedCompareName : '待上传'}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <SourceDocumentPreview
+                  file={baselinePreviewFile}
+                  title="旧文件原件预览"
+                  fallbackLabel="旧文件未绑定可访问原件"
+                  minHeightClassName="min-h-[360px]"
+                  surfaceMinHeightClassName="min-h-[320px]"
+                  frameHeightClassName="h-[360px]"
+                />
+                {comparePreviewFile ? (
+                  <SourceDocumentPreview
+                    file={comparePreviewFile}
+                    title="新文件原件预览"
+                    fallbackLabel="新文件未绑定可访问原件"
+                    minHeightClassName="min-h-[360px]"
+                    surfaceMinHeightClassName="min-h-[320px]"
+                    frameHeightClassName="h-[360px]"
+                  />
+                ) : (
+                  <div className="flex min-h-[360px] flex-col justify-center rounded-lg border border-dashed border-amber-300 bg-amber-50 p-5">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                      <UploadIcon className="h-4 w-4" />
+                      等待上传新文件 / 客户回传版
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-amber-800">
+                      文档比对必须有明确的新文件。主路径是直接上传客户回传版；已有版本只作为高级选择，不能默认占用文件画布。
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <label className={`inline-flex h-9 cursor-pointer items-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition hover:bg-blue-700 ${
+                        uploadingTarget === 'compare' ? 'pointer-events-none opacity-70' : ''
+                      }`}>
+                        <input
+                          type="file"
+                          accept=".pdf,.docx"
+                          className="sr-only"
+                          disabled={uploadingTarget !== null}
+                          onChange={handleFileInput('compare')}
+                        />
+                        {uploadingTarget === 'compare' ? (
+                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <UploadIcon className="mr-2 h-4 w-4" />
+                        )}
+                        上传新文件
+                      </label>
+                      {hasExistingCompareOptions && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAdvancedSelection(true)}
+                        >
+                          从已有回传中选择
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
 
