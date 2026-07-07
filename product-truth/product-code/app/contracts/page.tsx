@@ -968,21 +968,31 @@ function TaskItem({
   const moduleStyle = {
     '合同审核': {
       icon: ShieldCheckIcon,
+      short: '审核',
       badge: 'border-rose-200 bg-rose-50 text-rose-700',
       iconBox: 'bg-rose-50 text-rose-600',
+      bar: 'bg-rose-500',
+      versionBadge: 'border-rose-200 bg-rose-600 text-white',
     },
     '文档对比': {
       icon: GitCompareIcon,
+      short: '对比',
       badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
       iconBox: 'bg-emerald-50 text-emerald-600',
+      bar: 'bg-emerald-500',
+      versionBadge: 'border-emerald-200 bg-emerald-600 text-white',
     },
     '合同起草': {
       icon: PenToolIcon,
+      short: '起草',
       badge: 'border-indigo-200 bg-indigo-50 text-indigo-700',
       iconBox: 'bg-indigo-50 text-indigo-600',
+      bar: 'bg-indigo-500',
+      versionBadge: 'border-indigo-200 bg-indigo-600 text-white',
     },
   }[task.moduleLabel]
   const ModuleIcon = moduleStyle.icon
+  const titlePrefix = `${moduleStyle.short} · ${task.versionLabel}`
 
   return (
     <Link
@@ -991,9 +1001,10 @@ function TaskItem({
       className="group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
       aria-label={`打开${task.meta}${task.name}`}
     >
-      <Card className="cursor-pointer border-slate-200 transition-colors group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20">
+      <Card className="relative overflow-hidden cursor-pointer border-slate-200 transition-colors group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20">
+        <div className={`absolute inset-y-0 left-0 w-1 ${moduleStyle.bar}`} aria-hidden="true" />
         <CardContent className={`${isMobile ? 'p-3' : 'p-4'}`}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pl-1">
             {/* 图标 */}
             <div className={`${isMobile ? 'h-9 w-9' : 'h-10 w-10'} ${moduleStyle.iconBox} flex shrink-0 items-center justify-center rounded-lg`}>
               <ModuleIcon className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
@@ -1002,11 +1013,11 @@ function TaskItem({
             {/* 内容 */}
             <div className="flex-1 min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.versionBadge}`}>
+                  {titlePrefix}
+                </span>
                 <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.badge}`}>
                   {task.moduleLabel}
-                </span>
-                <span className="shrink-0 rounded-md border border-slate-900 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
-                  {task.versionLabel}
                 </span>
                 <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
                   {task.objectLabel}
@@ -1022,6 +1033,7 @@ function TaskItem({
               </div>
               <div className="mt-2 flex min-w-0 items-center gap-2">
                 <p className={`truncate font-semibold text-slate-900 ${isMobile ? 'text-sm' : 'text-base'}`}>
+                  <span className="sr-only">{titlePrefix} </span>
                   {task.name}
                 </p>
               </div>

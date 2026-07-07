@@ -38,6 +38,7 @@ export default function ContractDraftPage() {
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [lastExportedDocxName, setLastExportedDocxName] = useState('')
 
   const [draft, setDraft] = useState<DraftData>({
     title: '',
@@ -248,12 +249,14 @@ export default function ContractDraftPage() {
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
+      const filename = `${draft.title || '合同草稿'}-草稿.docx`
       link.href = url
-      link.download = `${draft.title || '合同草稿'}-草稿.docx`
+      link.download = filename
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
+      setLastExportedDocxName(filename)
       success('已导出可编辑 DOCX')
     } catch {
       error('导出失败')
@@ -539,19 +542,28 @@ export default function ContractDraftPage() {
                 导出 DOCX
               </Button>
               {hasGeneratedContent ? (
-                <Link href="/contracts/new?from=draft" prefetch={false}>
+                <Link href="/contracts/new?from=draft&source=draft-docx" prefetch={false}>
                   <Button type="button" variant="outline" className="w-full">
                     <UploadIcon className="mr-1.5 h-4 w-4" />
-                    转入审核
+                    上传审核
                   </Button>
                 </Link>
               ) : (
                 <Button type="button" variant="outline" disabled>
                   <UploadIcon className="mr-1.5 h-4 w-4" />
-                  转入审核
+                  上传审核
                 </Button>
               )}
             </div>
+            {lastExportedDocxName ? (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] leading-5 text-emerald-800">
+                已导出：{lastExportedDocxName}。下一步在审核入口上传这份 DOCX 作为源文件，生成 ReviewRun 后再进入批注工作台。
+              </div>
+            ) : hasGeneratedContent ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">
+                先导出可编辑 DOCX，再上传审核。页面预览不进入审核，也不会替代 Word 源文件。
+              </div>
+            ) : null}
             <p className="text-[11px] leading-5 text-slate-500">
               浏览器内只是 Word 草案近似预览；正式交付以导出的可编辑 DOCX 为准。进入审核时仍以“上传源文件”创建合同版本，不能用页面预览替代源文件。
             </p>
@@ -570,6 +582,9 @@ export default function ContractDraftPage() {
                 <Badge variant="outline" className="text-[10px]">
                   {hasGeneratedContent ? 'DOCX 可导出' : '等待生成'}
                 </Badge>
+                {lastExportedDocxName ? (
+                  <Badge variant="default" className="text-[10px]">已导出</Badge>
+                ) : null}
               </div>
               <Button type="button" size="sm" variant="outline" onClick={handleExportDocx} disabled={!hasGeneratedContent || exporting}>
                 {exporting ? <LoaderIcon className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <DownloadIcon className="mr-1.5 h-3.5 w-3.5" />}

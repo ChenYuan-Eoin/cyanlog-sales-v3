@@ -580,7 +580,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   return (
     <>
-	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
 	      <Card className="min-w-0">
 	        <CardHeader className="space-y-3">
             <div className="flex flex-row items-center justify-between gap-3">
@@ -622,7 +622,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               <p className="mt-1 text-sm text-slate-400">创建后将进入规则转译与发布检查</p>
             </div>
           ) : (
-	            <div className="max-h-[760px] space-y-4 overflow-y-auto pr-1">
+	            <div className="max-h-[calc(100dvh-260px)] space-y-4 overflow-y-auto pr-1">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                   <div className="flex items-center gap-2 px-2 py-1.5">
                     <FolderIcon className="h-4 w-4 text-slate-500" />
@@ -694,8 +694,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 	                          </div>
 	                        </div>
 	                      </button>
-                        <div className="ml-5 space-y-1 border-l border-slate-100 pl-2">
-                          {ruleSet.rules.slice(0, treeQuery ? 20 : 8).map((rule) => {
+                        <div className="ml-5 max-h-[340px] space-y-1 overflow-y-auto border-l border-slate-100 pl-2 pr-1">
+                          {ruleSet.rules.map((rule) => {
                             const active = selectedRule?.id === rule.id
                             const blocked = ruleBlockingReasons(rule).length > 0
                             return (
@@ -714,19 +714,13 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                                   <span className="font-mono text-[11px] text-slate-400">{rule.code}</span>
                                   <span className="ml-1 font-medium">{rule.name}</span>
                                 </span>
+                                <span className="hidden rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 2xl:inline">
+                                  {rule.engine_type || 'engine'}
+                                </span>
                                 <span title={blocked ? '测试/发布未通过' : '测试/发布可用'}>{blocked ? '❌' : '✅'}</span>
                               </button>
                             )
                           })}
-                          {ruleSet.rules.length > (treeQuery ? 20 : 8) ? (
-                            <button
-                              type="button"
-                              onClick={() => handleSelectRuleSet(ruleSet)}
-                              className="w-full rounded-md px-2 py-1 text-left text-[11px] text-slate-400 hover:bg-slate-50 hover:text-slate-700"
-                            >
-                              还有 {ruleSet.rules.length - (treeQuery ? 20 : 8)} 条，点击规则集查看全部
-                            </button>
-                          ) : null}
                         </div>
                       </div>
 	                  ))}

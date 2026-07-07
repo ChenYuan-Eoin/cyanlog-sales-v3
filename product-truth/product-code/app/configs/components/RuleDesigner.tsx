@@ -54,9 +54,9 @@ const operatorLabels: Record<ContractRuleOperator, string> = {
 }
 
 const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> = [
-  { value: 'green', label: '无法判定时通过' },
-  { value: 'yellow', label: '无法判定时需谈判' },
-  { value: 'red', label: '无法判定时红线' },
+  { value: 'green', label: '证据不足时默认通过' },
+  { value: 'yellow', label: '证据不足时进入谈判' },
+  { value: 'red', label: '证据不足时红线复核' },
 ]
 
 const actionOptions = [
@@ -236,6 +236,25 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
         </div>
       </section>
 
+      <section className="grid gap-2 rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs leading-5 text-indigo-900 md:grid-cols-4">
+        <div>
+          <div className="font-semibold">适用范围</div>
+          <p className="mt-1 text-indigo-800">决定规则在哪些合同或业务场景启用，不负责命中原文。</p>
+        </div>
+        <div>
+          <div className="font-semibold">关键词/语义定位</div>
+          <p className="mt-1 text-indigo-800">负责找到合同证据锚点，找不到就不能写正式批注。</p>
+        </div>
+        <div>
+          <div className="font-semibold">判定器</div>
+          <p className="mt-1 text-indigo-800">按字段、语义或混合方式计算红绿灯，不是给人看的备注。</p>
+        </div>
+        <div>
+          <div className="font-semibold">输出动作</div>
+          <p className="mt-1 text-indigo-800">只把客户能执行的修改建议写入批注，内部依据留在审计页。</p>
+        </div>
+      </section>
+
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-950">1. 触发器与定位器</h3>
@@ -291,11 +310,11 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
           </Field>
           {showSemanticPrompt ? (
           <div className="lg:col-span-2">
-            <Field label="语义触发条件">
+            <Field label="语义定位/判定补充">
               <Textarea
                 value={draft.semantic_prompt || ''}
                 onChange={(event) => update('semantic_prompt', event.target.value)}
-                placeholder="只描述机器需要理解的语义边界。例如：客户单方终止后要求全额退款且不计息。"
+                placeholder="给语义引擎看的补充边界，不替代关键词和阈值。例如：客户单方终止后要求全额退款且不计息。"
                 rows={3}
                 className="border-rose-200 bg-rose-50/70 text-slate-900 focus-visible:ring-rose-300"
               />
@@ -314,7 +333,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             </Field>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 lg:col-span-2">
-            <div className="text-xs font-medium text-slate-500">可读执行说明（不是发布结果）</div>
+            <div className="text-xs font-medium text-slate-500">实时转译预览（仅解释当前配置，不是发布结果）</div>
             <p className="mt-2 text-sm leading-6 text-slate-800">
               在{scenarios || '全部适用范围'}内，先用“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置定位线索'}”定位证据，
               再由{engineOptions.find((item) => item.value === draft.engine_type)?.label || '规则引擎'}按“{categoryOptions.find((item) => item.value === draft.category)?.label || '未配置判定类型'}”判断：
@@ -371,7 +390,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">3. 输出动作与客户侧批注</h3>
+          <h3 className="text-sm font-semibold text-slate-950">3. 客户批注与销售动作</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             客户侧只看到可执行修改建议；销售侧看到谈判口径；内部审核说明不写进客户批注。
           </p>
@@ -414,7 +433,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
       <div className="flex flex-wrap items-center justify-end gap-3">
         {onTest ? (
           <Button type="button" variant="outline" onClick={onTest}>
-            测试当前规则命中
+            测试规则命中
           </Button>
         ) : null}
         <Button type="submit" disabled={saving}>

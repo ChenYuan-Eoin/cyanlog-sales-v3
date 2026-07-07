@@ -93,6 +93,22 @@ export function SourceDocumentPreview({
   const locator = inferDocumentLocator(selectedText)
   const evidenceNeedle = useMemo(() => normalizeNeedle(selectedText), [selectedText])
   const renderModeLabel = canPreviewPdf ? 'PDF 原件' : canPreviewDocx ? 'DOCX 页级渲染' : '文本定位降级'
+  const renderStatusLabel = canPreviewPdf
+    ? '浏览器内嵌'
+    : canPreviewDocx
+      ? docxState === 'ready'
+        ? '已渲染'
+        : docxState === 'loading'
+          ? '渲染中'
+          : docxState === 'failed'
+            ? '预览失败'
+            : '等待渲染'
+      : '降级'
+  const renderStatusVariant = canPreviewPdf || (canPreviewDocx && docxState === 'ready')
+    ? 'default'
+    : docxState === 'failed'
+      ? 'destructive'
+      : 'outline'
 
   useEffect(() => {
     selectedTextRef.current = selectedText
@@ -171,6 +187,9 @@ export function SourceDocumentPreview({
             <span className="text-sm font-semibold text-slate-950">{title}</span>
             <Badge variant={canPreviewPdf || canPreviewDocx ? 'outline' : 'secondary'}>
               {renderModeLabel}
+            </Badge>
+            <Badge variant={renderStatusVariant}>
+              {renderStatusLabel}
             </Badge>
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">
