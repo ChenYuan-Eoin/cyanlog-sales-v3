@@ -9,6 +9,12 @@ import { error as toastError, success as toastSuccess } from '@/lib/toast'
 import { useChunkUpload } from '@/lib/hooks/useChunkUpload'
 import { UploadProgressBar } from '@/components/upload/UploadProgress'
 import { cn } from '@/lib/utils'
+import {
+  reviewStyleLabel,
+  reviewStyleOptions,
+  reviewStyleStrategy,
+  type ReviewStyle,
+} from '@/lib/contracts/review-style'
 
 // 文件类型验证用扩展名而非 MIME 类型，减少浏览器 MIME 差异影响。
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
@@ -43,6 +49,7 @@ export default function ContractUploadPage() {
   const [dragOver, setDragOver] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [finalizingReview, setFinalizingReview] = useState(false)
+  const [reviewStyle, setReviewStyle] = useState<ReviewStyle>('balanced')
   const inputRef = useRef<HTMLInputElement>(null)
   const activeContractIdRef = useRef<string | null>(null)
   const currentFileIndexRef = useRef(currentFileIndex)
@@ -88,12 +95,14 @@ export default function ContractUploadPage() {
     return submitData
   }
 
-  async function startContractAnalysis(cid: string, token: string) {
+  async function startContractAnalysis(cid: string, token: string, style: ReviewStyle) {
     const analyzeRes = await fetch(`/api/contracts/${cid}/analyze`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ strategy: reviewStyleStrategy(style) }),
     })
 
     const analyzeData = await analyzeRes.json().catch(() => ({ error: '启动审核失败' }))
@@ -133,7 +142,7 @@ export default function ContractUploadPage() {
     setFinalizingReview(true)
     try {
       await submitContractForReview(completedContractId, token)
-      await startContractAnalysis(completedContractId, token)
+      await startContractAnalysis(completedContractId, token, reviewStyle)
 
       // 所有文件上传完成后跳转
       const completedIndex = currentFileIndexRef.current
@@ -282,6 +291,10 @@ export default function ContractUploadPage() {
         body: JSON.stringify({
           party_b_name: file.name.replace(/\.[^/.]+$/, ''),
           contract_amount: 0,
+          notes: [
+            `审核源文件: ${file.name}`,
+            `审核风格: ${reviewStyleLabel(reviewStyle)}`,
+          ].join('\n'),
         }),
       })
 
@@ -307,7 +320,7 @@ export default function ContractUploadPage() {
       setErrorMsg(errorMessage)
       toastError(errorMessage)
     }
-  }, [files, uploadSingleFile])
+  }, [files, reviewStyle, uploadSingleFile])
 
   // 开始上传所有文件
   const handleUpload = useCallback(() => {
@@ -420,6 +433,41 @@ export default function ContractUploadPage() {
               支持 PDF、DOCX 格式，单个文件最大 500MB
             </p>
           </div>
+
+          {!isCompareIntent && (
+            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900">审核风格</p>
+                <span className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  随本次批量 ReviewRun 生效
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {reviewStyleOptions.map((option) => {
+                  const active = option.value === reviewStyle
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => setReviewStyle(option.value)}
+                      className={cn(
+                        'rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-60',
+                        active
+                          ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200'
+                      )}
+                    >
+                      <span className="text-sm font-semibold">{option.label}</span>
+                      <span className={cn('mt-1 block text-xs leading-5', active ? 'text-slate-200' : 'text-slate-500')}>
+                        {option.description}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* File List */}
           {files.length > 0 && (

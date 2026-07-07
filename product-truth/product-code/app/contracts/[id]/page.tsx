@@ -32,6 +32,7 @@ import {
   needsManualAnnotationLocation,
   needsManualRiskLocation,
 } from '@/lib/contracts/review-workbench-state'
+import { reviewStyleStrategy, type ReviewStyle } from '@/lib/contracts/review-style'
 import { SourceDocumentPreview, type SourceDocumentPreviewFile } from '@/components/contracts/source-document-preview'
 import { error as toastError, success as toastSuccess } from '@/lib/toast'
 
@@ -40,7 +41,6 @@ type RiskSeverity = 'red' | 'yellow' | 'green' | 'white'
 type SidePanelMode = 'review' | 'summary' | 'assistant' | 'evidence'
 type RiskFilter = 'all' | RiskSeverity
 type CustomerFeedbackStatus = 'needs_customer_confirmation' | 'accepted' | 'rejected' | 'special_approval'
-type ReviewStyle = 'strict' | 'balanced' | 'business'
 type ExportDownload = {
   url: string
   filename: string
@@ -319,12 +319,6 @@ const modelPolicySourceLabel: Record<NonNullable<ReviewRun['model_policy']>['sou
   model_policies: '已发布模型策略',
   'analysis_job.provider': '分析任务记录',
   fallback: '规则兜底',
-}
-
-function reviewStrategyCode(style: ReviewStyle): 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE' {
-  if (style === 'strict') return 'AGGRESSIVE'
-  if (style === 'business') return 'CONSERVATIVE'
-  return 'BALANCED'
 }
 
 function reviewVersionSourceLabel(source: ContractVersion['source']) {
@@ -649,8 +643,8 @@ export default function ContractWorkbenchPage() {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: isRerun
-            ? JSON.stringify({ trigger_event: 'manual_rerun', strategy: reviewStrategyCode(reviewStyle) })
-            : JSON.stringify({ strategy: reviewStrategyCode(reviewStyle) }),
+            ? JSON.stringify({ trigger_event: 'manual_rerun', strategy: reviewStyleStrategy(reviewStyle) })
+            : JSON.stringify({ strategy: reviewStyleStrategy(reviewStyle) }),
         }
       )
       const payload = await response.json().catch(() => ({}))

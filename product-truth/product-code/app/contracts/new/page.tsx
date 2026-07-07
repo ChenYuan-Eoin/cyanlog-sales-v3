@@ -9,6 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  reviewStyleLabel,
+  reviewStyleOptions,
+  reviewStyleStrategy,
+  type ReviewStyle,
+} from '@/lib/contracts/review-style'
 
 // 发起合同审核：上传源文件是唯一前置条件；业务上下文由 CRM、文件解析或人工补录提供。
 
@@ -28,22 +34,6 @@ interface ContractForm {
 }
 
 type UploadStage = 'idle' | 'creating' | 'uploading' | 'submitting' | 'analyzing' | 'done'
-type ReviewStyle = 'strict' | 'balanced' | 'business'
-
-const reviewStyleOptions: Array<{
-  value: ReviewStyle
-  label: string
-  description: string
-  strategy: 'AGGRESSIVE' | 'BALANCED' | 'CONSERVATIVE'
-}> = [
-  { value: 'strict', label: '严审', description: '红线、格式和证据定位更敏感，适合用印前审计。', strategy: 'AGGRESSIVE' },
-  { value: 'balanced', label: '均衡', description: '按发布规则默认阈值执行，适合大多数合同审核。', strategy: 'BALANCED' },
-  { value: 'business', label: '商务', description: '优先输出谈判口径和可控风险建议，适合销售现场沟通。', strategy: 'CONSERVATIVE' },
-]
-
-function reviewStyleStrategy(style: ReviewStyle) {
-  return reviewStyleOptions.find((option) => option.value === style)?.strategy || 'BALANCED'
-}
 
 const initialForm: ContractForm = {
   contract_no: '',
@@ -110,11 +100,10 @@ function optionalAmount(value: string): number | undefined {
 }
 
 function buildContractPayload(form: ContractForm, file: File, reviewStyle: ReviewStyle) {
-  const styleLabel = reviewStyleOptions.find((option) => option.value === reviewStyle)?.label || '均衡'
   const notes = [
     optionalText(form.notes),
     `审核源文件: ${file.name}`,
-    `审核风格: ${styleLabel}`,
+    `审核风格: ${reviewStyleLabel(reviewStyle)}`,
   ].filter(Boolean).join('\n')
 
   return {
