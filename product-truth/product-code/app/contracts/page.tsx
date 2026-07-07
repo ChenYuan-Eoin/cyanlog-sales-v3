@@ -505,7 +505,7 @@ export default function ContractCenterPage() {
       href: `/contracts/draft?id=${d.id}`,
       meta: '草稿',
       nextAction: '继续起草',
-      nextActionDescription: '补齐合同信息后再上传源文件或转入审核。',
+      nextActionDescription: '补齐合同信息后可导出 DOCX，或直接把草稿作为源文件进入审核。',
     } satisfies TaskItemView))
 
     const contractTasks = contracts.map((c) => {

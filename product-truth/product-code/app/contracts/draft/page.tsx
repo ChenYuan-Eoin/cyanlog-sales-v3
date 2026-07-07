@@ -21,6 +21,12 @@ import {
 } from 'lucide-react'
 import type { ContractTemplateParam } from '../types'
 import { success, error } from '@/lib/toast'
+import {
+  reviewStyleLabel,
+  reviewStyleOptions,
+  reviewStyleStrategy,
+  type ReviewStyle,
+} from '@/lib/contracts/review-style'
 
 interface DraftData {
   title: string
@@ -32,12 +38,37 @@ interface DraftData {
   clause_toggles: Record<string, boolean>
 }
 
+const DRAFT_DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+function readApiError(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === 'object') {
+    const errorValue = (payload as { error?: unknown }).error
+    if (typeof errorValue === 'string') return errorValue
+    if (errorValue && typeof errorValue === 'object') {
+      const message = (errorValue as { message?: unknown }).message
+      if (typeof message === 'string') return message
+    }
+  }
+  return fallback
+}
+
+function safeDraftFilename(title: string) {
+  const normalized = (title || '合同草稿')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return `${normalized.slice(0, 80) || '合同草稿'}-草稿.docx`
+}
+
 export default function ContractDraftPage() {
   const [params, setParams] = useState<ContractTemplateParam[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [launchingReview, setLaunchingReview] = useState(false)
+  const [reviewStyle, setReviewStyle] = useState<ReviewStyle>('balanced')
+  const [reviewLaunchStep, setReviewLaunchStep] = useState('')
   const [lastExportedDocxName, setLastExportedDocxName] = useState('')
 
   const [draft, setDraft] = useState<DraftData>({
@@ -222,6 +253,28 @@ export default function ContractDraftPage() {
     }
   }, [draft])
 
+  const exportDraftDocxBlob = useCallback(async (token: string) => {
+    if (!generatedContent.trim()) {
+      throw new Error('请先生成合同正文')
+    }
+    const res = await fetch('/api/contracts/draft/export', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: draft.title || '合同草稿',
+        content: generatedContent,
+      }),
+    })
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      throw new Error(readApiError(payload, '导出失败'))
+    }
+    return res.blob()
+  }, [draft.title, generatedContent])
+
   const handleExportDocx = useCallback(async () => {
     if (!generatedContent.trim()) {
       error('请先生成合同正文')
@@ -230,26 +283,14 @@ export default function ContractDraftPage() {
     setExporting(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/contracts/draft/export', {
-        method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: draft.title || '合同草稿',
-          content: generatedContent,
-        }),
-      })
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}))
-        error(payload.error || '导出失败')
+      if (!token) {
+        error('请先登录')
         return
       }
-      const blob = await res.blob()
+      const blob = await exportDraftDocxBlob(token)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
-      const filename = `${draft.title || '合同草稿'}-草稿.docx`
+      const filename = safeDraftFilename(draft.title)
       link.href = url
       link.download = filename
       document.body.appendChild(link)
@@ -263,7 +304,104 @@ export default function ContractDraftPage() {
     } finally {
       setExporting(false)
     }
-  }, [draft.title, generatedContent])
+  }, [draft.title, exportDraftDocxBlob, generatedContent])
+
+  const handleLaunchReview = useCallback(async () => {
+    if (!generatedContent.trim()) {
+      error('请先生成合同正文')
+      return
+    }
+    setLaunchingReview(true)
+    setReviewLaunchStep('生成可审核 DOCX')
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        error('请先登录')
+        return
+      }
+
+      const blob = await exportDraftDocxBlob(token)
+      const filename = safeDraftFilename(draft.title)
+      const sourceFile = new File([blob], filename, { type: DRAFT_DOCX_MIME })
+
+      setReviewLaunchStep('创建合同版本容器')
+      const createRes = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          party_a_name: draft.party_a_name || undefined,
+          party_b_name: draft.party_b_name || draft.title || 'AI 起草合同',
+          party_b_contact: draft.party_b_contact || undefined,
+          contract_amount: draft.contract_amount ? Number(draft.contract_amount) : undefined,
+          quote_id: selectedQuote || undefined,
+          notes: `AI 起草合同进入审核；审核风格：${reviewStyleLabel(reviewStyle)}`,
+        }),
+      })
+      const createPayload = await createRes.json().catch(() => ({}))
+      if (!createRes.ok) {
+        throw new Error(readApiError(createPayload, '创建合同失败'))
+      }
+      const contractId = createPayload?.data?.contract_id
+      if (typeof contractId !== 'string' || !contractId) {
+        throw new Error('创建合同成功但未返回合同ID')
+      }
+
+      setReviewLaunchStep('上传草稿为源文件')
+      const formData = new FormData()
+      formData.append('file', sourceFile)
+      formData.append('purpose', 'source')
+      const uploadRes = await fetch(`/api/contracts/${contractId}/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+      const uploadPayload = await uploadRes.json().catch(() => ({}))
+      if (!uploadRes.ok) {
+        throw new Error(readApiError(uploadPayload, '上传草稿源文件失败'))
+      }
+
+      setReviewLaunchStep('提交审核')
+      const submitRes = await fetch(`/api/contracts/${contractId}/submit`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const submitPayload = await submitRes.json().catch(() => ({}))
+      if (!submitRes.ok) {
+        throw new Error(readApiError(submitPayload, '提交审核失败'))
+      }
+
+      setReviewLaunchStep(`启动${reviewStyleLabel(reviewStyle)}审核`)
+      const analyzeRes = await fetch(`/api/contracts/${contractId}/analyze`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ strategy: reviewStyleStrategy(reviewStyle) }),
+      })
+      const analyzePayload = await analyzeRes.json().catch(() => ({}))
+      if (!analyzeRes.ok) {
+        throw new Error(readApiError(analyzePayload, '启动审核失败'))
+      }
+      if (analyzePayload.status === 'FAILED') {
+        throw new Error(analyzePayload.processingError || '审核处理失败')
+      }
+
+      setLastExportedDocxName(filename)
+      success('草稿已进入合同审核')
+      window.location.href = `/contracts/${contractId}?from=draft&panel=review`
+    } catch (err) {
+      error(err instanceof Error ? err.message : '进入审核失败')
+    } finally {
+      setLaunchingReview(false)
+      setReviewLaunchStep('')
+    }
+  }, [draft, exportDraftDocxBlob, generatedContent, reviewStyle, selectedQuote])
 
   const groupedParams = useMemo(() => {
     const enums = params.filter((p) => p.param_type === 'enum')
@@ -515,6 +653,38 @@ export default function ContractDraftPage() {
                 </div>
               </div>
             </section>
+
+            <section>
+              <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <FileTextIcon className="h-4 w-4 text-indigo-500" />
+                审核风格
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                {reviewStyleOptions.map((option) => {
+                  const active = option.value === reviewStyle
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setReviewStyle(option.value)}
+                      className={`rounded-lg border px-3 py-2 text-left transition ${
+                        active
+                          ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{option.label}</span>
+                      <span className={`mt-1 block text-[10px] leading-4 ${active ? 'text-slate-200' : 'text-slate-500'}`}>
+                        {option.strategy}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                {reviewStyleOptions.find((option) => option.value === reviewStyle)?.description}
+              </p>
+            </section>
           </div>
 
           {/* 底部操作 */}
@@ -541,31 +711,31 @@ export default function ContractDraftPage() {
                 )}
                 导出 DOCX
               </Button>
-              {hasGeneratedContent ? (
-                <Link href="/contracts/new?from=draft&source=draft-docx" prefetch={false}>
-                  <Button type="button" variant="outline" className="w-full">
-                    <UploadIcon className="mr-1.5 h-4 w-4" />
-                    上传审核
-                  </Button>
-                </Link>
-              ) : (
-                <Button type="button" variant="outline" disabled>
+              <Button type="button" variant="outline" onClick={handleLaunchReview} disabled={!hasGeneratedContent || launchingReview}>
+                {launchingReview ? (
+                  <LoaderIcon className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
                   <UploadIcon className="mr-1.5 h-4 w-4" />
-                  上传审核
-                </Button>
-              )}
+                )}
+                进入审核
+              </Button>
             </div>
+            {launchingReview && reviewLaunchStep ? (
+              <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] leading-5 text-indigo-800">
+                {reviewLaunchStep}...
+              </div>
+            ) : null}
             {lastExportedDocxName ? (
               <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] leading-5 text-emerald-800">
-                已导出：{lastExportedDocxName}。下一步在审核入口上传这份 DOCX 作为源文件，生成 ReviewRun 后再进入批注工作台。
+                已生成：{lastExportedDocxName}。可以继续下载编辑，也可以直接作为源文件进入合同审核。
               </div>
             ) : hasGeneratedContent ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">
-                先导出可编辑 DOCX，再上传审核。页面预览不进入审核，也不会替代 Word 源文件。
+                可以单独导出可编辑 DOCX；也可以直接创建合同版本并按“{reviewStyleLabel(reviewStyle)}”启动审核。
               </div>
             ) : null}
             <p className="text-[11px] leading-5 text-slate-500">
-              浏览器内只是 Word 草案近似预览；正式交付以导出的可编辑 DOCX 为准。进入审核时仍以“上传源文件”创建合同版本，不能用页面预览替代源文件。
+              浏览器内只是 Word 草案近似预览；正式交付以导出的可编辑 DOCX 为准。进入审核时会把 DOCX 作为源文件写入合同版本流，不能用页面预览替代源文件。
             </p>
           </div>
         </aside>
@@ -610,6 +780,9 @@ export default function ContractDraftPage() {
             selectedQuote={selectedQuote}
             hasRequirement={Boolean(aiAddition.trim() || draft.title.trim())}
             hasGeneratedContent={hasGeneratedContent}
+            reviewStyle={reviewStyle}
+            launchingReview={launchingReview}
+            reviewLaunchStep={reviewLaunchStep}
           />
         </aside>
       </div>
@@ -622,11 +795,17 @@ function DraftWorkflowPanel({
   selectedQuote,
   hasRequirement,
   hasGeneratedContent,
+  reviewStyle,
+  launchingReview,
+  reviewLaunchStep,
 }: {
   selectedTemplate: string
   selectedQuote: string
   hasRequirement: boolean
   hasGeneratedContent: boolean
+  reviewStyle: ReviewStyle
+  launchingReview: boolean
+  reviewLaunchStep: string
 }) {
   const steps = [
     {
@@ -651,8 +830,12 @@ function DraftWorkflowPanel({
     },
     {
       label: '进入审核',
-      value: hasGeneratedContent ? '导出 DOCX 后作为源文件上传审核' : '生成后导出 DOCX',
-      done: hasGeneratedContent,
+      value: launchingReview
+        ? reviewLaunchStep || '正在进入审核'
+        : hasGeneratedContent
+          ? `可按${reviewStyleLabel(reviewStyle)}风格创建 ReviewRun`
+          : '生成后可进入审核',
+      done: hasGeneratedContent && !launchingReview,
     },
   ]
 
@@ -664,6 +847,17 @@ function DraftWorkflowPanel({
         <p className="mt-1 text-xs leading-5 text-slate-500">
           合同起草是合同中心第三条独立能力，产物应进入版本流和审核工作台。
         </p>
+      </div>
+      <div className="border-b border-slate-100 px-4 py-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-slate-500">审核风格</span>
+            <Badge variant="outline" className="text-[10px]">{reviewStyleLabel(reviewStyle)}</Badge>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-600">
+            {reviewStyleOptions.find((option) => option.value === reviewStyle)?.description}
+          </p>
+        </div>
       </div>
       <div className="space-y-3 overflow-y-auto p-4">
         {steps.map((step, index) => (
