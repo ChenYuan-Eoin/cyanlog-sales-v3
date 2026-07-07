@@ -952,15 +952,6 @@ export default function ContractWorkbenchPage() {
         onReviewStyleChange={setReviewStyle}
       />
 
-      <ReviewRunStatusStrip
-        data={data}
-        isBusy={isBusy}
-        analyzing={analyzing}
-        reviewHealth={displayReviewHealth}
-        exportGateIssues={exportGateIssues}
-        canExport={canExport}
-      />
-
 	      {(evidenceRefreshing || isSummaryPayload) && (
 	        <EvidenceHydrationPanel />
 	      )}
@@ -983,22 +974,14 @@ export default function ContractWorkbenchPage() {
         />
       )}
 
-	      {!canExport && (
-	        <ExportReadinessPanel
-	          exportGateIssues={exportGateIssues}
-	          hasReviewArtifacts={data.annotations.length > 0 || data.riskFindings.length > 0}
-	          onOpenReview={() => setSidePanelMode('review')}
-	        />
-	      )}
-
       {reviewHealth.degraded && !isSummaryPayload && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           <div className="flex items-start gap-2">
             <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-none" />
             <div>
-              <p className="font-medium">当前审核结果未达到正式验收状态</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                {reviewHealth.issues.map((issue) => (
+              <p className="font-medium">审核降级，需复核后交付</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs leading-5">
+                {reviewHealth.issues.slice(0, 4).map((issue) => (
                   <li key={issue}>{issue}</li>
                 ))}
               </ul>
@@ -1016,7 +999,7 @@ export default function ContractWorkbenchPage() {
         onModeChange={setSidePanelMode}
       />
 
-	      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[220px_320px_minmax(0,1fr)]">
+	      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[180px_300px_minmax(0,1fr)] 2xl:grid-cols-[200px_320px_minmax(0,1fr)]">
         <ReviewNavigationRail
           data={data}
           selectedRiskId={selectedRisk?.id || null}
@@ -1026,7 +1009,7 @@ export default function ContractWorkbenchPage() {
           openRiskCount={openRiskCount}
         />
 
-	        <aside className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
+        <aside className="space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
           <Card>
             <CardHeader className="border-b border-slate-100 pb-3">
               <div className="flex items-center justify-between gap-3">
@@ -1085,24 +1068,20 @@ export default function ContractWorkbenchPage() {
               )}
             </CardContent>
           </Card>
-          <VersionOutputPanel
-            data={data}
-            contractId={contractId}
-            actionLabel={versionActionLabel}
-          />
+          <VersionOutputPanel data={data} contractId={contractId} actionLabel={versionActionLabel} />
         </aside>
 
         <section className="space-y-3">
-          <Card>
-            <CardHeader className="border-b border-slate-100 pb-4">
+          <Card className="min-h-[calc(100dvh-180px)]">
+            <CardHeader className="border-b border-slate-100 pb-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <FileTextIcon className="h-4 w-4" />
                     源文件与批注预览
                   </CardTitle>
-                  <p className="mt-1 text-sm text-slate-500">
-                    这里用于定位证据和批注意图，不是交付文件。交付以“源文件原生批注版”为准，不能用重新排版文档替代。
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    主画布只服务两件事：定位原文证据，预览客户侧批注将如何写入源 Word。
                   </p>
                 </div>
                 <Badge variant="outline">
@@ -1122,7 +1101,7 @@ export default function ContractWorkbenchPage() {
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               {selectedRisk && (
-                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-sm text-blue-950">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-medium">{selectedRisk.title}</div>
                     <div className="flex flex-wrap gap-2">
@@ -1134,7 +1113,7 @@ export default function ContractWorkbenchPage() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2 xl:grid-cols-[1fr_1fr_0.9fr]">
+                  <div className="mt-2 grid gap-2 xl:grid-cols-[1fr_1fr_0.85fr]">
                     <div className="rounded border border-slate-200 bg-white/80 p-2">
                       <div className="text-[11px] font-medium text-slate-500">原文证据</div>
                       <p className="mt-1 line-clamp-4 leading-5 text-slate-800">
@@ -1451,58 +1430,6 @@ function ExportStatusPanel({
   )
 }
 
-function ReviewRunStatusStrip({
-  data,
-  isBusy,
-  analyzing,
-  reviewHealth,
-  exportGateIssues,
-  canExport,
-}: {
-  data: WorkbenchData
-  isBusy: boolean
-  analyzing: boolean
-  reviewHealth: ReturnType<typeof buildReviewHealth>
-  exportGateIssues: string[]
-  canExport: boolean
-}) {
-  const statusText = isBusy || analyzing
-    ? '审核运行中'
-    : data.status === 'COMPLETED' && reviewHealth.degraded
-      ? '需人工复核'
-      : data.status === 'COMPLETED'
-        ? '可进入批注输出'
-        : data.status === 'FAILED'
-          ? '审核失败，可再次审核'
-          : '等待发起审核'
-  const outputText = canExport
-    ? '源文件批注版可导出'
-    : exportGateIssues.length > 0
-      ? exportGateIssues[0]
-      : reviewHealth.exportBlocked
-        ? '存在未定位风险，暂不能导出源文件批注版'
-      : '审核完成后生成源文件批注版'
-
-  return (
-    <div className="grid gap-3 md:grid-cols-3" aria-live="polite">
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-        <p className="text-xs font-medium text-slate-500">当前状态</p>
-        <p className="mt-1 text-sm font-semibold text-slate-950">{statusText}</p>
-      </div>
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-        <p className="text-xs font-medium text-slate-500">审核依据</p>
-        <p className="mt-1 truncate text-sm font-semibold text-slate-950">
-          {data.reviewRun?.skill_bundle_id ? '已绑定规则发布包' : '未绑定规则发布包'}
-        </p>
-      </div>
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-        <p className="text-xs font-medium text-slate-500">批注输出</p>
-        <p className="mt-1 text-sm font-semibold text-slate-950">{outputText}</p>
-      </div>
-    </div>
-  )
-}
-
 function ReviewProgressPanel({
   data,
   analyzing,
@@ -1596,43 +1523,6 @@ function ExportDownloadPanel({ exportDownload }: { exportDownload: NonNullable<E
         >
           重新下载批注版
         </a>
-      </div>
-    </div>
-  )
-}
-
-function ExportReadinessPanel({
-  exportGateIssues,
-  hasReviewArtifacts,
-  onOpenReview,
-}: {
-  exportGateIssues: string[]
-  hasReviewArtifacts: boolean
-  onOpenReview: () => void
-}) {
-  const issues = exportGateIssues.length > 0
-    ? exportGateIssues
-    : hasReviewArtifacts
-      ? ['当前结果还没有通过源文件批注导出门禁，请检查审核运行证据。']
-      : ['当前合同还没有可写入 Word 的风险项或批注意图。']
-
-  return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3" aria-live="polite">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <p className="font-semibold text-amber-950">暂不能导出源文件批注版</p>
-          <p className="mt-1 text-sm text-amber-800">
-            导出按钮只在风险证据可定位、批注意图可写入源 Word 时启用；不会用报告文件伪装成批注版。
-          </p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
-            {issues.slice(0, 4).map((issue) => (
-              <li key={issue}>{issue}</li>
-            ))}
-          </ul>
-        </div>
-        <Button type="button" variant="outline" className="shrink-0 border-amber-300 bg-white" onClick={onOpenReview}>
-          查看需定位风险
-        </Button>
       </div>
     </div>
   )

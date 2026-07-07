@@ -580,12 +580,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   return (
     <>
-	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
 	      <Card className="min-w-0">
 	        <CardHeader className="space-y-3">
             <div className="flex flex-row items-center justify-between gap-3">
 	            <CardTitle className="text-base">
-	              规则资产树 ({Math.max(ruleSets.length - 1, 0)})
+	              规则库树 ({Math.max(ruleSets.length - 1, 0)})
 	              {ruleSetAssetsLoading ? <span className="ml-2 text-xs font-normal text-slate-400">加载中</span> : null}
 	            </CardTitle>
             </div>
@@ -613,10 +613,10 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 size="sm"
                 variant="outline"
                 disabled
-                title="规则库是应用级配置根节点，当前第一阶段固定为默认审核库。"
+                title="规则库是应用级配置根节点；第一阶段固定为默认审核库，规则集就是规则列表容器。"
               >
                 <FolderIcon className="h-4 w-4 mr-1" />
-                新建规则库
+                新建审核库
               </Button>
               <Button size="sm" onClick={() => setCreateRuleSetOpen(true)}>
                 <PlusIcon className="h-4 w-4 mr-1" />
@@ -750,7 +750,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
         {activeTab === 'test' ? (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">规则测试：{selectedRule?.name || '全部规则'}</CardTitle>
+              <CardTitle className="text-base">测试用例：{selectedRule?.name || '全部规则'}</CardTitle>
               <Button size="sm" variant="outline" onClick={() => setActiveTab('design')}>
                 返回设计
               </Button>
@@ -797,7 +797,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 ) : null}
                 <Button size="sm" variant="outline" onClick={() => setActiveTab('test')}>
                   <PlayIcon className="h-4 w-4 mr-1" />
-                  测试
+                  测试用例
                 </Button>
               </div>
             </CardHeader>

@@ -136,7 +136,7 @@ export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle>界面主题</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">主题只管理颜色、圆角和外观变量；Logo、Favicon 和浏览器标题来自独立 BrandProfile。</p>
+          <p className="mt-1 text-sm text-slate-500">品牌资料统一维护 Logo、Favicon 和浏览器标题；主题只管理颜色、圆角和外观变量。</p>
         </div>
         <Button onClick={onNew} className="w-full sm:w-auto">+ 新增主题</Button>
       </CardHeader>
@@ -267,7 +267,7 @@ export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions
           <div className="mt-3 grid gap-2 text-xs md:grid-cols-3">
             <ThemeRuntimeFact label="主题外观" value={activeTheme?.appearance || '未发布'} ready={Boolean(activeTheme)} />
             <ThemeRuntimeFact label="品牌资产" value={activeLogo || activeFavicon ? '来自 BrandProfile 运行时源' : '等待 BrandProfile 配置入口'} ready={Boolean(activeLogo || activeFavicon)} />
-            <ThemeRuntimeFact label="边界" value="主题不编辑 logo/favicon" ready />
+            <ThemeRuntimeFact label="边界" value="品牌资料统一维护 logo/favicon" ready />
           </div>
         </div>
         {configs.length === 0 ? (
@@ -300,7 +300,7 @@ export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions
                         <span>卡片圆角：{theme.radiusLg}px</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <span>品牌资产：{logo || favicon ? '运行时读取，主题不编辑' : '未接入独立 BrandProfile 配置'}</span>
+                        <span>品牌资产：{logo || favicon ? 'BrandProfile 运行时读取' : '等待品牌资料配置'}</span>
                         <span>更新：{new Date(config.updated_at).toLocaleString('zh-CN')}</span>
                       </div>
                       <div className="flex flex-wrap gap-2">

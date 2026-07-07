@@ -236,14 +236,14 @@ export default function ContractDraftPage() {
     <div className="min-h-full bg-slate-50">
       <div className="flex h-screen">
         {/* 左侧：参数配置面板 */}
-        <aside className="w-[420px] bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+        <aside className="w-[360px] bg-white border-r border-slate-200 flex flex-col overflow-hidden 2xl:w-[390px]">
           <div className="h-14 border-b border-slate-200 flex items-center px-5 gap-3 flex-shrink-0">
             <Link href="/contracts">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ArrowLeftIcon className="h-4 w-4" />
               </Button>
             </Link>
-            <h1 className="font-bold text-slate-900 flex-1">AI 智能起草</h1>
+            <h1 className="font-bold text-slate-900 flex-1">合同起草</h1>
             <Button
               variant="outline"
               size="sm"
@@ -257,6 +257,13 @@ export default function ContractDraftPage() {
 
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
             {/* 模板选择 */}
+            <section className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <h3 className="text-sm font-bold text-blue-950">起草目标</h3>
+              <p className="mt-1 text-xs leading-5 text-blue-800">
+                输入业务需求后，系统提取交易要素、匹配模板和条款限制，生成可修改草案；草案必须能进入合同审核，而不是停留在一次性文本。
+              </p>
+            </section>
+
             <section>
               <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
                 <FileTextIcon className="h-4 w-4 text-indigo-500" />
@@ -481,7 +488,7 @@ export default function ContractDraftPage() {
         </aside>
 
         {/* 右侧：实时预览 */}
-        <main className="flex-1 bg-slate-100 overflow-auto p-10">
+        <main className="flex-1 bg-slate-100 overflow-auto p-6 xl:p-8">
           <div className="max-w-[800px] mx-auto bg-white min-h-[1100px] p-16 shadow-sm rounded-lg relative">
             <div className="absolute top-6 right-8 flex items-center gap-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
@@ -499,6 +506,84 @@ export default function ContractDraftPage() {
             )}
           </div>
         </main>
+        <aside className="hidden w-80 flex-col border-l border-slate-200 bg-white xl:flex">
+          <DraftWorkflowPanel
+            selectedTemplate={selectedTemplate}
+            selectedQuote={selectedQuote}
+            hasRequirement={Boolean(aiAddition.trim() || draft.title.trim())}
+            hasGeneratedContent={Boolean(generatedContent)}
+          />
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function DraftWorkflowPanel({
+  selectedTemplate,
+  selectedQuote,
+  hasRequirement,
+  hasGeneratedContent,
+}: {
+  selectedTemplate: string
+  selectedQuote: string
+  hasRequirement: boolean
+  hasGeneratedContent: boolean
+}) {
+  const steps = [
+    {
+      label: '需求理解',
+      value: hasRequirement ? '已有业务诉求' : '等待标题或补充诉求',
+      done: hasRequirement,
+    },
+    {
+      label: '模板约束',
+      value: selectedTemplate ? '已选择模板' : '请选择合同模板',
+      done: Boolean(selectedTemplate),
+    },
+    {
+      label: 'CRM 补全',
+      value: selectedQuote ? '报价已带入' : '可选报价单补全客户和金额',
+      done: Boolean(selectedQuote),
+    },
+    {
+      label: '生成草案',
+      value: hasGeneratedContent ? '草案已生成' : '等待生成',
+      done: hasGeneratedContent,
+    },
+    {
+      label: '进入审核',
+      value: hasGeneratedContent ? '下一步应创建 ContractVersion 并预审' : '生成后进入审核链路',
+      done: false,
+    },
+  ]
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-slate-100 p-4">
+        <div className="text-xs font-medium text-slate-500">起草闭环</div>
+        <h2 className="mt-1 text-base font-semibold text-slate-950">需求 → 模板 → 草案 → 预审</h2>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          合同起草是合同中心第三条独立能力，产物应进入版本流和审核工作台。
+        </p>
+      </div>
+      <div className="space-y-3 overflow-y-auto p-4">
+        {steps.map((step, index) => (
+          <div key={step.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center gap-2">
+              <span className={`grid h-6 w-6 place-items-center rounded-full text-xs font-semibold ${
+                step.done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
+              }`}>
+                {step.done ? '✓' : index + 1}
+              </span>
+              <span className="font-medium text-slate-900">{step.label}</span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{step.value}</p>
+          </div>
+        ))}
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+          当前仍是起草 MVP：已表达闭环路径，但“生成后自动建版本并预审”需要后续接入合同版本流。
+        </div>
       </div>
     </div>
   )

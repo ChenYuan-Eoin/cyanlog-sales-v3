@@ -29,17 +29,17 @@ interface RuleDesignerProps {
 }
 
 const categoryOptions: Array<{ value: ContractRuleCategory; label: string }> = [
-  { value: 'duration', label: '时限类' },
-  { value: 'amount', label: '金额类' },
-  { value: 'ratio', label: '比例类' },
-  { value: 'enum', label: '枚举类' },
-  { value: 'text', label: '条款语义' },
+  { value: 'duration', label: '时间/账期定位' },
+  { value: 'amount', label: '金额字段定位' },
+  { value: 'ratio', label: '比例字段定位' },
+  { value: 'enum', label: '枚举/主体定位' },
+  { value: 'text', label: '语义条款定位' },
 ]
 
 const engineOptions: Array<{ value: ContractRuleEngineType; label: string }> = [
-  { value: 'structured', label: '结构化字段校验' },
-  { value: 'semantic', label: 'AI 语义审查' },
-  { value: 'hybrid', label: '字段 + 语义混合' },
+  { value: 'structured', label: '字段规则' },
+  { value: 'semantic', label: '语义识别' },
+  { value: 'hybrid', label: '字段 + 语义' },
 ]
 
 const operatorOptions: ContractRuleOperator[] = ['<=', '>=', '>', '<', '=', 'contains', 'in']
@@ -54,9 +54,9 @@ const operatorLabels: Record<ContractRuleOperator, string> = {
 }
 
 const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> = [
-  { value: 'green', label: '绿色' },
-  { value: 'yellow', label: '黄色' },
-  { value: 'red', label: '红线' },
+  { value: 'green', label: '默认通过' },
+  { value: 'yellow', label: '默认需谈判' },
+  { value: 'red', label: '默认红线' },
 ]
 
 const actionOptions = [
@@ -201,7 +201,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
           </div>
         ) : null}
         <div className="grid gap-3 md:grid-cols-[120px_minmax(0,1fr)_120px]">
-          <Field label="ID / 编码">
+          <Field label="置灰 ID / 编码">
             <Input
               value={draft.code || ''}
               onChange={(event) => update('code', event.target.value)}
@@ -234,27 +234,30 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">触发器配置</h3>
+          <h3 className="text-sm font-semibold text-slate-950">1. 触发器与定位器</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            规则器只看可执行条件：关键词定位、语义判断、数值字段。规则来源可以是 Markdown，但这里必须可见可改。
+            适用范围只决定规则在哪些业务里启用；触发器决定何时开始检查；定位器负责在合同里找到证据。
           </p>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-2">
-          <Field label="关键词 / 原文定位线索">
+          <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800 lg:col-span-2">
+            执行顺序：适用范围过滤 → 触发器启动 → 定位器找证据 → 判定器给出红绿灯 → 输出批注和谈判动作。
+          </div>
+          <Field label="定位关键词（找证据）">
             <Input
               value={fieldHints}
               onChange={(event) => setFieldHints(event.target.value)}
               placeholder="首付款, 账期, 验收后付款"
             />
           </Field>
-          <Field label="适用范围">
+          <Field label="适用范围（启用边界）">
             <Input
               value={scenarios}
               onChange={(event) => setScenarios(event.target.value)}
-              placeholder="标准销售合同, 框架协议"
+              placeholder="标准销售合同, 框架协议；不直接参与命中"
             />
           </Field>
-          <Field label="触发方式">
+          <Field label="定位类型">
             <Select
               value={draft.category || 'duration'}
               onChange={(value) => update('category', value as ContractRuleCategory)}
@@ -268,14 +271,14 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               options={engineOptions}
             />
           </Field>
-          <Field label="数值字段">
+          <Field label="判定字段">
             <Input
               value={draft.target_field || ''}
               onChange={(event) => update('target_field', event.target.value)}
               placeholder="payment_schedule / payment_days"
             />
           </Field>
-          <Field label="默认风险等级">
+          <Field label="兜底等级">
             <Select
               value={draft.risk_level || 'yellow'}
               onChange={(value) => update('risk_level', value as ContractRuleRiskLevel)}
@@ -283,11 +286,11 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             />
           </Field>
           <div className="lg:col-span-2">
-            <Field label="语义触发条件">
+            <Field label="语义定位补充">
               <Textarea
                 value={draft.semantic_prompt || ''}
                 onChange={(event) => update('semantic_prompt', event.target.value)}
-                placeholder="描述 AI 需要识别的条款语义，例如：客户单方终止后要求全额退款且不计息。"
+                placeholder="只描述机器需要理解的语义边界。例如：客户单方终止后要求全额退款且不计息。"
                 rows={3}
                 className="border-rose-200 bg-rose-50/70 text-slate-900 focus-visible:ring-rose-300"
               />
@@ -305,7 +308,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             </Field>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 lg:col-span-2">
-            <div className="text-xs font-medium text-slate-500">实时转译预览</div>
+            <div className="text-xs font-medium text-slate-500">规则解释（给人看的执行说明）</div>
             <p className="mt-2 text-sm leading-6 text-slate-800">
               命中“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置触发线索'}”后，
               由{engineOptions.find((item) => item.value === draft.engine_type)?.label || '规则引擎'}判断：
@@ -318,7 +321,10 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">红绿灯等级定义</h3>
+          <h3 className="text-sm font-semibold text-slate-950">2. 判定器与红绿灯结果</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            红绿灯来自判定器输出，不来自上面的解释文案；每一档都必须有阈值和处理动作。
+          </p>
         </div>
         <div className="divide-y divide-slate-100">
           <LevelEditor
@@ -359,20 +365,20 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">输出模板</h3>
+          <h3 className="text-sm font-semibold text-slate-950">3. 输出动作</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            这里是给审核引擎和 Word 批注生成读取的模板，不是让业务人员填写长报告。
+            分清给客户、销售和内部审核看的内容；不要把规则 ID、证据字段和调试信息写进客户侧批注。
           </p>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-2">
-          <Field label="批注标题">
+          <Field label="客户侧批注标题">
             <Input
               value={messageTemplate.title || ''}
               onChange={(event) => updateMessageTemplate('title', event.target.value)}
               placeholder="预付款比例超标"
             />
           </Field>
-          <Field label="客户侧修改建议模板">
+          <Field label="客户侧修改建议">
             <Textarea
               value={messageTemplate.suggestion || ''}
               onChange={(event) => updateMessageTemplate('suggestion', event.target.value)}
@@ -380,7 +386,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               rows={3}
             />
           </Field>
-          <Field label="Word 批注文案模板">
+          <Field label="内部审核说明">
             <Textarea
               value={messageTemplate.comment || ''}
               onChange={(event) => updateMessageTemplate('comment', event.target.value)}
@@ -388,7 +394,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               rows={3}
             />
           </Field>
-          <Field label="谈判动作模板">
+          <Field label="销售谈判口径">
             <Textarea
               value={messageTemplate.negotiation_action || ''}
               onChange={(event) => updateMessageTemplate('negotiation_action', event.target.value)}
@@ -402,7 +408,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
       <div className="flex flex-wrap items-center justify-end gap-3">
         {onTest ? (
           <Button type="button" variant="outline" onClick={onTest}>
-            测试规则
+            运行测试用例
           </Button>
         ) : null}
         <Button type="submit" disabled={saving}>

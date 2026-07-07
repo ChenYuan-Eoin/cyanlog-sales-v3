@@ -187,10 +187,6 @@ function isDocxDocument(meta?: ComparisonDocumentMeta | null) {
   )
 }
 
-function officeViewerUrl(fileUrl: string) {
-  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
-}
-
 function readApiError(payload: unknown, fallback: string) {
   if (!payload || typeof payload !== 'object') return fallback
   const data = payload as { error?: unknown; message?: unknown }
@@ -772,23 +768,23 @@ export default function ContractComparePage() {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* 差异导航面板 */}
-      <aside className="w-80 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 2xl:w-72">
         {/* Header */}
         <div className="p-4 border-b border-slate-100">
-          <div className="mb-2 flex flex-wrap gap-2">
+            <div className="mb-2 flex flex-wrap gap-1.5">
             <Link href={buildContractsCenterHref()}>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
                 <ArrowLeftIcon className="h-4 w-4 mr-1" />
                 返回合同中心
               </Button>
             </Link>
             <Link href={buildContractWorkbenchHref(contractId, { panel: 'review', from: 'compare' })}>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
                 返回审核工作台
               </Button>
             </Link>
             <Link href={buildContractCompareHref(contractId, { from: 'compare' })}>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
                 返回文件选择
               </Button>
             </Link>
@@ -1003,7 +999,7 @@ export default function ContractComparePage() {
         </header>
 
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
-          下方优先展示上传文件的原件预览；PDF 直接内嵌，DOCX 使用 Office 预览或打开源文件。文本差异只作为证据定位，不再冒充原文页面。
+          PDF 直接内嵌；私有 DOCX 不再交给 Office 外链预览，避免 File not found。DOCX 以打开源文件 + 文本证据定位复核，后续接文件坐标渲染层。
         </div>
 
         {/* 差异高亮说明 */}
@@ -1036,7 +1032,7 @@ export default function ContractComparePage() {
         />
 
         {/* 对比区 */}
-	      <div className="relative flex-1 flex overflow-hidden bg-slate-100 p-4 gap-4">
+	      <div className="relative flex-1 flex overflow-hidden bg-slate-100 p-3 gap-3">
           {viewMode === 'merge' ? (
             <MergedDiffView
               diffs={visibleDiffs}
@@ -1049,15 +1045,15 @@ export default function ContractComparePage() {
           <div
             ref={leftPaneRef}
             onScroll={() => handleScroll('left')}
-            className="flex-1 bg-white rounded-xl shadow-sm overflow-y-auto custom-scrollbar relative"
+            className="flex-1 bg-white rounded-lg shadow-sm overflow-y-auto custom-scrollbar relative"
           >
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
+            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-3 py-2 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 原件预览（基准）
               </span>
               <FileTextIcon className="h-3 w-3 text-slate-300" />
             </div>
-            <div className="p-4">
+            <div className="p-3">
               <DocumentSourcePreview meta={documentPair?.baseline} fallback="当前合同基准文件" />
               <DocumentDiffEvidence side="baseline" diff={selectedDiff} />
             </div>
@@ -1067,15 +1063,15 @@ export default function ContractComparePage() {
           <div
             ref={rightPaneRef}
             onScroll={() => handleScroll('right')}
-            className="flex-1 bg-white rounded-xl shadow-sm overflow-y-auto custom-scrollbar relative"
+            className="flex-1 bg-white rounded-lg shadow-sm overflow-y-auto custom-scrollbar relative"
           >
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
+            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-3 py-2 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
                 原件预览（回传）
               </span>
               <Edit3Icon className="h-3 w-3 text-indigo-300" />
             </div>
-            <div className="p-4">
+            <div className="p-3">
               <DocumentSourcePreview meta={documentPair?.compare} fallback="客户回传文件" />
               <DocumentDiffEvidence side="compare" diff={selectedDiff} />
             </div>
@@ -1092,7 +1088,7 @@ export default function ContractComparePage() {
         </div>
       </main>
 
-      <aside className="hidden w-80 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex">
+      <aside className="hidden w-72 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex 2xl:w-80">
         <div className="border-b border-slate-100 p-4">
           <div className="text-xs font-medium text-slate-500">复核闭环</div>
           <h2 className="mt-1 text-base font-semibold text-slate-950">AI 差异披露与合规建议</h2>
@@ -1296,15 +1292,11 @@ function DocumentSourcePreview({
   fallback: string
 }) {
   const canPreviewPdf = Boolean(meta?.file_url && isPdfDocument(meta))
-  const canPreviewDocx = Boolean(meta?.file_url && isDocxDocument(meta))
-  const previewUrl = canPreviewPdf
-    ? meta?.file_url || ''
-    : canPreviewDocx
-      ? officeViewerUrl(meta?.file_url || '')
-      : ''
+  const isDocx = isDocxDocument(meta)
+  const previewUrl = canPreviewPdf ? meta?.file_url || '' : ''
 
   return (
-    <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-medium text-slate-500">{sourceLabel(meta)}</div>
@@ -1330,8 +1322,20 @@ function DocumentSourcePreview({
         <iframe
           title={`${meta?.label || fallback} 预览`}
           src={previewUrl}
-          className="mt-3 h-[640px] w-full rounded-md border border-slate-200 bg-white"
+          className="mt-3 h-[620px] w-full rounded-md border border-slate-200 bg-white"
         />
+      ) : isDocx ? (
+        <div className="mt-3 rounded-md border border-blue-100 bg-white p-4">
+          <div className="flex items-start gap-3">
+            <FileTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">DOCX 原文件已绑定，未使用外部预览器</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                当前文件通常是私有存储地址，交给 Office 在线预览会出现 File not found。请用“打开原件”查看源文件；下方文本证据只辅助定位差异，不替代 1:1 渲染。
+              </p>
+            </div>
+          </div>
+        </div>
       ) : (
         <p className="mt-3 rounded-md bg-white px-3 py-2 text-xs leading-5 text-slate-500">
           当前文件没有可用的浏览器原件预览地址。请打开源文件复核；系统不会用文本片段冒充原文页面。

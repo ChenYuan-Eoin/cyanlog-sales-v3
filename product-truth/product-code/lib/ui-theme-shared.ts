@@ -166,7 +166,14 @@ export function resolveBrandImageUrl(
 }
 
 export function resolveFaviconUrl(theme: Required<UIThemeConfigValue>): string {
-  return theme.brandAssets.favicon || theme.faviconUrl || ''
+  return theme.brandAssets.favicon
+    || theme.faviconUrl
+    || theme.brandAssets.symbol.dark
+    || theme.brandAssets.symbol.light
+    || theme.brandAssets.fullLogo.dark
+    || theme.brandAssets.fullLogo.light
+    || theme.logoUrl
+    || DEFAULT_THEME.brandAssets.favicon
 }
 
 function pickText(value: unknown, fallback: string): string {

@@ -35,4 +35,25 @@ describe('ui-theme-shared helpers', () => {
     expect(resolveBrandImageUrl(theme, 'symbol', 'dark')).toBe('https://cdn.example.com/full-dark.svg')
     expect(resolveBrandImageUrl(theme, 'symbol', 'light')).toBe('https://cdn.example.com/full-light.svg')
   })
+
+  it('falls back from missing favicon to the runtime brand symbol', () => {
+    const theme = sanitizeThemeValue({
+      ...DEFAULT_THEME,
+      faviconUrl: '',
+      logoUrl: '',
+      brandAssets: {
+        fullLogo: {
+          light: 'https://cdn.example.com/full-light.svg',
+          dark: 'https://cdn.example.com/full-dark.svg',
+        },
+        symbol: {
+          light: 'https://cdn.example.com/symbol-light.svg',
+          dark: 'https://cdn.example.com/symbol-dark.svg',
+        },
+        favicon: '',
+      },
+    })
+
+    expect(resolveFaviconUrl(theme)).toBe('https://cdn.example.com/symbol-dark.svg')
+  })
 })
