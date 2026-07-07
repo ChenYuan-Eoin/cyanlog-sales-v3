@@ -21,6 +21,10 @@ export interface SourceDocumentPreviewProps {
 }
 
 type EvidenceFocusState = 'idle' | 'found' | 'missing'
+type EvidenceFocusResult = {
+  state: EvidenceFocusState
+  pageNumber: number | null
+}
 
 function isPdf(file: SourceDocumentPreviewFile | null | undefined) {
   return Boolean(file?.mimeType?.includes('pdf') || (file?.label || '').toLowerCase().endsWith('.pdf'))
@@ -49,11 +53,30 @@ function clearEvidenceFocus(container: HTMLElement) {
   })
 }
 
-function focusEvidenceText(container: HTMLElement | null, evidenceText?: string): EvidenceFocusState {
-  if (!container) return 'idle'
+function renderedPageElements(container: HTMLElement) {
+  const directPages = Array.from(container.querySelectorAll<HTMLElement>('.docx-wrapper > section, section.docx'))
+  if (directPages.length > 0) return directPages
+  return Array.from(container.querySelectorAll<HTMLElement>('section'))
+}
+
+function renderedPageNumberFor(container: HTMLElement, host: HTMLElement) {
+  const pages = renderedPageElements(container)
+  const index = pages.findIndex((page) => page.contains(host))
+  return index >= 0 ? index + 1 : null
+}
+
+function hasVisibleDocxRender(container: HTMLElement) {
+  const pageCount = renderedPageElements(container).length
+  const textLength = (container.textContent || '').replace(/\s+/g, '').length
+  const elementCount = container.querySelectorAll('*').length
+  return pageCount > 0 || textLength > 0 || elementCount > 3
+}
+
+function focusEvidenceText(container: HTMLElement | null, evidenceText?: string): EvidenceFocusResult {
+  if (!container) return { state: 'idle', pageNumber: null }
   clearEvidenceFocus(container)
   const needle = normalizeNeedle(evidenceText)
-  if (!needle) return 'idle'
+  if (!needle) return { state: 'idle', pageNumber: null }
 
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
   let node = walker.nextNode()
@@ -61,19 +84,20 @@ function focusEvidenceText(container: HTMLElement | null, evidenceText?: string)
     const haystack = node.textContent?.replace(/\s+/g, '') || ''
     if (haystack.includes(needle)) {
       const host = node.parentElement
-      if (!host) return 'missing'
+      if (!host) return { state: 'missing', pageNumber: null }
+      const pageNumber = renderedPageNumberFor(container, host)
       host.dataset.onesEvidenceFocus = 'true'
       host.style.outline = '2px solid rgba(79, 70, 229, 0.75)'
       host.style.background = 'rgba(254, 249, 195, 0.82)'
       host.style.borderRadius = '3px'
       host.style.scrollMargin = '96px'
       host.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
-      return 'found'
+      return { state: 'found', pageNumber }
     }
     node = walker.nextNode()
   }
 
-  return 'missing'
+  return { state: 'missing', pageNumber: null }
 }
 
 export function SourceDocumentPreview({
@@ -88,11 +112,19 @@ export function SourceDocumentPreview({
   const [docxState, setDocxState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
   const [docxError, setDocxError] = useState('')
   const [evidenceFocusState, setEvidenceFocusState] = useState<EvidenceFocusState>('idle')
+  const [evidencePageNumber, setEvidencePageNumber] = useState<number | null>(null)
+  const [renderedPageCount, setRenderedPageCount] = useState<number | null>(null)
   const canPreviewPdf = Boolean(file?.fileUrl && isPdf(file))
   const canPreviewDocx = Boolean(file?.fileUrl && isDocx(file))
   const locator = inferDocumentLocator(selectedText)
   const evidenceNeedle = useMemo(() => normalizeNeedle(selectedText), [selectedText])
-  const renderModeLabel = canPreviewPdf ? 'PDF 原件' : canPreviewDocx ? 'DOCX 页级渲染' : '文本定位降级'
+  const renderModeLabel = canPreviewPdf
+    ? 'PDF 原件'
+    : canPreviewDocx && docxState === 'failed'
+      ? 'DOCX 渲染降级'
+      : canPreviewDocx
+        ? 'DOCX 页级渲染'
+        : '文本定位降级'
   const renderStatusLabel = canPreviewPdf
     ? '浏览器内嵌'
     : canPreviewDocx
@@ -123,6 +155,9 @@ export function SourceDocumentPreview({
 
     if (!canPreviewDocx || !file?.fileUrl) {
       setDocxState('idle')
+      setEvidenceFocusState('idle')
+      setEvidencePageNumber(null)
+      setRenderedPageCount(null)
       return
     }
     const docxFileUrl = file.fileUrl
@@ -154,12 +189,21 @@ export function SourceDocumentPreview({
           useBase64URL: true,
         })
         if (!cancelled) {
+          if (!containerRef.current || !hasVisibleDocxRender(containerRef.current)) {
+            throw new Error('DOCX 预览未生成可见页面；请打开原件复核，浏览器端不冒充 1:1 预览。')
+          }
+          const pageCount = renderedPageElements(containerRef.current).length
+          setRenderedPageCount(pageCount > 0 ? pageCount : null)
           setDocxState('ready')
-          setEvidenceFocusState(focusEvidenceText(containerRef.current, selectedTextRef.current))
+          const focusResult = focusEvidenceText(containerRef.current, selectedTextRef.current)
+          setEvidenceFocusState(focusResult.state)
+          setEvidencePageNumber(focusResult.pageNumber)
         }
       } catch (error) {
         if (cancelled) return
         setDocxState('failed')
+        setRenderedPageCount(null)
+        setEvidencePageNumber(null)
         setDocxError(error instanceof Error ? error.message : 'DOCX 渲染失败')
       }
     }
@@ -173,9 +217,12 @@ export function SourceDocumentPreview({
   useEffect(() => {
     if (!canPreviewDocx || docxState !== 'ready') {
       if (!evidenceNeedle) setEvidenceFocusState('idle')
+      if (!evidenceNeedle) setEvidencePageNumber(null)
       return
     }
-    setEvidenceFocusState(focusEvidenceText(containerRef.current, selectedText))
+    const focusResult = focusEvidenceText(containerRef.current, selectedText)
+    setEvidenceFocusState(focusResult.state)
+    setEvidencePageNumber(focusResult.pageNumber)
   }, [canPreviewDocx, docxState, evidenceNeedle, selectedText])
 
   return (
@@ -191,6 +238,12 @@ export function SourceDocumentPreview({
             <Badge variant={renderStatusVariant}>
               {renderStatusLabel}
             </Badge>
+            {canPreviewDocx && renderedPageCount ? (
+              <Badge variant="outline">浏览器页数 {renderedPageCount}</Badge>
+            ) : null}
+            {evidencePageNumber ? (
+              <Badge variant="default">定位第 {evidencePageNumber} 页</Badge>
+            ) : null}
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">
             {file?.label || fallbackLabel}
