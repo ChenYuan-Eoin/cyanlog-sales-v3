@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import type { Contract } from '@/types'
 import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
-import { loadContractsListForCache } from '@/lib/core-page-warmup'
+import { CONTRACTS_LIST_CACHE_PREFIX, loadContractsListForCache } from '@/lib/core-page-warmup'
 import { deriveReviewWorkflowState } from '@/lib/contracts/review-state-machine'
 import {
   buildContractCompareHref,
@@ -59,7 +59,7 @@ type QuickAction = {
 type ResolvedQuickAction = QuickAction
 
 type ContractsCachePayload = {
-  contracts: Contract[]
+  contracts: ListContract[]
   drafts: Contract[]
   meta: {
     totalPages: number
@@ -68,10 +68,35 @@ type ContractsCachePayload = {
   }
 }
 
+type ContractVersionSummary = {
+  id?: string | null
+  version_number?: number | null
+  source?: string | null
+  created_at?: string | null
+}
+
+type ContractComparisonSummary = {
+  id: string
+  contract_id?: string | null
+  baseline_type?: string | null
+  baseline_doc_id?: string | null
+  compare_doc_id?: string | null
+  status?: string | null
+  ai_summary?: string | null
+  created_at?: string | null
+  completed_at?: string | null
+  comparison_diffs?: Array<{ id?: string | null; risk_level?: string | null }>
+}
+
+type ListContract = Contract & {
+  contract_versions?: ContractVersionSummary[]
+  contract_comparisons?: ContractComparisonSummary[]
+}
+
 type TaskItemView = {
   id: string
   name: string
-  type: 'draft' | 'contract'
+  type: 'draft' | 'contract' | 'compare'
   moduleLabel: '合同审核' | '合同起草' | '文档对比'
   versionLabel: string
   status: string
@@ -86,8 +111,8 @@ type TaskItemView = {
 const LIST_CACHE_TTL_MS = 5 * 60 * 1000
 const LIST_BACKGROUND_REFRESH_MS = 60 * 1000
 
-function mergeContractsById(existing: Contract[], incoming: Contract[]) {
-  const merged = new Map<string, Contract>()
+function mergeContractsById(existing: ListContract[], incoming: ListContract[]) {
+  const merged = new Map<string, ListContract>()
   for (const contract of existing) {
     merged.set(contract.id, contract)
   }
@@ -120,16 +145,63 @@ function contractActionName(contract?: Contract) {
   return name.trim() || '未命名合同'
 }
 
-function contractVersionLabel(contract: Contract) {
-  const versions = (contract as Contract & {
-    contract_versions?: Array<{ version_number?: number | null; source?: string | null; created_at?: string | null }>
-  }).contract_versions || []
+function sortedContractVersions(contract: ListContract) {
+  return [...(contract.contract_versions || [])].sort((left, right) => {
+    const leftNumber = Number(left.version_number)
+    const rightNumber = Number(right.version_number)
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber !== rightNumber) {
+      return rightNumber - leftNumber
+    }
+    return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
+  })
+}
+
+function contractVersionLabel(contract: ListContract) {
+  const versions = sortedContractVersions(contract)
   const latestVersion = versions.reduce<number | null>((latest, version) => {
     const value = Number(version.version_number)
     if (!Number.isFinite(value)) return latest
     return latest === null ? value : Math.max(latest, value)
   }, null)
   return latestVersion ? `v${latestVersion}` : 'v1'
+}
+
+function versionLabelForDocument(contract: ListContract, docId?: string | null, fallback = '当前') {
+  if (!docId) return `${fallback} ${contractVersionLabel(contract)}`
+  const version = sortedContractVersions(contract).find((item) => item.id === docId)
+  if (version?.version_number) return `v${version.version_number}`
+  if (docId === contract.id) return contractVersionLabel(contract)
+  return fallback
+}
+
+function comparisonVersionLabel(contract: ListContract, comparison: ContractComparisonSummary) {
+  const baseline = versionLabelForDocument(contract, comparison.baseline_doc_id, '基准')
+  const compare = versionLabelForDocument(contract, comparison.compare_doc_id, '新稿')
+  return `${baseline} → ${compare}`
+}
+
+function comparisonStatus(comparison: ContractComparisonSummary) {
+  const status = (comparison.status || '').toLowerCase()
+  if (status === 'completed') return { label: '对比完成', color: 'bg-emerald-100 text-emerald-700' }
+  if (status === 'processing') return { label: '对比中', color: 'bg-indigo-100 text-indigo-700' }
+  if (status === 'failed') return { label: '对比失败', color: 'bg-red-100 text-red-700' }
+  return { label: '待对比', color: 'bg-amber-100 text-amber-700' }
+}
+
+function comparisonNextAction(comparison: ContractComparisonSummary) {
+  const riskCount = (comparison.comparison_diffs || []).filter((diff) => diff.risk_level === 'red').length
+  if ((comparison.status || '').toLowerCase() === 'completed') {
+    return {
+      label: riskCount > 0 ? '查看红线差异' : '查看差异结果',
+      description: riskCount > 0
+        ? `发现 ${riskCount} 处红线差异，进入文档对比工作台复核旧稿与新稿。`
+        : '对比已完成，进入文档对比工作台查看差异列表、原文定位和处理动作。',
+    }
+  }
+  return {
+    label: '继续文档对比',
+    description: '对比任务尚未完成，进入文档对比工作台确认文件和执行状态。',
+  }
 }
 
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
@@ -182,7 +254,7 @@ const quickActions: QuickAction[] = [
 ]
 
 export default function ContractCenterPage() {
-  const [contracts, setContracts] = useState<Contract[]>([])
+  const [contracts, setContracts] = useState<ListContract[]>([])
   const [drafts, setDrafts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -266,7 +338,7 @@ export default function ContractCenterPage() {
         return
       }
 
-      const cacheKey = scopedCacheKey(token, `contracts:list:${pageNum}:${pageSize}`)
+      const cacheKey = scopedCacheKey(token, `${CONTRACTS_LIST_CACHE_PREFIX}:${pageNum}:${pageSize}`)
       const cachedEntry = readBrowserCacheEntry<ContractsCachePayload>(cacheKey)
       const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
       const cached = cacheAgeMs <= LIST_CACHE_TTL_MS ? cachedEntry?.value : null
@@ -293,7 +365,7 @@ export default function ContractCenterPage() {
         }
 
         applyContractsPayload({
-          contracts: payload.contracts as Contract[],
+          contracts: payload.contracts as ListContract[],
           drafts: payload.drafts as Contract[],
           meta: payload.meta,
         }, pageNum, append)
@@ -415,8 +487,8 @@ export default function ContractCenterPage() {
     })
   }, [contracts])
 
-  // 过滤后的任务列表
-  const filteredTasks = useMemo(() => {
+  // 合同中心任务对象：审核、对比、起草是独立任务，但共享合同版本流。
+  const allTasks = useMemo(() => {
     const draftTasks = drafts.map((d) => ({
       id: d.id,
       name: d.title || '未命名草稿',
@@ -464,16 +536,50 @@ export default function ContractCenterPage() {
       } satisfies TaskItemView
     })
 
-    const all = [...draftTasks, ...contractTasks].sort(
+    const compareTasks = contracts.flatMap((contract) => {
+      const comparisons = [...(contract.contract_comparisons || [])].sort(
+        (left, right) => new Date(right.completed_at || right.created_at || 0).getTime()
+          - new Date(left.completed_at || left.created_at || 0).getTime()
+      )
+      const latestComparison = comparisons[0]
+      if (!latestComparison?.id) return []
+      const status = comparisonStatus(latestComparison)
+      const nextAction = comparisonNextAction(latestComparison)
+      return [{
+        id: `${contract.id}:compare:${latestComparison.id}`,
+        name: contract.filename || contract.title || '未命名文档对比',
+        type: 'compare' as const,
+        moduleLabel: '文档对比' as const,
+        versionLabel: comparisonVersionLabel(contract, latestComparison),
+        status: status.label,
+        statusColor: status.color,
+        updatedAt: latestComparison.completed_at || latestComparison.created_at || contract.updated_at,
+        href: buildContractCompareHref(contract.id, { from: 'list', comparisonId: latestComparison.id }),
+        meta: '文档对比',
+        nextAction: nextAction.label,
+        nextActionDescription: nextAction.description,
+      } satisfies TaskItemView]
+    })
+
+    const all = [...draftTasks, ...compareTasks, ...contractTasks].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     )
 
-    if (taskFilter === 'all') return all
-    if (taskFilter === 'draft') return all.filter((t) => t.type === 'draft')
-    if (taskFilter === 'pending') return all.filter((t) => t.status === '待审核' || t.status === '解析中' || t.status === '审核中')
-    if (taskFilter === 'review') return all.filter((t) => t.status === '审核完成')
-    return all.filter((t) => t.status === '审核失败')
-  }, [contracts, drafts, taskFilter])
+    return all
+  }, [contracts, drafts])
+
+  // 过滤后的任务列表
+  const filteredTasks = useMemo(() => {
+    if (taskFilter === 'all') return allTasks
+    if (taskFilter === 'draft') return allTasks.filter((t) => t.type === 'draft')
+    if (taskFilter === 'pending') {
+      return allTasks.filter((t) => ['待审核', '解析中', '审核中', '待对比', '对比中'].includes(t.status))
+    }
+    if (taskFilter === 'review') {
+      return allTasks.filter((t) => ['审核完成', '对比完成'].includes(t.status))
+    }
+    return allTasks.filter((t) => ['审核失败', '对比失败'].includes(t.status))
+  }, [allTasks, taskFilter])
 
   const isMobile = viewMode === 'mobile'
   const listUnavailable = !loading && Boolean(loadError) && filteredTasks.length === 0
@@ -575,7 +681,7 @@ export default function ContractCenterPage() {
                 <TabsList className={`${isMobile ? 'w-full' : ''} bg-white border`}>
                   <TabsTrigger value="all" className="text-xs md:text-sm">
                     全部
-                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{stats.total}</span>}
+                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.length}</span>}
                   </TabsTrigger>
                   <TabsTrigger value="draft" className="text-xs md:text-sm">起草中</TabsTrigger>
                   <TabsTrigger value="pending" className="text-xs md:text-sm">待审核</TabsTrigger>
@@ -823,7 +929,7 @@ function TaskItem({
   task: {
     id: string
     name: string
-    type: 'draft' | 'contract'
+    type: 'draft' | 'contract' | 'compare'
     moduleLabel: '合同审核' | '合同起草' | '文档对比'
     versionLabel: string
     status: string
@@ -836,6 +942,25 @@ function TaskItem({
   }
   isMobile: boolean
 }) {
+  const moduleStyle = {
+    '合同审核': {
+      icon: ShieldCheckIcon,
+      badge: 'border-rose-200 bg-rose-50 text-rose-700',
+      iconBox: 'bg-rose-50 text-rose-600',
+    },
+    '文档对比': {
+      icon: GitCompareIcon,
+      badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      iconBox: 'bg-emerald-50 text-emerald-600',
+    },
+    '合同起草': {
+      icon: PenToolIcon,
+      badge: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+      iconBox: 'bg-indigo-50 text-indigo-600',
+    },
+  }[task.moduleLabel]
+  const ModuleIcon = moduleStyle.icon
+
   return (
     <Link
       href={task.href}
@@ -847,29 +972,18 @@ function TaskItem({
         <CardContent className={`${isMobile ? 'p-3' : 'p-4'}`}>
           <div className="flex items-center gap-3">
             {/* 图标 */}
-            <div className={`${isMobile ? 'w-9 h-9' : 'w-10 h-10'} rounded-lg bg-slate-100 flex items-center justify-center shrink-0`}>
-              <FileTextIcon className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-slate-400`} />
+            <div className={`${isMobile ? 'h-9 w-9' : 'h-10 w-10'} ${moduleStyle.iconBox} flex shrink-0 items-center justify-center rounded-lg`}>
+              <ModuleIcon className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
             </div>
 
             {/* 内容 */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className={`font-medium text-slate-900 truncate ${isMobile ? 'text-sm' : 'text-sm'}`}>
-                  {task.name}
-                </p>
-                <span className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className={`shrink-0 rounded border px-2 py-0.5 text-[11px] font-semibold ${moduleStyle.badge}`}>
                   {task.moduleLabel}
                 </span>
-                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-500">
+                <span className="shrink-0 rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                   {task.versionLabel}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${task.statusColor}`}>
-                  {task.status}
-                </span>
-                <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
-                  下一步：{task.nextAction}
                 </span>
                 <span className="text-[10px] text-slate-400">
                   {new Date(task.updatedAt).toLocaleDateString('zh-CN', {
@@ -878,6 +992,19 @@ function TaskItem({
                     hour: isMobile ? undefined : '2-digit',
                     minute: isMobile ? undefined : '2-digit',
                   })}
+                </span>
+              </div>
+              <div className="mt-1 flex min-w-0 items-center gap-2">
+                <p className={`truncate font-semibold text-slate-900 ${isMobile ? 'text-sm' : 'text-base'}`}>
+                  {task.name}
+                </p>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${task.statusColor}`}>
+                  {task.status}
+                </span>
+                <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                  下一步：{task.nextAction}
                 </span>
               </div>
               {!isMobile && (

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('contracts')
       .select(
-        'id, filename, status, contract_no, quote_id, party_b_name, created_by, created_at, updated_at, storage_path, parsed_text, contract_versions(version_number, source, created_at)',
+        'id, filename, status, contract_no, quote_id, party_b_name, created_by, created_at, updated_at, storage_path, parsed_text, contract_versions(id, version_number, source, created_at)',
         includeTotal ? { count: 'exact' } : undefined
       )
       .eq('org_id', orgId)
@@ -43,6 +43,41 @@ export async function GET(req: NextRequest) {
 
     const rows = contracts || []
     const visibleRows = includeTotal ? rows : rows.slice(0, safePageSize)
+
+    const comparisonByContract = new Map<string, unknown[]>()
+    const visibleContractIds = visibleRows.map((contract) => contract.id).filter(Boolean)
+    if (visibleContractIds.length > 0) {
+      const { data: comparisons } = await supabaseAdmin
+        .from('contract_comparisons')
+        .select(`
+          id,
+          contract_id,
+          baseline_type,
+          baseline_doc_id,
+          compare_doc_id,
+          status,
+          ai_summary,
+          created_at,
+          completed_at,
+          comparison_diffs(id, risk_level)
+        `)
+        .in('contract_id', visibleContractIds)
+        .order('created_at', { ascending: false })
+        .limit(visibleContractIds.length * 3)
+
+      for (const comparison of comparisons || []) {
+        const contractId = typeof comparison.contract_id === 'string' ? comparison.contract_id : ''
+        if (!contractId) continue
+        const bucket = comparisonByContract.get(contractId) || []
+        bucket.push(comparison)
+        comparisonByContract.set(contractId, bucket)
+      }
+    }
+
+    const visibleRowsWithComparisons = visibleRows.map((contract) => ({
+      ...contract,
+      contract_comparisons: comparisonByContract.get(contract.id) || [],
+    }))
     const hasNext = includeTotal
       ? safePage < Math.ceil((count || 0) / safePageSize)
       : rows.length > safePageSize
@@ -54,7 +89,7 @@ export async function GET(req: NextRequest) {
       : safePage + (hasNext ? 1 : 0)
 
     return successResponse({
-      data: visibleRows,
+      data: visibleRowsWithComparisons,
       meta: {
         page: safePage,
         pageSize: safePageSize,

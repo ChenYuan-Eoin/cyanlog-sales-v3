@@ -46,6 +46,7 @@ export const QUOTE_DETAIL_VISIBLE_CACHE_TTL_MS = CORE_PAGE_VISIBLE_CACHE_TTL_MS
 const CONTRACTS_WARMUP_DELAY_MS = 150
 const WARMUP_DELAY_MS = 250
 const CONTRACTS_PAGE_SIZE = 20
+export const CONTRACTS_LIST_CACHE_PREFIX = 'contracts:list:v2'
 export const AGENDA_UPCOMING_CACHE_KEY = 'agenda:upcoming'
 const CORE_ROUTES = ['/contracts', '/quotes', '/tenders', '/configs', '/schedule'] as const
 const warmups = new Map<string, Promise<void>>()
@@ -128,8 +129,11 @@ export function primeCorePageCaches(token: string | null | undefined, payload: C
   if (typeof window === 'undefined' || !token || !isRecord(payload)) return
 
   const contracts = normalizeContractsCachePayload(payload.contracts)
-  if (contracts) {
-    writeBrowserCache(scopedCacheKey(token, `contracts:list:1:${CONTRACTS_PAGE_SIZE}`), contracts)
+  const contractsHaveListV2Shape = contracts?.contracts.every((contract) => (
+    isRecord(contract) && Array.isArray(contract.contract_comparisons)
+  ))
+  if (contracts && contractsHaveListV2Shape) {
+    writeBrowserCache(scopedCacheKey(token, `${CONTRACTS_LIST_CACHE_PREFIX}:1:${CONTRACTS_PAGE_SIZE}`), contracts)
   }
 
   const products = isRecord(payload.configs) && Array.isArray(payload.configs.products)
@@ -156,7 +160,7 @@ export function primeCorePageCaches(token: string | null | undefined, payload: C
 }
 
 export async function loadContractsListForCache(token: string, pageNum = 1, pageSize = CONTRACTS_PAGE_SIZE) {
-  const cacheKey = scopedCacheKey(token, `contracts:list:${pageNum}:${pageSize}`)
+  const cacheKey = scopedCacheKey(token, `${CONTRACTS_LIST_CACHE_PREFIX}:${pageNum}:${pageSize}`)
   const cached = readFreshCache<ContractsCachePayload>(cacheKey)
   if (cached) return cached
 
