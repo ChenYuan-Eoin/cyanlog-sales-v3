@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { AlertTriangleIcon, ExternalLinkIcon, FileTextIcon, Loader2Icon, MapPinIcon } from 'lucide-react'
 import { inferDocumentLocator } from '@/lib/contracts/document-locator'
@@ -20,6 +20,8 @@ export interface SourceDocumentPreviewProps {
   minHeightClassName?: string
 }
 
+type EvidenceFocusState = 'idle' | 'found' | 'missing'
+
 function isPdf(file: SourceDocumentPreviewFile | null | undefined) {
   return Boolean(file?.mimeType?.includes('pdf') || (file?.label || '').toLowerCase().endsWith('.pdf'))
 }
@@ -31,6 +33,49 @@ function isDocx(file: SourceDocumentPreviewFile | null | undefined) {
   )
 }
 
+function normalizeNeedle(text?: string) {
+  const normalized = (text || '').replace(/\s+/g, '')
+  if (normalized.length <= 0) return ''
+  return normalized.slice(0, 48)
+}
+
+function clearEvidenceFocus(container: HTMLElement) {
+  container.querySelectorAll<HTMLElement>('[data-ones-evidence-focus="true"]').forEach((element) => {
+    element.removeAttribute('data-ones-evidence-focus')
+    element.style.outline = ''
+    element.style.background = ''
+    element.style.borderRadius = ''
+    element.style.scrollMargin = ''
+  })
+}
+
+function focusEvidenceText(container: HTMLElement | null, evidenceText?: string): EvidenceFocusState {
+  if (!container) return 'idle'
+  clearEvidenceFocus(container)
+  const needle = normalizeNeedle(evidenceText)
+  if (!needle) return 'idle'
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let node = walker.nextNode()
+  while (node) {
+    const haystack = node.textContent?.replace(/\s+/g, '') || ''
+    if (haystack.includes(needle)) {
+      const host = node.parentElement
+      if (!host) return 'missing'
+      host.dataset.onesEvidenceFocus = 'true'
+      host.style.outline = '2px solid rgba(79, 70, 229, 0.75)'
+      host.style.background = 'rgba(254, 249, 195, 0.82)'
+      host.style.borderRadius = '3px'
+      host.style.scrollMargin = '96px'
+      host.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
+      return 'found'
+    }
+    node = walker.nextNode()
+  }
+
+  return 'missing'
+}
+
 export function SourceDocumentPreview({
   file,
   title = '原件预览',
@@ -39,12 +84,19 @@ export function SourceDocumentPreview({
   minHeightClassName = 'min-h-[680px]',
 }: SourceDocumentPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const selectedTextRef = useRef(selectedText)
   const [docxState, setDocxState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
   const [docxError, setDocxError] = useState('')
+  const [evidenceFocusState, setEvidenceFocusState] = useState<EvidenceFocusState>('idle')
   const canPreviewPdf = Boolean(file?.fileUrl && isPdf(file))
   const canPreviewDocx = Boolean(file?.fileUrl && isDocx(file))
   const locator = inferDocumentLocator(selectedText)
+  const evidenceNeedle = useMemo(() => normalizeNeedle(selectedText), [selectedText])
   const renderModeLabel = canPreviewPdf ? 'PDF 原件' : canPreviewDocx ? 'DOCX 页级渲染' : '文本定位降级'
+
+  useEffect(() => {
+    selectedTextRef.current = selectedText
+  }, [selectedText])
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +137,10 @@ export function SourceDocumentPreview({
           ignoreFonts: false,
           useBase64URL: true,
         })
-        if (!cancelled) setDocxState('ready')
+        if (!cancelled) {
+          setDocxState('ready')
+          setEvidenceFocusState(focusEvidenceText(containerRef.current, selectedTextRef.current))
+        }
       } catch (error) {
         if (cancelled) return
         setDocxState('failed')
@@ -98,6 +153,14 @@ export function SourceDocumentPreview({
       cancelled = true
     }
   }, [canPreviewDocx, file?.fileUrl])
+
+  useEffect(() => {
+    if (!canPreviewDocx || docxState !== 'ready') {
+      if (!evidenceNeedle) setEvidenceFocusState('idle')
+      return
+    }
+    setEvidenceFocusState(focusEvidenceText(containerRef.current, selectedText))
+  }, [canPreviewDocx, docxState, evidenceNeedle, selectedText])
 
   return (
     <div className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${minHeightClassName}`}>
@@ -143,6 +206,11 @@ export function SourceDocumentPreview({
             <span className="min-w-0 flex-1 truncate text-slate-500">
               证据：{locator.evidencePreview}
             </span>
+            {canPreviewDocx && evidenceNeedle ? (
+              <Badge variant={evidenceFocusState === 'found' ? 'default' : 'outline'} className="shrink-0">
+                {evidenceFocusState === 'found' ? '已定位原文' : evidenceFocusState === 'missing' ? '需人工定位' : '等待定位'}
+              </Badge>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -99,6 +99,8 @@ type TaskItemView = {
   type: 'draft' | 'contract' | 'compare'
   moduleLabel: '合同审核' | '合同起草' | '文档对比'
   versionLabel: string
+  versionDescription: string
+  objectLabel: string
   status: string
   statusColor: string
   updatedAt: string
@@ -495,6 +497,8 @@ export default function ContractCenterPage() {
       type: 'draft' as const,
       moduleLabel: '合同起草' as const,
       versionLabel: '草案 v1',
+      versionDescription: '可编辑草稿',
+      objectLabel: '需求草案',
       status: '起草中' as const,
       statusColor: 'bg-slate-100 text-slate-600' as const,
       updatedAt: d.updated_at,
@@ -524,6 +528,8 @@ export default function ContractCenterPage() {
         type: 'contract' as const,
         moduleLabel: '合同审核' as const,
         versionLabel: contractVersionLabel(c),
+        versionDescription: '审核源文件版本',
+        objectLabel: '合同源文件',
         status: status.label,
         statusColor: status.color as string,
         updatedAt: c.updated_at,
@@ -551,6 +557,8 @@ export default function ContractCenterPage() {
         type: 'compare' as const,
         moduleLabel: '文档对比' as const,
         versionLabel: comparisonVersionLabel(contract, latestComparison),
+        versionDescription: '旧文件 → 新文件',
+        objectLabel: '版本差异任务',
         status: status.label,
         statusColor: status.color,
         updatedAt: latestComparison.completed_at || latestComparison.created_at || contract.updated_at,
@@ -945,6 +953,8 @@ function TaskItem({
     type: 'draft' | 'contract' | 'compare'
     moduleLabel: '合同审核' | '合同起草' | '文档对比'
     versionLabel: string
+    versionDescription: string
+    objectLabel: string
     status: string
     statusColor: string
     updatedAt: string
@@ -991,12 +1001,15 @@ function TaskItem({
 
             {/* 内容 */}
             <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`shrink-0 rounded border px-2 py-0.5 text-[11px] font-semibold ${moduleStyle.badge}`}>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.badge}`}>
                   {task.moduleLabel}
                 </span>
-                <span className="shrink-0 rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                <span className="shrink-0 rounded-md border border-slate-900 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
                   {task.versionLabel}
+                </span>
+                <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
+                  {task.objectLabel}
                 </span>
                 <span className="text-[10px] text-slate-400">
                   {new Date(task.updatedAt).toLocaleDateString('zh-CN', {
@@ -1007,17 +1020,20 @@ function TaskItem({
                   })}
                 </span>
               </div>
-              <div className="mt-1 flex min-w-0 items-center gap-2">
+              <div className="mt-2 flex min-w-0 items-center gap-2">
                 <p className={`truncate font-semibold text-slate-900 ${isMobile ? 'text-sm' : 'text-base'}`}>
                   {task.name}
                 </p>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${task.statusColor}`}>
                   {task.status}
                 </span>
                 <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
                   下一步：{task.nextAction}
+                </span>
+                <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                  {task.versionDescription}
                 </span>
               </div>
               {!isMobile && (

@@ -19,7 +19,6 @@ import {
   GitCompareIcon,
   SparklesIcon,
   CheckCircleIcon,
-  Edit3Icon,
   Loader2Icon,
   FileTextIcon,
   UploadIcon,
@@ -766,7 +765,7 @@ export default function ContractComparePage() {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* 差异导航面板 */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 2xl:w-72">
+      <aside className="w-56 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 2xl:w-64">
         {/* Header */}
         <div className="p-4 border-b border-slate-100">
             <div className="mb-2 flex flex-wrap gap-1.5">
@@ -797,18 +796,18 @@ export default function ContractComparePage() {
         </div>
 
         {/* 差异统计 */}
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex gap-4 text-xs">
+        <div className="px-3 py-3 bg-slate-50 border-b border-slate-100 grid grid-cols-3 gap-2 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 bg-red-200 border border-red-300 rounded-sm" />
-            <span className="text-slate-600">删除 {stats.deleted}</span>
+            <span className="truncate text-slate-600">删 {stats.deleted}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 bg-green-200 border border-green-300 rounded-sm" />
-            <span className="text-slate-600">新增 {stats.added}</span>
+            <span className="truncate text-slate-600">增 {stats.added}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 bg-blue-100 border border-blue-300 rounded-sm" />
-            <span className="text-slate-600">修改 {stats.modified}</span>
+            <span className="truncate text-slate-600">改 {stats.modified}</span>
           </div>
         </div>
 
@@ -1030,7 +1029,7 @@ export default function ContractComparePage() {
         />
 
         {/* 对比区 */}
-	      <div className="relative flex-1 flex overflow-hidden bg-slate-100 p-3 gap-3">
+	      <div className="relative flex-1 flex overflow-hidden bg-slate-100 p-2 gap-2">
           {viewMode === 'merge' ? (
             <MergedDiffView
               diffs={visibleDiffs}
@@ -1043,18 +1042,12 @@ export default function ContractComparePage() {
           <div
             ref={leftPaneRef}
             onScroll={() => handleScroll('left')}
-            className="flex-1 bg-white rounded-lg shadow-sm overflow-y-auto custom-scrollbar relative"
+            className="flex-1 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
           >
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-3 py-2 flex justify-between items-center z-10">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                原件预览（基准）
-              </span>
-              <FileTextIcon className="h-3 w-3 text-slate-300" />
-            </div>
-            <div className="p-3">
+            <div className="p-2">
               <SourceDocumentPreview
                 file={toSourcePreviewFile(documentPair?.baseline, '当前合同基准文件')}
-                title="旧文件原件预览"
+                title={`旧文件原件预览 · ${sourceLabel(documentPair?.baseline)}`}
                 selectedText={selectedDiff?.baseline_text || ''}
                 fallbackLabel="当前合同基准文件"
                 minHeightClassName="min-h-[640px]"
@@ -1067,18 +1060,12 @@ export default function ContractComparePage() {
           <div
             ref={rightPaneRef}
             onScroll={() => handleScroll('right')}
-            className="flex-1 bg-white rounded-lg shadow-sm overflow-y-auto custom-scrollbar relative"
+            className="flex-1 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
           >
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-3 py-2 flex justify-between items-center z-10">
-              <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
-                原件预览（回传）
-              </span>
-              <Edit3Icon className="h-3 w-3 text-indigo-300" />
-            </div>
-            <div className="p-3">
+            <div className="p-2">
               <SourceDocumentPreview
                 file={toSourcePreviewFile(documentPair?.compare, '客户回传文件')}
-                title="新文件原件预览"
+                title={`新文件原件预览 · ${sourceLabel(documentPair?.compare)}`}
                 selectedText={selectedDiff?.compare_text || ''}
                 fallbackLabel="客户回传文件"
                 minHeightClassName="min-h-[640px]"
@@ -1098,7 +1085,7 @@ export default function ContractComparePage() {
         </div>
       </main>
 
-      <aside className="hidden w-72 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex 2xl:w-80">
+      <aside className="hidden w-64 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex 2xl:w-72">
         <div className="border-b border-slate-100 p-4">
           <div className="text-xs font-medium text-slate-500">复核闭环</div>
           <h2 className="mt-1 text-base font-semibold text-slate-950">AI 差异披露与合规建议</h2>
