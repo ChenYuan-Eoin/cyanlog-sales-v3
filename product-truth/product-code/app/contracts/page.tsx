@@ -35,7 +35,7 @@ import {
 import { handleError } from '@/lib/toast'
 import { LoadingState } from '@/components/ui/LoadingState'
 
-type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
+type TaskFilter = 'all' | 'contract' | 'compare' | 'draft' | 'pending' | 'review'
 type ViewMode = 'desktop' | 'mobile'
 
 type QuickAction = {
@@ -571,6 +571,8 @@ export default function ContractCenterPage() {
   // 过滤后的任务列表
   const filteredTasks = useMemo(() => {
     if (taskFilter === 'all') return allTasks
+    if (taskFilter === 'contract') return allTasks.filter((t) => t.type === 'contract')
+    if (taskFilter === 'compare') return allTasks.filter((t) => t.type === 'compare')
     if (taskFilter === 'draft') return allTasks.filter((t) => t.type === 'draft')
     if (taskFilter === 'pending') {
       return allTasks.filter((t) => ['待审核', '解析中', '审核中', '待对比', '对比中'].includes(t.status))
@@ -578,7 +580,7 @@ export default function ContractCenterPage() {
     if (taskFilter === 'review') {
       return allTasks.filter((t) => ['审核完成', '对比完成'].includes(t.status))
     }
-    return allTasks.filter((t) => ['审核失败', '对比失败'].includes(t.status))
+    return allTasks
   }, [allTasks, taskFilter])
 
   const isMobile = viewMode === 'mobile'
@@ -683,7 +685,18 @@ export default function ContractCenterPage() {
                     全部
                     {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.length}</span>}
                   </TabsTrigger>
-                  <TabsTrigger value="draft" className="text-xs md:text-sm">起草中</TabsTrigger>
+                  <TabsTrigger value="contract" className="text-xs md:text-sm">
+                    审核
+                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'contract').length}</span>}
+                  </TabsTrigger>
+                  <TabsTrigger value="compare" className="text-xs md:text-sm">
+                    对比
+                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'compare').length}</span>}
+                  </TabsTrigger>
+                  <TabsTrigger value="draft" className="text-xs md:text-sm">
+                    起草
+                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'draft').length}</span>}
+                  </TabsTrigger>
                   <TabsTrigger value="pending" className="text-xs md:text-sm">待审核</TabsTrigger>
                   <TabsTrigger value="review" className="text-xs md:text-sm">已完成</TabsTrigger>
                 </TabsList>

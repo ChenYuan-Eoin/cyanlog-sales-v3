@@ -267,6 +267,7 @@ export default function ContractDraftPage() {
     const toggles = params.filter((p) => p.param_type === 'toggle')
     return { enums, toggles }
   }, [params])
+  const hasGeneratedContent = Boolean(generatedContent.trim())
 
   if (loading) {
     return (
@@ -528,39 +529,59 @@ export default function ContractDraftPage() {
                 </>
               )}
             </Button>
-            {generatedContent ? (
-              <div className="grid grid-cols-2 gap-2">
-                <Button type="button" variant="outline" onClick={handleExportDocx} disabled={exporting}>
-                  {exporting ? (
-                    <LoaderIcon className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <DownloadIcon className="mr-1.5 h-4 w-4" />
-                  )}
-                  导出 DOCX
-                </Button>
-                <Link href="/contracts/new" prefetch={false}>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" onClick={handleExportDocx} disabled={!hasGeneratedContent || exporting}>
+                {exporting ? (
+                  <LoaderIcon className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <DownloadIcon className="mr-1.5 h-4 w-4" />
+                )}
+                导出 DOCX
+              </Button>
+              {hasGeneratedContent ? (
+                <Link href="/contracts/new?from=draft" prefetch={false}>
                   <Button type="button" variant="outline" className="w-full">
                     <UploadIcon className="mr-1.5 h-4 w-4" />
                     转入审核
                   </Button>
                 </Link>
-              </div>
-            ) : null}
+              ) : (
+                <Button type="button" variant="outline" disabled>
+                  <UploadIcon className="mr-1.5 h-4 w-4" />
+                  转入审核
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] leading-5 text-slate-500">
+              浏览器内只是 Word 草案近似预览；正式交付以导出的可编辑 DOCX 为准。进入审核时仍以“上传源文件”创建合同版本，不能用页面预览替代源文件。
+            </p>
           </div>
         </aside>
 
         {/* 右侧：实时预览 */}
         <main className="flex-1 bg-slate-100 overflow-auto p-6 xl:p-8">
           <div className="max-w-[800px] mx-auto bg-white min-h-[1100px] p-16 shadow-sm rounded-lg relative">
-            <div className="absolute top-6 right-8 flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                {generatedContent ? 'Generated' : 'Live Preview'}
-              </span>
+            <div className="absolute left-8 right-8 top-6 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${hasGeneratedContent ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {hasGeneratedContent ? 'Word Draft Preview' : 'Live Preview'}
+                </span>
+                <Badge variant="outline" className="text-[10px]">
+                  {hasGeneratedContent ? 'DOCX 可导出' : '等待生成'}
+                </Badge>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={handleExportDocx} disabled={!hasGeneratedContent || exporting}>
+                {exporting ? <LoaderIcon className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <DownloadIcon className="mr-1.5 h-3.5 w-3.5" />}
+                导出可编辑 DOCX
+              </Button>
             </div>
 
-            {generatedContent ? (
+            {hasGeneratedContent ? (
               <div className="space-y-6 text-sm leading-relaxed text-slate-700">
+                <div className="-mx-4 mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                  页面预览用于快速校对条款结构，不承诺像素级 Word 排版；继续编辑和审核流转以导出的 DOCX 文件为事实源。
+                </div>
                 <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{generatedContent}</pre>
               </div>
             ) : (
@@ -573,7 +594,7 @@ export default function ContractDraftPage() {
             selectedTemplate={selectedTemplate}
             selectedQuote={selectedQuote}
             hasRequirement={Boolean(aiAddition.trim() || draft.title.trim())}
-            hasGeneratedContent={Boolean(generatedContent)}
+            hasGeneratedContent={hasGeneratedContent}
           />
         </aside>
       </div>
@@ -615,8 +636,8 @@ function DraftWorkflowPanel({
     },
     {
       label: '进入审核',
-      value: hasGeneratedContent ? '下一步应创建 ContractVersion 并预审' : '生成后进入审核链路',
-      done: false,
+      value: hasGeneratedContent ? '导出 DOCX 后作为源文件上传审核' : '生成后导出 DOCX',
+      done: hasGeneratedContent,
     },
   ]
 
@@ -644,7 +665,7 @@ function DraftWorkflowPanel({
           </div>
         ))}
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-          当前仍是起草 MVP：已表达闭环路径，但“生成后自动建版本并预审”需要后续接入合同版本流。
+          起草与审核的边界：本页负责生成可编辑 DOCX 草案；合同审核只接受源文件上传形成版本，不把页面预览当作审核文件。
         </div>
       </div>
     </div>

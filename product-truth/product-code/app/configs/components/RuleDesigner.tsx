@@ -29,11 +29,11 @@ interface RuleDesignerProps {
 }
 
 const categoryOptions: Array<{ value: ContractRuleCategory; label: string }> = [
-  { value: 'duration', label: '时限触发' },
-  { value: 'amount', label: '金额触发' },
-  { value: 'ratio', label: '比例触发' },
-  { value: 'enum', label: '主体/枚举触发' },
-  { value: 'text', label: '语义触发' },
+  { value: 'duration', label: '时限判定' },
+  { value: 'amount', label: '金额判定' },
+  { value: 'ratio', label: '比例判定' },
+  { value: 'enum', label: '主体/枚举判定' },
+  { value: 'text', label: '语义判定' },
 ]
 
 const engineOptions: Array<{ value: ContractRuleEngineType; label: string }> = [
@@ -54,9 +54,9 @@ const operatorLabels: Record<ContractRuleOperator, string> = {
 }
 
 const riskLevelOptions: Array<{ value: ContractRuleRiskLevel; label: string }> = [
-  { value: 'green', label: '未命中时通过' },
-  { value: 'yellow', label: '未命中时需谈判' },
-  { value: 'red', label: '未命中时红线' },
+  { value: 'green', label: '无法判定时通过' },
+  { value: 'yellow', label: '无法判定时需谈判' },
+  { value: 'red', label: '无法判定时红线' },
 ]
 
 const actionOptions = [
@@ -170,6 +170,9 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
     level_c_threshold: Number(draft.level_c_threshold ?? 0),
     priority: Number(draft.priority ?? 100),
   }), [draft, fieldHints, scenarios, messageTemplate])
+  const showSemanticPrompt = (draft.engine_type || 'structured') !== 'structured'
+    || draft.category === 'text'
+    || Boolean((draft.semantic_prompt || '').trim())
 
   function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -207,7 +210,8 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               onChange={(event) => update('code', event.target.value)}
               placeholder="R1001"
               required
-              className="bg-white font-mono"
+              disabled={Boolean(initialRule)}
+              className={`font-mono ${initialRule ? 'bg-slate-100 text-slate-500' : 'bg-white'}`}
             />
           </Field>
           <Field label="规则名称">
@@ -236,14 +240,14 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
         <div className="border-b border-slate-200 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-950">1. 触发器与定位器</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            适用范围只决定规则在哪些业务里启用；触发器决定何时开始检查；定位器负责在合同里找到证据。
+            适用范围只决定规则在哪些业务里启用；关键词只负责定位原文；判定类型、字段、阈值决定红绿灯结果。
           </p>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-2">
           <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800 lg:col-span-2">
-            执行顺序：适用范围过滤 → 触发器启动 → 定位器找证据 → 判定器给出红绿灯 → 输出批注和谈判动作。
+            执行顺序：适用范围过滤 → 关键词/语义定位证据 → 字段或语义判定 → 红绿灯分档 → 输出客户批注和销售动作。
           </div>
-          <Field label="触发/定位关键词">
+          <Field label="定位关键词（找原文）">
             <Input
               value={fieldHints}
               onChange={(event) => setFieldHints(event.target.value)}
@@ -257,7 +261,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               placeholder="标准销售合同, 框架协议；不直接参与命中"
             />
           </Field>
-          <Field label="触发类型">
+          <Field label="判定类型">
             <Select
               value={draft.category || 'duration'}
               onChange={(value) => update('category', value as ContractRuleCategory)}
@@ -278,13 +282,14 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               placeholder="payment_schedule / payment_days"
             />
           </Field>
-          <Field label="未命中兜底等级">
+          <Field label="无法判定兜底等级">
             <Select
               value={draft.risk_level || 'yellow'}
               onChange={(value) => update('risk_level', value as ContractRuleRiskLevel)}
               options={riskLevelOptions}
             />
           </Field>
+          {showSemanticPrompt ? (
           <div className="lg:col-span-2">
             <Field label="语义触发条件">
               <Textarea
@@ -296,6 +301,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
               />
             </Field>
           </div>
+          ) : null}
           <div className="lg:col-span-2">
             <Field label="例外条件 / 白名单">
               <Textarea
@@ -308,10 +314,10 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             </Field>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 lg:col-span-2">
-            <div className="text-xs font-medium text-slate-500">实时执行预览（维护者确认）</div>
+            <div className="text-xs font-medium text-slate-500">可读执行说明（不是发布结果）</div>
             <p className="mt-2 text-sm leading-6 text-slate-800">
-              命中“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置触发线索'}”后，
-              由{engineOptions.find((item) => item.value === draft.engine_type)?.label || '规则引擎'}判断：
+              在{scenarios || '全部适用范围'}内，先用“{fromCsv(fieldHints).join(' / ') || draft.target_field || '未配置定位线索'}”定位证据，
+              再由{engineOptions.find((item) => item.value === draft.engine_type)?.label || '规则引擎'}按“{categoryOptions.find((item) => item.value === draft.category)?.label || '未配置判定类型'}”判断：
               {draft.semantic_prompt || `${formatOperatorLabel(draft.level_b_operator)} ${draft.level_b_threshold ?? 0}${draft.level_b_unit || ''}`}。
               {messageLevels.exception ? ` 满足例外“${messageLevels.exception}”时不进入红线。` : ' 尚未配置例外。'}
             </p>
@@ -365,7 +371,7 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
 
       <section className="rounded-lg border border-slate-200">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-950">3. 客户批注与销售动作</h3>
+          <h3 className="text-sm font-semibold text-slate-950">3. 输出动作与客户侧批注</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             客户侧只看到可执行修改建议；销售侧看到谈判口径；内部审核说明不写进客户批注。
           </p>
@@ -382,11 +388,11 @@ export default function RuleDesigner({ initialRule, defaultRuleSet, saving = fal
             <Textarea
               value={messageTemplate.suggestion || ''}
               onChange={(event) => updateMessageTemplate('suggestion', event.target.value)}
-              placeholder="建议修改为：{recommended_clause}"
+              placeholder="写成客户能直接接受或修改的条款建议，不写规则编号、证据 ID 或内部判断过程。"
               rows={3}
             />
           </Field>
-          <Field label="内部备注（不进客户批注）">
+          <Field label="内部审核备注（不写入客户批注）">
             <Textarea
               value={messageTemplate.comment || ''}
               onChange={(event) => updateMessageTemplate('comment', event.target.value)}
