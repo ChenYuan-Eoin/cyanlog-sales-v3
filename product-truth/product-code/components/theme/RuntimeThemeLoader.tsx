@@ -143,7 +143,6 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
       link.href = versionedFaviconUrl
       const isSvg = faviconUrl.toLowerCase().includes('.svg')
       link.type = isSvg ? 'image/svg+xml' : 'image/png'
-      link.sizes = rel === 'apple-touch-icon' ? '180x180' : isSvg ? 'any' : '32x32'
       document.head.appendChild(link)
     })
   }

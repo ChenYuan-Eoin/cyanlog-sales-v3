@@ -77,21 +77,18 @@ export default async function RootLayout({
           rel="icon"
           href={faviconUrl}
           type={faviconIsSvg ? "image/svg+xml" : "image/png"}
-          sizes={faviconIsSvg ? "any" : "32x32"}
         />
         <link
           data-runtime-favicon="true"
           rel="shortcut icon"
           href={faviconUrl}
           type={faviconIsSvg ? "image/svg+xml" : "image/png"}
-          sizes={faviconIsSvg ? "any" : "32x32"}
         />
         <link
           data-runtime-favicon="true"
           rel="apple-touch-icon"
           href={faviconUrl}
           type={faviconIsSvg ? "image/svg+xml" : "image/png"}
-          sizes="180x180"
         />
       </head>
       <body className="antialiased">
