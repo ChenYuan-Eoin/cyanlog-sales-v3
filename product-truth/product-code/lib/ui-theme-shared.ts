@@ -66,26 +66,26 @@ export type BrandAssetVariant = 'full' | 'symbol'
 export type BrandSurfaceTone = 'light' | 'dark'
 
 export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
-  brandName: 'Cyanlog',
-  brandShortName: 'CY',
-  productTitle: 'Cyanlog Sales',
-  productSubtitle: '智能销售支撑平台',
-  loginTitle: '企业销售支撑平台',
+  brandName: 'ONES Sales',
+  brandShortName: 'OS',
+  productTitle: 'ONES Sales',
+  productSubtitle: '智能协作平台',
+  loginTitle: '企业协作支撑平台',
   loginSubtitle: '使用企业账号进入工作台首页',
 
   // 新品牌资产配置
   brandAssets: {
     fullLogo: { light: '', dark: '' },
-    symbol: { light: '', dark: '' },
-    favicon: '',
+    symbol: { light: '/favicon.svg', dark: '/favicon.svg' },
+    favicon: '/favicon.svg',
   },
 
   // 默认跟随系统
   appearance: 'system',
 
   // 旧字段（过渡兼容）
-  logoUrl: '',
-  faviconUrl: '',
+  logoUrl: '/favicon.svg',
+  faviconUrl: '/favicon.svg',
 
   primary: '#2563eb',
   primaryForeground: '#ffffff',
@@ -166,7 +166,23 @@ export function resolveBrandImageUrl(
 }
 
 export function resolveFaviconUrl(theme: Required<UIThemeConfigValue>): string {
-  return theme.brandAssets.favicon || theme.faviconUrl || ''
+  const rawUrl = theme.brandAssets.favicon
+    || theme.faviconUrl
+    || theme.brandAssets.symbol.dark
+    || theme.brandAssets.symbol.light
+    || theme.brandAssets.fullLogo.dark
+    || theme.brandAssets.fullLogo.light
+    || theme.logoUrl
+    || DEFAULT_THEME.brandAssets.favicon
+
+  // ponytail: Supabase Storage 使用 Imgproxy 实时图片转换
+  // 参数: w=宽度 h=高度 fit=fill 强制 1:1 居中裁剪为方形 favicon
+  if (rawUrl && rawUrl.includes('supabase.co/storage')) {
+    const separator = rawUrl.includes('?') ? '&' : '?'
+    return `${rawUrl}${separator}w=32&h=32&fit=fill`
+  }
+
+  return rawUrl
 }
 
 function pickText(value: unknown, fallback: string): string {

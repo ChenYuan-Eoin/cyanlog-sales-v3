@@ -31,11 +31,18 @@ export function ImageUpload({
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const handleFileChange = useCallback(async (file: File | null) => {
     if (!file) return
 
     setError(null)
+    const maxBytes = maxSizeMB * 1024 * 1024
+    if (file.size > maxBytes) {
+      setError(`图片大小不能超过 ${maxSizeMB}MB`)
+      return
+    }
+
     setIsUploading(true)
 
     try {
@@ -55,22 +62,23 @@ export function ImageUpload({
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || `上传失败 (${response.status})`)
+        const errorMessage = data.error?.message || data.error || `上传失败 (${response.status})`
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
-      onChange(data.url)
+      onChange(data.data?.url || data.url)
     } catch (err) {
       const message = err instanceof Error ? err.message : '上传失败'
       setError(message)
-      console.error('Upload error:', err)
     } finally {
       setIsUploading(false)
     }
-  }, [folder, onChange])
+  }, [folder, maxSizeMB, onChange])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    setIsDragOver(false)
     const file = e.dataTransfer.files[0]
     if (file) {
       void handleFileChange(file)
@@ -79,6 +87,14 @@ export function ImageUpload({
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    if (!isUploading) {
+      setIsDragOver(true)
+    }
+  }, [isUploading])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
   }, [])
 
   const clearImage = useCallback(() => {
@@ -89,36 +105,42 @@ export function ImageUpload({
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="relative w-full max-w-full overflow-hidden rounded border bg-white p-2">
-          {/* ponytail: A7 修复图片溢出 - 使用 object-contain 和 max-w-full */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={value}
-            alt="Uploaded"
-            className={`mx-auto object-contain ${
-              square ? 'w-full h-full' : 'max-w-full h-auto'
-            }`}
-            style={square
-              ? { width: previewHeight, height: previewHeight, objectFit: 'contain' }
-              : { maxHeight: previewHeight * 2, width: 'auto', maxWidth: '100%' }
-            }
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚠️</text></svg>'
-            }}
-          />
-          <button
-            type="button"
-            onClick={clearImage}
-            className="absolute right-1 top-1 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
-            title="移除图片"
+        <>
+          <div
+            className="relative flex w-full max-w-full items-center justify-center overflow-hidden rounded border bg-white p-2"
+            style={{ height: square ? previewHeight + 16 : previewHeight * 2 + 16 }}
           >
-            <CloseIcon size={14} />
-          </button>
-        </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value}
+              alt="Uploaded"
+              className={square ? 'block h-full w-full object-cover' : 'block max-h-full max-w-full object-contain'}
+              style={square
+                ? {}
+                : { width: 'auto', height: 'auto' }
+              }
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚠️</text></svg>'
+              }}
+            />
+            <button
+              type="button"
+              onClick={clearImage}
+              className="absolute right-1 top-1 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
+              title="移除图片"
+            >
+              <CloseIcon size={14} />
+            </button>
+          </div>
+          {square && (
+            <p className="text-[10px] text-slate-400 text-center">预览：浏览器将居中裁剪为方形</p>
+          )}
+        </>
       ) : (
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
           className="relative"
         >
           <input
@@ -133,7 +155,11 @@ export function ImageUpload({
             className={`
               flex flex-col items-center justify-center gap-2
               h-20 px-4 rounded-lg border-2 border-dashed
-              ${isUploading ? 'bg-gray-50 border-gray-300' : 'bg-slate-50 border-slate-300 hover:bg-slate-100 hover:border-slate-400'}
+              ${isUploading
+                ? 'bg-gray-50 border-gray-300'
+                : isDragOver
+                  ? 'bg-blue-50 border-blue-500'
+                  : 'bg-slate-50 border-slate-300 hover:bg-slate-100 hover:border-slate-400'}
               transition-colors
             `}
           >
