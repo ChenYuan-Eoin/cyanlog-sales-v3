@@ -166,7 +166,7 @@ export function resolveBrandImageUrl(
 }
 
 export function resolveFaviconUrl(theme: Required<UIThemeConfigValue>): string {
-  return theme.brandAssets.favicon
+  const rawUrl = theme.brandAssets.favicon
     || theme.faviconUrl
     || theme.brandAssets.symbol.dark
     || theme.brandAssets.symbol.light
@@ -174,6 +174,15 @@ export function resolveFaviconUrl(theme: Required<UIThemeConfigValue>): string {
     || theme.brandAssets.fullLogo.light
     || theme.logoUrl
     || DEFAULT_THEME.brandAssets.favicon
+
+  // ponytail: Supabase Storage 支持实时图片转换
+  // 自动转 32x32 正方形，cover 模式居中裁剪，确保浏览器 favicon 不拉伸
+  if (rawUrl && rawUrl.includes('supabase.co/storage')) {
+    const separator = rawUrl.includes('?') ? '&' : '?'
+    return `${rawUrl}${separator}width=32&height=32&resize=cover`
+  }
+
+  return rawUrl
 }
 
 function pickText(value: unknown, fallback: string): string {
