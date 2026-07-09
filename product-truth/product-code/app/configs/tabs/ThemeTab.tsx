@@ -251,7 +251,7 @@ export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions
               <div className="flex h-12 items-center gap-2 rounded-md border border-slate-200 bg-white px-3">
                 {activeFavicon ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={activeFavicon} alt="" className="h-6 w-6 rounded-sm object-contain" />
+                  <img src={activeFavicon} alt="" className="max-h-6 max-w-6 object-contain" />
                 ) : (
                   <div className="h-6 w-6 rounded-sm bg-slate-200" />
                 )}
@@ -431,10 +431,10 @@ function BrandAssetPreview({
   return (
     <div className="rounded-md border border-slate-200 bg-white p-2">
       <div className="text-xs text-slate-500">{label}</div>
-      <div className={`mt-2 flex ${square ? 'h-16' : 'h-20'} items-center justify-center rounded border border-slate-100 bg-slate-50 overflow-hidden`}>
+      <div className={`mt-2 flex ${square ? 'h-16' : 'h-20'} items-center justify-center overflow-hidden rounded border border-slate-100 bg-slate-50`}>
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="h-full w-full object-contain" />
+          <img src={value} alt="" className="max-h-full max-w-full object-contain" />
         ) : (
           <span className="rounded bg-slate-900 px-2 py-1 text-xs font-semibold text-white">{fallback}</span>
         )}
