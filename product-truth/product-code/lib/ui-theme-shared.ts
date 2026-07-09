@@ -175,11 +175,11 @@ export function resolveFaviconUrl(theme: Required<UIThemeConfigValue>): string {
     || theme.logoUrl
     || DEFAULT_THEME.brandAssets.favicon
 
-  // ponytail: Supabase Storage 支持实时图片转换
-  // 自动转 32x32 正方形，cover 模式居中裁剪，确保浏览器 favicon 不拉伸
+  // ponytail: Supabase Storage 使用 Imgproxy 实时图片转换
+  // 参数: w=宽度 h=高度 fit=fill 强制 1:1 居中裁剪为方形 favicon
   if (rawUrl && rawUrl.includes('supabase.co/storage')) {
     const separator = rawUrl.includes('?') ? '&' : '?'
-    return `${rawUrl}${separator}width=32&height=32&resize=cover`
+    return `${rawUrl}${separator}w=32&h=32&fit=fill`
   }
 
   return rawUrl

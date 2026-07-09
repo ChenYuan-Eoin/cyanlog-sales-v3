@@ -105,32 +105,37 @@ export function ImageUpload({
   return (
     <div className="space-y-2">
       {value ? (
-        <div
-          className="relative flex w-full max-w-full items-center justify-center overflow-hidden rounded border bg-white p-2"
-          style={{ height: square ? previewHeight + 16 : previewHeight * 2 + 16 }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={value}
-            alt="Uploaded"
-            className="block max-h-full max-w-full object-contain"
-            style={square
-              ? { width: previewHeight, height: previewHeight }
-              : { width: 'auto', height: 'auto' }
-            }
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚠️</text></svg>'
-            }}
-          />
-          <button
-            type="button"
-            onClick={clearImage}
-            className="absolute right-1 top-1 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
-            title="移除图片"
+        <>
+          <div
+            className="relative flex w-full max-w-full items-center justify-center overflow-hidden rounded border bg-white p-2"
+            style={{ height: square ? previewHeight + 16 : previewHeight * 2 + 16 }}
           >
-            <CloseIcon size={14} />
-          </button>
-        </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value}
+              alt="Uploaded"
+              className={square ? 'block h-full w-full object-cover' : 'block max-h-full max-w-full object-contain'}
+              style={square
+                ? {}
+                : { width: 'auto', height: 'auto' }
+              }
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚠️</text></svg>'
+              }}
+            />
+            <button
+              type="button"
+              onClick={clearImage}
+              className="absolute right-1 top-1 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10 shadow-sm"
+              title="移除图片"
+            >
+              <CloseIcon size={14} />
+            </button>
+          </div>
+          {square && (
+            <p className="text-[10px] text-slate-400 text-center">预览：浏览器将居中裁剪为方形</p>
+          )}
+        </>
       ) : (
         <div
           onDrop={handleDrop}
