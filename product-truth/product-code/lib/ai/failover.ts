@@ -1,5 +1,5 @@
-// AI 服务多级故障容错链
-// 运行时顺序：配置中心已发布 AI_CONFIG -> 环境变量默认值 -> 规则引擎 -> 人工建议
+// AI 模型路由与降级链
+// 运行时顺序：配置中心已发布 AI_CONFIG 实例池 -> 环境变量默认实例 -> 规则引擎 -> 人工建议
 
 import { createOpenAI } from '@ai-sdk/openai'
 import { generateText } from 'ai'
@@ -202,9 +202,9 @@ function getDefaultProviders(): PublishedAIProviderConfig[] {
     {
       config_id: 'env-local',
       key: 'AI_LOCAL_PRIMARY',
-      display_name: '本地模型',
+      display_name: '本地模型实例',
       level: 1,
-      name: '本地模型',
+      name: '本地模型实例',
       profile: 'local_primary',
       provider_kind: 'openai_compatible',
       base_url: process.env.LOCAL_MODEL_URL || 'http://127.0.0.1:1234/v1',
@@ -218,9 +218,9 @@ function getDefaultProviders(): PublishedAIProviderConfig[] {
     {
       config_id: 'env-cloud',
       key: 'AI_SALES_CLOUD_BACKUP',
-      display_name: '销售云端模型',
+      display_name: '销售云端模型实例',
       level: 2,
-      name: '销售云端模型',
+      name: '销售云端模型实例',
       profile: 'sales_cloud_backup',
       provider_kind: 'openai_compatible',
       base_url: process.env.AI_GATEWAY_URL || 'https://cloud.yiyongai.cn/v1',
@@ -234,9 +234,9 @@ function getDefaultProviders(): PublishedAIProviderConfig[] {
     {
       config_id: 'env-rule',
       key: 'AI_RULE_FALLBACK',
-      display_name: '规则引擎',
+      display_name: '规则兜底执行器',
       level: 3,
-      name: '规则引擎',
+      name: '规则兜底执行器',
       profile: 'rule_engine',
       provider_kind: 'builtin',
       base_url: '',
@@ -278,14 +278,18 @@ function providerRuntimeTier(config: PublishedAIProviderConfig): number {
 
 function matchesProvider(provider: AIProvider, preferredProvider: string): boolean {
   const needle = preferredProvider.toLowerCase()
-  if (needle === 'local') {
+  if (needle === 'local' || needle === 'pool:local') {
     return provider.providerKind === 'openai_compatible' && isLocalEndpoint(provider.config.base_url)
   }
-  if (needle === 'cloud') {
+  if (needle === 'cloud' || needle === 'pool:cloud') {
     return provider.providerKind === 'openai_compatible' && !isLocalEndpoint(provider.config.base_url)
   }
-  if (needle === 'rule-engine') {
+  if (needle === 'rule-engine' || needle === 'executor:rule-engine') {
     return provider.providerKind === 'builtin'
+  }
+  if (needle.startsWith('stage:')) {
+    const stage = needle.slice('stage:'.length)
+    return (provider.config.stages || []).map((item) => item.toLowerCase()).includes(stage)
   }
   return [
     provider.id,
@@ -317,6 +321,15 @@ function determineStartIndex(providers: AIProvider[], contractText: string, pref
     return byRouting
   }
 
+  const chunkedCloudIndex = providers.findIndex((provider) => (
+    provider.providerKind !== 'builtin'
+    && !isLocalEndpoint(provider.config.base_url)
+    && provider.config.routing?.strategy === 'chunked'
+  ))
+  if (chunkedCloudIndex >= 0) {
+    return chunkedCloudIndex
+  }
+
   const nonBuiltinIndex = providers.findIndex((provider) => provider.providerKind !== 'builtin')
   return nonBuiltinIndex >= 0 ? nonBuiltinIndex : 0
 }
@@ -344,11 +357,20 @@ function hasAttemptedPreferredProvider(preferredProvider: string | undefined, at
     if (needle === 'local') {
       return normalizedId.includes('local')
     }
+    if (needle === 'pool:local') {
+      return normalizedId.includes('local')
+    }
     if (needle === 'cloud') {
       return normalizedId.includes('cloud')
     }
-    if (needle === 'rule-engine') {
+    if (needle === 'pool:cloud') {
+      return normalizedId.includes('cloud')
+    }
+    if (needle === 'rule-engine' || needle === 'executor:rule-engine') {
       return normalizedId.includes('rule')
+    }
+    if (needle.startsWith('stage:')) {
+      return true
     }
     return false
   })

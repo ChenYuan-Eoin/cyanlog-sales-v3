@@ -74,9 +74,9 @@ export type AIModelStage =
   | 'report_summary'
   | 'rule_fallback'
 
-// AI 模型配置值 (F012)
+// AI 模型实例配置值 (F012)
 export interface AIConfigValue {
-  level: number // 1, 2, 3
+  level: number // 策略优先级，数值越小越先尝试；不是固定三级槽位
   name: string
   profile?: AIProfile | string
   provider_kind?: AIProviderKind
@@ -142,7 +142,7 @@ export const CONFIG_TYPE_META: Record<ConfigType, { label: string; description: 
   },
   AI_CONFIG: {
     label: 'AI 模型配置',
-    description: '本地模型、云端模型连接配置',
+    description: '模型实例、路由策略、降级链和调用凭证配置',
   },
   UI_THEME: {
     label: '界面主题',

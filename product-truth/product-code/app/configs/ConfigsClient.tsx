@@ -67,8 +67,8 @@ const CONFIG_TABS: Record<ConfigTabId, {
     icon: ShieldCheckIcon,
   },
   rules: {
-    label: '合同审核策略',
-    description: '管理合同审核策略规则，供合同审核与本地模型执行。',
+    label: '合同审核规则集',
+    description: '管理规则库、规则集、结构化规则、转译确认与发布门禁，供合同审核消费。',
     section: 'contract-ai',
     icon: FileTextIcon,
   },
@@ -85,9 +85,9 @@ const CONFIG_TABS: Record<ConfigTabId, {
     icon: KeyRoundIcon,
   },
   ai: {
-    label: 'AI 模型配置',
-    description: '管理本地模型、云端 OpenAI 兼容模型和运行时路由策略。',
-    section: 'contract-ai',
+    label: 'AI 能力底座',
+    description: '平台级管理模型 Provider、能力路由、降级策略、调用证据和 Token 成本口径。',
+    section: 'ai-platform',
     icon: BotIcon,
   },
   theme: {
@@ -112,9 +112,15 @@ const CONFIG_SECTIONS: Array<{
   },
   {
     id: 'contract-ai',
-    label: '合同与 AI 规则',
-    description: '围绕合同审核规则、模型路由和运行时策略的配置集。',
-    tabs: ['rules', 'ai'],
+    label: '合同审核规则',
+    description: '围绕合同审核规则集、转译、发布和审核引擎编译的配置集。',
+    tabs: ['rules'],
+  },
+  {
+    id: 'ai-platform',
+    label: 'AI 能力底座',
+    description: '平台级模型接入、能力路由、策略降级、调用证据和成本治理。',
+    tabs: ['ai'],
   },
   {
     id: 'org-access',
@@ -848,7 +854,7 @@ export default function ConfigsClient({
       case 'ai': {
         const aiConfigs = getConfigsByType('AI_CONFIG')
         return [
-          { label: '模型档位', value: countValue(aiConfigs.length) },
+          { label: '模型实例', value: countValue(aiConfigs.length) },
           { label: '启用模型', value: countValue(aiConfigs.filter((config) => config.value?.enabled === true).length) },
           { label: '已发布', value: countValue(aiConfigs.filter((config) => config.status === 'PUBLISHED').length) },
         ]
@@ -940,10 +946,10 @@ export default function ConfigsClient({
     }
   }
 
-  async function handleSaveRule(rule: Partial<ContractPolicyRule>, id?: string) {
+  async function handleSaveRule(rule: Partial<ContractPolicyRule>, id?: string): Promise<ContractPolicyRule | null> {
     if (!rule.code || !rule.name) {
       setError('请填写规则编码和名称')
-      return
+      return null
     }
 
     try {
@@ -954,6 +960,7 @@ export default function ConfigsClient({
       const payload = {
         code: rule.code,
         name: rule.name,
+        rule_set_id: rule.rule_set_id || null,
         description: rule.description || '',
         business_domain: rule.business_domain || 'contract_review',
         risk_level: rule.risk_level || 'yellow',
@@ -997,8 +1004,10 @@ export default function ConfigsClient({
       if (!res.ok) {
         const data = await res.json()
         setError(getApiErrorMessage(data, '保存失败'))
-        return
+        return null
       }
+      const savedPayload = await res.json().catch(() => ({}))
+      const savedRule = (savedPayload?.data || savedPayload || null) as ContractPolicyRule | null
 
       const refreshed = await fetch('/api/contract-policies/rules', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -1012,8 +1021,10 @@ export default function ConfigsClient({
       } else {
         await refreshTabData('rules')
       }
+      return savedRule
     } catch {
       setError('网络错误')
+      return null
     }
   }
 
@@ -1179,10 +1190,11 @@ export default function ConfigsClient({
   }
 
   function openNewConfig(type: Config['type']) {
+    const isAIConfig = type === 'AI_CONFIG'
     setConfigType(type)
     setEditingConfig({
-      key: '',
-      name: '',
+      key: isAIConfig ? `AI_MODEL_${Date.now()}` : '',
+      name: isAIConfig ? '新模型实例' : '',
       value: getDefaultValue(type),
       description: '',
     })

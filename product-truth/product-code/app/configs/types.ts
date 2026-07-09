@@ -131,6 +131,9 @@ export interface RuntimePolicy {
   status: string
   is_current: boolean
   timeout_ms: number
+  routing_policy?: Record<string, unknown>
+  fallback_policy?: Record<string, unknown>
+  audit_policy?: Record<string, unknown>
   provider_chain: RuntimeProvider[]
   source_config_ids: string[]
   source_summary?: {
@@ -232,4 +235,4 @@ export interface PermissionCatalogGroup {
 }
 
 export type ConfigTabId = 'price-list' | 'rules' | 'tax' | 'approval' | 'ai' | 'theme' | 'org-structure' | 'role-access'
-export type ConfigSectionId = 'trading' | 'contract-ai' | 'org-access' | 'experience'
+export type ConfigSectionId = 'trading' | 'contract-ai' | 'ai-platform' | 'org-access' | 'experience'

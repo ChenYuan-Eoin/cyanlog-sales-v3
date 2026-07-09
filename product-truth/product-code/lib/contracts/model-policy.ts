@@ -402,6 +402,15 @@ export async function resolvePublishedModelPolicy(
     .map((provider) => provider.source_config_id)
     .filter((id): id is string => Boolean(id))
   const primary = providerChain[0] || ruleEngineProvider(1)
+  const localProfiles = providerChain
+    .filter((provider) => provider.runtime_location === 'local')
+    .map((provider) => provider.profile)
+  const cloudProfiles = providerChain
+    .filter((provider) => provider.runtime_location === 'cloud')
+    .map((provider) => provider.profile)
+  const ruleProfiles = providerChain
+    .filter((provider) => provider.provider_kind === 'builtin')
+    .map((provider) => provider.profile)
   const latest = await fetchLatestModelPolicy(orgId)
   const nextVersion = (latest?.version ?? current?.version ?? 0) + 1
 
@@ -417,6 +426,9 @@ export async function resolvePublishedModelPolicy(
       provider_chain: providerChain,
       routing_policy: {
         policy_version: 'f012.model-policy.v1',
+        gateway_model: 'model_instances_strategy_fallback_chain',
+        strategy_id: 'contract_review_local_first',
+        strategy_name: '合同审核本地优先策略',
         strategy: primary.routing?.strategy || 'rule',
         max_pages: primary.routing?.max_pages || 1,
         stage_order: [
@@ -434,6 +446,40 @@ export async function resolvePublishedModelPolicy(
           tender_long_document_parse: 'cloud_chunked_provider_required',
           comment_patch_draft: 'schema_validated_ai_or_rule_template',
           report_summary: 'same_fact_set_as_comment_patch',
+        },
+        strategy_rules: [
+          {
+            id: 'structured-rules-first',
+            when: { task_type: 'contract_review', stage: 'structured_rules' },
+            use: ruleProfiles,
+            reason: '确定性规则扫描、字段抽取和证据锚定不依赖外部模型。',
+          },
+          {
+            id: 'semantic-review-local-first',
+            when: { task_type: 'contract_review', stage: 'semantic_review', document_pages_lte: primary.routing?.max_pages || 1 },
+            use: localProfiles.length > 0 ? localProfiles : cloudProfiles,
+            fallback_to: [...cloudProfiles, ...ruleProfiles],
+            reason: '常规合同正文优先命中本地模型实例池；本地不可用或低置信度时进入云端模型实例池；确定性规则只作为兜底执行器，不冒充 AI 审核。',
+          },
+          {
+            id: 'long-document-cloud-first',
+            when: { task_type: 'tender_or_long_document_parse', stage: 'tender_long_document_parse' },
+            use: cloudProfiles,
+            fallback_to: [...localProfiles, ...ruleProfiles],
+            reason: '标书、长 PDF 和长 DOCX 优先使用具备长上下文能力的云端模型实例。',
+          },
+          {
+            id: 'comment-and-report-same-facts',
+            when: { task_type: 'contract_review', stage: 'comment_patch_draft' },
+            use: [...localProfiles, ...cloudProfiles],
+            fallback_to: ruleProfiles,
+            reason: '批注和报告必须复用同一组风险事实，不允许报告替代源文件批注。',
+          },
+        ],
+        provider_pools: {
+          local: localProfiles,
+          cloud: cloudProfiles,
+          rule: ruleProfiles,
         },
         data_boundary: {
           external_model_contract_text: 'allowed_only_by_published_provider_policy',

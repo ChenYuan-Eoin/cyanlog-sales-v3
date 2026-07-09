@@ -384,11 +384,12 @@ const invocationPhaseLabel: Record<string, string> = {
 }
 
 const providerTargetLabel: Record<string, string> = {
-  local_primary: '本地模型优先',
-  sales_cloud_backup: '云端增强模型',
-  AI_LEVEL_1: '本地模型',
-  AI_LEVEL_2: '云端增强模型',
-  'rule-engine': '规则引擎',
+  local_primary: '本地模型实例池',
+  cloud_primary: '云端模型实例',
+  sales_cloud_backup: '销售云端模型实例',
+  AI_LEVEL_1: '旧配置兼容：本地实例',
+  AI_LEVEL_2: '旧配置兼容：云端实例',
+  'rule-engine': '规则兜底执行器',
 }
 
 const reportTriggerLabel: Record<string, string> = {
@@ -995,7 +996,7 @@ export default function ContractWorkbenchPage() {
         onModeChange={setSidePanelMode}
       />
 
-      <div className="grid gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[150px_280px_minmax(0,1fr)] 2xl:grid-cols-[160px_300px_minmax(0,1fr)]">
+      <div className="grid gap-3 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[136px_260px_minmax(0,1fr)] 2xl:grid-cols-[144px_280px_minmax(0,1fr)]">
         <ReviewNavigationRail
           data={data}
           selectedRiskId={selectedRisk?.id || null}
@@ -1006,7 +1007,7 @@ export default function ContractWorkbenchPage() {
           <Card>
             <CardHeader className="border-b border-slate-100 pb-3">
               <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base">谈判跟进</CardTitle>
+                <CardTitle className="text-base">审查任务</CardTitle>
                 <Badge variant="outline">{data.reviewRun?.status || '未开始'}</Badge>
               </div>
               <SidePanelTabs value={sidePanelMode} onChange={setSidePanelMode} />
@@ -1192,7 +1193,8 @@ function SourceAnnotationDeliveryPanel({
           <TrafficLightPill label="谈判" value={yellowCount} tone="amber" />
           <TrafficLightPill label="开放" value={openRiskCount} tone="slate" />
           <TrafficLightPill label="批注" value={annotationCount} tone={canExport ? 'emerald' : 'blue'} />
-          <div className="flex rounded-md border border-slate-200 bg-slate-50 p-0.5">
+          <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5 pl-2">
+            <span className="mr-1 text-[11px] font-medium text-slate-500">审查风格</span>
             {styles.map((style) => {
               const active = style.value === reviewStyle
               return (
@@ -1798,7 +1800,7 @@ function RiskDecisionPanel({
             : '例如：客户同意改为双方书面确认后生效；如果不同意，请写清原因或特批依据。'}
           maxLength={1200}
         />
-        <div className="sticky bottom-0 -mx-3 mt-3 border-t border-amber-200 bg-amber-50/95 px-3 py-3 backdrop-blur">
+        <div className="mt-3 rounded-md border border-amber-200 bg-white px-3 py-3">
           <p className="mb-2 text-xs leading-5 text-amber-800">
             保存后不会直接关闭风险；客户回传后应再审核，导出时只写客户能理解的修改口径。
           </p>
@@ -1858,17 +1860,27 @@ function SidePanelTabs({
     <div className="mt-3 grid grid-cols-4 gap-1 rounded-md bg-slate-100 p-1">
       {tabs.map((tab) => {
         const active = tab.value === value
+        const reviewActive = active && tab.value === 'review'
         return (
           <button
             key={tab.value}
             type="button"
             onClick={() => onChange(tab.value)}
             className={`flex min-h-9 items-center justify-center gap-1 rounded px-2 text-xs font-medium transition ${
-              active ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              reviewActive
+                ? 'bg-slate-950 text-white shadow-sm ring-1 ring-slate-950'
+                : active
+                  ? 'bg-white text-slate-950 shadow-sm'
+                  : tab.value === 'review'
+                    ? 'text-red-700 hover:bg-red-50 hover:text-red-800'
+                    : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <tab.icon className="h-3.5 w-3.5" />
             <span>{tab.label}</span>
+            {tab.value === 'review' && !active ? (
+              <span className="ml-0.5 rounded bg-red-100 px-1 text-[10px] text-red-700">入口</span>
+            ) : null}
           </button>
         )
       })}
@@ -2189,17 +2201,17 @@ function EvidencePanel({
       <InfoLine label="调用耗时" value={formatLatency(reviewRun?.model_policy?.latency_ms)} />
       <InfoLine label="调用记录" value={reviewRun?.model_policy?.invocation_id || '未记录'} />
       <InfoLine
-        label="实际档位"
+        label="实际实例"
         value={formatProviderTarget(reviewRun?.model_policy?.actual_provider_profile || reviewRun?.model_policy?.provider)}
       />
       <InfoLine label="实际模型" value={reviewRun?.model_policy?.actual_provider_model || reviewRun?.model_policy?.model || '未记录'} />
       <InfoLine
-        label="目标档位"
+        label="策略目标"
         value={formatProviderTarget(reviewRun?.model_policy?.intended_provider_profile || reviewRun?.model_policy?.provider)}
       />
       <InfoLine label="目标模型" value={reviewRun?.model_policy?.intended_provider_model || '未记录'} />
       <InfoLine
-        label="请求档位"
+        label="复审指定"
         value={formatProviderTarget(reviewRun?.model_policy?.requested_provider_profile)}
       />
       <InfoLine label="请求模型" value={reviewRun?.model_policy?.requested_provider_model || '未记录'} />

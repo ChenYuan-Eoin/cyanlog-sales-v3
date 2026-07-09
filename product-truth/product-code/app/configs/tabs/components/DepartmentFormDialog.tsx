@@ -96,7 +96,7 @@ export function DepartmentFormDialog({
           添加部门
         </Button>
       )}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="max-h-[85dvh] overflow-hidden sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BuildingIcon className="h-5 w-5" />
@@ -104,7 +104,7 @@ export function DepartmentFormDialog({
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="max-h-[calc(85dvh-5rem)] space-y-4 overflow-y-auto pr-1">
             <FormField
               control={form.control}
               name="name"
@@ -146,7 +146,11 @@ export function DepartmentFormDialog({
                         <SelectValue placeholder="选择上级部门（可选）" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent
+                      sideOffset={6}
+                      style={{ maxHeight: 'min(16rem, var(--radix-select-content-available-height, 16rem))' }}
+                      className="z-[80]"
+                    >
                       <SelectItem value="null">无（根部门）</SelectItem>
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
@@ -174,7 +178,11 @@ export function DepartmentFormDialog({
                         <SelectValue placeholder="选择部门主管（可选）" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent
+                      sideOffset={6}
+                      style={{ maxHeight: 'min(16rem, var(--radix-select-content-available-height, 16rem))' }}
+                      className="z-[80]"
+                    >
                       <SelectItem value="null">暂无主管</SelectItem>
                       {users.map((user) => (
                         <SelectItem key={user.id} value={user.id}>

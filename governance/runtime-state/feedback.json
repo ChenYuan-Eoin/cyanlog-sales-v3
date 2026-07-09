@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-30T06:50:02.445Z",
+  "timestamp": "2026-07-07T22:12:01.328Z",
   "typecheck": {
     "success": true,
     "errors": 0,
@@ -13,7 +13,7 @@
   },
   "test": {
     "success": true,
-    "passed": 102,
+    "passed": 137,
     "failed": 0,
     "message": "测试执行完成"
   },

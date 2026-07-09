@@ -178,7 +178,7 @@ async function recordTenderFailure(input: {
   return recordModelInvocation({
     orgId: input.orgId,
     modelPolicyId: input.modelPolicy?.id || null,
-    provider: provider?.provider || 'AI_LEVEL_2',
+    provider: provider?.provider || provider?.profile || 'tender_long_document_parse_strategy',
     model: provider?.model || 'unavailable',
     phase: 'tender_long_document_parse',
     status: 'failed',
@@ -187,7 +187,7 @@ async function recordTenderFailure(input: {
     latencyMs: input.latencyMs,
     requestMeta: {
       phase: 'tender_ocr',
-      intended_provider_profile: provider?.profile || 'sales_cloud_backup',
+      intended_provider_profile: provider?.profile || 'strategy_unmatched',
       intended_provider_model: provider?.model || null,
       routing_strategy: provider?.routing?.strategy || 'chunked',
       configured_max_pages: provider?.routing?.max_pages || null,

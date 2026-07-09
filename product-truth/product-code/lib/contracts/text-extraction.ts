@@ -9,6 +9,34 @@ function normalizeText(text: string): string {
     .trim()
 }
 
+function countMatches(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length || 0
+}
+
+export function isLikelyReadableContractText(text: string | null | undefined): boolean {
+  const normalized = normalizeText(text || '')
+  if (!normalized) return false
+
+  const compact = normalized.replace(/\s+/g, '')
+  if (compact.length < 4) return false
+
+  const controlOrReplacementCount = countMatches(compact, /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFFD]/g)
+  if (controlOrReplacementCount > 0) return false
+
+  const cjkCount = countMatches(compact, /[\u3400-\u9fff\uf900-\ufaff]/g)
+  const asciiAlphaNumericCount = countMatches(compact, /[A-Za-z0-9]/g)
+  const latin1ArtifactCount = countMatches(compact, /[\u00c0-\u00ff]/g)
+  const readableCount = cjkCount + asciiAlphaNumericCount
+  const latin1ArtifactRatio = latin1ArtifactCount / compact.length
+  const readableRatio = readableCount / compact.length
+
+  if (latin1ArtifactRatio > 0.12 && cjkCount < 4 && readableRatio < 0.72) {
+    return false
+  }
+
+  return readableCount >= 4 || readableRatio >= 0.35
+}
+
 function decodeXmlEntities(text: string): string {
   return text
     .replace(/&lt;/g, '<')
@@ -58,10 +86,10 @@ function extractTextFromPdf(buffer: Buffer): string | null {
   }
 
   const extracted = normalizeText(chunks.join('\n'))
-  if (extracted) return extracted
+  if (isLikelyReadableContractText(extracted)) return extracted
 
   const utf8Text = normalizeText(buffer.toString('utf8').replace(/[^\p{L}\p{N}\p{P}\p{Zs}\n]/gu, ' '))
-  return /[\u4e00-\u9fff]/.test(utf8Text) ? utf8Text : null
+  return isLikelyReadableContractText(utf8Text) && /[\u4e00-\u9fff]/.test(utf8Text) ? utf8Text : null
 }
 
 function findEndOfCentralDirectory(buffer: Buffer): number {

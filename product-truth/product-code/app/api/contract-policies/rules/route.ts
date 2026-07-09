@@ -24,6 +24,8 @@ const messageTemplateSchema = z.object({
   negotiation_required: z.boolean().optional(),
   owner_role: z.string().optional(),
   bottom_line: z.string().optional(),
+  levels: z.record(z.string(), z.string()).optional(),
+  outputs: z.record(z.string(), z.string()).optional(),
 }).optional().nullable()
 
 // 规则创建/更新验证

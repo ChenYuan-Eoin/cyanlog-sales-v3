@@ -1,6 +1,6 @@
 // lib/ai/router.ts
-// 智能路由 — 根据策略选择Provider
-// 路由不是简单降级，而是综合考虑任务类型、用户、负载、成本
+// 智能路由 — 根据策略选择模型实例或能力池
+// 路由不是简单降级，也不是固定三槽模型，而是综合考虑任务类型、用户、负载、成本
 
 import { reviewWithFailover } from './failover'
 import type { TaskType, RoutingStrategy, RoutingContext } from './strategy'
@@ -39,14 +39,14 @@ export class SmartRouter {
     degraded: boolean
     routeDecision: string
   }> {
-    const provider = await this.strategy.select(request.taskType, request.context)
+    const routeTarget = await this.strategy.select(request.taskType, request.context)
 
-    // 调整PreferredProvider走降级链
-    const result = await reviewWithFailover(request.text, provider)
+    // routeTarget 可以是模型实例 profile，也可以是 local/cloud/rule-engine 能力池别名。
+    const result = await reviewWithFailover(request.text, routeTarget)
 
     return {
       ...result,
-      routeDecision: `strategy=${this.strategy.name}, selected=${provider}`,
+      routeDecision: `strategy=${this.strategy.name}, selected=${routeTarget}`,
     }
   }
 

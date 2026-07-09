@@ -205,14 +205,14 @@ export default function ContractUploadPage() {
     }
 
     if (validFiles.length > 0) {
-      setFiles(prev => [...prev, ...validFiles])
+      setFiles(prev => isCompareIntent ? [validFiles[0]] : [...prev, ...validFiles])
     }
 
     // 清空 input，允许重复选择相同文件
     if (inputRef.current) {
       inputRef.current.value = ''
     }
-  }, [validateFile])
+  }, [isCompareIntent, validateFile])
 
   // 拖拽处理
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -250,9 +250,9 @@ export default function ContractUploadPage() {
     }
 
     if (validFiles.length > 0) {
-      setFiles(prev => [...prev, ...validFiles])
+      setFiles(prev => isCompareIntent ? [validFiles[0]] : [...prev, ...validFiles])
     }
-  }, [validateFile])
+  }, [isCompareIntent, validateFile])
 
   // 删除文件
   const removeFile = useCallback((index: number) => {
@@ -383,7 +383,7 @@ export default function ContractUploadPage() {
             </h1>
             <p className="mt-1 text-sm text-slate-500">
               {isCompareIntent
-                ? '上传客户回传版或待比对合同，进入标准合同对照工作台。'
+                ? '上传旧文件或待比对材料，进入文档比对工作台后再明确旧文件和新文件。'
                 : '一次上传多个合同源文件；每个文件会创建独立合同与 ReviewRun，并进入审核工作台。'}
             </p>
           </div>
@@ -420,7 +420,7 @@ export default function ContractUploadPage() {
               id="file-input"
               type="file"
               accept=".pdf,.docx"
-              multiple
+              multiple={!isCompareIntent}
               className="hidden"
               onChange={handleFileChange}
               disabled={isBusy}
@@ -473,7 +473,7 @@ export default function ContractUploadPage() {
           {files.length > 0 && (
             <div className="mt-6 space-y-3">
               <h3 className="text-sm font-medium text-slate-700">
-                待上传文件 ({files.length}个)
+                {isCompareIntent ? '待比对材料' : `待上传文件 (${files.length}个)`}
               </h3>
 
               {files.map((file, index) => (
@@ -582,7 +582,7 @@ export default function ContractUploadPage() {
                   {currentFileIndex >= files.length
                     ? '全部完成'
                     : isCompareIntent
-                      ? `上传并进入比对 (${files.length - currentFileIndex}个)`
+                      ? '上传并进入比对'
                       : `批量上传并发起审核 (${files.length - currentFileIndex}个)`}
                 </Button>
               )}
@@ -597,7 +597,7 @@ export default function ContractUploadPage() {
           <p>• 3个分块并发上传，提高传输速度</p>
           <p>
             {isCompareIntent
-              ? '• 比对材料会复用合同版本资产，上传后进入标准模板对照，不自动启动风险审核。'
+              ? '• 比对入口一次只接收一个文件作为版本资产，上传后进入旧文件/新文件选择页，不自动启动风险审核。'
               : '• 这是批量审核入口，不用于导入客户回传件；客户回传件请在单个合同工作台的“版本与产物”中补充。'}
           </p>
         </div>

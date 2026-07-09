@@ -110,6 +110,12 @@ type TaskItemView = {
   nextActionDescription: string
 }
 
+const TASK_MODULE_ORDER: Record<TaskItemView['type'], number> = {
+  draft: 0,
+  contract: 1,
+  compare: 2,
+}
+
 const LIST_CACHE_TTL_MS = 5 * 60 * 1000
 const LIST_BACKGROUND_REFRESH_MS = 60 * 1000
 
@@ -139,12 +145,6 @@ function readApiError(payload: unknown, fallback: string) {
 async function readResponseError(response: Response, fallback: string) {
   const payload = await response.json().catch(() => null)
   return `${readApiError(payload, fallback)}（${response.status}）`
-}
-
-function contractActionName(contract?: Contract) {
-  const withOptionalNumber = contract as (Contract & { contract_no?: string }) | undefined
-  const name = contract?.filename || contract?.title || withOptionalNumber?.contract_no || ''
-  return name.trim() || '未命名合同'
 }
 
 function sortedContractVersions(contract: ListContract) {
@@ -209,6 +209,21 @@ function comparisonNextAction(comparison: ContractComparisonSummary) {
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
 const quickActions: QuickAction[] = [
   {
+    id: 'draft',
+    title: '合同起草',
+    shortTitle: '起草',
+    workflowLabel: '输入需求生成合同草稿',
+    objectLabel: '客户需求、模板、条款限制',
+    outcomeLabel: '可编辑合同草稿，可进入审核或对比',
+    boundaryLabel: '起草是独立路径，不等同于上传审核或版本对比',
+    icon: PenToolIcon,
+    color: 'bg-indigo-600',
+    hoverColor: 'hover:bg-indigo-700',
+    href: '/contracts/draft',
+    description: '描述业务需求，结合模板和条款限制生成可修改、可审核的合同草稿',
+    stateLabel: '需求起草',
+  },
+  {
     id: 'review',
     title: '合同审核',
     shortTitle: '审核',
@@ -237,21 +252,6 @@ const quickActions: QuickAction[] = [
     href: '/contracts/upload?intent=compare',
     description: '选择旧文件和新文件进行差异复核，文件属性只作为面板信息，不污染文件画布',
     stateLabel: '旧/新文件',
-  },
-  {
-    id: 'draft',
-    title: '合同起草',
-    shortTitle: '起草',
-    workflowLabel: '输入需求生成合同草稿',
-    objectLabel: '客户需求、模板、条款限制',
-    outcomeLabel: '可编辑合同草稿，可进入审核或对比',
-    boundaryLabel: '起草是独立路径，不等同于上传审核或版本对比',
-    icon: PenToolIcon,
-    color: 'bg-indigo-600',
-    hoverColor: 'hover:bg-indigo-700',
-    href: '/contracts/draft',
-    description: '描述业务需求，结合模板和条款限制生成可修改、可审核的合同草稿',
-    stateLabel: '需求起草',
   },
 ]
 
@@ -476,12 +476,12 @@ export default function ContractCenterPage() {
       if (action.id === 'compare') {
         return {
           ...action,
-          href: compareTarget
-            ? buildContractCompareHref(compareTarget.id, { from: 'workbench' })
-            : buildContractNewReviewHref('workbench'),
-          description: compareTarget ? '进入旧文件/新文件选择页，文件属性在面板展示，不写进文件画布' : '暂无可作为版本流入口的合同；请先上传源文件或完成一个合同版本',
-          targetName: compareTarget ? contractActionName(compareTarget) : '缺少合同版本流',
-          disabled: !compareTarget,
+          href: '/contracts/upload?intent=compare',
+          description: compareTarget
+            ? '上传或选择旧文件、新文件后发起文档比对；已有合同只作为可选属性，不自动锁定目标'
+            : '上传旧文件或待比对材料后进入文档比对工作台，再补充新文件/客户回传版',
+          targetName: compareTarget ? '上传/选择比对文件' : '上传比对文件',
+          disabled: false,
         }
       }
 
@@ -533,9 +533,10 @@ export default function ContractCenterPage() {
         status: status.label,
         statusColor: status.color as string,
         updatedAt: c.updated_at,
-        href: workflowState.detailPanel === 'evidence'
-          ? buildContractWorkbenchHref(c.id, { panel: 'evidence', from: 'list' })
-          : buildContractWorkbenchHref(c.id, { from: 'list' }),
+        href: buildContractWorkbenchHref(c.id, {
+          panel: workflowState.detailPanel,
+          from: 'list',
+        }),
         meta: '合同',
         nextAction: workflowState.nextActionLabel,
         nextActionDescription: workflowState.nextActionDescription,
@@ -569,9 +570,11 @@ export default function ContractCenterPage() {
       } satisfies TaskItemView]
     })
 
-    const all = [...draftTasks, ...compareTasks, ...contractTasks].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    )
+    const all = [...draftTasks, ...contractTasks, ...compareTasks].sort((a, b) => {
+      const moduleDiff = TASK_MODULE_ORDER[a.type] - TASK_MODULE_ORDER[b.type]
+      if (moduleDiff !== 0) return moduleDiff
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
 
     return all
   }, [contracts, drafts])
@@ -630,10 +633,11 @@ export default function ContractCenterPage() {
               </div>
             </div>
 
-            {/* 桌面端保留少量全局动作，完整状态机放到正文首屏 */}
+            {/* 桌面端保留三条产品线入口，完整状态机放到正文首屏 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
-              <QuickActionButton action={resolvedQuickActions[0]} compact />
-              <QuickActionButton action={resolvedQuickActions[2]} compact />
+              {resolvedQuickActions.map((action) => (
+                <QuickActionButton key={action.id} action={action} compact />
+              ))}
             </div>
 
             {/* 移动端筛选按钮 */}
@@ -693,6 +697,10 @@ export default function ContractCenterPage() {
                     全部
                     {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.length}</span>}
                   </TabsTrigger>
+                  <TabsTrigger value="draft" className="text-xs md:text-sm">
+                    起草
+                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'draft').length}</span>}
+                  </TabsTrigger>
                   <TabsTrigger value="contract" className="text-xs md:text-sm">
                     审核
                     {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'contract').length}</span>}
@@ -700,10 +708,6 @@ export default function ContractCenterPage() {
                   <TabsTrigger value="compare" className="text-xs md:text-sm">
                     对比
                     {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'compare').length}</span>}
-                  </TabsTrigger>
-                  <TabsTrigger value="draft" className="text-xs md:text-sm">
-                    起草
-                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'draft').length}</span>}
                   </TabsTrigger>
                   <TabsTrigger value="pending" className="text-xs md:text-sm">待审核</TabsTrigger>
                   <TabsTrigger value="review" className="text-xs md:text-sm">已完成</TabsTrigger>
@@ -841,14 +845,14 @@ function ReviewLaunchPanel({
               合同中心
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              一级入口只保留合同审核、文档对比、AI 起草合同。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
+              一级入口按工作顺序保留 AI 起草合同、合同审核、文档对比。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
             </p>
           </div>
         </div>
-        <Link href="/contracts/new" prefetch={false} className="shrink-0">
+        <Link href="/contracts/draft" prefetch={false} className="shrink-0">
           <Button className="w-full gap-1.5 md:w-auto">
-            <PlusIcon className="h-4 w-4" />
-            上传源文件并发起审核
+            <PenToolIcon className="h-4 w-4" />
+            输入需求起草合同
           </Button>
         </Link>
       </div>

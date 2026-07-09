@@ -44,7 +44,7 @@ const CONFIG_TYPE_META: Record<string, { label: string }> = {
   CONTRACT_RULE: { label: '合同审核策略' },
   TAX_RULE: { label: '税率规则' },
   APPROVAL_RULE: { label: '审批权限' },
-  AI_CONFIG: { label: 'AI 配置' },
+  AI_CONFIG: { label: 'AI 模型实例' },
   UI_THEME: { label: '界面主题' },
 }
 

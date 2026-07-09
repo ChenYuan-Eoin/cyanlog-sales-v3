@@ -14,7 +14,7 @@ import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { listAccessibleUserIds } from '@/lib/scoped-access'
-import { extractContractText } from '@/lib/contracts/text-extraction'
+import { extractContractText, isLikelyReadableContractText } from '@/lib/contracts/text-extraction'
 
 const compareSchema = z.object({
   baseline_type: z.enum(['template', 'previous_version', 'uploaded']),
@@ -91,6 +91,16 @@ type DiffInsert = {
   sort_order: number
 }
 
+type ComparisonDiffRow = {
+  id: string
+  diff_type: 'deleted' | 'added' | 'modified'
+  baseline_text?: string | null
+  compare_text?: string | null
+  semantic_change?: string | null
+  risk_level?: 'red' | 'yellow' | 'green' | null
+  sort_order: number
+}
+
 const HIGH_RISK_TERMS = [
   '违约',
   '赔偿',
@@ -108,6 +118,7 @@ const HIGH_RISK_TERMS = [
 
 const TEXT_EXTRACTION_TIMEOUT_MS = 8000
 const DOWNLOAD_TIMEOUT = Symbol('download-timeout')
+const UNREADABLE_DIFF_TEXT_NOTICE = '文件文本层不可读；请以原件预览和人工/OCR定位为准。'
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof DOWNLOAD_TIMEOUT> {
   return Promise.race([
@@ -116,6 +127,23 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof DOW
       setTimeout(() => resolve(DOWNLOAD_TIMEOUT), ms)
     }),
   ])
+}
+
+function shouldHideUnreadableDiffText(value: string | null | undefined) {
+  const trimmed = (value || '').trim()
+  return trimmed.length >= 12 && !isLikelyReadableContractText(trimmed)
+}
+
+function sanitizeComparisonDiff(diff: ComparisonDiffRow): ComparisonDiffRow {
+  return {
+    ...diff,
+    baseline_text: shouldHideUnreadableDiffText(diff.baseline_text)
+      ? UNREADABLE_DIFF_TEXT_NOTICE
+      : diff.baseline_text,
+    compare_text: shouldHideUnreadableDiffText(diff.compare_text)
+      ? UNREADABLE_DIFF_TEXT_NOTICE
+      : diff.compare_text,
+  }
 }
 
 function splitComparableText(text: string): string[] {
@@ -479,12 +507,13 @@ async function resolveComparisonDocumentMeta({
 }
 
 async function ensureComparableText(contract: ComparableContract): Promise<ComparableTextResult> {
-  if (contract.parsed_text?.trim()) {
-    return { ok: true, contract: { ...contract, parsed_text: contract.parsed_text } }
+  const cachedText = contract.parsed_text?.trim()
+  if (cachedText && isLikelyReadableContractText(cachedText)) {
+    return { ok: true, contract: { ...contract, parsed_text: cachedText } }
   }
 
   if (!contract.storage_path) {
-    return { ok: false, contract, reason: 'missing_source' }
+    return { ok: false, contract, reason: cachedText ? 'extract_failed' : 'missing_source' }
   }
 
   const downloadResult = await withTimeout(
@@ -512,7 +541,7 @@ async function ensureComparableText(contract: ComparableContract): Promise<Compa
     return { ok: false, contract, reason: 'extract_failed' }
   }
 
-  if (!extractedText?.trim()) {
+  if (!extractedText?.trim() || !isLikelyReadableContractText(extractedText)) {
     return { ok: false, contract, reason: 'extract_failed' }
   }
 
@@ -811,7 +840,7 @@ export async function GET(
         baseline: baselineMeta,
         compare: compareMeta,
       },
-      diffs: comparison.comparison_diffs || [],
+      diffs: ((comparison.comparison_diffs || []) as ComparisonDiffRow[]).map(sanitizeComparisonDiff),
     })
   })
 }

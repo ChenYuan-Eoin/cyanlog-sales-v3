@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "status": "permissive",
-  "mode": "permissive",
-  "phase": "complete",
+  "status": "enforcing",
+  "mode": "enforcing",
+  "phase": "intake",
   "startedAt": "2026-06-11T00:00:00Z",
   "configPath": "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
   "activeHooks": [
@@ -10,11 +10,19 @@
     "PreToolUse",
     "Stop"
   ],
-  "activeGates": [],
+  "activeGates": [
+    "G0"
+  ],
   "longTask": {
-    "enabled": false,
-    "contractPath": null
+    "enabled": true,
+    "contractPath": "governance/runtime-state/goal-contract.json"
   },
-  "currentGoal": null,
-  "lastActivity": "2026-06-30T09:55:56.975Z"
+  "currentGoal": {
+    "id": "goal-20260702041555",
+    "objective": "从产品愿景到需求整理下，发我，不要创建文件、文档，就在这里说\n\n需求/痛点/解决方案，类似这个格式\n\n这个格式好不好再调，目标是看起来这个项目目标和需求是清晰的",
+    "contractPath": "governance/runtime-state/goal-contract.json",
+    "status": "draft",
+    "autonomy": "A0"
+  },
+  "lastActivity": "2026-07-02T04:15:55.335Z"
 }

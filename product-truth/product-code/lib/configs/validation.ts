@@ -67,7 +67,7 @@ export const aiModelStageSchema = z.enum([
 
 // AI 模型配置值验证 (F012)
 export const aiConfigValueSchema = z.object({
-  level: z.number().int().min(1).max(3),
+  level: z.number().int().min(1).max(99),
   name: z.string().min(1),
   profile: z.string().min(1).optional(),
   provider_kind: z.enum(['openai_compatible', 'builtin']).default('openai_compatible'),

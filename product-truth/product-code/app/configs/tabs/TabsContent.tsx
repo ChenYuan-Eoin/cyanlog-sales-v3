@@ -54,7 +54,7 @@ export interface TabsContentProps {
   rules: ContractPolicyRule[]
   focusRuleId?: string | null
   ruleMode?: string | null
-  onSaveRule: (rule: Partial<ContractPolicyRule>, id?: string) => void | Promise<void>
+  onSaveRule: (rule: Partial<ContractPolicyRule>, id?: string) => void | ContractPolicyRule | null | Promise<void | ContractPolicyRule | null>
   onDeleteRule: (id: string) => void
   onRefreshRules?: () => void | Promise<void>
   // config-based tabs (tax, approval, ai, theme)

@@ -95,13 +95,17 @@ const STAGE_OPTIONS = [
 
 function defaultStagesForValue(value: AIValue, configKey?: string) {
   const profile = value.profile || ''
-  if (value.provider_kind === 'builtin' || profile === 'rule_engine' || configKey === 'AI_LEVEL_3') {
+  if (value.provider_kind === 'builtin' || profile === 'rule_engine' || configKey === 'AI_RULE_ENGINE') {
     return ['structured_rules', 'rule_fallback']
   }
-  if (value.level === 2 || profile === 'sales_cloud_backup' || profile === 'cloud_primary' || configKey === 'AI_LEVEL_2') {
+  if (value.level === 2 || profile === 'sales_cloud_backup' || profile === 'cloud_primary' || configKey === 'AI_CLOUD_PRIMARY') {
     return ['semantic_review', 'tender_long_document_parse', 'comment_patch_draft', 'report_summary']
   }
   return ['semantic_review', 'comment_patch_draft', 'report_summary']
+}
+
+function newModelKey(prefix: string) {
+  return `${prefix}_${Date.now()}`
 }
 
 export default function AIEditForm({ config, onChange }: AIEditFormProps) {
@@ -109,8 +113,8 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
   const [probing, setProbing] = useState(false)
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
   const [probeError, setProbeError] = useState<string | null>(null)
-  const isLocalLevel = value.level === 1 || value.profile === 'local_primary' || config.key === 'AI_LEVEL_1'
-  const isCloudLevel = value.level === 2 || value.profile === 'cloud_primary' || value.profile === 'sales_cloud_backup' || config.key === 'AI_LEVEL_2'
+  const isLocalProvider = value.profile === 'local_primary' || (typeof value.base_url === 'string' && value.base_url.includes('127.0.0.1'))
+  const isCloudProvider = value.profile === 'cloud_primary' || value.profile === 'sales_cloud_backup'
   const activeStages = Array.isArray(value.stages) && value.stages.length > 0
     ? value.stages
     : defaultStagesForValue(value, config.key)
@@ -133,7 +137,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
     if (preset === 'local') {
       onChange({
         ...config,
-        key: config.id ? config.key : 'AI_LEVEL_1',
+        key: config.id ? config.key : (config.key || newModelKey('AI_LOCAL_MODEL')),
         name: config.name || '本地 gpt-oss-20b',
         value: {
           ...value,
@@ -154,7 +158,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
     if (preset === 'cloud') {
       onChange({
         ...config,
-        key: config.id ? config.key : 'AI_LEVEL_2',
+        key: config.id ? config.key : (config.key || newModelKey('AI_CLOUD_MODEL')),
         name: config.name || '云端 OpenAI-compatible',
         value: {
           ...value,
@@ -174,7 +178,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
     }
     onChange({
       ...config,
-      key: config.id ? config.key : 'AI_LEVEL_3',
+      key: config.id ? config.key : (config.key || newModelKey('AI_RULE_ENGINE')),
       name: config.name || '规则引擎 (兜底)',
       value: {
         ...value,
@@ -210,7 +214,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
           base_url: value.base_url || '',
           api_key: value.api_key || '',
           model: value.model || '',
-          timeout_ms: value.timeout_ms || (isLocalLevel ? 120000 : isCloudLevel ? 60000 : 15000),
+          timeout_ms: value.timeout_ms || (isLocalProvider ? 120000 : isCloudProvider ? 60000 : 15000),
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -235,43 +239,47 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
         <div className="font-medium">来源口径</div>
         <p className="mt-1">
-          当前弹窗是表单草稿，测试连接只使用正在输入的 Base URL、Model 和 Token。
-          只有保存并发布后才会进入数据库 AI_CONFIG / ModelPolicy；只有真实 ReviewRun 写入 model_invocations 后，才能算正式模型调用证据。
+          当前弹窗只维护一个“模型实例”。测试连接只使用正在输入的 Base URL、Model 和 Token。
+          保存并发布后，它会进入数据库 AI_CONFIG，再由 ModelPolicy 生成策略快照；只有真实任务写入 model_invocations 后，才能算正式模型调用证据。
         </p>
       </div>
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="text-sm font-medium text-slate-900">快速套用</div>
+        <div className="text-sm font-medium text-slate-900">快速填充实例预设</div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          预设只负责填表，不代表系统只能接三种模型。可以创建任意数量的本地、云端、专用长文档或规则执行器实例。
+        </p>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => applyPreset('local')}>
-            L1 本地
+            本地模型实例
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => applyPreset('cloud')}>
-            L2 云端
+            云端模型实例
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => applyPreset('builtin')}>
-            L3 兜底
+            规则执行器
           </Button>
         </div>
       </div>
       <div>
-        <label className="text-sm font-medium">配置键 (Key)</label>
+        <label className="text-sm font-medium">模型实例 Key</label>
         <Input
           value={config.key || ''}
           onChange={(e) => onChange({ ...config, key: e.target.value })}
-          placeholder="如: AI_LEVEL_1"
+          placeholder="如: AI_LOCAL_MODEL_20260708"
           disabled={!!config.id}
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-sm font-medium">降级等级</label>
+          <label className="text-sm font-medium">策略优先级</label>
           <Input
             type="number"
             min={1}
-            max={3}
+            max={99}
             value={value.level || 1}
             onChange={(e) => updateValue({ level: parseInt(e.target.value) })}
           />
+          <p className="mt-1 text-xs text-slate-500">数值越小越先进入候选池；实际调用由策略规则和降级链决定。</p>
         </div>
         <div>
           <label className="text-sm font-medium">显示名称</label>
@@ -309,7 +317,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
         </div>
       </div>
       <div>
-        <div className="mb-2 text-sm font-medium">运行阶段</div>
+        <div className="mb-2 text-sm font-medium">可服务阶段 / 能力标签</div>
         <div className="grid grid-cols-2 gap-2">
           {STAGE_OPTIONS.map((stage) => (
             <label
@@ -334,7 +342,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
         <Input
           value={value.model || ''}
           onChange={(e) => updateValue({ model: e.target.value })}
-          placeholder={isLocalLevel ? '如: gpt-oss-20b' : '如: gemini-2.5-flash-lite'}
+          placeholder={isLocalProvider ? '如: gpt-oss-20b' : '如: gemini-2.5-flash-lite'}
         />
       </div>
       <div>
@@ -342,7 +350,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
         <Input
           value={value.base_url || ''}
           onChange={(e) => updateValue({ base_url: e.target.value })}
-          placeholder={value.provider_kind === 'builtin' ? 'builtin 可留空' : isCloudLevel ? '如: https://cloud.yiyongai.cn/v1' : '如: http://127.0.0.1:1234/v1'}
+          placeholder={value.provider_kind === 'builtin' ? 'builtin 可留空' : isCloudProvider ? '如: https://cloud.yiyongai.cn/v1' : '如: http://127.0.0.1:1234/v1'}
         />
       </div>
       <div>
@@ -356,7 +364,7 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
           type="password"
           value={value.api_key || ''}
           onChange={(e) => updateValue({ api_key: e.target.value })}
-          placeholder={isLocalLevel ? 'LM Studio 开启认证时填写 Developer Token' : '粘贴云模型 Token，留空保持现有值'}
+          placeholder={isLocalProvider ? 'LM Studio 开启认证时填写 Developer Token' : '粘贴云模型 Token，留空保持现有值'}
         />
         <p className="text-xs text-slate-500 mt-1">安全存储，API 返回时脱敏显示；已保存的密钥留空不会被清空。</p>
         {probeResult ? (
@@ -420,10 +428,10 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-900">
         <div className="font-medium">配置口径</div>
         <div className="mt-2 space-y-1">
-          <p>L1 本地模型：启动 LM Studio Local Server，Base URL 使用 http://127.0.0.1:1234/v1，模型标识使用已加载模型的 API Identifier。</p>
+          <p>本地模型实例：启动 LM Studio Local Server，Base URL 使用 http://127.0.0.1:1234/v1，模型标识使用已加载模型的 API Identifier。</p>
           <p>如果 LM Studio 开启 Require Authentication，必须填写 Developer Token；测试连接只验 HTTP，不把本机 CLI 当作正式接入。</p>
-          <p>L2 云模型：用于复杂规则、标书解析、长文本和长 PDF；使用 OpenAI-compatible 网关，复制 Base URL、模型 ID 和 Token 到这里，根地址会自动按 /v1 调用。</p>
-          <p>L3 规则引擎：Provider 类型选择 builtin，模型标识固定 rule-engine，不填写地址和密钥。</p>
+          <p>云端模型实例：用于复杂规则、标书解析、长文本和长 PDF；使用 OpenAI-compatible 网关，复制 Base URL、模型 ID 和 Token 到这里，根地址会自动按 /v1 调用。</p>
+          <p>规则引擎实例：Provider 类型选择 builtin，模型标识固定 rule-engine，不填写地址和密钥；它只能兜底确定性规则，不能冒充 AI 审核。</p>
           <p>
             Token 控制台：{' '}
             <a className="font-medium underline" href="https://cloud.yiyongai.cn/console/token" target="_blank" rel="noreferrer">
@@ -450,6 +458,26 @@ export default function AIEditForm({ config, onChange }: AIEditFormProps) {
             onChange={(e) => updateValue({ routing: { ...value.routing, max_pages: parseInt(e.target.value) } })}
           />
         </div>
+      </div>
+      <div>
+        <label className="text-sm font-medium">文本路由策略</label>
+        <select
+          className="w-full mt-1 rounded-md border p-2 text-sm"
+          value={value.routing?.strategy || (value.provider_kind === 'builtin' ? 'rule' : 'full')}
+          onChange={(e) => updateValue({
+            routing: {
+              ...value.routing,
+              strategy: e.target.value as 'full' | 'chunked' | 'rule',
+            },
+          })}
+        >
+          <option value="full">full - 短文/常规合同尽量完整送入模型</option>
+          <option value="chunked">chunked - 长合同/标书分段选择和汇总</option>
+          <option value="rule">rule - 只执行规则引擎确定性兜底</option>
+        </select>
+        <p className="mt-1 text-xs text-slate-500">
+          路由网关会结合任务类型、页数、能力阶段和优先级决定候选模型；这里定义单个模型实例适合的文本处理方式。
+        </p>
       </div>
       <div className="flex items-center gap-2">
         <input

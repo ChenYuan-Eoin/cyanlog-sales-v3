@@ -20,11 +20,15 @@ vi.mock('@/lib/supabase', () => ({
 
 vi.mock('@/lib/contracts/text-extraction', () => ({
   extractContractText: vi.fn(),
+  isLikelyReadableContractText: vi.fn((text: string | null | undefined) => {
+    const value = (text || '').trim()
+    return Boolean(value) && !value.includes('ÚØëü') && !value.includes('乱码')
+  }),
 }))
 
 import { extractContractText } from '@/lib/contracts/text-extraction'
 import { supabaseAdmin } from '@/lib/supabase'
-import { POST } from './route'
+import { GET, POST } from './route'
 
 function makeJsonRequest(body: unknown): any {
   return {
@@ -34,7 +38,15 @@ function makeJsonRequest(body: unknown): any {
   }
 }
 
-function installSupabaseMock(contracts: any[], versions: any[] = []) {
+function makeGetRequest(url = 'http://localhost/api/contracts/11111111-1111-4111-8111-111111111111/compare'): any {
+  return {
+    url,
+    method: 'GET',
+    headers: new Headers(),
+  }
+}
+
+function installSupabaseMock(contracts: any[], versions: any[] = [], comparisons: any[] = []) {
   const updates: any[] = []
   const diffInserts: any[] = []
   const comparisonInserts: any[] = []
@@ -72,6 +84,7 @@ function installSupabaseMock(contracts: any[], versions: any[] = []) {
     })),
   }
   const comparisonTable: any = {
+    select: vi.fn().mockImplementation(() => comparisonQuery),
     insert: vi.fn((payload) => {
       comparisonInserts.push(payload)
       return comparisonInsertChain
@@ -81,6 +94,13 @@ function installSupabaseMock(contracts: any[], versions: any[] = []) {
       return comparisonTable
     }),
     eq: vi.fn().mockReturnThis(),
+  }
+  const comparisonQuery: any = {
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    then: (resolve: any, reject: any) => Promise.resolve({ data: comparisons, error: null }).then(resolve, reject),
   }
 
   const diffTable: any = {
@@ -165,6 +185,52 @@ describe('POST /api/contracts/[id]/compare', () => {
       status: 'completed',
     })
     expect(supabase.diffInserts[0].length).toBeGreaterThan(0)
+  })
+
+  it('缓存 parsed_text 不可读时不复用坏证据，会重新从源文件提取', async () => {
+    ;(extractContractText as any).mockReturnValue('第一条 付款期限为30日')
+    const supabase = installSupabaseMock([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        filename: 'baseline.pdf',
+        status: 'COMPLETED',
+        parsed_text: 'ÚØëü n#ÜCóS$±vÁ N\ri»êiÀöAOHr4ÙUù gÓÆ0nR',
+        storage_path: 'baseline.pdf',
+        mime_type: 'application/pdf',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        filename: 'compare.docx',
+        status: 'COMPLETED',
+        parsed_text: '第一条 付款期限为60日',
+        storage_path: 'compare.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+    ])
+
+    const res = await POST(makeJsonRequest({
+      baseline_type: 'previous_version',
+      compare_doc_id: '22222222-2222-4222-8222-222222222222',
+    }), {
+      params: Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.data.diffs[0]).toMatchObject({
+      baseline_text: '第一条 付款期限为30日',
+      compare_text: '第一条 付款期限为60日',
+    })
+    expect(supabase.storageBucket.download).toHaveBeenCalledWith('baseline.pdf')
+    expect(extractContractText).toHaveBeenCalled()
+    expect(supabase.updates[0]).toMatchObject({
+      parsed_text: '第一条 付款期限为30日',
+      ocr_status: 'COMPLETED',
+    })
   })
 
   it('将同一条款的内容变化归并为一条修改差异', async () => {
@@ -496,5 +562,49 @@ describe('POST /api/contracts/[id]/compare', () => {
     expect(body.error.message).toBe('baseline.docx 无法提取可比对文本，请上传可复制文本的 docx/pdf')
     expect(supabase.storageBucket.download).toHaveBeenCalledWith('baseline.docx')
     expect(supabase.diffInserts).toHaveLength(0)
+  })
+
+  it('查询历史比对结果时隐藏旧乱码证据文本', async () => {
+    installSupabaseMock([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        filename: 'baseline.docx',
+        status: 'COMPLETED',
+        parsed_text: '第一条 付款期限为30日',
+        storage_path: 'baseline.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        created_by: 'user-1',
+        org_id: 'org-1',
+      },
+    ], [], [
+      {
+        id: 'comparison-1',
+        contract_id: '11111111-1111-4111-8111-111111111111',
+        baseline_doc_id: null,
+        compare_doc_id: null,
+        comparison_diffs: [
+          {
+            id: 'diff-1',
+            diff_type: 'deleted',
+            baseline_text: 'ÚØëü n#ÜCóS$±vÁ N\ri»êiÀöAOHr4ÙUù gÓÆ0nR',
+            compare_text: '第一条 付款期限为60日',
+            semantic_change: '旧证据不可读',
+            risk_level: 'yellow',
+            sort_order: 1,
+          },
+        ],
+      },
+    ])
+
+    const res = await GET(makeGetRequest(), {
+      params: Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.data.diffs[0]).toMatchObject({
+      baseline_text: '文件文本层不可读；请以原件预览和人工/OCR定位为准。',
+      compare_text: '第一条 付款期限为60日',
+    })
   })
 })

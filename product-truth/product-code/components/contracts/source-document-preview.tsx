@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { AlertTriangleIcon, ExternalLinkIcon, FileTextIcon, Loader2Icon, MapPinIcon } from 'lucide-react'
 import { inferDocumentLocator } from '@/lib/contracts/document-locator'
@@ -125,6 +125,7 @@ export function SourceDocumentPreview({
   const [evidenceFocusState, setEvidenceFocusState] = useState<EvidenceFocusState>('idle')
   const [evidencePageNumber, setEvidencePageNumber] = useState<number | null>(null)
   const [renderedPageCount, setRenderedPageCount] = useState<number | null>(null)
+  const [zoom, setZoom] = useState(100)
   const rawFileUrl = file?.fileUrl || ''
   const requiresAuthorizedPreview = needsAuthorizedPreviewFetch(rawFileUrl)
   const effectiveFileUrl = requiresAuthorizedPreview ? authorizedPreviewUrl : rawFileUrl
@@ -160,6 +161,13 @@ export function SourceDocumentPreview({
     : docxState === 'failed' || authorizedPreviewError
       ? 'destructive'
       : 'outline'
+  const canZoom = canPreviewPdf || canPreviewDocx
+  const docxZoomStyle = { zoom: `${zoom}%` } as CSSProperties
+  const pdfPreviewUrl = useMemo(() => {
+    if (!effectiveFileUrl || !canPreviewPdf) return effectiveFileUrl
+    const separator = effectiveFileUrl.includes('#') ? '&' : '#'
+    return `${effectiveFileUrl}${separator}zoom=${zoom}`
+  }, [canPreviewPdf, effectiveFileUrl, zoom])
 
   useEffect(() => {
     selectedTextRef.current = selectedText
@@ -181,11 +189,9 @@ export function SourceDocumentPreview({
       setAuthorizedPreviewLoading(true)
       try {
         const token = window.localStorage.getItem('token')
-        if (!token) {
-          throw new Error('未找到登录 token，无法读取私有文件预览。')
-        }
         const response = await fetch(rawFileUrl, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'same-origin',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         })
         if (!response.ok) {
           throw new Error(`文件读取失败：${response.status}`)
@@ -314,19 +320,48 @@ export function SourceDocumentPreview({
             {file?.storagePath ? ` · ${file.storagePath}` : ''}
           </p>
         </div>
-        {effectiveFileUrl ? (
-          <a
-            href={effectiveFileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[0.8rem] font-medium text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <ExternalLinkIcon className="h-3.5 w-3.5" />
-            打开原件
-          </a>
-        ) : (
-          <Badge variant="outline">无可访问文件</Badge>
-        )}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {canZoom ? (
+            <div className="inline-flex h-7 items-center overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] font-medium text-slate-700">
+              <button
+                type="button"
+                className="h-full px-2 hover:bg-slate-100 disabled:text-slate-300"
+                disabled={zoom <= 70}
+                onClick={() => setZoom((value) => Math.max(70, value - 10))}
+              >
+                -
+              </button>
+              <button
+                type="button"
+                className="h-full border-x border-slate-200 px-2 hover:bg-slate-100"
+                onClick={() => setZoom(100)}
+              >
+                {zoom}%
+              </button>
+              <button
+                type="button"
+                className="h-full px-2 hover:bg-slate-100 disabled:text-slate-300"
+                disabled={zoom >= 180}
+                onClick={() => setZoom((value) => Math.min(180, value + 10))}
+              >
+                +
+              </button>
+            </div>
+          ) : null}
+          {effectiveFileUrl ? (
+            <a
+              href={effectiveFileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[0.8rem] font-medium text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <ExternalLinkIcon className="h-3.5 w-3.5" />
+              打开原件
+            </a>
+          ) : (
+            <Badge variant="outline">无可访问文件</Badge>
+          )}
+        </div>
       </div>
 
       {locator.mode !== 'missing' ? (
@@ -359,11 +394,13 @@ export function SourceDocumentPreview({
           </div>
         </div>
       ) : canPreviewPdf ? (
-        <iframe
-          title={`${file?.label || fallbackLabel} PDF 原件预览`}
-          src={effectiveFileUrl}
-          className={`${frameHeightClassName} w-full bg-white`}
-        />
+        <div className={`${frameHeightClassName} overflow-auto bg-slate-100`}>
+          <iframe
+            title={`${file?.label || fallbackLabel} PDF 原件预览`}
+            src={pdfPreviewUrl}
+            className={`${frameHeightClassName} w-full bg-white`}
+          />
+        </div>
       ) : canPreviewDocx ? (
         <div className="relative bg-slate-100 p-3">
           {docxState === 'loading' ? (
@@ -383,7 +420,11 @@ export function SourceDocumentPreview({
               </div>
             </div>
           ) : null}
-          <div ref={containerRef} className={`ones-docx-preview-surface ${surfaceMinHeightClassName} overflow-auto`} />
+          <div className="overflow-auto">
+            <div style={docxZoomStyle}>
+              <div ref={containerRef} className={`ones-docx-preview-surface ${surfaceMinHeightClassName} overflow-auto`} />
+            </div>
+          </div>
         </div>
       ) : (
         <div className="p-4">

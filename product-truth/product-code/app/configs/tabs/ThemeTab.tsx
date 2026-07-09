@@ -431,10 +431,10 @@ function BrandAssetPreview({
   return (
     <div className="rounded-md border border-slate-200 bg-white p-2">
       <div className="text-xs text-slate-500">{label}</div>
-      <div className={`mt-2 flex ${square ? 'h-16' : 'h-20'} items-center justify-center rounded border border-slate-100 bg-slate-50`}>
+      <div className={`mt-2 flex ${square ? 'h-16' : 'h-20'} items-center justify-center rounded border border-slate-100 bg-slate-50 overflow-hidden`}>
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="max-h-full max-w-full object-contain" />
+          <img src={value} alt="" className="h-full w-full object-contain" />
         ) : (
           <span className="rounded bg-slate-900 px-2 py-1 text-xs font-semibold text-white">{fallback}</span>
         )}

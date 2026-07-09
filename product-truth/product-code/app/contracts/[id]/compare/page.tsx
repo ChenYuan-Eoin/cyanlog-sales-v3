@@ -260,6 +260,7 @@ export default function ContractComparePage() {
   const [error, setError] = useState('')
   const [selectedDiffId, setSelectedDiffId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'dual' | 'merge'>('dual')
+  const [scrollSyncEnabled, setScrollSyncEnabled] = useState(false)
   const [diffFilter, setDiffFilter] = useState<DiffFilter>('all')
   const [baselineContract, setBaselineContract] = useState<ContractDetail | null>(null)
   const [candidateContracts, setCandidateContracts] = useState<CompareCandidateOption[]>([])
@@ -273,6 +274,7 @@ export default function ContractComparePage() {
   const [startingComparison, setStartingComparison] = useState(false)
   const [startingRerun, setStartingRerun] = useState(false)
   const [rerunNotice, setRerunNotice] = useState('')
+  const [exportReportNotice, setExportReportNotice] = useState('')
   const [setupError, setSetupError] = useState('')
   const [setupSuccess, setSetupSuccess] = useState('')
   const [uploadingTarget, setUploadingTarget] = useState<CompareUploadTarget | null>(null)
@@ -636,8 +638,102 @@ export default function ContractComparePage() {
     }
   }, [comparison, contractId, router])
 
+  const handleExportDiffReport = useCallback(() => {
+    if (!comparison) return
+    setExportReportNotice('')
+    const escapeHtml = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+    const baseline = comparison.document_pair?.baseline
+    const compare = comparison.document_pair?.compare
+    const diffs = comparison.diffs || []
+    const redCount = diffs.filter((diff) => diff.risk_level === 'red').length
+    const yellowCount = diffs.filter((diff) => diff.risk_level === 'yellow').length
+    const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>合同文档差异报告</title>
+  <style>
+    body { margin: 32px; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.65; }
+    h1 { margin: 0 0 16px; font-size: 28px; }
+    h2 { margin-top: 32px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; font-size: 20px; }
+    .meta, .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 24px; }
+    .box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #f8fafc; }
+    .label { color: #64748b; font-size: 12px; }
+    .value { margin-top: 4px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    th, td { border: 1px solid #e2e8f0; padding: 10px; vertical-align: top; text-align: left; }
+    th { background: #f8fafc; }
+    .red { color: #dc2626; font-weight: 700; }
+    .yellow { color: #d97706; font-weight: 700; }
+    .green { color: #059669; font-weight: 700; }
+    .text { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>合同文档差异报告</h1>
+  <div class="meta">
+    <div class="box"><div class="label">比对编号</div><div class="value">${escapeHtml(comparison.id)}</div></div>
+    <div class="box"><div class="label">旧文件</div><div class="value">${escapeHtml(sourceLabel(baseline))} / ${escapeHtml(baseline?.label || baseline?.filename || '未记录')}</div></div>
+    <div class="box"><div class="label">新文件</div><div class="value">${escapeHtml(sourceLabel(compare))} / ${escapeHtml(compare?.label || compare?.filename || '未记录')}</div></div>
+    <div class="box"><div class="label">生成时间</div><div class="value">${escapeHtml(new Date().toLocaleString('zh-CN'))}</div></div>
+  </div>
+  <div class="summary">
+    <div class="box"><div class="label">差异总数</div><div class="value">${diffs.length}</div></div>
+    <div class="box"><div class="label">红线</div><div class="value red">${redCount}</div></div>
+    <div class="box"><div class="label">需关注</div><div class="value yellow">${yellowCount}</div></div>
+    <div class="box"><div class="label">普通差异</div><div class="value">${Math.max(diffs.length - redCount - yellowCount, 0)}</div></div>
+  </div>
+  <h2>AI 差异披露摘要</h2>
+  <p class="text">${escapeHtml(comparison.ai_summary || '未生成摘要。')}</p>
+  <h2>差异明细</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>序号</th>
+        <th>类型</th>
+        <th>风险变化</th>
+        <th>业务影响</th>
+        <th>旧文件内容</th>
+        <th>新文件内容</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${diffs.map((diff, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(diffTypeLabel(diff.diff_type))}</td>
+          <td class="${diff.risk_level === 'red' ? 'red' : diff.risk_level === 'yellow' ? 'yellow' : 'green'}">${escapeHtml(riskChangeLabel(diff))}</td>
+          <td class="text">${escapeHtml(diff.semantic_change || '未生成业务影响说明')}</td>
+          <td class="text">${escapeHtml(diff.baseline_text || '无')}</td>
+          <td class="text">${escapeHtml(diff.compare_text || '无')}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+</body>
+</html>`
+    const blob = new Blob(['\ufeff', html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    const filename = `contract-diff-report-${comparison.id}.html`
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    setExportReportNotice(`差异报告已生成：${filename}`)
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    window.setTimeout(() => setExportReportNotice(''), 4000)
+  }, [comparison])
+
   // 同步滚动
   const handleScroll = useCallback((source: 'left' | 'right') => {
+    if (!scrollSyncEnabled) return
     if (isSyncing.current) return
     isSyncing.current = true
 
@@ -651,7 +747,7 @@ export default function ContractComparePage() {
     setTimeout(() => {
       isSyncing.current = false
     }, 50)
-  }, [])
+  }, [scrollSyncEnabled])
 
   // 跳转到指定差异
   const scrollToDiff = useCallback((diffId: string) => {
@@ -776,9 +872,9 @@ export default function ContractComparePage() {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* 差异导航面板 */}
-      <aside className="w-56 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 2xl:w-64">
+      <aside className="w-48 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 2xl:w-56">
         {/* Header */}
-        <div className="p-4 border-b border-slate-100">
+        <div className="p-3 border-b border-slate-100">
             <div className="mb-2 flex flex-wrap gap-1.5">
             <Link href={buildContractsCenterHref()}>
               <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
@@ -807,7 +903,7 @@ export default function ContractComparePage() {
         </div>
 
         {/* 差异统计 */}
-        <div className="px-3 py-3 bg-slate-50 border-b border-slate-100 grid grid-cols-3 gap-2 text-xs">
+        <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 grid grid-cols-3 gap-2 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 bg-red-200 border border-red-300 rounded-sm" />
             <span className="truncate text-slate-600">删 {stats.deleted}</span>
@@ -848,7 +944,7 @@ export default function ContractComparePage() {
             <button
               key={diff.id}
               onClick={() => scrollToDiff(diff.id)}
-              className={`w-full text-left p-4 border-l-4 transition-colors ${
+              className={`w-full text-left p-3 border-l-4 transition-colors ${
                 selectedDiffId === diff.id
                   ? 'bg-indigo-50 border-indigo-500'
                   : 'border-transparent hover:bg-slate-50'
@@ -922,7 +1018,7 @@ export default function ContractComparePage() {
       </aside>
 
       {/* 主内容区 */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* 顶部操作栏 */}
         <header className="min-h-16 bg-white border-b border-slate-200 flex flex-col gap-3 px-4 py-3 flex-shrink-0 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 flex flex-1 flex-col gap-2">
@@ -999,7 +1095,18 @@ export default function ContractComparePage() {
                 合并视图
               </button>
             </div>
-            <Button size="sm" variant="outline" disabled title="差异报告导出需要绑定正式对比版本后接入">
+            <button
+              type="button"
+              onClick={() => setScrollSyncEnabled((value) => !value)}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                scrollSyncEnabled
+                  ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300'
+              }`}
+            >
+              滚动：{scrollSyncEnabled ? '同步' : '独立'}
+            </button>
+            <Button size="sm" variant="outline" onClick={handleExportDiffReport}>
               <DownloadIcon className="h-4 w-4 mr-1.5" />
               导出差异报告
             </Button>
@@ -1009,6 +1116,11 @@ export default function ContractComparePage() {
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
           PDF 直接内嵌；私有 DOCX 使用签名源文件做浏览器页级渲染，并保留打开原件与文本证据定位复核入口。当前差异定位仍以文本证据为准。
         </div>
+        {exportReportNotice ? (
+          <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs leading-5 text-emerald-700">
+            {exportReportNotice}
+          </div>
+        ) : null}
 
         {/* 差异高亮说明 */}
         <div className="h-10 bg-slate-50 border-b border-slate-200 flex items-center px-4 gap-6 text-xs">
@@ -1040,7 +1152,7 @@ export default function ContractComparePage() {
         />
 
         {/* 对比区 */}
-	      <div className="relative flex-1 flex overflow-hidden bg-slate-100 p-2 gap-2">
+	      <div className="relative grid min-h-0 flex-1 grid-cols-2 gap-1.5 overflow-hidden bg-slate-100 p-1.5">
           {viewMode === 'merge' ? (
             <MergedDiffView
               diffs={visibleDiffs}
@@ -1053,15 +1165,17 @@ export default function ContractComparePage() {
           <div
             ref={leftPaneRef}
             onScroll={() => handleScroll('left')}
-            className="flex-1 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
+            className="min-w-0 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
           >
-            <div className="p-2">
+            <div className="p-1.5">
               <SourceDocumentPreview
                 file={toSourcePreviewFile(documentPair?.baseline, '当前合同基准文件')}
                 title={`旧文件原件预览 · ${sourceLabel(documentPair?.baseline)}`}
                 selectedText={selectedDiff?.baseline_text || ''}
                 fallbackLabel="当前合同基准文件"
-                minHeightClassName="min-h-[640px]"
+                minHeightClassName="min-h-[calc(100dvh-230px)]"
+                surfaceMinHeightClassName="min-h-[calc(100dvh-300px)]"
+                frameHeightClassName="h-[calc(100dvh-300px)]"
               />
               <DocumentDiffEvidence side="baseline" diff={selectedDiff} />
             </div>
@@ -1071,15 +1185,17 @@ export default function ContractComparePage() {
           <div
             ref={rightPaneRef}
             onScroll={() => handleScroll('right')}
-            className="flex-1 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
+            className="min-w-0 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
           >
-            <div className="p-2">
+            <div className="p-1.5">
               <SourceDocumentPreview
                 file={toSourcePreviewFile(documentPair?.compare, '客户回传文件')}
                 title={`新文件原件预览 · ${sourceLabel(documentPair?.compare)}`}
                 selectedText={selectedDiff?.compare_text || ''}
                 fallbackLabel="客户回传文件"
-                minHeightClassName="min-h-[640px]"
+                minHeightClassName="min-h-[calc(100dvh-230px)]"
+                surfaceMinHeightClassName="min-h-[calc(100dvh-300px)]"
+                frameHeightClassName="h-[calc(100dvh-300px)]"
               />
               <DocumentDiffEvidence side="compare" diff={selectedDiff} />
             </div>
@@ -1096,8 +1212,8 @@ export default function ContractComparePage() {
         </div>
       </main>
 
-      <aside className="hidden w-64 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex 2xl:w-72">
-        <div className="border-b border-slate-100 p-4">
+      <aside className="hidden w-56 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex 2xl:w-64">
+        <div className="border-b border-slate-100 p-3">
           <div className="text-xs font-medium text-slate-500">复核闭环</div>
           <h2 className="mt-1 text-base font-semibold text-slate-950">AI 差异披露与合规建议</h2>
           <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -1105,7 +1221,7 @@ export default function ContractComparePage() {
           </p>
         </div>
 
-        <div className="space-y-4 overflow-y-auto p-4">
+        <div className="space-y-3 overflow-y-auto p-3">
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
               <div className="text-lg font-semibold text-slate-900">{totalChanges}</div>
@@ -1468,7 +1584,7 @@ function CompareSetupWorkspace({
   const recommendedCandidates = candidateContracts.filter((contract) => contract.relation_status === 'recommended')
   const manualConfirmCandidates = candidateContracts.filter((contract) => contract.relation_status === 'manual_confirm')
   const selectedBaselineName = selectedBaselineVersion
-    ? `v${selectedBaselineVersion.version_number} ${selectedBaselineVersion.source === 'original' ? '源文件' : '客户回传版'}`
+    ? `v${selectedBaselineVersion.version_number} ${selectedBaselineVersion.source === 'original' ? '源文件' : '旧稿/人工基准'}`
     : selectedBaselineCandidate?.filename || baselineContract?.filename || '当前合同'
   const selectedCompareName = selectedVersion
     ? `v${selectedVersion.version_number} 客户回传版`
@@ -1551,9 +1667,9 @@ function CompareSetupWorkspace({
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <FileTextIcon className="h-4 w-4 text-indigo-500" />
-                    <h2 className="font-semibold text-slate-950">基准文件</h2>
+                    <h2 className="font-semibold text-slate-950">旧文件</h2>
                   </div>
-                  <Badge variant="outline">可切换</Badge>
+                  <Badge variant="outline">默认当前合同，可替换</Badge>
                 </div>
                 <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedBaselineName}</p>
                 <div className="mt-3 space-y-1 text-xs text-slate-500">
@@ -1561,8 +1677,8 @@ function CompareSetupWorkspace({
                   <p>客户：{baselineContract?.party_b_name || '未记录'}</p>
                   <p>报价：{baselineContract?.quote_id || '未绑定'}</p>
                 </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                  <label className={`inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md bg-slate-950 px-3 text-sm font-medium text-white transition hover:bg-slate-800 ${
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <label className={`inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 transition hover:bg-slate-50 ${
                     uploadingTarget === 'baseline' ? 'pointer-events-none opacity-70' : ''
                   }`}>
                     <input
@@ -1586,8 +1702,13 @@ function CompareSetupWorkspace({
                     className="w-full"
                     onClick={() => setShowAdvancedSelection((value) => !value)}
                   >
-                    {showAdvancedSelection ? '收起属性选择' : '系统版本库 / 基准切换'}
+                    {showAdvancedSelection ? '收起版本选择' : '选择历史版本'}
                   </Button>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs leading-5 text-slate-500">
+                    普通路径默认使用当前合同作为旧文件；如果你手里有本地旧稿，就直接在这里上传，不需要进入版本库。
+                  </p>
                 </div>
               </div>
 
@@ -1631,7 +1752,7 @@ function CompareSetupWorkspace({
                   <>
                     <p className="text-sm font-semibold text-slate-900">还没有新文件</p>
                     <p className="mt-2 text-xs leading-5 text-slate-500">
-                      对比应以实时上传的客户回传版为主。没有明确回传件时，不把历史版本和候选合同摊在文件画布里。
+                      对比应以实时上传的新文件 / 客户回传版为主。没有明确回传件时，不把历史版本和候选合同摊在文件画布里。
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <label className={`inline-flex h-9 cursor-pointer items-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition hover:bg-blue-700 ${
@@ -1658,7 +1779,7 @@ function CompareSetupWorkspace({
                           size="sm"
                           onClick={() => setShowAdvancedSelection(true)}
                         >
-                          选择已有回传
+                          选择已有版本
                         </Button>
                       )}
                     </div>
@@ -1718,7 +1839,7 @@ function CompareSetupWorkspace({
                   <div>
                     <h2 className="font-semibold text-slate-950">高级选择</h2>
                     <p className="text-sm text-slate-500">
-                      只在明确知道要比较哪两个已有文件时使用。普通路径建议直接上传客户回传版。
+                      只在明确知道要比较哪两个已有文件时使用。普通路径建议直接上传旧文件和新文件。
                     </p>
                   </div>
                   <Badge variant="outline">已有回传 {comparableVersions.length} / 候选 {candidateContracts.length}</Badge>

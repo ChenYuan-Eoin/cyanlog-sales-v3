@@ -18,6 +18,7 @@ import {
   FolderIcon,
   FolderTreeIcon,
   GitBranchIcon,
+  PencilIcon,
   PlayIcon,
   PlusIcon,
   SearchIcon,
@@ -26,6 +27,7 @@ import {
   XIcon,
 } from 'lucide-react'
 import type { ContractPolicyRule, ContractRuleSet } from '@/types/rules'
+import { confirmAction } from '@/lib/toast'
 import {
   asRecord,
   buildRuleSetSections,
@@ -46,7 +48,7 @@ interface RuleTabProps {
   rules: ContractPolicyRule[]
   focusRuleId?: string | null
   ruleMode?: string | null
-  onSave: (rule: Partial<ContractPolicyRule>, id?: string) => void | Promise<void>
+  onSave: (rule: Partial<ContractPolicyRule>, id?: string) => void | ContractPolicyRule | null | Promise<void | ContractPolicyRule | null>
   onDelete: (id: string) => void
   onRefresh?: () => void | Promise<void>
 }
@@ -257,6 +259,15 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     code: '',
     description: '',
   })
+  const [editRuleSetOpen, setEditRuleSetOpen] = useState(false)
+  const [savingRuleSetMeta, setSavingRuleSetMeta] = useState(false)
+  const [ruleSetMetaDraft, setRuleSetMetaDraft] = useState({
+    id: '',
+    name: '',
+    code: '',
+    description: '',
+    priority: 100,
+  })
   const [savingRuleSetDocument, setSavingRuleSetDocument] = useState(false)
   const [ruleSetDocumentDraft, setRuleSetDocumentDraft] = useState({ title: '', content: '' })
   const [saving, setSaving] = useState(false)
@@ -351,6 +362,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       clauseCategory: ruleSetPrimaryCategory(activeRuleSet),
     }
   }, [activeRuleSet])
+  const canCreateRuleInActiveSet = Boolean(activeRuleSet && activeRuleSet.key !== 'all')
   const showRuleSetClosure = false
 
   useEffect(() => {
@@ -406,7 +418,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }, [activeRuleSetKey, selectedRule])
 
   const handleNewRule = () => {
+    if (!canCreateRuleInActiveSet) {
+      setFeedback({ tone: 'error', message: '请先在左侧选择一个具体规则集，再新增规则。' })
+      return
+    }
     setTranslationDraft(null)
+    setFeedback(null)
     setSelectedRule(null)
     setActiveTab('design')
   }
@@ -415,6 +432,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     setActiveRuleSetKey(ruleSet.key)
     setSelectedRule(ruleSet.rules[0] || null)
     setTranslationDraft(null)
+    setFeedback(null)
     setActiveTab(ruleSet.rules.length > 0 ? 'design' : 'list')
   }
 
@@ -427,6 +445,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       ? ruleSetKeyForAsset(rule.rule_set_id)
       : fallbackRuleSetKey(rule.clause_category))
     setActiveTab('design')
+    setFeedback(null)
   }
 
   const handleCreateRuleSet = async () => {
@@ -479,16 +498,119 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     }
   }
 
+  const openRuleSetEditor = (ruleSet: RuleSetView) => {
+    if (ruleSet.source !== 'ruleset' || !ruleSet.asset?.id) {
+      setFeedback({ tone: 'error', message: '只有规则集资产可以编辑；旧分类聚合需要先迁移为规则集。' })
+      return
+    }
+    setRuleSetMetaDraft({
+      id: ruleSet.asset.id,
+      name: ruleSet.asset.name,
+      code: ruleSet.asset.code,
+      description: ruleSet.asset.description || '',
+      priority: ruleSet.asset.priority ?? 100,
+    })
+    setEditRuleSetOpen(true)
+  }
+
+  const handleSaveRuleSetMeta = async () => {
+    const id = ruleSetMetaDraft.id
+    const name = ruleSetMetaDraft.name.trim()
+    const code = ruleSetMetaDraft.code.trim().toUpperCase().replace(/[^A-Z0-9_-]+/g, '_')
+    if (!id || !name || !code) {
+      setFeedback({ tone: 'error', message: '请填写规则集名称和编码。' })
+      return
+    }
+    setSavingRuleSetMeta(true)
+    setFeedback(null)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/contract-policies/rule-sets/${id}`, {
+        method: 'PATCH',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          code,
+          description: ruleSetMetaDraft.description.trim() || null,
+          priority: Number(ruleSetMetaDraft.priority || 100),
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setFeedback({
+          tone: 'error',
+          message: data?.error?.message || data?.message || '保存规则集失败',
+        })
+        return
+      }
+      setEditRuleSetOpen(false)
+      setFeedback({ tone: 'success', message: '规则集已保存，发布前需要重新确认规则和转译状态。' })
+      await loadRuleSetAssets()
+      await onRefresh?.()
+      setActiveRuleSetKey(ruleSetKeyForAsset(id))
+    } catch {
+      setFeedback({ tone: 'error', message: '保存规则集请求失败' })
+    } finally {
+      setSavingRuleSetMeta(false)
+    }
+  }
+
+  const handleArchiveRuleSet = async (ruleSet: RuleSetView) => {
+    if (ruleSet.source !== 'ruleset' || !ruleSet.asset?.id) {
+      setFeedback({ tone: 'error', message: '只有规则集资产可以停用。' })
+      return
+    }
+    if (!await confirmAction(`停用规则集“${ruleSet.label}”？停用后不会参与配置中心发布。`, {
+      confirmText: '停用',
+      danger: true,
+    })) return
+
+    setFeedback(null)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/contract-policies/rule-sets/${ruleSet.asset.id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setFeedback({
+          tone: 'error',
+          message: data?.error?.message || data?.message || '停用规则集失败',
+        })
+        return
+      }
+      setFeedback({ tone: 'success', message: '规则集已停用。' })
+      setSelectedRule(null)
+      setActiveRuleSetKey('all')
+      await loadRuleSetAssets()
+      await onRefresh?.()
+    } catch {
+      setFeedback({ tone: 'error', message: '停用规则集请求失败' })
+    }
+  }
+
   const handleSaveRule = async (rule: Partial<ContractPolicyRule>) => {
     setSaving(true)
     try {
-      await onSave({
+      const isUpdate = Boolean(selectedRule)
+      const savedRule = await onSave({
         ...rule,
         rule_set_id: selectedRule?.rule_set_id || activeRuleSet?.asset?.id || rule.rule_set_id || null,
       }, selectedRule?.id)
       setTranslationDraft(null)
-      setActiveTab('list')
-      setSelectedRule(null)
+      setFeedback({ tone: 'success', message: isUpdate ? '规则已保存，发布前仍需转译确认和测试。' : '规则已创建，已在树中选中，请继续完成转译、测试和发布。' })
+      if (savedRule && typeof savedRule === 'object' && 'id' in savedRule) {
+        const nextRule = savedRule as ContractPolicyRule
+        setSelectedRule(nextRule)
+        setActiveRuleSetKey(nextRule.rule_set_id
+          ? ruleSetKeyForAsset(nextRule.rule_set_id)
+          : fallbackRuleSetKey(nextRule.clause_category))
+      }
+      setActiveTab('design')
       await loadRuleSetAssets()
     } finally {
       setSaving(false)
@@ -608,8 +730,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </button>
               ) : null}
             </div>
-            <div>
-              <Button size="sm" className="w-full" onClick={() => setCreateRuleSetOpen(true)}>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" variant="outline" disabled={!canCreateRuleInActiveSet} onClick={handleNewRule}>
+                <FileTextIcon className="h-4 w-4 mr-1" />
+                新建规则
+              </Button>
+              <Button size="sm" onClick={() => setCreateRuleSetOpen(true)}>
                 <PlusIcon className="h-4 w-4 mr-1" />
                 新建规则集
               </Button>
@@ -659,9 +785,59 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 	                          <div className="min-w-0 flex-1">
 	                            <div className="flex items-center justify-between gap-2">
 	                              <div className="truncate text-sm font-semibold">{ruleSet.label}</div>
-	                              <Badge variant={activeRuleSetKey === ruleSet.key && !selectedRule ? 'secondary' : 'outline'} className="text-[10px]">
-	                                {ruleSet.total}
-	                              </Badge>
+                                <span className="flex shrink-0 items-center gap-1">
+                                  {ruleSet.source === 'ruleset' ? (
+                                    <>
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        title="编辑规则集"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          openRuleSetEditor(ruleSet)
+                                        }}
+                                        onKeyDown={(event) => {
+                                          if (event.key !== 'Enter' && event.key !== ' ') return
+                                          event.preventDefault()
+                                          event.stopPropagation()
+                                          openRuleSetEditor(ruleSet)
+                                        }}
+                                        className={`rounded p-1 ${
+                                          activeRuleSetKey === ruleSet.key && !selectedRule
+                                            ? 'text-white/80 hover:bg-white/10 hover:text-white'
+                                            : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                                        }`}
+                                      >
+                                        <PencilIcon className="h-3.5 w-3.5" />
+                                      </span>
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        title="停用规则集"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          void handleArchiveRuleSet(ruleSet)
+                                        }}
+                                        onKeyDown={(event) => {
+                                          if (event.key !== 'Enter' && event.key !== ' ') return
+                                          event.preventDefault()
+                                          event.stopPropagation()
+                                          void handleArchiveRuleSet(ruleSet)
+                                        }}
+                                        className={`rounded p-1 ${
+                                          activeRuleSetKey === ruleSet.key && !selectedRule
+                                            ? 'text-white/80 hover:bg-white/10 hover:text-white'
+                                            : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'
+                                        }`}
+                                      >
+                                        <TrashIcon className="h-3.5 w-3.5" />
+                                      </span>
+                                    </>
+                                  ) : null}
+    	                              <Badge variant={activeRuleSetKey === ruleSet.key && !selectedRule ? 'secondary' : 'outline'} className="text-[10px]">
+    	                                {ruleSet.total}
+    	                              </Badge>
+                                </span>
 	                            </div>
 	                            <div className={`mt-1 truncate font-mono text-[11px] ${
 	                              activeRuleSetKey === ruleSet.key && !selectedRule ? 'text-slate-200' : 'text-slate-400'
@@ -732,6 +908,16 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       </Card>
 
       <div className="min-w-0 space-y-4">
+        {feedback ? (
+          <div className={`rounded-lg border px-3 py-2 text-xs leading-5 ${
+            feedback.tone === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-rose-200 bg-rose-50 text-rose-700'
+          }`}
+          >
+            {feedback.message}
+          </div>
+        ) : null}
         {activeTab === 'test' ? (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -776,7 +962,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                     </Button>
                     <Button size="sm" variant="outline" className="text-red-600" onClick={() => onDelete(selectedRule.id)}>
                       <TrashIcon className="h-4 w-4 mr-1" />
-                      停用
+                      删除/停用
                     </Button>
                   </>
                 ) : null}
@@ -1069,6 +1255,73 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
           </Button>
           <Button type="button" disabled={creatingRuleSet} onClick={() => void handleCreateRuleSet()}>
             {creatingRuleSet ? '创建中...' : '创建规则集'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={editRuleSetOpen} onOpenChange={setEditRuleSetOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>编辑规则集</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-500" htmlFor="edit-rule-set-name">
+                规则集名称
+              </label>
+              <Input
+                id="edit-rule-set-name"
+                value={ruleSetMetaDraft.name}
+                onChange={(event) => setRuleSetMetaDraft((current) => ({ ...current, name: event.target.value }))}
+                placeholder="如：验收与交付规则集"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-500" htmlFor="edit-rule-set-priority">
+                排序
+              </label>
+              <Input
+                id="edit-rule-set-priority"
+                type="number"
+                value={ruleSetMetaDraft.priority}
+                onChange={(event) => setRuleSetMetaDraft((current) => ({ ...current, priority: Number(event.target.value) }))}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-500" htmlFor="edit-rule-set-code">
+              规则集编码
+            </label>
+            <Input
+              id="edit-rule-set-code"
+              value={ruleSetMetaDraft.code}
+              onChange={(event) => setRuleSetMetaDraft((current) => ({ ...current, code: event.target.value }))}
+              placeholder="如：ACCEPTANCE"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-500" htmlFor="edit-rule-set-description">
+              业务说明
+            </label>
+            <Textarea
+              id="edit-rule-set-description"
+              value={ruleSetMetaDraft.description}
+              onChange={(event) => setRuleSetMetaDraft((current) => ({ ...current, description: event.target.value }))}
+              placeholder="说明这个规则集覆盖哪些合同风险、由谁维护、发布后服务哪个审核场景。"
+              rows={4}
+            />
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+            修改规则集元数据会回到草稿态；正式审核仍以发布版本为准。
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setEditRuleSetOpen(false)}>
+            取消
+          </Button>
+          <Button type="button" disabled={savingRuleSetMeta} onClick={() => void handleSaveRuleSetMeta()}>
+            {savingRuleSetMeta ? '保存中...' : '保存规则集'}
           </Button>
         </DialogFooter>
       </DialogContent>

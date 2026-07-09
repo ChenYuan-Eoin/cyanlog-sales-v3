@@ -176,6 +176,70 @@ describe('reviewWithFailover local provider transport order', () => {
     })
   })
 
+  it('routes over-limit long documents to chunked cloud instances before local truncation', async () => {
+    mocks.listPublishedAIProviders.mockResolvedValue([
+      localProvider({ routing: { max_pages: 15, strategy: 'full' } }),
+      {
+        ...localProvider({
+          key: 'AI_CLOUD_LONG_DOC',
+          profile: 'cloud_primary',
+          display_name: '云端长文档模型',
+          name: '云端长文档模型',
+          base_url: 'https://cloud.yiyongai.cn/v1',
+          api_key: 'sk-cloud',
+          model: 'long-context-model',
+          level: 2,
+          routing: { max_pages: 80, strategy: 'chunked' },
+        }),
+      },
+    ])
+    mocks.generateText.mockResolvedValue({ text: '{"risks":[],"summary":"cloud"}' })
+
+    const veryLongContract = '付款、验收、违约、知识产权、争议解决。'.repeat(7000)
+    const result = await reviewWithFailover(veryLongContract, { orgId: 'org-1' })
+
+    expect(result.provider).toBe('AI_CLOUD_LONG_DOC')
+    expect(result.model).toBe('long-context-model')
+    expect(mocks.createOpenAI).toHaveBeenCalledWith({
+      baseURL: 'https://cloud.yiyongai.cn/v1',
+      apiKey: 'sk-cloud',
+    })
+    expect(result.inputStats?.selection_strategy).toBe('balanced_chunked')
+  })
+
+  it('honors stage aliases so business strategies can select a capability pool instead of fixed local/cloud slots', async () => {
+    mocks.listPublishedAIProviders.mockResolvedValue([
+      localProvider({
+        key: 'AI_LOCAL_GENERAL',
+        profile: 'local_primary',
+        stages: ['semantic_review', 'comment_patch_draft'],
+      }),
+      {
+        ...localProvider({
+          key: 'AI_CLOUD_TENDER',
+          profile: 'cloud_long_context',
+          display_name: '云端长文档模型',
+          name: '云端长文档模型',
+          base_url: 'https://cloud.yiyongai.cn/v1',
+          api_key: 'sk-cloud',
+          model: 'long-context-model',
+          level: 2,
+          routing: { max_pages: 120, strategy: 'chunked' },
+          stages: ['tender_long_document_parse', 'report_summary'],
+        }),
+      },
+    ])
+    mocks.generateText.mockResolvedValue({ text: '{"risks":[],"summary":"cloud"}' })
+
+    const result = await reviewWithFailover('标书长文本。'.repeat(3000), {
+      orgId: 'org-1',
+      preferredProvider: 'stage:tender_long_document_parse',
+    })
+
+    expect(result.provider).toBe('AI_CLOUD_TENDER')
+    expect(result.model).toBe('long-context-model')
+  })
+
   it('normalizes OpenAI-compatible root base URLs to /v1 before model calls', async () => {
     mocks.listPublishedAIProviders.mockResolvedValue([{
       ...localProvider({

@@ -37,6 +37,7 @@ describe('deriveReviewWorkflowState', () => {
 
     expect(state.phase).toBe('review_completed_ready')
     expect(state.nextActionLabel).toBe('导出批注版')
+    expect(state.detailPanel).toBe('review')
     expect(state.canExportComments).toBe(true)
   })
 
@@ -52,6 +53,7 @@ describe('deriveReviewWorkflowState', () => {
     expect(state.phase).toBe('review_completed_blocked')
     expect(state.nextActionLabel).toBe('处理批注门禁')
     expect(state.primaryButtonLabel).toBe('查看导出原因')
+    expect(state.detailPanel).toBe('review')
     expect(state.canExportComments).toBe(false)
     expect(state.nextActionDescription).toContain('人工定位')
   })
