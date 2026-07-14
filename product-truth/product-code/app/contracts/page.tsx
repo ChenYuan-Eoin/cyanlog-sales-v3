@@ -853,7 +853,7 @@ function ReviewLaunchPanel({
         </Link>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
 	        {actions.map((action, index) => {
 	          const Icon = action.icon
 	          const content = (
