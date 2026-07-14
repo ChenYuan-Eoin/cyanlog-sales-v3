@@ -209,6 +209,21 @@ function comparisonNextAction(comparison: ContractComparisonSummary) {
 // 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
 const quickActions: QuickAction[] = [
   {
+    id: 'draft',
+    title: '合同起草',
+    shortTitle: '起草',
+    workflowLabel: '输入需求生成合同草稿',
+    objectLabel: '客户需求、模板、条款限制',
+    outcomeLabel: '可编辑合同草稿，可进入审核或对比',
+    boundaryLabel: '起草是独立路径，不等同于上传审核或版本对比',
+    icon: PenToolIcon,
+    color: 'bg-indigo-600',
+    hoverColor: 'hover:bg-indigo-700',
+    href: '/contracts/draft',
+    description: '描述业务需求，结合模板和条款限制生成可修改、可审核的合同草稿',
+    stateLabel: '需求起草',
+  },
+  {
     id: 'review',
     title: '合同审核',
     shortTitle: '审核',
@@ -225,7 +240,7 @@ const quickActions: QuickAction[] = [
   },
   {
     id: 'compare',
-    title: '合同文档对比',
+    title: '合同对比',
     shortTitle: '对比',
     workflowLabel: '选择旧文件和新文件',
     objectLabel: '合同版本流或客户回传件',
@@ -237,21 +252,6 @@ const quickActions: QuickAction[] = [
     href: '/contracts/upload?intent=compare',
     description: '选择旧文件和新文件进行差异复核，文件属性只作为面板信息，不污染文件画布',
     stateLabel: '旧/新文件',
-  },
-  {
-    id: 'draft',
-    title: '合同起草',
-    shortTitle: '起草',
-    workflowLabel: '输入需求生成合同草稿',
-    objectLabel: '客户需求、模板、条款限制',
-    outcomeLabel: '可编辑合同草稿，可进入审核或对比',
-    boundaryLabel: '起草是独立路径，不等同于上传审核或版本对比',
-    icon: PenToolIcon,
-    color: 'bg-indigo-600',
-    hoverColor: 'hover:bg-indigo-700',
-    href: '/contracts/draft',
-    description: '描述业务需求，结合模板和条款限制生成可修改、可审核的合同草稿',
-    stateLabel: '需求起草',
   },
 ]
 
@@ -841,7 +841,7 @@ function ReviewLaunchPanel({
               合同中心
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              一级入口只保留合同审核、文档对比、AI 起草合同。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
+              一级入口按合同起草、合同审核、合同对比排列。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
             </p>
           </div>
         </div>
