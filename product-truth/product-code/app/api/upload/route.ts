@@ -39,6 +39,16 @@ function errorResponse(message: string, status: number, code?: string) {
   }, { status })
 }
 
+function readPngDimensions(buffer: Buffer): { width: number; height: number } | null {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+  if (buffer.length < 24 || !signature.every((byte, index) => buffer[index] === byte)) return null
+  if (buffer.toString('ascii', 12, 16) !== 'IHDR') return null
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  }
+}
+
 // 确保存储桶存在，不存在则自动创建
 async function ensureBucketExists(): Promise<boolean> {
   try {
@@ -115,6 +125,20 @@ export async function POST(req: NextRequest) {
     // 将 File 转换为 Buffer
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
+
+    if (targetFolder === 'favicons') {
+      const dimensions = file.type === 'image/png' ? readPngDimensions(buffer) : null
+      if (!dimensions || dimensions.width !== dimensions.height) {
+        return errorResponse(
+          'Favicon 上传必须是已加透明留白的正方形 PNG；配置中心会自动保持原 Logo 比例并生成该文件。',
+          400,
+          'FAVICON_NOT_SQUARE'
+        )
+      }
+      if (dimensions.width < 32 || dimensions.width > 1024) {
+        return errorResponse('Favicon 画布需在 32–1024 像素之间', 400, 'FAVICON_INVALID_SIZE')
+      }
+    }
 
     // 第一次上传尝试
     let uploadResult = await supabaseAdmin.storage

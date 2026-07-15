@@ -2,7 +2,17 @@
 
 import { useEffect } from 'react'
 
-import { DEFAULT_THEME, resolveBrandImageUrl, resolveFaviconUrl, sanitizeThemeValue, themeToCssVariables } from '@/lib/ui-theme-shared'
+import {
+  BRAND_ASSET_VERSION,
+  DEFAULT_THEME,
+  OFFICIAL_APPLE_TOUCH_ICON,
+  OFFICIAL_FAVICON_PNG_32,
+  isOfficialFaviconUrl,
+  resolveBrandImageUrl,
+  resolveFaviconUrl,
+  sanitizeThemeValue,
+  themeToCssVariables,
+} from '@/lib/ui-theme-shared'
 
 // 缓存相关常量
 const THEME_CACHE_KEY = 'runtime_theme_cache'
@@ -102,11 +112,11 @@ function clearCachedTheme(token: string): void {
 function withRuntimeFaviconVersion(url: string) {
   try {
     const parsed = new URL(url, window.location.origin)
-    parsed.searchParams.set('brand_favicon', stableHash(url))
+    parsed.searchParams.set('brand_favicon', `${BRAND_ASSET_VERSION}-${stableHash(url)}`)
     return parsed.toString()
   } catch {
     const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}brand_favicon=${stableHash(url)}`
+    return `${url}${separator}brand_favicon=${BRAND_ASSET_VERSION}-${stableHash(url)}`
   }
 }
 
@@ -129,21 +139,49 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
   const faviconUrl = resolveFaviconUrl(theme)
   if (faviconUrl) {
     const versionedFaviconUrl = withRuntimeFaviconVersion(faviconUrl)
+    const faviconIsSvg = faviconUrl.toLowerCase().includes('.svg')
+    const officialFavicon = isOfficialFaviconUrl(faviconUrl)
+    const iconLinks = [
+      {
+        rel: 'icon',
+        href: versionedFaviconUrl,
+        type: faviconIsSvg ? 'image/svg+xml' : 'image/png',
+        sizes: faviconIsSvg ? 'any' : '',
+      },
+      ...(officialFavicon ? [{
+        rel: 'icon',
+        href: withRuntimeFaviconVersion(OFFICIAL_FAVICON_PNG_32),
+        type: 'image/png',
+        sizes: '32x32',
+      }] : []),
+      {
+        rel: 'shortcut icon',
+        href: versionedFaviconUrl,
+        type: faviconIsSvg ? 'image/svg+xml' : 'image/png',
+        sizes: faviconIsSvg ? 'any' : '',
+      },
+      {
+        rel: 'apple-touch-icon',
+        href: officialFavicon
+          ? withRuntimeFaviconVersion(OFFICIAL_APPLE_TOUCH_ICON)
+          : versionedFaviconUrl,
+        type: officialFavicon ? 'image/png' : faviconIsSvg ? 'image/svg+xml' : 'image/png',
+        sizes: officialFavicon ? '180x180' : '',
+      },
+    ]
     document.documentElement.dataset.faviconUrl = versionedFaviconUrl
-    const rels = ['icon', 'shortcut icon', 'apple-touch-icon']
     document.head
       .querySelectorAll<HTMLLinkElement>('link[rel*="icon"]')
       .forEach((link) => {
         link.remove()
       })
-    rels.forEach((rel) => {
+    iconLinks.forEach(({ rel, href, type, sizes }) => {
       const link = document.createElement('link')
       link.rel = rel
       link.dataset.runtimeFavicon = 'true'
-      link.href = versionedFaviconUrl
-      const isSvg = faviconUrl.toLowerCase().includes('.svg')
-      link.type = isSvg ? 'image/svg+xml' : 'image/png'
-      link.sizes = rel === 'apple-touch-icon' ? '180x180' : isSvg ? 'any' : '32x32'
+      link.href = href
+      link.type = type
+      if (sizes) link.sizes = sizes
       document.head.appendChild(link)
     })
   }
@@ -153,12 +191,6 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
     ;(window as unknown as Record<string, unknown>).__RUNTIME_THEME__ = theme
     window.dispatchEvent(new CustomEvent('runtime-theme-applied', { detail: theme }))
   }
-}
-
-function isDefaultBrandProfile(theme: ReturnType<typeof sanitizeThemeValue>) {
-  return theme.brandName === DEFAULT_THEME.brandName
-    && theme.productTitle === DEFAULT_THEME.productTitle
-    && resolveFaviconUrl(theme) === resolveFaviconUrl(DEFAULT_THEME)
 }
 
 function scheduleBackgroundRefresh(callback: () => void) {
@@ -187,12 +219,14 @@ export function RuntimeThemeLoader({
         return
       }
 
-      const shouldUseCache = !initialTheme || !isDefaultBrandProfile(initialTheme)
+      // 服务端初始主题是当前发布态真相，不能被浏览器里最多 10 分钟前的缓存回盖。
+      // 仅在服务端没有给出主题时，才用 token 隔离的缓存作为首屏回退。
+      const shouldUseCache = !initialTheme
       if (!shouldUseCache) {
         clearCachedTheme(token)
       }
 
-      // 首先尝试从缓存加载主题，避免网络请求；默认主题不允许被历史缓存覆盖。
+      // 仅无服务端主题时先用缓存，随后仍做后台刷新。
       const cachedTheme = shouldUseCache ? getCachedTheme(token) : null
       if (cachedTheme) {
         applyTheme(cachedTheme.theme)

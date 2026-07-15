@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_THEME, resolveBrandImageUrl, resolveFaviconUrl, sanitizeThemeValue } from './ui-theme-shared'
+import {
+  DEFAULT_THEME,
+  OFFICIAL_FAVICON_SVG,
+  isOfficialFaviconUrl,
+  resolveBrandImageUrl,
+  resolveFaviconUrl,
+  sanitizeThemeValue,
+} from './ui-theme-shared'
 
 describe('ui-theme-shared helpers', () => {
+  it('uses official ONES assets without forcing source logos into square containers', () => {
+    expect(DEFAULT_THEME.brandAssets.fullLogo.light).toBe('/brand/ones-logo-horizontal-color.svg')
+    expect(DEFAULT_THEME.brandAssets.fullLogo.dark).toBe('/brand/ones-logo-horizontal-white.svg')
+    expect(DEFAULT_THEME.brandAssets.symbol.light).toBe('/brand/ones-symbol-color.svg')
+    expect(DEFAULT_THEME.brandAssets.symbol.dark).toBe('/brand/ones-symbol-white.svg')
+    expect(DEFAULT_THEME.brandAssets.favicon).toBe(OFFICIAL_FAVICON_SVG)
+    expect(isOfficialFaviconUrl(`https://sales.cyanlog.icu${OFFICIAL_FAVICON_SVG}?v=1`)).toBe(true)
+  })
+
   it('prefers new brandAssets favicon over legacy faviconUrl', () => {
     const theme = sanitizeThemeValue({
       ...DEFAULT_THEME,

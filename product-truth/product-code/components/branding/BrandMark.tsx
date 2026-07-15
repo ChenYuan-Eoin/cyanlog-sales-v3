@@ -67,6 +67,7 @@ export function BrandMark({ size = 40, className, variant = 'full', surface = 'a
           <img
             src={finalUrl}
             alt={theme.brandName}
+            draggable={false}
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
@@ -95,6 +96,7 @@ export function BrandMark({ size = 40, className, variant = 'full', surface = 'a
         <img
           src={finalUrl}
           alt={theme.brandName}
+          draggable={false}
           style={{
             maxHeight: Math.min(size, LOGO_CONTAINER.maxLogoHeight + 8),
             maxWidth: '100%',

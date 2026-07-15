@@ -10,9 +10,15 @@ import { ClientErrorMonitor } from "@/components/observability/ClientErrorMonito
 import { RuntimeThemeLoader } from "@/components/theme/RuntimeThemeLoader";
 import { getServerAuthToken } from "@/lib/server-auth";
 import { getPublishedUITheme } from "@/lib/ui-theme";
-import { resolveBrandImageUrl, resolveFaviconUrl, themeToCssVariables } from "@/lib/ui-theme-shared";
-
-const FAVICON_VERSION = "20260703";
+import {
+  BRAND_ASSET_VERSION,
+  OFFICIAL_APPLE_TOUCH_ICON,
+  OFFICIAL_FAVICON_PNG_32,
+  isOfficialFaviconUrl,
+  resolveBrandImageUrl,
+  resolveFaviconUrl,
+  themeToCssVariables,
+} from "@/lib/ui-theme-shared";
 
 export const metadata: Metadata = {
   title: "ONES Sales",
@@ -44,7 +50,7 @@ function stableHash(value: string) {
 
 function withRuntimeFaviconVersion(url: string) {
   const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}brand_favicon=${stableHash(url)}`;
+  return `${url}${separator}brand_favicon=${BRAND_ASSET_VERSION}-${stableHash(url)}`;
 }
 
 export default async function RootLayout({
@@ -55,8 +61,14 @@ export default async function RootLayout({
   const token = await getServerAuthToken();
   const theme = await getPublishedUITheme(token);
   const themeVariables = themeToCssVariables(theme) as CSSProperties;
-  const faviconUrl = withRuntimeFaviconVersion(resolveFaviconUrl(theme) || `/favicon.svg?v=${FAVICON_VERSION}`);
-  const faviconIsSvg = faviconUrl.toLowerCase().includes(".svg");
+  const rawFaviconUrl = resolveFaviconUrl(theme);
+  const faviconUrl = withRuntimeFaviconVersion(rawFaviconUrl);
+  const faviconIsSvg = rawFaviconUrl.toLowerCase().includes(".svg");
+  const officialFavicon = isOfficialFaviconUrl(rawFaviconUrl);
+  const faviconPng32Url = officialFavicon ? withRuntimeFaviconVersion(OFFICIAL_FAVICON_PNG_32) : null;
+  const appleTouchIconUrl = officialFavicon
+    ? withRuntimeFaviconVersion(OFFICIAL_APPLE_TOUCH_ICON)
+    : faviconUrl;
   const logoUrl = resolveBrandImageUrl(theme, "full", "dark") || resolveBrandImageUrl(theme, "symbol", "dark");
 
   return (
@@ -77,21 +89,30 @@ export default async function RootLayout({
           rel="icon"
           href={faviconUrl}
           type={faviconIsSvg ? "image/svg+xml" : "image/png"}
-          sizes={faviconIsSvg ? "any" : "32x32"}
+          sizes={faviconIsSvg ? "any" : undefined}
         />
+        {faviconPng32Url ? (
+          <link
+            data-runtime-favicon="true"
+            rel="icon"
+            href={faviconPng32Url}
+            type="image/png"
+            sizes="32x32"
+          />
+        ) : null}
         <link
           data-runtime-favicon="true"
           rel="shortcut icon"
           href={faviconUrl}
           type={faviconIsSvg ? "image/svg+xml" : "image/png"}
-          sizes={faviconIsSvg ? "any" : "32x32"}
+          sizes={faviconIsSvg ? "any" : undefined}
         />
         <link
           data-runtime-favicon="true"
           rel="apple-touch-icon"
-          href={faviconUrl}
-          type={faviconIsSvg ? "image/svg+xml" : "image/png"}
-          sizes="180x180"
+          href={appleTouchIconUrl}
+          type={officialFavicon ? "image/png" : faviconIsSvg ? "image/svg+xml" : "image/png"}
+          sizes={officialFavicon ? "180x180" : undefined}
         />
       </head>
       <body className="antialiased">

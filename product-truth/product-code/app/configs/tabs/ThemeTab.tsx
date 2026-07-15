@@ -197,11 +197,11 @@ export default function ThemeTab({ configs, onNew, onEdit, onPublish, onVersions
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">运行时资产</div>
                 {isBrandEditing ? (
                   <div className="space-y-3">
-                    <BrandAssetUpload label="完整 Logo（浅色背景）" folder="logos" value={brandDraft.fullLogoLight} onChange={(value) => updateBrandDraft({ fullLogoLight: value })} />
-                    <BrandAssetUpload label="完整 Logo（深色背景）" folder="logos" value={brandDraft.fullLogoDark} onChange={(value) => updateBrandDraft({ fullLogoDark: value })} />
-                    <BrandAssetUpload label="折叠图标（浅色背景）" folder="logos" value={brandDraft.symbolLight} onChange={(value) => updateBrandDraft({ symbolLight: value })} square />
-                    <BrandAssetUpload label="折叠图标（深色背景）" folder="logos" value={brandDraft.symbolDark} onChange={(value) => updateBrandDraft({ symbolDark: value })} square />
-                    <BrandAssetUpload label="浏览器 Favicon" folder="favicons" value={brandDraft.favicon} onChange={(value) => updateBrandDraft({ favicon: value })} square />
+                    <BrandAssetUpload label="完整 Logo（浅色背景，保持原比例）" folder="logos" value={brandDraft.fullLogoLight} onChange={(value) => updateBrandDraft({ fullLogoLight: value })} />
+                    <BrandAssetUpload label="完整 Logo（深色背景，保持原比例）" folder="logos" value={brandDraft.fullLogoDark} onChange={(value) => updateBrandDraft({ fullLogoDark: value })} />
+                    <BrandAssetUpload label="折叠图形（浅色背景，任意比例）" folder="logos" value={brandDraft.symbolLight} onChange={(value) => updateBrandDraft({ symbolLight: value })} square />
+                    <BrandAssetUpload label="折叠图形（深色背景，任意比例）" folder="logos" value={brandDraft.symbolDark} onChange={(value) => updateBrandDraft({ symbolDark: value })} square />
+                    <BrandAssetUpload label="Favicon 源图（自动加透明方形画布）" folder="favicons" value={brandDraft.favicon} onChange={(value) => updateBrandDraft({ favicon: value })} square />
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
@@ -410,8 +410,8 @@ function BrandAssetUpload({
         folder={folder}
         square={square}
         previewHeight={square ? 36 : 40}
+        showUrlInput={folder !== 'favicons'}
         maxSizeMB={2}
-        showUrlInput
       />
     </div>
   )

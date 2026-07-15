@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { UploadIcon, CloseIcon, LoaderIcon } from '@/components/icons'
+import { createSquareFaviconFile } from '@/lib/brand/favicon-canvas'
 
 interface ImageUploadProps {
   value: string
@@ -10,7 +11,7 @@ interface ImageUploadProps {
   accept?: string
   placeholder?: string
   maxSizeMB?: number
-  /** 是否保持正方形比例（用于favicon） */
+  /** 是否使用正方形预览容器；不会要求上传源图本身为正方形 */
   square?: boolean
   /** 预览高度（像素） */
   previewHeight?: number
@@ -46,8 +47,12 @@ export function ImageUpload({
     setIsUploading(true)
 
     try {
+      const uploadFile = folder === 'favicons' ? await createSquareFaviconFile(file) : file
+      if (uploadFile.size > maxBytes) {
+        throw new Error(`生成的图片超过 ${maxSizeMB}MB，请改用更小的源文件`)
+      }
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', uploadFile)
       formData.append('folder', folder)
 
       const token = localStorage.getItem('token')

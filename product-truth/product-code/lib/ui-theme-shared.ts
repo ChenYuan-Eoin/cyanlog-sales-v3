@@ -5,7 +5,7 @@ export interface BrandAssets {
     light: string  // 用于浅色背景
     dark: string   // 用于深色背景
   }
-  // 图标符号（正方形，用于折叠态）
+  // 图标符号（保持品牌原比例，用于折叠态；容器负责 contain）
   symbol: {
     light: string
     dark: string
@@ -65,6 +65,15 @@ export interface UIThemeConfigValue {
 export type BrandAssetVariant = 'full' | 'symbol'
 export type BrandSurfaceTone = 'light' | 'dark'
 
+export const BRAND_ASSET_VERSION = '20260715-p1'
+export const OFFICIAL_FAVICON_SVG = '/brand/ones-symbol-square.svg'
+export const OFFICIAL_FAVICON_PNG_32 = '/brand/ones-symbol-square-32.png'
+export const OFFICIAL_APPLE_TOUCH_ICON = '/brand/ones-symbol-square-180.png'
+
+export function isOfficialFaviconUrl(url: string): boolean {
+  return url.split(/[?#]/, 1)[0]?.endsWith(OFFICIAL_FAVICON_SVG) ?? false
+}
+
 export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
   brandName: 'ONES Sales',
   brandShortName: 'OS',
@@ -75,17 +84,23 @@ export const DEFAULT_THEME: Required<UIThemeConfigValue> = {
 
   // 新品牌资产配置
   brandAssets: {
-    fullLogo: { light: '', dark: '' },
-    symbol: { light: '/favicon.svg', dark: '/favicon.svg' },
-    favicon: '/favicon.svg',
+    fullLogo: {
+      light: '/brand/ones-logo-horizontal-color.svg',
+      dark: '/brand/ones-logo-horizontal-white.svg',
+    },
+    symbol: {
+      light: '/brand/ones-symbol-color.svg',
+      dark: '/brand/ones-symbol-white.svg',
+    },
+    favicon: OFFICIAL_FAVICON_SVG,
   },
 
   // 默认跟随系统
   appearance: 'system',
 
   // 旧字段（过渡兼容）
-  logoUrl: '/favicon.svg',
-  faviconUrl: '/favicon.svg',
+  logoUrl: '/brand/ones-logo-horizontal-white.svg',
+  faviconUrl: OFFICIAL_FAVICON_SVG,
 
   primary: '#2563eb',
   primaryForeground: '#ffffff',

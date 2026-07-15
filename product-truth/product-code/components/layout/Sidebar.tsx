@@ -99,12 +99,9 @@ export function Sidebar() {
           transition: 'transform 300ms ease-out',
         }}
       >
-        <div className="flex items-center gap-3 p-6">
-          <BrandMark size={36} variant="symbol" surface="dark" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">{branding.brandName}</div>
-            <p className="truncate text-xs text-slate-300">{branding.productSubtitle || branding.brandName}</p>
-          </div>
+        <div className="space-y-1 px-4 pb-4 pt-5">
+          <BrandMark size={36} variant="full" surface="dark" className="max-w-full" />
+          <p className="truncate px-4 text-xs text-slate-300">{branding.productSubtitle || branding.brandName}</p>
         </div>
         <nav className="px-3 py-4 flex-1 overflow-y-auto">
           {navItems.map((item) => {

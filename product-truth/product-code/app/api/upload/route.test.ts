@@ -43,6 +43,15 @@ function makeFile(name: string, type = 'image/png'): File {
   return new File(['image'], name, { type })
 }
 
+function makePngFile(name: string, width: number, height: number): File {
+  const bytes = new Uint8Array(24)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12)
+  new DataView(bytes.buffer).setUint32(16, width)
+  new DataView(bytes.buffer).setUint32(20, height)
+  return new File([bytes], name, { type: 'image/png' })
+}
+
 describe('POST /api/upload validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -95,6 +104,38 @@ describe('POST /api/upload validation', () => {
     expect(supabaseAdmin.storage.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.listBuckets).not.toHaveBeenCalled()
     expect(supabaseAdmin.storage.createBucket).not.toHaveBeenCalled()
+  })
+
+  it('拒绝把竖向 Logo 原图直接冒充 favicon', async () => {
+    const res = await POST(makeFormRequest({
+      file: makePngFile('ones-symbol.png', 714, 884),
+      folder: 'favicons',
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error.code).toBe('FAVICON_NOT_SQUARE')
+    expect(supabaseAdmin.storage.from).not.toHaveBeenCalled()
+  })
+
+  it('允许配置中心生成的透明正方形 favicon PNG', async () => {
+    const storageBucket = {
+      upload: vi.fn().mockResolvedValue({ error: null }),
+      getPublicUrl: vi.fn().mockReturnValue({
+        data: { publicUrl: 'https://cdn.example.com/favicons/user-1_square.png' },
+      }),
+    }
+    ;(supabaseAdmin.storage.from as any).mockReturnValue(storageBucket)
+
+    const res = await POST(makeFormRequest({
+      file: makePngFile('ones-symbol-square.png', 512, 512),
+      folder: 'favicons',
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.success).toBe(true)
+    expect(body.data.fileName).toMatch(/^favicons\/user-1_.*\.png$/)
   })
 
   it('上传成功返回 common success envelope', async () => {
