@@ -189,14 +189,16 @@ function normalizeAIConfig(row: ConfigRow): PublishedAIProviderConfig {
 /** Only provider records may enter the runtime provider chain. */
 export function isPublishedAIProviderValue(value: JsonRecord): boolean {
   if (value.kind === 'application' || value.kind === 'tool_policy') return false
-  if (value.kind === 'provider') return true
-  // Legacy rows without kind are accepted only when they have a real model
-  // and provider signature; application/policy rows must never become models.
-  return typeof value.model === 'string'
+  const hasProviderShape = typeof value.model === 'string'
     && value.model.trim().length > 0
     && (typeof value.base_url === 'string'
       || typeof value.provider_kind === 'string'
       || typeof value.profile === 'string')
+  if (value.kind === 'provider') return hasProviderShape
+  if (value.kind !== undefined && value.kind !== null && value.kind !== '') return false
+  // Legacy rows without kind are accepted only when they have a real model
+  // and provider signature; application/policy rows must never become models.
+  return hasProviderShape
 }
 
 export async function listPublishedAIProviders(orgId: string): Promise<PublishedAIProviderConfig[]> {

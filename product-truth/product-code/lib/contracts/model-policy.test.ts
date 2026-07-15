@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isModelPolicyCurrentForPublishedProviders,
   selectReviewExecutionProvider,
+  validatePublishedModelPolicy,
   type ContractModelPolicy,
   type ModelPolicyProvider,
 } from './model-policy'
@@ -57,10 +58,20 @@ function policy(providerChain: ModelPolicyProvider[]): ContractModelPolicy {
     status: 'published',
     is_current: true,
     provider_chain: providerChain,
-    routing_policy: {},
+    routing_policy: { policy_version: 'f012.model-policy.v1' },
     timeout_ms: 45000,
-    fallback_policy: {},
-    audit_policy: {},
+    fallback_policy: { policy_version: 'f012.fallback.v1' },
+    audit_policy: {
+      policy_version: 'f012.audit.v1',
+      required_spans: [
+        'structured_rules',
+        'template_compare',
+        'semantic_review',
+        'tender_long_document_parse',
+        'comment_patch_draft',
+        'report_summary',
+      ],
+    },
     source_config_ids: [],
     published_at: '2026-07-01T00:00:00.000Z',
   }
@@ -211,6 +222,10 @@ describe('isModelPolicyCurrentForPublishedProviders', () => {
         publishedRuleProvider(),
       ])
     ).toBe(true)
+    expect(validatePublishedModelPolicy(currentPolicy, [
+      publishedProvider(),
+      publishedRuleProvider(),
+    ])).toEqual({ ok: true })
   })
 
   it('rejects a stale policy when the published provider model changed', () => {
@@ -272,5 +287,25 @@ describe('isModelPolicyCurrentForPublishedProviders', () => {
       publishedProvider({ level: 1 }),
       localProvider,
     ])).toBe(true)
+  })
+
+  it('rejects polluted models and duplicate provider profiles', () => {
+    const pollutedPolicy = {
+      ...policy([
+        { ...aiProvider, profile: 'duplicate', model: ' UNKNOWN ' },
+        { ...aiProvider, profile: ' DUPLICATE ', source_config_id: 'extra-config' },
+        ruleProvider,
+      ]),
+      source_config_ids: [aiProvider.source_config_id!, 'extra-config'],
+    }
+
+    const result = validatePublishedModelPolicy(pollutedPolicy, [publishedProvider()])
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reasons).toContain('策略引用了非 provider 配置')
+      expect(result.reasons).toContain('策略包含 unknown 或空模型')
+      expect(result.reasons).toContain('策略包含空白或重复 provider profile')
+    }
   })
 })

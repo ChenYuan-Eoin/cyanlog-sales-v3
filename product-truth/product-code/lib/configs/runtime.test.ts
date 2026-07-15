@@ -67,9 +67,11 @@ describe('config runtime helpers', () => {
   })
 
   it('keeps applications and tool policies out of the provider chain', () => {
-    expect(isPublishedAIProviderValue({ kind: 'provider', model: 'gpt-5.5' })).toBe(true)
+    expect(isPublishedAIProviderValue({ kind: 'provider', model: 'gpt-5.5', profile: 'sales_cloud' })).toBe(true)
     expect(isPublishedAIProviderValue({ kind: 'application', model: 'gpt-5.5' })).toBe(false)
     expect(isPublishedAIProviderValue({ kind: 'tool_policy', model: 'gpt-5.5' })).toBe(false)
+    expect(isPublishedAIProviderValue({ kind: 'provider', model: '   ', profile: 'blank' })).toBe(false)
+    expect(isPublishedAIProviderValue({ kind: 'future_kind', model: 'gpt-5.5', profile: 'unknown' })).toBe(false)
   })
 
   it('accepts only provider-shaped legacy rows without an explicit kind', () => {

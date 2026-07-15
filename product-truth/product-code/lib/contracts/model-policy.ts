@@ -224,6 +224,15 @@ function normalizeProviderChain(value: unknown): ModelPolicyProvider[] {
       : runtimeLocation === 'cloud'
         ? ['semantic_clause_review', 'long_document_chunk_parse', 'tender_ocr_enhancement', 'comment_patch_draft', 'report_summary']
         : ['semantic_clause_review', 'comment_patch_draft', 'report_summary']
+    const routingRecord = asRecord(record.routing)
+    const routing: ModelPolicyProvider['routing'] = Object.keys(routingRecord).length > 0
+      ? {
+          max_pages: Number(routingRecord.max_pages || 15),
+          strategy: routingRecord.strategy === 'chunked' || routingRecord.strategy === 'rule'
+            ? routingRecord.strategy
+            : 'full',
+        }
+      : undefined
     providers.push({
       profile: String(record.profile || model),
       provider_kind: isBuiltin ? 'builtin' : 'openai_compatible',
@@ -243,7 +252,7 @@ function normalizeProviderChain(value: unknown): ModelPolicyProvider[] {
       health_check_required: typeof record.health_check_required === 'boolean'
         ? record.health_check_required
         : record.provider_kind !== 'builtin',
-      routing: asRecord(record.routing) as ModelPolicyProvider['routing'],
+      routing,
       source_config_id: typeof record.source_config_id === 'string' ? record.source_config_id : null,
     })
   }
@@ -277,8 +286,15 @@ export function validatePublishedModelPolicy(
   const actualIds = policy?.source_config_ids || []
   if (actualIds.some((id) => !expectedIds.has(id))) reasons.push('策略引用了非 provider 配置')
   if (new Set(actualIds).size !== actualIds.length) reasons.push('策略 provider source_config_ids 重复')
-  if (policy?.provider_chain.some((provider) => !provider.model || provider.model === 'unknown')) {
+  if (policy?.provider_chain.some((provider) => {
+    const model = provider.model.trim().toLowerCase()
+    return !model || model === 'unknown'
+  })) {
     reasons.push('策略包含 unknown 或空模型')
+  }
+  const profiles = (policy?.provider_chain || []).map((provider) => provider.profile.trim().toLowerCase())
+  if (profiles.some((profile) => !profile) || new Set(profiles).size !== profiles.length) {
+    reasons.push('策略包含空白或重复 provider profile')
   }
   if (policy && !isModelPolicyCurrentForPublishedProviders(policy, providers)) {
     reasons.push('策略与当前已发布 provider 配置不一致')
