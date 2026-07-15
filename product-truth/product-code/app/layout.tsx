@@ -78,6 +78,7 @@ export default async function RootLayout({
   return (
     <html
       lang="zh-CN"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable}`}
       style={themeVariables}
       data-brand-name={theme.brandName}
