@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
+import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -64,6 +65,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     if (config.status === 'PUBLISHED') {
       return errorResponse(createApiError('BUSINESS_RULE_VIOLATION', '配置已处于发布状态'))
+    }
+
+    if (config.type === 'AI_CONFIG' && getAIConfigKind(config.value) !== 'provider') {
+      return errorResponse(createApiError(
+        'BUSINESS_RULE_VIOLATION',
+        '模型应用与工具消费策略的专用校验和发布流程尚未验收，当前禁止通过通用接口发布'
+      ))
     }
 
     const now = new Date().toISOString()

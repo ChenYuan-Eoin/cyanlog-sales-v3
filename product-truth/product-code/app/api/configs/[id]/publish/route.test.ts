@@ -75,4 +75,28 @@ describe('POST /api/configs/[id]/publish', () => {
     expect(archiveQuery.eq).not.toHaveBeenCalledWith('key', 'UI_THEME_ALT')
     expect(archiveQuery.neq).toHaveBeenCalledWith('id', 'theme-2')
   })
+
+  it('工具消费策略不能通过通用配置接口发布', async () => {
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(makeSelectSingle({ org_id: 'org-1' }))
+      .mockReturnValueOnce(makeSelectSingle({ id: 'policy-1' }))
+      .mockReturnValueOnce(makeSelectSingle({
+        id: 'policy-1',
+        org_id: 'org-1',
+        type: 'AI_CONFIG',
+        key: 'POLICY_CONTRACT_REVIEW',
+        status: 'DRAFT',
+        value: { kind: 'tool_policy', tool: 'contract_review' },
+      }))
+
+    const res = await POST({ method: 'POST' } as any, {
+      params: Promise.resolve({ id: 'policy-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error.code).toBe('B001')
+    expect(body.error.message).toContain('专用校验和发布流程尚未验收')
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(3)
+  })
 })

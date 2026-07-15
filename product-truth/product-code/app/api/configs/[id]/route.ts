@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth'
 import { configUpdateSchema } from '@/lib/configs/validation'
 import { validateConfigValue } from '@/lib/configs/validation'
 import { mergeStoredAIConfigValue, sanitizeConfigRow } from '@/lib/configs/runtime'
+import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 
@@ -45,6 +46,11 @@ async function verifyConfigAccess(configId: string, userId: string): Promise<{ o
   }
 
   return { ok: true, orgId, config }
+}
+
+function isProtectedAIAsset(config: unknown): boolean {
+  const record = config as { type?: unknown; value?: Record<string, unknown> | null }
+  return record.type === 'AI_CONFIG' && getAIConfigKind(record.value) !== 'provider'
 }
 
 // GET /api/configs/:id - 获取配置详情
@@ -94,6 +100,12 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     }
 
     const type = (config as { type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' | 'UI_THEME' }).type
+    if (isProtectedAIAsset(config)) {
+      return errorResponse(createApiError(
+        'BUSINESS_RULE_VIOLATION',
+        '模型应用与工具消费策略当前只读，专用校验和发布流程验收前禁止使用通用 Provider 接口修改'
+      ))
+    }
     const nextValue = validated.data.value
       ? (
           type === 'AI_CONFIG'
@@ -107,6 +119,13 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
             : validated.data.value
         )
       : undefined
+
+    if (type === 'AI_CONFIG' && nextValue && getAIConfigKind(nextValue) !== 'provider') {
+      return errorResponse(createApiError(
+        'BUSINESS_RULE_VIOLATION',
+        'AI 配置资产 kind 不可通过通用 Provider 接口变更'
+      ))
+    }
 
     // 如果更新 value，需要验证
     if (nextValue) {
@@ -149,9 +168,15 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     const user = await requireAuth(req)
     const { id } = await params
 
-    const { ok } = await verifyConfigAccess(id, user.id)
+    const { ok, config } = await verifyConfigAccess(id, user.id)
     if (!ok) {
       return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
+    }
+    if (isProtectedAIAsset(config)) {
+      return errorResponse(createApiError(
+        'BUSINESS_RULE_VIOLATION',
+        '模型应用与工具消费策略当前只读，专用发布流程验收前禁止删除'
+      ))
     }
 
     const { error } = await supabaseAdmin.from('configs').delete().eq('id', id)
