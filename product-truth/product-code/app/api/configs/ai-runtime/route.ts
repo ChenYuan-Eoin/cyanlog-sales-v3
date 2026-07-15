@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
             apiKey: providerConfig?.api_key,
             model: provider.model,
             latestInvocation: providerSemanticEvidence.actual || undefined,
-            checkRemoteHealth: provider.health_check_required,
+            checkRemoteHealth: false,
           }),
           assessProviderRuntime({
             providerKind: provider.provider_kind,
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
             apiKey: providerConfig?.api_key,
             model: provider.model,
             latestInvocation: providerTenderEvidence.actual || undefined,
-            checkRemoteHealth: provider.health_check_required,
+            checkRemoteHealth: false,
             phaseLabel: 'tender_long_document_parse',
             readyAction: '上传真实标书或长 PDF，确认 model_invocations 中 tender_long_document_parse 为 completed。',
           }),

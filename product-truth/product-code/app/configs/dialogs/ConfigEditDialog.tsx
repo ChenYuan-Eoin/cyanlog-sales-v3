@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
 import type { Config } from '../types'
 
 function DialogChunkFallback() {
@@ -65,6 +66,9 @@ export default function ConfigEditDialog({
   onConfigChange,
   onSave,
 }: ConfigEditDialogProps) {
+  const aiKind = configType === 'AI_CONFIG' ? getAIConfigKind(config.value) : null
+  const isReadOnlyAIAsset = configType === 'AI_CONFIG' && aiKind !== 'provider'
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
@@ -77,22 +81,29 @@ export default function ConfigEditDialog({
         <div className="py-4">
           {configType === 'TAX_RULE' && <TaxEditForm config={config} onChange={onConfigChange} />}
           {configType === 'APPROVAL_RULE' && <ApprovalEditForm config={config} onChange={onConfigChange} />}
-          {configType === 'AI_CONFIG' && <AIEditForm config={config} onChange={onConfigChange} />}
+          {configType === 'AI_CONFIG' && !isReadOnlyAIAsset && <AIEditForm config={config} onChange={onConfigChange} />}
           {configType === 'UI_THEME' && <ThemeEditForm config={config} onChange={onConfigChange} />}
 
-          <div className="mt-4">
-            <label className="text-sm font-medium">描述</label>
-            <Textarea
-              value={config.description || ''}
-              onChange={(event) => onConfigChange({ ...config, description: event.target.value })}
-              placeholder="配置描述（可选）"
-            />
-          </div>
+          {isReadOnlyAIAsset ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+              该记录属于{aiKind === 'application' ? '模型应用' : aiKind === 'tool_policy' ? '工具消费策略' : '未知 AI 资产'}，
+              不能使用 Provider 表单编辑。专用编辑与发布流程通过独立验收前保持只读。
+            </div>
+          ) : (
+            <div className="mt-4">
+              <label className="text-sm font-medium">描述</label>
+              <Textarea
+                value={config.description || ''}
+                onChange={(event) => onConfigChange({ ...config, description: event.target.value })}
+                placeholder="配置描述（可选）"
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={onSave}>保存</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{isReadOnlyAIAsset ? '关闭' : '取消'}</Button>
+          {!isReadOnlyAIAsset && <Button onClick={onSave}>保存</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

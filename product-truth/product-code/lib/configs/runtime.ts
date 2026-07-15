@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import type { AIConfigValue, AIModelStage, AIProviderKind, ConfigType, TaxRuleValue } from '@/lib/configs/types'
 import { normalizeOpenAICompatibleBaseUrl } from '@/lib/ai/openai-compatible'
+import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
 
 type JsonRecord = Record<string, unknown>
 
@@ -188,16 +189,12 @@ function normalizeAIConfig(row: ConfigRow): PublishedAIProviderConfig {
 
 /** Only provider records may enter the runtime provider chain. */
 export function isPublishedAIProviderValue(value: JsonRecord): boolean {
-  if (value.kind === 'application' || value.kind === 'tool_policy') return false
+  if (getAIConfigKind(value) !== 'provider') return false
   const hasProviderShape = typeof value.model === 'string'
     && value.model.trim().length > 0
     && (typeof value.base_url === 'string'
       || typeof value.provider_kind === 'string'
       || typeof value.profile === 'string')
-  if (value.kind === 'provider') return hasProviderShape
-  if (value.kind !== undefined && value.kind !== null && value.kind !== '') return false
-  // Legacy rows without kind are accepted only when they have a real model
-  // and provider signature; application/policy rows must never become models.
   return hasProviderShape
 }
 

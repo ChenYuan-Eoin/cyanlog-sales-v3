@@ -51,6 +51,16 @@ export type ContractModelPolicy = {
   published_at: string | null
 }
 
+export class ModelPolicyConfigurationError extends Error {
+  readonly reasons: string[]
+
+  constructor(reasons: string[]) {
+    super(`当前发布模型策略不可安全消费：${reasons.join('；')}`)
+    this.name = 'ModelPolicyConfigurationError'
+    this.reasons = reasons
+  }
+}
+
 type ModelPolicyRow = Omit<ContractModelPolicy, 'provider_chain' | 'routing_policy' | 'fallback_policy' | 'audit_policy'> & {
   provider_chain: unknown
   routing_policy: unknown
@@ -415,7 +425,24 @@ async function fetchLatestModelPolicy(orgId: string) {
   return data ? normalizeModelPolicy(data as ModelPolicyRow) : null
 }
 
+/** Business consumers must never publish or repair configuration as a side effect. */
 export async function resolvePublishedModelPolicy(
+  orgId: string,
+  _requestedBy?: string | null,
+): Promise<ContractModelPolicy> {
+  const current = await fetchCurrentModelPolicy(orgId)
+  const providers = await listPublishedAIProviders(orgId)
+  const validation = validatePublishedModelPolicy(current, providers)
+  if (!current || !validation.ok) {
+    throw new ModelPolicyConfigurationError(
+      validation.ok ? ['没有当前已发布模型策略'] : validation.reasons,
+    )
+  }
+  return current
+}
+
+/** Explicit control-plane operation. Do not call from GET, warmup, or business consumption. */
+export async function publishModelPolicyFromPublishedProviders(
   orgId: string,
   requestedBy?: string | null
 ): Promise<ContractModelPolicy> {

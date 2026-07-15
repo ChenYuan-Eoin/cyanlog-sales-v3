@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
   query.eq.mockReturnValue(query)
   query.order.mockReturnValue(query)
   query.limit.mockReturnValue(query)
-  return { from: vi.fn(() => query), query }
+  return { from: vi.fn(() => query), query, listPublishedAIProviders: vi.fn() }
 })
 
 vi.mock('@/lib/supabase', () => ({
@@ -23,10 +23,13 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 vi.mock('@/lib/configs/runtime', () => ({
-  listPublishedAIProviders: vi.fn(),
+  listPublishedAIProviders: mocks.listPublishedAIProviders,
 }))
 
-import { getCurrentPublishedModelPolicy } from './model-policy'
+import {
+  getCurrentPublishedModelPolicy,
+  resolvePublishedModelPolicy,
+} from './model-policy'
 
 describe('getCurrentPublishedModelPolicy', () => {
   beforeEach(() => {
@@ -35,6 +38,7 @@ describe('getCurrentPublishedModelPolicy', () => {
     mocks.query.eq.mockReturnValue(mocks.query)
     mocks.query.order.mockReturnValue(mocks.query)
     mocks.query.limit.mockReturnValue(mocks.query)
+    mocks.listPublishedAIProviders.mockResolvedValue([])
     mocks.query.maybeSingle.mockResolvedValue({
       data: {
         id: 'policy-25',
@@ -62,6 +66,18 @@ describe('getCurrentPublishedModelPolicy', () => {
     expect(result?.version).toBe(25)
     expect(mocks.from).toHaveBeenCalledWith('model_policies')
     expect(mocks.query.select).toHaveBeenCalledWith('*')
+    expect(mocks.query.insert).not.toHaveBeenCalled()
+    expect(mocks.query.update).not.toHaveBeenCalled()
+    expect(mocks.query.delete).not.toHaveBeenCalled()
+  })
+
+  it('blocks business consumption instead of auto-publishing a replacement policy', async () => {
+    await expect(resolvePublishedModelPolicy('org-1', 'user-1')).rejects.toMatchObject({
+      name: 'ModelPolicyConfigurationError',
+      reasons: expect.arrayContaining(['当前模型策略缺少完整审计/路由字段']),
+    })
+
+    expect(mocks.listPublishedAIProviders).toHaveBeenCalledWith('org-1')
     expect(mocks.query.insert).not.toHaveBeenCalled()
     expect(mocks.query.update).not.toHaveBeenCalled()
     expect(mocks.query.delete).not.toHaveBeenCalled()

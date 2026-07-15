@@ -10,6 +10,7 @@ import {
   hasFormalModelInvocationEvidence,
   hasModelInvocationEvidence,
 } from '@/lib/configs/ai-runtime-state'
+import { groupAIConfigs } from '@/lib/configs/ai-config-kind'
 
 interface AIConfigTabProps {
   configs: Config[]
@@ -216,6 +217,12 @@ function providerSourceText(provider: RuntimeProvider) {
 }
 
 export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNew, onEdit, onPublish, onDelete }: AIConfigTabProps) {
+  const {
+    providers: providerConfigs,
+    applications: applicationConfigs,
+    toolPolicies: toolPolicyConfigs,
+    unclassified: unclassifiedConfigs,
+  } = groupAIConfigs(configs)
   const externalProviders = runtimePolicy?.provider_chain.filter((provider) => provider.provider_kind !== 'builtin') ?? []
   const hasExternalProvider = externalProviders.length > 0
   const hasFormalExternalProviderEvidence = externalProviders.some(hasFormalModelProviderEvidence)
@@ -224,8 +231,8 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
   const localProvider = runtimePolicy?.provider_chain.find((provider) => provider.runtime_location === 'local')
   const cloudProvider = runtimePolicy?.provider_chain.find((provider) => provider.runtime_location === 'cloud')
   const builtinProvider = runtimePolicy?.provider_chain.find((provider) => provider.provider_kind === 'builtin')
-  const localConfig = configs.find((config) => config.key === 'AI_LEVEL_1' || config.value?.level === 1)
-  const cloudConfig = configs.find((config) => config.key === 'AI_LEVEL_2' || config.value?.level === 2)
+  const localConfig = providerConfigs.find((config) => config.key === 'AI_LEVEL_1' || config.value?.level === 1)
+  const cloudConfig = providerConfigs.find((config) => config.key === 'AI_LEVEL_2' || config.value?.level === 2)
   const hasLocalCliFallback = externalProviders.some((provider) => (
     provider.runtime_state === 'local_cli_ready'
     || (provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli')
@@ -267,19 +274,19 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(360px,1fr)_360px]">
-      <Card className="min-w-0">
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+      <Card className="min-w-0 self-start">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-base">模型 Provider ({configs.length})</CardTitle>
+          <CardTitle className="text-base">模型 Provider ({providerConfigs.length})</CardTitle>
           <Button size="sm" onClick={onNew}>+ 新增</Button>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[720px] space-y-3 overflow-y-auto pr-1">
-            {configs.map((config) => (
+          <div className="space-y-3">
+            {providerConfigs.map((config) => (
               <div key={config.id} className="rounded-lg border p-4">
                 <div className="flex items-baseline justify-between mb-3">
                   <div className="text-sm font-semibold text-slate-900">
-                    Level {(config.value?.level as number)} · {config.name}
+                    {typeof config.value?.level === 'number' ? `L${config.value.level}` : '未标注层级'} · {config.name}
                   </div>
                   <div className="flex gap-1">
                     <ConfigStatusBadge status={config.status} />
@@ -289,26 +296,26 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
 
                 <div className="text-xs text-slate-600 space-y-1.5 mb-4">
                   <div>来源: 配置中心数据库 · {config.status === 'DRAFT' ? '表单草稿/未发布' : config.status === 'PUBLISHED' ? '已发布' : '已归档'}</div>
-                  <div className="truncate">画像: {(config.value?.profile as string) || '未设置'}</div>
-                  <div className="truncate">类型: {configProviderKind(config)}</div>
-                  <div className="truncate">模型: {config.value?.model as string}</div>
-                  <div className="truncate">地址: {(config.value?.base_url as string) || '（内置）'}</div>
+                  <div className="break-all">画像: {(config.value?.profile as string) || '未设置'}</div>
+                  <div className="break-all">类型: {configProviderKind(config)}</div>
+                  <div className="break-all">模型: {(config.value?.model as string) || '未设置'}</div>
+                  <div className="break-all">地址: {(config.value?.base_url as string) || '（内置）'}</div>
                   <div>超时: {(config.value?.timeout_ms as number) / 1000}s</div>
                   <div>密钥: {configCredentialLabel(config)}</div>
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => onEdit(config)}>编辑</Button>
+                  <Button variant="outline" size="sm" className="min-h-11 flex-1" onClick={() => onEdit(config)}>编辑</Button>
                   {config.status !== 'PUBLISHED' && (
-                    <Button variant="outline" size="sm" onClick={() => onPublish(config.id)}>发布</Button>
+                    <Button variant="outline" size="sm" className="min-h-11" onClick={() => onPublish(config.id)}>发布</Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => onDelete(config.id)}>删除</Button>
+                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onDelete(config.id)}>删除</Button>
                 </div>
               </div>
             ))}
           </div>
 
-        {configs.length === 0 && (
+        {providerConfigs.length === 0 && (
           <div className="text-center py-12">
             <p className="text-slate-500">暂无 AI 模型配置</p>
             <p className="text-sm text-slate-400 mt-2">点击上方按钮创建第一条 AI 配置</p>
@@ -317,7 +324,89 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
         </CardContent>
       </Card>
 
-      <Card className="min-w-0">
+      <Card className="min-w-0 self-start">
+        <CardHeader>
+          <CardTitle className="text-base">应用与工具消费</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
+            Provider 只保存模型连接；应用保存业务能力绑定；工具策略决定具体工具如何选择 Provider。三类资产分别发布。
+          </div>
+
+          <section aria-labelledby="ai-applications-heading" className="rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between border-b bg-slate-50 px-3 py-2">
+              <h3 id="ai-applications-heading" className="text-sm font-semibold text-slate-900">
+                模型应用 ({applicationConfigs.length})
+              </h3>
+              <span className="text-[11px] text-slate-500">业务能力层</span>
+            </div>
+            <div className="divide-y">
+              {applicationConfigs.map((config) => (
+                <div key={config.id} className="px-3 py-3 text-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900">{config.name}</div>
+                      <div className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                        {(config.value?.application_id as string) || config.key}
+                      </div>
+                    </div>
+                    <ConfigStatusBadge status={config.status} />
+                  </div>
+                  <div className="mt-2 break-words text-slate-600">
+                    工具：{Array.isArray(config.value?.bound_tools) && config.value.bound_tools.length > 0
+                      ? config.value.bound_tools.join(' / ')
+                      : '未绑定'}
+                  </div>
+                </div>
+              ))}
+              {applicationConfigs.length === 0 && (
+                <div className="px-3 py-6 text-center text-xs text-slate-500">暂无模型应用</div>
+              )}
+            </div>
+          </section>
+
+          <section aria-labelledby="ai-tool-policies-heading" className="rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between border-b bg-slate-50 px-3 py-2">
+              <h3 id="ai-tool-policies-heading" className="text-sm font-semibold text-slate-900">
+                工具消费策略 ({toolPolicyConfigs.length})
+              </h3>
+              <span className="text-[11px] text-slate-500">业务消费层</span>
+            </div>
+            <div className="divide-y">
+              {toolPolicyConfigs.map((config) => (
+                <div key={config.id} className="px-3 py-3 text-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900">{config.name}</div>
+                      <div className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                        {(config.value?.tool as string) || config.key}
+                      </div>
+                    </div>
+                    <ConfigStatusBadge status={config.status} />
+                  </div>
+                  <div className="mt-2 break-words text-slate-600">
+                    应用：{(config.value?.application_key as string) || '未绑定'} · 策略：{(config.value?.strategy as string) || '未设置'}
+                  </div>
+                </div>
+              ))}
+              {toolPolicyConfigs.length === 0 && (
+                <div className="px-3 py-6 text-center text-xs text-slate-500">暂无工具消费策略</div>
+              )}
+            </div>
+          </section>
+
+          {unclassifiedConfigs.length > 0 && (
+            <div aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              有 {unclassifiedConfigs.length} 条 AI_CONFIG 使用未知 kind，已从运行链和三层资产中隔离。
+            </div>
+          )}
+          <p className="text-[11px] leading-5 text-slate-500">
+            当前 Provider 编辑器不会打开应用或工具策略，避免把业务配置误保存成模型连接。
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0 self-start">
         <CardHeader>
           <CardTitle className="text-base">路由与执行策略</CardTitle>
         </CardHeader>
@@ -379,20 +468,20 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
 
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
-              <div className="text-lg font-semibold text-slate-900">{configs.length}</div>
-              <div className="text-[11px] text-slate-500">档位</div>
+              <div className="text-lg font-semibold text-slate-900">{providerConfigs.length}</div>
+              <div className="text-[11px] text-slate-500">Provider</div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
               <div className="text-lg font-semibold text-slate-900">
-                {configs.filter((config) => config.value?.enabled === true).length}
+                {applicationConfigs.length}
               </div>
-              <div className="text-[11px] text-slate-500">启用</div>
+              <div className="text-[11px] text-slate-500">应用</div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
               <div className="text-lg font-semibold text-slate-900">
-                {configs.filter((config) => config.status === 'PUBLISHED').length}
+                {toolPolicyConfigs.length}
               </div>
-              <div className="text-[11px] text-slate-500">发布</div>
+              <div className="text-[11px] text-slate-500">工具策略</div>
             </div>
           </div>
 
@@ -407,13 +496,13 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 xl:col-span-2 2xl:col-span-1">
+      <Card className="min-w-0 self-start">
       <CardHeader>
         <CardTitle className="text-base">合同审核运行时策略</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         {runtimeError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+          <div aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
             {runtimeError}
           </div>
         )}

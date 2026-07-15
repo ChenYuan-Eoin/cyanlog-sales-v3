@@ -144,5 +144,9 @@ describe('GET /api/configs/ai-runtime', () => {
     expect(mocks.insert).not.toHaveBeenCalled()
     expect(mocks.update).not.toHaveBeenCalled()
     expect(mocks.delete).not.toHaveBeenCalled()
+    expect(mocks.assessProviderRuntime).toHaveBeenCalledTimes(2)
+    for (const [input] of mocks.assessProviderRuntime.mock.calls) {
+      expect(input).toMatchObject({ checkRemoteHealth: false })
+    }
   })
 })

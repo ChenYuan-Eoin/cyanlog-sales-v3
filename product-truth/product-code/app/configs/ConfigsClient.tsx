@@ -18,6 +18,7 @@ import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSu
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
+import { groupAIConfigs } from '@/lib/configs/ai-config-kind'
 import TabsContent from './tabs/TabsContent'
 import { confirmAction } from '@/lib/toast'
 import {
@@ -85,8 +86,8 @@ const CONFIG_TABS: Record<ConfigTabId, {
     icon: KeyRoundIcon,
   },
   ai: {
-    label: 'AI 模型配置',
-    description: '管理本地模型、云端 OpenAI 兼容模型和运行时路由策略。',
+    label: 'AI 模型与消费',
+    description: '分层管理模型 Provider、模型应用和业务工具消费策略；L1/L2/L3 只作为路由标签。',
     section: 'contract-ai',
     icon: BotIcon,
   },
@@ -317,7 +318,13 @@ function getApiErrorMessage(payload: unknown, fallback: string): string {
 async function readResponseErrorMessage(response: Response, fallback: string): Promise<string> {
   const payload = await response.json().catch(() => null)
   const message = getApiErrorMessage(payload, fallback)
-  return `${message}（${response.status}）`
+  const reasons = payload && typeof payload === 'object'
+    && 'error' in payload && payload.error && typeof payload.error === 'object'
+    && 'details' in payload.error && payload.error.details && typeof payload.error.details === 'object'
+    && 'reasons' in payload.error.details && Array.isArray(payload.error.details.reasons)
+      ? payload.error.details.reasons.filter((reason: unknown): reason is string => typeof reason === 'string')
+      : []
+  return `${message}${reasons.length > 0 ? ` 原因：${reasons.join('；')}` : ''}（${response.status}）`
 }
 
 async function fetchJsonOrThrow<T>(input: RequestInfo | URL, init: RequestInit | undefined, fallback: string): Promise<T> {
@@ -580,6 +587,8 @@ export default function ConfigsClient({
             setAiRuntimeError('')
             writeBrowserCache(runtimeCacheKey, runtimeResult.value)
           } else if (runtimeResult.status === 'rejected') {
+            setAiRuntimePolicy(null)
+            deleteBrowserCache(runtimeCacheKey)
             setAiRuntimeError(runtimeResult.reason instanceof Error
               ? runtimeResult.reason.message
               : 'AI 运行时策略加载失败')
@@ -847,10 +856,11 @@ export default function ConfigsClient({
       }
       case 'ai': {
         const aiConfigs = getConfigsByType('AI_CONFIG')
+        const grouped = groupAIConfigs(aiConfigs)
         return [
-          { label: '模型档位', value: countValue(aiConfigs.length) },
-          { label: '启用模型', value: countValue(aiConfigs.filter((config) => config.value?.enabled === true).length) },
-          { label: '已发布', value: countValue(aiConfigs.filter((config) => config.status === 'PUBLISHED').length) },
+          { label: 'Provider', value: countValue(grouped.providers.length) },
+          { label: '模型应用', value: countValue(grouped.applications.length) },
+          { label: '工具策略', value: countValue(grouped.toolPolicies.length) },
         ]
       }
       case 'theme': {
@@ -1203,6 +1213,7 @@ export default function ConfigsClient({
         return { rule_type: 'discount', thresholds: [{ limit: 5, approver_role: 'auto', enabled: true }] }
       case 'AI_CONFIG':
         return {
+          kind: 'provider',
           level: 1,
           name: '新模型',
           profile: 'local_primary',
