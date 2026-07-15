@@ -143,17 +143,31 @@ body {
 }
 
 .ones-docx-preview-surface {
+  min-width: 100%;
   background: #e2e8f0;
 }
 
-.ones-docx-preview-surface .docx-wrapper {
+.ones-docx-preview-surface .docx-wrapper,
+.ones-docx-preview-surface .ones-docx-preview-wrapper {
+  min-width: max-content;
   background: transparent;
   padding: 12px 0;
+  transform-origin: top center;
+  zoom: var(--ones-docx-preview-zoom, 1);
 }
 
-.ones-docx-preview-surface .docx {
+.ones-docx-preview-surface .docx,
+.ones-docx-preview-surface section.ones-docx-preview {
   margin: 0 auto 16px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ones-docx-preview-surface *,
+  .ones-docx-preview-surface *::before,
+  .ones-docx-preview-surface *::after {
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Utility classes for shell layout */

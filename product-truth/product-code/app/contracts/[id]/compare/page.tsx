@@ -10,8 +10,12 @@ import {
   buildContractWorkbenchHref,
   buildContractsCenterHref,
 } from '@/lib/contracts/review-navigation'
-import { inferDocumentLocator } from '@/lib/contracts/document-locator'
-import { SourceDocumentPreview, type SourceDocumentPreviewFile } from '@/components/contracts/source-document-preview'
+import {
+  SourceDocumentPreview,
+  type SourceDocumentPreviewFile,
+  type SourceDocumentViewerCapabilities,
+} from '@/components/contracts/source-document-preview'
+import { nextCompareViewerZoom, proportionalScrollTop } from '@/lib/contracts/compare-viewer'
 import {
   ArrowLeftIcon,
   AlertTriangleIcon,
@@ -24,6 +28,14 @@ import {
   UploadIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  Link2Icon,
+  ListFilterIcon,
+  Maximize2Icon,
+  PanelRightIcon,
+  Unlink2Icon,
+  XIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
 } from 'lucide-react'
 
 interface DiffItem {
@@ -47,8 +59,15 @@ interface ComparisonData {
     baseline: ComparisonDocumentMeta
     compare: ComparisonDocumentMeta
   }
+  source_verification?: ComparisonSourceVerification
   diffs: DiffItem[]
   created_at: string
+}
+
+interface ComparisonSourceVerification {
+  status: 'verified' | 'unverified' | 'source_drift'
+  can_start_review: boolean
+  reasons: string[]
 }
 
 interface ComparisonDocumentMeta {
@@ -110,6 +129,15 @@ type DiffFilter = 'all' | 'red' | 'yellow' | 'green' | 'deleted' | 'added' | 'mo
 type ComparePrecision = 'strict' | 'semantic'
 
 type CompareUploadTarget = 'baseline' | 'compare'
+type CompareDrawer = 'diffs' | 'details' | null
+type CompareZoomMode = 'fit-width' | 'manual'
+
+const UNAVAILABLE_VIEWER_CAPABILITIES: SourceDocumentViewerCapabilities = {
+  kind: 'unavailable',
+  controlledScroll: false,
+  controlledZoom: false,
+  fidelity: 'unavailable',
+}
 
 const COMPARE_ALLOWED_EXTENSIONS = ['.pdf', '.docx']
 
@@ -260,6 +288,12 @@ export default function ContractComparePage() {
   const [error, setError] = useState('')
   const [selectedDiffId, setSelectedDiffId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'dual' | 'merge'>('dual')
+  const [zoomMode, setZoomMode] = useState<CompareZoomMode>('fit-width')
+  const [zoomPercent, setZoomPercent] = useState(100)
+  const [syncScroll, setSyncScroll] = useState(true)
+  const [activeDrawer, setActiveDrawer] = useState<CompareDrawer>(null)
+  const [leftViewerCapabilities, setLeftViewerCapabilities] = useState(UNAVAILABLE_VIEWER_CAPABILITIES)
+  const [rightViewerCapabilities, setRightViewerCapabilities] = useState(UNAVAILABLE_VIEWER_CAPABILITIES)
   const [diffFilter, setDiffFilter] = useState<DiffFilter>('all')
   const [baselineContract, setBaselineContract] = useState<ContractDetail | null>(null)
   const [candidateContracts, setCandidateContracts] = useState<CompareCandidateOption[]>([])
@@ -280,10 +314,26 @@ export default function ContractComparePage() {
   const leftPaneRef = useRef<HTMLDivElement>(null)
   const rightPaneRef = useRef<HTMLDivElement>(null)
   const isSyncing = useRef(false)
+  const syncFrameRef = useRef<number | null>(null)
   const pendingUploadedVersionRef = useRef<{
     target: CompareUploadTarget
     versionNumber: number | null
   } | null>(null)
+
+  const handleLeftViewerCapabilities = useCallback((capabilities: SourceDocumentViewerCapabilities) => {
+    setLeftViewerCapabilities(capabilities)
+  }, [])
+
+  const handleRightViewerCapabilities = useCallback((capabilities: SourceDocumentViewerCapabilities) => {
+    setRightViewerCapabilities(capabilities)
+  }, [])
+
+  const canSynchronizeViewers = leftViewerCapabilities.controlledScroll
+    && rightViewerCapabilities.controlledScroll
+
+  useEffect(() => () => {
+    if (syncFrameRef.current !== null) cancelAnimationFrame(syncFrameRef.current)
+  }, [])
 
   const fetchComparison = useCallback(async () => {
     if (!comparisonId) {
@@ -607,6 +657,10 @@ export default function ContractComparePage() {
 
   const handleStartReReview = useCallback(async () => {
     if (!comparison || (comparison.diffs || []).length === 0) return
+    if (comparison.source_verification?.can_start_review !== true) {
+      setRerunNotice('源文件身份尚未冻结，本结果仅供查看器复核，不能创建 ReviewRun。')
+      return
+    }
 
     setStartingRerun(true)
     setRerunNotice('')
@@ -638,28 +692,27 @@ export default function ContractComparePage() {
 
   // 同步滚动
   const handleScroll = useCallback((source: 'left' | 'right') => {
-    if (isSyncing.current) return
+    if (!syncScroll || !canSynchronizeViewers || isSyncing.current) return
     isSyncing.current = true
 
     const sourceRef = source === 'left' ? leftPaneRef : rightPaneRef
     const targetRef = source === 'left' ? rightPaneRef : leftPaneRef
 
     if (sourceRef.current && targetRef.current) {
-      targetRef.current.scrollTop = sourceRef.current.scrollTop
+      targetRef.current.scrollTop = proportionalScrollTop(sourceRef.current, targetRef.current)
     }
 
-    setTimeout(() => {
+    if (syncFrameRef.current !== null) cancelAnimationFrame(syncFrameRef.current)
+    syncFrameRef.current = requestAnimationFrame(() => {
       isSyncing.current = false
-    }, 50)
-  }, [])
+      syncFrameRef.current = null
+    })
+  }, [canSynchronizeViewers, syncScroll])
 
   // 跳转到指定差异
   const scrollToDiff = useCallback((diffId: string) => {
     setSelectedDiffId(diffId)
-    const element = document.getElementById(`diff-${diffId}`)
-    if (element && leftPaneRef.current) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
+    setActiveDrawer(null)
   }, [])
 
   if (loading) {
@@ -766,6 +819,15 @@ export default function ContractComparePage() {
   const redDiffCount = allDiffs.filter((diff) => diff.risk_level === 'red').length
   const yellowDiffCount = allDiffs.filter((diff) => diff.risk_level === 'yellow').length
   const documentPair = comparison.document_pair
+  const sourceVerification = comparison.source_verification || {
+    status: 'unverified' as const,
+    can_start_review: false,
+    reasons: ['comparison_source_snapshot_missing'],
+  }
+  const sourceCanStartReview = sourceVerification.status === 'verified'
+    && sourceVerification.can_start_review
+  const canControlLinkedZoom = leftViewerCapabilities.controlledZoom
+    && rightViewerCapabilities.controlledZoom
   const goToVisibleDiff = (offset: number) => {
     if (!visibleDiffs.length) return
     const currentIndex = selectedVisibleIndex >= 0 ? selectedVisibleIndex : 0
@@ -774,9 +836,18 @@ export default function ContractComparePage() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="relative flex h-[calc(100dvh-5.75rem)] min-h-[640px] overflow-hidden bg-slate-50 xl:h-dvh xl:min-h-0">
+      {activeDrawer ? (
+        <button
+          type="button"
+          aria-label="关闭对比辅助面板"
+          className="absolute inset-0 z-30 cursor-default bg-slate-950/30"
+          onClick={() => setActiveDrawer(null)}
+        />
+      ) : null}
       {/* 差异导航面板 */}
-      <aside className="w-56 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 2xl:w-64">
+      {activeDrawer === 'diffs' ? (
+      <aside role="dialog" aria-modal="true" aria-label="差异列表" className="absolute inset-y-0 left-0 z-40 flex w-[min(22rem,calc(100%_-_1rem))] flex-col border-r border-slate-200 bg-white shadow-2xl">
         {/* Header */}
         <div className="p-4 border-b border-slate-100">
             <div className="mb-2 flex flex-wrap gap-1.5">
@@ -797,10 +868,15 @@ export default function ContractComparePage() {
               </Button>
             </Link>
           </div>
-          <h2 className="font-bold text-slate-900 flex items-center gap-2">
-            <GitCompareIcon className="h-5 w-5 text-indigo-500" />
-            文档比对
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 font-bold text-slate-900">
+              <GitCompareIcon className="h-5 w-5 text-indigo-500" />
+              差异列表
+            </h2>
+            <Button type="button" variant="ghost" className="h-11 w-11 p-0" aria-label="关闭差异列表" onClick={() => setActiveDrawer(null)}>
+              <XIcon className="h-5 w-5" />
+            </Button>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
             检测到 {totalChanges} 处差异，当前筛选 {visibleDiffs.length} 处
           </p>
@@ -920,9 +996,10 @@ export default function ContractComparePage() {
           </div>
         )}
       </aside>
+      ) : null}
 
       {/* 主内容区 */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* 顶部操作栏 */}
         <header className="min-h-16 bg-white border-b border-slate-200 flex flex-col gap-3 px-4 py-3 flex-shrink-0 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 flex flex-1 flex-col gap-2">
@@ -952,6 +1029,14 @@ export default function ContractComparePage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => setActiveDrawer('diffs')}>
+              <ListFilterIcon className="mr-1.5 h-4 w-4" />
+              差异列表
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => setActiveDrawer('details')}>
+              <PanelRightIcon className="mr-1.5 h-4 w-4" />
+              复核详情
+            </Button>
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
               <Button
                 type="button"
@@ -959,7 +1044,8 @@ export default function ContractComparePage() {
                 variant="ghost"
                 disabled={selectedVisibleIndex <= 0}
                 onClick={() => goToVisibleDiff(-1)}
-                className="h-8 px-2"
+                className="h-11 w-11 p-0"
+                aria-label="上一处差异"
               >
                 <ChevronLeftIcon className="h-4 w-4" />
               </Button>
@@ -972,15 +1058,18 @@ export default function ContractComparePage() {
                 variant="ghost"
                 disabled={selectedVisibleIndex < 0 || selectedVisibleIndex >= visibleDiffs.length - 1}
                 onClick={() => goToVisibleDiff(1)}
-                className="h-8 px-2"
+                className="h-11 w-11 p-0"
+                aria-label="下一处差异"
               >
                 <ChevronRightIcon className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex items-center bg-slate-100 p-1 rounded-lg">
+            <div className="flex items-center rounded-lg bg-slate-100 p-1" role="group" aria-label="对比视图">
               <button
+                type="button"
                 onClick={() => setViewMode('dual')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                aria-pressed={viewMode === 'dual'}
+                className={`min-h-11 touch-manipulation rounded-md px-3 text-xs font-medium transition-colors ${
                   viewMode === 'dual'
                     ? 'bg-white text-indigo-600 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -989,8 +1078,10 @@ export default function ContractComparePage() {
                 双栏视图
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('merge')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                aria-pressed={viewMode === 'merge'}
+                className={`min-h-11 touch-manipulation rounded-md px-3 text-xs font-medium transition-colors ${
                   viewMode === 'merge'
                     ? 'bg-white text-indigo-600 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -999,6 +1090,62 @@ export default function ContractComparePage() {
                 合并视图
               </button>
             </div>
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="文档缩放">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-11 w-11 p-0"
+                aria-label="缩小文档"
+                disabled={viewMode !== 'dual' || !canControlLinkedZoom}
+                onClick={() => {
+                  setZoomMode('manual')
+                  setZoomPercent((current) => nextCompareViewerZoom(current, 'out'))
+                }}
+              >
+                <ZoomOutIcon className="h-4 w-4" />
+              </Button>
+              <span className="min-w-14 text-center text-xs font-medium text-slate-600">
+                {zoomMode === 'fit-width' ? '适宽' : `${zoomPercent}%`}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-11 w-11 p-0"
+                aria-label="放大文档"
+                disabled={viewMode !== 'dual' || !canControlLinkedZoom}
+                onClick={() => {
+                  setZoomMode('manual')
+                  setZoomPercent((current) => nextCompareViewerZoom(current, 'in'))
+                }}
+              >
+                <ZoomInIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={zoomMode === 'fit-width' ? 'default' : 'ghost'}
+                className="h-11 px-2.5"
+                disabled={viewMode !== 'dual' || !canControlLinkedZoom}
+                onClick={() => setZoomMode('fit-width')}
+              >
+                <Maximize2Icon className="mr-1 h-4 w-4" />
+                适宽
+              </Button>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant={syncScroll && canSynchronizeViewers ? 'default' : 'outline'}
+              className="min-h-11"
+              disabled={viewMode !== 'dual' || !canSynchronizeViewers}
+              title={!canSynchronizeViewers ? 'PDF 内嵌或预览未就绪时不能由应用同步滚动' : undefined}
+              onClick={() => setSyncScroll((current) => !current)}
+            >
+              {syncScroll && canSynchronizeViewers ? <Link2Icon className="mr-1.5 h-4 w-4" /> : <Unlink2Icon className="mr-1.5 h-4 w-4" />}
+              {canSynchronizeViewers ? (syncScroll ? '同步滚动' : '独立滚动') : 'PDF 不同步'}
+            </Button>
             <Button size="sm" variant="outline" disabled title="差异报告导出需要绑定正式对比版本后接入">
               <DownloadIcon className="h-4 w-4 mr-1.5" />
               导出差异报告
@@ -1006,8 +1153,13 @@ export default function ContractComparePage() {
           </div>
         </header>
 
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-800">
-          PDF 直接内嵌；私有 DOCX 使用签名源文件做浏览器页级渲染，并保留打开原件与文本证据定位复核入口。当前差异定位仍以文本证据为准。
+        <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-900" role="status">
+          <Badge variant="outline" className="shrink-0 border-amber-300 bg-white text-amber-800">
+            源身份未冻结 · 只读
+          </Badge>
+          <span>
+            当前历史任务没有创建时文件哈希快照，只能验收查看器交互，不能作为审计证据或创建 ReviewRun。DOCX 为浏览器近似预览；PDF 使用原生内嵌且不同步。
+          </span>
         </div>
 
         {/* 差异高亮说明 */}
@@ -1033,14 +1185,14 @@ export default function ContractComparePage() {
           selectedDiff={selectedDiff}
           selectedIndex={selectedVisibleIndex}
           visibleCount={visibleDiffs.length}
-          canStartReview={totalChanges > 0}
+          canStartReview={totalChanges > 0 && sourceCanStartReview}
           startingRerun={startingRerun}
           rerunNotice={rerunNotice}
           onStartReReview={handleStartReReview}
         />
 
         {/* 对比区 */}
-	      <div className="relative flex-1 flex overflow-hidden bg-slate-100 p-2 gap-2">
+	      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-slate-100 p-2 gap-2">
           {viewMode === 'merge' ? (
             <MergedDiffView
               diffs={visibleDiffs}
@@ -1050,39 +1202,39 @@ export default function ContractComparePage() {
           ) : (
             <>
           {/* 左窗格：基准文档 */}
-          <div
-            ref={leftPaneRef}
-            onScroll={() => handleScroll('left')}
-            className="flex-1 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
-          >
-            <div className="p-2">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-lg bg-white p-2 shadow-sm">
               <SourceDocumentPreview
                 file={toSourcePreviewFile(documentPair?.baseline, '当前合同基准文件')}
                 title={`旧文件原件预览 · ${sourceLabel(documentPair?.baseline)}`}
                 selectedText={selectedDiff?.baseline_text || ''}
                 fallbackLabel="当前合同基准文件"
-                minHeightClassName="min-h-[640px]"
+                minHeightClassName="h-full min-h-0"
+                surfaceMinHeightClassName="min-h-full"
+                frameHeightClassName="h-full"
+                zoomMode={zoomMode}
+                zoomPercent={zoomPercent}
+                scrollViewportRef={leftPaneRef}
+                onScroll={() => handleScroll('left')}
+                onViewerCapabilitiesChange={handleLeftViewerCapabilities}
               />
-              <DocumentDiffEvidence side="baseline" diff={selectedDiff} />
-            </div>
           </div>
 
           {/* 右窗格：对比文档 */}
-          <div
-            ref={rightPaneRef}
-            onScroll={() => handleScroll('right')}
-            className="flex-1 overflow-y-auto rounded-lg bg-white shadow-sm custom-scrollbar"
-          >
-            <div className="p-2">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-lg bg-white p-2 shadow-sm">
               <SourceDocumentPreview
                 file={toSourcePreviewFile(documentPair?.compare, '客户回传文件')}
                 title={`新文件原件预览 · ${sourceLabel(documentPair?.compare)}`}
                 selectedText={selectedDiff?.compare_text || ''}
                 fallbackLabel="客户回传文件"
-                minHeightClassName="min-h-[640px]"
+                minHeightClassName="h-full min-h-0"
+                surfaceMinHeightClassName="min-h-full"
+                frameHeightClassName="h-full"
+                zoomMode={zoomMode}
+                zoomPercent={zoomPercent}
+                scrollViewportRef={rightPaneRef}
+                onScroll={() => handleScroll('right')}
+                onViewerCapabilitiesChange={handleRightViewerCapabilities}
               />
-              <DocumentDiffEvidence side="compare" diff={selectedDiff} />
-            </div>
           </div>
 
           {/* VS 标记 */}
@@ -1096,10 +1248,18 @@ export default function ContractComparePage() {
         </div>
       </main>
 
-      <aside className="hidden w-64 flex-shrink-0 flex-col border-l border-slate-200 bg-white xl:flex 2xl:w-72">
+      {activeDrawer === 'details' ? (
+      <aside role="dialog" aria-modal="true" aria-label="复核详情" className="absolute inset-y-0 right-0 z-40 flex w-[min(24rem,calc(100%_-_1rem))] flex-col border-l border-slate-200 bg-white shadow-2xl">
         <div className="border-b border-slate-100 p-4">
-          <div className="text-xs font-medium text-slate-500">复核闭环</div>
-          <h2 className="mt-1 text-base font-semibold text-slate-950">AI 差异披露与合规建议</h2>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-slate-500">复核详情</div>
+              <h2 className="mt-1 text-base font-semibold text-slate-950">AI 差异披露与合规建议</h2>
+            </div>
+            <Button type="button" variant="ghost" className="h-11 w-11 p-0" aria-label="关闭复核详情" onClick={() => setActiveDrawer(null)}>
+              <XIcon className="h-5 w-5" />
+            </Button>
+          </div>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             对比只定位版本差异；红线或需谈判变化应回到审核工作台发起再审核。
           </p>
@@ -1172,7 +1332,7 @@ export default function ContractComparePage() {
               <Link href={buildContractCompareHref(contractId, { from: 'compare' })}>
                 <Button className="w-full" variant="outline">返回文件选择</Button>
               </Link>
-              <Button className="w-full" disabled={totalChanges === 0 || startingRerun} onClick={handleStartReReview}>
+              <Button className="w-full" disabled={totalChanges === 0 || startingRerun || !sourceCanStartReview} onClick={handleStartReReview}>
                 {startingRerun && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
                 进入风险再审核
               </Button>
@@ -1183,11 +1343,14 @@ export default function ContractComparePage() {
               </p>
             )}
             <p className="mt-3 rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-500">
-              点击“进入风险再审核”会基于当前比对任务创建新的 ReviewRun；比对结果只作为版本变化证据，不替代审核结论。
+              {sourceCanStartReview
+                ? '进入风险再审核会基于当前比对任务创建新的 ReviewRun；比对结果只作为版本变化证据，不替代审核结论。'
+                : '当前任务缺少创建时源文件哈希快照，已强制只读；完成不可变源身份迁移和真实文件校验前不能创建 ReviewRun。'}
             </p>
           </div>
         </div>
       </aside>
+      ) : null}
     </div>
   )
 }
@@ -1288,47 +1451,6 @@ function DocumentPill({
         <div className="text-[11px] font-medium text-slate-500">{label} · {sourceLabel(meta)}</div>
         <div className="truncate text-xs font-semibold text-slate-800">{meta?.label || fallback}</div>
       </div>
-    </div>
-  )
-}
-
-function DocumentDiffEvidence({
-  side,
-  diff,
-}: {
-  side: 'baseline' | 'compare'
-  diff: DiffItem | null
-}) {
-  if (!diff) {
-    return (
-      <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-        当前筛选下没有差异证据。
-      </div>
-    )
-  }
-
-  const text = side === 'baseline' ? diff.baseline_text : diff.compare_text
-  const label = side === 'baseline' ? '旧文件文本证据' : '新文件文本证据'
-  const tone = side === 'baseline' ? 'border-red-100 bg-red-50 text-red-900' : 'border-emerald-100 bg-emerald-50 text-emerald-900'
-  const locator = inferDocumentLocator(text)
-  const locatorLabel = locator.mode === 'missing' ? '无对应文本' : locator.clauseLabel
-
-  return (
-    <div className={`mt-2 rounded-md border px-3 py-2 ${tone}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 text-xs font-semibold">
-          {label} · {locatorLabel}
-          {locator.mode !== 'missing' ? (
-            <span className="ml-2 font-normal opacity-75">{locator.pageLabel}</span>
-          ) : null}
-        </div>
-        <Badge variant={diff.risk_level === 'red' ? 'destructive' : 'outline'}>
-          {riskLabel(diff.risk_level)}
-        </Badge>
-      </div>
-      <p className="mt-1 truncate text-xs opacity-85">
-        {locator.evidencePreview || '无对应文本；请以原件预览和右侧差异说明为准。'}
-      </p>
     </div>
   )
 }

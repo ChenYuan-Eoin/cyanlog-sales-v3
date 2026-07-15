@@ -15,6 +15,7 @@ import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { listAccessibleUserIds } from '@/lib/scoped-access'
 import { extractContractText } from '@/lib/contracts/text-extraction'
+import { evaluateComparisonSourceVerification } from '@/lib/contracts/comparison-source-verification'
 
 const compareSchema = z.object({
   baseline_type: z.enum(['template', 'previous_version', 'uploaded']),
@@ -807,6 +808,10 @@ export async function GET(
 
     return successResponse({
       ...comparison,
+      source_verification: evaluateComparisonSourceVerification({
+        baseline_snapshot: comparison.baseline_source_snapshot,
+        compare_snapshot: comparison.compare_source_snapshot,
+      }),
       document_pair: {
         baseline: baselineMeta,
         compare: compareMeta,
