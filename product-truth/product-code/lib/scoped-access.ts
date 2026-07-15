@@ -341,6 +341,16 @@ export function canMutateOrgUsers(assignments: ScopedRoleAssignment[], orgId: st
     || hasPermission(permissions, 'org:write')
 }
 
+export function canMutateOrgDepartments(assignments: ScopedRoleAssignment[], orgId: string): boolean {
+  const permissions = getOrgPermissions(assignments, orgId)
+  const roleCodes = getOrgRoleCodes(assignments, orgId)
+
+  return roleCodes.includes('SUPER_ADMIN')
+    || roleCodes.includes('ADMIN')
+    || hasPermission(permissions, 'dept:write')
+    || hasPermission(permissions, 'org:write')
+}
+
 async function loadAccessibleSalesSpaces(userId: string, orgId: string): Promise<{
   assignments: ScopedRoleAssignment[]
   spaces: SalesSpaceSummary[]

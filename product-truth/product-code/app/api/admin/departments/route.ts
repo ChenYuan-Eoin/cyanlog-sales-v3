@@ -5,8 +5,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgDepartments,
+  getDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 
 const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, 'ID 格式不正确')
 const createDepartmentSchema = z.object({
@@ -80,12 +83,9 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
+    const assignments = await getFreshUserScopedRoleAssignments(user.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    if (!canMutateOrgDepartments(assignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

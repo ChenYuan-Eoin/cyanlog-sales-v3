@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canManageOrg,
+  canMutateOrgDepartments,
   canMutateOrgUsers,
   canReviewContracts,
   getOrgPermissions,
@@ -65,6 +66,46 @@ describe('exact organization role scope', () => {
     ], 'org-a')).toBe(true)
     expect(canMutateOrgUsers([
       assignment('org-b', 'ORG_ADMIN', ['user:write']),
+    ], 'org-a')).toBe(false)
+  })
+
+  it.each([
+    ['SUPER_ADMIN', []],
+    ['ADMIN', []],
+    ['DEPARTMENT_OPERATOR', ['dept:write']],
+    ['DEPARTMENT_OPERATOR', ['dept:*']],
+    ['ORG_OPERATOR', ['org:write']],
+    ['ORG_OPERATOR', ['org:*']],
+    ['PLATFORM_OPERATOR', ['*']],
+  ])('当前组织 %s / %j 可以维护部门', (roleCode, permissions) => {
+    expect(canMutateOrgDepartments([
+      assignment('org-a', roleCode as string, permissions as string[]),
+    ], 'org-a')).toBe(true)
+  })
+
+  it.each([
+    ['SALES_OPS', []],
+    ['AUDITOR', ['admin:access']],
+    ['AUDITOR', ['user:view']],
+    ['USER_OPERATOR', ['user:write']],
+    ['DEPARTMENT_VIEWER', ['dept:read']],
+  ])('当前组织 %s / %j 不能维护部门', (roleCode, permissions) => {
+    expect(canMutateOrgDepartments([
+      assignment('org-a', roleCode as string, permissions as string[]),
+    ], 'org-a')).toBe(false)
+  })
+
+  it('其他组织或非组织作用域的部门写权限不能维护当前组织', () => {
+    expect(canMutateOrgDepartments([
+      assignment('org-b', 'ADMIN', ['dept:*']),
+      {
+        ...assignment('dept-a', 'DEPARTMENT_OPERATOR', ['dept:write']),
+        scopeType: 'department',
+      },
+      {
+        ...assignment('space-a', 'SPACE_OPERATOR', ['*']),
+        scopeType: 'space',
+      },
     ], 'org-a')).toBe(false)
   })
 })

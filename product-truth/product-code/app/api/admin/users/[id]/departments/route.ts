@@ -5,8 +5,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 
 const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, '部门 ID 格式不正确')
 
@@ -31,12 +35,9 @@ export async function POST(
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
+    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -119,12 +120,9 @@ export async function DELETE(
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
+    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -163,12 +161,21 @@ export async function DELETE(
       return NextResponse.json({ error: '不能删除主属部门，请先修改主属部门' }, { status: 400 })
     }
 
+    const targetDepartment = await assertDepartmentInOrg(orgId, targetDeptId)
+    if (!targetDepartment) {
+      return NextResponse.json(
+        { error: '部门不存在或不在当前组织', code: 'INVALID_DEPARTMENT' },
+        { status: 400 }
+      )
+    }
+
     // 删除兼职部门关联
     const { error: deleteError } = await supabaseAdmin
       .from('user_departments')
       .delete()
       .eq('user_id', userId)
       .eq('department_id', targetDeptId)
+      .eq('is_primary', false)
 
     if (deleteError) {
       console.error('Delete department error:', deleteError)
