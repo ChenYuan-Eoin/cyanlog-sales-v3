@@ -274,8 +274,8 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
   ]
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-      <Card className="min-w-0 self-start">
+    <div className="columns-1 gap-4 xl:columns-2">
+      <Card className="mb-4 min-w-0 break-inside-avoid">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-base">模型 Provider ({providerConfigs.length})</CardTitle>
           <Button size="sm" onClick={onNew}>+ 新增</Button>
@@ -324,7 +324,7 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 self-start">
+      <Card className="mb-4 min-w-0 break-inside-avoid">
         <CardHeader>
           <CardTitle className="text-base">应用与工具消费</CardTitle>
         </CardHeader>
@@ -406,7 +406,7 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 self-start">
+      <Card className="mb-4 min-w-0 break-inside-avoid">
         <CardHeader>
           <CardTitle className="text-base">路由与执行策略</CardTitle>
         </CardHeader>
@@ -496,7 +496,7 @@ export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNe
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 self-start">
+      <Card className="mb-4 min-w-0 break-inside-avoid">
       <CardHeader>
         <CardTitle className="text-base">合同审核运行时策略</CardTitle>
       </CardHeader>
