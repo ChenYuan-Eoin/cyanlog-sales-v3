@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   return withAuth(req, async (user: AuthUser) => {
     const orgId = await getDefaultOrgId(user.id)
     const assignments = await getUserScopedRoleAssignments(user.id)
-    const accessibleUserIds = canManageOrg(assignments)
+    const accessibleUserIds = canManageOrg(assignments, orgId)
       ? null
       : (await listAccessibleUserIds(user.id, orgId)).userIds
 

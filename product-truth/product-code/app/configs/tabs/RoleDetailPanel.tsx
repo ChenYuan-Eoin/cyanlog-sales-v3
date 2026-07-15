@@ -38,6 +38,10 @@ import type {
   OrgSummarySpace,
   PermissionCatalogGroup,
 } from '../types'
+import {
+  getRoleMutationRestriction,
+  partitionRoleMutationTargets,
+} from './role-assignment-policy'
 
 // ============ 权限目录 ============
 
@@ -121,8 +125,10 @@ interface RoleDetailPanelProps {
     description: string | null
     permissions: string[] | null
   }
+  currentUserId: string | null
   saving: boolean
   onSave: (perms: string[]) => void
+  permissionsEditable?: boolean
   users: OrgSummaryUser[]
   departments: OrgSummaryDepartment[]
   _spaces: OrgSummarySpace[]
@@ -133,8 +139,10 @@ interface RoleDetailPanelProps {
 
 export function RoleDetailPanel({
   role,
+  currentUserId,
   saving,
   onSave,
+  permissionsEditable = false,
   users,
   departments,
   _spaces,
@@ -143,6 +151,11 @@ export function RoleDetailPanel({
   const [activeTab, setActiveTab] = useState('members')
   const [perms, setPerms] = useState<string[]>(role.permissions ?? [])
   const isSuperAdmin = role.code === 'SUPER_ADMIN'
+  const assignmentBlockReason = isSuperAdmin
+    ? 'SUPER_ADMIN 是平台根角色，不能通过组织管理界面变更。'
+    : currentUserId
+      ? null
+      : '当前登录身份尚未确认，角色分配暂不可用。'
 
   // 计算统计数据
   const stats = useMemo(() => {
@@ -164,7 +177,7 @@ export function RoleDetailPanel({
   const hasChanges = JSON.stringify([...perms].sort()) !== JSON.stringify([...(role.permissions ?? [])].sort())
 
   function togglePermission(key: string) {
-    if (isSuperAdmin) return
+    if (isSuperAdmin || !permissionsEditable) return
     setPerms(cur =>
       cur.includes(key) ? cur.filter(p => p !== key) : [...cur, key]
     )
@@ -200,7 +213,7 @@ export function RoleDetailPanel({
               )}
             </div>
           </div>
-          {!isSuperAdmin && activeTab === 'permissions' && (
+          {!isSuperAdmin && permissionsEditable && activeTab === 'permissions' && (
             <Button
               onClick={() => onSave(perms)}
               disabled={saving || !hasChanges}
@@ -235,6 +248,9 @@ export function RoleDetailPanel({
           <MemberAssignmentTab
             roleId={role.id}
             roleName={role.name}
+            assignmentEditable={!assignmentBlockReason}
+            assignmentBlockReason={assignmentBlockReason}
+            currentUserId={currentUserId}
             users={users}
             _departments={departments}
             assignedUsers={stats.assignedUsers}
@@ -247,6 +263,7 @@ export function RoleDetailPanel({
           <PermissionSettingTab
             perms={perms}
             isSuperAdmin={isSuperAdmin}
+            readOnly={!permissionsEditable}
             onToggle={togglePermission}
           />
         </TabsContent>
@@ -261,13 +278,25 @@ interface MemberAssignmentTabProps {
   _roleCode?: string
   roleId: string
   roleName: string
+  assignmentEditable: boolean
+  assignmentBlockReason: string | null
+  currentUserId: string | null
   users: OrgSummaryUser[]
   _departments: OrgSummaryDepartment[]
   assignedUsers: OrgSummaryUser[]
   onRefresh?: () => void | Promise<void>
 }
 
-function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh }: MemberAssignmentTabProps) {
+function MemberAssignmentTab({
+  roleId,
+  roleName,
+  assignmentEditable,
+  assignmentBlockReason,
+  currentUserId,
+  users,
+  assignedUsers,
+  onRefresh,
+}: MemberAssignmentTabProps) {
   const [assigning, setAssigning] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogSearch, setDialogSearch] = useState('')
@@ -279,11 +308,11 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
     [assignedUsers]
   )
 
-  // 可分配的用户（排除已分配）
-  const availableUsers = useMemo(
-    () => users.filter(u => !assignedUserIds.has(u.id)),
-    [users, assignedUserIds]
-  )
+  // 可分配的用户（排除已分配、当前登录账号与平台根管理员）
+  const { eligible: availableUsers, restricted: restrictedAvailableUsers } = useMemo(() => {
+    const unassignedUsers = users.filter((user) => !assignedUserIds.has(user.id))
+    return partitionRoleMutationTargets(unassignedUsers, currentUserId)
+  }, [assignedUserIds, currentUserId, users])
 
   // 弹窗内搜索
   const fuse = useMemo(
@@ -309,35 +338,35 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
   }, [dialogOpen])
 
   const toggleSelectUser = useCallback((userId: string) => {
-    setSelectedUserIds(prev => {
-      const next = new Set(prev)
-      if (next.has(userId)) {
-        next.delete(userId)
-      } else {
-        next.add(userId)
-      }
-      return next
+    setSelectedUserIds((current) => {
+      return current.has(userId) ? new Set() : new Set([userId])
     })
   }, [])
 
-  const handleSelectAll = useCallback(() => {
-    const allSelected = dialogFilteredUsers.every(u => selectedUserIds.has(u.id))
-    setSelectedUserIds(prev => {
-      const next = new Set(prev)
-      if (allSelected) {
-        // 取消全选当前可见
-        dialogFilteredUsers.forEach(u => next.delete(u.id))
-      } else {
-        // 全选当前可见
-        dialogFilteredUsers.forEach(u => next.add(u.id))
-      }
-      return next
-    })
-  }, [dialogFilteredUsers, selectedUserIds])
+  // 当前后端只提供单用户替换接口。为避免 N 个独立请求形成部分成功，
+  // 在有原子批量端点前，每次只允许添加一名成员。
+  const handleAddMember = async () => {
+    if (!assignmentEditable || selectedUserIds.size === 0) return
 
-  // 批量添加成员到角色
-  const handleBatchAdd = async () => {
-    if (selectedUserIds.size === 0) return
+    const selectedUserId = Array.from(selectedUserIds)[0]
+    const selectedUser = users.find((user) => user.id === selectedUserId)
+    if (!selectedUser) {
+      error('成员数据已变更，请刷新后重试。')
+      return
+    }
+
+    const restriction = getRoleMutationRestriction(selectedUser, currentUserId)
+    if (restriction) {
+      error(restriction?.reason || '当前成员不可进行角色变更。')
+      return
+    }
+
+    const currentRoleIds = selectedUser.role_ids || []
+    if (currentRoleIds.includes(roleId)) {
+      setDialogOpen(false)
+      success('成员已是当前角色')
+      return
+    }
 
     setAssigning(true)
     try {
@@ -347,40 +376,20 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
         'Content-Type': 'application/json',
       }
 
-      const results = await Promise.all(Array.from(selectedUserIds).map(async userId => {
-        const user = users.find(u => u.id === userId)
-        if (!user) return { ok: false, skipped: true }
-        const currentRoleIds = user.role_ids || []
-        if (currentRoleIds.includes(roleId)) return { ok: true, skipped: true }
-        const newRoleIds = [...currentRoleIds, roleId]
+      const response = await fetch(`/api/admin/users/${selectedUser.id}/roles`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ role_ids: [...currentRoleIds, roleId] }),
+      })
 
-        const response = await fetch(`/api/admin/users/${userId}/roles`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ role_ids: newRoleIds }),
-        })
-
-        return { ok: response.ok, response }
-      }))
-
-      const succeededCount = results.filter((item) => item.ok && !item.skipped).length
-      const failed = results.find((item) => item.response && !item.response.ok)
-
-      if (succeededCount > 0) {
-        setDialogOpen(false)
-        await onRefresh?.()
-      }
-
-      if (failed?.response) {
-        const data = await failed.response.json().catch(() => ({}))
-        const message = typeof data.error === 'string' ? data.error : '添加成员失败'
-        throw new Error(succeededCount > 0
-          ? `已添加 ${succeededCount} 人，部分成员失败：${message}`
-          : message)
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(typeof data.error === 'string' ? data.error : '添加成员失败')
       }
 
       setDialogOpen(false)
-      success(succeededCount > 0 ? `已添加 ${succeededCount} 人` : '成员已是当前角色')
+      await onRefresh?.()
+      success(`已添加「${selectedUser.display_name}」`)
     } catch (err) {
       error(err instanceof Error ? err.message : '添加失败，请重试')
     } finally {
@@ -390,8 +399,15 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
 
   // 从角色移除成员
   const handleRemoveMember = async (userId: string) => {
+    if (!assignmentEditable) return
     const user = assignedUsers.find(u => u.id === userId)
     if (!user) return
+
+    const restriction = getRoleMutationRestriction(user, currentUserId)
+    if (restriction) {
+      error(restriction.reason)
+      return
+    }
 
     if (!await confirmAction(`确定要从角色中移除「${user.display_name}」？`, { confirmText: '移除', danger: true })) return
 
@@ -424,13 +440,6 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
     }
   }
 
-  // 全选按钮文字
-  const selectAllText = useMemo(() => {
-    if (dialogFilteredUsers.length === 0) return '全选'
-    const allSelected = dialogFilteredUsers.every(u => selectedUserIds.has(u.id))
-    return allSelected ? '取消全选' : '全选'
-  }, [dialogFilteredUsers, selectedUserIds])
-
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* 已分配成员列表 */}
@@ -439,51 +448,77 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
           <h4 className="min-w-0 font-medium text-slate-900">
             已分配成员 ({assignedUsers.length})
           </h4>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDialogOpen(true)}
-            disabled={assigning}
-            className="shrink-0"
-          >
-            <UserPlusIcon size={16} className="mr-1.5" />
-            添加成员
-          </Button>
+          {assignmentEditable ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDialogOpen(true)}
+              disabled={assigning}
+              className="shrink-0"
+            >
+              <UserPlusIcon size={16} className="mr-1.5" />
+              添加成员
+            </Button>
+          ) : (
+            <div className="max-w-sm text-right">
+              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                角色分配只读
+              </Badge>
+              {assignmentBlockReason && (
+                <p className="mt-1 text-xs leading-5 text-amber-800">
+                  {assignmentBlockReason}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {assignedUsers.length > 0 ? (
           <div className="space-y-2 md:hidden">
-            {assignedUsers.map(user => (
-              <div key={user.id} className="rounded-md border bg-white p-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
-                    {user.display_name?.charAt(0) || '?'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium leading-5 text-slate-900">{user.display_name}</div>
-                    <div className="break-all text-xs leading-5 text-slate-500">{user.email}</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge variant="outline" className="max-w-full break-all">
-                        {user.primary_dept_name || '未分配'}
-                      </Badge>
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                        {user.title || '未设置职位'}
-                      </span>
+            {assignedUsers.map((user) => {
+              const restriction = getRoleMutationRestriction(user, currentUserId)
+              return (
+                <div key={user.id} className="rounded-md border bg-white p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                      {user.display_name?.charAt(0) || '?'}
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium leading-5 text-slate-900">{user.display_name}</div>
+                      <div className="break-all text-xs leading-5 text-slate-500">{user.email}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge variant="outline" className="max-w-full break-all">
+                          {user.primary_dept_name || '未分配'}
+                        </Badge>
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {user.title || '未设置职位'}
+                        </span>
+                      </div>
+                    </div>
+                    {restriction ? (
+                      <Badge
+                        variant="outline"
+                        title={restriction.reason}
+                        className="shrink-0 border-amber-200 bg-amber-50 text-amber-800"
+                      >
+                        {restriction.label}
+                      </Badge>
+                    ) : assignmentEditable ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleRemoveMember(user.id)}
+                        disabled={assigning}
+                        aria-label={`从角色中移除 ${user.display_name}`}
+                        className="h-8 w-8 shrink-0"
+                      >
+                        <TrashIcon size={16} className="text-red-500" />
+                      </Button>
+                    ) : null}
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleRemoveMember(user.id)}
-                    disabled={assigning}
-                    aria-label={`从角色中移除 ${user.display_name}`}
-                    className="h-8 w-8 shrink-0"
-                  >
-                    <TrashIcon size={16} className="text-red-500" />
-                  </Button>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="rounded-md border py-10 text-center text-sm text-slate-500 md:hidden">
@@ -503,38 +538,51 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
             </TableHeader>
             <TableBody>
               {assignedUsers.length > 0 ? (
-                assignedUsers.map(user => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
-                          {user.display_name?.charAt(0) || '?'}
+                assignedUsers.map((user) => {
+                  const restriction = getRoleMutationRestriction(user, currentUserId)
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                            {user.display_name?.charAt(0) || '?'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-slate-900">{user.display_name}</div>
+                            <div className="max-w-[260px] break-all text-xs text-slate-500">{user.email}</div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="font-medium text-slate-900">{user.display_name}</div>
-                          <div className="max-w-[260px] break-all text-xs text-slate-500">{user.email}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="max-w-[160px] break-all">
-                        {user.primary_dept_name || '未分配'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[160px] break-all text-slate-600">{user.title || '-'}</TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRemoveMember(user.id)}
-                        disabled={assigning}
-                        aria-label={`从角色中移除 ${user.display_name}`}
-                      >
-                        <TrashIcon size={16} className="text-red-500" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="max-w-[160px] break-all">
+                          {user.primary_dept_name || '未分配'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[160px] break-all text-slate-600">{user.title || '-'}</TableCell>
+                      <TableCell>
+                        {restriction ? (
+                          <Badge
+                            variant="outline"
+                            title={restriction.reason}
+                            className="whitespace-nowrap border-amber-200 bg-amber-50 text-amber-800"
+                          >
+                            {restriction.label}
+                          </Badge>
+                        ) : assignmentEditable ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRemoveMember(user.id)}
+                            disabled={assigning}
+                            aria-label={`从角色中移除 ${user.display_name}`}
+                          >
+                            <TrashIcon size={16} className="text-red-500" />
+                          </Button>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} className="h-24 text-center text-slate-500">
@@ -548,7 +596,7 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
       </div>
 
       {/* 添加成员 Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={assignmentEditable && dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[520px] max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -558,33 +606,23 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden flex flex-col gap-3 py-2">
-            {/* 搜索栏 + 全选 */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="relative flex-1">
-                <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  placeholder="搜索姓名、邮箱、职位..."
-                  value={dialogSearch}
-                  onChange={(e) => setDialogSearch(e.target.value)}
-                  className="pl-9"
-                  autoFocus
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSelectAll}
-                disabled={dialogFilteredUsers.length === 0}
-              >
-                {selectAllText}
-              </Button>
+            {/* 搜索栏 */}
+            <div className="relative shrink-0">
+              <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="搜索姓名、邮箱、职位..."
+                value={dialogSearch}
+                onChange={(e) => setDialogSearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
             </div>
 
             {/* 统计提示 */}
             <div className="text-xs text-slate-500 shrink-0">
               {selectedUserIds.size > 0 && (
                 <span className="text-blue-600 font-medium">
-                  已选择 {selectedUserIds.size} 人
+                  已选择 1 人
                 </span>
               )}
               {dialogSearch.trim() ? (
@@ -597,6 +635,17 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
                   共 {availableUsers.length} 人可添加
                 </span>
               )}
+            </div>
+
+            {restrictedAvailableUsers.length > 0 && (
+              <div className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                已排除 {restrictedAvailableUsers.length} 名不可在线变更角色的成员：
+                当前登录账号与平台根管理员不会进入提交。
+              </div>
+            )}
+
+            <div className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
+              当前接口不支持原子批量写入。为避免多请求部分成功，每次只可添加一名成员。
             </div>
 
             {/* 用户列表 */}
@@ -658,10 +707,10 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
               取消
             </Button>
             <Button
-              onClick={handleBatchAdd}
+              onClick={handleAddMember}
               disabled={selectedUserIds.size === 0 || assigning}
             >
-              {assigning ? '添加中...' : `添加 ${selectedUserIds.size} 人到角色`}
+              {assigning ? '添加中...' : '添加成员到角色'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -675,10 +724,11 @@ function MemberAssignmentTab({ roleId, roleName, users, assignedUsers, onRefresh
 interface PermissionSettingTabProps {
   perms: string[]
   isSuperAdmin: boolean
+  readOnly: boolean
   onToggle: (key: string) => void
 }
 
-function PermissionSettingTab({ perms, isSuperAdmin, onToggle }: PermissionSettingTabProps) {
+function PermissionSettingTab({ perms, isSuperAdmin, readOnly, onToggle }: PermissionSettingTabProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     () => new Set(PERMISSION_CATALOG.map(g => g.id))
   )
@@ -701,6 +751,13 @@ function PermissionSettingTab({ perms, isSuperAdmin, onToggle }: PermissionSetti
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
           <ShieldIcon className="inline-block h-4 w-4 mr-2" />
           超级管理员拥有系统中的所有权限，无需单独配置。
+        </div>
+      )}
+
+      {!isSuperAdmin && readOnly && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+          系统角色是跨组织共享的只读模板。为避免某个组织修改全局权限或自我提权，
+          组织级角色模型完成前这里只展示当前权限，不提供在线编辑。
         </div>
       )}
 
@@ -747,18 +804,20 @@ function PermissionSettingTab({ perms, isSuperAdmin, onToggle }: PermissionSetti
                       <label
                         key={item.key}
                         className={`flex items-start gap-3 rounded-lg border bg-white p-3 ${
-                          isSuperAdmin ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-slate-300'
+                          isSuperAdmin || readOnly
+                            ? 'opacity-60 cursor-not-allowed'
+                            : 'cursor-pointer hover:border-slate-300'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={checked}
-                          disabled={isSuperAdmin}
+                          disabled={isSuperAdmin || readOnly}
                           onChange={() => onToggle(item.key)}
                           className="mt-0.5 rounded"
                         />
                         <div className="flex-1">
-                          <div className={`text-sm font-medium ${isSuperAdmin ? 'text-slate-500' : 'text-slate-900'}`}>
+                          <div className={`text-sm font-medium ${isSuperAdmin || readOnly ? 'text-slate-500' : 'text-slate-900'}`}>
                             {item.label}
                           </div>
                           <div className="text-xs text-slate-500 mt-0.5">{item.description}</div>

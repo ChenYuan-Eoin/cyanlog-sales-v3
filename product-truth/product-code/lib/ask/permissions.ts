@@ -31,28 +31,29 @@ export function normalizeAskRole(role: string | null | undefined): string {
   return ROLE_ALIASES[key] || key
 }
 
-export function getAskRoleCodes(assignments: ScopedRoleAssignment[]): string[] {
+export function getAskRoleCodes(assignments: ScopedRoleAssignment[], orgId: string): string[] {
   return Array.from(new Set(
-    assignments
-      .map((assignment) => normalizeAskRole(assignment.roleCode))
+    getOrgRoleCodes(assignments, orgId)
+      .map((roleCode) => normalizeAskRole(roleCode))
       .filter(Boolean)
   ))
 }
 
-export function canManageAllAsks(assignments: ScopedRoleAssignment[]): boolean {
-  const roleCodes = getOrgRoleCodes(assignments)
+export function canManageAllAsks(assignments: ScopedRoleAssignment[], orgId: string): boolean {
+  const roleCodes = getOrgRoleCodes(assignments, orgId)
   return (
     roleCodes.includes('SUPER_ADMIN')
     || roleCodes.includes('ADMIN')
-    || canReviewContracts(assignments)
+    || canReviewContracts(assignments, orgId)
   )
 }
 
 export function canAccessAskByRoles(
   requiredRoles: string[] | null | undefined,
-  assignments: ScopedRoleAssignment[]
+  assignments: ScopedRoleAssignment[],
+  orgId: string
 ): boolean {
-  if (canManageAllAsks(assignments)) {
+  if (canManageAllAsks(assignments, orgId)) {
     return true
   }
 
@@ -64,19 +65,19 @@ export function canAccessAskByRoles(
     return false
   }
 
-  const userRoleCodes = getAskRoleCodes(assignments)
+  const userRoleCodes = getAskRoleCodes(assignments, orgId)
   return normalizedRequired.some((role) => userRoleCodes.includes(role))
 }
 
-export function getAskResponderRole(assignments: ScopedRoleAssignment[]): string {
-  const orgRole = getOrgRoleCodes(assignments)[0]
-  const askRole = getAskRoleCodes(assignments)[0]
+export function getAskResponderRole(assignments: ScopedRoleAssignment[], orgId: string): string {
+  const orgRole = getOrgRoleCodes(assignments, orgId)[0]
+  const askRole = getAskRoleCodes(assignments, orgId)[0]
   return orgRole || askRole || 'unknown'
 }
 
-export function canCloseOrReopenAsk(assignments: ScopedRoleAssignment[]): boolean {
+export function canCloseOrReopenAsk(assignments: ScopedRoleAssignment[], orgId: string): boolean {
   return (
-    canManageAllAsks(assignments)
-    || getOrgPermissions(assignments).includes('contract:review')
+    canManageAllAsks(assignments, orgId)
+    || getOrgPermissions(assignments, orgId).includes('contract:review')
   )
 }

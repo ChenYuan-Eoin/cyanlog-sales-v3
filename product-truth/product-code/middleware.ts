@@ -32,7 +32,6 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getRequestAuthToken } from '@/lib/auth-token'
-import { AUTH_CONTEXT_COOKIE_NAME, readAuthContextCookieValue } from '@/lib/auth-context-cookie'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 
 const PUBLIC_PATHS = ['/login', '/register']
@@ -69,14 +68,12 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
 
 type MiddlewareAuthContext = {
   userId: string
+  orgId: string
   mustChangePassword: boolean
   roleCodes: string[]
   allPermissions: string[]
 }
 
-const MIDDLEWARE_AUTH_CACHE_TTL_MS = 15_000
-const middlewareAuthCache = new Map<string, { value: MiddlewareAuthContext | null; expiresAt: number }>()
-const middlewareAuthInflight = new Map<string, Promise<MiddlewareAuthContext | null>>()
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p)) return true
@@ -136,23 +133,6 @@ function createMiddlewareSupabaseClient() {
   })
 }
 
-function getCachedMiddlewareAuth(token: string): MiddlewareAuthContext | null | undefined {
-  const cached = middlewareAuthCache.get(token)
-  if (!cached) return undefined
-  if (cached.expiresAt < Date.now()) {
-    middlewareAuthCache.delete(token)
-    return undefined
-  }
-  return cached.value
-}
-
-function setCachedMiddlewareAuth(token: string, value: MiddlewareAuthContext | null) {
-  middlewareAuthCache.set(token, {
-    value,
-    expiresAt: Date.now() + MIDDLEWARE_AUTH_CACHE_TTL_MS,
-  })
-}
-
 function roleRecordOf(value: unknown): { code: string; permissions: string[] | null } | null {
   if (Array.isArray(value)) {
     return roleRecordOf(value[0])
@@ -175,20 +155,36 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   }
 
   const userId = tokenRecord.user_id
-  const [{ data: userRow }, { data: userRolesData }] = await Promise.all([
-    supabase
-      .from('users')
-      .select('id, org_id, must_change_password')
-      .eq('id', userId)
-      .maybeSingle(),
-    supabase
-      .from('user_roles')
-      .select('scope_type, scope_id, roles:roles(code, permissions)')
-      .eq('user_id', userId)
-      .eq('scope_type', 'org'),
-  ])
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('id, org_id, must_change_password, status, login_enabled')
+    .eq('id', userId)
+    .maybeSingle()
 
-  if (!userRow) return null
+  if (
+    !userRow
+    || userRow.status !== 'active'
+    || userRow.login_enabled !== true
+  ) return null
+
+  const { data: defaultMembership, error: defaultMembershipError } = await supabase
+    .from('user_organizations')
+    .select('org_id')
+    .eq('user_id', userId)
+    .eq('is_default', true)
+    .maybeSingle()
+
+  if (defaultMembershipError) return null
+
+  const orgId = defaultMembership?.org_id || userRow.org_id
+  if (!orgId) return null
+
+  const { data: userRolesData } = await supabase
+    .from('user_roles')
+    .select('scope_type, scope_id, roles:roles(code, permissions)')
+    .eq('user_id', userId)
+    .eq('scope_type', 'org')
+    .eq('scope_id', orgId)
 
   const allPermissions: string[] = []
   const roleCodes: string[] = []
@@ -207,6 +203,7 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
 
   return {
     userId,
+    orgId,
     mustChangePassword: Boolean(userRow.must_change_password),
     roleCodes,
     allPermissions,
@@ -214,23 +211,9 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
 }
 
 async function getMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
-  const cached = getCachedMiddlewareAuth(token)
-  if (cached !== undefined) return cached
-
-  let inflight = middlewareAuthInflight.get(token)
-  if (!inflight) {
-    inflight = loadMiddlewareAuthContext(token)
-      .then((value) => {
-        setCachedMiddlewareAuth(token, value)
-        return value
-      })
-      .finally(() => {
-        middlewareAuthInflight.delete(token)
-      })
-    middlewareAuthInflight.set(token, inflight)
-  }
-
-  return inflight
+  // A disabled user or revoked token must stop working on the next request;
+  // an isolate-local cache cannot provide that guarantee.
+  return loadMiddlewareAuthContext(token)
 }
 
 export async function middleware(request: NextRequest) {
@@ -261,21 +244,10 @@ export async function middleware(request: NextRequest) {
 
   try {
     const required = getRequiredPermission(pathname)
-    const signedContext = await readAuthContextCookieValue(
-      token,
-      request.cookies.get(AUTH_CONTEXT_COOKIE_NAME)?.value
-    )
-    let authContext: MiddlewareAuthContext | null
-    if (signedContext && (signedContext.full || !required)) {
-      authContext = {
-        userId: signedContext.userId,
-        mustChangePassword: signedContext.mustChangePassword,
-        roleCodes: signedContext.roleCodes,
-        allPermissions: signedContext.allPermissions,
-      }
-    } else {
-      authContext = await getMiddlewareAuthContext(token)
-    }
+    // Authorization always comes from the exact current-org database context.
+    // The signed cookie remains a login warmup artifact, but is not a permission
+    // source until default-org changes can invalidate it atomically.
+    const authContext = await getMiddlewareAuthContext(token)
 
     if (!authContext) {
       if (pathname.startsWith('/api/')) {
@@ -306,6 +278,7 @@ export async function middleware(request: NextRequest) {
     // 透传 user context 到下游 route handler / page
     const requestHeaders = new Headers(request.headers)
     requestHeaders.set('x-user-id', authContext.userId)
+    requestHeaders.set('x-org-id', authContext.orgId)
     requestHeaders.set('x-user-roles', authContext.roleCodes.join(','))
     requestHeaders.set('x-user-role-codes', authContext.roleCodes.join(','))
     requestHeaders.set('x-user-permissions', authContext.allPermissions.join(','))

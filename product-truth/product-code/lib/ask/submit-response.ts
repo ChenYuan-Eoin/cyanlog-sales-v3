@@ -76,7 +76,11 @@ export async function submitAskResponse({
     return errorResponse(createApiError('NOT_FOUND', 'ASK 不存在'))
   }
 
-  if (!canAccessAskByRoles(typedAsk.required_roles, access.assignments as ScopedRoleAssignment[])) {
+  if (!canAccessAskByRoles(
+    typedAsk.required_roles,
+    access.assignments as ScopedRoleAssignment[],
+    access.orgId
+  )) {
     return errorResponse(createApiError('FORBIDDEN', '当前角色不能回应该 ASK'))
   }
 
@@ -93,7 +97,10 @@ export async function submitAskResponse({
   }
 
   const now = new Date().toISOString()
-  const responderRole = getAskResponderRole(access.assignments as ScopedRoleAssignment[])
+  const responderRole = getAskResponderRole(
+    access.assignments as ScopedRoleAssignment[],
+    access.orgId
+  )
 
   const { data: response, error: responseError } = await supabaseAdmin
     .from('ask_responses')

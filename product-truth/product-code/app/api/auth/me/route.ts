@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canManageOrg, getOrgScopedAssignments, getUserScopedRoleAssignments } from '@/lib/scoped-access'
+import {
+  canManageOrg,
+  getDefaultOrgId,
+  getOrgScopedAssignments,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 
 export const preferredRegion = 'sin1'
 
@@ -12,8 +17,9 @@ function errorResponse(message: string, status: number, code?: string) {
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const [scopedAssignments, userResult] = await Promise.all([
+    const [scopedAssignments, orgId, userResult] = await Promise.all([
       getUserScopedRoleAssignments(user.id),
+      getDefaultOrgId(user.id),
       supabaseAdmin
         .from('users')
         .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id, must_change_password')
@@ -26,7 +32,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('读取用户失败', 500, 'USER_FETCH_FAILED')
     }
 
-    const roles = getOrgScopedAssignments(scopedAssignments).map((assignment) => ({
+    const roles = getOrgScopedAssignments(scopedAssignments, orgId).map((assignment) => ({
       code: assignment.roleCode,
       name: assignment.roleName,
     }))
@@ -36,7 +42,7 @@ export async function GET(req: NextRequest) {
         ...userRow,
         roles,
         scopedRoles: scopedAssignments,
-        canManageOrg: canManageOrg(scopedAssignments),
+        canManageOrg: canManageOrg(scopedAssignments, orgId),
         mustChangePassword: Boolean(userRow.must_change_password),
       },
     })

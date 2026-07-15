@@ -12,6 +12,7 @@ let secretSequence = 0
 function makeInput() {
   return {
     userId: '30000001-0000-0000-0000-000000000000',
+    orgId: '10000001-0000-0000-0000-000000000000',
     mustChangePassword: false,
     roleCodes: ['SUPER_ADMIN'],
     allPermissions: ['*'],
@@ -66,6 +67,7 @@ describe('auth context cookie signing', () => {
     expect(await readAuthContextCookieValue('token-1', first || undefined)).toBeNull()
     expect(await readAuthContextCookieValue('token-1', second || undefined)).toMatchObject({
       userId: '30000001-0000-0000-0000-000000000000',
+      orgId: '10000001-0000-0000-0000-000000000000',
       roleCodes: ['SUPER_ADMIN'],
       allPermissions: ['*'],
       full: true,

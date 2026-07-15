@@ -1,5 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { canAccessOrgAdmin, canReviewContracts as canReviewContractsByPermission } from '@/lib/permissions'
+import {
+  canAccessOrgAdmin,
+  canReviewContracts as canReviewContractsByPermission,
+  hasPermission,
+} from '@/lib/permissions'
 
 export type ScopeType = 'org' | 'department' | 'space'
 
@@ -113,14 +117,6 @@ const scopedRoleCache = new Map<string, { assignments: ScopedRoleAssignment[]; e
 const scopedRoleInflight = new Map<string, Promise<ScopedRoleAssignment[]>>()
 const salesSpacesCache = new Map<string, { value: { assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }; expiresAt: number }>()
 const salesSpacesInflight = new Map<string, Promise<{ assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }>>()
-
-export function primeDefaultOrgCache(userId: string | null | undefined, orgId: string | null | undefined) {
-  if (!userId || !orgId) return
-  defaultOrgCache.set(userId, {
-    orgId,
-    expiresAt: Date.now() + ORG_CACHE_TTL_MS,
-  })
-}
 
 export async function getDefaultOrgId(userId: string): Promise<string> {
   const cached = defaultOrgCache.get(userId)
@@ -266,24 +262,43 @@ export async function getUserScopedRoleAssignments(userId: string): Promise<Scop
   return promise
 }
 
-export function getOrgScopedAssignments(assignments: ScopedRoleAssignment[]): ScopedRoleAssignment[] {
-  return assignments.filter((assignment) => assignment.scopeType === 'org')
-}
-
-export function getOrgRoleCodes(assignments: ScopedRoleAssignment[]): string[] {
-  return Array.from(new Set(
-    getOrgScopedAssignments(assignments).map((assignment) => assignment.roleCode)
+export function getOrgScopedAssignments(
+  assignments: ScopedRoleAssignment[],
+  orgId: string
+): ScopedRoleAssignment[] {
+  return assignments.filter((assignment) => (
+    assignment.scopeType === 'org'
+    && assignment.scopeId === orgId
   ))
 }
 
-export function getOrgPermissions(assignments: ScopedRoleAssignment[]): string[] {
+export function getOrgRoleCodes(assignments: ScopedRoleAssignment[], orgId: string): string[] {
   return Array.from(new Set(
-    getOrgScopedAssignments(assignments).flatMap((assignment) => assignment.permissions)
+    getOrgScopedAssignments(assignments, orgId).map((assignment) => assignment.roleCode)
   ))
 }
 
-export function canManageOrg(assignments: ScopedRoleAssignment[]): boolean {
-  return canAccessOrgAdmin(getOrgPermissions(assignments), getOrgRoleCodes(assignments))
+export function getOrgPermissions(assignments: ScopedRoleAssignment[], orgId: string): string[] {
+  return Array.from(new Set(
+    getOrgScopedAssignments(assignments, orgId).flatMap((assignment) => assignment.permissions)
+  ))
+}
+
+export function canManageOrg(assignments: ScopedRoleAssignment[], orgId: string): boolean {
+  return canAccessOrgAdmin(
+    getOrgPermissions(assignments, orgId),
+    getOrgRoleCodes(assignments, orgId)
+  )
+}
+
+export function canMutateOrgUsers(assignments: ScopedRoleAssignment[], orgId: string): boolean {
+  const permissions = getOrgPermissions(assignments, orgId)
+  const roleCodes = getOrgRoleCodes(assignments, orgId)
+
+  return roleCodes.includes('SUPER_ADMIN')
+    || roleCodes.includes('ADMIN')
+    || hasPermission(permissions, 'user:write')
+    || hasPermission(permissions, 'org:write')
 }
 
 async function loadAccessibleSalesSpaces(userId: string, orgId: string): Promise<{
@@ -306,7 +321,7 @@ async function loadAccessibleSalesSpaces(userId: string, orgId: string): Promise
     .map((row) => unwrapOne(row.space))
     .filter((space): space is SalesSpaceSummary => Boolean(space))
 
-  if (canManageOrg(assignments)) {
+  if (canManageOrg(assignments, orgId)) {
     const { data, error } = await supabaseAdmin
       .from('sales_spaces')
       .select('id, name, description, department_id, owner_id, active_opportunities, pending_milestones')
@@ -411,7 +426,7 @@ export async function listAccessibleUserIds(userId: string, orgId?: string): Pro
   const effectiveOrgId = orgId || await getDefaultOrgId(userId)
   const assignments = await getUserScopedRoleAssignments(userId)
 
-  if (canManageOrg(assignments)) {
+  if (canManageOrg(assignments, effectiveOrgId)) {
     const { data, error } = await supabaseAdmin
       .from('users')
       .select('id')
@@ -523,10 +538,10 @@ export async function listAccessibleUserIds(userId: string, orgId?: string): Pro
   }
 }
 
-export function canReviewContracts(assignments: ScopedRoleAssignment[]): boolean {
+export function canReviewContracts(assignments: ScopedRoleAssignment[], orgId: string): boolean {
   return canReviewContractsByPermission(
-    getOrgPermissions(assignments),
-    getOrgRoleCodes(assignments)
+    getOrgPermissions(assignments, orgId),
+    getOrgRoleCodes(assignments, orgId)
   )
 }
 

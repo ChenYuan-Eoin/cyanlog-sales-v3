@@ -16,6 +16,7 @@ interface RoleAccessTabProps {
     permissions: string[] | null
     sort_order: number | null
   }>
+  currentUserId: string | null
   savingRoleId: string | null
   orgSummary: OrgSummaryPayload | null
   onSaveRole: (roleId: string, newPerms: string[]) => void
@@ -35,6 +36,7 @@ interface RoleWithStats {
 
 export default function RoleAccessTab({
   roles,
+  currentUserId,
   savingRoleId,
   orgSummary,
   onSaveRole,
@@ -175,6 +177,7 @@ export default function RoleAccessTab({
         {selectedRole ? (
           <RoleDetailPanel
             role={selectedRole}
+            currentUserId={currentUserId}
             saving={savingRoleId === selectedRole.id}
             onSave={(perms) => onSaveRole(selectedRole.id, perms)}
             users={users}

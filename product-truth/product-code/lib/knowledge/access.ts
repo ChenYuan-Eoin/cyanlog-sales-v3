@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import {
   canManageOrg,
   getDefaultOrgId,
+  getOrgScopedAssignments,
   getUserScopedRoleAssignments,
   type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
@@ -74,7 +75,7 @@ export function canUseKnowledgePage(
     return false
   }
 
-  if (page.created_by === context.userId || canManageOrg(context.assignments)) {
+  if (page.created_by === context.userId || canManageOrg(context.assignments, context.orgId)) {
     return true
   }
 
@@ -83,7 +84,10 @@ export function canUseKnowledgePage(
   }
 
   const requiredLevel = PERMISSION_LEVEL[required]
-  const roleIds = new Set(context.assignments.map((assignment) => assignment.roleId))
+  const roleIds = new Set(
+    getOrgScopedAssignments(context.assignments, context.orgId)
+      .map((assignment) => assignment.roleId)
+  )
 
   return permissions.some((permission) => {
     if (PERMISSION_LEVEL[permission.permission] < requiredLevel) {

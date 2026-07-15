@@ -547,9 +547,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const orgId = await getDefaultOrgId(user.id)
   const assignments = await getUserScopedRoleAssignments(user.id)
 
-  if (!canManageOrg(assignments)) {
+  if (!canManageOrg(assignments, orgId)) {
     return NextResponse.json(
       { code: 'FORBIDDEN', error: '需要组织管理员权限' },
       { status: 403 }
@@ -578,7 +579,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const orgId = await getDefaultOrgId(user.id)
     const token = await getTenantAccessToken(appId, appSecret)
     const departmentResult = await fetchFeishuDepartments(token)
     const departmentWrite = await syncDepartmentsToDatabase(orgId, departmentResult.departments)

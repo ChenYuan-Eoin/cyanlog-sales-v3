@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
     }
 
     const pageRows = ((pages || []) as KnowledgePage[]).filter((page) => !page.is_archived)
-    const canManageKnowledge = canManageOrg(assignments)
+    const canManageKnowledge = canManageOrg(assignments, orgId)
     const permissionMap = canManageKnowledge
       ? new Map()
       : await fetchKnowledgePermissions(pageRows.map((page) => page.id))

@@ -64,7 +64,7 @@ export function RoleAssignmentDialog({
         if (res.ok) {
           const result = await res.json()
           if (result.success && result.data?.roles) {
-            setRoles(result.data.roles)
+            setRoles(result.data.roles.filter((role: Role) => role.code !== 'SUPER_ADMIN'))
           }
         }
       } catch (err) {

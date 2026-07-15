@@ -5,8 +5,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
   createAdminTempPassword,
@@ -16,6 +19,7 @@ import {
   syncPrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
+import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 
 const createUserSchema = z.object({
   email: z.string().trim().email('请输入有效的邮箱地址').transform((value) => value.toLowerCase()),
@@ -92,16 +96,9 @@ export async function POST(req: NextRequest) {
   try {
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
+    const actorAssignments = await getUserScopedRoleAssignments(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = (
-      req.headers.get('x-user-role-codes') ||
-      req.headers.get('x-user-roles') ||
-      ''
-    ).split(',').filter(Boolean)
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -115,6 +112,16 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, display_name, title, primary_dept_id, role_ids, status } = parseResult.data
+    const roleValidation = await validateOrgRoleAssignment(actorAssignments, orgId, role_ids)
+    if (!roleValidation.ok && roleValidation.reason === 'ROLE_NOT_FOUND') {
+      return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
+    }
+    if (!roleValidation.ok) {
+      return NextResponse.json(
+        { error: '不能分配超过当前操作者权限上限的角色', code: 'ROLE_ESCALATION_FORBIDDEN' },
+        { status: 403 }
+      )
+    }
 
     if (primary_dept_id) {
       const department = await assertDepartmentInOrg(orgId, primary_dept_id)
@@ -163,7 +170,7 @@ export async function POST(req: NextRequest) {
       await ensureDefaultOrganizationMembership(user.id, orgId)
       await syncPrimaryDepartmentMembership(user.id, primary_dept_id || null)
       await syncUserSalesSpaces(user.id, orgId, primary_dept_id || null)
-      await replaceOrgRoleIds(user.id, orgId, role_ids, currentUser.id)
+      await replaceOrgRoleIds(user.id, orgId, roleValidation.roleIds, currentUser.id)
     } catch (syncError) {
       console.error('Create user consistency error:', syncError)
       await supabaseAdmin.from('users').delete().eq('id', user.id)

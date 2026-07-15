@@ -103,7 +103,7 @@ export async function GET(
     }
 
     const visibleItems = ((asks || []) as AskItem[])
-      .filter((ask) => canAccessAskByRoles(ask.required_roles, access.assignments))
+      .filter((ask) => canAccessAskByRoles(ask.required_roles, access.assignments, access.orgId))
       .map((ask) => {
         const { ask_responses, ...item } = ask
         return {

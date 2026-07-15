@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { useEffect, useState } from 'react'
 import type { ProductRecord, Config, OrgSummaryPayload, FeishuSyncFeedback, RuntimePolicy } from '../types'
 import type { ContractPolicyRule } from '@/types/rules'
 
@@ -117,6 +118,34 @@ export default function TabsContent({
   savingRoleId,
   onSaveRole,
 }: TabsContentProps) {
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const token = localStorage.getItem('token')
+
+    void fetch('/api/auth/me', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null
+        const payload = await response.json() as { user?: { id?: unknown } }
+        return typeof payload.user?.id === 'string' ? payload.user.id : null
+      })
+      .then((userId) => {
+        if (!controller.signal.aborted) {
+          setCurrentUserId(userId)
+        }
+      })
+      .catch(() => {
+        // Fail closed: role mutation UIs remain disabled until identity is known.
+      })
+
+    return () => controller.abort()
+  }, [])
+
   if (loading) {
     // 骨架屏根据 tab 类型显示不同形态
     switch (activeTab) {
@@ -239,6 +268,7 @@ export default function TabsContent({
       return (
         <OrgStructureTab
           orgSummary={orgSummary}
+          currentUserId={currentUserId}
           feishuSyncing={feishuSyncing}
           feishuFeedback={feishuFeedback}
           onFeishuSync={onFeishuSync}
@@ -249,6 +279,7 @@ export default function TabsContent({
       return (
         <RoleAccessTab
           roles={roles}
+          currentUserId={currentUserId}
           savingRoleId={savingRoleId}
           orgSummary={orgSummary}
           onSaveRole={onSaveRole}

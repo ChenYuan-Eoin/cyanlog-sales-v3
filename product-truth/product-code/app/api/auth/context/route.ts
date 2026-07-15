@@ -7,7 +7,12 @@ import {
   AUTH_CONTEXT_COOKIE_NAME,
   createAuthContextCookieValue,
 } from '@/lib/auth-context-cookie'
-import { getOrgPermissions, getOrgRoleCodes, getUserScopedRoleAssignments } from '@/lib/scoped-access'
+import {
+  getDefaultOrgId,
+  getOrgPermissions,
+  getOrgRoleCodes,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const preferredRegion = 'sin1'
@@ -24,8 +29,9 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await requireAuth(req)
-    const [assignments, userResult] = await Promise.all([
+    const [assignments, orgId, userResult] = await Promise.all([
       getUserScopedRoleAssignments(user.id),
+      getDefaultOrgId(user.id),
       supabaseAdmin
         .from('users')
         .select('must_change_password')
@@ -37,14 +43,15 @@ export async function POST(req: NextRequest) {
       return errorResponse('读取用户失败', 500, 'USER_FETCH_FAILED')
     }
 
-    const roleCodes = getOrgRoleCodes(assignments)
-    const allPermissions = getOrgPermissions(assignments)
+    const roleCodes = getOrgRoleCodes(assignments, orgId)
+    const allPermissions = getOrgPermissions(assignments, orgId)
     if (roleCodes.includes('SUPER_ADMIN')) {
       allPermissions.push('*')
     }
 
     const authContextCookie = await createAuthContextCookieValue(token, {
       userId: user.id,
+      orgId,
       mustChangePassword: Boolean(userResult.data.must_change_password),
       roleCodes,
       allPermissions,

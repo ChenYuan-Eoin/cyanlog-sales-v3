@@ -27,6 +27,7 @@ import { success, error, confirmAction } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
+import { getRoleMutationRestriction } from './role-assignment-policy'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +38,7 @@ import {
 
 interface OrgStructureTabProps {
   orgSummary: OrgSummaryPayload | null
+  currentUserId: string | null
   feishuSyncing: boolean
   feishuFeedback: FeishuSyncFeedback | null
   onFeishuSync: () => void | Promise<void>
@@ -323,12 +325,13 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
 interface MemberTableProps {
   users: OrgSummaryUser[]
   departments: OrgSummaryDepartment[]
+  currentUserId: string | null
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
   onRefresh?: () => void | Promise<void>
 }
 
-function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTableProps) {
+function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
 
   // 使用 Fuse.js 进行模糊搜索
@@ -419,6 +422,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
         const user = row.original
         const isDisabled = user.status !== 'active'
         const isLoginDisabled = user.login_enabled === false
+        const roleMutationRestriction = getRoleMutationRestriction(user, currentUserId)
 
         return (
           <DropdownMenu>
@@ -435,9 +439,26 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
               </DropdownMenuItem>
 
               {/* P0: 分配角色 */}
-              <DropdownMenuItem onSelect={() => onAssignRole(user)}>
-                <ShieldIcon className="h-4 w-4 mr-2" />
-                分配角色
+              <DropdownMenuItem
+                disabled={Boolean(roleMutationRestriction)}
+                onSelect={() => {
+                  if (!roleMutationRestriction) onAssignRole(user)
+                }}
+                title={roleMutationRestriction?.reason}
+              >
+                {roleMutationRestriction ? (
+                  <LockIcon className="h-4 w-4 mr-2" />
+                ) : (
+                  <ShieldIcon className="h-4 w-4 mr-2" />
+                )}
+                <span className="flex min-w-0 flex-col">
+                  <span>{roleMutationRestriction?.label || '分配角色'}</span>
+                  {roleMutationRestriction && (
+                    <span className="max-w-64 whitespace-normal text-[11px] leading-4 text-slate-400">
+                      {roleMutationRestriction.reason}
+                    </span>
+                  )}
+                </span>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
@@ -571,7 +592,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
         )
       },
     },
-  ], [onEditUser, onAssignRole, onRefresh])
+  ], [currentUserId, onEditUser, onAssignRole, onRefresh])
 
   const table = useReactTable({
     data: filteredUsers,
@@ -675,6 +696,7 @@ function MemberTable({ users, onEditUser, onAssignRole, onRefresh }: MemberTable
 
 export default function OrgStructureTab({
   orgSummary,
+  currentUserId,
   feishuSyncing,
   feishuFeedback,
   onFeishuSync,
@@ -817,8 +839,16 @@ export default function OrgStructureTab({
               <MemberTable
                 users={filteredUsers}
                 departments={departments}
+                currentUserId={currentUserId}
                 onEditUser={setEditingUser}
-                onAssignRole={setAssigningUser}
+                onAssignRole={(user) => {
+                  const restriction = getRoleMutationRestriction(user, currentUserId)
+                  if (restriction) {
+                    error(restriction.reason)
+                    return
+                  }
+                  setAssigningUser(user)
+                }}
                 onRefresh={onRefresh}
               />
             </div>

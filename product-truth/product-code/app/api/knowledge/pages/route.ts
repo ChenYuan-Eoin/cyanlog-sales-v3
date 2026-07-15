@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     }
 
     const pageRows = pages || []
-    const canManageKnowledge = canManageOrg(assignments)
+    const canManageKnowledge = canManageOrg(assignments, orgId)
     const permissionMap = canManageKnowledge
       ? new Map()
       : await fetchKnowledgePermissions(pageRows.map((page) => page.id))

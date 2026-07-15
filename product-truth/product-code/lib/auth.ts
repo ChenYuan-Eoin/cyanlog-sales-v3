@@ -18,47 +18,10 @@ export class AuthError extends Error {
   }
 }
 
-type CachedAuth = {
-  user: AuthUser | null
-  expiresAt: number
-}
-
-const AUTH_CACHE_TTL_MS = 15_000
-const authCache = new Map<string, CachedAuth>()
-const authInflight = new Map<string, Promise<AuthUser | null>>()
-
-function getCachedAuth(token: string): AuthUser | null | undefined {
-  const cached = authCache.get(token)
-  if (!cached) return undefined
-  if (cached.expiresAt < Date.now()) {
-    authCache.delete(token)
-    return undefined
-  }
-  return cached.user
-}
-
-function setCachedAuth(token: string, user: AuthUser | null) {
-  authCache.set(token, {
-    user,
-    expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
-  })
-}
-
-export function invalidateAuthCache(token: string | null | undefined) {
-  if (!token) return
-  authCache.delete(token)
-  authInflight.delete(token)
-}
-
-export function primeAuthCache(token: string | null | undefined, user: AuthUser | null) {
-  if (!token) return
-  setCachedAuth(token, user)
-}
-
 async function fetchAuthUser(token: string): Promise<AuthUser | null> {
   const { data: tokenRecord } = await supabaseAdmin
     .from('auth_tokens')
-    .select('user_id, expires_at, user:users(id, email, phone, display_name, org_id)')
+    .select('user_id, expires_at, user:users(id, email, phone, display_name, org_id, status, login_enabled)')
     .eq('token', token)
     .single()
 
@@ -69,17 +32,25 @@ async function fetchAuthUser(token: string): Promise<AuthUser | null> {
     ? tokenRecord.user[0]
     : tokenRecord.user
 
-  if (joinedUser?.id) {
+  if (
+    joinedUser?.id
+    && joinedUser.status === 'active'
+    && joinedUser.login_enabled === true
+  ) {
     return joinedUser as AuthUser
   }
 
+  if (joinedUser?.id) return null
+
   const { data: user } = await supabaseAdmin
     .from('users')
-    .select('id, email, phone, display_name, org_id')
+    .select('id, email, phone, display_name, org_id, status, login_enabled')
     .eq('id', tokenRecord.user_id)
     .single()
 
-  return user
+  return user?.status === 'active' && user.login_enabled === true
+    ? user
+    : null
 }
 
 export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
@@ -87,23 +58,9 @@ export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
 
   if (!token) return null
 
-  const cached = getCachedAuth(token)
-  if (cached !== undefined) return cached
-
-  let inflight = authInflight.get(token)
-  if (!inflight) {
-    inflight = fetchAuthUser(token)
-      .then((user) => {
-        setCachedAuth(token, user)
-        return user
-      })
-      .finally(() => {
-        authInflight.delete(token)
-      })
-    authInflight.set(token, inflight)
-  }
-
-  return inflight
+  // Session state must be checked for every request. Cross-instance admin
+  // revocation cannot safely invalidate an in-memory token cache.
+  return fetchAuthUser(token)
 }
 
 export async function requireAuth(req: NextRequest): Promise<AuthUser> {

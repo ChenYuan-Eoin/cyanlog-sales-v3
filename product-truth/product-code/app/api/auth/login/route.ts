@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { primeAuthCache } from '@/lib/auth'
-import { primeDefaultOrgCache } from '@/lib/scoped-access'
 import { formatLoginPrewarmTiming, warmLoginRuntime } from '@/lib/login-prewarm'
 import {
   cacheDashboardPayload,
@@ -47,6 +45,8 @@ type LoginUserPublicRow = {
 type LoginUserRow = LoginUserPublicRow & {
   password_hash: string
 }
+
+type LoginEligibility = 'allowed' | 'disabled' | 'unavailable'
 
 type LoginCandidateRpcData = {
   accountCount?: unknown
@@ -283,86 +283,6 @@ function toOptionalSeconds(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.ceil(value)) : undefined
 }
 
-function toStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-}
-
-function normalizeDashboardPayload(value: unknown): DashboardPayload | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-
-  const payload = value as Partial<DashboardPayload>
-  return {
-    spaces: Array.isArray(payload.spaces) ? payload.spaces : [],
-    activeSpace: payload.activeSpace || null,
-    opportunities: Array.isArray(payload.opportunities) ? payload.opportunities : [],
-    milestones: Array.isArray(payload.milestones) ? payload.milestones : [],
-    reminders: Array.isArray(payload.reminders) ? payload.reminders : [],
-    agenda: Array.isArray(payload.agenda) ? payload.agenda : [],
-  }
-}
-
-function normalizeCorePagePayload(value: unknown): InitialCorePagePayload | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-
-  const payload = value as Partial<InitialCorePagePayload>
-  const contracts = payload.contracts && typeof payload.contracts === 'object'
-    ? payload.contracts
-    : null
-  const contractMeta = contracts?.meta && typeof contracts.meta === 'object'
-    ? contracts.meta
-    : null
-  const configs = payload.configs && typeof payload.configs === 'object'
-    ? payload.configs
-    : null
-  const quotes = payload.quotes && typeof payload.quotes === 'object'
-    ? payload.quotes
-    : null
-  const tenders = payload.tenders && typeof payload.tenders === 'object'
-    ? payload.tenders
-    : null
-  const agenda = payload.agenda && typeof payload.agenda === 'object'
-    ? payload.agenda
-    : null
-
-  return {
-    contracts: contracts
-      ? {
-          contracts: Array.isArray(contracts.contracts) ? contracts.contracts : [],
-          drafts: Array.isArray(contracts.drafts) ? contracts.drafts : [],
-          meta: {
-            totalPages: typeof contractMeta?.totalPages === 'number' ? contractMeta.totalPages : 1,
-            hasNext: Boolean(contractMeta?.hasNext),
-            hasPrev: Boolean(contractMeta?.hasPrev),
-          },
-        }
-      : null,
-    configs: configs
-      ? {
-          products: Array.isArray(configs.products) ? configs.products : [],
-        }
-      : null,
-    quotes: quotes
-      ? {
-          quotes: Array.isArray(quotes.quotes) ? quotes.quotes : [],
-        }
-      : null,
-    tenders: tenders
-      ? {
-          tenders: Array.isArray(tenders.tenders) ? tenders.tenders : [],
-        }
-      : null,
-    agenda: agenda
-      ? {
-          items: Array.isArray(agenda.items) ? agenda.items : [],
-        }
-      : null,
-  }
-}
-
 function normalizeRpcStageTiming(value: unknown): LoginRpcStageTiming {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -494,12 +414,18 @@ async function loadLoginWithPasswordFromRpc(
           kind: 'ok',
           user,
           authContext: {
-            roleCodes: toStringArray(result.roleCodes),
-            allPermissions: toStringArray(result.allPermissions),
-            full: Array.isArray(result.roleCodes) && Array.isArray(result.allPermissions),
+            // The current RPC does not bind its role aggregation to a concrete
+            // organization. Force the exact-org context endpoint to hydrate the
+            // signed authorization cookie instead of trusting that legacy result.
+            roleCodes: [],
+            allPermissions: [],
+            full: false,
           },
-          dashboard: normalizeDashboardPayload(result.dashboard),
-          core: normalizeCorePagePayload(result.core),
+          // The legacy RPC payload is not exact-org scoped. In particular its
+          // tender payload reads global OCR rows. Never return or cache either
+          // aggregate until the RPC is replaced with an exact-org version.
+          dashboard: null,
+          core: null,
           rpcTiming,
         }
       : { kind: 'server_error', rpcTiming }
@@ -644,7 +570,7 @@ async function loadLoginCandidateFromRpc(
 }
 
 async function queryLoginUser(email: string | undefined, phone: string | undefined) {
-  let query = supabaseAdmin.from('users').select('id, email, phone, display_name, org_id, password_hash, must_change_password')
+  let query = supabaseAdmin.from('users').select('id, email, phone, display_name, org_id, password_hash, must_change_password, status, login_enabled')
   if (email) {
     query = query.eq('email', email)
   } else {
@@ -652,6 +578,23 @@ async function queryLoginUser(email: string | undefined, phone: string | undefin
   }
 
   return query.single()
+}
+
+async function getLoginEligibility(userId: string): Promise<LoginEligibility> {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('status, login_enabled')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error || !data) return 'unavailable'
+  return data.status === 'active' && data.login_enabled === true
+    ? 'allowed'
+    : 'disabled'
+}
+
+async function revokeLoginToken(token: string) {
+  await supabaseAdmin.from('auth_tokens').delete().eq('token', token)
 }
 
 function createSessionExpiry() {
@@ -677,14 +620,12 @@ async function createLoginSuccessResponse(
     org_id: user.org_id,
   }
   const primeCaches = () => {
-    primeDefaultOrgCache(user.id, user.org_id)
     if (!user.must_change_password && initialDashboard) {
       cacheDashboardPayload(authUser, initialDashboard)
     } else if (!user.must_change_password) {
       primeDashboardPayload(authUser)
     }
 
-    primeAuthCache(token, authUser)
   }
   if (timing) {
     timing.measureSync('cache_prime', primeCaches)
@@ -721,6 +662,7 @@ async function createLoginSuccessResponse(
 
   const createAuthContextCookie = () => createAuthContextCookieValue(token, {
     userId: user.id,
+    orgId: user.org_id || '',
     mustChangePassword: Boolean(user.must_change_password),
     roleCodes: authContext?.roleCodes ?? [],
     allPermissions: authContext?.allPermissions ?? [],
@@ -825,6 +767,17 @@ export async function POST(req: NextRequest) {
       return withTiming(errorResponse('登录失败，请重试', 500, 'LOGIN_RPC_FAILED'))
     }
     if (loginWithPassword?.kind === 'ok') {
+      const eligibility = await measureLoginTransport(timing, 'login_eligibility', () => (
+        getLoginEligibility(loginWithPassword.user.id)
+      ))
+      if (eligibility !== 'allowed') {
+        await measureLoginTransport(timing, 'token_revoke', () => revokeLoginToken(token))
+        if (eligibility === 'disabled') {
+          return withTiming(errorResponse('账号已停用或禁止登录', 403, 'LOGIN_DISABLED'))
+        }
+        return withTiming(errorResponse('登录服务暂时不可用，请稍后重试', 503, 'LOGIN_ELIGIBILITY_UNAVAILABLE'))
+      }
+
       const response = await createLoginSuccessResponse(
         loginWithPassword.user,
         token,
@@ -865,6 +818,16 @@ export async function POST(req: NextRequest) {
     if (userError || !user) {
       await measureLoginTransport(timing, 'record_attempt', () => recordLoginAttempt(identifier, ipAddress, false))
       return withTiming(errorResponse('邮箱/手机号或密码错误', 401, 'AUTH_FAILED'))
+    }
+
+    const eligibility = await measureLoginTransport(timing, 'login_eligibility', () => (
+      getLoginEligibility(user.id)
+    ))
+    if (eligibility === 'disabled') {
+      return withTiming(errorResponse('账号已停用或禁止登录', 403, 'LOGIN_DISABLED'))
+    }
+    if (eligibility === 'unavailable') {
+      return withTiming(errorResponse('登录服务暂时不可用，请稍后重试', 503, 'LOGIN_ELIGIBILITY_UNAVAILABLE'))
     }
 
     // 验证密码

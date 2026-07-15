@@ -50,7 +50,7 @@ export async function POST(
       )
     }
 
-    if (!canCloseOrReopenAsk(access.assignments)) {
+    if (!canCloseOrReopenAsk(access.assignments, access.orgId)) {
       return errorResponse(createApiError('FORBIDDEN', '当前角色不能关闭或重开 ASK'))
     }
 
@@ -158,7 +158,7 @@ export async function POST(
         ask_id: askId,
         contract_id: ask.contract_id,
         actor_id: user.id,
-        actor_role: getOrgRoleCodes(access.assignments)[0] || 'unknown',
+        actor_role: getOrgRoleCodes(access.assignments, access.orgId)[0] || 'unknown',
         event_type: eventType,
         from_status: fromStatus,
         to_status: toStatus,

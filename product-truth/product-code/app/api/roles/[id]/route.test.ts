@@ -1,82 +1,59 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: {
-    from: vi.fn(),
-  },
+vi.mock('@/lib/api/auth-wrapper', () => ({
+  withAuthAndOrg: vi.fn(async (_req, handler) => handler({ id: 'user-1' }, 'org-1')),
 }))
 
-import { supabaseAdmin } from '@/lib/supabase'
+const accessMocks = vi.hoisted(() => ({
+  userHasOrgConfigAccess: vi.fn(),
+}))
+
+vi.mock('@/lib/configs/access', () => accessMocks)
+
 import { PATCH } from './route'
 
-function makeMalformedRequest(): any {
+function jsonRequest(body: unknown): any {
   return {
-    json: async () => {
-      throw new SyntaxError('Unexpected token')
-    },
+    json: vi.fn(async () => body),
     method: 'PATCH',
-    headers: new Headers({
-      'content-type': 'application/json',
-      'x-user-permissions': 'config:write',
-    }),
+    headers: new Headers({ 'content-type': 'application/json' }),
   }
 }
 
-function makeJsonRequest(body: unknown): any {
-  return {
-    json: async () => body,
-    method: 'PATCH',
-    headers: new Headers({
-      'content-type': 'application/json',
-      'x-user-permissions': 'config:write',
-    }),
-  }
+const routeContext: any = {
+  params: Promise.resolve({ id: 'role-1' }),
 }
 
-function makeUpdateChain(result: any) {
-  const chain: any = {}
-  chain.update = vi.fn().mockReturnValue(chain)
-  chain.eq = vi.fn().mockReturnValue(chain)
-  chain.select = vi.fn().mockReturnValue(chain)
-  chain.single = vi.fn().mockResolvedValue(result)
-  return chain
-}
-
-describe('PATCH /api/roles/[id] validation', () => {
+describe('PATCH /api/roles/[id] global-role boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
   })
 
-  it('无效 JSON 返回参数错误且不访问数据库', async () => {
-    const res = await PATCH(makeMalformedRequest(), {
-      params: Promise.resolve({ id: 'role-1' }),
-    })
+  it('没有当前组织 config:write 时返回 403', async () => {
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+
+    const res = await PATCH(jsonRequest({ permissions: ['*'] }), routeContext)
     const body = await res.json()
 
-    expect(res.status).toBe(400)
-    expect(body.error.code).toBe('V001')
-    expect(body.error.message).toBe('INVALID_BODY')
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(res.status).toBe(403)
+    expect(body.error.code).toBe('A002')
+    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'write')
   })
 
-  it('更新成功返回 common success envelope', async () => {
-    const role = { id: 'role-1', permissions: ['config:read'] }
-    const query = makeUpdateChain({ data: role, error: null })
-    ;(supabaseAdmin.from as any).mockReturnValue(query)
+  it.each([
+    ['普通权限', ['config:read']],
+    ['全局通配权限', ['*']],
+    ['清空权限', []],
+  ])('即使有写权限也禁止在线修改全局角色：%s', async (_label, permissions) => {
+    const req = jsonRequest({ permissions })
 
-    const res = await PATCH(makeJsonRequest({ permissions: ['config:read'] }), {
-      params: Promise.resolve({ id: 'role-1' }),
-    })
+    const res = await PATCH(req, routeContext)
     const body = await res.json()
 
-    expect(res.status).toBe(200)
-    expect(body).toMatchObject({
-      success: true,
-      data: role,
-    })
-    expect(supabaseAdmin.from).toHaveBeenCalledWith('roles')
-    expect(query.update).toHaveBeenCalledWith({ permissions: ['config:read'] })
-    expect(query.eq).toHaveBeenCalledWith('id', 'role-1')
+    expect(res.status).toBe(409)
+    expect(body.error.message).toContain('全局只读模板')
+    expect(req.json).not.toHaveBeenCalled()
   })
 })

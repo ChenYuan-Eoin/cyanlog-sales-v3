@@ -7,17 +7,27 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+vi.mock('@/lib/api/auth-wrapper', () => ({
+  withAuthAndOrg: vi.fn(async (_req, handler) => handler({ id: 'user-1' }, 'org-1')),
+}))
+
+const accessMocks = vi.hoisted(() => ({
+  userHasOrgConfigAccess: vi.fn(),
+}))
+
+const scopedAccessMocks = vi.hoisted(() => ({
+  getUserScopedRoleAssignments: vi.fn(),
+  canManageOrg: vi.fn(),
+}))
+
+vi.mock('@/lib/configs/access', () => accessMocks)
+vi.mock('@/lib/scoped-access', () => scopedAccessMocks)
+
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET } from './route'
 
-function makeRequest(url = 'https://example.test/api/roles', permissions = 'config:read'): any {
-  return {
-    method: 'GET',
-    url,
-    headers: new Headers({
-      'x-user-permissions': permissions,
-    }),
-  }
+function makeRequest(url = 'https://example.test/api/roles'): any {
+  return { method: 'GET', url, headers: new Headers() }
 }
 
 function makeRolesQuery(result: any) {
@@ -31,18 +41,24 @@ function makeRolesQuery(result: any) {
 describe('GET /api/roles', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
+    scopedAccessMocks.getUserScopedRoleAssignments.mockResolvedValue([])
+    scopedAccessMocks.canManageOrg.mockReturnValue(false)
   })
 
-  it('无权限返回 common error envelope', async () => {
-    const res = await GET(makeRequest('https://example.test/api/roles', ''))
+  it('当前组织无配置读取或组织管理权限时返回 403', async () => {
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+
+    const res = await GET(makeRequest())
     const body = await res.json()
 
     expect(res.status).toBe(403)
     expect(body.error.code).toBe('A002')
+    expect(scopedAccessMocks.canManageOrg).toHaveBeenCalledWith([], 'org-1')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
-  it('角色列表返回 common success envelope 和 meta', async () => {
+  it('角色列表返回只读边界、common success envelope 和 meta', async () => {
     const roles = [
       { id: 'role-1', code: 'ADMIN', name: '管理员', permissions: ['config:read', 'config:write'] },
       { id: 'role-2', code: 'SALES', name: '销售', permissions: ['config:read'] },
@@ -59,6 +75,8 @@ describe('GET /api/roles', () => {
       data: {
         roles,
         permission_keys: ['config:read', 'config:write'],
+        permissions_editable: false,
+        permissions_edit_block_reason: expect.stringContaining('全局只读模板'),
       },
       meta: {
         total: 2,

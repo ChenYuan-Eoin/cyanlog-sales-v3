@@ -266,7 +266,7 @@ export async function GET(
 
     const { id } = idResult.data
     const assignments = await getUserScopedRoleAssignments(user.id)
-    const accessibleUserIds = canManageOrg(assignments)
+    const accessibleUserIds = canManageOrg(assignments, orgId)
       ? null
       : (await listAccessibleUserIds(user.id, orgId)).userIds
     const cacheKey = quoteDetailResponseCacheKey(user.id, orgId, id)

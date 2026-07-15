@@ -7,6 +7,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }))
 
 import type { NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { middleware } from './middleware'
 
 function makeRequest(url: string, headers: Record<string, string> = {}): NextRequest {
@@ -25,14 +26,74 @@ function makeRequest(url: string, headers: Record<string, string> = {}): NextReq
 }
 
 const originalServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 afterEach(() => {
+  vi.clearAllMocks()
   if (originalServiceRoleKey === undefined) {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY
   } else {
     process.env.SUPABASE_SERVICE_ROLE_KEY = originalServiceRoleKey
   }
+
+  if (originalSupabaseUrl === undefined) {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL
+  } else {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl
+  }
 })
+
+function queryBuilder(result: { data: unknown; error?: unknown }, terminal: 'single' | 'maybeSingle' | 'await') {
+  const query: Record<string, unknown> = {}
+  query.select = vi.fn(() => query)
+  query.eq = vi.fn(() => query)
+  if (terminal === 'single') {
+    query.single = vi.fn().mockResolvedValue(result)
+  } else if (terminal === 'maybeSingle') {
+    query.maybeSingle = vi.fn().mockResolvedValue(result)
+  } else {
+    query.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
+      Promise.resolve(result).then(resolve, reject)
+    )
+  }
+  return query as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>
+}
+
+function mockExactOrgAuth(options: {
+  token: string
+  orgId: string
+  roles: Array<{ roles: { code: string; permissions: string[] } }>
+  status?: string
+  loginEnabled?: boolean
+}) {
+  const tokenQuery = queryBuilder({
+    data: { user_id: 'user-1', expires_at: '2099-01-01T00:00:00.000Z' },
+  }, 'single')
+  const userQuery = queryBuilder({
+    data: {
+      id: 'user-1',
+      org_id: 'legacy-org',
+      must_change_password: false,
+      status: options.status ?? 'active',
+      login_enabled: options.loginEnabled ?? true,
+    },
+  }, 'maybeSingle')
+  const membershipQuery = queryBuilder({ data: { org_id: options.orgId }, error: null }, 'maybeSingle')
+  const rolesQuery = queryBuilder({ data: options.roles }, 'await')
+  const from = vi.fn((table: string) => {
+    if (table === 'auth_tokens') return tokenQuery
+    if (table === 'users') return userQuery
+    if (table === 'user_organizations') return membershipQuery
+    if (table === 'user_roles') return rolesQuery
+    throw new Error(`unexpected table ${table}`)
+  })
+
+  vi.mocked(createClient).mockReturnValue({ from } as never)
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://supabase.example.test'
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test'
+
+  return { from, rolesQuery }
+}
 
 describe('middleware host routing', () => {
   it('redirects quote subdomain to sales quotes entry', async () => {
@@ -122,5 +183,60 @@ describe('middleware public API routing', () => {
     expect(health.status).toBe(200)
     expect(cron.status).toBe(200)
     expect(healthNeighbor.status).toBe(401)
+  })
+})
+
+describe('middleware exact organization authorization', () => {
+  it('只把 default org 的权限写入可信下游请求头', async () => {
+    const { rolesQuery } = mockExactOrgAuth({
+      token: 'scope-token-a',
+      orgId: 'org-a',
+      roles: [{ roles: { code: 'SALES', permissions: ['config:read'] } }],
+    })
+    const req = makeRequest('https://sales.cyanlog.icu/configs', { host: 'sales.cyanlog.icu' })
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'scope-token-a' })
+
+    const res = await middleware(req)
+
+    expect(res.status).toBe(200)
+    expect(rolesQuery.eq).toHaveBeenCalledWith('scope_type', 'org')
+    expect(rolesQuery.eq).toHaveBeenCalledWith('scope_id', 'org-a')
+    expect(res.headers.get('x-middleware-request-x-user-permissions')).toBe('config:read')
+    expect(res.headers.get('x-middleware-request-x-user-permissions')).not.toContain('*')
+    expect(res.headers.get('x-middleware-request-x-org-id')).toBe('org-a')
+  })
+
+  it('只有其他组织或 null scope 的权限时拒绝访问配置中心', async () => {
+    const { rolesQuery } = mockExactOrgAuth({
+      token: 'scope-token-b',
+      orgId: 'org-a',
+      roles: [],
+    })
+    const req = makeRequest('https://sales.cyanlog.icu/configs', { host: 'sales.cyanlog.icu' })
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'scope-token-b' })
+
+    const res = await middleware(req)
+
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location')).toContain('denied=config%3Aread')
+    expect(rolesQuery.eq).toHaveBeenCalledWith('scope_id', 'org-a')
+  })
+
+  it('用户停用后旧 token 下一次请求立即失效', async () => {
+    const { from } = mockExactOrgAuth({
+      token: 'disabled-token',
+      orgId: 'org-a',
+      roles: [{ roles: { code: 'ADMIN', permissions: ['*'] } }],
+      status: 'suspended',
+      loginEnabled: false,
+    })
+    const req = makeRequest('https://sales.cyanlog.icu/api/admin/org', { host: 'sales.cyanlog.icu' })
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'disabled-token' })
+
+    const res = await middleware(req)
+
+    expect(res.status).toBe(401)
+    expect(from).not.toHaveBeenCalledWith('user_organizations')
+    expect(from).not.toHaveBeenCalledWith('user_roles')
   })
 })

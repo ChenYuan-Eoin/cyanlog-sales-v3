@@ -75,11 +75,16 @@ function makeGetRequest(headers: Record<string, string> = {}): any {
 
 function makeChain(result: any) {
   const chain: any = {}
-  ;['select', 'eq', 'insert'].forEach((m) => {
+  ;['select', 'eq', 'insert', 'delete'].forEach((m) => {
     chain[m] = vi.fn().mockReturnValue(chain)
   })
   chain.single = vi.fn().mockResolvedValue(result)
+  chain.maybeSingle = vi.fn().mockResolvedValue(result)
   return chain
+}
+
+function allowedEligibilityChain() {
+  return makeChain({ data: { status: 'active', login_enabled: true }, error: null })
 }
 
 describe('POST /api/auth/login', () => {
@@ -187,6 +192,7 @@ describe('POST /api/auth/login', () => {
       ;(supabaseAdmin.from as any).mockReturnValueOnce(
         makeChain({ data: { id: 'u1', password_hash: 'wrong-hash' }, error: null })
       )
+      ;(supabaseAdmin.from as any).mockReturnValueOnce(allowedEligibilityChain())
       ;(bcrypt.compare as any).mockResolvedValue(false)
 
       const res = await POST(makeRequest({ email: 'u@x.com', password: 'wrong' }))
@@ -204,6 +210,7 @@ describe('POST /api/auth/login', () => {
         .mockReturnValueOnce(
           makeChain({ data: { id: 'u1', email: 'u@x.com', display_name: 'U' }, error: null })
         )
+        .mockReturnValueOnce(allowedEligibilityChain())
         .mockReturnValueOnce(makeChain({ data: null, error: null }))
 
       const res = await POST(makeRequest({ email: 'u@x.com', password: 'right' }))
@@ -240,6 +247,7 @@ describe('POST /api/auth/login', () => {
             error: null,
           })
         )
+        .mockReturnValueOnce(allowedEligibilityChain())
         .mockReturnValueOnce(makeChain({ data: null, error: null }))
 
       try {
@@ -320,7 +328,9 @@ describe('POST /api/auth/login', () => {
         error: null,
       })
       ;(bcrypt.compare as any).mockResolvedValue(true)
-      ;(supabaseAdmin.from as any).mockReturnValueOnce(makeChain({ data: null, error: null }))
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce(allowedEligibilityChain())
+        .mockReturnValueOnce(makeChain({ data: null, error: null }))
 
       const res = await POST(makeRequest({ email: 'rpc@x.com', password: 'right' }))
       const body = await res.json()
@@ -328,7 +338,8 @@ describe('POST /api/auth/login', () => {
       expect(res.status).toBe(200)
       expect(body.user.id).toBe('u-rpc')
       expect(checkLoginRateLimit).not.toHaveBeenCalled()
-      expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+      expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
       expect(supabaseAdmin.from).toHaveBeenCalledWith('auth_tokens')
     })
 
@@ -385,13 +396,14 @@ describe('POST /api/auth/login', () => {
           error: null,
         }
       })
+      ;(supabaseAdmin.from as any).mockReturnValueOnce(allowedEligibilityChain())
 
       const res = await POST(makeRequest({ email: 'fast@x.com', password: 'right' }))
       const body = await res.json()
 
       expect(res.status).toBe(200)
       expect(body.user.id).toBe('u-fast')
-      expect(body.authContextReady).toBe(true)
+      expect(body.authContextReady).toBe(false)
       expect(res.headers.get('Server-Timing')).toContain('login_rpc')
       expect(res.headers.get('Server-Timing')).toContain('rpc_token_write;dur=3.2')
       expect(res.headers.get('Server-Timing')).toContain('rpc_initial_dashboard;dur=42.8')
@@ -403,34 +415,58 @@ describe('POST /api/auth/login', () => {
       expect(res.headers.get('X-Login-Timing')).toContain('rpc_initial_dashboard;dur=42.8')
       expect(res.headers.get('X-Login-Timing')).toContain('login_rpc_transport')
       expect(res.headers.get('X-Login-Timing')).toContain('total')
-      expect(body.initialDashboard).toMatchObject({
-        activeSpace: { id: 'space-1', name: '默认空间' },
-        opportunities: [],
-      })
-      expect(body.initialCore).toMatchObject({
-        contracts: {
-          contracts: [{ id: 'contract-1', filename: '合同.pdf', status: 'COMPLETED' }],
-          meta: { totalPages: 1, hasNext: false, hasPrev: false },
-        },
-        configs: {
-          products: [{ id: 'product-1', name: '企业版SaaS授权' }],
-        },
-        agenda: {
-          items: [{ id: 'agenda-1', title: '客户跟进', start_at: '2026-06-26T01:00:00.000Z' }],
-        },
-      })
+      expect(body.initialDashboard).toBeNull()
+      expect(body.initialCore).toBeNull()
       const authContextCookie = res.cookies.get(AUTH_CONTEXT_COOKIE_NAME)?.value
       const authContext = await readAuthContextCookieValue(body.token, authContextCookie)
       expect(authContext).toMatchObject({
         userId: 'u-fast',
-        roleCodes: ['SUPER_ADMIN'],
-        allPermissions: ['*', 'admin:access'],
-        full: true,
+        orgId: 'org-fast',
+        roleCodes: [],
+        allPermissions: [],
+        full: false,
       })
       expect(checkLoginRateLimit).not.toHaveBeenCalled()
       expect(bcrypt.compare).not.toHaveBeenCalled()
       expect(recordLoginAttempt).not.toHaveBeenCalled()
-      expect(supabaseAdmin.from).not.toHaveBeenCalled()
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+      expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
+    })
+
+    it('RPC 密码成功但用户已停用 → 撤销刚签发 token 且拒绝登录', async () => {
+      ;(supabaseAdmin.rpc as any).mockResolvedValueOnce({
+        data: {
+          ok: true,
+          code: 'OK',
+          user: {
+            id: 'u-disabled',
+            email: 'disabled@x.com',
+            org_id: 'org-1',
+            must_change_password: false,
+          },
+          timing: { token_write: 2.1 },
+        },
+        error: null,
+      })
+      const eligibility = makeChain({
+        data: { status: 'suspended', login_enabled: false },
+        error: null,
+      })
+      const revoke = makeChain({ data: null, error: null })
+      ;(supabaseAdmin.from as any)
+        .mockReturnValueOnce(eligibility)
+        .mockReturnValueOnce(revoke)
+
+      const res = await POST(makeRequest({ email: 'disabled@x.com', password: 'right' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(403)
+      expect(body.code).toBe('LOGIN_DISABLED')
+      expect(supabaseAdmin.from).toHaveBeenNthCalledWith(1, 'users')
+      expect(supabaseAdmin.from).toHaveBeenNthCalledWith(2, 'auth_tokens')
+      expect(revoke.delete).toHaveBeenCalled()
+      expect(revoke.eq).toHaveBeenCalledWith('token', expect.any(String))
+      expect(bcrypt.compare).not.toHaveBeenCalled()
     })
 
     it('慢登录只记录脱敏阶段耗时', async () => {
@@ -474,6 +510,7 @@ describe('POST /api/auth/login', () => {
         },
         error: null,
       })
+      ;(supabaseAdmin.from as any).mockReturnValueOnce(allowedEligibilityChain())
 
       try {
         const res = await POST(makeRequest({ email: 'slow@example.com', password: 'right' }))
@@ -515,6 +552,7 @@ describe('POST /api/auth/login', () => {
             error: null,
           })
         )
+        .mockReturnValueOnce(allowedEligibilityChain())
         .mockReturnValueOnce(makeChain({ data: null, error: null }))
 
       const res = await POST(makeRequest({ email: 'temp@x.com', password: 'TempPassword123!' }))

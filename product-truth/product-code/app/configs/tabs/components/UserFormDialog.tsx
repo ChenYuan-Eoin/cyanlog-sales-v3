@@ -61,6 +61,7 @@ export function UserFormDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: UserFormDialogProps) {
+  const assignableRoles = roles.filter((role) => role.code !== 'SUPER_ADMIN')
   const [internalOpen, setInternalOpen] = useState(false)
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
@@ -189,7 +190,7 @@ export function UserFormDialog({
                 </FormItem>
               )}
             />
-            {roles.length > 0 && (
+            {assignableRoles.length > 0 && (
               <FormField
                 control={form.control}
                 name="role_ids"
@@ -197,7 +198,7 @@ export function UserFormDialog({
                   <FormItem>
                     <FormLabel>角色</FormLabel>
                     <div className="space-y-2">
-                      {roles.map((role) => (
+                      {assignableRoles.map((role) => (
                         <div key={role.id} className="flex items-center gap-2">
                           <Checkbox
                             checked={(field.value || []).includes(role.id)}

@@ -174,7 +174,7 @@ export async function replaceOrgRoleIds(userId: string, orgId: string, roleIds: 
     .delete()
     .eq('user_id', userId)
     .eq('scope_type', 'org')
-    .or(`scope_id.is.null,scope_id.eq.${orgId}`)
+    .eq('scope_id', orgId)
 
   if (deleteError) {
     throw new Error('ROLE_ASSIGN_FAILED')

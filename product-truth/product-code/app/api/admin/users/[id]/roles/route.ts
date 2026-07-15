@@ -5,9 +5,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 import { replaceOrgRoleIds } from '@/lib/admin/org-membership'
+import {
+  userHasOrgRoleCode,
+  validateOrgRoleAssignment,
+} from '@/lib/admin/org-role-authority'
 
 const assignOrgRolesSchema = z.object({
   role_ids: z.array(z.string().regex(/^[0-9a-f-]{36}$/i, '角色 ID 格式不正确')),
@@ -24,13 +31,19 @@ export async function POST(
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
+    const actorAssignments = await getUserScopedRoleAssignments(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
+
+    // A user must never be able to alter the authorization source of their own
+    // active session through this tenant API.
+    if (userId === currentUser.id) {
+      return NextResponse.json(
+        { error: '不能在线修改自己的角色', code: 'SELF_ROLE_MUTATION_FORBIDDEN' },
+        { status: 403 }
+      )
     }
 
     const parseResult = assignOrgRolesSchema.safeParse(await req.json().catch(() => null))
@@ -56,9 +69,27 @@ export async function POST(
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
     }
 
+    if (await userHasOrgRoleCode(userId, orgId, 'SUPER_ADMIN')) {
+      return NextResponse.json(
+        { error: '平台根管理员角色不能通过组织接口变更', code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN' },
+        { status: 403 }
+      )
+    }
+
+    const roleValidation = await validateOrgRoleAssignment(actorAssignments, orgId, role_ids)
+    if (!roleValidation.ok && roleValidation.reason === 'ROLE_NOT_FOUND') {
+      return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
+    }
+    if (!roleValidation.ok) {
+      return NextResponse.json(
+        { error: '不能分配超过当前操作者权限上限的角色', code: 'ROLE_ESCALATION_FORBIDDEN' },
+        { status: 403 }
+      )
+    }
+
     let data
     try {
-      data = await replaceOrgRoleIds(userId, orgId, role_ids, currentUser.id)
+      data = await replaceOrgRoleIds(userId, orgId, roleValidation.roleIds, currentUser.id)
     } catch (error) {
       if (error instanceof Error && error.message === 'ROLE_NOT_FOUND') {
         return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })

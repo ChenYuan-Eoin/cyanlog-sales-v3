@@ -28,6 +28,7 @@ const OrgStructureTab = dynamic(() => import('@/app/configs/tabs/OrgStructureTab
 // B11: /admin/org 入口复用 OrgStructureTab，避免与 /configs?tab=org-structure 重复代码
 export default function AdminOrgPage() {
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [feishuSyncing, setFeishuSyncing] = useState(false)
   const [feishuFeedback, setFeishuFeedback] = useState<FeishuSyncFeedback | null>(null)
@@ -36,12 +37,18 @@ export default function AdminOrgPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/admin/org', {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      })
-      if (res.ok) {
-        const data = await res.json()
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+      const [orgResponse, profileResponse] = await Promise.all([
+        fetch('/api/admin/org', { headers }),
+        fetch('/api/auth/me', { headers, cache: 'no-store' }).catch(() => null),
+      ])
+      if (orgResponse.ok) {
+        const data = await orgResponse.json()
         setOrgSummary(data)
+      }
+      if (profileResponse?.ok) {
+        const profile = await profileResponse.json() as { user?: { id?: unknown } }
+        setCurrentUserId(typeof profile.user?.id === 'string' ? profile.user.id : null)
       }
     } catch (err) {
       console.error('[AdminOrgPage] fetch error:', err)
@@ -97,6 +104,7 @@ export default function AdminOrgPage() {
         </p>
         <OrgStructureTab
           orgSummary={orgSummary}
+          currentUserId={currentUserId}
           feishuSyncing={feishuSyncing}
           feishuFeedback={feishuFeedback}
           onFeishuSync={handleFeishuSync}

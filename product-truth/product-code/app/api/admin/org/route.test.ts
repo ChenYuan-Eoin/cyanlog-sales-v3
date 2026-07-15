@@ -32,6 +32,7 @@ function makeRequest(): any {
   return new Request('https://example.test/api/admin/org', {
     headers: {
       'x-user-id': 'u-1',
+      'x-org-id': 'org-1',
       'x-user-role-codes': 'ADMIN',
       'x-user-permissions': 'admin:access',
     },
@@ -78,6 +79,7 @@ describe('GET /api/admin/org', () => {
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_org_admin_payload_v1', {
       p_org_id: 'org-1',
     })
+    expect(getDefaultOrgId).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 

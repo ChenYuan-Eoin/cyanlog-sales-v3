@@ -212,7 +212,8 @@ async function getOrgUserRoles(orgId: string, orgUserIds?: string[]) {
 
 async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   const headerUserId = req.headers.get('x-user-id')?.trim()
-  if (headerUserId) {
+  const headerOrgId = req.headers.get('x-org-id')?.trim()
+  if (headerUserId && headerOrgId) {
     const roleCodes = (
       req.headers.get('x-user-role-codes')
       || req.headers.get('x-user-roles')
@@ -227,36 +228,29 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
       return null
     }
 
-    const orgId = await getDefaultOrgId(headerUserId)
     return {
       user: { id: headerUserId },
-      orgId,
+      // Middleware resolves permissions and org from the same exact-org DB
+      // snapshot. Do not mix those permissions with a separately cached org.
+      orgId: headerOrgId,
       roleCodes,
     }
   }
 
   const user = await requireAuth(req)
-  const assignments = await getUserScopedRoleAssignments(user.id)
-  const roleCodes = getOrgRoleCodes(assignments)
+  const [assignments, orgId] = await Promise.all([
+    getUserScopedRoleAssignments(user.id),
+    getDefaultOrgId(user.id),
+  ])
+  const roleCodes = getOrgRoleCodes(assignments, orgId)
 
-  if (!canManageOrg(assignments)) {
+  if (!canManageOrg(assignments, orgId)) {
     return null
-  }
-
-  const { data: userOrg, error: orgError } = await supabaseAdmin
-    .from('user_organizations')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('is_default', true)
-    .single()
-
-  if (orgError || !userOrg?.org_id) {
-    throw new Error('ORG_FETCH_FAILED')
   }
 
   return {
     user,
-    orgId: userOrg.org_id,
+    orgId,
     roleCodes,
   }
 }

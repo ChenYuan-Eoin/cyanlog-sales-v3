@@ -52,7 +52,7 @@ describe('Auth Module', () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
-            data: { id: 'u1', email: 'test@test.com' },
+            data: { id: 'u1', email: 'test@test.com', status: 'active', login_enabled: true },
             error: null,
           }),
         })
@@ -77,7 +77,7 @@ describe('Auth Module', () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
-            data: { id: 'u2' },
+            data: { id: 'u2', status: 'active', login_enabled: true },
             error: null,
           }),
         })
@@ -101,7 +101,7 @@ describe('Auth Module', () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
-            data: { id: 'u3' },
+            data: { id: 'u3', status: 'active', login_enabled: true },
             error: null,
           }),
         })
@@ -135,6 +135,30 @@ describe('Auth Module', () => {
       const user = await getAuthUser(makeReq({ authorization: 'Bearer invalid' }))
       expect(user).toBeNull()
     })
+
+    it('token 有效但用户已停用时返回 null', async () => {
+      ;(supabaseAdmin.from as any).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            user_id: 'u-disabled',
+            expires_at: null,
+            user: {
+              id: 'u-disabled',
+              status: 'suspended',
+              login_enabled: false,
+            },
+          },
+          error: null,
+        }),
+      })
+
+      const user = await getAuthUser(makeReq({ authorization: 'Bearer disabled-token' }))
+
+      expect(user).toBeNull()
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('requireAuth', () => {
@@ -157,7 +181,7 @@ describe('Auth Module', () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
-            data: { id: 'u1', email: 'a@b.com' },
+            data: { id: 'u1', email: 'a@b.com', status: 'active', login_enabled: true },
             error: null,
           }),
         })

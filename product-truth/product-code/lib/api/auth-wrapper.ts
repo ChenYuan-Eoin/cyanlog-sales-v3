@@ -6,7 +6,13 @@ import { requireAuth, getAuthUser } from '@/lib/auth'
 import { errorResponse } from './common'
 import { createApiError } from './errors'
 import type { AuthUser } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  getDefaultOrgId,
+  getOrgPermissions,
+  getOrgRoleCodes,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
+import { hasPermission } from '@/lib/permissions'
 
 // 可选认证 - 不强制要求登录
 export async function withOptionalAuth<T>(
@@ -62,14 +68,18 @@ export async function withPermission<T>(
   permission: string,
   handler: (user: AuthUser) => Promise<T>
 ): Promise<T | Response> {
-  try {
-    const user = await requireAuth(req)
+  return withAuthAndOrg(req, async (user, orgId) => {
+    const assignments = await getUserScopedRoleAssignments(user.id)
+    const roleCodes = getOrgRoleCodes(assignments, orgId)
+    const permissions = getOrgPermissions(assignments, orgId)
+    if (roleCodes.includes('SUPER_ADMIN')) {
+      permissions.push('*')
+    }
 
-    // 这里可以扩展权限检查逻辑
-    // 例如：检查 user.roles 是否包含所需权限
+    if (!hasPermission(permissions, permission)) {
+      return errorResponse(createApiError('FORBIDDEN'))
+    }
 
-    return await handler(user)
-  } catch (_error) {
-    return errorResponse(createApiError('UNAUTHORIZED'))
-  }
+    return handler(user)
+  })
 }

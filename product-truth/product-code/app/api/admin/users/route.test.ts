@@ -5,12 +5,14 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/permissions', () => ({
-  canAccessOrgAdmin: vi.fn(),
-}))
-
 vi.mock('@/lib/scoped-access', () => ({
   getDefaultOrgId: vi.fn(),
+  getUserScopedRoleAssignments: vi.fn(),
+  canMutateOrgUsers: vi.fn(),
+}))
+
+vi.mock('@/lib/admin/org-role-authority', () => ({
+  validateOrgRoleAssignment: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -20,8 +22,12 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
+import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
@@ -37,7 +43,9 @@ describe('POST /api/admin/users validation', () => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(canAccessOrgAdmin as any).mockReturnValue(true)
+    ;(getUserScopedRoleAssignments as any).mockResolvedValue([])
+    ;(canMutateOrgUsers as any).mockReturnValue(true)
+    ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [] })
   })
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
@@ -46,6 +54,15 @@ describe('POST /api/admin/users validation', () => {
 
     expect(res.status).toBe(400)
     expect(body.code).toBe('VALIDATION_ERROR')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('只有查看权限时拒绝创建用户', async () => {
+    ;(canMutateOrgUsers as any).mockReturnValue(false)
+
+    const res = await POST(malformedJsonRequest())
+
+    expect(res.status).toBe(403)
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 })

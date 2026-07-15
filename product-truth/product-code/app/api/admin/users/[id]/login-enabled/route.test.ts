@@ -5,12 +5,10 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/permissions', () => ({
-  canAccessOrgAdmin: vi.fn(),
-}))
-
 vi.mock('@/lib/scoped-access', () => ({
   getDefaultOrgId: vi.fn(),
+  getUserScopedRoleAssignments: vi.fn(),
+  canMutateOrgUsers: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -20,8 +18,11 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { PATCH } from './route'
 
@@ -36,12 +37,25 @@ function makeRequest(body: unknown): any {
   })
 }
 
+function makeQuery(result: { data?: unknown; error?: unknown }) {
+  const query: any = {}
+  ;['select', 'update', 'delete', 'eq'].forEach((method) => {
+    query[method] = vi.fn().mockReturnValue(query)
+  })
+  query.single = vi.fn().mockResolvedValue(result)
+  query.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
+    Promise.resolve(result).then(resolve, reject)
+  )
+  return query
+}
+
 describe('/api/admin/users/[id]/login-enabled validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(canAccessOrgAdmin as any).mockReturnValue(true)
+    ;(getUserScopedRoleAssignments as any).mockResolvedValue([])
+    ;(canMutateOrgUsers as any).mockReturnValue(true)
   })
 
   it('拒绝非布尔 login_enabled 且不访问数据库', async () => {
@@ -54,5 +68,36 @@ describe('/api/admin/users/[id]/login-enabled validation', () => {
       error: 'login_enabled 必须为布尔值',
     })
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('只有 user:view 时拒绝修改登录状态', async () => {
+    ;(canMutateOrgUsers as any).mockReturnValue(false)
+
+    const res = await PATCH(makeRequest({ login_enabled: false }), routeContext)
+
+    expect(res.status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('禁止登录后撤销该用户全部既有会话', async () => {
+    const lookup = makeQuery({
+      data: { id: '00000000-0000-0000-0000-000000000001', org_id: 'org-1' },
+      error: null,
+    })
+    const update = makeQuery({ data: null, error: null })
+    const revoke = makeQuery({ data: null, error: null })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(lookup)
+      .mockReturnValueOnce(update)
+      .mockReturnValueOnce(revoke)
+
+    const res = await PATCH(makeRequest({ login_enabled: false }), routeContext)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.data.login_enabled).toBe(false)
+    expect(supabaseAdmin.from).toHaveBeenNthCalledWith(3, 'auth_tokens')
+    expect(revoke.delete).toHaveBeenCalled()
+    expect(revoke.eq).toHaveBeenCalledWith('user_id', '00000000-0000-0000-0000-000000000001')
   })
 })

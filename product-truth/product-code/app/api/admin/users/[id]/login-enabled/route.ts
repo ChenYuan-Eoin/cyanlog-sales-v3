@@ -5,8 +5,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 
 const loginEnabledSchema = z.object({
   login_enabled: z.boolean(),
@@ -21,12 +24,9 @@ export async function PATCH(
     const { id } = await params
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
+    const assignments = await getUserScopedRoleAssignments(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    if (!canMutateOrgUsers(assignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -69,6 +69,21 @@ export async function PATCH(
     if (updateError) {
       console.error('Update login_enabled error:', updateError)
       return NextResponse.json({ error: '更新登录状态失败' }, { status: 500 })
+    }
+
+    if (!login_enabled) {
+      const { error: revokeError } = await supabaseAdmin
+        .from('auth_tokens')
+        .delete()
+        .eq('user_id', id)
+
+      if (revokeError) {
+        console.error('Revoke disabled user sessions error:', revokeError)
+        return NextResponse.json(
+          { error: '用户已禁止登录，但会话撤销失败', code: 'SESSION_REVOKE_FAILED' },
+          { status: 500 }
+        )
+      }
     }
 
     return NextResponse.json({

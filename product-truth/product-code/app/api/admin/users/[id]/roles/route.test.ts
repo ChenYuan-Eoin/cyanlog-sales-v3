@@ -5,12 +5,10 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/permissions', () => ({
-  canAccessOrgAdmin: vi.fn(),
-}))
-
 vi.mock('@/lib/scoped-access', () => ({
   getDefaultOrgId: vi.fn(),
+  getUserScopedRoleAssignments: vi.fn(),
+  canMutateOrgUsers: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -23,11 +21,23 @@ vi.mock('@/lib/admin/org-membership', () => ({
   replaceOrgRoleIds: vi.fn(),
 }))
 
+vi.mock('@/lib/admin/org-role-authority', () => ({
+  validateOrgRoleAssignment: vi.fn(),
+  userHasOrgRoleCode: vi.fn(),
+}))
+
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { replaceOrgRoleIds } from '@/lib/admin/org-membership'
+import {
+  userHasOrgRoleCode,
+  validateOrgRoleAssignment,
+} from '@/lib/admin/org-role-authority'
 import { POST } from './route'
 
 const routeContext: any = {
@@ -65,7 +75,10 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(canAccessOrgAdmin as any).mockReturnValue(true)
+    ;(getUserScopedRoleAssignments as any).mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
+    ;(canMutateOrgUsers as any).mockReturnValue(true)
+    ;(userHasOrgRoleCode as any).mockResolvedValue(false)
+    ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [roleId] })
     ;(replaceOrgRoleIds as any).mockResolvedValue([{ role_id: roleId }])
   })
 
@@ -89,13 +102,17 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
   })
 
   it('无组织管理权限时返回 403 且不访问数据库', async () => {
-    ;(canAccessOrgAdmin as any).mockReturnValue(false)
+    ;(canMutateOrgUsers as any).mockReturnValue(false)
 
     const res = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
     const body = await res.json()
 
     expect(res.status).toBe(403)
     expect(body.code).toBe('NO_PERMISSION')
+    expect(canMutateOrgUsers).toHaveBeenCalledWith(
+      [{ scopeType: 'org', scopeId: 'org-1' }],
+      'org-1'
+    )
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
     expect(replaceOrgRoleIds).not.toHaveBeenCalled()
   })
@@ -132,9 +149,57 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(replaceOrgRoleIds).toHaveBeenCalledWith(
       '00000000-0000-0000-0000-000000000001',
       'org-1',
-      [roleId, roleId],
+      [roleId],
       'admin-user'
     )
+  })
+
+  it('禁止操作者修改自己的角色', async () => {
+    ;(requireAuth as any).mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' })
+
+    const res = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('SELF_ROLE_MUTATION_FORBIDDEN')
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
+    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+  })
+
+  it('禁止分配超过操作者权限上限的角色', async () => {
+    const query = makeUserLookupQuery({
+      data: { id: '00000000-0000-0000-0000-000000000001', display_name: '测试用户' },
+      error: null,
+    })
+    ;(supabaseAdmin.from as any).mockReturnValue(query)
+    ;(validateOrgRoleAssignment as any).mockResolvedValue({
+      ok: false,
+      reason: 'ROLE_ESCALATION_FORBIDDEN',
+    })
+
+    const res = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('ROLE_ESCALATION_FORBIDDEN')
+    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+  })
+
+  it('禁止组织接口变更现有平台根管理员', async () => {
+    const query = makeUserLookupQuery({
+      data: { id: '00000000-0000-0000-0000-000000000001', display_name: '根管理员' },
+      error: null,
+    })
+    ;(supabaseAdmin.from as any).mockReturnValue(query)
+    ;(userHasOrgRoleCode as any).mockResolvedValue(true)
+
+    const res = await POST(jsonRequest({ role_ids: [] }), routeContext)
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('PROTECTED_ROLE_MUTATION_FORBIDDEN')
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
+    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
   })
 
   it('角色不存在时返回 400', async () => {
@@ -143,7 +208,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
       error: null,
     })
     ;(supabaseAdmin.from as any).mockReturnValue(query)
-    ;(replaceOrgRoleIds as any).mockRejectedValue(new Error('ROLE_NOT_FOUND'))
+    ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: false, reason: 'ROLE_NOT_FOUND' })
 
     const res = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
     const body = await res.json()

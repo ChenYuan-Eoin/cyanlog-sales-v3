@@ -301,7 +301,7 @@ export async function GET(
     const annotations = (annotationsResult.data || []) as AnnotationRow[]
     const jobs = (jobsResult.data || []) as ContractAnalysisJobRow[]
     const asks = ((asksResult.data || []) as AskTaskRow[])
-      .filter((ask) => canAccessAskByRoles(ask.required_roles, assignments))
+      .filter((ask) => canAccessAskByRoles(ask.required_roles, assignments, orgId))
     const reportVersions = (reportVersionsResult.data || []) as ReportVersionRow[]
     const outputVersions = versions.filter((version) => version.source === 'review_revision')
     const sourceVersions = versions.filter((version) => version.source !== 'review_revision')

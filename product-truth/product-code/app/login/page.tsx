@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { persistClientSession } from '@/lib/session-client'
-import { primeHomeInitialData, primeHomeInitialSnapshot, primeHomeProfile } from '@/lib/home-data-client'
+import {
+  primeHomeAuthContext,
+  primeHomeInitialData,
+  primeHomeInitialSnapshot,
+  primeHomeProfile,
+} from '@/lib/home-data-client'
 import { primeCorePageCaches, scheduleCorePageWarmup } from '@/lib/core-page-warmup'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
@@ -91,8 +96,10 @@ export default function LoginPage() {
         primeHomeProfile(data.token, data.user)
         primeHomeInitialSnapshot(data.token, data.user, data.initialDashboard)
         primeCorePageCaches(data.token, data.initialCore)
-        if (!hasInitialDashboard || !data.authContextReady) {
+        if (!hasInitialDashboard) {
           primeHomeInitialData(data.token)
+        } else if (!data.authContextReady) {
+          primeHomeAuthContext(data.token)
         }
         window.setTimeout(() => {
           scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))

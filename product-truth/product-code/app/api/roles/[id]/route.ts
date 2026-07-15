@@ -1,58 +1,30 @@
 // REQ: F003 自主可控 + RBAC
-// PURPOSE: 角色管理 API - 编辑角色权限
-// 权限要求: config:write
+// PURPOSE: 全局系统角色只读边界
 
 import { NextRequest } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
-import { z } from 'zod'
-import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
-import { hasPermission } from '@/lib/permissions'
-import { errorResponse, successResponse } from '@/lib/api/common'
+import type { AsyncRouteParams } from '@/lib/route-params'
+import { errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
+import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import type { AuthUser } from '@/lib/auth'
+import { userHasOrgConfigAccess } from '@/lib/configs/access'
 
-function canWriteRoles(userPerms: string[]) {
-  return hasPermission(userPerms, 'config:write')
-    || hasPermission(userPerms, 'admin:access')
-}
-
-const patchSchema = z.object({
-  name: z.string().min(1).optional(),
-  description: z.string().optional(),
-  permissions: z.array(z.string()).optional(),
-  sort_order: z.number().int().optional(),
-})
-
-// PATCH /api/roles/[id] - 修改角色（需 config:write 权限）
+// Roles are currently a global dictionary without org ownership. Any tenant-side
+// mutation would affect every organization and could rewrite the caller's own
+// authorization source. Keep the public mutation surface closed until roles are
+// made organization-owned (or moved to a separate platform control plane).
 export async function PATCH(
   req: NextRequest,
-  { params }: AsyncRouteParams
+  _context: AsyncRouteParams
 ) {
-  const userPerms = (req.headers.get('x-user-permissions') ?? '').split(',').filter(Boolean)
-  if (!canWriteRoles(userPerms)) {
-    return errorResponse(createApiError('FORBIDDEN', 'Forbidden'))
-  }
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasOrgConfigAccess(user.id, orgId, 'write')) {
+      return errorResponse(createApiError('FORBIDDEN'))
+    }
 
-  const id = await resolveIdParam(params)
-
-  const body = await req.json().catch(() => null)
-  const parsed = patchSchema.safeParse(body)
-  if (!parsed.success) {
-    return errorResponse(createApiError('VALIDATION_ERROR', 'INVALID_BODY', {
-      reason: parsed.error.issues[0]?.message,
-    }))
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('roles')
-    .update(parsed.data)
-    .eq('id', id)
-    .select()
-    .single()
-
-  if (error) {
-    console.error('Update role error:', error)
-    return errorResponse(createApiError('DB_ERROR', '更新失败'))
-  }
-
-  return successResponse(data)
+    return errorResponse(createApiError(
+      'CONFLICT',
+      '系统角色是全局只读模板；组织级角色模型完成前禁止在线修改。'
+    ))
+  })
 }
