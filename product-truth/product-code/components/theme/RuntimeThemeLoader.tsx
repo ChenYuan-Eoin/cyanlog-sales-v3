@@ -193,6 +193,13 @@ function applyTheme(theme: ReturnType<typeof sanitizeThemeValue>): void {
   }
 }
 
+function themesMatch(
+  left: ReturnType<typeof sanitizeThemeValue>,
+  right: ReturnType<typeof sanitizeThemeValue>,
+) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
 function scheduleBackgroundRefresh(callback: () => void) {
   const idle = window.requestIdleCallback
   if (idle) {
@@ -209,9 +216,6 @@ export function RuntimeThemeLoader({
 }) {
   useEffect(() => {
     let cancelled = false
-    if (initialTheme) {
-      applyTheme(initialTheme)
-    }
 
     async function loadTheme() {
       const token = window.localStorage.getItem('token')
@@ -267,7 +271,7 @@ export function RuntimeThemeLoader({
           const themeConfig = sortedConfigs.find(c => c.status === 'PUBLISHED')
           if (!themeConfig) {
             clearCachedTheme(token)
-            applyTheme(initialTheme || DEFAULT_THEME)
+            if (!initialTheme) applyTheme(DEFAULT_THEME)
             return
           }
           const theme = sanitizeThemeValue(themeConfig?.value)
@@ -276,8 +280,11 @@ export function RuntimeThemeLoader({
             return
           }
 
-          // 应用主题
-          applyTheme(theme)
+          // SSR 已输出当前发布主题时，不在 hydration 窗口重复改写 <html> 与 favicon。
+          // 只有真实主题变化，或没有服务端初始主题时，才应用运行时主题。
+          if (!initialTheme || !themesMatch(theme, initialTheme)) {
+            applyTheme(theme)
+          }
 
           // 更新缓存
           setCachedTheme(theme, token)
@@ -295,7 +302,9 @@ export function RuntimeThemeLoader({
         return
       }
 
-      void refreshTheme()
+      scheduleBackgroundRefresh(() => {
+        void refreshTheme()
+      })
     }
 
     void loadTheme()

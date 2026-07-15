@@ -17,6 +17,13 @@ describe('RuntimeThemeLoader', () => {
   beforeEach(() => {
     localStorage.clear()
     document.head.querySelectorAll('link[rel*="icon"]').forEach((link) => link.remove())
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: (callback: IdleRequestCallback) => {
+        callback({ didTimeout: false, timeRemaining: () => 50 })
+        return 0
+      },
+    })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
   })
 
@@ -56,6 +63,11 @@ describe('RuntimeThemeLoader', () => {
     localStorage.setItem('token', token)
     localStorage.setItem(`runtime_theme_cache:${suffix}`, JSON.stringify({ theme: cachedTheme, token }))
     localStorage.setItem(`runtime_theme_cache_ts:${suffix}`, String(Date.now()))
+
+    // Simulate the server-rendered <html> contract. RuntimeThemeLoader must not
+    // rewrite it during hydration when the published theme is already present.
+    document.documentElement.dataset.brandName = serverTheme.brandName
+    document.documentElement.dataset.faviconUrl = `/brand/ones-symbol-square.svg?brand_favicon=${stableHash('/brand/ones-symbol-square.svg')}`
 
     render(createElement(RuntimeThemeLoader, { initialTheme: serverTheme }))
 

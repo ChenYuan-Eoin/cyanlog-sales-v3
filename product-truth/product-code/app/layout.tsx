@@ -79,6 +79,7 @@ export default async function RootLayout({
       data-brand-name={theme.brandName}
       data-brand-short-name={theme.brandShortName}
       data-logo-url={logoUrl}
+      data-favicon-url={faviconUrl}
       data-product-title={theme.productTitle}
       data-product-subtitle={theme.productSubtitle}
       data-login-subtitle={theme.loginSubtitle}
