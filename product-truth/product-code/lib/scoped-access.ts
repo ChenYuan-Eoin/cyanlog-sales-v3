@@ -262,6 +262,18 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
     .filter((assignment): assignment is ScopedRoleAssignment => Boolean(assignment))
 }
 
+/**
+ * Load role assignments directly from the database for authorization checks
+ * that guard a state-changing operation. Read-oriented callers may use the
+ * short-lived cached variant below, but writes must observe revocations
+ * immediately.
+ */
+export async function getFreshUserScopedRoleAssignments(
+  userId: string
+): Promise<ScopedRoleAssignment[]> {
+  return loadUserScopedRoleAssignments(userId)
+}
+
 export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
   const cached = scopedRoleCache.get(userId)
   if (cached && cached.expiresAt >= Date.now()) {

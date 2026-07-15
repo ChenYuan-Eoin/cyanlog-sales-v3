@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 
 const clauseStanceSchema = z.enum(['required', 'recommended', 'optional', 'risky', 'dangerous'])
@@ -62,6 +63,11 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
+    const canWrite = await userHasFreshOrgConfigAccess(user.id, orgId, 'write')
+
+    if (!canWrite) {
+      return errorResponse('无权管理合同审核资产', 403, 'NO_PERMISSION')
+    }
 
     const parsed = clauseCreateSchema.safeParse(await req.json().catch(() => ({})))
     if (!parsed.success) {

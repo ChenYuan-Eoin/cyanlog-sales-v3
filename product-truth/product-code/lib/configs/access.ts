@@ -1,5 +1,6 @@
 import { hasPermission } from '@/lib/permissions'
 import {
+  getFreshUserScopedRoleAssignments,
   getUserScopedRoleAssignments,
   type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
@@ -74,6 +75,18 @@ export async function userHasOrgConfigAccess(
   requiredAccess: OrgConfigAccess
 ): Promise<boolean> {
   const decision = await getUserOrgConfigAccess(userId, orgId)
+  if (requiredAccess === 'read') return decision.canRead
+  if (requiredAccess === 'write') return decision.canWrite
+  return decision.canPublish
+}
+
+export async function userHasFreshOrgConfigAccess(
+  userId: string,
+  orgId: string,
+  requiredAccess: OrgConfigAccess
+): Promise<boolean> {
+  const assignments = await getFreshUserScopedRoleAssignments(userId)
+  const decision = evaluateOrgConfigAccess(assignments, orgId)
   if (requiredAccess === 'read') return decision.canRead
   if (requiredAccess === 'write') return decision.canWrite
   return decision.canPublish

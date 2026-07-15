@@ -2,22 +2,18 @@
 // PURPOSE: 管理员帮用户重置密码，生成临时密码
 
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
-
-function generateTempPassword(): string {
-  // 12位随机字母数字组合，包含大小写和数字
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < 12; i++) {
-    const randomIndex = Math.floor(Math.random() * chars.length)
-    result += chars[randomIndex]
-  }
-  return result
-}
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
+import {
+  createAdminTempPassword,
+  hashAdminPassword,
+} from '@/lib/admin/org-membership'
+import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 
 // POST /api/admin/users/:id/reset-password - 重置密码
 export async function POST(
@@ -29,48 +25,62 @@ export async function POST(
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    // 写操作必须直读当前组织角色，不接受客户端头也不使用短期缓存。
+    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
+    if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
     // 不能重置自己的密码（安全考虑：应通过"改密"流程）
     if (id === currentUser.id) {
-      return NextResponse.json({ error: '不能通过此接口重置自己的密码，请使用"修改密码"功能' }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: '不能通过此接口重置自己的密码，请使用"修改密码"功能',
+          code: 'SELF_PASSWORD_RESET_FORBIDDEN',
+        },
+        { status: 400 }
+      )
     }
 
-    // 检查用户是否存在
+    // 先锁定当前组织内的目标，避免跨组织 IDOR。
     const { data: existing, error: checkError } = await supabaseAdmin
       .from('users')
       .select('id, display_name, email, org_id')
       .eq('id', id)
       .eq('org_id', orgId)
-      .single()
+      .maybeSingle()
 
-    if (checkError || !existing) {
+    if (checkError) {
+      console.error('Reset password target lookup error:', checkError)
+      return NextResponse.json({ error: '重置密码失败' }, { status: 500 })
+    }
+    if (!existing) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
     }
 
-    // 生成临时密码并哈希
-    const tempPassword = generateTempPassword()
-    const passwordHash = await bcrypt.hash(tempPassword, 12)
+    // 组织侧接口不允许接管平台根管理员。
+    if (await userHasOrgRoleCode(id, orgId, 'SUPER_ADMIN')) {
+      return NextResponse.json(
+        { error: '不允许重置平台根管理员密码', code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN' },
+        { status: 403 }
+      )
+    }
 
-    // 更新用户密码，强制首次登录改密
-    const { error: updateError } = await supabaseAdmin
-      .from('users')
-      .update({
-        password_hash: passwordHash,
-        must_change_password: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('org_id', orgId)
+    const tempPassword = createAdminTempPassword()
+    const passwordHash = await hashAdminPassword(tempPassword)
 
-    if (updateError) {
-      console.error('Reset password error:', updateError)
+    // 密码更新和旧会话撤销必须同一个数据库事务成功。
+    const { data: resetApplied, error: resetError } = await supabaseAdmin.rpc(
+      'reset_org_user_password_and_revoke_sessions_v1',
+      {
+        p_target_user_id: id,
+        p_org_id: orgId,
+        p_password_hash: passwordHash,
+      }
+    )
+
+    if (resetError || resetApplied !== true) {
+      console.error('Reset password transaction error:', resetError || 'target_not_updated')
       return NextResponse.json({ error: '重置密码失败' }, { status: 500 })
     }
 
@@ -78,8 +88,6 @@ export async function POST(
       success: true,
       data: {
         tempPassword,
-        // 注意：实际生产环境应该通过邮件发送，不要把密码返回前端
-        // 这里返回是为了MVP阶段的便利性，后续应移除
         userId: id,
         displayName: existing.display_name,
       },

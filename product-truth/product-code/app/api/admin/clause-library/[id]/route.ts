@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
@@ -30,6 +31,12 @@ export async function PATCH(req: NextRequest, { params }: AsyncRouteParams) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
+    const canWrite = await userHasFreshOrgConfigAccess(user.id, orgId, 'write')
+
+    if (!canWrite) {
+      return errorResponse('无权管理合同审核资产', 403, 'NO_PERMISSION')
+    }
+
     const id = await resolveIdParam(params)
 
     if (!id) return errorResponse('条款ID必填', 400, 'MISSING_ID')
@@ -69,6 +76,8 @@ export async function PATCH(req: NextRequest, { params }: AsyncRouteParams) {
       .from('clause_library')
       .update(update)
       .eq('id', id)
+      .eq('org_id', orgId)
+      .eq('is_system', false)
       .select()
       .single()
 
@@ -84,6 +93,12 @@ export async function DELETE(req: NextRequest, { params }: AsyncRouteParams) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
+    const canWrite = await userHasFreshOrgConfigAccess(user.id, orgId, 'write')
+
+    if (!canWrite) {
+      return errorResponse('无权管理合同审核资产', 403, 'NO_PERMISSION')
+    }
+
     const id = await resolveIdParam(params)
 
     if (!id) return errorResponse('条款ID必填', 400, 'MISSING_ID')
@@ -102,6 +117,8 @@ export async function DELETE(req: NextRequest, { params }: AsyncRouteParams) {
       .from('clause_library')
       .delete()
       .eq('id', id)
+      .eq('org_id', orgId)
+      .eq('is_system', false)
 
     if (error) return errorResponse('删除失败', 500, 'DB_ERROR')
     return NextResponse.json({ success: true })

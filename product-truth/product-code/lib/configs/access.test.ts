@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/scoped-access', () => ({
+  getFreshUserScopedRoleAssignments: vi.fn(),
   getUserScopedRoleAssignments: vi.fn(),
 }))
 
 import {
+  getFreshUserScopedRoleAssignments,
   getUserScopedRoleAssignments,
   type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
 import {
   evaluateOrgConfigAccess,
   getUserOrgConfigAccess,
+  userHasFreshOrgConfigAccess,
   userHasOrgConfigAccess,
 } from './access'
 
+const mockGetFreshUserScopedRoleAssignments = vi.mocked(getFreshUserScopedRoleAssignments)
 const mockGetUserScopedRoleAssignments = vi.mocked(getUserScopedRoleAssignments)
 
 function assignment(
@@ -134,6 +138,17 @@ describe('organization config access', () => {
     await expect(userHasOrgConfigAccess('user-2', 'org-1', 'write')).resolves.toBe(false)
     await expect(userHasOrgConfigAccess('user-2', 'org-1', 'publish')).resolves.toBe(false)
     expect(mockGetUserScopedRoleAssignments).toHaveBeenCalledTimes(3)
+  })
+
+  it('uses an uncached assignment lookup for state-changing access checks', async () => {
+    mockGetFreshUserScopedRoleAssignments.mockResolvedValue([
+      assignment(['config:write']),
+    ])
+
+    await expect(userHasFreshOrgConfigAccess('user-2', 'org-1', 'write')).resolves.toBe(true)
+    expect(mockGetFreshUserScopedRoleAssignments).toHaveBeenCalledOnce()
+    expect(mockGetFreshUserScopedRoleAssignments).toHaveBeenCalledWith('user-2')
+    expect(mockGetUserScopedRoleAssignments).not.toHaveBeenCalled()
   })
 
   it('propagates assignment lookup failures instead of granting access', async () => {
