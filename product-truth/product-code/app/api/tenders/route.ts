@@ -12,11 +12,12 @@ function errorResponse(message: string, status: number, code?: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth(req)
+    const user = await requireAuth(req)
 
     const { data, error } = await supabaseAdmin
       .from('ocr_results')
       .select('id, original_file, key_info, confidence, status, created_at')
+      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
       .limit(50)
 

@@ -2,21 +2,19 @@
 // 标书详情页 - 展示 OCR 解析的结构化结果
 
 import { notFound } from 'next/navigation'
-import { supabaseAdmin } from '@/lib/supabase'
 import { resolveRouteParams } from '@/lib/route-params'
+import { loadOwnedOcrResultForServer } from '@/lib/tenders/owned-ocr-result'
 import type { TenderKeyInfo } from '@/lib/ocr/tender-parser'
 
 interface PageProps {
   params: Promise<{ id: string }>
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function TenderDetailPage({ params }: PageProps) {
   const { id } = await resolveRouteParams(params)
-  const { data: ocrResult, error } = await supabaseAdmin
-    .from('ocr_results')
-    .select('id, original_file, extracted_text, key_info, confidence, status, created_at')
-    .eq('id', id)
-    .single()
+  const { data: ocrResult, error } = await loadOwnedOcrResultForServer(id)
 
   if (error || !ocrResult) {
     notFound()

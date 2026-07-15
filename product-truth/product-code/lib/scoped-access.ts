@@ -21,8 +21,21 @@ type UserRoleRow = {
   role: RoleJoinRow | RoleJoinRow[] | null
 }
 
+type OrgSalesSpaceSummary = SalesSpaceSummary & {
+  org_id: string
+}
+
 type SalesSpaceMemberRow = {
-  space: SalesSpaceSummary | SalesSpaceSummary[] | null
+  space: OrgSalesSpaceSummary | OrgSalesSpaceSummary[] | null
+}
+
+type SalesSpaceIdentity = {
+  id: string
+  org_id: string
+}
+
+type SalesSpaceMembershipRow = {
+  space: SalesSpaceIdentity | SalesSpaceIdentity[] | null
 }
 
 type OrgMembershipRow = {
@@ -44,9 +57,12 @@ type UserSummaryRow = {
 
 type SalesSpaceMemberUserRow = {
   user_id: string
+  space: Pick<SalesSpaceIdentity, 'org_id'> | Array<Pick<SalesSpaceIdentity, 'org_id'>> | null
 }
 
 type SalesSpaceOwnerRow = {
+  id: string
+  org_id: string
   owner_id: string | null
 }
 
@@ -104,6 +120,18 @@ function mergeSpaces(...groups: SalesSpaceSummary[][]): SalesSpaceSummary[] {
   }
 
   return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name, 'zh-Hans-CN'))
+}
+
+function toSalesSpaceSummary(space: OrgSalesSpaceSummary): SalesSpaceSummary {
+  return {
+    id: space.id,
+    name: space.name,
+    description: space.description,
+    department_id: space.department_id,
+    owner_id: space.owner_id,
+    active_opportunities: space.active_opportunities,
+    pending_milestones: space.pending_milestones,
+  }
 }
 
 function uniqueStrings(values: Array<string | null | undefined>): string[] {
@@ -309,8 +337,9 @@ async function loadAccessibleSalesSpaces(userId: string, orgId: string): Promise
     getUserScopedRoleAssignments(userId),
     supabaseAdmin
       .from('sales_space_members')
-      .select('space:sales_spaces(id, name, description, department_id, owner_id, active_opportunities, pending_milestones)')
-      .eq('user_id', userId),
+      .select('space:sales_spaces!inner(id, org_id, name, description, department_id, owner_id, active_opportunities, pending_milestones)')
+      .eq('user_id', userId)
+      .eq('space.org_id', orgId),
   ])
 
   if (memberResult.error) {
@@ -319,7 +348,8 @@ async function loadAccessibleSalesSpaces(userId: string, orgId: string): Promise
 
   const memberSpaces = ((memberResult.data || []) as SalesSpaceMemberRow[])
     .map((row) => unwrapOne(row.space))
-    .filter((space): space is SalesSpaceSummary => Boolean(space))
+    .filter((space): space is OrgSalesSpaceSummary => space?.org_id === orgId)
+    .map(toSalesSpaceSummary)
 
   if (canManageOrg(assignments, orgId)) {
     const { data, error } = await supabaseAdmin
@@ -489,42 +519,58 @@ export async function listAccessibleUserIds(userId: string, orgId?: string): Pro
 
   const memberSpacesResult = await supabaseAdmin
     .from('sales_space_members')
-    .select('space_id')
+    .select('space:sales_spaces!inner(id, org_id)')
     .eq('user_id', userId)
+    .eq('space.org_id', effectiveOrgId)
 
   if (memberSpacesResult.error) {
     throw memberSpacesResult.error
   }
 
-  const spaceIds = uniqueStrings([
+  const memberSpaceIds = ((memberSpacesResult.data || []) as SalesSpaceMembershipRow[])
+    .map((row) => unwrapOne(row.space))
+    .filter((space): space is SalesSpaceIdentity => space?.org_id === effectiveOrgId)
+    .map((space) => space.id)
+
+  const candidateSpaceIds = uniqueStrings([
     ...directSpaceIds,
-    ...((memberSpacesResult.data || []) as Array<{ space_id: string | null }>).map((row) => row.space_id),
+    ...memberSpaceIds,
   ])
 
-  if (spaceIds.length > 0) {
-    const [spaceMembersResult, spaceOwnersResult] = await Promise.all([
-      supabaseAdmin
-        .from('sales_space_members')
-        .select('user_id')
-        .in('space_id', spaceIds),
-      supabaseAdmin
-        .from('sales_spaces')
-        .select('owner_id')
-        .eq('org_id', effectiveOrgId)
-        .in('id', spaceIds),
-    ])
+  if (candidateSpaceIds.length > 0) {
+    const spaceOwnersResult = await supabaseAdmin
+      .from('sales_spaces')
+      .select('id, org_id, owner_id')
+      .eq('org_id', effectiveOrgId)
+      .in('id', candidateSpaceIds)
 
-    if (spaceMembersResult.error) {
-      throw spaceMembersResult.error
-    }
     if (spaceOwnersResult.error) {
       throw spaceOwnersResult.error
     }
 
-    for (const member of (spaceMembersResult.data || []) as SalesSpaceMemberUserRow[]) {
-      userIds.add(member.user_id)
+    const exactOrgSpaces = ((spaceOwnersResult.data || []) as SalesSpaceOwnerRow[])
+      .filter((space) => space.org_id === effectiveOrgId)
+    const exactOrgSpaceIds = exactOrgSpaces.map((space) => space.id)
+
+    if (exactOrgSpaceIds.length > 0) {
+      const spaceMembersResult = await supabaseAdmin
+        .from('sales_space_members')
+        .select('user_id, space:sales_spaces!inner(org_id)')
+        .eq('space.org_id', effectiveOrgId)
+        .in('space_id', exactOrgSpaceIds)
+
+      if (spaceMembersResult.error) {
+        throw spaceMembersResult.error
+      }
+
+      for (const member of (spaceMembersResult.data || []) as SalesSpaceMemberUserRow[]) {
+        if (unwrapOne(member.space)?.org_id === effectiveOrgId) {
+          userIds.add(member.user_id)
+        }
+      }
     }
-    for (const space of (spaceOwnersResult.data || []) as SalesSpaceOwnerRow[]) {
+
+    for (const space of exactOrgSpaces) {
       if (space.owner_id) {
         userIds.add(space.owner_id)
       }

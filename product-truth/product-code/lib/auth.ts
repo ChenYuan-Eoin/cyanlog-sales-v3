@@ -18,7 +18,7 @@ export class AuthError extends Error {
   }
 }
 
-async function fetchAuthUser(token: string): Promise<AuthUser | null> {
+export async function getAuthUserByToken(token: string): Promise<AuthUser | null> {
   const { data: tokenRecord } = await supabaseAdmin
     .from('auth_tokens')
     .select('user_id, expires_at, user:users(id, email, phone, display_name, org_id, status, login_enabled)')
@@ -60,7 +60,7 @@ export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
 
   // Session state must be checked for every request. Cross-instance admin
   // revocation cannot safely invalidate an in-memory token cache.
-  return fetchAuthUser(token)
+  return getAuthUserByToken(token)
 }
 
 export async function requireAuth(req: NextRequest): Promise<AuthUser> {
