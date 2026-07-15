@@ -5,8 +5,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
+import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 
 const reportToSchema = z.object({
   report_to_user_id: z
@@ -25,11 +29,8 @@ export async function PATCH(
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    const assignments = await getFreshUserScopedRoleAssignments(currentUser.id)
+    if (!canMutateOrgUsers(assignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -54,10 +55,21 @@ export async function PATCH(
       .select('id, display_name, org_id')
       .eq('id', id)
       .eq('org_id', orgId)
-      .single()
+      .maybeSingle()
 
-    if (checkError || !existing) {
+    if (checkError) {
+      console.error('Update report-to target lookup error:', checkError)
+      return NextResponse.json({ error: '更新汇报对象失败' }, { status: 500 })
+    }
+    if (!existing) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
+    }
+
+    if (await userHasOrgRoleCode(id, orgId, 'SUPER_ADMIN')) {
+      return NextResponse.json(
+        { error: '不允许修改平台根管理员的汇报关系', code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN' },
+        { status: 403 }
+      )
     }
 
     // 如果指定了汇报对象，验证其存在性
@@ -67,7 +79,7 @@ export async function PATCH(
         .select('id')
         .eq('id', report_to_user_id)
         .eq('org_id', orgId)
-        .single()
+        .maybeSingle()
 
       if (reportToError || !reportToUser) {
         return NextResponse.json({ error: '汇报对象不存在' }, { status: 400 })

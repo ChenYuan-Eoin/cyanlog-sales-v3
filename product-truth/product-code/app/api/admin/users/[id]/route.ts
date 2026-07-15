@@ -5,13 +5,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canMutateOrgUsers,
+  getDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
   syncPrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
+import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 
 const updateUserSchema = z.object({
   display_name: z.string().trim().min(1, '姓名不能为空').optional(),
@@ -32,11 +36,8 @@ export async function PATCH(
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
+    if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -50,17 +51,81 @@ export async function PATCH(
     }
 
     const { display_name, title, primary_dept_id, status, login_enabled, report_to_user_id } = parseResult.data
+    const hasAccountStateMutation = status !== undefined || login_enabled !== undefined
+    const hasProfileMutation = display_name !== undefined
+      || title !== undefined
+      || primary_dept_id !== undefined
+      || report_to_user_id !== undefined
 
-    // 检查用户是否存在
+    if (!hasAccountStateMutation && !hasProfileMutation) {
+      return NextResponse.json(
+        { error: '未提供可更新的用户字段', code: 'NO_UPDATES' },
+        { status: 400 }
+      )
+    }
+
+    if (hasAccountStateMutation && id === currentUser.id) {
+      return NextResponse.json(
+        { error: '不能通过管理接口修改自己的账户状态', code: 'SELF_ACCOUNT_STATE_MUTATION_FORBIDDEN' },
+        { status: 400 }
+      )
+    }
+
+    // 账户状态需要和会话撤销保持原子性，不与普通资料更新混在同一请求。
+    if (hasAccountStateMutation && hasProfileMutation) {
+      return NextResponse.json(
+        { error: '账户状态与用户资料请分开更新', code: 'MIXED_ACCOUNT_STATE_UPDATE' },
+        { status: 400 }
+      )
+    }
+
     const { data: existing, error: checkError } = await supabaseAdmin
       .from('users')
-      .select('id, email')
+      .select('id, email, display_name, status, login_enabled')
       .eq('id', id)
       .eq('org_id', orgId)
-      .single()
+      .maybeSingle()
 
-    if (checkError || !existing) {
+    if (checkError) {
+      console.error('Update user target lookup error:', checkError)
+      return NextResponse.json({ error: '更新用户失败' }, { status: 500 })
+    }
+    if (!existing) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
+    }
+
+    if (await userHasOrgRoleCode(id, orgId, 'SUPER_ADMIN')) {
+      return NextResponse.json(
+        { error: '不允许修改平台根管理员', code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN' },
+        { status: 403 }
+      )
+    }
+
+    if (hasAccountStateMutation) {
+      const { data: stateUpdated, error: stateError } = await supabaseAdmin.rpc(
+        'set_org_user_account_state_and_revoke_sessions_v1',
+        {
+          p_target_user_id: id,
+          p_org_id: orgId,
+          p_status: status ?? null,
+          p_login_enabled: login_enabled ?? null,
+        }
+      )
+
+      if (stateError || stateUpdated !== true) {
+        console.error('Update user account state transaction error:', stateError || 'target_not_updated')
+        return NextResponse.json({ error: '更新用户状态失败' }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          ...existing,
+          status: status ?? existing.status,
+          login_enabled: login_enabled ?? existing.login_enabled,
+        },
+        message: '用户状态更新成功',
+      })
     }
 
     if (primary_dept_id) {
@@ -71,6 +136,13 @@ export async function PATCH(
     }
 
     if (report_to_user_id) {
+      if (report_to_user_id === id) {
+        return NextResponse.json(
+          { error: '不能将自己设为自己的汇报对象', code: 'INVALID_REPORT_TO_USER' },
+          { status: 400 }
+        )
+      }
+
       const { data: manager } = await supabaseAdmin
         .from('users')
         .select('id')
@@ -88,8 +160,6 @@ export async function PATCH(
     if (display_name !== undefined) updateData.display_name = display_name
     if (title !== undefined) updateData.title = title
     if (primary_dept_id !== undefined) updateData.primary_dept_id = primary_dept_id
-    if (status !== undefined) updateData.status = status
-    if (login_enabled !== undefined) updateData.login_enabled = login_enabled
     if (report_to_user_id !== undefined) updateData.report_to_user_id = report_to_user_id || null
 
     const { data, error } = await supabaseAdmin
@@ -139,11 +209,8 @@ export async function DELETE(
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
 
-    // 权限检查
-    const userPerms = req.headers.get('x-user-permissions')?.split(',') || []
-    const roleCodes = req.headers.get('x-user-role-codes')?.split(',') || []
-
-    if (!canAccessOrgAdmin(userPerms, roleCodes)) {
+    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
+    if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -158,20 +225,35 @@ export async function DELETE(
       .select('id, display_name')
       .eq('id', id)
       .eq('org_id', orgId)
-      .single()
+      .maybeSingle()
 
-    if (checkError || !existing) {
+    if (checkError) {
+      console.error('Delete user target lookup error:', checkError)
+      return NextResponse.json({ error: '删除用户失败' }, { status: 500 })
+    }
+    if (!existing) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
     }
 
-    // 软删除：将状态改为 inactive
-    const { error } = await supabaseAdmin
-      .from('users')
-      .update({ status: 'inactive' })
-      .eq('id', id)
-      .eq('org_id', orgId)
+    if (await userHasOrgRoleCode(id, orgId, 'SUPER_ADMIN')) {
+      return NextResponse.json(
+        { error: '不允许删除平台根管理员', code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN' },
+        { status: 403 }
+      )
+    }
 
-    if (error) {
+    // 软删除与禁止登录、撤销会话在同一数据库事务内完成。
+    const { data: deleted, error } = await supabaseAdmin.rpc(
+      'set_org_user_account_state_and_revoke_sessions_v1',
+      {
+        p_target_user_id: id,
+        p_org_id: orgId,
+        p_status: 'inactive',
+        p_login_enabled: false,
+      }
+    )
+
+    if (error || deleted !== true) {
       console.error('Delete user error:', error)
       return NextResponse.json({ error: '删除用户失败' }, { status: 500 })
     }

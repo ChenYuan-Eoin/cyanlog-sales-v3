@@ -8,8 +8,9 @@ import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgUsers,
   getDefaultOrgId,
-  getUserScopedRoleAssignments,
+  getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
+import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 
 const loginEnabledSchema = z.object({
   login_enabled: z.boolean(),
@@ -24,7 +25,7 @@ export async function PATCH(
     const { id } = await params
     const currentUser = await requireAuth(req)
     const orgId = await getDefaultOrgId(currentUser.id)
-    const assignments = await getUserScopedRoleAssignments(currentUser.id)
+    const assignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
     if (!canMutateOrgUsers(assignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
@@ -50,40 +51,37 @@ export async function PATCH(
       .select('id, display_name, org_id')
       .eq('id', id)
       .eq('org_id', orgId)
-      .single()
+      .maybeSingle()
 
-    if (checkError || !existing) {
+    if (checkError) {
+      console.error('Update login_enabled target lookup error:', checkError)
+      return NextResponse.json({ error: '更新登录状态失败' }, { status: 500 })
+    }
+    if (!existing) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
     }
 
-    // 更新登录状态
-    const { error: updateError } = await supabaseAdmin
-      .from('users')
-      .update({
-        login_enabled: login_enabled,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('org_id', orgId)
-
-    if (updateError) {
-      console.error('Update login_enabled error:', updateError)
-      return NextResponse.json({ error: '更新登录状态失败' }, { status: 500 })
+    if (await userHasOrgRoleCode(id, orgId, 'SUPER_ADMIN')) {
+      return NextResponse.json(
+        { error: '不允许修改平台根管理员的登录状态', code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN' },
+        { status: 403 }
+      )
     }
 
-    if (!login_enabled) {
-      const { error: revokeError } = await supabaseAdmin
-        .from('auth_tokens')
-        .delete()
-        .eq('user_id', id)
-
-      if (revokeError) {
-        console.error('Revoke disabled user sessions error:', revokeError)
-        return NextResponse.json(
-          { error: '用户已禁止登录，但会话撤销失败', code: 'SESSION_REVOKE_FAILED' },
-          { status: 500 }
-        )
+    // 任何登录状态变更都撤销旧会话，避免重新启用后历史 token 复活。
+    const { data: stateUpdated, error: updateError } = await supabaseAdmin.rpc(
+      'set_org_user_account_state_and_revoke_sessions_v1',
+      {
+        p_target_user_id: id,
+        p_org_id: orgId,
+        p_status: null,
+        p_login_enabled: login_enabled,
       }
+    )
+
+    if (updateError || stateUpdated !== true) {
+      console.error('Update login_enabled transaction error:', updateError || 'target_not_updated')
+      return NextResponse.json({ error: '更新登录状态失败' }, { status: 500 })
     }
 
     return NextResponse.json({
