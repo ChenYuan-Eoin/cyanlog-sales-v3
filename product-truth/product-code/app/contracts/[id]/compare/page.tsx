@@ -873,7 +873,7 @@ export default function ContractComparePage() {
               <GitCompareIcon className="h-5 w-5 text-indigo-500" />
               差异列表
             </h2>
-            <Button type="button" variant="ghost" className="h-11 w-11 p-0" aria-label="关闭差异列表" onClick={() => setActiveDrawer(null)}>
+            <Button type="button" variant="ghost" className="h-12 w-12 p-0" aria-label="关闭差异列表" onClick={() => setActiveDrawer(null)}>
               <XIcon className="h-5 w-5" />
             </Button>
           </div>
@@ -1029,11 +1029,11 @@ export default function ContractComparePage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => setActiveDrawer('diffs')}>
+            <Button type="button" size="sm" variant="outline" className="min-h-12" onClick={() => setActiveDrawer('diffs')}>
               <ListFilterIcon className="mr-1.5 h-4 w-4" />
               差异列表
             </Button>
-            <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => setActiveDrawer('details')}>
+            <Button type="button" size="sm" variant="outline" className="min-h-12" onClick={() => setActiveDrawer('details')}>
               <PanelRightIcon className="mr-1.5 h-4 w-4" />
               复核详情
             </Button>
@@ -1044,7 +1044,7 @@ export default function ContractComparePage() {
                 variant="ghost"
                 disabled={selectedVisibleIndex <= 0}
                 onClick={() => goToVisibleDiff(-1)}
-                className="h-11 w-11 p-0"
+                className="h-12 w-12 p-0"
                 aria-label="上一处差异"
               >
                 <ChevronLeftIcon className="h-4 w-4" />
@@ -1058,7 +1058,7 @@ export default function ContractComparePage() {
                 variant="ghost"
                 disabled={selectedVisibleIndex < 0 || selectedVisibleIndex >= visibleDiffs.length - 1}
                 onClick={() => goToVisibleDiff(1)}
-                className="h-11 w-11 p-0"
+                className="h-12 w-12 p-0"
                 aria-label="下一处差异"
               >
                 <ChevronRightIcon className="h-4 w-4" />
@@ -1069,7 +1069,7 @@ export default function ContractComparePage() {
                 type="button"
                 onClick={() => setViewMode('dual')}
                 aria-pressed={viewMode === 'dual'}
-                className={`min-h-11 touch-manipulation rounded-md px-3 text-xs font-medium transition-colors ${
+                className={`min-h-12 touch-manipulation rounded-md px-3 text-xs font-medium transition-colors ${
                   viewMode === 'dual'
                     ? 'bg-white text-indigo-600 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1081,7 +1081,7 @@ export default function ContractComparePage() {
                 type="button"
                 onClick={() => setViewMode('merge')}
                 aria-pressed={viewMode === 'merge'}
-                className={`min-h-11 touch-manipulation rounded-md px-3 text-xs font-medium transition-colors ${
+                className={`min-h-12 touch-manipulation rounded-md px-3 text-xs font-medium transition-colors ${
                   viewMode === 'merge'
                     ? 'bg-white text-indigo-600 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1095,7 +1095,7 @@ export default function ContractComparePage() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-11 w-11 p-0"
+                className="h-12 w-12 p-0"
                 aria-label="缩小文档"
                 disabled={viewMode !== 'dual' || !canControlLinkedZoom}
                 onClick={() => {
@@ -1112,7 +1112,7 @@ export default function ContractComparePage() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-11 w-11 p-0"
+                className="h-12 w-12 p-0"
                 aria-label="放大文档"
                 disabled={viewMode !== 'dual' || !canControlLinkedZoom}
                 onClick={() => {
@@ -1126,7 +1126,7 @@ export default function ContractComparePage() {
                 type="button"
                 size="sm"
                 variant={zoomMode === 'fit-width' ? 'default' : 'ghost'}
-                className="h-11 px-2.5"
+                className="h-12 px-2.5"
                 disabled={viewMode !== 'dual' || !canControlLinkedZoom}
                 onClick={() => setZoomMode('fit-width')}
               >
@@ -1138,7 +1138,7 @@ export default function ContractComparePage() {
               type="button"
               size="sm"
               variant={syncScroll && canSynchronizeViewers ? 'default' : 'outline'}
-              className="min-h-11"
+              className="min-h-12"
               disabled={viewMode !== 'dual' || !canSynchronizeViewers}
               title={!canSynchronizeViewers ? 'PDF 内嵌或预览未就绪时不能由应用同步滚动' : undefined}
               onClick={() => setSyncScroll((current) => !current)}
@@ -1256,7 +1256,7 @@ export default function ContractComparePage() {
               <div className="text-xs font-medium text-slate-500">复核详情</div>
               <h2 className="mt-1 text-base font-semibold text-slate-950">AI 差异披露与合规建议</h2>
             </div>
-            <Button type="button" variant="ghost" className="h-11 w-11 p-0" aria-label="关闭复核详情" onClick={() => setActiveDrawer(null)}>
+            <Button type="button" variant="ghost" className="h-12 w-12 p-0" aria-label="关闭复核详情" onClick={() => setActiveDrawer(null)}>
               <XIcon className="h-5 w-5" />
             </Button>
           </div>

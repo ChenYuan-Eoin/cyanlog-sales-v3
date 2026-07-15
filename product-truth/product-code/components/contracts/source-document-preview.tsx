@@ -414,7 +414,7 @@ export function SourceDocumentPreview({
             target="_blank"
             rel="noreferrer"
             aria-label={`在新窗口打开原件：${file?.label || fallbackLabel}`}
-            className="inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-[0.8rem] font-medium text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="inline-flex min-h-12 shrink-0 touch-manipulation items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-[0.8rem] font-medium text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <ExternalLinkIcon className="h-3.5 w-3.5" />
             打开原件
