@@ -262,6 +262,30 @@ function normalizeModelPolicy(row: ModelPolicyRow): ContractModelPolicy {
   }
 }
 
+export async function getCurrentPublishedModelPolicy(orgId: string) {
+  return fetchCurrentModelPolicy(orgId)
+}
+
+export function validatePublishedModelPolicy(
+  policy: ContractModelPolicy | null,
+  providers: PublishedAIProviderConfig[]
+): { ok: true } | { ok: false; reasons: string[] } {
+  const reasons: string[] = []
+  if (!policy) reasons.push('没有当前已发布模型策略')
+  if (policy && !isCompleteModelPolicy(policy)) reasons.push('当前模型策略缺少完整审计/路由字段')
+  const expectedIds = new Set(providers.map((provider) => provider.config_id))
+  const actualIds = policy?.source_config_ids || []
+  if (actualIds.some((id) => !expectedIds.has(id))) reasons.push('策略引用了非 provider 配置')
+  if (new Set(actualIds).size !== actualIds.length) reasons.push('策略 provider source_config_ids 重复')
+  if (policy?.provider_chain.some((provider) => !provider.model || provider.model === 'unknown')) {
+    reasons.push('策略包含 unknown 或空模型')
+  }
+  if (policy && !isModelPolicyCurrentForPublishedProviders(policy, providers)) {
+    reasons.push('策略与当前已发布 provider 配置不一致')
+  }
+  return reasons.length ? { ok: false, reasons } : { ok: true }
+}
+
 function buildProviderChain(providers: PublishedAIProviderConfig[]): ModelPolicyProvider[] {
   const chain = providers.map(normalizeProvider)
   return ensureRuleEngineProvider(chain)

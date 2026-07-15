@@ -186,9 +186,23 @@ function normalizeAIConfig(row: ConfigRow): PublishedAIProviderConfig {
   }
 }
 
+/** Only provider records may enter the runtime provider chain. */
+export function isPublishedAIProviderValue(value: JsonRecord): boolean {
+  if (value.kind === 'application' || value.kind === 'tool_policy') return false
+  if (value.kind === 'provider') return true
+  // Legacy rows without kind are accepted only when they have a real model
+  // and provider signature; application/policy rows must never become models.
+  return typeof value.model === 'string'
+    && value.model.trim().length > 0
+    && (typeof value.base_url === 'string'
+      || typeof value.provider_kind === 'string'
+      || typeof value.profile === 'string')
+}
+
 export async function listPublishedAIProviders(orgId: string): Promise<PublishedAIProviderConfig[]> {
   const configs = await listPublishedConfigsByType('AI_CONFIG', orgId)
   return configs
+    .filter((row) => isPublishedAIProviderValue(row.value || {}))
     .map(normalizeAIConfig)
     .filter((config) => config.enabled)
     .sort((left, right) => (

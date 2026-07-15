@@ -6,7 +6,10 @@ import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import { successResponse, errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { listPublishedAIProviders } from '@/lib/configs/runtime'
-import { resolvePublishedModelPolicy } from '@/lib/contracts/model-policy'
+import {
+  getCurrentPublishedModelPolicy,
+  validatePublishedModelPolicy,
+} from '@/lib/contracts/model-policy'
 import { supabaseAdmin } from '@/lib/supabase'
 import type { AuthUser } from '@/lib/auth'
 import type { PublishedAIProviderConfig } from '@/lib/configs/runtime'
@@ -85,8 +88,16 @@ async function latestInvocationRowsByPhase(orgId: string, phase: string) {
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     try {
-      const policy = await resolvePublishedModelPolicy(orgId, user.id)
       const providerConfigs = await listPublishedAIProviders(orgId)
+      const policy = await getCurrentPublishedModelPolicy(orgId)
+      const validation = validatePublishedModelPolicy(policy, providerConfigs)
+      if (!policy || !validation.ok) {
+        return errorResponse(createApiError(
+          'CONFLICT',
+          'AI 运行时策略已阻断：当前发布策略不可安全消费，请先显式修复并发布。',
+          { reasons: validation.ok ? ['没有当前已发布模型策略'] : validation.reasons },
+        ))
+      }
       const providerConfigById = new Map(providerConfigs.map((config) => [config.config_id, config]))
       const latestInvocationRows = await latestInvocationRowsByPhase(orgId, 'semantic_review')
       const latestTenderInvocationRows = await latestInvocationRowsByPhase(orgId, 'tender_long_document_parse')
