@@ -1,11 +1,16 @@
 // REQ: F003 自主可控 + RBAC
 // PURPOSE: 飞书组织架构同步
-// 权限要求: 组织管理员（SUPER_ADMIN / SALES_OPS / ADMIN 或拥有 admin:access/org:write 权限）
+// 权限要求: 当前组织用户写 + 部门写权限
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments } from '@/lib/scoped-access'
+import {
+  canMutateOrgDepartments,
+  canMutateOrgUsers,
+  getFreshDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
+} from '@/lib/scoped-access'
 import {
   ensureDefaultOrganizationMembership,
   syncPrimaryDepartmentMembership,
@@ -65,7 +70,7 @@ type SyncWarning = {
 
 const FEISHU_CONNECTOR = 'feishu'
 const FEISHU_SYNC_SCOPE = 'departments_and_members'
-const FEISHU_CONFIG_HINT = '请在 Vercel Production/Preview 环境变量和本地 .env.local 配置 FEISHU_APP_ID、FEISHU_APP_SECRET 后重新部署；飞书应用需要通讯录部门读取和成员读取权限。'
+const FEISHU_CONFIG_HINT = '请在 Vercel Production/Preview 环境变量和本地 .env.local 配置 FEISHU_APP_ID、FEISHU_APP_SECRET、FEISHU_ORG_ID 后重新部署；飞书应用需要通讯录部门读取和成员读取权限。'
 
 function externalDepartmentId(department: FeishuDepartment) {
   return department.department_id || department.open_department_id || ''
@@ -91,6 +96,13 @@ function normalizeEmail(email: string | undefined) {
 function normalizePhone(phone: string | undefined) {
   const trimmed = phone?.replace(/\s+/g, '').trim()
   return trimmed || null
+}
+
+function roleCodeOf(value: unknown): string | null {
+  const role = Array.isArray(value) ? value[0] : value
+  if (!role || typeof role !== 'object') return null
+  const code = (role as { code?: unknown }).code
+  return typeof code === 'string' ? code : null
 }
 
 async function getTenantAccessToken(appId: string, appSecret: string) {
@@ -426,12 +438,30 @@ async function loadExistingUsers(orgId: string) {
   return { byEmployeeId, byEmail, byPhone }
 }
 
+async function loadProtectedSuperAdminUserIds(orgId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('user_roles')
+    .select('user_id, role:roles(code)')
+    .eq('scope_type', 'org')
+    .eq('scope_id', orgId)
+
+  if (error) {
+    throw new Error('读取受保护根管理员失败')
+  }
+
+  return new Set((data || [])
+    .filter((row) => roleCodeOf(row.role) === 'SUPER_ADMIN')
+    .map((row) => row.user_id as string)
+    .filter(Boolean))
+}
+
 async function syncUsersToDatabase(
   orgId: string,
   users: FeishuUserWithSource[],
   syncedDepartments: Map<string, SyncedDepartment>
 ) {
   const existing = await loadExistingUsers(orgId)
+  const protectedSuperAdminUserIds = await loadProtectedSuperAdminUserIds(orgId)
   let imported = 0
   let updated = 0
   let skipped = 0
@@ -458,14 +488,19 @@ async function syncUsersToDatabase(
       || (email ? existing.byEmail.get(email) : null)
       || (phone ? existing.byPhone.get(phone) : null)
       || null
+
+    if (matched && protectedSuperAdminUserIds.has(matched.id)) {
+      skipped += 1
+      continue
+    }
+
     const primaryDeptId = departmentIds[0]
     const avatarUrl = feishuUser.avatar?.avatar_72 || feishuUser.avatar?.avatar_url || null
-    const payload = {
+    const profilePayload = {
       org_id: orgId,
       employee_id: externalId,
       display_name: userDisplayName(feishuUser),
       primary_dept_id: primaryDeptId,
-      status: 'active',
       updated_at: new Date().toISOString(),
       ...(email ? { email } : {}),
       ...(phone ? { phone } : {}),
@@ -477,7 +512,7 @@ async function syncUsersToDatabase(
     if (userId) {
       const { error } = await supabaseAdmin
         .from('users')
-        .update(payload)
+        .update(profilePayload)
         .eq('id', userId)
         .eq('org_id', orgId)
       if (error) {
@@ -487,7 +522,10 @@ async function syncUsersToDatabase(
     } else {
       const { data, error } = await supabaseAdmin
         .from('users')
-        .insert(payload)
+        .insert({
+          ...profilePayload,
+          status: 'active',
+        })
         .select('id')
         .single()
       if (error || !data?.id) {
@@ -503,7 +541,7 @@ async function syncUsersToDatabase(
 
     const syncedUserId = userId
     await ensureDefaultOrganizationMembership(syncedUserId, orgId)
-    await syncPrimaryDepartmentMembership(syncedUserId, primaryDeptId)
+    await syncPrimaryDepartmentMembership(syncedUserId, primaryDeptId, orgId)
     await syncUserSalesSpaces(syncedUserId, orgId, primaryDeptId)
 
     const extraDepartmentRows = departmentIds
@@ -547,22 +585,26 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const orgId = await getDefaultOrgId(user.id)
-  const assignments = await getUserScopedRoleAssignments(user.id)
+  const orgId = await getFreshDefaultOrgId(user.id)
+  const assignments = await getFreshUserScopedRoleAssignments(user.id)
+  const canWriteUsers = canMutateOrgUsers(assignments, orgId)
+  const canWriteDepartments = canMutateOrgDepartments(assignments, orgId)
 
-  if (!canManageOrg(assignments, orgId)) {
+  if (!canWriteUsers || !canWriteDepartments) {
     return NextResponse.json(
-      { code: 'FORBIDDEN', error: '需要组织管理员权限' },
+      { code: 'FORBIDDEN', error: '需要当前组织的用户写和部门写权限' },
       { status: 403 }
     )
   }
 
   const appId = process.env.FEISHU_APP_ID
   const appSecret = process.env.FEISHU_APP_SECRET
-  if (!appId || !appSecret) {
+  const configuredOrgId = process.env.FEISHU_ORG_ID
+  if (!appId || !appSecret || !configuredOrgId) {
     const missing = [
       !appId ? 'FEISHU_APP_ID' : null,
       !appSecret ? 'FEISHU_APP_SECRET' : null,
+      !configuredOrgId ? 'FEISHU_ORG_ID' : null,
     ].filter(Boolean)
 
     return NextResponse.json(
@@ -578,11 +620,44 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  if (configuredOrgId !== orgId) {
+    return NextResponse.json(
+      {
+        code: 'FEISHU_ORG_MISMATCH',
+        connector: FEISHU_CONNECTOR,
+        scope: FEISHU_SYNC_SCOPE,
+        error: '飞书连接器未绑定当前组织',
+        hint: FEISHU_CONFIG_HINT,
+      },
+      { status: 503 }
+    )
+  }
+
+  let token: string
+  let departmentResult: Awaited<ReturnType<typeof fetchFeishuDepartments>>
+  let departmentWrite: Awaited<ReturnType<typeof syncDepartmentsToDatabase>>
+
   try {
-    const token = await getTenantAccessToken(appId, appSecret)
-    const departmentResult = await fetchFeishuDepartments(token)
-    const departmentWrite = await syncDepartmentsToDatabase(orgId, departmentResult.departments)
-    const userResult = await fetchFeishuUsers(token, departmentResult.departments)
+    token = await getTenantAccessToken(appId, appSecret)
+    departmentResult = await fetchFeishuDepartments(token)
+    departmentWrite = await syncDepartmentsToDatabase(orgId, departmentResult.departments)
+  } catch (error) {
+    console.error('[FeishuSync] department phase failed:', error)
+    return NextResponse.json(
+      {
+        code: 'FEISHU_SYNC_FAILED',
+        connector: FEISHU_CONNECTOR,
+        scope: FEISHU_SYNC_SCOPE,
+        error: error instanceof Error ? error.message : '飞书同步失败',
+        hint: '请确认飞书应用已开通通讯录读取权限，并在 Vercel 函数日志中查看上游返回。',
+      },
+      { status: 502 }
+    )
+  }
+
+  let userResult: Awaited<ReturnType<typeof fetchFeishuUsers>> | null = null
+  try {
+    userResult = await fetchFeishuUsers(token, departmentResult.departments)
     const userWrite = await syncUsersToDatabase(orgId, userResult.users, departmentWrite.synced)
     const warnings = [...departmentResult.warnings, ...userResult.warnings]
     if (departmentResult.departments.length === 0) {
@@ -622,16 +697,46 @@ export async function POST(req: NextRequest) {
           : '飞书组织架构同步完成',
     })
   } catch (error) {
-    console.error('[FeishuSync] sync failed:', error)
+    const errorMessage = error instanceof Error ? error.message : '成员数据库写入失败'
+    const failedAt = userResult === null ? 'upstream_fetch' : 'database_write'
+    const warnings: SyncWarning[] = [
+      ...departmentResult.warnings,
+      ...(userResult?.warnings || []),
+      {
+        scope: 'members',
+        sourceId: failedAt,
+        message: errorMessage,
+      },
+    ]
+    const departmentFailed = departmentResult.warnings
+      .filter((warning) => warning.scope === 'departments').length
+
+    console.error('[FeishuSync] member phase failed after department commit:', error)
     return NextResponse.json(
       {
-        code: 'FEISHU_SYNC_FAILED',
+        success: false,
+        code: 'FEISHU_MEMBER_SYNC_PARTIAL',
         connector: FEISHU_CONNECTOR,
         scope: FEISHU_SYNC_SCOPE,
-        error: error instanceof Error ? error.message : '飞书同步失败',
-        hint: '请确认飞书应用已开通通讯录读取权限，并在 Vercel 函数日志中查看上游返回。',
+        sync_status: 'partial',
+        departments: {
+          imported: departmentWrite.imported,
+          updated: departmentWrite.updated,
+          failed: departmentFailed,
+          total: departmentResult.departments.length,
+        },
+        members: {
+          status: 'unknown',
+          completed: false,
+          candidate_count: userResult?.users.length ?? 0,
+          failed: 1,
+          failed_at: failedAt,
+        },
+        warnings,
+        error: errorMessage,
+        message: '飞书部门已提交，成员同步未完成',
       },
-      { status: 502 }
+      { status: 200 }
     )
   }
 }

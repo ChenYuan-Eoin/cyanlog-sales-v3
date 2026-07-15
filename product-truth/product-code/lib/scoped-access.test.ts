@@ -1,15 +1,44 @@
-import { describe, expect, it } from 'vitest'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/supabase', () => ({
+  supabaseAdmin: {
+    from: vi.fn(),
+  },
+}))
 
 import {
   canManageOrg,
   canMutateOrgDepartments,
   canMutateOrgUsers,
   canReviewContracts,
+  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getOrgPermissions,
   getOrgRoleCodes,
   getOrgScopedAssignments,
   type ScopedRoleAssignment,
 } from './scoped-access'
+import { supabaseAdmin } from '@/lib/supabase'
+
+function makeDefaultOrgQuery(result: unknown | Promise<unknown>) {
+  const query: any = {}
+  ;['select', 'eq'].forEach((method) => {
+    query[method] = vi.fn().mockReturnValue(query)
+  })
+  query.maybeSingle = vi.fn().mockReturnValue(Promise.resolve(result))
+  return query
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
 
 function assignment(
   scopeId: string | null,
@@ -107,5 +136,40 @@ describe('exact organization role scope', () => {
         scopeType: 'space',
       },
     ], 'org-a')).toBe(false)
+  })
+})
+
+describe('fresh default organization lookup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('绕过已有旧缓存并让后续 cached getter 读取 fresh 结果', async () => {
+    const oldQuery = makeDefaultOrgQuery({ data: { org_id: 'org-old' }, error: null })
+    const freshQuery = makeDefaultOrgQuery({ data: { org_id: 'org-new' }, error: null })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(oldQuery)
+      .mockReturnValueOnce(freshQuery)
+
+    await expect(getDefaultOrgId('fresh-user-1')).resolves.toBe('org-old')
+    await expect(getFreshDefaultOrgId('fresh-user-1')).resolves.toBe('org-new')
+    await expect(getDefaultOrgId('fresh-user-1')).resolves.toBe('org-new')
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+
+  it('较旧的并发 cached lookup 完成后不能覆盖 fresh 组织', async () => {
+    const oldResult = deferred<{ data: { org_id: string }; error: null }>()
+    const oldQuery = makeDefaultOrgQuery(oldResult.promise)
+    const freshQuery = makeDefaultOrgQuery({ data: { org_id: 'org-new' }, error: null })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(oldQuery)
+      .mockReturnValueOnce(freshQuery)
+
+    const oldLookup = getDefaultOrgId('fresh-user-race')
+    await expect(getFreshDefaultOrgId('fresh-user-race')).resolves.toBe('org-new')
+    oldResult.resolve({ data: { org_id: 'org-old' }, error: null })
+    await expect(oldLookup).resolves.toBe('org-old')
+    await expect(getDefaultOrgId('fresh-user-race')).resolves.toBe('org-new')
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
   })
 })

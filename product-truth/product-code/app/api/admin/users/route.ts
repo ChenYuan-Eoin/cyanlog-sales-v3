@@ -6,9 +6,11 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
+  canMutateOrgDepartments,
   canMutateOrgUsers,
   getDefaultOrgId,
-  getUserScopedRoleAssignments,
+  getFreshDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
@@ -95,8 +97,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
-    const actorAssignments = await getUserScopedRoleAssignments(currentUser.id)
+    const orgId = await getFreshDefaultOrgId(currentUser.id)
+    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
     if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
@@ -112,6 +114,11 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, display_name, title, primary_dept_id, role_ids, status } = parseResult.data
+
+    if (primary_dept_id && !canMutateOrgDepartments(actorAssignments, orgId)) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_DEPARTMENT_PERMISSION' }, { status: 403 })
+    }
+
     const roleValidation = await validateOrgRoleAssignment(actorAssignments, orgId, role_ids)
     if (!roleValidation.ok && roleValidation.reason === 'ROLE_NOT_FOUND') {
       return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
@@ -168,12 +175,14 @@ export async function POST(req: NextRequest) {
 
     try {
       await ensureDefaultOrganizationMembership(user.id, orgId)
-      await syncPrimaryDepartmentMembership(user.id, primary_dept_id || null)
-      await syncUserSalesSpaces(user.id, orgId, primary_dept_id || null)
+      if (primary_dept_id) {
+        await syncPrimaryDepartmentMembership(user.id, primary_dept_id, orgId)
+        await syncUserSalesSpaces(user.id, orgId, primary_dept_id)
+      }
       await replaceOrgRoleIds(user.id, orgId, roleValidation.roleIds, currentUser.id)
     } catch (syncError) {
       console.error('Create user consistency error:', syncError)
-      await supabaseAdmin.from('users').delete().eq('id', user.id)
+      await supabaseAdmin.from('users').delete().eq('id', user.id).eq('org_id', orgId)
       return NextResponse.json({ error: '创建用户关联数据失败' }, { status: 500 })
     }
 

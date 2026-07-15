@@ -141,6 +141,7 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
 const ORG_CACHE_TTL_MS = 15_000
 const defaultOrgCache = new Map<string, { orgId: string; expiresAt: number }>()
 const defaultOrgInflight = new Map<string, Promise<string>>()
+const defaultOrgGeneration = new Map<string, number>()
 const scopedRoleCache = new Map<string, { assignments: ScopedRoleAssignment[]; expiresAt: number }>()
 const scopedRoleInflight = new Map<string, Promise<ScopedRoleAssignment[]>>()
 const salesSpacesCache = new Map<string, { value: { assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }; expiresAt: number }>()
@@ -158,20 +159,48 @@ export async function getDefaultOrgId(userId: string): Promise<string> {
   const inflight = defaultOrgInflight.get(userId)
   if (inflight) return inflight
 
+  const generation = defaultOrgGeneration.get(userId) ?? 0
   const promise = loadDefaultOrgId(userId)
     .then((orgId) => {
-      defaultOrgCache.set(userId, {
-        orgId,
-        expiresAt: Date.now() + ORG_CACHE_TTL_MS,
-      })
+      if ((defaultOrgGeneration.get(userId) ?? 0) === generation) {
+        defaultOrgCache.set(userId, {
+          orgId,
+          expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+        })
+      }
       return orgId
     })
     .finally(() => {
-      defaultOrgInflight.delete(userId)
+      if (defaultOrgInflight.get(userId) === promise) {
+        defaultOrgInflight.delete(userId)
+      }
     })
 
   defaultOrgInflight.set(userId, promise)
   return promise
+}
+
+/**
+ * Resolve the currently selected organization directly from the database for
+ * state-changing requests. A generation guard prevents an older cached lookup
+ * from overwriting the fresh value if the two requests overlap.
+ */
+export async function getFreshDefaultOrgId(userId: string): Promise<string> {
+  const requestGeneration = (defaultOrgGeneration.get(userId) ?? 0) + 1
+  defaultOrgGeneration.set(userId, requestGeneration)
+  defaultOrgCache.delete(userId)
+  defaultOrgInflight.delete(userId)
+
+  const orgId = await loadDefaultOrgId(userId)
+  if (defaultOrgGeneration.get(userId) === requestGeneration) {
+    defaultOrgGeneration.set(userId, requestGeneration + 1)
+    defaultOrgCache.set(userId, {
+      orgId,
+      expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+    })
+  }
+
+  return orgId
 }
 
 async function loadDefaultOrgId(userId: string): Promise<string> {
