@@ -11,9 +11,22 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+const accessMocks = vi.hoisted(() => ({
+  userHasOrgConfigAccess: vi.fn(),
+}))
+
+const orgMocks = vi.hoisted(() => ({
+  getDefaultOrgId: vi.fn(),
+}))
+
+vi.mock('@/lib/configs/access', () => accessMocks)
+vi.mock('@/lib/scoped-access', () => orgMocks)
+
 import { requireAuth } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
+
+const CANARY_SECRET = 'sk-canary-never-return-this-value'
 
 function makeSelectSingle(data: unknown) {
   return {
@@ -45,12 +58,13 @@ describe('POST /api/configs/[id]/publish', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
+    orgMocks.getDefaultOrgId.mockResolvedValue('org-1')
   })
 
   it('发布 UI_THEME 时按类型归档同组织其他已发布主题，保证唯一 active BrandProfile', async () => {
     const archiveQuery = makeArchiveQuery()
     ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(makeSelectSingle({ org_id: 'org-1' }))
       .mockReturnValueOnce(makeSelectSingle({ id: 'theme-2' }))
       .mockReturnValueOnce(makeSelectSingle({
         id: 'theme-2',
@@ -78,7 +92,6 @@ describe('POST /api/configs/[id]/publish', () => {
 
   it('工具消费策略不能通过通用配置接口发布', async () => {
     ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(makeSelectSingle({ org_id: 'org-1' }))
       .mockReturnValueOnce(makeSelectSingle({ id: 'policy-1' }))
       .mockReturnValueOnce(makeSelectSingle({
         id: 'policy-1',
@@ -97,6 +110,55 @@ describe('POST /api/configs/[id]/publish', () => {
     expect(res.status).toBe(400)
     expect(body.error.code).toBe('B001')
     expect(body.error.message).toContain('专用校验和发布流程尚未验收')
-    expect(supabaseAdmin.from).toHaveBeenCalledTimes(3)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+
+  it('没有 config:publish 时返回 403 且不读取或发布配置', async () => {
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+
+    const res = await POST({ method: 'POST' } as any, {
+      params: Promise.resolve({ id: 'provider-1' }),
+    })
+
+    expect(res.status).toBe(403)
+    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'publish')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('发布 Provider 的响应不会返回真实 API Key', async () => {
+    const provider = {
+      id: 'provider-1',
+      org_id: 'org-1',
+      type: 'AI_CONFIG',
+      key: 'AI_PROVIDER_PRIMARY',
+      status: 'DRAFT',
+      value: {
+        kind: 'provider',
+        level: 1,
+        name: 'Primary provider',
+        profile: 'primary',
+        provider_kind: 'openai_compatible',
+        base_url: 'https://provider.example/v1',
+        api_key: CANARY_SECRET,
+        model: 'provider-model',
+        timeout_ms: 45000,
+        enabled: true,
+      },
+    }
+    const archiveQuery = makeArchiveQuery()
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(makeSelectSingle({ id: 'provider-1' }))
+      .mockReturnValueOnce(makeSelectSingle(provider))
+      .mockReturnValueOnce(archiveQuery)
+      .mockReturnValueOnce(makePublishUpdate({ ...provider, status: 'PUBLISHED' }))
+
+    const res = await POST({ method: 'POST' } as any, {
+      params: Promise.resolve({ id: 'provider-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(JSON.stringify(body)).not.toContain(CANARY_SECRET)
+    expect(body.data.value.api_key).toContain('***')
   })
 })

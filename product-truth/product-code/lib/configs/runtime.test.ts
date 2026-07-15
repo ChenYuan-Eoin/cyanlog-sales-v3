@@ -4,7 +4,11 @@ import {
   isPublishedAIProviderValue,
   maskApiKey,
   mergeStoredAIConfigValue,
+  mergeStoredAIProviderValue,
   sanitizeConfigRow,
+  sanitizeConfigValue,
+  sanitizeConfigVersionRow,
+  withoutStoredApiKey,
 } from './runtime'
 
 describe('config runtime helpers', () => {
@@ -18,6 +22,33 @@ describe('config runtime helpers', () => {
     })
 
     expect(row.value?.api_key).toBe('lmst***7890')
+  })
+
+  it('redacts canary secrets in both direct values and version rows', () => {
+    const secret = 'sk-canary-never-return-this-value'
+
+    const value = sanitizeConfigValue('AI_CONFIG', { api_key: secret })
+    const version = sanitizeConfigVersionRow('AI_CONFIG', {
+      id: 'version-1',
+      value: { api_key: secret },
+    })
+
+    expect(JSON.stringify(value)).not.toContain(secret)
+    expect(JSON.stringify(version)).not.toContain(secret)
+    expect(value.api_key).toContain('***')
+    expect(version.value?.api_key).toContain('***')
+  })
+
+  it('redacts unsupported credential-shaped fields in legacy AI values', () => {
+    const value = sanitizeConfigValue('AI_CONFIG', {
+      access_token: 'legacy-access-secret',
+      clientSecret: 'legacy-client-secret',
+      model: 'provider-model',
+    })
+
+    expect(JSON.stringify(value)).not.toContain('legacy-access-secret')
+    expect(JSON.stringify(value)).not.toContain('legacy-client-secret')
+    expect(value.model).toBe('provider-model')
   })
 
   it('preserves stored API keys when update payload leaves token blank', () => {
@@ -64,6 +95,41 @@ describe('config runtime helpers', () => {
     })
 
     expect(merged.api_key).toBe('new-token')
+  })
+
+  it('clears a stored API key when the Provider credential binding changes', () => {
+    const merged = mergeStoredAIProviderValue({
+      provider_kind: 'openai_compatible',
+      base_url: 'https://old-provider.example/v1',
+      profile: 'primary',
+      api_key: 'old-token',
+    }, {
+      base_url: 'https://new-provider.example/v1',
+      api_key: 'old-***-oken',
+    })
+
+    expect(merged).not.toHaveProperty('api_key')
+  })
+
+  it('accepts a new API key supplied together with a new Provider binding', () => {
+    const merged = mergeStoredAIProviderValue({
+      provider_kind: 'openai_compatible',
+      base_url: 'https://old-provider.example/v1',
+      profile: 'primary',
+      api_key: 'old-token',
+    }, {
+      base_url: 'https://new-provider.example/v1',
+      api_key: 'new-provider-token',
+    })
+
+    expect(merged.api_key).toBe('new-provider-token')
+  })
+
+  it.each([
+    ['masked history', { api_key: 'sk-h***alue', model: 'old-model' }],
+    ['history without a key', { model: 'old-model' }],
+  ])('removes api_key from %s before rollback merge', (_label, historicalValue) => {
+    expect(withoutStoredApiKey(historicalValue)).toEqual({ model: 'old-model' })
   })
 
   it('keeps applications and tool policies out of the provider chain', () => {

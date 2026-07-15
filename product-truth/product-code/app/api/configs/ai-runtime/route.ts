@@ -25,6 +25,8 @@ import {
   buildRuntimeSourceSummary,
   runtimeProviderSourceMeta,
 } from '@/lib/configs/ai-runtime-source'
+import { userHasOrgConfigAccess } from '@/lib/configs/access'
+import { redactSecretsDeep } from '@/lib/configs/secret-redaction'
 
 function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -88,6 +90,10 @@ async function latestInvocationRowsByPhase(orgId: string, phase: string) {
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     try {
+      if (!await userHasOrgConfigAccess(user.id, orgId, 'read')) {
+        return errorResponse(createApiError('FORBIDDEN'))
+      }
+
       const providerConfigs = await listPublishedAIProviders(orgId)
       const policy = await getCurrentPublishedModelPolicy(orgId)
       const validation = validatePublishedModelPolicy(policy, providerConfigs)
@@ -147,7 +153,7 @@ export async function GET(req: NextRequest) {
         tenderRuntimeAssessments.set(assessmentKey, tenderRuntimeAssessment)
       }))
 
-      return successResponse({
+      return successResponse(redactSecretsDeep({
         id: policy.id,
         key: policy.key,
         name: policy.name,
@@ -206,7 +212,7 @@ export async function GET(req: NextRequest) {
         source_config_ids: policy.source_config_ids,
         source_summary: buildRuntimeSourceSummary(),
         published_at: policy.published_at,
-      })
+      }, providerConfigs.map((config) => config.api_key)))
     } catch (error) {
       console.error('[AI runtime policy] failed:', error)
       return errorResponse(createApiError('DB_ERROR', '读取 AI 运行时策略失败'))

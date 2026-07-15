@@ -17,10 +17,15 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { userHasOrgConfigAccess } from '@/lib/configs/access'
 
 // GET /api/configs - 获取配置列表（分页）
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasOrgConfigAccess(user.id, orgId, 'read')) {
+      return errorResponse(createApiError('FORBIDDEN'))
+    }
+
     const { searchParams } = new URL(req.url)
 
     const type = searchParams.get('type') as ConfigType | null
@@ -62,6 +67,10 @@ export async function GET(req: NextRequest) {
 // POST /api/configs - 创建配置
 export async function POST(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasOrgConfigAccess(user.id, orgId, 'write')) {
+      return errorResponse(createApiError('FORBIDDEN'))
+    }
+
     const body = await req.json().catch(() => null)
     const validated = configCreateSchema.safeParse(body)
 
@@ -122,6 +131,6 @@ export async function POST(req: NextRequest) {
       return errorResponse(createApiError('DB_ERROR', '创建配置失败'))
     }
 
-    return createdResponse(config)
+    return createdResponse(sanitizeConfigRow(config))
   })
 }

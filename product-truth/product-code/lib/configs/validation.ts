@@ -67,18 +67,19 @@ export const aiModelStageSchema = z.enum([
 
 // AI 模型配置值验证 (F012)
 export const aiConfigValueSchema = z.object({
+  kind: z.literal('provider').optional(),
   level: z.number().int().min(1).max(3),
   name: z.string().min(1),
   profile: z.string().min(1).optional(),
   provider_kind: z.enum(['openai_compatible', 'builtin']).default('openai_compatible'),
   base_url: z.string().url().or(z.string().length(0)),
-  api_key: z.string().optional(),
+  api_key: z.string().min(4).or(z.literal('')).optional(),
   model: z.string().min(1),
   timeout_ms: z.number().int().min(1000).max(300000),
   enabled: z.boolean(),
   routing: aiRoutingSchema.optional(),
   stages: z.array(aiModelStageSchema).optional(),
-}).superRefine((value, ctx) => {
+}).strict().superRefine((value, ctx) => {
   if (value.provider_kind === 'openai_compatible' && value.base_url.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

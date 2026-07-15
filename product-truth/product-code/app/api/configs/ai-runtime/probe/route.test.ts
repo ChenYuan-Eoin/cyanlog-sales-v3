@@ -11,9 +11,17 @@ vi.mock('@/lib/api/auth-wrapper', () => ({
   withAuthAndOrg: vi.fn(async (_req, handler) => handler({ id: 'user-1' }, 'org-1')),
 }))
 
+const accessMocks = vi.hoisted(() => ({
+  userHasOrgConfigAccess: vi.fn(),
+}))
+
+vi.mock('@/lib/configs/access', () => accessMocks)
+
 vi.mock('@/lib/configs/ai-runtime-readiness', () => runtimeMocks)
 
 import { POST } from './route'
+
+const CANARY_SECRET = 'sk-canary-never-return-this-value'
 
 function jsonRequest(body: unknown): any {
   return {
@@ -26,6 +34,7 @@ function jsonRequest(body: unknown): any {
 describe('POST /api/configs/ai-runtime/probe', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
     runtimeMocks.fetchOpenAICompatibleModelIds.mockResolvedValue(['gpt-oss-20b'])
     runtimeMocks.probeOpenAICompatibleChatCompletion.mockResolvedValue({
       ok: false,
@@ -69,6 +78,23 @@ describe('POST /api/configs/ai-runtime/probe', () => {
     )
   })
 
+  it('没有 config:write 时返回 403 且不发起任何 Provider 请求', async () => {
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+
+    const res = await POST(jsonRequest({
+      provider_kind: 'openai_compatible',
+      base_url: 'https://provider.example/v1',
+      api_key: 'sk-do-not-use',
+      model: 'provider-model',
+    }))
+
+    expect(res.status).toBe(403)
+    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'write')
+    expect(runtimeMocks.assessProviderRuntime).not.toHaveBeenCalled()
+    expect(runtimeMocks.fetchOpenAICompatibleModelIds).not.toHaveBeenCalled()
+    expect(runtimeMocks.probeOpenAICompatibleChatCompletion).not.toHaveBeenCalled()
+  })
+
   it('区分云端模型列表可达和最小生成失败，不能误报为网关不可达', async () => {
     runtimeMocks.assessProviderRuntime.mockResolvedValue({
       runtime_state: 'remote_health_ok',
@@ -90,5 +116,35 @@ describe('POST /api/configs/ai-runtime/probe', () => {
     expect(body.data.runtime_state).toBe('remote_generation_failed')
     expect(body.data.runtime_reason).toContain('最小生成测试失败')
     expect(body.data.runtime_action).toContain('模型 ID')
+  })
+
+  it('Provider 回显请求密钥时，探测响应也不会泄漏密钥', async () => {
+    runtimeMocks.assessProviderRuntime.mockResolvedValue({
+      runtime_state: 'remote_health_ok',
+      runtime_reason: `health response echoed ${CANARY_SECRET}`,
+      runtime_action: null,
+      runtime_environment: 'preview',
+      local_endpoint: false,
+    })
+    runtimeMocks.probeOpenAICompatibleChatCompletion.mockResolvedValue({
+      ok: false,
+      status: 401,
+      latency_ms: 20,
+      model: 'provider-model',
+      content_sample: null,
+      error: `Authorization: Bearer ${CANARY_SECRET}`,
+    })
+
+    const res = await POST(jsonRequest({
+      provider_kind: 'openai_compatible',
+      base_url: 'https://provider.example/v1',
+      api_key: CANARY_SECRET,
+      model: 'provider-model',
+    }))
+    const responseText = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(responseText).not.toContain(CANARY_SECRET)
+    expect(responseText).toContain('[REDACTED]')
   })
 })

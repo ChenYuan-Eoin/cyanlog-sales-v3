@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import type { AIConfigValue, AIModelStage, AIProviderKind, ConfigType, TaxRuleValue } from '@/lib/configs/types'
 import { normalizeOpenAICompatibleBaseUrl } from '@/lib/ai/openai-compatible'
 import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
+import { redactSecretsDeep } from '@/lib/configs/secret-redaction'
 
 type JsonRecord = Record<string, unknown>
 
@@ -49,17 +50,78 @@ export function mergeStoredAIConfigValue(
   }
 }
 
+export function withoutStoredApiKey(value: JsonRecord): JsonRecord {
+  const { api_key: _discardedApiKey, ...rest } = value
+  return rest
+}
+
+export function providerCredentialBindingMatches(
+  currentValue: JsonRecord | null | undefined,
+  targetValue: JsonRecord
+): boolean {
+  if (!currentValue) return false
+
+  return ['provider_kind', 'base_url', 'profile'].every((field) => (
+    (typeof currentValue[field] === 'string' ? currentValue[field] : '')
+    === (typeof targetValue[field] === 'string' ? targetValue[field] : '')
+  ))
+}
+
+export function mergeStoredAIProviderValue(
+  existingValue: JsonRecord | null | undefined,
+  nextValue: JsonRecord
+): JsonRecord {
+  const merged = mergeStoredAIConfigValue(existingValue, nextValue)
+  if (providerCredentialBindingMatches(existingValue, merged)) {
+    return merged
+  }
+
+  const suppliedApiKey = typeof nextValue.api_key === 'string' ? nextValue.api_key : undefined
+  if (suppliedApiKey && !isMaskedApiKey(suppliedApiKey)) {
+    return merged
+  }
+
+  return withoutStoredApiKey(merged)
+}
+
 export function sanitizeConfigRow<T extends { type: string; value?: JsonRecord | null }>(row: T): T {
-  if (row.type !== 'AI_CONFIG' || typeof row.value?.api_key !== 'string' || row.value.api_key.length === 0) {
+  const value = sanitizeConfigValue(row.type, row.value)
+  if (value === row.value) {
     return row
   }
 
   return {
     ...row,
-    value: {
-      ...row.value,
-      api_key: maskApiKey(row.value.api_key),
-    },
+    value,
+  }
+}
+
+export function sanitizeConfigValue<T extends JsonRecord | null | undefined>(
+  type: string,
+  value: T
+): T {
+  if (type !== 'AI_CONFIG' || !value) {
+    return value
+  }
+
+  const apiKey = typeof value.api_key === 'string' ? value.api_key : undefined
+  const redacted = redactSecretsDeep(value, [apiKey])
+  return (apiKey
+    ? { ...redacted, api_key: maskApiKey(apiKey) }
+    : redacted) as T
+}
+
+export function sanitizeConfigVersionRow<
+  T extends { value?: JsonRecord | null },
+>(type: string, row: T): T {
+  const value = sanitizeConfigValue(type, row.value)
+  if (value === row.value) {
+    return row
+  }
+
+  return {
+    ...row,
+    value,
   }
 }
 

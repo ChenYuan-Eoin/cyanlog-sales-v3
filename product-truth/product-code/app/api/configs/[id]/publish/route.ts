@@ -7,6 +7,10 @@ import { requireAuth } from '@/lib/auth'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
+import { sanitizeConfigRow } from '@/lib/configs/runtime'
+import { userHasOrgConfigAccess } from '@/lib/configs/access'
+import { getDefaultOrgId } from '@/lib/scoped-access'
+import { validateConfigValue } from '@/lib/configs/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -14,23 +18,15 @@ interface RouteParams {
 
 // 获取当前用户的组织 ID
 async function getCurrentOrgId(userId: string): Promise<string | null> {
-  const { data } = await supabaseAdmin
-    .from('user_organizations')
-    .select('org_id')
-    .eq('user_id', userId)
-    .eq('is_default', true)
-    .single()
-
-  return data?.org_id || null
+  try {
+    return await getDefaultOrgId(userId)
+  } catch {
+    return null
+  }
 }
 
 // 验证配置是否属于当前用户组织
-async function verifyConfigAccess(configId: string, userId: string): Promise<boolean> {
-  const orgId = await getCurrentOrgId(userId)
-  if (!orgId) {
-    return false
-  }
-
+async function verifyConfigAccess(configId: string, orgId: string): Promise<boolean> {
   const { data: config } = await supabaseAdmin
     .from('configs')
     .select('id')
@@ -46,8 +42,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const user = await requireAuth(req)
     const { id } = await params
+    const orgId = await getCurrentOrgId(user.id)
+    if (!orgId) {
+      return errorResponse(createApiError('NO_ORG'))
+    }
+    if (!await userHasOrgConfigAccess(user.id, orgId, 'publish')) {
+      return errorResponse(createApiError('FORBIDDEN'))
+    }
 
-    const hasAccess = await verifyConfigAccess(id, user.id)
+    const hasAccess = await verifyConfigAccess(id, orgId)
     if (!hasAccess) {
       return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
     }
@@ -72,6 +75,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         'BUSINESS_RULE_VIOLATION',
         '模型应用与工具消费策略的专用校验和发布流程尚未验收，当前禁止通过通用接口发布'
       ))
+    }
+    if (config.type === 'AI_CONFIG') {
+      const valueValidation = validateConfigValue('AI_CONFIG', config.value || {})
+      if (!valueValidation.valid) {
+        return errorResponse(createApiError(
+          'VALIDATION_ERROR',
+          `Provider 配置值验证失败: ${valueValidation.error}`
+        ))
+      }
     }
 
     const now = new Date().toISOString()
@@ -115,7 +127,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return errorResponse(createApiError('DB_ERROR', '发布配置失败'))
     }
 
-    return successResponse(updated)
+    return successResponse(sanitizeConfigRow(updated))
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

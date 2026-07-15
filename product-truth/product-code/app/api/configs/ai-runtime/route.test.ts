@@ -19,6 +19,12 @@ vi.mock('@/lib/api/auth-wrapper', () => ({
   withAuthAndOrg: vi.fn(async (_req, handler) => handler({ id: 'user-1' }, 'org-1')),
 }))
 
+const accessMocks = vi.hoisted(() => ({
+  userHasOrgConfigAccess: vi.fn(),
+}))
+
+vi.mock('@/lib/configs/access', () => accessMocks)
+
 vi.mock('@/lib/configs/runtime', () => ({
   listPublishedAIProviders: mocks.listPublishedAIProviders,
 }))
@@ -47,9 +53,12 @@ vi.mock('@/lib/configs/ai-runtime-source', () => ({
 
 import { GET } from './route'
 
+const CANARY_SECRET = 'sk-canary-never-return-this-value'
+
 describe('GET /api/configs/ai-runtime', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
     mocks.listPublishedAIProviders.mockResolvedValue([
       { config_id: 'provider-1', kind: 'provider', model: 'gpt-5.5' },
     ])
@@ -88,6 +97,18 @@ describe('GET /api/configs/ai-runtime', () => {
     expect(mocks.from).not.toHaveBeenCalled()
   })
 
+  it('没有 config:read 时返回 403 且不读取 Provider、策略或运行记录', async () => {
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+
+    expect(res.status).toBe(403)
+    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'read')
+    expect(mocks.listPublishedAIProviders).not.toHaveBeenCalled()
+    expect(mocks.getCurrentPublishedModelPolicy).not.toHaveBeenCalled()
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
+
   it('keeps the valid response path SELECT-only', async () => {
     const query = {
       select: vi.fn(),
@@ -103,7 +124,15 @@ describe('GET /api/configs/ai-runtime', () => {
     query.order.mockReturnValue(query)
     query.limit.mockResolvedValue({ data: [], error: null })
     mocks.from.mockReturnValue(query)
-    mocks.listPublishedAIProviders.mockResolvedValue([])
+    mocks.listPublishedAIProviders.mockResolvedValue([{
+      config_id: 'provider-secret-source',
+      api_key: CANARY_SECRET,
+      model: 'provider-model',
+    }])
+    mocks.assessProviderRuntime.mockResolvedValue({
+      runtime_state: 'builtin_ready',
+      runtime_reason: `upstream accidentally echoed ${CANARY_SECRET}`,
+    })
     mocks.getCurrentPublishedModelPolicy.mockResolvedValue({
       id: 'policy-26',
       key: 'CONTRACT_REVIEW_DEFAULT',
@@ -136,8 +165,10 @@ describe('GET /api/configs/ai-runtime', () => {
     mocks.validatePublishedModelPolicy.mockReturnValue({ ok: true })
 
     const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const responseText = await res.text()
 
     expect(res.status).toBe(200)
+    expect(responseText).not.toContain(CANARY_SECRET)
     expect(mocks.from).toHaveBeenCalledTimes(2)
     expect(mocks.from).toHaveBeenNthCalledWith(1, 'model_invocations')
     expect(mocks.from).toHaveBeenNthCalledWith(2, 'model_invocations')

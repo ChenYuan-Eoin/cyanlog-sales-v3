@@ -12,11 +12,13 @@ import {
   probeOpenAICompatibleChatCompletion,
 } from '@/lib/configs/ai-runtime-readiness'
 import type { AuthUser } from '@/lib/auth'
+import { userHasOrgConfigAccess } from '@/lib/configs/access'
+import { redactSecretsDeep } from '@/lib/configs/secret-redaction'
 
 const probeSchema = z.object({
   provider_kind: z.enum(['openai_compatible', 'builtin']).default('openai_compatible'),
   base_url: z.string().trim().optional(),
-  api_key: z.string().optional(),
+  api_key: z.string().min(4).or(z.literal('')).optional(),
   model: z.string().trim().optional(),
   timeout_ms: z.number().int().min(1000).max(180000).optional(),
 })
@@ -30,7 +32,11 @@ function clampProbeTimeout(timeoutMs: number | undefined, localEndpoint: boolean
 }
 
 export async function POST(req: NextRequest) {
-  return withAuthAndOrg(req, async (_user: AuthUser, _orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasOrgConfigAccess(user.id, orgId, 'write')) {
+      return errorResponse(createApiError('FORBIDDEN'))
+    }
+
     const body = await req.json().catch(() => null)
     const parsed = probeSchema.safeParse(body)
 
@@ -93,7 +99,7 @@ export async function POST(req: NextRequest) {
         }
         : assessment
 
-    return successResponse({
+    return successResponse(redactSecretsDeep({
       ...finalAssessment,
       probe_scope: 'explicit_http_health_and_generation_check',
       available_models: availableModels,
@@ -103,6 +109,6 @@ export async function POST(req: NextRequest) {
         : parsed.data.api_key
           ? 'provided'
           : 'missing',
-    })
+    }, [parsed.data.api_key]))
   })
 }
