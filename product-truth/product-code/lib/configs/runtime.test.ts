@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isMaskedApiKey, maskApiKey, mergeStoredAIConfigValue, sanitizeConfigRow } from './runtime'
+import {
+  isMaskedApiKey,
+  isPublishedAIProviderValue,
+  maskApiKey,
+  mergeStoredAIConfigValue,
+  sanitizeConfigRow,
+} from './runtime'
 
 describe('config runtime helpers', () => {
   it('redacts AI config API keys before returning config rows', () => {
@@ -58,5 +64,18 @@ describe('config runtime helpers', () => {
     })
 
     expect(merged.api_key).toBe('new-token')
+  })
+
+  it('keeps applications and tool policies out of the provider chain', () => {
+    expect(isPublishedAIProviderValue({ kind: 'provider', model: 'gpt-5.5' })).toBe(true)
+    expect(isPublishedAIProviderValue({ kind: 'application', model: 'gpt-5.5' })).toBe(false)
+    expect(isPublishedAIProviderValue({ kind: 'tool_policy', model: 'gpt-5.5' })).toBe(false)
+  })
+
+  it('accepts only provider-shaped legacy rows without an explicit kind', () => {
+    expect(isPublishedAIProviderValue({ model: 'gpt-oss-20b', base_url: 'http://127.0.0.1:1234/v1' })).toBe(true)
+    expect(isPublishedAIProviderValue({ model: 'gpt-oss-20b', profile: 'local_primary' })).toBe(true)
+    expect(isPublishedAIProviderValue({ model: 'gpt-oss-20b' })).toBe(false)
+    expect(isPublishedAIProviderValue({ application: 'contract_review' })).toBe(false)
   })
 })
