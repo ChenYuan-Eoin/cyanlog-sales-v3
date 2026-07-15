@@ -20,10 +20,14 @@ import {
   themeToCssVariables,
 } from "@/lib/ui-theme-shared";
 
-export const metadata: Metadata = {
-  title: "ONES Sales",
-  description: "智能协作平台",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const token = await getServerAuthToken();
+  const theme = await getPublishedUITheme(token);
+  return {
+    title: theme.productTitle || "ONES Sales",
+    description: theme.productSubtitle || "智能协作平台",
+  };
+}
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",

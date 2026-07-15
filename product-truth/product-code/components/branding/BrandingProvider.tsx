@@ -23,6 +23,12 @@ export function BrandingProvider({
   const [theme, setTheme] = useState<Required<UIThemeConfigValue>>(value)
 
   useEffect(() => {
+    // Router refresh/RSC navigation can deliver a newer server-published theme.
+    // Keep context consumers aligned without requiring a full page reload.
+    setTheme(value)
+  }, [value])
+
+  useEffect(() => {
     // 客户端挂载时：检查 RuntimeThemeLoader 是否已将运行时主题写入全局
     if (window.__RUNTIME_THEME__) {
       setTheme(window.__RUNTIME_THEME__)
