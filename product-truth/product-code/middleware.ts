@@ -83,7 +83,9 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api/')) {
     return PUBLIC_API_PATHS.has(pathname)
   }
-  return pathname.startsWith('/_next/') || pathname.startsWith('/favicon')
+  return pathname.startsWith('/_next/')
+    || pathname.startsWith('/favicon')
+    || pathname.startsWith('/brand/')
 }
 
 function getRequiredPermission(pathname: string): string | null {

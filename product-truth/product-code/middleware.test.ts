@@ -75,6 +75,19 @@ describe('middleware host routing', () => {
 })
 
 describe('middleware public API routing', () => {
+  it('serves runtime brand assets without requiring an authenticated session', async () => {
+    const brandAsset = await middleware(
+      makeRequest('https://sales.cyanlog.icu/brand/ones-symbol-square.svg', { host: 'sales.cyanlog.icu' }),
+    )
+    const brandNeighbor = await middleware(
+      makeRequest('https://sales.cyanlog.icu/branding/private', { host: 'sales.cyanlog.icu' }),
+    )
+
+    expect(brandAsset.status).toBe(200)
+    expect(brandNeighbor.status).toBe(307)
+    expect(brandNeighbor.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+  })
+
   it('allows both registration entrypoints without opening every auth API route', async () => {
     const legacyRegister = await middleware(
       makeRequest('https://sales.cyanlog.icu/api/auth', { host: 'sales.cyanlog.icu' }),
