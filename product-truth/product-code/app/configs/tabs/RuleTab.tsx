@@ -581,7 +581,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   return (
     <>
 	    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-	      <Card className="min-w-0">
+	      <Card className="min-w-0 self-start">
 	        <CardHeader className="space-y-3">
             <div className="flex flex-row items-center justify-between gap-3">
 	            <CardTitle className="text-base">
