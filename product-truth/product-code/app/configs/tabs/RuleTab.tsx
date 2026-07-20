@@ -144,7 +144,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
           ? current
           : nextCategories[0]?.id || ''
       ))
-      const defaultRuleSetId = nextRuleSets.find((ruleSet: ContractRuleSet) => ruleSet.is_default)?.id
+      const defaultRuleSetId = nextRuleSets.find((ruleSet: ContractRuleSet) => ruleSet.is_default && (ruleSet.rule_count || 0) > 0)?.id
+        || nextRuleSets.find((ruleSet: ContractRuleSet) => (ruleSet.rule_count || 0) > 0)?.id
+        || nextRuleSets.find((ruleSet: ContractRuleSet) => ruleSet.is_default)?.id
         || nextRuleSets[0]?.id
         || ''
       setSelectedRuleSetId((current) => (
