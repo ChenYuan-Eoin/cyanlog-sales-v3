@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-20T17:58:48+08:00",
+  "updated_at": "2026-07-20T20:59:57+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,15 +128,15 @@
     ]
   },
   "active_task": {
-    "id": "WP01",
-    "slug": "ai-platform-foundation",
-    "name": "平台模型接入、模型目录与 AI 应用绑定底座",
+    "id": "WP02",
+    "slug": "ai-runtime-truth",
+    "name": "真实模型调用、路由降级与运行证据",
     "kind": "product",
     "status": "active",
-    "objective": "把 AI 从合同场景和具体模型表单中解耦为全局平台能力：Provider 连接负责账号与端点，模型目录负责可用模型，AI 应用负责能力与路由，业务用点只绑定已发布应用；后续任何业务模块都能接入而不直接写死模型。",
-    "current_step": "以 release 候选代码为事实，先盘点现有 Provider/ModelPolicy/业务阶段混合点，再固定领域对象、迁移兼容边界和管理员主任务，随后按 API、配置 UI、目标测试与浏览器验收实现。",
-    "started_at": "2026-07-20T17:58:48+08:00",
-    "activation_basis": "WP00 已由提交 18dad230bbc12a6cf664e5868cc25d57bbb65fd3 固化唯一 G/WP/F/IN/DG/HG 体系；用户对全局模型层、模型目录、应用模块和业务消费边界的纠正已记录在 IN-20260720-037/039/041/047。",
+    "objective": "让实际业务调用从 BusinessUsePoint 唯一解析到已发布 AIApplication 与 RoutePolicy，按有序模型候选执行并记录 provider、model、token、降级原因、配置快照、model_invocations 与 ReviewRun；用同一真实合同和多个可用模型验证运行一致性与审核质量。",
+    "current_step": "先审计旧 ModelPolicy、环境变量与现有 failover 的真实消费路径，建立新六对象图到不可漂移运行快照的唯一编译边界；随后用零持续费用的可用 Provider 跑通 probe、最小生成、业务 ReviewRun、token/invocation 和降级证据，再进行共同真实合同对比。",
+    "started_at": "2026-07-20T20:59:57+08:00",
+    "activation_basis": "WP01 已由提交 4269840fbc798eb9a92faee44d6e467a250033b4 完成六对象控制面、Provider 安全、桌面/iPad、Preview 创建/修订/发布/回滚/清理及 182 文件 1255 测试验收；IN-20260720-049 记录本次工作包切换。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
     "allowed_paths": [
       "AGENTS.md",
@@ -147,50 +147,49 @@
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/00-master/PROJECT-主文档.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F000-config-center-architecture.md",
       "product-truth/feature-packets/F012-ai-runtime-config.md",
       "product-truth/product-code/app/configs",
-      "product-truth/product-code/app/api/configs",
+      "product-truth/product-code/app/contracts",
+      "product-truth/product-code/app/api/ai",
+      "product-truth/product-code/app/api/contracts",
+      "product-truth/product-code/app/api/configs/ai-runtime",
+      "product-truth/product-code/lib/ai",
       "product-truth/product-code/lib/configs",
+      "product-truth/product-code/lib/contracts",
       "product-truth/product-code/types",
-      "product-truth/product-code/output/evidence/wp01"
+      "product-truth/product-code/supabase/migrations",
+      "product-truth/product-code/output/evidence/wp02"
     ],
     "non_goals": [
-      "在 WP01 证明真实模型调用、token、ReviewRun 或审核准确率；这些属于 WP02",
-      "在 Provider 或模型目录中配置合同规则、问题分类、运行阶段、Prompt 或规则引擎；这些属于 WP03 或业务模块",
-      "重做合同审核工作台、循环复审、文档对比或合同起草",
-      "引入持续付费模型网关、在线 Office 或需要销售审核的供应商依赖",
+      "把规则集、问题分类、具体规则或规则详情混入 AI 平台运行路由；这些属于 WP03",
+      "重做合同工作台、循环复审、文档对比、合同起草或品牌组织体验",
+      "用配置存在、连接 probe 或单次模型响应冒充 ReviewRun 和准确率闭环",
+      "引入持续或按量付费依赖作为默认前提；优先复用本地、自托管或已有免费能力",
       "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
     ],
     "exit_criteria": [
-      "产品与代码使用独立对象表达 ProviderConnection、ModelCatalogEntry、AIApplication、BusinessUsePoint、ApplicationBinding 与 RoutePolicy，职责和关系有唯一来源",
-      "Provider 配置只管理账号、端点、认证与连接状态；可发现或录入同 Provider 下的多个模型，不把具体模型版本冒充 Provider",
-      "AI 应用选择逻辑能力、候选模型与降级路由；业务模块注册用点并绑定已发布应用，不直接绑定具体模型",
-      "配置 UI 按模型接入、模型目录、AI 应用、业务绑定和发布状态组织；不出现合同阶段复选框、规则引擎 Provider 或机器内部策略长文",
-      "既有配置有可回滚的兼容读取或迁移方案；证据冲突、不可逆数据迁移或 Production 写入立即停止",
-      "目标测试、typecheck、build、桌面与 iPad 配置任务验收通过；连接测试只证明草稿参数可达，不冒充 WP02 真实业务运行证据",
-      "F000、F012、REQ、主文档和 F099 同步当前对象边界、证据与未完成项"
+      "所有纳入验收的业务调用点只从已发布 BusinessUsePoint 解析唯一 ApplicationBinding、AIApplication、RoutePolicy、ModelCatalogEntry 与 ProviderConnection，不被环境变量或旧 ModelPolicy 静默旁路",
+      "至少两个可用模型候选完成真实 provider probe 和最小生成；每次调用持久化 provider、model、输入输出 token、耗时、状态和失败原因",
+      "真实合同 ReviewRun 绑定不可漂移的应用、路由、模型和规则快照，model_invocations 与 ReviewRun 可双向追溯",
+      "主模型不可用或输出无效时按 RoutePolicy 顺序降级，全失败动作和原因在运行证据与用户界面一致",
+      "同一真实合同由多个可用模型按同一冻结输入运行，并与独立验收口径比较；缺金标时明确停止准确率完成声明",
+      "目标/全量测试、lint、typecheck、build、桌面/iPad、Preview 数据读回与清理通过，F012、REQ、主文档和 F099 同步证据与未完成项"
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP01",
-      "slug": "ai-platform-foundation",
-      "reason": "WP00 已固化并通过治理/Harness 校验；按批准序列进入全局 AI 平台底座"
-    },
-    "next": {
       "id": "WP02",
       "slug": "ai-runtime-truth",
-      "name": "真实模型调用、路由降级与运行证据",
-      "entry_gate": "WP01 的平台对象、配置任务与应用绑定通过验收",
+      "reason": "WP01 已绑定最终候选提交、Preview 与浏览器证据完成；按批准序列进入真实运行闭环"
+    },
+    "next": {
+      "id": "WP03",
+      "slug": "rule-collection",
+      "name": "规则集、问题分类、具体规则与规则详情",
+      "entry_gate": "WP02 的真实调用、路由降级、token、model_invocations 与 ReviewRun 一致性通过验收",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
-      {
-        "id": "WP03",
-        "slug": "rule-collection",
-        "name": "规则集、问题分类、具体规则与规则详情"
-      },
       {
         "id": "WP04",
         "slug": "contract-center-ia",
@@ -252,10 +251,36 @@
         "completed_at": "2026-07-20T17:58:48+08:00",
         "evidence_commit": "18dad230bbc12a6cf664e5868cc25d57bbb65fd3",
         "result": "唯一目标命名空间、调度、Harness 与候选真相快照已固化"
+      },
+      {
+        "id": "WP01",
+        "slug": "ai-platform-foundation",
+        "completed_at": "2026-07-20T20:59:57+08:00",
+        "evidence_commit": "4269840fbc798eb9a92faee44d6e467a250033b4",
+        "result": "六对象 AI 平台控制面、Provider 安全、五任务 UI、Preview 创建/修订/发布/回滚/清理和桌面/iPad 验收完成；Production 未写入或部署"
       }
     ]
   },
   "verification": {
+    "wp01_ai_platform_20260720": {
+      "status": "passed_preview_control_plane_not_production",
+      "implementation_commit": "5a22f769ac03baf80d7436eecf79fe57a24c509b",
+      "closure_commit": "4269840fbc798eb9a92faee44d6e467a250033b4",
+      "objects": "ProviderConnection, ModelCatalogEntry, AIApplication, BusinessUsePoint, ApplicationBinding and RoutePolicy validated as independent records with one dependency graph",
+      "security": "fresh organization authorization, DRAFT CAS, immutable published revisions, credential reuse/clear rules and bounded SSRF-safe outbound sessions passed independent tests",
+      "preview": "isolated project vsfropnfsmnonkotywsx passed provider discovery, two model minimum generations, six-object publication, capability mismatch rejection, revision secret reuse, draft history rollback and zero-residue cleanup; config_versions sensitive-key count is zero",
+      "browser": "desktop 1440x900 and iPad 1024x768 passed five-task navigation with zero page overflow and zero clean-session console errors; actual 0/1/14/50 release filtering and 50-card intrinsic layout passed",
+      "engineering": "182 test files / 1255 tests, lint, typecheck, serial build 75/75 pages, diff check, document governance and independent API/UI re-audits passed",
+      "harness": "selftest and document governance pass; doctor has zero failures and two existing Codex project-trust warnings, so local hooks are not claimed loaded/effective",
+      "evidence": [
+        "product-truth/product-code/output/evidence/wp01/README.md",
+        "product-truth/product-code/output/evidence/wp01/browser-results.json",
+        "product-truth/product-code/output/evidence/wp01/preview-security.json",
+        "product-truth/product-code/output/evidence/wp01/desktop-config.png",
+        "product-truth/product-code/output/evidence/wp01/ipad-config.png"
+      ],
+      "boundary": "WP02 owns real business runtime, token/model_invocations/ReviewRun/failover and accuracy; WP09 owns atomic multi-row publication and Production release"
+    },
     "wp00_goal_baseline_20260720": {
       "status": "passed_with_runtime_trust_warning",
       "namespace": "G1-G11 / WP00-WP09 / F / IN / DG0-DG7 / HG0-HG5",

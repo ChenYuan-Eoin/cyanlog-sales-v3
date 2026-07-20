@@ -3,7 +3,7 @@
 **Created**: 2026-06-09  
 **Rebased**: 2026-07-20
 **REQ ID**: F012  
-**Status**: implementation-candidate / WP01 / pending-final-revalidation
+**Status**: WP01-completed / WP02-active
 **Parent**: 配置中心  
 **Depends On**: `F000-config-center-architecture`
 
@@ -162,7 +162,7 @@ LOCAL_AI_ALLOWED_ORIGINS=http://127.0.0.1:1234
 
 ## 7. WP01 与 WP02 的完成边界
 
-### 7.1 WP01 控制面候选
+### 7.1 WP01 控制面（已完成）
 
 WP01 负责：
 
@@ -203,17 +203,17 @@ WP02 才负责：
 
 ### 9.1 WP01 退出门禁
 
-当前代码已形成 WP01 实现候选，但不用“已编码”代替“已完成”。WP01 只以下列控制面证据为退出门禁；不等待 WP02 的真实业务运行，也不等待 WP09 的 Production 发布：
+WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 和回滚交互收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 完成。证据索引位于 `output/evidence/wp01/README.md`，且以下控制面门禁全部通过；WP02 的真实业务运行和 WP09 的 Production 发布没有被混入完成声明：
 
-- [ ] **六对象与 API**：类型、规范化持久化、完整发布图、唯一绑定/路由、反向依赖和单行 DRAFT CAS 冲突处理通过目标测试；
-- [ ] **Provider 安全**：修订凭据复用、连接身份变更清密钥、访问权限与 SSRF 边界通过负向测试；
-- [ ] **配置 UI**：五任务的创建、修订、有序候选、发布、历史和草稿错误在桌面与 iPad 实浏览器重验，并覆盖 0/1/14/50 条数据及弹窗开关；
+- [x] **六对象与 API**：类型、规范化持久化、完整发布图、唯一绑定/路由、反向依赖和单行 DRAFT CAS 冲突处理通过目标测试；
+- [x] **Provider 安全**：修订凭据复用、连接身份变更清密钥、访问权限与 SSRF 边界通过负向测试；
+- [x] **配置 UI**：五任务的创建、修订、有序候选、发布、历史和草稿错误在桌面与 iPad 实浏览器重验，并覆盖 0/1/14/50 条数据及弹窗开关；
 - [x] **Preview 密钥安全**：隔离 Preview `vsfropnfsmnonkotywsx` 已应用安全迁移并通过动态密钥历史 canary；Production 未触碰；
-- [ ] **Preview 控制面闭环**：以最终 Git SHA 在同一隔离 Preview 重验六对象创建、修订、发布、唯一解析、历史/回滚和脱敏读回；
-- [ ] **兼容与回滚**：旧 `AI_CONFIG / ModelPolicy` 仍可只读消费，新图不与旧图混合，候选可回退到旧运行事实而不丢失历史引用；
-- [ ] **工程与证据**：目标测试、全量测试、lint、typecheck、build、浏览器截图与脱敏读回结果被同一最终 Git SHA 的证据索引引用。
+- [x] **Preview 控制面闭环**：在同一隔离 Preview 重验六对象创建、修订、发布、唯一解析、历史/回滚和脱敏读回；63 条临时记录清理后残留为 0；
+- [x] **兼容与回滚**：旧 `AI_CONFIG / ModelPolicy` 仍可只读消费，新图不与旧图混合，候选可回退到旧运行事实而不丢失历史引用；
+- [x] **工程与证据**：182 个测试文件 / 1255 项测试、lint、typecheck、75/75 build、桌面/iPad、截图与脱敏读回由同一候选证据索引引用；独立 API/安全与 UI 复审均为 GO。
 
-上述 WP01 退出门禁通过即可把 WP01 转为 completed，并让 WP02 进入 Active。
+上述 WP01 退出门禁已通过，WP01 已转为 completed，WP02 已进入 Active。Harness selftest 与文档治理通过；doctor 为 0 failures / 2 条既有 Codex 项目信任警告，因此只声明本地门禁结果，不声明项目级 hooks 已加载生效。
 
 ### 9.2 下游门禁（不阻塞 WP01 退出）
 

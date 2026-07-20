@@ -21,8 +21,8 @@
 | WP | Slug | 主要 G | 当前状态 | 边界 |
 |---|---|---|---|---|
 | WP00 | goal-baseline-consolidation | G1/G10/G11 | Completed / `18dad230` | 已统一编号、真相源、Harness 和候选分支治理快照 |
-| WP01 | ai-platform-foundation | G4；支撑 G3/G7 | **Active** / implementation candidate pending final revalidation | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
-| WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Next / needs_current_runtime_proof | 当前 probe、真实 invocation/token、ReviewRun、降级 |
+| WP01 | ai-platform-foundation | G4；支撑 G3/G7 | Completed / `4269840f` | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
+| WP02 | ai-runtime-truth | G3；支撑 G7/G10 | **Active** / needs_current_runtime_proof | 当前 probe、真实 invocation/token、ReviewRun、降级 |
 | WP03 | rule-collection | G3/G4；支撑 G7/G10 | acceptance_disputed | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | contract-center-ia | G6；支撑 G8 | needs_reacceptance | 合同中心入口、任务身份、版本和下一步 |
 | WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | parked / NO-GO | 新源文件、事前独立金标、文件版本、风险迁移与循环复审 |
@@ -31,17 +31,17 @@
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
 | WP09 | release-acceptance | G7/G8/G9/G10/G11 | queued | 唯一候选、测试/build、桌面/iPad、真实文件、Preview/Production |
 
-执行顺序为 `WP00（已完成） -> WP01（Active） -> WP02（Next） -> WP03 -> WP04 -> WP05（恢复门禁满足后）/WP07 -> WP08 子包 -> WP09`。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
+执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（Active） -> WP03（Next） -> WP04 -> WP05（恢复门禁满足后）/WP07 -> WP08 子包 -> WP09`。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
 
 ## 2. 候选边界
 
-WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化，本分支现为可继续 WP01 的治理候选。WP01-WP04 的旧“本地完成”总括结论已被用户验收推翻；局部代码和历史证据可复用，但必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
+WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成。WP02-WP05 的旧“本地完成”总括结论仍无效，必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
 
-Production 数据库继续只读；WP01 不部署 Production，不覆盖根工作区受保护 dirty 快照。
+Production 数据库继续只读；WP01 未部署 Production，也未覆盖根工作区受保护 dirty 快照。
 
-## 3. WP01 当前候选（2026-07-20）
+## 3. WP01 完成证据（2026-07-20）
 
-当前工作树已形成下列实现候选；这是“待最终重验的候选范围”，不是完成声明：
+最终候选已完成下列控制面范围：
 
 - 六个独立对象：`ProviderConnection`、`ModelCatalogEntry`、`AIApplication`、`BusinessUsePoint`、`ApplicationBinding`、`RoutePolicy`；
 - 唯一解析方向：`BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy → ModelCatalogEntry → ProviderConnection`；
@@ -50,8 +50,8 @@ Production 数据库继续只读；WP01 不部署 Production，不覆盖根工�
 - 配置页五任务工作区，移除造成白色空洞的异高 Grid / CSS columns 路径；
 - `connection` 与 `model` 两种草稿参数 probe 口径；probe 只是当次请求结果，不持久化连接健康，不写 `model_invocations`，不代表生产可用或真实业务调用。
 
-门禁状态：中间候选曾通过目标/全量测试、build 和桌面/iPad 浏览器验收，但其后代码事实审查又发现发布图、Provider 修订密钥、SSRF/授权和 iPad 首屏等需修正项。因此旧浏览器截图只是中间证据，不得与后续代码混合声称完成。
+门禁结果：独立 API/安全与 UI 复审均为 GO；182 个测试文件 / 1255 项测试、lint、typecheck、75/75 build、桌面 1440×900、iPad 1024×768、0/1/14/50 发布筛选、50 卡自然高度、Provider Bearer 探测、两个模型最小生成、完整发布图、能力不匹配负向门禁、草稿历史回滚和 Preview 零残留均通过。证据索引为 `product-code/output/evidence/wp01/README.md`。
 
-**WP01 退出门禁**：以同一最终 Git SHA 重跑六对象/API 事实、Provider 安全边界、五任务 UI、目标/全量测试、lint、typecheck、build、桌面/iPad、隔离 Preview 六对象闭环以及旧 `AI_CONFIG / ModelPolicy` 兼容回退。密钥历史数据层门禁已在隔离 Preview `vsfropnfsmnonkotywsx` 通过：已应用 `secure_ai_config_control_plane`，动态 bearer canary 证明当前记录可持有凭据、历史版本无该凭据且 fixture 清理完成；此结论不外推到 Production。WP01 退出门禁通过即可转 completed，WP02 的运行证据不回填阻塞 WP01。
+**WP01 退出结论**：六对象/API、Provider 安全、五任务 UI、工程门禁、桌面/iPad、隔离 Preview 六对象闭环以及旧 `AI_CONFIG / ModelPolicy` 兼容回退已通过，WP01 已转 completed。隔离 Preview `vsfropnfsmnonkotywsx` 已应用 `secure_ai_config_control_plane`；动态 bearer canary 与最终读回证明当前记录可持有凭据、历史版本无凭据且临时记录清理完成。此结论不外推到 Production。
 
-**下游门禁**：WP02 在 WP01 退出后验收真实 provider、invocation/token、ReviewRun、降级一致性和准确率；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、环境和正式发布。两者都不是 WP01 完成前置条件。
+**当前与下游门禁**：Active WP02 验收真实 provider、invocation/token、ReviewRun、降级一致性和准确率；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、环境和正式发布。

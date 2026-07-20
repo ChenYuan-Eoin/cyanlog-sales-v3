@@ -10,7 +10,7 @@
 #   - 代码中的 REQ 标记必须与之一致
 
 version: "2026-07-20.1"
-last_updated: "2026-07-20T18:55:00+08:00"
+last_updated: "2026-07-20T20:59:57+08:00"
 
 goal_governance:
   status: active
@@ -25,8 +25,8 @@ goal_governance:
     - "完成证据必须绑定 namespace_version、WP、Git SHA、部署/数据库环境及浏览器或真实文件产物。"
   work_package_crosswalk:
     WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
-    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: implementation_candidate_pending_final_revalidation}
-    WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: next_needs_current_runtime_proof}
+    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: completed_commit_4269840f}
+    WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: active_needs_current_runtime_proof}
     WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: acceptance_disputed}
     WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: needs_reacceptance}
     WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: parked_waiting_external_gold_and_product_reacceptance}
@@ -543,7 +543,7 @@ requirements:
     name: AI平台配置与运行边界
     module: 配置中心
     source: PROJECT-主文档.md#6.2.3
-    status: implementation_candidate_pending_final_revalidation
+    status: wp01_completed_wp02_active
     priority: P1
     feature_packet: product-truth/feature-packets/F012-ai-runtime-config.md
     code_locations:
@@ -565,7 +565,7 @@ requirements:
       - lib/ai/failover.ts
     description: 全局 Provider 连接、模型目录、AI 应用、业务用点、绑定与路由配置；真实调用证据由 WP02 验收
     audit_supplement:
-      current_gap: "WP01 实现候选已将 ProviderConnection、ModelCatalogEntry、AIApplication、BusinessUsePoint、ApplicationBinding、RoutePolicy 拆为独立对象并建立五任务 UI、发布依赖和草稿参数 probe。隔离 Preview vsfropnfsmnonkotywsx 已通过密钥历史安全迁移和动态 canary；该结论仅对 Preview 数据层成立。WP01 完成仍必须绑定最终 Git SHA 重跑代码、桌面/iPad 和六对象 Preview 闭环。新图尚未切真实业务运行，所有业务调用点、invocation/token/ReviewRun 一致性属于 WP02。Production 保持只读。"
+      current_gap: "WP01 已由 5a22f769 实现提交和 4269840f 回滚交互收口提交完成：六对象、五任务 UI、发布依赖、Provider 安全、182 files/1255 tests、75/75 build、桌面/iPad、0/1/14/50 与 50 卡布局、隔离 Preview 创建/修订/发布/回滚/脱敏/零残留均有证据。新图尚未切真实业务运行；所有业务调用点、invocation/token/ReviewRun、降级一致性和准确率由当前 Active WP02 验收。Production 保持只读，数据库原子发布仍属 WP09。"
       supplemental_requirements:
         - "Provider 只管理端点、协议和认证；同一 Provider 的多个具体模型必须进入模型目录。"
         - "业务模块先注册稳定 BusinessUsePoint，只绑定已发布 AIApplication；模型选择由 RoutePolicy 决定。"

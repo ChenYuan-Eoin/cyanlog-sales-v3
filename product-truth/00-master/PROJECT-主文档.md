@@ -43,8 +43,8 @@
 | 工作包 | 关联 G | 当前状态 | 产品边界 |
 |---|---|---|---|
 | WP00 | G1/G10/G11 | Completed；`18dad230` | 已统一编号、真相源、队列、Harness 和发布候选治理快照 |
-| WP01 | G4（支撑 G3/G7） | **Active**；实现候选待最终同 SHA 重验 | 全局 Provider 接入、模型目录、AI 应用、业务用点、绑定和路由 |
-| WP02 | G3（支撑 G7/G10） | Next | 当前 Provider probe、真实模型调用、路由降级、token 与 ReviewRun |
+| WP01 | G4（支撑 G3/G7） | Completed；`4269840f` | 全局 Provider 接入、模型目录、AI 应用、业务用点、绑定和路由 |
+| WP02 | G3（支撑 G7/G10） | **Active** | 当前 Provider probe、真实模型调用、路由降级、token 与 ReviewRun |
 | WP03 | G3/G4（支撑 G7/G10） | 排队；旧验收有争议 | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | G6（支撑 G8） | 排队复验 | 合同中心入口、任务身份、版本和下一步 |
 | WP05 | G2（支撑 G3/G6/G8/G10） | Parked / NO-GO | Word/PDF 风险处理、下一版本、全量复审、风险迁移与最终交付 |
@@ -53,11 +53,11 @@
 | WP08 | G5/G8 | 激活前必须拆包 | 伞目标；激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包 |
 | WP09 | G7/G8/G9/G10/G11 | 排队 | 分支收敛、全量门禁、Preview 与获批后的 Production 验收 |
 
-当前唯一 Active 是 WP01。2026-07-20 实现候选已把 AI 控制面拆为 `ProviderConnection → ModelCatalogEntry` 和 `BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy` 六对象，配置页按模型接入、模型目录、AI 应用、业务绑定、发布状态五项任务组织；Provider 不再包含具体模型、合同阶段或规则引擎。该候选尚不表示业务运行已切换：真实 provider、token、`model_invocations`、ReviewRun 和降级一致性仍属于 WP02。WP03 仍为 `acceptance_disputed`，WP04 需按当前入口语义复验；WP05 同时缺外部金标和循环复审产品验收；WP06 只完成免费隔离 Preview 候选，Production 仍未发布。
+当前唯一 Active 是 WP02。WP01 已由实现提交 `5a22f769` 和收口提交 `4269840f` 完成：AI 控制面拆为 `ProviderConnection → ModelCatalogEntry` 和 `BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy` 六对象，配置页按模型接入、模型目录、AI 应用、业务绑定、发布状态五项任务组织；Provider 不再包含具体模型、合同阶段或规则引擎。业务运行尚未切换：真实 provider、token、`model_invocations`、ReviewRun、降级一致性和准确率由 WP02 验收。WP03 仍为 `acceptance_disputed`，WP04 需按当前入口语义复验；WP05 同时缺外部金标和循环复审产品验收；WP06 只完成免费隔离 Preview 候选，Production 仍未发布。
 
-WP01 当前兼容边界：六对象先以“一行一个严格对象”暂存既有 `configs`，旧 `AI_CONFIG / ModelPolicy` 只读保留，禁止新旧图混合；未做不可逆迁移、未写 Production。发布前检查已发布引用、启用状态和能力匹配；业务用点来自代码注册表，业务模块不直接绑定模型。完整对象、生命周期和 WP01/WP02 分界以 `F012-ai-runtime-config.md` 为准。
+WP01 已验收的兼容边界：六对象以“一行一个严格对象”存入既有 `configs`，旧 `AI_CONFIG / ModelPolicy` 只读保留，禁止新旧图混合；未做不可逆迁移、未写 Production。发布前检查已发布引用、启用状态和能力匹配；业务用点来自代码注册表，业务模块不直接绑定模型。完整对象、生命周期和 WP01/WP02 分界以 `F012-ai-runtime-config.md` 为准。
 
-执行顺序固定为 `WP00（已完成） -> WP01（Active） -> WP02（Next） -> WP03 -> WP04 -> WP05（满足恢复门禁后）/WP07 -> WP08 -> WP09`。新需求继续进入 Inbox，只有满足调度规则才切换 Active；发布、AI 平台和规则 UX 不再合成一个混合任务。
+执行顺序固定为 `WP00（已完成） -> WP01（已完成） -> WP02（Active） -> WP03（Next） -> WP04 -> WP05（满足恢复门禁后）/WP07 -> WP08 -> WP09`。新需求继续进入 Inbox，只有满足调度规则才切换 Active；发布、AI 平台和规则 UX 不再合成一个混合任务。
 
 ---
 
@@ -3819,7 +3819,7 @@ approval_flow:
 
 **候选存储与安全边界**：WP01 暂时把六类对象作为六种严格 discriminated 记录存入既有 `configs`，不做不可逆迁移、不写 Production。草稿 probe 只对当次参数有效，不持久化 Provider 健康、不写 `model_invocations`、不充当发布成功或生产可用的证据。隔离 Preview `vsfropnfsmnonkotywsx` 已应用 `secure_ai_config_control_plane` 迁移，动态 bearer canary 证明当前记录可持有凭据而历史版本无该凭据，fixture 已清理；此结论仅对 Preview 数据层成立，不外推到 Production。通用 `configs` 发布非数据库原子事务是 WP09 的 Production 发布门禁，不阻塞 WP01 配置控制面退出。
 
-**WP01 退出与下游边界**：WP01 只在同一最终 Git SHA 通过六对象/API、Provider 安全、五任务 UI、目标/全量测试、lint、typecheck、build、桌面/iPad、隔离 Preview 控制面闭环和旧运行链兼容回退后，才能声称配置控制面完成。通过即可让 WP02 进入 Active；不需先提供 WP02 的业务运行证据或 WP09 的 Production 发布证据。业务运行切换、真实 Provider 调用、token、`model_invocations`、ReviewRun、降级一致性和准确率属于 WP02；原子事务、RLS、环境和 Production 发布属于 WP09。完整验收以 `F012-ai-runtime-config.md` 为准。
+**WP01 完成与下游边界**：WP01 已在候选提交 `4269840f` 通过六对象/API、Provider 安全、五任务 UI、182 文件 / 1255 测试、lint、typecheck、75/75 build、桌面/iPad、隔离 Preview 控制面闭环和旧运行链兼容回退，并已让 WP02 进入 Active。业务运行切换、真实 Provider 调用、token、`model_invocations`、ReviewRun、降级一致性和准确率属于 WP02；原子事务、RLS、环境和 Production 发布属于 WP09。完整验收以 `F012-ai-runtime-config.md` 与 `product-code/output/evidence/wp01/README.md` 为准。
 
 ---
 
