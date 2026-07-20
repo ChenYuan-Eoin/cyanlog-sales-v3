@@ -1,5 +1,5 @@
 {
-  "validated_at": "2026-07-20T20:44:13+08:00",
+  "validated_at": "2026-07-20T20:57:18+08:00",
   "environment": {
     "application": "http://127.0.0.1:3100/configs?tab=ai",
     "supabase_project_id": "vsfropnfsmnonkotywsx",
@@ -32,6 +32,14 @@
     "capability_mismatch_rejected_before_fix": true,
     "binding_published_after_capability_fix": true
   },
+  "draft_history_rollback": {
+    "saved_versions_exercised": 2,
+    "rolled_back_to_version": 1,
+    "restored_value": "https://example.org/v1",
+    "newer_value_absent_after_reload": true,
+    "version_dialog_closed_before_confirmation": true,
+    "confirmation_pointer_blocked": false
+  },
   "large_list": {
     "temporary_provider_assets": 50,
     "desktop_single_column": true,
@@ -59,7 +67,7 @@
     "clean_console_warnings": 0
   },
   "cleanup": {
-    "deleted_run_tagged_rows": 62,
+    "deleted_run_tagged_rows": 63,
     "run_tagged_residue": 0,
     "retained_preexisting_ai_rows": 9,
     "config_version_rows_with_secret_after_cleanup": 0

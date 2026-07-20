@@ -32,6 +32,17 @@ export default function ConfigVersionDialog({
   onOpenChange,
   onRollback,
 }: ConfigVersionDialogProps) {
+  function requestRollback(configId: string, version: number) {
+    // The shared confirmation dialog is rendered in a separate portal. Close
+    // this modal first so its overlay cannot sit above and intercept the
+    // confirmation action. The next animation frame guarantees the close has
+    // reached the DOM before opening the confirmation dialog.
+    onOpenChange(false)
+    window.requestAnimationFrame(() => {
+      void onRollback(configId, version)
+    })
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -54,7 +65,7 @@ export default function ConfigVersionDialog({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => versionConfigId && onRollback(versionConfigId, version.version)}
+                      onClick={() => versionConfigId && requestRollback(versionConfigId, version.version)}
                     >
                       回滚
                     </Button>

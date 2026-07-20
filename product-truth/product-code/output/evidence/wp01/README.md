@@ -26,8 +26,12 @@ dependency graph rather than accepting independent forms.
 Preview read-back before cleanup showed one published object of every kind, an
 ordered primary/fallback route, one archived Provider row without `api_key`, one
 current Provider row with the credential, and zero sensitive keys in
-`config_versions`. All 62 run-tagged rows were then deleted; residue is zero and
-the six pre-existing Preview fixtures remain.
+`config_versions`. A separate draft was edited twice and rolled back from its
+second saved value to version 1 through the real version-history UI. This test
+also found and fixed a nested-dialog layering bug: version history now closes
+before the confirmation portal opens, so the confirm action is clickable. All
+63 run-tagged rows created across the acceptance run were deleted; residue is
+zero and the six pre-existing Preview fixtures remain.
 
 ## Layout and browser acceptance
 
@@ -49,7 +53,7 @@ bearer canary results are in `preview-security.json`.
 
 ## Engineering gates
 
-- `pnpm test:run`: 181 files, 1254 tests passed.
+- `pnpm test:run`: 182 files, 1255 tests passed.
 - `pnpm lint`: passed.
 - `pnpm exec tsc --noEmit`: passed.
 - serial clean `pnpm build`: passed (75/75 static pages).
