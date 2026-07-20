@@ -113,6 +113,7 @@ describe('rule configuration product boundary', () => {
     expect(tab).toContain('min-w-0 scroll-mt-6 self-start overflow-hidden lg:col-span-2')
     expect(tab).not.toContain('xl:grid-cols-[210px_280px_minmax(0,1fr)]')
     expect((tab.match(/max-h-\[420px\]/g) || []).length).toBe(2)
+    expect((tab.match(/overflow-x-hidden overflow-y-auto/g) || []).length).toBe(2)
     expect(tab).toContain("scrollIntoView({ behavior: 'smooth', block: 'start' })")
     expect((tab.match(/self-start overflow-hidden/g) || []).length).toBeGreaterThanOrEqual(3)
   })

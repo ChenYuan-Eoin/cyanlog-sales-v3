@@ -524,7 +524,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="max-h-[420px] space-y-1 overflow-y-auto p-2">
+            <CardContent className="max-h-[420px] space-y-1 overflow-x-hidden overflow-y-auto p-2">
               {loadingHierarchy ? (
                 <div className="px-3 py-8 text-center text-sm text-slate-400">加载中...</div>
               ) : categories.length === 0 ? (
@@ -575,7 +575,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 />
               </div>
             </CardHeader>
-            <CardContent className="max-h-[420px] space-y-2 overflow-y-auto p-2">
+            <CardContent className="max-h-[420px] space-y-2 overflow-x-hidden overflow-y-auto p-2">
               {!selectedCategory ? (
                 <EmptyList message="请选择问题分类" />
               ) : visibleRules.length === 0 ? (
