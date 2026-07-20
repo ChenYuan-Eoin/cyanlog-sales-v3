@@ -33,6 +33,38 @@
       "description": "AI 运行治理指南"
     },
     {
+      "id": "agent-execution-entry",
+      "path": "AGENTS.md",
+      "kind": "file",
+      "required": true,
+      "maintained": true,
+      "description": "Codex 调度入口与执行授权边界"
+    },
+    {
+      "id": "runtime-continuation",
+      "path": "governance/runtime-state/CONTINUE_WORK.md",
+      "kind": "file",
+      "required": true,
+      "maintained": true,
+      "description": "当前工作包与安全边界的人类可读续跑入口"
+    },
+    {
+      "id": "skills-catalog",
+      "path": "governance/SKILLS-CATALOG.md",
+      "kind": "file",
+      "required": false,
+      "maintained": true,
+      "description": "Harness Skill 能力与阶段触发目录"
+    },
+    {
+      "id": "legacy-execution-mechanism-pointer",
+      "path": "product-truth/02-technical-truth/EXECUTION_MECHANISM.md",
+      "kind": "file",
+      "required": false,
+      "maintained": true,
+      "description": "已迁出产品真相层的 Harness 执行机制兼容指针"
+    },
+    {
       "id": "db-schema-governance",
       "path": "governance/truth-docs-治理真相文档/DB_SCHEMA_GOVERNANCE.md",
       "kind": "file",

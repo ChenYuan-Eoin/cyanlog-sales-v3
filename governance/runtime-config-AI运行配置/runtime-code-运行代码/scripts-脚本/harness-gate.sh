@@ -34,7 +34,7 @@ function switch_gate() {
   local gate="$1"
 
   if [ -z "$gate" ]; then
-    echo "❌ 请指定Gate ID: G2, G4, or none"
+    echo "❌ 请指定Gate ID: HG2, HG4, or none"
     exit 1
   fi
 
@@ -81,7 +81,7 @@ case "$ACTION" in
     switch_gate "$GATE_ID"
     ;;
   strict)
-    switch_gate "G2"
+    switch_gate "HG2"
     ;;
   permissive|open)
     switch_gate "none"
@@ -91,8 +91,8 @@ case "$ACTION" in
     echo ""
     echo "Examples:"
     echo "  $0 status                    # 查看当前状态"
-    echo "  $0 switch G2                 # 切换到审查门（只读）"
-    echo "  $0 switch G4                 # 切换到复核门（深度只读）"
+    echo "  $0 switch HG2                 # 切换到审查门（只读）"
+    echo "  $0 switch HG4                 # 切换到复核门（深度只读）"
     echo "  $0 strict                    # 快捷方式：进入严格模式"
     echo "  $0 permissive                # 快捷方式：解除限制"
     exit 1

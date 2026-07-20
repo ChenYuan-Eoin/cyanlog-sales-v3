@@ -6,15 +6,15 @@ const crypto = require('crypto');
 const { loadRegistry } = require('./project-registry');
 
 const PHASE_TO_GATE = {
-  intake: 'G0',
-  research: 'G1',
-  contract_review: 'G2',
-  plan: 'G2',
-  execute: 'G3',
-  verify: 'G4',
-  evidence: 'G4',
-  approval: 'G5',
-  blocked: 'G5',
+  intake: 'HG0',
+  research: 'HG1',
+  contract_review: 'HG2',
+  plan: 'HG2',
+  execute: 'HG3',
+  verify: 'HG4',
+  evidence: 'HG4',
+  approval: 'HG5',
+  blocked: 'HG5',
   complete: null,
   idle: null
 };

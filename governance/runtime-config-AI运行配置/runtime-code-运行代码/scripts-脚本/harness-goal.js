@@ -132,7 +132,7 @@ function main() {
         askUser: options.askUser,
         requiredChecks: options.requiredChecks
       });
-      console.log(`Harness phase=intake gate=G0`);
+      console.log(`Harness phase=intake gate=HG0`);
       console.log(`Goal contract written: ${paths(repoRoot).contractPath}`);
       console.log(`Goal id=${contract.id}`);
       console.log(`Autonomy=${contract.autonomyBudget.level}`);

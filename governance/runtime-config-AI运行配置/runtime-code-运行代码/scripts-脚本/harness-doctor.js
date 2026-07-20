@@ -274,7 +274,7 @@ function main() {
   }
 
   if (settings) {
-    const requiredGates = ['G0', 'G1', 'G2', 'G3', 'G4', 'G5'];
+    const requiredGates = ['HG0', 'HG1', 'HG2', 'HG3', 'HG4', 'HG5'];
     const missingGates = requiredGates.filter((gate) => !settings.gates?.[gate]);
     if (missingGates.length === 0) {
       pass('long-task gates defined', requiredGates.join(','));

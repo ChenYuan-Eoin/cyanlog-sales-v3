@@ -219,7 +219,7 @@ git commit -m "feat: F001 价盘管理"
 
 ### 方式3：Gate 阶段强制触发
 ```
-# G2 门（审查阶段）自动调用
+# HG2 门（审查阶段）自动调用
 Executing: /skill-req-review
 [Agent] Reading REQUIREMENTS.md...
 [Agent] Checking R1-R5...

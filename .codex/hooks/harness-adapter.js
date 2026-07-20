@@ -94,7 +94,7 @@ function userPromptSubmit(payload) {
     console.log([
       '[Harness read-only verification started]',
       `goal=${contract.id}`,
-      'phase=verify gate=G4 autonomy=A0',
+      'phase=verify gate=HG4 autonomy=A0',
       'Only read and local verification commands are allowed. Edits, deployment, remote mutation, and destructive commands remain blocked.'
     ].join('\n'));
     return;
@@ -117,7 +117,7 @@ function userPromptSubmit(payload) {
   console.log([
     '[Harness intake started]',
     `goal=${contract.id}`,
-    'phase=intake gate=G0 autonomy=A0',
+    'phase=intake gate=HG0 autonomy=A0',
     'Before autonomous long-task work, classify the goal into: objective, non-goals, researchable unknowns, user-intent questions, autonomy budget, forbidden scopes, checkpoints, evidence, and stop conditions.',
     `To approve bounded execution after the contract is reviewed, run: node ${GOAL_SCRIPT} approve --level A1 --by <name> && node ${GOAL_SCRIPT} phase execute`
   ].join('\n'));

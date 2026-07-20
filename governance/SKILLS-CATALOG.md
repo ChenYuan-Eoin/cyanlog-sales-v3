@@ -177,7 +177,7 @@ Refs: Fxxx
 
 **用途：** PRD 与代码实现的机械对比
 
-**触发条件：** G3 Gate（修复阶段）
+**触发条件：** HG3 Gate（受控执行阶段）
 
 **文档中提到但未实现，需要补充**
 
@@ -240,10 +240,12 @@ git commit -m "feat: F001 价盘管理"
 
 ### 方式 3：Gate 阶段触发
 ```
-G1 (编辑门) → 完成编辑
-G2 (审查门) → skill-req-review, skill-code-review
-G3 (修复门) → skill-test-gen (补测试)
-G4 (复核门) → skill-socrates
+HG0 intake → 只做目标澄清与边界识别
+HG1 research → 只读调研与低风险本地检查
+HG2 contract_review → skill-req-review, skill-code-review
+HG3 execute → skill-code-review, skill-test-gen
+HG4 verify → skill-socrates 与只读证据复核
+HG5 approval → 等待高风险动作批准，不自动执行写操作
 ```
 
 ---

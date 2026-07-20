@@ -17,6 +17,31 @@ const core = require('../scripts-脚本/harness-core');
 
 const WORKSPACE_ROOT = process.env.PRICE_V3_WORKSPACE_ROOT ||
   path.resolve(__dirname, '../../../..');
+const PROJECT_REGISTRY_PATH = path.join(
+  WORKSPACE_ROOT,
+  'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js'
+);
+
+function enforceSchedulerPath(payload) {
+  const toolName = core.normalizeToolName(payload.tool_name);
+  if (!['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {
+    return;
+  }
+  const toolInput = payload.tool_input || {};
+  const filePath = toolInput.file_path || toolInput.notebook_path;
+  if (!filePath) {
+    console.error('SCHEDULER_BLOCKED: write tool did not provide a file path');
+    process.exit(2);
+  }
+  const result = spawnSync(process.execPath, [PROJECT_REGISTRY_PATH, 'scheduler-check', filePath], {
+    cwd: WORKSPACE_ROOT,
+    encoding: 'utf8'
+  });
+  if (result.status !== 0) {
+    console.error(result.stdout || result.stderr || 'SCHEDULER_BLOCKED');
+    process.exit(2);
+  }
+}
 
 function printDeny(result) {
   console.error(`\n🚫 GATE INTERCEPTED: ${result.reason}`);
@@ -72,6 +97,8 @@ function main() {
     console.error(`❌ Gate Enforcer: invalid hook payload: ${error.message}`);
     process.exit(1);
   }
+
+  enforceSchedulerPath(payload);
 
   const result = core.evaluateToolUse(WORKSPACE_ROOT, payload);
   if (!result.ok) {

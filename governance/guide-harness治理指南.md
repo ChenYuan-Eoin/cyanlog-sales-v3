@@ -4,6 +4,8 @@
 
 本目录归集项目中的 AI 运行配置、技能配置、历史治理文档、hook、validator 与 guard 代码。
 
+Harness 的“文档真相”和“当前工作树可运行”必须分开判断：只有当前工作树同时具备 settings、`harness-core.js`、Hook adapter、状态文件并通过 `harness-selftest.js` 与 `harness-doctor.js`，才可声明该工作树的 Harness 已就绪；受保护的旧工作树缺少运行资产时只能作为快照，不得用文档存在冒充运行中。
+
 ## 长期维护范围
 
 > 约定：本项目长期维护的 Markdown 真相文档仅有 1 份治理文档，即当前文件。
@@ -141,7 +143,7 @@ python3 ./scripts/sync_governance.py
 
 Codex 项目 hook 在识别到目标型 prompt 且当前没有活跃长任务时，应自动进入 `A0/intake`，写入初始目标合约，并阻止命令执行和编辑，直到目标合约被审查并显式 approve。
 
-例外：当 prompt 明确声明为只读验证/复验，并同时声明不修改、不提交、不推送、不部署时，Codex hook 可以直接进入 `G4/verify`。该模式只允许读取和本地验证命令，仍然禁止编辑、部署、远程写入和破坏性命令，用于新会话/新 worktree 的 post-push 验证，避免验证任务被普通 A0 intake 卡死。
+例外：当 prompt 明确声明为只读验证/复验，并同时声明不修改、不提交、不推送、不部署时，Codex hook 可以直接进入 `HG4/verify`。该模式只允许读取和本地验证命令，仍然禁止编辑、部署、远程写入和破坏性命令，用于新会话/新 worktree 的 post-push 验证，避免验证任务被普通 A0 intake 卡死。
 
 ### 自治级别
 
@@ -158,14 +160,14 @@ Codex 项目 hook 在识别到目标型 prompt 且当前没有活跃长任务时
 
 | 阶段 | Gate | 目的 | 写权限 |
 |---|---|---|---|
-| intake | G0 | 目标澄清和边界识别 | 否 |
-| research | G1 | 只读调研和低风险本地检查 | 否 |
-| contract_review | G2 | 合约审查与用户意图确认 | 否 |
-| execute | G3 | 已批准合约内执行 | 是，受自治级别和风险策略限制 |
-| verify | G4 | 验证与证据收集 | 否 |
-| approval | G5 | 高风险动作等待用户确认 | 否 |
+| intake | HG0 | 目标澄清和边界识别 | 否 |
+| research | HG1 | 只读调研和低风险本地检查 | 否 |
+| contract_review | HG2 | 合约审查与用户意图确认 | 否 |
+| execute | HG3 | 已批准合约内执行 | 是，受自治级别和风险策略限制 |
+| verify | HG4 | 验证与证据收集 | 否 |
+| approval | HG5 | 高风险动作等待用户确认 | 否 |
 
-进入 `execute/G3` 必须满足：目标合约有效、合约状态为 `approved` 或 `active`、自治级别允许编辑。
+进入 `execute/HG3` 必须满足：目标合约有效、合约状态为 `approved` 或 `active`、自治级别允许编辑。
 
 同时还必须满足 intake readiness：
 
@@ -218,9 +220,9 @@ Harness 不得在执行高影响动作后再解释理由。所有工具调用必
 | 评估项 | 机器判定 | 不满足时动作 |
 |---|---|---|
 | 目标对象 | 动作是否属于当前目标对象，例如 Harness 控制面、业务应用、外部供应商或远程 Git | 目标漂移时拦截 |
-| 动作类型 | 工具和命令被归类为 read、edit、command、deploy、external write、destructive、control-plane | 高风险进入拦截或 G5 |
+| 动作类型 | 工具和命令被归类为 read、edit、command、deploy、external write、destructive、control-plane | 高风险进入拦截或 HG5 |
 | 自治等级 | A0/A1/A2/A3 是否允许该动作类别 | 不允许则拒绝 |
-| 阶段门 | 当前 G0-G5 是否允许该工具 | 不允许则拒绝 |
+| 阶段门 | 当前 HG0-HG5 是否允许该工具 | 不允许则拒绝 |
 | 作用域 | 文件路径或命令目标是否落在 `allowedScopes` | 越界则拒绝或要求确认 |
 | 外部副作用 | 是否会创建部署、远程写、数据库/账单/鉴权变更 | 默认拒绝，除非目标合约显式授权 |
 | 控制面保护 | 是否直接改 runtime state、goal、evidence、hooks 或 Harness 策略文件 | runtime state 永久拒绝；控制面需显式 scope |

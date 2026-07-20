@@ -35,7 +35,7 @@
 
 F027 的主目标不是“把 60 多个标题逐条改掉”，而是把当前线上反馈、历史 Bug、需求缺失和代码事实归并到同一个产品闭环里。
 
-**主目标 G0：商业产品第一阶段闭环恢复。**
+**组合目标：商业产品第一阶段闭环恢复。**
 
 把 ONES Sales 从“功能堆叠 + 临时修补”恢复为可持续迭代的商业产品第一阶段。第一阶段允许能力不完整，但不允许关键结构被写死或伪完成。
 
@@ -70,11 +70,11 @@ Bug 合并规则：
 - 状态只能按证据推进：`待确认` -> `已确认` -> `修复中` -> `本地已验证` -> `线上已验证` -> `收尾完成`。
 - `待设计补齐` 不是延期借口；只有对象、接口、状态机或验收口径确实缺失时才使用，并且必须指向对应 F0xx 补齐位置。
 
-### 0.0.1 合同审核产品目标卡验收账本（2026-07-03 执行版）
+### 0.0.1 合同审核交付门禁账本（2026-07-03 执行版）
 
-本账本是本轮“合同审核产品目标拆解执行方案”的执行入口。它不新建平行 PRD，也不替代本文件上方 F027 G1-G11 问题域治理目标；它只把本轮开发拆成可关闭、可复验的小目标卡。
+本账本是 2026-07-03 批次的历史交付证据。它不新建平行 PRD，也不替代本文件上方 F027 G1-G11 产品组合目标；其中 DG0-DG7 只表示 Delivery Gate，不是当前工作包，也不得再解释为产品目标。旧文档中的 G0-G7 别名仅通过本段追溯。
 
-本轮执行顺序固定为：`G0 账本` -> `G1 模型真实性` -> `G2 规则资产` -> `G3 合同状态机` -> `G4 源文件批注工作台` -> `G5 文档对比版本流` -> `G6 品牌主题` -> `G7 性能与发布验收`。
+本轮执行顺序固定为：`DG0 账本` -> `DG1 模型真实性` -> `DG2 规则资产` -> `DG3 合同状态机` -> `DG4 源文件批注工作台` -> `DG5 文档对比版本流` -> `DG6 品牌主题` -> `DG7 性能与发布验收`。
 
 关闭规则：
 
@@ -106,14 +106,14 @@ Bug 合并规则：
 
 | 目标卡 | 当前状态 | 业务目标 | 涉及页面/API/数据对象 | 验收动作 | 失败标准 | 证据位置 |
 |---|---|---|---|---|---|---|
-| G0 目标验收账本 | 本地已验证 | 建立 G1-G7 可追踪目标卡，作为后续关闭口径。 | F027、`REQ_REGISTRY.yml`、F005v2/F006/F007/F009/F012。 | 确认每张卡都有目标、涉及页面/API、验收步骤、失败标准、证据位置；后续关闭只更新对应卡。 | 新增游离文档；目标卡缺少失败标准；用整体“已修改”关闭多卡。 | 本节。 |
-| G1 模型真实性闭环 | 本地已验证 | 证明本地模型、云模型、规则兜底的真实运行状态。 | `/configs?tab=ai-runtime`、`/api/configs/ai-runtime`、`/api/configs/ai-runtime/probe`、`/api/contracts/:id/review`、`/api/contracts/:id/review-runs`、`model_policies`、`model_invocations`。 | 1. 配置中心展示模型配置来源：数据库/环境变量/表单草稿；2. 本地 LM Studio 仅本地可达时显示可用；3. 云端 OpenAI-compatible provider 使用同一 Base URL/Model/Token 做真实 probe；4. 真实合同 ReviewRun 后展示 provider、model、phase、status、degraded、error；5. 本地成功、云端失败、规则兜底三态可区分。 | 测试失败但页面显示正式调用通过；`model_invocations` 无记录却宣称 AI 审核完成；规则兜底被包装成 AI；生产把 `127.0.0.1` 当作可达云能力。 | `product-truth/04-implementation-truth/manifests/F027/verification-result.md`；配置中心浏览器截图；`model_invocations` 查询/API 响应。 |
-| G2 规则资产产品化闭环 | 本地已验证 | 配置中心规则成为生产规则源，而不是复杂表单或黑盒 Markdown。 | `/configs?tab=rules`、RuleTab、RuleDesigner、规则集/分类/规则 API、`contract_rules_v2`、`contract_rule_snapshots`、`contract_skill_bundles`。 | 1. 规则按“规则集 -> 分类 -> 规则”树状组织；2. 规则详情可看业务解释、适用范围、风险等级、触发条件、例外条件、证据要求、批注模板；3. Markdown/自然语言只作为来源；4. AI 转译结果可见、可编辑、可确认；5. 发布后生成 SkillBundle 并绑定规则版本；6. ReviewRun 显示规则集版本和 SkillBundle。 | 用户必须看 JSON 才能维护；未确认转译结果可发布；GitHub/MD 规则直接覆盖系统发布规则；ReviewRun 只记录当前表状态。 | 规则配置浏览器截图；规则发布 API 响应；SkillBundle 数据/API；ReviewRun evidence。 |
-| G3 合同中心状态机闭环 | 本地已验证 | 发起审核、继续审核、查看批注、文档对比不再混淆。 | `/contracts`、`/contracts/upload`、`/contracts/:id`、`/contracts/:id/compare`、review navigation/state machine、`ContractVersion`、`ReviewRun`。 | 1. 合同中心只保留四个主入口：发起合同审核、继续合同审核、查看批注输出、合同文档对比；2. 每个入口绑定明确对象和下一步；3. 返回路径保留 `from`、`panel`、`contractId`; 4. 继续审核不新建合同，查看批注不进入报告页，文档对比不替代风险审核。 | 四个入口打开后仍像同一个上传/报告页；返回跳错页面；继续审核创建新合同；对比覆盖或替代 ReviewRun。 | `verification-result.md` G3 行；桌面/iPad 浏览器截图；导航单测；合同中心 API/状态机证据。 |
-| G4 源文件批注工作台闭环 | 本地已验证 | 审核结果以源 Word 批注为主，报告为辅。 | `/contracts/:id` 工作台、`/api/contracts/:id/review`、`/api/contracts/:id/export`、`RiskFinding`、`CommentPatch`、`contract_annotations`、DOCX `word/comments.xml`。 | 1. 桌面三栏：左版本/ReviewRun/风险队列，中源文件正文/锚点/高亮，右风险详情/规则依据/处理动作；2. iPad 保持正文和审查侧栏并行可见；3. 每个风险绑定 `evidence_text` 和 source range；4. 不能定位证据时标记人工定位，不生成正式批注；5. 导出基于源 DOCX 写入 Word 原生批注。 | 导出按钮无响应；重新生成导致原文件格式丢失；无法在 `comments.xml` 找到批注；证据不在原文仍生成正式批注；页面以报告为主。 | `verification-result.md` G4 行；DOCX zip/xml 检查；工作台桌面/iPad 截图；导出 API timing；模型/锚点双门禁 API 证据。 |
-| G5 文档对比版本流闭环 | 本地已验证 | 文档对比成为合同版本流的一部分。 | `/contracts/:id/compare`、`/api/contracts/:id/compare`、`compare-standard`、`ContractVersion`、客户回传版/人工修订版上传。 | 1. 基准文件可选择，不能锁死；2. 新文件来自客户回传版或人工修订版；3. 对比结果绑定 ContractVersion；4. 展示新增/删除/修改/风险变化；5. 对比完成后可进入再审核；6. 返回审核工作台保留 compare 上下文。 | 基准文件锁死；没有候选就只显示死路；结果不绑定版本；对比覆盖原合同；对比页面替代 ReviewRun。 | `verification-result.md` G5 行；对比选择页/结果页桌面与 iPad 截图；compare API `document_pair` 响应；再审核入口和 ReviewRun API 单测证据。 |
-| G6 品牌主题治理闭环 | 本地已验证 | 全站只认一个 active BrandProfile。 | `/configs?tab=theme`、`/api/configs/:id/publish`、`RuntimeThemeLoader`、`AppShell`、`Sidebar`、`app/layout.tsx`、`BrandProfile/UI_THEME`、favicon。 | 1. 发布 UI_THEME 时归档同组织其他 active 主题；2. 登录页、侧栏、合同中心、favicon 使用同一 BrandProfile；3. HTML head favicon 指向 active profile；4. 草稿主题不影响线上运行时；5. 刷新后 logo/favicon/name 仍一致。 | 同组织多个 active；浏览器仍显示 Vercel 默认图标；页面 logo 与配置中心不一致；草稿污染运行时。 | `verification-result.md` G6 行；主题发布 API 测试；本地 API active 计数；合同中心 HTML head/favicon 证据；配置中心主题页截图。 |
-| G7 性能与发布验收闭环 | 线上已验证 | 所有目标完成后再整体发布，不用单点修改冒充完成。 | `/api/auth/login`、`/contracts`、`/contracts/:id`、`/configs`、长审核进度、测试/构建/Vercel。 | 1. 冷登录拆解 Server-Timing；2. 长审核显示阶段进度；3. 记录 `/contracts`、`/contracts/:id`、`/configs` 首屏大小和加载时间；4. 跑 `pnpm tsc --noEmit`、`pnpm build`、关键 Vitest；5. 桌面/iPad 浏览器验收合同中心、审核工作台、文档对比、配置中心、品牌主题；6. 用户要求时才 commit/push/deploy；部署后 Vercel Production Ready 再声明线上可验收。 | 审核长时间只有 loading；只跑 build 就说完成；没有 iPad 视口；没有 DOCX 文件证据；未部署却说线上可验收。 | `verification-result.md` G7/线上验收行；Vercel Production `dpl_3xTwnGbXK9Nvfeuc8APwHR7RMGsu`; 主域 `https://sales.cyanlog.icu`; 线上桌面/iPad 截图；冷登录 timing 记录。 |
+| DG0 目标验收账本 | 本地已验证 | 建立 DG1-DG7 可追踪目标卡，作为后续关闭口径。 | F027、`REQ_REGISTRY.yml`、F005v2/F006/F007/F009/F012。 | 确认每张卡都有目标、涉及页面/API、验收步骤、失败标准、证据位置；后续关闭只更新对应卡。 | 新增游离文档；目标卡缺少失败标准；用整体“已修改”关闭多卡。 | 本节。 |
+| DG1 模型真实性闭环 | 本地已验证 | 证明本地模型、云模型、规则兜底的真实运行状态。 | `/configs?tab=ai-runtime`、`/api/configs/ai-runtime`、`/api/configs/ai-runtime/probe`、`/api/contracts/:id/review`、`/api/contracts/:id/review-runs`、`model_policies`、`model_invocations`。 | 1. 配置中心展示模型配置来源：数据库/环境变量/表单草稿；2. 本地 LM Studio 仅本地可达时显示可用；3. 云端 OpenAI-compatible provider 使用同一 Base URL/Model/Token 做真实 probe；4. 真实合同 ReviewRun 后展示 provider、model、phase、status、degraded、error；5. 本地成功、云端失败、规则兜底三态可区分。 | 测试失败但页面显示正式调用通过；`model_invocations` 无记录却宣称 AI 审核完成；规则兜底被包装成 AI；生产把 `127.0.0.1` 当作可达云能力。 | `product-truth/04-implementation-truth/manifests/F027/verification-result.md`；配置中心浏览器截图；`model_invocations` 查询/API 响应。 |
+| DG2 规则资产产品化闭环 | 本地已验证 | 配置中心规则成为生产规则源，而不是复杂表单或黑盒 Markdown。 | `/configs?tab=rules`、RuleTab、RuleDesigner、规则集/分类/规则 API、`contract_rules_v2`、`contract_rule_snapshots`、`contract_skill_bundles`。 | 1. 规则按“规则集 -> 分类 -> 规则”树状组织；2. 规则详情可看业务解释、适用范围、风险等级、触发条件、例外条件、证据要求、批注模板；3. Markdown/自然语言只作为来源；4. AI 转译结果可见、可编辑、可确认；5. 发布后生成 SkillBundle 并绑定规则版本；6. ReviewRun 显示规则集版本和 SkillBundle。 | 用户必须看 JSON 才能维护；未确认转译结果可发布；GitHub/MD 规则直接覆盖系统发布规则；ReviewRun 只记录当前表状态。 | 规则配置浏览器截图；规则发布 API 响应；SkillBundle 数据/API；ReviewRun evidence。 |
+| DG3 合同中心状态机闭环 | 本地已验证 | 发起审核、继续审核、查看批注、文档对比不再混淆。 | `/contracts`、`/contracts/upload`、`/contracts/:id`、`/contracts/:id/compare`、review navigation/state machine、`ContractVersion`、`ReviewRun`。 | 1. 合同中心只保留四个主入口：发起合同审核、继续合同审核、查看批注输出、合同文档对比；2. 每个入口绑定明确对象和下一步；3. 返回路径保留 `from`、`panel`、`contractId`; 4. 继续审核不新建合同，查看批注不进入报告页，文档对比不替代风险审核。 | 四个入口打开后仍像同一个上传/报告页；返回跳错页面；继续审核创建新合同；对比覆盖或替代 ReviewRun。 | `verification-result.md` DG3 行；桌面/iPad 浏览器截图；导航单测；合同中心 API/状态机证据。 |
+| DG4 源文件批注工作台闭环 | 本地已验证 | 审核结果以源 Word 批注为主，报告为辅。 | `/contracts/:id` 工作台、`/api/contracts/:id/review`、`/api/contracts/:id/export`、`RiskFinding`、`CommentPatch`、`contract_annotations`、DOCX `word/comments.xml`。 | 1. 桌面三栏：左版本/ReviewRun/风险队列，中源文件正文/锚点/高亮，右风险详情/规则依据/处理动作；2. iPad 保持正文和审查侧栏并行可见；3. 每个风险绑定 `evidence_text` 和 source range；4. 不能定位证据时标记人工定位，不生成正式批注；5. 导出基于源 DOCX 写入 Word 原生批注。 | 导出按钮无响应；重新生成导致原文件格式丢失；无法在 `comments.xml` 找到批注；证据不在原文仍生成正式批注；页面以报告为主。 | `verification-result.md` DG4 行；DOCX zip/xml 检查；工作台桌面/iPad 截图；导出 API timing；模型/锚点双门禁 API 证据。 |
+| DG5 文档对比版本流闭环 | 本地已验证 | 文档对比成为合同版本流的一部分。 | `/contracts/:id/compare`、`/api/contracts/:id/compare`、`compare-standard`、`ContractVersion`、客户回传版/人工修订版上传。 | 1. 基准文件可选择，不能锁死；2. 新文件来自客户回传版或人工修订版；3. 对比结果绑定 ContractVersion；4. 展示新增/删除/修改/风险变化；5. 对比完成后可进入再审核；6. 返回审核工作台保留 compare 上下文。 | 基准文件锁死；没有候选就只显示死路；结果不绑定版本；对比覆盖原合同；对比页面替代 ReviewRun。 | `verification-result.md` DG5 行；对比选择页/结果页桌面与 iPad 截图；compare API `document_pair` 响应；再审核入口和 ReviewRun API 单测证据。 |
+| DG6 品牌主题治理闭环 | 本地已验证 | 全站只认一个 active BrandProfile。 | `/configs?tab=theme`、`/api/configs/:id/publish`、`RuntimeThemeLoader`、`AppShell`、`Sidebar`、`app/layout.tsx`、`BrandProfile/UI_THEME`、favicon。 | 1. 发布 UI_THEME 时归档同组织其他 active 主题；2. 登录页、侧栏、合同中心、favicon 使用同一 BrandProfile；3. HTML head favicon 指向 active profile；4. 草稿主题不影响线上运行时；5. 刷新后 logo/favicon/name 仍一致。 | 同组织多个 active；浏览器仍显示 Vercel 默认图标；页面 logo 与配置中心不一致；草稿污染运行时。 | `verification-result.md` DG6 行；主题发布 API 测试；本地 API active 计数；合同中心 HTML head/favicon 证据；配置中心主题页截图。 |
+| DG7 性能与发布验收闭环 | 线上已验证 | 所有目标完成后再整体发布，不用单点修改冒充完成。 | `/api/auth/login`、`/contracts`、`/contracts/:id`、`/configs`、长审核进度、测试/构建/Vercel。 | 1. 冷登录拆解 Server-Timing；2. 长审核显示阶段进度；3. 记录 `/contracts`、`/contracts/:id`、`/configs` 首屏大小和加载时间；4. 跑 `pnpm tsc --noEmit`、`pnpm build`、关键 Vitest；5. 桌面/iPad 浏览器验收合同中心、审核工作台、文档对比、配置中心、品牌主题；6. 用户要求时才 commit/push/deploy；部署后 Vercel Production Ready 再声明线上可验收。 | 审核长时间只有 loading；只跑 build 就说完成；没有 iPad 视口；没有 DOCX 文件证据；未部署却说线上可验收。 | `verification-result.md` DG7/线上验收行；Vercel Production `dpl_3xTwnGbXK9Nvfeuc8APwHR7RMGsu`; 主域 `https://sales.cyanlog.icu`; 线上桌面/iPad 截图；冷登录 timing 记录。 |
 
 ---
 
@@ -201,7 +201,7 @@ Bug 合并规则：
 | BUG-P2-043 | PD09 | RQ-ERR-001 | 404 页面、loading 状态、空状态设计不统一。 | 用户原始 B21-B23 反馈。 | 建立统一 error/loading/empty 组件和路由级验收。 | 404、加载失败、真实空、未授权四类状态可区分且样式一致。 | 待验证 |
 | BUG-P2-044 | PD09 | RQ-QA-001/RQ-GOV-002 | Harness test 失败、`--no-verify` 绕过和治理项未收敛。 | 用户原始 D5-D9 反馈。 | 恢复测试命令、提交门禁和发布证据链。 | 不依赖 `--no-verify`；失败测试有修复或明确豁免记录。 | 待验证 |
 | BUG-P2-045 | PD09 | RQ-QA-001 | 新增 lint 错误和 warning 清理不完整。 | 用户原始 F1-F10/C6 反馈。 | 固化 lint/typecheck/test 回归，不把 warning 当完成。 | `pnpm lint`、`pnpm exec tsc --noEmit`、目标测试和全量测试通过；剩余 warning 有归属。 | 本地当前批次通过，待发布门禁 |
-| BUG-P2-046 | PD03 | RQ-CFG-001 | 配置中心菜单重复。 | 用户原始 G1 反馈。 | 配置域导航源收敛，避免重复注册。 | 配置中心菜单无重复项；新增配置域需走同一 registry。 | 历史已修复，待回归固化 |
+| BUG-P2-046 | PD03 | RQ-CFG-001 | 配置中心菜单重复。 | 用户原始问题标签 SRC-G1 反馈。 | 配置域导航源收敛，避免重复注册。 | 配置中心菜单无重复项；新增配置域需走同一 registry。 | 历史已修复，待回归固化 |
 | BUG-P1-047 | PD04/PD10 | RQ-CON-004/RQ-NOISE-001 | 文档比对结果混入 Hemory 条款，说明合同测试/历史数据存在跨产品污染风险。 | 本地生产浏览器打开 `/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare` 曾出现 Hemory 条款；API 元数据确认 Hemory 记录缺少同客户/同报价关系。 | 候选和 POST/GET 均按同报价、同客户或 legacy 同上传者关系过滤；后续仍需清理或隔离跨产品样本数据。 | 合同中心列表、比对候选和结果页不得默认展示跨产品/无关业务合同；测试样本必须可追溯来源和用途。 | 本地生产浏览器/API 已验证污染比对被阻断；样本清理与线上复验待补 |
 
 ### 0.2.1 Bug 到子目标映射
@@ -243,7 +243,7 @@ Bug 合并规则：
 
 | 批次 | 当前状态 | 已有证据 | 未闭环缺口 | 下一步出口 |
 |---|---|---|---|---|
-| B0 需求/问题资产归位 | 修复中 | 主文档 0.4、F027 0.0-0.2、`REQ_REGISTRY.yml#audit_supplement` 已建立 G0/G1-G11、PD01-PD10、47 条结构化 Bug 和用户原始 A-G 映射。 | 后半段历史 D01-D10/P0-P4 记录仍可能干扰当前 G/PD/Bug 体系；F027 evidence manifest 与当前 dirty worktree、最新未部署改动尚未完全同步。 | 当前 truth 以 0.x 段、`REQ_REGISTRY.yml` 和本看板为准；历史段只作证据来源，不得反向覆盖当前状态。 |
+| B0 需求/问题资产归位 | 修复中 | 主文档 0.4、F027 0.0-0.2、`REQ_REGISTRY.yml#audit_supplement` 已建立组合目标、G1-G11、PD01-PD10、47 条结构化 Bug 和用户原始 A-G 映射。 | 后半段历史 D01-D10/P0-P4 记录仍可能干扰当前 G/PD/Bug 体系；F027 evidence manifest 与当前 dirty worktree、最新未部署改动尚未完全同步。 | 当前 truth 以 0.x 段、`REQ_REGISTRY.yml` 和本看板为准；历史段只作证据来源，不得反向覆盖当前状态。 |
 | B1 配置与组织假空态 | 本地已验证，待线上复验 | 组织、角色、主题、R001-R015 规则、本地浏览器和部分历史线上样本已有证据。 | 当前工作树仍有未部署改动，用户最新截图暴露过线上假空态；Feishu 真实凭据和上游成功导入未验收。 | 先保证当前代码质量门禁通过，再线上复验组织/角色/主题/规则/Feishu 未配置态。 |
 | B2 合同中心入口与上传/比对 | 本地已验证，待线上复验 | 上传入口、ContractVersion、文档比对阻断/成功、污染候选过滤已有本地 API/浏览器证据。 | 当前线上是否已包含最新入口/比对修复未确认；测试样本隔离和默认数据污染仍需收尾。 | 用同一线上账号复验 `/contracts` 四入口、真实上传、比对候选和结果页。 |
 | B3 合同审核商业对象闭环 | 本地已验证，待线上复验 | 已补 ReviewRun 证据适配层、CommentPatch 适配层、ASK-backed NegotiationTask/CustomerFeedback 映射、ASK 回应后 `report_versions` 升版快照、Word docx zip 级测试；2026-07-01 已补真实 `contract_skill_bundles`、`model_policies`、`model_invocations` 和 `POST /api/contracts/:id/review-runs` 再审核触发；本地 production 临时样本跑通 `上传 -> 初审 -> 再审核 -> review evidence -> Word 批注导出 -> ContractVersion v2/report_version 关联 -> Storage/DB 清理`。 | 线上 Production 未复验；WPS 未安装，当前只完成人工 Word 打开验收；完整 Skill 编辑/模拟/发布控制台、模型连接健康检查、客户反馈驱动再审核状态机仍是后续项。 | 下一优先级是当前提交推送、Vercel Production 构建和主域在线复验，不再用本地样本替代线上证据。 |
@@ -317,7 +317,7 @@ Bug 合并规则：
 | F1 | compare 路由语法错误 | BUG-P1-024 / BUG-P2-045 | G6/G10 | 历史已修，保留在比对与 lint 回归。 |
 | F2 | analyze 路由 err 未使用 | BUG-P2-045 | G10 | 历史已修，保留在 lint 回归。 |
 | F3-F10 | 8 个 Warning | BUG-P2-042 / BUG-P2-045 | G7/G10 | 原清单未拆具体 warning，先按代码质量治理挂账。 |
-| G1 | 配置中心菜单重复 | BUG-P2-046 | G4/G8 | 历史已修，纳入配置导航回归。 |
+| SRC-G1 | 配置中心菜单重复 | BUG-P2-046 | G4/G8 | 历史已修，纳入配置导航回归；SRC 表示用户原始问题清单标签，不是产品目标。 |
 
 ---
 
@@ -685,7 +685,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 |---|---|---|---|---|
 | D01 | 线上可用性与发布治理 | 用户线上不可访问、D5-D9、F1-F10、外部依赖上传问题 | Vercel 构建、DNS、部署 payload、提交门禁同属发布链路 | Production Ready，主域名可访问，构建日志无阻断错误，部署上传边界明确 |
 | D02 | 异常路径与性能韧性 | 截图 2、B13-B14、B18、B21-B23、登录性能反馈 | error boundary、404/loading/empty、错误上报、冷登录 RPC 属异常/性能链路 | 异常可恢复，可追踪；关键异常路径浏览器可验证；冷登录瓶颈有 `X-Login-Timing` 分解 |
-| D03 | 组织权限与管理员闭环 | A3-A5、B9-B11、E8、G1 | 部门、用户、角色、成员分配、计数和下拉菜单同属 F011 组织权限链路 | 新增/删除成员后 UI、计数、数据库权限绑定一致；菜单可点击 |
+| D03 | 组织权限与管理员闭环 | A3-A5、B9-B11、E8、SRC-G1 | 部门、用户、角色、成员分配、计数和下拉菜单同属 F011 组织权限链路 | 新增/删除成员后 UI、计数、数据库权限绑定一致；菜单可点击 |
 | D04 | 外部组织同步闭环 | 外部组织架构同步无下文、A5 相关、F011 飞书同步 | 飞书环境变量、部门同步、结果反馈、幂等写入同属外部组织同步链路 | 未配置时给出明确错误；配置后同步部门并显示新增/更新/总计 |
 | D05 | 配置中心与业务执行面一致性 | A2、A9、B7、C3、C8、规则入口问题 | 配置中心合同规则、风险审核、规则执行都消费 `contract_rules_v2` | 线上存在 R001-R015；配置、模拟、风险审核读取同一规则事实 |
 | D06 | 合同审核与文档能力闭环 | A8、A10、B12、C5、C7、E1-E7、E9 | 上传、分析、合同详情、文档比对 POST/GET/UI 属 F005 合同能力链路 | 上传到分析结果查看可跑通；比对 POST/GET/UI 可跑通；失败提示明确 |
@@ -734,7 +734,7 @@ F027 不是一个新增业务功能，而是一次跨问题域的闭环治理单
 | 文档 | 原因 | 补齐范围 |
 |---|---|---|
 | `F011-org-permission-config.md` | 外部组织同步范围不清会影响验收判断。 | 明确飞书 MVP 只同步部门结构，未配置时必须反馈缺失环境变量和配置位置。 |
-| `F027-remediation-governance.md` | 缺少跨问题域合并、验收、发布证据的稳定 truth。 | 当前 0.x 段以 G0/G1-G11、PD01-PD10、47 条结构化 Bug、B0-B5 批次和执行看板为准；旧 D01-D10/P0-P4 只保留为历史证据来源。 |
+| `F027-remediation-governance.md` | 缺少跨问题域合并、验收、发布证据的稳定 truth。 | 当前 0.x 段以组合目标、G1-G11、PD01-PD10、47 条结构化 Bug、B0-B5 批次和执行看板为准；旧 D01-D10/P0-P4 只保留为历史证据来源。 |
 | `04-implementation-truth/manifests/F027/*` | 需要保留本轮线上证据、命令证据、发布证据。 | 记录当前验证结果、部署 ID、线上路径、剩余风险。 |
 | `04-implementation-truth/manifests/F027/api-validation-inventory.md` | API schema 覆盖债务不能只用粗略数量表达，否则容易把 manual guard 误判为已完成或未修复。 | 固化 103 个 API route 的 body-parse 分类：67 个 `schema+guard`、0 个 `guard-only`、36 个 `no-body`；ASK 回应路由按已测试的共享 helper schema 计入。 |
 

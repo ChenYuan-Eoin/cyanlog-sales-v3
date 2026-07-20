@@ -15,12 +15,12 @@ function makeSettings(repoRoot) {
   writeJson(core.paths(repoRoot).settingsPath, {
     version: 'selftest',
     gates: {
-      G0: { phase: 'intake', tools: ['Read', 'Grep', 'Glob', 'AskUserQuestion'] },
-      G1: { phase: 'research', tools: ['Read', 'Grep', 'Glob', 'Bash'] },
-      G2: { phase: 'contract_review', tools: ['Read', 'Grep', 'Glob', 'AskUserQuestion'] },
-      G3: { phase: 'execute', tools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'MultiEdit', 'Bash'] },
-      G4: { phase: 'verify', tools: ['Read', 'Grep', 'Glob', 'Bash'] },
-      G5: { phase: 'approval', tools: ['Read', 'Grep', 'Glob', 'AskUserQuestion'] }
+      HG0: { phase: 'intake', tools: ['Read', 'Grep', 'Glob', 'AskUserQuestion'] },
+      HG1: { phase: 'research', tools: ['Read', 'Grep', 'Glob', 'Bash'] },
+      HG2: { phase: 'contract_review', tools: ['Read', 'Grep', 'Glob', 'AskUserQuestion'] },
+      HG3: { phase: 'execute', tools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'MultiEdit', 'Bash'] },
+      HG4: { phase: 'verify', tools: ['Read', 'Grep', 'Glob', 'Bash'] },
+      HG5: { phase: 'approval', tools: ['Read', 'Grep', 'Glob', 'AskUserQuestion'] }
     }
   });
   writeJson(core.paths(repoRoot).registryPath, {
@@ -67,7 +67,7 @@ function main() {
 
   const started = core.startGoal(repoRoot, 'Build a safe long-task harness', { level: 'A0' });
   assert.strictEqual(started.state.mode, 'enforcing');
-  assert.deepStrictEqual(started.state.activeGates, ['G0']);
+  assert.deepStrictEqual(started.state.activeGates, ['HG0']);
   assert.strictEqual(started.contract.status, 'draft');
   assert.ok(started.contract.successCriteria.length > 0);
 
@@ -104,7 +104,7 @@ function main() {
   });
 
   const execution = core.setPhase(repoRoot, 'execute');
-  assert.deepStrictEqual(execution.state.activeGates, ['G3']);
+  assert.deepStrictEqual(execution.state.activeGates, ['HG3']);
   assert.deepStrictEqual(execution.state.activeHooks, ['UserPromptSubmit', 'PreToolUse', 'Stop']);
 
   assert.strictEqual(core.evaluateToolUse(repoRoot, {
