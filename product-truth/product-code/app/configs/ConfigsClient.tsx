@@ -682,14 +682,11 @@ export default function ConfigsClient({
       }
     }
 
-    loadedTabsRef.current = new Set(
-      Array.from(loadedTabsRef.current).filter((loadedTab) => (
-        tab === 'org-structure' || tab === 'role-access'
-          ? loadedTab !== 'org-structure' && loadedTab !== 'role-access'
-          : loadedTab !== tab
-      ))
-    )
-    setLoadedTabs(new Set(loadedTabsRef.current))
+    // A refresh is a data update, not a navigation event. Keep the already
+    // rendered tab mounted so its selected RuleSet/category/rule and open test
+    // workspace survive saves, test runs and publishes. `force: true` still
+    // bypasses the loaded-tab guard and replaces the data when the request
+    // completes.
     await loadTabData(tab, { force: true })
   }, [loadTabData])
 
@@ -993,9 +990,9 @@ export default function ConfigsClient({
         body: JSON.stringify(payload),
       })
 
+      const savedPayload = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const data = await res.json()
-        const message = getApiErrorMessage(data, '保存失败')
+        const message = getApiErrorMessage(savedPayload, '保存失败')
         setError(message)
         throw new Error(message)
       }
@@ -1012,6 +1009,7 @@ export default function ConfigsClient({
       } else {
         await refreshTabData('rules')
       }
+      return savedPayload?.data as ContractPolicyRule | undefined
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : '网络错误'
       setError(message)

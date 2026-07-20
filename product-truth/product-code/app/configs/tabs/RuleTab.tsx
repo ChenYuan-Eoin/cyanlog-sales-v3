@@ -32,7 +32,7 @@ interface RuleTabProps {
   rules: ContractPolicyRule[]
   focusRuleId?: string | null
   ruleMode?: string | null
-  onSave: (rule: Partial<ContractPolicyRule>, id?: string) => void | Promise<void>
+  onSave: (rule: Partial<ContractPolicyRule>, id?: string) => void | ContractPolicyRule | Promise<void | ContractPolicyRule>
   onDelete: (id: string) => void
   onRefresh?: () => void | Promise<void>
 }
@@ -251,14 +251,21 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     setSaving(true)
     setFeedback(null)
     try {
-      await onSave({
+      const savedRule = await onSave({
         ...rule,
         problem_category_id: selectedCategory.id,
         problem_category: selectedCategory,
         rule_set_id: selectedRule?.rule_set_id || (selectedRuleSetId === 'all' ? rule.rule_set_id || null : selectedRuleSetId),
       }, selectedRule?.id)
       setFeedback({ tone: 'success', message: '规则草稿已保存。正式生效仍需随所属规则集完成测试和发布。' })
-      await Promise.all([loadHierarchy(), onRefresh?.()])
+      // ConfigsClient.onSave already refreshes the rule rows. A second parent
+      // refresh would unmount this workspace and lose the user's position.
+      await loadHierarchy()
+      if (savedRule?.id) {
+        setSelectedRuleSetId(savedRule.rule_set_id || selectedRuleSetId)
+        setSelectedCategoryId(savedRule.problem_category_id || selectedCategory.id)
+        setSelectedRule(savedRule)
+      }
       setCreatingRule(false)
     } catch {
       setFeedback({ tone: 'error', message: '规则保存失败，请检查页面提示后重试。' })
@@ -559,7 +566,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </CardHeader>
                 <CardContent className="p-4">
                   <RuleTestSandbox rule={selectedRule} onTestSaved={async () => {
-                    await onRefresh?.()
+                    // A test run changes release readiness, not the rule draft.
+                    // Refresh the hierarchy in place so the test workspace and
+                    // selected business context remain visible.
                     await loadHierarchy()
                   }} />
                 </CardContent>

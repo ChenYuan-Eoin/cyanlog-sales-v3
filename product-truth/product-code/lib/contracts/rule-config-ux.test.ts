@@ -90,4 +90,23 @@ describe('rule configuration product boundary', () => {
     expect(tab).toContain('grid items-start gap-4 xl:grid-cols')
     expect((tab.match(/self-start overflow-hidden/g) || []).length).toBeGreaterThanOrEqual(3)
   })
+
+  it('keeps the selected business context mounted during saves and test runs', () => {
+    const refreshStart = configsClient.indexOf('const refreshTabData')
+    const refreshEnd = configsClient.indexOf('useEffect(() => {', refreshStart)
+    const refreshSource = configsClient.slice(refreshStart, refreshEnd)
+    const saveStart = tab.indexOf('async function handleSaveRule')
+    const saveEnd = tab.indexOf('async function handleCreateCategory')
+    const saveSource = tab.slice(saveStart, saveEnd)
+    const testStart = tab.indexOf('<RuleTestSandbox')
+    const testEnd = tab.indexOf('</CardContent>', testStart)
+    const testSource = tab.slice(testStart, testEnd)
+
+    expect(refreshSource).toContain('await loadTabData(tab, { force: true })')
+    expect(refreshSource).not.toContain('setLoadedTabs(')
+    expect(saveSource).toContain('setSelectedRule(savedRule)')
+    expect(saveSource).not.toContain('onRefresh?.()')
+    expect(testSource).toContain('await loadHierarchy()')
+    expect(testSource).not.toContain('onRefresh?.()')
+  })
 })
