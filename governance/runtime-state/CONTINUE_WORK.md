@@ -28,21 +28,22 @@
 
 ## 当前恢复点
 
-- 唯一 Active：`WP00`（`goal-baseline-consolidation`）。
-- 当前步骤：统一 REQ_REGISTRY、主文档、F099、Active/Inbox、F027/DG 和发布候选 Harness；本批不修改产品代码。
-- Next：`WP01`（平台模型接入、模型目录、AI 应用和业务用点底座）。
+- 唯一 Active：`WP01`（`ai-platform-foundation`）。
+- 当前步骤：以 release 候选代码为事实，盘点 Provider、ModelPolicy 与业务阶段的混合点；先固定平台领域对象、兼容边界和管理员主任务，再进入 API、配置 UI 与浏览器验收。
+- Next：`WP02`（真实模型调用、路由降级与运行证据）。
+- WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化完成；唯一 G/WP/F/IN/DG/HG 命名空间和六门 Harness 已通过本地门禁。
 - 旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆为 WP01、WP03、WP09，不再执行。
-- WP01、WP03 的旧整包验收为 `acceptance_disputed`；WP02 缺当前真实运行证据；WP04 需重验；WP05 为 `NO-GO`；WP06 只完成历史 Preview 候选；WP08 激活前必须拆成独立子包。
+- WP03 的旧整包验收为 `acceptance_disputed`；WP02 缺当前真实运行证据；WP04 需重验；WP05 为 `NO-GO`；WP06 只完成历史 Preview 候选；WP08 激活前必须拆成独立子包。
 
-## WP00 退出门禁
+## WP01 退出门禁
 
-- REQ_REGISTRY、主文档、F099、active-task 对 G/WP/F/IN/DG/HG 定义和映射一致。
-- 当前 Active/Next/Ready/Parked 不使用 G 或带 slug 的长 WP ID。
-- F027 正式产品目标只使用 G1-G11，历史批次卡只使用 DG0-DG7。
-- Harness 当前配置和运行状态只使用 HG0-HG5；旧 G0-G5 仅保留在历史证据中。
-- 根工作区受保护 dirty 快照不变；release 分支能独立运行相同 scheduler。
-- JSON/YAML/Markdown、scheduler validate/check 与 Git diff 检查通过。
-- 通过后 WP00 结束，再把 WP01 设为唯一 Active；不得在同一批顺带开发规则 UX 或执行 Production 发布。
+- ProviderConnection、ModelCatalogEntry、AIApplication、BusinessUsePoint、ApplicationBinding 和 RoutePolicy 的职责、关系与唯一来源明确。
+- Provider 只管理账号、端点、认证和连接状态；同一 Provider 可维护多个模型，模型版本不得冒充 Provider。
+- AI 应用选择能力、候选模型和降级路由；业务用点只绑定已发布应用，不直接绑定具体模型。
+- 配置 UI 按模型接入、模型目录、AI 应用、业务绑定和发布状态组织，不出现合同阶段复选框、规则引擎 Provider 或机器内部策略长文。
+- 既有配置具备可回滚的兼容读取或迁移路径；不可逆数据迁移或证据冲突立即停止。
+- 目标测试、typecheck、build、桌面和 iPad 管理员任务通过；连接测试不得冒充 WP02 的真实业务运行证据。
+- F000、F012、REQ、主文档和 F099 同步对象边界、证据与未完成项。
 
 ## 新输入路由
 
@@ -59,4 +60,4 @@
 - Production 数据库继续只读；未经批准不部署 Production。
 - 持续或按量付费依赖默认淘汰。
 - 不得用配置存在、页面能打开或旧环境证据冒充当前模型/文件/Production 验收。
-- 不得以治理整合为名改动本批 allowed paths 之外的产品代码。
+- 不得越过 WP01 的 allowed paths，也不得把规则 UX、真实模型运行证明或 Production 发布混入本批。

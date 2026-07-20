@@ -20,9 +20,9 @@
 
 | WP | Slug | 主要 G | 当前状态 | 边界 |
 |---|---|---|---|---|
-| WP00 | goal-baseline-consolidation | G1/G10/G11 | **Active** | 统一编号、真相源、Harness 和候选分支治理快照；不改产品代码 |
-| WP01 | ai-platform-foundation | G4；支撑 G3/G7 | Next / acceptance_disputed | Provider、模型目录、AI 应用、业务用点 |
-| WP02 | ai-runtime-truth | G3；支撑 G7/G10 | needs_current_runtime_proof | 当前 probe、真实 invocation/token、ReviewRun、降级 |
+| WP00 | goal-baseline-consolidation | G1/G10/G11 | Completed / `18dad230` | 已统一编号、真相源、Harness 和候选分支治理快照 |
+| WP01 | ai-platform-foundation | G4；支撑 G3/G7 | **Active** / reacceptance | Provider、模型目录、AI 应用、业务用点 |
+| WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Next / needs_current_runtime_proof | 当前 probe、真实 invocation/token、ReviewRun、降级 |
 | WP03 | rule-collection | G3/G4；支撑 G7/G10 | acceptance_disputed | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | contract-center-ia | G6；支撑 G8 | needs_reacceptance | 合同中心入口、任务身份、版本和下一步 |
 | WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | parked / NO-GO | 新源文件、事前独立金标、文件版本、风险迁移与循环复审 |
@@ -31,10 +31,10 @@
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
 | WP09 | release-acceptance | G7/G8/G9/G10/G11 | queued | 唯一候选、测试/build、桌面/iPad、真实文件、Preview/Production |
 
-执行顺序为 `WP00 -> WP01 -> WP02 -> WP03 -> WP04 -> WP05（恢复门禁满足后）/WP07 -> WP08 子包 -> WP09`。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
+执行顺序为 `WP00（已完成） -> WP01（Active） -> WP02（Next） -> WP03 -> WP04 -> WP05（恢复门禁满足后）/WP07 -> WP08 子包 -> WP09`。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
 
 ## 2. 候选边界
 
-本分支只在 WP00 完成后才是可继续开发的治理候选。WP01-WP04 的旧“本地完成”总括结论已被用户验收推翻；局部代码和历史证据可复用，但必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
+WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化，本分支现为可继续 WP01 的治理候选。WP01-WP04 的旧“本地完成”总括结论已被用户验收推翻；局部代码和历史证据可复用，但必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
 
-Production 数据库继续只读；WP00 不部署 Production，不覆盖根工作区受保护 dirty 快照。
+Production 数据库继续只读；WP01 不部署 Production，不覆盖根工作区受保护 dirty 快照。

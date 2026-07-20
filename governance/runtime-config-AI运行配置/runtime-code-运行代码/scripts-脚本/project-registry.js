@@ -232,7 +232,7 @@ function validateSchedulerState(options = {}) {
   if (state.execution_queue && state.execution_queue.next && state.execution_queue.next.id) {
     queueIds.push(state.execution_queue.next.id);
   }
-  for (const lane of ['ready', 'parked']) {
+  for (const lane of ['ready', 'parked', 'completed']) {
     for (const item of (state.execution_queue && state.execution_queue[lane]) || []) {
       if (item.id) queueIds.push(item.id);
     }

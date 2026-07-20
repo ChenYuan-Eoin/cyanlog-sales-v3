@@ -24,9 +24,9 @@ goal_governance:
     - "WP 完成不等于 G 完成；G 只有在相关 WP 和自身验收证据均有效时才能关闭。"
     - "完成证据必须绑定 namespace_version、WP、Git SHA、部署/数据库环境及浏览器或真实文件产物。"
   work_package_crosswalk:
-    WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: active}
-    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: acceptance_disputed}
-    WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: needs_current_runtime_proof}
+    WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
+    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: active_reacceptance}
+    WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: next_needs_current_runtime_proof}
     WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: acceptance_disputed}
     WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: needs_reacceptance}
     WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: parked_waiting_external_gold_and_product_reacceptance}

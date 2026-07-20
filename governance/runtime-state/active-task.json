@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-20T17:20:13+08:00",
+  "updated_at": "2026-07-20T17:58:48+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,86 +128,64 @@
     ]
   },
   "active_task": {
-    "id": "WP00",
-    "slug": "goal-baseline-consolidation",
-    "name": "目标命名空间、真相源与执行队列收敛",
-    "kind": "governance_recovery",
+    "id": "WP01",
+    "slug": "ai-platform-foundation",
+    "name": "平台模型接入、模型目录与 AI 应用绑定底座",
+    "kind": "product",
     "status": "active",
-    "current_step": "固定 G/WP/F/IN/DG/HG 六类编号和唯一交叉映射；将近期混合 P0 拆回 WP01 平台模型底座、WP03 规则集合与 WP09 发布验收，不在治理批次继续改产品代码。",
-    "started_at": "2026-07-20T17:20:13+08:00",
-    "resumed_at": "2026-07-20T17:20:13+08:00",
+    "objective": "把 AI 从合同场景和具体模型表单中解耦为全局平台能力：Provider 连接负责账号与端点，模型目录负责可用模型，AI 应用负责能力与路由，业务用点只绑定已发布应用；后续任何业务模块都能接入而不直接写死模型。",
+    "current_step": "以 release 候选代码为事实，先盘点现有 Provider/ModelPolicy/业务阶段混合点，再固定领域对象、迁移兼容边界和管理员主任务，随后按 API、配置 UI、目标测试与浏览器验收实现。",
+    "started_at": "2026-07-20T17:58:48+08:00",
+    "activation_basis": "WP00 已由提交 18dad230bbc12a6cf664e5868cc25d57bbb65fd3 固化唯一 G/WP/F/IN/DG/HG 体系；用户对全局模型层、模型目录、应用模块和业务消费边界的纠正已记录在 IN-20260720-037/039/041/047。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
     "allowed_paths": [
       "AGENTS.md",
-      "gate",
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
       "governance/runtime-state/CONTINUE_WORK.md",
-      "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
-      "governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/claude-user-prompt-submit.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/hooks-钩子/claude-pretool-gate-enforcer.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-gate.sh",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-doctor.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
-      ".codex/hooks/harness-adapter.js",
-      "governance/skills/skill-test-gen.json",
-      "governance/guide-harness治理指南.md",
-      "governance/runtime-config-AI运行配置/config-配置文件/legacy-skills/skill-req-review.json",
-      "governance/runtime-config-AI运行配置/config-配置文件/legacy-skills/skill-code-review.json",
-      "governance/runtime-assets/SKILLS.md",
-      "governance/SKILLS-CATALOG.md",
-      "governance/truth-docs-治理真相文档/SKILLS.md",
-      "governance/truth-docs-治理真相文档/PRD-GOVERNANCE.md",
-      "governance/truth-docs-治理真相文档/EXECUTION_MECHANISM.md",
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/00-master/PROJECT-主文档.md",
-      "product-truth/02-technical-truth/EXECUTION_MECHANISM.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F027-remediation-governance.md",
-      "product-truth/04-implementation-truth/manifests/F027/verification-result.md"
+      "product-truth/feature-packets/F000-config-center-architecture.md",
+      "product-truth/feature-packets/F012-ai-runtime-config.md",
+      "product-truth/product-code/app/configs",
+      "product-truth/product-code/app/api/configs",
+      "product-truth/product-code/lib/configs",
+      "product-truth/product-code/types",
+      "product-truth/product-code/output/evidence/wp01"
     ],
     "non_goals": [
-      "把 CSPP、WPS WebOffice、OnlyOffice 或实时协同重新引入当前主线",
-      "把运行时事实提取或独立属性中心冒充规则集合的产品主线",
-      "让规则配置人员填写模型、Prompt、执行引擎、内部字段代码或定位词",
-      "把规则集继续当作问题分类树，或把 amount/ratio/duration 当作业务问题分类",
-      "从当前受保护 dirty 快照直接部署不可复现 Production",
-      "未经单独裁定直接写 Production 数据库或跳过 SECURITY-P0-RLS-PRODUCTION 门禁",
-      "引入按月、按量或需要销售审核的持续付费依赖",
-      "在 WP00 内顺带修改产品代码、部署 Production、开发合同起草、CRM/SSO 或在线 Office"
+      "在 WP01 证明真实模型调用、token、ReviewRun 或审核准确率；这些属于 WP02",
+      "在 Provider 或模型目录中配置合同规则、问题分类、运行阶段、Prompt 或规则引擎；这些属于 WP03 或业务模块",
+      "重做合同审核工作台、循环复审、文档对比或合同起草",
+      "引入持续付费模型网关、在线 Office 或需要销售审核的供应商依赖",
+      "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
     ],
     "exit_criteria": [
-      "REQ_REGISTRY、主文档顶部、F099 和 active-task 对 G/WP/F/IN/DG/HG 的定义与交叉映射逐项一致",
-      "当前态不再用 G1-G9 表示近期开发包；所有旧编号都有明确别名且历史证据文件名不被破坏",
-      "F027 的历史执行卡使用 DG0-DG7，正式产品组合目标只保留 G1-G11",
-      "Harness 审查/复核门只使用 HG 编号，运行配置不再复用正式产品目标 G2/G4",
-      "execution_queue 保持一个 Active；原混合 P0 被拆回 WP01、WP03、WP09，不再把发布、平台底座和规则 UX 混成一批",
-      "发布候选分支携带同一目标基线快照；根 dirty 快照不被覆盖、stash、reset 或直接部署",
-      "JSON、YAML、Markdown 链接和治理校验通过后，WP00 结束并由 WP01 接替 Active"
+      "产品与代码使用独立对象表达 ProviderConnection、ModelCatalogEntry、AIApplication、BusinessUsePoint、ApplicationBinding 与 RoutePolicy，职责和关系有唯一来源",
+      "Provider 配置只管理账号、端点、认证与连接状态；可发现或录入同 Provider 下的多个模型，不把具体模型版本冒充 Provider",
+      "AI 应用选择逻辑能力、候选模型与降级路由；业务模块注册用点并绑定已发布应用，不直接绑定具体模型",
+      "配置 UI 按模型接入、模型目录、AI 应用、业务绑定和发布状态组织；不出现合同阶段复选框、规则引擎 Provider 或机器内部策略长文",
+      "既有配置有可回滚的兼容读取或迁移方案；证据冲突、不可逆数据迁移或 Production 写入立即停止",
+      "目标测试、typecheck、build、桌面与 iPad 配置任务验收通过；连接测试只证明草稿参数可达，不冒充 WP02 真实业务运行证据",
+      "F000、F012、REQ、主文档和 F099 同步当前对象边界、证据与未完成项"
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP00",
-      "slug": "goal-baseline-consolidation",
-      "reason": "用户指出多个目标体系导致完成度与排队失真，并明确要求整合；该治理恢复是继续产品开发前的最小必要批次"
-    },
-    "next": {
       "id": "WP01",
       "slug": "ai-platform-foundation",
-      "name": "平台模型接入、模型目录与应用绑定底座",
-      "entry_gate": "WP00 的唯一编号体系与发布候选真相快照通过治理校验",
+      "reason": "WP00 已固化并通过治理/Harness 校验；按批准序列进入全局 AI 平台底座"
+    },
+    "next": {
+      "id": "WP02",
+      "slug": "ai-runtime-truth",
+      "name": "真实模型调用、路由降级与运行证据",
+      "entry_gate": "WP01 的平台对象、配置任务与应用绑定通过验收",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
-      {
-        "id": "WP02",
-        "slug": "ai-runtime-truth",
-        "name": "真实模型调用、路由降级与运行证据"
-      },
       {
         "id": "WP03",
         "slug": "rule-collection",
@@ -265,6 +243,15 @@
       {
         "id": "F002-LEGACY-ACTIVE",
         "reason": "旧 active-task 状态已过期，保留追溯但不执行"
+      }
+    ],
+    "completed": [
+      {
+        "id": "WP00",
+        "slug": "goal-baseline-consolidation",
+        "completed_at": "2026-07-20T17:58:48+08:00",
+        "evidence_commit": "18dad230bbc12a6cf664e5868cc25d57bbb65fd3",
+        "result": "唯一目标命名空间、调度、Harness 与候选真相快照已固化"
       }
     ]
   },
@@ -534,7 +521,8 @@
     "truth_root": "product-truth",
     "registry_path": "product-truth/REQ_REGISTRY.yml",
     "inbox_path": "governance/runtime-state/demand-inbox.jsonl",
-    "source_dirty_workspace": "/Users/nsss/Price-v3"
+    "source_dirty_workspace": "/Users/nsss/Price-v3",
+    "role": "canonical_execution_candidate"
   },
   "entry": {
     "continue_work": "继续工作",
