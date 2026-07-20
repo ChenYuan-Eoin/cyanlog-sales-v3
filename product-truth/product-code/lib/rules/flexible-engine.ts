@@ -19,7 +19,6 @@ import type {
 import {
   evaluateRuleContract,
   normalizeRuleContract,
-  resolveRuleContract,
 } from './rule-contract'
 
 // ═══════════════════════════════════════════════════════════════
@@ -41,6 +40,251 @@ export interface LoadSnapshotRulesOptions {
   scenario?: string
 }
 
+interface RuleSnapshotRow {
+  id: string
+  rule_id: string
+  version: number
+  status: string
+  released_at?: string | null
+  created_at?: string | null
+  config_snapshot: unknown
+}
+
+interface PublishedRuleSetSnapshotRow {
+  id: string
+  org_id: string
+  rule_set_id: string
+  version: number
+  status: string
+  rule_snapshot_ids: unknown
+  released_at?: string | null
+  created_at?: string | null
+}
+
+interface PublishedRuleSetPointerRow {
+  id: string
+  org_id: string
+  current_snapshot_id: string | null
+  published_at?: string | null
+}
+
+function parseExecutableSnapshotRules(
+  snapshots: RuleSnapshotRow[],
+  options: {
+    orgId: string
+    isActive?: boolean
+    category?: RuleCategory
+    scenario?: string
+    acceptedStatuses: ReadonlySet<string>
+    allowedSnapshotIds?: ReadonlySet<string>
+    expectedRuleSetIdBySnapshotId?: ReadonlyMap<string, string>
+  }
+): FlexibleRule[] {
+  const expectedActive = options.isActive ?? true
+  const selectedRuleSnapshots = new Map<string, string>()
+  const invalidSnapshotIds: string[] = []
+  const rules: FlexibleRule[] = []
+
+  // Snapshot membership is an execution contract. Invalid config or two
+  // versions of one rule must fail closed instead of being silently skipped.
+  for (const snapshot of snapshots) {
+    if (
+      !options.acceptedStatuses.has(snapshot.status)
+      || (options.allowedSnapshotIds && !options.allowedSnapshotIds.has(snapshot.id))
+    ) {
+      invalidSnapshotIds.push(snapshot.id)
+      continue
+    }
+
+    const config = snapshot.config_snapshot && typeof snapshot.config_snapshot === 'object'
+      ? snapshot.config_snapshot as Record<string, unknown>
+      : null
+
+    const snapshotVersion = Number(snapshot.version)
+    const configVersion = Number(config?.version)
+    if (
+      !snapshot.rule_id
+      || !config
+      || config.id !== snapshot.rule_id
+      || config.org_id !== options.orgId
+      || (
+        options.expectedRuleSetIdBySnapshotId
+        && config.rule_set_id !== options.expectedRuleSetIdBySnapshotId.get(snapshot.id)
+      )
+      || config.is_active !== expectedActive
+      || !Number.isInteger(snapshotVersion)
+      || snapshotVersion < 1
+      || configVersion !== snapshotVersion
+      || typeof config.code !== 'string'
+      || config.code.trim().length === 0
+      || typeof config.name !== 'string'
+      || config.name.trim().length === 0
+      || (config.rule_contract != null && !normalizeRuleContract(config.rule_contract))
+    ) {
+      invalidSnapshotIds.push(snapshot.id)
+      continue
+    }
+
+    const previousSnapshotId = selectedRuleSnapshots.get(snapshot.rule_id)
+    if (previousSnapshotId && previousSnapshotId !== snapshot.id) {
+      throw new Error(
+        `RULE_RUNTIME_RULE_VERSION_CONFLICT: rule ${snapshot.rule_id} is bound by ${previousSnapshotId},${snapshot.id}`
+      )
+    }
+    if (previousSnapshotId === snapshot.id) continue
+    selectedRuleSnapshots.set(snapshot.rule_id, snapshot.id)
+    rules.push(parseFlexibleRule(config))
+  }
+
+  if (invalidSnapshotIds.length > 0) {
+    throw new Error(`RULE_RUNTIME_RULE_SNAPSHOT_CONFIG_INVALID: ${invalidSnapshotIds.join(',')}`)
+  }
+
+  return filterApplicableRules(rules, options)
+    .sort((left, right) => (
+      right.priority - left.priority
+      || left.code.localeCompare(right.code)
+    ))
+}
+
+function collectCurrentRuleSnapshotIds(
+  snapshots: PublishedRuleSetSnapshotRow[],
+  orgId: string
+): string[] {
+  const snapshotIds = new Set<string>()
+
+  // 上游已经按 RuleSet.current_snapshot_id 精确解析；这里不再猜“最新”。
+  for (const snapshot of snapshots) {
+    if (
+      snapshot.status !== 'published'
+      || snapshot.org_id !== orgId
+      || !snapshot.rule_set_id
+    ) {
+      throw new Error(`RULE_RUNTIME_RULESET_MEMBERSHIP_INVALID: ${snapshot.rule_set_id || snapshot.id}`)
+    }
+
+    if (!Array.isArray(snapshot.rule_snapshot_ids) || snapshot.rule_snapshot_ids.length === 0) {
+      throw new Error(`RULE_RUNTIME_RULESET_MEMBERSHIP_INVALID: ${snapshot.rule_set_id}`)
+    }
+    const memberIds = new Set<string>()
+    for (const snapshotId of snapshot.rule_snapshot_ids) {
+      if (typeof snapshotId !== 'string' || snapshotId.trim().length === 0 || memberIds.has(snapshotId)) {
+        throw new Error(`RULE_RUNTIME_RULESET_MEMBERSHIP_INVALID: ${snapshot.rule_set_id}`)
+      }
+      memberIds.add(snapshotId)
+      snapshotIds.add(snapshotId)
+    }
+  }
+
+  return Array.from(snapshotIds)
+}
+
+async function loadPublishedSnapshotRules(
+  options: Omit<LoadRulesOptions, 'includeUnpublished'>
+): Promise<FlexibleRule[]> {
+  const { orgId, isActive = true } = options
+  const { data: ruleSetPointers, error: ruleSetPointerError } = await supabaseAdmin
+    .from('contract_rule_sets')
+    .select('id, org_id, current_snapshot_id, published_at')
+    .eq('org_id', orgId)
+    .eq('is_active', true)
+
+  if (ruleSetPointerError) {
+    throw new Error(`RULE_RUNTIME_RULESET_POINTER_QUERY_FAILED: ${ruleSetPointerError.message || String(ruleSetPointerError)}`)
+  }
+
+  const activeRuleSets = (ruleSetPointers || []) as PublishedRuleSetPointerRow[]
+  const inconsistentPointers = activeRuleSets.filter((ruleSet) => (
+    Boolean(ruleSet.current_snapshot_id) !== Boolean(ruleSet.published_at)
+  ))
+  if (inconsistentPointers.length > 0) {
+    throw new Error(`RULE_RUNTIME_RULESET_POINTER_STATE_INVALID: ${inconsistentPointers.map((ruleSet) => ruleSet.id).join(',')}`)
+  }
+  const pointerRows = activeRuleSets.filter((ruleSet) => (
+    Boolean(ruleSet.current_snapshot_id) && Boolean(ruleSet.published_at)
+  ))
+  if (pointerRows.length === 0) return []
+
+  const currentRuleSetSnapshotIds = pointerRows.map((ruleSet) => ruleSet.current_snapshot_id as string)
+  const { data: ruleSetSnapshots, error: ruleSetSnapshotError } = await supabaseAdmin
+    .from('contract_rule_set_snapshots')
+    .select('id, org_id, rule_set_id, version, status, rule_snapshot_ids, released_at, created_at')
+    .in('id', currentRuleSetSnapshotIds)
+    .eq('org_id', orgId)
+    .eq('status', 'published')
+
+  if (ruleSetSnapshotError) {
+    throw new Error(`RULE_RUNTIME_RULESET_SNAPSHOT_QUERY_FAILED: ${ruleSetSnapshotError.message || String(ruleSetSnapshotError)}`)
+  }
+
+  const ruleSetSnapshotRows = (ruleSetSnapshots || []) as PublishedRuleSetSnapshotRow[]
+  const snapshotsById = new Map(ruleSetSnapshotRows.map((snapshot) => [snapshot.id, snapshot]))
+  const invalidPointers = pointerRows.filter((ruleSet) => {
+    const snapshot = snapshotsById.get(ruleSet.current_snapshot_id as string)
+    return !snapshot
+      || snapshot.org_id !== orgId
+      || snapshot.rule_set_id !== ruleSet.id
+      || snapshot.status !== 'published'
+  })
+  if (invalidPointers.length > 0) {
+    throw new Error(`RULE_RUNTIME_RULESET_POINTER_INVALID: ${invalidPointers.map((ruleSet) => ruleSet.id).join(',')}`)
+  }
+
+  const currentSnapshotIds = collectCurrentRuleSnapshotIds(
+    pointerRows.map((ruleSet) => snapshotsById.get(ruleSet.current_snapshot_id as string) as PublishedRuleSetSnapshotRow),
+    orgId
+  )
+  if (currentSnapshotIds.length === 0) {
+    throw new Error('RULE_RUNTIME_RULESET_MEMBERSHIP_EMPTY: published RuleSet pointers contain no rule snapshots')
+  }
+
+  const expectedRuleSetIdBySnapshotId = new Map<string, string>()
+  for (const ruleSet of pointerRows) {
+    const snapshot = snapshotsById.get(ruleSet.current_snapshot_id as string) as PublishedRuleSetSnapshotRow
+    for (const ruleSnapshotId of snapshot.rule_snapshot_ids as string[]) {
+      const previousRuleSetId = expectedRuleSetIdBySnapshotId.get(ruleSnapshotId)
+      if (previousRuleSetId && previousRuleSetId !== ruleSet.id) {
+        throw new Error(`RULE_RUNTIME_RULESET_MEMBERSHIP_CONFLICT: snapshot ${ruleSnapshotId} belongs to ${previousRuleSetId},${ruleSet.id}`)
+      }
+      expectedRuleSetIdBySnapshotId.set(ruleSnapshotId, ruleSet.id)
+    }
+  }
+
+  const allowedSnapshotIds = new Set(currentSnapshotIds)
+  const query = supabaseAdmin
+    .from('contract_rule_snapshots')
+    .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
+    .in('id', currentSnapshotIds)
+    .eq('status', 'published')
+    .eq('config_snapshot->>org_id', orgId)
+    .eq('config_snapshot->>is_active', String(isActive))
+    .order('released_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+
+  const { data: snapshots, error } = await query
+  if (error) {
+    throw new Error(`RULE_RUNTIME_RULE_SNAPSHOT_QUERY_FAILED: ${error.message || String(error)}`)
+  }
+
+  const snapshotRows = (snapshots || []) as RuleSnapshotRow[]
+  const resolvedSnapshotIds = new Set(snapshotRows.map((snapshot) => snapshot.id))
+  const unresolvedSnapshotIds = currentSnapshotIds.filter((snapshotId) => !resolvedSnapshotIds.has(snapshotId))
+  if (unresolvedSnapshotIds.length > 0) {
+    throw new Error(`RULE_RUNTIME_RULE_SNAPSHOTS_MISSING: unresolved published pointers ${unresolvedSnapshotIds.join(',')}`)
+  }
+
+  const parsed = parseExecutableSnapshotRules(
+    snapshotRows,
+    {
+      ...options,
+      acceptedStatuses: new Set(['published']),
+      allowedSnapshotIds,
+      expectedRuleSetIdBySnapshotId,
+    }
+  )
+  return parsed
+}
+
 /**
  * 加载柔性化规则（contract_rules_v2）
  */
@@ -54,6 +298,12 @@ export async function loadFlexibleRules(
     isActive = true,
     includeUnpublished = false,
   } = options
+
+  // 正式运行只认 RuleSet.current_snapshot_id 指向的 published 快照。
+  // 保存新草稿会改动 live row，但在原子切换指针前不能影响线上审核。
+  if (!includeUnpublished) {
+    return loadPublishedSnapshotRules({ orgId, category, scenario, isActive })
+  }
 
   let query = supabaseAdmin
     .from('contract_rules_v2')
@@ -70,13 +320,6 @@ export async function loadFlexibleRules(
     .eq('org_id', orgId)
     .eq('is_active', isActive)
     .order('priority', { ascending: false })
-
-  if (!includeUnpublished) {
-    query = query
-      .eq('lifecycle_status', 'published')
-      .eq('translation_status', 'ready')
-      .not('published_at', 'is', null)
-  }
 
   if (category) {
     query = query.eq('category', category)
@@ -122,8 +365,8 @@ function filterApplicableRules(
 }
 
 /**
- * 从 SkillBundle 绑定的发布快照加载规则。
- * 正式审核使用该入口，避免 ReviewRun 记录的 snapshot 与实际执行规则漂移。
+ * 从 SkillBundle / ReviewRun 绑定的显式快照加载规则。
+ * 历史重放允许 rolled_back；draft 从未成为正式运行事实，始终拒绝。
  */
 export async function loadFlexibleRulesFromSnapshots(
   options: LoadSnapshotRulesOptions
@@ -136,35 +379,43 @@ export async function loadFlexibleRulesFromSnapshots(
 
   const { data: snapshots, error } = await supabaseAdmin
     .from('contract_rule_snapshots')
-    .select('id, rule_id, version, status, config_snapshot')
+    .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
     .in('id', uniqueSnapshotIds)
+    .in('status', ['published', 'rolled_back'])
+    .eq('config_snapshot->>org_id', orgId)
+    .eq('config_snapshot->>is_active', 'true')
+    .order('released_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Failed to load flexible rules from snapshots:', error)
-    return []
+    throw new Error(`RULE_RUNTIME_RULE_SNAPSHOT_QUERY_FAILED: ${error.message || String(error)}`)
   }
 
-  const rules = (snapshots || [])
-    .filter((snapshot) => snapshot.status === 'published')
-    .map((snapshot) => {
-      const config = snapshot.config_snapshot && typeof snapshot.config_snapshot === 'object'
-        ? snapshot.config_snapshot as Record<string, unknown>
-        : {}
-      return parseFlexibleRule({
-        ...config,
-        id: typeof config.id === 'string' ? config.id : snapshot.rule_id,
-        org_id: typeof config.org_id === 'string' ? config.org_id : orgId,
-        version: typeof config.version === 'number' ? config.version : snapshot.version,
-        is_active: typeof config.is_active === 'boolean' ? config.is_active : true,
-      })
-    })
-    .filter((rule) => rule.org_id === orgId && rule.is_active)
+  const snapshotRows = (snapshots || []) as RuleSnapshotRow[]
+  const resolvedSnapshotIds = new Set(snapshotRows.map((snapshot) => snapshot.id))
+  const invalidSnapshotIds = snapshotRows
+    .filter((snapshot) => !['published', 'rolled_back'].includes(snapshot.status))
+    .map((snapshot) => snapshot.id)
+  const unresolvedSnapshotIds = uniqueSnapshotIds.filter((snapshotId) => !resolvedSnapshotIds.has(snapshotId))
+  if (invalidSnapshotIds.length > 0 || unresolvedSnapshotIds.length > 0) {
+    throw new Error(
+      `RULE_RUNTIME_EXPLICIT_SNAPSHOTS_UNRESOLVED: invalid=${invalidSnapshotIds.join(',') || 'none'} missing=${unresolvedSnapshotIds.join(',') || 'none'}`
+    )
+  }
 
-  return filterApplicableRules(rules, options)
-    .sort((left, right) => (
-      right.priority - left.priority
-      || left.code.localeCompare(right.code)
-    ))
+  const parsed = parseExecutableSnapshotRules(
+    snapshotRows,
+    {
+      ...options,
+      isActive: true,
+      acceptedStatuses: new Set(['published', 'rolled_back']),
+      allowedSnapshotIds: new Set(uniqueSnapshotIds),
+    }
+  )
+  if (parsed.length === 0) {
+    throw new Error('RULE_RUNTIME_EXPLICIT_SNAPSHOTS_UNRESOLVED: supplied ruleSnapshotIds produced no executable rule')
+  }
+  return parsed
 }
 
 /**
@@ -181,6 +432,8 @@ function parseFlexibleRule(row: Record<string, unknown>): FlexibleRule {
     problem_category: row.problem_category && typeof row.problem_category === 'object'
       ? row.problem_category as FlexibleRule['problem_category']
       : null,
+    rule_contract: normalizeRuleContract(row.rule_contract),
+    message_template: row.message_template,
     category: row.category as RuleCategory,
     engine_type: (row.engine_type as 'structured' | 'semantic' | 'hybrid') || 'structured',
     target_field: row.target_field as string | undefined,
@@ -223,11 +476,6 @@ function parseFlexibleRule(row: Record<string, unknown>): FlexibleRule {
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   }
-  rule.rule_contract = resolveRuleContract({
-    ...rule,
-    rule_contract: normalizeRuleContract(row.rule_contract),
-    message_template: row.message_template,
-  })
   return rule
 }
 
@@ -630,27 +878,7 @@ export function evaluateFlexibleRule(
   contractText: string,
   _extractedFields?: Record<string, number>
 ): LevelMatchResult {
-  const hadCanonicalContract = Boolean(normalizeRuleContract(rule.rule_contract))
   const evaluation = evaluateRuleContract(rule, contractText)
-
-  // Existing callers historically use white to mean “legacy asset produced no
-  // source evidence”. Keep that presentation compatibility while all actual
-  // evaluation already runs through the canonical contract above.
-  if (!hadCanonicalContract && evaluation.status !== 'decided') {
-    return {
-      level: null,
-      matched: false,
-      operator: '=',
-      threshold: 0,
-      actual_value: 0,
-      unit: rule.level_a.unit,
-      source: '',
-      confidence: 0,
-      action: 'manual_review',
-      message: `${rule.name}未找到足够的原文证据`,
-      risk_label: 'white',
-    }
-  }
 
   const decision = evaluation.decision
   const condition = decision?.conditions[0]
@@ -669,10 +897,25 @@ export function evaluateFlexibleRule(
     : typeof reading?.value === 'boolean'
       ? reading.value ? 1 : 0
       : reading?.value ? 1 : 0
+  const propertyReadings = Object.values(evaluation.readings).map((propertyReading) => ({
+    propertyKey: propertyReading.property_key,
+    status: propertyReading.status,
+    confidence: propertyReading.confidence,
+    ...(propertyReading.value !== undefined ? { value: propertyReading.value } : {}),
+    ...(propertyReading.unit ? { unit: propertyReading.unit } : {}),
+    ...(propertyReading.evidence ? { evidence: propertyReading.evidence } : {}),
+  }))
 
   return {
     level,
     matched: true,
+    evaluation_status: evaluation.status,
+    outcome,
+    decision_id: decision?.id,
+    propertyReadings,
+    missing_property_keys: evaluation.missing_property_keys,
+    ambiguous_property_keys: evaluation.ambiguous_property_keys,
+    unit_conflict_property_keys: evaluation.unit_conflict_property_keys,
     operator,
     threshold,
     actual_value: actualValue,
@@ -709,8 +952,10 @@ export async function executeFlexibleRules(
   const { orgId, scenario, category, ruleSnapshotIds } = options
 
   // 1. 加载规则
-  const rules = ruleSnapshotIds && ruleSnapshotIds.length > 0
-    ? await loadFlexibleRulesFromSnapshots({ orgId, scenario, category, snapshotIds: ruleSnapshotIds })
+  const rules = Array.isArray(ruleSnapshotIds)
+    ? ruleSnapshotIds.length === 0
+      ? []
+      : await loadFlexibleRulesFromSnapshots({ orgId, scenario, category, snapshotIds: ruleSnapshotIds })
     : await loadFlexibleRules({ orgId, scenario, category })
 
   if (rules.length === 0) {
@@ -730,6 +975,8 @@ export async function executeFlexibleRules(
       ruleVersion: rule.version,
       ruleType: rule.engine_type,
       ruleCode: rule.code,
+      decisionId: levelResult.decision_id,
+      propertyReadings: levelResult.propertyReadings,
       riskLevel: levelResult.risk_label === 'red'
         ? 'red'
         : levelResult.risk_label === 'yellow'
@@ -739,17 +986,21 @@ export async function executeFlexibleRules(
             : 'green',
       title: rule.name,
       description: levelResult.message,
-      suggestion: levelResult.counterparty
-        ? `建议换取：${levelResult.counterparty}`
-        : levelResult.level === 'C'
-          ? '必须修改合同条款'
-          : levelResult.level === 'B'
-            ? '建议协商调整'
-            : '符合标准',
+      suggestion: levelResult.action !== levelResult.outcome
+        ? levelResult.action
+        : levelResult.counterparty
+          ? `建议换取：${levelResult.counterparty}`
+          : levelResult.level === 'C'
+            ? '必须修改合同条款'
+            : levelResult.level === 'B'
+              ? '建议协商调整'
+              : '符合标准',
       triggered: levelResult.matched,
       executionTime: Date.now() - startTime,
       evidence: levelResult.source ? [levelResult.source] : undefined,
-      details: `规则 ${rule.code} v${rule.version}，实际值 ${levelResult.actual_value}${levelResult.unit}`,
+      details: levelResult.evaluation_status === 'decided'
+        ? `规则 ${rule.code} v${rule.version}，判定 ${levelResult.decision_id || levelResult.outcome}，实际值 ${levelResult.actual_value}${levelResult.unit}`
+        : `规则 ${rule.code} v${rule.version}，${levelResult.evaluation_status}，缺失属性 ${levelResult.missing_property_keys.join(', ') || '无'}，歧义属性 ${levelResult.ambiguous_property_keys.join(', ') || '无'}，单位冲突 ${levelResult.unit_conflict_property_keys.join(', ') || '无'}`,
       levelResult,
     }
 
@@ -806,6 +1057,8 @@ export interface FlexibleAnalysisResults {
     ruleId?: string
     ruleCode?: string
     ruleVersion?: number
+    decisionId?: string
+    propertyReadings?: LevelMatchResult['propertyReadings']
     level: 'red' | 'yellow' | 'green'
     title: string
     description: string
@@ -861,6 +1114,8 @@ export async function executeFlexibleRulesCompat(
         ruleId: r.ruleId,
         ruleCode: r.ruleCode,
         ruleVersion: r.ruleVersion,
+        decisionId: r.decisionId,
+        propertyReadings: r.propertyReadings,
         level: r.riskLevel,
         title: r.title,
         description: r.description,
@@ -868,7 +1123,9 @@ export async function executeFlexibleRulesCompat(
         counterparty: r.levelResult?.counterparty,
         evidence: r.evidence,
       })),
-    summary: generateFlexibleSummary(results),
+    summary: Array.isArray(options.ruleSnapshotIds) && options.ruleSnapshotIds.length === 0
+      ? '未绑定已发布规则快照，正式规则判定已降级关闭'
+      : generateFlexibleSummary(results),
     appliedRules: results.length,
     matchedRules: results.filter((r) => r.triggered).length,
     levelBreakdown,

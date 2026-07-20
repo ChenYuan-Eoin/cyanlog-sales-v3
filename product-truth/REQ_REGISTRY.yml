@@ -448,20 +448,23 @@ requirements:
       - supabase/migrations/20260625162638_contract_rule_engine_alignment.sql
     description: |
       合同审核规则配置：
-      - 结构化/语义/混合规则维护
-      - 规则版本、发布、回滚、审计和测试
-      - 规则与模板、条款库、话术、处理角色、谈判要求关联
-      - 发布 RuleSnapshot 给 F006 编译 SkillBundle
+      - 按“规则集 → 问题分类 → 具体规则 → 规则详情 → 业务属性 → 判定与处理”维护
+      - 属性由业务人员明确配置；AI 只在运行期定位原文并读取 typed value/unit/evidence
+      - 服务端确定性执行已发布判定，输出动作和说明来自规则而非模型自由生成
+      - 草稿、逐判定测试矩阵、规则集原子发布、历史快照与 ReviewRun 回放
+      - 发布 RuleSetSnapshot / RuleSnapshot 给 F006 编译 SkillBundle
     audit_supplement:
-      current_gap: "生产库存在 R001-R015，但前端截图显示 0；当前需求需要补充规则存在、发布、消费和错误呈现的分层验收。"
+      current_gap: "旧实现把规则、模型、机器字段和场景混在一起；当前批次必须证明 canonical 业务规则、语义属性读取、确定性判定、规则集发布和历史证据为同一条链。"
       supplemental_requirements:
-        - "R001-R015 是预置规则事实，但不能硬编码为审核依据；审核必须消费已发布 RuleSnapshot。"
-        - "规则列表必须区分 active、archived、加载失败、未授权和真实空。"
-        - "规则配置必须能维护字段提示、语义 prompt、消息模板、模板引用、处理角色、是否必须谈判和测试用例。"
+        - "规则配置不得出现属性提取、AI 转译、Provider、Prompt、target_field 等机器拥有字段。"
+        - "金额、比例、时限、日期、枚举、布尔、文本和数字是具体规则的末端属性能力，不是问题分类。"
+        - "F009 当前消费者固定为 contract_review；跨模块场景必须由消费模块传入可审计上下文后再扩展。"
+        - "规则列表必须区分线上版本、草稿版本、待停用、加载失败、未授权和真实空。"
       acceptance_requirements:
-        - "配置中心能看到 R001-R015 active 规则，归档旧规则不混入当前启用统计。"
-        - "风险审核读取的规则版本与配置中心发布版本一致。"
-        - "规则 API 失败时前端显示错误态，不显示 0 条规则。"
+        - "多属性、多判定规则可逐项验收；相同目标后续失败会撤销旧通过。"
+        - "正式审核只读取当前 RuleSetSnapshot 的精确成员，控制面失败不得显示为 0 风险。"
+        - "AI 同义表达可形成合法 property readings，但 decision、risk、动作和说明由服务端已发布规则决定。"
+        - "旧 ReviewRun 在快照不再 current（或属于早期 rolled_back 历史）后仍可按显式绑定 ID 回放；已发布快照只追加不改写，draft 永不作为正式证据。"
 
   F010:
     name: 报价规则配置

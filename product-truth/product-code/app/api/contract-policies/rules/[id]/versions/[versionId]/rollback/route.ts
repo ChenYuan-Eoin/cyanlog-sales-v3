@@ -1,136 +1,39 @@
-// POST /api/contract-policies/rules/:id/versions/:versionId/rollback
-// 回滚到指定版本
+// Single-rule rollback is retired.  Restoring one rule without the rest of its
+// released set would manufacture a mixed production baseline.
 
 import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { errorResponse, successResponse } from '@/lib/api/common'
+import { errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
-import { z } from 'zod'
-import { missingRulePublicationFields } from '@/lib/contracts/rule-publication'
-
-const rollbackVersionSchema = z.object({
-  reason: z.string().max(500, '回滚原因不能超过500个字符').optional().default(''),
-})
-
-async function readOptionalJson(req: NextRequest) {
-  const contentType = req.headers.get('content-type') || ''
-  if (!contentType.includes('application/json')) {
-    return {}
-  }
-
-  return req.json().catch(() => null)
-}
+import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
-  const parsed = rollbackVersionSchema.safeParse(await readOptionalJson(req))
-  if (!parsed.success) {
-    return errorResponse(
-      createApiError(
-        'VALIDATION_ERROR',
-        `参数验证失败: ${parsed.error.issues.map((issue) => issue.message).join(', ')}`
-      )
-    )
-  }
-
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'publish')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:publish 权限'))
+    }
+
     const { id, versionId } = await params
-    const { reason } = parsed.data
-
-    // 1. 获取目标版本
-    const { data: targetVersion, error: targetError } = await supabaseAdmin
-      .from('contract_rule_snapshots')
-      .select('*')
-      .eq('id', versionId)
-      .eq('rule_id', id)
-      .single()
-
-    if (targetError || !targetVersion) {
-      return errorResponse(createApiError('NOT_FOUND', '版本不存在'))
-    }
-
-    const configSnapshot = targetVersion.config_snapshot && typeof targetVersion.config_snapshot === 'object'
-      ? targetVersion.config_snapshot as Record<string, unknown>
-      : {}
-    const missingFields = missingRulePublicationFields(configSnapshot)
-    if (missingFields.length > 0) {
-      return errorResponse(
-        createApiError(
-          'VALIDATION_ERROR',
-          `目标版本尚不能回滚发布，缺少转译字段: ${missingFields.join(', ')}`
-        )
-      )
-    }
-
-    const now = new Date().toISOString()
-    const publishedSnapshot = {
-      ...configSnapshot,
-      id,
-      org_id: orgId,
-      version: targetVersion.version,
-      is_active: true,
-      lifecycle_status: 'published',
-      translation_status: 'ready',
-      published_by: user.id,
-      published_at: now,
-      updated_at: now,
-    }
-
-    // 2. 获取当前发布的版本
-    const { data: currentVersion } = await supabaseAdmin
-      .from('contract_rule_snapshots')
-      .select('*')
-      .eq('rule_id', id)
-      .eq('status', 'published')
-      .order('released_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    // 3. 将当前版本标记为已回滚
-    if (currentVersion && currentVersion.id !== versionId) {
-      await supabaseAdmin
-        .from('contract_rule_snapshots')
-        .update({ status: 'rolled_back' })
-        .eq('id', currentVersion.id)
-    }
-
-    // 4. 重新发布目标版本
-    const { error: updateError } = await supabaseAdmin
-      .from('contract_rule_snapshots')
-      .update({
-        status: 'published',
-        released_by: user.id,
-        released_at: now,
-        release_note: `回滚至此版本。原因: ${reason || '未说明'}`,
-        config_snapshot: publishedSnapshot,
-      })
-      .eq('id', versionId)
-
-    if (updateError) {
-      return errorResponse(createApiError('DB_ERROR', '回滚失败'))
-    }
-
-    // 5. 更新规则配置
-    const { error: ruleError } = await supabaseAdmin
+    const { data: rule, error } = await supabaseAdmin
       .from('contract_rules_v2')
-      .update({
-        ...publishedSnapshot,
-      })
+      .select('id, code, rule_set_id')
       .eq('id', id)
       .eq('org_id', orgId)
+      .single()
 
-    if (ruleError) {
-      return errorResponse(createApiError('DB_ERROR', '更新规则配置失败'))
+    if (error || !rule) {
+      return errorResponse(createApiError('NOT_FOUND', '规则不存在'))
     }
 
-    return successResponse({
-      message: '回滚成功',
-      version: targetVersion.version,
-      from_version: currentVersion?.version || null,
-    })
+    return errorResponse(createApiError(
+      'CONFLICT',
+      '单条规则回滚已停用。请选择一个完整规则集版本恢复，避免线上再次混入不同基线。',
+      { rule_id: id, version_id: versionId, rule_set_id: rule.rule_set_id }
+    ))
   })
 }

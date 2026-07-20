@@ -1,3 +1,6 @@
+import type { ContractRuleContract } from '@/types/rules'
+import { normalizeRuleContract } from '@/lib/rules/rule-contract'
+
 type JsonRecord = Record<string, unknown>
 
 export type RuleUnitTranslationStatus =
@@ -31,6 +34,7 @@ export type RuleUnit = {
   field_hints: string[]
   semantic_prompt: string | null
   message_template: unknown
+  rule_contract: ContractRuleContract | null
   source_trace: RuleUnitSourceTrace
   execution: {
     trigger_conditions: string[]
@@ -42,7 +46,7 @@ export type RuleUnit = {
   }
   translation: {
     status: RuleUnitTranslationStatus
-    method: 'configured_fields' | 'ai_required'
+    method: 'rule_contract_v1' | 'legacy_configured_fields' | 'ai_required'
     missing_fields: string[]
     notes: string[]
   }
@@ -61,6 +65,8 @@ export type RuleTranslationGate = {
 
 export type RuleUnitRuleInput = {
   id: string
+  rule_set_id?: string | null
+  problem_category_id?: string | null
   code: string
   name?: string | null
   business_domain?: string | null
@@ -74,6 +80,7 @@ export type RuleUnitRuleInput = {
   field_hints: string[] | null
   semantic_prompt: string | null
   message_template: unknown
+  rule_contract?: ContractRuleContract | null
 }
 
 export type RuleUnitSnapshotInput = {
@@ -129,7 +136,8 @@ function needsSemanticPrompt(engineType: string): boolean {
 function sourceCompletenessMissing(
   rule: RuleUnitRuleInput,
   snapshot: RuleUnitSnapshotInput | null,
-  engineType: string
+  engineType: string,
+  canonical: ContractRuleContract | null
 ): string[] {
   const missing: string[] = []
   if (!snapshot || snapshot.status !== 'published') missing.push('published_rule_snapshot')
@@ -138,13 +146,23 @@ function sourceCompletenessMissing(
   if (!nonEmptyString(rule.risk_level)) missing.push('risk_level')
   if ((rule.applicable_scenarios || []).length === 0) missing.push('applicable_scenarios')
   if (!nonEmptyString(rule.scope)) missing.push('scope')
+  if (canonical) {
+    if (!nonEmptyString(rule.rule_set_id)) missing.push('rule_set_id')
+    if (!nonEmptyString(rule.problem_category_id)) missing.push('problem_category_id')
+    return missing
+  }
   if (!nonEmptyString(engineType)) missing.push('engine_type')
   if (!nonEmptyString(rule.clause_category)) missing.push('clause_category')
   if ((rule.field_hints || []).length === 0) missing.push('field_hints')
   return missing
 }
 
-function translationMissing(rule: RuleUnitRuleInput, engineType: string): string[] {
+function translationMissing(
+  rule: RuleUnitRuleInput,
+  engineType: string,
+  canonical: ContractRuleContract | null
+): string[] {
+  if (canonical) return []
   const missing: string[] = []
   if ((engineType === 'structured' || engineType === 'hybrid') && !nonEmptyString(rule.target_field)) {
     missing.push('target_field')
@@ -158,14 +176,20 @@ function translationMissing(rule: RuleUnitRuleInput, engineType: string): string
   return missing
 }
 
-function notesForRule(rule: RuleUnitRuleInput, snapshot: RuleUnitSnapshotInput | null): string[] {
+function notesForRule(
+  rule: RuleUnitRuleInput,
+  snapshot: RuleUnitSnapshotInput | null,
+  canonical: ContractRuleContract | null
+): string[] {
   const notes: string[] = [
     'production source is F009 config center published rule snapshot',
   ]
   if (!snapshot) {
     notes.push('missing published snapshot blocks formal SkillBundle readiness')
   }
-  if (!hasMessageTemplate(rule.message_template)) {
+  if (canonical) {
+    notes.push('execution contract is the published canonical rule_contract v1')
+  } else if (!hasMessageTemplate(rule.message_template)) {
     notes.push('comment and negotiation wording still require AI or human translation confirmation')
   }
   return notes
@@ -175,9 +199,10 @@ export function buildRuleUnit(
   rule: RuleUnitRuleInput,
   snapshot: RuleUnitSnapshotInput | null
 ): RuleUnit {
-  const engineType = normalizedEngineType(rule.engine_type)
-  const sourceMissing = sourceCompletenessMissing(rule, snapshot, engineType)
-  const translationMissingFields = translationMissing(rule, engineType)
+  const canonical = normalizeRuleContract(rule.rule_contract)
+  const engineType = canonical ? 'rule_contract_v1' : normalizedEngineType(rule.engine_type)
+  const sourceMissing = sourceCompletenessMissing(rule, snapshot, engineType, canonical)
+  const translationMissingFields = translationMissing(rule, engineType, canonical)
   const status: RuleUnitTranslationStatus = sourceMissing.length > 0
     ? 'incomplete_source'
     : translationMissingFields.length > 0
@@ -201,6 +226,7 @@ export function buildRuleUnit(
     field_hints: rule.field_hints || [],
     semantic_prompt: rule.semantic_prompt,
     message_template: rule.message_template,
+    rule_contract: canonical,
     source_trace: {
       owner: 'config_center',
       module: 'F009',
@@ -211,26 +237,34 @@ export function buildRuleUnit(
       snapshot_id: snapshot?.id || null,
     },
     execution: {
-      trigger_conditions: rule.field_hints || [],
-      risk_conditions: [
-        nonEmptyString(rule.semantic_prompt) || `按 ${rule.code} 的结构化字段 ${rule.target_field || '未配置字段'} 判断风险`,
-      ],
+      trigger_conditions: canonical
+        ? canonical.properties.map((property) => property.label)
+        : rule.field_hints || [],
+      risk_conditions: canonical
+        ? canonical.decisions.map((decision) => `${decision.label} → ${decision.outcome}`)
+        : [nonEmptyString(rule.semantic_prompt) || `按 ${rule.code} 的兼容字段 ${rule.target_field || '未配置字段'} 判断风险`],
       exception_conditions: [],
       evidence_requirements: [
         'evidence_text_exact_match',
         'source_range_required_for_word_comment',
       ],
-      negotiation_action: nonEmptyString(asRecord(rule.message_template).negotiation_action)
-        || (hasMessageTemplate(rule.message_template)
-          ? 'use_configured_message_template'
-          : 'requires_translation_before_formal_review'),
-      comment_template: rule.message_template,
+      negotiation_action: canonical
+        ? canonical.decisions.find((decision) => decision.outcome === 'negotiate')?.action || '按规则判定处理'
+        : nonEmptyString(asRecord(rule.message_template).negotiation_action)
+          || (hasMessageTemplate(rule.message_template)
+            ? 'use_configured_message_template'
+            : 'requires_translation_before_formal_review'),
+      comment_template: canonical
+        ? Object.fromEntries(canonical.decisions.map((decision) => [decision.id, decision.message || decision.action || decision.label]))
+        : rule.message_template,
     },
     translation: {
       status,
-      method: status === 'ready' ? 'configured_fields' : 'ai_required',
+      method: status === 'ready'
+        ? canonical ? 'rule_contract_v1' : 'legacy_configured_fields'
+        : 'ai_required',
       missing_fields: [...sourceMissing, ...translationMissingFields],
-      notes: notesForRule(rule, snapshot),
+      notes: notesForRule(rule, snapshot, canonical),
     },
   }
 }

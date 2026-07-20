@@ -10,6 +10,8 @@ import {
   selectReviewExecutionProvider,
   type ModelPolicyProvider,
 } from '@/lib/contracts/model-policy'
+import type { RuleExecutionPropertyReading } from '@/lib/rules/types'
+import type { ContractRuleContract } from '@/types/rules'
 
 export interface ContractAnalysisJobRecord {
   id: string
@@ -33,6 +35,8 @@ export interface ContractAnalysisResult {
     ruleId?: string
     ruleCode?: string
     ruleVersion?: number
+    decisionId?: string
+    propertyReadings?: RuleExecutionPropertyReading[]
     level: 'red' | 'yellow' | 'green'
     title: string
     description: string
@@ -782,6 +786,12 @@ function extractRuntimeSnapshotRefs(skillBundle: ContractSkillBundle) {
         fieldHints: Array.isArray(record.field_hints)
           ? record.field_hints.filter((hint): hint is string => typeof hint === 'string')
           : [],
+        executionProtocol: record.execution_protocol === 'rule_contract_v1'
+          ? 'rule_contract_v1' as const
+          : 'legacy_adapter' as const,
+        ruleContract: record.rule_contract && typeof record.rule_contract === 'object'
+          ? record.rule_contract as ContractRuleContract
+          : null,
       }
     })
     .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref?.id))
@@ -1039,6 +1049,8 @@ async function runSemanticReviewStage(input: {
       clause_category: ref.category,
       target_field: ref.targetField,
       field_hints: ref.fieldHints,
+      execution_protocol: ref.executionProtocol,
+      rule_contract: ref.ruleContract,
     }))
     const semanticResult = await reviewWithFailoverSync(input.text, {
       orgId: input.orgId,
@@ -1462,6 +1474,8 @@ export async function saveStructuredReport(
         rule_snapshot_id: snapshotRef?.id || null,
         rule_code: risk.ruleCode || null,
         rule_version: risk.ruleVersion || null,
+        decision_id: risk.decisionId || null,
+        property_readings: risk.propertyReadings || [],
       },
       status: 'open',
       clause_ref: sourceLocation.clause?.clauseNumber || sourceLocation.clause?.clauseTitle || null,

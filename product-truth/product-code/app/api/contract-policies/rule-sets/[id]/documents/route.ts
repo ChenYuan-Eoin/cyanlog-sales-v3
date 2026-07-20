@@ -1,7 +1,8 @@
 // GET /api/contract-policies/rule-sets/:id/documents
 // POST /api/contract-policies/rule-sets/:id/documents
-// RuleSetDocument is an auditable source asset. Saving it creates a new
-// document version and marks the owning rule set as needing translation.
+// RuleSetDocument is optional drafting/reference material. Saving it creates a
+// new document version but cannot change the RuleSet release lifecycle; only an
+// explicit frozen document id in a RuleSetSnapshot may enter formal evidence.
 
 import crypto from 'crypto'
 import { NextRequest } from 'next/server'
@@ -10,6 +11,7 @@ import { createdResponse, errorResponse, successResponse } from '@/lib/api/commo
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import { createApiError } from '@/lib/api/errors'
 import type { AuthUser } from '@/lib/auth'
+import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const documentSchema = z.object({
@@ -52,7 +54,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withAuthAndOrg(req, async (_user: AuthUser, orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'read')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:read 权限'))
+    }
+
     const { id } = await params
     const ruleSet = await ensureRuleSet(id, orgId)
     if (!ruleSet) {
@@ -80,6 +86,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:write 权限'))
+    }
+
     const { id } = await params
     const parsed = documentSchema.safeParse(await req.json().catch(() => ({})))
     if (!parsed.success) {
@@ -123,22 +133,6 @@ export async function POST(
     if (error || !data) {
       return errorResponse(createApiError('DB_ERROR', '保存规则集文档失败'))
     }
-
-    await supabaseAdmin
-      .from('contract_rule_sets')
-      .update({
-        version: Number(ruleSet.version || 1) + 1,
-        lifecycle_status: 'needs_translation',
-        translation_status: payload.content_markdown.trim()
-          ? 'needs_ai_translation'
-          : 'not_started',
-        published_at: null,
-        published_by: null,
-        release_note: '规则集文档已更新，需字段级转译确认后重新发布',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('org_id', orgId)
 
     return createdResponse(data)
   })

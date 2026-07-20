@@ -8,6 +8,7 @@ import {
   buildRuleUnits,
   summarizeRuleTranslationGate,
 } from '@/lib/contracts/rule-unit'
+import type { ContractRuleContract } from '@/types/rules'
 
 type JsonRecord = Record<string, unknown>
 
@@ -68,6 +69,7 @@ const ONES_SKILL_EVAL_CASES = [
 type RuleRow = {
   id: string
   rule_set_id: string | null
+  problem_category_id: string | null
   code: string
   name: string
   business_domain: string | null
@@ -83,6 +85,7 @@ type RuleRow = {
   field_hints: string[] | null
   semantic_prompt: string | null
   message_template: unknown
+  rule_contract: ContractRuleContract | null
   priority: number | null
   updated_at: string | null
   published_at: string | null
@@ -109,6 +112,13 @@ type RuleSetRow = {
   published_at: string | null
 }
 
+type RuleSetPointerRow = {
+  id: string
+  org_id: string
+  current_snapshot_id: string | null
+  published_at: string | null
+}
+
 type RuleSetDocumentRow = {
   id: string
   rule_set_id: string
@@ -124,18 +134,14 @@ type RuleSetDocumentRow = {
 
 type RuleSetSnapshotRow = {
   id: string
+  org_id: string
   rule_set_id: string
   version: number | null
   status: string | null
-}
-
-type ClauseTemplateRow = {
-  id: string
-  category: string
-  name: string
-  stance: string
-  contract_types: string[] | null
-  updated_at: string | null
+  rule_snapshot_ids: string[] | null
+  document_snapshot_ids: string[] | null
+  config_snapshot: unknown
+  released_at: string | null
 }
 
 type SkillBundleRow = Omit<ContractSkillBundle, 'model_policy' | 'compiled_from' | 'output_schema'> & {
@@ -152,6 +158,13 @@ type RuleSetDocumentGate = {
   blocking_reasons: string[]
 }
 
+type RuleSetSnapshotGate = {
+  status: 'ready' | 'failed'
+  total_rule_sets: number
+  published_snapshots: number
+  blocking_reasons: string[]
+}
+
 type FormalReviewBundleGateInput = {
   status?: string | null
   is_current?: boolean | null
@@ -161,10 +174,9 @@ type FormalReviewBundleGateInput = {
 }
 
 function resolveBundleEvalStatus(input: {
-  missingCanonicalRules: string[]
   ruleTranslationStatus: string
 }): BundleEvalStatus {
-  if (input.missingCanonicalRules.length > 0 || input.ruleTranslationStatus !== 'ready') {
+  if (input.ruleTranslationStatus !== 'ready') {
     return 'failed'
   }
   return 'passed'
@@ -209,6 +221,7 @@ export function isContractSkillBundleFormalReviewAllowed(bundle: FormalReviewBun
   const releaseMeta = asRecord(bundle.release_meta)
   const compiledFrom = asRecord(bundle.compiled_from)
   const ruleTranslationGate = asRecord(compiledFrom.rule_translation_gate)
+  const ruleSetSnapshotGate = asRecord(compiledFrom.rule_set_snapshot_gate)
   const ruleSetDocumentGate = asRecord(compiledFrom.rule_set_document_gate)
   const evalResults = asRecord(compiledFrom.eval_results)
 
@@ -218,6 +231,7 @@ export function isContractSkillBundleFormalReviewAllowed(bundle: FormalReviewBun
     && booleanValue(releaseMeta.official_review_allowed) === true
     && stringValue(ruleTranslationGate.status) === 'ready'
     && booleanValue(ruleTranslationGate.official_review_allowed) === true
+    && stringValue(ruleSetSnapshotGate.status) === 'ready'
     && stringValue(ruleSetDocumentGate.status) === 'ready'
     && stringValue(evalResults.status) === 'passed'
 }
@@ -323,168 +337,198 @@ function findSnapshotForRule(rule: RuleRow, snapshots: RuleSnapshotRow[]) {
   return candidates[0]
 }
 
-async function loadRules(orgId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('contract_rules_v2')
-    .select('id, rule_set_id, code, name, business_domain, risk_level, applicable_scenarios, scope, lifecycle_status, translation_status, version, engine_type, target_field, clause_category, field_hints, semantic_prompt, message_template, priority, updated_at, published_at')
-    .eq('org_id', orgId)
-    .eq('is_active', true)
-    .eq('lifecycle_status', 'published')
-    .eq('translation_status', 'ready')
-    .not('published_at', 'is', null)
-    .order('code', { ascending: true })
-
-  if (error) throw error
-  return (data || []) as RuleRow[]
-}
-
-async function loadClauseTemplates(orgId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('clause_library')
-    .select('id, category, name, stance, contract_types, updated_at')
-    .or(`org_id.is.null,org_id.eq.${orgId}`)
-    .order('category', { ascending: true })
-
-  if (error) return []
-  return (data || []) as ClauseTemplateRow[]
-}
-
-async function loadPublishedRuleSnapshots(rules: RuleRow[]) {
-  if (rules.length === 0) return []
+async function loadRulesFromRuleSetSnapshots(orgId: string, ruleSetSnapshots: RuleSetSnapshotRow[]) {
+  const ownerByRuleSnapshotId = new Map<string, string>()
+  for (const ruleSetSnapshot of ruleSetSnapshots) {
+    for (const ruleSnapshotId of ruleSetSnapshot.rule_snapshot_ids || []) {
+      const previousOwner = ownerByRuleSnapshotId.get(ruleSnapshotId)
+      if (previousOwner && previousOwner !== ruleSetSnapshot.rule_set_id) {
+        throw new Error(`RULESET_CURRENT_RULE_SNAPSHOT_OWNER_CONFLICT:${ruleSnapshotId}`)
+      }
+      ownerByRuleSnapshotId.set(ruleSnapshotId, ruleSetSnapshot.rule_set_id)
+    }
+  }
+  const snapshotIds = Array.from(new Set(
+    ruleSetSnapshots.flatMap((snapshot) => snapshot.rule_snapshot_ids || []).filter(Boolean)
+  ))
+  if (snapshotIds.length === 0) {
+    if (ruleSetSnapshots.length > 0) {
+      throw new Error('RULESET_CURRENT_MEMBERSHIP_EMPTY')
+    }
+    return { rules: [] as RuleRow[], snapshots: [] as RuleSnapshotRow[] }
+  }
 
   const { data, error } = await supabaseAdmin
     .from('contract_rule_snapshots')
     .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
-    .in('rule_id', rules.map((rule) => rule.id))
-    .eq('status', 'published')
-    .order('released_at', { ascending: false })
+    .in('id', snapshotIds)
 
   if (error) throw error
-  return (data || []) as RuleSnapshotRow[]
+  const snapshots = ((data || []) as RuleSnapshotRow[]).filter((snapshot) => {
+    const config = asRecord(snapshot.config_snapshot)
+    return snapshot.status === 'published'
+      && stringValue(config.org_id) === orgId
+      && stringValue(config.id) === snapshot.rule_id
+      && stringValue(config.rule_set_id) === ownerByRuleSnapshotId.get(snapshot.id)
+      && Number(config.version) === snapshot.version
+      && config.is_active === true
+  })
+  const resolvedSnapshotIds = new Set(snapshots.map((snapshot) => snapshot.id))
+  const unresolvedSnapshotIds = snapshotIds.filter((snapshotId) => !resolvedSnapshotIds.has(snapshotId))
+  if (unresolvedSnapshotIds.length > 0) {
+    throw new Error(`RULESET_CURRENT_RULE_SNAPSHOT_INVALID:${unresolvedSnapshotIds.join(',')}`)
+  }
+  const snapshotByRuleId = new Map<string, string>()
+  for (const snapshot of snapshots) {
+    const previousSnapshotId = snapshotByRuleId.get(snapshot.rule_id)
+    if (previousSnapshotId && previousSnapshotId !== snapshot.id) {
+      throw new Error(`RULESET_CURRENT_RULE_VERSION_CONFLICT:${snapshot.rule_id}`)
+    }
+    snapshotByRuleId.set(snapshot.rule_id, snapshot.id)
+  }
+  const rules = snapshots.map((snapshot) => ({
+    ...asRecord(snapshot.config_snapshot),
+    id: snapshot.rule_id,
+    version: snapshot.version,
+    lifecycle_status: 'published',
+    translation_status: 'ready',
+    published_at: snapshot.released_at,
+  } as RuleRow)).sort((left, right) => left.code.localeCompare(right.code))
+  return { rules, snapshots }
 }
 
-async function loadRuleSetsWithLatestDocuments(orgId: string, ruleSetIds: string[]) {
-  const uniqueIds = Array.from(new Set(ruleSetIds.filter(Boolean)))
-  if (uniqueIds.length === 0) {
-    return { ruleSets: [] as RuleSetRow[], documents: [] as RuleSetDocumentRow[] }
-  }
-
-  const [ruleSetResult, documentResult] = await Promise.all([
-    supabaseAdmin
-      .from('contract_rule_sets')
-      .select('id, code, name, description, version, lifecycle_status, translation_status, published_at')
-      .eq('org_id', orgId)
-      .in('id', uniqueIds),
-    supabaseAdmin
-      .from('contract_rule_set_documents')
-      .select('id, rule_set_id, title, source_type, source_uri, content_hash, version, status, translation_status, updated_at')
-      .eq('org_id', orgId)
-      .in('rule_set_id', uniqueIds)
-      .neq('status', 'archived')
-      .order('version', { ascending: false }),
-  ])
-
-  if (ruleSetResult.error) throw ruleSetResult.error
+async function loadFrozenRuleSetDocuments(orgId: string, snapshots: RuleSetSnapshotRow[]) {
+  const documentIds = Array.from(new Set(
+    snapshots.flatMap((snapshot) => snapshot.document_snapshot_ids || []).filter(Boolean)
+  ))
+  if (documentIds.length === 0) return [] as RuleSetDocumentRow[]
+  const documentResult = await supabaseAdmin
+    .from('contract_rule_set_documents')
+    .select('id, rule_set_id, title, source_type, source_uri, content_hash, version, status, translation_status, updated_at')
+    .eq('org_id', orgId)
+    .in('id', documentIds)
   if (documentResult.error) throw documentResult.error
 
-  const latestDocuments = new Map<string, RuleSetDocumentRow>()
-  for (const document of (documentResult.data || []) as RuleSetDocumentRow[]) {
-    if (!latestDocuments.has(document.rule_set_id)) {
-      latestDocuments.set(document.rule_set_id, document)
-    }
-  }
-
-  return {
-    ruleSets: (ruleSetResult.data || []) as RuleSetRow[],
-    documents: Array.from(latestDocuments.values()),
-  }
+  const allowedBySet = new Map(
+    snapshots.map((snapshot) => [snapshot.rule_set_id, new Set(snapshot.document_snapshot_ids || [])])
+  )
+  return ((documentResult.data || []) as RuleSetDocumentRow[]).filter((document) => (
+    allowedBySet.get(document.rule_set_id)?.has(document.id)
+    && document.status === 'published'
+    && document.translation_status === 'ready'
+  ))
 }
 
 function summarizeRuleSetDocumentGate(ruleSets: RuleSetRow[], documents: RuleSetDocumentRow[]): RuleSetDocumentGate {
   const documentsBySetId = new Map(documents.map((document) => [document.rule_set_id, document]))
-  const blockingReasons: string[] = []
   let readyDocuments = 0
 
   for (const ruleSet of ruleSets) {
     const document = documentsBySetId.get(ruleSet.id)
-    if (!document) {
-      blockingReasons.push(`ruleset_document_missing:${ruleSet.code}`)
-      continue
-    }
-    if (document.status !== 'published') {
-      blockingReasons.push(`ruleset_document_not_published:${ruleSet.code}`)
-      continue
-    }
-    if (document.translation_status !== 'ready') {
-      blockingReasons.push(`ruleset_document_translation_not_ready:${ruleSet.code}`)
-      continue
-    }
-    readyDocuments += 1
+    if (document?.status === 'published' && document.translation_status === 'ready') readyDocuments += 1
   }
 
   return {
-    status: blockingReasons.length === 0 && ruleSets.length > 0 ? 'ready' : 'failed',
+    // RuleSetDocument is optional reference material. The published business
+    // contract and its rule snapshots are the release truth; an absent or draft
+    // document cannot block an otherwise complete canonical ruleset.
+    status: ruleSets.length > 0 ? 'ready' : 'failed',
     total_rule_sets: ruleSets.length,
     ready_documents: readyDocuments,
-    blocking_reasons: blockingReasons,
+    blocking_reasons: ruleSets.length > 0 ? [] : ['no_published_rule_sets'],
   }
 }
 
-async function ensureRuleSetSnapshots(input: {
-  orgId: string
-  ruleSets: RuleSetRow[]
-  documents: RuleSetDocumentRow[]
-  ruleSnapshotIdsBySetId: Map<string, string[]>
-  status: 'draft' | 'published'
-  requestedBy?: string | null
-}) {
-  if (input.ruleSets.length === 0) return [] as RuleSetSnapshotRow[]
+async function loadPublishedRuleSetSnapshots(orgId: string, ruleSetIds: string[] = []) {
+  const uniqueIds = Array.from(new Set(ruleSetIds.filter(Boolean)))
+  let pointerQuery = supabaseAdmin
+    .from('contract_rule_sets')
+    .select('id, org_id, current_snapshot_id, published_at')
+    .eq('org_id', orgId)
+    .eq('is_active', true)
+  if (uniqueIds.length > 0) pointerQuery = pointerQuery.in('id', uniqueIds)
 
-  const documentsBySetId = new Map(input.documents.map((document) => [document.rule_set_id, document]))
-  const now = new Date().toISOString()
-  const rows = input.ruleSets.map((ruleSet) => {
-    const document = documentsBySetId.get(ruleSet.id)
-    return {
-      org_id: input.orgId,
-      rule_set_id: ruleSet.id,
-      version: ruleSet.version || 1,
-      status: input.status,
-      rule_snapshot_ids: input.ruleSnapshotIdsBySetId.get(ruleSet.id) || [],
-      document_snapshot_ids: document ? [document.id] : [],
-      config_snapshot: {
-        code: ruleSet.code,
-        name: ruleSet.name,
-        description: ruleSet.description,
-        lifecycle_status: ruleSet.lifecycle_status,
-        translation_status: ruleSet.translation_status,
-        latest_document: document
-          ? {
-              id: document.id,
-              title: document.title,
-              source_type: document.source_type,
-              source_uri: document.source_uri,
-              content_hash: document.content_hash,
-              version: document.version,
-              status: document.status,
-              translation_status: document.translation_status,
-            }
-          : null,
-      },
-      released_by: input.status === 'published' ? input.requestedBy || null : null,
-      released_at: input.status === 'published' ? now : null,
-      release_note: input.status === 'published'
-        ? 'SkillBundle 编译时冻结规则集与文档快照'
-        : 'SkillBundle 编译未过正式门，保留规则集草稿快照',
-    }
-  })
+  const { data: pointerData, error: pointerError } = await pointerQuery
+  if (pointerError) throw pointerError
 
+  const activeRuleSets = (pointerData || []) as RuleSetPointerRow[]
+  const foreignPointers = activeRuleSets.filter((pointer) => pointer.org_id !== orgId)
+  if (foreignPointers.length > 0) {
+    throw new Error(`RULESET_CURRENT_POINTER_ORG_MISMATCH:${foreignPointers.map((pointer) => pointer.id).join(',')}`)
+  }
+  const inconsistentPointers = activeRuleSets.filter((pointer) => (
+    Boolean(pointer.current_snapshot_id) !== Boolean(pointer.published_at)
+  ))
+  if (inconsistentPointers.length > 0) {
+    throw new Error(`RULESET_CURRENT_POINTER_STATE_INVALID:${inconsistentPointers.map((pointer) => pointer.id).join(',')}`)
+  }
+  const pointers = activeRuleSets.filter((pointer) => (
+    Boolean(pointer.current_snapshot_id) && Boolean(pointer.published_at)
+  ))
+  if (pointers.length === 0) return [] as RuleSetSnapshotRow[]
+
+  const currentSnapshotIds = pointers.map((pointer) => pointer.current_snapshot_id as string)
   const { data, error } = await supabaseAdmin
     .from('contract_rule_set_snapshots')
-    .upsert(rows, { onConflict: 'rule_set_id,version,status' })
-    .select('id, rule_set_id, version, status')
+    .select('id, org_id, rule_set_id, version, status, rule_snapshot_ids, document_snapshot_ids, config_snapshot, released_at')
+    .in('id', currentSnapshotIds)
+    .eq('org_id', orgId)
+    .eq('status', 'published')
 
   if (error) throw error
-  return (data || []) as RuleSetSnapshotRow[]
+  const snapshots = (data || []) as RuleSetSnapshotRow[]
+  const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]))
+  const invalidPointers = pointers.filter((pointer) => {
+    const snapshot = snapshotsById.get(pointer.current_snapshot_id as string)
+    return !snapshot
+      || snapshot.org_id !== orgId
+      || snapshot.rule_set_id !== pointer.id
+      || snapshot.status !== 'published'
+  })
+  if (invalidPointers.length > 0) {
+    throw new Error(`RULESET_CURRENT_SNAPSHOT_INVALID:${invalidPointers.map((pointer) => pointer.id).join(',')}`)
+  }
+
+  for (const pointer of pointers) {
+    const snapshot = snapshotsById.get(pointer.current_snapshot_id as string) as RuleSetSnapshotRow
+    const memberIds = snapshot.rule_snapshot_ids
+    if (
+      !Array.isArray(memberIds)
+      || memberIds.length === 0
+      || memberIds.some((memberId) => typeof memberId !== 'string' || memberId.trim().length === 0)
+      || new Set(memberIds).size !== memberIds.length
+    ) {
+      throw new Error(`RULESET_CURRENT_MEMBERSHIP_INVALID:${pointer.id}`)
+    }
+  }
+
+  return pointers.map((pointer) => snapshotsById.get(pointer.current_snapshot_id as string) as RuleSetSnapshotRow)
+}
+
+function summarizeRuleSetSnapshotGate(
+  ruleSetIds: string[],
+  snapshots: RuleSetSnapshotRow[],
+  ruleSnapshotIdsBySetId: Map<string, string[]>
+): RuleSetSnapshotGate {
+  const snapshotsBySetId = new Map(snapshots.map((snapshot) => [snapshot.rule_set_id, snapshot]))
+  const missing = ruleSetIds.filter((id) => !snapshotsBySetId.has(id))
+  const mismatched = ruleSetIds.filter((id) => {
+    const snapshot = snapshotsBySetId.get(id)
+    if (!snapshot) return false
+    const expected = new Set(ruleSnapshotIdsBySetId.get(id) || [])
+    const actual = new Set(snapshot.rule_snapshot_ids || [])
+    return expected.size !== actual.size || Array.from(expected).some((value) => !actual.has(value))
+  })
+  const blockingReasons = [
+    ...missing.map((id) => `published_rule_set_snapshot_missing:${id}`),
+    ...mismatched.map((id) => `rule_set_snapshot_membership_mismatch:${id}`),
+  ]
+  return {
+    status: blockingReasons.length === 0 && ruleSetIds.length > 0 ? 'ready' : 'failed',
+    total_rule_sets: ruleSetIds.length,
+    published_snapshots: snapshots.length,
+    blocking_reasons: blockingReasons.length > 0 ? blockingReasons : ruleSetIds.length > 0 ? [] : ['no_published_rule_sets'],
+  }
 }
 
 async function fetchCurrentBundle(orgId: string, modelPolicy: ContractModelPolicy) {
@@ -525,11 +569,8 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
 }): Promise<ContractSkillBundle> {
   const { orgId, requestedBy } = input
   const modelPolicy = await resolvePublishedModelPolicy(orgId, requestedBy)
-  const [rules, templates] = await Promise.all([
-    loadRules(orgId),
-    loadClauseTemplates(orgId),
-  ])
-  const snapshots = await loadPublishedRuleSnapshots(rules)
+  const ruleSetSnapshots = await loadPublishedRuleSetSnapshots(orgId)
+  const { rules, snapshots } = await loadRulesFromRuleSetSnapshots(orgId, ruleSetSnapshots)
   const snapshotsByRuleId = new Map(
     rules
       .map((rule) => [rule.id, findSnapshotForRule(rule, snapshots)] as const)
@@ -538,25 +579,23 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
   const ruleUnits = buildRuleUnits(rules, snapshotsByRuleId)
   const ruleTranslationGate = summarizeRuleTranslationGate(ruleUnits)
   const rulesById = new Map(rules.map((rule) => [rule.id, rule]))
-  const ruleSetIds = Array.from(new Set(
-    rules
-      .map((rule) => rule.rule_set_id)
-      .filter((id): id is string => Boolean(id))
-  ))
-  const { ruleSets: ruleSetAssets, documents: ruleSetDocuments } = await loadRuleSetsWithLatestDocuments(orgId, ruleSetIds)
-  const ruleSetDocumentGate = summarizeRuleSetDocumentGate(ruleSetAssets, ruleSetDocuments)
+  const ruleSetIds = ruleSetSnapshots.map((snapshot) => snapshot.rule_set_id)
+  const ruleSetDocuments = await loadFrozenRuleSetDocuments(orgId, ruleSetSnapshots)
   const snapshotRefs = ruleUnits
     .filter((unit) => unit.source_trace.snapshot_id)
     .map((unit) => ({
       id: unit.id,
       rule_id: unit.rule_id,
       rule_set_id: rulesById.get(unit.rule_id)?.rule_set_id || null,
+      problem_category_id: rulesById.get(unit.rule_id)?.problem_category_id || null,
       code: unit.code,
       version: unit.version,
       business_domain: unit.business_domain,
       risk_level: unit.risk_level,
       applicable_scenarios: unit.applicable_scenarios,
       scope: unit.scope,
+      execution_protocol: unit.rule_contract ? 'rule_contract_v1' : 'legacy_adapter',
+      rule_contract: unit.rule_contract,
       engine_type: unit.engine_type,
       target_field: unit.target_field,
       clause_category: unit.clause_category,
@@ -564,26 +603,10 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       translation_status: unit.translation.status,
     }))
 
-  const templateRefs = templates.map((template) => ({
-    id: template.id,
-    category: template.category,
-    name: template.name,
-    stance: template.stance,
-    contract_types: template.contract_types || [],
-    updated_at: template.updated_at,
-  }))
   const schema = outputSchema()
-  const ruleCodes = new Set(rules.map((rule) => rule.code))
-  const missingCanonicalRules = Array.from({ length: 15 }, (_, index) => `R${String(index + 1).padStart(3, '0')}`)
-    .filter((code) => !ruleCodes.has(code))
   const evalStatus = resolveBundleEvalStatus({
-    missingCanonicalRules,
     ruleTranslationStatus: ruleTranslationGate.status,
   })
-  const formalReviewAllowed = ruleTranslationGate.official_review_allowed
-    && ruleSetDocumentGate.status === 'ready'
-    && evalStatus === 'passed'
-  const bundleStatus: ContractSkillBundle['status'] = formalReviewAllowed ? 'published' : 'compiled'
   const ruleSnapshotIdsBySetId = new Map<string, string[]>()
   for (const ref of snapshotRefs) {
     if (!ref.rule_set_id) continue
@@ -591,16 +614,34 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
     existing.push(ref.id)
     ruleSnapshotIdsBySetId.set(ref.rule_set_id, existing)
   }
-  const ruleSetSnapshots = await ensureRuleSetSnapshots({
-    orgId,
-    ruleSets: ruleSetAssets,
-    documents: ruleSetDocuments,
-    ruleSnapshotIdsBySetId,
-    status: formalReviewAllowed ? 'published' : 'draft',
-    requestedBy,
+  const ruleSetSnapshotGate = summarizeRuleSetSnapshotGate(
+    ruleSetIds,
+    ruleSetSnapshots,
+    ruleSnapshotIdsBySetId
+  )
+  const publishedRuleSetAssets = ruleSetSnapshots.map((snapshot) => {
+    const config = asRecord(snapshot.config_snapshot)
+    return {
+      id: snapshot.rule_set_id,
+      code: stringValue(config.code) || snapshot.rule_set_id,
+      name: stringValue(config.name) || snapshot.rule_set_id,
+      description: stringValue(config.description) || null,
+      version: snapshot.version,
+      lifecycle_status: 'published',
+      translation_status: 'ready',
+      published_at: snapshot.released_at,
+    } satisfies RuleSetRow
   })
+  const ruleSetDocumentGate = summarizeRuleSetDocumentGate(publishedRuleSetAssets, ruleSetDocuments)
+  const formalReviewAllowed = ruleTranslationGate.official_review_allowed
+    && ruleSetSnapshotGate.status === 'ready'
+    && ruleSetDocumentGate.status === 'ready'
+    && evalStatus === 'passed'
+  const bundleStatus: ContractSkillBundle['status'] = formalReviewAllowed ? 'published' : 'compiled'
   const ruleSetSnapshotIds = ruleSetSnapshots.map((snapshot) => snapshot.id)
-  const documentSnapshotIds = ruleSetDocuments.map((document) => document.id)
+  const documentSnapshotIds = Array.from(new Set(
+    ruleSetSnapshots.flatMap((snapshot) => snapshot.document_snapshot_ids || []).filter(Boolean)
+  ))
 
   const compiledFrom = {
     product_phase: 'contract_review_first_stage',
@@ -643,10 +684,10 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       must_bind: ['RiskFinding', 'RuleSnapshot', 'evidence_text', 'source_range', 'Word comment anchor'],
       on_location_missing: 'manual_location_required',
     },
-    canonical_rule_completeness: {
-      expected: 15,
-      actual: ruleCodes.size,
-      missing: missingCanonicalRules,
+    published_rule_scope: {
+      rule_count: rules.length,
+      rule_snapshot_count: snapshotRefs.length,
+      source: 'current_published_rule_set_snapshots',
     },
     execution_plan: [
       'structured_rules',
@@ -659,7 +700,8 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
     rules: snapshotRefs,
     rule_units: ruleUnits,
     rule_translation_gate: ruleTranslationGate,
-    rule_sets: ruleSetAssets.map((ruleSet) => ({
+    rule_set_snapshot_gate: ruleSetSnapshotGate,
+    rule_sets: publishedRuleSetAssets.map((ruleSet) => ({
       id: ruleSet.id,
       code: ruleSet.code,
       name: ruleSet.name,
@@ -681,7 +723,7 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       updated_at: document.updated_at,
     })),
     rule_set_document_gate: ruleSetDocumentGate,
-    template_references: templateRefs,
+    template_references: [],
     eval_results: {
       source_type: 'reference_asset',
       reference_eval_source: `${ONES_CONTRACT_REFERENCE_ASSET.repo}/skills/${ONES_CONTRACT_REFERENCE_ASSET.skill}/evals/evals.json`,
@@ -691,8 +733,8 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       total_cases: ONES_SKILL_EVAL_CASES.length,
       passed_cases: evalStatus === 'passed' ? ONES_SKILL_EVAL_CASES.length : 0,
       failed_cases: [
-        ...(missingCanonicalRules.length === 0 ? [] : ['canonical_rule_completeness']),
         ...(ruleTranslationGate.status === 'ready' ? [] : ruleTranslationGate.blocking_reasons),
+        ...(ruleSetSnapshotGate.status === 'ready' ? [] : ruleSetSnapshotGate.blocking_reasons),
         ...(ruleSetDocumentGate.status === 'ready' ? [] : ruleSetDocumentGate.blocking_reasons),
       ],
       runtime_eval_status: 'model_quality_eval_not_run',
@@ -768,16 +810,16 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
         reference_asset: ONES_CONTRACT_REFERENCE_ASSET,
         reference_asset_count: ONES_SKILL_REFERENCES.length,
         rule_count: snapshotRefs.length,
-        rule_set_count: ruleSetAssets.length,
+        rule_set_count: ruleSetSnapshots.length,
         rule_set_snapshot_count: ruleSetSnapshotIds.length,
         rule_set_document_count: ruleSetDocuments.length,
-        canonical_rule_count: ruleCodes.size,
-        canonical_rule_missing: missingCanonicalRules,
+        published_rule_count: snapshotRefs.length,
+        published_rule_scope_status: ruleSetSnapshotGate.status,
         rule_translation_status: ruleTranslationGate.status,
         rule_set_document_status: ruleSetDocumentGate.status,
         official_review_allowed: formalReviewAllowed,
         review_gate_status: formalReviewAllowed ? 'formal_review_allowed' : 'compiled_not_formal',
-        template_reference_count: templateRefs.length,
+        template_reference_count: 0,
         output_schema_version: schema.schema_version,
         second_verification_required: true,
         audit_required: true,

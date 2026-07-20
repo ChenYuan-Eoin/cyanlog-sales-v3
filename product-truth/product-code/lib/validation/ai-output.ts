@@ -3,21 +3,59 @@
 // AI输出不可控，用Schema校验保证前端拿到合法JSON，失败自动重试
 
 import { z } from 'zod'
+import {
+  evaluateRuleContractReadings,
+  normalizeDurationUnit,
+  normalizeRuleContract,
+  riskLevelForOutcome,
+  type RulePropertyReading,
+} from '@/lib/rules/rule-contract'
+import type { ContractRuleContract, ContractRuleProperty } from '@/types/rules'
 
 // ─── Zod Schema定义 ─────────────────────────────────────
 
 const RiskLevelSchema = z.enum(['red', 'yellow', 'green'])
 
+const PropertyReadingSchema = z.object({
+  propertyKey: z.string().min(1),
+  status: z.enum(['read', 'missing', 'ambiguous', 'unit_conflict']),
+  value: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  unit: z.string().min(1).optional(),
+  evidence: z.string().min(2).optional(),
+  confidence: z.number().min(0).max(1),
+})
+
 const RiskSchema = z.object({
   ruleId: z.string().optional(),
   ruleCode: z.string().min(1),
   ruleVersion: z.number().optional(),
+  decisionId: z.string().min(1).optional(),
+  propertyReadings: z.array(PropertyReadingSchema).max(30).optional(),
   level: RiskLevelSchema,
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(2000),
   suggestion: z.string().min(1).max(1000),
   counterparty: z.string().optional(),
-  evidence: z.array(z.string().min(2)).min(1),
+  evidence: z.array(z.string().min(2)),
+})
+
+const RawRiskSchema = z.object({
+  ruleId: z.string().optional(),
+  ruleCode: z.string().min(1),
+  ruleVersion: z.number().optional(),
+  decisionId: z.string().min(1).optional(),
+  propertyReadings: z.array(PropertyReadingSchema).max(30).optional(),
+  level: RiskLevelSchema.optional(),
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().min(1).max(2000).optional(),
+  suggestion: z.string().min(1).max(1000).optional(),
+  counterparty: z.string().optional(),
+  evidence: z.array(z.string().min(2)).min(1).optional(),
+})
+
+const RawAIReviewOutputSchema = z.object({
+  risks: z.array(RawRiskSchema).max(50),
+  summary: z.string().min(1).max(5000),
 })
 
 export const AIReviewOutputSchema = z.object({
@@ -26,6 +64,8 @@ export const AIReviewOutputSchema = z.object({
 })
 
 export type AIReviewOutput = z.infer<typeof AIReviewOutputSchema>
+type RawAIReviewOutput = z.infer<typeof RawAIReviewOutputSchema>
+type RawRisk = RawAIReviewOutput['risks'][number]
 
 // ─── 参数约束配置 ─────────────────────────────────────────
 
@@ -77,6 +117,8 @@ export type RuntimeRuleConstraint = {
   clause_category?: string | null
   target_field?: string | null
   field_hints?: string[] | null
+  execution_protocol?: 'rule_contract_v1' | 'legacy_adapter' | null
+  rule_contract?: ContractRuleContract | null
 }
 
 export type AIOutputRuntimeConstraints = {
@@ -144,7 +186,7 @@ export function validateAIOutput(
     }
 
     const parsed = JSON.parse(jsonStr)
-    const validated = AIReviewOutputSchema.safeParse(parsed)
+    const validated = RawAIReviewOutputSchema.safeParse(parsed)
 
     if (validated.success) {
       const runtimeValidation = validateRuntimeConstraints(validated.data, constraints)
@@ -207,6 +249,17 @@ function meaningfulEvidence(evidence: string) {
 
 function ruleHints(rule: RuntimeRuleConstraint | undefined) {
   if (!rule) return []
+  const canonical = normalizeRuleContract(rule.rule_contract)
+  if (canonical) {
+    return canonical.properties.flatMap((property) => [
+      property.label,
+      property.description,
+      ...(property.options || []).flatMap((option) => [option.label, option.value]),
+    ])
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .map(normalizeEvidenceText)
+      .filter((value) => value.length >= 2)
+  }
   return [
     ...(Array.isArray(rule.field_hints) ? rule.field_hints : []),
     rule.clause_category,
@@ -226,57 +279,266 @@ function evidenceMatchesRuleHints(evidenceItems: string[], rule: RuntimeRuleCons
   })
 }
 
-function normalizeRuntimeRisk(
-  risk: AIReviewOutput['risks'][number],
-  rule: RuntimeRuleConstraint | undefined
-): AIReviewOutput['risks'][number] {
-  const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
-  return {
-    ...risk,
-    ruleCode: normalizedRuleCode || risk.ruleCode,
-    ruleVersion: typeof rule?.version === 'number' ? rule.version : risk.ruleVersion,
-  }
+function unitsEqual(left: string | undefined, right: string | undefined) {
+  if (!left || !right) return left === right
+  return left.trim().toUpperCase() === right.trim().toUpperCase()
 }
 
-function validateRuntimeRisk(input: {
-  risk: AIReviewOutput['risks'][number]
+function validateReadingValue(
+  property: ContractRuleProperty,
+  rawValue: string | number | boolean | undefined,
+  rawUnit: string | undefined,
+  path: string
+): { errors: string[]; value?: string | number | boolean; unit?: string } {
+  const errors: string[] = []
+  let value = rawValue
+  let unit = rawUnit?.trim()
+
+  if (value === undefined) {
+    return { errors: [`${path}.value: read status requires a typed value`] }
+  }
+
+  if (['money', 'percentage', 'duration', 'number'].includes(property.type)) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      errors.push(`${path}.value: ${property.type} requires a finite number`)
+    }
+  } else if (property.type === 'boolean') {
+    if (typeof value !== 'boolean') errors.push(`${path}.value: boolean requires true or false`)
+  } else if (typeof value !== 'string' || value.trim().length === 0) {
+    errors.push(`${path}.value: ${property.type} requires a non-empty string`)
+  }
+
+  if (property.type === 'money') {
+    const expected = property.currency || property.unit || undefined
+    if (!unit) errors.push(`${path}.unit: money requires an explicit currency`)
+    if (expected && unit && !unitsEqual(unit, expected)) {
+      errors.push(`${path}.unit: expected ${expected} for ${property.key}`)
+    }
+    unit = unit?.toUpperCase()
+  } else if (property.type === 'percentage') {
+    const expected = property.unit || 'percent'
+    if (!unit || !unitsEqual(unit, expected)) {
+      errors.push(`${path}.unit: expected ${expected} for ${property.key}`)
+    }
+    unit = 'percent'
+  } else if (property.type === 'duration') {
+    const normalized = normalizeDurationUnit(unit)
+    if (!normalized) errors.push(`${path}.unit: duration requires day, month, or year`)
+    unit = normalized
+  } else if (property.type === 'number') {
+    if (property.unit && !unitsEqual(unit, property.unit)) {
+      errors.push(`${path}.unit: expected ${property.unit} for ${property.key}`)
+    } else if (!property.unit && unit) {
+      errors.push(`${path}.unit: ${property.key} has no configured unit`)
+    }
+  } else if (unit) {
+    errors.push(`${path}.unit: ${property.type} does not accept a unit`)
+  }
+
+  if (property.type === 'enum' && typeof value === 'string') {
+    const option = property.options?.find((candidate) => (
+      candidate.value === value || candidate.label === value
+    ))
+    if (!option) errors.push(`${path}.value: value is not a configured option for ${property.key}`)
+    else value = option.value
+  }
+
+  if (property.type === 'date' && typeof value === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    errors.push(`${path}.value: date must use YYYY-MM-DD`)
+  }
+
+  return { errors, value, unit }
+}
+
+function validateCanonicalRisk(input: {
+  risk: RawRisk
+  rule: RuntimeRuleConstraint
+  canonical: ContractRuleContract
   index: number
   constraints: AIOutputRuntimeConstraints
-  rulesByCode: Map<string, RuntimeRuleConstraint>
-  allowedRuleCodes: Set<string>
-}): string[] {
-  const { risk, index, constraints, rulesByCode, allowedRuleCodes } = input
+}): { errors: string[]; normalized?: AIReviewOutput['risks'][number] } {
+  const { risk, rule, canonical, index, constraints } = input
   const path = `risks.${index}`
-  const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
-  const rule = rulesByCode.get(normalizedRuleCode)
   const errors: string[] = []
+  const propertyByKey = new Map(canonical.properties.map((property) => [property.key, property]))
+  const rawReadings = risk.propertyReadings || []
+  const seenKeys = new Set<string>()
+  const readings: Record<string, RulePropertyReading> = {}
+  const normalizedReadings: NonNullable<AIReviewOutput['risks'][number]['propertyReadings']> = []
 
-  if (allowedRuleCodes.size > 0 && !allowedRuleCodes.has(normalizedRuleCode)) {
-    errors.push(`${path}.ruleCode: ${risk.ruleCode} is not in current SkillBundle`)
-  }
+  if (rawReadings.length === 0) errors.push(`${path}.propertyReadings: canonical output requires typed readings`)
 
-  const evidence = risk.evidence || []
-  const weakEvidence = evidence.filter((item) => !meaningfulEvidence(item))
-  if (weakEvidence.length > 0) {
-    errors.push(`${path}.evidence: evidence is too short or generic`)
-  }
+  rawReadings.forEach((rawReading, readingIndex) => {
+    const readingPath = `${path}.propertyReadings.${readingIndex}`
+    const property = propertyByKey.get(rawReading.propertyKey)
+    if (!property) {
+      errors.push(`${readingPath}.propertyKey: ${rawReading.propertyKey} is not defined by rule_contract`)
+      return
+    }
+    if (seenKeys.has(rawReading.propertyKey)) {
+      errors.push(`${readingPath}.propertyKey: duplicate reading for ${rawReading.propertyKey}`)
+      return
+    }
+    seenKeys.add(rawReading.propertyKey)
 
-  if (constraints.requireEvidenceInSource && constraints.contractText) {
-    const missing = evidence.filter((item) => !sourceContainsEvidence(constraints.contractText || '', item))
-    if (missing.length > 0) {
-      errors.push(`${path}.evidence: evidence is not a continuous source fragment`)
+    const evidence = rawReading.evidence?.trim()
+    const evidenceRequired = rawReading.status !== 'missing'
+    if (evidenceRequired && (!evidence || !meaningfulEvidence(evidence))) {
+      errors.push(`${readingPath}.evidence: reading requires meaningful source evidence`)
+    } else if (evidence && !meaningfulEvidence(evidence)) {
+      errors.push(`${readingPath}.evidence: reading evidence is too short or generic`)
+    } else if (evidence && !constraints.contractText) {
+      errors.push(`${readingPath}.evidence: contract source is required to validate continuous evidence`)
+    } else if (evidence && constraints.contractText && !constraints.contractText.includes(evidence)) {
+      errors.push(`${readingPath}.evidence: evidence is not a continuous source fragment`)
+    }
+
+    let value = rawReading.value
+    let unit = rawReading.unit
+    if (rawReading.status === 'read') {
+      const validatedValue = validateReadingValue(property, value, unit, readingPath)
+      errors.push(...validatedValue.errors)
+      value = validatedValue.value
+      unit = validatedValue.unit
+    } else if (value !== undefined) {
+      errors.push(`${readingPath}.value: ${rawReading.status} status must not provide a decided value`)
+    }
+
+    const reading: RulePropertyReading = {
+      property_key: rawReading.propertyKey,
+      status: rawReading.status,
+      confidence: rawReading.confidence,
+      ...(value !== undefined ? { value } : {}),
+      ...(unit ? { unit } : {}),
+      ...(evidence ? { evidence } : {}),
+    }
+    readings[property.key] = reading
+    normalizedReadings.push({
+      propertyKey: property.key,
+      status: reading.status,
+      confidence: reading.confidence,
+      ...(reading.value !== undefined ? { value: reading.value } : {}),
+      ...(reading.unit ? { unit: reading.unit } : {}),
+      ...(reading.evidence ? { evidence: reading.evidence } : {}),
+    })
+  })
+
+  for (const property of canonical.properties) {
+    if (!seenKeys.has(property.key)) {
+      errors.push(`${path}.propertyReadings: missing defined property ${property.key}`)
     }
   }
 
+  if (errors.length > 0) return { errors }
+
+  const evaluation = evaluateRuleContractReadings(canonical, readings)
+  const normalizedBase = {
+    ruleId: risk.ruleId,
+    ruleCode: normalizeRuleCode(risk.ruleCode) || risk.ruleCode,
+    ruleVersion: typeof rule.version === 'number' ? rule.version : risk.ruleVersion,
+    propertyReadings: normalizedReadings,
+    evidence: evaluation.evidence,
+  }
+  const normalized = evaluation.status === 'decided' && evaluation.decision
+    ? RiskSchema.parse({
+        ...normalizedBase,
+        decisionId: evaluation.decision.id,
+        level: riskLevelForOutcome(evaluation.decision.outcome),
+        title: evaluation.decision.label,
+        description: evaluation.decision.message || evaluation.decision.label,
+        suggestion: evaluation.decision.action || evaluation.decision.message || evaluation.decision.label,
+      })
+    : RiskSchema.parse({
+        ...normalizedBase,
+        level: riskLevelForOutcome(evaluation.outcome),
+        ...canonicalUnresolvedCopy(canonical, evaluation),
+      })
+  return { errors: [], normalized }
+}
+
+function canonicalUnresolvedCopy(
+  canonical: ContractRuleContract,
+  evaluation: ReturnType<typeof evaluateRuleContractReadings>
+): { title: string; description: string; suggestion: string } {
+  const labels = new Map(canonical.properties.map((property) => [property.key, property.label]))
+  const readable = (keys: string[]) => keys.map((key) => labels.get(key) || key).join('、')
+  const details: string[] = []
+  if (evaluation.missing_property_keys.length > 0) {
+    details.push(`缺少必填属性：${readable(evaluation.missing_property_keys)}`)
+  }
+  if (evaluation.ambiguous_property_keys.length > 0) {
+    details.push(`同一属性存在多个冲突值：${readable(evaluation.ambiguous_property_keys)}`)
+  }
+  if (evaluation.unit_conflict_property_keys.length > 0) {
+    details.push(`属性单位或币种冲突：${readable(evaluation.unit_conflict_property_keys)}`)
+  }
+  if (evaluation.status === 'no_decision') {
+    details.push('已读取属性未命中任何已配置判定')
+  }
+
+  const reason = evaluation.status === 'no_decision'
+    ? '没有可达判定'
+    : evaluation.unit_conflict_property_keys.length > 0
+      ? '属性单位或币种冲突'
+      : evaluation.ambiguous_property_keys.length > 0
+        ? '属性值存在冲突'
+        : '缺少必填属性'
+  const disposition = evaluation.outcome === 'block' ? '按规则阻断' : '需人工复核'
+  return {
+    title: `${reason}，${disposition}`,
+    description: `${details.join('；') || '规则事实不足'}。处置：${disposition}。`,
+    suggestion: evaluation.outcome === 'block'
+      ? '补充或澄清规则事实后重新审核；当前按规则阻断'
+      : '提交人工复核，确认规则事实后重新审核',
+  }
+}
+
+function validateLegacyRisk(input: {
+  risk: RawRisk
+  rule: RuntimeRuleConstraint | undefined
+  index: number
+  constraints: AIOutputRuntimeConstraints
+}): { errors: string[]; normalized?: AIReviewOutput['risks'][number] } {
+  const { risk, rule, index, constraints } = input
+  const path = `risks.${index}`
+  const parsed = RiskSchema.safeParse(risk)
+  if (!parsed.success) {
+    return {
+      errors: parsed.error.issues.map((issue) => (
+        `${path}.${issue.path.join('.')}: ${issue.message}`
+      )),
+    }
+  }
+
+  const evidence = parsed.data.evidence
+  const errors: string[] = []
+  if (evidence.length === 0) {
+    errors.push(`${path}.evidence: legacy output requires source evidence`)
+  }
+  if (evidence.some((item) => !meaningfulEvidence(item))) {
+    errors.push(`${path}.evidence: evidence is too short or generic`)
+  }
+  if (constraints.requireEvidenceInSource && constraints.contractText
+    && evidence.some((item) => !sourceContainsEvidence(constraints.contractText || '', item))) {
+    errors.push(`${path}.evidence: evidence is not a continuous source fragment`)
+  }
   if (constraints.requireRuleEvidenceHint && !evidenceMatchesRuleHints(evidence, rule)) {
     errors.push(`${path}.evidence: evidence does not match rule field hints`)
   }
+  if (errors.length > 0) return { errors }
 
-  return errors
+  return {
+    errors: [],
+    normalized: {
+      ...parsed.data,
+      ruleCode: normalizeRuleCode(parsed.data.ruleCode) || parsed.data.ruleCode,
+      ruleVersion: typeof rule?.version === 'number' ? rule.version : parsed.data.ruleVersion,
+    }
+  }
 }
 
 function validateRuntimeConstraints(
-  data: AIReviewOutput,
+  data: RawAIReviewOutput,
   constraints: AIOutputRuntimeConstraints
 ): ValidationResult {
   const rules = constraints.rules || []
@@ -293,13 +555,25 @@ function validateRuntimeConstraints(
   for (const [index, risk] of data.risks.entries()) {
     const normalizedRuleCode = normalizeRuleCode(risk.ruleCode)
     const rule = rulesByCode.get(normalizedRuleCode)
-    const riskErrors = validateRuntimeRisk({
-      risk,
-      index,
-      constraints,
-      rulesByCode,
-      allowedRuleCodes,
-    })
+    let riskErrors: string[] = []
+    let normalizedRisk: AIReviewOutput['risks'][number] | undefined
+
+    if (allowedRuleCodes.size > 0 && !allowedRuleCodes.has(normalizedRuleCode)) {
+      riskErrors.push(`risks.${index}.ruleCode: ${risk.ruleCode} is not in current SkillBundle`)
+    } else if (rule?.execution_protocol === 'rule_contract_v1' || rule?.rule_contract) {
+      const canonical = normalizeRuleContract(rule.rule_contract)
+      if (!canonical) {
+        riskErrors.push(`risks.${index}.ruleCode: canonical rule_contract is invalid`)
+      } else {
+        const validation = validateCanonicalRisk({ risk, rule, canonical, index, constraints })
+        riskErrors = validation.errors
+        normalizedRisk = validation.normalized
+      }
+    } else {
+      const validation = validateLegacyRisk({ risk, rule, index, constraints })
+      riskErrors = validation.errors
+      normalizedRisk = validation.normalized
+    }
 
     if (riskErrors.length > 0) {
       errors.push(...riskErrors)
@@ -307,7 +581,7 @@ function validateRuntimeConstraints(
       continue
     }
 
-    acceptedRisks.push(normalizeRuntimeRisk(risk, rule))
+    if (normalizedRisk) acceptedRisks.push(normalizedRisk)
   }
 
   if (errors.length > 0) {

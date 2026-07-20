@@ -3,6 +3,7 @@ import { createdResponse, errorResponse, successResponse } from '@/lib/api/commo
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
   createProblemCategorySchema,
@@ -14,7 +15,11 @@ import {
 // Stable organization-scoped business problem categories.  Property types such
 // as money/percentage/duration live inside a rule's rule_contract instead.
 export async function GET(req: NextRequest) {
-  return withAuthAndOrg(req, async (_user: AuthUser, orgId: string) => {
+  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'read')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:read 权限'))
+    }
+
     const includeInactive = new URL(req.url).searchParams.get('include_inactive') === 'true'
     let query = supabaseAdmin
       .from('contract_rule_problem_categories')
@@ -39,6 +44,10 @@ export async function GET(req: NextRequest) {
 // POST /api/contract-policies/rule-categories
 export async function POST(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:write 权限'))
+    }
+
     const parsed = createProblemCategorySchema.safeParse(await req.json().catch(() => ({})))
     if (!parsed.success) {
       return errorResponse(createApiError(

@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
+  configAccess: vi.fn(),
 }))
 
 vi.mock('@/lib/api/auth-wrapper', () => ({
@@ -15,6 +16,10 @@ vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { from: mocks.from },
 }))
 
+vi.mock('@/lib/configs/access', () => ({
+  userHasFreshOrgConfigAccess: mocks.configAccess,
+}))
+
 import { GET, POST } from './route'
 
 function request(url: string, body?: unknown) {
@@ -25,7 +30,21 @@ function request(url: string, body?: unknown) {
 }
 
 describe('/api/contract-policies/rule-categories', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.configAccess.mockResolvedValue(true)
+  })
+
+  it('returns a clear 403 before reading categories without fresh config:read', async () => {
+    mocks.configAccess.mockResolvedValue(false)
+
+    const response = await GET(request('http://localhost/api/contract-policies/rule-categories'))
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body.error.message).toContain('config:read')
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
 
   it('returns the stable business categories in data[]', async () => {
     const categories = [{ id: 'category-1', code: 'payment', name: '付款与结算' }]
@@ -52,6 +71,17 @@ describe('/api/contract-policies/rule-categories', () => {
 
     expect(response.status).toBe(400)
     expect(body.error.message).toContain('不能作为问题分类')
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
+
+  it('returns a clear 403 before parsing or writing without fresh config:write', async () => {
+    mocks.configAccess.mockResolvedValue(false)
+
+    const response = await POST(request('http://localhost/api/contract-policies/rule-categories', {}))
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body.error.message).toContain('config:write')
     expect(mocks.from).not.toHaveBeenCalled()
   })
 

@@ -282,7 +282,7 @@ function makeFlexibleRule(overrides: Partial<FlexibleRule>): FlexibleRule {
 }
 
 describe('柔性规则引擎 - 合同审核事实判定', () => {
-  it('R001 付款节奏不应把服务费 6% 误判为首付款比例', () => {
+  it('R001 付款节奏不应把服务费 6% 伪造为首付款证据，缺失事实转人工复核', () => {
     const rule = makeFlexibleRule({
       code: 'R001',
       name: '付款节奏',
@@ -295,8 +295,12 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
 
     const result = evaluateFlexibleRule(rule, '服务费率为合同总价的 6%，甲方应在验收后 30 个工作日内支付。')
 
-    expect(result.risk_label).toBe('white')
-    expect(result.matched).toBe(false)
+    expect(result.risk_label).toBe('yellow')
+    expect(result.matched).toBe(true)
+    expect(result.evaluation_status).toBe('missing_evidence')
+    expect(result.action).toBe('manual_review')
+    expect(result.source).toBe('')
+    expect(result.confidence).toBe(0)
   })
 
   it('R001 付款节奏只在首付款上下文中提取比例', () => {
@@ -362,7 +366,7 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
     expect(result.source).toContain('120天')
   })
 
-  it('R009 保密期不应复用合同期限数值', () => {
+  it('R009 保密期不应复用合同期限数值，缺失保密期事实转人工复核', () => {
     const rule = makeFlexibleRule({
       code: 'R009',
       name: '保密期',
@@ -375,8 +379,11 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
 
     const result = evaluateFlexibleRule(rule, '合同期限为 5 年，未单独约定保密期。')
 
-    expect(result.risk_label).toBe('white')
-    expect(result.matched).toBe(false)
+    expect(result.risk_label).toBe('yellow')
+    expect(result.matched).toBe(true)
+    expect(result.evaluation_status).toBe('missing_evidence')
+    expect(result.action).toBe('manual_review')
+    expect(result.source).toBe('')
   })
 
   it('R009 保密期能识别永久保密为红线', () => {
@@ -492,7 +499,7 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
     expect(result.source).not.toContain('第四条')
   })
 
-  it('R004 默示验收期不应把下一条款标题误判为期限', () => {
+  it('R004 默示验收期不应把下一条款标题误判为期限，缺失期限转人工复核', () => {
     const rule = makeFlexibleRule({
       code: 'R004',
       name: '默示验收期',
@@ -505,8 +512,10 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
 
     const result = evaluateFlexibleRule(rule, '本合同约定自动验收通过。第四条 违约责任：另行约定。')
 
-    expect(result.risk_label).toBe('white')
-    expect(result.matched).toBe(false)
+    expect(result.risk_label).toBe('yellow')
+    expect(result.matched).toBe(true)
+    expect(result.evaluation_status).toBe('missing_evidence')
+    expect(result.action).toBe('manual_review')
     expect(result.source).toBe('')
   })
 
@@ -542,7 +551,7 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
     expect(result.source).not.toContain('第五条')
   })
 
-  it('文本规则不能把规则词或 hint 当成合同原文证据', () => {
+  it('文本规则不能把规则词或 hint 当成合同原文证据，无法判定时转人工复核', () => {
     const rule = makeFlexibleRule({
       code: 'R099',
       name: '通用文本规则',
@@ -555,12 +564,14 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
 
     const result = evaluateFlexibleRule(rule, '本合同约定双方应合规履约。')
 
-    expect(result.risk_label).toBe('white')
-    expect(result.matched).toBe(false)
-    expect(result.source).toBe('')
+    expect(result.risk_label).toBe('yellow')
+    expect(result.matched).toBe(true)
+    expect(result.evaluation_status).toBe('no_decision')
+    expect(result.action).toBe('manual_review')
+    expect(result.source).toBe('本合同约定双方应合规履约。')
   })
 
-  it('R013 SLA 不应把产品名 ONES 误判为 SLA 命中', () => {
+  it('R013 SLA 不应把产品名 ONES 误判为 SLA 证据，缺失事实转人工复核', () => {
     const rule = makeFlexibleRule({
       code: 'R013',
       name: 'SLA 承诺',
@@ -579,8 +590,11 @@ describe('柔性规则引擎 - 合同审核事实判定', () => {
 
     const result = evaluateFlexibleRule(rule, '乙方为甲方提供 ONES 系统服务，具体功能以订单为准。')
 
-    expect(result.risk_label).toBe('white')
-    expect(result.matched).toBe(false)
+    expect(result.risk_label).toBe('yellow')
+    expect(result.matched).toBe(true)
+    expect(result.evaluation_status).toBe('missing_evidence')
+    expect(result.action).toBe('manual_review')
+    expect(result.source).toBe('')
   })
 
   it('R013 SLA 能识别高风险服务可用性承诺', () => {

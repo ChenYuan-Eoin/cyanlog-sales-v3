@@ -1,12 +1,19 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertCircleIcon, CheckCircle2Icon, Loader2Icon, PlayIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { resolveRuleContract, type RulePropertyReading } from '@/lib/rules/rule-contract'
-import type { ContractPolicyRule, ContractRuleOutcome, ContractRuleProperty } from '@/types/rules'
+import type {
+  ContractPolicyRule,
+  ContractRuleCondition,
+  ContractRuleDecision,
+  ContractRuleOutcome,
+  ContractRuleProperty,
+  ContractRuleTestCaseKind,
+} from '@/types/rules'
 
 interface RuleTestResult {
   ruleId: string
@@ -28,6 +35,16 @@ interface RuleTestResult {
   evidence: string[]
   missingPropertyKeys: string[]
   ambiguousPropertyKeys: string[]
+  unitConflictPropertyKeys: string[]
+  assertion: {
+    caseKind: ContractRuleTestCaseKind
+    expectedStatus: 'decided' | 'missing_evidence' | 'no_decision'
+    expectedOutcome: ContractRuleOutcome
+    expectedDecisionId: string | null
+    passed: boolean
+  }
+  testRunId?: string
+  testedAt?: string
 }
 
 interface RuleTestResponse {
@@ -37,6 +54,7 @@ interface RuleTestResponse {
 
 interface RuleTestSandboxProps {
   rule: ContractPolicyRule
+  onTestSaved?: () => void | Promise<void>
 }
 
 const outcomeLabels: Record<ContractRuleOutcome, string> = {
@@ -53,47 +71,130 @@ const outcomeClasses: Record<ContractRuleOutcome, string> = {
   manual_review: 'border-blue-200 bg-blue-50 text-blue-800',
 }
 
-function exampleForProperty(property: ContractRuleProperty) {
+function formattedPropertyValue(property: ContractRuleProperty, value?: ContractRuleCondition['value']) {
+  const scalar = Array.isArray(value) ? value[0] : value
   switch (property.type) {
-    case 'money': return `${property.label || '合同金额'}为50000元`
-    case 'percentage': return `${property.label || '比例'}为30%`
-    case 'duration': return `${property.label || '期限'}为30天`
-    case 'date': return `${property.label || '日期'}为2026年8月1日`
-    case 'enum': return `${property.label || '选项'}为${property.options?.[0]?.label || '标准方式'}`
-    case 'boolean': return `${property.label || '是否满足'}为是`
-    case 'number': return `${property.label || '数量'}为10`
-    case 'text': return `${property.label || '约定内容'}为双方书面确认`
+    case 'money': return `${property.label || '合同金额'}为${typeof scalar === 'number' ? scalar : 50000}${property.currency === 'USD' ? '美元' : property.currency === 'EUR' ? '欧元' : '元'}`
+    case 'percentage': return `${property.label || '比例'}为${typeof scalar === 'number' ? scalar : 30}%`
+    case 'duration': return `${property.label || '期限'}为${typeof scalar === 'number' ? scalar : 30}${property.unit === 'month' ? '个月' : property.unit === 'year' ? '年' : '天'}`
+    case 'date': return `${property.label || '日期'}为${typeof scalar === 'string' ? scalar : '2026年8月1日'}`
+    case 'enum': {
+      const option = property.options?.find((candidate) => candidate.value === scalar)
+      return `${property.label || '选项'}为${option?.label || property.options?.[0]?.label || '标准方式'}`
+    }
+    case 'boolean': return `${property.label || '是否满足'}：${scalar === false ? '否' : '是'}`
+    case 'number': return `${property.label || '数量'}为${typeof scalar === 'number' ? scalar : 10}${property.unit || ''}`
+    case 'text': return `${property.label || '约定内容'}为${typeof scalar === 'string' ? scalar : '双方书面确认'}`
   }
 }
 
-function buildExamples(properties: ContractRuleProperty[]) {
-  const normal = properties.length > 0
-    ? `${properties.map(exampleForProperty).join('；')}。`
-    : '本合同约定付款期限为30天，双方按约履行。'
-  const first = properties[0]
-  const conflict = first
-    ? first.type === 'money'
-      ? `${first.label}一处约定为50000元，另一处约定为60000元。`
-      : first.type === 'percentage'
-        ? `${first.label}一处约定为20%，另一处约定为30%。`
-        : first.type === 'duration'
-          ? `${first.label}一处约定为30天，另一处约定为60天。`
-          : `${first.label}在合同不同位置存在不一致约定。`
-    : '合同不同位置存在不一致约定，需要人工确认。'
-  return [
-    { label: '完整示例', text: normal },
-    { label: '缺少明确值', text: '合同仅说明双方后续协商，未写明本规则所需的具体信息。' },
-    { label: '冲突示例', text: conflict },
-  ]
+function valueThatMatches(condition: ContractRuleCondition) {
+  if (typeof condition.value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(condition.value)) {
+    const date = new Date(`${condition.value}T00:00:00.000Z`)
+    if (condition.operator === '>') date.setUTCDate(date.getUTCDate() + 1)
+    if (condition.operator === '<') date.setUTCDate(date.getUTCDate() - 1)
+    return date.toISOString().slice(0, 10)
+  }
+  if (typeof condition.value !== 'number') return condition.value
+  if (condition.operator === '>') return condition.value + 1
+  if (condition.operator === '<') return condition.value - 1
+  return condition.value
 }
 
-export default function RuleTestSandbox({ rule }: RuleTestSandboxProps) {
+function exampleForDecision(decision: ContractRuleDecision, properties: ContractRuleProperty[]) {
+  const omittedKeys = new Set(
+    decision.conditions.filter((condition) => condition.operator === 'not_exists').map((condition) => condition.property_key)
+  )
+  const conditionKeys = new Set(decision.conditions.map((condition) => condition.property_key))
+  const clauses = decision.conditions.flatMap((condition) => {
+    const property = properties.find((candidate) => candidate.key === condition.property_key)
+    if (!property || condition.operator === 'not_exists') return []
+    if (condition.operator === 'exists') return [formattedPropertyValue(property)]
+    return [formattedPropertyValue(property, valueThatMatches(condition))]
+  })
+  // A decision example must still provide the other required properties.  If
+  // they are omitted, runtime correctly stops at missing_evidence before it can
+  // evaluate the target decision, making a valid multi-property rule impossible
+  // to release from this UI.
+  const requiredContext = properties
+    .filter((property) => property.required && !conditionKeys.has(property.key) && !omittedKeys.has(property.key))
+    .map((property) => formattedPropertyValue(property))
+  const source = [...clauses, ...requiredContext]
+  return `${source.join('；') || '合同其余条款均按双方书面约定执行'}。`
+}
+
+type AcceptanceExample = {
+  label: string
+  text: string
+  caseKind: ContractRuleTestCaseKind
+  expectedDecisionId?: string
+}
+
+function buildExamples(properties: ContractRuleProperty[], decisions: ContractRuleDecision[]): AcceptanceExample[] {
+  // 发布门禁要求每条判定分别有一次精确通过记录，因此这里不能只
+  // 暴露第一条风险和第一条通过判定。
+  const examples: AcceptanceExample[] = decisions.map((decision) => ({
+    label: `${decision.outcome === 'pass' ? '通过' : '风险'}：${decision.label}`,
+    text: exampleForDecision(decision, properties),
+    caseKind: decision.outcome === 'pass' ? 'pass' : 'risk',
+    expectedDecisionId: decision.id,
+  }))
+  examples.push({
+    label: '缺少证据',
+    text: '合同仅说明双方后续协商，未写明本规则所需的具体信息。',
+    caseKind: 'missing_evidence',
+  })
+  const conflictProperty = properties.find((property) => (
+    property.type !== 'text'
+    && (property.type !== 'enum' || (property.options?.length || 0) > 1)
+  ))
+  if (conflictProperty) examples.push({
+    label: '同文多值冲突',
+    text: conflictProperty.type === 'money'
+      ? `${conflictProperty.label}为50000元；${conflictProperty.label}同时写为60000元。`
+      : conflictProperty.type === 'percentage'
+        ? `${conflictProperty.label}为20%；${conflictProperty.label}同时写为30%。`
+        : conflictProperty.type === 'duration'
+          ? `${conflictProperty.label}为30天；${conflictProperty.label}同时写为60天。`
+          : conflictProperty.type === 'date'
+            ? `${conflictProperty.label}为2026年8月1日；${conflictProperty.label}同时写为2026年9月1日。`
+            : conflictProperty.type === 'enum' && (conflictProperty.options?.length || 0) > 1
+              ? `${conflictProperty.label}为${conflictProperty.options?.[0]?.label}；${conflictProperty.label}同时写为${conflictProperty.options?.[1]?.label}。`
+              : conflictProperty.type === 'boolean'
+                ? `${conflictProperty.label}明确允许，同时又约定不允许。`
+                : `${conflictProperty.label}为10；${conflictProperty.label}同时写为20。`,
+    caseKind: 'value_conflict',
+  })
+  // Current deterministic runtime defines a hard unit conflict only for
+  // currency mismatch. Duration units are intentionally converted, not failed.
+  const unitProperty = properties.find((property) => property.type === 'money' && property.currency)
+  if (unitProperty) examples.push({
+    label: '单位冲突',
+    text: `${unitProperty.label}为50000${unitProperty.currency === 'USD' ? '元人民币' : '美元'}，与规则币种${unitProperty.currency}不一致。`,
+    caseKind: 'unit_conflict',
+  })
+  return examples
+}
+
+export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxProps) {
   const contract = useMemo(() => resolveRuleContract(rule), [rule])
-  const examples = useMemo(() => buildExamples(contract.properties), [contract.properties])
+  const examples = useMemo(() => buildExamples(contract.properties, contract.decisions), [contract.decisions, contract.properties])
   const [text, setText] = useState(examples[0]?.text || '')
+  const [caseKind, setCaseKind] = useState<ContractRuleTestCaseKind>(examples[0]?.caseKind || 'risk')
+  const [expectedDecisionId, setExpectedDecisionId] = useState<string | undefined>(examples[0]?.expectedDecisionId)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<RuleTestResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const first = examples[0]
+    if (!first) return
+    setText(first.text)
+    setCaseKind(first.caseKind)
+    setExpectedDecisionId(first.expectedDecisionId)
+    setResult(null)
+    setError(null)
+  }, [examples, rule.id, rule.version])
 
   async function runTest() {
     if (text.trim().length < 10) {
@@ -111,13 +212,19 @@ export default function RuleTestSandbox({ rule }: RuleTestSandboxProps) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text, rule_id: rule.id }),
+        body: JSON.stringify({
+          text,
+          rule_id: rule.id,
+          case_kind: caseKind,
+          expected_decision_id: expectedDecisionId,
+        }),
       })
       const payload = await response.json().catch(() => ({})) as RuleTestResponse
       if (!response.ok || !payload.test) {
         throw new Error(payload.error || '规则测试失败')
       }
       setResult(payload.test)
+      await onTestSaved?.()
     } catch (testError) {
       setError(testError instanceof Error ? testError.message : '规则测试失败')
     } finally {
@@ -155,8 +262,10 @@ export default function RuleTestSandbox({ rule }: RuleTestSandboxProps) {
         />
         <div className="flex flex-wrap gap-2">
           {examples.map((example) => (
-            <Button key={example.label} type="button" variant="outline" size="sm" onClick={() => {
+            <Button key={`${example.caseKind}:${example.expectedDecisionId || example.label}`} type="button" variant="outline" size="sm" onClick={() => {
               setText(example.text)
+              setCaseKind(example.caseKind)
+              setExpectedDecisionId(example.expectedDecisionId)
               setResult(null)
               setError(null)
             }}>
@@ -164,6 +273,10 @@ export default function RuleTestSandbox({ rule }: RuleTestSandboxProps) {
             </Button>
           ))}
         </div>
+        <p className="text-xs text-slate-500">
+          当前验收目标：{caseKind === 'risk' ? '命中指定风险判定' : caseKind === 'pass' ? '命中指定通过判定' : caseKind === 'unit_conflict' ? '发现币种冲突并转人工' : caseKind === 'value_conflict' ? '发现同文多值冲突并转人工' : '缺少证据时转人工'}。
+          每条判定都要分别验收；示例只是可编辑起点，只有实际结果与当前目标完全一致才计入发布门禁。若总被另一条高优先级判定覆盖，应修正规则条件，而不是伪造通过记录。
+        </p>
       </div>
 
       <Button type="button" onClick={() => void runTest()} disabled={loading || text.trim().length < 10}>
@@ -179,13 +292,13 @@ export default function RuleTestSandbox({ rule }: RuleTestSandboxProps) {
 
       {result ? (
         <div className="space-y-4">
-          <div className={`rounded-lg border p-4 ${outcomeClasses[result.outcome]}`}>
+          <div className={`rounded-lg border p-4 ${result.assertion.passed ? outcomeClasses[result.outcome] : 'border-rose-200 bg-rose-50 text-rose-800'}`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 {result.outcome === 'pass'
                   ? <CheckCircle2Icon className="h-5 w-5" />
                   : <AlertCircleIcon className="h-5 w-5" />}
-                判定结果：{outcomeLabels[result.outcome]}
+                {result.assertion.passed ? '验收通过' : '验收未通过'} · 实际结果：{outcomeLabels[result.outcome]}
               </div>
               <span className="text-xs">{result.decision?.label || '未形成明确判定'}</span>
             </div>
@@ -201,7 +314,13 @@ export default function RuleTestSandbox({ rule }: RuleTestSandboxProps) {
             <div className="divide-y divide-slate-100">
               {contract.properties.map((property) => {
                 const reading = result.readings.find((item) => item.property_key === property.key)
-                const statusLabel = reading?.status === 'read' ? '已读取' : reading?.status === 'ambiguous' ? '存在冲突' : '缺少明确值'
+                const statusLabel = reading?.status === 'read'
+                  ? '已读取'
+                  : reading?.status === 'ambiguous'
+                    ? '存在多个值'
+                    : reading?.status === 'unit_conflict'
+                      ? '单位冲突'
+                      : '缺少明确值'
                 return (
                   <div key={property.key} className="grid gap-2 px-4 py-3 sm:grid-cols-[150px_1fr_auto] sm:items-center">
                     <div className="text-sm font-medium text-slate-800">{property.label}</div>
@@ -230,6 +349,14 @@ export default function RuleTestSandbox({ rule }: RuleTestSandboxProps) {
                 ))}
               </div>
             </div>
+          ) : null}
+
+          {result.testRunId ? (
+            <p className={`text-xs ${result.assertion.passed ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {result.assertion.passed
+                ? '本次断言已保存，可计入当前规则版本的发布矩阵。'
+                : '本次结果已留痕，但不会计入发布通过；请修正规则或测试原文后重试。'}
+            </p>
           ) : null}
         </div>
       ) : null}

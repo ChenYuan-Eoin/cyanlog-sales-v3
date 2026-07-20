@@ -1,4 +1,11 @@
 import { z } from 'zod'
+import type {
+  ContractRuleCondition,
+  ContractRuleConditionOperator,
+  ContractRuleContract,
+  ContractRuleProperty,
+  ContractRulePropertyType,
+} from '@/types/rules'
 
 export const RULE_WITH_PROBLEM_CATEGORY_SELECT = `
   *,
@@ -11,7 +18,7 @@ export const RULE_WITH_PROBLEM_CATEGORY_SELECT = `
   )
 `
 
-const propertyTypeSchema = z.enum([
+const PROPERTY_TYPES = [
   'money',
   'percentage',
   'duration',
@@ -20,7 +27,375 @@ const propertyTypeSchema = z.enum([
   'boolean',
   'text',
   'number',
-])
+] as const
+
+const CONDITION_OPERATORS = [
+  '>=',
+  '<=',
+  '=',
+  '>',
+  '<',
+  'contains',
+  'in',
+  'exists',
+  'not_exists',
+] as const
+
+const NUMERIC_OPERATORS = ['>=', '<=', '=', '>', '<', 'exists', 'not_exists'] as const
+
+/**
+ * Canonical property/condition matrix shared by API validation and the rule
+ * designer.  This is business data validation, not runtime model selection.
+ */
+export const RULE_CONDITION_OPERATORS: Record<
+  ContractRulePropertyType,
+  readonly ContractRuleConditionOperator[]
+> = {
+  money: NUMERIC_OPERATORS,
+  percentage: NUMERIC_OPERATORS,
+  duration: NUMERIC_OPERATORS,
+  number: NUMERIC_OPERATORS,
+  date: NUMERIC_OPERATORS,
+  enum: ['=', 'in', 'exists', 'not_exists'],
+  boolean: ['=', 'exists', 'not_exists'],
+  text: ['contains', 'exists', 'not_exists'],
+}
+
+const propertyTypeSchema = z.enum(PROPERTY_TYPES)
+const conditionOperatorSchema = z.enum(CONDITION_OPERATORS)
+const DURATION_UNITS = new Set(['day', 'month', 'year'])
+const VALUELESS_OPERATORS = new Set<ContractRuleConditionOperator>(['exists', 'not_exists'])
+
+export type RuleContractMatrixIssue = {
+  path: Array<string | number>
+  message: string
+}
+
+export function allowedConditionOperators(
+  type: ContractRulePropertyType
+): readonly ContractRuleConditionOperator[] {
+  return RULE_CONDITION_OPERATORS[type]
+}
+
+function hasConfiguredValue(value: unknown) {
+  return value !== undefined && value !== null
+}
+
+function normalizedOptionalText(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+function expectedConditionUnit(property: ContractRuleProperty) {
+  if (property.type === 'money') return normalizedOptionalText(property.currency)?.toUpperCase()
+  if (property.type === 'percentage') return 'percent'
+  if (property.type === 'duration' || property.type === 'number') {
+    return normalizedOptionalText(property.unit)
+  }
+  return undefined
+}
+
+function canonicalDurationUnit(unit: string | null | undefined): string | undefined {
+  const normalized = normalizedOptionalText(unit)?.toLowerCase()
+  if (!normalized) return undefined
+  if (['month', 'months', 'mon', '月', '个月', '個月'].includes(normalized || '')) return 'month'
+  if (['year', 'years', 'yr', '年'].includes(normalized || '')) return 'year'
+  if (['day', 'days', 'd', '日', '天', '工作日', '自然日'].includes(normalized)) return 'day'
+  return normalized
+}
+
+function propertyMatrixIssues(property: ContractRuleProperty, propertyIndex: number): RuleContractMatrixIssue[] {
+  const issues: RuleContractMatrixIssue[] = []
+  const add = (field: string, message: string) => issues.push({
+    path: ['properties', propertyIndex, field],
+    message,
+  })
+
+  if (property.type === 'money') {
+    if (!normalizedOptionalText(property.currency)) add('currency', '金额属性必须指定币种')
+    if (normalizedOptionalText(property.unit)) add('unit', '金额属性使用币种作为单位，不能另设单位')
+  } else if (normalizedOptionalText(property.currency)) {
+    add('currency', '只有金额属性可以指定币种')
+  }
+
+  if (property.type === 'percentage' && property.unit !== 'percent') {
+    add('unit', '比例属性单位必须为 percent')
+  }
+  if (property.type === 'duration' && !DURATION_UNITS.has(property.unit || '')) {
+    add('unit', '时限属性单位只能为 day、month 或 year')
+  }
+  if (!['money', 'percentage', 'duration', 'number'].includes(property.type) && normalizedOptionalText(property.unit)) {
+    add('unit', '该属性类型不允许配置单位')
+  }
+
+  if (property.type === 'enum') {
+    if (!property.options || property.options.length === 0) {
+      add('options', '枚举属性至少需要一个选项')
+    } else {
+      const optionValues = new Set<string>()
+      property.options.forEach((option, optionIndex) => {
+        if (optionValues.has(option.value)) {
+          issues.push({
+            path: ['properties', propertyIndex, 'options', optionIndex, 'value'],
+            message: '枚举选项值不能重复',
+          })
+        }
+        optionValues.add(option.value)
+      })
+    }
+  } else if (property.options && property.options.length > 0) {
+    add('options', '只有枚举属性可以配置选项')
+  }
+
+  return issues
+}
+
+function conditionMatrixIssues(
+  property: ContractRuleProperty,
+  condition: ContractRuleCondition,
+  decisionIndex: number,
+  conditionIndex: number
+): RuleContractMatrixIssue[] {
+  const issues: RuleContractMatrixIssue[] = []
+  const basePath = ['decisions', decisionIndex, 'conditions', conditionIndex] as Array<string | number>
+  const add = (field: string, message: string) => issues.push({
+    path: [...basePath, field],
+    message,
+  })
+
+  if (!allowedConditionOperators(property.type).includes(condition.operator)) {
+    add('operator', `${property.type} 属性不允许运算符 ${condition.operator}`)
+    return issues
+  }
+
+  if (VALUELESS_OPERATORS.has(condition.operator)) {
+    if (hasConfiguredValue(condition.value)) add('value', '已填写/未填写条件不能携带比较值')
+    if (normalizedOptionalText(condition.unit)) add('unit', '已填写/未填写条件不能携带单位')
+    return issues
+  }
+
+  const expectedUnit = expectedConditionUnit(property)
+  const actualUnit = normalizedOptionalText(condition.unit)
+  if (expectedUnit && actualUnit !== expectedUnit) {
+    add('unit', `条件单位必须与属性单位一致：${expectedUnit}`)
+  } else if (!expectedUnit && actualUnit) {
+    add('unit', '该属性的条件不能携带单位')
+  }
+
+  if (['money', 'percentage', 'duration', 'number'].includes(property.type)) {
+    if (typeof condition.value !== 'number' || !Number.isFinite(condition.value)) {
+      add('value', '数值属性的比较值必须是有限数字')
+    }
+    return issues
+  }
+
+  if (property.type === 'date') {
+    if (!isIsoDate(condition.value)) add('value', '日期比较值必须是有效的 YYYY-MM-DD')
+    return issues
+  }
+
+  if (property.type === 'boolean') {
+    if (typeof condition.value !== 'boolean') add('value', '是/否属性的比较值必须是布尔值')
+    return issues
+  }
+
+  if (property.type === 'enum') {
+    const allowedValues = new Set((property.options || []).map((option) => option.value))
+    if (condition.operator === 'in') {
+      if (!Array.isArray(condition.value)
+        || condition.value.length === 0
+        || condition.value.some((value) => typeof value !== 'string' || !allowedValues.has(value))) {
+        add('value', '枚举“属于其中”必须选择一个或多个现有选项')
+      }
+    } else if (typeof condition.value !== 'string' || !allowedValues.has(condition.value)) {
+      add('value', '枚举比较值必须是现有选项')
+    }
+    return issues
+  }
+
+  if (property.type === 'text') {
+    if (typeof condition.value !== 'string' || !condition.value.trim()) {
+      add('value', '文本比较值不能为空')
+    }
+  }
+
+  return issues
+}
+
+export function ruleContractMatrixIssues(
+  contract: Pick<ContractRuleContract, 'properties' | 'decisions'>
+): RuleContractMatrixIssue[] {
+  const issues = contract.properties.flatMap(propertyMatrixIssues)
+  const properties = new Map(contract.properties.map((property) => [property.key, property]))
+  contract.decisions.forEach((decision, decisionIndex) => {
+    decision.conditions.forEach((condition, conditionIndex) => {
+      const property = properties.get(condition.property_key)
+      if (property) {
+        issues.push(...conditionMatrixIssues(property, condition, decisionIndex, conditionIndex))
+        if (property.required && condition.operator === 'not_exists') {
+          issues.push({
+            path: ['decisions', decisionIndex, 'conditions', conditionIndex, 'operator'],
+            message: '必填属性缺失时会先进入缺少证据处理，不能再配置“未填写”判定；请改为可选属性',
+          })
+        }
+      }
+    })
+  })
+  return issues
+}
+
+function numericReconciledValue(value: ContractRuleCondition['value']) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value)
+    if (Number.isFinite(numeric)) return numeric
+  }
+  return ''
+}
+
+/** Reconcile a condition after its property type/unit/options change. */
+export function reconcileConditionForProperty(
+  condition: ContractRuleCondition,
+  property: ContractRuleProperty
+): ContractRuleCondition {
+  const allowed = allowedConditionOperators(property.type)
+  const operator = allowed.includes(condition.operator) ? condition.operator : '='
+
+  if (VALUELESS_OPERATORS.has(operator)) {
+    return {
+      property_key: property.key,
+      operator,
+      value: undefined,
+      unit: undefined,
+    }
+  }
+
+  let value: ContractRuleCondition['value']
+  if (['money', 'percentage', 'duration', 'number'].includes(property.type)) {
+    value = numericReconciledValue(condition.value)
+  } else if (property.type === 'boolean') {
+    value = typeof condition.value === 'boolean'
+      ? condition.value
+      : condition.value === 'false'
+        ? false
+        : true
+  } else if (property.type === 'enum') {
+    const optionValues = (property.options || []).map((option) => option.value)
+    if (operator === 'in') {
+      const retained = Array.isArray(condition.value)
+        ? condition.value.filter((item): item is string => typeof item === 'string' && optionValues.includes(item))
+        : typeof condition.value === 'string' && optionValues.includes(condition.value)
+          ? [condition.value]
+          : []
+      value = retained.length > 0 ? retained : optionValues.slice(0, 1)
+    } else {
+      value = typeof condition.value === 'string' && optionValues.includes(condition.value)
+        ? condition.value
+        : optionValues[0] || ''
+    }
+  } else if (property.type === 'date') {
+    value = isIsoDate(condition.value) ? condition.value : ''
+  } else if (operator === 'in') {
+    value = Array.isArray(condition.value)
+      ? condition.value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+      : typeof condition.value === 'string'
+        ? condition.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
+        : []
+  } else {
+    value = typeof condition.value === 'string'
+      ? condition.value
+      : hasConfiguredValue(condition.value)
+        ? String(condition.value)
+        : ''
+  }
+
+  return {
+    property_key: property.key,
+    operator,
+    value,
+    unit: expectedConditionUnit(property),
+  }
+}
+
+/**
+ * Bring legacy/read-only rule assets into the canonical editor shape before a
+ * human edits and saves them. This does not invent properties or decisions; it
+ * only removes obsolete cross-type fields and reconciles existing conditions.
+ */
+export function reconcileRuleContractForEditing(
+  contract: ContractRuleContract
+): ContractRuleContract {
+  const properties = contract.properties.map((property): ContractRuleProperty => {
+    const base = {
+      ...property,
+      options: property.options?.map((option) => ({ ...option })),
+    }
+
+    if (property.type === 'money') {
+      const currency = normalizedOptionalText(property.currency)?.toUpperCase()
+      const unit = normalizedOptionalText(property.unit)
+      const unitCurrency = unit?.toUpperCase().match(/^[A-Z]{3}$/)?.[0]
+      if (!currency && unitCurrency) {
+        return { ...base, unit: undefined, currency: unitCurrency, options: undefined }
+      }
+      return {
+        ...base,
+        unit: currency && unitCurrency === currency ? undefined : unit,
+        currency,
+        options: undefined,
+      }
+    }
+    if (property.type === 'percentage') {
+      const unit = normalizedOptionalText(property.unit)?.toLowerCase()
+      return {
+        ...base,
+        unit: ['%', 'percent', 'ratio'].includes(unit || '') ? 'percent' : unit,
+        currency: undefined,
+        options: undefined,
+      }
+    }
+    if (property.type === 'duration') {
+      return {
+        ...base,
+        unit: canonicalDurationUnit(property.unit),
+        currency: undefined,
+        options: undefined,
+      }
+    }
+    if (property.type === 'number') {
+      return {
+        ...base,
+        unit: normalizedOptionalText(property.unit),
+        currency: undefined,
+        options: undefined,
+      }
+    }
+    if (property.type === 'enum') {
+      return { ...base, unit: undefined, currency: undefined }
+    }
+    return { ...base, unit: undefined, currency: undefined, options: undefined }
+  })
+  const propertiesByKey = new Map(properties.map((property) => [property.key, property]))
+
+  return {
+    ...contract,
+    properties,
+    decisions: contract.decisions.map((decision) => ({
+      ...decision,
+      conditions: decision.conditions.map((condition) => {
+        const property = propertiesByKey.get(condition.property_key)
+        return property
+          ? reconcileConditionForProperty(condition, property)
+          : { ...condition }
+      }),
+    })),
+  }
+}
 
 const propertyOptionSchema = z.object({
   value: z.string().trim().min(1).max(200),
@@ -33,25 +408,10 @@ const rulePropertySchema = z.object({
   type: propertyTypeSchema,
   required: z.boolean(),
   description: z.string().trim().max(1000).optional().nullable(),
-  unit: z.string().trim().max(40).optional().nullable(),
+  unit: z.string().trim().min(1).max(40).optional().nullable(),
   currency: z.string().trim().length(3).regex(/^[A-Z]{3}$/).optional().nullable(),
   options: z.array(propertyOptionSchema).max(100).optional(),
-}).strict().superRefine((property, ctx) => {
-  if (property.type === 'enum' && (!property.options || property.options.length === 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['options'],
-      message: '枚举属性至少需要一个选项',
-    })
-  }
-  if (property.type === 'money' && !property.currency) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['currency'],
-      message: '金额属性必须指定币种',
-    })
-  }
-})
+}).strict()
 
 const conditionValueSchema = z.union([
   z.string(),
@@ -63,7 +423,7 @@ const conditionValueSchema = z.union([
 
 const ruleConditionSchema = z.object({
   property_key: z.string().trim().min(1).max(80),
-  operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in', 'exists', 'not_exists']),
+  operator: conditionOperatorSchema,
   value: conditionValueSchema.optional(),
   unit: z.string().trim().max(40).optional().nullable(),
 }).strict().superRefine((condition, ctx) => {
@@ -126,19 +486,27 @@ export const ruleContractSchema = z.object({
       }
     })
   })
+
+  ruleContractMatrixIssues(contract).forEach((issue) => {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: issue.path,
+      message: issue.message,
+    })
+  })
 })
 
 const problemCategoryIdSchema = z.string().uuid('请选择有效的问题分类')
 
 const ruleBusinessFieldsSchema = z.object({
   name: z.string().trim().min(1, '规则名称不能为空').max(160),
-  rule_set_id: z.string().uuid().optional().nullable(),
+  rule_set_id: z.string().uuid('请选择有效的规则集'),
   problem_category_id: problemCategoryIdSchema,
   description: z.string().trim().max(4000).optional().nullable(),
   business_domain: z.string().trim().min(1).max(120).optional().default('contract_review'),
   risk_level: z.enum(['green', 'yellow', 'red']).optional().default('yellow'),
   rule_contract: ruleContractSchema,
-  applicable_scenarios: z.array(z.string().trim().min(1).max(120)).max(50).optional().default(['standard_contract_review']),
+  applicable_scenarios: z.array(z.string().trim().min(1).max(120)).max(50).optional().default(['contract_review']),
   scope: z.enum(['org', 'dept', 'user']).optional().default('org'),
   approval_roles: z.array(z.string().trim().min(1).max(120)).max(50).optional().default([]),
   priority: z.number().int().min(0).max(100_000).optional().default(100),
@@ -150,6 +518,7 @@ export const createRuleSchema = ruleBusinessFieldsSchema.extend({
 }).strict()
 
 export const updateRuleSchema = ruleBusinessFieldsSchema.partial().extend({
+  rule_set_id: z.string().uuid('请选择有效的规则集'),
   problem_category_id: problemCategoryIdSchema,
   rule_contract: ruleContractSchema,
 }).strict()

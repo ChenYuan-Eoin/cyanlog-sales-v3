@@ -4,6 +4,8 @@ import {
   adaptLegacyRuleAsset,
   createDefaultRuleContract,
   evaluateRuleContract,
+  isResolvedRuleContractComplete,
+  ruleContractConfigurationStatus,
   normalizeRuleContract,
   parseChineseNumericText,
   resolveRuleContract,
@@ -123,6 +125,22 @@ describe('canonical rule contract', () => {
       'legacy_level_a',
     ])
   })
+
+  it('separates runtime legacy compatibility from user-confirmed canonical completeness', () => {
+    expect(isResolvedRuleContractComplete({
+      rule_contract: null,
+      code: 'R003',
+      name: '账期',
+      category: 'duration',
+      target_field: 'payment_term_days',
+      level_a: { operator: '<=', threshold: 30, unit: 'day', action: 'auto_approve' },
+      level_b: { operator: '>', threshold: 30, unit: 'day', action: 'manual_review' },
+      level_c: { operator: '>', threshold: 90, unit: 'day', action: 'block' },
+    })).toBe(false)
+    expect(ruleContractConfigurationStatus({ rule_contract: null })).toBe('legacy_compatible')
+    expect(ruleContractConfigurationStatus({ rule_contract: createDefaultRuleContract() })).toBe('incomplete')
+    expect(ruleContractConfigurationStatus({ rule_contract: amountContract() })).toBe('canonical_complete')
+  })
 })
 
 describe('legacy asset adapter', () => {
@@ -220,14 +238,32 @@ describe('clause-first property reading', () => {
     })
   })
 
-  it('always chooses the higher-risk matching outcome before decision priority', () => {
+  it('uses configured priority before risk severity when multiple decisions match', () => {
     const contract = amountContract()
     contract.decisions[0].conditions = [{ property_key: 'contract_amount', operator: '>', value: 0 }]
     contract.decisions[1].conditions = [{ property_key: 'contract_amount', operator: '<', value: 50000 }]
     const result = evaluateRuleContract(asset(contract), '合同总价48000元。')
 
-    expect(result.decision?.id).toBe('amount-block')
-    expect(result.risk_level).toBe('red')
+    expect(result.decision?.id).toBe('amount-pass')
+    expect(result.risk_level).toBe('green')
+  })
+
+  it('rejects text equality because runtime reads a clause and only contains is executable', () => {
+    const contract: ContractRuleContract = {
+      schema_version: '1.0',
+      properties: [{ key: 'invoice_note', label: '发票备注', type: 'text', required: true }],
+      decisions: [{
+        id: 'invalid-text-equality',
+        label: '错误文本配置',
+        outcome: 'block',
+        priority: 1,
+        match: 'all',
+        conditions: [{ property_key: 'invoice_note', operator: '=', value: '专票' }],
+      }],
+      missing_evidence_outcome: 'manual_review',
+    }
+
+    expect(normalizeRuleContract(contract)).toBeNull()
   })
 })
 
@@ -357,6 +393,143 @@ describe('multi-property and common property types', () => {
       copy_count: { value: 2 },
       effective_date: { value: '2026-08-01' },
     })
+  })
+
+  it('matches an enum decision by stable option value and remains compatible with an older label value', () => {
+    const contract: ContractRuleContract = {
+      schema_version: '1.0',
+      properties: [{
+        key: 'payment_method',
+        label: '付款方式',
+        type: 'enum',
+        required: true,
+        options: [
+          { value: 'option_1', label: '预付款' },
+          { value: 'option_2', label: '验收后付款' },
+        ],
+      }],
+      decisions: [{
+        id: 'prepay-pass',
+        label: '采用预付款',
+        outcome: 'pass',
+        priority: 1,
+        match: 'all',
+        conditions: [{ property_key: 'payment_method', operator: '=', value: '预付款' }],
+      }],
+      missing_evidence_outcome: 'manual_review',
+    }
+
+    const result = evaluateRuleContract(asset(contract), '付款方式为预付款。')
+
+    expect(result.readings.payment_method.value).toBe('option_1')
+    expect(result.outcome).toBe('pass')
+  })
+
+  it('does not misread a negative boolean phrase through its positive substring', () => {
+    const contract: ContractRuleContract = {
+      schema_version: '1.0',
+      properties: [{
+        key: 'subcontract_allowed',
+        label: '允许转包',
+        type: 'boolean',
+        required: true,
+        options: [
+          { value: 'true', label: '允许转包' },
+          { value: 'false', label: '不允许转包' },
+        ],
+      }],
+      decisions: [{
+        id: 'forbid-subcontract',
+        label: '禁止转包',
+        outcome: 'pass',
+        priority: 1,
+        match: 'all',
+        conditions: [{ property_key: 'subcontract_allowed', operator: '=', value: false }],
+      }],
+      missing_evidence_outcome: 'manual_review',
+    }
+
+    const result = evaluateRuleContract(asset(contract), '未经甲方书面同意，乙方不允许转包。')
+
+    expect(result.readings.subcontract_allowed).toMatchObject({ status: 'read', value: false })
+    expect(result.outcome).toBe('pass')
+  })
+
+  it('reads a question-answer boolean as false and reports contradictory assertions as ambiguous', () => {
+    const contract: ContractRuleContract = {
+      schema_version: '1.0',
+      properties: [{
+        key: 'subcontract_allowed',
+        label: '是否允许转包',
+        type: 'boolean',
+        required: true,
+        options: [
+          { value: 'true', label: '允许转包' },
+          { value: 'false', label: '不允许转包' },
+        ],
+      }],
+      decisions: [{
+        id: 'forbid-subcontract',
+        label: '禁止转包',
+        outcome: 'pass',
+        priority: 1,
+        match: 'all',
+        conditions: [{ property_key: 'subcontract_allowed', operator: '=', value: false }],
+      }],
+      missing_evidence_outcome: 'manual_review',
+    }
+
+    const negative = evaluateRuleContract(asset(contract), '是否允许转包：否。')
+    expect(negative.readings.subcontract_allowed).toMatchObject({ status: 'read', value: false })
+    expect(negative.decision?.id).toBe('forbid-subcontract')
+
+    const conflicting = evaluateRuleContract(
+      asset(contract),
+      '是否允许转包：否，但补充条款约定允许转包。'
+    )
+    expect(conflicting.readings.subcontract_allowed.status).toBe('ambiguous')
+    expect(conflicting.status).toBe('missing_evidence')
+  })
+
+  it.each([
+    ['合同金额为5万。', 50_000],
+    ['合同金额为5亿。', 500_000_000],
+  ])('reads explicit Chinese money unit in %s', (sourceText, expected) => {
+    const result = evaluateRuleContract(asset(amountContract()), sourceText)
+    expect(result.readings.contract_amount).toMatchObject({ status: 'read', value: expected, unit: 'CNY' })
+  })
+
+  it.each(['合同金额为5w。', '合同金额为5W。'])('does not invent a money unit for ambiguous shorthand %s', (sourceText) => {
+    const result = evaluateRuleContract(asset(amountContract()), sourceText)
+    expect(result.readings.contract_amount.status).toBe('missing')
+    expect(result.status).toBe('missing_evidence')
+  })
+
+  it.each([
+    ['付款期限为90天。', 'month', 3],
+    ['付款期限为1年。', 'day', 365],
+  ])('converts duration units before comparing %s', (sourceText, propertyUnit, expected) => {
+    const contract: ContractRuleContract = {
+      schema_version: '1.0',
+      properties: [{
+        key: 'payment_days',
+        label: '付款期限',
+        type: 'duration',
+        required: true,
+        unit: propertyUnit,
+      }],
+      decisions: [{
+        id: 'duration-equal',
+        label: '期限一致',
+        outcome: 'pass',
+        priority: 1,
+        match: 'all',
+        conditions: [{ property_key: 'payment_days', operator: '=', value: expected }],
+      }],
+      missing_evidence_outcome: 'manual_review',
+    }
+
+    expect(evaluateRuleContract(asset(contract), sourceText).outcome).toBe('pass')
   })
 })
 

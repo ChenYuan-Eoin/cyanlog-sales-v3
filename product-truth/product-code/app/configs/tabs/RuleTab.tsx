@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { ruleContractConfigurationStatus } from '@/lib/rules/rule-contract'
 import type { ContractPolicyRule, ContractProblemCategory, ContractRuleSet } from '@/types/rules'
 import RuleDesigner from '../components/RuleDesigner'
 import RuleTestSandbox from '../components/RuleTestSandbox'
@@ -58,16 +59,18 @@ function categoryForRule(rule: ContractPolicyRule, categories: ContractProblemCa
     || null
 }
 
-function ruleIsComplete(rule: ContractPolicyRule) {
-  return Boolean(rule.rule_contract?.properties?.length && rule.rule_contract?.decisions?.length)
-}
-
-function ruleStatus(rule: ContractPolicyRule) {
-  if (!rule.is_active) return { label: '已停用', className: 'bg-slate-100 text-slate-600' }
-  if (rule.lifecycle_status === 'published' && rule.published_at) {
-    return { label: '已发布', className: 'bg-emerald-100 text-emerald-700' }
+function ruleStatus(rule: ContractPolicyRule, activePublishedVersion?: number) {
+  if (!rule.is_active && activePublishedVersion) {
+    return { label: `线上 v${activePublishedVersion} · 待随规则集停用`, className: 'bg-amber-50 text-amber-800' }
   }
-  return { label: '草稿', className: 'bg-blue-50 text-blue-700' }
+  if (!rule.is_active) return { label: '待停用', className: 'bg-slate-100 text-slate-600' }
+  if (activePublishedVersion && activePublishedVersion === rule.version) {
+    return { label: `线上 v${activePublishedVersion}`, className: 'bg-emerald-100 text-emerald-700' }
+  }
+  if (activePublishedVersion) {
+    return { label: `线上 v${activePublishedVersion} · 草稿 v${rule.version} 待发布`, className: 'bg-blue-50 text-blue-700' }
+  }
+  return { label: `草稿 v${rule.version || 1} · 尚未上线`, className: 'bg-blue-50 text-blue-700' }
 }
 
 export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete, onRefresh }: RuleTabProps) {
@@ -86,6 +89,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   const [ruleSetDialogOpen, setRuleSetDialogOpen] = useState(false)
   const [creatingCategory, setCreatingCategory] = useState(false)
   const [creatingRuleSet, setCreatingRuleSet] = useState(false)
+  const [publishingRuleSet, setPublishingRuleSet] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState({ name: '', code: '', description: '', sort_order: 100 })
   const [ruleSetDraft, setRuleSetDraft] = useState({ name: '', code: '', description: '' })
   const handledFocusRef = useRef('')
@@ -166,6 +170,15 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     () => ruleSets.find((ruleSet) => ruleSet.id === selectedRuleSetId) || null,
     [ruleSets, selectedRuleSetId]
   )
+
+  const detailRuleSet = useMemo(() => {
+    const ruleSetId = selectedRule?.rule_set_id || (selectedRuleSetId === 'all' ? null : selectedRuleSetId)
+    return ruleSets.find((ruleSet) => ruleSet.id === ruleSetId) || null
+  }, [ruleSets, selectedRule, selectedRuleSetId])
+
+  const activePublishedVersionForRule = useCallback((rule: ContractPolicyRule) => (
+    ruleSets.find((ruleSet) => ruleSet.id === rule.rule_set_id)?.active_rule_versions?.[rule.id]
+  ), [ruleSets])
 
   useEffect(() => {
     const focusKey = `${ruleMode || ''}:${focusRuleId || ''}:${rules.length}:${categories.length}`
@@ -306,7 +319,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
           name,
           code,
           description: ruleSetDraft.description.trim() || null,
-          applicable_scenario: 'standard_contract_review',
+          applicable_scenario: 'contract_review',
           priority: 100,
         }),
       })
@@ -326,8 +339,30 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     }
   }
 
+  async function handlePublishRuleSet() {
+    if (!selectedRuleSet) return
+    setPublishingRuleSet(true)
+    setFeedback(null)
+    try {
+      const response = await fetch(`/api/contract-policies/rule-sets/${selectedRuleSet.id}/publish`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ release_note: '配置中心规则集统一发布' }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(getApiMessage(payload, '规则集发布失败'))
+      await onRefresh?.()
+      await loadHierarchy()
+      setFeedback({ tone: 'success', message: `规则集“${selectedRuleSet.name}”已发布，所含规则版本已冻结为同一发布快照。` })
+    } catch (error) {
+      setFeedback({ tone: 'error', message: error instanceof Error ? error.message : '规则集发布失败' })
+    } finally {
+      setPublishingRuleSet(false)
+    }
+  }
+
   const ruleSetSummary = selectedRuleSet
-    ? `v${selectedRuleSet.version} · ${selectedRuleSet.lifecycle_status === 'published' ? '已发布' : '草稿'} · ${selectedRuleSet.rule_count || 0} 条规则`
+    ? `v${selectedRuleSet.version} · ${selectedRuleSet.lifecycle_status === 'published' ? '已发布' : selectedRuleSet.lifecycle_status === 'ready_to_publish' ? '待发布' : '草稿'} · ${selectedRuleSet.rule_count || 0} 条规则 · 验收 ${selectedRuleSet.passed_test_case_count || 0}/${selectedRuleSet.required_test_case_count || 0}`
     : `跨规则集查看 · ${rules.length} 条规则`
 
   return (
@@ -363,7 +398,18 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                     {ruleSets.map((ruleSet) => <option key={ruleSet.id} value={ruleSet.id}>{ruleSet.name}</option>)}
                   </select>
                   <div className="mt-1 text-[11px] text-slate-400">{ruleSetSummary}</div>
+                  {selectedRuleSet?.publish_blockers?.length ? (
+                    <div className="mt-1 max-w-sm text-[11px] text-amber-700">{selectedRuleSet.publish_blockers[0]}</div>
+                  ) : null}
                 </div>
+                <Button
+                  type="button"
+                  onClick={() => void handlePublishRuleSet()}
+                  disabled={!selectedRuleSet?.can_publish || publishingRuleSet}
+                  title={selectedRuleSet?.publish_blockers?.join('；') || undefined}
+                >
+                  {publishingRuleSet ? '发布中...' : '发布规则集'}
+                </Button>
                 <Button type="button" variant="outline" onClick={() => setRuleSetDialogOpen(true)}>
                   <ArchiveIcon className="mr-1 h-4 w-4" />新建规则集
                 </Button>
@@ -458,7 +504,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </button>
               ) : visibleRules.map((rule) => {
                 const active = selectedRule?.id === rule.id
-                const status = ruleStatus(rule)
+                const status = ruleStatus(rule, activePublishedVersionForRule(rule))
+                const configurationStatus = ruleContractConfigurationStatus(rule)
                 return (
                   <button
                     key={rule.id}
@@ -483,9 +530,15 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                     <div className="mt-2 flex items-center gap-2">
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${status.className}`}>{status.label}</span>
                       <span className={`rounded-full px-2 py-0.5 text-[11px] ${
-                        ruleIsComplete(rule) ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                        configurationStatus === 'canonical_complete'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
                       }`}>
-                        {ruleIsComplete(rule) ? '结构完整' : '待补属性或判定'}
+                        {configurationStatus === 'canonical_complete'
+                          ? '规则详情已确认'
+                          : configurationStatus === 'legacy_compatible'
+                            ? '旧规则待业务确认'
+                            : '待补属性或判定'}
                       </span>
                     </div>
                   </button>
@@ -505,7 +558,10 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                   <Button type="button" variant="outline" size="sm" onClick={() => setDetailMode('details')}>返回规则详情</Button>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <RuleTestSandbox rule={selectedRule} />
+                  <RuleTestSandbox rule={selectedRule} onTestSaved={async () => {
+                    await onRefresh?.()
+                    await loadHierarchy()
+                  }} />
                 </CardContent>
               </>
             ) : selectedRule || creatingRule ? (
@@ -534,8 +590,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                     initialRule={selectedRule || undefined}
                     context={{
                       ruleSetId: selectedRule?.rule_set_id || (selectedRuleSetId === 'all' ? null : selectedRuleSetId),
-                      ruleSetLabel: selectedRuleSet?.name || '未指定发布规则集',
+                      ruleSetLabel: detailRuleSet?.name || '未指定发布规则集',
                       problemCategory: selectedCategory,
+                      activePublishedVersion: selectedRule ? activePublishedVersionForRule(selectedRule) : undefined,
                     }}
                     saving={saving}
                     onSave={handleSaveRule}
@@ -590,11 +647,14 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             <DialogField label="规则集编码" htmlFor="rule-set-code">
               <Input id="rule-set-code" value={ruleSetDraft.code} onChange={(event) => setRuleSetDraft((current) => ({ ...current, code: event.target.value }))} placeholder="如：STANDARD_SALES" />
             </DialogField>
-            <DialogField label="适用与发布说明" htmlFor="rule-set-description">
-              <Textarea id="rule-set-description" value={ruleSetDraft.description} onChange={(event) => setRuleSetDraft((current) => ({ ...current, description: event.target.value }))} placeholder="说明这个版本适用于哪些合同，并由谁维护。" rows={3} />
+            <DialogField label="规则集说明" htmlFor="rule-set-description">
+              <Textarea id="rule-set-description" value={ruleSetDraft.description} onChange={(event) => setRuleSetDraft((current) => ({ ...current, description: event.target.value }))} placeholder="说明这组规则解决什么问题、由谁维护。" rows={3} />
             </DialogField>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+              应用模块：合同审核（当前产品固定）。其它业务模块以后选择自己的规则资产，不在这里填模糊场景词。
+            </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-              规则集只控制适用范围、版本和统一发布；问题分类和规则详情仍在各自层级维护。
+              规则集控制版本和统一发布；问题分类组织问题，具体属性、判定和处理在规则详情中维护。
             </div>
           </div>
           <DialogFooter>

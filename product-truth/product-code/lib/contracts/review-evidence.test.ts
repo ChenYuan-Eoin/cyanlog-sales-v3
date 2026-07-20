@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildReviewRunEvidence } from './review-evidence'
+
+const reviewRouteSource = readFileSync(
+  join(process.cwd(), 'app/api/contracts/[id]/review/route.ts'),
+  'utf8'
+)
 
 describe('buildReviewRunEvidence', () => {
   it('binds ReviewRun to published rule snapshots and analysis job provider', () => {
@@ -7,6 +14,8 @@ describe('buildReviewRunEvidence', () => {
       latestReview: {
         id: 'review-1',
         status: 'COMPLETED',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
         created_at: '2026-06-30T01:00:00.000Z',
         completed_at: '2026-06-30T01:02:00.000Z',
       },
@@ -20,12 +29,6 @@ describe('buildReviewRunEvidence', () => {
       },
       currentVersion: { id: 'version-1' },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
-      rules: [{
-        id: 'rule-1',
-        code: 'R001',
-        version: 2,
-        engine_type: 'structured',
-      }],
       snapshots: [{
         id: 'snapshot-1',
         rule_id: 'rule-1',
@@ -34,13 +37,20 @@ describe('buildReviewRunEvidence', () => {
         released_at: '2026-06-30T00:59:00.000Z',
         config_snapshot: { code: 'R001', engine_type: 'structured', version: 2 },
       }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1'],
+      }],
+      expectedOrgId: 'org-1',
     })
 
     expect(evidence).toMatchObject({
       id: 'review-1',
       contract_version_id: 'version-1',
       skill_bundle_id: 'contract-skill:ruleset:R001@2',
-      rule_snapshot_id: 'contract_rule_snapshots:snapshot-1:v2',
+      rule_snapshot_id: 'contract_rule_snapshots:snapshot-1',
       model_policy_id: 'model-policy:rule-engine',
       evidence_status: 'snapshot_bound',
       model_policy: {
@@ -62,15 +72,26 @@ describe('buildReviewRunEvidence', () => {
 
   it('marks partial snapshot evidence when a risk references an uncovered rule', () => {
     const evidence = buildReviewRunEvidence({
-      latestReview: { id: 'review-1', status: 'COMPLETED' },
+      latestReview: {
+        id: 'review-1',
+        status: 'COMPLETED',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
+      },
       latestJob: null,
       currentVersion: null,
       risks: [
         { rule_id: 'rule-1', rule_code: 'R001' },
         { rule_id: 'rule-missing', rule_code: 'R999' },
       ],
-      rules: [{ id: 'rule-1', code: 'R001', version: 1 }],
       snapshots: [{ id: 'snapshot-1', rule_id: 'rule-1', version: 1, status: 'published' }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1'],
+      }],
+      expectedOrgId: 'org-1',
     })
 
     expect(evidence?.evidence_status).toBe('partial_snapshot')
@@ -87,7 +108,6 @@ describe('buildReviewRunEvidence', () => {
       latestJob: { provider: null, degraded: true, status: 'failed', last_error: 'model timeout' },
       currentVersion: null,
       risks: [{ rule_id: 'rule-1', rule_code: 'R001' }],
-      rules: [{ id: 'rule-1', code: 'R001', version: 1 }],
       snapshots: [],
     })
 
@@ -112,7 +132,6 @@ describe('buildReviewRunEvidence', () => {
       latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 3 }],
-      rules: [{ id: 'rule-1', code: 'R001', version: 3, engine_type: 'hybrid' }],
       snapshots: [{
         id: 'snapshot-draft',
         rule_id: 'rule-1',
@@ -129,6 +148,269 @@ describe('buildReviewRunEvidence', () => {
     expect(evidence?.skill_bundle_id).toBe('contract-skill:ruleset:missing')
   })
 
+  it('keeps an explicitly bound historical snapshot after a later release rolls it back', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-historical-bound',
+        status: 'COMPLETED',
+        rule_snapshot_ids: ['snapshot-old'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-old'],
+      },
+      latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-old' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
+      snapshots: [{
+        id: 'snapshot-old',
+        rule_id: 'rule-1',
+        version: 2,
+        status: 'rolled_back',
+        released_at: '2026-07-01T00:00:00.000Z',
+        config_snapshot: { code: 'R001', engine_type: 'rule_contract_v1', version: 2 },
+      }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-old',
+        org_id: 'org-1',
+        status: 'rolled_back',
+        rule_snapshot_ids: ['snapshot-old'],
+      }],
+      expectedOrgId: 'org-1',
+    })
+
+    expect(evidence?.evidence_status).toBe('snapshot_bound')
+    expect(evidence?.rule_snapshot_id).toBe('contract_rule_snapshots:snapshot-old')
+    expect(evidence?.rule_snapshot_refs).toEqual([
+      expect.objectContaining({ id: 'snapshot-old', version: 2 }),
+    ])
+  })
+
+  it('does not accept an unbound rolled-back snapshot as current evidence', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: { id: 'review-unbound-old', status: 'COMPLETED' },
+      latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-old' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
+      snapshots: [{ id: 'snapshot-old', rule_id: 'rule-1', version: 2, status: 'rolled_back' }],
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.rule_snapshot_refs).toEqual([])
+  })
+
+  it('treats empty ReviewRun arrays as missing and falls back to its immutable SkillBundle bindings', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-empty-arrays',
+        status: 'COMPLETED',
+        skill_bundle_id: 'skill-1',
+        rule_snapshot_ids: [],
+        rule_set_snapshot_ids: [],
+      },
+      latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [{ rule_id: 'rule-1', rule_code: 'R001' }],
+      snapshots: [{
+        id: 'snapshot-1',
+        rule_id: 'rule-1',
+        version: 1,
+        status: 'published',
+        config_snapshot: { code: 'R001', engine_type: 'rule_contract_v1' },
+      }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1'],
+      }],
+      expectedOrgId: 'org-1',
+      skillBundle: {
+        id: 'skill-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
+      },
+    })
+
+    expect(evidence?.evidence_status).toBe('snapshot_bound')
+    expect(evidence?.rule_snapshot_id).toBe('contract_rule_snapshots:snapshot-1')
+    expect(evidence?.snapshot_integrity).toEqual({
+      valid: true,
+      rule_binding_source: 'skill_bundle',
+      rule_set_binding_source: 'skill_bundle',
+      errors: [],
+    })
+  })
+
+  it('fails closed when ReviewRun and its bound SkillBundle name different snapshots', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-bundle-mismatch',
+        status: 'COMPLETED',
+        skill_bundle_id: 'skill-1',
+        rule_snapshot_ids: ['snapshot-run'],
+        rule_set_snapshot_ids: ['rule-set-run'],
+      },
+      latestJob: null,
+      currentVersion: null,
+      risks: [],
+      snapshots: [{ id: 'snapshot-run', rule_id: 'rule-1', status: 'published' }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-run',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-run'],
+      }],
+      expectedOrgId: 'org-1',
+      skillBundle: {
+        id: 'skill-1',
+        rule_snapshot_ids: ['snapshot-bundle'],
+        rule_set_snapshot_ids: ['rule-set-bundle'],
+      },
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.rule_snapshot_refs).toEqual([])
+    expect(evidence?.snapshot_integrity.errors).toEqual(expect.arrayContaining([
+      'review_bundle_rule_snapshot_mismatch',
+      'review_bundle_rule_set_snapshot_mismatch',
+    ]))
+  })
+
+  it('fails closed when a bound rule snapshot row is missing', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-missing-row',
+        rule_snapshot_ids: ['snapshot-1', 'snapshot-2'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
+      },
+      latestJob: null,
+      currentVersion: null,
+      risks: [],
+      snapshots: [{ id: 'snapshot-1', rule_id: 'rule-1', status: 'published' }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1', 'snapshot-2'],
+      }],
+      expectedOrgId: 'org-1',
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.snapshot_integrity.errors).toContain('rule_snapshot_rows_not_exact')
+  })
+
+  it('fails closed when a RuleSet snapshot has missing or extra members', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-extra-member',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
+      },
+      latestJob: null,
+      currentVersion: null,
+      risks: [],
+      snapshots: [{ id: 'snapshot-1', rule_id: 'rule-1', status: 'published' }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1', 'snapshot-not-bound'],
+      }],
+      expectedOrgId: 'org-1',
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.snapshot_integrity.errors).toContain('rule_set_members_not_exact')
+  })
+
+  it('fails closed when a bound RuleSet snapshot row is missing', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-missing-rule-set-row',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-missing'],
+      },
+      latestJob: null,
+      currentVersion: null,
+      risks: [],
+      snapshots: [{ id: 'snapshot-1', rule_id: 'rule-1', status: 'published' }],
+      ruleSetSnapshots: [],
+      expectedOrgId: 'org-1',
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.snapshot_integrity.errors).toEqual(expect.arrayContaining([
+      'rule_set_snapshot_rows_not_exact',
+      'rule_set_members_not_exact',
+    ]))
+  })
+
+  it('fails closed when a RuleSet snapshot is cross-organization or not released history', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-corrupt-set',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
+      },
+      latestJob: null,
+      currentVersion: null,
+      risks: [],
+      snapshots: [{ id: 'snapshot-1', rule_id: 'rule-1', status: 'published' }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-other',
+        status: 'draft',
+        rule_snapshot_ids: ['snapshot-1'],
+      }],
+      expectedOrgId: 'org-1',
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.snapshot_integrity.errors).toEqual(expect.arrayContaining([
+      'rule_set_snapshot_status_invalid:rule-set-snapshot-1',
+      'rule_set_snapshot_org_invalid:rule-set-snapshot-1',
+    ]))
+  })
+
+  it('fails closed when a bound RuleSnapshot belongs to another organization', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-cross-org-rule',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
+      },
+      latestJob: null,
+      currentVersion: null,
+      risks: [],
+      snapshots: [{
+        id: 'snapshot-1',
+        rule_id: 'rule-1',
+        status: 'published',
+        config_snapshot: { org_id: 'org-other' },
+      }],
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1'],
+      }],
+      expectedOrgId: 'org-1',
+    })
+
+    expect(evidence?.evidence_status).toBe('missing_snapshot')
+    expect(evidence?.snapshot_integrity.errors).toContain('rule_snapshot_org_invalid:snapshot-1')
+  })
+
+  it('does not allow the review route to graft current rules onto an old run', () => {
+    expect(reviewRouteSource).not.toContain(".from('contract_rules_v2')")
+    expect(reviewRouteSource).not.toMatch(/\.in\(['"]rule_id['"]/)
+    expect(reviewRouteSource).toContain(".from('contract_rule_snapshots')")
+    expect(reviewRouteSource).toContain(".from('contract_rule_set_snapshots')")
+    expect(reviewRouteSource).toMatch(
+      /nonEmptyStrings\(latestReview\?\.rule_snapshot_ids\)[\s\S]*nonEmptyStrings\(skillBundle\?\.rule_snapshot_ids\)/
+    )
+  })
+
   it('summarizes intended, requested, and actual model providers for ReviewRun evidence', () => {
     const evidence = buildReviewRunEvidence({
       latestReview: {
@@ -139,7 +421,6 @@ describe('buildReviewRunEvidence', () => {
       latestJob: { provider: 'rule-engine+AI_LEVEL_2', degraded: false, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [],
-      rules: [],
       snapshots: [],
       modelInvocations: [{
         id: 'invocation-semantic',
@@ -196,12 +477,12 @@ describe('buildReviewRunEvidence', () => {
         skill_bundle_id: 'skill-1',
         model_policy_id: 'policy-1',
         rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
         model_invocation_ids: ['invocation-1'],
       },
       latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
-      rules: [{ id: 'rule-1', code: 'R001', version: 2, engine_type: 'structured' }],
       snapshots: [{
         id: 'snapshot-1',
         rule_id: 'rule-1',
@@ -213,6 +494,7 @@ describe('buildReviewRunEvidence', () => {
         id: 'skill-1',
         version: 3,
         rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
         model_policy_id: 'policy-1',
         status: 'published',
         compiled_hash: 'hash-1',
@@ -271,6 +553,13 @@ describe('buildReviewRunEvidence', () => {
           },
         },
       },
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1'],
+      }],
+      expectedOrgId: 'org-1',
       modelPolicy: {
         id: 'policy-1',
         version: 4,
@@ -376,11 +665,11 @@ describe('buildReviewRunEvidence', () => {
         status: 'DEGRADED',
         skill_bundle_id: 'skill-1',
         rule_snapshot_ids: ['snapshot-1', 'snapshot-2', 'snapshot-3'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
       },
       latestJob: { provider: 'rule-engine', degraded: true, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
-      rules: [{ id: 'rule-1', code: 'R001', version: 2, engine_type: 'structured' }],
       snapshots: [{
         id: 'snapshot-1',
         rule_id: 'rule-1',
@@ -404,6 +693,7 @@ describe('buildReviewRunEvidence', () => {
         id: 'skill-1',
         version: 3,
         rule_snapshot_ids: ['snapshot-1', 'snapshot-2', 'snapshot-3'],
+        rule_set_snapshot_ids: ['rule-set-snapshot-1'],
         status: 'published',
         compiled_from: {
           canonical_rule_completeness: {
@@ -413,6 +703,13 @@ describe('buildReviewRunEvidence', () => {
           },
         },
       },
+      ruleSetSnapshots: [{
+        id: 'rule-set-snapshot-1',
+        org_id: 'org-1',
+        status: 'published',
+        rule_snapshot_ids: ['snapshot-1', 'snapshot-2', 'snapshot-3'],
+      }],
+      expectedOrgId: 'org-1',
     })
 
     expect(evidence?.rule_snapshot_id).toBe('contract_rule_snapshots:bound:3')
@@ -438,7 +735,6 @@ describe('buildReviewRunEvidence', () => {
       latestJob: { provider: 'rule-engine', degraded: true, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
-      rules: [{ id: 'rule-1', code: 'R001', version: 2, engine_type: 'structured' }],
       snapshots: [{
         id: 'snapshot-1',
         rule_id: 'rule-1',
@@ -512,7 +808,6 @@ describe('buildReviewRunEvidence', () => {
       latestJob: { provider: 'rule-engine', degraded: false, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [],
-      rules: [],
       snapshots: [],
       skillBundle: {
         id: 'skill-1',
@@ -563,7 +858,6 @@ describe('buildReviewRunEvidence', () => {
       latestJob: { provider: 'rule-engine+AI_LEVEL_1', degraded: false, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 3 }],
-      rules: [{ id: 'rule-1', code: 'R001', version: 3, engine_type: 'hybrid' }],
       snapshots: [{
         id: 'snapshot-1',
         rule_id: 'rule-1',
@@ -653,7 +947,6 @@ describe('buildReviewRunEvidence', () => {
       latestJob: { provider: 'rule-engine+AI_LEVEL_1', degraded: false, status: 'completed' },
       currentVersion: { id: 'version-1' },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 3 }],
-      rules: [{ id: 'rule-1', code: 'R001', version: 3, engine_type: 'hybrid' }],
       snapshots: [{
         id: 'snapshot-1',
         rule_id: 'rule-1',

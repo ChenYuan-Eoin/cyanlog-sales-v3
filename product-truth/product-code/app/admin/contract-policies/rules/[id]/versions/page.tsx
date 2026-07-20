@@ -14,20 +14,17 @@ import {
 import {
   ArrowLeftIcon,
   GitBranchIcon,
-  RocketIcon,
-  RotateCcwIcon,
   CheckCircleIcon,
-  AlertCircleIcon,
-  ClockIcon,
   BarChart3Icon,
   ChevronRightIcon,
 } from 'lucide-react'
-import { handleError, error, confirmAction } from '@/lib/toast'
+import { handleError } from '@/lib/toast'
 
 interface Version {
   id: string
   version: number
   status: 'draft' | 'published' | 'rolled_back'
+  is_current: boolean
   config_snapshot: Record<string, unknown>
   released_by?: string
   released_at?: string
@@ -62,8 +59,6 @@ export default function RuleVersionsPage() {
   const [rule, setRule] = useState<Rule | null>(null)
   const [versions, setVersions] = useState<Version[]>([])
   const [loading, setLoading] = useState(true)
-  const [publishingId, setPublishingId] = useState<string | null>(null)
-  const [rollingBackId, setRollingBackId] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -87,64 +82,7 @@ export default function RuleVersionsPage() {
     void fetchData()
   }, [fetchData])
 
-  const handlePublish = useCallback(
-    async (versionId: string, grayRelease = false) => {
-      setPublishingId(versionId)
-      try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(
-          `/api/contract-policies/rules/${ruleId}/versions/${versionId}/publish`,
-          {
-            method: 'POST',
-            headers: {
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ gray_release: grayRelease }),
-          }
-        )
-        if (res.ok) {
-          await fetchData()
-        }
-      } catch {
-        error('发布失败')
-      } finally {
-        setPublishingId(null)
-      }
-    },
-    [ruleId, fetchData]
-  )
-
-  const handleRollback = useCallback(
-    async (versionId: string) => {
-      if (!await confirmAction('确定要回滚到此版本吗？', { confirmText: '回滚' })) return
-      setRollingBackId(versionId)
-      try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(
-          `/api/contract-policies/rules/${ruleId}/versions/${versionId}/rollback`,
-          {
-            method: 'POST',
-            headers: {
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ reason: '用户手动回滚' }),
-          }
-        )
-        if (res.ok) {
-          await fetchData()
-        }
-      } catch {
-        error('回滚失败')
-      } finally {
-        setRollingBackId(null)
-      }
-    },
-    [ruleId, fetchData]
-  )
-
-  const currentPublished = versions.find((v) => v.status === 'published')
+  const currentVersion = versions.find((version) => version.is_current)
 
   if (loading) {
     return (
@@ -177,7 +115,7 @@ export default function RuleVersionsPage() {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="bg-indigo-50 border-indigo-200">
-              当前版本: v{currentPublished?.version || rule?.version || 1}
+              {currentVersion ? `当前生效：v${currentVersion.version}` : '当前生效：未绑定'}
             </Badge>
             <Link href={`/admin/contract-policies/rules/${ruleId}`}>
               <Button variant="outline" size="sm">
@@ -188,30 +126,17 @@ export default function RuleVersionsPage() {
           </div>
         </div>
 
-        {/* 灰度/发布状态卡片 */}
-        {currentPublished?.is_gray_release && (
-          <Card className="mb-6 border-amber-200 bg-amber-50/50">
-            <CardContent className="py-4">
-              <div className="flex items-center gap-3">
-                <AlertCircleIcon className="h-5 w-5 text-amber-500" />
-                <div>
-                  <p className="font-medium text-amber-900">灰度发布中</p>
-                  <p className="text-sm text-amber-700">
-                    版本 v{currentPublished.version} 正在灰度测试，预计结束时间:{' '}
-                    {currentPublished.gray_end_at
-                      ? new Date(currentPublished.gray_end_at).toLocaleDateString('zh-CN')
-                      : '未设置'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <Card className="mb-6 border-blue-200 bg-blue-50/50">
+          <CardContent className="py-4 text-sm leading-6 text-blue-900">
+            这里展示单条规则的不可变版本历史。“已发布”表示它曾随规则集发布；只有所属规则集当前快照明确引用的版本才是“当前生效”。发布或回退必须在完整规则集上统一完成。
+          </CardContent>
+        </Card>
 
         {/* 版本列表 */}
         <div className="space-y-4">
           {versions.map((version, index) => {
             const isPublished = version.status === 'published'
+            const isCurrent = version.is_current
             const isRolledBack = version.status === 'rolled_back'
             const isLatest = index === 0
 
@@ -219,7 +144,7 @@ export default function RuleVersionsPage() {
               <Card
                 key={version.id}
                 className={`overflow-hidden ${
-                  isPublished ? 'border-indigo-200 ring-1 ring-indigo-100' : ''
+                  isCurrent ? 'border-indigo-200 ring-1 ring-indigo-100' : ''
                 } ${isRolledBack ? 'opacity-60' : ''}`}
               >
                 <CardHeader className="bg-slate-50/50 py-4">
@@ -227,7 +152,7 @@ export default function RuleVersionsPage() {
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-10 h-10 rounded-lg flex items-center justify-center font-mono font-bold text-sm ${
-                          isPublished
+                          isCurrent
                             ? 'bg-indigo-100 text-indigo-700'
                             : isRolledBack
                               ? 'bg-slate-100 text-slate-500'
@@ -239,23 +164,25 @@ export default function RuleVersionsPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <CardTitle className="text-base">
-                            {isPublished
+                            {isCurrent
                               ? '当前生效版本'
+                              : isPublished
+                                ? '已发布历史版本'
                               : isRolledBack
-                                ? '已回滚版本'
+                                ? '遗留回退记录'
                                 : isLatest
                                   ? '最新草稿'
                                   : `历史版本 v${version.version}`}
                           </CardTitle>
-                          {isPublished && (
+                          {isCurrent && (
                             <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200">
                               <CheckCircleIcon className="h-3 w-3 mr-1" />
-                              已发布
+                              当前
                             </Badge>
                           )}
-                          {version.is_gray_release && (
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                              灰度
+                          {isPublished && !isCurrent && (
+                            <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">
+                              已发布历史
                             </Badge>
                           )}
                         </div>
@@ -272,40 +199,6 @@ export default function RuleVersionsPage() {
                           )}
                         </p>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!isPublished && !isRolledBack && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handlePublish(version.id, true)}
-                            disabled={publishingId === version.id}
-                          >
-                            <ClockIcon className="h-4 w-4 mr-1" />
-                            灰度发布
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handlePublish(version.id, false)}
-                            disabled={publishingId === version.id}
-                          >
-                            <RocketIcon className="h-4 w-4 mr-1" />
-                            {publishingId === version.id ? '发布中...' : '全量发布'}
-                          </Button>
-                        </>
-                      )}
-                      {!isPublished && isRolledBack && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRollback(version.id)}
-                          disabled={rollingBackId === version.id}
-                        >
-                          <RotateCcwIcon className="h-4 w-4 mr-1" />
-                          {rollingBackId === version.id ? '回滚中...' : '回滚至此'}
-                        </Button>
-                      )}
                     </div>
                   </div>
                 </CardHeader>

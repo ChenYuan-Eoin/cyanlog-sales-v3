@@ -51,8 +51,10 @@ export interface FlexibleRule {
   description: string | null
   problem_category_id?: string | null
   problem_category?: ContractProblemCategory | null
-  /** Canonical v1 execution contract. Legacy rows are adapted once at load time. */
+  /** Canonical v1 execution contract. Legacy rows stay null until runtime compilation. */
   rule_contract?: ContractRuleContract | null
+  /** Compatibility-only source for the short-lived nested canonical draft shape. */
+  message_template?: unknown
   category: RuleCategory          // ratio/amount/duration/enum/text
   engine_type: RuleType
   target_field?: string
@@ -86,7 +88,14 @@ export interface FlexibleRule {
 
 export interface LevelMatchResult {
   level: 'A' | 'B' | 'C' | null   // 匹配到的级别，null=未匹配任何级别
-  matched: boolean                // 是否命中规则
+  matched: boolean                // 是否产生审核项；场景不适用的规则不会进入执行
+  evaluation_status: 'decided' | 'missing_evidence' | 'no_decision'
+  outcome: 'pass' | 'negotiate' | 'block' | 'manual_review'
+  decision_id?: string
+  propertyReadings: RuleExecutionPropertyReading[]
+  missing_property_keys: string[]
+  ambiguous_property_keys: string[]
+  unit_conflict_property_keys: string[]
   operator: LevelOperator
   threshold: number
   actual_value: number
@@ -97,6 +106,15 @@ export interface LevelMatchResult {
   message: string
   counterparty?: string           // Level B 专用
   risk_label: 'green' | 'yellow' | 'red' | 'white'
+}
+
+export interface RuleExecutionPropertyReading {
+  propertyKey: string
+  status: 'read' | 'missing' | 'ambiguous' | 'unit_conflict'
+  value?: string | number | boolean
+  unit?: string
+  evidence?: string
+  confidence: number
 }
 
 // 旧类型保持兼容（将在后续重构中逐步替换）
@@ -153,6 +171,8 @@ export interface RuleExecutionResult {
   ruleVersion: number
   ruleType: RuleType
   ruleCode?: string
+  decisionId?: string
+  propertyReadings?: RuleExecutionPropertyReading[]
   riskLevel: RiskLevel
   title: string
   description: string

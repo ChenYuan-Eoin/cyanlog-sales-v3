@@ -38,7 +38,7 @@ describe('contract rule units', () => {
       },
       translation: {
         status: 'ready',
-        method: 'configured_fields',
+        method: 'legacy_configured_fields',
         missing_fields: [],
       },
     })
@@ -89,8 +89,59 @@ describe('contract rule units', () => {
 
     expect(units[0].translation).toMatchObject({
       status: 'ready',
-      method: 'configured_fields',
+      method: 'legacy_configured_fields',
       missing_fields: [],
+    })
+  })
+
+  it('builds a ready RuleUnit directly from a published canonical business contract', () => {
+    const units = buildRuleUnits([{
+      id: 'rule-canonical',
+      rule_set_id: 'set-payment',
+      problem_category_id: 'category-payment',
+      code: 'PAYMENT_MINIMUM',
+      name: '合同金额底线',
+      business_domain: 'contract_review',
+      risk_level: 'red',
+      applicable_scenarios: ['standard_contract_review'],
+      scope: 'org',
+      version: 1,
+      engine_type: null,
+      target_field: null,
+      clause_category: null,
+      field_hints: [],
+      semantic_prompt: null,
+      message_template: {},
+      rule_contract: {
+        schema_version: '1.0',
+        properties: [{ key: 'contract_amount', label: '合同金额', type: 'money', required: true, currency: 'CNY' }],
+        decisions: [{
+          id: 'amount_block',
+          label: '低于金额底线',
+          outcome: 'block',
+          priority: 100,
+          match: 'all',
+          conditions: [{ property_key: 'contract_amount', operator: '<', value: 50000 }],
+          action: '提交例外审批',
+          message: '合同金额低于五万元。',
+        }],
+        missing_evidence_outcome: 'manual_review',
+      },
+    }], new Map([['rule-canonical', {
+      id: 'snapshot-canonical',
+      rule_id: 'rule-canonical',
+      version: 1,
+      status: 'published',
+    }]]))
+
+    expect(units[0]).toMatchObject({
+      engine_type: 'rule_contract_v1',
+      rule_contract: { schema_version: '1.0' },
+      translation: { status: 'ready', method: 'rule_contract_v1', missing_fields: [] },
+      execution: {
+        trigger_conditions: ['合同金额'],
+        risk_conditions: ['低于金额底线 → block'],
+      },
     })
   })
 

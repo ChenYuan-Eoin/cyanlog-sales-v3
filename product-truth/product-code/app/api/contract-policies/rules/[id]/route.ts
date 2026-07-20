@@ -10,6 +10,7 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
+import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
 import {
   buildLegacyRuleAdapter,
   formatRuleValidationError,
@@ -22,6 +23,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'read')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:read 权限'))
+    }
+
     const { id } = await params
 
     const { data: rule, error } = await supabaseAdmin
@@ -44,6 +49,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:write 权限'))
+    }
+
     const { id } = await params
     const body = await req.json().catch(() => ({}))
     const parsed = updateRuleSchema.safeParse(body)
@@ -64,6 +73,9 @@ export async function PATCH(
     if (!oldRule) {
       return errorResponse(createApiError('NOT_FOUND', '规则不存在'))
     }
+    if (oldRule.rule_set_id !== parsed.data.rule_set_id) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '已保存规则不能直接跨规则集移动；请在目标规则集中新建并单独发布'))
+    }
 
     const { data: problemCategory, error: categoryError } = await supabaseAdmin
       .from('contract_rule_problem_categories')
@@ -77,40 +89,61 @@ export async function PATCH(
       return errorResponse(createApiError('VALIDATION_ERROR', '所选问题分类不存在或已停用'))
     }
 
-    const legacyAdapter = buildLegacyRuleAdapter(parsed.data.rule_contract, problemCategory.code)
-
-    const nextVersion = (oldRule.version || 1) + 1
-    const { data: rule, error } = await supabaseAdmin
-      .from('contract_rules_v2')
-      .update({
-        ...parsed.data,
-        ...legacyAdapter,
-        version: nextVersion,
-        published_at: null,
-        published_by: null,
-        lifecycle_status: 'ready_to_publish',
-        translation_status: 'ready',
-        translation_notes: [],
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+    const { data: ruleSet, error: ruleSetError } = await supabaseAdmin
+      .from('contract_rule_sets')
+      .select('id')
+      .eq('id', parsed.data.rule_set_id)
       .eq('org_id', orgId)
-      .select(RULE_WITH_PROBLEM_CATEGORY_SELECT)
+      .eq('is_active', true)
       .single()
 
-    if (error || !rule) {
+    if (ruleSetError || !ruleSet) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '所选规则集不存在或已停用'))
+    }
+
+    const legacyAdapter = buildLegacyRuleAdapter(parsed.data.rule_contract, problemCategory.code)
+    // PATCH is intentionally partial at the HTTP boundary, while the atomic
+    // draft RPC writes a complete projection.  Merge the current row first so
+    // omitted optional fields are preserved instead of becoming NULL/defaults.
+    // Zod defaults may appear in parsed.data even when the request omitted the
+    // field, so only copy keys that the caller actually sent.
+    const explicitlyProvided = Object.fromEntries(
+      Object.entries(parsed.data).filter(([key]) => Object.prototype.hasOwnProperty.call(body, key))
+    )
+    const completePayload = {
+      ...oldRule,
+      ...explicitlyProvided,
+      rule_set_id: parsed.data.rule_set_id,
+      problem_category_id: parsed.data.problem_category_id,
+      rule_contract: parsed.data.rule_contract,
+    }
+
+    const { data: saved, error } = await supabaseAdmin.rpc('save_contract_rule_draft_v1', {
+      p_org_id: orgId,
+      p_user_id: user.id,
+      p_rule_id: id,
+      p_payload: { ...completePayload, ...legacyAdapter },
+    })
+
+    if (error?.message?.includes('RULE_DRAFT_VERSION_CONFLICT')) {
+      return errorResponse(createApiError(
+        'CONFLICT',
+        '这条规则已在其他页面更新，请刷新后基于最新版本重新修改'
+      ))
+    }
+    if (error || !saved) {
       return errorResponse(createApiError('DB_ERROR', '更新规则失败'))
     }
 
-    await supabaseAdmin.from('contract_rule_snapshots').insert({
-      rule_id: id,
-      version: nextVersion,
-      config_snapshot: rule,
-      released_by: null,
-      released_at: null,
-      release_note: '保存 rule_contract v1 规则草稿，待测试后发布',
-      status: 'draft',
-    })
+    const { data: rule, error: readError } = await supabaseAdmin
+      .from('contract_rules_v2')
+      .select(RULE_WITH_PROBLEM_CATEGORY_SELECT)
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .single()
+    if (readError || !rule) {
+      return errorResponse(createApiError('DB_ERROR', '规则草稿已保存，但读取结果失败'))
+    }
 
     return successResponse(rule)
   })
@@ -121,45 +154,22 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
+      return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:write 权限'))
+    }
+
     const { id } = await params
 
-    const { data: oldRule } = await supabaseAdmin
-      .from('contract_rules_v2')
-      .select('*')
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .single()
-
-    const nextVersion = (oldRule?.version || 1) + 1
-    const { data: rule, error } = await supabaseAdmin
-      .from('contract_rules_v2')
-      .update({
-        is_active: false,
-        version: nextVersion,
-        lifecycle_status: 'archived',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .select()
-      .single()
+    const { data: rule, error } = await supabaseAdmin.rpc('archive_contract_rule_draft_v1', {
+      p_org_id: orgId,
+      p_user_id: user.id,
+      p_rule_id: id,
+    })
 
     if (error) {
       return errorResponse(createApiError('DB_ERROR', '删除规则失败'))
     }
 
-    if (rule) {
-      await supabaseAdmin.from('contract_rule_snapshots').insert({
-        rule_id: id,
-        version: nextVersion,
-        config_snapshot: rule,
-        released_by: user.id,
-        released_at: new Date().toISOString(),
-        release_note: '停用规则',
-        status: 'rolled_back',
-      })
-    }
-
-    return successResponse({ id })
+    return successResponse({ id, pending_rule_set_publish: Boolean(rule) })
   })
 }

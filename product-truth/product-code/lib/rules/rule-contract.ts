@@ -115,6 +115,17 @@ const CONDITION_OPERATORS = new Set<ContractRuleConditionOperator>([
   'not_exists',
 ])
 
+const PROPERTY_CONDITION_OPERATORS: Record<ContractRulePropertyType, ReadonlySet<ContractRuleConditionOperator>> = {
+  money: new Set(['>=', '<=', '=', '>', '<', 'exists', 'not_exists']),
+  percentage: new Set(['>=', '<=', '=', '>', '<', 'exists', 'not_exists']),
+  duration: new Set(['>=', '<=', '=', '>', '<', 'exists', 'not_exists']),
+  date: new Set(['>=', '<=', '=', '>', '<', 'exists', 'not_exists']),
+  enum: new Set(['=', 'in', 'exists', 'not_exists']),
+  boolean: new Set(['=', 'exists', 'not_exists']),
+  text: new Set(['contains', 'exists', 'not_exists']),
+  number: new Set(['>=', '<=', '=', '>', '<', 'exists', 'not_exists']),
+}
+
 const OUTCOME_RISK: Record<ContractRuleOutcome, ContractRuleRiskLevel> = {
   block: 'red',
   negotiate: 'yellow',
@@ -292,6 +303,10 @@ export function normalizeRuleContract(value: unknown): ContractRuleContract | nu
   }
   for (const decision of decisions as ContractRuleDecision[]) {
     if (decision.conditions.some((condition) => !keys.has(condition.property_key))) return null
+    if (decision.conditions.some((condition) => {
+      const property = normalizedProperties.find((candidate) => candidate.key === condition.property_key)
+      return !property || !PROPERTY_CONDITION_OPERATORS[property.type].has(condition.operator)
+    })) return null
   }
 
   return {
@@ -512,6 +527,26 @@ export function resolveRuleContract(asset: RuleContractAsset): ContractRuleContr
   return adaptLegacyRuleAsset(asset)
 }
 
+export type RuleContractConfigurationStatus = 'canonical_complete' | 'legacy_compatible' | 'incomplete'
+
+export function ruleContractConfigurationStatus(asset: RuleContractAsset): RuleContractConfigurationStatus {
+  const directValue = asset.rule_contract
+  const nestedValue = asRecord(asset.message_template)?.rule_contract
+  const canonical = normalizeRuleContract(directValue) || normalizeRuleContract(nestedValue)
+  if (canonical?.properties.length && canonical.decisions.length) return 'canonical_complete'
+  if (directValue !== undefined && directValue !== null || nestedValue !== undefined && nestedValue !== null) {
+    return 'incomplete'
+  }
+  // Runtime compatibility is intentionally separate from user-confirmed
+  // configuration completeness. A legacy adapter can keep old reviews running,
+  // but it must never make the new rule editor or release gate look complete.
+  return 'legacy_compatible'
+}
+
+export function isResolvedRuleContractComplete(asset: RuleContractAsset): boolean {
+  return ruleContractConfigurationStatus(asset) === 'canonical_complete'
+}
+
 function termFragments(value: unknown): string[] {
   if (!nonEmptyString(value)) return []
   const full = value.trim()
@@ -729,14 +764,18 @@ function numericCandidates(text: string, property: ContractRuleProperty): ValueC
   }
 
   if (property.type === 'money') {
-    const pattern = new RegExp(`(?:(人民币|RMB|CNY|美元|美金|USD|欧元|EUR|[￥¥$€])\\s*)?([0-9][0-9,]*(?:\\.[0-9]+)?|[${CHINESE_NUMBER_SOURCE}]+)\\s*(亿元|万元|元|美元|美金|USD|欧元|EUR)?`, 'gi')
+    const pattern = new RegExp(`(?:(人民币|RMB|CNY|美元|美金|USD|欧元|EUR|[￥¥$€])\\s*)?([0-9][0-9,]*(?:\\.[0-9]+)?|[${CHINESE_NUMBER_SOURCE}]+)\\s*(亿元|万元|亿|万|元|美元|美金|USD|欧元|EUR)?`, 'gi')
     pushMatches(pattern, (match) => {
       const prefix = (match[1] || '').toUpperCase()
       const suffix = (match[3] || '').toUpperCase()
       if (!prefix && !suffix) return null
       const numeric = parseChineseNumericText(match[2])
       if (numeric === null) return null
-      const multiplier = match[3] === '亿元' ? 100000000 : match[3] === '万元' ? 10000 : 1
+      const multiplier = match[3] === '亿元' || match[3] === '亿'
+        ? 100000000
+        : match[3] === '万元' || match[3] === '万'
+          ? 10000
+          : 1
       const currencySource = `${prefix}:${suffix}`
       const currency = /美元|美金|USD|\$/.test(currencySource)
         ? 'USD'
@@ -857,11 +896,28 @@ function readBoolean(
   const optionFalse = (property.options || [])
     .filter((option) => option.value.toLowerCase() === 'false')
     .map((option) => option.label)
-  const trueTerms = [...truthyTerms, ...optionTruth, '是', '存在', '允许', '需要']
-  const falseTerms = [...falsyTerms, ...optionFalse, '否', '不存在', '不允许', '无需']
-  const matchedTrue = trueTerms.filter((term) => term && includesTerm(text, term))
-  const matchedFalse = falseTerms.filter((term) => term && includesTerm(text, term))
-  if (matchedTrue.length > 0 && matchedFalse.length > 0) return { status: 'ambiguous' }
+  // If the clause uses a question/answer shape such as “是否允许转包：否”,
+  // only the answer side expresses the value. The label side merely names the
+  // configured property and must not be mistaken for a positive assertion.
+  const delimiter = text.search(/[:：]/)
+  const assertionText = delimiter >= 0 ? text.slice(delimiter + 1) : text
+  const explicitAnswers = Array.from(assertionText.matchAll(/(?:^|[，。；;、,\s])(?:为|系)?\s*(是|否)(?=$|[，。；;、,\s])/g))
+    .map((match) => match[1] === '是')
+  const trueTerms = [...truthyTerms, ...optionTruth, '存在', '允许', '需要']
+  const falseTerms = [...falsyTerms, ...optionFalse, '不存在', '不允许', '无需']
+  const matchedFalse = falseTerms.filter((term) => term && includesTerm(assertionText, term))
+  // A longer negative phrase such as “不允许” or “不得用于训练” must not
+  // simultaneously match its shorter positive substring.
+  const matchedTrue = trueTerms.filter((term) => (
+    term
+    && includesTerm(assertionText, term)
+    && !matchedFalse.some((negative) => negative.includes(term))
+  ))
+  const hasTrue = matchedTrue.length > 0 || explicitAnswers.includes(true)
+  const hasFalse = matchedFalse.length > 0 || explicitAnswers.includes(false)
+  if (hasTrue && hasFalse) return { status: 'ambiguous' }
+  if (explicitAnswers.includes(true)) return { status: 'read', value: true, raw: '是' }
+  if (explicitAnswers.includes(false)) return { status: 'read', value: false, raw: '否' }
   if (matchedTrue.length > 0) return { status: 'read', value: true, raw: matchedTrue[0] }
   if (matchedFalse.length > 0) return { status: 'read', value: false, raw: matchedFalse[0] }
   return { status: 'missing' }
@@ -1009,17 +1065,29 @@ function readProperty(
   return successful[0]
 }
 
+export function normalizeDurationUnit(unit: string | null | undefined): 'day' | 'month' | 'year' | undefined {
+  if (!unit) return undefined
+  const normalized = unit.trim().toLowerCase()
+  if (['day', 'days', 'd', '日', '天', '工作日', '自然日'].includes(normalized)) return 'day'
+  if (['month', 'months', 'mon', '月', '个月', '個月'].includes(normalized)) return 'month'
+  if (['year', 'years', 'yr', '年'].includes(normalized)) return 'year'
+  return undefined
+}
+
 function durationInUnit(value: number, sourceUnit: string | undefined, targetUnit: string | undefined): number {
-  if (!sourceUnit || !targetUnit || sourceUnit === targetUnit) return value
-  const days = sourceUnit === 'year' ? value * 365 : sourceUnit === 'month' ? value * 30 : value
-  if (targetUnit === 'year') return days / 365
-  if (targetUnit === 'month') return days / 30
+  const source = normalizeDurationUnit(sourceUnit)
+  const target = normalizeDurationUnit(targetUnit)
+  if (!source || !target || source === target) return value
+  const days = source === 'year' ? value * 365 : source === 'month' ? value * 30 : value
+  if (target === 'year') return days / 365
+  if (target === 'month') return days / 30
   return days
 }
 
 function conditionMatches(
   condition: ContractRuleCondition,
-  reading: RulePropertyReading | undefined
+  reading: RulePropertyReading | undefined,
+  property: ContractRuleProperty | undefined
 ): boolean {
   if (condition.operator === 'exists') return reading?.status === 'read'
   if (condition.operator === 'not_exists') return !reading || reading.status !== 'read'
@@ -1036,8 +1104,17 @@ function conditionMatches(
       : String(expected).split(',').map((value) => value.trim()).includes(String(reading.value))
   }
 
+  if (property?.type === 'enum' && condition.operator === '=') {
+    const expectedValue = property.options?.find((option) => (
+      option.value === String(expected) || option.label === String(expected)
+    ))?.value || String(expected)
+    return String(reading.value) === expectedValue
+  }
+
   if (typeof reading.value === 'number' && typeof expected === 'number') {
-    const actual = durationInUnit(reading.value, reading.unit, condition.unit || reading.unit)
+    const actual = property?.type === 'duration'
+      ? durationInUnit(reading.value, reading.unit, condition.unit || property.unit || reading.unit)
+      : reading.value
     switch (condition.operator) {
       case '>=': return actual >= expected
       case '<=': return actual <= expected
@@ -1063,8 +1140,8 @@ function conditionMatches(
 
 function sortDecisions(decisions: ContractRuleDecision[]): ContractRuleDecision[] {
   return [...decisions].sort((left, right) => (
-    OUTCOME_PRIORITY[right.outcome] - OUTCOME_PRIORITY[left.outcome]
-    || right.priority - left.priority
+    right.priority - left.priority
+    || OUTCOME_PRIORITY[right.outcome] - OUTCOME_PRIORITY[left.outcome]
     || left.id.localeCompare(right.id)
   ))
 }
@@ -1074,33 +1151,39 @@ export function riskLevelForOutcome(outcome: ContractRuleOutcome): ContractRuleR
 }
 
 /**
- * Execute the canonical business contract. Runtime first locates relevant source
- * clauses, then reads only pre-defined properties inside those clauses.
+ * Execute configured decisions against already located, typed property readings.
+ * The semantic model may propose a decision id, but only this deterministic
+ * function selects the actual outcome.
  */
-export function evaluateRuleContract(
-  asset: RuleContractAsset,
-  sourceText: string
+function evaluatePreparedRuleContractReadings(
+  contract: ContractRuleContract,
+  suppliedReadings: Record<string, RulePropertyReading>
 ): RuleContractEvaluation {
-  const compiled = compileRuleContract(asset)
-  const readings = Object.fromEntries(compiled.property_bindings.map((binding) => (
-    [binding.property.key, readProperty(sourceText, compiled, binding)]
-  )))
-  const missingKeys = compiled.contract.properties
+  const readings = Object.fromEntries(contract.properties.map((property) => [
+    property.key,
+    suppliedReadings[property.key] || {
+      property_key: property.key,
+      status: 'missing' as const,
+      confidence: 0,
+    },
+  ]))
+  const missingKeys = contract.properties
     .filter((property) => property.required && readings[property.key]?.status === 'missing')
     .map((property) => property.key)
-  const ambiguousKeys = compiled.contract.properties
+  const ambiguousKeys = contract.properties
     .filter((property) => readings[property.key]?.status === 'ambiguous')
     .map((property) => property.key)
-  const unitConflictKeys = compiled.contract.properties
+  const unitConflictKeys = contract.properties
     .filter((property) => readings[property.key]?.status === 'unit_conflict')
     .map((property) => property.key)
   const hasAnyReading = Object.values(readings).some((reading) => reading.status === 'read')
+  const propertiesByKey = new Map(contract.properties.map((property) => [property.key, property]))
   const evidence = Array.from(new Set(
     Object.values(readings).flatMap((reading) => reading.evidence ? [reading.evidence] : [])
   ))
 
   if (missingKeys.length > 0 || ambiguousKeys.length > 0 || unitConflictKeys.length > 0) {
-    const outcome = compiled.contract.missing_evidence_outcome
+    const outcome = contract.missing_evidence_outcome
     return {
       status: 'missing_evidence',
       outcome,
@@ -1113,14 +1196,22 @@ export function evaluateRuleContract(
     }
   }
 
-  const decision = sortDecisions(compiled.contract.decisions).find((candidate) => (
+  const decision = sortDecisions(contract.decisions).find((candidate) => (
     candidate.match === 'any'
-      ? candidate.conditions.some((condition) => conditionMatches(condition, readings[condition.property_key]))
-      : candidate.conditions.every((condition) => conditionMatches(condition, readings[condition.property_key]))
+      ? candidate.conditions.some((condition) => conditionMatches(
+          condition,
+          readings[condition.property_key],
+          propertiesByKey.get(condition.property_key)
+        ))
+      : candidate.conditions.every((condition) => conditionMatches(
+          condition,
+          readings[condition.property_key],
+          propertiesByKey.get(condition.property_key)
+        ))
   ))
 
   if (!decision) {
-    const outcome = compiled.contract.missing_evidence_outcome
+    const outcome = contract.missing_evidence_outcome
     return {
       status: hasAnyReading ? 'no_decision' : 'missing_evidence',
       outcome,
@@ -1144,4 +1235,28 @@ export function evaluateRuleContract(
     ambiguous_property_keys: [],
     unit_conflict_property_keys: [],
   }
+}
+
+export function evaluateRuleContractReadings(
+  contractValue: ContractRuleContract,
+  suppliedReadings: Record<string, RulePropertyReading>
+): RuleContractEvaluation {
+  const contract = normalizeRuleContract(contractValue)
+  if (!contract) throw new Error('Invalid canonical rule contract')
+  return evaluatePreparedRuleContractReadings(contract, suppliedReadings)
+}
+
+/**
+ * Execute the canonical business contract. Runtime first locates relevant source
+ * clauses, then reads only pre-defined properties inside those clauses.
+ */
+export function evaluateRuleContract(
+  asset: RuleContractAsset,
+  sourceText: string
+): RuleContractEvaluation {
+  const compiled = compileRuleContract(asset)
+  const readings = Object.fromEntries(compiled.property_bindings.map((binding) => (
+    [binding.property.key, readProperty(sourceText, compiled, binding)]
+  )))
+  return evaluatePreparedRuleContractReadings(compiled.contract, readings)
 }

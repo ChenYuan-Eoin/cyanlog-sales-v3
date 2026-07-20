@@ -35,20 +35,6 @@ export type ReviewEvidenceRisk = {
   rule_version?: number | null
 }
 
-export type ReviewEvidenceRule = {
-  id: string
-  code?: string | null
-  version?: number | null
-  is_active?: boolean | null
-  lifecycle_status?: string | null
-  translation_status?: string | null
-  engine_type?: string | null
-  target_field?: string | null
-  clause_category?: string | null
-  published_at?: string | null
-  updated_at?: string | null
-}
-
 export type ReviewEvidenceSnapshot = {
   id: string
   rule_id: string
@@ -57,6 +43,14 @@ export type ReviewEvidenceSnapshot = {
   released_at?: string | null
   created_at?: string | null
   config_snapshot?: unknown
+}
+
+export type ReviewEvidenceRuleSetSnapshot = {
+  id: string
+  org_id?: string | null
+  rule_set_id?: string | null
+  status?: string | null
+  rule_snapshot_ids?: string[] | null
 }
 
 export type ReviewEvidenceSkillBundle = {
@@ -128,6 +122,12 @@ export type ReviewRunEvidence = {
   completed_at: string | null
   evidence_status: ReviewRunEvidenceStatus
   rule_snapshot_refs: RuleSnapshotRef[]
+  snapshot_integrity: {
+    valid: boolean
+    rule_binding_source: 'review_run' | 'skill_bundle' | 'missing'
+    rule_set_binding_source: 'review_run' | 'skill_bundle' | 'missing'
+    errors: string[]
+  }
     skill_bundle: {
       id: string
       version: number | null
@@ -250,6 +250,21 @@ function numberValue(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+function nonEmptyStringList(value: unknown): string[] | null {
+  const values = stringListValue(value)
+  return values.length > 0 ? values : null
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false
+  const rightSet = new Set(right)
+  return rightSet.size === right.length && left.every((value) => rightSet.has(value))
+}
+
+function hasDuplicates(values: string[]): boolean {
+  return new Set(values).size !== values.length
+}
+
 function extractSnapshotCode(snapshot: ReviewEvidenceSnapshot): string | null {
   const record = asRecord(snapshot.config_snapshot)
   return stringValue(record?.code)
@@ -262,22 +277,6 @@ function extractSnapshotEngineType(snapshot: ReviewEvidenceSnapshot): string | n
 
 function snapshotReleasedAt(snapshot: ReviewEvidenceSnapshot): string | null {
   return snapshot.released_at || snapshot.created_at || null
-}
-
-function findSnapshotForRule(
-  rule: ReviewEvidenceRule,
-  snapshots: ReviewEvidenceSnapshot[]
-): ReviewEvidenceSnapshot | null {
-  const sameRule = snapshots.filter((snapshot) => snapshot.rule_id === rule.id && snapshot.status === 'published')
-  if (sameRule.length === 0) return null
-
-  const ruleVersion = rule.version ?? null
-  if (ruleVersion !== null) {
-    const exact = sameRule.find((snapshot) => (snapshot.version ?? null) === ruleVersion)
-    if (exact) return exact
-  }
-
-  return sameRule[0]
 }
 
 function formatRuleSet(refs: RuleSnapshotRef[]): string {
@@ -485,56 +484,134 @@ function buildSkillBundleSummary(
   }
 }
 
-function buildSnapshotRefs(
-  rules: ReviewEvidenceRule[],
-  snapshots: ReviewEvidenceSnapshot[],
-  boundSnapshotIds?: string[] | null
-): RuleSnapshotRef[] {
-  const publishedSnapshots = snapshots.filter((snapshot) => snapshot.status === 'published')
-  const refs = rules
-    .map((rule) => {
-      const snapshot = findSnapshotForRule(rule, publishedSnapshots)
-      if (!snapshot) return null
-      return {
-        id: snapshot.id,
-        rule_id: rule.id,
-        rule_code: rule.code || extractSnapshotCode(snapshot),
-        version: snapshot.version ?? rule.version ?? numberValue(asRecord(snapshot.config_snapshot)?.version),
-        engine_type: rule.engine_type || extractSnapshotEngineType(snapshot),
-        released_at: snapshotReleasedAt(snapshot),
-        source: 'published_snapshot' as const,
-      }
-    })
-    .filter((ref): ref is RuleSnapshotRef => Boolean(ref))
+type SnapshotBindingSource = 'review_run' | 'skill_bundle' | 'missing'
 
-  const refsBySnapshotId = new Map(refs.map((ref) => [ref.id, ref]))
-  const coveredRuleIds = new Set(refs.map((ref) => ref.rule_id))
-  const bound = boundSnapshotIds && boundSnapshotIds.length > 0
-    ? new Set(boundSnapshotIds)
-    : null
-
-  publishedSnapshots.forEach((snapshot) => {
-    if (refsBySnapshotId.has(snapshot.id)) return
-    if (!bound?.has(snapshot.id) && coveredRuleIds.has(snapshot.rule_id)) return
-
-    refsBySnapshotId.set(snapshot.id, {
-      id: snapshot.id,
-      rule_id: snapshot.rule_id,
-      rule_code: extractSnapshotCode(snapshot),
-      version: snapshot.version ?? numberValue(asRecord(snapshot.config_snapshot)?.version),
-      engine_type: extractSnapshotEngineType(snapshot),
-      released_at: snapshotReleasedAt(snapshot),
-      source: 'published_snapshot',
-    })
-  })
-
-  return Array.from(refsBySnapshotId.values())
+type SnapshotBinding = {
+  ids: string[]
+  source: SnapshotBindingSource
+  reviewIds: string[] | null
+  bundleIds: string[] | null
 }
 
-function filterRefsByBoundSnapshots(refs: RuleSnapshotRef[], snapshotIds: string[] | null | undefined): RuleSnapshotRef[] {
-  if (!snapshotIds || snapshotIds.length === 0) return refs
-  const bound = new Set(snapshotIds)
-  return refs.filter((ref) => bound.has(ref.id))
+function selectSnapshotBinding(
+  reviewIds: string[] | null | undefined,
+  bundleIds: string[] | null | undefined
+): SnapshotBinding {
+  const nonEmptyReviewIds = nonEmptyStringList(reviewIds)
+  const nonEmptyBundleIds = nonEmptyStringList(bundleIds)
+  if (nonEmptyReviewIds) {
+    return {
+      ids: nonEmptyReviewIds,
+      source: 'review_run',
+      reviewIds: nonEmptyReviewIds,
+      bundleIds: nonEmptyBundleIds,
+    }
+  }
+  if (nonEmptyBundleIds) {
+    return {
+      ids: nonEmptyBundleIds,
+      source: 'skill_bundle',
+      reviewIds: null,
+      bundleIds: nonEmptyBundleIds,
+    }
+  }
+  return { ids: [], source: 'missing', reviewIds: null, bundleIds: null }
+}
+
+function validateSnapshotBindings(input: {
+  ruleBinding: SnapshotBinding
+  ruleSetBinding: SnapshotBinding
+  snapshots: ReviewEvidenceSnapshot[]
+  ruleSetSnapshots: ReviewEvidenceRuleSetSnapshot[]
+  expectedOrgId?: string | null
+}): string[] {
+  const {
+    ruleBinding,
+    ruleSetBinding,
+    snapshots,
+    ruleSetSnapshots,
+    expectedOrgId,
+  } = input
+  const errors: string[] = []
+
+  if (ruleBinding.ids.length === 0) errors.push('rule_snapshot_binding_missing')
+  if (ruleSetBinding.ids.length === 0) errors.push('rule_set_snapshot_binding_missing')
+  if (hasDuplicates(ruleBinding.ids)) errors.push('rule_snapshot_binding_duplicated')
+  if (hasDuplicates(ruleSetBinding.ids)) errors.push('rule_set_snapshot_binding_duplicated')
+
+  if (
+    ruleBinding.reviewIds
+    && ruleBinding.bundleIds
+    && !sameStringSet(ruleBinding.reviewIds, ruleBinding.bundleIds)
+  ) {
+    errors.push('review_bundle_rule_snapshot_mismatch')
+  }
+  if (
+    ruleSetBinding.reviewIds
+    && ruleSetBinding.bundleIds
+    && !sameStringSet(ruleSetBinding.reviewIds, ruleSetBinding.bundleIds)
+  ) {
+    errors.push('review_bundle_rule_set_snapshot_mismatch')
+  }
+
+  const loadedRuleIds = snapshots.map((snapshot) => snapshot.id)
+  if (hasDuplicates(loadedRuleIds)) errors.push('rule_snapshot_rows_duplicated')
+  if (!sameStringSet(ruleBinding.ids, loadedRuleIds)) errors.push('rule_snapshot_rows_not_exact')
+
+  for (const snapshot of snapshots) {
+    if (snapshot.status !== 'published' && snapshot.status !== 'rolled_back') {
+      errors.push(`rule_snapshot_status_invalid:${snapshot.id}`)
+    }
+    const snapshotOrgId = stringValue(asRecord(snapshot.config_snapshot)?.org_id)
+    if (expectedOrgId && snapshotOrgId && snapshotOrgId !== expectedOrgId) {
+      errors.push(`rule_snapshot_org_invalid:${snapshot.id}`)
+    }
+  }
+
+  const loadedRuleSetIds = ruleSetSnapshots.map((snapshot) => snapshot.id)
+  if (hasDuplicates(loadedRuleSetIds)) errors.push('rule_set_snapshot_rows_duplicated')
+  if (!sameStringSet(ruleSetBinding.ids, loadedRuleSetIds)) errors.push('rule_set_snapshot_rows_not_exact')
+
+  const memberRuleSnapshotIds: string[] = []
+  for (const snapshot of ruleSetSnapshots) {
+    if (snapshot.status !== 'published' && snapshot.status !== 'rolled_back') {
+      errors.push(`rule_set_snapshot_status_invalid:${snapshot.id}`)
+    }
+    if (expectedOrgId && snapshot.org_id !== expectedOrgId) {
+      errors.push(`rule_set_snapshot_org_invalid:${snapshot.id}`)
+    }
+    if (!Array.isArray(snapshot.rule_snapshot_ids)) {
+      errors.push(`rule_set_snapshot_members_invalid:${snapshot.id}`)
+      continue
+    }
+    if (hasDuplicates(snapshot.rule_snapshot_ids)) {
+      errors.push(`rule_set_snapshot_members_duplicated:${snapshot.id}`)
+    }
+    memberRuleSnapshotIds.push(...snapshot.rule_snapshot_ids)
+  }
+
+  if (hasDuplicates(memberRuleSnapshotIds)) errors.push('rule_set_members_overlap')
+  if (!sameStringSet(ruleBinding.ids, memberRuleSnapshotIds)) {
+    errors.push('rule_set_members_not_exact')
+  }
+
+  return Array.from(new Set(errors))
+}
+
+function buildBoundSnapshotRefs(
+  snapshots: ReviewEvidenceSnapshot[],
+  integrityErrors: string[]
+): RuleSnapshotRef[] {
+  if (integrityErrors.length > 0) return []
+  return snapshots.map((snapshot) => ({
+    id: snapshot.id,
+    rule_id: snapshot.rule_id,
+    rule_code: extractSnapshotCode(snapshot),
+    version: snapshot.version ?? numberValue(asRecord(snapshot.config_snapshot)?.version),
+    engine_type: extractSnapshotEngineType(snapshot),
+    released_at: snapshotReleasedAt(snapshot),
+    source: 'published_snapshot',
+  }))
 }
 
 function firstProviderFromPolicy(modelPolicy: ReviewEvidenceModelPolicy): { provider: string; model: string | null } | null {
@@ -635,8 +712,9 @@ export function buildReviewRunEvidence(input: {
   latestJob: ReviewEvidenceJob
   currentVersion: ReviewEvidenceVersion
   risks: ReviewEvidenceRisk[]
-  rules: ReviewEvidenceRule[]
   snapshots: ReviewEvidenceSnapshot[]
+  ruleSetSnapshots?: ReviewEvidenceRuleSetSnapshot[]
+  expectedOrgId?: string | null
   skillBundle?: ReviewEvidenceSkillBundle
   modelPolicy?: ReviewEvidenceModelPolicy
   modelInvocations?: ReviewEvidenceModelInvocation[]
@@ -646,18 +724,34 @@ export function buildReviewRunEvidence(input: {
     latestJob,
     currentVersion,
     risks,
-    rules,
     snapshots,
+    ruleSetSnapshots = [],
+    expectedOrgId,
     skillBundle,
     modelPolicy,
     modelInvocations = [],
   } = input
   if (!latestReview) return null
 
-  const boundSnapshotIds = latestReview.rule_snapshot_ids || skillBundle?.rule_snapshot_ids || null
-  const boundRuleSetSnapshotIds = latestReview.rule_set_snapshot_ids || skillBundle?.rule_set_snapshot_ids || []
-  const boundRuleSetDocumentIds = latestReview.rule_set_document_ids || skillBundle?.document_snapshot_ids || []
-  const refs = filterRefsByBoundSnapshots(buildSnapshotRefs(rules, snapshots, boundSnapshotIds), boundSnapshotIds)
+  const ruleBinding = selectSnapshotBinding(
+    latestReview.rule_snapshot_ids,
+    skillBundle?.rule_snapshot_ids
+  )
+  const ruleSetBinding = selectSnapshotBinding(
+    latestReview.rule_set_snapshot_ids,
+    skillBundle?.rule_set_snapshot_ids
+  )
+  const boundRuleSetDocumentIds = nonEmptyStringList(latestReview.rule_set_document_ids)
+    || nonEmptyStringList(skillBundle?.document_snapshot_ids)
+    || []
+  const snapshotIntegrityErrors = validateSnapshotBindings({
+    ruleBinding,
+    ruleSetBinding,
+    snapshots,
+    ruleSetSnapshots,
+    expectedOrgId,
+  })
+  const refs = buildBoundSnapshotRefs(snapshots, snapshotIntegrityErrors)
   const invocation = representativeInvocation(modelInvocations)
   const requestMeta = invocationRequestMeta(invocation)
   const responseMeta = invocationResponseMeta(invocation)
@@ -680,8 +774,8 @@ export function buildReviewRunEvidence(input: {
     status: latestReview.status || 'PENDING',
     contract_version_id: currentVersion?.id || null,
     skill_bundle_id: skillBundleId,
-    rule_snapshot_id: summarizeBoundRuleSnapshotId(boundSnapshotIds, refs),
-    rule_set_snapshot_ids: boundRuleSetSnapshotIds,
+    rule_snapshot_id: summarizeBoundRuleSnapshotId(ruleBinding.ids, refs),
+    rule_set_snapshot_ids: ruleSetBinding.ids,
     rule_set_document_ids: boundRuleSetDocumentIds,
     model_policy_id: modelPolicyId,
     model_invocation_ids: modelInvocationIds,
@@ -689,6 +783,12 @@ export function buildReviewRunEvidence(input: {
     completed_at: latestJob?.completed_at || latestReview.completed_at || null,
     evidence_status: status,
     rule_snapshot_refs: refs,
+    snapshot_integrity: {
+      valid: snapshotIntegrityErrors.length === 0,
+      rule_binding_source: ruleBinding.source,
+      rule_set_binding_source: ruleSetBinding.source,
+      errors: snapshotIntegrityErrors,
+    },
     skill_bundle: buildSkillBundleSummary(
       skillBundle ?? null,
       refs,

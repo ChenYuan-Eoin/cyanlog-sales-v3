@@ -8,6 +8,7 @@ function source(path: string) {
 
 describe('rule configuration product boundary', () => {
   const designer = source('app/configs/components/RuleDesigner.tsx')
+  const sandbox = source('app/configs/components/RuleTestSandbox.tsx')
   const tab = source('app/configs/tabs/RuleTab.tsx')
   const configsClient = source('app/configs/ConfigsClient.tsx')
 
@@ -23,6 +24,7 @@ describe('rule configuration product boundary', () => {
       '任一条件满足',
       '缺少明确值时',
       '保存草稿',
+      '发布规则集',
     ]) {
       expect(`${tab}\n${designer}`).toContain(expected)
     }
@@ -66,5 +68,26 @@ describe('rule configuration product boundary', () => {
     expect(configsClient).toContain("id: 'ai-platform'")
     expect(configsClient).toContain("tabs: ['rules']")
     expect(configsClient).toContain("tabs: ['ai']")
+  })
+
+  it('fixes the current F009 consumer instead of asking users for vague scenario words', () => {
+    expect(designer).toContain('合同审核（当前产品固定）')
+    expect(designer).toContain("applicable_scenarios: ['contract_review']")
+    expect(tab).toContain("applicable_scenario: 'contract_review'")
+    expect(tab).not.toContain('请输入适用场景')
+  })
+
+  it('exposes a release test for every decision and supplies other required properties', () => {
+    expect(sandbox).toContain('const examples: AcceptanceExample[] = decisions.map')
+    expect(sandbox).toContain('property.required && !conditionKeys.has(property.key)')
+    expect(sandbox).toContain("property.type !== 'enum' || (property.options?.length || 0) > 1")
+    expect(sandbox).toContain("：${scalar === false ? '否' : '是'}")
+    expect(sandbox).toContain('每条判定都要分别验收')
+    expect(sandbox).not.toContain("decisions.find((decision)")
+  })
+
+  it('prevents the three-column grid from stretching short cards into white overlays', () => {
+    expect(tab).toContain('grid items-start gap-4 xl:grid-cols')
+    expect((tab.match(/self-start overflow-hidden/g) || []).length).toBeGreaterThanOrEqual(3)
   })
 })

@@ -31,7 +31,7 @@ vi.mock('@/lib/error-log', () => ({
   logError: vi.fn(),
 }))
 
-import { runStructuredAnalysis } from './contract-analysis'
+import { runStructuredAnalysis, saveStructuredReport } from './contract-analysis'
 import { getOrgIdForUser } from '@/lib/configs/runtime'
 import { executeRules } from '@/lib/rules/engine'
 import { reviewWithFailoverSync } from '@/lib/ai/failover'
@@ -126,6 +126,27 @@ function makeThenableQuery(result: unknown) {
     or: vi.fn(() => query),
     is: vi.fn(() => query),
     single: vi.fn().mockResolvedValue(result),
+    then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
+      Promise.resolve(result).then(resolve, reject)
+    ),
+  }
+  return query
+}
+
+function makeMutationQuery(
+  result: unknown,
+  onInsert?: (payload: unknown) => void
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const query: any = {
+    delete: vi.fn(() => query),
+    eq: vi.fn(() => query),
+    insert: vi.fn((payload: unknown) => {
+      onInsert?.(payload)
+      return query
+    }),
+    select: vi.fn(() => query),
+    update: vi.fn(() => query),
     then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
       Promise.resolve(result).then(resolve, reject)
     ),
@@ -714,5 +735,102 @@ describe('runStructuredAnalysis', () => {
       fallbackReason: 'long_contract_cloud_provider_unavailable',
       errorMessage: expect.stringContaining('long_contract_cloud_provider_unavailable'),
     }))
+  })
+})
+
+describe('saveStructuredReport', () => {
+  it('persists the server decision and typed property readings with the risk evidence', async () => {
+    let insertedRiskRows: unknown
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === 'contract_risk_cards') {
+        return makeMutationQuery({ data: [], error: null }, (payload) => {
+          insertedRiskRows = payload
+        })
+      }
+      return makeMutationQuery({ data: [], error: null })
+    })
+
+    await saveStructuredReport('review-1', 'contract-1', {
+      result: {
+        risks: [{
+          ruleId: 'rule-1',
+          ruleCode: 'PAYMENT_MINIMUM',
+          ruleVersion: 4,
+          decisionId: 'below_minimum',
+          propertyReadings: [{
+            propertyKey: 'contract_amount',
+            status: 'read',
+            value: 40_000,
+            unit: 'CNY',
+            evidence: '合同金额为4万元',
+            confidence: 0.98,
+          }],
+          level: 'red',
+          title: '合同金额低于最低标准',
+          description: '合同金额为4万元，低于5万元。',
+          suggestion: '转人工复核并调整金额。',
+          evidence: ['合同金额为4万元'],
+        }],
+        summary: '命中1条规则',
+        appliedRules: 1,
+        matchedRules: 1,
+        provider: 'rule-engine+AI_LEVEL_2',
+        degraded: false,
+      },
+      risk_summary: {
+        total_clauses: 1,
+        critical_risks: 1,
+        high_risks: 0,
+        medium_risks: 0,
+        low_risks: 0,
+        compliance_score: 75,
+      },
+      compliance_check: {
+        missing_required_clauses: [],
+        dangerous_clauses: [],
+        ambiguous_clauses: [],
+        unbalanced_clauses: [],
+        party_a_consistency: 'unknown',
+        party_b_consistency: 'unknown',
+        issues: [],
+      },
+      effectiveness_analysis: '需要复核',
+      clauses: [],
+      source_text: '第一条 合同金额为4万元。',
+      runtime: {
+        skill_bundle_id: 'skill-1',
+        model_policy_id: 'policy-1',
+        rule_snapshot_ids: ['snapshot-1'],
+        rule_set_snapshot_ids: ['ruleset-snapshot-1'],
+        rule_set_document_ids: [],
+        rule_snapshot_refs: [{
+          id: 'snapshot-1',
+          rule_id: 'rule-1',
+          code: 'PAYMENT_MINIMUM',
+          version: 4,
+        }],
+        model_invocation_ids: ['invocation-1'],
+        provider: 'rule-engine+AI_LEVEL_2',
+        model: 'gpt-review',
+      },
+    })
+
+    expect(insertedRiskRows).toEqual([
+      expect.objectContaining({
+        rule_id: 'rule-1',
+        evidence: expect.objectContaining({
+          rule_snapshot_id: 'snapshot-1',
+          decision_id: 'below_minimum',
+          property_readings: [{
+            propertyKey: 'contract_amount',
+            status: 'read',
+            value: 40_000,
+            unit: 'CNY',
+            evidence: '合同金额为4万元',
+            confidence: 0.98,
+          }],
+        }),
+      }),
+    ])
   })
 })

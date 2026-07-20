@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
+  rpc: vi.fn(),
+  configAccess: vi.fn(),
 }))
 
 vi.mock('@/lib/api/auth-wrapper', () => ({
@@ -12,13 +14,18 @@ vi.mock('@/lib/api/auth-wrapper', () => ({
 }))
 
 vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: { from: mocks.from },
+  supabaseAdmin: { from: mocks.from, rpc: mocks.rpc },
+}))
+
+vi.mock('@/lib/configs/access', () => ({
+  userHasFreshOrgConfigAccess: mocks.configAccess,
 }))
 
 import { GET, POST } from './route'
 import { RULE_WITH_PROBLEM_CATEGORY_SELECT } from './rule-contract'
 
 const problemCategoryId = '11111111-1111-4111-8111-111111111111'
+const ruleSetId = '22222222-2222-4222-8222-222222222222'
 
 function request(url: string, body?: unknown) {
   return {
@@ -77,7 +84,21 @@ function contract() {
 }
 
 describe('/api/contract-policies/rules', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.configAccess.mockResolvedValue(true)
+  })
+
+  it('denies rule reads without fresh config:read before database access', async () => {
+    mocks.configAccess.mockResolvedValue(false)
+
+    const response = await GET(request('http://localhost/api/contract-policies/rules'))
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body.error.message).toContain('config:read')
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
 
   it('loads rules with their business problem category relation', async () => {
     const rules = [{
@@ -90,6 +111,7 @@ describe('/api/contract-policies/rules', () => {
     chain.select = vi.fn(() => chain)
     chain.eq = vi.fn(() => chain)
     chain.order = vi.fn(() => chain)
+    chain.neq = vi.fn(() => chain)
     mocks.from.mockReturnValue(chain)
 
     const response = await GET(request('http://localhost/api/contract-policies/rules'))
@@ -104,6 +126,7 @@ describe('/api/contract-policies/rules', () => {
     const response = await POST(request('http://localhost/api/contract-policies/rules', {
       code: 'R100',
       name: '付款节奏',
+      rule_set_id: ruleSetId,
       problem_category_id: problemCategoryId,
       rule_contract: contract(),
       semantic_prompt: '识别付款条款',
@@ -112,6 +135,17 @@ describe('/api/contract-policies/rules', () => {
     }))
 
     expect(response.status).toBe(400)
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
+
+  it('denies rule creation without fresh config:write before parsing or database access', async () => {
+    mocks.configAccess.mockResolvedValue(false)
+
+    const response = await POST(request('http://localhost/api/contract-policies/rules', {}))
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body.error.message).toContain('config:write')
     expect(mocks.from).not.toHaveBeenCalled()
   })
 
@@ -127,9 +161,16 @@ describe('/api/contract-policies/rules', () => {
     categoryChain.select.mockReturnValue(categoryChain)
     categoryChain.eq.mockReturnValue(categoryChain)
 
-    const insert = vi.fn()
-    const ruleChain = {
+    const ruleSetChain = {
       select: vi.fn(),
+      eq: vi.fn(),
+      single: vi.fn().mockResolvedValue({ data: { id: ruleSetId }, error: null }),
+    }
+    ruleSetChain.select.mockReturnValue(ruleSetChain)
+    ruleSetChain.eq.mockReturnValue(ruleSetChain)
+    const ruleReadChain = {
+      select: vi.fn(),
+      eq: vi.fn(),
       single: vi.fn().mockResolvedValue({
         data: {
           id: 'rule-1',
@@ -141,20 +182,21 @@ describe('/api/contract-policies/rules', () => {
         error: null,
       }),
     }
-    ruleChain.select.mockReturnValue(ruleChain)
-    insert.mockReturnValue(ruleChain)
-    const snapshotInsert = vi.fn().mockResolvedValue({ data: null, error: null })
+    ruleReadChain.select.mockReturnValue(ruleReadChain)
+    ruleReadChain.eq.mockReturnValue(ruleReadChain)
+    mocks.rpc.mockResolvedValue({ data: { id: 'rule-1', version: 1 }, error: null })
 
     mocks.from.mockImplementation((table: string) => {
       if (table === 'contract_rule_problem_categories') return categoryChain
-      if (table === 'contract_rules_v2') return { insert }
-      if (table === 'contract_rule_snapshots') return { insert: snapshotInsert }
+      if (table === 'contract_rule_sets') return ruleSetChain
+      if (table === 'contract_rules_v2') return ruleReadChain
       return {}
     })
 
     const response = await POST(request('http://localhost/api/contract-policies/rules', {
       code: 'R100',
       name: '付款节奏',
+      rule_set_id: ruleSetId,
       problem_category_id: problemCategoryId,
       rule_contract: contract(),
     }))
@@ -162,20 +204,21 @@ describe('/api/contract-policies/rules', () => {
 
     expect(response.status).toBe(201)
     expect(body.data.problem_category.code).toBe('payment')
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
-      problem_category_id: problemCategoryId,
-      rule_contract: contract(),
-      category: 'ratio',
-      target_field: 'initial_payment_ratio',
-      clause_category: 'payment',
-      engine_type: 'structured',
-      semantic_prompt: null,
-      lifecycle_status: 'ready_to_publish',
-      translation_status: 'ready',
-    }))
-    expect(snapshotInsert).toHaveBeenCalledWith(expect.objectContaining({
-      rule_id: 'rule-1',
-      status: 'draft',
-    }))
+    expect(mocks.rpc).toHaveBeenCalledWith('save_contract_rule_draft_v1', {
+      p_org_id: 'org-1',
+      p_user_id: 'user-1',
+      p_rule_id: null,
+      p_payload: expect.objectContaining({
+        rule_set_id: ruleSetId,
+        problem_category_id: problemCategoryId,
+        rule_contract: contract(),
+        category: 'ratio',
+        target_field: 'initial_payment_ratio',
+        clause_category: 'payment',
+        engine_type: 'structured',
+        semantic_prompt: null,
+      }),
+    })
+    expect(ruleReadChain.select).toHaveBeenCalledWith(RULE_WITH_PROBLEM_CATEGORY_SELECT)
   })
 })

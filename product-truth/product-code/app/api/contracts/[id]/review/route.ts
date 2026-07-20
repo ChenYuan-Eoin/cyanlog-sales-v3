@@ -17,7 +17,7 @@ import {
   buildReviewRunEvidence,
   type ReviewEvidenceModelInvocation,
   type ReviewEvidenceModelPolicy,
-  type ReviewEvidenceRule,
+  type ReviewEvidenceRuleSetSnapshot,
   type ReviewEvidenceSkillBundle,
   type ReviewEvidenceSnapshot,
 } from '@/lib/contracts/review-evidence'
@@ -153,10 +153,10 @@ const reviewConclusionSchema = z.object({
   }
 })
 
-function uniqueStrings(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.filter((value): value is string => (
-    typeof value === 'string' && value.trim().length > 0
-  ))))
+function nonEmptyStrings(values: string[] | null | undefined): string[] | null {
+  if (!Array.isArray(values)) return null
+  const normalized = values.filter((value) => typeof value === 'string' && value.trim().length > 0)
+  return normalized.length > 0 ? normalized : null
 }
 
 function contractFileAccessUrl(contractId: string, storagePath: string | null | undefined) {
@@ -313,7 +313,6 @@ export async function GET(
       latestJob,
       currentVersion,
       risks: orderedRiskCards,
-      rules: [],
       snapshots: [],
       skillBundle: null,
       modelPolicy: null,
@@ -321,109 +320,56 @@ export async function GET(
     })
 
     if (!summaryOnly) {
-      const riskRuleIds = uniqueStrings(orderedRiskCards.map((card) => card.rule_id))
-      const riskRuleCodes = uniqueStrings(orderedRiskCards.map((card) => card.rule_code))
-
-      const ruleQueries: Array<PromiseLike<{
-        data: ReviewEvidenceRule[] | null
-        error: { message?: string } | null
-      }>> = []
-
-      if (riskRuleIds.length > 0) {
-        ruleQueries.push(
-          supabaseAdmin
-            .from('contract_rules_v2')
-            .select('id, code, version, is_active, lifecycle_status, translation_status, engine_type, target_field, clause_category, published_at, updated_at')
-            .eq('org_id', orgId)
-            .in('id', riskRuleIds)
-        )
-      }
-
-      if (riskRuleCodes.length > 0) {
-        ruleQueries.push(
-          supabaseAdmin
-            .from('contract_rules_v2')
-            .select('id, code, version, is_active, lifecycle_status, translation_status, engine_type, target_field, clause_category, published_at, updated_at')
-            .eq('org_id', orgId)
-            .in('code', riskRuleCodes)
-        )
-      }
-
-      if (ruleQueries.length === 0 && latestReview) {
-        ruleQueries.push(
-          supabaseAdmin
-            .from('contract_rules_v2')
-            .select('id, code, version, is_active, lifecycle_status, translation_status, engine_type, target_field, clause_category, published_at, updated_at')
-            .eq('org_id', orgId)
-            .eq('is_active', true)
-            .eq('lifecycle_status', 'published')
-            .eq('translation_status', 'ready')
-            .not('published_at', 'is', null)
-            .order('code', { ascending: true })
-        )
-      }
-
-      const ruleResults = await Promise.all(ruleQueries)
-      const ruleError = ruleResults.find((result) => result.error)?.error
-      if (ruleError) {
-        return errorResponse(createApiError('DB_ERROR', '获取规则快照规则失败'))
-      }
-
-      const ruleRows = Array.from(
-        new Map(
-          ruleResults
-            .flatMap((result) => result.data || [])
-            .map((rule) => [rule.id, rule] as const)
-        ).values()
-      )
-
-      let snapshotRows: ReviewEvidenceSnapshot[] = []
-      if (ruleRows.length > 0) {
-        const { data: snapshots, error: snapshotError } = await supabaseAdmin
-          .from('contract_rule_snapshots')
-          .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
-          .in('rule_id', ruleRows.map((rule) => rule.id))
-          .eq('status', 'published')
-          .order('released_at', { ascending: false })
-
-        if (snapshotError) {
-          return errorResponse(createApiError('DB_ERROR', '获取规则快照失败'))
-        }
-
-        snapshotRows = (snapshots || []) as ReviewEvidenceSnapshot[]
-      }
-
-      const boundSnapshotIds = latestReview?.rule_snapshot_ids || []
-      if (boundSnapshotIds.length > 0) {
-        const { data: boundSnapshots, error: boundSnapshotError } = await supabaseAdmin
-          .from('contract_rule_snapshots')
-          .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
-          .in('id', boundSnapshotIds)
-
-        if (boundSnapshotError) {
-          return errorResponse(createApiError('DB_ERROR', '获取绑定规则快照失败'))
-        }
-
-        snapshotRows = Array.from(
-          new Map(
-            [...snapshotRows, ...((boundSnapshots || []) as ReviewEvidenceSnapshot[])]
-              .map((snapshot) => [snapshot.id, snapshot] as const)
-          ).values()
-        )
-      }
-
       let skillBundle: ReviewEvidenceSkillBundle = null
       if (latestReview?.skill_bundle_id) {
         const { data, error } = await supabaseAdmin
           .from('contract_skill_bundles')
           .select('id, version, rule_snapshot_ids, rule_set_snapshot_ids, template_snapshot_ids, document_snapshot_ids, model_policy_id, output_schema, eval_case_ids, release_meta, compiled_from, compiled_hash, status, published_at')
           .eq('id', latestReview.skill_bundle_id)
+          .eq('org_id', orgId)
           .maybeSingle()
 
         if (error) {
           return errorResponse(createApiError('DB_ERROR', '获取 SkillBundle 失败'))
         }
         skillBundle = data as ReviewEvidenceSkillBundle
+      }
+
+      // Historical evidence is resolved only from ids persisted by this ReviewRun.
+      // Empty database arrays mean "not bound", so the immutable compiled bundle
+      // is the only permitted fallback. Never scan today's rules or latest snapshots.
+      const boundSnapshotIds = nonEmptyStrings(latestReview?.rule_snapshot_ids)
+        || nonEmptyStrings(skillBundle?.rule_snapshot_ids)
+        || []
+      const boundRuleSetSnapshotIds = nonEmptyStrings(latestReview?.rule_set_snapshot_ids)
+        || nonEmptyStrings(skillBundle?.rule_set_snapshot_ids)
+        || []
+
+      let snapshotRows: ReviewEvidenceSnapshot[] = []
+      if (boundSnapshotIds.length > 0) {
+        const { data, error } = await supabaseAdmin
+          .from('contract_rule_snapshots')
+          .select('id, rule_id, version, status, released_at, created_at, config_snapshot')
+          .in('id', boundSnapshotIds)
+          .eq('config_snapshot->>org_id', orgId)
+
+        if (error) {
+          return errorResponse(createApiError('DB_ERROR', '获取绑定规则快照失败'))
+        }
+        snapshotRows = (data || []) as ReviewEvidenceSnapshot[]
+      }
+
+      let ruleSetSnapshotRows: ReviewEvidenceRuleSetSnapshot[] = []
+      if (boundRuleSetSnapshotIds.length > 0) {
+        const { data, error } = await supabaseAdmin
+          .from('contract_rule_set_snapshots')
+          .select('id, org_id, rule_set_id, status, rule_snapshot_ids')
+          .in('id', boundRuleSetSnapshotIds)
+
+        if (error) {
+          return errorResponse(createApiError('DB_ERROR', '获取绑定规则集快照失败'))
+        }
+        ruleSetSnapshotRows = (data || []) as ReviewEvidenceRuleSetSnapshot[]
       }
 
       let modelPolicy: ReviewEvidenceModelPolicy = null
@@ -472,8 +418,9 @@ export async function GET(
         latestJob,
         currentVersion,
         risks: orderedRiskCards,
-        rules: ruleRows,
         snapshots: snapshotRows,
+        ruleSetSnapshots: ruleSetSnapshotRows,
+        expectedOrgId: orgId,
         skillBundle,
         modelPolicy,
         modelInvocations,

@@ -19,6 +19,7 @@ import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowser
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import { groupAIConfigs } from '@/lib/configs/ai-config-kind'
+import { isResolvedRuleContractComplete } from '@/lib/rules/rule-contract'
 import TabsContent from './tabs/TabsContent'
 import { confirmAction } from '@/lib/toast'
 import {
@@ -842,7 +843,7 @@ export default function ConfigsClient({
         return [
           { label: '规则总数', value: countValue(rules.length) },
           { label: '启用规则', value: countValue(rules.filter((rule) => rule.is_active).length) },
-          { label: '结构完整', value: countValue(rules.filter((rule) => Boolean(rule.rule_contract?.properties?.length && rule.rule_contract?.decisions?.length)).length) },
+          { label: '结构完整', value: countValue(rules.filter(isResolvedRuleContractComplete).length) },
         ]
       case 'tax': {
         const taxConfigs = getConfigsByType('TAX_RULE')

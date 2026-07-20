@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { generateTextWithFailover, reviewWithFailover } from './failover'
+import { generateTextWithFailover, reviewWithFailover, reviewWithFailoverSync } from './failover'
 import type { PublishedAIProviderConfig } from '@/lib/configs/runtime'
 
 const mocks = vi.hoisted(() => ({
@@ -215,5 +215,110 @@ describe('reviewWithFailover local provider transport order', () => {
     expect(result.transport).toBe('lm_studio_cli')
     expect(result.attemptErrors).toContain('AI_LEVEL_1: local_http_failed: LM Studio HTTP Token 未配置；已尝试本机 CLI 通道')
     expect(mocks.createOpenAI).not.toHaveBeenCalled()
+  })
+
+  it('sends only canonical property definitions to the semantic locator and keeps decisions server-side', async () => {
+    mocks.generateText.mockResolvedValue({ text: '{"risks":[],"summary":"canonical"}' })
+
+    await reviewWithFailover('第一条 合同金额为40000元。', {
+      orgId: 'org-1',
+      preferredProvider: 'AI_LEVEL_1',
+      skillContext: {
+        rules: [{
+          code: 'MIN_AMOUNT',
+          version: 2,
+          target_field: 'legacy_target',
+          field_hints: ['legacy-hint'],
+          execution_protocol: 'rule_contract_v1',
+          rule_contract: {
+            schema_version: '1.0',
+            properties: [{ key: 'contract_amount', label: '合同金额', type: 'money', required: true, currency: 'CNY' }],
+            decisions: [{ id: 'block', label: '低于下限', outcome: 'block', priority: 20, match: 'all', conditions: [{ property_key: 'contract_amount', operator: '<', value: 50000, unit: 'CNY' }] }],
+            missing_evidence_outcome: 'manual_review',
+          },
+        }],
+      },
+    })
+
+    const system = mocks.generateText.mock.calls[0][0].system as string
+    expect(system).toContain('合同金额')
+    expect(system).toContain('"key":"contract_amount"')
+    expect(system).toContain('只是在原文中定位规则范围、读取')
+    expect(system).toContain('"propertyReadings"')
+    expect(system).toContain('canonical 输出是“属性观察”而不是“风险判断”')
+    expect(system).toContain('不得接触或推测判定条件、优先级、outcome、风险级别和处理动作')
+    expect(system).not.toContain('"decisionId"')
+    expect(system).not.toContain('"outcome":"block"')
+    expect(system).not.toContain('"conditions"')
+    expect(system).not.toContain('低于下限')
+    expect(system).not.toContain('legacy_target')
+    expect(system).not.toContain('legacy-hint')
+    const userMessage = mocks.generateText.mock.calls[0][0].messages[0].content as string
+    expect(userMessage).toContain('本次为全文覆盖')
+    expect(userMessage).toContain('不得先判断风险再决定是否返回')
+  })
+
+  it('returns the configured decision result from canonical readings instead of model-authored risk text', async () => {
+    const evidence = '第一条 合同金额为40000元。'
+    mocks.generateText.mockResolvedValue({
+      text: JSON.stringify({
+        risks: [{
+          ruleCode: 'MIN_AMOUNT',
+          decisionId: 'model-guess',
+          propertyReadings: [{
+            propertyKey: 'contract_amount',
+            status: 'read',
+            value: 40000,
+            unit: 'CNY',
+            evidence,
+            confidence: 0.96,
+          }],
+          level: 'green',
+          title: '模型自定结果',
+          description: '模型自定结果',
+          suggestion: '模型自定结果',
+          evidence: ['模型自定结果'],
+        }],
+        summary: '模型定位完成',
+      }),
+    })
+
+    const result = await reviewWithFailoverSync(evidence, {
+      orgId: 'org-1',
+      preferredProvider: 'AI_LEVEL_1',
+      skillContext: {
+        rules: [{
+          code: 'MIN_AMOUNT',
+          version: 2,
+          execution_protocol: 'rule_contract_v1',
+          rule_contract: {
+            schema_version: '1.0',
+            properties: [{ key: 'contract_amount', label: '合同金额', type: 'money', required: true, currency: 'CNY' }],
+            decisions: [{
+              id: 'block',
+              label: '低于金额下限',
+              outcome: 'block',
+              priority: 20,
+              match: 'all',
+              conditions: [{ property_key: 'contract_amount', operator: '<', value: 50000, unit: 'CNY' }],
+              message: '合同金额不足五万元',
+              action: '提交例外审批',
+            }],
+            missing_evidence_outcome: 'manual_review',
+          },
+        }],
+      },
+    }, 0)
+
+    expect(result.risks[0]).toMatchObject({
+      ruleCode: 'MIN_AMOUNT',
+      ruleVersion: 2,
+      decisionId: 'block',
+      level: 'red',
+      title: '低于金额下限',
+      description: '合同金额不足五万元',
+      suggestion: '提交例外审批',
+      evidence: [evidence],
+    })
   })
 })

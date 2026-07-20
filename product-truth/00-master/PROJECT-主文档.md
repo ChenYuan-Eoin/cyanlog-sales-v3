@@ -3349,6 +3349,8 @@ interface CRMIntegration {
 | 客户反馈 | 客户可接受、拒绝、反建议，触发再审核或升级 |
 | 知识库模板 | 模板、条款和案例必须可版本化引用和快照 |
 
+2026-07-20 当前实现边界：F009 只服务合同审核，应用模块固定为 `contract_review`。上表中的多合同类型/场景属于以后扩展，只有消费模块能够传入标准化、可审计的上下文并完成“不适用规则不执行”验收后才能开放；当前界面不得用自由文本场景制造假能力。规则选择业务模块、模型选择应用模块，两者分别由 F009 与 F012 管理。
+
 模型配置的第一阶段口径是“三层模型旅程”，不是环境变量说明页：
 
 - L1 本地模型：优先使用用户本机 LM Studio / OpenAI-compatible 服务，配置项为 `base_url + model + token`。本机服务已加载模型不等于应用 HTTP 可调用；若返回 401，配置中心必须提示保存 LM Studio Developer Token 或明确当前仅可走本机 CLI 通道。
@@ -3389,9 +3391,9 @@ CC Switch 可作为 Provider 配置体验参考，但它管理的是 Codex/Claud
 | `RiskFinding` | 单个风险项，必须有来源、证据、状态、责任人和处理结果 | F005 / F006 |
 | `NegotiationTask` | 销售谈判任务，来自必须谈判的风险项 | F005 |
 | `CustomerFeedback` | 客户对批注或条款的反馈，驱动再审核或升级 | F005 |
-| `RuleUnit` | 单条结构化/语义/混合审核规则 | F009 |
-| `RuleSet` | 规则集合，可按合同类型、金额、客户类型、场景生效 | F009 |
-| `RuleSetDocument` | 规则集的 Markdown/自然语言声明资产，作为高效维护入口，经 AI/人工转译后生成 RuleUnit | F009 / F006 |
+| `RuleUnit` | 单条 canonical 业务规则：属性、判定、处理和缺证据策略 | F009 |
+| `RuleSet` | 规则集合，是版本、测试矩阵和统一发布的原子边界 | F009 |
+| `RuleSetDocument` | 可选参考资料；不是规则配置入口，也不是发布前置条件 | F009 / F006 |
 | `RuleSnapshot` | 已发布规则快照，ReviewRun 使用后不可漂移 | F009 / F006 |
 | `KnowledgeTemplate` | 标准合同模板、条款模板、案例、话术等知识资产 | F005 / F009 / F006 |
 | `TemplateSnapshot` | 审核时引用的模板或条款库快照 | F006 |
@@ -3408,14 +3410,15 @@ CC Switch 可作为 Provider 配置体验参考，但它管理的是 Codex/Claud
 
 ```
 F009 配置中心规则
-  -> 维护 RuleSetDocument / RuleSet / RuleUnit
-  -> AI/人工转译为可执行 RuleUnit
-  -> 发布 RuleSet / RuleSnapshot
-  -> 引用知识库模板、条款库、变体词典、测试用例
+  -> 规则集 → 问题分类 → 具体规则
+  -> 明确配置业务属性 → 判定与处理
+  -> 每条判定、缺证据、多值和币种冲突逐项测试
+  -> 原子发布 RuleSetSnapshot / RuleSnapshot
   -> F006 编译 SkillBundle
   -> F012 注入已发布 ModelPolicy
   -> F005 创建 ReviewRun 并绑定快照
-  -> F006 执行结构化规则、语义规则、模板对比、模型调用
+  -> AI 只定位原文并读取已定义属性
+  -> 服务端校验证据并确定性执行判定与处理
   -> 生成 RiskFinding / ReviewEvidence
   -> F007 生成 CommentPatch / AnnotatedDocument / ReviewReport
   -> F005 推动人工复核、销售谈判、客户反馈、再审核
@@ -3472,11 +3475,11 @@ DETECTED
 | 中栏：主工作区 | 完成当前对象的核心编辑、测试、预览、复核或对比动作 | 把复杂表单平铺成需要反复滚动的页面 |
 | 右栏：闭环与证据 | 串联影响范围、发布状态、运行证据、下一步动作和阻断原因 | 重复展示摘要，或只放无操作价值的统计卡片 |
 
-规则配置页的主对象是 `RuleSet / RuleSetDocument`，不是散点规则表单。规则资产必须可视化维护：左栏是知识库式树状规则集目录，中栏是规则集下的规则列表和状态，右栏是当前规则的结构化详情、约束条件、适用范围、测试结果和转译差异。Markdown/自然语言声明只是规则集的一种高效编辑来源，AI 转译结果必须以 `RuleUnit / SkillUnit / EngineRule` 形式明示出来，支持人工确认、字段级修正、测试和发布；不得把“输入一段文档然后系统黑盒解析”为最终产品形态。
+规则配置页的主对象结构是 `RuleSet → 问题分类 → RuleUnit`，不是散点规则表单，也不是机器字段管理器。左栏展示规则集，第二层按业务问题分类，中栏列出具体规则，右栏依次维护基本信息、业务属性、判定与处理、输出和逐项测试。属性必须由业务人员明确配置；配置阶段不得出现“属性提取”或“AI 转译”。RuleSetDocument 只作可选参考资料，不能覆盖结构化规则或阻断发布。
 
-规则状态必须按运行事实拆开展示：`is_active=true` 只表示规则可维护/未停用，不等于生产发布；进入正式合同审核必须同时满足 `is_active=true`、`lifecycle_status='published'`、`translation_status='ready'`、`published_at` 存在并绑定已发布快照。配置中心、规则统计、SkillBundle 编译、ReviewRun 证据和底层规则引擎必须使用同一口径；未发布、未转译或缺发布时间的规则只能进入设计/测试/沙箱，不能被展示为“可正式审核”。
+规则状态必须按运行事实拆开展示：`is_active=true` 只表示规则可维护/未停用，不等于生产发布；进入正式合同审核必须同时满足 `is_active=true`、`lifecycle_status='published'`、`translation_status='ready'`、`published_at` 存在，并由所属 RuleSet 的唯一 `current_snapshot_id` 指向精确已发布成员。已发布 RuleSnapshot / RuleSetSnapshot 只追加不改写；新发布只能原子写入新快照并切换当前指针。配置中心、规则统计、SkillBundle 编译、ReviewRun 证据和底层规则引擎必须使用同一口径；未发布、未转译或缺少当前快照指针的规则只能进入设计/测试/沙箱，不能被展示为“可正式审核”。
 
-R001-R015 的第一阶段预置规则必须按规则集资产管理，而不是平铺表单。`RuleSetDocument` 是高效维护入口，允许 Markdown/自然语言声明，但正式审核只能消费已经发布并转译 ready 的 `RuleUnit`、`RuleSnapshot`、`RuleSetSnapshot` 和文档快照。R001 `付款节奏` 是复合规则，至少要同时覆盖首付款比例和账期/验收后付款天数；例如 `账期>30工作日` 必须由确定性规则引擎命中，不能完全依赖模型自由判断。
+R001-R015 的历史预置规则必须按规则集资产管理，而不是平铺表单。legacy adapter 只保证旧审核暂时可运行；规则详情经业务人员确认、通过新测试矩阵并随规则集发布后，才成为 canonical 配置。R001 `付款节奏` 是多属性规则，至少覆盖首付款比例和账期；AI 可以识别同义原文，最终阈值、结果和处理动作仍由服务端已发布判定确定。
 
 文档比对不是“上传两个文件”的占位入口。第一阶段必须至少支持 Word/PDF 两类合同版本的可解释比对：明确基准版本和候选版本，展示新增、删除、修改、移动/语义变化，提供差异列表、双栏定位、上一处/下一处导航和导出；比对结果可进入 RiskFinding、NegotiationTask 或客户反馈再审核链路。
 

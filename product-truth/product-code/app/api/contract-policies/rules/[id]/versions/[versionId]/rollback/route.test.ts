@@ -1,64 +1,44 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NextRequest } from 'next/server'
+
+const mocks = vi.hoisted(() => ({ configAccess: vi.fn(), from: vi.fn() }))
 
 vi.mock('@/lib/api/auth-wrapper', () => ({
-  withAuthAndOrg: vi.fn(),
+  withAuthAndOrg: async (_req: unknown, handler: (user: { id: string }, orgId: string) => Promise<Response>) => (
+    handler({ id: 'user-1' }, 'org-1')
+  ),
 }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
+vi.mock('@/lib/configs/access', () => ({ userHasFreshOrgConfigAccess: mocks.configAccess }))
 
-vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: {
-    from: vi.fn(),
-  },
-}))
-
-import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
-import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
-function makeJsonRequest(body: unknown): any {
-  return {
-    json: async () => body,
-    method: 'POST',
-    headers: new Headers({ 'content-type': 'application/json' }),
-  }
+function request() { return {} as NextRequest }
+function params() { return { params: Promise.resolve({ id: 'rule-1', versionId: 'snapshot-1' }) } }
+
+function setupRule() {
+  const chain = { eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({
+    data: { id: 'rule-1', code: 'R001', rule_set_id: 'set-1' }, error: null,
+  }) }
+  mocks.from.mockReturnValue({ select: vi.fn(() => chain) })
 }
 
-function makeMalformedJsonRequest(): any {
-  return {
-    json: async () => {
-      throw new SyntaxError('Unexpected token')
-    },
-    method: 'POST',
-    headers: new Headers({ 'content-type': 'application/json' }),
-  }
-}
+describe('single rule rollback boundary', () => {
+  beforeEach(() => { vi.clearAllMocks(); mocks.configAccess.mockResolvedValue(true) })
 
-describe('POST /api/contract-policies/rules/[id]/versions/[versionId]/rollback validation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+  it('checks fresh publish permission before reading the rule', async () => {
+    mocks.configAccess.mockResolvedValue(false)
+    const response = await POST(request(), params())
+    expect(response.status).toBe(403)
+    expect(mocks.from).not.toHaveBeenCalled()
   })
 
-  it('无效 JSON 返回 400 且不进入鉴权和数据库', async () => {
-    const res = await POST(makeMalformedJsonRequest(), {
-      params: Promise.resolve({ id: 'rule-1', versionId: 'version-1' }),
-    })
-    const body = await res.json()
-
-    expect(res.status).toBe(400)
-    expect(body.error.code).toBe('V001')
-    expect(withAuthAndOrg).not.toHaveBeenCalled()
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
-  })
-
-  it('字段类型错误返回 400 且不进入鉴权和数据库', async () => {
-    const res = await POST(makeJsonRequest({ reason: 123 }), {
-      params: Promise.resolve({ id: 'rule-1', versionId: 'version-1' }),
-    })
-    const body = await res.json()
-
-    expect(res.status).toBe(400)
-    expect(body.error.code).toBe('V001')
-    expect(withAuthAndOrg).not.toHaveBeenCalled()
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  it('rejects an existing rule and requires whole RuleSet recovery', async () => {
+    setupRule()
+    const response = await POST(request(), params())
+    const body = await response.json()
+    expect(response.status).toBe(409)
+    expect(body.error.message).toContain('单条规则回滚已停用')
+    expect(body.error.details).toMatchObject({ rule_set_id: 'set-1', version_id: 'snapshot-1' })
   })
 })

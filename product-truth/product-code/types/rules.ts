@@ -52,6 +52,7 @@ export type ContractRulePropertyType =
 
 export type ContractRuleOutcome = 'pass' | 'negotiate' | 'block' | 'manual_review'
 export type ContractRuleMissingEvidenceOutcome = 'manual_review' | 'block'
+export type ContractRuleTestCaseKind = 'risk' | 'pass' | 'missing_evidence' | 'value_conflict' | 'unit_conflict'
 
 export type ContractRuleConditionOperator =
   | '>='
@@ -176,6 +177,9 @@ export interface ContractPolicyRule {
   version: number
   is_active: boolean
   published_at?: string | null
+  active_published_version?: number | null
+  active_published_snapshot_id?: string | null
+  has_pending_change?: boolean
   created_at: string
   updated_at: string
 }
@@ -232,4 +236,12 @@ export interface ContractRuleSet {
   published_rule_count?: number
   ready_rule_count?: number
   blocked_rule_count?: number
+  pending_rule_count?: number
+  test_evidence_ready_rule_count?: number
+  required_test_case_count?: number
+  passed_test_case_count?: number
+  can_publish?: boolean
+  publish_blockers?: string[]
+  active_rule_versions?: Record<string, number>
+  active_rule_snapshot_ids?: Record<string, string>
 }

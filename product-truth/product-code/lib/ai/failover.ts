@@ -8,6 +8,7 @@ import { executeRules } from '@/lib/rules/engine'
 import { validateAIOutput } from '@/lib/validation/ai-output'
 import { generateWithLmStudioCli, probeLmStudioCliModel } from '@/lib/ai/lm-studio-cli'
 import { normalizeOpenAICompatibleBaseUrl, openAICompatibleModelsUrl } from '@/lib/ai/openai-compatible'
+import type { ContractRuleContract } from '@/types/rules'
 
 export interface ReviewOptions {
   preferredProvider?: string
@@ -22,6 +23,8 @@ export interface ReviewOptions {
       clause_category?: string | null
       target_field?: string | null
       field_hints?: string[] | null
+      execution_protocol?: 'rule_contract_v1' | 'legacy_adapter' | null
+      rule_contract?: ContractRuleContract | null
     }>
   }
 }
@@ -45,6 +48,15 @@ export interface SyncReviewResult {
     ruleId?: string
     ruleCode?: string
     ruleVersion?: number
+    decisionId?: string
+    propertyReadings?: Array<{
+      propertyKey: string
+      status: 'read' | 'missing' | 'ambiguous' | 'unit_conflict'
+      value?: string | number | boolean
+      unit?: string
+      evidence?: string
+      confidence: number
+    }>
     level: 'red' | 'yellow' | 'green'
     title: string
     description: string
@@ -401,9 +413,18 @@ function buildReviewChunks(text: string): ReviewTextChunk[] {
 }
 
 function reviewSignalTerms(skillContext?: ReviewOptions['skillContext']): string[] {
-  const ruleHints = (skillContext?.rules || []).flatMap((rule) => rule.field_hints || [])
+  const ruleTerms = (skillContext?.rules || []).flatMap((rule) => {
+    if (rule.rule_contract) {
+      return rule.rule_contract.properties.flatMap((property) => [
+        property.label,
+        property.description || '',
+        ...(property.options || []).flatMap((option) => [option.label, option.value]),
+      ])
+    }
+    return rule.field_hints || []
+  })
   return Array.from(new Set([
-    ...ruleHints,
+    ...ruleTerms,
     '付款',
     '退款',
     '验收',
@@ -606,6 +627,19 @@ function buildSkillBoundPrompt(provider: AIProvider, skillContext?: ReviewOption
   const rules = (skillContext?.rules || [])
     .filter((rule) => rule.code)
     .map((rule) => {
+      if (rule.rule_contract) {
+        const properties = rule.rule_contract.properties.map((property) => ({
+          key: property.key,
+          label: property.label,
+          type: property.type,
+          required: property.required,
+          unit: property.unit || property.currency || null,
+          options: property.options || [],
+        }))
+        return `${rule.code}@v${rule.version ?? 'x'} canonical=${JSON.stringify({
+          properties,
+        })}`
+      }
       const hints = Array.isArray(rule.field_hints) && rule.field_hints.length > 0
         ? ` hints=${rule.field_hints.join('/')}`
         : ''
@@ -615,29 +649,37 @@ function buildSkillBoundPrompt(provider: AIProvider, skillContext?: ReviewOption
 
   return [
     base,
-    '只能依据配置中心已发布规则、SkillBundle、模型策略和合同原文判断，不得编造未在原文中出现的数字、日期、主体或条款。',
-    '只输出高置信风险，最多 5 项；如果风险不能同时绑定规则和原文证据，就不要输出该风险。',
-    '每条 evidence 必须是合同原文的连续片段，不能摘要、不能跨条款拼接，并且必须包含所选规则的一项 hints。',
+    '只能依据配置中心已发布 rule_contract、SkillBundle、模型策略和合同原文判断，不得编造未定义的属性、规则、数字、日期、主体或条款。',
+    '你的职责只是在原文中定位规则范围、读取 rule_contract 已定义属性；不得接触或推测判定条件、优先级、outcome、风险级别和处理动作，也不能扩写或模糊化配置规则。',
+    'canonical 规则的每个已定义属性都必须输出一条 propertyReadings：propertyKey、status、与类型一致的 value、明确 unit、原文 evidence 和 0-1 confidence。status 不是 read 时不得填写 value；missing 可省略 evidence，ambiguous/unit_conflict 必须引用冲突原文。',
+    'canonical 输出是“属性观察”而不是“风险判断”：不得因为读取值看起来合规就省略该规则，也不要输出 decisionId；服务端会独立执行已发布判定并生成最终结果。',
+    'legacy_adapter 才输出高置信风险，最多 5 项；如果 legacy 风险不能同时绑定规则和原文证据，就不要输出该风险。',
+    '每条 evidence 必须是合同原文的连续片段，不能摘要、不能跨条款拼接，并且必须足以读取所选 canonical 规则的一项已定义属性；legacy_adapter 规则才使用 hints。',
     '规则编码和版本必须来自可用规则快照，例如 R001@v3 代表 ruleCode=R001、ruleVersion=3。',
-    '不要为了覆盖所有规则而枚举风险；只输出确实命中的风险。无法正式命中时返回 {"risks":[],"summary":"未发现可定位风险"}。',
+    'canonical 按属性观察要求返回，不做风险筛选；legacy_adapter 不要为了覆盖而枚举风险，只返回确实命中的高置信风险。两类都没有可返回项时使用 {"risks":[],"summary":"未发现可定位内容"}。',
     '输出必须是 JSON 对象，不要 Markdown，不要解释性前后缀。',
     'JSON schema:',
     '{',
     '  "risks": [',
     '    {',
-    '      "ruleCode": "R001-R015 中的规则编码",',
+    '      "ruleCode": "当前可用规则快照中的规则编码",',
     '      "ruleVersion": 1,',
-    '      "level": "red|yellow|green",',
-    '      "title": "风险标题",',
-    '      "description": "问题描述，必须对应规则和证据",',
-    '      "suggestion": "销售谈判或合同修改建议",',
-    '      "counterparty": "可选，对价或谈判口径",',
-    '      "evidence": ["合同原文中的连续片段，禁止摘要或改写"]',
+    '      "propertyReadings": [',
+    '        {',
+    '          "propertyKey": "rule_contract 中已有的属性 key",',
+    '          "status": "read|missing|ambiguous|unit_conflict",',
+    '          "value": "与属性类型一致的值；非 read 时省略",',
+    '          "unit": "金额为币种、比例为 percent、时限为 day|month|year；无单位类型省略",',
+    '          "evidence": "合同原文中的连续片段，禁止摘要或改写",',
+    '          "confidence": 0.95',
+    '        }',
+    '      ]',
     '    }',
     '  ],',
     '  "summary": "总体评估"',
     '}',
-    '二次校验要求：每个风险必须有规则编码、原文证据、风险说明、建议动作；证据不能只是产品名、公司名、单个数字或通用词。',
+    'legacy_adapter 规则仍按旧格式输出 level/title/description/suggestion/evidence；canonical 规则不要自行输出这些结果字段，服务端只信任已发布 decision。',
+    '二次校验要求：每条 reading 的证据必须是连续原文且能绑定已定义属性；证据不能只是产品名、公司名、单个数字或通用词。',
     rules ? `可用规则快照:\n${rules}` : '可用规则快照：缺失，必须返回空 risks 并说明 skill 未绑定。',
     skillContext?.source ? `规则源与参考资产: ${JSON.stringify(skillContext.source).slice(0, 1200)}` : '',
   ].filter(Boolean).join('\n')
@@ -658,6 +700,9 @@ async function callOpenAICompatibleProvider(
     '请审核以下合同。',
     '如果合同被分成多个片段，片段均来自同一份原文；风险证据必须逐字引用片段中的原文连续内容。',
     `输入覆盖率：${Math.round(preparedInput.stats.character_coverage_ratio * 100)}%，选择策略：${preparedInput.stats.selection_strategy}。`,
+    preparedInput.stats.coverage_limited
+      ? '本次不是全文覆盖：canonical 规则仅在片段中找到至少一项属性证据时返回，并补齐该规则全部属性；不得把片段未出现误报为全文 missing。'
+      : '本次为全文覆盖：每条 canonical 规则都返回一项属性观察，并为该规则的全部已定义属性给出 read、missing、ambiguous 或 unit_conflict；不得先判断风险再决定是否返回。',
     '',
     preparedInput.text,
   ].join('\n')

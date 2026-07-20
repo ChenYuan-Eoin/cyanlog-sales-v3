@@ -8,9 +8,17 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  allowedConditionOperators,
+  reconcileConditionForProperty,
+  reconcileRuleContractForEditing,
+  ruleContractMatrixIssues,
+} from '@/app/api/contract-policies/rules/rule-contract'
+import {
   createDefaultRuleContract,
+  normalizeDurationUnit,
   normalizeRuleContract,
   resolveRuleContract,
+  ruleContractConfigurationStatus,
 } from '@/lib/rules/rule-contract'
 import type {
   ContractPolicyRule,
@@ -33,6 +41,7 @@ interface RuleDesignerProps {
     ruleSetId?: string | null
     ruleSetLabel?: string
     problemCategory?: ContractProblemCategory | null
+    activePublishedVersion?: number
   }
   saving?: boolean
   onSave: (rule: RuleDraft) => void | Promise<void>
@@ -77,10 +86,6 @@ const tabOptions: Array<{ value: EditorTab; label: string }> = [
   { value: 'validation', label: '测试' },
 ]
 
-function toCsv(value: string[] | null | undefined) {
-  return Array.isArray(value) ? value.join('，') : ''
-}
-
 function fromCsv(value: string) {
   return value
     .split(/[,，]/)
@@ -105,6 +110,43 @@ function createProperty(existing: ContractRuleProperty[]): ContractRuleProperty 
   }
 }
 
+function defaultCondition(property: ContractRuleProperty): ContractRuleCondition {
+  return reconcileConditionForProperty({
+    property_key: property.key,
+    operator: '=',
+    value: property.type === 'boolean'
+      ? true
+      : property.type === 'enum'
+        ? property.options?.[0]?.value || ''
+        : '',
+  }, property)
+}
+
+function reconcileEnumOptions(
+  existing: ContractRuleProperty['options'],
+  labels: string[]
+): NonNullable<ContractRuleProperty['options']> {
+  const available = [...(existing || [])]
+  const used = new Set<string>()
+  let nextNumber = 1
+  return labels.map((label, index) => {
+    const sameLabel = available.find((option) => option.label === label && !used.has(option.value))
+    const samePosition = available[index] && !used.has(available[index].value) ? available[index] : undefined
+    const retained = sameLabel || samePosition
+    if (retained) {
+      used.add(retained.value)
+      return { value: retained.value, label }
+    }
+    while (used.has(`option_${nextNumber}`) || available.some((option) => option.value === `option_${nextNumber}`)) {
+      nextNumber += 1
+    }
+    const value = `option_${nextNumber}`
+    used.add(value)
+    nextNumber += 1
+    return { value, label }
+  })
+}
+
 function createDecision(properties: ContractRuleProperty[], existing: ContractRuleDecision[]): ContractRuleDecision {
   const firstProperty = properties[0]
   return {
@@ -114,7 +156,7 @@ function createDecision(properties: ContractRuleProperty[], existing: ContractRu
     priority: Math.max(100, ...existing.map((item) => item.priority + 10)),
     match: 'all',
     conditions: firstProperty
-      ? [{ property_key: firstProperty.key, operator: '=', value: '' }]
+      ? [defaultCondition(firstProperty)]
       : [],
     action: '',
     message: '',
@@ -141,13 +183,17 @@ function valueForInput(value: ContractRuleCondition['value']) {
   return value === undefined ? '' : String(value)
 }
 
-function parseConditionValue(value: string, property?: ContractRuleProperty): ContractRuleCondition['value'] {
+function parseConditionValue(
+  value: string,
+  property: ContractRuleProperty | undefined,
+  operator: ContractRuleConditionOperator
+): ContractRuleCondition['value'] {
+  if (operator === 'in') return fromCsv(value)
   if (property?.type === 'number' || property?.type === 'money' || property?.type === 'percentage' || property?.type === 'duration') {
     const numeric = Number(value)
     return value.trim() && Number.isFinite(numeric) ? numeric : value
   }
   if (property?.type === 'boolean') return value === 'true'
-  if (property?.type === 'enum' && value.includes('，')) return fromCsv(value)
   return value
 }
 
@@ -155,6 +201,7 @@ function validationMessages(draft: RuleDraft, contract: ContractRuleContract) {
   const messages: string[] = []
   if (!draft.code?.trim()) messages.push('填写规则编码')
   if (!draft.name?.trim()) messages.push('填写规则名称')
+  if (!draft.rule_set_id) messages.push('选择规则集')
   if (!draft.problem_category_id) messages.push('选择问题分类')
   if (contract.properties.length === 0) messages.push('至少添加一个属性')
   if (contract.properties.some((property) => !property.label.trim())) messages.push('补齐属性名称')
@@ -163,6 +210,11 @@ function validationMessages(draft: RuleDraft, contract: ContractRuleContract) {
   if (contract.decisions.length === 0) messages.push('至少添加一条判定')
   if (contract.decisions.some((decision) => !decision.label.trim())) messages.push('补齐判定名称')
   if (contract.decisions.some((decision) => decision.conditions.length === 0)) messages.push('每条判定至少需要一个条件')
+  if (!contract.decisions.some((decision) => decision.outcome !== 'pass')) messages.push('至少添加一条风险判定')
+  if (contract.decisions.some((decision) => (
+    decision.outcome !== 'pass' && (!decision.action?.trim() || !decision.message?.trim())
+  ))) messages.push('为风险判定补齐处理动作和用户说明')
+  messages.push(...ruleContractMatrixIssues(contract).map((issue) => issue.message))
   if (!normalizeRuleContract(contract)) messages.push('检查属性与判定之间的引用关系')
   return Array.from(new Set(messages))
 }
@@ -171,14 +223,12 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
   const [activeTab, setActiveTab] = useState<EditorTab>('definition')
   const [draft, setDraft] = useState<RuleDraft>({})
   const [contract, setContract] = useState<ContractRuleContract>(() => createDefaultRuleContract())
-  const [scenarios, setScenarios] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
 
   useEffect(() => {
     if (initialRule) {
       setDraft({ ...initialRule })
-      setContract(cloneContract(resolveRuleContract(initialRule)))
-      setScenarios(toCsv(initialRule.applicable_scenarios))
+      setContract(reconcileRuleContractForEditing(resolveRuleContract(initialRule)))
     } else {
       setDraft({
         code: '',
@@ -188,31 +238,44 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
         rule_set_id: context?.ruleSetId || null,
         problem_category_id: context?.problemCategory?.id || null,
         problem_category: context?.problemCategory || null,
-        applicable_scenarios: ['标准合同审核'],
+        applicable_scenarios: ['contract_review'],
         scope: 'org',
         priority: 100,
         is_active: true,
       })
       setContract(createDefaultRuleContract())
-      setScenarios('标准合同审核')
     }
     setFeedback(null)
     setActiveTab('definition')
   }, [context?.problemCategory, context?.ruleSetId, initialRule])
 
   const validation = useMemo(() => validationMessages(draft, contract), [contract, draft])
+  const initialConfigurationStatus = initialRule ? ruleContractConfigurationStatus(initialRule) : 'canonical_complete'
 
   function updateDraft<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
   }
 
   function updateProperty(index: number, patch: Partial<ContractRuleProperty>) {
-    setContract((current) => ({
-      ...current,
-      properties: current.properties.map((property, propertyIndex) => (
-        propertyIndex === index ? { ...property, ...patch } : property
-      )),
-    }))
+    setContract((current) => {
+      const currentProperty = current.properties[index]
+      if (!currentProperty) return current
+      const nextProperty = { ...currentProperty, ...patch }
+      return {
+        ...current,
+        properties: current.properties.map((property, propertyIndex) => (
+          propertyIndex === index ? nextProperty : property
+        )),
+        decisions: current.decisions.map((decision) => ({
+          ...decision,
+          conditions: decision.conditions.map((condition) => (
+            condition.property_key === nextProperty.key
+              ? reconcileConditionForProperty(condition, nextProperty)
+              : condition
+          )),
+        })),
+      }
+    })
   }
 
   function removeProperty(index: number) {
@@ -263,7 +326,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
     }
     const decision = contract.decisions[decisionIndex]
     updateDecision(decisionIndex, {
-      conditions: [...decision.conditions, { property_key: property.key, operator: '=', value: '' }],
+      conditions: [...decision.conditions, defaultCondition(property)],
     })
   }
 
@@ -289,7 +352,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
       rule_set_id: draft.rule_set_id || context?.ruleSetId || null,
       problem_category_id: draft.problem_category_id || context?.problemCategory?.id || null,
       problem_category: draft.problem_category || context?.problemCategory || null,
-      applicable_scenarios: fromCsv(scenarios),
+      applicable_scenarios: ['contract_review'],
       scope: draft.scope || 'org',
       approval_roles: draft.approval_roles || [],
       priority: Number(draft.priority ?? 100),
@@ -309,9 +372,23 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
         </div>
         <div className="flex items-center gap-2 text-xs">
           <span className={`rounded-full px-2.5 py-1 font-medium ${
-            draft.is_active === false ? 'bg-slate-200 text-slate-600' : 'bg-emerald-100 text-emerald-700'
+            draft.is_active === false && context?.activePublishedVersion
+              ? 'bg-amber-100 text-amber-800'
+              : draft.is_active === false
+                ? 'bg-slate-200 text-slate-600'
+                : context?.activePublishedVersion === draft.version
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-blue-50 text-blue-700'
           }`}>
-            {draft.is_active === false ? '已停用' : '草稿启用'}
+            {draft.is_active === false && context?.activePublishedVersion
+              ? `线上 v${context?.activePublishedVersion} · 待停用`
+              : draft.is_active === false
+                ? '待停用'
+                : context?.activePublishedVersion === draft.version
+                  ? `线上 v${context?.activePublishedVersion}`
+                  : context?.activePublishedVersion
+                    ? `线上 v${context?.activePublishedVersion} · 草稿 v${draft.version} 待发布`
+                    : `草稿 v${draft.version || 1} · 尚未上线`}
           </span>
           <span className="rounded-full bg-white px-2.5 py-1 text-slate-600 ring-1 ring-slate-200">
             {contract.properties.length} 个属性 · {contract.decisions.length} 条判定
@@ -323,6 +400,12 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
         <div role="alert" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
           <AlertCircleIcon className="mt-1 h-4 w-4 shrink-0" />
           <span>{feedback}</span>
+        </div>
+      ) : null}
+
+      {initialConfigurationStatus === 'legacy_compatible' ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-900">
+          这是一条旧规则。系统仍可按旧协议兼容运行，但这里展示的是迁移草稿；请逐项确认属性、判定和处理后保存，再完成测试矩阵并随规则集发布。
         </div>
       ) : null}
 
@@ -369,13 +452,10 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                 />
               </Field>
             </div>
-            <Field label="适用场景" htmlFor="rule-scenarios" hint="多个场景用逗号分隔">
-              <Input
-                id="rule-scenarios"
-                value={scenarios}
-                onChange={(event) => setScenarios(event.target.value)}
-                placeholder="标准合同审核，重点项目"
-              />
+            <Field label="应用模块" htmlFor="rule-business-module" hint="由业务模块选择规则资产，不在单条规则里自由填写">
+              <div id="rule-business-module" className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                合同审核（当前产品固定）
+              </div>
             </Field>
             <Field label="优先级" htmlFor="rule-priority" hint="数字越大越先判断">
               <Input
@@ -407,8 +487,8 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
           <section className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">这条规则需要读取哪些业务属性</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">属性直接属于当前规则。一条规则可以同时使用金额、比例、时限等多个属性。</p>
+                <h3 className="text-sm font-semibold text-slate-950">这条规则包含哪些业务属性</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">属性直接属于当前规则，是金额、比例、时限等判定条件的明确依据。</p>
               </div>
               <Button
                 type="button"
@@ -452,6 +532,13 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                             updateProperty(index, {
                               type,
                               currency: type === 'money' ? property.currency || 'CNY' : undefined,
+                              unit: type === 'duration'
+                                ? normalizeDurationUnit(property.unit) || 'day'
+                                : type === 'percentage'
+                                  ? 'percent'
+                                  : type === 'number'
+                                    ? property.unit
+                                    : undefined,
                               options: type === 'enum' ? property.options || [] : undefined,
                             })
                           }}
@@ -485,13 +572,31 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                           </select>
                         </Field>
                       ) : null}
-                      {['duration', 'number', 'percentage'].includes(property.type) ? (
+                      {property.type === 'duration' ? (
+                        <Field label="单位" htmlFor={`property-unit-${index}`}>
+                          <select
+                            id={`property-unit-${index}`}
+                            value={normalizeDurationUnit(property.unit) || ''}
+                            onChange={(event) => updateProperty(index, { unit: event.target.value })}
+                            className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                          >
+                            <option value="" disabled>请选择单位</option>
+                            <option value="day">天</option>
+                            <option value="month">月</option>
+                            <option value="year">年</option>
+                          </select>
+                        </Field>
+                      ) : property.type === 'percentage' ? (
+                        <Field label="单位" htmlFor={`property-unit-${index}`}>
+                          <Input id={`property-unit-${index}`} value="%" disabled />
+                        </Field>
+                      ) : property.type === 'number' ? (
                         <Field label="单位" htmlFor={`property-unit-${index}`}>
                           <Input
                             id={`property-unit-${index}`}
-                            value={property.unit || (property.type === 'duration' ? '天' : property.type === 'percentage' ? '%' : '')}
-                            onChange={(event) => updateProperty(index, { unit: event.target.value })}
-                            placeholder="如：天、%、份"
+                            value={property.unit || ''}
+                            onChange={(event) => updateProperty(index, { unit: event.target.value.trim() || undefined })}
+                            placeholder="如：份、次"
                           />
                         </Field>
                       ) : null}
@@ -502,7 +607,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                               id={`property-options-${index}`}
                               value={property.options?.map((option) => option.label).join('，') || ''}
                               onChange={(event) => updateProperty(index, {
-                                options: fromCsv(event.target.value).map((label, optionIndex) => ({ value: `option_${optionIndex + 1}`, label })),
+                                options: reconcileEnumOptions(property.options, fromCsv(event.target.value)),
                               })}
                               placeholder="如：预付款，分期付款，验收后付款"
                             />
@@ -614,13 +719,19 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                       {decision.conditions.map((condition, conditionIndex) => {
                         const property = contract.properties.find((item) => item.key === condition.property_key)
                         const noValue = condition.operator === 'exists' || condition.operator === 'not_exists'
+                        const availableOperators = property
+                          ? allowedConditionOperators(property.type)
+                          : operatorOptions.map((option) => option.value)
                         return (
                           <div key={`${decision.id}-${conditionIndex}`} className="grid gap-2 lg:grid-cols-[1fr_150px_1fr_40px] lg:items-end">
                             <Field label={conditionIndex === 0 ? '属性' : `属性 ${conditionIndex + 1}`} htmlFor={`condition-property-${decisionIndex}-${conditionIndex}`}>
                               <select
                                 id={`condition-property-${decisionIndex}-${conditionIndex}`}
                                 value={condition.property_key}
-                                onChange={(event) => updateCondition(decisionIndex, conditionIndex, { property_key: event.target.value })}
+                                onChange={(event) => {
+                                  const nextProperty = contract.properties.find((item) => item.key === event.target.value)
+                                  if (nextProperty) updateCondition(decisionIndex, conditionIndex, defaultCondition(nextProperty))
+                                }}
                                 className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                               >
                                 {contract.properties.map((item) => <option key={item.key} value={item.key}>{item.label || `属性 ${item.key}`}</option>)}
@@ -630,10 +741,22 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                               <select
                                 id={`condition-operator-${decisionIndex}-${conditionIndex}`}
                                 value={condition.operator}
-                                onChange={(event) => updateCondition(decisionIndex, conditionIndex, { operator: event.target.value as ContractRuleConditionOperator })}
+                                onChange={(event) => {
+                                  if (!property) return
+                                  updateCondition(
+                                    decisionIndex,
+                                    conditionIndex,
+                                    reconcileConditionForProperty({
+                                      ...condition,
+                                      operator: event.target.value as ContractRuleConditionOperator,
+                                    }, property)
+                                  )
+                                }}
                                 className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                               >
-                                {operatorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                {operatorOptions
+                                  .filter((option) => availableOperators.includes(option.value))
+                                  .map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                               </select>
                             </Field>
                             <Field label="比较值" htmlFor={`condition-value-${decisionIndex}-${conditionIndex}`}>
@@ -648,12 +771,50 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                                   <option value="true">是</option>
                                   <option value="false">否</option>
                                 </select>
+                              ) : property?.type === 'enum' ? (
+                                condition.operator === 'in' ? (
+                                  <select
+                                    id={`condition-value-${decisionIndex}-${conditionIndex}`}
+                                    multiple
+                                    disabled={noValue}
+                                    value={Array.isArray(condition.value) ? condition.value.map(String) : []}
+                                    onChange={(event) => updateCondition(decisionIndex, conditionIndex, {
+                                      value: Array.from(event.target.selectedOptions, (option) => option.value),
+                                    })}
+                                    className="min-h-24 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
+                                  >
+                                    {(property.options || []).map((option) => (
+                                      <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <select
+                                    id={`condition-value-${decisionIndex}-${conditionIndex}`}
+                                    disabled={noValue}
+                                    value={noValue ? '' : valueForInput(condition.value)}
+                                    onChange={(event) => updateCondition(decisionIndex, conditionIndex, { value: event.target.value })}
+                                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100"
+                                  >
+                                    <option value="">请选择</option>
+                                    {(property.options || []).map((option) => (
+                                      <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                  </select>
+                                )
                               ) : (
                                 <Input
                                   id={`condition-value-${decisionIndex}-${conditionIndex}`}
+                                  type={property?.type === 'date'
+                                    ? 'date'
+                                    : property && ['money', 'percentage', 'duration', 'number'].includes(property.type)
+                                      ? 'number'
+                                      : 'text'}
+                                  step={property && ['money', 'percentage', 'duration', 'number'].includes(property.type) ? 'any' : undefined}
                                   disabled={noValue}
                                   value={noValue ? '' : valueForInput(condition.value)}
-                                  onChange={(event) => updateCondition(decisionIndex, conditionIndex, { value: parseConditionValue(event.target.value, property) })}
+                                  onChange={(event) => updateCondition(decisionIndex, conditionIndex, {
+                                    value: parseConditionValue(event.target.value, property, condition.operator),
+                                  })}
                                   placeholder={noValue ? '无需填写' : property?.unit || property?.currency || '填写比较值'}
                                 />
                               )}
