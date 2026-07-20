@@ -1,4 +1,21 @@
-export type AIConfigKind = 'provider' | 'application' | 'tool_policy'
+import type { AIConfigKind, AIPlatformAssetKind } from './types'
+
+export type { AIConfigKind, AIPlatformAssetKind } from './types'
+
+export const AI_PLATFORM_ASSET_KINDS: AIPlatformAssetKind[] = [
+  'provider_connection',
+  'model_catalog_entry',
+  'ai_application',
+  'business_use_point',
+  'application_binding',
+  'route_policy',
+]
+
+const LEGACY_AI_CONFIG_KINDS: AIConfigKind[] = ['provider', 'application', 'tool_policy']
+
+export function isAIPlatformAssetKind(value: unknown): value is AIPlatformAssetKind {
+  return typeof value === 'string' && AI_PLATFORM_ASSET_KINDS.includes(value as AIPlatformAssetKind)
+}
 
 type AIConfigLike = {
   value: Record<string, unknown> | null | undefined
@@ -7,8 +24,11 @@ type AIConfigLike = {
 export function getAIConfigKind(
   value: Record<string, unknown> | null | undefined,
 ): AIConfigKind | null {
-  if (value?.kind === 'provider' || value?.kind === 'application' || value?.kind === 'tool_policy') {
+  if (isAIPlatformAssetKind(value?.kind)) {
     return value.kind
+  }
+  if (typeof value?.kind === 'string' && LEGACY_AI_CONFIG_KINDS.includes(value.kind as AIConfigKind)) {
+    return value.kind as AIConfigKind
   }
   if (value?.kind !== undefined && value?.kind !== null && value?.kind !== '') {
     return null
@@ -25,18 +45,46 @@ export function getAIConfigKind(
 }
 
 export function groupAIConfigs<T extends AIConfigLike>(configs: T[]) {
-  const providers: T[] = []
-  const applications: T[] = []
-  const toolPolicies: T[] = []
+  const providerConnections: T[] = []
+  const modelCatalogEntries: T[] = []
+  const aiApplications: T[] = []
+  const businessUsePoints: T[] = []
+  const applicationBindings: T[] = []
+  const routePolicies: T[] = []
+  const legacyProviders: T[] = []
+  const legacyApplications: T[] = []
+  const legacyToolPolicies: T[] = []
   const unclassified: T[] = []
 
   for (const config of configs) {
     const kind = getAIConfigKind(config.value)
-    if (kind === 'provider') providers.push(config)
-    else if (kind === 'application') applications.push(config)
-    else if (kind === 'tool_policy') toolPolicies.push(config)
+    if (kind === 'provider_connection') providerConnections.push(config)
+    else if (kind === 'model_catalog_entry') modelCatalogEntries.push(config)
+    else if (kind === 'ai_application') aiApplications.push(config)
+    else if (kind === 'business_use_point') businessUsePoints.push(config)
+    else if (kind === 'application_binding') applicationBindings.push(config)
+    else if (kind === 'route_policy') routePolicies.push(config)
+    else if (kind === 'provider') legacyProviders.push(config)
+    else if (kind === 'application') legacyApplications.push(config)
+    else if (kind === 'tool_policy') legacyToolPolicies.push(config)
     else unclassified.push(config)
   }
 
-  return { providers, applications, toolPolicies, unclassified }
+  return {
+    providerConnections,
+    modelCatalogEntries,
+    aiApplications,
+    businessUsePoints,
+    applicationBindings,
+    routePolicies,
+    legacyProviders,
+    legacyApplications,
+    legacyToolPolicies,
+    // Temporary aliases keep legacy runtime/admin readers compatible while the
+    // WP01 UI migrates. They never include the new six-object platform graph.
+    providers: legacyProviders,
+    applications: legacyApplications,
+    toolPolicies: legacyToolPolicies,
+    unclassified,
+  }
 }

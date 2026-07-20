@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyProviderRevisionCredential,
   isMaskedApiKey,
   isPublishedAIProviderValue,
   maskApiKey,
@@ -12,6 +13,10 @@ import {
 } from './runtime'
 
 describe('config runtime helpers', () => {
+  it('uses a schema-valid fixed mask for short credentials', () => {
+    expect(maskApiKey('short-key')).toBe('****')
+  })
+
   it('redacts AI config API keys before returning config rows', () => {
     const row = sanitizeConfigRow({
       type: 'AI_CONFIG',
@@ -21,7 +26,7 @@ describe('config runtime helpers', () => {
       },
     })
 
-    expect(row.value?.api_key).toBe('lmst***7890')
+    expect(row.value?.api_key).toBe('****')
   })
 
   it('redacts canary secrets in both direct values and version rows', () => {
@@ -70,7 +75,10 @@ describe('config runtime helpers', () => {
 
   it('preserves stored API keys when update payload contains a masked token', () => {
     const masked = maskApiKey('cloud-token-1234567890')
+    expect(masked).toBe('****')
     expect(isMaskedApiKey(masked)).toBe(true)
+    expect(isMaskedApiKey('abcd***wxyz')).toBe(true)
+    expect(isMaskedApiKey('real***token-with-stars')).toBe(false)
 
     const merged = mergeStoredAIConfigValue({
       api_key: 'stored-cloud-token',
@@ -105,7 +113,7 @@ describe('config runtime helpers', () => {
       api_key: 'old-token',
     }, {
       base_url: 'https://new-provider.example/v1',
-      api_key: 'old-***-oken',
+      api_key: '****',
     })
 
     expect(merged).not.toHaveProperty('api_key')
@@ -123,6 +131,127 @@ describe('config runtime helpers', () => {
     })
 
     expect(merged.api_key).toBe('new-provider-token')
+  })
+
+  it('keeps a ProviderConnection credential only while its connection identity is unchanged', () => {
+    const unchanged = mergeStoredAIProviderValue({
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      base_url: 'https://provider.example/v1',
+      api_key: 'stored-token',
+    }, {
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      base_url: 'https://provider.example/v1',
+      api_key: '****',
+      connection_timeout_ms: 120000,
+    })
+    const relocated = mergeStoredAIProviderValue(unchanged, {
+      ...unchanged,
+      runtime_location: 'local',
+      api_key: '****',
+    })
+
+    expect(unchanged.api_key).toBe('stored-token')
+    expect(relocated).not.toHaveProperty('api_key')
+  })
+
+  it('canonicalizes a legacy ProviderConnection auth mode without dropping its existing key', () => {
+    const merged = mergeStoredAIProviderValue({
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      base_url: 'https://provider.example/v1',
+      api_key: 'stored-token',
+      connection_timeout_ms: 45000,
+    }, {
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      base_url: 'https://provider.example/v1',
+      connection_timeout_ms: 120000,
+    })
+
+    expect(merged).toMatchObject({ auth_mode: 'bearer', api_key: 'stored-token' })
+  })
+
+  it('clears an existing credential when a Provider switches to auth_mode none', () => {
+    const merged = mergeStoredAIProviderValue({
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
+      base_url: 'https://provider.example/v1',
+      api_key: 'stored-token',
+    }, {
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'none',
+      base_url: 'https://provider.example/v1',
+    })
+
+    expect(merged).not.toHaveProperty('api_key')
+  })
+
+  it('reuses revision credentials only for the same canonical connection identity', () => {
+    const source = {
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
+      base_url: 'https://provider.example/v1/',
+      api_key: 'stored-token',
+    }
+    const same = applyProviderRevisionCredential(source, {
+      ...source,
+      base_url: 'https://provider.example/v1',
+      api_key: undefined,
+    }, 'reuse')
+    const moved = applyProviderRevisionCredential(source, {
+      ...source,
+      base_url: 'https://other.example/v1',
+      api_key: undefined,
+    }, 'reuse')
+    const relocated = applyProviderRevisionCredential(source, {
+      ...source,
+      runtime_location: 'local',
+      base_url: 'http://127.0.0.1:1234/v1',
+      api_key: undefined,
+    }, 'reuse')
+    const changedAuth = applyProviderRevisionCredential(source, {
+      ...source,
+      auth_mode: 'none',
+      api_key: undefined,
+    }, 'reuse')
+
+    expect(same).toMatchObject({ ok: true, value: { api_key: 'stored-token' } })
+    expect(moved).toMatchObject({ ok: false })
+    expect(relocated).toMatchObject({ ok: false })
+    expect(changedAuth).toMatchObject({ ok: false })
+  })
+
+  it('requires a real token for replace and always strips it for clear', () => {
+    const source = {
+      kind: 'provider_connection',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
+      base_url: 'https://provider.example/v1',
+      api_key: 'stored-token',
+    }
+    expect(applyProviderRevisionCredential(source, {
+      ...source,
+      api_key: '****',
+    }, 'replace')).toMatchObject({ ok: false })
+    expect(applyProviderRevisionCredential(source, {
+      ...source,
+      api_key: 'replacement-token',
+    }, 'replace')).toMatchObject({ ok: true, value: { api_key: 'replacement-token' } })
+    expect(applyProviderRevisionCredential(source, source, 'clear'))
+      .toMatchObject({ ok: true, value: expect.not.objectContaining({ api_key: expect.anything() }) })
   })
 
   it.each([

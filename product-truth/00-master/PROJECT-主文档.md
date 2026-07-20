@@ -43,7 +43,7 @@
 | 工作包 | 关联 G | 当前状态 | 产品边界 |
 |---|---|---|---|
 | WP00 | G1/G10/G11 | Completed；`18dad230` | 已统一编号、真相源、队列、Harness 和发布候选治理快照 |
-| WP01 | G4（支撑 G3/G7） | **Active**；旧验收失效，重新验收 | 全局 Provider 接入、模型目录、AI 应用和业务用点绑定 |
+| WP01 | G4（支撑 G3/G7） | **Active**；实现候选待最终同 SHA 重验 | 全局 Provider 接入、模型目录、AI 应用、业务用点、绑定和路由 |
 | WP02 | G3（支撑 G7/G10） | Next | 当前 Provider probe、真实模型调用、路由降级、token 与 ReviewRun |
 | WP03 | G3/G4（支撑 G7/G10） | 排队；旧验收有争议 | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | G6（支撑 G8） | 排队复验 | 合同中心入口、任务身份、版本和下一步 |
@@ -53,7 +53,9 @@
 | WP08 | G5/G8 | 激活前必须拆包 | 伞目标；激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包 |
 | WP09 | G7/G8/G9/G10/G11 | 排队 | 分支收敛、全量门禁、Preview 与获批后的 Production 验收 |
 
-当前唯一 Active 是 WP01。最新产品审查已推翻“WP01-WP04 已完成”的总括结论：WP01 从现有代码事实重新建立平台对象、管理员任务和验收，WP03 仍为 `acceptance_disputed`，WP02 缺当前真实运行证据，WP04 需按当前入口语义复验；既有局部代码和历史证据只能选择性复用，不能冒充整包完成。WP05 同时缺外部金标和循环复审产品验收；WP06 只完成免费隔离 Preview 候选，Production 仍未发布。
+当前唯一 Active 是 WP01。2026-07-20 实现候选已把 AI 控制面拆为 `ProviderConnection → ModelCatalogEntry` 和 `BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy` 六对象，配置页按模型接入、模型目录、AI 应用、业务绑定、发布状态五项任务组织；Provider 不再包含具体模型、合同阶段或规则引擎。该候选尚不表示业务运行已切换：真实 provider、token、`model_invocations`、ReviewRun 和降级一致性仍属于 WP02。WP03 仍为 `acceptance_disputed`，WP04 需按当前入口语义复验；WP05 同时缺外部金标和循环复审产品验收；WP06 只完成免费隔离 Preview 候选，Production 仍未发布。
+
+WP01 当前兼容边界：六对象先以“一行一个严格对象”暂存既有 `configs`，旧 `AI_CONFIG / ModelPolicy` 只读保留，禁止新旧图混合；未做不可逆迁移、未写 Production。发布前检查已发布引用、启用状态和能力匹配；业务用点来自代码注册表，业务模块不直接绑定模型。完整对象、生命周期和 WP01/WP02 分界以 `F012-ai-runtime-config.md` 为准。
 
 执行顺序固定为 `WP00（已完成） -> WP01（Active） -> WP02（Next） -> WP03 -> WP04 -> WP05（满足恢复门禁后）/WP07 -> WP08 -> WP09`。新需求继续进入 Inbox，只有满足调度规则才切换 Active；发布、AI 平台和规则 UX 不再合成一个混合任务。
 
@@ -1077,7 +1079,7 @@ Bug 修复不得按标题相似度机械合并。合并规则必须以业务事�
 │                                                                 │
 │       │                                                         │
 │       ▼                                                         │
-│  【AI增强】Ollama深度分析（非阻塞）                               │
+│  【AI增强】经 F012 平台解析已发布 AIApplication / RoutePolicy      │
 │  ├── 条款语义理解                                                │
 │  ├── 风险条款识别（超出规则库的新风险）                          │
 │  ├── 修改建议生成                                                │
@@ -1396,7 +1398,7 @@ Bug 修复不得按标题相似度机械合并。合并规则必须以业务事�
 | 业务场景 | 实现路径 | 技术支撑 | 失败兜底 | 人工干预点 |
 |---------|---------|---------|---------|-----------|
 | **报价创建** | 工作台录入 → 实时计算 → 折扣审批 → 版本固化 | Quote引擎 + TaxRule + Approval流 | 离线模式（标记待同步） | 折扣超阈值时经理审批 |
-| **合同审核** | 上传 → OCR/解析 → 规则+AI扫描 → 批注生成 | Ollama本地模型 + Rule引擎 + Word批注 | AI超时→规则兜底；批注失败→HTML报告 | 法务审核规则配置 |
+| **合同审核** | 上传 → OCR/解析 → 规则+AI扫描 → 批注生成 | F012 AI 平台 + 独立 Rule 引擎 + Word 批注 | AI 候选全失败→RoutePolicy 显式失败/人工复核；规则引擎只返回自身可证明结果；批注失败→独立报告 | 法务审核规则配置与 AI 业务用点绑定 |
 | **标书生成** | 招标文件OCR → 评分项提取 → 案例匹配 → 文档合并 | OCR服务 + 知识检索 + 模板引擎 | OCR失败→人工录入；案例不足→通用模板 | 技术方案人工编辑 |
 | **日程规划** | 条件检测 → 候选计划生成 → 销售确认 → 日历同步 | Schedule引擎 + 工作日历API | 无日期→仅跟进提醒；冲突→提示调整 | 销售确认/调整计划 |
 | **知识检索** | 语义向量化 → 相似度匹配 → 结果排序 → 引用建议 | Embedding模型 + 向量数据库 | 无匹配结果→关键词搜索 | 运营手动维护知识库 |
@@ -1772,13 +1774,15 @@ Contract ──┬─── 可独立存在（外部上传审核）
 │                      降级与容错策略（确定性兜底）                                 │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
-│  AI服务降级（合同审核）                                                           │
+│  AI 路由失败处理（合同审核）                                                       │
 │  ═══════════════════════════════════════════════════                            │
-│  正常路径: CONTRACT_UPLOADED ──► AIService(LM Studio) ──► CONTRACT_REVIEWED     │
-│  降级路径:                                                                      │
-│    IF LM Studio超时 ──► 分段处理 ──► IF仍失败 ──► 规则引擎兜底                  │
-│    IF LM Studio OOM ──► 规则引擎直接兜底                                        │
-│    emit: AI_ANALYSIS_FAILED ──► NotificationService: 通知运维                   │
+│  正常路径: CONTRACT_UPLOADED ──► F012 业务用点解析 ──► RoutePolicy 有序候选      │
+│            ──► 记录 ModelInvocation ──► CONTRACT_REVIEWED                      │
+│  失败路径:                                                                      │
+│    IF 当前候选失败 ──► 按 RoutePolicy 尝试下一候选                              │
+│    IF 全部候选失败 ──► 执行显式失败动作 ──► 人工复核/重试入口                   │
+│    独立规则引擎仍可输出自身确定性结果，但不得标记为 AI 成功                     │
+│    emit: AI_ANALYSIS_FAILED ──► NotificationService: 通知运维与业务操作人       │
 │                                                                                 │
 │  日程生成降级（报价确认）                                                         │
 │  ═══════════════════════════════════════════════════                            │
@@ -3392,7 +3396,7 @@ interface CRMIntegration {
 | 合同类型 | 支持按合同类型/场景选择规则、模板和 Skill |
 | 规则集 | 支持多规则集、版本、发布、回滚和快照 |
 | Skill | Skill 是配置发布后的运行包，不是代码里固定 prompt |
-| 模型 | 本地模型、云端模型、规则兜底必须由 F012 配置控制 |
+| 模型 | 业务用点必须通过 F012 的已发布应用、路由、模型目录和 Provider 解析；不得直连 URL/模型，规则引擎不冒充模型 |
 | 风险处理人 | 风险可分派给销售、法务、财务、交付、管理员 |
 | 批注输出 | Word 批注是主产物，报告是辅助和兜底 |
 | 客户反馈 | 客户可接受、拒绝、反建议，触发再审核或升级 |
@@ -3400,15 +3404,17 @@ interface CRMIntegration {
 
 2026-07-20 当前实现边界：F009 只服务合同审核，应用模块固定为 `contract_review`。上表中的多合同类型/场景属于以后扩展，只有消费模块能够传入标准化、可审计的上下文并完成“不适用规则不执行”验收后才能开放；当前界面不得用自由文本场景制造假能力。规则选择业务模块、模型选择应用模块，两者分别由 F009 与 F012 管理。
 
-模型配置的第一阶段口径是“三层模型旅程”，不是环境变量说明页：
+模型配置的第一阶段口径是全局 AI 平台，不是“L1/L2/L3”层级表单，也不从属于合同审核：
 
-- L1 本地模型：优先使用用户本机 LM Studio / OpenAI-compatible 服务，配置项为 `base_url + model + token`。本机服务已加载模型不等于应用 HTTP 可调用；若返回 401，配置中心必须提示保存 LM Studio Developer Token 或明确当前仅可走本机 CLI 通道。
-- L2 云模型：使用 OpenAI-compatible 云端网关作为增强和仲裁层，Token 由用户从供应商控制台显式粘贴保存，例如云端 Token 控制台；系统不得从浏览器页面猜测或抓取密钥。
-- L3 规则引擎：只做确定性校验、证据定位和降级兜底，不能冒充 AI 审核完成。
+`BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy → ModelCatalogEntry → ProviderConnection`
 
-配置中心必须提供 L1/L2/L3 快速套用、保存前连接测试和模型发现。连接测试只验证当前表单的 OpenAI-compatible HTTP 或内置规则引擎状态，不保存密钥，不写入 `ModelInvocation`，也不能替代真实 `ReviewRun` 的模型调用证据。若 LM Studio HTTP 返回 401，测试结果必须显示 Token 未通过，不能用本机 CLI fallback 掩盖认证失败；若云端 OpenAI-compatible `/models` 返回 401/403，必须显示 Token 或权限不可用；若 `/models` 通过，页面可展示并点选模型 ID，但仍需 ReviewRun 证明正式语义审核调用成功。ReviewRun 中 `semantic_review` 的 `model_invocation` 必须展示 `transport`：`openai_compatible_http` 才能证明 HTTP 模型链通过，`lm_studio_cli` 只能证明本机模型执行，不等同线上或 HTTP 接入验收完成。长合同、长 PDF 的 `semantic_review` 还必须展示 L2 云端 Provider 选择原因、文本长度、页数估计、chunk/字符覆盖率和降级原因；缺少可用云端 Provider 或覆盖不完整时，不能宣称正式 AI 审核完成。
+- `ProviderConnection` 只管账号、端点、认证、运行位置和超时，不包含具体模型、合同阶段或规则引擎。
+- `ModelCatalogEntry` 在同一 Provider 下登记一个或多个具体模型及其通用能力。
+- `AIApplication` 定义可复用逻辑能力，`RoutePolicy` 定义有序候选模型、单次超时和全失败动作。
+- 业务代码先注册稳定 `BusinessUsePoint`，管理员再用 `ApplicationBinding` 选择已发布应用；业务模块不直接读 Provider URL 或绑定具体模型。
+- `rule-engine` 是确定性业务执行能力或失败处理路径，不是 Provider、模型或路由层级。
 
-CC Switch 可作为 Provider 配置体验参考，但它管理的是 Codex/Claude/Gemini 等开发工具配置；合同审核生产运行事实只能来自配置中心发布的 `AI_CONFIG -> ModelPolicy -> ModelInvocation`。
+WP01 只建立这六类平台资产的配置控制面。`connection/model` probe 只验证当前草稿参数：结果不持久化为生产健康状态，不写 `model_invocations`，不证明业务模块已使用该模型，也不证明 ReviewRun、token、降级或审核准确率。新发布图真正切入合同审核、起草和标书等业务，并用 `model_invocations + token + ReviewRun` 证明运行一致性，属于 WP02。旧 `AI_CONFIG / ModelPolicy` 在此之前只读保留，不得与新图混合或冒充新平台已运行。
 
 ### 5.1 第一阶段多流业务图景
 
@@ -3419,9 +3425,9 @@ CC Switch 可作为 Provider 配置体验参考，但它管理的是 Codex/Claud
 | 合同文件与版本流 | ContractVersion | 销售/法务/客户回传 | 审核、批注、归档 | 原文件、解析文本、客户回传版、批注版可追溯 |
 | 配置中心规则流 | RuleSet / RuleUnit / RuleSnapshot | 法务/管理员 | Skill 编译、审核执行 | 已发布规则成为唯一审核依据 |
 | 知识库与模板流 | KnowledgeTemplate / ClauseLibrary / TemplateSnapshot | 法务/运营 | Skill 编译、模板对比 | 标准模板和条款库作为审核依据 |
-| Skill 编译流 | SkillBundle | 系统编译，管理员发布 | ReviewRun | 规则、模板、知识、模型策略组成版本化运行包 |
-| 模型运行流 | ModelPolicy / ModelInvocation | F012 配置，运行时记录 | Skill 执行、审计 | 本地/云端/规则兜底可配置、可追踪 |
-| 审核运行流 | ReviewRun | 销售/法务触发 | 风险项、批注、报告 | 每次审核绑定合同版本、规则快照、Skill、模型策略 |
+| Skill 编译流 | SkillBundle | 系统编译，管理员发布 | ReviewRun | 规则、模板、知识和输出 schema 组成版本化运行包，通过稳定用点消费 AI |
+| 模型运行流 | BusinessUsePoint / ApplicationBinding / AIApplication / RoutePolicy / ModelCatalogEntry / ProviderConnection / ModelInvocation | F012 配置平台图，运行时记录调用 | Skill 执行、审计 | 业务用点解析到有序模型路由，失败和降级可追踪 |
+| 审核运行流 | ReviewRun | 销售/法务触发 | 风险项、批注、报告 | 每次审核绑定合同版本、规则快照、Skill 和不可漂移的已解析路由快照 |
 | 风险项处理流 | RiskFinding | 审核引擎/人工 | 销售、法务、财务、交付 | 风险可分派、复核、谈判、关闭、升级 |
 | 销售谈判流 | NegotiationTask | 风险项生成/人工创建 | 销售、销售经理、法务 | 给销售谈判依据、建议话术和让步边界 |
 | 客户反馈流 | CustomerFeedback | 销售录入/客户回传 | 再审核、升级、归档 | 接受/拒绝/反建议会影响风险状态 |
@@ -3436,7 +3442,7 @@ CC Switch 可作为 Provider 配置体验参考，但它管理的是 Codex/Claud
 |------|------|-------------|
 | `Contract` | 合同业务主对象，承载来源、组织、当前状态 | F005 |
 | `ContractVersion` | 合同文件版本，包含原文件、解析文本、客户回传版、批注版 | F005 / F007 |
-| `ReviewRun` | 一次审核运行，绑定合同版本、Skill、规则快照、模型策略 | F005 / F006 |
+| `ReviewRun` | 一次审核运行，绑定合同版本、Skill、规则快照和不可漂移的已解析路由快照 | F005 / F006 / F012 |
 | `RiskFinding` | 单个风险项，必须有来源、证据、状态、责任人和处理结果 | F005 / F006 |
 | `NegotiationTask` | 销售谈判任务，来自必须谈判的风险项 | F005 |
 | `CustomerFeedback` | 客户对批注或条款的反馈，驱动再审核或升级 | F005 |
@@ -3446,8 +3452,11 @@ CC Switch 可作为 Provider 配置体验参考，但它管理的是 Codex/Claud
 | `RuleSnapshot` | 已发布规则快照，ReviewRun 使用后不可漂移 | F009 / F006 |
 | `KnowledgeTemplate` | 标准合同模板、条款模板、案例、话术等知识资产 | F005 / F009 / F006 |
 | `TemplateSnapshot` | 审核时引用的模板或条款库快照 | F006 |
-| `SkillBundle` | 由规则、模板、知识库、输出 schema、模型策略编译出的运行包 | F006 |
-| `ModelPolicy` | 本地/云端/规则兜底的路由策略与参数 | F012 |
+| `SkillBundle` | 由规则、模板、知识库和输出 schema 编译出的运行包；运行时通过稳定业务用点解析 AI 应用 | F006 / F012 |
+| `ProviderConnection` / `ModelCatalogEntry` | 分别表示模型服务连接和该连接下的具体模型 | F012 |
+| `AIApplication` / `RoutePolicy` | 分别表示可复用 AI 能力和其有序候选模型/失败动作 | F012 |
+| `BusinessUsePoint` / `ApplicationBinding` | 分别表示代码注册的业务入口和用点到已发布应用的绑定 | F012 |
+| `ModelPolicy` | WP02 前的旧运行兼容快照；不是 WP01 管理员产品对象 | F012 |
 | `ModelInvocation` | 每次模型调用的审计记录 | F012 / F006 |
 | `CommentPatch` | 写入 Word 的批注意图，绑定 RiskFinding 和原文定位 | F007 |
 | `AnnotatedDocument` | 带原生批注的新文件版本 | F007 |
@@ -3464,7 +3473,8 @@ F009 配置中心规则
   -> 每条判定、缺证据、多值和币种冲突逐项测试
   -> 原子发布 RuleSetSnapshot / RuleSnapshot
   -> F006 编译 SkillBundle
-  -> F012 注入已发布 ModelPolicy
+  -> F012 按 BusinessUsePoint 解析 ApplicationBinding / AIApplication
+  -> RoutePolicy 选择已发布 ModelCatalogEntry / ProviderConnection
   -> F005 创建 ReviewRun 并绑定快照
   -> AI 只定位原文并读取已定义属性
   -> 服务端校验证据并确定性执行判定与处理
@@ -3546,7 +3556,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 
 批注成功必须绑定 `RiskFinding -> RuleSnapshot -> evidence_text -> source range -> Word comment anchor`。只有能在源文件中找到原文片段的 L1/L2/L3 定位才可写入 Word 原生批注；无法绑定原文片段时必须标记 `manual_location_required`，工作台显示“需人工定位”，并禁止把产物登记为完整批注版。报告只能作为辅助或兜底产物，不得伪装成源文件批注成功。
 
-当前研发验收口径：一条合格的合同审核链路必须同时证明 `ReviewRun.status=COMPLETED`、绑定 SkillBundle / RuleSnapshot / RuleSetSnapshot / RuleSetDocument / ModelPolicy、存在 `semantic_review` 的真实 `ModelInvocation`，且 Word 导出包内存在 `word/comments.xml`、`document.xml` 的 `w:commentRangeStart` / `w:commentReference`。若只跑规则引擎、只生成报告、缺少模型调用证据、缺少规则集文档绑定或批注无法定位，都不能宣称完整合同审核完成。
+当前研发验收口径：一条合格的合同审核链路必须同时证明 `ReviewRun.status=COMPLETED`、绑定 SkillBundle / RuleSnapshot / RuleSetSnapshot / RuleSetDocument / 已解析路由快照、存在 `semantic_review` 的真实 `ModelInvocation`，且 Word 导出包内存在 `word/comments.xml`、`document.xml` 的 `w:commentRangeStart` / `w:commentReference`。历史 ReviewRun 可继续绑定当时的 ModelPolicy，但新链路不得用其代替 F012 已解析路由快照。若只跑规则引擎、只生成报告、缺少模型调用证据、缺少规则集文档绑定或批注无法定位，都不能宣称完整合同审核完成。
 
 ### 5.7 F0xx 研发依据映射
 
@@ -3556,7 +3566,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 | F006 | `feature-packets/F006-contract-review-skill-runtime.md` | SkillBundle 编译与运行、规则执行、模板对比、审核证据、输出 schema |
 | F007 | `feature-packets/F007-word-annotation-export.md` | Word 原生批注、CommentPatch、批注文件版本、报告辅助 |
 | F009 | `feature-packets/F009-contract-rule-config.md` | 规则配置、发布、回滚、测试、规则快照 |
-| F012 | `feature-packets/F012-ai-runtime-config.md` | 本地模型、云端模型、规则兜底、路由、调用审计 |
+| F012 | `feature-packets/F012-ai-runtime-config.md` | Provider 连接、模型目录、AI 应用、业务用点、绑定和有序路由；真实调用审计由 WP02 验收 |
 
 旧 `F005-derive.md` / `F005-derive-v2.md` 只作为历史资产。噪音项结论直接在本节和对应 F0xx 文档中收敛，不再新增平行说明文档。
 
@@ -3569,7 +3579,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 | 旧单线程审核 | 不符合商业产品第一阶段骨架 | F005 必须按合同版本、风险处理、谈判、客户反馈、输出和审计组织 |
 | 旧规则/模板/词典 | 是审核依据资产，必须保留 | F009 负责配置，F006 负责编译和执行，F005 只消费结果 |
 | 旧 Word 输出 | “批注为主、报告为辅”成立，但文末摘要方案废弃 | F007 负责原生批注和报告兜底 |
-| 旧 AI 降级 | 作为模型运行时能力保留 | F012 负责策略和审计，F006 负责受控调用 |
+| 旧 AI 降级 | 仅保留为历史运行证据；“本地→云端→规则引擎”不再是现行产品拓扑 | F012 RoutePolicy 可配任意有序模型候选和全失败动作；规则引擎为独立确定性执行，F006 负责受控调用 |
 | F008 OCR | 不属于合同审核第一阶段主链路 | 归 F014 标书中心/共享 OCR，不作为 F005 验收依据 |
 | 重复派生文档 | 没有产品增量 | 只保留 legacy source；重复副本待确认后物理归档或删除 |
 
@@ -3583,7 +3593,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 |------|----------|
 | D1 多流业务图景 | 上述 10 条业务流在主文档和 F005 中一致 |
 | D2 核心对象 | F005/F006/F007/F009/F012 均引用同一套对象名和边界 |
-| D3 规则/Skill/模型链 | F009 发布规则，F006 编译 Skill，F012 注入模型策略，F005 绑定 ReviewRun |
+| D3 规则/Skill/模型链 | F009 发布规则，F006 编译 Skill，F012 从业务用点解析已发布应用/路由/Provider，F005 绑定 ReviewRun |
 | D4 前端工作台 | 前端不再以文本框审核为主，按版本/原文/风险/谈判/输出/审计组织 |
 | D5 数据/API 草案 | 每个 F 文档列出第一阶段 API 和数据对象，不以旧占位接口验收 |
 | D6 复用方案 | 明确复用现有规则表、配置中心、合同上传、风险卡片、AI 降级链和导出资产 |
@@ -3613,7 +3623,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 │  定义系统提供哪些可配置的能力模块：                                │
 │  • 合同审核规则配置                                              │
 │  • 报价规则配置                                                  │
-│  • AI模型连接配置                                                │
+│  • AI平台配置                                                    │
 │  • 组织权限配置                                                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -3624,7 +3634,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 │  定义每个能力域下具体能配置什么内容：                              │
 │  • 合同规则：结构化规则、语义规则、版本管理、测试执行              │
 │  • 报价规则：税率规则、折扣阈值、审批链路                         │
-│  • AI配置：本地模型URL、路由阈值、调用参数                        │
+│  • AI平台：Provider、模型目录、AI应用、业务用点、绑定、路由    │
 │  • 权限配置：组织架构、角色权限、数据范围                         │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -3633,7 +3643,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 │  第三层：业务工作区域（Where configs are consumed）               │
 │  ─────────────────────────────────────────────────────────────  │
 │  定义配置在业务场景中如何被使用（配置是输入，业务动作是输出）：     │
-│  • 合同审核页：使用合同规则配置执行审核                           │
+│  • 合同审核/起草/标书等：通过代码注册用点消费已发布 AI 应用        │
 │  • 报价创建页：使用税率规则、折扣阈值计算金额                     │
 │  • 审批处理页：使用审批链路配置执行审批流转                       │
 │                                                                 │
@@ -3657,7 +3667,7 @@ Word 原生批注是主路径，报告是辅助和兜底路径。两者必须使
 |--------|-----------|-------------|---------------|
 | **合同审核规则配置** | 法务、系统管理员 | 定义合同审核的规则（结构化规则+语义规则） | 合同中心-审核执行 |
 | **报价规则配置** | 销售运营、财务 | 定义税率、折扣权限、审批流程 | 报价中心-金额计算、折扣审批 |
-| **AI模型连接配置** | 技术管理员 | 定义本地/云端模型连接参数、路由策略 | 合同中心-模型调用 |
+| **AI平台配置** | 技术管理员 | 分离 Provider 连接、模型目录、AI 应用、业务用点、绑定和路由 | 合同审核、合同起草、标书与后续任意注册用点 |
 | **组织权限配置** | 组织管理员 | 定义部门架构、角色权限、数据范围 | 全局-权限控制 |
 
 ---
@@ -3782,44 +3792,34 @@ approval_flow:
 
 ---
 
-#### 6.2.3 AI模型连接配置（能力域）
+#### 6.2.3 AI 平台配置与运行边界（能力域）
 
-**配置目标**：定义本地/云端AI模型的连接参数和调用策略
+**配置目标**：把 AI 从合同场景和具体模型表单中解耦为全局平台能力，使任意现有或未来业务模块都能通过稳定用点选择已发布 AI 应用，而不直接绑定 Provider、URL 或模型版本。
 
-**可配置内容**：
+**唯一解析链**：
 
-| 配置项 | 配置类型 | 配置说明 |
-|--------|---------|---------|
-| **本地模型连接** | 文本 + 连接测试 | OpenAI兼容API的URL、模型名称、可选Token；通过 `/models` 校验 |
-| **云端模型备用** | 文本 + 连接测试 | 云端Base URL、API Key、模型名称；通过 HTTPS `/models` 校验并发现模型 |
-| **路由阈值** | 数值 | 本地/云端切换的页数阈值 |
-| **调用参数** | 数值 | Temperature、Max Tokens等 |
+`BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy → ModelCatalogEntry → ProviderConnection`
 
-**AI配置示例**：
-```yaml
-# 配置内容：AI模型配置
-ai_config:
-  local_model:
-    url: "http://localhost:1234/v1"
-    model_name: "gpt-oss-20b"
-    token_ref: "AI_LEVEL_1_TOKEN"
-    timeout_seconds: 120
-  
-  cloud_model_backup:
-    base_url: "https://cloud.yiyongai.cn/v1"
-    api_key_ref: "AI_LEVEL_2_TOKEN"
-    model_name: "provider-model-id"
-  
-  routing:
-    local_max_pages: 15
-    local_max_pages_with_fallback: 40
-    timeout_ms: 45000
-  
-  generation_params:
-    temperature: 0.3
-    max_tokens: 2000
-    json_mode: true
-```
+| 对象 | 管理员配置什么 | 不得混入什么 |
+|---|---|---|
+| `ProviderConnection` | 服务类型、运行位置、端点、认证和超时 | 具体模型、合同阶段、规则引擎、业务模块 |
+| `ModelCatalogEntry` | 归属 Provider、远端模型 ID、通用能力和上下文窗口 | Provider 密钥、业务规则 |
+| `AIApplication` | 可复用的逻辑能力合同 | Provider、具体模型和合同规则 |
+| `BusinessUsePoint` | 业务代码注册的稳定消费入口和必需能力 | 自由创建的机器字段、模型选择 |
+| `ApplicationBinding` | 业务用点到已发布 AI 应用的唯一绑定 | Provider 或具体模型 |
+| `RoutePolicy` | AI 应用的有序候选模型、单次超时和全失败动作 | 合同规则集、问题分类、Prompt |
+
+**管理员五个主任务**：
+
+1. 模型接入：保存 Provider 草稿，对当前参数执行一次性 probe；
+2. 模型目录：在同一 Provider 下登记一个或多个模型及其能力；
+3. AI 应用：定义逻辑能力，为其维护可审计的有序候选模型；
+4. 业务绑定：从代码注册用点选择已发布应用；
+5. 发布状态：按 Provider → 模型 → 应用 → 用点 → 路由 → 绑定的依赖事实检查草稿、版本和发布阻断。
+
+**候选存储与安全边界**：WP01 暂时把六类对象作为六种严格 discriminated 记录存入既有 `configs`，不做不可逆迁移、不写 Production。草稿 probe 只对当次参数有效，不持久化 Provider 健康、不写 `model_invocations`、不充当发布成功或生产可用的证据。隔离 Preview `vsfropnfsmnonkotywsx` 已应用 `secure_ai_config_control_plane` 迁移，动态 bearer canary 证明当前记录可持有凭据而历史版本无该凭据，fixture 已清理；此结论仅对 Preview 数据层成立，不外推到 Production。通用 `configs` 发布非数据库原子事务是 WP09 的 Production 发布门禁，不阻塞 WP01 配置控制面退出。
+
+**WP01 退出与下游边界**：WP01 只在同一最终 Git SHA 通过六对象/API、Provider 安全、五任务 UI、目标/全量测试、lint、typecheck、build、桌面/iPad、隔离 Preview 控制面闭环和旧运行链兼容回退后，才能声称配置控制面完成。通过即可让 WP02 进入 Active；不需先提供 WP02 的业务运行证据或 WP09 的 Production 发布证据。业务运行切换、真实 Provider 调用、token、`model_invocations`、ReviewRun、降级一致性和准确率属于 WP02；原子事务、RLS、环境和 Production 发布属于 WP09。完整验收以 `F012-ai-runtime-config.md` 为准。
 
 ---
 
@@ -3882,7 +3882,7 @@ roles:
 |---------|---------|-----------|---------|
 | 合同上传页 | 上传合同文件 | 文件大小限制（50MB）、格式限制（.docx/.pdf） | 系统级配置 |
 | 合同审核页 | 点击"开始审核" | 当前生效的合同规则（结构化+语义） | 配置中心-合同规则 |
-| 合同审核页 | 执行文档解析 | 本地模型URL、路由阈值 | 配置中心-AI配置 |
+| 合同审核页 | 执行语义审核 | 已注册 `contract.review.semantic` 用点对应的已发布 AI 应用和路由 | 配置中心-AI 平台 |
 | 合同审核页 | 执行规则扫描 | 所有启用的结构化规则 | 配置中心-合同规则 |
 | 合同审核页 | 执行语义分析 | 所有启用的语义规则 | 配置中心-合同规则 |
 | 审核报告页 | 显示风险列表 | 规则定义的message模板 | 配置中心-合同规则 |
@@ -3892,6 +3892,7 @@ roles:
 - 合同中心页面**只能读取**规则配置，**不能修改**规则配置
 - 规则修改必须在【配置中心-合同规则】页面进行
 - 审核时自动使用当前生效的规则版本
+- 合同中心只提供代码注册的业务用点，不读取或写死 Provider URL、密钥或具体模型；真实解析链与 `model_invocations / ReviewRun` 一致性由 WP02 验收
 
 ---
 
@@ -4004,8 +4005,11 @@ interface ConfigVersion {
 | POST | /api/config/rules/:id/test | 测试规则执行效果 | 配置中心-规则测试 |
 | PUT | /api/config/tax-rules | 更新税率规则 | 配置中心-税率配置 |
 | GET | /api/config/discount-matrix | 获取折扣权限矩阵 | 报价折扣检查 |
-| GET | /api/admin/config/ai | 获取AI模型配置 | 模型调用 |
-| POST | /api/admin/config/ai/health | 模型健康检查 | 配置中心-连接测试 |
+| GET / POST | /api/configs | 按类型查询配置，或创建六类 AI 平台资产草稿 | 配置中心-AI 平台 |
+| PUT | /api/configs/:id | 更新可编辑草稿；已发布/已归档资产不原地修改 | 配置中心-草稿编辑 |
+| POST | /api/configs/:id/publish | 验证完整发布图后发布单个逻辑资产新版本 | 配置中心-发布状态 |
+| POST | /api/configs/:id/rollback | 将同类型、同逻辑资产的历史内容回填为草稿 | 配置中心-版本 |
+| POST | /api/configs/ai-runtime/probe | 对当前 Provider 草稿参数做一次性连接/模型探测；不持久化生产健康 | 配置中心-模型接入/目录 |
 
 完整API列表见附录A.3-A.5。
 
@@ -4016,7 +4020,7 @@ interface ConfigVersion {
 **P0（必须）**：
 - [x] 合同审核规则配置（结构化规则、语义规则）
 - [x] 报价规则配置（税率、折扣权限）
-- [x] AI模型连接配置
+- [ ] AI 平台六对象控制面（WP01 实现候选，以最终同 SHA 重验结论为准）
 - [x] 配置版本记录
 - [ ] 配置回滚（可做）
 
@@ -4072,8 +4076,8 @@ interface ConfigVersion {
 │   ├── Word → 结构化解析（标题层级识别）
 │   └── 图片 → OCR → 版面分析（表格/文字分离，P1 能力）
 │
-├── AI提取引擎（F012 模型策略：本地优先，长文本/长 PDF 走授权云端增强）：
-│   ├── OpenAI-compatible 云端地址允许填写供应商根域名，运行时统一规范化到 `/v1`
+├── AI提取引擎（F012：`tender.document.extract` 用点解析已发布应用与有序 RoutePolicy）：
+│   ├── Provider 端点与模型由平台控制面管理；标书业务代码不硬编码本地/云端优先级或供应商 URL
 │   ├── 长文分块选择必须覆盖首尾、高信号关键词段和全局采样段，不允许只取前 N 段静默成功
 │   ├── 每次解析必须记录 provider/model/transport、字符覆盖率、chunk 覆盖率、耗时、并发和 `model_invocation_id`
 │   ├── 评分标准提取：
@@ -4111,7 +4115,7 @@ interface ConfigVersion {
 │
 ├── 技术方案生成（AI辅助）：
 │   ├── 输入：招标文件技术章节 + 公司能力标签
-│   ├── 模型：F012 Provider Chain（L1 本地快速初筛；L2 云端长文本增强；L3 规则兜底）
+│   ├── AI 用点：通过 F012 代码注册的标书用点解析已发布 AIApplication / RoutePolicy
 │   ├── 输出：技术方案初稿（实施计划、团队配置、服务承诺）
 │   └── 人工审核：技术经理修改后定稿
 │
@@ -4138,7 +4142,7 @@ interface ConfigVersion {
 
 与竞品的差异设计：
 1. 数据打通：招标网的标书是"孤岛"，我们和企业案例库/报价系统打通
-2. 模型分级：默认本地优先；长文本、长 PDF、复杂标书解析经配置中心发布的 L2 云端 OpenAI-compatible Provider 处理，并记录 provider/model/transport、字符覆盖率、chunk 覆盖率、耗时和 `model_invocation_id` 证据；覆盖不完整时必须显式降级
+2. 平台路由：长文本、长 PDF 和复杂标书解析只能通过代码注册的 `tender.document.extract` 用点解析已发布 AI 应用和有序模型路由；技术方案生成若需独立能力，必须先注册新用点，不得借用解析用点。WP02 需记录 provider/model/transport、字符覆盖率、chunk 覆盖率、耗时和 `model_invocation_id`；覆盖不完整时必须显式降级
 3. 渐进式填充：技术标先行（不报价），商务标后补，支持分阶段投标
 ```
 
@@ -4179,7 +4183,7 @@ interface ConfigVersion {
          │
          ▼
 ┌─────────────────┐
-│   AI结构化分析  │  Ollama
+│   AI结构化分析  │  F012 tender.document.extract 业务用点
 │ - 评分标准提取  │
 │ - 资质要求识别  │
 │ - 时间节点提取  │
@@ -4867,15 +4871,15 @@ reminderRules:
 │   ├── 处理：OCR解析 + 结构化存储
 │   └── 事件发布：TENDER_CREATED, TENDER_LINKED_TO_QUOTE
 │
-├── AIService（AI服务 - 特殊降级策略）
-│   ├── 输入：合同文本块 / 招标文本块
+├── AIService（AI 平台运行适配器）
+│   ├── 输入：BusinessUsePoint + 业务对象引用 + 受控输入
 │   ├── 处理：
-│   │   ├── 尝试1：Ollama本地调用（Qwen2.5:14b）
-│   │   ├── IF 超时(>30s) → 尝试2：分段处理
-│   │   ├── IF OOM → 尝试3：规则引擎兜底
-│   │   └── IF 全部失败 → 返回降级提示
-│   ├── 输出：AI分析结果（JSON）
-│   └── 降级策略（见10.4节）
+│   │   ├── 解析已发布 ApplicationBinding / AIApplication / RoutePolicy
+│   │   ├── 按 RoutePolicy 的有序 ModelCatalogEntry 候选调用 ProviderConnection
+│   │   ├── 每次尝试记录 ModelInvocation；超时、schema 失败和降级原因不可静默
+│   │   └── 全候选失败时执行显式失败动作；独立确定性规则可继续运行，但不冒充 AI 成功
+│   ├── 输出：通过业务 schema 校验的结果或可审计失败
+│   └── 真实运行证据由 WP02 验收（见10.4节）
 │
 └── ScheduleService（日程服务）
     ├── 输入：事件触发 / 手动创建
@@ -4924,11 +4928,11 @@ reminderRules:
 │   ├── 报价单导出（PDF）
 │   └── 附件（资质文件、案例证明）
 │
-└── LM Studio（本地AI模型）
-    ├── qwen/qwen3.5-9b（合同分析）
-    ├── API地址：http://localhost:1234/v1
-    ├── 需要API Key认证
-    └── 完全本地，不上云
+└── AI 平台运行适配器（F012）
+    ├── 业务服务只提交稳定 BusinessUsePoint，不写死模型或端点
+    ├── RoutePolicy 解析已发布的有序模型候选
+    ├── ProviderConnection 保存受控连接与密钥引用
+    └── Ollama、LM Studio、云端网关仅是可选 Provider 实现
 
 外部集成层（调用电路）
 ├── 飞书开放平台
@@ -4997,49 +5001,32 @@ interface Event {
 
 ---
 
-### 10.4 AI服务降级策略（关键电路）
+### 10.4 AI 平台路由与失败处理（现行产品口径）
 
-**LM Studio本地模型配置**：
-- 服务地址：`http://localhost:1234/v1`（本地HTTP API）
-- 模型：`qwen/qwen3.5-9b`（9B参数，4bit量化）
-- API认证：需要API Key（在LM Studio设置中管理Token）
-
-**三级降级**：
+2026-07-20 以前的“LM Studio 本地首选 → 分段 → 规则引擎”是历史设计，不再是现行配置、运行或验收依据。现行链路是：
 
 ```
-第1级：LM Studio本地模型（首选）
-├── 输入：合同文本块（<8000字符）
-├── 模型：qwen/qwen3.5-9b（本地LM Studio）
-├── 地址：http://localhost:1234/v1/chat/completions
-├── 认证：Bearer Token（从LM Studio获取）
-├── 超时：30秒
-├── 成功 → 返回AI结果
-└── 失败（超时/OOM）→ 降级到第2级
-
-第2级：分段处理（长合同策略）
-├── 触发：合同>10页或第1级OOM
-├── 处理：按标题分段 → 并行调用AI
-├── 合并：各段结果聚合
-├── 成功 → 返回合并结果
-└── 失败 → 降级到第3级
-
-第3级：规则引擎兜底（终极降级）
-├── 触发：AI完全不可用
-├── 处理：YAML规则扫描（正则/关键词）
-├── 结果：规则识别风险 + "AI分析不可用"提示
-└── 用户感知：仍有基础审核，但建议人工复核
+BusinessUsePoint
+  → ApplicationBinding
+  → AIApplication
+  → RoutePolicy.candidate_model_ids（管理员发布的有序候选）
+  → ModelCatalogEntry
+  → ProviderConnection
 ```
 
-**LM Studio启动要求**：
-- 开发前必须手动启动LM Studio应用
-- 加载qwen3.5-9b模型（约6.55GB）
-- 启用API服务（端口1234）
-- 开启"Require Authentication"并配置API Key
+**路由规则**：
 
-**降级监控**：
-- 降级次数 > 10/小时 → 飞书告警运维
-- 降级率 > 20% → 触发模型健康检查
-- LM Studio连接失败 → 记录日志并立即启用规则兜底
+- RoutePolicy 可以选择任意已发布且能力匹配的模型候选，不内置“本地必须优先”或“云端必须第二级”。
+- 分段、并发、schema 验证属于 AI 应用或 Skill 的执行策略，不是一个虚构模型层级。
+- 每次候选调用必须记录 provider、model、policy/路由快照、耗时、token、状态和失败原因；该运行真实性由 WP02 验收。
+- 所有模型候选失败时，执行 RoutePolicy 的显式失败动作，返回可审计的降级/人工复核状态，不伪造 AI 结果。
+- 规则引擎是 F009/F006 的独立确定性执行能力，可在 AI 不可用时继续输出其自身可证明的结果，但不是 Provider、ModelCatalogEntry 或 AI 调用成功。
+
+**运行监控**：
+
+- 按 BusinessUsePoint、AIApplication、RoutePolicy、ProviderConnection 和 ModelCatalogEntry 聚合成功率、耗时、token 和降级率；
+- 草稿 probe 不作为持久化健康证据；运行告警只使用真实 ModelInvocation 和业务结果；
+- 具体阈值由运维/发布策略独立配置，不在业务代码中写死 LM Studio、Ollama、云端或规则引擎次序。
 
 ---
 
@@ -5048,7 +5035,7 @@ interface Event {
 **同步调用（HTTP）**：
 - QuoteService → PostgreSQL（数据查询）
 - ContractService → MinIO（文件上传）
-- AIService → LM Studio（本地HTTP调用，端口1234）
+- AIService → F012 运行适配器（按 BusinessUsePoint 解析已发布路由；具体 Provider 端点不由业务服务写死）
 
 **异步调用（EventBus）**：
 - QuoteService → EventBus → ScheduleService
@@ -5066,8 +5053,9 @@ ContractService（同步）
          │
          ▼
     AIService（订阅）
-         ├── 调用LM Studio分析（http://localhost:1234/v1）
-         └── emit('CONTRACT_REVIEWED')
+         ├── 以 contract.review.* 业务用点解析 F012 已发布路由
+         ├── 调用 RoutePolicy 候选并记录真实 ModelInvocation
+         └── 成功后 emit('CONTRACT_REVIEWED')；全失败则 emit('AI_ANALYSIS_FAILED')
               │
               ▼
     NotificationService（订阅）
@@ -5101,12 +5089,13 @@ Docker Compose
 ├── db (PostgreSQL)
 ├── cache (Redis)
 ├── storage (MinIO)
-└── ai (LM Studio - 手动启动)
+└── ai-provider (可选；按 F012 ProviderConnection 接入 Ollama、LM Studio 或测试网关)
 ```
 
 **生产环境（单服务器）**：
 ```
-Nginx → PM2(Next.js x4) → PostgreSQL + Redis + MinIO + LM Studio
+Nginx → PM2(Next.js x4) → PostgreSQL + Redis + MinIO
+                              └── F012 AI 平台 → 已批准 Provider（可本地或远端）
 ```
 
 ---
@@ -5120,7 +5109,7 @@ Nginx → PM2(Next.js x4) → PostgreSQL + Redis + MinIO + LM Studio
 | ORM | Prisma 5 | 类型安全、迁移方便 |
 | 缓存 | Redis 7 | 多功能（缓存+队列+事件） |
 | 文件 | MinIO | S3兼容、本地部署 |
-| AI | LM Studio | 本地运行、数据不出境 |
+| AI | F012 平台适配器 + 可插拔 Provider | 业务与模型/连接解耦，按 RoutePolicy 审计路由与失败 |
 | 消息 | Redis Pub/Sub | 轻量、无需额外组件 |
 
 ---
@@ -5128,7 +5117,7 @@ Nginx → PM2(Next.js x4) → PostgreSQL + Redis + MinIO + LM Studio
 ### 10.9 MVP架构约束
 
 1. **单体优先**：MVP不分微服务，按模块组织代码
-2. **本地优先**：LM Studio本地，数据不出境
+2. **路由显式**：不固定本地优先；Provider、数据边界、候选顺序和失败动作必须由 F012 发布配置明确声明
 3. **事件轻量**：Redis Pub/Sub足够，不上Kafka/RabbitMQ
 4. **缓存适度**：核心API缓存，不全局缓存
 5. **降级就绪**：AI服务必须有降级，不依赖单一组件
@@ -5166,7 +5155,7 @@ cyanlog-sales-v3/
 │   ├── config/                 # 配置管理
 │   └── ai/                     # AI服务封装
 ├── services/                   # 独立服务
-│   ├── ollama/                 # AI模型服务
+│   ├── ai-provider/            # 可选 Provider 适配/自托管模型服务
 │   └── ocr/                    # OCR服务
 ├── infra/                      # 基础设施
 │   ├── docker/                 # Docker配置
@@ -5185,7 +5174,7 @@ cyanlog-sales-v3/
 | 报价引擎 | apps/api/quote | 后端组 | 计算/模板/导出 | REST API |
 | 配置中心 | apps/api/config | 后端组 | 配置/版本/审计 | REST API |
 | Web前端 | apps/web | 前端组 | UI/交互/状态 | - |
-| AI服务 | services/ollama | 算法组 | 模型/推理 | gRPC |
+| AI平台适配 | packages/ai + 可选 services/ai-provider | 算法组/后端组 | 业务用点解析、路由、Provider适配与调用证据 | 内部 API |
 
 ### 11.3 环境变量清单（双层真相机制）
 
@@ -5198,20 +5187,21 @@ cyanlog-sales-v3/
 
 #### 11.3.1 Core Required（最小可运行集）
 
-**定义**：本地能跑通 Quote.create + Contract.upload → AI审核的最小 env 集合
+**定义**：本地能跑通 Quote.create + Contract.upload，并能对未配置 AI 路由返回明确不可用状态的最小 env 集合。AI Provider 的连接与密钥由 F012 控制面发布，不属于固定环境变量最小集。
 
 | 变量名 | 必填 | 默认值 | 说明 | SoT（真相来源） | 轮换策略 |
 |--------|------|--------|------|-----------------|----------|
 | `DATABASE_URL` | 是 | - | PostgreSQL连接字符串 | `.env.local` | 连接串变更需滚动重启 |
 | `REDIS_URL` | 是 | - | Redis连接字符串 | `.env.local` | 连接串变更需滚动重启 |
 | `JWT_SECRET` | 是 | - | JWT签名密钥（≥32字符随机串） | 密钥管理系统 | 季度轮换，旧密钥保留7天兼容期 |
-| `LOCAL_MODEL_URL` | 是 | `http://localhost:1234/v1` | 本地AI服务地址（OpenAI兼容） | `.env.local` | 服务发现时动态更新 |
 | `MINIO_ENDPOINT` | 是 | `localhost:9000` | 对象存储入口 | `.env.local` | 多节点时配负载均衡地址 |
 | `MINIO_ACCESS_KEY` | 是 | - | 对象存储访问密钥 | 密钥管理系统 | 年度轮换 |
 | `MINIO_SECRET_KEY` | 是 | - | 对象存储密钥 | 密钥管理系统 | 年度轮换 |
 | `APP_BASE_URL` | 是 | `http://localhost:3000` | 应用基础URL（用于回调） | 部署配置 | 随域名变更 |
 
 **验证命令**：`pnpm env:check`（必须全绿才能启动）
+
+> `LOCAL_MODEL_URL` 仅作为旧运行兼容变量保留时才可选使用，不是 WP01/P0 固定依赖，也不能替代已发布的 ProviderConnection、ModelCatalogEntry 与 RoutePolicy。
 
 ---
 
@@ -5391,10 +5381,11 @@ pnpm dev
 
 ### 13.3 AI集成
 
-**Ollama本地部署**：
-- 合同审核AI增强
-- 标书内容生成
-- 规则调优建议
+**F012 AI 平台接入**：
+- 合同审核、标书解析等模块通过稳定 BusinessUsePoint 消费 AIApplication
+- RoutePolicy 明确模型候选顺序、超时/重试和全失败动作
+- Ollama、LM Studio、云端网关等仅为可选 Provider 实现，不构成 P0 固定依赖
+- AI 结果与独立规则引擎结果分别记录；规则引擎不得伪装为 AI 调用成功
 
 ---
 
@@ -5428,7 +5419,7 @@ pnpm dev
 - 审核报告（辅助/兜底）：单独标识为报告产物，不能替代源文件批注成功
 
 【失败降级策略】
-1. AI模型超时（>30s）→ 返回规则引擎兜底结果（仅红绿灯，无详细批注）
+1. 当前模型超时或失败 → 按 F012 RoutePolicy 的有序候选尝试下一模型；全候选失败时返回可审计降级/人工复核状态。规则引擎可独立输出确定性结果，但不冒充 AI 成功
 2. 批注生成失败 → 标记“需人工定位”或返回独立报告产物，主状态必须显示降级原因
 3. 规则配置错误 → 返回校验错误并阻断正式审核结果，不得静默使用默认规则集
 4. 模型服务不可用 → 返回"服务暂不可用，请稍后重试" + 日志告警
@@ -5746,12 +5737,12 @@ interface AuditLog {
 
 - 所有数据存储在中国大陆境内
 - 使用本地部署的MinIO（可选阿里云OSS国内节点）
-- 本地模型优先；长文本、长 PDF、标书解析等需要 L2 云端增强时，必须使用配置中心显式发布的 OpenAI-compatible Provider，并记录授权、模型调用和降级原因
+- 模型候选顺序由配置中心已发布 RoutePolicy 决定，不默认写死本地优先或 L2 云端；任何外部 Provider 必须显式声明数据边界、授权范围和最小必要输入，并记录真实模型调用与降级原因
 
 #### 14.4.2 合同数据保密
 
 - 合同文本加密存储，仅授权人员可解密查看
-- 合同审核 AI 分析默认本地优先；长合同、长 PDF 的云端增强必须由已发布模型策略授权，按最小必要文本和分块覆盖执行，并写入 `model_invocations`，不能静默上传或伪装为本地完成
+- 合同审核 AI 分析必须经 `contract.review.*` 业务用点解析已发布 AIApplication / RoutePolicy；外部 Provider 调用按最小必要文本和分块覆盖执行，并写入 `model_invocations`，不能静默上传或伪装为本地完成
 - 合同导出操作记录审计日志
 - 员工离职自动回收数据访问权限
 
@@ -5940,7 +5931,7 @@ Week 7-8: 合同审核核心（重点，双方案设计）
 │ [P0] Word文档解析（mammoth.js）                  后端组      文档提取服务         │
 │ [P0] 文本位置映射（段落→Word XML）               后端组      位置映射算法         │
 │ [P0] 红绿灯规则引擎（9类规则基础版）             后端组      规则配置YAML         │
-│ [P0] AI审核集成（Ollama + 统一接口层）           后端组      AI服务封装           │
+│ [P0] AI审核业务用点接入（F012 平台）             后端组      绑定/路由/证据闭环   │
 │ [P0] 统一审核问题数据结构                        后端组      ReviewIssue类型定义 │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │ 【Week 8】双输出方案（关键决策点：Day 3）                                        │
@@ -6005,7 +5996,8 @@ Week 9-10: 合同审核优化与系统集成 [Phase 2: 日程管理延后]
 │         │ （XML定位困难、格式破坏）      │        │        │ Word批注，兜底方案    │
 │         │                              │        │        │ 审核报告，确保可用    │
 ├─────────┼──────────────────────────────┼────────┼────────┼──────────────────────┤
-│ R003    │ Ollama本地部署性能不足        │ 中     │ 中     │ 准备云端模型备选方案  │
+│ R003    │ 已发布 AI 路由无可用候选或质量不足 │ 中  │ 高     │ RoutePolicy 候选验证、│
+│         │                              │        │        │ 显式失败与人工复核   │
 ├─────────┼──────────────────────────────┼────────┼────────┼──────────────────────┤
 │ R004    │ 飞书集成接口变更              │ 低     │ 中     │ 封装抽象层，隔离变化  │
 ├─────────┼──────────────────────────────┼────────┼────────┼──────────────────────┤
@@ -8232,8 +8224,8 @@ alerts:
     severity: warning
     notify: [slack]
     
-  - name: ai_service_down
-    condition: ollama_health == 0
+  - name: ai_route_unavailable
+    condition: ai_route_available == 0
     duration: 1m
     severity: critical
     notify: [slack, pagerduty, email]
@@ -8586,6 +8578,8 @@ async function migrateData() {
 
 
 ## 附录X：详细设计扩展
+
+> **权威性声明（2026-07-20）**：本附录保留大量历史设计、运维示例和技术选型记录，仅作背景材料，不得覆盖第 5 章、10.4 节与 F012。下文出现的 Ollama、LM Studio、`LOCAL_MODEL_URL` 只代表可选或旧 Provider 实现，不是 P0 固定依赖；“规则引擎兜底”只能表示独立规则结果仍可用，不能表示 AI 成功。新实现必须使用 BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy → ModelCatalogEntry → ProviderConnection，并在候选全失败时执行 RoutePolicy 的显式失败动作。
 
 ### X.1 报价引擎详细设计（第4章扩展）
 
@@ -14789,6 +14783,8 @@ class MultiAgentOrchestrator {
 
 ## 附录R：研发准备与执行清单（原第二部分）
 
+> **权威性声明（2026-07-20）**：本附录是早期研发准备记录，不是当前 AI 产品或发布真相。涉及 Ollama、本地模型和固定生产模型的内容仅作为历史方案留档；现行实现以 F012 六对象模型及第 10.4 节为准，Ollama/LM Studio 只能作为可选 Provider 实现。
+
 > **说明**：本节内容为开发团队准备材料，非产品功能定义。包含PRD验证、开发工具链、Agent调用设计等实施层面的准备事项。
 
 ### R.1 PRD设计验证清单
@@ -15248,13 +15244,15 @@ flow:
 | 系统 | 集成方式 | 数据流向 | 使用场景 | 失败兜底 | 优先级 |
 |------|---------|---------|---------|---------|--------|
 | **飞书开放平台** | OAuth2 + Webhook | 双向：用户/部门同步、消息推送、审批流 | 登录认证、组织架构、消息通知、审批 | 降级为系统内通知 | P0 |
-| **Ollama本地模型** | HTTP API | 单向：文本→分析结果 | 合同审核AI分析、标书内容生成 | 超时→规则引擎兜底 | P0 |
+| **AI Provider（经 F012 平台）** | ProviderConnection 受控适配 | 单向：业务输入→模型结果与调用证据 | 所有已注册 BusinessUsePoint（含合同审核、标书解析） | 按 RoutePolicy 尝试有序候选；全失败执行显式失败/人工复核，规则引擎不冒充 AI | P0（平台能力） |
 | **PaddleOCR** | Docker本地部署 | 单向：图片→文本 | 招标文件OCR、合同扫描件识别 | 失败→人工录入 | P1 |
 | **SMTP邮件服务** | SMTP协议 | 单向：系统→邮件 | 报价单PDF发送、通知邮件 | 失败→飞书消息 | P0 |
 | **飞书日历** | Calendar API | 双向：日程同步 | 里程碑日程、提醒同步 | 仅系统内日程 | P2 |
 | **iCal订阅** | 标准协议 | 单向：系统→日历应用 | 销售个人日历订阅 | 不支持→手动导入 | P2 |
 | **电子签章（预留）** | API接入 | 双向：合同签署 | 合同在线签署 | 线下签署 | P3 |
 | **CRM（预留）** | API/Webhook | 双向：客户数据同步 | 客户信息拉取、报价回写 | 支持快速录入 | P2 |
+
+> Ollama、LM Studio、云端网关等只是可选 Provider 实现，不是 P0 固定依赖；是否可用取决于已发布的 ProviderConnection、ModelCatalogEntry、ApplicationBinding 与 RoutePolicy。
 
 ### Y4.1 集成依赖关系
 
@@ -15265,9 +15263,13 @@ flow:
     ├── 消息通知
     └── 审批流
 
-AI服务层
-    ├── Ollama本地模型（合同审核）
-    └── PaddleOCR（文档解析）
+AI 平台层（F012）
+    ├── BusinessUsePoint → ApplicationBinding → AIApplication
+    ├── RoutePolicy → ModelCatalogEntry → ProviderConnection
+    └── 可选 Provider 实现（Ollama / LM Studio / 云端网关等）
+
+文档处理层（独立于 AI Provider）
+    └── PaddleOCR（扫描件 OCR / 文档解析）
 
 通知通道
     ├── 飞书消息（主通道）

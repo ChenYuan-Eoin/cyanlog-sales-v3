@@ -10,7 +10,7 @@
 #   - 代码中的 REQ 标记必须与之一致
 
 version: "2026-07-20.1"
-last_updated: "2026-07-20T17:20:13+08:00"
+last_updated: "2026-07-20T18:55:00+08:00"
 
 goal_governance:
   status: active
@@ -25,7 +25,7 @@ goal_governance:
     - "完成证据必须绑定 namespace_version、WP、Git SHA、部署/数据库环境及浏览器或真实文件产物。"
   work_package_crosswalk:
     WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
-    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: active_reacceptance}
+    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: implementation_candidate_pending_final_revalidation}
     WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: next_needs_current_runtime_proof}
     WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: acceptance_disputed}
     WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: needs_reacceptance}
@@ -77,7 +77,7 @@ audit_supplement:
         name: 审核规则与 Skill 闭环
         problem_domains: [PD03, PD06]
         related_reqs: [F006, F009, F012]
-        acceptance: "ReviewRun 绑定 RuleSnapshot、SkillBundle、ModelPolicy，规则变更不影响历史结果。"
+        acceptance: "ReviewRun 绑定 RuleSnapshot、SkillBundle 和不可漂移的已解析路由快照，规则或平台路由变更不影响历史结果；历史 ModelPolicy 绑定保留。"
       G4:
         name: 配置中心数据底座
         problem_domains: [PD02, PD03, PD08]
@@ -168,7 +168,7 @@ requirements:
     name: 配置中心共享架构
     module: 配置中心
     source: PROJECT-主文档.md#6.0-6.4
-    status: confirmed
+    status: in_progress
     priority: P0
     feature_packet: product-truth/feature-packets/F000-config-center-architecture.md
     code_locations:
@@ -301,7 +301,7 @@ requirements:
       合同审核商业产品第一阶段执行面：
       - 合同版本、ReviewRun、RiskFinding、NegotiationTask、CustomerFeedback
       - 多流审核工作台：原文/批注、风险队列、销售谈判、客户反馈、输出审计
-      - 消费 F006 SkillBundle、F009 规则快照、F012 模型策略
+      - 消费 F006 SkillBundle、F009 规则快照，并通过 F012 稳定业务用点获取已解析路由快照
       - 批注为主、报告为辅；禁止把文本粘贴审核作为主链路
     audit_supplement:
       current_gap: "当前合同中心入口仍把风险审核、文档比对在无前置对象时退回上传/新建，产品语义与本需求不一致。"
@@ -313,7 +313,7 @@ requirements:
       acceptance_requirements:
         - "桌面和移动端真实浏览器验证四个入口分别到达不同的业务状态。"
         - "无合同、无已完成合同、有上传未审核合同、有已审核合同四种状态都有明确 UI。"
-        - "合同审核完成证据必须绑定合同版本、ReviewRun、规则快照/Skill、模型策略和输出物。"
+        - "合同审核完成证据必须绑定合同版本、ReviewRun、规则快照/Skill、已解析路由快照和输出物。"
     parent_doc: product-truth/00-master/PROJECT-主文档.md#5
     legacy_docs:
       - product-truth/feature-packets/F005-derive.md
@@ -339,7 +339,7 @@ requirements:
     description: |
       合同审核执行面：
       - 合同文件与版本流
-      - ReviewRun 绑定 SkillBundle / RuleSnapshot / ModelPolicy
+      - ReviewRun 绑定 SkillBundle / RuleSnapshot / 不可漂移的已解析路由快照；历史 ModelPolicy 引用保留
       - RiskFinding 复核、销售谈判、客户反馈、再审核、审计归档
       - Word 批注主路径和报告辅助路径的工作台承接
     audit_supplement:
@@ -413,18 +413,19 @@ requirements:
       - lib/rules/flexible-engine.ts
     description: |
       合同审核 Skill 运行时：
-      - 从 F009 已发布规则、知识库模板、条款库和 F012 模型策略编译 SkillBundle
+      - 从 F009 已发布规则、知识库模板和条款库编译 SkillBundle；AI 通过 F012 稳定 BusinessUsePoint 消费已发布应用
       - 执行结构化规则、语义规则、模板对比和模型调用
       - 生成 ReviewEvidence、RiskFinding 和 F007 可消费的 CommentPatchDraft
-      - 历史 ReviewRun 必须绑定不可漂移的 SkillBundle / RuleSnapshot / ModelPolicy
+      - 新 ReviewRun 必须绑定不可漂移的 SkillBundle / RuleSnapshot / 已解析路由快照；历史 ModelPolicy 绑定保留但不是新控制面对象
     audit_supplement:
-      current_gap: "第一阶段已能从已发布规则快照、条款库引用和 F012 ModelPolicy 编译真实 `contract_skill_bundles` 并绑定 ReviewRun；仍缺独立 Skill 编译控制台、模板快照、变体词典快照和 eval case 门禁。"
+      current_gap: "旧运行时已能从已发布规则快照、条款库引用和历史 ModelPolicy 编译 `contract_skill_bundles` 并绑定 ReviewRun；该链只是兼容事实。新六对象图到不可漂移运行路由快照的编译和 ReviewRun 绑定由 WP02 完成；仍缺独立 Skill 编译控制台、模板快照、变体词典快照和 eval case 门禁。"
       supplemental_requirements:
         - "F009 发布后的规则、模板、字段抽取提示、话术和测试用例必须编译为 SkillBundle。"
-        - "ReviewRun 必须记录 SkillBundle、RuleSnapshot、TemplateSnapshot、ModelPolicy，不允许只记录当前规则表状态。"
-        - "本地模型、云端模型、规则兜底的调用选择必须由 F012 注入，不由合同审核代码硬编码。"
+        - "ReviewRun 必须记录 SkillBundle、RuleSnapshot、TemplateSnapshot 和已解析路由快照，不允许只记录当前规则表或当前 RoutePolicy 状态。"
+        - "模型调用选择必须由 F012 RoutePolicy 的任意有序候选决定，不由合同审核代码硬编码本地/云端次序。"
+        - "rule-engine 是独立确定性执行能力，不得作为 Provider、ModelCatalogEntry 或 AI 调用成功。"
       acceptance_requirements:
-        - "给定同一合同版本和同一 SkillBundle，可复现同一批规则/模板依据和模型调用策略。"
+        - "给定同一合同版本、SkillBundle 和已解析路由快照，可复现同一批规则/模板依据和模型调用选择。"
         - "规则配置变更后，新 ReviewRun 使用新快照，旧 ReviewRun 不漂移。"
 
   F007:
@@ -539,30 +540,45 @@ requirements:
         - "API 返回 401/403/500/ORG_CONTEXT 错误时，前端不渲染为 0 部门 0 成员。"
 
   F012:
-    name: AI运行时配置
+    name: AI平台配置与运行边界
     module: 配置中心
     source: PROJECT-主文档.md#6.2.3
-    status: confirmed
+    status: implementation_candidate_pending_final_revalidation
     priority: P1
     feature_packet: product-truth/feature-packets/F012-ai-runtime-config.md
     code_locations:
       - app/configs/page.tsx
       - app/api/configs/route.ts
       - app/api/configs/[id]/route.ts
+      - app/api/configs/[id]/publish/route.ts
+      - app/api/configs/[id]/rollback/route.ts
+      - app/api/configs/ai-runtime/probe/route.ts
+      - app/configs/tabs/AIConfigTab.tsx
+      - app/configs/dialogs/AIEditForm.tsx
+      - lib/configs/ai-platform.ts
+      - lib/configs/ai-platform-registry.ts
+      - lib/configs/validation.ts
+      - lib/configs/types.ts
       - lib/contracts/model-policy.ts
       - supabase/migrations/20260701033715_f006_f012_runtime_objects.sql
       - lib/configs/runtime.ts
       - lib/ai/failover.ts
-    description: 本地模型、销售云端 OpenAI 兼容模型、路由阈值和降级链配置
+    description: 全局 Provider 连接、模型目录、AI 应用、业务用点、绑定与路由配置；真实调用证据由 WP02 验收
     audit_supplement:
-      current_gap: "第一阶段已能从已发布 AI 配置生成 `model_policies`，合同审核 ReviewRun 会绑定 `model_policy_id` 并记录 `model_invocations`；仍缺完整 Provider/Routing 编辑器、连接测试和健康状态面板。"
+      current_gap: "WP01 实现候选已将 ProviderConnection、ModelCatalogEntry、AIApplication、BusinessUsePoint、ApplicationBinding、RoutePolicy 拆为独立对象并建立五任务 UI、发布依赖和草稿参数 probe。隔离 Preview vsfropnfsmnonkotywsx 已通过密钥历史安全迁移和动态 canary；该结论仅对 Preview 数据层成立。WP01 完成仍必须绑定最终 Git SHA 重跑代码、桌面/iPad 和六对象 Preview 闭环。新图尚未切真实业务运行，所有业务调用点、invocation/token/ReviewRun 一致性属于 WP02。Production 保持只读。"
       supplemental_requirements:
-        - "模型 provider、base URL、模型名、密钥引用、超时、页数阈值、降级顺序必须由配置中心发布。"
-        - "F006 执行时只能消费已发布 ModelPolicy，并记录每次模型调用、降级、失败和规则兜底原因。"
-        - "本地模型和云端模型都不可在业务代码里写死为最终策略。"
+        - "Provider 只管理端点、协议和认证；同一 Provider 的多个具体模型必须进入模型目录。"
+        - "业务模块先注册稳定 BusinessUsePoint，只绑定已发布 AIApplication；模型选择由 RoutePolicy 决定。"
+        - "规则集、合同阶段、Prompt 和 rule-engine 不得进入 Provider 或模型目录。"
+        - "F006 执行时只能消费完整发布图编译出的运行策略，并记录每次模型调用、降级、失败和确定性兜底原因；该运行切换由 WP02 验收。"
       acceptance_requirements:
-        - "配置中心修改模型策略后，新 ReviewRun 能读取新策略，旧 ReviewRun 保留旧策略快照。"
-        - "模型不可用时能降级到规则/备用模型，并在审计区展示原因。"
+        - "WP01：六对象可独立保存草稿、校验引用、发布、建立新版本和查看历史；桌面与 iPad 五任务无白块或横向溢出。"
+        - "WP01：草稿参数 probe 不持久化连接状态，不回填密钥掩码，不把测试冒充生产健康或 ReviewRun；同一 Provider 可登记多个模型。"
+        - "WP01：隔离 Preview vsfropnfsmnonkotywsx 已应用 secure_ai_config_control_plane 迁移；动态 bearer canary 证明当前记录可持有凭据、config_versions 不保留凭据且 fixture 可清理。该证据不外推到 Production。"
+        - "WP01：旧 AI_CONFIG / ModelPolicy 仍可只读消费，新图不与旧图混合，候选可安全回退而不丢失历史引用。"
+      downstream_release_gates:
+        - "WP02（不阻塞 WP01 退出）：配置中心修改发布图后，新 ReviewRun 读取新策略，旧 ReviewRun 保留旧策略快照；模型不可用时按 RoutePolicy 降级，并在 model_invocations 和 ReviewRun 展示原因。"
+        - "WP09（不阻塞 WP01 退出）：Production 前验收数据库原子发布、RLS、环境及正式发布。"
 
   # ═══════════════════════════════════════════════════════════════
   # 标书中心 (Tender Center)
@@ -680,10 +696,11 @@ requirements:
     name: AI服务降级
     module: 技术架构
     source: 技术架构.md#4
-    status: confirmed
+    status: deprecated
     priority: P0
     code_locations: []
-    description: 本地模型、云端模型、规则引擎降级
+    superseded_by: F012 / WP02
+    description: 历史“本地→云端→规则引擎”三级降级占位，不再是现行产品或验收依据。现行口径由 F012 RoutePolicy 配置任意有序模型候选和全失败动作，rule-engine 作为独立确定性能力；真实运行证据属于 WP02。
 
   # ═══════════════════════════════════════════════════════════════
   # 销售赋能与考核中心 (Sales Enablement Center)

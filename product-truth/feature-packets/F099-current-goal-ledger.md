@@ -21,7 +21,7 @@
 | WP | Slug | 主要 G | 当前状态 | 边界 |
 |---|---|---|---|---|
 | WP00 | goal-baseline-consolidation | G1/G10/G11 | Completed / `18dad230` | 已统一编号、真相源、Harness 和候选分支治理快照 |
-| WP01 | ai-platform-foundation | G4；支撑 G3/G7 | **Active** / reacceptance | Provider、模型目录、AI 应用、业务用点 |
+| WP01 | ai-platform-foundation | G4；支撑 G3/G7 | **Active** / implementation candidate pending final revalidation | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
 | WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Next / needs_current_runtime_proof | 当前 probe、真实 invocation/token、ReviewRun、降级 |
 | WP03 | rule-collection | G3/G4；支撑 G7/G10 | acceptance_disputed | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | contract-center-ia | G6；支撑 G8 | needs_reacceptance | 合同中心入口、任务身份、版本和下一步 |
@@ -38,3 +38,20 @@
 WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化，本分支现为可继续 WP01 的治理候选。WP01-WP04 的旧“本地完成”总括结论已被用户验收推翻；局部代码和历史证据可复用，但必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
 
 Production 数据库继续只读；WP01 不部署 Production，不覆盖根工作区受保护 dirty 快照。
+
+## 3. WP01 当前候选（2026-07-20）
+
+当前工作树已形成下列实现候选；这是“待最终重验的候选范围”，不是完成声明：
+
+- 六个独立对象：`ProviderConnection`、`ModelCatalogEntry`、`AIApplication`、`BusinessUsePoint`、`ApplicationBinding`、`RoutePolicy`；
+- 唯一解析方向：`BusinessUsePoint → ApplicationBinding → AIApplication → RoutePolicy → ModelCatalogEntry → ProviderConnection`；
+- 业务用点由代码注册，Provider 不包含模型/合同阶段/规则引擎；
+- 草稿、发布依赖、不可变发布版本、新草稿修订和草稿历史回滚；
+- 配置页五任务工作区，移除造成白色空洞的异高 Grid / CSS columns 路径；
+- `connection` 与 `model` 两种草稿参数 probe 口径；probe 只是当次请求结果，不持久化连接健康，不写 `model_invocations`，不代表生产可用或真实业务调用。
+
+门禁状态：中间候选曾通过目标/全量测试、build 和桌面/iPad 浏览器验收，但其后代码事实审查又发现发布图、Provider 修订密钥、SSRF/授权和 iPad 首屏等需修正项。因此旧浏览器截图只是中间证据，不得与后续代码混合声称完成。
+
+**WP01 退出门禁**：以同一最终 Git SHA 重跑六对象/API 事实、Provider 安全边界、五任务 UI、目标/全量测试、lint、typecheck、build、桌面/iPad、隔离 Preview 六对象闭环以及旧 `AI_CONFIG / ModelPolicy` 兼容回退。密钥历史数据层门禁已在隔离 Preview `vsfropnfsmnonkotywsx` 通过：已应用 `secure_ai_config_control_plane`，动态 bearer canary 证明当前记录可持有凭据、历史版本无该凭据且 fixture 清理完成；此结论不外推到 Production。WP01 退出门禁通过即可转 completed，WP02 的运行证据不回填阻塞 WP01。
+
+**下游门禁**：WP02 在 WP01 退出后验收真实 provider、invocation/token、ReviewRun、降级一致性和准确率；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、环境和正式发布。两者都不是 WP01 完成前置条件。

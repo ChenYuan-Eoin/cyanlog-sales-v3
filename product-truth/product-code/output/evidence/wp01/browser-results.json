@@ -1,0 +1,68 @@
+{
+  "validated_at": "2026-07-20T20:44:13+08:00",
+  "environment": {
+    "application": "http://127.0.0.1:3100/configs?tab=ai",
+    "supabase_project_id": "vsfropnfsmnonkotywsx",
+    "supabase_project_name": "price-v3-p0-g5-preview-20260717",
+    "production_write": false,
+    "production_deploy": false
+  },
+  "provider_probe": {
+    "auth_mode": "bearer",
+    "credential_value_recorded": false,
+    "supplied_credential_probe": true,
+    "stored_credential_revision_probe": true,
+    "discovered_models": ["wp01/mock-primary", "wp01/mock-fallback"],
+    "minimum_generation": {
+      "wp01/mock-primary": "passed",
+      "wp01/mock-fallback": "passed"
+    },
+    "archived_provider_has_api_key": false,
+    "published_provider_has_api_key": true,
+    "config_version_rows_with_secret": 0
+  },
+  "published_graph": {
+    "provider_connection": 1,
+    "model_catalog_entry": 2,
+    "ai_application": 1,
+    "business_use_point": 1,
+    "route_policy": 1,
+    "application_binding": 1,
+    "route_order": ["wp01/mock-primary", "wp01/mock-fallback"],
+    "capability_mismatch_rejected_before_fix": true,
+    "binding_published_after_capability_fix": true
+  },
+  "large_list": {
+    "temporary_provider_assets": 50,
+    "desktop_single_column": true,
+    "ipad_single_column": true,
+    "monotonic_vertical_order": true,
+    "maximum_inter_card_gap_px": 11.25,
+    "release_query_matches": [0, 1, 14, 50]
+  },
+  "desktop": {
+    "viewport": { "width": 1440, "height": 900 },
+    "horizontal_overflow_px": 0,
+    "task_button_count": 5,
+    "clean_console_errors": 0,
+    "clean_console_warnings": 0
+  },
+  "ipad": {
+    "viewport": { "width": 1024, "height": 768 },
+    "horizontal_overflow_px": 0,
+    "task_button_count": 5,
+    "large_list_asset_count": 50,
+    "dialog_bounds": { "top": 46.09, "bottom": 721.91, "height": 675.83 },
+    "dialog_close_visible": true,
+    "dialog_save_visible": true,
+    "clean_console_errors": 0,
+    "clean_console_warnings": 0
+  },
+  "cleanup": {
+    "deleted_run_tagged_rows": 62,
+    "run_tagged_residue": 0,
+    "retained_preexisting_ai_rows": 9,
+    "config_version_rows_with_secret_after_cleanup": 0
+  },
+  "scope_boundary": "WP01 configuration control plane only; runtime execution is WP02 and atomic Production publication is WP09"
+}

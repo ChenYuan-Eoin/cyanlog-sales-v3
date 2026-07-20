@@ -14,6 +14,18 @@ export interface Config {
   updated_at: string
 }
 
+export type EditableConfig = Partial<Config> & {
+  revision_source_id?: string
+  revision_asset_locked?: boolean
+  credential_action?: 'reuse' | 'replace' | 'clear'
+  credential_reuse_available?: boolean
+}
+
+export type ConfigPublishFeedback = {
+  tone: 'success' | 'error'
+  message: string
+}
+
 export interface ProductPriceTier {
   id?: string
   qty_from: number

@@ -14,11 +14,14 @@ import {
   UsersIcon,
   FileTextIcon,
 } from '@/components/icons'
-import type { Config, ConfigsInitialData, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback, RuntimePolicy } from './types'
+import type { Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback, RuntimePolicy } from './types'
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
-import { groupAIConfigs } from '@/lib/configs/ai-config-kind'
+import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
+import type { AIPlatformAssetKind } from '@/lib/configs/types'
+import { groupPlatformConfigRevisions } from './tabs/ai-config-presentation'
+import { isMaskedApiKey } from '@/lib/configs/runtime'
 import { isResolvedRuleContractComplete } from '@/lib/rules/rule-contract'
 import TabsContent from './tabs/TabsContent'
 import { confirmAction } from '@/lib/toast'
@@ -388,8 +391,14 @@ export default function ConfigsClient({
 
   // Config dialog
   const [isConfigEditOpen, setIsConfigEditOpen] = useState(false)
-  const [editingConfig, setEditingConfig] = useState<Partial<Config> | null>(null)
+  const [editingConfig, setEditingConfig] = useState<EditableConfig | null>(null)
   const [configType, setConfigType] = useState<Config['type']>('TAX_RULE')
+  const [configDialogError, setConfigDialogError] = useState('')
+  const [isSavingConfig, setIsSavingConfig] = useState(false)
+  const configSaveInFlightRef = useRef(false)
+  const [publishingConfigIds, setPublishingConfigIds] = useState<Set<string>>(new Set())
+  const [configPublishFeedback, setConfigPublishFeedback] = useState<Record<string, ConfigPublishFeedback | undefined>>({})
+  const publishingConfigIdsRef = useRef(new Set<string>())
 
   // Product / price list dialog
   const [isProductEditOpen, setIsProductEditOpen] = useState(false)
@@ -791,7 +800,7 @@ export default function ConfigsClient({
     rules: rules.length,
     tax: getConfigsByType('TAX_RULE').length,
     approval: getConfigsByType('APPROVAL_RULE').length,
-    ai: getConfigsByType('AI_CONFIG').length,
+    ai: groupPlatformConfigRevisions(getConfigsByType('AI_CONFIG')).length,
     theme: getConfigsByType('UI_THEME').length,
     'org-structure': orgSummary?.departments.length ?? 0,
     'role-access': roles.length,
@@ -802,30 +811,30 @@ export default function ConfigsClient({
       return '!'
     }
     if (activeTabLoading && tabId === activeTab) {
-      return '...'
+      return '…'
     }
     if (!loadedTabs.has(tabId)) {
-      return '...'
+      return '…'
     }
     return String(moduleCounts[tabId] || 0)
   }, [activeTab, activeTabLoading, error, loadedTabs, moduleCounts])
 
   const formatSectionCount = useCallback((sectionTabs: ConfigTabId[]) => {
     if (activeTabLoading && sectionTabs.includes(activeTab)) {
-      return '...'
+      return '…'
     }
     const knownTotal = sectionTabs.reduce((total, tab) => total + (moduleCounts[tab] || 0), 0)
     const hasUnloadedTabs = sectionTabs.some((tab) => !loadedTabs.has(tab))
     if (hasUnloadedTabs) {
-      return knownTotal > 0 ? `${knownTotal}+` : '...'
+      return knownTotal > 0 ? `${knownTotal}+` : '…'
     }
     return String(knownTotal)
   }, [activeTab, activeTabLoading, loadedTabs, moduleCounts])
 
   const activeModuleMetrics = useMemo(() => {
     const countValue = (count: number) => {
-      if (activeTabLoading) return '...'
-      if (!loadedTabs.has(activeTab)) return error ? '加载失败' : '...'
+      if (activeTabLoading) return '…'
+      if (!loadedTabs.has(activeTab)) return error ? '加载失败' : '…'
       return String(count)
     }
 
@@ -860,11 +869,14 @@ export default function ConfigsClient({
       }
       case 'ai': {
         const aiConfigs = getConfigsByType('AI_CONFIG')
-        const grouped = groupAIConfigs(aiConfigs)
+        const logicalGroups = groupPlatformConfigRevisions(aiConfigs)
+        const countKinds = (...kinds: AIPlatformAssetKind[]) => logicalGroups
+          .filter((group) => kinds.includes(group.kind)).length
         return [
-          { label: 'Provider', value: countValue(grouped.providers.length) },
-          { label: '模型应用', value: countValue(grouped.applications.length) },
-          { label: '工具策略', value: countValue(grouped.toolPolicies.length) },
+          { label: 'Provider 连接', value: countValue(countKinds('provider_connection')) },
+          { label: '模型目录', value: countValue(countKinds('model_catalog_entry')) },
+          { label: 'AI 应用 / 路由', value: countValue(countKinds('ai_application', 'route_policy')) },
+          { label: '业务用点 / 绑定', value: countValue(countKinds('business_use_point', 'application_binding')) },
         ]
       }
       case 'theme': {
@@ -1044,29 +1056,49 @@ export default function ConfigsClient({
 
   // Config handlers
   async function handleSaveConfig() {
+    if (configSaveInFlightRef.current) return
     if (!editingConfig?.key || !editingConfig?.name) {
-      setError('请填写完整信息')
+      setConfigDialogError('请填写配置编号和显示名称。')
       return
     }
 
+    configSaveInFlightRef.current = true
+    setIsSavingConfig(true)
+    setConfigDialogError('')
     try {
       const token = localStorage.getItem('token')
       const isUpdate = 'id' in editingConfig && editingConfig.id
       const url = isUpdate ? `/api/configs/${editingConfig.id}` : '/api/configs'
       const method = isUpdate ? 'PUT' : 'POST'
+      const sanitizedValue = { ...(editingConfig.value || getDefaultValue(configType)) }
+      if (typeof sanitizedValue.api_key === 'string' && isMaskedApiKey(sanitizedValue.api_key)) {
+        delete sanitizedValue.api_key
+      }
+      const isProviderRevision = !isUpdate
+        && Boolean(editingConfig.revision_source_id)
+        && getAIConfigKind(sanitizedValue) === 'provider_connection'
+      const credentialAction = sanitizedValue.auth_mode === 'none'
+        ? 'clear'
+        : typeof sanitizedValue.api_key === 'string' && sanitizedValue.api_key.length > 0
+          ? 'replace'
+          : editingConfig.credential_action || 'clear'
 
       const payload = isUpdate
         ? {
             name: editingConfig.name,
-            value: editingConfig.value || {},
+            value: sanitizedValue,
             description: editingConfig.description,
           }
         : {
             key: editingConfig.key,
             name: editingConfig.name,
             type: configType,
-            value: editingConfig.value || getDefaultValue(configType),
+            value: sanitizedValue,
             description: editingConfig.description,
+            ...(isProviderRevision ? {
+              revision_source_id: editingConfig.revision_source_id,
+              credential_action: credentialAction,
+            } : {}),
           }
 
       const res = await fetch(url, {
@@ -1079,16 +1111,20 @@ export default function ConfigsClient({
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        setError(getApiErrorMessage(data, '保存失败'))
+        const data = await res.json().catch(() => ({}))
+        setConfigDialogError(getApiErrorMessage(data, '保存失败'))
         return
       }
 
       setIsConfigEditOpen(false)
       setEditingConfig(null)
+      setConfigDialogError('')
       await refreshTabData(activeTab)
     } catch {
-      setError('网络错误')
+      setConfigDialogError('保存请求失败，请检查网络后重试。')
+    } finally {
+      configSaveInFlightRef.current = false
+      setIsSavingConfig(false)
     }
   }
 
@@ -1114,6 +1150,10 @@ export default function ConfigsClient({
   }
 
   async function handlePublishConfig(id: string) {
+    if (publishingConfigIdsRef.current.has(id)) return
+    publishingConfigIdsRef.current.add(id)
+    setPublishingConfigIds(new Set(publishingConfigIdsRef.current))
+    setConfigPublishFeedback((current) => ({ ...current, [id]: undefined }))
     try {
       const token = localStorage.getItem('token')
       const res = await fetch(`/api/configs/${id}/publish`, {
@@ -1122,14 +1162,32 @@ export default function ConfigsClient({
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        setError(getApiErrorMessage(data, '发布失败'))
+        const data = await res.json().catch(() => ({}))
+        const message = getApiErrorMessage(data, '发布失败')
+        const correctiveMessage = `${message}。请根据该行的依赖检查修正配置后重试。`
+        setConfigPublishFeedback((current) => ({
+          ...current,
+          [id]: { tone: 'error', message: correctiveMessage },
+        }))
+        setError(correctiveMessage)
         return
       }
 
       await refreshTabData(activeTab)
+      setConfigPublishFeedback((current) => ({
+        ...current,
+        [id]: { tone: 'success', message: '发布成功，当前版本与依赖关系已更新。' },
+      }))
     } catch {
-      setError('网络错误')
+      const message = '发布请求失败，请检查网络连接后重试。'
+      setConfigPublishFeedback((current) => ({
+        ...current,
+        [id]: { tone: 'error', message },
+      }))
+      setError(message)
+    } finally {
+      publishingConfigIdsRef.current.delete(id)
+      setPublishingConfigIds(new Set(publishingConfigIdsRef.current))
     }
   }
 
@@ -1182,12 +1240,43 @@ export default function ConfigsClient({
     }
   }
 
-  function openNewConfig(type: Config['type']) {
+  function openNewConfig(type: Config['type'], aiKind?: AIPlatformAssetKind) {
+    const nextValue = getDefaultValue(type, aiKind)
+    const aiSuffix = Date.now().toString(36).toUpperCase()
+    const assetSuffix = aiSuffix.toLowerCase()
+    const aiKeyPrefix: Record<AIPlatformAssetKind, string> = {
+      provider_connection: 'AI_PROVIDER',
+      model_catalog_entry: 'AI_MODEL',
+      ai_application: 'AI_APP',
+      business_use_point: 'AI_USE_POINT',
+      application_binding: 'AI_BINDING',
+      route_policy: 'AI_ROUTE',
+    }
+    const aiName: Record<AIPlatformAssetKind, string> = {
+      provider_connection: '新 Provider 连接',
+      model_catalog_entry: '新模型',
+      ai_application: '新 AI 应用',
+      business_use_point: '新业务用点',
+      application_binding: '新应用绑定',
+      route_policy: '新路由策略',
+    }
+    const aiAssetPrefix: Record<AIPlatformAssetKind, string> = {
+      provider_connection: 'provider.connection',
+      model_catalog_entry: 'model.catalog',
+      ai_application: 'application.ai',
+      business_use_point: 'business.use-point',
+      application_binding: 'binding.application',
+      route_policy: 'route.policy',
+    }
+    if (type === 'AI_CONFIG' && aiKind && aiKind !== 'business_use_point') {
+      nextValue.asset_id = `${aiAssetPrefix[aiKind]}.${assetSuffix}`
+    }
     setConfigType(type)
+    setConfigDialogError('')
     setEditingConfig({
-      key: '',
-      name: '',
-      value: getDefaultValue(type),
+      key: type === 'AI_CONFIG' && aiKind ? `${aiKeyPrefix[aiKind]}_${aiSuffix}` : '',
+      name: type === 'AI_CONFIG' && aiKind ? aiName[aiKind] : '',
+      value: nextValue,
       description: '',
     })
     setIsConfigEditOpen(true)
@@ -1195,28 +1284,107 @@ export default function ConfigsClient({
 
   function openEditConfig(config: Config) {
     setConfigType(config.type)
+    setConfigDialogError('')
     setEditingConfig({ ...config })
     setIsConfigEditOpen(true)
   }
 
-  function getDefaultValue(type: Config['type']): Record<string, unknown> {
+  function openReviseConfig(config: Config) {
+    const { api_key: _discardedSecret, ...safeValue } = config.value
+    const isProviderRevision = getAIConfigKind(config.value) === 'provider_connection'
+    const canUseProviderRevisionSource = isProviderRevision && config.status !== 'ARCHIVED'
+    const canReuseCredential = canUseProviderRevisionSource
+      && typeof config.value.api_key === 'string'
+      && isMaskedApiKey(config.value.api_key)
+    const suffix = Date.now().toString(36).toUpperCase()
+    const nextKey = `${config.key}_R${config.version + 1}_${suffix}`.slice(0, 100)
+    setConfigType(config.type)
+    setConfigDialogError('')
+    setEditingConfig({
+      key: nextKey,
+      name: config.name,
+      value: safeValue,
+      revision_asset_locked: true,
+      description: config.description
+        ? `${config.description}（基于 v${config.version} 新建草稿）`
+        : `基于 ${config.key} v${config.version} 新建草稿`,
+      ...(canUseProviderRevisionSource ? {
+        revision_source_id: config.id,
+        credential_action: canReuseCredential ? 'reuse' : 'clear',
+        credential_reuse_available: canReuseCredential,
+      } : {}),
+    })
+    setIsConfigEditOpen(true)
+  }
+
+  function getDefaultValue(type: Config['type'], aiKind: AIPlatformAssetKind = 'provider_connection'): Record<string, unknown> {
     switch (type) {
       case 'TAX_RULE':
         return { rate: 0.13, category: '货物销售', enabled: true }
       case 'APPROVAL_RULE':
         return { rule_type: 'discount', thresholds: [{ limit: 5, approver_role: 'auto', enabled: true }] }
       case 'AI_CONFIG':
-        return {
-          kind: 'provider',
-          level: 1,
-          name: '新模型',
-          profile: 'local_primary',
-          provider_kind: 'openai_compatible',
-          base_url: '',
-          model: '',
-          timeout_ms: 45000,
-          enabled: true,
-          routing: { max_pages: 15, strategy: 'full' },
+        switch (aiKind) {
+          case 'provider_connection':
+            return {
+              schema_version: 'ai-platform.v1',
+              kind: aiKind,
+              asset_id: '',
+              provider_type: 'openai_compatible',
+              runtime_location: 'cloud',
+              auth_mode: 'none',
+              base_url: '',
+              connection_timeout_ms: 45000,
+              enabled: true,
+            }
+          case 'model_catalog_entry':
+            return {
+              schema_version: 'ai-platform.v1',
+              kind: aiKind,
+              asset_id: '',
+              provider_connection_id: '',
+              model_id: '',
+              capabilities: ['text_generation'],
+              enabled: true,
+            }
+          case 'ai_application':
+            return {
+              schema_version: 'ai-platform.v1',
+              kind: aiKind,
+              asset_id: '',
+              capabilities: ['text_generation'],
+              enabled: true,
+            }
+          case 'business_use_point':
+            return {
+              schema_version: 'ai-platform.v1',
+              kind: aiKind,
+              asset_id: '',
+              module_id: '',
+              required_capabilities: [],
+              enabled: true,
+            }
+          case 'application_binding':
+            return {
+              schema_version: 'ai-platform.v1',
+              kind: aiKind,
+              asset_id: '',
+              business_use_point_id: '',
+              ai_application_id: '',
+              enabled: true,
+            }
+          case 'route_policy':
+            return {
+              schema_version: 'ai-platform.v1',
+              kind: aiKind,
+              asset_id: '',
+              ai_application_id: '',
+              model_catalog_entry_ids: [],
+              strategy: 'ordered_fallback',
+              timeout_ms: 120000,
+              failure_action: 'manual_review',
+              enabled: true,
+            }
         }
       case 'CONTRACT_RULE':
         return { pattern: '', field: '', operator: 'gt', value: 0 }
@@ -1339,9 +1507,11 @@ export default function ConfigsClient({
   }
 
   function handleConfigDialogOpenChange(open: boolean) {
+    if (!open && configSaveInFlightRef.current) return
     setIsConfigEditOpen(open)
     if (!open) {
       setEditingConfig(null)
+      setConfigDialogError('')
     }
   }
 
@@ -1354,20 +1524,20 @@ export default function ConfigsClient({
 
   return (
     <div className="min-h-full bg-slate-50">
-      <div className="mx-auto max-w-[1480px] px-4 py-6 pl-14 lg:px-8 lg:pl-8">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="mx-auto max-w-[1480px] px-4 py-4 pl-14 lg:px-8 lg:pl-8 xl:py-6">
+        <div className="mb-4 flex flex-col gap-4 xl:mb-8 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
               <SettingsIcon size={14} />
               组织级配置工作台
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">配置中心</h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-500">
+            <p className="mt-2 hidden max-w-3xl text-sm text-slate-500 xl:block">
               参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
+          <div className="hidden gap-3 sm:grid-cols-3 xl:grid xl:min-w-[420px]">
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div className="text-xs font-medium text-slate-500">生效范围</div>
               <div className="mt-2 text-sm font-semibold text-slate-900">组织级统一发布</div>
@@ -1390,8 +1560,32 @@ export default function ConfigsClient({
           </div>
         )}
 
-        <div className="grid gap-8 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="self-start xl:sticky xl:top-8">
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] xl:gap-8">
+          <nav aria-label="配置域快捷导航" className="flex gap-2 overflow-x-auto pb-1 xl:hidden">
+            {CONFIG_SECTIONS.map((section) => {
+              const isActiveSection = section.id === activeSection
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => switchSection(section.id)}
+                  aria-current={isActiveSection ? 'page' : undefined}
+                  className={`min-h-11 shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
+                    isActiveSection
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 bg-white text-slate-700'
+                  }`}
+                >
+                  {section.label}
+                  <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${isActiveSection ? 'bg-white/10' : 'bg-slate-100'}`}>
+                    {formatSectionCount(section.tabs)}
+                  </span>
+                </button>
+              )
+            })}
+          </nav>
+
+          <aside className="hidden self-start xl:sticky xl:top-8 xl:block">
             <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="px-3 pb-3 pt-2">
                 <div className="text-sm font-semibold text-slate-900">配置域</div>
@@ -1408,7 +1602,7 @@ export default function ConfigsClient({
                       key={section.id}
                       type="button"
                       onClick={() => switchSection(section.id)}
-                      className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                      className={`w-full rounded-2xl border px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
                         isActiveSection
                           ? 'border-slate-900 bg-slate-900 text-white'
                           : 'border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white'
@@ -1444,15 +1638,15 @@ export default function ConfigsClient({
           </aside>
 
           <main className="min-w-0">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:p-6">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                  <div className="hidden items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400 xl:flex">
                     <span>配置中心</span>
                     <span>/</span>
                     <span>{sectionMeta.label}</span>
                   </div>
-                  <div className="mt-4 flex items-center gap-3">
+                  <div className="flex items-center gap-3 xl:mt-4">
                     {(() => {
                       const ActiveIcon = CONFIG_TABS[activeTab].icon
                       return (
@@ -1468,7 +1662,11 @@ export default function ConfigsClient({
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[360px]">
+                <div className={`hidden gap-3 xl:grid ${
+                  activeModuleMetrics.length === 4
+                    ? 'xl:min-w-[520px] xl:grid-cols-4'
+                    : 'xl:min-w-[360px] xl:grid-cols-3'
+                }`}>
                   {activeModuleMetrics.map((metric) => (
                     <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                       <div className="text-xs font-medium text-slate-500">{metric.label}</div>
@@ -1478,7 +1676,7 @@ export default function ConfigsClient({
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-200 pt-6">
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 xl:mt-6 xl:pt-6">
                 {sectionTabs.map((tabId) => {
                   const meta = CONFIG_TABS[tabId]
                   const TabIcon = meta.icon
@@ -1489,7 +1687,7 @@ export default function ConfigsClient({
                       key={tabId}
                       type="button"
                       onClick={() => setActiveTab(tabId)}
-                      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${
+                      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
                         isActive
                           ? 'border-slate-900 bg-slate-900 text-white'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
@@ -1527,7 +1725,10 @@ export default function ConfigsClient({
                 aiRuntimeError={aiRuntimeError}
                 onNewConfig={openNewConfig}
                 onEditConfig={openEditConfig}
+                onReviseConfig={openReviseConfig}
                 onPublishConfig={handlePublishConfig}
+                publishingConfigIds={publishingConfigIds}
+                configPublishFeedback={configPublishFeedback}
                 onFetchVersions={handleFetchVersions}
                 onDeleteConfig={handleDeleteConfig}
                 onRefreshConfigs={() => refreshTabData(activeTab)}
@@ -1550,8 +1751,14 @@ export default function ConfigsClient({
           open={isConfigEditOpen}
           configType={configType}
           config={editingConfig}
+          configs={configs}
+          error={configDialogError}
+          saving={isSavingConfig}
           onOpenChange={handleConfigDialogOpenChange}
-          onConfigChange={setEditingConfig}
+          onConfigChange={(nextConfig) => {
+            setConfigDialogError('')
+            setEditingConfig(nextConfig)
+          }}
           onSave={handleSaveConfig}
         />
       )}

@@ -13,10 +13,11 @@ vi.mock('@/lib/supabase', () => ({
 
 const accessMocks = vi.hoisted(() => ({
   userHasOrgConfigAccess: vi.fn(),
+  userHasFreshOrgConfigAccess: vi.fn(),
 }))
 
 const orgMocks = vi.hoisted(() => ({
-  getDefaultOrgId: vi.fn(),
+  getFreshDefaultOrgId: vi.fn(),
 }))
 
 vi.mock('@/lib/configs/access', () => accessMocks)
@@ -55,12 +56,12 @@ function makeSelectSingle(data: unknown) {
   }
 }
 
-function makeUpdate(data: unknown) {
+function makeUpdate(data: unknown, error: unknown = null) {
   return {
     update: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     select: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data, error: null }),
+    single: vi.fn().mockResolvedValue({ data, error }),
   }
 }
 
@@ -68,8 +69,8 @@ describe('POST /api/configs/[id]/rollback validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
-    orgMocks.getDefaultOrgId.mockResolvedValue('org-1')
+    accessMocks.userHasFreshOrgConfigAccess.mockResolvedValue(true)
+    orgMocks.getFreshDefaultOrgId.mockResolvedValue('org-1')
   })
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
@@ -84,19 +85,19 @@ describe('POST /api/configs/[id]/rollback validation', () => {
   })
 
   it('没有 config:write 时返回 403 且不读取版本或更新配置', async () => {
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+    accessMocks.userHasFreshOrgConfigAccess.mockResolvedValue(false)
 
     const res = await POST(makeJsonRequest({ version: 1 }), {
       params: Promise.resolve({ id: 'provider-1' }),
     })
 
     expect(res.status).toBe(403)
-    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'write')
+    expect(accessMocks.userHasFreshOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'write')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('没有 config:write 时即使 JSON 畸形也稳定返回 403', async () => {
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+    accessMocks.userHasFreshOrgConfigAccess.mockResolvedValue(false)
 
     const res = await POST(makeMalformedJsonRequest(), {
       params: Promise.resolve({ id: 'provider-1' }),
@@ -126,21 +127,21 @@ describe('POST /api/configs/[id]/rollback validation', () => {
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 
-  it('已发布 Provider 不能原地回滚并绕过受控版本切换', async () => {
+  it('已发布 ProviderConnection 不能原地回滚并绕过受控版本切换', async () => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(makeSelectSingle({
       id: 'provider-1',
       type: 'AI_CONFIG',
       status: 'PUBLISHED',
       value: {
-        kind: 'provider',
-        level: 1,
-        name: 'Published provider',
-        profile: 'primary',
-        provider_kind: 'openai_compatible',
+        schema_version: 'ai-platform.v1',
+        kind: 'provider_connection',
+        asset_id: 'provider.primary',
+        provider_type: 'openai_compatible',
+        runtime_location: 'cloud',
+        auth_mode: 'bearer',
         base_url: 'https://provider.example/v1',
         api_key: CURRENT_SECRET,
-        model: 'provider-model',
-        timeout_ms: 45000,
+        connection_timeout_ms: 45000,
         enabled: true,
       },
     }))
@@ -152,28 +153,27 @@ describe('POST /api/configs/[id]/rollback validation', () => {
 
     expect(res.status).toBe(400)
     expect(body.error.code).toBe('B001')
-    expect(body.error.message).toContain('已发布 Provider')
+    expect(body.error.message).toContain('不可原地回滚')
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 
-  it('Provider 回滚丢弃历史密钥、保留当前密钥且响应不泄漏任何密钥', async () => {
+  it('ProviderConnection 回滚丢弃历史密钥、保留当前密钥且响应不泄漏任何密钥', async () => {
     const currentValue = {
-      kind: 'provider',
-      level: 1,
-      name: 'Current provider',
-      profile: 'primary',
-      provider_kind: 'openai_compatible',
+      schema_version: 'ai-platform.v1',
+      kind: 'provider_connection',
+      asset_id: 'provider.primary',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
       base_url: 'https://provider.example/v1',
       api_key: CURRENT_SECRET,
-      model: 'current-model',
-      timeout_ms: 45000,
+      connection_timeout_ms: 45000,
       enabled: true,
     }
     const historicalValue = {
       ...currentValue,
-      name: 'Historical provider',
       api_key: HISTORICAL_SECRET,
-      model: 'historical-model',
+      connection_timeout_ms: 60000,
     }
     const updateQuery = makeUpdate({
       id: 'provider-1',
@@ -205,7 +205,7 @@ describe('POST /api/configs/[id]/rollback validation', () => {
     expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({
       value: expect.objectContaining({
         api_key: CURRENT_SECRET,
-        model: 'historical-model',
+        connection_timeout_ms: 60000,
       }),
     }))
     expect(JSON.stringify(body)).not.toContain(CURRENT_SECRET)
@@ -214,24 +214,23 @@ describe('POST /api/configs/[id]/rollback validation', () => {
     expect(body.data.rollbackFrom.value.api_key).toContain('***')
   })
 
-  it('Provider 回滚到不同网关时清空当前密钥，防止凭据发送给错误第三方', async () => {
+  it('ProviderConnection 回滚到不同网关时清空当前密钥，防止凭据发送给错误第三方', async () => {
     const currentValue = {
-      kind: 'provider',
-      level: 1,
-      name: 'Current provider',
-      profile: 'primary',
-      provider_kind: 'openai_compatible',
+      schema_version: 'ai-platform.v1',
+      kind: 'provider_connection',
+      asset_id: 'provider.primary',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
       base_url: 'https://current-provider.example/v1',
       api_key: CURRENT_SECRET,
-      model: 'current-model',
-      timeout_ms: 45000,
+      connection_timeout_ms: 45000,
       enabled: true,
     }
     const historicalValue = {
       ...currentValue,
       base_url: 'https://historical-provider.example/v1',
       api_key: HISTORICAL_SECRET,
-      model: 'historical-model',
     }
     const updateQuery = makeUpdate({
       id: 'provider-1',
@@ -262,5 +261,84 @@ describe('POST /api/configs/[id]/rollback validation', () => {
     expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({
       value: expect.not.objectContaining({ api_key: expect.anything() }),
     }))
+  })
+
+  it('草稿 AI 应用可回滚到同一资产的历史版本', async () => {
+    const currentValue = {
+      schema_version: 'ai-platform.v1',
+      kind: 'ai_application',
+      asset_id: 'review.assistant',
+      capabilities: ['text_generation', 'structured_output'],
+      enabled: true,
+    }
+    const historicalValue = {
+      ...currentValue,
+      capabilities: ['text_generation'],
+    }
+    const updateQuery = makeUpdate({
+      id: 'app-1',
+      type: 'AI_CONFIG',
+      value: historicalValue,
+      status: 'DRAFT',
+    })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(makeSelectSingle({
+        id: 'app-1',
+        type: 'AI_CONFIG',
+        status: 'DRAFT',
+        value: currentValue,
+      }))
+      .mockReturnValueOnce(makeSelectSingle({
+        id: 'version-app-1',
+        config_id: 'app-1',
+        version: 1,
+        value: historicalValue,
+      }))
+      .mockReturnValueOnce(updateQuery)
+
+    const response = await POST(makeJsonRequest({ version: 1 }), {
+      params: Promise.resolve({ id: 'app-1' }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({
+      value: historicalValue,
+      status: 'DRAFT',
+    }))
+  })
+
+  it('草稿在读取后被并发发布时，回滚状态 CAS 不会把已发布资产改回草稿', async () => {
+    const currentValue = {
+      schema_version: 'ai-platform.v1',
+      kind: 'ai_application',
+      asset_id: 'review.rollback-cas',
+      capabilities: ['text_generation'],
+      enabled: true,
+    }
+    const failedUpdate = makeUpdate(null, { code: 'PGRST116', message: '0 rows' })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(makeSelectSingle({
+        id: 'app-cas',
+        type: 'AI_CONFIG',
+        status: 'DRAFT',
+        value: currentValue,
+      }))
+      .mockReturnValueOnce(makeSelectSingle({
+        id: 'version-cas',
+        config_id: 'app-cas',
+        version: 1,
+        value: currentValue,
+      }))
+      .mockReturnValueOnce(failedUpdate)
+
+    const response = await POST(makeJsonRequest({ version: 1 }), {
+      params: Promise.resolve({ id: 'app-cas' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.message).toContain('状态已变化')
+    expect(failedUpdate.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(failedUpdate.eq).toHaveBeenCalledWith('status', 'DRAFT')
   })
 })

@@ -4,26 +4,42 @@
 import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { configUpdateSchema } from '@/lib/configs/validation'
-import { validateConfigValue } from '@/lib/configs/validation'
-import { mergeStoredAIProviderValue, sanitizeConfigRow } from '@/lib/configs/runtime'
+import { configUpdateSchema, parseConfigValue } from '@/lib/configs/validation'
+import {
+  mergeStoredAIProviderValue,
+  sanitizeConfigRow,
+  withoutStoredApiKey,
+} from '@/lib/configs/runtime'
 import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
+import {
+  getAIAssetId,
+  isEditableAIConfigValue,
+  isProviderCredentialValue,
+} from '@/lib/configs/ai-platform'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
-import { userHasOrgConfigAccess } from '@/lib/configs/access'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import { userHasFreshOrgConfigAccess, userHasOrgConfigAccess } from '@/lib/configs/access'
+import { getDefaultOrgId, getFreshDefaultOrgId } from '@/lib/scoped-access'
 
 interface RouteParams {
   params: Promise<{ id: string }>
 }
 
 // 获取当前用户的组织 ID
-async function getCurrentOrgId(userId: string): Promise<string | null> {
+async function getCurrentOrgId(userId: string, fresh = false): Promise<string | null> {
   try {
-    return await getDefaultOrgId(userId)
+    return fresh ? await getFreshDefaultOrgId(userId) : await getDefaultOrgId(userId)
   } catch {
     return null
   }
+}
+
+function isConfigCasConflict(error: unknown): boolean {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && (error as { code?: unknown }).code === 'PGRST116',
+  )
 }
 
 // 验证配置是否属于当前用户组织
@@ -42,20 +58,20 @@ async function verifyConfigAccess(configId: string, orgId: string): Promise<{ ok
   return { ok: true, config }
 }
 
-function isProtectedAIAsset(config: unknown): boolean {
+function isProtectedLegacyAIAsset(config: unknown): boolean {
   const record = config as { type?: unknown; value?: Record<string, unknown> | null }
-  return record.type === 'AI_CONFIG' && getAIConfigKind(record.value) !== 'provider'
+  return record.type === 'AI_CONFIG' && !isEditableAIConfigValue(record.value)
 }
 
-function isPublishedAIProvider(config: unknown): boolean {
+function isImmutableAIAsset(config: unknown): boolean {
   const record = config as {
     type?: unknown
     status?: unknown
     value?: Record<string, unknown> | null
   }
   return record.type === 'AI_CONFIG'
-    && record.status === 'PUBLISHED'
-    && getAIConfigKind(record.value) === 'provider'
+    && (record.status === 'PUBLISHED' || record.status === 'ARCHIVED')
+    && isEditableAIConfigValue(record.value)
 }
 
 // GET /api/configs/:id - 获取配置详情
@@ -93,11 +109,11 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
     const user = await requireAuth(req)
     const { id } = await params
-    const orgId = await getCurrentOrgId(user.id)
+    const orgId = await getCurrentOrgId(user.id, true)
     if (!orgId) {
       return errorResponse(createApiError('NO_ORG'))
     }
-    if (!await userHasOrgConfigAccess(user.id, orgId, 'write')) {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
       return errorResponse(createApiError('FORBIDDEN'))
     }
 
@@ -119,45 +135,55 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     }
 
     const type = (config as { type: 'CONTRACT_RULE' | 'TAX_RULE' | 'APPROVAL_RULE' | 'AI_CONFIG' | 'UI_THEME' }).type
-    if (isProtectedAIAsset(config)) {
+    if (isProtectedLegacyAIAsset(config)) {
       return errorResponse(createApiError(
         'BUSINESS_RULE_VIOLATION',
-        '模型应用与工具消费策略当前只读，专用校验和发布流程验收前禁止使用通用 Provider 接口修改'
+        '旧 Provider、旧模型应用、旧工具策略或未知 AI 资产保持只读；请使用六对象 AI 平台资产'
       ))
     }
-    if (isPublishedAIProvider(config)) {
+    if (isImmutableAIAsset(config)) {
       return errorResponse(createApiError(
         'BUSINESS_RULE_VIOLATION',
-        '已发布 Provider 不可原地修改；必须创建独立草稿版本并经显式发布后切换'
+        '已发布或已归档的 AI 平台资产不可原地修改；请基于当前版本创建新草稿'
       ))
     }
-    const nextValue = validated.data.value
-      ? (
-          type === 'AI_CONFIG'
-            ? mergeStoredAIProviderValue(
-                (config as { value?: Record<string, unknown> }).value,
-                {
-                  ...validated.data.value,
-                  ...(validated.data.name ? { name: validated.data.name } : {}),
-                }
-              )
-            : validated.data.value
-        )
+    const currentValue = (config as { value?: Record<string, unknown> }).value
+    const submittedAIValue = validated.data.value && type === 'AI_CONFIG'
+      ? {
+          ...(isProviderCredentialValue(currentValue)
+            ? withoutStoredApiKey(currentValue || {})
+            : currentValue),
+          ...validated.data.value,
+        }
+      : null
+    let nextValue = validated.data.value
+      ? (type === 'AI_CONFIG'
+          ? isProviderCredentialValue(currentValue)
+            ? mergeStoredAIProviderValue(currentValue, submittedAIValue || {})
+            : submittedAIValue || {}
+          : validated.data.value)
       : undefined
 
-    if (type === 'AI_CONFIG' && nextValue && getAIConfigKind(nextValue) !== 'provider') {
-      return errorResponse(createApiError(
-        'BUSINESS_RULE_VIOLATION',
-        'AI 配置资产 kind 不可通过通用 Provider 接口变更'
-      ))
+    if (type === 'AI_CONFIG' && nextValue) {
+      const currentKind = getAIConfigKind(currentValue)
+      const nextKind = getAIConfigKind(nextValue)
+      const currentAssetId = getAIAssetId(currentValue)
+      const nextAssetId = getAIAssetId(nextValue)
+      if (currentKind !== nextKind || currentAssetId !== nextAssetId) {
+        return errorResponse(createApiError(
+          'BUSINESS_RULE_VIOLATION',
+          'AI 资产 kind 与 asset_id 是稳定身份，不能在编辑时变更'
+        ))
+      }
     }
 
-    // 如果更新 value，需要验证
+    // 如果更新 value，需要验证并保存规范化后的解析结果。
     if (nextValue) {
-      const valueValidation = validateConfigValue(type, nextValue)
+      const valueValidation = parseConfigValue(type, nextValue)
       if (!valueValidation.valid) {
         return errorResponse(createApiError('VALIDATION_ERROR', `配置值验证失败: ${valueValidation.error}`))
       }
+      nextValue = valueValidation.data || nextValue
     }
 
     const { data: updated, error } = await supabaseAdmin
@@ -168,11 +194,19 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .eq('org_id', orgId)
+      .eq('status', 'DRAFT')
       .select()
       .single()
 
     if (error) {
       console.error('Update config error:', error)
+      if (isConfigCasConflict(error)) {
+        return errorResponse(createApiError(
+          'BUSINESS_RULE_VIOLATION',
+          '配置状态已变化，请刷新后基于当前版本继续编辑',
+        ))
+      }
       return errorResponse(createApiError('DB_ERROR', '更新配置失败'))
     }
 
@@ -192,11 +226,11 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     const user = await requireAuth(req)
     const { id } = await params
-    const orgId = await getCurrentOrgId(user.id)
+    const orgId = await getCurrentOrgId(user.id, true)
     if (!orgId) {
       return errorResponse(createApiError('NO_ORG'))
     }
-    if (!await userHasOrgConfigAccess(user.id, orgId, 'write')) {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
       return errorResponse(createApiError('FORBIDDEN'))
     }
 
@@ -204,23 +238,36 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     if (!ok) {
       return errorResponse(createApiError('NOT_FOUND', '配置不存在或无权限'))
     }
-    if (isProtectedAIAsset(config)) {
+    if (isProtectedLegacyAIAsset(config)) {
       return errorResponse(createApiError(
         'BUSINESS_RULE_VIOLATION',
-        '模型应用与工具消费策略当前只读，专用发布流程验收前禁止删除'
+        '旧 Provider、旧模型应用、旧工具策略或未知 AI 资产保持只读，禁止删除'
       ))
     }
-    if (isPublishedAIProvider(config)) {
+    if (isImmutableAIAsset(config)) {
       return errorResponse(createApiError(
         'BUSINESS_RULE_VIOLATION',
-        '已发布 Provider 不可直接删除；必须先通过受控版本切换解除运行时引用'
+        '已发布或已归档的 AI 平台资产不可删除；请创建新草稿并完成受控版本切换'
       ))
     }
 
-    const { error } = await supabaseAdmin.from('configs').delete().eq('id', id)
+    const { error } = await supabaseAdmin
+      .from('configs')
+      .delete()
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .eq('status', 'DRAFT')
+      .select('id')
+      .single()
 
     if (error) {
       console.error('Delete config error:', error)
+      if (isConfigCasConflict(error)) {
+        return errorResponse(createApiError(
+          'BUSINESS_RULE_VIOLATION',
+          '配置状态已变化，请刷新后再删除草稿',
+        ))
+      }
       return errorResponse(createApiError('DB_ERROR', '删除配置失败'))
     }
 

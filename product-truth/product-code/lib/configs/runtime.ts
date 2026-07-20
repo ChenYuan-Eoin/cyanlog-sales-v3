@@ -3,6 +3,7 @@ import type { AIConfigValue, AIModelStage, AIProviderKind, ConfigType, TaxRuleVa
 import { normalizeOpenAICompatibleBaseUrl } from '@/lib/ai/openai-compatible'
 import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
 import { redactSecretsDeep } from '@/lib/configs/secret-redaction'
+import { canonicalizeProviderBaseUrl } from '@/lib/configs/provider-endpoint'
 
 type JsonRecord = Record<string, unknown>
 
@@ -24,14 +25,20 @@ export interface PublishedAIProviderConfig extends AIConfigValue {
 }
 
 export function maskApiKey(apiKey: string): string {
-  if (apiKey.length <= 12) {
-    return '***'
-  }
-  return `${apiKey.slice(0, 4)}***${apiKey.slice(-4)}`
+  void apiKey
+  // A constant mask reveals neither length nor prefix/suffix. Server
+  // persistence and publish gates still reject this presentation sentinel.
+  return '****'
 }
 
 export function isMaskedApiKey(value: string | undefined): boolean {
-  return typeof value === 'string' && value.includes('***')
+  if (typeof value !== 'string') return false
+  // Accept the current sentinel and the two exact shapes emitted by older
+  // clients. Do not classify an arbitrary real token containing stars as a
+  // mask merely because it includes "***".
+  return value === '****'
+    || value === '***'
+    || /^[^*]{4}\*{3}[^*]{4}$/.test(value)
 }
 
 export function mergeStoredAIConfigValue(
@@ -61,24 +68,92 @@ export function providerCredentialBindingMatches(
 ): boolean {
   if (!currentValue) return false
 
-  return ['provider_kind', 'base_url', 'profile'].every((field) => (
-    (typeof currentValue[field] === 'string' ? currentValue[field] : '')
-    === (typeof targetValue[field] === 'string' ? targetValue[field] : '')
+  const platformProvider = currentValue.kind === 'provider_connection' || targetValue.kind === 'provider_connection'
+  const fields = platformProvider
+    ? ['kind', 'provider_type', 'base_url', 'runtime_location', 'auth_mode']
+    : ['provider_kind', 'base_url', 'profile']
+
+  return fields.every((field) => (
+    providerIdentityField(currentValue, field, platformProvider)
+    === providerIdentityField(targetValue, field, platformProvider)
   ))
+}
+
+function providerIdentityField(value: JsonRecord, field: string, platformProvider: boolean): string {
+  if (field === 'base_url') {
+    try {
+      return canonicalizeProviderBaseUrl(typeof value.base_url === 'string' ? value.base_url : '')
+    } catch {
+      return typeof value.base_url === 'string' ? value.base_url.trim() : ''
+    }
+  }
+  if (field === 'auth_mode' && platformProvider) {
+    if (value.auth_mode === 'none' || value.auth_mode === 'bearer') return value.auth_mode
+    return typeof value.api_key === 'string' && value.api_key.length > 0 ? 'bearer' : 'none'
+  }
+  return typeof value[field] === 'string' ? String(value[field]).trim() : ''
+}
+
+export type ProviderCredentialAction = 'reuse' | 'replace' | 'clear'
+
+export function applyProviderRevisionCredential(
+  sourceValue: JsonRecord,
+  targetValue: JsonRecord,
+  action: ProviderCredentialAction,
+): { ok: true; value: JsonRecord } | { ok: false; error: string } {
+  if (sourceValue.kind !== 'provider_connection' || targetValue.kind !== 'provider_connection') {
+    return { ok: false, error: '凭据动作只适用于 ProviderConnection 修订' }
+  }
+
+  const sourceKey = typeof sourceValue.api_key === 'string' ? sourceValue.api_key : undefined
+  const targetKey = typeof targetValue.api_key === 'string' ? targetValue.api_key : undefined
+  const targetAuthMode = providerIdentityField(targetValue, 'auth_mode', true)
+
+  if (action === 'clear') {
+    return { ok: true, value: withoutStoredApiKey(targetValue) }
+  }
+  if (targetAuthMode !== 'bearer') {
+    return { ok: false, error: '只有 Bearer 认证连接可以保存或复用凭据' }
+  }
+  if (action === 'replace') {
+    if (!targetKey || isMaskedApiKey(targetKey)) {
+      return { ok: false, error: '替换凭据必须提交新的真实 Token' }
+    }
+    return { ok: true, value: { ...targetValue, api_key: targetKey } }
+  }
+  if (!providerCredentialBindingMatches(sourceValue, targetValue)) {
+    return { ok: false, error: '连接端点、位置、认证方式发生变化，不能复用旧凭据' }
+  }
+  if (!sourceKey || isMaskedApiKey(sourceKey)) {
+    return { ok: false, error: '来源 Provider 没有可复用的真实凭据' }
+  }
+  return { ok: true, value: { ...targetValue, api_key: sourceKey } }
 }
 
 export function mergeStoredAIProviderValue(
   existingValue: JsonRecord | null | undefined,
   nextValue: JsonRecord
 ): JsonRecord {
-  const merged = mergeStoredAIConfigValue(existingValue, nextValue)
-  if (providerCredentialBindingMatches(existingValue, merged)) {
-    return merged
-  }
-
+  const existingApiKey = typeof existingValue?.api_key === 'string' ? existingValue.api_key : undefined
   const suppliedApiKey = typeof nextValue.api_key === 'string' ? nextValue.api_key : undefined
+  const merged = { ...existingValue, ...nextValue }
+  if (
+    merged.kind === 'provider_connection'
+    && merged.auth_mode !== 'none'
+    && merged.auth_mode !== 'bearer'
+  ) {
+    merged.auth_mode = existingApiKey ? 'bearer' : 'none'
+  }
+  const targetAuthMode = providerIdentityField(merged, 'auth_mode', merged.kind === 'provider_connection')
+
+  if (targetAuthMode === 'none') {
+    return withoutStoredApiKey(merged)
+  }
   if (suppliedApiKey && !isMaskedApiKey(suppliedApiKey)) {
-    return merged
+    return { ...merged, api_key: suppliedApiKey }
+  }
+  if (providerCredentialBindingMatches(existingValue, merged) && existingApiKey) {
+    return { ...merged, api_key: existingApiKey }
   }
 
   return withoutStoredApiKey(merged)

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   assessProviderRuntime,
   fetchOpenAICompatibleModelIds,
@@ -10,6 +10,8 @@ describe('AI runtime readiness', () => {
   it('detects loopback model URLs', () => {
     expect(isLoopbackAIBaseUrl('http://localhost:1234/v1')).toBe(true)
     expect(isLoopbackAIBaseUrl('http://127.0.0.1:11434/v1')).toBe(true)
+    expect(isLoopbackAIBaseUrl('http://[::1]:1234/v1')).toBe(true)
+    expect(isLoopbackAIBaseUrl('http://0.0.0.0:1234/v1')).toBe(false)
     expect(isLoopbackAIBaseUrl('https://api.example.com/v1')).toBe(false)
   })
 
@@ -150,6 +152,50 @@ describe('AI runtime readiness', () => {
     })).resolves.toMatchObject({
       runtime_state: 'ready_to_call',
     })
+  })
+
+  it('allows an explicitly credential-free cloud Provider and disables redirects', async () => {
+    const okFetch: typeof fetch = async (_input, init) => {
+      expect(init?.headers).toBeUndefined()
+      expect(init?.redirect).toBe('error')
+      return new Response('{}', { status: 200 })
+    }
+
+    await expect(assessProviderRuntime({
+      providerKind: 'openai_compatible',
+      baseUrl: 'https://api.example.com/v1',
+      authMode: 'none',
+      checkRemoteHealth: true,
+    }, { NODE_ENV: 'development' }, okFetch)).resolves.toMatchObject({
+      runtime_state: 'remote_health_ok',
+    })
+  })
+
+  it('uses the configured connection timeout for the actual models request', async () => {
+    vi.useFakeTimers()
+    const captured: { signal?: AbortSignal } = {}
+    const pendingFetch: typeof fetch = async (_input, init) => {
+      captured.signal = init?.signal as AbortSignal
+      return new Promise<Response>((_resolve, reject) => {
+        captured.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      })
+    }
+
+    try {
+      const assessment = assessProviderRuntime({
+        providerKind: 'openai_compatible',
+        baseUrl: 'https://api.example.com/v1',
+        authMode: 'none',
+        checkRemoteHealth: true,
+        healthCheckTimeoutMs: 4321,
+      }, { NODE_ENV: 'development' }, pendingFetch)
+      await vi.advanceTimersByTimeAsync(4321)
+
+      await expect(assessment).resolves.toMatchObject({ runtime_state: 'remote_health_failed' })
+      expect(captured.signal?.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('checks remote provider health only when explicitly requested', async () => {

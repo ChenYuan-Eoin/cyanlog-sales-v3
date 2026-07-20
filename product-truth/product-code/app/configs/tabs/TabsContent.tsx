@@ -2,8 +2,9 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
-import type { ProductRecord, Config, OrgSummaryPayload, FeishuSyncFeedback, RuntimePolicy } from '../types'
+import type { ProductRecord, Config, ConfigPublishFeedback, OrgSummaryPayload, FeishuSyncFeedback, RuntimePolicy } from '../types'
 import type { ContractPolicyRule } from '@/types/rules'
+import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
 
@@ -62,9 +63,12 @@ export interface TabsContentProps {
   configs: Config[]
   aiRuntimePolicy: RuntimePolicy | null
   aiRuntimeError: string
-  onNewConfig: (type: Config['type']) => void
+  onNewConfig: (type: Config['type'], aiKind?: AIPlatformAssetKind) => void
   onEditConfig: (config: Config) => void
+  onReviseConfig: (config: Config) => void
   onPublishConfig: (id: string) => void
+  publishingConfigIds: ReadonlySet<string>
+  configPublishFeedback: Record<string, ConfigPublishFeedback | undefined>
   onFetchVersions: (id: string) => void
   onDeleteConfig: (id: string) => void
   onRefreshConfigs?: () => void | Promise<void>
@@ -105,7 +109,10 @@ export default function TabsContent({
   aiRuntimeError,
   onNewConfig,
   onEditConfig,
+  onReviseConfig,
   onPublishConfig,
+  publishingConfigIds,
+  configPublishFeedback,
   onFetchVersions,
   onDeleteConfig,
   onRefreshConfigs,
@@ -243,9 +250,13 @@ export default function TabsContent({
           configs={aiConfigs}
           runtimePolicy={aiRuntimePolicy}
           runtimeError={aiRuntimeError}
-          onNew={() => onNewConfig('AI_CONFIG')}
+          onNew={(kind) => onNewConfig('AI_CONFIG', kind)}
           onEdit={onEditConfig}
+          onRevise={onReviseConfig}
           onPublish={onPublishConfig}
+          publishingConfigIds={publishingConfigIds}
+          publishFeedback={configPublishFeedback}
+          onVersions={onFetchVersions}
           onDelete={onDeleteConfig}
         />
       )

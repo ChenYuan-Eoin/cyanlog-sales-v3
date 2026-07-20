@@ -71,7 +71,8 @@ export function isLoopbackAIBaseUrl(baseUrl: string | undefined | null): boolean
   if (!baseUrl) return false
   try {
     const parsed = new URL(baseUrl)
-    return ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(parsed.hostname)
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    return ['localhost', '127.0.0.1', '::1'].includes(hostname)
   } catch {
     return false
   }
@@ -82,9 +83,10 @@ type HealthResult = 'ok' | 'auth_failed' | 'failed'
 async function checkLocalModelHealth(
   baseUrl: string,
   apiKey?: string,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 1200,
 ): Promise<HealthResult> {
-  return checkOpenAICompatibleModelsEndpoint(baseUrl, apiKey, fetchImpl, 1200)
+  return checkOpenAICompatibleModelsEndpoint(baseUrl, apiKey, fetchImpl, timeoutMs)
 }
 
 async function checkOpenAICompatibleModelsEndpoint(
@@ -93,19 +95,21 @@ async function checkOpenAICompatibleModelsEndpoint(
   fetchImpl: typeof fetch,
   timeoutMs: number
 ): Promise<HealthResult> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
     const response = await fetchImpl(openAICompatibleModelsUrl(baseUrl), {
       signal: controller.signal,
       headers: authHeaders(apiKey),
+      redirect: 'error',
     })
-    clearTimeout(timeout)
     if (response.ok) return 'ok'
     if (response.status === 401 || response.status === 403) return 'auth_failed'
     return 'failed'
   } catch {
     return 'failed'
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -146,18 +150,20 @@ export async function fetchOpenAICompatibleModelIds(
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 3000
 ): Promise<string[]> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
     const response = await fetchImpl(openAICompatibleModelsUrl(baseUrl), {
       signal: controller.signal,
       headers: authHeaders(apiKey),
+      redirect: 'error',
     })
-    clearTimeout(timeout)
     if (!response.ok) return []
     return extractModelIds(await response.json().catch(() => null))
   } catch {
     return []
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -222,13 +228,14 @@ export async function probeOpenAICompatibleChatCompletion(
     }
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
     const headers = authHeaders(apiKey)
     const response = await fetchImpl(openAICompatibleChatCompletionsUrl(baseUrl), {
       method: 'POST',
       signal: controller.signal,
+      redirect: 'error',
       headers: headers
         ? { 'Content-Type': 'application/json', ...headers }
         : { 'Content-Type': 'application/json' },
@@ -245,8 +252,6 @@ export async function probeOpenAICompatibleChatCompletion(
         stream: false,
       }),
     })
-    clearTimeout(timeout)
-
     const payload = await response.json().catch(() => null)
     const finishReason = extractChatCompletionFinishReason(payload)
     const content = normalizeProbeContent(extractChatCompletionContent(payload))
@@ -306,6 +311,8 @@ export async function probeOpenAICompatibleChatCompletion(
       content_sample: null,
       error: error instanceof Error ? error.message : '最小生成请求失败。',
     }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -480,12 +487,14 @@ export async function assessProviderRuntime(
     providerKind: 'openai_compatible' | 'builtin'
     baseUrl?: string
     apiKey?: string
+    authMode?: 'none' | 'bearer'
     model?: string
     latestInvocation?: RuntimeInvocationEvidence
     allowLocalCliFallback?: boolean
     checkRemoteHealth?: boolean
     phaseLabel?: string
     readyAction?: string
+    healthCheckTimeoutMs?: number
   },
   env: NodeJS.ProcessEnv = process.env,
   fetchImpl: typeof fetch = fetch,
@@ -514,6 +523,10 @@ export async function assessProviderRuntime(
   }
 
   const localEndpoint = isLoopbackAIBaseUrl(baseUrl)
+  const healthCheckTimeoutMs = Math.min(
+    300000,
+    Math.max(1000, input.healthCheckTimeoutMs ?? (localEndpoint ? 1200 : 3000)),
+  )
   if (localEndpoint && isActualVercelRuntime(env)) {
     return {
       runtime_state: 'unreachable_in_vercel',
@@ -525,7 +538,7 @@ export async function assessProviderRuntime(
   }
 
   if (localEndpoint) {
-    const health = await checkLocalModelHealth(baseUrl, input.apiKey, fetchImpl)
+    const health = await checkLocalModelHealth(baseUrl, input.apiKey, fetchImpl, healthCheckTimeoutMs)
     if (health !== 'ok' && input.model && input.allowLocalCliFallback !== false) {
       const cliStatus = await localCliProbe(input.model, { env })
       if (cliStatus === 'ready') {
@@ -565,7 +578,7 @@ export async function assessProviderRuntime(
     }
   }
 
-  if (!input.apiKey) {
+  if (input.authMode !== 'none' && !input.apiKey) {
     return {
       runtime_state: 'missing_credential',
       runtime_reason: '云端或公网模型 Provider 缺少 API Key。',
@@ -587,7 +600,12 @@ export async function assessProviderRuntime(
       }
     }
 
-    const health = await checkOpenAICompatibleModelsEndpoint(baseUrl, input.apiKey, fetchImpl, 3000)
+    const health = await checkOpenAICompatibleModelsEndpoint(
+      baseUrl,
+      input.apiKey,
+      fetchImpl,
+      healthCheckTimeoutMs,
+    )
     if (health !== 'ok') {
       return remoteHealthAssessment(health, environment, input.readyAction)
     }

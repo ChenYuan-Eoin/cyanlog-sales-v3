@@ -13,9 +13,15 @@ vi.mock('@/lib/api/auth-wrapper', () => ({
 
 const accessMocks = vi.hoisted(() => ({
   userHasOrgConfigAccess: vi.fn(),
+  userHasFreshOrgConfigAccess: vi.fn(),
+}))
+
+const orgMocks = vi.hoisted(() => ({
+  getFreshDefaultOrgId: vi.fn(),
 }))
 
 vi.mock('@/lib/configs/access', () => accessMocks)
+vi.mock('@/lib/scoped-access', () => orgMocks)
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
@@ -36,6 +42,8 @@ describe('POST /api/configs validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
+    accessMocks.userHasFreshOrgConfigAccess.mockResolvedValue(true)
+    orgMocks.getFreshDefaultOrgId.mockResolvedValue('org-1')
   })
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
@@ -58,37 +66,16 @@ describe('POST /api/configs validation', () => {
   })
 
   it('没有 config:write 时创建接口返回 403 且不解析或写入配置', async () => {
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+    accessMocks.userHasFreshOrgConfigAccess.mockResolvedValue(false)
 
     const res = await POST(makeMalformedJsonRequest())
 
     expect(res.status).toBe(403)
-    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'write')
+    expect(accessMocks.userHasFreshOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'write')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
-  it('创建 Provider 的响应不会返回真实 API Key', async () => {
-    const existingQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }
-    const insertQuery = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: 'provider-1',
-          type: 'AI_CONFIG',
-          value: { api_key: CANARY_SECRET },
-        },
-        error: null,
-      }),
-    }
-    ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(existingQuery)
-      .mockReturnValueOnce(insertQuery)
-
+  it('旧 Provider 只读兼容，不能通过通用接口继续新建', async () => {
     const res = await POST({
       json: async () => ({
         key: 'AI_PROVIDER_PRIMARY',
@@ -110,9 +97,10 @@ describe('POST /api/configs validation', () => {
     } as any)
     const body = await res.json()
 
-    expect(res.status).toBe(201)
+    expect(res.status).toBe(400)
+    expect(body.error.message).toContain('旧 Provider')
     expect(JSON.stringify(body)).not.toContain(CANARY_SECRET)
-    expect(body.data.value.api_key).toContain('***')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('列表响应会同时清除规范密钥和未知敏感字段', async () => {
@@ -169,5 +157,214 @@ describe('POST /api/configs validation', () => {
     expect(res.status).toBe(400)
     expect(body.error.code).toBe('V001')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('创建独立 ProviderConnection 时不会注入模型或业务阶段', async () => {
+    const existingQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    const inserted = {
+      id: 'connection-1',
+      type: 'AI_CONFIG',
+      status: 'DRAFT',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'provider_connection',
+        asset_id: 'provider.cloud',
+        provider_type: 'openai_compatible',
+        runtime_location: 'cloud',
+        base_url: 'https://provider.example/v1',
+        connection_timeout_ms: 240000,
+        enabled: true,
+      },
+    }
+    const insertQuery = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: inserted, error: null }),
+    }
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(existingQuery)
+      .mockReturnValueOnce(insertQuery)
+
+    const response = await POST({
+      json: async () => ({
+        key: 'AI_PROVIDER_CLOUD',
+        name: '云模型服务',
+        type: 'AI_CONFIG',
+        value: inserted.value,
+      }),
+    } as any)
+
+    expect(response.status).toBe(201)
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      value: expect.not.objectContaining({ model: expect.anything(), stages: expect.anything() }),
+    }))
+  })
+
+  it('Provider 修订通过服务端来源复用同一连接的密钥，响应仍只返回掩码', async () => {
+    const sourceValue = {
+      schema_version: 'ai-platform.v1',
+      kind: 'provider_connection',
+      asset_id: 'provider.cloud',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
+      base_url: 'https://provider.example/v1',
+      api_key: CANARY_SECRET,
+      connection_timeout_ms: 45000,
+      enabled: true,
+    }
+    const sourceQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: 'source-1',
+          type: 'AI_CONFIG',
+          org_id: 'org-1',
+          status: 'PUBLISHED',
+          value: sourceValue,
+        },
+        error: null,
+      }),
+    }
+    const existingQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    const insertQuery = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'revision-1', type: 'AI_CONFIG', value: sourceValue },
+        error: null,
+      }),
+    }
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(sourceQuery)
+      .mockReturnValueOnce(existingQuery)
+      .mockReturnValueOnce(insertQuery)
+
+    const response = await POST({
+      json: async () => ({
+        key: 'AI_PROVIDER_CLOUD_R2',
+        name: 'Cloud provider revision',
+        type: 'AI_CONFIG',
+        revision_source_id: 'source-1',
+        credential_action: 'reuse',
+        value: { ...sourceValue, api_key: undefined },
+      }),
+    } as any)
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      value: expect.objectContaining({ api_key: CANARY_SECRET }),
+    }))
+    expect(JSON.stringify(body)).not.toContain(CANARY_SECRET)
+    expect(body.data.value.api_key).toContain('***')
+  })
+
+  it.each([
+    ['端点', { base_url: 'https://other.example/v1' }],
+    ['位置', { runtime_location: 'local', base_url: 'http://127.0.0.1:1234/v1' }],
+    ['认证方式', { auth_mode: 'none' }],
+  ])('Provider 修订改变%s时拒绝复用旧密钥', async (_label, patch) => {
+    const sourceValue = {
+      schema_version: 'ai-platform.v1',
+      kind: 'provider_connection',
+      asset_id: 'provider.cloud',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
+      base_url: 'https://provider.example/v1',
+      api_key: CANARY_SECRET,
+      connection_timeout_ms: 45000,
+      enabled: true,
+    }
+    const sourceQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: 'source-1',
+          type: 'AI_CONFIG',
+          org_id: 'org-1',
+          status: 'PUBLISHED',
+          value: sourceValue,
+        },
+        error: null,
+      }),
+    }
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(sourceQuery)
+
+    const response = await POST({
+      json: async () => ({
+        key: 'AI_PROVIDER_CLOUD_R2',
+        name: 'Unsafe revision',
+        type: 'AI_CONFIG',
+        revision_source_id: 'source-1',
+        credential_action: 'reuse',
+        value: { ...sourceValue, api_key: undefined, ...patch },
+      }),
+    } as any)
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.message).toMatch(/不能复用|只有 Bearer/)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+  })
+
+  it('拒绝从已归档 Provider 修订或复用历史密钥', async () => {
+    const archivedSecret = 'sk-archived-must-never-be-reused'
+    const sourceValue = {
+      schema_version: 'ai-platform.v1',
+      kind: 'provider_connection',
+      asset_id: 'provider.cloud',
+      provider_type: 'openai_compatible',
+      runtime_location: 'cloud',
+      auth_mode: 'bearer',
+      base_url: 'https://provider.example/v1',
+      api_key: archivedSecret,
+      connection_timeout_ms: 45000,
+      enabled: true,
+    }
+    const sourceQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: 'source-archived',
+          type: 'AI_CONFIG',
+          org_id: 'org-1',
+          status: 'ARCHIVED',
+          value: sourceValue,
+        },
+        error: null,
+      }),
+    }
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(sourceQuery)
+
+    const response = await POST({
+      json: async () => ({
+        key: 'AI_PROVIDER_CLOUD_R2',
+        name: 'Archived source revision',
+        type: 'AI_CONFIG',
+        revision_source_id: 'source-archived',
+        credential_action: 'reuse',
+        value: { ...sourceValue, api_key: undefined },
+      }),
+    } as any)
+    const responseText = await response.text()
+
+    expect(response.status).toBe(404)
+    expect(responseText).toContain('当前已发布')
+    expect(responseText).not.toContain(archivedSecret)
+    expect(sourceQuery.eq).toHaveBeenCalledWith('status', 'PUBLISHED')
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 })

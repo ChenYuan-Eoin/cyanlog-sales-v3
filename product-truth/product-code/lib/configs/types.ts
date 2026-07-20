@@ -89,6 +89,85 @@ export interface AIConfigValue {
   stages?: AIModelStage[]
 }
 
+/**
+ * WP01 AI platform control-plane contract.
+ *
+ * These assets intentionally stay independent from the legacy AIConfigValue.
+ * The legacy shape remains readable by the runtime until WP02 switches the
+ * execution path; new platform assets are dark-launched in the configs store.
+ */
+export const AI_PLATFORM_SCHEMA_VERSION = 'ai-platform.v1' as const
+
+export type AIPlatformAssetKind =
+  | 'provider_connection'
+  | 'model_catalog_entry'
+  | 'ai_application'
+  | 'business_use_point'
+  | 'application_binding'
+  | 'route_policy'
+
+export type LegacyAIConfigKind = 'provider' | 'application' | 'tool_policy'
+export type AIConfigKind = AIPlatformAssetKind | LegacyAIConfigKind
+
+export interface AIPlatformAssetBase {
+  schema_version: typeof AI_PLATFORM_SCHEMA_VERSION
+  kind: AIPlatformAssetKind
+  asset_id: string
+  enabled: boolean
+}
+
+export interface ProviderConnectionValue extends AIPlatformAssetBase {
+  kind: 'provider_connection'
+  provider_type: 'openai_compatible'
+  runtime_location: 'local' | 'cloud'
+  auth_mode?: 'none' | 'bearer'
+  base_url: string
+  api_key?: string
+  connection_timeout_ms: number
+}
+
+export interface ModelCatalogEntryValue extends AIPlatformAssetBase {
+  kind: 'model_catalog_entry'
+  provider_connection_id: string
+  model_id: string
+  capabilities: string[]
+  context_window?: number
+}
+
+export interface AIApplicationValue extends AIPlatformAssetBase {
+  kind: 'ai_application'
+  capabilities: string[]
+}
+
+export interface BusinessUsePointValue extends AIPlatformAssetBase {
+  kind: 'business_use_point'
+  module_id: string
+  required_capabilities: string[]
+}
+
+export interface ApplicationBindingValue extends AIPlatformAssetBase {
+  kind: 'application_binding'
+  business_use_point_id: string
+  ai_application_id: string
+}
+
+export interface RoutePolicyValue extends AIPlatformAssetBase {
+  kind: 'route_policy'
+  ai_application_id: string
+  model_catalog_entry_ids: string[]
+  strategy: 'ordered_fallback'
+  timeout_ms: number
+  failure_action: 'manual_review' | 'stop'
+}
+
+export type AIPlatformAssetValue =
+  | ProviderConnectionValue
+  | ModelCatalogEntryValue
+  | AIApplicationValue
+  | BusinessUsePointValue
+  | ApplicationBindingValue
+  | RoutePolicyValue
+
 export type UIThemeValue = UIThemeConfigValue
 
 // 合同审核规则值 (F009) - 与现有 Rule 类型兼容
@@ -110,6 +189,8 @@ export interface ConfigCreateDTO {
   key: string
   name: string
   value: Record<string, unknown>
+  revision_source_id?: string
+  credential_action?: 'reuse' | 'replace' | 'clear'
   type: ConfigType
   description?: string
 }
@@ -141,8 +222,8 @@ export const CONFIG_TYPE_META: Record<ConfigType, { label: string; description: 
     description: '折扣审批、合同审批权限配置',
   },
   AI_CONFIG: {
-    label: 'AI 模型配置',
-    description: '本地模型、云端模型连接配置',
+    label: 'AI 平台配置',
+    description: 'Provider、模型目录、AI 应用、业务用点、绑定与路由',
   },
   UI_THEME: {
     label: '界面主题',

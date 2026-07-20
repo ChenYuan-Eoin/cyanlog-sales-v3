@@ -1,0 +1,44 @@
+{
+  "validated_at": "2026-07-20T19:34:56+08:00",
+  "environment": {
+    "supabase_project_id": "vsfropnfsmnonkotywsx",
+    "supabase_project_name": "price-v3-p0-g5-preview-20260717",
+    "isolation": "preview_only",
+    "production_write": false,
+    "production_deploy": false
+  },
+  "migration": {
+    "source_file": "supabase/migrations/20260715124528_secure_ai_config_control_plane.sql",
+    "preview_version": "20260720112710",
+    "preview_name": "secure_ai_config_control_plane",
+    "applied": true,
+    "preexisting_history_secret_rows": 0
+  },
+  "dynamic_secret_canary": {
+    "live_secret_present_before_cleanup": true,
+    "version_row_created": true,
+    "history_secret_absent": true,
+    "fixture_clean": true,
+    "secret_value_recorded_in_evidence": false
+  },
+  "table_privileges": {
+    "configs": {
+      "anon": [],
+      "authenticated": [],
+      "service_role": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "config_versions": {
+      "anon": [],
+      "authenticated": [],
+      "service_role": ["INSERT", "SELECT"]
+    }
+  },
+  "function_contract": {
+    "record_config_version_security_definer": false,
+    "record_config_version_search_path": "",
+    "claim_contract_analysis_job_anon_execute": false,
+    "claim_contract_analysis_job_authenticated_execute": false,
+    "claim_contract_analysis_job_service_role_execute": true
+  },
+  "boundary": "This proves Preview history redaction and control-plane ACLs only. It does not prove Production state or provider runtime behavior."
+}

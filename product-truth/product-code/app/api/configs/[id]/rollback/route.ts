@@ -14,10 +14,15 @@ import {
   mergeStoredAIProviderValue,
   withoutStoredApiKey,
 } from '@/lib/configs/runtime'
-import { validateConfigValue } from '@/lib/configs/validation'
+import { parseConfigValue } from '@/lib/configs/validation'
 import type { ConfigType } from '@/lib/configs/types'
-import { userHasOrgConfigAccess } from '@/lib/configs/access'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
+import { getFreshDefaultOrgId } from '@/lib/scoped-access'
+import {
+  getAIAssetId,
+  isEditableAIConfigValue,
+  isProviderCredentialValue,
+} from '@/lib/configs/ai-platform'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -30,10 +35,18 @@ const rollbackSchema = z.object({
 // 获取当前用户的组织 ID
 async function getCurrentOrgId(userId: string): Promise<string | null> {
   try {
-    return await getDefaultOrgId(userId)
+    return await getFreshDefaultOrgId(userId)
   } catch {
     return null
   }
+}
+
+function isConfigCasConflict(error: unknown): boolean {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && (error as { code?: unknown }).code === 'PGRST116',
+  )
 }
 
 // 验证配置是否属于当前用户组织
@@ -68,7 +81,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (!orgId) {
       return errorResponse(createApiError('NO_ORG'))
     }
-    if (!await userHasOrgConfigAccess(user.id, orgId, 'write')) {
+    if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
       return errorResponse(createApiError('FORBIDDEN'))
     }
 
@@ -91,21 +104,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     if (
       access.config.type === 'AI_CONFIG'
-      && getAIConfigKind(access.config.value) !== 'provider'
+      && !isEditableAIConfigValue(access.config.value)
     ) {
       return errorResponse(createApiError(
         'BUSINESS_RULE_VIOLATION',
-        '模型应用与工具消费策略当前只读，专用校验和发布流程验收前禁止回滚'
+        '旧模型应用、旧工具策略或未知 AI 资产保持只读，禁止回滚'
       ))
     }
     if (
       access.config.type === 'AI_CONFIG'
-      && access.config.status === 'PUBLISHED'
-      && getAIConfigKind(access.config.value) === 'provider'
+      && (access.config.status === 'PUBLISHED' || access.config.status === 'ARCHIVED')
+      && isEditableAIConfigValue(access.config.value)
     ) {
       return errorResponse(createApiError(
         'BUSINESS_RULE_VIOLATION',
-        '已发布 Provider 不可原地回滚；必须创建独立草稿版本并经显式发布后切换'
+        '已发布或已归档的 AI 平台资产不可原地回滚；请基于历史版本创建新草稿'
       ))
     }
 
@@ -127,27 +140,31 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       ? versionRecord.value as Record<string, unknown>
       : {}
     const historicalWithoutApiKey = withoutStoredApiKey(storedVersionValue)
-    const nextValue = access.config.type === 'AI_CONFIG'
-      ? mergeStoredAIProviderValue(access.config.value, historicalWithoutApiKey)
+    let nextValue = access.config.type === 'AI_CONFIG'
+      ? isProviderCredentialValue(access.config.value)
+        ? mergeStoredAIProviderValue(access.config.value, historicalWithoutApiKey)
+        : historicalWithoutApiKey
       : storedVersionValue
 
-    if (
-      access.config.type === 'AI_CONFIG'
-      && getAIConfigKind(nextValue) !== 'provider'
-    ) {
-      return errorResponse(createApiError(
-        'BUSINESS_RULE_VIOLATION',
-        'AI 配置历史版本不是 Provider，禁止通过通用回滚接口恢复'
-      ))
+    if (access.config.type === 'AI_CONFIG') {
+      const sameKind = getAIConfigKind(nextValue) === getAIConfigKind(access.config.value)
+      const sameAssetId = getAIAssetId(nextValue) === getAIAssetId(access.config.value)
+      if (!sameKind || !sameAssetId) {
+        return errorResponse(createApiError(
+          'BUSINESS_RULE_VIOLATION',
+          '历史版本的 kind 或 asset_id 与当前 AI 资产不一致，禁止跨资产回滚'
+        ))
+      }
     }
 
-    const valueValidation = validateConfigValue(access.config.type, nextValue)
+    const valueValidation = parseConfigValue(access.config.type, nextValue)
     if (!valueValidation.valid) {
       return errorResponse(createApiError(
         'VALIDATION_ERROR',
         `目标版本配置值验证失败: ${valueValidation.error}`
       ))
     }
+    nextValue = valueValidation.data || nextValue
 
     // 历史版本永远不是密钥来源；仅相同凭据绑定可沿用当前密钥。
     const { data: updated, error } = await supabaseAdmin
@@ -158,11 +175,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .eq('org_id', orgId)
+      .eq('status', 'DRAFT')
       .select()
       .single()
 
     if (error) {
       console.error('Rollback config error:', error)
+      if (isConfigCasConflict(error)) {
+        return errorResponse(createApiError(
+          'BUSINESS_RULE_VIOLATION',
+          '配置状态已变化，请刷新后基于当前草稿重试回滚',
+        ))
+      }
       return errorResponse(createApiError('DB_ERROR', '回滚配置失败'))
     }
 

@@ -1,699 +1,736 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import ConfigStatusBadge from './ConfigStatusBadge'
-import type { Config, RuntimePolicy, RuntimeProvider } from '../types'
+import { Input } from '@/components/ui/input'
 import {
-  canAttemptModelInvocation,
-  hasFormalModelInvocationEvidence,
-  hasModelInvocationEvidence,
-} from '@/lib/configs/ai-runtime-state'
-import { groupAIConfigs } from '@/lib/configs/ai-config-kind'
+  getAIConfigKind,
+  groupAIConfigs,
+  isAIPlatformAssetKind,
+} from '@/lib/configs/ai-config-kind'
+import {
+  validateAIPlatformPublishGraph,
+  type AIPlatformReferenceValidation,
+} from '@/lib/configs/ai-platform'
+import { BUSINESS_USE_POINT_REGISTRY } from '@/lib/configs/ai-platform-registry'
+import { isMaskedApiKey } from '@/lib/configs/runtime'
+import type { AIPlatformAssetKind } from '@/lib/configs/types'
+import type { Config, ConfigPublishFeedback, RuntimePolicy } from '../types'
+import {
+  AI_PLATFORM_KIND_LABELS,
+  groupPlatformConfigRevisions,
+  orderAndFilterReleaseConfigs,
+  type PlatformConfigRevisionGroup,
+  type ReleaseStatusFilter,
+} from './ai-config-presentation'
+import ConfigStatusBadge from './ConfigStatusBadge'
+import { IntrinsicCardStack } from './IntrinsicCardStack'
+import { PublishActionControl } from './PublishActionControl'
+
+type AIWorkspaceView = 'connections' | 'models' | 'applications' | 'bindings' | 'release'
 
 interface AIConfigTabProps {
   configs: Config[]
   runtimePolicy: RuntimePolicy | null
   runtimeError: string
-  onNew: () => void
+  onNew: (kind: AIPlatformAssetKind) => void
   onEdit: (config: Config) => void
+  onRevise: (config: Config) => void
   onPublish: (id: string) => void
+  onVersions: (id: string) => void
   onDelete: (id: string) => void
+  publishingConfigIds: ReadonlySet<string>
+  publishFeedback: Record<string, ConfigPublishFeedback | undefined>
 }
 
-function runtimeStateLabel(state: RuntimeProvider['runtime_state']) {
-  const labels: Record<RuntimeProvider['runtime_state'], string> = {
-    builtin_ready: '兜底可用',
-    missing_base_url: '地址缺失',
-    missing_credential: '密钥缺失',
-    unreachable_in_vercel: '生产不可达',
-    local_health_ok: '本地可达',
-    local_cli_ready: 'CLI 可调用',
-    local_auth_failed: 'Token 未通过',
-    local_health_failed: '本地不可达',
-    local_generation_failed: '本地生成失败',
-    remote_health_ok: '发布配置云端可达',
-    remote_auth_failed: '云端认证失败',
-    remote_health_failed: '云端不可达',
-    remote_generation_failed: '云端生成失败',
-    ready_to_call: '发布配置待实测',
-    recent_invocation_passed: '最近 ReviewRun 通过',
-    recent_invocation_partial: '最近 ReviewRun 部分通过',
-    recent_invocation_failed: '最近调用失败',
-  }
-  return labels[state]
+const TASKS: Array<{
+  id: AIWorkspaceView
+  step: string
+  label: string
+  description: string
+}> = [
+  { id: 'connections', step: '1', label: '模型接入', description: '账号、端点与认证' },
+  { id: 'models', step: '2', label: '模型目录', description: '同一连接下的可用模型' },
+  { id: 'applications', step: '3', label: 'AI 应用', description: '能力、候选模型与降级' },
+  { id: 'bindings', step: '4', label: '业务绑定', description: '业务用点只绑定应用' },
+  { id: 'release', step: '5', label: '发布状态', description: '依赖检查、版本与兼容' },
+]
+
+function viewFromUrl(href: string): AIWorkspaceView {
+  const requested = new URL(href).searchParams.get('view')
+  return TASKS.some((task) => task.id === requested) ? requested as AIWorkspaceView : 'connections'
 }
 
-function runtimeStateClass(state: RuntimeProvider['runtime_state']) {
-  if (hasFormalModelInvocationEvidence(state)) {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-800'
-  }
-  if (canAttemptModelInvocation(state)) {
-    return 'border-blue-200 bg-blue-50 text-blue-800'
-  }
-  if (
-    state === 'missing_base_url'
-    || state === 'missing_credential'
-    || state === 'unreachable_in_vercel'
-    || state === 'local_auth_failed'
-    || state === 'local_health_failed'
-    || state === 'local_generation_failed'
-    || state === 'remote_auth_failed'
-    || state === 'remote_health_failed'
-    || state === 'remote_generation_failed'
-    || state === 'recent_invocation_failed'
-  ) {
-    return 'border-red-200 bg-red-50 text-red-700'
-  }
-  return 'border-amber-200 bg-amber-50 text-amber-800'
+function releaseQueryFromUrl(href: string) {
+  return new URL(href).searchParams.get('release_q') || ''
 }
 
-function runtimeStateTone(state: RuntimeProvider['runtime_state']) {
-  if (hasFormalModelInvocationEvidence(state)) return 'ok'
-  if (canAttemptModelInvocation(state)) return 'partial'
-  if (state === 'builtin_ready') return 'fallback'
-  return 'blocked'
+function releaseStatusFromUrl(href: string): ReleaseStatusFilter {
+  const requested = new URL(href).searchParams.get('release_status')
+  return requested === 'DRAFT' || requested === 'PUBLISHED' || requested === 'ARCHIVED'
+    ? requested
+    : 'ALL'
 }
 
-function hasFormalModelProviderEvidence(provider: RuntimeProvider) {
-  return hasFormalModelInvocationEvidence(provider.runtime_state)
+function stringList(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
-function hasModelProviderInvocationEvidence(provider: RuntimeProvider) {
-  return hasModelInvocationEvidence(provider.runtime_state)
+const CAPABILITY_LABELS: Record<string, string> = {
+  text_generation: '文本生成',
+  structured_output: '结构化结果',
+  long_context: '长文档理解',
+  vision: '视觉理解',
+  tool_calling: '工具调用',
 }
 
-function canAttemptModelProvider(provider: RuntimeProvider) {
-  return canAttemptModelInvocation(provider.runtime_state)
+function capabilityText(values: string[]) {
+  return values.map((value) => CAPABILITY_LABELS[value] || value).join(' / ')
 }
 
-function providerRuntimeLabel(provider?: RuntimeProvider) {
-  if (!provider) return '未配置'
-  return `${runtimeStateLabel(provider.runtime_state)} · ${provider.model}`
+function statusText(status: Config['status']) {
+  if (status === 'PUBLISHED') return '已发布'
+  if (status === 'ARCHIVED') return '已归档'
+  return '草稿'
 }
 
-function providerRuntimeClass(provider?: RuntimeProvider) {
-  if (!provider) return 'border-red-200 bg-red-50 text-red-700'
-  const tone = runtimeStateTone(provider.runtime_state)
-  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
-  if (tone === 'partial') return 'border-blue-200 bg-blue-50 text-blue-800'
-  if (tone === 'fallback') return 'border-slate-200 bg-slate-50 text-slate-700'
-  return 'border-red-200 bg-red-50 text-red-700'
+function formatUpdatedAt(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '更新时间未知'
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
-function providerConfigPath(provider?: RuntimeProvider) {
-  if (!provider) return '新增并发布 AI_CONFIG'
-  if (provider.provider_kind === 'builtin') return '内置规则引擎，无需配置 Token'
-  if (provider.runtime_state === 'recent_invocation_failed') return '最近正式调用失败，请更换 Token/模型网关后再触发 ReviewRun'
-  if (provider.runtime_state === 'recent_invocation_passed') {
-    return provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli'
-      ? '最近 ReviewRun 通过本机 CLI 通道；HTTP Token 仍未统一'
-      : '最近 ReviewRun 已通过正式模型调用；若当前编辑表单测试失败，仍不得发布为新可用配置'
-  }
-  if (provider.runtime_state === 'recent_invocation_partial') {
-    return provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli'
-      ? '最近 ReviewRun 通过本机 CLI；仍需保存 LM Studio Token 验收 HTTP 通道'
-      : '最近 ReviewRun 有模型调用证据，但输出质量需复核'
-  }
-  if (provider.runtime_state === 'remote_health_ok') return '云端网关和 Token 已通过连接测试，仍需 ReviewRun 产出调用证据'
-  if (provider.runtime_state === 'remote_auth_failed') return '云端 Token 未通过，请更换 Token 或模型权限'
-  if (provider.runtime_state === 'remote_health_failed') return '云端网关不可达，请检查 Base URL 和供应商状态'
-  if (provider.runtime_state === 'remote_generation_failed') return '云端模型列表可达，但最小生成失败，请检查模型 ID、Token 权限或限流'
-  if (provider.runtime_state === 'local_generation_failed') return '本地模型列表可达，但最小生成失败或超时，不能按本地模型可用验收'
-  if (provider.local_endpoint) return provider.credential_state === 'configured'
-    ? 'LM Studio HTTP Token 已保存'
-    : '保存 LM Studio Token，或保留本机 CLI 通道'
-  return provider.credential_state === 'configured'
-    ? '云端 API Key 已保存'
-    : '粘贴云端 Token 并重新发布'
+function credentialText(config: Config) {
+  if (config.value.auth_mode !== 'bearer') return '无需认证'
+  return typeof config.value.api_key === 'string' && isMaskedApiKey(config.value.api_key)
+    ? 'Bearer Token · 凭据已安全保存'
+    : 'Bearer Token · 凭据未配置'
 }
 
-function RuntimeEvidenceScopeNotice() {
+function InlinePublishFeedback({ feedback }: { feedback?: ConfigPublishFeedback }) {
+  if (!feedback) return null
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-      <div className="font-semibold">运行证据口径</div>
-      <p className="mt-1">
-        本区只展示“已发布模型策略”和“最近 ReviewRun / 长文档解析”的证据；编辑弹窗里的连接测试代表当前草稿配置。
-        如果当前草稿测试失败，不能用这里的历史通过记录证明新配置可用。
-      </p>
+    <div
+      role={feedback.tone === 'error' ? 'alert' : 'status'}
+      aria-live={feedback.tone === 'error' ? 'assertive' : 'polite'}
+      className={feedback.tone === 'error'
+        ? 'rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800'
+        : 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'}
+    >
+      {feedback.message}
     </div>
   )
 }
 
-function configProviderKind(config: Config) {
-  const model = config.value?.model
-  if (config.value?.provider_kind === 'builtin' || model === 'rule-engine') return 'builtin'
-  return 'openai_compatible'
-}
-
-function isLocalBaseUrl(value: unknown) {
-  if (typeof value !== 'string' || value.trim().length === 0) return false
-  try {
-    const parsed = new URL(value)
-    return ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(parsed.hostname)
-  } catch {
-    return false
-  }
-}
-
-function configCredentialLabel(config: Config) {
-  if (configProviderKind(config) === 'builtin') return '无需密钥'
-  if (typeof config.value?.api_key === 'string' && config.value.api_key.length > 0) return '已保存'
-  return isLocalBaseUrl(config.value?.base_url) ? '未保存 Token' : '未配置'
-}
-
-function latestInvocationText(invocation: RuntimeProvider['latest_invocation'], fallbackModel: string) {
-  if (!invocation) return null
-  const failure = invocation.attempt_errors.find(Boolean) || invocation.error_message || invocation.fallback_reason
-  const parts = [
-    invocation.status || 'unknown',
-    invocation.degraded ? 'degraded' : 'not-degraded',
-    invocation.transport || invocation.provider_kind,
-  ].filter(Boolean)
-  return failure
-    ? `${parts.join(' · ')} · ${failure}`
-    : `${parts.join(' · ')} · ${invocation.model || fallbackModel}`
-}
-
-function plannedInvocationText(provider: RuntimeProvider) {
-  const invocation = provider.latest_intended_invocation || provider.latest_requested_invocation
-  if (!invocation || invocation.id === provider.latest_invocation?.id) return null
-  const plannedProfile = invocation.intended_provider_profile
-    || invocation.requested_provider_profile
-    || provider.profile
-  const actualProvider = invocation.provider || 'unknown'
-  const summary = latestInvocationText(invocation, provider.model)
-  return `最近计划使用 ${plannedProfile}，实际记录在 ${actualProvider}${summary ? `：${summary}` : ''}`
-}
-
-function providerCredentialLabel(provider: RuntimeProvider) {
-  if (provider.credential_state === 'not_required') return '无需密钥'
-  if (provider.credential_state === 'configured') return '密钥已配置'
-  if (provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli') {
-    return 'CLI 通道可用 / HTTP Token 未配置'
-  }
-  if (provider.local_endpoint && ['local_health_ok', 'recent_invocation_passed', 'recent_invocation_partial'].includes(provider.runtime_state)) {
-    return '本地免密可用'
-  }
-  if (provider.local_endpoint && provider.runtime_state === 'local_cli_ready') return 'CLI 通道可用 / HTTP Token 未配置'
-  return provider.local_endpoint ? '本地 Token 未配置' : '密钥缺失'
-}
-
-function sourceSummaryText(runtimePolicy: RuntimePolicy) {
-  const summary = runtimePolicy.source_summary
-  if (!summary) return '来源：已发布策略来自配置中心数据库；编辑弹窗是表单草稿。'
-  const envText = summary.environment_source === 'present_not_consumed_by_published_policy'
-    ? `环境变量存在但不自动进入当前发布策略：${summary.environment_keys_present.join(' / ')}`
-    : '未检测到运行时模型环境变量'
-
-  return `来源：ModelPolicy 来自数据库，Provider 来自 configs 表，编辑弹窗是表单草稿；${envText}。`
-}
-
-function providerSourceText(provider: RuntimeProvider) {
-  if (provider.source_kind === 'builtin_rule_engine') return '来源：内置规则引擎兜底'
-  if (provider.source_kind === 'missing_database_config') return '来源异常：发布策略引用的 AI_CONFIG 已缺失'
-  return `来源：${provider.source_label || '配置中心数据库 AI_CONFIG'}${provider.source_config_key ? ` · ${provider.source_config_key}` : ''}`
-}
-
-export default function AIConfigTab({ configs, runtimePolicy, runtimeError, onNew, onEdit, onPublish, onDelete }: AIConfigTabProps) {
-  const {
-    providers: providerConfigs,
-    applications: applicationConfigs,
-    toolPolicies: toolPolicyConfigs,
-    unclassified: unclassifiedConfigs,
-  } = groupAIConfigs(configs)
-  const externalProviders = runtimePolicy?.provider_chain.filter((provider) => provider.provider_kind !== 'builtin') ?? []
-  const hasExternalProvider = externalProviders.length > 0
-  const hasFormalExternalProviderEvidence = externalProviders.some(hasFormalModelProviderEvidence)
-  const hasExternalProviderInvocationEvidence = externalProviders.some(hasModelProviderInvocationEvidence)
-  const hasAttemptableExternalProvider = externalProviders.some(canAttemptModelProvider)
-  const localProvider = runtimePolicy?.provider_chain.find((provider) => provider.runtime_location === 'local')
-  const cloudProvider = runtimePolicy?.provider_chain.find((provider) => provider.runtime_location === 'cloud')
-  const builtinProvider = runtimePolicy?.provider_chain.find((provider) => provider.provider_kind === 'builtin')
-  const localConfig = providerConfigs.find((config) => config.key === 'AI_LEVEL_1' || config.value?.level === 1)
-  const cloudConfig = providerConfigs.find((config) => config.key === 'AI_LEVEL_2' || config.value?.level === 2)
-  const hasLocalCliFallback = externalProviders.some((provider) => (
-    provider.runtime_state === 'local_cli_ready'
-    || (provider.local_endpoint && provider.latest_invocation?.transport === 'lm_studio_cli')
-  ))
-  const hasHttpAuthBlock = externalProviders.some((provider) => provider.runtime_state === 'local_auth_failed')
-  const hasRecentInvocationFailed = externalProviders.some((provider) => provider.runtime_state === 'recent_invocation_failed')
-  const hasProductionBlockedLocalProvider = externalProviders.some((provider) => (
-    provider.runtime_state === 'unreachable_in_vercel'
-  ))
-  const tenderCloudState = cloudProvider?.tender_runtime?.runtime_state
-  const tenderCloudEvidencePassed = tenderCloudState
-    ? hasFormalModelInvocationEvidence(tenderCloudState)
-    : false
-  const tenderCloudAttemptable = tenderCloudState
-    ? canAttemptModelInvocation(tenderCloudState)
-    : false
-  const routeRows = [
-    {
-      level: 'L1',
-      title: '本地模型优先',
-      stage: 'semantic_review / rule_translation',
-      target: '合同正文、规则声明优先在本机处理',
-      provider: localProvider,
-    },
-    {
-      level: 'L2',
-      title: '云模型增强',
-      stage: 'long_document_parse / ambiguity_arbitration / low_confidence_review',
-      target: '标书解析、长文本/长 PDF、复杂规则和低置信度仲裁',
-      provider: cloudProvider,
-    },
-    {
-      level: 'L3',
-      title: '规则引擎兜底',
-      stage: 'deterministic_check / evidence_anchor',
-      target: '确定性校验、证据定位和失败可解释',
-      provider: builtinProvider,
-    },
-  ]
+function AssetActions({
+  config,
+  onEdit,
+  onRevise,
+  onPublish,
+  onVersions,
+  onDelete,
+  publishingConfigIds,
+  publishFeedback,
+}: Pick<AIConfigTabProps, 'onEdit' | 'onRevise' | 'onPublish' | 'onVersions' | 'onDelete' | 'publishingConfigIds' | 'publishFeedback'> & { config: Config }) {
+  const publishing = publishingConfigIds.has(config.id)
+  const feedback = publishFeedback[config.id]
 
   return (
-    <div className="columns-1 gap-4 xl:columns-2">
-      <Card className="mb-4 min-w-0 break-inside-avoid">
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-base">模型 Provider ({providerConfigs.length})</CardTitle>
-          <Button size="sm" onClick={onNew}>+ 新增</Button>
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {config.status === 'DRAFT' ? (
+          <>
+            <Button variant="outline" size="sm" className="min-h-11" disabled={publishing} onClick={() => onEdit(config)}>编辑</Button>
+            <PublishActionControl
+              pending={publishing}
+              feedback={feedback}
+              onPublish={() => onPublish(config.id)}
+            />
+            <Button variant="outline" size="sm" className="min-h-11" disabled={publishing} onClick={() => onDelete(config.id)}>删除草稿</Button>
+          </>
+        ) : (
+          <Button variant="outline" size="sm" className="min-h-11" onClick={() => onRevise(config)}>
+            {config.status === 'ARCHIVED' ? '重新创建草稿' : '基于当前版本新建草稿'}
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" className="min-h-11" onClick={() => onVersions(config.id)}>版本记录</Button>
+      </div>
+      {config.status !== 'DRAFT' && <InlinePublishFeedback feedback={feedback} />}
+    </div>
+  )
+}
+
+function EmptyState({ title, action, onClick }: { title: string; action: string; onClick: () => void }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+      <p className="text-sm text-slate-600">{title}</p>
+      <Button className="mt-4 min-h-11" onClick={onClick}>{action}</Button>
+    </div>
+  )
+}
+
+function AssetHeader({ config, showStatus = true }: { config: Config; showStatus?: boolean }) {
+  const kind = getAIConfigKind(config.value)
+  return (
+    <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-slate-950">{config.name}</h3>
+          {showStatus && <ConfigStatusBadge status={config.status} />}
+          {config.value.enabled === false && <Badge variant="outline">已停用</Badge>}
+        </div>
+      </div>
+      {kind && isAIPlatformAssetKind(kind) && (
+        <Badge variant="outline" className="shrink-0">{AI_PLATFORM_KIND_LABELS[kind]}</Badge>
+      )}
+    </div>
+  )
+}
+
+function RevisionSummary({ group }: { group: PlatformConfigRevisionGroup }) {
+  return (
+    <div className="mt-3">
+      <div className="flex flex-wrap gap-2" aria-label="版本状态摘要">
+        {group.published.length > 0 && <Badge className="bg-emerald-100 text-emerald-800">当前 {group.published.length}</Badge>}
+        {group.drafts.length > 0 && <Badge className="bg-blue-100 text-blue-800">草稿 {group.drafts.length}</Badge>}
+        {group.archived.length > 0 && <Badge variant="outline">归档 {group.archived.length}</Badge>}
+      </div>
+      <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-slate-700">版本与高级标识</summary>
+        <div className="border-t border-slate-200 pt-3">
+          <div className="text-xs text-slate-500">稳定资产标识</div>
+          <div className="mt-1 break-all font-mono text-xs text-slate-700">{group.assetId}</div>
+          <ol className="mt-3 space-y-2">
+            {group.records.map((record) => (
+              <li key={record.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-slate-900">
+                    {record.status === 'PUBLISHED' ? '当前' : record.status === 'DRAFT' ? '草稿' : '归档'}
+                  </span>
+                  <span>{formatUpdatedAt(record.updated_at)}</span>
+                </div>
+                <div className="mt-1 break-all font-mono">记录键：{record.key}</div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </details>
+    </div>
+  )
+}
+
+function RevisionCard({
+  group,
+  children,
+  ...actions
+}: Pick<AIConfigTabProps, 'onEdit' | 'onRevise' | 'onPublish' | 'onVersions' | 'onDelete' | 'publishingConfigIds' | 'publishFeedback'> & {
+  group: PlatformConfigRevisionGroup
+  children: React.ReactNode
+}) {
+  return (
+    <article className="rounded-2xl border border-slate-200 p-4 [contain-intrinsic-size:auto_320px] [content-visibility:auto]">
+      <AssetHeader config={group.primary} showStatus={false} />
+      <RevisionSummary group={group} />
+      {children}
+      <div className="mt-4 border-t border-slate-100 pt-4">
+        <AssetActions config={group.primary} {...actions} />
+      </div>
+    </article>
+  )
+}
+
+export default function AIConfigTab({
+  configs,
+  runtimePolicy,
+  runtimeError,
+  onNew,
+  onEdit,
+  onRevise,
+  onPublish,
+  onVersions,
+  onDelete,
+  publishingConfigIds,
+  publishFeedback,
+}: AIConfigTabProps) {
+  const [view, setView] = useState<AIWorkspaceView>('connections')
+  const grouped = useMemo(() => groupAIConfigs(configs), [configs])
+  const platformConfigs = useMemo(() => configs.filter((config) => {
+    const kind = getAIConfigKind(config.value)
+    return kind !== null && isAIPlatformAssetKind(kind)
+  }), [configs])
+  const revisionGroups = useMemo(() => groupPlatformConfigRevisions(platformConfigs), [platformConfigs])
+  const providerGroups = revisionGroups.filter((group) => group.kind === 'provider_connection')
+  const modelGroups = revisionGroups.filter((group) => group.kind === 'model_catalog_entry')
+  const applicationGroups = revisionGroups.filter((group) => group.kind === 'ai_application')
+  const usePointGroups = revisionGroups.filter((group) => group.kind === 'business_use_point')
+  const bindingGroups = revisionGroups.filter((group) => group.kind === 'application_binding')
+  const routeGroups = revisionGroups.filter((group) => group.kind === 'route_policy')
+  const legacyConfigs = [
+    ...grouped.legacyProviders,
+    ...grouped.legacyApplications,
+    ...grouped.legacyToolPolicies,
+    ...grouped.unclassified,
+  ]
+  const draftReadiness = useMemo(() => new Map(platformConfigs
+    .filter((config) => config.status === 'DRAFT')
+    .map((config) => [config.id, validateAIPlatformPublishGraph(config, platformConfigs, {
+      allowMaskedCredentialForPresentation: true,
+    })])), [platformConfigs])
+
+  useEffect(() => {
+    const syncViewFromUrl = () => setView(viewFromUrl(window.location.href))
+    syncViewFromUrl()
+    const onPopState = () => syncViewFromUrl()
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  function changeView(next: AIWorkspaceView) {
+    setView(next)
+    const url = new URL(window.location.href)
+    url.searchParams.set('view', next)
+    window.history.pushState({}, '', url)
+  }
+
+  const counts: Record<AIWorkspaceView, number> = {
+    connections: providerGroups.length,
+    models: modelGroups.length,
+    applications: applicationGroups.length + routeGroups.length,
+    bindings: usePointGroups.length + bindingGroups.length,
+    release: revisionGroups.length,
+  }
+
+  return (
+    <div className="space-y-6" data-testid="ai-platform-workspace">
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle className="text-lg">AI 平台配置</CardTitle>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                平台先接入模型服务和模型目录，再由 AI 应用定义路由；业务模块只绑定已发布应用，不直接写死 Provider 或模型。
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
+              <div className="font-semibold text-slate-900">配置状态</div>
+              这里负责建立和发布平台资产；真实业务调用与输出质量需要单独运行验证。
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {providerConfigs.map((config) => (
-              <div key={config.id} className="rounded-lg border p-4">
-                <div className="flex items-baseline justify-between mb-3">
-                  <div className="text-sm font-semibold text-slate-900">
-                    {typeof config.value?.level === 'number' ? `L${config.value.level}` : '未标注层级'} · {config.name}
+          <nav aria-label="AI 平台配置任务" className="flex gap-2 overflow-x-auto pb-1 xl:grid xl:grid-cols-5 xl:overflow-visible xl:pb-0">
+            {TASKS.map((task) => {
+              const active = view === task.id
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  aria-current={active ? 'step' : undefined}
+                  onClick={() => changeView(task.id)}
+                  className={`min-h-16 min-w-[168px] rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 xl:min-h-[76px] xl:min-w-0 ${
+                    active
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold">{task.step}. {task.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${active ? 'bg-white/10' : 'bg-slate-100'}`}>
+                      {counts[task.id]}
+                    </span>
                   </div>
-                  <div className="flex gap-1">
-                    <ConfigStatusBadge status={config.status} />
-                    {config.value?.enabled === true && <Badge className="bg-emerald-100 text-emerald-700">启用</Badge>}
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-600 space-y-1.5 mb-4">
-                  <div>来源: 配置中心数据库 · {config.status === 'DRAFT' ? '表单草稿/未发布' : config.status === 'PUBLISHED' ? '已发布' : '已归档'}</div>
-                  <div className="break-all">画像: {(config.value?.profile as string) || '未设置'}</div>
-                  <div className="break-all">类型: {configProviderKind(config)}</div>
-                  <div className="break-all">模型: {(config.value?.model as string) || '未设置'}</div>
-                  <div className="break-all">地址: {(config.value?.base_url as string) || '（内置）'}</div>
-                  <div>超时: {(config.value?.timeout_ms as number) / 1000}s</div>
-                  <div>密钥: {configCredentialLabel(config)}</div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="min-h-11 flex-1" onClick={() => onEdit(config)}>编辑</Button>
-                  {config.status !== 'PUBLISHED' && (
-                    <Button variant="outline" size="sm" className="min-h-11" onClick={() => onPublish(config.id)}>发布</Button>
-                  )}
-                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onDelete(config.id)}>删除</Button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-        {providerConfigs.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-slate-500">暂无 AI 模型配置</p>
-            <p className="text-sm text-slate-400 mt-2">点击上方按钮创建第一条 AI 配置</p>
-          </div>
-        )}
+                  <div className={`mt-1 text-xs ${active ? 'text-slate-300' : 'text-slate-500'}`}>{task.description}</div>
+                </button>
+              )
+            })}
+          </nav>
         </CardContent>
       </Card>
 
-      <Card className="mb-4 min-w-0 break-inside-avoid">
-        <CardHeader>
-          <CardTitle className="text-base">应用与工具消费</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
-            Provider 只保存模型连接；应用保存业务能力绑定；工具策略决定具体工具如何选择 Provider。三类资产分别发布。
-          </div>
-
-          <section aria-labelledby="ai-applications-heading" className="rounded-lg border border-slate-200">
-            <div className="flex items-center justify-between border-b bg-slate-50 px-3 py-2">
-              <h3 id="ai-applications-heading" className="text-sm font-semibold text-slate-900">
-                模型应用 ({applicationConfigs.length})
-              </h3>
-              <span className="text-[11px] text-slate-500">业务能力层</span>
-            </div>
-            <div className="divide-y">
-              {applicationConfigs.map((config) => (
-                <div key={config.id} className="px-3 py-3 text-xs">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-slate-900">{config.name}</div>
-                      <div className="mt-1 break-all font-mono text-[11px] text-slate-500">
-                        {(config.value?.application_id as string) || config.key}
-                      </div>
-                    </div>
-                    <ConfigStatusBadge status={config.status} />
-                  </div>
-                  <div className="mt-2 break-words text-slate-600">
-                    工具：{Array.isArray(config.value?.bound_tools) && config.value.bound_tools.length > 0
-                      ? config.value.bound_tools.join(' / ')
-                      : '未绑定'}
-                  </div>
-                </div>
-              ))}
-              {applicationConfigs.length === 0 && (
-                <div className="px-3 py-6 text-center text-xs text-slate-500">暂无模型应用</div>
-              )}
-            </div>
-          </section>
-
-          <section aria-labelledby="ai-tool-policies-heading" className="rounded-lg border border-slate-200">
-            <div className="flex items-center justify-between border-b bg-slate-50 px-3 py-2">
-              <h3 id="ai-tool-policies-heading" className="text-sm font-semibold text-slate-900">
-                工具消费策略 ({toolPolicyConfigs.length})
-              </h3>
-              <span className="text-[11px] text-slate-500">业务消费层</span>
-            </div>
-            <div className="divide-y">
-              {toolPolicyConfigs.map((config) => (
-                <div key={config.id} className="px-3 py-3 text-xs">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-slate-900">{config.name}</div>
-                      <div className="mt-1 break-all font-mono text-[11px] text-slate-500">
-                        {(config.value?.tool as string) || config.key}
-                      </div>
-                    </div>
-                    <ConfigStatusBadge status={config.status} />
-                  </div>
-                  <div className="mt-2 break-words text-slate-600">
-                    应用：{(config.value?.application_key as string) || '未绑定'} · 策略：{(config.value?.strategy as string) || '未设置'}
-                  </div>
-                </div>
-              ))}
-              {toolPolicyConfigs.length === 0 && (
-                <div className="px-3 py-6 text-center text-xs text-slate-500">暂无工具消费策略</div>
-              )}
-            </div>
-          </section>
-
-          {unclassifiedConfigs.length > 0 && (
-            <div aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              有 {unclassifiedConfigs.length} 条 AI_CONFIG 使用未知 kind，已从运行链和三层资产中隔离。
-            </div>
+      {view === 'connections' && (
+        <TaskSection
+          title="模型接入"
+          description="一条连接只回答“如何访问模型服务”。具体模型、合同阶段、规则集和降级顺序都不在这里配置。"
+          actionLabel="新增 Provider 连接"
+          onAction={() => onNew('provider_connection')}
+        >
+          {providerGroups.length === 0 ? (
+            <EmptyState title="还没有平台 Provider 连接。" action="创建第一条连接" onClick={() => onNew('provider_connection')} />
+          ) : (
+            <IntrinsicCardStack label="Provider 连接列表">
+              {providerGroups.map((group) => {
+                const config = group.primary
+                return (
+                <RevisionCard
+                  key={group.key}
+                  group={group}
+                  {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                >
+                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                    <Fact label="位置" value={config.value.runtime_location === 'local' ? '本地服务' : '云端服务'} />
+                    <Fact label="协议" value="OpenAI compatible" />
+                    <Fact label="端点" value={String(config.value.base_url || '未配置')} wide />
+                    <Fact label="认证" value={credentialText(config)} />
+                  </dl>
+                </RevisionCard>
+                )
+              })}
+            </IntrinsicCardStack>
           )}
-          <p className="text-[11px] leading-5 text-slate-500">
-            当前 Provider 编辑器不会打开应用或工具策略，避免把业务配置误保存成模型连接。
-          </p>
-        </CardContent>
-      </Card>
+        </TaskSection>
+      )}
 
-      <Card className="mb-4 min-w-0 break-inside-avoid">
-        <CardHeader>
-          <CardTitle className="text-base">路由与执行策略</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          <div className="rounded-lg border border-slate-200">
-            <div className="border-b bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700">
-              L1 / L2 / L3 模型旅程
-            </div>
-            <div className="divide-y">
-              {routeRows.map((row) => (
-                <div key={row.level} className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-3 px-4 py-3">
-                  <span className="rounded bg-slate-100 px-2 py-1 text-center font-mono text-xs font-semibold text-slate-700">
-                    {row.level}
-                  </span>
-                  <div className="min-w-0">
+      {view === 'models' && (
+        <TaskSection
+          title="模型目录"
+          description="同一个 Provider 可以登记多个模型。模型条目说明远端模型 ID 和通用能力，不包含任何合同规则。"
+          actionLabel="新增模型"
+          onAction={() => onNew('model_catalog_entry')}
+        >
+          {modelGroups.length === 0 ? (
+            <EmptyState title="还没有可供应用选择的模型。" action="登记模型" onClick={() => onNew('model_catalog_entry')} />
+          ) : (
+            <IntrinsicCardStack label="模型目录列表">
+              {modelGroups.map((group) => {
+                const config = group.primary
+                const provider = providerGroups.find((item) => item.assetId === config.value.provider_connection_id)
+                return (
+                  <RevisionCard
+                    key={group.key}
+                    group={group}
+                    {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                  >
+                    <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                      <Fact label="Provider" value={provider?.primary.name || '连接已停用或不存在'} />
+                      <Fact label="远端模型 ID" value={String(config.value.model_id || '未设置')} />
+                      <Fact label="能力" value={capabilityText(stringList(config.value.capabilities)) || '未定义'} />
+                    </div>
+                  </RevisionCard>
+                )
+              })}
+            </IntrinsicCardStack>
+          )}
+        </TaskSection>
+      )}
+
+      {view === 'applications' && (
+        <div className="space-y-6">
+          <TaskSection
+            title="AI 应用"
+            description="AI 应用定义可被多个业务模块复用的逻辑能力；它不保存 Provider 或具体模型。"
+            actionLabel="新增 AI 应用"
+            onAction={() => onNew('ai_application')}
+          >
+            <AssetList
+              groups={applicationGroups}
+              empty="还没有 AI 应用。"
+              detail={(config) => `能力：${capabilityText(stringList(config.value.capabilities)) || '未定义'}`}
+              {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+            />
+          </TaskSection>
+          <TaskSection
+            title="路由与降级"
+            description="路由把应用连接到有序候选模型；候选全部失败后只能转人工或明确停止。"
+            actionLabel="新增路由策略"
+            onAction={() => onNew('route_policy')}
+          >
+            <AssetList
+              groups={routeGroups}
+              empty="还没有应用路由。"
+              detail={(config) => {
+                const application = applicationGroups.find((item) => item.assetId === config.value.ai_application_id)
+                const modelNames = stringList(config.value.model_catalog_entry_ids).map((modelId) => (
+                  modelGroups.find((item) => item.assetId === modelId)?.primary.name || '不可用模型'
+                ))
+                return `${application?.primary.name || '应用已停用或不存在'} → ${modelNames.join(' → ') || '未选择模型'}`
+              }}
+              {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+            />
+          </TaskSection>
+        </div>
+      )}
+
+      {view === 'bindings' && (
+        <div className="space-y-6">
+          <TaskSection
+            title="业务用点"
+            description="业务用点代表产品里真正需要 AI 的动作。这里只登记已有功能入口和所需能力，不创建系统无法执行的虚假入口。"
+            actionLabel="登记业务用点"
+            onAction={() => onNew('business_use_point')}
+          >
+            <IntrinsicCardStack label="业务用点列表">
+              {BUSINESS_USE_POINT_REGISTRY.map((definition) => {
+                const group = usePointGroups.find((item) => item.assetId === definition.asset_id)
+                const detail = (
+                  <>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">{definition.description}</p>
+                    <p className="mt-2 text-xs text-slate-500">需要：{capabilityText(definition.required_capabilities)}</p>
+                  </>
+                )
+                if (group) {
+                  return (
+                    <RevisionCard
+                      key={group.key}
+                      group={group}
+                      {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                    >
+                      {detail}
+                    </RevisionCard>
+                  )
+                }
+                return (
+                  <article key={definition.asset_id} className="rounded-2xl border border-slate-200 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-slate-900">{row.title}</div>
-                        <div className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-500">{row.target}</div>
-                      </div>
-                      <span className={`shrink-0 rounded border px-2 py-1 text-[11px] font-medium ${providerRuntimeClass(row.provider)}`}>
-                        {providerRuntimeLabel(row.provider)}
-                      </span>
+                      <h3 className="text-sm font-semibold text-slate-950">{definition.display_name}</h3>
+                      <Badge variant="outline">未登记</Badge>
                     </div>
-                    <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-[1fr_1fr]">
-                      <div className="rounded bg-slate-50 px-2 py-1">
-                        阶段：{row.stage}
-                      </div>
-                      <div className="rounded bg-slate-50 px-2 py-1">
-                        配置：{providerConfigPath(row.provider)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                    {detail}
+                  </article>
+                )
+              })}
+            </IntrinsicCardStack>
+          </TaskSection>
+          <TaskSection
+            title="应用绑定"
+            description="绑定只连接“业务用点 → 已发布 AI 应用”；具体模型由应用路由决定。"
+            actionLabel="新增绑定"
+            onAction={() => onNew('application_binding')}
+          >
+            <AssetList
+              groups={bindingGroups}
+              empty="还没有业务应用绑定。"
+              detail={(config) => {
+                const usePoint = usePointGroups.find((item) => item.assetId === config.value.business_use_point_id)
+                const application = applicationGroups.find((item) => item.assetId === config.value.ai_application_id)
+                return `${usePoint?.primary.name || '产品功能入口已停用或不存在'} → ${application?.primary.name || 'AI 应用已停用或不存在'}`
+              }}
+              {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+            />
+          </TaskSection>
+        </div>
+      )}
 
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-xs leading-5 text-blue-900">
-            <div className="flex items-center justify-between gap-3">
-              <div className="font-semibold">推荐配置方式</div>
-              <div className="flex shrink-0 gap-2">
-                <Button variant="outline" size="sm" className="h-7 bg-white px-2 text-xs" onClick={() => localConfig ? onEdit(localConfig) : onNew()}>
-                  配置 L1
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 bg-white px-2 text-xs" onClick={() => cloudConfig ? onEdit(cloudConfig) : onNew()}>
-                  配置 L2
-                </Button>
-              </div>
-            </div>
+      {view === 'release' && (
+        <div className="space-y-6">
+          <TaskSection
+            title="发布检查"
+            description="每类资产独立发布。系统在发布前检查引用、启用状态和能力匹配；缺少哪一环会明确说明。"
+          >
+            <ReleaseList
+              configs={platformConfigs}
+              readiness={draftReadiness}
+              {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+            />
+          </TaskSection>
 
-            <RuntimeEvidenceScopeNotice />
-            <div className="mt-2 space-y-1">
-              <p>L1 本地：LM Studio 保持运行，Base URL 使用 http://127.0.0.1:1234/v1，模型标识使用 gpt-oss-20b。</p>
-              <p>L2 云端：使用 OpenAI-compatible 网关，填入 Base URL、模型 ID 和 Token；Token 只保存在系统配置中，不展示明文。</p>
-              <p>L3 兜底：规则引擎只做确定性校验，不能冒充 AI 审核完成。</p>
-            </div>
-          </div>
+          <Card>
+            <CardHeader><CardTitle className="text-base">兼容运行边界</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm leading-6 text-slate-600">
+              <p>
+                当前有 <strong className="text-slate-950">{legacyConfigs.length}</strong> 条旧版运行配置只读保留。
+                新平台资产尚未切换业务运行；配置发布不等于真实调用已经验证。
+              </p>
+              <p>
+                旧版兼容状态：{runtimePolicy
+                  ? `保留 ${runtimePolicy.provider_chain.length} 个历史连接，仅供切换前回溯`
+                  : runtimeError || '暂无可回溯的旧版运行配置'}
+              </p>
+              {legacyConfigs.length > 0 && (
+                <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <summary className="cursor-pointer font-medium text-slate-900">查看只读兼容记录</summary>
+                  <ul className="mt-3 space-y-2">
+                    {legacyConfigs.map((config) => (
+                      <li key={config.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
+                        <span className="min-w-0 truncate">{config.name}</span>
+                        <span className="shrink-0 text-xs text-slate-500">{statusText(config.status)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
 
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
-              <div className="text-lg font-semibold text-slate-900">{providerConfigs.length}</div>
-              <div className="text-[11px] text-slate-500">Provider</div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
-              <div className="text-lg font-semibold text-slate-900">
-                {applicationConfigs.length}
-              </div>
-              <div className="text-[11px] text-slate-500">应用</div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-3">
-              <div className="text-lg font-semibold text-slate-900">
-                {toolPolicyConfigs.length}
-              </div>
-              <div className="text-[11px] text-slate-500">工具策略</div>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 p-4">
-            <div className="text-xs font-medium text-slate-500">消费边界</div>
-            <div className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
-              <p>F012 只决定模型路由、超时、降级和审计。</p>
-              <p>F009/F006 决定审核规则、输出结构和风险事实。</p>
-              <p>正式验收必须看到 semantic_review 的模型调用证据。</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="mb-4 min-w-0 break-inside-avoid">
+function TaskSection({
+  title,
+  description,
+  actionLabel,
+  onAction,
+  children,
+}: {
+  title: string
+  description: string
+  actionLabel?: string
+  onAction?: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <Card>
       <CardHeader>
-        <CardTitle className="text-base">合同审核运行时策略</CardTitle>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-base">{title}</CardTitle>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
+          </div>
+          {actionLabel && onAction && <Button className="min-h-11 shrink-0" onClick={onAction}>+ {actionLabel}</Button>}
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm">
-        {runtimeError && (
-          <div aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
-            {runtimeError}
-          </div>
-        )}
-
-        {!runtimePolicy && !runtimeError && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-8 text-center text-slate-500">
-            运行时策略加载中
-          </div>
-        )}
-
-        {runtimePolicy && (
-          <>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-medium text-slate-900">{runtimePolicy.key}</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    v{runtimePolicy.version} · {runtimePolicy.status} · {runtimePolicy.timeout_ms / 1000}s
-                  </div>
-                  <div className="mt-2 max-w-[620px] text-xs leading-5 text-slate-600">
-                    {sourceSummaryText(runtimePolicy)}
-                  </div>
-                </div>
-                <Badge variant={runtimePolicy.is_current ? 'default' : 'secondary'}>
-                  {runtimePolicy.is_current ? '当前' : '历史'}
-                </Badge>
-              </div>
-            </div>
-
-            <RuntimeEvidenceScopeNotice />
-
-            <div className={`rounded-lg border px-3 py-2 ${
-              hasRecentInvocationFailed
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : hasFormalExternalProviderEvidence
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : hasAttemptableExternalProvider
-                ? 'border-blue-200 bg-blue-50 text-blue-800'
-                : hasExternalProvider
-                  ? 'border-amber-200 bg-amber-50 text-amber-800'
-                  : 'border-amber-200 bg-amber-50 text-amber-800'
-            }`}>
-              {hasRecentInvocationFailed
-                ? '模型链存在最近正式调用失败的档位；当前不能按完整 L1/L2/L3 模型链验收。'
-                : hasFormalExternalProviderEvidence
-                  ? '外部模型 Provider 已有最近 ReviewRun 正式调用通过证据，可作为本档模型验收依据。'
-                : hasExternalProviderInvocationEvidence
-                  ? '外部模型 Provider 已有最近 ReviewRun 真实调用证据，但输出质量或规则映射仍需复核。'
-                : hasAttemptableExternalProvider
-                  ? hasLocalCliFallback
-                    ? '本机已检测到 LM Studio 已加载模型，当前可通过 CLI 通道调用；HTTP Token 尚未统一时只能作为本机预验收能力。'
-                    : '外部模型 Provider 已具备尝试调用条件，但仍缺真实 ReviewRun 的 completed 调用证据。'
-                : hasExternalProvider
-                  ? externalProviders.some((provider) => provider.runtime_state === 'recent_invocation_failed')
-                    ? '外部模型 Provider 配置存在，但最近一次正式语义审核调用失败；当前不能按正式模型链验收。'
-                    : hasProductionBlockedLocalProvider
-                    ? '存在本地模型 Provider，但在 Vercel 生产环境不可达；当前不能按正式模型链验收。'
-                    : hasHttpAuthBlock
-                      ? '本地模型服务已启动但 HTTP Token 未通过；请保存 LM Studio Token，或确认本机 CLI 通道可用于本地验收。'
-                    : '外部模型 Provider 已发布，但密钥、地址或运行时健康检查未通过；当前不能按正式模型链验收。'
-                  : '当前仅有内置规则引擎兜底；这不是模拟，但语义模型能力尚未配置。'}
-            </div>
-
-            <div className={`rounded-lg border px-3 py-2 ${
-              tenderCloudEvidencePassed
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : tenderCloudAttemptable
-                  ? 'border-blue-200 bg-blue-50 text-blue-800'
-                  : 'border-red-200 bg-red-50 text-red-700'
-            }`}>
-              {cloudProvider
-                ? tenderCloudEvidencePassed
-                  ? '长标书 / 长 PDF 云模型解析已有正式调用通过证据。'
-                  : tenderCloudAttemptable
-                    ? '长标书 / 长 PDF 云模型配置具备调用条件，但还缺真实上传解析后的 completed 证据。'
-                    : '长标书 / 长 PDF 云模型链路不可验收；云端 Provider 未通过配置、健康或最近调用检查。'
-                : '未找到 L2 云模型 Provider；标书解析和长 PDF 不能按目标运行。'}
-            </div>
-
-            <div className={`rounded-lg border px-3 py-2 ${
-              hasExternalProvider
-                ? hasRecentInvocationFailed
-                  ? 'border-red-200 bg-red-50 text-red-700'
-                  : hasFormalExternalProviderEvidence
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : hasAttemptableExternalProvider
-                  ? 'border-blue-200 bg-blue-50 text-blue-800'
-                  : 'border-red-200 bg-red-50 text-red-700'
-                : 'border-amber-200 bg-amber-50 text-amber-800'
-            }`}>
-              {hasExternalProvider
-                ? hasRecentInvocationFailed
-                  ? '验收口径：先修复失败模型档位并重新触发 ReviewRun；失败档位不能靠静态配置或旧通过记录验收。'
-                  : hasFormalExternalProviderEvidence
-                    ? '验收口径：最近 semantic_review 已有 completed 且未降级的模型调用记录；变更 Token 或模型后必须重新触发 ReviewRun。'
-                  : hasExternalProviderInvocationEvidence
-                    ? '验收口径：semantic_review 已写入真实模型调用记录；输出质量告警归入规则资产和批注质量目标继续验收。'
-                  : hasAttemptableExternalProvider
-                    ? hasLocalCliFallback
-                      ? '验收口径：本机可以先触发真实 ReviewRun；线上验收仍需要云模型 Token 或可公网访问的模型网关。'
-                      : '验收口径：仍需用真实合同触发一次模型调用，并确认 semantic_review invocation 为 completed。'
-                  : '验收口径：请先在 AI 模型配置中补齐密钥与地址，再进行真实模型调用验收。'
-                : '验收口径：规则引擎可审计，但不能替代大模型审核目标。'}
-            </div>
-
-            <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-600">
-              <div className="font-medium text-slate-900">OpenAI-compatible 配置说明</div>
-              <div className="mt-2 space-y-1">
-                <p>LM Studio：Base URL 使用 http://127.0.0.1:1234/v1；如果开启认证，需要填写 Developer 页生成的 Token。</p>
-                <p>
-                  云端网关：从{' '}
-                  <a className="font-medium text-blue-700 underline" href="https://cloud.yiyongai.cn/console/token" target="_blank" rel="noreferrer">
-                    cloud.yiyongai.cn/console/token
-                  </a>
-                  {' '}获取 Key，按供应商给出的 Base URL 和模型 ID 配置到 L2。
-                </p>
-                <p>CC Switch 适合管理 Codex/Claude/Gemini 等开发工具配置；产品运行时仍以本系统发布的 AI_CONFIG / ModelPolicy 为准。</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {runtimePolicy.provider_chain.map((provider) => (
-                <div key={`${provider.level}-${provider.profile}-${provider.model}`} className="rounded-lg border border-slate-200 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 font-medium text-slate-900">
-                      Level {provider.level} · {provider.profile}
-                    </div>
-                    <Badge variant={provider.role === 'primary' ? 'default' : 'secondary'}>
-                      {provider.role}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 space-y-1 text-xs text-slate-500">
-                      <div className="truncate">{provider.runtime_location} / {provider.provider_kind} / {provider.model}</div>
-                    <div className={`rounded border px-2 py-1 ${
-                      provider.source_kind === 'missing_database_config'
-                        ? 'border-red-200 bg-red-50 text-red-700'
-                        : 'border-slate-200 bg-slate-50 text-slate-600'
-                    }`}>
-                      {providerSourceText(provider)}
-                    </div>
-                    <div className={`rounded border px-2 py-1 ${runtimeStateClass(provider.runtime_state)}`}>
-                      {runtimeStateLabel(provider.runtime_state)} · {provider.runtime_reason}
-                    </div>
-                    {provider.runtime_action && (
-                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">
-                        处理：{provider.runtime_action}
-                      </div>
-                    )}
-                    {provider.latest_invocation && (
-                      <div className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-600">
-                        最近合同审核：{latestInvocationText(provider.latest_invocation, provider.model)}
-                      </div>
-                    )}
-                    {plannedInvocationText(provider) && (
-                      <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
-                        档位计划记录：{plannedInvocationText(provider)}
-                      </div>
-                    )}
-                    {provider.tender_runtime && (
-                      <div className={`rounded border px-2 py-1 ${runtimeStateClass(provider.tender_runtime.runtime_state)}`}>
-                        标书长文档：{runtimeStateLabel(provider.tender_runtime.runtime_state)} · {provider.tender_runtime.runtime_reason}
-                      </div>
-                    )}
-                    {provider.tender_runtime?.runtime_action && (
-                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">
-                        标书处理：{provider.tender_runtime.runtime_action}
-                      </div>
-                    )}
-                    {provider.latest_tender_invocation && (
-                      <div className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-600">
-                        最近标书解析：{latestInvocationText(provider.latest_tender_invocation, provider.model)}
-                      </div>
-                    )}
-                    <div>
-                      {provider.timeout_ms / 1000}s · {provider.health_check_required ? '需健康检查' : '无需健康检查'} · {providerCredentialLabel(provider)}
-                    </div>
-                    {provider.provider_kind !== 'builtin' && (
-                      <div>
-                        {provider.base_url_configured ? '地址已配置' : '地址缺失'} · {provider.runtime_environment}
-                        {provider.local_endpoint ? ' · 本地端点' : ''}
-                      </div>
-                    )}
-                    <div className="line-clamp-2">阶段: {provider.stages.join(', ')}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </CardContent>
+      <CardContent>{children}</CardContent>
     </Card>
+  )
+}
+
+function Fact({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={wide ? 'sm:col-span-2' : undefined}>
+      <dt className="text-xs font-medium text-slate-500">{label}</dt>
+      <dd className="mt-1 break-all text-slate-800">{value}</dd>
+    </div>
+  )
+}
+
+function AssetList({
+  groups,
+  empty,
+  detail,
+  ...actions
+}: Pick<AIConfigTabProps, 'onEdit' | 'onRevise' | 'onPublish' | 'onVersions' | 'onDelete' | 'publishingConfigIds' | 'publishFeedback'> & {
+  groups: PlatformConfigRevisionGroup[]
+  empty: string
+  detail: (config: Config) => string
+}) {
+  if (groups.length === 0) {
+    return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">{empty}</div>
+  }
+  return (
+    <IntrinsicCardStack label="平台资产列表">
+      {groups.map((group) => (
+        <RevisionCard key={group.key} group={group} {...actions}>
+          <p className="mt-3 break-words text-sm leading-6 text-slate-600">{detail(group.primary)}</p>
+        </RevisionCard>
+      ))}
+    </IntrinsicCardStack>
+  )
+}
+
+function ReleaseList({
+  configs,
+  readiness,
+  ...actions
+}: Pick<AIConfigTabProps, 'onEdit' | 'onRevise' | 'onPublish' | 'onVersions' | 'onDelete' | 'publishingConfigIds' | 'publishFeedback'> & {
+  configs: Config[]
+  readiness: Map<string, AIPlatformReferenceValidation>
+}) {
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<ReleaseStatusFilter>('ALL')
+  const [urlReady, setUrlReady] = useState(false)
+  const visibleConfigs = useMemo(
+    () => orderAndFilterReleaseConfigs(configs, query, status),
+    [configs, query, status],
+  )
+
+  useEffect(() => {
+    const syncFiltersFromUrl = () => {
+      setQuery(releaseQueryFromUrl(window.location.href))
+      setStatus(releaseStatusFromUrl(window.location.href))
+      setUrlReady(true)
+    }
+    syncFiltersFromUrl()
+    window.addEventListener('popstate', syncFiltersFromUrl)
+    return () => window.removeEventListener('popstate', syncFiltersFromUrl)
+  }, [])
+
+  useEffect(() => {
+    if (!urlReady) return
+    const url = new URL(window.location.href)
+    if (query.trim()) url.searchParams.set('release_q', query)
+    else url.searchParams.delete('release_q')
+    if (status === 'ALL') url.searchParams.delete('release_status')
+    else url.searchParams.set('release_status', status)
+    window.history.replaceState({}, '', url)
+  }, [query, status, urlReady])
+
+  if (configs.length === 0) {
+    return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">还没有平台资产。</div>
+  }
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+        <div>
+          <label htmlFor="release-config-search" className="text-xs font-medium text-slate-600">搜索发布资产</label>
+          <Input
+            id="release-config-search"
+            name="release-config-search"
+            type="search"
+            autoComplete="off"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="按名称、配置编号或资产 ID 搜索"
+            className="mt-1 min-h-11 bg-white"
+          />
+        </div>
+        <div>
+          <label htmlFor="release-status-filter" className="text-xs font-medium text-slate-600">状态</label>
+          <select
+            id="release-status-filter"
+            name="release-status-filter"
+            autoComplete="off"
+            value={status}
+            onChange={(event) => setStatus(event.target.value as ReleaseStatusFilter)}
+            className="mt-1 min-h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+          >
+            <option value="ALL">全部状态</option>
+            <option value="DRAFT">草稿</option>
+            <option value="PUBLISHED">已发布</option>
+            <option value="ARCHIVED">已归档</option>
+          </select>
+        </div>
+        <p className="text-xs text-slate-500 sm:col-span-2" aria-live="polite">
+          按“连接 → 模型 → 应用 → 业务用点 → 路由 → 绑定”的依赖顺序显示，共 {visibleConfigs.length} / {configs.length} 条版本记录。
+        </p>
+      </div>
+
+      {visibleConfigs.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+          没有符合当前搜索和状态条件的资产。
+        </div>
+      )}
+
+      {visibleConfigs.map((config) => {
+        const validation = readiness.get(config.id)
+        return (
+          <div key={config.id} className="rounded-2xl border border-slate-200 p-4 [contain-intrinsic-size:auto_280px] [content-visibility:auto]">
+            <AssetHeader config={config} />
+            {config.status === 'DRAFT' && (
+              <div className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
+                validation?.valid
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : 'border-amber-200 bg-amber-50 text-amber-900'
+              }`}>
+                {validation?.valid ? '依赖检查通过，可以提交发布。' : (
+                  <ul className="list-disc space-y-1 pl-5">
+                    {(validation?.reasons || ['请补全资产字段后再发布。']).map((reason) => <li key={reason}>{reason}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+            <div className="mt-4 border-t border-slate-100 pt-4"><AssetActions config={config} {...actions} /></div>
+          </div>
+        )
+      })}
     </div>
   )
 }

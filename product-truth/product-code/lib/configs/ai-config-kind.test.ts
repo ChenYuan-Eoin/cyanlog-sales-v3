@@ -32,4 +32,26 @@ describe('AI config kind classification', () => {
     expect(getAIConfigKind({ model: 'ambiguous-model' })).toBeNull()
     expect(getAIConfigKind({ kind: 'future_kind', model: 'future-model', profile: 'future' })).toBeNull()
   })
+
+  it('keeps all six platform objects independent from legacy runtime assets', () => {
+    const configs = [
+      'provider_connection',
+      'model_catalog_entry',
+      'ai_application',
+      'business_use_point',
+      'application_binding',
+      'route_policy',
+    ].map((kind) => ({ value: { kind, schema_version: 'ai-platform.v1', asset_id: `${kind}.one` } }))
+
+    const grouped = groupAIConfigs(configs)
+
+    expect(grouped.providerConnections).toHaveLength(1)
+    expect(grouped.modelCatalogEntries).toHaveLength(1)
+    expect(grouped.aiApplications).toHaveLength(1)
+    expect(grouped.businessUsePoints).toHaveLength(1)
+    expect(grouped.applicationBindings).toHaveLength(1)
+    expect(grouped.routePolicies).toHaveLength(1)
+    expect(grouped.providers).toHaveLength(0)
+    expect(grouped.unclassified).toHaveLength(0)
+  })
 })
