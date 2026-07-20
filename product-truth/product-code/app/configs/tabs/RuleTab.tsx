@@ -181,7 +181,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   ), [ruleSets])
 
   useEffect(() => {
-    const focusKey = `${ruleMode || ''}:${focusRuleId || ''}:${rules.length}:${categories.length}`
+    // `mode=new` is a one-shot navigation intent. It must not become a new
+    // command merely because saving the draft changes `rules.length`.
+    const focusKey = ruleMode === 'new'
+      ? 'new'
+      : `${ruleMode || ''}:${focusRuleId || ''}:${rules.length}:${categories.length}`
     if (handledFocusRef.current === focusKey || categories.length === 0) return
     if (ruleMode === 'new') {
       handledFocusRef.current = focusKey

@@ -108,5 +108,6 @@ describe('rule configuration product boundary', () => {
     expect(saveSource).not.toContain('onRefresh?.()')
     expect(testSource).toContain('await loadHierarchy()')
     expect(testSource).not.toContain('onRefresh?.()')
+    expect(tab).toContain("ruleMode === 'new'\n      ? 'new'")
   })
 })
