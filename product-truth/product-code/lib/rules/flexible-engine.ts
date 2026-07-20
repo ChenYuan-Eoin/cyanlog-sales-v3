@@ -16,6 +16,11 @@ import type {
   LevelMatchResult,
   RuleExecutionResult,
 } from './types'
+import {
+  evaluateRuleContract,
+  normalizeRuleContract,
+  resolveRuleContract,
+} from './rule-contract'
 
 // ═══════════════════════════════════════════════════════════════
 // 1. 规则加载（从 contract_rules_v2 表）
@@ -52,7 +57,16 @@ export async function loadFlexibleRules(
 
   let query = supabaseAdmin
     .from('contract_rules_v2')
-    .select('*')
+    .select(`
+      *,
+      problem_category:contract_rule_problem_categories(
+        id,
+        code,
+        name,
+        description,
+        sort_order
+      )
+    `)
     .eq('org_id', orgId)
     .eq('is_active', isActive)
     .order('priority', { ascending: false })
@@ -157,12 +171,16 @@ export async function loadFlexibleRulesFromSnapshots(
  * 解析数据库规则为 FlexibleRule 对象
  */
 function parseFlexibleRule(row: Record<string, unknown>): FlexibleRule {
-  return {
+  const rule: FlexibleRule = {
     id: row.id as string,
     org_id: row.org_id as string,
     code: row.code as string,
     name: row.name as string,
     description: row.description as string | null,
+    problem_category_id: row.problem_category_id as string | null | undefined,
+    problem_category: row.problem_category && typeof row.problem_category === 'object'
+      ? row.problem_category as FlexibleRule['problem_category']
+      : null,
     category: row.category as RuleCategory,
     engine_type: (row.engine_type as 'structured' | 'semantic' | 'hybrid') || 'structured',
     target_field: row.target_field as string | undefined,
@@ -205,10 +223,16 @@ function parseFlexibleRule(row: Record<string, unknown>): FlexibleRule {
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   }
+  rule.rule_contract = resolveRuleContract({
+    ...rule,
+    rule_contract: normalizeRuleContract(row.rule_contract),
+    message_template: row.message_template,
+  })
+  return rule
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 2. 字段提取器（从合同文本中提取数值）
+// 2. 旧字段读取兼容面（正式审核不走全文首值路径）
 // ═══════════════════════════════════════════════════════════════
 
 export interface ExtractedField {
@@ -221,6 +245,8 @@ export interface ExtractedField {
 
 /**
  * 根据规则类别提取合同字段
+ * @deprecated 仅供旧调用方兼容；正式审核由 evaluateRuleContract 先定位条款，
+ * 再读取 rule_contract 中预先定义的属性。
  */
 export function extractField(
   contractText: string,
@@ -596,84 +622,21 @@ function extractTextField(
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * 执行运算符比较
- */
-function compare(
-  operator: LevelOperator,
-  actual: number,
-  threshold: number
-): boolean {
-  switch (operator) {
-    case '>=':
-      return actual >= threshold
-    case '<=':
-      return actual <= threshold
-    case '>':
-      return actual > threshold
-    case '<':
-      return actual < threshold
-    case '=':
-      return actual === threshold
-    case 'contains':
-      // 文本包含检查（简化）
-      return actual > 0
-    case 'in':
-      // 在列表中（简化）
-      return actual > 0
-    default:
-      return false
-  }
-}
-
-function normalizeThresholdForExtractedUnit(threshold: number, thresholdUnit: string, extractedUnit: string): number {
-  if (extractedUnit !== 'day') return threshold
-  if (thresholdUnit === 'year') return threshold * 365
-  if (thresholdUnit === 'month') return threshold * 30
-  return threshold
-}
-
-/**
- * 执行单条规则的 Level A/B/C 判定
- *
- * 判定顺序：C -> B -> A（从严格到宽松）
- * - 如果满足 Level C 条件 → 红线（🔴）
- * - 否则如果满足 Level B 条件 → 偏离（🟡）
- * - 否则如果满足 Level A 条件 → 通过（🟢）
- * - 否则 → 未匹配（⚪）
+ * 兼容旧返回结构的统一判定入口。业务判定只执行 canonical
+ * rule_contract；Level A/B/C 仅是对旧调用方的结果映射。
  */
 export function evaluateFlexibleRule(
   rule: FlexibleRule,
   contractText: string,
   _extractedFields?: Record<string, number>
 ): LevelMatchResult {
-  const fieldHints = buildRuleHints(rule)
+  const hadCanonicalContract = Boolean(normalizeRuleContract(rule.rule_contract))
+  const evaluation = evaluateRuleContract(rule, contractText)
 
-  if (rule.category === 'text' || rule.engine_type === 'semantic') {
-    return evaluateTextRule(rule, contractText, fieldHints)
-  }
-
-  if (rule.target_field === 'payment_schedule') {
-    const paymentTerm = extractDurationField(contractText, fieldHints, 'payment_term_days')
-    if (paymentTerm && paymentTerm.value > 30) {
-      return {
-        level: 'C',
-        matched: true,
-        operator: '>',
-        threshold: 30,
-        actual_value: paymentTerm.value,
-        unit: 'day',
-        source: paymentTerm.source,
-        confidence: paymentTerm.confidence,
-        action: rule.level_c.action,
-        message: rule.level_c.message || `${rule.name}账期超出红线标准`,
-        risk_label: 'red',
-      }
-    }
-  }
-
-  // 提取字段值
-  const extracted = extractField(contractText, rule.category, fieldHints, rule.target_field)
-  if (!extracted) {
+  // Existing callers historically use white to mean “legacy asset produced no
+  // source evidence”. Keep that presentation compatibility while all actual
+  // evaluation already runs through the canonical contract above.
+  if (!hadCanonicalContract && evaluation.status !== 'decided') {
     return {
       level: null,
       matched: false,
@@ -683,312 +646,46 @@ export function evaluateFlexibleRule(
       unit: rule.level_a.unit,
       source: '',
       confidence: 0,
-      action: 'auto_approve',
-      message: `未能提取到${rule.category}类型字段`,
+      action: 'manual_review',
+      message: `${rule.name}未找到足够的原文证据`,
       risk_label: 'white',
     }
   }
 
-  const actualValue = extracted.value
+  const decision = evaluation.decision
+  const condition = decision?.conditions[0]
+  const reading = condition
+    ? evaluation.readings[condition.property_key]
+    : Object.values(evaluation.readings).find((candidate) => candidate.status === 'read')
+  const outcome = evaluation.outcome
+  const level = outcome === 'block' ? 'C' : outcome === 'pass' ? 'A' : 'B'
+  const riskLabel = outcome === 'block' ? 'red' : outcome === 'pass' ? 'green' : 'yellow'
+  const operator = condition && ['>=', '<=', '=', '>', '<', 'contains', 'in'].includes(condition.operator)
+    ? condition.operator as LevelOperator
+    : '='
+  const threshold = typeof condition?.value === 'number' ? condition.value : 0
+  const actualValue = typeof reading?.value === 'number'
+    ? reading.value
+    : typeof reading?.value === 'boolean'
+      ? reading.value ? 1 : 0
+      : reading?.value ? 1 : 0
 
-  const levelCThreshold = normalizeThresholdForExtractedUnit(
-    rule.level_c.threshold,
-    rule.level_c.unit,
-    extracted.unit
-  )
-  const levelBThreshold = normalizeThresholdForExtractedUnit(
-    rule.level_b.threshold,
-    rule.level_b.unit,
-    extracted.unit
-  )
-  const levelAThreshold = normalizeThresholdForExtractedUnit(
-    rule.level_a.threshold,
-    rule.level_a.unit,
-    extracted.unit
-  )
-
-  // 按优先级判定：C -> B -> A
-  // Level C (🔴 红线)
-  if (compare(rule.level_c.operator, actualValue, levelCThreshold)) {
-    return {
-      level: 'C',
-      matched: true,
-      operator: rule.level_c.operator,
-      threshold: rule.level_c.threshold,
-      actual_value: actualValue,
-      unit: rule.level_c.unit,
-      source: extracted.source,
-      confidence: extracted.confidence,
-      action: rule.level_c.action,
-      message: rule.level_c.message || `${rule.name}超出红线标准`,
-      risk_label: 'red',
-    }
-  }
-
-  // Level B (🟡 偏离)
-  if (compare(rule.level_b.operator, actualValue, levelBThreshold)) {
-    return {
-      level: 'B',
-      matched: true,
-      operator: rule.level_b.operator,
-      threshold: rule.level_b.threshold,
-      actual_value: actualValue,
-      unit: rule.level_b.unit,
-      source: extracted.source,
-      confidence: extracted.confidence,
-      action: rule.level_b.action,
-      message: `${rule.name}偏离建议区间`,
-      counterparty: rule.level_b.counterparty,
-      risk_label: 'yellow',
-    }
-  }
-
-  // Level A (🟢 通过)
-  if (compare(rule.level_a.operator, actualValue, levelAThreshold)) {
-    return {
-      level: 'A',
-      matched: true,
-      operator: rule.level_a.operator,
-      threshold: rule.level_a.threshold,
-      actual_value: actualValue,
-      unit: rule.level_a.unit,
-      source: extracted.source,
-      confidence: extracted.confidence,
-      action: rule.level_a.action,
-      message: `${rule.name}在合规范围内`,
-      risk_label: 'green',
-    }
-  }
-
-  // 未匹配任何级别（可能是数据异常或规则配置问题）
   return {
-    level: null,
-    matched: false,
-    operator: rule.level_a.operator,
-    threshold: rule.level_a.threshold,
+    level,
+    matched: true,
+    operator,
+    threshold,
     actual_value: actualValue,
-    unit: rule.level_a.unit,
-    source: extracted.source,
-    confidence: extracted.confidence,
-    action: 'auto_approve',
-    message: `${rule.name}未能匹配任何判定级别`,
-    risk_label: 'white',
+    unit: condition?.unit || reading?.unit || 'text',
+    source: reading?.evidence || evaluation.evidence[0] || '',
+    confidence: reading?.confidence || 0,
+    action: decision?.action || outcome,
+    message: decision?.message
+      || decision?.label
+      || (evaluation.status === 'decided' ? `${rule.name}完成判定` : `${rule.name}证据缺失，需人工复核`),
+    counterparty: outcome === 'negotiate' ? rule.level_b.counterparty : undefined,
+    risk_label: riskLabel,
   }
-}
-
-function buildRuleHints(rule: FlexibleRule): string[] {
-  const hints = new Set<string>()
-  for (const hint of rule.field_hints || []) {
-    if (hint.trim()) hints.add(hint.trim())
-  }
-  for (const text of [rule.name, rule.description || '', rule.semantic_prompt || '']) {
-    for (const token of text.split(/[，。；、\s/()（）:：-]+/)) {
-      const normalized = token.trim()
-      if (normalized.length >= 2 && normalized.length <= 12) {
-        hints.add(normalized)
-      }
-    }
-  }
-  return Array.from(hints)
-}
-
-function evaluateTextRule(
-  rule: FlexibleRule,
-  contractText: string,
-  _hints: string[]
-): LevelMatchResult {
-  const text = contractText.toLowerCase()
-  const target = rule.target_field || rule.clause_category || rule.code
-  const hasSourceEvidence = (evidence: string) => evidence.trim().length >= 6
-
-  const redResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult | null => {
-    if (!hasSourceEvidence(evidence)) return null
-    return {
-    level: 'C',
-    matched: true,
-    operator: rule.level_c.operator,
-    threshold: rule.level_c.threshold,
-    actual_value: 0,
-    unit: 'text',
-    source: evidence,
-    confidence,
-    action: rule.level_c.action,
-    message: rule.level_c.message || message,
-    risk_label: 'red',
-    }
-  }
-
-  const greenResult = (message: string, evidence: string, confidence = 0.82): LevelMatchResult | null => {
-    if (!hasSourceEvidence(evidence)) return null
-    return {
-    level: 'A',
-    matched: true,
-    operator: rule.level_a.operator,
-    threshold: rule.level_a.threshold,
-    actual_value: 1,
-    unit: 'text',
-    source: evidence,
-    confidence,
-    action: rule.level_a.action,
-    message,
-    risk_label: 'green',
-    }
-  }
-
-  const noTextRisk = (): LevelMatchResult => ({
-    level: null,
-    matched: false,
-    operator: rule.level_a.operator,
-    threshold: rule.level_a.threshold,
-    actual_value: 0,
-    unit: 'text',
-    source: '',
-    confidence: 0.4,
-    action: 'auto_approve',
-    message: `${rule.name}未发现明确风险表述`,
-    risk_label: 'white',
-  })
-
-  const includesAny = (terms: string[]) => terms.some((term) => text.includes(term.toLowerCase()))
-  const contextForTerms = (terms: string[]) => contextForTermsInText(contractText, terms)
-  const hasNegatedContext = (terms: string[]) => {
-    const negations = ['未约定', '未明确', '未载明', '未说明', '没有约定', '无约定', '缺失', '不明确', '待定']
-    return terms.some((term) => {
-      const normalizedTerm = term.toLowerCase()
-      let startIndex = text.indexOf(normalizedTerm)
-      while (startIndex >= 0) {
-        const windowStart = Math.max(0, startIndex - 12)
-        const windowEnd = Math.min(text.length, startIndex + normalizedTerm.length + 12)
-        const context = text.slice(windowStart, windowEnd)
-        if (negations.some((negation) => context.includes(negation))) {
-          return true
-        }
-        startIndex = text.indexOf(normalizedTerm, startIndex + normalizedTerm.length)
-      }
-      return false
-    })
-  }
-
-  const dangerHints = ['商业风险', '市场变化', '经营困难']
-  const containsDanger = rule.code === 'R013'
-    && dangerHints.some((hint) => text.includes(hint))
-
-  if (containsDanger) {
-    const evidence = contextForTerms(dangerHints)
-    if (!hasSourceEvidence(evidence)) return noTextRisk()
-    return {
-      level: 'C',
-      matched: true,
-      operator: rule.level_c.operator,
-      threshold: rule.level_c.threshold,
-      actual_value: 1,
-      unit: 'text',
-      source: evidence,
-      confidence: 0.85,
-      action: rule.level_c.action,
-      message: rule.level_c.message || `${rule.name}存在高风险表述`,
-      risk_label: 'red',
-    }
-  }
-
-  if (target === 'termination_refund_clause') {
-    const subjectTerms = ['终止', '解除', '退费', '退款', '未消耗', '未使用']
-    if (!includesAny(subjectTerms)) return noTextRisk()
-    const refundTerms = ['按未消耗', '退还未使用', '退还未消耗', '不予退还', '不退费', '全额退款']
-    const context = contextForTerms(subjectTerms)
-    if (includesAny(['不予退还', '不退费', '全额退款'])) {
-      return redResult(`${rule.name}存在终止退款红线`, context, 0.88) || noTextRisk()
-    }
-    if (!includesAny(refundTerms)) {
-      return redResult(`${rule.name}未明确终止退款口径`, context) || noTextRisk()
-    }
-    return greenResult(`${rule.name}已明确终止退款口径`, context) || noTextRisk()
-  }
-
-  if (target === 'acceptance_failure_clause') {
-    const subjectTerms = ['验收不通过', '验收未通过', '不合格', '整改', '重交', '全额退款', '解除合同']
-    if (!includesAny(subjectTerms)) return noTextRisk()
-    const dangerTerms = ['全额退款', '立即解除', '单方解除', '间接损失']
-    const context = contextForTerms(subjectTerms)
-    if (includesAny(dangerTerms)) {
-      return redResult(`${rule.name}存在验收失败红线`, context, 0.88) || noTextRisk()
-    }
-    return greenResult(`${rule.name}已约定验收失败处理`, context) || noTextRisk()
-  }
-
-  if (target === 'indirect_loss_clause') {
-    const dangerTerms = ['间接损失', '可得利益', '商誉', '惩罚性赔偿', '一切损失']
-    if (!includesAny(dangerTerms)) return noTextRisk()
-    return redResult(`${rule.name}包含不应承担的间接或扩张损失`, contextForTerms(dangerTerms), 0.9) || noTextRisk()
-  }
-
-  if (target === 'entity_payment_amount_consistency') {
-    const dangerTerms = ['收款账户不一致', '主体不一致', '金额不一致', '大写金额不一致', '另行指定账户']
-    if (!includesAny(dangerTerms)) return noTextRisk()
-    return redResult(`${rule.name}存在主体、账户或金额一致性风险`, contextForTerms(dangerTerms), 0.9) || noTextRisk()
-  }
-
-  if (target === 'ip_ownership_clause') {
-    const subjectTerms = ['知识产权', '著作权', '专利', '源代码', '定制开发成果', '技术成果', '归属']
-    const ownershipTerms = ['归甲方', '归乙方', '归双方', '归买方', '归卖方', '归属甲方', '归属乙方', '归属双方', '所有权归', '享有所有权']
-    const evidence = contextForTerms([...subjectTerms, ...ownershipTerms])
-    if (hasNegatedContext(subjectTerms) || !includesAny(subjectTerms) || !includesAny(ownershipTerms)) {
-      return redResult(`${rule.name}缺失或未明确`, evidence) || noTextRisk()
-    }
-    return greenResult(`${rule.name}已明确`, evidence) || noTextRisk()
-  }
-
-  if (target === 'data_security_clause') {
-    const subjectTerms = ['客户数据', '个人信息', 'AI训练', '跨境', '境外', 'DPA', '删除']
-    if (!includesAny(subjectTerms)) return noTextRisk()
-    const dangerTerms = ['用于训练', 'AI训练', '跨境', '境外', '无法删除', '永久保留']
-    const context = contextForTerms(subjectTerms)
-    if (includesAny(dangerTerms)) {
-      return redResult(`${rule.name}存在数据安全红线`, context, 0.9) || noTextRisk()
-    }
-    return greenResult(`${rule.name}已覆盖数据安全要求`, context) || noTextRisk()
-  }
-
-  if (target === 'renewal_clause') {
-    const subjectTerms = ['续约', '自动续期', '自动续约', '续期']
-    if (!includesAny(subjectTerms)) return noTextRisk()
-    const dangerTerms = ['自动续约', '自动续期', '无权退出', '不得退出', '锁价', '单方涨价']
-    const context = contextForTerms(subjectTerms)
-    if (includesAny(dangerTerms) && !includesAny(['提前通知', '书面通知', '退出权', '不续约'])) {
-      return redResult(`${rule.name}存在自动续约或退出权风险`, context, 0.88) || noTextRisk()
-    }
-    return greenResult(`${rule.name}已明确续约安排`, context) || noTextRisk()
-  }
-
-  if (target === 'dispute_resolution_clause') {
-    const subjectTerms = ['争议解决', '仲裁', '管辖', '诉讼', '法院']
-    const resolutionTerms = ['仲裁委员会', '仲裁', '管辖法院', '人民法院', '诉讼', '争议解决方式', '管辖地']
-    const evidence = contextForTerms([...subjectTerms, ...resolutionTerms])
-    if (hasNegatedContext(subjectTerms) || !includesAny(resolutionTerms)) {
-      return redResult(`${rule.name}缺失或未明确`, evidence) || noTextRisk()
-    }
-    return greenResult(`${rule.name}已明确`, evidence) || noTextRisk()
-  }
-
-  if (target === 'change_process_clause') {
-    const subjectTerms = ['合同变更', '变更流程', '补充协议']
-    const writtenTerms = ['书面', '补充协议', '双方签字', '双方盖章', '授权代表', '加盖公章', '签署']
-    const dangerTerms = ['口头', '单方变更', '无需书面', '电话确认']
-    const evidence = contextForTerms([...subjectTerms, ...writtenTerms, ...dangerTerms])
-    if (includesAny(dangerTerms)) {
-      return redResult(`${rule.name}存在口头或单方变更风险`, evidence, 0.9) || noTextRisk()
-    }
-    if (hasNegatedContext([...subjectTerms, ...writtenTerms]) || !includesAny(subjectTerms) || !includesAny(writtenTerms)) {
-      return redResult(`${rule.name}缺失书面授权流程`, evidence) || noTextRisk()
-    }
-    return greenResult(`${rule.name}已明确书面授权流程`, evidence) || noTextRisk()
-  }
-
-  if (rule.engine_type === 'semantic' || rule.engine_type === 'hybrid') {
-    return noTextRisk()
-  }
-
-  return noTextRisk()
 }
 
 // ═══════════════════════════════════════════════════════════════

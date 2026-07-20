@@ -1,10 +1,9 @@
 // GET /api/contract-policies/rules
 // POST /api/contract-policies/rules
-// 属性化规则 CRUD（Tier 1 可索引性）
+// 规则 CRUD。业务分类与属性类型分离；新写入协议以 rule_contract v1 为准。
 
 import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { z } from 'zod'
 import {
   errorResponse,
   successResponse,
@@ -13,83 +12,28 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
-import { inferRuleLifecycleStatus, inferRuleTranslationStatus } from '@/lib/contracts/rule-publication'
-
-const messageTemplateSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional(),
-  suggestion: z.string().optional(),
-  comment: z.string().optional(),
-  negotiation_action: z.string().optional(),
-  negotiation_required: z.boolean().optional(),
-  owner_role: z.string().optional(),
-  bottom_line: z.string().optional(),
-}).optional().nullable()
-
-// 规则创建/更新验证
-const ruleSchema = z.object({
-  code: z.string().min(1, '规则编码不能为空'),
-  name: z.string().min(1, '规则名称不能为空'),
-  rule_set_id: z.string().uuid().optional().nullable(),
-  description: z.string().optional(),
-  business_domain: z.string().min(1).optional().default('contract_review'),
-  risk_level: z.enum(['green', 'yellow', 'red']).optional().default('yellow'),
-  category: z.enum(['ratio', 'amount', 'duration', 'enum', 'text']),
-  engine_type: z.enum(['structured', 'semantic', 'hybrid']).default('structured'),
-  target_field: z.string().optional().nullable(),
-  clause_category: z.string().optional().nullable(),
-  field_hints: z.array(z.string()).optional(),
-  semantic_prompt: z.string().optional().nullable(),
-  message_template: messageTemplateSchema,
-  applicable_scenarios: z.array(z.string()).optional().default(['standard_contract_review']),
-  scope: z.enum(['org', 'dept', 'user']).optional().default('org'),
-
-  // Level A
-  level_a_operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in']),
-  level_a_threshold: z.number(),
-  level_a_unit: z.string().optional(),
-  level_a_action: z.string().optional(),
-
-  // Level B
-  level_b_operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in']),
-  level_b_threshold: z.number(),
-  level_b_unit: z.string().optional(),
-  level_b_action: z.string().optional(),
-  level_b_counterparty: z.string().optional(),
-
-  // Level C
-  level_c_operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in']),
-  level_c_threshold: z.number(),
-  level_c_unit: z.string().optional(),
-  level_c_action: z.string().optional(),
-  level_c_message: z.string().optional(),
-
-  // 其他
-  approval_roles: z.array(z.string()).optional(),
-  script_id: z.string().uuid().optional(),
-  priority: z.number().optional(),
-  is_active: z.boolean().optional(),
-})
+import {
+  buildLegacyRuleAdapter,
+  createRuleSchema,
+  formatRuleValidationError,
+  RULE_WITH_PROBLEM_CATEGORY_SELECT,
+} from './rule-contract'
 
 // GET - 规则列表
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { searchParams } = new URL(req.url)
-    const category = searchParams.get('category')
-    const engineType = searchParams.get('engine_type')
+    const problemCategoryId = searchParams.get('problem_category_id')
     const isActive = searchParams.get('is_active')
 
     let query = supabaseAdmin
       .from('contract_rules_v2')
-      .select('*')
+      .select(RULE_WITH_PROBLEM_CATEGORY_SELECT)
       .eq('org_id', orgId)
       .order('priority', { ascending: false })
 
-    if (category) {
-      query = query.eq('category', category)
-    }
-    if (engineType) {
-      query = query.eq('engine_type', engineType)
+    if (problemCategoryId) {
+      query = query.eq('problem_category_id', problemCategoryId)
     }
     if (isActive !== null) {
       query = query.eq('is_active', isActive === 'true')
@@ -111,16 +55,30 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const body = await req.json().catch(() => ({}))
-    const parsed = ruleSchema.safeParse(body)
+    const parsed = createRuleSchema.safeParse(body)
 
     if (!parsed.success) {
       return errorResponse(
         createApiError(
           'VALIDATION_ERROR',
-          `参数验证失败: ${parsed.error.issues.map((e) => e.message).join(', ')}`
+          `规则参数无效：${formatRuleValidationError(parsed.error)}`
         )
       )
     }
+
+    const { data: problemCategory, error: categoryError } = await supabaseAdmin
+      .from('contract_rule_problem_categories')
+      .select('id, code')
+      .eq('id', parsed.data.problem_category_id)
+      .eq('org_id', orgId)
+      .eq('is_active', true)
+      .single()
+
+    if (categoryError || !problemCategory) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '所选问题分类不存在或已停用'))
+    }
+
+    const legacyAdapter = buildLegacyRuleAdapter(parsed.data.rule_contract, problemCategory.code)
 
     const { data: rule, error } = await supabaseAdmin
       .from('contract_rules_v2')
@@ -128,17 +86,21 @@ export async function POST(req: NextRequest) {
         org_id: orgId,
         created_by: user.id,
         ...parsed.data,
+        ...legacyAdapter,
         published_at: null,
         published_by: null,
-        lifecycle_status: inferRuleLifecycleStatus(parsed.data),
-        translation_status: inferRuleTranslationStatus(parsed.data),
+        lifecycle_status: 'ready_to_publish',
+        translation_status: 'ready',
         translation_notes: [],
         version: 1,
       })
-      .select()
+      .select(RULE_WITH_PROBLEM_CATEGORY_SELECT)
       .single()
 
     if (error) {
+      if (error.code === '23505') {
+        return errorResponse(createApiError('DUPLICATE_KEY', '规则编码已存在'))
+      }
       return errorResponse(createApiError('DB_ERROR', '创建规则失败'))
     }
 
@@ -148,7 +110,7 @@ export async function POST(req: NextRequest) {
       config_snapshot: rule,
       released_by: null,
       released_at: null,
-      release_note: '创建规则草稿，待转译确认后发布',
+      release_note: '创建 rule_contract v1 规则草稿，待测试后发布',
       status: 'draft',
     })
 

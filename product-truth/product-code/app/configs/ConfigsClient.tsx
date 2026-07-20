@@ -68,9 +68,9 @@ const CONFIG_TABS: Record<ConfigTabId, {
     icon: ShieldCheckIcon,
   },
   rules: {
-    label: '合同审核策略',
-    description: '管理合同审核策略规则，供合同审核与本地模型执行。',
-    section: 'contract-ai',
+    label: '合同审核规则',
+    description: '按问题分类维护具体规则、属性、判定与处理，并随规则集统一发布。',
+    section: 'contract-rules',
     icon: FileTextIcon,
   },
   'org-structure': {
@@ -87,8 +87,8 @@ const CONFIG_TABS: Record<ConfigTabId, {
   },
   ai: {
     label: 'AI 模型与消费',
-    description: '分层管理模型 Provider、模型应用和业务工具消费策略；L1/L2/L3 只作为路由标签。',
-    section: 'contract-ai',
+    description: '统一管理模型接入、可用模型、路由降级和业务应用绑定，供所有业务模块消费。',
+    section: 'ai-platform',
     icon: BotIcon,
   },
   theme: {
@@ -112,10 +112,16 @@ const CONFIG_SECTIONS: Array<{
     tabs: ['price-list', 'tax', 'approval'],
   },
   {
-    id: 'contract-ai',
-    label: '合同与 AI 规则',
-    description: '围绕合同审核规则、模型路由和运行时策略的配置集。',
-    tabs: ['rules', 'ai'],
+    id: 'contract-rules',
+    label: '合同规则',
+    description: '管理合同审核的问题分类、具体规则、属性与统一发布边界。',
+    tabs: ['rules'],
+  },
+  {
+    id: 'ai-platform',
+    label: 'AI 平台',
+    description: '管理全局模型能力与业务应用绑定，不从属于合同模块。',
+    tabs: ['ai'],
   },
   {
     id: 'org-access',
@@ -836,7 +842,7 @@ export default function ConfigsClient({
         return [
           { label: '规则总数', value: countValue(rules.length) },
           { label: '启用规则', value: countValue(rules.filter((rule) => rule.is_active).length) },
-          { label: '语义规则', value: countValue(rules.filter((rule) => rule.engine_type === 'semantic' || rule.engine_type === 'hybrid').length) },
+          { label: '结构完整', value: countValue(rules.filter((rule) => Boolean(rule.rule_contract?.properties?.length && rule.rule_contract?.decisions?.length)).length) },
         ]
       case 'tax': {
         const taxConfigs = getConfigsByType('TAX_RULE')
@@ -953,7 +959,7 @@ export default function ConfigsClient({
   async function handleSaveRule(rule: Partial<ContractPolicyRule>, id?: string) {
     if (!rule.code || !rule.name) {
       setError('请填写规则编码和名称')
-      return
+      throw new Error('请填写规则编码和名称')
     }
 
     try {
@@ -964,32 +970,14 @@ export default function ConfigsClient({
       const payload = {
         code: rule.code,
         name: rule.name,
+        rule_set_id: rule.rule_set_id || null,
+        problem_category_id: rule.problem_category_id,
         description: rule.description || '',
         business_domain: rule.business_domain || 'contract_review',
         risk_level: rule.risk_level || 'yellow',
-        category: rule.category || 'duration',
-        engine_type: rule.engine_type || (rule.category === 'text' ? 'semantic' : 'structured'),
-        target_field: rule.target_field || null,
-        clause_category: rule.clause_category || null,
-        field_hints: rule.field_hints || [],
-        semantic_prompt: rule.semantic_prompt || null,
-        message_template: rule.message_template || {},
+        rule_contract: rule.rule_contract,
         applicable_scenarios: rule.applicable_scenarios || [],
         scope: rule.scope || 'org',
-        level_a_operator: rule.level_a_operator || '<=',
-        level_a_threshold: Number(rule.level_a_threshold ?? 30),
-        level_a_unit: rule.level_a_unit || 'day',
-        level_a_action: rule.level_a_action || 'auto_approve',
-        level_b_operator: rule.level_b_operator || '>',
-        level_b_threshold: Number(rule.level_b_threshold ?? 90),
-        level_b_unit: rule.level_b_unit || 'day',
-        level_b_action: rule.level_b_action || 'suggest_counterparty',
-        level_b_counterparty: rule.level_b_counterparty || '',
-        level_c_operator: rule.level_c_operator || '>',
-        level_c_threshold: Number(rule.level_c_threshold ?? 180),
-        level_c_unit: rule.level_c_unit || 'day',
-        level_c_action: rule.level_c_action || 'block',
-        level_c_message: rule.level_c_message || '',
         approval_roles: rule.approval_roles || [],
         priority: Number(rule.priority ?? 100),
         is_active: rule.is_active ?? true,
@@ -1006,8 +994,9 @@ export default function ConfigsClient({
 
       if (!res.ok) {
         const data = await res.json()
-        setError(getApiErrorMessage(data, '保存失败'))
-        return
+        const message = getApiErrorMessage(data, '保存失败')
+        setError(message)
+        throw new Error(message)
       }
 
       const refreshed = await fetch('/api/contract-policies/rules', {
@@ -1022,8 +1011,10 @@ export default function ConfigsClient({
       } else {
         await refreshTabData('rules')
       }
-    } catch {
-      setError('网络错误')
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : '网络错误'
+      setError(message)
+      throw saveError
     }
   }
 

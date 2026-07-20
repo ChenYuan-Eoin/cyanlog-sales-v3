@@ -34,6 +34,31 @@ describe('loadFlexibleRules', () => {
         code: 'R001',
         name: '付款节奏',
         description: null,
+        problem_category_id: 'category-payment',
+        problem_category: {
+          id: 'category-payment',
+          code: 'payment',
+          name: '付款与结算',
+        },
+        rule_contract: {
+          schema_version: '1.0',
+          properties: [{
+            key: 'first_payment_rate',
+            label: '首付款比例',
+            type: 'percentage',
+            required: true,
+            unit: 'percent',
+          }],
+          decisions: [{
+            id: 'payment_block',
+            label: '低于红线',
+            outcome: 'block',
+            priority: 30,
+            match: 'all',
+            conditions: [{ property_key: 'first_payment_rate', operator: '<', value: 15 }],
+          }],
+          missing_evidence_outcome: 'manual_review',
+        },
         category: 'ratio',
         engine_type: 'hybrid',
         target_field: 'payment_schedule',
@@ -63,6 +88,13 @@ describe('loadFlexibleRules', () => {
     expect(query.not).toHaveBeenCalledWith('published_at', 'is', null)
     expect(rules).toHaveLength(1)
     expect(rules[0].code).toBe('R001')
+    expect(rules[0]).toMatchObject({
+      problem_category: { code: 'payment', name: '付款与结算' },
+      rule_contract: {
+        schema_version: '1.0',
+        properties: [{ key: 'first_payment_rate' }],
+      },
+    })
   })
 
   it('配置中心测试场景可显式加载未发布规则，但不会成为正式审核默认行为', async () => {

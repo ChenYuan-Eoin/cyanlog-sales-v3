@@ -23,6 +23,99 @@ export type ContractRuleRiskLevel = 'green' | 'yellow' | 'red'
 export type ContractRuleLifecycleStatus = 'draft' | 'needs_translation' | 'ready_to_publish' | 'published' | 'archived'
 export type ContractRuleTranslationStatus = 'not_started' | 'needs_ai_translation' | 'ready' | 'failed'
 
+/**
+ * 规则的单层业务分类。分类回答“这是哪一类业务问题”，不承担字段类型、
+ * 执行引擎或为了展示而生的树形层级职责。
+ */
+export interface ContractProblemCategory {
+  id: string
+  org_id: string
+  code: string
+  name: string
+  description?: string | null
+  sort_order?: number | null
+  is_active?: boolean | null
+  created_by?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export type ContractRulePropertyType =
+  | 'money'
+  | 'percentage'
+  | 'duration'
+  | 'date'
+  | 'enum'
+  | 'boolean'
+  | 'text'
+  | 'number'
+
+export type ContractRuleOutcome = 'pass' | 'negotiate' | 'block' | 'manual_review'
+export type ContractRuleMissingEvidenceOutcome = 'manual_review' | 'block'
+
+export type ContractRuleConditionOperator =
+  | '>='
+  | '<='
+  | '='
+  | '>'
+  | '<'
+  | 'contains'
+  | 'in'
+  | 'exists'
+  | 'not_exists'
+
+export type ContractRuleScalarValue = string | number | boolean
+export type ContractRuleConditionValue = ContractRuleScalarValue | string[] | number[]
+
+export interface ContractRulePropertyOption {
+  value: string
+  label: string
+}
+
+/**
+ * 规则详情中的业务属性定义。key 是稳定引用，label 是用户可读名称。
+ * 属性由规则作者预先定义；运行时只读取这些属性，不动态创造属性。
+ */
+export interface ContractRuleProperty {
+  key: string
+  label: string
+  description?: string | null
+  type: ContractRulePropertyType
+  required: boolean
+  unit?: string | null
+  currency?: string | null
+  options?: ContractRulePropertyOption[] | null
+}
+
+export interface ContractRuleCondition {
+  property_key: string
+  operator: ContractRuleConditionOperator
+  value?: ContractRuleConditionValue
+  unit?: string | null
+}
+
+export interface ContractRuleDecision {
+  id: string
+  label: string
+  outcome: ContractRuleOutcome
+  priority: number
+  match: 'all' | 'any'
+  conditions: ContractRuleCondition[]
+  action?: string | null
+  message?: string | null
+}
+
+/**
+ * 规则运行唯一业务协议。问题分类属于规则关系，不重复嵌入这里；条款定位、
+ * 模型、Prompt 和旧 target_field 等运行细节也不属于可配置合同。
+ */
+export interface ContractRuleContract {
+  schema_version: '1.0'
+  properties: ContractRuleProperty[]
+  decisions: ContractRuleDecision[]
+  missing_evidence_outcome: ContractRuleMissingEvidenceOutcome
+}
+
 export type ContractRuleMessageTemplate = {
   title?: string
   description?: string
@@ -41,6 +134,8 @@ export interface ContractPolicyRule {
   org_id: string
   rule_set_id?: string | null
   rule_set_document_id?: string | null
+  problem_category_id?: string | null
+  problem_category?: ContractProblemCategory | null
   code: string
   name: string
   description?: string | null
@@ -59,6 +154,7 @@ export interface ContractPolicyRule {
   field_hints?: string[] | null
   semantic_prompt?: string | null
   message_template?: ContractRuleMessageTemplate | null
+  rule_contract?: ContractRuleContract | null
   applicable_scenarios?: string[] | null
   scope?: 'org' | 'dept' | 'user' | null
   level_a_operator: ContractRuleOperator

@@ -3,6 +3,24 @@
  * F005-derive.md: 柔性化 3 级阈值（Level A/B/C）
  */
 
+import type {
+  ContractProblemCategory,
+  ContractRuleContract,
+} from '@/types/rules'
+
+export type {
+  ContractProblemCategory,
+  ContractRuleCondition,
+  ContractRuleConditionOperator,
+  ContractRuleContract,
+  ContractRuleDecision,
+  ContractRuleMissingEvidenceOutcome,
+  ContractRuleOutcome,
+  ContractRuleProperty,
+  ContractRulePropertyOption,
+  ContractRulePropertyType,
+} from '@/types/rules'
+
 export type RiskLevel = 'red' | 'yellow' | 'green'
 export type RuleType = 'structured' | 'semantic' | 'hybrid'
 export type RuleStatus = 'draft' | 'published' | 'archived'
@@ -31,6 +49,10 @@ export interface FlexibleRule {
   code: string                    // e.g., "RULE-01-01"
   name: string
   description: string | null
+  problem_category_id?: string | null
+  problem_category?: ContractProblemCategory | null
+  /** Canonical v1 execution contract. Legacy rows are adapted once at load time. */
+  rule_contract?: ContractRuleContract | null
   category: RuleCategory          // ratio/amount/duration/enum/text
   engine_type: RuleType
   target_field?: string

@@ -232,4 +232,4 @@ export interface PermissionCatalogGroup {
 }
 
 export type ConfigTabId = 'price-list' | 'rules' | 'tax' | 'approval' | 'ai' | 'theme' | 'org-structure' | 'role-access'
-export type ConfigSectionId = 'trading' | 'contract-ai' | 'org-access' | 'experience'
+export type ConfigSectionId = 'trading' | 'contract-rules' | 'ai-platform' | 'org-access' | 'experience'
