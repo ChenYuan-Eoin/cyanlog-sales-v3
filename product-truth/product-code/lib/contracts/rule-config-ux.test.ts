@@ -58,6 +58,8 @@ describe('rule configuration product boundary', () => {
     for (const expected of ['problem_category_id', 'rule_set_id', 'rule_contract']) {
       expect(saveSource).toContain(expected)
     }
+    expect(saveSource).toContain("...(!isUpdate ? { code: rule.code } : {})")
+    expect(saveSource).not.toContain('\n        code: rule.code,')
     for (const forbidden of ['engine_type:', 'target_field:', 'field_hints:', 'semantic_prompt:', 'level_a_operator:']) {
       expect(saveSource).not.toContain(forbidden)
     }
@@ -106,6 +108,7 @@ describe('rule configuration product boundary', () => {
     expect(refreshSource).not.toContain('setLoadedTabs(')
     expect(saveSource).toContain('setSelectedRule(savedRule)')
     expect(saveSource).not.toContain('onRefresh?.()')
+    expect(saveSource).toContain('error instanceof Error ? error.message')
     expect(testSource).toContain('await loadHierarchy()')
     expect(testSource).not.toContain('onRefresh?.()')
     expect(tab).toContain("ruleMode === 'new'\n      ? 'new'")

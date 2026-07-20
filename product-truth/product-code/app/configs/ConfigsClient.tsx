@@ -966,7 +966,11 @@ export default function ConfigsClient({
       const url = isUpdate ? `/api/contract-policies/rules/${id}` : '/api/contract-policies/rules'
       const method = isUpdate ? 'PATCH' : 'POST'
       const payload = {
-        code: rule.code,
+        // Rule codes are immutable after creation. The PATCH contract is
+        // strict and intentionally does not accept `code`, so sending the
+        // disabled form value here made every existing-rule save fail before
+        // the draft RPC could run.
+        ...(!isUpdate ? { code: rule.code } : {}),
         name: rule.name,
         rule_set_id: rule.rule_set_id || null,
         problem_category_id: rule.problem_category_id,

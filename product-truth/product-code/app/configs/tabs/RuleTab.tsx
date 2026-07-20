@@ -271,8 +271,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
         setSelectedRule(savedRule)
       }
       setCreatingRule(false)
-    } catch {
-      setFeedback({ tone: 'error', message: '规则保存失败，请检查页面提示后重试。' })
+    } catch (error) {
+      setFeedback({
+        tone: 'error',
+        message: error instanceof Error ? error.message : '规则保存失败，请检查页面提示后重试。',
+      })
     } finally {
       setSaving(false)
     }
