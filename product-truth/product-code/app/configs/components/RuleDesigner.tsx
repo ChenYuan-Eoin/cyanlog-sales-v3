@@ -33,7 +33,7 @@ import type {
 } from '@/types/rules'
 
 type RuleDraft = Partial<ContractPolicyRule>
-type EditorTab = 'definition' | 'properties' | 'decisions' | 'output' | 'validation'
+type EditorTab = 'definition' | 'properties' | 'decisions' | 'validation'
 
 interface RuleDesignerProps {
   initialRule?: ContractPolicyRule
@@ -46,6 +46,7 @@ interface RuleDesignerProps {
   saving?: boolean
   onSave: (rule: RuleDraft) => void | Promise<void>
   onTest?: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 const propertyTypeOptions: Array<{ value: ContractRulePropertyType; label: string }> = [
@@ -82,7 +83,6 @@ const tabOptions: Array<{ value: EditorTab; label: string }> = [
   { value: 'definition', label: '基本信息' },
   { value: 'properties', label: '属性' },
   { value: 'decisions', label: '判定与处理' },
-  { value: 'output', label: '输出' },
   { value: 'validation', label: '测试' },
 ]
 
@@ -177,6 +177,10 @@ function cloneContract(contract: ContractRuleContract): ContractRuleContract {
   }
 }
 
+function editorFingerprint(draft: RuleDraft, contract: ContractRuleContract) {
+  return JSON.stringify({ draft, contract })
+}
+
 function valueForInput(value: ContractRuleCondition['value']) {
   if (Array.isArray(value)) return value.join('，')
   if (typeof value === 'boolean') return value ? 'true' : 'false'
@@ -219,18 +223,24 @@ function validationMessages(draft: RuleDraft, contract: ContractRuleContract) {
   return Array.from(new Set(messages))
 }
 
-export default function RuleDesigner({ initialRule, context, saving = false, onSave, onTest }: RuleDesignerProps) {
+export default function RuleDesigner({ initialRule, context, saving = false, onSave, onTest, onDirtyChange }: RuleDesignerProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>('definition')
   const [draft, setDraft] = useState<RuleDraft>({})
   const [contract, setContract] = useState<ContractRuleContract>(() => createDefaultRuleContract())
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [baselineFingerprint, setBaselineFingerprint] = useState('')
+  const editorIdentity = initialRule
+    ? `rule:${initialRule.id}:${initialRule.version}`
+    : `new:${context?.ruleSetId || ''}:${context?.problemCategory?.id || ''}`
 
   useEffect(() => {
+    let nextDraft: RuleDraft
+    let nextContract: ContractRuleContract
     if (initialRule) {
-      setDraft({ ...initialRule })
-      setContract(reconcileRuleContractForEditing(resolveRuleContract(initialRule)))
+      nextDraft = { ...initialRule }
+      nextContract = reconcileRuleContractForEditing(resolveRuleContract(initialRule))
     } else {
-      setDraft({
+      nextDraft = {
         code: '',
         name: '',
         description: '',
@@ -242,15 +252,33 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
         scope: 'org',
         priority: 100,
         is_active: true,
-      })
-      setContract(createDefaultRuleContract())
+      }
+      nextContract = createDefaultRuleContract()
     }
+    setDraft(nextDraft)
+    setContract(nextContract)
+    setBaselineFingerprint(editorFingerprint(nextDraft, nextContract))
     setFeedback(null)
     setActiveTab('definition')
-  }, [context?.problemCategory, context?.ruleSetId, initialRule])
+    // Parent fetches may replace object identities without changing the rule
+    // being edited. Reset only when the actual draft identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorIdentity])
 
   const validation = useMemo(() => validationMessages(draft, contract), [contract, draft])
   const initialConfigurationStatus = initialRule ? ruleContractConfigurationStatus(initialRule) : 'canonical_complete'
+  const isDirty = baselineFingerprint !== '' && editorFingerprint(draft, contract) !== baselineFingerprint
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+    if (!isDirty) return
+    const preventAccidentalClose = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', preventAccidentalClose)
+    return () => window.removeEventListener('beforeunload', preventAccidentalClose)
+  }, [isDirty, onDirtyChange])
 
   function updateDraft<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -836,6 +864,33 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                         <PlusIcon className="mr-1 h-4 w-4" />添加条件
                       </Button>
                     </div>
+
+                    <div className="mt-4 grid gap-4 border-t border-slate-100 pt-4 lg:grid-cols-2">
+                      <Field
+                        label={decision.outcome === 'pass' ? '通过后的处理（可选）' : '风险处理动作'}
+                        htmlFor={`decision-action-${decisionIndex}`}
+                      >
+                        <Textarea
+                          id={`decision-action-${decisionIndex}`}
+                          value={decision.action || ''}
+                          onChange={(event) => updateDecision(decisionIndex, { action: event.target.value })}
+                          placeholder="如：由销售负责人补充例外审批，或调整合同条款。"
+                          rows={3}
+                        />
+                      </Field>
+                      <Field
+                        label={decision.outcome === 'pass' ? '通过说明（可选）' : '给业务人员的风险说明'}
+                        htmlFor={`decision-message-${decisionIndex}`}
+                      >
+                        <Textarea
+                          id={`decision-message-${decisionIndex}`}
+                          value={decision.message || ''}
+                          onChange={(event) => updateDecision(decisionIndex, { message: event.target.value })}
+                          placeholder="如：合同金额低于公司标准，请补充审批依据或调整金额。"
+                          rows={3}
+                        />
+                      </Field>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -858,48 +913,6 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
               </Field>
               <p className="mt-2 text-xs leading-5 text-amber-800">未读取到必填值、单位冲突或同一内容出现多个无法判断的值时，不能默认通过。</p>
             </div>
-          </section>
-        </TabsContent>
-
-        <TabsContent value="output" className="pt-4">
-          <section className="space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-950">每种结果要告诉业务人员什么、下一步做什么</h3>
-              <p className="mt-1 text-xs leading-5 text-slate-500">处理动作留在内部工作台；用户文案可进入风险报告或文件批注。</p>
-            </div>
-            {contract.decisions.length === 0 ? (
-              <EmptyBlock title="还没有可配置的输出" description="先在“判定与处理”中添加判定。" />
-            ) : contract.decisions.map((decision, index) => {
-              const outcome = outcomeOptions.find((item) => item.value === decision.outcome)
-              return (
-                <div key={decision.id} className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="mb-4 flex items-center gap-2">
-                    <span className={`text-sm font-semibold ${outcome?.tone || 'text-slate-800'}`}>{outcome?.label || decision.outcome}</span>
-                    <span className="text-sm text-slate-500">· {decision.label || `判定 ${index + 1}`}</span>
-                  </div>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <Field label="内部处理动作" htmlFor={`decision-action-${index}`}>
-                      <Textarea
-                        id={`decision-action-${index}`}
-                        value={decision.action || ''}
-                        onChange={(event) => updateDecision(index, { action: event.target.value })}
-                        placeholder="如：由销售负责人确认最低签约金额例外审批。"
-                        rows={3}
-                      />
-                    </Field>
-                    <Field label="用户可见说明" htmlFor={`decision-message-${index}`}>
-                      <Textarea
-                        id={`decision-message-${index}`}
-                        value={decision.message || ''}
-                        onChange={(event) => updateDecision(index, { message: event.target.value })}
-                        placeholder="如：合同金额低于公司标准，请补充审批依据或调整金额。"
-                        rows={3}
-                      />
-                    </Field>
-                  </div>
-                </div>
-              )
-            })}
           </section>
         </TabsContent>
 
@@ -929,7 +942,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
               </div>
             </div>
             {onTest ? (
-              <Button type="button" variant="outline" disabled={validation.length > 0} onClick={onTest}>
+              <Button type="button" variant="outline" disabled={validation.length > 0 || isDirty} onClick={onTest}>
                 测试真实合同段落
               </Button>
             ) : null}
@@ -938,9 +951,11 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
       </Tabs>
 
       <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-slate-200 bg-white/95 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs leading-5 text-slate-500">保存的是当前规则草稿；正式审核只读取规则集发布版本。</p>
+        <p className="text-xs leading-5 text-slate-500">
+          {isDirty ? '当前有未保存修改；切换规则前请先保存或确认放弃。' : '保存的是当前规则草稿；正式审核只读取规则集发布版本。'}
+        </p>
         <div className="flex items-center justify-end gap-2">
-          {onTest ? <Button type="button" variant="outline" disabled={validation.length > 0} onClick={onTest}>测试</Button> : null}
+          {onTest ? <Button type="button" variant="outline" disabled={validation.length > 0 || isDirty} onClick={onTest}>测试</Button> : null}
           <Button type="button" disabled={saving || validation.length > 0} onClick={submit}>
             {saving ? '保存中...' : '保存草稿'}
           </Button>

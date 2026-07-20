@@ -77,7 +77,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   const [categories, setCategories] = useState<ContractProblemCategory[]>([])
   const [ruleSets, setRuleSets] = useState<ContractRuleSet[]>([])
   const [loadingHierarchy, setLoadingHierarchy] = useState(true)
-  const [selectedRuleSetId, setSelectedRuleSetId] = useState('all')
+  const [selectedRuleSetId, setSelectedRuleSetId] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [selectedRule, setSelectedRule] = useState<ContractPolicyRule | null>(null)
   const [creatingRule, setCreatingRule] = useState(false)
@@ -90,9 +90,32 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   const [creatingCategory, setCreatingCategory] = useState(false)
   const [creatingRuleSet, setCreatingRuleSet] = useState(false)
   const [publishingRuleSet, setPublishingRuleSet] = useState(false)
+  const [detailDirty, setDetailDirty] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState({ name: '', code: '', description: '', sort_order: 100 })
   const [ruleSetDraft, setRuleSetDraft] = useState({ name: '', code: '', description: '' })
   const handledFocusRef = useRef('')
+  const detailWorkspaceRef = useRef<HTMLDivElement>(null)
+
+  function revealDetailWorkspace() {
+    window.requestAnimationFrame(() => {
+      detailWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  function confirmLeaveDirtyRule() {
+    if (!detailDirty) return true
+    return window.confirm('当前规则有未保存修改。离开会丢失这些修改，是否继续？')
+  }
+
+  function openTestWorkspace() {
+    if (detailDirty) {
+      setFeedback({ tone: 'error', message: '当前规则还有未保存修改。请先保存，再用已保存版本进行测试。' })
+      revealDetailWorkspace()
+      return
+    }
+    setDetailMode('test')
+    revealDetailWorkspace()
+  }
 
   const loadHierarchy = useCallback(async () => {
     setLoadingHierarchy(true)
@@ -121,10 +144,13 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
           ? current
           : nextCategories[0]?.id || ''
       ))
+      const defaultRuleSetId = nextRuleSets.find((ruleSet: ContractRuleSet) => ruleSet.is_default)?.id
+        || nextRuleSets[0]?.id
+        || ''
       setSelectedRuleSetId((current) => (
-        current === 'all' || nextRuleSets.some((ruleSet: ContractRuleSet) => ruleSet.id === current)
+        nextRuleSets.some((ruleSet: ContractRuleSet) => ruleSet.id === current)
           ? current
-          : 'all'
+          : defaultRuleSetId
       ))
     } catch (error) {
       setFeedback({ tone: 'error', message: error instanceof Error ? error.message : '规则结构加载失败' })
@@ -138,9 +164,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }, [loadHierarchy])
 
   const rulesInSet = useMemo(() => (
-    selectedRuleSetId === 'all'
-      ? rules
-      : rules.filter((rule) => rule.rule_set_id === selectedRuleSetId)
+    selectedRuleSetId
+      ? rules.filter((rule) => rule.rule_set_id === selectedRuleSetId)
+      : []
   ), [rules, selectedRuleSetId])
 
   const categoryCounts = useMemo(() => {
@@ -172,7 +198,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   )
 
   const detailRuleSet = useMemo(() => {
-    const ruleSetId = selectedRule?.rule_set_id || (selectedRuleSetId === 'all' ? null : selectedRuleSetId)
+    const ruleSetId = selectedRule?.rule_set_id || selectedRuleSetId
     return ruleSets.find((ruleSet) => ruleSet.id === ruleSetId) || null
   }, [ruleSets, selectedRule, selectedRuleSetId])
 
@@ -200,7 +226,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       handledFocusRef.current = focusKey
       const category = categoryForRule(focused, categories)
       if (category) setSelectedCategoryId(category.id)
-      setSelectedRuleSetId(focused.rule_set_id || 'all')
+      setSelectedRuleSetId(focused.rule_set_id || '')
       setSelectedRule(focused)
       setCreatingRule(false)
       setDetailMode('details')
@@ -226,6 +252,9 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   }, [selectedRule, visibleRules])
 
   function handleSelectCategory(category: ContractProblemCategory) {
+    const switchingCategory = category.id !== selectedCategoryId
+    if (switchingCategory && !confirmLeaveDirtyRule()) return
+    if (switchingCategory) setDetailDirty(false)
     setSelectedCategoryId(category.id)
     const firstRule = rulesInSet
       .filter((rule) => categoryForRule(rule, categories)?.id === category.id)
@@ -241,13 +270,16 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       setFeedback({ tone: 'error', message: '请先创建并选择一个问题分类。' })
       return
     }
-    if (selectedRuleSetId === 'all') {
+    if (!selectedRuleSetId) {
       setFeedback({ tone: 'error', message: '请先选择一个具体规则集，规则必须归入明确的版本与发布边界。' })
       return
     }
+    if (!confirmLeaveDirtyRule()) return
+    setDetailDirty(false)
     setSelectedRule(null)
     setCreatingRule(true)
     setDetailMode('details')
+    revealDetailWorkspace()
   }
 
   async function handleSaveRule(rule: Partial<ContractPolicyRule>) {
@@ -259,7 +291,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
         ...rule,
         problem_category_id: selectedCategory.id,
         problem_category: selectedCategory,
-        rule_set_id: selectedRule?.rule_set_id || (selectedRuleSetId === 'all' ? rule.rule_set_id || null : selectedRuleSetId),
+        rule_set_id: selectedRule?.rule_set_id || selectedRuleSetId || rule.rule_set_id || null,
       }, selectedRule?.id)
       setFeedback({ tone: 'success', message: '规则草稿已保存。正式生效仍需随所属规则集完成测试和发布。' })
       // ConfigsClient.onSave already refreshes the rule rows. A second parent
@@ -303,13 +335,22 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(getApiMessage(payload, '问题分类创建失败'))
       const created = payload?.data as ContractProblemCategory | undefined
+      const switchToCreated = Boolean(created?.id) && confirmLeaveDirtyRule()
       setCategoryDialogOpen(false)
       setCategoryDraft({ name: '', code: '', description: '', sort_order: 100 })
       await loadHierarchy()
-      if (created?.id) setSelectedCategoryId(created.id)
-      setSelectedRule(null)
-      setCreatingRule(false)
-      setFeedback({ tone: 'success', message: '问题分类已创建，现在可以在该分类下添加具体规则。' })
+      if (created?.id && switchToCreated) {
+        setDetailDirty(false)
+        setSelectedCategoryId(created.id)
+        setSelectedRule(null)
+        setCreatingRule(false)
+      }
+      setFeedback({
+        tone: 'success',
+        message: switchToCreated
+          ? '问题分类已创建，现在可以在该分类下添加具体规则。'
+          : '问题分类已创建；当前未保存的规则仍保留在编辑区。',
+      })
     } catch (error) {
       setFeedback({ tone: 'error', message: error instanceof Error ? error.message : '问题分类创建失败' })
     } finally {
@@ -340,12 +381,22 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(getApiMessage(payload, '规则集创建失败'))
       const created = payload?.data as ContractRuleSet | undefined
+      const switchToCreated = Boolean(created?.id) && confirmLeaveDirtyRule()
       setRuleSetDialogOpen(false)
       setRuleSetDraft({ name: '', code: '', description: '' })
       await loadHierarchy()
-      if (created?.id) setSelectedRuleSetId(created.id)
-      setCreatingRule(false)
-      setFeedback({ tone: 'success', message: '规则集草稿已创建。它将统一管理所含规则的版本和发布边界。' })
+      if (created?.id && switchToCreated) {
+        setDetailDirty(false)
+        setSelectedRuleSetId(created.id)
+        setSelectedRule(null)
+        setCreatingRule(false)
+      }
+      setFeedback({
+        tone: 'success',
+        message: switchToCreated
+          ? '规则集草稿已创建。它将统一管理所含规则的版本和发布边界。'
+          : '规则集草稿已创建；当前未保存的规则仍保留在编辑区。',
+      })
     } catch (error) {
       setFeedback({ tone: 'error', message: error instanceof Error ? error.message : '规则集创建失败' })
     } finally {
@@ -355,6 +406,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   async function handlePublishRuleSet() {
     if (!selectedRuleSet) return
+    if (detailDirty) {
+      setFeedback({ tone: 'error', message: '当前规则还有未保存修改。请先保存或放弃修改，再发布规则集。' })
+      revealDetailWorkspace()
+      return
+    }
     setPublishingRuleSet(true)
     setFeedback(null)
     try {
@@ -377,38 +433,46 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   const ruleSetSummary = selectedRuleSet
     ? `v${selectedRuleSet.version} · ${selectedRuleSet.lifecycle_status === 'published' ? '已发布' : selectedRuleSet.lifecycle_status === 'ready_to_publish' ? '待发布' : '草稿'} · ${selectedRuleSet.rule_count || 0} 条规则 · 验收 ${selectedRuleSet.passed_test_case_count || 0}/${selectedRuleSet.required_test_case_count || 0}`
-    : `跨规则集查看 · ${rules.length} 条规则`
+    : '尚未创建规则集'
 
   return (
     <>
       <div className="space-y-4">
         <Card>
           <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-4 min-[1800px]:flex-row min-[1800px]:items-center min-[1800px]:justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <Layers3Icon className="h-5 w-5 text-blue-600" />
                   <h2 className="text-lg font-semibold text-slate-950">合同审核规则</h2>
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
-                  按问题分类维护具体规则，在规则详情中定义属性、判定和处理；规则集只负责版本与发布边界。
+                  规则集是一套可统一发布的审核规则；在规则集内按问题分类维护具体规则、属性、判定和处理。
                 </p>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                 <div className="min-w-64">
                   <label htmlFor="rule-set-filter" className="mb-1 block text-xs font-medium text-slate-500">当前规则集</label>
                   <select
                     id="rule-set-filter"
                     value={selectedRuleSetId}
                     onChange={(event) => {
-                      setSelectedRuleSetId(event.target.value)
-                      setSelectedRule(null)
+                      const nextRuleSetId = event.target.value
+                      if (nextRuleSetId !== selectedRuleSetId && !confirmLeaveDirtyRule()) return
+                      setDetailDirty(false)
+                      const firstRule = rules
+                        .filter((rule) => rule.rule_set_id === nextRuleSetId)
+                        .sort((left, right) => (right.priority || 0) - (left.priority || 0))[0]
+                      const firstCategory = firstRule ? categoryForRule(firstRule, categories) : categories[0]
+                      setSelectedRuleSetId(nextRuleSetId)
+                      setSelectedCategoryId(firstCategory?.id || '')
+                      setSelectedRule(firstRule || null)
                       setCreatingRule(false)
                       setDetailMode('details')
                     }}
                     className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                   >
-                    <option value="all">全部规则集</option>
+                    {ruleSets.length === 0 ? <option value="">暂无规则集</option> : null}
                     {ruleSets.map((ruleSet) => <option key={ruleSet.id} value={ruleSet.id}>{ruleSet.name}</option>)}
                   </select>
                   <div className="mt-1 text-[11px] text-slate-400">{ruleSetSummary}</div>
@@ -427,7 +491,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <Button type="button" variant="outline" onClick={() => setRuleSetDialogOpen(true)}>
                   <ArchiveIcon className="mr-1 h-4 w-4" />新建规则集
                 </Button>
-                <Button type="button" onClick={handleNewRule} disabled={!selectedCategory || selectedRuleSetId === 'all'}>
+                <Button type="button" onClick={handleNewRule} disabled={!selectedCategory || !selectedRuleSetId}>
                   <PlusIcon className="mr-1 h-4 w-4" />新建规则
                 </Button>
               </div>
@@ -445,7 +509,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
           </div>
         ) : null}
 
-        <div className="grid items-start gap-4 xl:grid-cols-[210px_280px_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(200px,0.8fr)_minmax(280px,1.2fr)]">
           <Card className="self-start overflow-hidden">
             <CardHeader className="border-b border-slate-100 p-4">
               <div className="flex items-center justify-between gap-2">
@@ -458,7 +522,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="max-h-[680px] space-y-1 overflow-y-auto p-2">
+            <CardContent className="max-h-[420px] space-y-1 overflow-y-auto p-2">
               {loadingHierarchy ? (
                 <div className="px-3 py-8 text-center text-sm text-slate-400">加载中...</div>
               ) : categories.length === 0 ? (
@@ -494,7 +558,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                   <CardTitle className="truncate text-sm">{selectedCategory?.name || '具体规则'}</CardTitle>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{selectedCategory?.description || '选择分类后查看具体规则'}</p>
                 </div>
-                <Button type="button" variant="ghost" size="icon" aria-label="在当前分类新建规则" disabled={!selectedCategory || selectedRuleSetId === 'all'} onClick={handleNewRule}>
+                <Button type="button" variant="ghost" size="icon" aria-label="在当前分类新建规则" disabled={!selectedCategory || !selectedRuleSetId} onClick={handleNewRule}>
                   <PlusIcon className="h-4 w-4" />
                 </Button>
               </div>
@@ -509,12 +573,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 />
               </div>
             </CardHeader>
-            <CardContent className="max-h-[680px] space-y-2 overflow-y-auto p-2">
+            <CardContent className="max-h-[420px] space-y-2 overflow-y-auto p-2">
               {!selectedCategory ? (
                 <EmptyList message="请选择问题分类" />
               ) : visibleRules.length === 0 ? (
                 <button type="button" onClick={handleNewRule} className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-8 text-center text-sm text-slate-500 hover:border-blue-300 hover:text-blue-700">
-                  当前分类还没有规则<br /><span className="mt-1 inline-block text-xs">{selectedRuleSetId === 'all' ? '先在顶部选择具体规则集' : '点击添加具体规则'}</span>
+                  当前分类还没有规则<br /><span className="mt-1 inline-block text-xs">{selectedRuleSetId ? '点击添加具体规则' : '先创建一个规则集'}</span>
                 </button>
               ) : visibleRules.map((rule) => {
                 const active = selectedRule?.id === rule.id
@@ -525,9 +589,13 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                     key={rule.id}
                     type="button"
                     onClick={() => {
+                      const switchingRule = selectedRule?.id !== rule.id
+                      if (switchingRule && !confirmLeaveDirtyRule()) return
+                      if (switchingRule) setDetailDirty(false)
                       setSelectedRule(rule)
                       setCreatingRule(false)
                       setDetailMode('details')
+                      revealDetailWorkspace()
                     }}
                     className={`w-full rounded-lg border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       active ? 'border-blue-300 bg-blue-50' : 'border-slate-100 bg-white hover:border-slate-300'
@@ -561,7 +629,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             </CardContent>
           </Card>
 
-          <Card className="min-w-0 self-start overflow-hidden">
+          <Card ref={detailWorkspaceRef} className="min-w-0 scroll-mt-6 self-start overflow-hidden lg:col-span-2">
             {detailMode === 'test' && selectedRule ? (
               <>
                 <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-slate-100 p-4">
@@ -589,10 +657,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                   </div>
                   {selectedRule ? (
                     <div className="flex items-center gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setDetailMode('test')}>
+                      <Button type="button" variant="outline" size="sm" onClick={openTestWorkspace}>
                         <Settings2Icon className="mr-1 h-4 w-4" />测试
                       </Button>
                       <Button type="button" variant="outline" size="sm" className="text-rose-600" onClick={() => {
+                        if (!confirmLeaveDirtyRule()) return
+                        setDetailDirty(false)
                         onDelete(selectedRule.id)
                         setSelectedRule(null)
                       }}>
@@ -605,14 +675,15 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                   <RuleDesigner
                     initialRule={selectedRule || undefined}
                     context={{
-                      ruleSetId: selectedRule?.rule_set_id || (selectedRuleSetId === 'all' ? null : selectedRuleSetId),
+                      ruleSetId: selectedRule?.rule_set_id || selectedRuleSetId || null,
                       ruleSetLabel: detailRuleSet?.name || '未指定发布规则集',
                       problemCategory: selectedCategory,
                       activePublishedVersion: selectedRule ? activePublishedVersionForRule(selectedRule) : undefined,
                     }}
                     saving={saving}
                     onSave={handleSaveRule}
-                    onTest={selectedRule ? () => setDetailMode('test') : undefined}
+                    onTest={selectedRule ? openTestWorkspace : undefined}
+                    onDirtyChange={setDetailDirty}
                   />
                 </CardContent>
               </>

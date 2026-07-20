@@ -30,6 +30,18 @@ describe('rule configuration product boundary', () => {
     }
   })
 
+  it('keeps each decision, outcome and handling instruction in one business card', () => {
+    const decisionsStart = designer.indexOf('<TabsContent value="decisions"')
+    const validationStart = designer.indexOf('<TabsContent value="validation"')
+    const decisionWorkspace = designer.slice(decisionsStart, validationStart)
+
+    expect(decisionWorkspace).toContain('风险处理动作')
+    expect(decisionWorkspace).toContain('给业务人员的风险说明')
+    expect(decisionWorkspace).toContain('decision-action-')
+    expect(decisionWorkspace).toContain('decision-message-')
+    expect(designer).not.toContain('<TabsContent value="output"')
+  })
+
   it('does not expose legacy execution configuration in the rule page', () => {
     const rulePage = `${tab}\n${designer}`
     for (const forbidden of [
@@ -72,6 +84,14 @@ describe('rule configuration product boundary', () => {
     expect(configsClient).toContain("tabs: ['ai']")
   })
 
+  it('binds the editing workspace to one concrete rule set', () => {
+    expect(tab).toContain("const [selectedRuleSetId, setSelectedRuleSetId] = useState('')")
+    expect(tab).toContain('ruleSet.is_default')
+    expect(tab).toContain("rules.filter((rule) => rule.rule_set_id === selectedRuleSetId)")
+    expect(tab).not.toContain('<option value="all">全部规则集</option>')
+    expect(tab).not.toContain('跨规则集查看')
+  })
+
   it('fixes the current F009 consumer instead of asking users for vague scenario words', () => {
     expect(designer).toContain('合同审核（当前产品固定）')
     expect(designer).toContain("applicable_scenarios: ['contract_review']")
@@ -88,8 +108,12 @@ describe('rule configuration product boundary', () => {
     expect(sandbox).not.toContain("decisions.find((decision)")
   })
 
-  it('prevents the three-column grid from stretching short cards into white overlays', () => {
-    expect(tab).toContain('grid items-start gap-4 xl:grid-cols')
+  it('keeps selection compact while giving rule details a full-width workspace', () => {
+    expect(tab).toContain('grid items-start gap-4 lg:grid-cols-[minmax(200px,0.8fr)_minmax(280px,1.2fr)]')
+    expect(tab).toContain('min-w-0 scroll-mt-6 self-start overflow-hidden lg:col-span-2')
+    expect(tab).not.toContain('xl:grid-cols-[210px_280px_minmax(0,1fr)]')
+    expect((tab.match(/max-h-\[420px\]/g) || []).length).toBe(2)
+    expect(tab).toContain("scrollIntoView({ behavior: 'smooth', block: 'start' })")
     expect((tab.match(/self-start overflow-hidden/g) || []).length).toBeGreaterThanOrEqual(3)
   })
 
@@ -112,5 +136,15 @@ describe('rule configuration product boundary', () => {
     expect(testSource).toContain('await loadHierarchy()')
     expect(testSource).not.toContain('onRefresh?.()')
     expect(tab).toContain("ruleMode === 'new'\n      ? 'new'")
+  })
+
+  it('protects multi-step rule edits from silent navigation loss', () => {
+    expect(designer).toContain('onDirtyChange?: (dirty: boolean) => void')
+    expect(designer).toContain("window.addEventListener('beforeunload', preventAccidentalClose)")
+    expect(designer).toContain('当前有未保存修改')
+    expect(tab).toContain('confirmLeaveDirtyRule()')
+    expect(tab).toContain('当前规则有未保存修改。离开会丢失这些修改，是否继续？')
+    expect(tab).toContain('当前规则还有未保存修改。请先保存，再用已保存版本进行测试。')
+    expect(tab).toContain('onDirtyChange={setDetailDirty}')
   })
 })
