@@ -94,6 +94,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   const [categoryDraft, setCategoryDraft] = useState({ name: '', code: '', description: '', sort_order: 100 })
   const [ruleSetDraft, setRuleSetDraft] = useState({ name: '', code: '', description: '' })
   const handledFocusRef = useRef('')
+  const categoryListRef = useRef<HTMLDivElement>(null)
+  const selectedCategoryButtonRef = useRef<HTMLButtonElement>(null)
   const detailWorkspaceRef = useRef<HTMLDivElement>(null)
 
   function revealDetailWorkspace() {
@@ -252,6 +254,24 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     setSelectedRule(visibleRules[0] || null)
     setDetailMode('details')
   }, [selectedRule, visibleRules])
+
+  useEffect(() => {
+    if (loadingHierarchy || !selectedCategoryId) return
+    const frame = window.requestAnimationFrame(() => {
+      const list = categoryListRef.current
+      const selectedButton = selectedCategoryButtonRef.current
+      if (!list || !selectedButton) return
+      const listBounds = list.getBoundingClientRect()
+      const buttonBounds = selectedButton.getBoundingClientRect()
+      const padding = 8
+      if (buttonBounds.top < listBounds.top + padding) {
+        list.scrollTop -= listBounds.top + padding - buttonBounds.top
+      } else if (buttonBounds.bottom > listBounds.bottom - padding) {
+        list.scrollTop += buttonBounds.bottom - listBounds.bottom + padding
+      }
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [loadingHierarchy, selectedCategoryId])
 
   function handleSelectCategory(category: ContractProblemCategory) {
     const switchingCategory = category.id !== selectedCategoryId
@@ -524,7 +544,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="max-h-[420px] space-y-1 overflow-x-hidden overflow-y-auto p-2">
+            <CardContent ref={categoryListRef} className="max-h-[420px] space-y-1 overflow-x-hidden overflow-y-auto p-2">
               {loadingHierarchy ? (
                 <div className="px-3 py-8 text-center text-sm text-slate-400">加载中...</div>
               ) : categories.length === 0 ? (
@@ -536,6 +556,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 return (
                   <button
                     key={category.id}
+                    ref={active ? selectedCategoryButtonRef : undefined}
                     type="button"
                     onClick={() => handleSelectCategory(category)}
                     className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
