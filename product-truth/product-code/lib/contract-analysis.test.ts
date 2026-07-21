@@ -8,9 +8,10 @@ const mocks = vi.hoisted(() => ({
   executeRules: vi.fn(),
   executeContractSemanticReview: vi.fn(),
   getSkillBundle: vi.fn(),
+  rpc: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from, rpc: mocks.rpc } }))
 vi.mock('@/lib/configs/runtime', () => ({ getOrgIdForUser: mocks.getOrgIdForUser }))
 vi.mock('@/lib/rules/engine', () => ({ executeRules: mocks.executeRules }))
 vi.mock('@/lib/ai/contract-semantic', () => ({
@@ -21,7 +22,11 @@ vi.mock('@/lib/contracts/skill-bundle', () => ({
 }))
 vi.mock('@/lib/error-log', () => ({ logError: vi.fn() }))
 
-import { runStructuredAnalysis, saveStructuredReport } from './contract-analysis'
+import {
+  runStructuredAnalysis,
+  saveStructuredReport,
+  type ContractAnalysisJobRecord,
+} from './contract-analysis'
 
 function query(result: unknown, capture?: (operation: string, payload: unknown) => void) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,9 +111,35 @@ function semanticResult(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function runningJob(overrides: Partial<ContractAnalysisJobRecord> = {}): ContractAnalysisJobRecord {
+  return {
+    id: 'job-1',
+    contract_id: 'contract-1',
+    review_id: 'review-1',
+    requested_by: 'user-1',
+    status: 'running',
+    attempts: 1,
+    provider: null,
+    degraded: false,
+    last_error: null,
+    locked_at: '2026-07-21T00:00:00.000Z',
+    lock_token: '00000000-0000-4000-8000-000000000001',
+    locked_by: 'test-worker',
+    started_at: '2026-07-21T00:00:00.000Z',
+    completed_at: null,
+    created_at: '2026-07-21T00:00:00.000Z',
+    updated_at: '2026-07-21T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
 describe('runStructuredAnalysis', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.rpc.mockResolvedValue({
+      data: [runningJob({ status: 'completed', lock_token: null, completed_at: '2026-07-21T00:01:00.000Z' })],
+      error: null,
+    })
     mocks.getOrgIdForUser.mockResolvedValue('org-1')
     mocks.getSkillBundle.mockResolvedValue(skillBundle())
     mocks.executeRules.mockResolvedValue({
@@ -278,14 +309,18 @@ describe('runStructuredAnalysis', () => {
 
 describe('saveStructuredReport', () => {
   it('persists rule evidence, the immutable plan pointer, and real invocation ids', async () => {
-    let insertedRiskRows: unknown
-    let reviewUpdate: unknown
-    mocks.from.mockImplementation((table: string) => query({ data: [], error: null }, (operation, payload) => {
-      if (table === 'contract_risk_cards' && operation === 'insert') insertedRiskRows = payload
-      if (table === 'contract_reviews' && operation === 'update') reviewUpdate = payload
-    }))
+    let rpcName: string | undefined
+    let rpcPayload: Record<string, unknown> | undefined
+    mocks.rpc.mockImplementation((name: string, payload: Record<string, unknown>) => {
+      rpcName = name
+      rpcPayload = payload
+      return Promise.resolve({
+        data: [runningJob({ status: 'completed', lock_token: null, completed_at: '2026-07-21T00:01:00.000Z' })],
+        error: null,
+      })
+    })
 
-    await saveStructuredReport('review-1', 'contract-1', {
+    await saveStructuredReport(runningJob(), {
       result: {
         risks: [{
           ruleCode: 'PAYMENT_MINIMUM', ruleVersion: 4,
@@ -320,7 +355,8 @@ describe('saveStructuredReport', () => {
       },
     })
 
-    expect(insertedRiskRows).toEqual([
+    expect(rpcName).toBe('publish_contract_analysis_artifacts_fenced')
+    expect(rpcPayload?.p_risk_rows).toEqual([
       expect.objectContaining({
         rule_id: 'rule-1',
         evidence: expect.objectContaining({
@@ -329,7 +365,7 @@ describe('saveStructuredReport', () => {
         }),
       }),
     ])
-    expect(reviewUpdate).toEqual(expect.objectContaining({
+    expect(rpcPayload?.p_review_patch).toEqual(expect.objectContaining({
       model_policy_id: null,
       plan_snapshot_id: 'plan-snapshot-1',
       model_invocation_ids: ['invocation-1'],

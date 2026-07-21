@@ -17,161 +17,114 @@ vi.mock('@/lib/scoped-access', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
+}))
+
+vi.mock('@/lib/contracts/current-review-binding', () => ({
+  resolveCurrentReviewArtifactBinding: vi.fn(),
 }))
 
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 import { submitAskResponse } from './submit-response'
+
+function makeAskLookup(overrides: Record<string, unknown> = {}) {
+  return {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({
+      data: {
+        id: 'ask-1',
+        contract_id: 'contract-1',
+        review_id: 'review-1',
+        contract_version_id: 'version-1',
+        binding_state: 'bound',
+        status: 'pending',
+        required_roles: ['sales'],
+        response_id: null,
+        ...overrides,
+      },
+      error: null,
+    }),
+  }
+}
 
 describe('submitAskResponse', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(getAccessibleContract as any).mockResolvedValue({
-      contract: { id: 'contract-1' },
+      contract: { id: 'contract-1', current_version_id: 'version-1' },
       assignments: [{ roleCode: 'ADMIN', permissions: ['contract:review'] }],
+      orgId: 'org-1',
+    })
+    ;(resolveCurrentReviewArtifactBinding as any).mockResolvedValue({
+      contractId: 'contract-1',
+      reviewId: 'review-1',
+      contractVersionId: 'version-1',
+      reviewStatus: 'COMPLETED',
     })
   })
 
-  it('creates a report version when a pending ASK is answered', async () => {
-    const insertedReportPayloads: any[] = []
-    const auditPayloads: any[] = []
-    let askItemsCall = 0
-    let reportVersionsCall = 0
+  it('rejects an ASK from an older review of the current source version', async () => {
+    const askLookupQuery = makeAskLookup({ id: 'ask-old', review_id: 'review-old' })
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'ask_items') return askLookupQuery
+      throw new Error(`Unexpected table ${table}`)
+    })
 
-    const askLookupQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: 'ask-1',
-          contract_id: 'contract-1',
-          status: 'pending',
-          required_roles: ['sales'],
-          response_id: null,
-        },
-        error: null,
-      }),
-    }
-    const responseInsertQuery = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: {
+    const response = await submitAskResponse({
+      askId: 'ask-old',
+      contractId: 'contract-1',
+      body: { response_text: '不应写入旧审核' },
+      user: {
+        id: 'user-1',
+        email: 'user@example.com',
+        display_name: '测试用户',
+      } as any,
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.message).toContain('较早的审核记录')
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('commits the response and current report through one aggregate RPC', async () => {
+    const askLookupQuery = makeAskLookup()
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'ask_items') return askLookupQuery
+      throw new Error(`Unexpected table ${table}`)
+    })
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({
+      data: [{
+        response: {
           id: 'response-1',
           ask_id: 'ask-1',
+          responder_id: 'user-1',
           responder_role: 'ADMIN',
           responder_name: '测试用户',
           response_text: '客户同意 45 天付款',
+          attachments: [],
+          created_at: '2026-07-21T15:00:00Z',
         },
-        error: null,
-      }),
-    }
-    const askUpdateQuery = {
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { id: 'ask-1' },
-        error: null,
-      }),
-    }
-    const askSnapshotQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({
-        data: [
-          {
-            id: 'ask-1',
-            ask_code: 'ASK-001',
-            clause_ref: null,
-            risk_name: '付款周期过长',
-            initial_level: 'red',
-            question_type: 'financial',
-            required_roles: ['finance'],
-            question_text: '请确认付款周期',
-            qualified_std: '30 天付款',
-            status: 'responded',
-            response_id: 'response-1',
-            closed_reason: null,
-            created_at: '2026-07-01T00:00:00.000Z',
-            updated_at: '2026-07-01T00:01:00.000Z',
-            ask_responses: [
-              {
-                id: 'response-1',
-                responder_id: 'user-1',
-                responder_role: 'ADMIN',
-                responder_name: '测试用户',
-                response_text: '客户同意 45 天付款',
-                attachments: [],
-                created_at: '2026-07-01T00:01:00.000Z',
-              },
-            ],
-          },
-        ],
-        error: null,
-      }),
-    }
-    const latestReportQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({
-        data: [{ id: 'report-1', version: 1, is_current: true }],
-        error: null,
-      }),
-    }
-    const unsetCurrentQuery = {
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }
-    const reportInsertQuery = {
-      insert: vi.fn((payload) => {
-        insertedReportPayloads.push(payload)
-        return reportInsertQuery
-      }),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: {
+        ask_status_after: 'responded',
+        report_version: {
           id: 'report-2',
           version: 2,
           is_current: true,
           trigger_event: 'ask_responded',
-          created_at: '2026-07-01T00:02:00.000Z',
+          created_at: '2026-07-21T15:00:00Z',
         },
-        error: null,
-      }),
-    }
-    const auditQuery = {
-      insert: vi.fn((payload) => {
-        auditPayloads.push(payload)
-        return Promise.resolve({ data: null, error: null })
-      }),
-    }
-
-    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
-      if (table === 'ask_items') {
-        askItemsCall += 1
-        if (askItemsCall === 1) return askLookupQuery
-        if (askItemsCall === 2) return askUpdateQuery
-        return askSnapshotQuery
-      }
-      if (table === 'ask_responses') return responseInsertQuery
-      if (table === 'ask_audit_logs') return auditQuery
-      if (table === 'report_versions') {
-        reportVersionsCall += 1
-        if (reportVersionsCall === 1) return latestReportQuery
-        if (reportVersionsCall === 2) return unsetCurrentQuery
-        return reportInsertQuery
-      }
-      throw new Error(`Unexpected table ${table}`)
+      }],
+      error: null,
     })
 
     const response = await submitAskResponse({
       askId: 'ask-1',
       contractId: 'contract-1',
-      body: { response_text: '客户同意 45 天付款' },
+      body: { response_text: '客户同意 45 天付款', attachments: [] },
       user: {
         id: 'user-1',
         email: 'user@example.com',
@@ -181,34 +134,58 @@ describe('submitAskResponse', () => {
     const body = await response.json()
 
     expect(response.status).toBe(201)
-    expect(body.success).toBe(true)
-    expect(body.data.ask_status_after).toBe('responded')
-    expect(body.data.report_version).toMatchObject({
-      id: 'report-2',
-      version: 2,
-      is_current: true,
-      trigger_event: 'ask_responded',
+    expect(body.data).toMatchObject({
+      ask_status_after: 'responded',
+      report_version_error: null,
+      report_version: {
+        id: 'report-2',
+        version: 2,
+        is_current: true,
+      },
     })
-    expect(insertedReportPayloads[0]).toMatchObject({
-      contract_id: 'contract-1',
-      version: 2,
-      trigger_event: 'ask_responded',
-      trigger_ask_id: 'ask-1',
-      trigger_user_id: 'user-1',
-      is_current: true,
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'submit_ask_response_report_aggregate',
+      {
+        p_ask_id: 'ask-1',
+        p_contract_id: 'contract-1',
+        p_review_id: 'review-1',
+        p_contract_version_id: 'version-1',
+        p_responder_id: 'user-1',
+        p_responder_role: 'ADMIN',
+        p_responder_name: '测试用户',
+        p_response_text: '客户同意 45 天付款',
+        p_attachments: [],
+      },
+    )
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not report success when report publication makes the aggregate roll back', async () => {
+    const askLookupQuery = makeAskLookup()
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'ask_items') return askLookupQuery
+      throw new Error(`Unexpected table ${table}`)
     })
-    expect(insertedReportPayloads[0]).not.toHaveProperty('no_ask_explanation')
-    expect(insertedReportPayloads[0].report_data.summary).toEqual({
-      total: 1,
-      pending: 0,
-      responded: 1,
-      closed: 0,
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({
+      data: null,
+      error: { code: 'P0001', message: 'forced report publication failure' },
     })
-    expect(unsetCurrentQuery.update).toHaveBeenCalledWith({ is_current: false })
-    expect(unsetCurrentQuery.eq).toHaveBeenCalledWith('id', 'report-1')
-    expect(auditPayloads.map((payload) => payload.event_type)).toEqual([
-      'responded',
-      'report_generated',
-    ])
+
+    const response = await submitAskResponse({
+      askId: 'ask-1',
+      contractId: 'contract-1',
+      body: { response_text: '不应部分写入' },
+      user: {
+        id: 'user-1',
+        email: 'user@example.com',
+        display_name: '测试用户',
+      } as any,
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.error.message).toContain('回应和报告均未写入')
+    expect(body.data).toBeUndefined()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 })

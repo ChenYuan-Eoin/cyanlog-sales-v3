@@ -6,7 +6,9 @@ vi.mock('@/lib/api/auth-wrapper', () => ({
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
-  listAccessibleUserIds: vi.fn(async () => ({ userIds: ['user-1'] })),
+  canAccessContractAction: vi.fn(() => true),
+  listAccessibleUserIds: vi.fn(async () => ({ assignments: [], userIds: ['user-1'] })),
+  listFreshAccessibleUserIds: vi.fn(async () => ({ assignments: [], userIds: ['user-1'] })),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -23,6 +25,11 @@ vi.mock('@/lib/contracts/text-extraction', () => ({
 }))
 
 import { extractContractText } from '@/lib/contracts/text-extraction'
+import {
+  canAccessContractAction,
+  listAccessibleUserIds,
+  listFreshAccessibleUserIds,
+} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
@@ -109,10 +116,56 @@ function installSupabaseMock(contracts: any[], versions: any[] = []) {
 describe('POST /api/contracts/[id]/compare', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(canAccessContractAction).mockReturnValue(true)
+    vi.mocked(listAccessibleUserIds).mockResolvedValue({
+      orgId: 'org-1',
+      assignments: [],
+      userIds: ['user-1'],
+    })
+    vi.mocked(listFreshAccessibleUserIds).mockResolvedValue({
+      orgId: 'org-1',
+      assignments: [],
+      userIds: ['user-1'],
+    })
   })
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('角色已撤销时忽略缓存范围并拒绝创建 comparison 和 diffs', async () => {
+    vi.mocked(listAccessibleUserIds).mockResolvedValue({
+      orgId: 'org-1',
+      assignments: [{
+        scopeType: 'org',
+        scopeId: 'org-1',
+        roleId: 'role-admin',
+        roleCode: 'ADMIN',
+        roleName: '管理员',
+        permissions: ['*'],
+        grantedAt: null,
+      }],
+      userIds: ['user-1', 'user-2'],
+    })
+    vi.mocked(listFreshAccessibleUserIds).mockResolvedValue({
+      orgId: 'org-1',
+      assignments: [],
+      userIds: ['user-1'],
+    })
+    vi.mocked(canAccessContractAction).mockReturnValue(false)
+
+    const res = await POST(makeJsonRequest({
+      baseline_type: 'previous_version',
+      compare_doc_id: '22222222-2222-4222-8222-222222222222',
+    }), {
+      params: Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }),
+    })
+
+    expect(res.status).toBe(403)
+    expect(listFreshAccessibleUserIds).toHaveBeenCalledWith('user-1', 'org-1')
+    expect(listAccessibleUserIds).not.toHaveBeenCalled()
+    expect(canAccessContractAction).toHaveBeenCalledWith([], 'org-1', 'review')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('缺少 parsed_text 但有源文件时懒抽取并回填后完成比对', async () => {

@@ -8,6 +8,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
+  canAccessContractAction,
   canManageOrg,
   canMutateOrgDepartments,
   canMutateOrgUsers,
@@ -17,6 +18,8 @@ import {
   getOrgPermissions,
   getOrgRoleCodes,
   getOrgScopedAssignments,
+  listAccessibleUserIds,
+  listFreshAccessibleUserIds,
   type ScopedRoleAssignment,
 } from './scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -27,6 +30,18 @@ function makeDefaultOrgQuery(result: unknown | Promise<unknown>) {
     query[method] = vi.fn().mockReturnValue(query)
   })
   query.maybeSingle = vi.fn().mockReturnValue(Promise.resolve(result))
+  return query
+}
+
+function makeCollectionQuery(result: unknown) {
+  const query: any = {
+    then(resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) {
+      return Promise.resolve(result).then(resolve, reject)
+    },
+  }
+  ;['select', 'eq', 'in'].forEach((method) => {
+    query[method] = vi.fn().mockReturnValue(query)
+  })
   return query
 }
 
@@ -79,6 +94,51 @@ describe('exact organization role scope', () => {
 
     expect(canManageOrg(currentOrgAdmin, 'org-a')).toBe(true)
     expect(canReviewContracts(currentOrgAdmin, 'org-a')).toBe(true)
+  })
+
+  it.each([
+    ['view', 'READONLY', ['contract:view']],
+    ['view', 'LEGACY_READER', ['contract:read']],
+    ['view', 'SALES', ['contract:upload']],
+    ['view', 'LEGAL', ['contract:review']],
+    ['view', 'ADMIN', []],
+    ['view', 'SUPER_ADMIN', []],
+    ['create_or_upload', 'SALES', ['contract:upload']],
+    ['create_or_upload', 'CONTRACT_CREATOR', ['contract:create']],
+    ['create_or_upload', 'CONTRACT_EDITOR', ['contract:write']],
+    ['create_or_upload', 'ADMIN', []],
+    ['create_or_upload', 'SUPER_ADMIN', []],
+    ['review', 'LEGAL', ['contract:review']],
+    ['review', 'CONTRACT_EDITOR', ['contract:write']],
+    ['review', 'ADMIN', []],
+    ['review', 'SUPER_ADMIN', []],
+  ] as const)('%s 允许当前组织 %s / %j', (action, roleCode, permissions) => {
+    expect(canAccessContractAction([
+      assignment('org-a', roleCode, [...permissions]),
+    ], 'org-a', action)).toBe(true)
+  })
+
+  it.each([
+    ['view', 'SALES', ['quote:view']],
+    ['create_or_upload', 'LEGAL', ['contract:review']],
+    ['create_or_upload', 'READONLY', ['contract:view']],
+    ['review', 'SALES', ['contract:upload']],
+    ['review', 'READONLY', ['contract:view']],
+  ] as const)('%s 拒绝当前组织 %s / %j', (action, roleCode, permissions) => {
+    expect(canAccessContractAction([
+      assignment('org-a', roleCode, [...permissions]),
+    ], 'org-a', action)).toBe(false)
+  })
+
+  it('其他组织的管理员与合同通配权限不能跨组织授权任何合同动作', () => {
+    const crossOrgAssignments = [
+      assignment('org-b', 'SUPER_ADMIN', ['*']),
+      assignment('org-b', 'LEGAL', ['contract:*']),
+    ]
+
+    expect(canAccessContractAction(crossOrgAssignments, 'org-a', 'view')).toBe(false)
+    expect(canAccessContractAction(crossOrgAssignments, 'org-a', 'create_or_upload')).toBe(false)
+    expect(canAccessContractAction(crossOrgAssignments, 'org-a', 'review')).toBe(false)
   })
 
   it('只读 user:view 可查看但不能创建用户或修改角色', () => {
@@ -171,5 +231,46 @@ describe('fresh default organization lookup', () => {
     await expect(oldLookup).resolves.toBe('org-old')
     await expect(getDefaultOrgId('fresh-user-race')).resolves.toBe('org-new')
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('fresh mutation access scope', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('bypasses a cached administrator role after revocation', async () => {
+    const oldRoleQuery = makeCollectionQuery({
+      data: [{
+        scope_type: 'org',
+        scope_id: 'org-fresh-access',
+        granted_at: null,
+        role: {
+          id: 'role-admin',
+          code: 'ADMIN',
+          name: '管理员',
+          permissions: ['admin:access'],
+        },
+      }],
+      error: null,
+    })
+    const orgUsersQuery = makeCollectionQuery({
+      data: [{ id: 'fresh-access-user' }, { id: 'another-user' }],
+      error: null,
+    })
+    const revokedRoleQuery = makeCollectionQuery({ data: [], error: null })
+    const memberSpacesQuery = makeCollectionQuery({ data: [], error: null })
+
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(oldRoleQuery)
+      .mockReturnValueOnce(orgUsersQuery)
+      .mockReturnValueOnce(revokedRoleQuery)
+      .mockReturnValueOnce(memberSpacesQuery)
+
+    await expect(listAccessibleUserIds('fresh-access-user', 'org-fresh-access'))
+      .resolves.toMatchObject({ userIds: ['fresh-access-user', 'another-user'] })
+    await expect(listFreshAccessibleUserIds('fresh-access-user', 'org-fresh-access'))
+      .resolves.toMatchObject({ userIds: ['fresh-access-user'] })
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(4)
   })
 })

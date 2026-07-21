@@ -6,6 +6,17 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/lib/contract-analysis', () => ({
+  ContractAnalysisLeaseError: class ContractAnalysisLeaseError extends Error {
+    readonly name = 'ContractAnalysisLeaseError'
+
+    constructor(
+      readonly code: 'ANALYSIS_LEASE_LOST' | 'ANALYSIS_STATE_WRITE_FAILED',
+      readonly jobId: string,
+      message: string,
+    ) {
+      super(message)
+    }
+  },
   enqueueContractAnalysisJob: vi.fn().mockResolvedValue({ id: 'job-1' }),
   formatAnalysisError: vi.fn((error: unknown) => error instanceof Error ? error.message : String(error)),
   markContractAnalysisCompleted: vi.fn().mockResolvedValue(undefined),
@@ -42,8 +53,8 @@ vi.mock('@/lib/contracts/review-source-identity', () => ({
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
-  getDefaultOrgId: vi.fn(),
-  listAccessibleUserIds: vi.fn(),
+  canAccessContractAction: vi.fn(),
+  listFreshAccessibleUserIds: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -54,9 +65,18 @@ vi.mock('@/lib/supabase', () => ({
 
 import { POST } from './route'
 import { requireAuth } from '@/lib/auth'
-import { enqueueContractAnalysisJob, runStructuredAnalysis } from '@/lib/contract-analysis'
+import {
+  ContractAnalysisLeaseError,
+  enqueueContractAnalysisJob,
+  markContractAnalysisFailed,
+  markContractAnalysisRunning,
+  runStructuredAnalysis,
+} from '@/lib/contract-analysis'
 import { resolveIdParam } from '@/lib/route-params'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import {
+  canAccessContractAction,
+  listFreshAccessibleUserIds,
+} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
   loadCurrentReviewSourceIdentity,
@@ -109,8 +129,12 @@ describe('POST /api/contracts/[id]/review-runs', () => {
     vi.clearAllMocks()
     /* eslint-disable @typescript-eslint/no-explicit-any */
     ;(requireAuth as any).mockResolvedValue({ id: 'u-admin' })
-    ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(listAccessibleUserIds as any).mockResolvedValue({ userIds: ['u-admin', 'u-owner'] })
+    ;(listFreshAccessibleUserIds as any).mockResolvedValue({
+      orgId: 'org-1',
+      assignments: [],
+      userIds: ['u-admin', 'u-owner'],
+    })
+    ;(canAccessContractAction as any).mockReturnValue(true)
     ;(resolveIdParam as any).mockResolvedValue('contract-1')
     ;(enqueueContractAnalysisJob as any).mockResolvedValue({ id: 'job-1' })
     /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -118,7 +142,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
 
   it('允许已完成合同创建手动再审核运行', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', current_version_id: 'version-1', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -142,10 +166,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
       .mockReturnValueOnce(reviewInsertQuery)
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
-    const res = await POST(makeRequest({
-      trigger_event: 'manual_rerun',
-      semantic_model_asset_id: 'model.gpt-5.5.cloud',
-    }), {
+    const res = await POST(makeRequest({ trigger_event: 'manual_rerun' }), {
       params: Promise.resolve({ id: 'contract-1' }),
     })
     const body = await res.json()
@@ -156,7 +177,6 @@ describe('POST /api/contracts/[id]/review-runs', () => {
       reviewId: 'review-rerun',
       parentReviewId: 'review-parent',
       triggerEvent: 'manual_rerun',
-      semanticModelAssetId: 'model.gpt-5.5.cloud',
       status: 'COMPLETED',
     })
     expect(runStructuredAnalysis).toHaveBeenCalledWith('contract-1', expect.objectContaining({
@@ -164,19 +184,113 @@ describe('POST /api/contracts/[id]/review-runs', () => {
       requestedBy: 'u-admin',
       reviewTrigger: 'direct',
       reviewEvent: 'manual_rerun',
-      semanticModelAssetId: 'model.gpt-5.5.cloud',
     }))
+    expect(vi.mocked(runStructuredAnalysis).mock.calls[0]?.[1]).not.toHaveProperty('semanticModelAssetId')
+    expect(vi.mocked(runStructuredAnalysis).mock.calls[0]?.[1]).not.toHaveProperty('strategyCode')
     expect(reviewInsertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      contract_version_id: 'version-1',
       review_trigger: 'direct',
       source_storage_path: 'contracts/a.docx',
       source_hash: 'a'.repeat(64),
       source_text_hash: 'b'.repeat(64),
     }))
+    expect(parentReviewQuery.eq).toHaveBeenCalledWith('contract_version_id', 'version-1')
+    expect(parentReviewQuery.eq).toHaveBeenCalledWith('source_storage_path', 'contracts/a.docx')
+    expect(parentReviewQuery.eq).toHaveBeenCalledWith('source_hash', 'a'.repeat(64))
+    expect(parentReviewQuery.eq).toHaveBeenCalledWith('source_text_hash', 'b'.repeat(64))
+  })
+
+  it('only historical reviews exist时拒绝误走再审核并要求当前版本首次审核', async () => {
+    const contractQuery = makeQuery({
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', current_version_id: 'version-2', created_by: 'u-owner', org_id: 'org-1' },
+      error: null,
+    })
+    const currentReviewQuery = makeQuery({ data: null, error: null })
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(contractQuery)
+      .mockReturnValueOnce(currentReviewQuery)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const res = await POST(makeRequest({ trigger_event: 'manual_rerun' }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.code).toBe('CURRENT_REVIEW_MISSING')
+    expect(currentReviewQuery.eq).toHaveBeenCalledWith('contract_version_id', 'version-2')
+    expect(runStructuredAnalysis).not.toHaveBeenCalled()
+    expect(enqueueContractAnalysisJob).not.toHaveBeenCalled()
+  })
+
+  it('没有审核能力时使用 fresh assignments 拒绝且不改变合同或创建 ReviewRun', async () => {
+    vi.mocked(canAccessContractAction).mockReturnValue(false)
+
+    const res = await POST(makeRequest({ trigger_event: 'manual_rerun' }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('FORBIDDEN')
+    expect(listFreshAccessibleUserIds).toHaveBeenCalledWith('u-admin')
+    expect(canAccessContractAction).toHaveBeenCalledWith([], 'org-1', 'review')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(enqueueContractAnalysisJob).not.toHaveBeenCalled()
+    expect(runStructuredAnalysis).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['semantic_model_asset_id', 'model.gpt-5.5.cloud'],
+    ['semantic_provider_profile', 'cloud-primary'],
+    ['strategy', 'BALANCED'],
+    ['strategy_id', '33333333-3333-4333-8333-333333333333'],
+  ])('拒绝业务再审核请求覆盖控制面字段 %s', async (field, value) => {
+    const res = await POST(makeRequest({ trigger_event: 'manual_rerun', [field]: value }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toEqual({
+      error: '再审核参数无效',
+      code: 'INVALID_REVIEW_RUN_OPTIONS',
+    })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(runStructuredAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('陈旧租约被替换后停止再审核且不覆盖新执行者状态', async () => {
+    const contractQuery = makeQuery({
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', current_version_id: 'version-1', created_by: 'u-owner', org_id: 'org-1' },
+      error: null,
+    })
+    const parentReviewQuery = makeQuery({ data: { id: 'review-parent' }, error: null })
+    const updateQuery = makeUpdate({ data: { id: 'contract-1' }, error: null })
+    const reviewInsertQuery = makeInsert({ data: { id: 'review-rerun' }, error: null })
+    ;(supabaseAdmin.from as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(contractQuery)
+      .mockReturnValueOnce(parentReviewQuery)
+      .mockReturnValueOnce(updateQuery)
+      .mockReturnValueOnce(reviewInsertQuery)
+    ;(markContractAnalysisRunning as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ContractAnalysisLeaseError('ANALYSIS_LEASE_LOST', 'job-1', 'lease replaced'),
+    )
+
+    const res = await POST(makeRequest({ trigger_event: 'manual_rerun' }), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: 'ANALYSIS_LEASE_LOST' })
+    expect(markContractAnalysisFailed).not.toHaveBeenCalled()
+    expect(runStructuredAnalysis).not.toHaveBeenCalled()
   })
 
   it('降级再审核必须在响应主状态中显式返回 DEGRADED', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', current_version_id: 'version-1', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -223,7 +337,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
 
   it('允许文档对比完成后以客户回传版本事件创建再审核', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', current_version_id: 'version-1', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -272,7 +386,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
 
   it('规则发布或 SkillBundle 未过正式门时不得描述为正式审核完成', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', current_version_id: 'version-1', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -319,7 +433,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
 
   it('当前源文件没有冻结身份时拒绝创建 ReviewRun', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', current_version_id: 'version-1', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     ;(loadCurrentReviewSourceIdentity as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
@@ -340,9 +454,34 @@ describe('POST /api/contracts/[id]/review-runs', () => {
     expect(enqueueContractAnalysisJob).not.toHaveBeenCalled()
   })
 
+  it('没有当前源版本时拒绝创建 ReviewRun', async () => {
+    const contractQuery = makeQuery({
+      data: {
+        id: 'contract-1',
+        status: 'COMPLETED',
+        storage_path: 'contracts/a.docx',
+        current_version_id: null,
+        created_by: 'u-owner',
+        org_id: 'org-1',
+      },
+      error: null,
+    })
+    ;(supabaseAdmin.from as ReturnType<typeof vi.fn>).mockReturnValueOnce(contractQuery)
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'contract-1' }) })
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toEqual({
+      error: '当前合同还没有可审核的源文件版本',
+      code: 'SOURCE_VERSION_MISSING',
+    })
+    expect(loadCurrentReviewSourceIdentity).not.toHaveBeenCalled()
+    expect(enqueueContractAnalysisJob).not.toHaveBeenCalled()
+  })
+
   it('拒绝正在审核中的合同重复创建再审核', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'ANALYZING', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'ANALYZING', storage_path: 'contracts/a.docx', current_version_id: 'version-1', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
 

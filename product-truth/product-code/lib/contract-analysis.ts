@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOrgIdForUser } from '@/lib/configs/runtime'
 import { executeRules } from '@/lib/rules/engine'
@@ -23,6 +24,9 @@ export interface ContractAnalysisJobRecord {
   degraded: boolean
   last_error: string | null
   locked_at: string | null
+  lock_token?: string | null
+  locked_by?: string | null
+  start_request_id?: string | null
   started_at: string | null
   completed_at: string | null
   created_at: string
@@ -130,6 +134,23 @@ export interface ReviewRuntimeBinding {
   review_trigger?: string
 }
 
+export type ContractAnalysisLeaseErrorCode =
+  | 'ANALYSIS_LEASE_LOST'
+  | 'ANALYSIS_STATE_WRITE_FAILED'
+
+export class ContractAnalysisLeaseError extends Error {
+  readonly name = 'ContractAnalysisLeaseError'
+
+  constructor(
+    readonly code: ContractAnalysisLeaseErrorCode,
+    readonly jobId: string,
+    message: string,
+    readonly detail?: unknown,
+  ) {
+    super(message)
+  }
+}
+
 export function formatAnalysisError(error: unknown): string {
   if (error instanceof Error) return error.message
   if (error && typeof error === 'object') {
@@ -139,6 +160,42 @@ export function formatAnalysisError(error: unknown): string {
     if (parts.length > 0) return parts.join(' | ')
   }
   return String(error)
+}
+
+function analysisStateWriteError(jobId: string, operation: string, detail: unknown) {
+  return new ContractAnalysisLeaseError(
+    'ANALYSIS_STATE_WRITE_FAILED',
+    jobId,
+    `${operation}数据库写入失败：${formatAnalysisError(detail)}`,
+    detail,
+  )
+}
+
+function requireLeaseToken(job: ContractAnalysisJobRecord): string {
+  if (job.status !== 'running' || !job.lock_token) {
+    throw new ContractAnalysisLeaseError(
+      'ANALYSIS_LEASE_LOST',
+      job.id,
+      '审核任务没有有效运行租约，已停止发布结果',
+    )
+  }
+  return job.lock_token
+}
+
+function transitionedJob(
+  job: ContractAnalysisJobRecord,
+  data: unknown,
+  operation: string,
+): ContractAnalysisJobRecord {
+  const value = Array.isArray(data) ? data[0] : data
+  if (!value || typeof value !== 'object' || (value as { id?: string }).id !== job.id) {
+    throw new ContractAnalysisLeaseError(
+      'ANALYSIS_LEASE_LOST',
+      job.id,
+      `${operation}未命中当前租约，旧执行者已停止`,
+    )
+  }
+  return value as ContractAnalysisJobRecord
 }
 
 export async function enqueueContractAnalysisJob(contractId: string, reviewId: string, requestedBy: string) {
@@ -154,10 +211,43 @@ export async function enqueueContractAnalysisJob(contractId: string, reviewId: s
     .single()
 
   if (error) {
-    throw error
+    throw analysisStateWriteError(reviewId, '创建审核任务', error)
   }
 
-  return data as ContractAnalysisJobRecord
+  if (!data || typeof data !== 'object' || !('id' in data)) {
+    throw analysisStateWriteError(reviewId, '创建审核任务', new Error('数据库未返回任务标识'))
+  }
+  const queuedJob = data as ContractAnalysisJobRecord
+  const claimedJob = await claimContractAnalysisJobById(
+    queuedJob.id,
+    `inline-review:${reviewId}`,
+    randomUUID(),
+  )
+  if (!claimedJob) {
+    throw new ContractAnalysisLeaseError(
+      'ANALYSIS_LEASE_LOST',
+      queuedJob.id,
+      '审核任务已被另一个执行者接管',
+    )
+  }
+  return claimedJob
+}
+
+export async function claimContractAnalysisJobById(
+  jobId: string,
+  workerId: string,
+  lockToken: string,
+) {
+  const { data, error } = await supabaseAdmin
+    .rpc('claim_contract_analysis_job_by_id', {
+      p_job_id: jobId,
+      p_worker_id: workerId,
+      p_lock_token: lockToken,
+    })
+
+  if (error) throw analysisStateWriteError(jobId, '获取审核任务租约', error)
+  const job = Array.isArray(data) ? data[0] : data
+  return (job ?? null) as ContractAnalysisJobRecord | null
 }
 
 export async function claimNextContractAnalysisJob(workerId: string) {
@@ -167,7 +257,7 @@ export async function claimNextContractAnalysisJob(workerId: string) {
     })
 
   if (error) {
-    throw error
+    throw analysisStateWriteError(workerId, '获取下一审核任务租约', error)
   }
 
   const job = Array.isArray(data) ? data[0] : data
@@ -224,106 +314,39 @@ export async function runContractAnalysis(contractId: string): Promise<ContractA
 }
 
 export async function markContractAnalysisRunning(job: ContractAnalysisJobRecord) {
-  const now = new Date().toISOString()
-  const nextAttempts = job.status === 'running' ? job.attempts : job.attempts + 1
-  const nextProvider = job.status === 'running'
-    ? job.provider
-    : (job.provider ?? 'inline-request')
-
-  await Promise.all([
-    supabaseAdmin
-      .from('contracts')
-      .update({
-        status: 'ANALYZING',
-        updated_at: now,
-      })
-      .eq('id', job.contract_id),
-    supabaseAdmin
-      .from('contract_reviews')
-      .update({
-        status: 'ANALYZING',
-      })
-      .eq('id', job.review_id),
-    supabaseAdmin
-      .from('contract_analysis_jobs')
-      .update({
-        status: 'running',
-        attempts: nextAttempts,
-        provider: nextProvider,
-        last_error: null,
-        locked_at: now,
-        started_at: job.started_at ?? now,
-        updated_at: now,
-      })
-      .eq('id', job.id),
-  ])
+  const lockToken = requireLeaseToken(job)
+  const { data, error } = await supabaseAdmin.rpc('mark_contract_analysis_job_running', {
+    p_job_id: job.id,
+    p_lock_token: lockToken,
+    p_provider: job.locked_by ?? job.provider ?? 'inline-request',
+  })
+  if (error) throw analysisStateWriteError(job.id, '刷新审核任务租约', error)
+  return transitionedJob(job, data, '刷新审核任务租约')
 }
 
 export async function markContractAnalysisCompleted(job: ContractAnalysisJobRecord, result: ContractAnalysisResult) {
-  const now = new Date().toISOString()
-  const reviewStatus = result.degraded ? 'DEGRADED' : 'COMPLETED'
-
-  await Promise.all([
-    supabaseAdmin
-      .from('contracts')
-      .update({
-        status: 'COMPLETED',
-        updated_at: now,
-      })
-      .eq('id', job.contract_id),
-    supabaseAdmin
-      .from('contract_reviews')
-      .update({
-        status: reviewStatus,
-        results: result,
-        completed_at: now,
-      })
-      .eq('id', job.review_id),
-    supabaseAdmin
-      .from('contract_analysis_jobs')
-      .update({
-        status: 'completed',
-        provider: result.provider,
-        degraded: result.degraded,
-        completed_at: now,
-        locked_at: null,
-        updated_at: now,
-      })
-      .eq('id', job.id),
-  ])
+  const lockToken = requireLeaseToken(job)
+  const { data, error } = await supabaseAdmin.rpc('mark_contract_analysis_job_completed', {
+    p_job_id: job.id,
+    p_lock_token: lockToken,
+    p_provider: result.provider,
+    p_degraded: result.degraded,
+    p_result: result,
+  })
+  if (error) throw analysisStateWriteError(job.id, '发布审核完成状态', error)
+  return transitionedJob(job, data, '发布审核完成状态')
 }
 
 export async function markContractAnalysisFailed(job: ContractAnalysisJobRecord, error: unknown) {
-  const now = new Date().toISOString()
   const message = formatAnalysisError(error)
-
-  await Promise.all([
-    supabaseAdmin
-      .from('contracts')
-      .update({
-        status: 'FAILED',
-        updated_at: now,
-      })
-      .eq('id', job.contract_id),
-    supabaseAdmin
-      .from('contract_reviews')
-      .update({
-        status: 'FAILED',
-        results: { error: message },
-        completed_at: now,
-      })
-      .eq('id', job.review_id),
-    supabaseAdmin
-      .from('contract_analysis_jobs')
-      .update({
-        status: 'failed',
-        last_error: message,
-        locked_at: null,
-        completed_at: now,
-        updated_at: now,
-      })
-      .eq('id', job.id),
-  ])
+  const lockToken = requireLeaseToken(job)
+  const { data, error: transitionError } = await supabaseAdmin.rpc('mark_contract_analysis_job_failed', {
+    p_job_id: job.id,
+    p_lock_token: lockToken,
+    p_last_error: message,
+  })
+  if (transitionError) throw analysisStateWriteError(job.id, '发布审核失败状态', transitionError)
+  return transitionedJob(job, data, '发布审核失败状态')
 }
 
 export async function processQueuedContractAnalysisJobs(workerId: string, limit: number = 1) {
@@ -378,10 +401,13 @@ export async function processContractAnalysisJob(job: ContractAnalysisJobRecord)
       requestedBy: job.requested_by,
       reviewTrigger: 'worker',
     })
-    await saveStructuredReport(job.review_id, job.contract_id, structuredReport)
-    await markContractAnalysisCompleted(job, structuredReport.result)
+    // The provider call can be long. Revalidate and refresh the lease before
+    // any report artifact is written, so a stale worker cannot publish output.
+    await markContractAnalysisRunning(job)
+    await saveStructuredReport(job, structuredReport)
     return structuredReport.result
   } catch (error) {
+    if (error instanceof ContractAnalysisLeaseError) throw error
     await markContractAnalysisFailed(job, error)
     throw error
   }
@@ -1167,27 +1193,17 @@ export async function runStructuredAnalysis(
 }
 
 export async function saveStructuredReport(
-  reviewId: string,
-  contractId: string,
+  job: ContractAnalysisJobRecord,
   report: StructuredReport,
   strategyId?: string
-): Promise<void> {
-  await supabaseAdmin.from('contract_clauses').delete().eq('review_id', reviewId)
-  await supabaseAdmin.from('contract_risk_cards').delete().eq('review_id', reviewId)
-  await supabaseAdmin
-    .from('contract_annotations')
-    .delete()
-    .eq('contract_id', contractId)
-    .eq('category', 'risk_finding')
-
-  if (report.result.risks.length > 0) {
-    const riskRows = report.result.risks.map((risk) => {
+): Promise<ContractAnalysisJobRecord> {
+  const lockToken = requireLeaseToken(job)
+  const riskRows = report.result.risks.map((risk) => {
       const sourceLocation = locateRiskSource(risk, report.clauses, report.source_text)
       const snapshotRef = runtimeRuleSnapshotRef(report.runtime, risk)
 
       return {
-      review_id: reviewId,
-      contract_id: contractId,
+      id: randomUUID(),
       // Canonical model output identifies the published rule by its frozen
       // code/version. The model must not be asked to invent internal UUIDs;
       // recover the source rule id from the already-bound immutable snapshot.
@@ -1220,31 +1236,18 @@ export async function saveStructuredReport(
       position_start: sourceLocation.startOffset,
       position_end: sourceLocation.endOffset,
     }
-    })
-    const { data: insertedRisks, error: riskError } = await supabaseAdmin
-      .from('contract_risk_cards')
-      .insert(riskRows)
-      .select('id, rule_id, rule_code, rule_version, title, description, suggestion, level, evidence, status, position_start, position_end')
-    if (riskError) throw riskError
-
-    const annotationRows = buildCommentPatchesFromRiskCards({
-      contractId,
-      risks: insertedRisks || [],
-      sourceText: report.source_text,
-    }).map((patch) => patch.annotation)
-
-    if (annotationRows.length > 0) {
-      const { error: annotationError } = await supabaseAdmin
-        .from('contract_annotations')
-        .insert(annotationRows)
-      if (annotationError) throw annotationError
-    }
-  }
-
-  if (report.clauses.length > 0) {
-    const clauseRows = report.clauses.map(c => ({
-      review_id: reviewId,
-      contract_id: contractId,
+  })
+  const annotationRows = buildCommentPatchesFromRiskCards({
+    contractId: job.contract_id,
+    risks: riskRows,
+    sourceText: report.source_text,
+  }).map((patch) => ({
+    id: randomUUID(),
+    ...patch.annotation,
+    author_id: null,
+  }))
+  const clauseRows = report.clauses.map(c => ({
+      id: randomUUID(),
       clause_number: c.clauseNumber,
       clause_title: c.clauseTitle,
       clause_text: c.clauseText,
@@ -1258,12 +1261,8 @@ export async function saveStructuredReport(
       position: c.position,
       start_offset: c.startOffset,
       end_offset: c.endOffset,
-    }))
-    const { error: clauseError } = await supabaseAdmin.from('contract_clauses').insert(clauseRows)
-    if (clauseError) throw clauseError
-  }
-
-  const { error: reviewError } = await supabaseAdmin.from('contract_reviews').update({
+  }))
+  const reviewPatch = {
     strategy_id: strategyId || null,
     risk_summary: report.risk_summary as unknown as Record<string, unknown>,
     compliance_check: report.compliance_check as unknown as Record<string, unknown>,
@@ -1277,6 +1276,22 @@ export async function saveStructuredReport(
     rule_set_document_ids: report.runtime?.rule_set_document_ids || [],
     model_invocation_ids: report.runtime?.model_invocation_ids || [],
     review_trigger: report.runtime?.review_trigger || null,
-  }).eq('id', reviewId)
-  if (reviewError) throw reviewError
+  }
+
+  const { data, error } = await supabaseAdmin.rpc('publish_contract_analysis_artifacts_fenced', {
+    p_job_id: job.id,
+    p_lock_token: lockToken,
+    p_contract_id: job.contract_id,
+    p_review_id: job.review_id,
+    p_risk_rows: riskRows,
+    p_annotation_rows: annotationRows,
+    p_clause_rows: clauseRows,
+    p_review_patch: reviewPatch,
+    p_provider: report.result.provider,
+    p_degraded: report.result.degraded,
+    p_result: report.result,
+  })
+
+  if (error) throw analysisStateWriteError(job.id, '原子发布审核产物', error)
+  return transitionedJob(job, data, '原子发布审核产物')
 }

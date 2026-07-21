@@ -275,10 +275,45 @@ export async function POST(
       )
     }
 
-    // 检查是否有审核结果
-    const latestReview = contract.contract_reviews?.[0]
+    // Only the current source version may be exported. A newer historical
+    // ReviewRun must never be mistaken for the current file's result.
+    const currentVersionId = typeof contract.current_version_id === 'string'
+      ? contract.current_version_id
+      : null
+    const latestReview = currentVersionId
+      ? contract.contract_reviews?.find((review: { contract_version_id?: string | null }) => (
+          review.contract_version_id === currentVersionId
+        ))
+      : null
     if (!latestReview || !latestReview.results) {
-      return errorResponse('合同尚未完成审核', 400, 'NO_REVIEW_RESULTS')
+      return errorResponse('当前文件版本尚未完成审核', 400, 'NO_CURRENT_REVIEW_RESULTS')
+    }
+
+    const { data: sourceVersion, error: sourceVersionError } = await exportTiming.measure('source_version_load', () => (
+      supabaseAdmin
+        .from('contract_versions')
+        .select('id, contract_id, version_number, source, storage_path, file_size, mime_type, parent_version_id, review_id, change_summary, upload_id, file_sha256, text_sha256, parsed_text, ingest_status, created_at')
+        .eq('id', currentVersionId)
+        .eq('contract_id', id)
+        .maybeSingle()
+    ))
+    const sourceIdentityMatches = Boolean(
+      sourceVersion
+      && sourceVersion.source !== 'review_revision'
+      && sourceVersion.ingest_status === 'SOURCE_READY'
+      && sourceVersion.storage_path
+      && sourceVersion.storage_path === contract.storage_path
+      && sourceVersion.storage_path === latestReview.source_storage_path
+      && sourceVersion.file_sha256 === latestReview.source_hash
+      && sourceVersion.text_sha256 === latestReview.source_text_hash
+      && sourceVersion.parsed_text === contract.parsed_text
+    )
+    if (sourceVersionError || !sourceVersion || !sourceIdentityMatches) {
+      return errorResponse(
+        '当前审核与源文件版本不一致，请重新准备文件或发起审核后再导出',
+        409,
+        'CURRENT_SOURCE_IDENTITY_INVALID',
+      )
     }
 
     // 获取审核结果中的风险项
@@ -334,6 +369,9 @@ export async function POST(
         .from('contract_annotations')
         .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
         .eq('contract_id', id)
+        .eq('review_id', latestReview.id)
+        .eq('contract_version_id', currentVersionId)
+        .eq('binding_state', 'bound')
         .order('created_at', { ascending: true })
     ))
 
@@ -373,6 +411,9 @@ export async function POST(
           .from('contract_annotations')
           .insert(missingCommentPatches.map((patch) => ({
             ...patch.annotation,
+            review_id: latestReview.id,
+            contract_version_id: currentVersionId,
+            binding_state: 'bound',
             author_id: user.id,
           })))
           .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
@@ -502,14 +543,13 @@ export async function POST(
     }
 
     const latestVersion = versions?.[0] || null
-    const sourceVersion = versions?.find((version) => version.source !== 'review_revision') || latestVersion
     const nextVersionNumber = (latestVersion?.version_number || 0) + 1
-    const sourceStoragePath = sourceVersion?.storage_path || contract.storage_path
+    const sourceStoragePath = sourceVersion.storage_path
     const existingOutput = missingCommentPatches.length === 0 && annotationControlUpdates.length === 0
       ? versions?.find((version) => (
         version.source === 'review_revision'
         && version.review_id === latestReview.id
-        && (!sourceVersion?.id || version.parent_version_id === sourceVersion.id)
+        && version.parent_version_id === sourceVersion.id
         && version.storage_path
         && String(version.change_summary || '').includes('customer-comment-v4')
       ))
@@ -619,7 +659,7 @@ export async function POST(
       'reviewed',
       safeStorageSegment(id),
       `review-${safeStorageSegment(latestReview.id)}`,
-      `source-${safeStorageSegment(sourceVersion?.id || 'contract-storage')}-${Date.now()}.docx`,
+      `source-${safeStorageSegment(sourceVersion.id)}-${Date.now()}.docx`,
     ].join('/')
     const { error: uploadError } = await exportTiming.measure('storage_upload', () => (
       supabaseAdmin.storage
@@ -645,7 +685,7 @@ export async function POST(
           storage_path: outputStoragePath,
           file_size: fileBuffer.length,
           mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          parent_version_id: sourceVersion?.id || null,
+          parent_version_id: sourceVersion.id,
           change_summary: `customer-comment-v4：ONES 业务运营基于风险项生成客户侧 Word 原生批注版本（ReviewRun: ${latestReview.id}）`,
           uploaded_by: user.id,
           review_id: latestReview.id,
@@ -663,6 +703,9 @@ export async function POST(
         .from('report_versions')
         .update({ report_file_url: outputStoragePath })
         .eq('contract_id', id)
+        .eq('review_id', latestReview.id)
+        .eq('contract_version_id', currentVersionId)
+        .eq('binding_state', 'bound')
         .eq('is_current', true)
     ))
 
@@ -684,7 +727,7 @@ export async function POST(
       generatedPatchCount: missingCommentPatches.length,
       riskCount: reviewResults.risks?.length || 0,
       outputStoragePath,
-      sourceVersionId: sourceVersion?.id || null,
+      sourceVersionId: sourceVersion.id,
       outputVersionNumber: nextVersionNumber,
       exportTiming: exportTiming.toJSON(),
       modelGateIssues,

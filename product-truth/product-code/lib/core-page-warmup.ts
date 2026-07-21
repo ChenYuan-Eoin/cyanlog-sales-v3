@@ -46,7 +46,7 @@ export const QUOTE_DETAIL_VISIBLE_CACHE_TTL_MS = CORE_PAGE_VISIBLE_CACHE_TTL_MS
 const CONTRACTS_WARMUP_DELAY_MS = 150
 const WARMUP_DELAY_MS = 250
 const CONTRACTS_PAGE_SIZE = 20
-export const CONTRACTS_LIST_CACHE_PREFIX = 'contracts:list:v2'
+export const CONTRACTS_LIST_CACHE_PREFIX = 'contracts:list:v3'
 export const AGENDA_UPCOMING_CACHE_KEY = 'agenda:upcoming'
 const CORE_ROUTES = ['/contracts', '/quotes', '/tenders', '/configs', '/schedule'] as const
 const warmups = new Map<string, Promise<void>>()
@@ -89,6 +89,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+export function hasContractTaskSummaryShape(contract: unknown): boolean {
+  if (!isRecord(contract)) return false
+  const currentVersionId = contract.current_version_id
+  const latestReview = contract.latest_review
+  return (
+    Array.isArray(contract.contract_versions)
+    && Array.isArray(contract.contract_comparisons)
+    && (currentVersionId === null || typeof currentVersionId === 'string')
+    && (latestReview === null || isRecord(latestReview))
+    && isRecord(contract.source_identity)
+  )
+}
+
 function normalizeContractsCachePayload(value: unknown): ContractsCachePayload | null {
   if (!isRecord(value)) return null
 
@@ -129,10 +142,8 @@ export function primeCorePageCaches(token: string | null | undefined, payload: C
   if (typeof window === 'undefined' || !token || !isRecord(payload)) return
 
   const contracts = normalizeContractsCachePayload(payload.contracts)
-  const contractsHaveListV2Shape = contracts?.contracts.every((contract) => (
-    isRecord(contract) && Array.isArray(contract.contract_comparisons)
-  ))
-  if (contracts && contractsHaveListV2Shape) {
+  const contractsHaveTaskSummaryShape = contracts?.contracts.every(hasContractTaskSummaryShape)
+  if (contracts && contractsHaveTaskSummaryShape) {
     writeBrowserCache(scopedCacheKey(token, `${CONTRACTS_LIST_CACHE_PREFIX}:1:${CONTRACTS_PAGE_SIZE}`), contracts)
   }
 

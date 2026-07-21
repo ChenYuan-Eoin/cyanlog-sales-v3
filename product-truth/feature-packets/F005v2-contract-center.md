@@ -237,12 +237,37 @@ NegotiationTask
 
 | 产品形态 | 第一阶段落地要求 | 不允许的退化 |
 |----------|------------------|--------------|
-| 合同中心主入口 | 金刚区按 `起草合同`、`发起审核`、`文档比对`、`批量发起审核` 排列；`发起审核` 以源文件上传为第一动作创建单个 ReviewRun，`批量发起审核` 创建多份合同与多个 ReviewRun | 把“上传合同/上传新版本/资料导入”混成同一个审核主入口，或要求先填乙方/金额/日期才允许上传 |
+| 合同中心主入口 | 固定呈现四个业务任务：`起草合同`、`上传并发起风险审核`、`继续/查看已有审核`、`选择版本进行文档比对`。批量审核不属于本阶段主入口 | 把上传、继续审核和比对都退回同一个上传页；把批量能力冒充已经可用；要求先填乙方/金额/日期才允许上传 |
 | 审核工作台主画布 | 左/中部展示合同源文件画布、批注意图和版本，侧栏展示审查、摘要、对话、证据 | 回退成粘贴文本框、灰色日志块或静态报告页 |
 | 风险侧栏 | 风险按红线、需谈判、通过、提示分类，可定位原文和查看规则来源 | 只展示一串无状态风险文本 |
 | 版本与产物 | 客户谈判后的回传件形成新的 `ContractVersion`；批注版形成 `AnnotatedDocument` | 把客户回传版上传误导成“新建审核” |
 | 摘要/对话 | 摘要和 `ONES 业务运营` 对话只作为辅助解释，依据来自 ReviewRun 证据 | 让通用 AI 对话替代规则和人工复核 |
-| 比对入口 | 优先基于已完成审核的合同进入比对；没有已完成合同时必须提示前置条件 | 在无审核结果时给用户一个看似可用的比对入口 |
+| 比对入口 | 先选择合同，再明确选择两个不同源版本；只有一个版本时进入“上传新版本”准备态，无合同时解释前置条件 | 静默选择最近完成的合同；把批注输出版本当源版本；无可比版本时退回新建审核 |
+
+### 3.0.2 WP04 业务任务与系统状态契约
+
+业务人员配置和操作的是任务，不是数据库状态。合同中心必须先形成下列四个稳定任务，再由系统状态决定该任务当前可执行的下一步：
+
+| 业务任务 | 用户对象 | 前置条件 | 目标与下一步 |
+|----------|----------|----------|--------------|
+| 起草合同 | 一份新合同草稿 | 无 | 进入起草页开始新草稿；在 WP07 支持草稿恢复前，不得承诺“继续起草” |
+| 上传并发起风险审核 | 一份 Word（DOC、DOCX、DOCM）或 PDF 原文件 | 文件满足格式、大小和安全校验；legacy DOC 原件先保留并转换为 DOCX 后审核 | 文件保存后完成可信正文读取、源文件身份和定位映射；只有全部就绪才创建一次初始 ReviewRun |
+| 继续/查看已有审核 | 已存在的 ReviewRun | 合同至少有一个真实 ReviewRun | 根据运行状态显示查看进度、处理风险、查看失败并重试或下载结果；不得用 Contract.status 猜测运行身份 |
+| 选择版本进行文档比对 | 同一合同的两个不同源版本 | 至少一个合同；真正开始比对前必须有两个源版本 | 无版本时说明先上传；单版本时上传回传版；多版本时明确选择旧版与新版后进入比对 |
+
+系统内部可保留“上传中、文件已保存、正在读取原文、等待 OCR、源身份准备失败、审核排队、审核中”等状态，但页面主信息必须转译为业务结果、阻断原因和恢复动作。`storage_path`、哈希、page map、规则快照、模型路由和内部状态码只进入诊断或审计证据，不得作为主任务名称。
+
+初始审核的编排顺序固定为：
+
+```
+唯一上传会话
+  -> 唯一源文件版本
+  -> 可信正文或明确等待 OCR
+  -> 当前源文件身份与定位映射
+  -> 唯一初始 ReviewRun 与分析任务
+```
+
+任何一步失败都必须保留已经成功的源文件和业务对象，并从失败步骤恢复；页面重试不得重新创建合同、版本或初始 ReviewRun。扫描 PDF 可以停在“等待 OCR/人工定位”并保留原件，但不得生成假审核完成态。
 
 ### 3.1 首页 (/contracts) — 合同工作站
 
@@ -443,6 +468,7 @@ NegotiationTask
 | `Contract` | `id`, `org_id`, `owner_id`, `source_type`, `current_version_id`, `status` | 合同业务主对象 |
 | `ContractVersion` | `contract_id`, `version_no`, `file_path`, `parsed_text`, `source`, `parent_version_id` | 每次上传、客户回传、批注生成都形成版本 |
 | `ReviewRun` | `contract_id`, `contract_version_id`, `skill_bundle_id`, `rule_snapshot_id`, `model_policy_id`, `status` | 一次审核运行；历史运行不得随配置变化漂移 |
+| `ReviewArtifact`（现有风险、批注、ASK、报告表） | `review_id`, `contract_version_id`, `binding_state` | 审核产物必须同时属于一次 ReviewRun 和它审核的源版本；无法唯一归属的历史数据保持隔离，不得自动绑定到最新审核 |
 | `RiskFinding` | `review_run_id`, `rule_id`, `rule_code`, `rule_version`, `evidence`, `owner_role`, `owner_id`, `status` | 风险项可分派、可复核、可谈判、可关闭 |
 | `NegotiationTask` | `risk_finding_id`, `sales_owner_id`, `bottom_line`, `script`, `customer_feedback_status` | 必须谈判风险项的销售动作 |
 | `CustomerFeedback` | `contract_version_id`, `risk_finding_id`, `feedback_type`, `content`, `next_action` | 客户接受/拒绝/反建议触发再审核或升级 |
@@ -722,6 +748,18 @@ contract_rule_sets (新)
 ---
 
 ## 5. API 设计
+
+### 5.0 合同业务权限兼容矩阵
+
+权限门按业务动作统一解释，且只接受当前组织精确作用域内的角色与权限；对象可见范围仍需另外按合同创建人及部门/空间作用域收口：
+
+| 业务动作 | 允许的权限 | 兼容角色 |
+|----------|------------|----------|
+| 查看合同、源文件与结果 | `contract:view` / `contract:read` / `contract:upload` / `contract:review` / `contract:write` / `contract:*` | `LEGAL` / `ADMIN` / `SUPER_ADMIN` |
+| 创建合同或上传/替换源文件 | `contract:upload` / `contract:create`（未来兼容）/ `contract:write` / `contract:*` | `ADMIN` / `SUPER_ADMIN` |
+| 发起初审或再审核 | `contract:review` / `contract:write` / `contract:*` | `LEGAL` / `ADMIN` / `SUPER_ADMIN` |
+
+`contract:review` 不自动获得创建或上传权限；`contract:upload` 可读取本人或其作用域内合同，以完成上传后的业务下一步，但不能发起审核。所有会改变合同、文件或 ReviewRun 状态的接口必须使用 fresh assignments，不能依赖短时权限缓存。
 
 ### 5.1 合同中心首页
 

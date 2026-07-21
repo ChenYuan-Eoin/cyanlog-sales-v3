@@ -6,7 +6,9 @@ vi.mock('@/lib/api/auth-wrapper', () => ({
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
-  listAccessibleUserIds: vi.fn(async () => ({ userIds: ['user-1'] })),
+  canAccessContractAction: vi.fn(() => true),
+  listAccessibleUserIds: vi.fn(async () => ({ assignments: [], userIds: ['user-1'] })),
+  listFreshAccessibleUserIds: vi.fn(async () => ({ assignments: [], userIds: ['user-1'] })),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -16,6 +18,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { supabaseAdmin } from '@/lib/supabase'
+import { canAccessContractAction, listAccessibleUserIds } from '@/lib/scoped-access'
 import { GET } from './route'
 
 const CONTRACT_ID = '11111111-1111-4111-8111-111111111111'
@@ -102,6 +105,26 @@ function installGetSupabaseMock() {
 describe('GET /api/contracts/[id]/compare', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(canAccessContractAction).mockReturnValue(true)
+  })
+
+  it('没有 VIEW 权限时在读取 comparison 前拒绝请求', async () => {
+    vi.mocked(listAccessibleUserIds).mockResolvedValue({
+      orgId: 'org-1',
+      assignments: [],
+      userIds: ['user-1'],
+    })
+    vi.mocked(canAccessContractAction).mockReturnValue(false)
+
+    const response = await GET({
+      url: `https://sales.example.test/api/contracts/${CONTRACT_ID}/compare`,
+    } as any, {
+      params: Promise.resolve({ id: CONTRACT_ID }),
+    })
+
+    expect(response.status).toBe(403)
+    expect(canAccessContractAction).toHaveBeenCalledWith([], 'org-1', 'view')
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('returns an explicit review gate when legacy comparisons lack immutable source snapshots', async () => {

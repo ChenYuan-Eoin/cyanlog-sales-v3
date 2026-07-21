@@ -1,4 +1,3 @@
-import { supabaseAdmin } from '@/lib/supabase'
 import { firstRelatedRow, type OneOrMany } from '@/lib/ask/relations'
 
 type AskResponseSnapshot = {
@@ -28,22 +27,6 @@ type AskItemSnapshot = {
   updated_at: string | null
   ask_responses?: OneOrMany<AskResponseSnapshot>
 }
-
-type LatestReportVersionRow = {
-  id: string
-  version: number | null
-  is_current: boolean | null
-}
-
-type ReportVersionRow = {
-  id: string
-  version: number
-  is_current: boolean
-  trigger_event: string
-  created_at: string | null
-}
-
-type ReportVersionClient = typeof supabaseAdmin
 
 export type AskReportData = {
   generated_at: string
@@ -81,114 +64,5 @@ export function buildAskResponseReportData(input: {
       closed: askItems.filter((ask) => ask.status === 'closed').length,
     },
     ask_items: askItems,
-  }
-}
-
-export async function createAskResponseReportVersion(input: {
-  contractId: string
-  triggerAskId: string
-  triggerUserId: string
-  generatedAt: string
-  client?: ReportVersionClient
-}): Promise<{
-  report: ReportVersionRow | null
-  error: string | null
-}> {
-  const client = input.client || supabaseAdmin
-
-  const latestResult = await client
-    .from('report_versions')
-    .select('id, version, is_current')
-    .eq('contract_id', input.contractId)
-    .order('version', { ascending: false })
-    .limit(1)
-
-  if (latestResult.error) {
-    return { report: null, error: '读取报告版本失败' }
-  }
-
-  const latestReport = ((latestResult.data || []) as LatestReportVersionRow[])[0] || null
-  const latestVersion = latestReport?.version || 0
-
-  const asksResult = await client
-    .from('ask_items')
-    .select(`
-      id,
-      ask_code,
-      clause_ref,
-      risk_name,
-      initial_level,
-      question_type,
-      required_roles,
-      question_text,
-      qualified_std,
-      status,
-      response_id,
-      closed_reason,
-      created_at,
-      updated_at,
-      ask_responses!ask_responses_ask_id_fkey (
-        id,
-        responder_id,
-        responder_role,
-        responder_name,
-        response_text,
-        attachments,
-        created_at
-      )
-    `)
-    .eq('contract_id', input.contractId)
-    .order('created_at', { ascending: true })
-
-  if (asksResult.error) {
-    return { report: null, error: '读取 ASK 快照失败' }
-  }
-
-  const reportData = buildAskResponseReportData({
-    asks: (asksResult.data || []) as AskItemSnapshot[],
-    triggerAskId: input.triggerAskId,
-    generatedAt: input.generatedAt,
-  })
-
-  if (latestReport?.id && latestReport.is_current) {
-    const unsetCurrentResult = await client
-      .from('report_versions')
-      .update({ is_current: false })
-      .eq('id', latestReport.id)
-
-    if (unsetCurrentResult.error) {
-      return { report: null, error: '更新旧报告版本状态失败' }
-    }
-  }
-
-  const insertResult = await client
-    .from('report_versions')
-    .insert({
-      contract_id: input.contractId,
-      version: latestVersion + 1,
-      trigger_event: 'ask_responded',
-      trigger_ask_id: input.triggerAskId,
-      trigger_user_id: input.triggerUserId,
-      no_ask_reason: null,
-      report_data: reportData,
-      report_file_url: null,
-      is_current: true,
-    })
-    .select('id, version, is_current, trigger_event, created_at')
-    .single()
-
-  if (insertResult.error) {
-    if (latestReport?.id && latestReport.is_current) {
-      await client
-        .from('report_versions')
-        .update({ is_current: true })
-        .eq('id', latestReport.id)
-    }
-    return { report: null, error: '创建报告版本失败' }
-  }
-
-  return {
-    report: insertResult.data as ReportVersionRow,
-    error: null,
   }
 }

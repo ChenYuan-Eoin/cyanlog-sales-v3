@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 
 interface AskInput {
   clause_ref?: string | null
@@ -97,9 +98,28 @@ export async function POST(
     const { id: contractId } = await params
     const body = await req.json().catch(() => ({}))
 
-    const access = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    const access = await getAccessibleContract(
+      contractId,
+      user.id,
+      undefined,
+      'id, current_version_id',
+    )
     if (!access.contract) {
       return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
+    }
+
+    const binding = await resolveCurrentReviewArtifactBinding({
+      contractId,
+      currentVersionId: typeof access.contract.current_version_id === 'string'
+        ? access.contract.current_version_id
+        : null,
+      mode: 'write',
+    })
+    if (!binding) {
+      return errorResponse(
+        createApiError('CONFLICT', '当前文件版本还没有审核结果，不能生成谈判任务'),
+        409,
+      )
     }
 
     const parsed = generateAskSchema.safeParse(body)
@@ -115,6 +135,9 @@ export async function POST(
       .from('ask_items')
       .select('*')
       .eq('contract_id', contractId)
+      .eq('review_id', binding.reviewId)
+      .eq('contract_version_id', binding.contractVersionId)
+      .eq('binding_state', 'bound')
       .order('created_at', { ascending: true })
 
     if (existingError) {
@@ -132,6 +155,7 @@ export async function POST(
         .from('contract_risk_cards')
         .select('clause_ref, title, description, suggestion, level')
         .eq('contract_id', contractId)
+        .eq('review_id', binding.reviewId)
         .eq('status', 'open')
         .in('level', ['red', 'yellow'])
         .order('created_at', { ascending: true })
@@ -152,6 +176,9 @@ export async function POST(
       .insert(
         asks.map((ask, idx) => ({
           contract_id: contractId,
+          review_id: binding.reviewId,
+          contract_version_id: binding.contractVersionId,
+          binding_state: 'bound',
           ask_code: `ASK-${String(idx + 1).padStart(3, '0')}`,
           clause_ref: ask.clause_ref || null,
           risk_name: ask.risk_name,

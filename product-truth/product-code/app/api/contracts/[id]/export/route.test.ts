@@ -131,19 +131,59 @@ function installSupabaseExportMocks(options: {
     error_message?: string | null
     response_meta?: Record<string, unknown>
   }>
+  sourceVersion?: Partial<{
+    id: string
+    contract_id: string
+    version_number: number
+    source: string
+    storage_path: string
+    file_size: number
+    mime_type: string
+    file_sha256: string
+    text_sha256: string
+    parsed_text: string
+    ingest_status: string
+  }>
 } = {}) {
+  const fileSha256 = 'a'.repeat(64)
+  const textSha256 = 'b'.repeat(64)
   const contract = {
     id: 'contract-1',
     filename: 'source.docx',
     storage_path: 'contract-1/source.docx',
+    current_version_id: 'version-1',
     parsed_text: '付款周期为 120 天，质保期为 24 个月。',
     contract_reviews: [{
       id: 'review-1',
+      contract_version_id: 'version-1',
       created_at: '2026-07-02T01:00:00.000Z',
+      source_storage_path: 'contract-1/source.docx',
+      source_hash: fileSha256,
+      source_text_hash: textSha256,
       model_invocation_ids: ['invocation-semantic'],
       results: { summary: '审核完成', risks: [] },
     }],
   }
+  const sourceVersion = {
+    id: 'version-1',
+    contract_id: 'contract-1',
+    version_number: 1,
+    source: 'original',
+    storage_path: 'contract-1/source.docx',
+    file_size: 1024,
+    mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    file_sha256: fileSha256,
+    text_sha256: textSha256,
+    parsed_text: contract.parsed_text,
+    ingest_status: 'SOURCE_READY',
+    ...options.sourceVersion,
+  }
+  const versions = options.versions || [{
+    id: sourceVersion.id,
+    version_number: sourceVersion.version_number,
+    source: sourceVersion.source,
+    storage_path: sourceVersion.storage_path,
+  }]
   const modelInvocations = options.modelInvocations || [{
     id: 'invocation-semantic',
     phase: 'semantic_review',
@@ -167,8 +207,9 @@ function installSupabaseExportMocks(options: {
     contract_risk_cards: [makeArrayResult({ data: options.riskCards || [], error: null })],
     model_invocations: [makeModelInvocationResult({ data: modelInvocations, error: null })],
     contract_versions: [
+      makeSingleResult({ data: sourceVersion, error: null }),
       makeArrayResult({
-        data: options.versions || [{ id: 'version-1', version_number: 1, source: 'original' }],
+        data: versions,
         error: null,
       }),
       makeInsertResult({ error: null }),
@@ -221,6 +262,21 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(res.status).toBe(500)
     expect(body.code).toBe('EXPORT_NOT_SOURCE_COMMENTS')
     expect(body.error).toBe('未生成源文件批注版，请检查源文件格式')
+  })
+
+  it('当前审核与精确 current_version_id 的源身份不一致时失败关闭', async () => {
+    installSupabaseExportMocks({
+      sourceVersion: { file_sha256: 'c'.repeat(64) },
+    })
+
+    const res = await POST(makeRequest(), {
+      params: Promise.resolve({ id: 'contract-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.code).toBe('CURRENT_SOURCE_IDENTITY_INVALID')
+    expect(generateWordDocument).not.toHaveBeenCalled()
   })
 
   it('源文件批注版导出成功时登记 review_revision 版本并返回性能分段', async () => {
@@ -340,15 +396,34 @@ describe('POST /api/contracts/[id]/export', () => {
       id: 'contract-1',
       filename: 'source.docx',
       storage_path: 'contract-1/source.docx',
+      current_version_id: 'version-1',
       parsed_text: '保密义务\n3 年。',
       contract_reviews: [{
         id: 'review-1',
+        contract_version_id: 'version-1',
         created_at: '2026-07-02T01:00:00.000Z',
+        source_storage_path: 'contract-1/source.docx',
+        source_hash: 'a'.repeat(64),
+        source_text_hash: 'b'.repeat(64),
         results: { summary: '审核完成', risks: [{ level: 'yellow', title: '保密期', description: '偏离', suggestion: '谈判' }] },
       }],
     }
+    const exactSourceVersion = {
+      id: 'version-1',
+      contract_id: 'contract-1',
+      version_number: 1,
+      source: 'original',
+      storage_path: 'contract-1/source.docx',
+      file_size: 1024,
+      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      file_sha256: 'a'.repeat(64),
+      text_sha256: 'b'.repeat(64),
+      parsed_text: contract.parsed_text,
+      ingest_status: 'SOURCE_READY',
+    }
     const queues: Record<string, any[]> = {
       contracts: [makeSingleResult({ data: contract, error: null })],
+      contract_versions: [makeSingleResult({ data: exactSourceVersion, error: null })],
       contract_clauses: [makeArrayResult({ data: [], error: null })],
       contract_annotations: [makeArrayResult({
         data: [{

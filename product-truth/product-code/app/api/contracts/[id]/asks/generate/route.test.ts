@@ -15,9 +15,14 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+vi.mock('@/lib/contracts/current-review-binding', () => ({
+  resolveCurrentReviewArtifactBinding: vi.fn(),
+}))
+
 import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 import { POST } from './route'
 
 function makeJsonRequest(body: unknown): any {
@@ -33,9 +38,15 @@ describe('POST /api/contracts/[id]/asks/generate', () => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'user-1', email: 'user@example.com' })
     ;(getAccessibleContract as any).mockResolvedValue({
-      contract: { id: 'contract-1' },
+      contract: { id: 'contract-1', current_version_id: 'version-1' },
       orgId: 'org-1',
       userIds: ['user-1'],
+    })
+    ;(resolveCurrentReviewArtifactBinding as any).mockResolvedValue({
+      contractId: 'contract-1',
+      reviewId: 'review-1',
+      contractVersionId: 'version-1',
+      reviewStatus: 'COMPLETED',
     })
   })
 
@@ -116,6 +127,9 @@ describe('POST /api/contracts/[id]/asks/generate', () => {
     expect(insertedPayloads[0]).toEqual([
       expect.objectContaining({
         contract_id: 'contract-1',
+        review_id: 'review-1',
+        contract_version_id: 'version-1',
+        binding_state: 'bound',
         ask_code: 'ASK-001',
         clause_ref: '第 3 条',
         risk_name: '付款周期过长',

@@ -1,96 +1,117 @@
-// POST /api/contracts/[id]/upload-chunk - 上传单个分块
-// 支持大文件分块上传、断点续传
-
-import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-import { supabaseAdmin } from '@/lib/supabase'
+import { NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { logError } from '@/lib/error-log'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
-import { errorResponse } from '@/lib/api/common'
+import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
+import { logError } from '@/lib/error-log'
+import {
+  canAccessContractAction,
+  listFreshAccessibleUserIds,
+} from '@/lib/scoped-access'
+import { supabaseAdmin } from '@/lib/supabase'
+import {
+  chunkObjectPath,
+  uploadCancellationPath,
+  validateChunkUpload,
+  validateUploadCleanup,
+  validateStableSourceUploadIdentity,
+} from '@/lib/documents/chunk-upload-protocol'
+import { inspectContractSource } from '@/lib/documents/source-format'
 
-// 临时分块存储桶名称
 const TEMP_BUCKET = 'contract-chunks'
-const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
 
-function isBlob(value: unknown): value is Blob {
-  return typeof Blob !== 'undefined' && value instanceof Blob
+function authError(error: unknown) {
+  return error instanceof Error && error.name === 'AuthError'
+    ? errorResponse(createApiError('UNAUTHORIZED'))
+    : null
 }
 
-const uploadChunkFormSchema = z.object({
-  chunk: z.custom<Blob>(isBlob).refine(chunk => chunk.size > 0),
-  index: z.coerce.number().int().nonnegative(),
-  start: z.coerce.number().int().nonnegative(),
-  end: z.coerce.number().int().positive(),
-  totalSize: z.coerce.number().int().positive(),
-  fileName: z.string().trim().min(1),
-  fileType: z.string().optional().default(''),
-}).refine(({ start, end, totalSize }) => end > start && totalSize >= end)
-
-function hasAllowedFileName(fileName: string): boolean {
-  const extension = `.${fileName.split('.').pop()?.toLowerCase() || ''}`
-  return ALLOWED_EXTENSIONS.includes(extension)
+function supportedContractSource(fileName: string, fileType: string) {
+  const inspection = inspectContractSource(fileName, fileType)
+  return inspection.ok
 }
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await requireAuth(req)
-    if (!user) {
-      return errorResponse(createApiError('UNAUTHORIZED'))
-    }
-
     const { id: contractId } = await params
-
-    // 获取表单数据
     const formData = await req.formData().catch(() => null)
     if (!formData) {
       return errorResponse(createApiError('VALIDATION_ERROR', '请求格式不是有效的表单数据'))
     }
 
-    const parsed = uploadChunkFormSchema.safeParse({
-      chunk: formData.get('chunk'),
-      index: formData.get('index'),
-      start: formData.get('start'),
-      end: formData.get('end'),
-      totalSize: formData.get('totalSize'),
-      fileName: formData.get('fileName'),
-      fileType: formData.get('fileType'),
-    })
-    if (!parsed.success) {
+    const chunkValue = formData.get('chunk')
+    const chunk = chunkValue instanceof Blob ? chunkValue : null
+    const fileNameValue = formData.get('fileName')
+    const fileName = typeof fileNameValue === 'string' ? fileNameValue : ''
+    const fileTypeValue = formData.get('fileType')
+    const fileType = typeof fileTypeValue === 'string' ? fileTypeValue : ''
+    const uploadIdValue = formData.get('uploadId')
+    const uploadId = typeof uploadIdValue === 'string' ? uploadIdValue : ''
+    const expectedSha256Value = formData.get('expectedSha256')
+    const expectedSha256 = typeof expectedSha256Value === 'string'
+      ? expectedSha256Value
+      : ''
+
+    if (!chunk) {
       return errorResponse(createApiError('VALIDATION_ERROR', '无效的分块数据'))
     }
-
-    const { chunk, index, start, end, fileName, fileType } = parsed.data
-    if (!hasAllowedFileName(fileName)) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
+    const validation = validateChunkUpload({
+      index: Number(formData.get('index')),
+      start: Number(formData.get('start')),
+      end: Number(formData.get('end')),
+      totalSize: Number(formData.get('totalSize')),
+      chunkSize: chunk.size,
+      fileName,
+      uploadId,
+      expectedSha256,
+    })
+    if (!validation.ok) {
+      return errorResponse(createApiError('VALIDATION_ERROR', validation.error))
+    }
+    const stableIdentity = await validateStableSourceUploadIdentity(
+      contractId,
+      uploadId,
+      expectedSha256,
+    )
+    if (!stableIdentity.ok) {
+      return errorResponse(createApiError('VALIDATION_ERROR', stableIdentity.error))
+    }
+    if (!supportedContractSource(fileName, fileType)) {
+      return errorResponse(createApiError(
+        'VALIDATION_ERROR',
+        '仅支持 PDF、DOC、DOCX、DOCM',
+      ))
     }
 
-    const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
-
-    // 检查合同是否存在且有权限
+    const {
+      orgId,
+      assignments,
+      userIds: accessibleUserIds,
+    } = await listFreshAccessibleUserIds(user.id)
+    if (!canAccessContractAction(assignments, orgId, 'create_or_upload')) {
+      return errorResponse(createApiError('FORBIDDEN', '没有上传合同源文件的权限'))
+    }
     const { data: contract, error: fetchError } = await supabaseAdmin
       .from('contracts')
-      .select('id, created_by, org_id, status')
+      .select('id, status')
       .eq('id', contractId)
       .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !contract) {
-      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在或无权访问'))
+    }
+    if (contract.status === 'PARSING' || contract.status === 'ANALYZING') {
+      return errorResponse(createApiError('CONFLICT', '合同正在审核或复审，源文件已锁定'))
     }
 
-    // 生成临时分块路径
-    const tempPath = `${contractId}/${fileName}.part${index}`
-
-    // 上传分块到临时存储
-    const { error: uploadError } = await supabaseAdmin
-      .storage
+    const index = Number(formData.get('index'))
+    const tempPath = chunkObjectPath(contractId, uploadId, index)
+    const { error: uploadError } = await supabaseAdmin.storage
       .from(TEMP_BUCKET)
       .upload(tempPath, chunk, {
         contentType: fileType || 'application/octet-stream',
@@ -107,6 +128,7 @@ export async function POST(
         context: {
           route: '/api/contracts/[id]/upload-chunk',
           contractId,
+          uploadId,
           chunkIndex: index,
           fileName,
         },
@@ -114,26 +136,137 @@ export async function POST(
       return errorResponse(createApiError('DB_ERROR', '分块上传失败'))
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        index,
-        start,
-        end,
-        size: chunk.size,
-      },
+    return successResponse({
+      uploadId,
+      expectedSha256,
+      index,
+      start: Number(formData.get('start')),
+      end: Number(formData.get('end')),
+      size: chunk.size,
     })
-  } catch (error: unknown) {
-    const err = error as Error
+  } catch (error) {
+    const response = authError(error)
+    if (response) return response
     await logError({
       req,
       source: 'api',
-      message: err.message,
+      message: error instanceof Error ? error.message : String(error),
       error,
-      context: {
-        route: '/api/contracts/[id]/upload-chunk',
-      },
+      context: { route: '/api/contracts/[id]/upload-chunk' },
     })
-    return errorResponse(createApiError('INTERNAL_ERROR', '服务器错误'))
+    return errorResponse(createApiError('INTERNAL_ERROR'))
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const user = await requireAuth(req)
+    const { id: contractId } = await params
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return errorResponse(createApiError('INVALID_JSON'))
+    }
+    const uploadId = (body as { uploadId?: unknown }).uploadId
+    const expectedSha256 = (body as { expectedSha256?: unknown }).expectedSha256
+    const chunkCount = (body as { chunkCount?: unknown }).chunkCount
+    const validation = validateUploadCleanup({
+      uploadId: typeof uploadId === 'string' ? uploadId : '',
+      expectedSha256: typeof expectedSha256 === 'string' ? expectedSha256 : '',
+      chunkCount: Number(chunkCount),
+    })
+    if (!validation.ok) {
+      return errorResponse(createApiError('VALIDATION_ERROR', validation.error))
+    }
+    const stableIdentity = await validateStableSourceUploadIdentity(
+      contractId,
+      uploadId as string,
+      expectedSha256 as string,
+    )
+    if (!stableIdentity.ok) {
+      return errorResponse(createApiError('VALIDATION_ERROR', stableIdentity.error))
+    }
+
+    const {
+      orgId,
+      assignments,
+      userIds: accessibleUserIds,
+    } = await listFreshAccessibleUserIds(user.id)
+    if (!canAccessContractAction(assignments, orgId, 'create_or_upload')) {
+      return errorResponse(createApiError('FORBIDDEN', '没有取消合同上传的权限'))
+    }
+    const { data: contract, error: fetchError } = await supabaseAdmin
+      .from('contracts')
+      .select('id, updated_at, storage_path')
+      .eq('id', contractId)
+      .eq('org_id', orgId)
+      .in('created_by', accessibleUserIds)
+      .maybeSingle()
+
+    if (fetchError || !contract) {
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在或无权访问'))
+    }
+    if (
+      typeof contract.storage_path === 'string'
+      && contract.storage_path.startsWith(`${contractId}/${uploadId}/`)
+    ) {
+      return errorResponse(createApiError('CONFLICT', '上传会话已经提交，不能再取消'))
+    }
+
+    const markerPath = uploadCancellationPath(contractId, uploadId as string)
+    const { error: markerError } = await supabaseAdmin.storage
+      .from(TEMP_BUCKET)
+      .upload(markerPath, new Uint8Array([1]), {
+        contentType: 'application/x-price-upload-cancelled',
+        upsert: true,
+      })
+    if (markerError) {
+      return errorResponse(createApiError('DB_ERROR', '无法标记上传会话为已取消'))
+    }
+
+    const { data: fencedContract, error: fenceError } = await supabaseAdmin
+      .from('contracts')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', contractId)
+      .eq('org_id', orgId)
+      .eq('updated_at', contract.updated_at)
+      .select('id')
+      .maybeSingle()
+    if (fenceError || !fencedContract) {
+      // The cancellation marker was created before the CAS. If another
+      // request committed first, remove our uncommitted marker so the stable
+      // contract+SHA upload identity is not poisoned for every later retry.
+      await supabaseAdmin.storage.from(TEMP_BUCKET).remove([markerPath])
+      return errorResponse(createApiError('CONFLICT', '上传已提交或合同状态已变化'))
+    }
+
+    const paths = Array.from(
+      { length: Number(chunkCount) },
+      (_, index) => chunkObjectPath(contractId, uploadId as string, index),
+    )
+    // The CAS fence above invalidates any merge that read the pre-cancel
+    // contract snapshot. Remove the marker with the chunks so the same stable
+    // contract+SHA upload identity can be started again intentionally.
+    const { error: cleanupError } = await supabaseAdmin.storage
+      .from(TEMP_BUCKET)
+      .remove([...paths, markerPath])
+    if (cleanupError) {
+      return errorResponse(createApiError('DB_ERROR', '上传已取消，但临时分块清理失败'))
+    }
+
+    return successResponse({ uploadId, cancelled: true })
+  } catch (error) {
+    const response = authError(error)
+    if (response) return response
+    await logError({
+      req,
+      source: 'api',
+      message: error instanceof Error ? error.message : String(error),
+      error,
+      context: { route: '/api/contracts/[id]/upload-chunk', method: 'DELETE' },
+    })
+    return errorResponse(createApiError('INTERNAL_ERROR'))
   }
 }

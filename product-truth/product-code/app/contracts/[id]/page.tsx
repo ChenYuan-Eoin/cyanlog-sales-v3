@@ -19,7 +19,7 @@ import {
   XCircleIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { buildCustomerFacingWordComment } from '@/lib/contracts/comment-patch'
@@ -32,7 +32,6 @@ import {
   needsManualAnnotationLocation,
   needsManualRiskLocation,
 } from '@/lib/contracts/review-workbench-state'
-import { reviewStyleStrategy, type ReviewStyle } from '@/lib/contracts/review-style'
 import {
   buildContractWorkbenchPanelHref,
   normalizeContractWorkbenchPanel,
@@ -40,6 +39,7 @@ import {
 } from '@/lib/contracts/review-navigation'
 import { SourceDocumentPreview, type SourceDocumentPreviewFile } from '@/components/contracts/source-document-preview'
 import { error as toastError, success as toastSuccess } from '@/lib/toast'
+import type { ContractSourceReadinessProjection } from '@/lib/contracts/contract-source-readiness'
 
 type ContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
 type RiskSeverity = 'red' | 'yellow' | 'green' | 'white'
@@ -66,6 +66,11 @@ type ContractVersion = {
   parent_version_id: string | null
   change_summary: string | null
   review_id: string | null
+  upload_id?: string | null
+  file_sha256?: string | null
+  text_sha256?: string | null
+  ingest_status?: 'SOURCE_READY' | 'AWAITING_OCR' | 'AWAITING_CONVERSION' | 'FAILED' | null
+  ingest_error?: string | null
   created_at: string | null
 }
 
@@ -287,10 +292,28 @@ type WorkbenchData = {
   negotiationTasks: NegotiationTask[]
   annotations: Annotation[]
   versions: ContractVersion[]
+  currentVersion?: ContractVersion | null
+  source_identity?: ContractSourceReadinessProjection | null
+  reviewedVersion?: ContractVersion | null
+  current_review_status?: ContractStatus
+  has_current_review?: boolean
+  review_context?: 'current' | 'historical' | 'current_unreviewed'
+  review_history?: Array<{
+    id: string
+    status: string
+    contract_version_id: string | null
+    source_version_number: number | null
+    source_identity_verified: boolean
+    is_current: boolean
+    created_at: string | null
+    completed_at: string | null
+  }>
   outputs: ContractVersion[]
   currentReport?: ReportVersion | null
   reportVersions?: ReportVersion[]
   latestReview?: {
+    id?: string
+    status?: string
     results?: {
       summary?: string
     }
@@ -333,9 +356,11 @@ function reviewVersionSourceLabel(source: ContractVersion['source']) {
 }
 
 function pickReviewSourcePreviewFile(data: WorkbenchData): SourceDocumentPreviewFile | null {
-  const sourceVersion = [...data.versions]
-    .filter((version) => version.source === 'original' || version.source === 'manual_revision')
-    .sort((a, b) => b.version_number - a.version_number)[0]
+  const sourceVersion = data.reviewedVersion
+    || data.currentVersion
+    || [...data.versions]
+      .filter((version) => version.source === 'original' || version.source === 'manual_revision')
+      .sort((a, b) => b.version_number - a.version_number)[0]
 
   if (sourceVersion) {
     return {
@@ -409,6 +434,28 @@ const reportTriggerLabel: Record<string, string> = {
 function formatTime(value?: string | null) {
   if (!value) return '未记录'
   return new Date(value).toLocaleString('zh-CN')
+}
+
+function reviewHistoryStatus(status: string, isCurrent: boolean) {
+  const normalized = status.trim().toLowerCase()
+  if (['pending', 'queued', 'created', 'parsing', 'analyzing', 'processing', 'running'].includes(normalized)) {
+    return { label: '审核进行中', className: 'border-indigo-200 bg-indigo-50 text-indigo-700' }
+  }
+  if (['failed', 'error', 'cancelled', 'canceled'].includes(normalized)) {
+    return { label: '审核未完成', className: 'border-red-200 bg-red-50 text-red-700' }
+  }
+  if (['degraded', 'needs_review', 'needs_manual_review'].includes(normalized)) {
+    return { label: '需要人工复核', className: 'border-amber-200 bg-amber-50 text-amber-700' }
+  }
+  if (['completed', 'succeeded', 'success', 'done'].includes(normalized)) {
+    return {
+      label: isCurrent ? '风险结果待处理' : '审核已完成',
+      className: isCurrent
+        ? 'border-blue-200 bg-blue-50 text-blue-700'
+        : 'border-slate-200 bg-slate-50 text-slate-700',
+    }
+  }
+  return { label: '状态待确认', className: 'border-slate-200 bg-slate-50 text-slate-700' }
 }
 
 function formatSize(value?: number | null) {
@@ -539,11 +586,11 @@ export default function ContractWorkbenchPage() {
   const [riskControlNote, setRiskControlNote] = useState('')
   const [riskFeedbackStatus, setRiskFeedbackStatus] = useState<CustomerFeedbackStatus>('needs_customer_confirmation')
   const [riskControlSaving, setRiskControlSaving] = useState(false)
-  const [reviewStyle, setReviewStyle] = useState<ReviewStyle>('balanced')
   const returnHref = '/contracts'
   const compareReturnHref = `/contracts/${contractId}/compare?from=workbench`
   const showCompareReturn = searchParams.get('from') === 'compare'
   const requestedPanel = searchParams.get('panel')
+  const requestedReviewId = searchParams.get('review')
   const sidePanelMode = normalizeContractWorkbenchPanel(requestedPanel)
 
   const handleSidePanelModeChange = useCallback((nextPanel: SidePanelMode) => {
@@ -579,9 +626,10 @@ export default function ContractWorkbenchPage() {
   } = {}) => {
     try {
       const token = localStorage.getItem('token')
-      const endpoint = scope === 'summary'
-        ? `/api/contracts/${contractId}/review?view=summary`
-        : `/api/contracts/${contractId}/review`
+      const query = new URLSearchParams()
+      if (scope === 'summary') query.set('view', 'summary')
+      if (requestedReviewId) query.set('review', requestedReviewId)
+      const endpoint = `/api/contracts/${contractId}/review${query.size > 0 ? `?${query}` : ''}`
       const response = await fetch(endpoint, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
@@ -607,7 +655,7 @@ export default function ContractWorkbenchPage() {
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [contractId])
+  }, [contractId, requestedReviewId])
 
   useEffect(() => {
     let cancelled = false
@@ -631,7 +679,7 @@ export default function ContractWorkbenchPage() {
   }, [fetchWorkbench])
 
   useEffect(() => {
-    if (!data || (data.status !== 'PARSING' && data.status !== 'ANALYZING')) return
+    if (!data || (data.current_review_status !== 'PARSING' && data.current_review_status !== 'ANALYZING')) return
     const timer = window.setInterval(() => {
       void fetchWorkbench({ silent: true, scope: 'summary' })
     }, 3000)
@@ -640,28 +688,55 @@ export default function ContractWorkbenchPage() {
 
   async function handleStartReview() {
     if (!data) return
+    if (!data.source_identity?.can_start_review) {
+      toastError(data.source_identity?.description || '当前审核文件尚未准备完成，请先完成文件准备')
+      return
+    }
 
     setAnalyzing(true)
     try {
       const token = localStorage.getItem('token')
-      const isRerun = data.status === 'COMPLETED' || data.status === 'FAILED' || Boolean(data.reviewRun?.id)
+      const isRerun = Boolean(data.has_current_review)
+      const currentUploadId = data.currentVersion?.upload_id?.trim() || ''
+      const currentFileHash = data.currentVersion?.file_sha256?.trim() || ''
+      if (!isRerun && (!currentUploadId || !/^[0-9a-f]{64}$/i.test(currentFileHash))) {
+        toastError('当前文件身份尚未完整冻结，请刷新或重新完成文件准备后再审核')
+        return
+      }
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
       const response = await fetch(
         isRerun ? `/api/contracts/${contractId}/review-runs` : `/api/contracts/${contractId}/analyze`,
         {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
-          body: isRerun
-            ? JSON.stringify({ trigger_event: 'manual_rerun', strategy: reviewStyleStrategy(reviewStyle) })
-            : JSON.stringify({ strategy: reviewStyleStrategy(reviewStyle) }),
+          body: JSON.stringify(isRerun
+            ? { trigger_event: 'manual_rerun' }
+            : {
+                expected_upload_id: currentUploadId,
+                expected_file_sha256: currentFileHash,
+              }),
         }
       )
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
+        const responseCode = payload && typeof payload === 'object'
+          ? (payload as { code?: unknown }).code
+          : null
+        if (responseCode === 'SOURCE_NOT_READY' || responseCode === 'CONCURRENT_UPDATE') {
+          toastError('当前文件状态刚刚发生变化，已停止审核。请按最新文件准备提示继续。')
+          await fetchWorkbench({ scope: 'summary' })
+          return
+        }
         toastError(extractApiError(payload, isRerun ? '启动再审核失败' : '启动审核失败'))
         return
       }
       toastSuccess(isRerun ? '已启动合同再审核，工作台会持续刷新进度' : '已启动合同审核，工作台会持续刷新进度')
+      if (requestedReviewId) {
+        const nextSearch = new URLSearchParams(searchParams.toString())
+        nextSearch.delete('review')
+        router.replace(`/contracts/${contractId}${nextSearch.size > 0 ? `?${nextSearch}` : ''}`, { scroll: false })
+        return
+      }
       await fetchWorkbench({ scope: 'summary' })
     } catch {
       toastError('网络错误，启动审核失败')
@@ -673,7 +748,7 @@ export default function ContractWorkbenchPage() {
   async function handleExportForData(currentData: WorkbenchData) {
     const currentReviewHealth = buildReviewHealth(currentData)
     if (currentData.payload_scope === 'summary') {
-      setExportNotice('正在补齐规则快照、SkillBundle、模型调用和批注意图门禁。补齐完成后会自动继续导出，不需要重复点击。')
+      setExportNotice('正在补齐审核依据、执行记录和批注输出检查。完成后会自动继续导出，不需要重复点击。')
       setEvidenceRefreshing(true)
       const hydrated = await fetchWorkbench({ silent: true, scope: 'full' })
       setEvidenceRefreshing(false)
@@ -684,7 +759,7 @@ export default function ContractWorkbenchPage() {
       }
       return
     }
-    if (currentData.status !== 'COMPLETED') {
+    if (currentData.reviewRun?.status !== 'COMPLETED') {
       setExportNotice('当前合同还没有完成审核运行，暂不能生成源文件批注版。')
       toastError('当前合同还没有完成审核运行，暂不能导出批注版')
       return
@@ -746,7 +821,7 @@ export default function ContractWorkbenchPage() {
       anchor.click()
       document.body.removeChild(anchor)
       toastSuccess(reused
-        ? '已复用当前 ReviewRun 的源文件 Word 批注版，若浏览器未自动下载，可使用页面中的重新下载入口'
+        ? '已复用本次审核记录对应的 Word 批注版；若浏览器未自动下载，可使用页面中的重新下载入口'
         : '已生成源文件 Word 批注版，若浏览器未自动下载，可使用页面中的重新下载入口')
       await fetchWorkbench({ silent: true, scope: 'full' })
     } catch {
@@ -826,7 +901,15 @@ export default function ContractWorkbenchPage() {
     )
   }
 
-  const isBusy = data.status === 'PARSING' || data.status === 'ANALYZING'
+  const currentReviewStatus = data.current_review_status
+    || (data.has_current_review ? data.reviewRun?.status as ContractStatus : 'PENDING')
+    || 'PENDING'
+  const selectedReviewStatus = (
+    data.reviewRun?.status
+    || data.latestReview?.status
+    || currentReviewStatus
+  ) as ContractStatus
+  const isBusy = currentReviewStatus === 'PARSING' || currentReviewStatus === 'ANALYZING'
   const selectedSnippet = firstEvidence(selectedRisk)
   const evidenceSourceRange = selectedRisk?.evidence?.source_range
   const selectedSourceRange = selectedRisk
@@ -838,18 +921,26 @@ export default function ContractWorkbenchPage() {
   const yellowCount = data.stats?.yellow || data.riskFindings.filter((risk) => risk.severity === 'yellow').length
   const displayName = data.filename?.trim() || data.title?.trim() || '未命名合同审核'
   const hasSourceAsset = Boolean(data.parsed_text?.trim()) || data.versions.length > 0 || Boolean(data.storage_path)
+	  const sourcePreparation = data.source_identity?.can_start_review
+	    ? null
+	    : {
+	        statusLabel: data.source_identity?.label || '文件准备状态待确认',
+	        title: data.source_identity?.label || '先完成文件准备，再发起风险审核',
+	        description: data.source_identity?.description || '当前文件准备状态无法确认。请刷新页面；确认正文、文件身份和风险定位完成前不会发起审核。',
+	        recoveryAction: data.source_identity?.recovery_action || null,
+	      }
 	  const isSummaryPayload = data.payload_scope === 'summary'
 	  const reviewHealth = buildReviewHealth(data)
 	  const displayReviewHealth = isSummaryPayload
 	    ? { ...reviewHealth, degraded: false, issues: [] }
 	    : reviewHealth
 	  const exportGateIssues = isSummaryPayload
-	    ? ['规则快照、SkillBundle 和模型调用证据正在后台补齐，完成后再判断源文件批注导出门禁。']
+	    ? ['审核依据和执行记录正在后台补齐，完成后再检查批注版是否可以导出。']
 	    : buildExportGateIssues(data, reviewHealth)
 	  const canExport = !isSummaryPayload && exportGateIssues.length === 0
   const hasReviewArtifacts = data.annotations.length > 0 || data.riskFindings.length > 0
   const workflowState = deriveReviewWorkflowState({
-    status: data.status,
+    status: currentReviewStatus,
     hasSourceAsset,
     hasReviewArtifacts,
     exportReady: canExport,
@@ -857,12 +948,14 @@ export default function ContractWorkbenchPage() {
     payloadScope: data.payload_scope,
     reviewRunId: data.reviewRun?.id,
   })
-  const canStartReview = hasSourceAsset && !isBusy && workflowState.canStartReview
+	  const canStartReview = Boolean(data.source_identity?.can_start_review)
+	    && !isBusy
+	    && workflowState.canStartReview
   const versionActionLabel = hasSourceAsset ? '导入客户回传件' : '补充审核源文件'
   const openRiskCount = data.stats?.open || data.riskFindings.filter((risk) => risk.status === 'open').length
-  const reviewActionLabel = data.status === 'COMPLETED'
+  const reviewActionLabel = currentReviewStatus === 'COMPLETED'
     ? '重新审查'
-    : data.status === 'FAILED'
+    : currentReviewStatus === 'FAILED'
       ? workflowState.primaryButtonLabel
       : workflowState.primaryButtonLabel
   const exportActionLabel = exporting
@@ -872,14 +965,24 @@ export default function ContractWorkbenchPage() {
       : canExport
         ? '导出批注版'
         : '查看导出原因'
-  const statusMeta = statusMap[data.status] || { label: data.status, variant: 'secondary' as const }
-	  const statusLabel = data.status === 'COMPLETED' && displayReviewHealth.degraded
-	    ? '审核降级（需复核）'
-	    : statusMeta.label
-	  const statusVariant = data.status === 'COMPLETED' && displayReviewHealth.degraded
-	    ? 'destructive'
-	    : statusMeta.variant
+  const statusMeta = statusMap[selectedReviewStatus] || { label: selectedReviewStatus, variant: 'secondary' as const }
+	  const statusLabel = sourcePreparation?.statusLabel
+	    || (selectedReviewStatus === 'COMPLETED' && displayReviewHealth.degraded
+	      ? '审核降级（需复核）'
+	      : statusMeta.label)
+	  const statusVariant = sourcePreparation
+	    ? 'secondary'
+	    : selectedReviewStatus === 'COMPLETED' && displayReviewHealth.degraded
+	      ? 'destructive'
+	      : statusMeta.variant
   const sourcePreviewFile = pickReviewSourcePreviewFile(data)
+  const currentVersionLabel = data.currentVersion?.version_number
+    ? `v${data.currentVersion.version_number}`
+    : '当前版本'
+  const reviewedVersionLabel = data.reviewedVersion?.version_number
+    ? `v${data.reviewedVersion.version_number}`
+    : '历史版本'
+  const reviewHistory = data.review_history || []
 
   return (
     <div className="space-y-5 p-4 md:p-5 xl:p-8">
@@ -897,7 +1000,7 @@ export default function ContractWorkbenchPage() {
             </Badge>
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            ONES 业务运营按后台发布规则和模型策略生成风险定位、谈判任务和源文件 Word 原生批注版本。
+            根据已发布的审核标准定位合同风险、记录处理决定，并准备源文件批注版本。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -915,19 +1018,24 @@ export default function ContractWorkbenchPage() {
               </Button>
             </Link>
           )}
-          {data.status !== 'DRAFT' && (
+          {sourcePreparation?.recoveryAction ? (
+            <Link
+              href={sourcePreparation.recoveryAction.href}
+              className={buttonVariants({ variant: 'default' })}
+            >
+              <UploadIcon className="mr-2 h-4 w-4" />
+              {sourcePreparation.recoveryAction.label}
+            </Link>
+          ) : sourcePreparation ? (
+            <Button disabled>
+              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              文件准备中
+            </Button>
+          ) : (
             <Button onClick={handleStartReview} disabled={!canStartReview || analyzing}>
               {analyzing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <BotIcon className="mr-2 h-4 w-4" />}
               {isBusy ? '审核中' : reviewActionLabel}
             </Button>
-          )}
-          {data.status === 'DRAFT' && !hasSourceAsset && (
-            <Link href={`/contracts/${contractId}/edit`}>
-              <Button className="gap-1.5">
-                <UploadIcon className="h-4 w-4" />
-                补充审核源文件
-              </Button>
-            </Link>
           )}
           {hasSourceAsset && (
             <Link href={`/contracts/${contractId}/compare?from=workbench`}>
@@ -950,6 +1058,119 @@ export default function ContractWorkbenchPage() {
         </div>
       </div>
 
+      {sourcePreparation && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <div className="flex items-start gap-3">
+            <AlertTriangleIcon className="mt-0.5 h-5 w-5 flex-none" />
+            <div>
+              <p className="font-semibold">{sourcePreparation.title}</p>
+              <p className="mt-1 leading-6">{sourcePreparation.description}</p>
+              {sourcePreparation.recoveryAction ? (
+                <Link
+                  href={sourcePreparation.recoveryAction.href}
+                  className="mt-3 inline-flex font-medium text-amber-950 underline underline-offset-4"
+                >
+                  {sourcePreparation.recoveryAction.label}
+                </Link>
+              ) : (
+                <p className="mt-3 font-medium">文件仍在处理中，请稍后刷新本页查看最新状态。</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {data.review_context === 'historical' && (
+        <div className="rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+          <p className="font-semibold">正在查看 {reviewedVersionLabel} 历史审核</p>
+          <p className="mt-1 leading-6">
+            本页风险、处理记录和审核依据只属于 {reviewedVersionLabel}，不会作为 {currentVersionLabel} 的审核结果。
+            {data.has_current_review ? ` ${currentVersionLabel} 已有独立审核记录。` : ` ${currentVersionLabel} 仍需单独发起审核。`}
+          </p>
+          <Link
+            href={`/contracts/${contractId}?from=list`}
+            className="mt-2 inline-flex font-medium text-indigo-700 underline underline-offset-4"
+          >
+            返回 {currentVersionLabel}
+          </Link>
+        </div>
+      )}
+
+      {data.review_context === 'current_unreviewed' && (data.review_history?.length || 0) > 0 && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+          <p className="font-semibold">{currentVersionLabel} 尚未审核</p>
+          <p className="mt-1 leading-6">旧版本审核记录仍保留在合同中心；它们不会替代当前文件的首次审核。</p>
+        </div>
+      )}
+
+      {reviewHistory.length > 0 && (
+        <section aria-labelledby="review-history-title" className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="review-history-title" className="font-semibold text-slate-950">审核记录</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                每次审核按对应文件版本单独保留。选择记录只会切换查看内容，不会覆盖当前版本。
+              </p>
+            </div>
+            <span className="text-xs text-slate-500">共 {reviewHistory.length} 次</span>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {reviewHistory.map((review) => {
+              const selected = data.reviewRun?.id === review.id || data.latestReview?.id === review.id
+              const status = reviewHistoryStatus(review.status, review.is_current)
+              const versionLabel = review.source_version_number
+                ? `v${review.source_version_number}`
+                : '文件版本待核对'
+              const recordLabel = review.is_current
+                ? '当前版本审核'
+                : review.source_identity_verified
+                  ? '历史审核'
+                  : '来源待核对'
+              const content = (
+                <div className={`h-full rounded-md border px-3 py-3 ${
+                  selected ? 'border-indigo-400 bg-indigo-50/60' : 'border-slate-200 bg-white'
+                }`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{versionLabel} · {recordLabel}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {formatTime(review.completed_at || review.created_at)}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${status.className}`}>
+                      {status.label}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-medium text-indigo-700">
+                    {selected
+                      ? '正在查看'
+                      : review.source_identity_verified
+                        ? '查看本次风险与处理记录'
+                        : '确认文件版本后可查看'}
+                  </p>
+                </div>
+              )
+
+              if (selected) {
+                return <div key={review.id} aria-current="page">{content}</div>
+              }
+              if (!review.source_identity_verified) {
+                return <div key={review.id} aria-disabled="true">{content}</div>
+              }
+              return (
+                <Link
+                  key={review.id}
+                  href={`/contracts/${encodeURIComponent(contractId)}?from=list&review=${encodeURIComponent(review.id)}`}
+                  className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                >
+                  {content}
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       <SourceAnnotationDeliveryPanel
         data={data}
         canExport={canExport}
@@ -959,8 +1180,6 @@ export default function ContractWorkbenchPage() {
         yellowCount={yellowCount}
         openRiskCount={openRiskCount}
         annotationCount={data.annotations.length}
-        reviewStyle={reviewStyle}
-        onReviewStyleChange={setReviewStyle}
       />
 
 	      {(evidenceRefreshing || isSummaryPayload) && (
@@ -1169,8 +1388,6 @@ function SourceAnnotationDeliveryPanel({
   yellowCount,
   openRiskCount,
   annotationCount,
-  reviewStyle,
-  onReviewStyleChange,
 }: {
   data: WorkbenchData
   canExport: boolean
@@ -1180,18 +1397,10 @@ function SourceAnnotationDeliveryPanel({
   yellowCount: number
   openRiskCount: number
   annotationCount: number
-  reviewStyle: ReviewStyle
-  onReviewStyleChange: (style: ReviewStyle) => void
 }) {
   const latestOriginal = data.versions.find((version) => version.source === 'original')
   const latestAnnotated = data.outputs[0]
   const blockedReason = exportGateIssues.slice(0, 2).join('；')
-  const styles: Array<{ value: ReviewStyle; label: string }> = [
-    { value: 'strict', label: '严审' },
-    { value: 'balanced', label: '均衡' },
-    { value: 'business', label: '商务' },
-  ]
-
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1209,23 +1418,6 @@ function SourceAnnotationDeliveryPanel({
           <TrafficLightPill label="谈判" value={yellowCount} tone="amber" />
           <TrafficLightPill label="开放" value={openRiskCount} tone="slate" />
           <TrafficLightPill label="批注" value={annotationCount} tone={canExport ? 'emerald' : 'blue'} />
-          <div className="flex rounded-md border border-slate-200 bg-slate-50 p-0.5">
-            {styles.map((style) => {
-              const active = style.value === reviewStyle
-              return (
-                <button
-                  key={style.value}
-                  type="button"
-                  onClick={() => onReviewStyleChange(style.value)}
-                  className={`rounded px-2.5 py-1 text-xs font-medium transition ${
-                    active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  {style.label}
-                </button>
-              )
-            })}
-          </div>
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
@@ -1317,8 +1509,8 @@ function CompactReviewDock({
 function ReviewWorkbenchLoadingPanel() {
   const steps = [
     '读取合同源文件与版本流',
-    '装载最近一次 ReviewRun',
-    '绑定规则发布包与模型调用证据',
+    '装载对应版本的审核记录',
+    '核对审核依据与执行记录',
     '整理风险定位、谈判任务和批注意图',
   ]
 
@@ -1332,10 +1524,10 @@ function ReviewWorkbenchLoadingPanel() {
               正在打开合同审核工作台
             </div>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              工作台会同时读取合同版本、规则快照、模型调用和批注意图。长合同首次打开可能需要数秒，但每一步都应能解释正在处理什么。
+              工作台会同时读取合同版本、审核依据、处理记录和批注意图。长合同首次打开可能需要数秒，但每一步都应能解释正在处理什么。
             </p>
           </div>
-          <Badge variant="outline">ReviewRun 装载中</Badge>
+          <Badge variant="outline">审核记录装载中</Badge>
         </div>
         <div className="mt-5 grid gap-2 md:grid-cols-4">
           {steps.map((step, index) => (
@@ -1358,7 +1550,7 @@ function ReviewWorkbenchLoadingPanel() {
 }
 
 function EvidenceHydrationPanel() {
-  const steps = ['规则快照', 'SkillBundle', '模型调用', '质量门禁']
+  const steps = ['审核标准', '审核能力', '执行记录', '输出质量检查']
 
   return (
     <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3" aria-live="polite">
@@ -1369,7 +1561,7 @@ function EvidenceHydrationPanel() {
             正在补齐审核证据包
           </div>
           <p className="mt-1 text-sm leading-6 text-blue-800">
-            首屏已先打开。系统正在后台读取规则发布包、模型调用和质量门禁，完成后才会判断正式审核与批注导出状态。
+            首屏已先打开。系统正在后台读取审核依据、执行记录和质量检查，完成后才会判断正式审核与批注导出状态。
           </p>
         </div>
         <div className="grid grid-cols-4 gap-2 text-center text-xs">
@@ -1462,16 +1654,16 @@ function ReviewProgressPanel({
     },
     {
       key: 'rules',
-      label: '规则发布包',
-      description: data.reviewRun?.skill_bundle_id ? `已绑定 ${data.reviewRun.skill_bundle_id.slice(0, 8)}` : '等待发布规则与审核包',
+      label: '审核标准',
+      description: data.reviewRun?.skill_bundle_id ? '已装载本次审核标准' : '等待审核标准准备完成',
       done: Boolean(data.reviewRun?.skill_bundle_id),
     },
     {
       key: 'model',
-      label: '模型与引擎',
-      description: data.reviewRun?.model_policy?.model
-        ? `${data.reviewRun.model_policy.provider} / ${data.reviewRun.model_policy.model}`
-        : data.latestJob?.provider || '等待模型或规则引擎结果',
+      label: '风险判断',
+      description: data.reviewRun?.model_policy?.model || data.latestJob?.provider
+        ? '规则与语义判断正在工作'
+        : '等待风险判断开始',
       done: Boolean(data.reviewRun?.model_policy?.model || data.latestJob?.provider),
     },
     {
@@ -1492,11 +1684,13 @@ function ReviewProgressPanel({
     <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3" aria-live="polite">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-semibold text-indigo-950">{analyzing ? '正在启动审核运行' : '审核运行处理中'}</p>
-          <p className="mt-1 text-sm text-indigo-800">长任务会持续刷新；请等待风险定位、模型调用和批注意图完成。</p>
+          <p className="font-semibold text-indigo-950">{analyzing ? '正在启动风险审核' : '风险审核处理中'}</p>
+          <p className="mt-1 text-sm text-indigo-800">长任务会持续刷新；请等待审核标准、风险判断、原文定位和批注意图完成。</p>
         </div>
         <Badge variant="outline" className="w-fit border-indigo-300 bg-white text-indigo-700">
-          {data.latestJob?.status || data.status}
+          {analyzing
+            ? '启动中'
+            : statusMap[(data.current_review_status || 'PENDING') as ContractStatus]?.label || '处理中'}
         </Badge>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-5">
@@ -2384,7 +2578,7 @@ function VersionOutputPanel({
               ))}
               {hiddenOutputCount > 0 && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                  另有 {hiddenOutputCount} 个历史批注产物已折叠。后续应通过导出幂等和版本归档治理，避免同一 ReviewRun 重复生成大量批注版。
+                  另有 {hiddenOutputCount} 个历史批注产物已折叠。系统会按审核记录归档，避免重复生成大量批注版。
                 </div>
               )}
             </div>

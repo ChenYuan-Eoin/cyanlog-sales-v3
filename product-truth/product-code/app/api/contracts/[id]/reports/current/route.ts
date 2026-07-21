@@ -4,6 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
+import { getAccessibleContract } from '@/lib/scoped-access'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 
 // ASK Item 类型定义
 interface AskItem {
@@ -32,6 +34,33 @@ export async function GET(
       )
     }
 
+    const access = await getAccessibleContract(
+      contractId,
+      user.id,
+      undefined,
+      'id, current_version_id',
+    )
+    if (!access.contract) {
+      return NextResponse.json({ error: 'Contract not found' }, { status: 404 })
+    }
+    const binding = await resolveCurrentReviewArtifactBinding({
+      contractId,
+      currentVersionId: typeof access.contract.current_version_id === 'string'
+        ? access.contract.current_version_id
+        : null,
+    })
+    if (!binding) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          contract_id: contractId,
+          has_report: false,
+          ask_summary: { total: 0, pending: 0, responded: 0, closed: 0 },
+          can_export: false,
+        },
+      })
+    }
+
     // 查询当前最新报告
     const { data: report, error } = await supabaseAdmin
       .from('report_versions')
@@ -48,6 +77,9 @@ export async function GET(
         created_at
       `)
       .eq('contract_id', contractId)
+      .eq('review_id', binding.reviewId)
+      .eq('contract_version_id', binding.contractVersionId)
+      .eq('binding_state', 'bound')
       .eq('is_current', true)
       .single()
 
@@ -64,6 +96,9 @@ export async function GET(
       .from('ask_items')
       .select('status')
       .eq('contract_id', contractId)
+      .eq('review_id', binding.reviewId)
+      .eq('contract_version_id', binding.contractVersionId)
+      .eq('binding_state', 'bound')
 
     if (askError) {
       console.error('[Report Current] ASK count error:', askError)

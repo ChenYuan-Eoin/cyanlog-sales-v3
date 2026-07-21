@@ -4,7 +4,10 @@ import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import { errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import type { AuthUser } from '@/lib/auth'
-import { listAccessibleUserIds } from '@/lib/scoped-access'
+import {
+  canAccessContractAction,
+  listAccessibleUserIds,
+} from '@/lib/scoped-access'
 
 type ContractFileRow = {
   id: string
@@ -49,7 +52,10 @@ export async function GET(
       return errorResponse(createApiError('VALIDATION_ERROR', '缺少文件路径'))
     }
 
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const { assignments, userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    if (!canAccessContractAction(assignments, orgId, 'view')) {
+      return errorResponse(createApiError('FORBIDDEN', '没有查看合同文件的权限'))
+    }
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
       .select('id, filename, storage_path, mime_type')

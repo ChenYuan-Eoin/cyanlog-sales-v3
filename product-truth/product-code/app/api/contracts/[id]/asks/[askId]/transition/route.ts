@@ -12,6 +12,7 @@ import {
 import { errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { canCloseOrReopenAsk } from '@/lib/ask/permissions'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 
 const transitionSchema = z.object({
   action: z.enum(['close', 'reopen']),
@@ -42,12 +43,27 @@ export async function POST(
 
     const user = await requireAuth(request)
 
-    const access = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    const access = await getAccessibleContract(
+      contractId,
+      user.id,
+      undefined,
+      'id, current_version_id',
+    )
     if (!access.contract) {
       return NextResponse.json(
         { error: 'Contract not found' },
         { status: 404 }
       )
+    }
+    const binding = await resolveCurrentReviewArtifactBinding({
+      contractId,
+      currentVersionId: typeof access.contract.current_version_id === 'string'
+        ? access.contract.current_version_id
+        : null,
+      mode: 'write',
+    })
+    if (!binding) {
+      return NextResponse.json({ error: 'ASK not found' }, { status: 404 })
     }
 
     if (!canCloseOrReopenAsk(access.assignments, access.orgId)) {
@@ -71,6 +87,9 @@ export async function POST(
       .select('id, contract_id, status, response_id')
       .eq('id', askId)
       .eq('contract_id', contractId)
+      .eq('review_id', binding.reviewId)
+      .eq('contract_version_id', binding.contractVersionId)
+      .eq('binding_state', 'bound')
       .single()
 
     if (askError || !ask) {
@@ -107,6 +126,7 @@ export async function POST(
         })
         .eq('id', askId)
         .eq('contract_id', contractId)
+        .eq('review_id', binding.reviewId)
 
       if (updateError) {
         return errorResponse(createApiError('DB_ERROR', '关闭 ASK 失败'))
@@ -134,6 +154,7 @@ export async function POST(
         })
         .eq('id', askId)
         .eq('contract_id', contractId)
+        .eq('review_id', binding.reviewId)
 
       if (updateError) {
         return errorResponse(createApiError('DB_ERROR', '重开 ASK 失败'))

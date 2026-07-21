@@ -13,7 +13,11 @@ import {
 import { createApiError } from '@/lib/api/errors'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
-import { listAccessibleUserIds } from '@/lib/scoped-access'
+import {
+  canAccessContractAction,
+  listAccessibleUserIds,
+  listFreshAccessibleUserIds,
+} from '@/lib/scoped-access'
 import { extractContractText } from '@/lib/contracts/text-extraction'
 import { evaluateComparisonSourceVerification } from '@/lib/contracts/comparison-source-verification'
 
@@ -569,7 +573,13 @@ export async function POST(
       )
     }
 
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const {
+      assignments,
+      userIds: accessibleUserIds,
+    } = await listFreshAccessibleUserIds(user.id, orgId)
+    if (!canAccessContractAction(assignments, orgId, 'review')) {
+      return errorResponse(createApiError('FORBIDDEN', '没有发起合同文档比对的权限'))
+    }
     const contract = await loadComparableContract(id, orgId, accessibleUserIds)
 
     if (!contract) {
@@ -723,7 +733,10 @@ export async function GET(
     const { id } = await params
     const { searchParams } = new URL(req.url)
     const comparisonId = searchParams.get('comparison_id')
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const { assignments, userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    if (!canAccessContractAction(assignments, orgId, 'view')) {
+      return errorResponse(createApiError('FORBIDDEN', '没有查看合同文档比对的权限'))
+    }
 
     let query = supabaseAdmin
       .from('contract_comparisons')

@@ -76,6 +76,38 @@ export interface ScopedRoleAssignment {
   permissions: string[]
 }
 
+export type ContractBusinessAction = 'view' | 'create_or_upload' | 'review'
+
+const CONTRACT_ACTION_PERMISSIONS: Record<ContractBusinessAction, string[]> = {
+  // Reading is implied by every contract capability that must inspect the
+  // source or result before acting. `contract:read` remains a legacy alias.
+  view: [
+    'contract:view',
+    'contract:read',
+    'contract:upload',
+    'contract:review',
+    'contract:write',
+  ],
+  // F005 currently names upload as the create permission. `contract:create`
+  // is accepted as a forward-compatible alias, while write remains the higher
+  // capability. Review-only users may not create or replace source files.
+  create_or_upload: [
+    'contract:upload',
+    'contract:create',
+    'contract:write',
+  ],
+  review: [
+    'contract:review',
+    'contract:write',
+  ],
+}
+
+const CONTRACT_ACTION_ROLES: Record<ContractBusinessAction, string[]> = {
+  view: ['LEGAL', 'ADMIN', 'SUPER_ADMIN'],
+  create_or_upload: ['ADMIN', 'SUPER_ADMIN'],
+  review: ['LEGAL', 'ADMIN', 'SUPER_ADMIN'],
+}
+
 export interface SalesSpaceSummary {
   id: string
   name: string
@@ -144,6 +176,7 @@ const defaultOrgInflight = new Map<string, Promise<string>>()
 const defaultOrgGeneration = new Map<string, number>()
 const scopedRoleCache = new Map<string, { assignments: ScopedRoleAssignment[]; expiresAt: number }>()
 const scopedRoleInflight = new Map<string, Promise<ScopedRoleAssignment[]>>()
+const scopedRoleGeneration = new Map<string, number>()
 const salesSpacesCache = new Map<string, { value: { assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }; expiresAt: number }>()
 const salesSpacesInflight = new Map<string, Promise<{ assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }>>()
 
@@ -300,7 +333,21 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
 export async function getFreshUserScopedRoleAssignments(
   userId: string
 ): Promise<ScopedRoleAssignment[]> {
-  return loadUserScopedRoleAssignments(userId)
+  const requestGeneration = (scopedRoleGeneration.get(userId) ?? 0) + 1
+  scopedRoleGeneration.set(userId, requestGeneration)
+  scopedRoleCache.delete(userId)
+  scopedRoleInflight.delete(userId)
+
+  const assignments = await loadUserScopedRoleAssignments(userId)
+  if (scopedRoleGeneration.get(userId) === requestGeneration) {
+    scopedRoleGeneration.set(userId, requestGeneration + 1)
+    scopedRoleCache.set(userId, {
+      assignments,
+      expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+    })
+  }
+
+  return assignments
 }
 
 export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
@@ -315,12 +362,15 @@ export async function getUserScopedRoleAssignments(userId: string): Promise<Scop
   const inflight = scopedRoleInflight.get(userId)
   if (inflight) return inflight
 
+  const generation = scopedRoleGeneration.get(userId) ?? 0
   const promise = loadUserScopedRoleAssignments(userId)
     .then((assignments) => {
-      scopedRoleCache.set(userId, {
-        assignments,
-        expiresAt: Date.now() + ORG_CACHE_TTL_MS,
-      })
+      if ((scopedRoleGeneration.get(userId) ?? 0) === generation) {
+        scopedRoleCache.set(userId, {
+          assignments,
+          expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+        })
+      }
       return assignments
     })
     .finally(() => {
@@ -499,14 +549,15 @@ export async function listAccessibleSalesSpaces(userId: string, orgId: string): 
   return promise
 }
 
-export async function listAccessibleUserIds(userId: string, orgId?: string): Promise<{
+async function listAccessibleUserIdsFromAssignments(
+  userId: string,
+  effectiveOrgId: string,
+  assignments: ScopedRoleAssignment[]
+): Promise<{
   orgId: string
   assignments: ScopedRoleAssignment[]
   userIds: string[]
 }> {
-  const effectiveOrgId = orgId || await getDefaultOrgId(userId)
-  const assignments = await getUserScopedRoleAssignments(userId)
-
   if (canManageOrg(assignments, effectiveOrgId)) {
     const { data, error } = await supabaseAdmin
       .from('users')
@@ -635,11 +686,60 @@ export async function listAccessibleUserIds(userId: string, orgId?: string): Pro
   }
 }
 
+export async function listAccessibleUserIds(userId: string, orgId?: string): Promise<{
+  orgId: string
+  assignments: ScopedRoleAssignment[]
+  userIds: string[]
+}> {
+  const effectiveOrgId = orgId || await getDefaultOrgId(userId)
+  const assignments = await getUserScopedRoleAssignments(userId)
+  return listAccessibleUserIdsFromAssignments(userId, effectiveOrgId, assignments)
+}
+
+/**
+ * Re-evaluate organization and role scope directly from the database before a
+ * state-changing request. This prevents the read cache grace period from
+ * authorizing an upload after membership or role revocation.
+ */
+export async function listFreshAccessibleUserIds(userId: string, orgId?: string): Promise<{
+  orgId: string
+  assignments: ScopedRoleAssignment[]
+  userIds: string[]
+}> {
+  const effectiveOrgId = orgId || await getFreshDefaultOrgId(userId)
+  const assignments = await getFreshUserScopedRoleAssignments(userId)
+  return listAccessibleUserIdsFromAssignments(userId, effectiveOrgId, assignments)
+}
+
 export function canReviewContracts(assignments: ScopedRoleAssignment[], orgId: string): boolean {
-  return canReviewContractsByPermission(
-    getOrgPermissions(assignments, orgId),
-    getOrgRoleCodes(assignments, orgId)
-  )
+  return canAccessContractAction(assignments, orgId, 'review')
+}
+
+/**
+ * Authorize a human contract task against assignments bound to this exact
+ * organization. This keeps role compatibility in one place while routes keep
+ * object visibility (`created_by`) as a separate scoped-access constraint.
+ */
+export function canAccessContractAction(
+  assignments: ScopedRoleAssignment[],
+  orgId: string,
+  action: ContractBusinessAction,
+): boolean {
+  const permissions = getOrgPermissions(assignments, orgId)
+  const roleCodes = getOrgRoleCodes(assignments, orgId)
+
+  if (CONTRACT_ACTION_ROLES[action].some((roleCode) => roleCodes.includes(roleCode))) {
+    return true
+  }
+
+  if (action === 'review') {
+    // Preserve the existing public helper's wildcard and role semantics.
+    return canReviewContractsByPermission(permissions, roleCodes)
+  }
+
+  return CONTRACT_ACTION_PERMISSIONS[action].some((permission) => (
+    hasPermission(permissions, permission)
+  ))
 }
 
 export async function getAccessibleContract<T extends Record<string, unknown> = Record<string, unknown>>(

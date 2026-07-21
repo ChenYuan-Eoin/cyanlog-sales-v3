@@ -1,31 +1,90 @@
+import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { enqueueContractAnalysisJob, runStructuredAnalysis, saveStructuredReport, markContractAnalysisRunning, markContractAnalysisCompleted, markContractAnalysisFailed, formatAnalysisError, type ReviewOptions } from '@/lib/contract-analysis'
+import {
+  claimContractAnalysisJobById,
+  ContractAnalysisLeaseError,
+  formatAnalysisError,
+  markContractAnalysisFailed,
+  markContractAnalysisRunning,
+  runStructuredAnalysis,
+  saveStructuredReport,
+} from '@/lib/contract-analysis'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import {
+  canAccessContractAction,
+  listFreshAccessibleUserIds,
+} from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
-import {
-  loadCurrentReviewSourceIdentity,
-  ReviewSourceIdentityError,
-} from '@/lib/contracts/review-source-identity'
 
 const analyzeOptionsSchema = z.object({
-  strategy: z.enum(['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE']).optional(),
-  strategy_id: z.string().trim().min(1).optional(),
-})
+  expected_upload_id: z.string().trim().uuid().optional(),
+  expected_file_sha256: z.string()
+    .trim()
+    .regex(/^[0-9a-fA-F]{64}$/)
+    .transform((value) => value.toLowerCase())
+    .optional(),
+}).strict()
 
-// 统一错误响应
+type InitialReviewSetup = {
+  review_id?: string
+  job_id?: string
+  review_status?: string
+  job_status?: string
+  should_process?: boolean
+  recovered?: boolean
+}
+
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
 
-// POST /api/contracts/:id/analyze - 触发合同审核（需登录）
-export async function POST(
-  req: NextRequest,
-  { params }: AsyncRouteParams
-) {
+function firstRow<T>(value: T | T[] | null): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value
+}
+
+function setupErrorResponse(error: { code?: string; message?: string } | null) {
+  if (error?.code === 'P0002') {
+    return errorResponse('合同不存在或无权访问', 404, 'NOT_FOUND')
+  }
+  if (error?.code === '23514') {
+    return errorResponse(
+      '源文件仍在准备中；正文、文件身份和定位信息全部就绪后才能发起审核',
+      409,
+      'SOURCE_NOT_READY',
+    )
+  }
+  if (
+    error?.code === '40001'
+    || error?.code === '40P01'
+    || error?.code === '55000'
+    || error?.code === '23505'
+  ) {
+    return errorResponse(
+      '文件版本或审核状态刚刚发生变化，请刷新后从当前步骤继续',
+      409,
+      'CONCURRENT_UPDATE',
+    )
+  }
+  return errorResponse('审核任务创建失败，源文件和版本记录已保留', 500, 'REVIEW_SETUP_FAILED')
+}
+
+function responseStatus(setup: InitialReviewSetup) {
+  const reviewStatus = String(setup.review_status || '').toUpperCase()
+  const jobStatus = String(setup.job_status || '').toLowerCase()
+  if (jobStatus === 'failed' || reviewStatus === 'FAILED') return 'FAILED'
+  if (jobStatus === 'completed') {
+    return reviewStatus === 'DEGRADED' ? 'DEGRADED' : 'COMPLETED'
+  }
+  return 'PARSING'
+}
+
+// POST /api/contracts/:id/analyze - start or recover the one initial review
+// for the contract's current source version. Business re-review uses
+// /review-runs and never shares this idempotency identity.
+export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
   const startedAt = Date.now()
   const requestId = getRequestId(req)
   const route = '/api/contracts/[id]/analyze'
@@ -33,10 +92,17 @@ export async function POST(
 
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const {
+      orgId,
+      assignments,
+      userIds: accessibleUserIds,
+    } = await listFreshAccessibleUserIds(user.id)
+    if (!canAccessContractAction(assignments, orgId, 'review')) {
+      return errorResponse('没有发起合同审核的权限', 403, 'FORBIDDEN')
+    }
     routeId = await resolveIdParam(params)
     const id = routeId
+
     logRouteStart({
       route,
       requestId,
@@ -44,9 +110,7 @@ export async function POST(
       details: { contractId: id },
     })
 
-    if (!id) {
-      return errorResponse('合同ID必填', 400, 'MISSING_ID')
-    }
+    if (!id) return errorResponse('合同ID必填', 400, 'MISSING_ID')
 
     const optionsParse = analyzeOptionsSchema.safeParse(await req.json().catch(() => ({})))
     if (!optionsParse.success) {
@@ -54,10 +118,9 @@ export async function POST(
     }
     const analyzeOptions = optionsParse.data
 
-    // 使用行级锁检查合同状态（防止并发重复审核）
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
-      .select('id, status, storage_path, created_by, org_id')
+      .select('id, status, current_version_id, created_by, org_id')
       .eq('id', id)
       .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
@@ -66,211 +129,157 @@ export async function POST(
     if (contractError) {
       await logRouteFailure(
         req,
-        {
-          route,
-          requestId,
-          userId: user.id,
-          details: { contractId: id },
-        },
+        { route, requestId, userId: user.id, details: { contractId: id } },
         startedAt,
         contractError,
-        {
-          phase: 'fetch_contract_for_analyze',
-        }
+        { phase: 'fetch_contract_for_initial_review' },
       )
       return errorResponse('查询合同失败', 500, 'DB_ERROR')
     }
-
-    if (!contract) {
-      return errorResponse('合同不存在或无权访问', 404, 'NOT_FOUND')
-    }
-
-    // 状态检查：只有PENDING或FAILED才能重新审核
-    if (contract.status !== 'PENDING' && contract.status !== 'FAILED') {
-      // 检查是否已有进行中的审核
-      if (contract.status === 'PARSING' || contract.status === 'ANALYZING') {
-        return errorResponse('合同正在审核中，请勿重复提交', 409, 'ALREADY_IN_PROGRESS')
-      }
-      if (contract.status === 'COMPLETED') {
-        return errorResponse('合同已审核完成，如需重新审核请先重置状态', 409, 'ALREADY_COMPLETED')
-      }
-      return errorResponse('合同当前状态无法审核', 400, 'INVALID_STATUS')
-    }
-
-    // 检查24小时内是否有审核记录（简单幂等性控制）
-    const { data: recentReview } = await supabaseAdmin
-      .from('contract_reviews')
-      .select('id, created_at, status')
-      .eq('contract_id', id)
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (recentReview && (recentReview.status === 'PARSING' || recentReview.status === 'ANALYZING')) {
-      return errorResponse('24小时内已有进行中的审核任务', 409, 'RECENT_REVIEW_EXISTS')
-    }
-
-    let sourceIdentity
-    try {
-      sourceIdentity = await loadCurrentReviewSourceIdentity(id, contract.storage_path)
-    } catch (error) {
-      if (error instanceof ReviewSourceIdentityError) {
-        return errorResponse(error.message, 409, error.code)
-      }
-      throw error
-    }
-
-    // 更新合同状态为解析中（乐观锁）
-    const { error: updateError } = await supabaseAdmin
-      .from('contracts')
-      .update({ status: 'PARSING', updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .eq('status', contract.status) // 乐观锁：只有状态未变才更新
-
-    if (updateError) {
-      await logRouteFailure(
-        req,
-        {
-          route,
-          requestId,
-          userId: user.id,
-          details: { contractId: id },
-        },
-        startedAt,
-        updateError,
-        {
-          phase: 'set_contract_parsing',
-        }
+    if (!contract) return errorResponse('合同不存在或无权访问', 404, 'NOT_FOUND')
+    if (!contract.current_version_id) {
+      return errorResponse(
+        '合同还没有完成源文件版本登记，请从文件准备步骤继续',
+        409,
+        'SOURCE_VERSION_MISSING',
       )
-      return errorResponse('状态更新失败，可能并发操作', 409, 'CONCURRENT_UPDATE')
     }
 
-    // 创建审核记录
-    const { data: review, error: reviewError } = await supabaseAdmin
-      .from('contract_reviews')
-      .insert({
-        contract_id: id,
-        status: 'PARSING',
-        started_at: new Date().toISOString(),
-        review_trigger: 'direct',
-        ...sourceIdentity,
+    const { data: setupRows, error: setupError } = await supabaseAdmin
+      .rpc('start_initial_contract_review_fenced', {
+        p_org_id: orgId,
+        p_contract_id: id,
+        p_contract_version_id: contract.current_version_id,
+        p_requested_by: user.id,
+        p_expected_contract_status: contract.status,
+        p_strategy_id: null,
+        p_expected_upload_id: analyzeOptions.expected_upload_id ?? null,
+        p_expected_file_sha256: analyzeOptions.expected_file_sha256 ?? null,
       })
-      .select()
-      .single()
+    const setup = firstRow(setupRows as InitialReviewSetup[] | InitialReviewSetup | null)
 
-    if (reviewError) {
-      // 回滚合同状态
-      await supabaseAdmin
-        .from('contracts')
-        .update({ status: contract.status })
-        .eq('id', id)
-        .eq('org_id', orgId)
-
+    if (setupError || !setup?.review_id || !setup.job_id) {
       await logRouteFailure(
         req,
-        {
-          route,
-          requestId,
-          userId: user.id,
-          details: { contractId: id },
-        },
+        { route, requestId, userId: user.id, details: { contractId: id } },
         startedAt,
-        reviewError,
-        {
-          phase: 'create_contract_review',
-        }
+        setupError || new Error('Initial review setup returned no identifiers'),
+        { phase: 'start_initial_contract_review_fenced' },
       )
-      return errorResponse('创建审核记录失败', 500, 'REVIEW_CREATE_FAILED')
+      return setupErrorResponse(setupError)
     }
 
-    const job = await enqueueContractAnalysisJob(id, review.id, user.id)
-    let responseStatus: 'PARSING' | 'COMPLETED' | 'DEGRADED' | 'FAILED' = 'PARSING'
-    let responseMessage = '审核任务已创建'
+    // Every caller may attempt a queued or stale-running lease. The database
+    // grants it to exactly one caller, so an ambiguous response or abandoned
+    // request can recover the same ReviewRun without executing a second one.
+    const initialStatus = responseStatus(setup)
+    const setupJobStatus = String(setup.job_status).toLowerCase()
+    if (setupJobStatus !== 'queued' && setupJobStatus !== 'running') {
+      return NextResponse.json({
+        jobId: setup.job_id,
+        reviewId: setup.review_id,
+        status: initialStatus,
+        message: initialStatus === 'FAILED'
+          ? '审核未完成，请查看失败原因后从当前步骤重试'
+          : initialStatus === 'COMPLETED' || initialStatus === 'DEGRADED'
+            ? '该文件版本已有审核结果'
+            : '审核正在进行中',
+        recovered: true,
+      }, { status: initialStatus === 'PARSING' ? 202 : 200 })
+    }
+
+    const lockToken = randomUUID()
+    const job = await claimContractAnalysisJobById(
+      setup.job_id,
+      `initial-review:${requestId}`,
+      lockToken,
+    )
+    if (!job) {
+      return NextResponse.json({
+        jobId: setup.job_id,
+        reviewId: setup.review_id,
+        status: 'PARSING',
+        message: '审核任务已由另一个请求或队列接管',
+        recovered: true,
+      }, { status: 202 })
+    }
+
+    let finalStatus: 'COMPLETED' | 'DEGRADED' | 'FAILED' = 'COMPLETED'
+    let message = '结构化审核已完成'
     let processingError: string | undefined
     let degradationReasons: string[] = []
 
-    let reviewOptions: ReviewOptions | undefined
-    let strategyId: string | undefined
-    if (analyzeOptions.strategy_id) {
-      strategyId = analyzeOptions.strategy_id
-    } else if (analyzeOptions.strategy) {
-      // 根据 code 查找 strategy
-      const { data: strategyData } = await supabaseAdmin
-        .from('review_strategies')
-        .select('id, code')
-        .or(`org_id.is.null,org_id.eq.${orgId}`)
-        .eq('code', analyzeOptions.strategy)
-        .limit(1)
-        .maybeSingle()
-      if (strategyData) strategyId = strategyData.id
-      reviewOptions = { strategyCode: analyzeOptions.strategy }
-    }
-
     try {
-      // 改用结构化分析（保留 AI 模型和规则引擎不改动）
       await markContractAnalysisRunning(job)
       const structuredReport = await runStructuredAnalysis(id, {
-        ...reviewOptions,
-        reviewId: review.id,
+        reviewId: setup.review_id,
         requestedBy: user.id,
-        reviewTrigger: 'direct',
+        reviewTrigger: 'initial_upload',
         reviewEvent: 'initial_generate',
       })
-      await saveStructuredReport(review.id, id, structuredReport, strategyId)
-      await markContractAnalysisCompleted(job, structuredReport.result)
+      // Revalidate the lease after the provider call and before any report
+      // artifact is written. A replaced stale lease stops here with zero writes.
+      await markContractAnalysisRunning(job)
+      await saveStructuredReport(job, structuredReport)
       degradationReasons = structuredReport.result.degradationReasons || []
-      responseStatus = structuredReport.result.degraded ? 'DEGRADED' : 'COMPLETED'
-      responseMessage = structuredReport.result.degraded
-        ? '结构化审核已完成，但存在降级或未绑定项，需要人工复核'
+      finalStatus = structuredReport.result.degraded ? 'DEGRADED' : 'COMPLETED'
+      message = structuredReport.result.degraded
+        ? '审核已完成，但有明确降级项，需要人工复核'
         : '结构化审核已完成'
-    } catch (fallbackError) {
-      processingError = formatAnalysisError(fallbackError)
-      await markContractAnalysisFailed(job, fallbackError)
-      responseStatus = 'FAILED'
-      responseMessage = '审核处理失败，任务状态已记录'
+    } catch (processingFailure) {
+      if (processingFailure instanceof ContractAnalysisLeaseError) {
+        throw processingFailure
+      }
+      processingError = formatAnalysisError(processingFailure)
+      await markContractAnalysisFailed(job, processingFailure)
+      finalStatus = 'FAILED'
+      message = '审核处理未完成；源文件、版本和本次审核记录已保留，可从失败步骤重试'
     }
 
     logRouteDone(
-      {
-        route,
-        requestId,
-        userId: user.id,
-        details: { contractId: id },
-      },
+      { route, requestId, userId: user.id, details: { contractId: id } },
       startedAt,
       {
-        reviewId: review.id,
-        jobId: job.id,
-        finalStatus: responseStatus,
-      }
+        reviewId: setup.review_id,
+        jobId: setup.job_id,
+        finalStatus,
+        recovered: Boolean(setup.recovered),
+      },
     )
 
     return NextResponse.json({
-      jobId: job.id,
-      reviewId: review.id,
-      status: responseStatus,
-      message: responseMessage,
-      degraded: responseStatus === 'DEGRADED',
-      degradationReasons: responseStatus === 'DEGRADED' ? degradationReasons : undefined,
+      jobId: setup.job_id,
+      reviewId: setup.review_id,
+      status: finalStatus,
+      message,
+      recovered: Boolean(setup.recovered),
+      degraded: finalStatus === 'DEGRADED',
+      degradationReasons: finalStatus === 'DEGRADED' ? degradationReasons : undefined,
       processingError,
     })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
-    if (authError) {
-      return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
-    }
+    if (authError) return errorResponse('未登录或登录已过期', 401, 'UNAUTHORIZED')
     await logRouteFailure(
       req,
-      {
-        route,
-        requestId,
-        details: { contractId: routeId },
-      },
+      { route, requestId, details: { contractId: routeId } },
       startedAt,
-      error
+      error,
     )
+    if (error instanceof ContractAnalysisLeaseError) {
+      if (error.code === 'ANALYSIS_LEASE_LOST') {
+        return errorResponse(
+          '审核任务已由新的执行者接管，本次旧执行已停止，请刷新查看当前状态',
+          409,
+          error.code,
+        )
+      }
+      return errorResponse(
+        '审核任务状态未能安全写入，系统已停止继续发布结果',
+        500,
+        error.code,
+      )
+    }
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }

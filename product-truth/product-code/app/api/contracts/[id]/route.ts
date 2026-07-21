@@ -7,7 +7,11 @@ import { requireAuth } from '@/lib/auth'
 import { contractIdSchema } from '@/lib/validation'
 import { logError } from '@/lib/error-log'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import {
+  canAccessContractAction,
+  getDefaultOrgId,
+  listAccessibleUserIds,
+} from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
 // 统一错误响应
@@ -28,7 +32,10 @@ export async function GET(
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const { assignments, userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    if (!canAccessContractAction(assignments, orgId, 'view')) {
+      return errorResponse('没有查看合同的权限', 403, 'FORBIDDEN')
+    }
     routeId = await resolveIdParam(params)
     logRouteStart({
       route,

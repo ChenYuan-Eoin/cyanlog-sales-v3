@@ -17,7 +17,6 @@ import {
   ZapIcon,
   SearchIcon,
   PlusIcon,
-  FilterIcon,
   ChevronRightIcon,
   XIcon,
   ShieldCheckIcon,
@@ -26,37 +25,26 @@ import {
 import type { Contract } from '@/types'
 import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { CONTRACTS_LIST_CACHE_PREFIX, loadContractsListForCache } from '@/lib/core-page-warmup'
-import { deriveReviewWorkflowState } from '@/lib/contracts/review-state-machine'
 import {
-  buildContractListReviewNavigation,
-  buildContractCompareHref,
-  buildContractNewReviewHref,
-} from '@/lib/contracts/review-navigation'
+  deriveContractCenterTaskModel,
+  type ContractCenterBusinessTask,
+  type ContractCenterTaskId,
+} from '@/lib/contracts/contract-center-task-model'
+import { buildContractCompareHref } from '@/lib/contracts/review-navigation'
 import { handleError } from '@/lib/toast'
 import { LoadingState } from '@/components/ui/LoadingState'
 
-type TaskFilter = 'all' | 'contract' | 'compare' | 'draft' | 'pending' | 'review'
+type TaskFilter = 'all' | 'contract' | 'reviewed' | 'compare' | 'draft' | 'pending' | 'review'
 type ViewMode = 'desktop' | 'mobile'
 
 type QuickAction = {
-  id: 'review' | 'compare' | 'draft'
-  title: string
+  id: ContractCenterTaskId
+  task: ContractCenterBusinessTask
   shortTitle: string
-  workflowLabel: string
-  objectLabel: string
   outcomeLabel: string
-  boundaryLabel: string
   icon: React.ComponentType<{ className?: string }>
   color: string
-  hoverColor: string
-  href: string
-  description: string
-  stateLabel?: string
-  targetName?: string
-  disabled?: boolean
 }
-
-type ResolvedQuickAction = QuickAction
 
 type ContractsCachePayload = {
   contracts: ListContract[]
@@ -72,7 +60,38 @@ type ContractVersionSummary = {
   id?: string | null
   version_number?: number | null
   source?: string | null
+  storage_path?: string | null
+  upload_id?: string | null
+  file_sha256?: string | null
+  text_sha256?: string | null
   created_at?: string | null
+}
+
+type ContractReviewSummary = {
+  id: string
+  status?: string | null
+  source_binding?: 'matched_source_version' | 'points_to_output_version' | 'unresolved' | null
+  contract_version_id?: string | null
+  source_storage_path?: string | null
+  created_at?: string | null
+  completed_at?: string | null
+}
+
+type ContractSourceIdentitySummary = {
+  state?: string | null
+  label?: string | null
+  description?: string | null
+  ready?: boolean | null
+  can_start_review?: boolean | null
+  source_version_id?: string | null
+  storage_path?: string | null
+  failure_reason?: string | null
+  recovery_action?: {
+    id?: string | null
+    label?: string | null
+    description?: string | null
+    href?: string | null
+  } | null
 }
 
 type ContractComparisonSummary = {
@@ -88,26 +107,31 @@ type ContractComparisonSummary = {
   comparison_diffs?: Array<{ id?: string | null; risk_level?: string | null }>
 }
 
-type ListContract = Contract & {
+type ListContract = Omit<Contract, 'contract_reviews'> & {
+  current_version_id?: string | null
   contract_versions?: ContractVersionSummary[]
   contract_comparisons?: ContractComparisonSummary[]
+  latest_review?: ContractReviewSummary | null
+  review_runs?: ContractReviewSummary[]
+  source_identity?: ContractSourceIdentitySummary | null
 }
 
 type TaskItemView = {
   id: string
   name: string
-  type: 'draft' | 'contract' | 'compare'
+  type: 'draft' | 'review' | 'compare'
   moduleLabel: '合同审核' | '合同起草' | '文档对比'
   versionLabel: string
-  versionDescription: string
   objectLabel: string
   status: string
   statusColor: string
   updatedAt: string
-  href: string
-  meta: string
+  href: string | null
   nextAction: string
   nextActionDescription: string
+  stateGroup: 'pending' | 'completed' | 'attention' | 'unavailable'
+  hasExistingReview: boolean
+  selectionOnly?: boolean
 }
 
 const LIST_CACHE_TTL_MS = 5 * 60 * 1000
@@ -141,38 +165,68 @@ async function readResponseError(response: Response, fallback: string) {
   return `${readApiError(payload, fallback)}（${response.status}）`
 }
 
-function contractActionName(contract?: Contract) {
-  const withOptionalNumber = contract as (Contract & { contract_no?: string }) | undefined
-  const name = contract?.filename || contract?.title || withOptionalNumber?.contract_no || ''
+function contractActionName(contract?: {
+  filename?: string | null
+  title?: string | null
+  contract_no?: string | null
+}) {
+  const name = contract?.filename || contract?.title || contract?.contract_no || ''
   return name.trim() || '未命名合同'
 }
 
-function sortedContractVersions(contract: ListContract) {
-  return [...(contract.contract_versions || [])].sort((left, right) => {
-    const leftNumber = Number(left.version_number)
-    const rightNumber = Number(right.version_number)
-    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber !== rightNumber) {
-      return rightNumber - leftNumber
-    }
-    return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
+function buildTaskModel(contract?: ListContract) {
+  const latestReview = contract?.latest_review || null
+  const sourceIdentity = contract?.source_identity || null
+  const versions = contract?.contract_versions || []
+  const hasVersionStoragePaths = versions.some((version) => Boolean(version.storage_path?.trim()))
+  return deriveContractCenterTaskModel({
+    contract: contract ? { id: contract.id, name: contractActionName(contract) } : null,
+    versions: versions.flatMap((version) => version.id ? [{
+      id: version.id,
+      versionNumber: version.version_number,
+      source: version.source,
+      storagePath: version.storage_path,
+      createdAt: version.created_at,
+    }] : []),
+    latestReviewRun: latestReview ? {
+      id: latestReview.id,
+      status: latestReview.status,
+      sourceBinding: latestReview.source_binding,
+      sourceVersionId: latestReview.contract_version_id,
+      sourceStoragePath: latestReview.source_storage_path,
+      createdAt: latestReview.created_at,
+      completedAt: latestReview.completed_at,
+    } : null,
+    reviewRuns: (contract?.review_runs || []).map((review) => ({
+      id: review.id,
+      status: review.status,
+      sourceBinding: review.source_binding,
+      sourceVersionId: review.contract_version_id,
+      sourceStoragePath: review.source_storage_path,
+      createdAt: review.created_at,
+      completedAt: review.completed_at,
+    })),
+    currentSourceVersionId: contract?.current_version_id,
+    currentSourceStoragePath: hasVersionStoragePaths ? contract?.storage_path : null,
+    sourceIdentity: sourceIdentity ? {
+      state: sourceIdentity.state,
+      ready: sourceIdentity.ready,
+      sourceVersionId: sourceIdentity.source_version_id,
+      storagePath: sourceIdentity.storage_path,
+      failureReason: sourceIdentity.failure_reason,
+    } : null,
   })
 }
 
-function contractVersionLabel(contract: ListContract) {
-  const versions = sortedContractVersions(contract)
-  const latestVersion = versions.reduce<number | null>((latest, version) => {
-    const value = Number(version.version_number)
-    if (!Number.isFinite(value)) return latest
-    return latest === null ? value : Math.max(latest, value)
-  }, null)
-  return latestVersion ? `v${latestVersion}` : 'v1'
-}
-
-function versionLabelForDocument(contract: ListContract, docId?: string | null, fallback = '当前') {
-  if (!docId) return `${fallback} ${contractVersionLabel(contract)}`
-  const version = sortedContractVersions(contract).find((item) => item.id === docId)
-  if (version?.version_number) return `v${version.version_number}`
-  if (docId === contract.id) return contractVersionLabel(contract)
+function versionLabelForDocument(
+  contract: ListContract,
+  docId: string | null | undefined,
+  fallback: string
+) {
+  const model = buildTaskModel(contract)
+  if (!docId) return `${fallback} ${model.currentSourceVersionLabel}`
+  const version = model.sourceVersions.find((item) => item.id === docId)
+  if (version?.versionNumber) return `v${version.versionNumber}`
   return fallback
 }
 
@@ -206,54 +260,76 @@ function comparisonNextAction(comparison: ContractComparisonSummary) {
   }
 }
 
-// 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
-const quickActions: QuickAction[] = [
-  {
-    id: 'draft',
-    title: '合同起草',
+function reviewTaskPresentation(status: string | null | undefined) {
+  const normalized = (status || '').trim().toLowerCase()
+  if (['pending', 'queued', 'created', 'parsing', 'analyzing', 'processing', 'running'].includes(normalized)) {
+    return {
+      action: '查看审核进度',
+      description: '查看当前文件的正文读取、规则判断和风险审核进度。',
+      stateGroup: 'pending' as const,
+      executionComplete: false,
+    }
+  }
+  if (['failed', 'error', 'cancelled', 'canceled'].includes(normalized)) {
+    return {
+      action: '查看失败原因并重试',
+      description: '先确认失败步骤，再恢复当前版本审核，不创建新的合同或文件版本。',
+      stateGroup: 'attention' as const,
+      executionComplete: false,
+    }
+  }
+  if (['degraded', 'needs_review', 'needs_manual_review'].includes(normalized)) {
+    return {
+      action: '复核降级结果',
+      description: '核对当前版本的规则依据、审核结果和原文定位。',
+      stateGroup: 'attention' as const,
+      executionComplete: false,
+    }
+  }
+  if (['completed', 'succeeded', 'success', 'done'].includes(normalized)) {
+    return {
+      action: '处理审核风险',
+      description: '风险结果已经生成，仍需复核处理并准备当前版本的批注输出。',
+      // 模型运行结束不等于合同审核业务结束。风险处理、复审和交付
+      // 尚未闭环前，列表必须继续把它放在待处理任务中。
+      stateGroup: 'pending' as const,
+      executionComplete: true,
+    }
+  }
+  return {
+    action: '查看审核记录',
+    description: '进入当前版本审核工作台，确认审核状态和下一步。',
+    stateGroup: 'pending' as const,
+    executionComplete: false,
+  }
+}
+
+const taskPresentation: Record<ContractCenterTaskId, Omit<QuickAction, 'id' | 'task'>> = {
+  draft_contract: {
     shortTitle: '起草',
-    workflowLabel: '输入需求生成合同草稿',
-    objectLabel: '客户需求、模板、条款限制',
-    outcomeLabel: '可编辑合同草稿，可进入审核或对比',
-    boundaryLabel: '起草是独立路径，不等同于上传审核或版本对比',
+    outcomeLabel: '形成一份可继续完善的新合同草稿',
     icon: PenToolIcon,
     color: 'bg-indigo-600',
-    hoverColor: 'hover:bg-indigo-700',
-    href: '/contracts/draft',
-    description: '描述业务需求，结合模板和条款限制生成可修改、可审核的合同草稿',
-    stateLabel: '需求起草',
   },
-  {
-    id: 'review',
-    title: '合同审核',
-    shortTitle: '审核',
-    workflowLabel: '上传源文件并创建 ReviewRun',
-    objectLabel: 'DOCX / PDF 源文件',
-    outcomeLabel: '风险定位、AI 批注、源文件批注版',
-    boundaryLabel: '审核自动消费配置中心已发布规则，不在这里选择规则版本',
+  start_review: {
+    shortTitle: '上传审核',
+    outcomeLabel: '获得风险定位、处理建议和批注输出准备',
     icon: ShieldCheckIcon,
     color: 'bg-rose-600',
-    hoverColor: 'hover:bg-rose-700',
-    href: '/contracts/new',
-    description: '上传合同源文件，系统自动绑定已发布规则、SkillBundle 和模型策略',
-    stateLabel: '源文件审核',
   },
-  {
-    id: 'compare',
-    title: '合同对比',
-    shortTitle: '对比',
-    workflowLabel: '选择旧文件和新文件',
-    objectLabel: '合同版本流或客户回传件',
-    outcomeLabel: '差异列表、并排高亮、风险变化判断',
-    boundaryLabel: '对比不替代审核；红线或需谈判变化进入再审核',
+  continue_review: {
+    shortTitle: '已有审核',
+    outcomeLabel: '查看进度、处理风险、重试或下载结果',
+    icon: ClockIcon,
+    color: 'bg-amber-500',
+  },
+  compare_versions: {
+    shortTitle: '版本比对',
+    outcomeLabel: '明确查看旧版与新版之间的差异',
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
-    hoverColor: 'hover:bg-emerald-700',
-    href: '/contracts/upload?intent=compare',
-    description: '选择旧文件和新文件进行差异复核，文件属性只作为面板信息，不污染文件画布',
-    stateLabel: '旧/新文件',
   },
-]
+}
 
 export default function ContractCenterPage() {
   const [contracts, setContracts] = useState<ListContract[]>([])
@@ -279,6 +355,12 @@ export default function ContractCenterPage() {
     checkViewport()
     window.addEventListener('resize', checkViewport)
     return () => window.removeEventListener('resize', checkViewport)
+  }, [])
+
+  useEffect(() => {
+    const task = new URLSearchParams(window.location.search).get('task')
+    if (task === 'continue_review') setTaskFilter('reviewed')
+    if (task === 'compare' || task === 'compare_versions') setTaskFilter('compare')
   }, [])
 
   const applyContractsPayload = useCallback((
@@ -445,49 +527,79 @@ export default function ContractCenterPage() {
     })
   }, [fetchData, hasNext, loadingMore, page, searchQuery])
 
-  // 统计计算
-  const stats = useMemo(() => {
-    const total = contracts.length + drafts.length
-    const pending = contracts.filter((c) =>
-      c.status === 'PENDING' || c.status === 'PARSING' || c.status === 'ANALYZING'
-    ).length
-    const needAttention = contracts.filter((c) =>
-      c.status === 'FAILED' || c.latest_analysis_job?.degraded
-    ).length
-    const completed = contracts.filter((c) => c.status === 'COMPLETED').length
-    return { total, pending, needAttention, completed }
-  }, [contracts, drafts])
-
-  const resolvedQuickActions = useMemo<ResolvedQuickAction[]>(() => {
-    const sortedContracts = [...contracts].sort(
-      (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+  const resolvedQuickActions = useMemo<QuickAction[]>(() => {
+    const globalModel = buildTaskModel()
+    const reviewedContracts = contracts.filter((contract) => (contract.review_runs?.length || 0) > 0)
+    const contractsWithSources = contracts.filter(
+      (contract) => buildTaskModel(contract).sourceVersions.length > 0
     )
-    const compareTarget = sortedContracts.find((contract) => contract.status === 'COMPLETED')
-    return quickActions.map((action) => {
-      if (action.id === 'review') {
-        return {
-          ...action,
-          href: buildContractNewReviewHref('workbench'),
-          description: '上传源文件后直接创建新的审核运行，并进入风险定位与批注工作台',
-          targetName: '新建合同版本',
+    return globalModel.taskOrder.map((id) => {
+      let task = globalModel.tasks[id]
+      if (id === 'continue_review' && reviewedContracts.length > 0) {
+        task = {
+          ...task,
+          availability: 'available',
+          availabilityLabel: '可选择',
+          objectLabel: `${reviewedContracts.length} 份已有审核记录的合同`,
+          preconditionLabel: '从列表明确选择要继续的合同和审核记录',
+          href: '#contract-task-list',
+          nextAction: {
+            id: 'select_reviewed_contract',
+            label: '选择已有审核',
+            description: '列表只展示已有真实审核记录的合同，不会根据合同状态猜测。',
+          },
+          blockedReason: null,
+        }
+      } else if (id === 'continue_review' && hasNext) {
+        task = {
+          ...task,
+          availability: 'available',
+          availabilityLabel: '继续查找',
+          objectLabel: '更多合同记录尚未加载',
+          preconditionLabel: '继续加载后明确选择已有审核记录的合同',
+          href: '#contract-task-list',
+          nextAction: {
+            id: 'load_more_reviewed_contracts',
+            label: '加载更多并选择',
+            description: '当前页没有审核记录，但后续还有合同；系统不会把当前 20 条误当作全部数据。',
+          },
+          blockedReason: null,
         }
       }
-
-      if (action.id === 'compare') {
-        return {
-          ...action,
-          href: compareTarget
-            ? buildContractCompareHref(compareTarget.id, { from: 'workbench' })
-            : buildContractNewReviewHref('workbench'),
-          description: compareTarget ? '进入旧文件/新文件选择页，文件属性在面板展示，不写进文件画布' : '暂无可作为版本流入口的合同；请先上传源文件或完成一个合同版本',
-          targetName: compareTarget ? contractActionName(compareTarget) : '缺少合同版本流',
-          disabled: !compareTarget,
+      if (id === 'compare_versions' && contracts.length > 0) {
+        const moreContractsMayHaveSources = contractsWithSources.length === 0 && hasNext
+        task = {
+          ...task,
+          availability: contractsWithSources.length > 0 || moreContractsMayHaveSources ? 'available' : 'needs_input',
+          availabilityLabel: contractsWithSources.length > 0
+            ? '可选择'
+            : moreContractsMayHaveSources
+              ? '继续查找'
+              : '需先补源文件',
+          objectLabel: contractsWithSources.length > 0
+            ? `${contractsWithSources.length} 份已有源版本的合同`
+            : moreContractsMayHaveSources
+              ? '更多合同记录尚未加载'
+            : `${contracts.length} 份待补源文件的合同`,
+          preconditionLabel: '先选择合同；开始比对前再明确选择两个不同源版本',
+          href: '#contract-task-list',
+          nextAction: {
+            id: 'select_contract_for_comparison',
+            label: moreContractsMayHaveSources ? '加载更多并选择' : '选择合同',
+            description: moreContractsMayHaveSources
+              ? '当前页没有源版本，但后续还有合同；继续加载后再明确选择。'
+              : '进入文档比对任务列表，由你选择合同；系统不会静默选最近合同。',
+          },
+          blockedReason: null,
         }
       }
-
-      return action
+      return {
+        id,
+        task,
+        ...taskPresentation[id],
+      }
     })
-  }, [contracts])
+  }, [contracts, hasNext])
 
   // 合同中心任务对象：审核、对比、起草是独立任务，但共享合同版本流。
   const allTasks = useMemo(() => {
@@ -496,49 +608,140 @@ export default function ContractCenterPage() {
       name: d.title || '未命名草稿',
       type: 'draft' as const,
       moduleLabel: '合同起草' as const,
-      versionLabel: '草案 v1',
-      versionDescription: '可编辑草稿',
+      versionLabel: '草案记录',
       objectLabel: '需求草案',
-      status: '起草中' as const,
-      statusColor: 'bg-slate-100 text-slate-600' as const,
+      status: '暂不可继续' as const,
+      statusColor: 'bg-amber-100 text-amber-700' as const,
       updatedAt: d.updated_at,
-      href: `/contracts/draft?id=${d.id}`,
-      meta: '草稿',
-      nextAction: '继续起草',
-      nextActionDescription: '补齐合同信息后可导出 DOCX，或直接把草稿作为源文件进入审核。',
+      href: null,
+      nextAction: '开始一份新草稿',
+      nextActionDescription: '当前起草页还不能安全恢复这份历史草稿，因此不提供虚假的继续入口。',
+      stateGroup: 'unavailable' as const,
+      hasExistingReview: false,
     } satisfies TaskItemView))
 
-    const contractTasks = contracts.map((c) => {
-      const statusMap: Record<string, { label: string; color: string }> = {
-        COMPLETED: { label: '审核完成', color: 'bg-green-100 text-green-700' },
-        PENDING: { label: '待审核', color: 'bg-amber-100 text-amber-700' },
-        PARSING: { label: '解析中', color: 'bg-blue-100 text-blue-700' },
-        ANALYZING: { label: '审核中', color: 'bg-indigo-100 text-indigo-700' },
-        FAILED: { label: '审核失败', color: 'bg-red-100 text-red-700' },
-      }
-      const status = statusMap[c.status] || { label: c.status, color: 'bg-slate-100 text-slate-600' }
-      const workflowState = deriveReviewWorkflowState({
-        status: c.status,
-        hasSourceAsset: Boolean(c.parsed_text?.trim() || c.storage_path),
-        exportReady: false,
-      })
-      const navigation = buildContractListReviewNavigation(c.id, workflowState)
-      return {
-        id: c.id,
-        name: c.filename,
-        type: 'contract' as const,
+    const contractTasks = contracts.flatMap((c) => {
+      const model = buildTaskModel(c)
+      const currentReview = model.currentReview
+      const sourceState = model.sourceIdentity.state
+      const sourceRecoveryAction = c.source_identity?.recovery_action
+      const reviewAction = sourceRecoveryAction?.label
+          ? {
+              id: sourceRecoveryAction.id || 'recover_source_preparation',
+              label: sourceRecoveryAction.label,
+              description: sourceRecoveryAction.description || model.sourceIdentity.description,
+            }
+        : sourceState === 'ready' && model.sourceIdentity.canStartReview
+          ? {
+              id: 'start_first_review',
+              label: `审核当前 ${model.currentSourceVersionLabel}`,
+              description: model.reviewRuns.length > 0
+                ? `已有 ${model.reviewRuns.length} 条历史审核仍可查看，但不会替代当前 ${model.currentSourceVersionLabel} 的首次审核。`
+                : '文件已准备完成，可以启动当前版本的第一次风险审核。',
+            }
+          : sourceState === 'not_applicable'
+              ? {
+                  id: 'supply_source',
+                  label: '补充源文件',
+                  description: model.sourceIdentity.description,
+                }
+              : {
+                  id: 'continue_source_preparation',
+                  label: sourceState === 'preparing'
+                    ? '查看文件准备进度'
+                    : '完成文件准备',
+                  description: model.sourceIdentity.description,
+                }
+      const stateGroup: TaskItemView['stateGroup'] = sourceState === 'failed' || sourceState === 'stale'
+          ? 'attention'
+          : 'pending'
+      const statusColor = stateGroup === 'attention'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-indigo-100 text-indigo-700'
+
+      const currentUnreviewedTask = {
+        id: `${c.id}:review:current-unreviewed`,
+        name: contractActionName(c),
+        type: 'review' as const,
         moduleLabel: '合同审核' as const,
-        versionLabel: contractVersionLabel(c),
-        versionDescription: '审核源文件版本',
-        objectLabel: '合同源文件',
-        status: status.label,
-        statusColor: status.color as string,
+        versionLabel: model.currentSourceVersion ? model.currentSourceVersionLabel : '暂无源版本',
+        objectLabel: '当前版本待审核',
+        status: model.sourceIdentity.label,
+        statusColor,
         updatedAt: c.updated_at,
-        href: navigation.href,
-        meta: '合同',
-        nextAction: navigation.nextAction,
-        nextActionDescription: navigation.nextActionDescription,
+        href: sourceRecoveryAction?.href
+          ? sourceRecoveryAction.href
+          : `/contracts/${encodeURIComponent(c.id)}?from=list`,
+        nextAction: reviewAction.label,
+        nextActionDescription: reviewAction.description,
+        stateGroup,
+        hasExistingReview: false,
       } satisfies TaskItemView
+
+      const reviewTasks = model.reviewRuns.map((review) => {
+        const presentation = reviewTaskPresentation(review.status)
+        const isCurrentReview = currentReview?.id === review.id
+        const sourceVerified = review.sourceBinding === 'matched_source_version'
+        const reviewStateGroup: TaskItemView['stateGroup'] = !sourceVerified
+          ? 'attention'
+          : isCurrentReview
+            ? presentation.stateGroup
+            : presentation.executionComplete
+              ? 'completed'
+              : presentation.stateGroup
+        const isHistoricalRecord = !isCurrentReview
+        const objectLabel = !sourceVerified
+          ? '审核文件版本待核对'
+          : isCurrentReview
+            ? '当前版本审核'
+            : review.isForCurrentSource
+              ? `当前 ${model.currentSourceVersionLabel} 的较早审核`
+              : `历史审核，不影响当前 ${model.currentSourceVersionLabel}`
+        const nextAction = !sourceVerified
+          ? {
+              label: '打开合同核对来源',
+              description: '先在合同工作台核对当前文件与审核历史；来源修复完成前，不会把这条记录展示成可信风险结果。',
+            }
+          : isHistoricalRecord && presentation.executionComplete
+            ? {
+                label: `查看 ${review.sourceVersionLabel} 历史审核`,
+                description: `查看该次风险结论、处理记录和审核依据；不会把它当成当前 ${model.currentSourceVersionLabel} 的审核。`,
+              }
+            : {
+                label: presentation.action,
+                description: presentation.description,
+              }
+
+        return {
+          id: `${c.id}:review:${review.id}`,
+          name: contractActionName(c),
+          type: 'review' as const,
+          moduleLabel: '合同审核' as const,
+          versionLabel: review.sourceVersionLabel,
+          objectLabel,
+          status: review.statusLabel,
+          statusColor: reviewStateGroup === 'attention'
+            ? 'bg-red-100 text-red-700'
+            : reviewStateGroup === 'completed'
+              ? 'bg-slate-100 text-slate-700'
+              : 'bg-indigo-100 text-indigo-700',
+          updatedAt: review.completedAt || review.createdAt || c.updated_at,
+          href: sourceVerified
+            ? `/contracts/${encodeURIComponent(c.id)}?from=list&review=${encodeURIComponent(review.id)}`
+            : `/contracts/${encodeURIComponent(c.id)}?from=list`,
+          nextAction: nextAction.label,
+          nextActionDescription: nextAction.description,
+          stateGroup: reviewStateGroup,
+          hasExistingReview: true,
+        } satisfies TaskItemView
+      })
+
+      // A failed/stale current source is actionable even when an older review
+      // still points at that version. Keep recovery as its own business task;
+      // the historical review remains separately available for audit.
+      return model.sourceIdentity.ready && currentReview
+        ? reviewTasks
+        : [currentUnreviewedTask, ...reviewTasks]
     })
 
     const compareTasks = contracts.flatMap((contract) => {
@@ -547,51 +750,114 @@ export default function ContractCenterPage() {
           - new Date(left.completed_at || left.created_at || 0).getTime()
       )
       const latestComparison = comparisons[0]
-      if (!latestComparison?.id) return []
-      const status = comparisonStatus(latestComparison)
-      const nextAction = comparisonNextAction(latestComparison)
-      return [{
-        id: `${contract.id}:compare:${latestComparison.id}`,
-        name: contract.filename || contract.title || '未命名文档对比',
-        type: 'compare' as const,
-        moduleLabel: '文档对比' as const,
-        versionLabel: comparisonVersionLabel(contract, latestComparison),
-        versionDescription: '旧文件 → 新文件',
-        objectLabel: '版本差异任务',
-        status: status.label,
-        statusColor: status.color,
-        updatedAt: latestComparison.completed_at || latestComparison.created_at || contract.updated_at,
-        href: buildContractCompareHref(contract.id, { from: 'list', comparisonId: latestComparison.id }),
-        meta: '文档对比',
-        nextAction: nextAction.label,
-        nextActionDescription: nextAction.description,
-      } satisfies TaskItemView]
+      if (latestComparison?.id) {
+        const latestStatus = comparisonStatus(latestComparison)
+        const latestAction = comparisonNextAction(latestComparison)
+        const stateGroup: TaskItemView['stateGroup'] = latestComparison.status?.toLowerCase() === 'completed'
+          ? 'completed'
+          : latestComparison.status?.toLowerCase() === 'failed'
+            ? 'attention'
+            : 'pending'
+        return [{
+          id: `${contract.id}:compare:${latestComparison.id}`,
+          name: contractActionName(contract),
+          type: 'compare' as const,
+          moduleLabel: '文档对比' as const,
+          versionLabel: comparisonVersionLabel(contract, latestComparison),
+          objectLabel: '最近一次版本比对',
+          status: latestStatus.label,
+          statusColor: latestStatus.color,
+          updatedAt: latestComparison.completed_at || latestComparison.created_at || contract.updated_at,
+          href: buildContractCompareHref(contract.id, { from: 'list', comparisonId: latestComparison.id }),
+          nextAction: latestAction.label,
+          nextActionDescription: latestAction.description,
+          stateGroup,
+          hasExistingReview: false,
+        } satisfies TaskItemView]
+      }
+      return []
     })
 
-    const all = [...draftTasks, ...compareTasks, ...contractTasks].sort(
+    const all = [...contractTasks, ...compareTasks, ...draftTasks].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     )
 
     return all
   }, [contracts, drafts])
 
+  const compareChoices = useMemo(() => contracts.flatMap((contract) => {
+    if ((contract.contract_comparisons || []).length > 0) return []
+    const model = buildTaskModel(contract)
+    const compareTask = model.tasks.compare_versions
+    return [{
+      id: `${contract.id}:compare:choose`,
+      name: contractActionName(contract),
+      type: 'compare' as const,
+      moduleLabel: '文档对比' as const,
+      versionLabel: model.comparison.sourceVersionCount > 0
+        ? `${model.comparison.sourceVersionCount} 个源版本`
+        : '暂无源版本',
+      objectLabel: '可选择的合同',
+      status: model.comparison.label,
+      statusColor: model.comparison.state === 'ready'
+        ? 'bg-emerald-100 text-emerald-700'
+        : 'bg-amber-100 text-amber-700',
+      updatedAt: contract.updated_at,
+      href: compareTask.href,
+      nextAction: compareTask.nextAction.label,
+      nextActionDescription: compareTask.nextAction.description,
+      stateGroup: 'unavailable' as const,
+      hasExistingReview: false,
+      selectionOnly: true,
+    } satisfies TaskItemView]
+  }), [contracts])
+
   // 过滤后的任务列表
   const filteredTasks = useMemo(() => {
     if (taskFilter === 'all') return allTasks
-    if (taskFilter === 'contract') return allTasks.filter((t) => t.type === 'contract')
-    if (taskFilter === 'compare') return allTasks.filter((t) => t.type === 'compare')
+    if (taskFilter === 'contract') return allTasks.filter((t) => t.type === 'review')
+    if (taskFilter === 'reviewed') return allTasks.filter((t) => t.type === 'review' && t.hasExistingReview)
+    if (taskFilter === 'compare') {
+      return [...allTasks.filter((t) => t.type === 'compare'), ...compareChoices]
+    }
     if (taskFilter === 'draft') return allTasks.filter((t) => t.type === 'draft')
     if (taskFilter === 'pending') {
-      return allTasks.filter((t) => ['待审核', '解析中', '审核中', '待对比', '对比中'].includes(t.status))
+      return allTasks.filter((t) => t.stateGroup === 'pending' || t.stateGroup === 'attention')
     }
     if (taskFilter === 'review') {
-      return allTasks.filter((t) => ['审核完成', '对比完成'].includes(t.status))
+      return allTasks.filter((t) => t.stateGroup === 'completed')
     }
     return allTasks
-  }, [allTasks, taskFilter])
+  }, [allTasks, compareChoices, taskFilter])
+
+  const stats = useMemo(() => ({
+    total: contracts.length + drafts.length,
+    pending: allTasks.filter((task) => task.stateGroup === 'pending').length,
+    needAttention: allTasks.filter((task) => task.stateGroup === 'attention').length,
+    completed: allTasks.filter((task) => task.stateGroup === 'completed').length,
+  }), [allTasks, contracts.length, drafts.length])
 
   const isMobile = viewMode === 'mobile'
   const listUnavailable = !loading && Boolean(loadError) && filteredTasks.length === 0
+  const emptyMode = searchQuery.trim()
+    ? 'search' as const
+    : contracts.length === 0 && drafts.length === 0
+      ? 'organization' as const
+      : 'filter' as const
+
+  const selectGlobalTask = useCallback((taskId: ContractCenterTaskId) => {
+    if (taskId !== 'continue_review' && taskId !== 'compare_versions') return
+    setTaskFilter(taskId === 'continue_review' ? 'reviewed' : 'compare')
+    const url = new URL(window.location.href)
+    url.searchParams.set('task', taskId)
+    window.history.replaceState(window.history.state, '', url)
+    window.setTimeout(() => {
+      document.getElementById('contract-task-list')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }, 0)
+  }, [])
 
   return (
     <div className="min-h-full bg-slate-50 pb-24 md:pb-8">
@@ -629,18 +895,6 @@ export default function ContractCenterPage() {
               </div>
             </div>
 
-            {/* 桌面端保留少量全局动作，完整状态机放到正文首屏 */}
-            <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
-              <QuickActionButton action={resolvedQuickActions[0]} compact />
-              <QuickActionButton action={resolvedQuickActions[2]} compact />
-            </div>
-
-            {/* 移动端筛选按钮 */}
-            {isMobile && (
-              <Button variant="ghost" size="icon" className="shrink-0">
-                <FilterIcon className="h-5 w-5" />
-              </Button>
-            )}
           </div>
 
         </div>
@@ -648,23 +902,27 @@ export default function ContractCenterPage() {
 
       {/* 主内容区 */}
       <main className="mx-auto max-w-[1480px] px-4 md:px-6 py-4 md:py-6">
-        <ReviewLaunchPanel isMobile={isMobile} actions={resolvedQuickActions} />
+        <ReviewLaunchPanel
+          isMobile={isMobile}
+          actions={resolvedQuickActions}
+          onSelectTask={selectGlobalTask}
+        />
 
         {listUnavailable ? (
           <LoadErrorState message={loadError} onRetry={() => void fetchData(1, { query: searchQuery })} />
         ) : (
           <>
             {/* 统计卡片 - 桌面端完整 / 移动端简化 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+            <div id="contract-task-list" className="grid scroll-mt-24 grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
               <StatCard
                 icon={<FileTextIcon className="h-4 w-4 md:h-5 md:w-5 text-slate-500" />}
-                label="全部合同"
+                label="合同与草稿"
                 value={stats.total}
                 isMobile={isMobile}
               />
               <StatCard
                 icon={<ClockIcon className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />}
-                label="进行中"
+                label="待处理任务"
                 value={stats.pending}
                 highlight={stats.pending > 0}
                 isMobile={isMobile}
@@ -678,7 +936,7 @@ export default function ContractCenterPage() {
               />
               <StatCard
                 icon={<ZapIcon className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />}
-                label="已完成"
+                label="已完成任务"
                 value={stats.completed}
                 isMobile={isMobile}
               />
@@ -694,7 +952,10 @@ export default function ContractCenterPage() {
                   </TabsTrigger>
                   <TabsTrigger value="contract" className="text-xs md:text-sm">
                     审核
-                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'contract').length}</span>}
+                    {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'review').length}</span>}
+                  </TabsTrigger>
+                  <TabsTrigger value="reviewed" className="text-xs md:text-sm">
+                    已有审核
                   </TabsTrigger>
                   <TabsTrigger value="compare" className="text-xs md:text-sm">
                     对比
@@ -704,7 +965,7 @@ export default function ContractCenterPage() {
                     起草
                     {!isMobile && <span className="ml-1.5 text-[10px] text-slate-400">{allTasks.filter((task) => task.type === 'draft').length}</span>}
                   </TabsTrigger>
-                  <TabsTrigger value="pending" className="text-xs md:text-sm">待审核</TabsTrigger>
+                  <TabsTrigger value="pending" className="text-xs md:text-sm">待处理</TabsTrigger>
                   <TabsTrigger value="review" className="text-xs md:text-sm">已完成</TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -714,7 +975,13 @@ export default function ContractCenterPage() {
             {loading ? (
               <LoadingState message="加载合同中..." />
             ) : filteredTasks.length === 0 ? (
-              <EmptyState isMobile={isMobile} />
+              <EmptyState
+                isMobile={isMobile}
+                mode={emptyMode}
+                query={searchQuery.trim()}
+                onClearSearch={() => setSearchQuery('')}
+                onResetFilter={() => setTaskFilter('all')}
+              />
             ) : (
               <div className="space-y-2 md:space-y-3">
                 {loadError && (
@@ -735,7 +1002,7 @@ export default function ContractCenterPage() {
         )}
 
         {/* 分页控件 */}
-        {!listUnavailable && !loading && filteredTasks.length > 0 && totalPages > 1 && (
+        {!listUnavailable && !loading && totalPages > 1 && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t border-slate-200">
             <p className="text-xs text-slate-500">
               已加载到第 {page} / {totalPages} 页
@@ -760,7 +1027,7 @@ export default function ContractCenterPage() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-20 safe-area-pb">
           <div className="flex items-center justify-around">
             {resolvedQuickActions.map((action) => (
-              <QuickActionButton key={action.id} action={action} mobile />
+              <QuickActionButton key={action.id} action={action} onSelectTask={selectGlobalTask} />
             ))}
           </div>
         </div>
@@ -771,52 +1038,46 @@ export default function ContractCenterPage() {
 
 function QuickActionButton({
   action,
-  compact = false,
-  mobile = false,
+  onSelectTask,
 }: {
-  action: ResolvedQuickAction
-  compact?: boolean
-  mobile?: boolean
+  action: QuickAction
+  onSelectTask: (taskId: ContractCenterTaskId) => void
 }) {
   const Icon = action.icon
-  if (mobile) {
-    const content = (
-      <>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-full shadow-md ${action.disabled ? 'bg-slate-200' : action.color}`}>
-          <Icon className={`h-5 w-5 ${action.disabled ? 'text-slate-400' : 'text-white'}`} />
-        </div>
-        <span className={`text-[10px] font-medium ${action.disabled ? 'text-slate-400' : 'text-slate-700'}`}>{action.shortTitle}</span>
-      </>
-    )
-    if (action.disabled) {
-      return (
-        <div className="flex flex-col items-center gap-1 px-3 py-1" aria-disabled="true" title={action.description}>
-          {content}
-        </div>
-      )
-    }
+  const disabled = !action.task.href || action.task.availability === 'blocked'
+  const description = action.task.blockedReason || action.task.nextAction.description
+  const content = (
+    <>
+      <div className={`flex h-10 w-10 items-center justify-center rounded-full shadow-md ${disabled ? 'bg-slate-200' : action.color}`}>
+        <Icon className={`h-5 w-5 ${disabled ? 'text-slate-400' : 'text-white'}`} />
+      </div>
+      <span className={`text-[10px] font-medium ${disabled ? 'text-slate-400' : 'text-slate-700'}`}>{action.shortTitle}</span>
+    </>
+  )
+
+  if (disabled) {
     return (
-      <Link href={action.href} prefetch={false} className="flex flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-95">
+      <div className="flex flex-col items-center gap-1 px-3 py-1" aria-disabled="true" title={description}>
         {content}
-      </Link>
+      </div>
     )
   }
 
-  if (action.disabled) {
+  if (action.id === 'continue_review' || action.id === 'compare_versions') {
     return (
-      <Button size="sm" variant="outline" className="gap-1.5" disabled title={action.description}>
-        <Icon className="h-4 w-4" />
-        {action.shortTitle}
-      </Button>
+      <button
+        type="button"
+        onClick={() => onSelectTask(action.id)}
+        className="flex flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-95"
+      >
+        {content}
+      </button>
     )
   }
 
   return (
-    <Link href={action.href} prefetch={false}>
-      <Button size={compact ? 'sm' : 'default'} variant="outline" className="gap-1.5">
-        <Icon className="h-4 w-4" />
-        {action.shortTitle}
-      </Button>
+    <Link href={action.task.href!} prefetch={false} className="flex flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-95">
+      {content}
     </Link>
   )
 }
@@ -824,9 +1085,11 @@ function QuickActionButton({
 function ReviewLaunchPanel({
   isMobile,
   actions,
+  onSelectTask,
 }: {
   isMobile: boolean
-  actions: ResolvedQuickAction[]
+  actions: QuickAction[]
+  onSelectTask: (taskId: ContractCenterTaskId) => void
 }) {
   return (
     <section className="mb-4 rounded-lg border border-indigo-100 bg-white p-4 shadow-sm md:mb-6 md:p-5">
@@ -840,71 +1103,70 @@ function ReviewLaunchPanel({
               合同中心
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              一级入口按合同起草、合同审核、合同对比排列。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
+              先选择要完成的业务任务。新建、已有审核和版本比对各自进入对应流程，不会因为合同状态被合并成同一个上传入口。
             </p>
           </div>
         </div>
-        <Link href="/contracts/new" prefetch={false} className="shrink-0">
-          <Button className="w-full gap-1.5 md:w-auto">
-            <PlusIcon className="h-4 w-4" />
-            上传源文件并发起审核
-          </Button>
-        </Link>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-	        {actions.map((action, index) => {
-	          const Icon = action.icon
-	          const content = (
-	            <div className={`h-full rounded-lg border p-3 transition ${
-              action.disabled
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {actions.map((action) => {
+          const Icon = action.icon
+          const disabled = !action.task.href || action.task.availability === 'blocked'
+          const content = (
+            <div className={`h-full rounded-lg border p-3 transition ${
+              disabled
                 ? 'border-slate-200 bg-slate-50 opacity-70'
                 : 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm'
             }`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-[11px] font-semibold text-white">
-                    {index + 1}
+                  <span className={`grid h-8 w-8 place-items-center rounded-lg ${disabled ? 'bg-slate-200' : action.color}`}>
+                    <Icon className={`h-4 w-4 ${disabled ? 'text-slate-400' : 'text-white'}`} />
                   </span>
-                  <div className="font-semibold text-slate-950">{action.title}</div>
+                  <div className="font-semibold text-slate-950">{action.task.label}</div>
                 </div>
-                <Icon className={`h-4 w-4 ${action.disabled ? 'text-slate-400' : 'text-indigo-600'}`} />
-	              </div>
-	              <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600">
-	                <WorkflowFact label="入口" value={action.stateLabel || action.shortTitle} />
-                <WorkflowFact label="动作" value={action.workflowLabel} />
-                <WorkflowFact label="对象" value={action.objectLabel} />
-                <WorkflowFact label="当前目标" value={action.targetName || '等待选择'} />
-                <WorkflowFact label="结果" value={action.outcomeLabel} />
-	              </div>
-	              <div className={`mt-3 rounded-md px-2 py-1.5 text-[11px] leading-5 ${
-	                action.disabled ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-500'
-	              }`}>
-	                <span className="font-medium">{action.disabled ? '当前不可用：' : '边界：'}</span>
-	                {action.disabled ? action.description : action.boundaryLabel}
-	              </div>
-	            </div>
-	          )
-          if (action.disabled) {
-            return <div key={action.id} aria-disabled="true" title={action.description}>{content}</div>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  disabled ? 'bg-slate-100 text-slate-500' : 'bg-indigo-50 text-indigo-700'
+                }`}>
+                  {action.task.availabilityLabel}
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-700">{action.outcomeLabel}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                <span className="font-medium text-slate-700">开始前：</span>{action.task.preconditionLabel}
+              </p>
+              <div className={`mt-3 rounded-md px-2 py-1.5 text-[11px] leading-5 ${
+                disabled ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-600'
+              }`}>
+                <span className="font-medium">下一步：{action.task.nextAction.label}</span>
+                <span className="mt-0.5 block">{action.task.blockedReason || action.task.nextAction.description}</span>
+              </div>
+            </div>
+          )
+          if (disabled) {
+            return <div key={action.id} aria-disabled="true" title={action.task.blockedReason || undefined}>{content}</div>
+          }
+          if (action.id === 'continue_review' || action.id === 'compare_versions') {
+            return (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => onSelectTask(action.id)}
+                className="block text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              >
+                {content}
+              </button>
+            )
           }
           return (
-            <Link key={action.id} href={action.href} prefetch={false} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
+            <Link key={action.id} href={action.task.href!} prefetch={false} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
               {content}
             </Link>
           )
         })}
       </div>
     </section>
-  )
-}
-
-function WorkflowFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2">
-      <span className="text-slate-400">{label}</span>
-      <span className="min-w-0 truncate font-medium text-slate-800">{value}</span>
-    </div>
   )
 }
 
@@ -946,28 +1208,12 @@ function TaskItem({
   task,
   isMobile,
 }: {
-  task: {
-    id: string
-    name: string
-    type: 'draft' | 'contract' | 'compare'
-    moduleLabel: '合同审核' | '合同起草' | '文档对比'
-    versionLabel: string
-    versionDescription: string
-    objectLabel: string
-    status: string
-    statusColor: string
-    updatedAt: string
-    href: string
-    meta: string
-    nextAction: string
-    nextActionDescription: string
-  }
+  task: TaskItemView
   isMobile: boolean
 }) {
   const moduleStyle = {
     '合同审核': {
       icon: ShieldCheckIcon,
-      short: '审核',
       badge: 'border-rose-200 bg-rose-50 text-rose-700',
       iconBox: 'bg-rose-50 text-rose-600',
       bar: 'bg-rose-500',
@@ -975,7 +1221,6 @@ function TaskItem({
     },
     '文档对比': {
       icon: GitCompareIcon,
-      short: '对比',
       badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
       iconBox: 'bg-emerald-50 text-emerald-600',
       bar: 'bg-emerald-500',
@@ -983,7 +1228,6 @@ function TaskItem({
     },
     '合同起草': {
       icon: PenToolIcon,
-      short: '起草',
       badge: 'border-indigo-200 bg-indigo-50 text-indigo-700',
       iconBox: 'bg-indigo-50 text-indigo-600',
       bar: 'bg-indigo-500',
@@ -992,14 +1236,8 @@ function TaskItem({
   }[task.moduleLabel]
   const ModuleIcon = moduleStyle.icon
 
-  return (
-    <Link
-      href={task.href}
-      prefetch={false}
-      className="group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-      aria-label={`打开${task.moduleLabel} ${task.versionLabel} ${task.name}`}
-    >
-      <Card className="relative overflow-hidden cursor-pointer border-slate-200 transition-colors group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20">
+  const content = (
+      <Card className={`relative overflow-hidden border-slate-200 transition-colors ${task.href ? 'cursor-pointer group-hover:border-indigo-200 group-hover:shadow-sm group-active:border-indigo-300 group-active:bg-indigo-50/20' : 'bg-slate-50'}`}>
         <div className={`absolute inset-y-0 left-0 w-1 ${moduleStyle.bar}`} aria-hidden="true" />
         <CardContent className={`${isMobile ? 'p-3' : 'p-4'}`}>
           <div className="flex items-center gap-3 pl-1">
@@ -1013,7 +1251,7 @@ function TaskItem({
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.badge}`}>
                   <ModuleIcon className="h-3 w-3" />
-                  任务：{task.moduleLabel}
+                  {task.selectionOnly ? '选择：' : '任务：'}{task.moduleLabel}
                 </span>
                 <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${moduleStyle.versionBadge}`}>
                   版本：{task.versionLabel}
@@ -1043,9 +1281,6 @@ function TaskItem({
                 <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
                   下一步：{task.nextAction}
                 </span>
-                <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                  {task.versionDescription}
-                </span>
               </div>
               {!isMobile && (
                 <p className="mt-1 truncate text-xs text-slate-500">{task.nextActionDescription}</p>
@@ -1053,10 +1288,32 @@ function TaskItem({
             </div>
 
             {/* 箭头 */}
-            <ChevronRightIcon className="h-5 w-5 text-slate-300 group-hover:text-indigo-500 transition-colors shrink-0" />
+            {task.href ? (
+              <ChevronRightIcon className="h-5 w-5 text-slate-300 group-hover:text-indigo-500 transition-colors shrink-0" />
+            ) : (
+              <span className="shrink-0 rounded bg-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500">暂不可用</span>
+            )}
           </div>
         </CardContent>
       </Card>
+  )
+
+  if (!task.href) {
+    return (
+      <div className="group block rounded-lg" aria-disabled="true">
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      href={task.href}
+      prefetch={false}
+      className="group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+      aria-label={`打开${task.moduleLabel} ${task.versionLabel} ${task.name}`}
+    >
+      {content}
     </Link>
   )
 }
@@ -1085,23 +1342,66 @@ function LoadErrorState({
   )
 }
 
-// 空状态组件
-function EmptyState({ isMobile }: { isMobile: boolean }) {
+// 空状态组件：组织没有资产、搜索无结果和筛选无结果是三种不同的下一步。
+function EmptyState({
+  isMobile,
+  mode,
+  query,
+  onClearSearch,
+  onResetFilter,
+}: {
+  isMobile: boolean
+  mode: 'organization' | 'search' | 'filter'
+  query: string
+  onClearSearch: () => void
+  onResetFilter: () => void
+}) {
+  const content = mode === 'organization'
+    ? {
+        title: '还没有合同或草稿',
+        description: '可以起草一份新合同，也可以上传已有 Word 或 PDF 发起风险审核。',
+      }
+    : mode === 'search'
+      ? {
+          title: `没有找到“${query}”`,
+          description: '换一个合同名称、编号或客户关键词，或者清除搜索查看全部任务。',
+        }
+      : {
+          title: '当前分类没有任务',
+          description: '合同资产仍然存在，只是没有符合当前分类的任务。',
+        }
+
   return (
     <div className="text-center py-12 md:py-16">
       <div className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4`}>
         <FileTextIcon className={`${isMobile ? 'h-8 w-8' : 'h-10 w-10'} text-slate-300`} />
       </div>
-      <p className={`text-slate-500 ${isMobile ? 'text-sm' : 'text-base'}`}>暂无合同记录</p>
-      <p className="text-xs text-slate-400 mt-1">可以直接发起合同审核，上传源文件后生成审核运行。</p>
-      {!isMobile && (
-        <Link href="/contracts/new" prefetch={false}>
-          <Button variant="outline" size="sm" className="mt-4">
-            <PlusIcon className="h-4 w-4 mr-1" />
-            发起审核
-          </Button>
-        </Link>
-      )}
+      <p className={`text-slate-700 font-medium ${isMobile ? 'text-sm' : 'text-base'}`}>{content.title}</p>
+      <p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-slate-500">{content.description}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        {mode === 'organization' && (
+          <>
+            <Link href="/contracts/draft" prefetch={false}>
+              <Button variant="outline" size="sm">
+                <PenToolIcon className="mr-1 h-4 w-4" />
+                开始起草
+              </Button>
+            </Link>
+            <Link href="/contracts/new?from=workbench" prefetch={false}>
+              <Button size="sm">
+                <PlusIcon className="mr-1 h-4 w-4" />
+                上传并审核
+              </Button>
+            </Link>
+          </>
+        )}
+        {mode === 'search' && (
+          <Button variant="outline" size="sm" onClick={onClearSearch}>清除搜索</Button>
+        )}
+        {mode === 'filter' && (
+          <Button variant="outline" size="sm" onClick={onResetFilter}>查看全部任务</Button>
+        )}
+      </div>
     </div>
   )
 }

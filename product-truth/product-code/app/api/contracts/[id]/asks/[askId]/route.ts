@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { firstRelatedRow, type OneOrMany } from '@/lib/ask/relations'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 
 // ASK关联用户类型 - 匹配数据库查询返回的结构
 interface AskWithUser {
@@ -43,12 +44,26 @@ export async function GET(
 
     const user = await requireAuth(request)
 
-    const { contract } = await getAccessibleContract(contractId, user.id, undefined, 'id')
+    const { contract } = await getAccessibleContract(
+      contractId,
+      user.id,
+      undefined,
+      'id, current_version_id',
+    )
     if (!contract) {
       return NextResponse.json(
         { error: 'Contract not found' },
         { status: 404 }
       )
+    }
+    const binding = await resolveCurrentReviewArtifactBinding({
+      contractId,
+      currentVersionId: typeof contract.current_version_id === 'string'
+        ? contract.current_version_id
+        : null,
+    })
+    if (!binding) {
+      return NextResponse.json({ error: 'ASK not found' }, { status: 404 })
     }
 
     // 查询 ASK 详情
@@ -84,6 +99,9 @@ export async function GET(
       `)
       .eq('id', askId)
       .eq('contract_id', contractId)
+      .eq('review_id', binding.reviewId)
+      .eq('contract_version_id', binding.contractVersionId)
+      .eq('binding_state', 'bound')
       .single()
 
     if (error) {

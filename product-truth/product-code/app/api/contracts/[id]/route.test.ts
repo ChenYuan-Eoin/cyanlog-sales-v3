@@ -8,6 +8,7 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
+  canAccessContractAction: vi.fn(),
   getDefaultOrgId: vi.fn(),
   listAccessibleUserIds: vi.fn(),
 }))
@@ -30,9 +31,13 @@ vi.mock('@/lib/observability', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import {
+  canAccessContractAction,
+  getDefaultOrgId,
+  listAccessibleUserIds,
+} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { PATCH } from './route'
+import { GET, PATCH } from './route'
 
 function makeMalformedRequest(): any {
   return {
@@ -59,6 +64,33 @@ describe('PATCH /api/contracts/[id] validation', () => {
     expect(res.status).toBe(400)
     expect(body.code).toBe('INVALID_DATA')
     expect(getDefaultOrgId).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /api/contracts/[id] permission gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
+    vi.mocked(getDefaultOrgId).mockResolvedValue('org-1')
+    vi.mocked(listAccessibleUserIds).mockResolvedValue({
+      orgId: 'org-1',
+      assignments: [],
+      userIds: ['user-1'],
+    })
+  })
+
+  it('没有合同查看能力时返回 403 且不查询合同与任务证据', async () => {
+    vi.mocked(canAccessContractAction).mockReturnValue(false)
+
+    const res = await GET({ headers: new Headers() } as any, {
+      params: Promise.resolve({ id: CONTRACT_ID }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('FORBIDDEN')
+    expect(canAccessContractAction).toHaveBeenCalledWith([], 'org-1', 'view')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 })

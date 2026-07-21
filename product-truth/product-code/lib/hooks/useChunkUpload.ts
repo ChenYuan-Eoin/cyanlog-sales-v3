@@ -1,6 +1,12 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import { readUploadErrorMessage } from '@/lib/documents/upload-error'
+import {
+  CONTRACT_UPLOAD_CHUNK_BYTES,
+  stableSourceUploadId,
+  validateUploadSize,
+} from '@/lib/documents/chunk-upload-protocol'
 
 export type UploadStatus = 'idle' | 'uploading' | 'paused' | 'completed' | 'error'
 
@@ -23,38 +29,46 @@ export interface UploadState {
 }
 
 export interface UseChunkUploadOptions {
-  chunkSize?: number // default 5MB
+  /** @deprecated 分块大小由服务端协议固定为 4MiB。 */
+  chunkSize?: number
   maxRetries?: number // default 3
   concurrency?: number // default 3
   onProgress?: (state: UploadState) => void
-  onComplete?: (result: { contractId: string; fileUrl: string; storagePath: string }) => void
+  onComplete?: (result: {
+    fileUrl: string
+    storagePath: string
+    contractId: string
+    fileName: string
+    uploadId: string
+    sha256: string
+    sourceTextHash: string | null
+    preparationStatus: 'READY' | 'AWAITING_OCR' | 'AWAITING_CONVERSION'
+    preparationReason: 'PDF_TEXT_UNAVAILABLE' | 'LEGACY_DOC_REQUIRES_CONVERSION' | null
+    reviewReady: boolean
+    renderMode: 'native-pdf' | 'browser-ooxml' | 'identity-only'
+    pageMapLocator: 'provisional' | null
+    contractStatus: 'PENDING' | 'DRAFT'
+  }) => void
   onError?: (error: string) => void
 }
 
-const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_MAX_RETRIES = 3
 const DEFAULT_CONCURRENCY = 3
 
-function readApiError(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object') {
-    const error = (payload as { error?: unknown }).error
-    if (typeof error === 'string') {
-      return error
-    }
-    if (error && typeof error === 'object') {
-      const message = (error as { message?: unknown }).message
-      if (typeof message === 'string') {
-        return message
-      }
-    }
+class UploadHttpError extends Error {
+  constructor(message: string, readonly retryable: boolean) {
+    super(message)
+    this.name = 'UploadHttpError'
   }
+}
 
-  return fallback
+async function fileSha256(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
 export function useChunkUpload(options: UseChunkUploadOptions = {}) {
   const {
-    chunkSize = DEFAULT_CHUNK_SIZE,
     maxRetries = DEFAULT_MAX_RETRIES,
     concurrency = DEFAULT_CONCURRENCY,
     onProgress,
@@ -72,7 +86,16 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
-  const abortReasonRef = useRef<'pause' | 'cancel' | null>(null)
+  const activeRunRef = useRef<{ runId: number; controller: AbortController } | null>(null)
+  const nextRunIdRef = useRef(0)
+  const resumableSessionRef = useRef<{
+    fileKey: string
+    uploadId: string
+    contractId: string
+    token: string
+    chunkCount: number
+    expectedSha256: string
+  } | null>(null)
   const startTimeRef = useRef<number>(0)
   const uploadedBytesRef = useRef<number>(0)
 
@@ -83,7 +106,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
     let index = 0
 
     while (start < fileSize) {
-      const end = Math.min(start + chunkSize, fileSize)
+      const end = Math.min(start + CONTRACT_UPLOAD_CHUNK_BYTES, fileSize)
       chunks.push({
         index,
         start,
@@ -96,7 +119,7 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
     }
 
     return chunks
-  }, [chunkSize])
+  }, [])
 
   // 上传单个分块
   const uploadChunk = useCallback(async (
@@ -104,7 +127,9 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
     file: File,
     contractId: string,
     token: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    uploadId: string,
+    expectedSha256: string,
   ): Promise<void> => {
     const blob = file.slice(chunk.start, chunk.end)
     const formData = new FormData()
@@ -115,6 +140,8 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
     formData.append('totalSize', String(file.size))
     formData.append('fileName', file.name)
     formData.append('fileType', file.type)
+    formData.append('uploadId', uploadId)
+    formData.append('expectedSha256', expectedSha256)
 
     const response = await fetch(`/api/contracts/${contractId}/upload-chunk`, {
       method: 'POST',
@@ -126,8 +153,12 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: '上传失败' }))
-      throw new Error(readApiError(error, `分块 ${chunk.index} 上传失败`))
+      const message = await readUploadErrorMessage(response, `分块 ${chunk.index} 上传失败`)
+      const retryable = response.status === 408
+        || response.status === 425
+        || response.status === 429
+        || response.status >= 500
+      throw new UploadHttpError(message, retryable)
     }
   }, [])
 
@@ -141,14 +172,29 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
       onError?.('缺少必要参数')
       return
     }
+    // React state 在下一次 render 前仍可能是 idle；同步 run gate 才能阻止双击并发。
+    if (activeRunRef.current && !activeRunRef.current.controller.signal.aborted) {
+      return
+    }
+    const sizeValidation = validateUploadSize(file.size)
+    if (!sizeValidation.ok) {
+      onError?.(sizeValidation.error)
+      return
+    }
 
-    abortReasonRef.current = null
-    abortControllerRef.current = new AbortController()
-    const signal = abortControllerRef.current.signal
+    const controller = new AbortController()
+    const runId = ++nextRunIdRef.current
+    activeRunRef.current = { runId, controller }
+    abortControllerRef.current = controller
+    const signal = controller.signal
     startTimeRef.current = Date.now()
     uploadedBytesRef.current = 0
 
     const chunks = initChunks(file.size)
+    const fileKey = `${contractId}:${file.name}:${file.size}:${file.lastModified}`
+    const previousSession = resumableSessionRef.current?.fileKey === fileKey
+      ? resumableSessionRef.current
+      : null
 
     setState({
       status: 'uploading',
@@ -162,8 +208,35 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
     // 并发上传队列
     const queue = [...chunks]
     const activeUploads = new Set<Promise<void>>()
-    const completedChunks = new Set<number>()
     const failedChunks = new Set<number>()
+    let terminalError: Error | null = null
+    let expectedSha256: string
+    let uploadId: string
+
+    try {
+      expectedSha256 = previousSession?.expectedSha256 ?? await fileSha256(file)
+      uploadId = await stableSourceUploadId(contractId, expectedSha256)
+      if (signal.aborted || activeRunRef.current?.runId !== runId) {
+        if (activeRunRef.current?.runId === runId) activeRunRef.current = null
+        if (abortControllerRef.current === controller) abortControllerRef.current = null
+        return
+      }
+      resumableSessionRef.current = {
+        fileKey,
+        uploadId,
+        contractId,
+        token,
+        chunkCount: chunks.length,
+        expectedSha256,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '无法计算文件摘要'
+      setState(prev => ({ ...prev, status: 'error', error: message }))
+      onError?.(message)
+      if (activeRunRef.current?.runId === runId) activeRunRef.current = null
+      if (abortControllerRef.current === controller) abortControllerRef.current = null
+      return
+    }
 
     const updateProgress = () => {
       const completedBytes = chunks
@@ -199,21 +272,36 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
       updateProgress()
 
       try {
-        await uploadChunk(chunk, file, contractId, token, signal)
+        await uploadChunk(
+          chunk,
+          file,
+          contractId,
+          token,
+          signal,
+          uploadId,
+          expectedSha256
+        )
         chunk.status = 'completed'
-        completedChunks.add(chunk.index)
         updateProgress()
-      } catch (_error) {
-        void _error
+      } catch (error) {
+        if (signal.aborted) {
+          chunk.status = 'pending'
+          return
+        }
+
         chunk.status = 'error'
         chunk.retries++
+        const retryable = error instanceof UploadHttpError ? error.retryable : true
 
-        if (chunk.retries < maxRetries) {
+        if (retryable && chunk.retries < maxRetries) {
           // 重试
           chunk.status = 'pending'
           queue.push(chunk)
         } else {
           failedChunks.add(chunk.index)
+          terminalError = error instanceof Error ? error : new Error('分块上传失败')
+          queue.length = 0
+          controller.abort()
         }
         updateProgress()
       }
@@ -236,12 +324,13 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
 
         // 检查是否已取消
         if (signal.aborted) {
+          if (terminalError) throw terminalError
           throw new Error('上传已取消')
         }
       }
 
       if (failedChunks.size > 0) {
-        throw new Error(`${failedChunks.size} 个分块上传失败`)
+        throw terminalError ?? new Error(`${failedChunks.size} 个分块上传失败`)
       }
 
       // 合并分块
@@ -256,24 +345,59 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
           fileType: file.type,
           totalSize: file.size,
           chunkCount: chunks.length,
+          uploadId,
+          expectedSha256,
         }),
         signal,
       })
 
       if (!mergeRes.ok) {
-        const error = await mergeRes.json().catch(() => ({ error: '合并失败' }))
-        throw new Error(readApiError(error, '文件合并失败'))
+        throw new Error(await readUploadErrorMessage(mergeRes, '文件合并失败'))
       }
 
       const result = await mergeRes.json()
-      const resultData = result?.data || {}
-      const fileUrl = typeof resultData.fileUrl === 'string' ? resultData.fileUrl : ''
-      const storagePath = typeof resultData.storagePath === 'string' ? resultData.storagePath : ''
-      const mergedContractId = typeof resultData.contractId === 'string' ? resultData.contractId : contractId
-
-      if (!fileUrl || !storagePath || !mergedContractId) {
-        throw new Error('文件合并成功但返回数据不完整')
+      const resultData = result?.data
+      const preparationStatus = resultData?.preparationStatus
+      const reviewReady = resultData?.reviewReady
+      const sourceTextHash = resultData?.sourceTextHash
+      const preparationReason = resultData?.preparationReason
+      const renderMode = resultData?.renderMode
+      const pageMapLocator = resultData?.pageMapLocator
+      const contractStatus = resultData?.contractStatus
+      const sourceStateIsConsistent = preparationStatus === 'READY'
+        ? reviewReady === true
+          && typeof sourceTextHash === 'string'
+          && /^[0-9a-f]{64}$/i.test(sourceTextHash)
+          && preparationReason === null
+          && (renderMode === 'native-pdf' || renderMode === 'browser-ooxml')
+          && pageMapLocator === 'provisional'
+          && contractStatus === 'PENDING'
+        : preparationStatus === 'AWAITING_OCR'
+          ? reviewReady === false
+            && sourceTextHash === null
+            && preparationReason === 'PDF_TEXT_UNAVAILABLE'
+            && renderMode === 'native-pdf'
+            && pageMapLocator === null
+            && contractStatus === 'DRAFT'
+          : preparationStatus === 'AWAITING_CONVERSION'
+            && reviewReady === false
+            && sourceTextHash === null
+            && preparationReason === 'LEGACY_DOC_REQUIRES_CONVERSION'
+            && renderMode === 'identity-only'
+            && pageMapLocator === null
+            && contractStatus === 'DRAFT'
+      if (
+        !resultData
+        || typeof resultData.fileUrl !== 'string'
+        || typeof resultData.storagePath !== 'string'
+        || typeof resultData.sourceHash !== 'string'
+        || resultData.sourceHash !== expectedSha256
+        || !sourceStateIsConsistent
+      ) {
+        throw new Error('文件已合并，但返回的源文件身份不完整或不一致')
       }
+
+      if (signal.aborted || activeRunRef.current?.runId !== runId) return
 
       setState(prev => ({
         ...prev,
@@ -281,31 +405,31 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
         progress: 100,
       }))
 
-      onComplete?.({
-        contractId: mergedContractId,
-        fileUrl,
-        storagePath,
-      })
-    } catch (error) {
-      if (signal.aborted && abortReasonRef.current === 'pause') {
-        setState(prev => ({
-          ...prev,
-          status: 'paused',
-        }))
-        return
+      // 当前 run 已完成；在回调启动队列下一文件前释放同步 gate。
+      if (activeRunRef.current?.runId === runId) activeRunRef.current = null
+      if (abortControllerRef.current === controller) abortControllerRef.current = null
+      if (resumableSessionRef.current?.uploadId === uploadId) {
+        resumableSessionRef.current = null
       }
 
-      if (signal.aborted && abortReasonRef.current === 'cancel') {
-        setState({
-          status: 'idle',
-          progress: 0,
-          chunks: [],
-          uploadedBytes: 0,
-          totalBytes: 0,
-          speed: 0,
-        })
-        return
-      }
+      onComplete?.({
+        fileUrl: resultData.fileUrl,
+        storagePath: resultData.storagePath,
+        contractId,
+        fileName: file.name,
+        uploadId,
+        sha256: expectedSha256,
+        sourceTextHash,
+        preparationStatus,
+        preparationReason,
+        reviewReady,
+        renderMode,
+        pageMapLocator,
+        contractStatus,
+      })
+    } catch (error) {
+      // 用户暂停/取消由对应动作维护状态；异步 fetch 的 AbortError 不得把它覆盖成 error。
+      if (signal.aborted && !terminalError) return
 
       const errorMessage = error instanceof Error ? error.message : '上传失败'
 
@@ -316,12 +440,14 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
       }))
 
       onError?.(errorMessage)
+    } finally {
+      if (activeRunRef.current?.runId === runId) activeRunRef.current = null
+      if (abortControllerRef.current === controller) abortControllerRef.current = null
     }
   }, [initChunks, uploadChunk, concurrency, maxRetries, onProgress, onComplete, onError])
 
   // 暂停上传
   const pauseUpload = useCallback(() => {
-    abortReasonRef.current = 'pause'
     abortControllerRef.current?.abort()
     setState(prev => ({
       ...prev,
@@ -330,9 +456,10 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
   }, [])
 
   // 取消上传
-  const cancelUpload = useCallback(() => {
-    abortReasonRef.current = 'cancel'
+  const cancelUpload = useCallback(async (): Promise<boolean> => {
+    const session = resumableSessionRef.current
     abortControllerRef.current?.abort()
+    resumableSessionRef.current = null
     setState({
       status: 'idle',
       progress: 0,
@@ -341,6 +468,28 @@ export function useChunkUpload(options: UseChunkUploadOptions = {}) {
       totalBytes: 0,
       speed: 0,
     })
+
+    if (!session) return true
+
+    try {
+      const response = await fetch(`/api/contracts/${session.contractId}/upload-chunk`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uploadId: session.uploadId,
+          expectedSha256: session.expectedSha256,
+          chunkCount: session.chunkCount,
+        }),
+      })
+      // 409 表示 merge 已提交或合同状态已经变化；调用方不得继续删除合同草稿。
+      return response.ok
+    } catch {
+      // UI 立即退出，但上层只有在服务端确认取消后才会删除草稿合同。
+      return false
+    }
   }, [])
 
   return {

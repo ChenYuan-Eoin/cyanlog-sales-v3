@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth'
 import { getAccessibleContract } from '@/lib/scoped-access'
 import { canAccessAskByRoles } from '@/lib/ask/permissions'
 import { firstRelatedRow, type OneOrMany } from '@/lib/ask/relations'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 
 // ASK Item 类型定义 - 匹配数据库查询返回的结构
 interface AskItem {
@@ -53,7 +54,12 @@ export async function GET(
     const user = await requireAuth(request)
 
     // 验证合同权限
-    const access = await getAccessibleContract(contractId, user.id, undefined, 'id, org_id')
+    const access = await getAccessibleContract(
+      contractId,
+      user.id,
+      undefined,
+      'id, org_id, current_version_id',
+    )
     const { contract } = access
 
     if (!contract) {
@@ -61,6 +67,25 @@ export async function GET(
         { error: 'Contract not found' },
         { status: 404 }
       )
+    }
+
+    const binding = await resolveCurrentReviewArtifactBinding({
+      contractId,
+      currentVersionId: typeof contract.current_version_id === 'string'
+        ? contract.current_version_id
+        : null,
+    })
+    if (!binding) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          contract_id: contractId,
+          items: [],
+          summary: { total: 0, pending: 0, responded: 0, closed: 0 },
+          risk_summary: { red: 0, yellow: 0, green: 0 },
+          can_export: false,
+        },
+      })
     }
 
     // 获取 ASK 列表
@@ -92,6 +117,9 @@ export async function GET(
         )
       `)
       .eq('contract_id', contractId)
+      .eq('review_id', binding.reviewId)
+      .eq('contract_version_id', binding.contractVersionId)
+      .eq('binding_state', 'bound')
       .order('created_at', { ascending: true })
 
     if (error) {

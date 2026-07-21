@@ -1,8 +1,14 @@
+import { reviewRunMatchesSourceVersion } from './review-source-identity'
+
 type ReviewStatus = string | null | undefined
 
 export type ReviewEvidenceReview = {
   id: string
   status?: ReviewStatus
+  contract_version_id?: string | null
+  source_storage_path?: string | null
+  source_hash?: string | null
+  source_text_hash?: string | null
   rule_version?: number | null
   skill_bundle_id?: string | null
   plan_snapshot_id?: string | null
@@ -18,10 +24,14 @@ export type ReviewEvidenceReview = {
 
 export type ReviewEvidenceVersion = {
   id: string
+  storage_path?: string | null
+  file_sha256?: string | null
+  text_sha256?: string | null
 } | null
 
 export type ReviewEvidenceJob = {
   id?: string
+  review_id?: string | null
   status?: ReviewStatus
   provider?: string | null
   degraded?: boolean | null
@@ -186,6 +196,9 @@ export type ReviewRunEvidence = {
   id: string
   status: string
   contract_version_id: string | null
+  source_storage_path: string | null
+  source_hash: string | null
+  source_text_hash: string | null
   skill_bundle_id: string
   rule_snapshot_id: string
   rule_set_snapshot_ids: string[]
@@ -1190,6 +1203,20 @@ export function buildReviewRunEvidence(input: {
   } = input
   if (!latestReview) return null
 
+  const hasPersistedSourceReference = Boolean(
+    latestReview.contract_version_id
+      || latestReview.source_storage_path
+      || latestReview.source_hash
+      || latestReview.source_text_hash
+  )
+  if (
+    currentVersion
+      && hasPersistedSourceReference
+      && !reviewRunMatchesSourceVersion(latestReview, currentVersion)
+  ) {
+    return null
+  }
+
   const ruleBinding = selectSnapshotBinding(
     latestReview.rule_snapshot_ids,
     skillBundle?.rule_snapshot_ids
@@ -1257,7 +1284,10 @@ export function buildReviewRunEvidence(input: {
   return {
     id: latestReview.id,
     status: latestReview.status || 'PENDING',
-    contract_version_id: currentVersion?.id || null,
+    contract_version_id: latestReview.contract_version_id || null,
+    source_storage_path: latestReview.source_storage_path || null,
+    source_hash: latestReview.source_hash || null,
+    source_text_hash: latestReview.source_text_hash || null,
     skill_bundle_id: skillBundleId,
     rule_snapshot_id: summarizeBoundRuleSnapshotId(ruleBinding.ids, refs),
     rule_set_snapshot_ids: ruleSetBinding.ids,

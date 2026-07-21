@@ -14,6 +14,10 @@ describe('buildReviewRunEvidence', () => {
       latestReview: {
         id: 'review-1',
         status: 'COMPLETED',
+        contract_version_id: 'version-1',
+        source_storage_path: 'contracts/a/v1.docx',
+        source_hash: 'a'.repeat(64),
+        source_text_hash: 'b'.repeat(64),
         rule_snapshot_ids: ['snapshot-1'],
         rule_set_snapshot_ids: ['rule-set-snapshot-1'],
         created_at: '2026-06-30T01:00:00.000Z',
@@ -27,7 +31,12 @@ describe('buildReviewRunEvidence', () => {
         started_at: '2026-06-30T01:00:30.000Z',
         completed_at: '2026-06-30T01:01:30.000Z',
       },
-      currentVersion: { id: 'version-1' },
+      currentVersion: {
+        id: 'version-1',
+        storage_path: 'contracts/a/v1.docx',
+        file_sha256: 'a'.repeat(64),
+        text_sha256: 'b'.repeat(64),
+      },
       risks: [{ rule_id: 'rule-1', rule_code: 'R001', rule_version: 2 }],
       snapshots: [{
         id: 'snapshot-1',
@@ -49,6 +58,9 @@ describe('buildReviewRunEvidence', () => {
     expect(evidence).toMatchObject({
       id: 'review-1',
       contract_version_id: 'version-1',
+      source_storage_path: 'contracts/a/v1.docx',
+      source_hash: 'a'.repeat(64),
+      source_text_hash: 'b'.repeat(64),
       skill_bundle_id: 'contract-skill:ruleset:R001@2',
       rule_snapshot_id: 'contract_rule_snapshots:snapshot-1',
       model_policy_id: 'model-policy:rule-engine',
@@ -68,6 +80,36 @@ describe('buildReviewRunEvidence', () => {
       released_at: '2026-06-30T00:59:00.000Z',
       source: 'published_snapshot',
     }])
+  })
+
+  it('fails closed instead of attaching v1 evidence and provider facts to current v2', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-v1',
+        status: 'COMPLETED',
+        contract_version_id: 'version-1',
+        source_storage_path: 'contracts/a/v1.docx',
+        source_hash: '1'.repeat(64),
+        source_text_hash: 'a'.repeat(64),
+        model_invocation_ids: ['invocation-v1'],
+      },
+      latestJob: {
+        id: 'job-v1',
+        review_id: 'review-v1',
+        provider: 'provider-for-v1',
+      },
+      currentVersion: {
+        id: 'version-2',
+        storage_path: 'contracts/a/v2.docx',
+        file_sha256: '2'.repeat(64),
+        text_sha256: 'b'.repeat(64),
+      },
+      risks: [{ rule_id: 'rule-v1' }],
+      snapshots: [],
+      modelInvocations: [{ id: 'invocation-v1', provider: 'provider-for-v1' }],
+    })
+
+    expect(evidence).toBeNull()
   })
 
   it('marks partial snapshot evidence when a risk references an uncovered rule', () => {
@@ -407,7 +449,7 @@ describe('buildReviewRunEvidence', () => {
     expect(reviewRouteSource).toContain(".from('contract_rule_snapshots')")
     expect(reviewRouteSource).toContain(".from('contract_rule_set_snapshots')")
     expect(reviewRouteSource).toMatch(
-      /nonEmptyStrings\(latestReview\?\.rule_snapshot_ids\)[\s\S]*nonEmptyStrings\(skillBundle\?\.rule_snapshot_ids\)/
+      /nonEmptyStrings\(selectedReview\?\.rule_snapshot_ids\)[\s\S]*nonEmptyStrings\(skillBundle\?\.rule_snapshot_ids\)/
     )
   })
 
@@ -1320,10 +1362,10 @@ describe('buildReviewRunEvidence', () => {
 
   it('loads plan-bound attempts by ReviewRun and plan while keeping ModelPolicy legacy-only', () => {
     expect(reviewRouteSource).toContain(".from('ai_runtime_plan_snapshots')")
-    expect(reviewRouteSource).toContain(".eq('id', latestReview.plan_snapshot_id)")
-    expect(reviewRouteSource).toContain('const modelPolicyId = latestReview?.plan_snapshot_id')
-    expect(reviewRouteSource).toContain(".eq('review_id', latestReview.id)")
-    expect(reviewRouteSource).toContain(".eq('plan_snapshot_id', latestReview.plan_snapshot_id)")
+    expect(reviewRouteSource).toContain(".eq('id', selectedReview.plan_snapshot_id)")
+    expect(reviewRouteSource).toContain('const modelPolicyId = selectedReview?.plan_snapshot_id')
+    expect(reviewRouteSource).toContain(".eq('review_id', selectedReview.id)")
+    expect(reviewRouteSource).toContain(".eq('plan_snapshot_id', selectedReview.plan_snapshot_id)")
     expect(reviewRouteSource).toContain(".order('attempt_no', { ascending: true })")
     expect(reviewRouteSource).toContain('input_tokens, output_tokens, total_tokens')
   })

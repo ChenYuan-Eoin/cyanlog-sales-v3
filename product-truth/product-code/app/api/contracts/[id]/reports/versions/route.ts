@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAuthUser } from '@/lib/auth'
 import { firstRelatedRow, type OneOrMany } from '@/lib/ask/relations'
+import { getAccessibleContract } from '@/lib/scoped-access'
+import { resolveCurrentReviewArtifactBinding } from '@/lib/contracts/current-review-binding'
 
 // 报告版本类型定义
 interface ReportVersion {
@@ -41,6 +43,28 @@ export async function GET(
       )
     }
 
+    const access = await getAccessibleContract(
+      contractId,
+      user.id,
+      undefined,
+      'id, current_version_id',
+    )
+    if (!access.contract) {
+      return NextResponse.json({ error: 'Contract not found' }, { status: 404 })
+    }
+    const binding = await resolveCurrentReviewArtifactBinding({
+      contractId,
+      currentVersionId: typeof access.contract.current_version_id === 'string'
+        ? access.contract.current_version_id
+        : null,
+    })
+    if (!binding) {
+      return NextResponse.json({
+        success: true,
+        data: { contract_id: contractId, versions: [], total_versions: 0 },
+      })
+    }
+
     // 查询所有版本
     const { data: versions, error } = await supabaseAdmin
       .from('report_versions')
@@ -55,6 +79,9 @@ export async function GET(
         users:trigger_user_id (name)
       `)
       .eq('contract_id', contractId)
+      .eq('review_id', binding.reviewId)
+      .eq('contract_version_id', binding.contractVersionId)
+      .eq('binding_state', 'bound')
       .order('version', { ascending: false })
 
     if (error) {

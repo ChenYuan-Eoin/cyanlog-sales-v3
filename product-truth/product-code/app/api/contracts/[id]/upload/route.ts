@@ -1,259 +1,120 @@
-// POST /api/contracts/[id]/upload - 上传合同文件
-// REQ: F005
-
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { logError } from '@/lib/error-log'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
-import { errorResponse } from '@/lib/api/common'
+import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
-import { extractContractText } from '@/lib/contracts/text-extraction'
-
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]
-const ALLOWED_EXTENSIONS = ['.pdf', '.docx']
-
-const MAX_SIZE = 50 * 1024 * 1024 // 50MB
+import { logError } from '@/lib/error-log'
+import {
+  canAccessContractAction,
+  listFreshAccessibleUserIds,
+} from '@/lib/scoped-access'
+import { supabaseAdmin } from '@/lib/supabase'
+import {
+  stableSourceUploadId,
+  validateUploadSize,
+} from '@/lib/documents/chunk-upload-protocol'
+import {
+  finalizeContractSourceUpload,
+  SourceFinalizationError,
+  type SourceContractSnapshot,
+} from '@/lib/documents/source-ingestion'
+import { SourcePreparationError, prepareContractSource } from '@/lib/documents/source-page-map'
 
 function isFile(value: unknown): value is File {
   return typeof File !== 'undefined' && value instanceof File
 }
 
-const contractUploadFormSchema = z.object({
+const uploadFormSchema = z.object({
   file: z.custom<File>(isFile),
   purpose: z.enum(['source', 'manual_revision', 'customer-return']).optional(),
 })
 
-function hasAllowedFileType(file: File): boolean {
-  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
-  return ALLOWED_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(extension)
+function authError(error: unknown) {
+  return error instanceof Error && error.name === 'AuthError'
+    ? errorResponse(createApiError('UNAUTHORIZED'))
+    : null
 }
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await requireAuth(req)
-    if (!user) {
-      return errorResponse(createApiError('UNAUTHORIZED'))
-    }
-
     const { id: contractId } = await params
-
-    // 获取表单数据
     const formData = await req.formData().catch(() => null)
     if (!formData) {
       return errorResponse(createApiError('VALIDATION_ERROR', '请求格式不是有效的表单数据'))
     }
-
-    const parsed = contractUploadFormSchema.safeParse({
+    const parsed = uploadFormSchema.safeParse({
       file: formData.get('file'),
       purpose: formData.get('purpose') || undefined,
     })
     if (!parsed.success) {
       return errorResponse(createApiError('MISSING_FIELD', '未提供文件'))
     }
-
     const { file } = parsed.data
-    const uploadPurpose = parsed.data.purpose || 'source'
-    const isVersionOnlyUpload = uploadPurpose === 'manual_revision' || uploadPurpose === 'customer-return'
-
-    // 验证文件类型
-    if (!hasAllowedFileType(file)) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '不支持的文件类型，请上传 PDF 或 DOCX'))
+    const sizeValidation = validateUploadSize(file.size)
+    if (!sizeValidation.ok) {
+      return errorResponse(createApiError('VALIDATION_ERROR', sizeValidation.error))
     }
+    const bytes = new Uint8Array(await file.arrayBuffer())
 
-    // 验证文件大小
-    if (file.size > MAX_SIZE) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '文件大小超过 50MB 限制'))
+    // Parse and signature-check before organization/database/storage work. The
+    // exact bytes are reused later; no second, divergent extraction occurs.
+    const preparation = await prepareContractSource(bytes, file.name, file.type)
+    const {
+      orgId,
+      assignments,
+      userIds: accessibleUserIds,
+    } = await listFreshAccessibleUserIds(user.id)
+    if (!canAccessContractAction(assignments, orgId, 'create_or_upload')) {
+      return errorResponse(createApiError('FORBIDDEN', '没有上传合同源文件的权限'))
     }
-
-    const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
-
-    // 检查合同是否存在且有权限
     const { data: contract, error: fetchError } = await supabaseAdmin
       .from('contracts')
-      .select('id, created_by, org_id, status')
+      .select('id, org_id, status, storage_path, filename, size, mime_type, updated_at')
       .eq('id', contractId)
       .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
-      .single()
-
-    if (fetchError || !contract) {
-      return errorResponse(createApiError('NOT_FOUND', '合同不存在'))
-    }
-
-    // 生成存储路径：contracts/{contractId}/{timestamp}_{filename}
-    const timestamp = Date.now()
-    const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const storagePath = `${contractId}/${timestamp}_${safeFileName}`
-    const fileBytes = Buffer.from(await file.arrayBuffer())
-    const parsedText = extractContractText(fileBytes, file.name, file.type)
-    if (!parsedText) {
-      return errorResponse(createApiError('VALIDATION_ERROR', '文件内容无法解析，请上传可复制文本的 PDF 或 DOCX 文件'))
-    }
-
-    // 上传文件到 Supabase Storage
-    const { error: uploadError } = await supabaseAdmin
-      .storage
-      .from('contracts')
-      .upload(storagePath, fileBytes, {
-        contentType: file.type,
-        upsert: true,
-      })
-
-    if (uploadError) {
-      await logError({
-        req,
-        source: 'api',
-        userId: user.id,
-        message: uploadError.message,
-        error: uploadError,
-        context: {
-          route: '/api/contracts/[id]/upload',
-          contractId,
-          fileName: file.name,
-        },
-      })
-      return errorResponse(createApiError('DB_ERROR', '上传失败'))
-    }
-
-    // 获取文件 URL
-    const { data: urlData } = supabaseAdmin
-      .storage
-      .from('contracts')
-      .getPublicUrl(storagePath)
-
-    const { data: latestVersion } = await supabaseAdmin
-      .from('contract_versions')
-      .select('id, version_number')
-      .eq('contract_id', contractId)
-      .order('version_number', { ascending: false })
-      .limit(1)
       .maybeSingle()
-
-    const nextVersionNumber = (latestVersion?.version_number || 0) + 1
-    if (isVersionOnlyUpload && !latestVersion) {
-      await supabaseAdmin.storage.from('contracts').remove([storagePath])
-      return errorResponse(createApiError(
-        'VALIDATION_ERROR',
-        '当前合同缺少源文件版本，不能直接上传客户回传版'
-      ))
+    if (fetchError || !contract) {
+      return errorResponse(createApiError('NOT_FOUND', '合同不存在或无权访问'))
     }
 
-    const versionSource = isVersionOnlyUpload || latestVersion ? 'manual_revision' : 'original'
-    const now = new Date().toISOString()
-
-    if (!isVersionOnlyUpload) {
-      // 源文件上传更新合同主记录。客户回传/人工修订只进入版本流，不能污染审核源文件。
-      const { error: updateError } = await supabaseAdmin
-        .from('contracts')
-        .update({
-          filename: file.name,
-          storage_path: storagePath,
-          size: file.size,
-          mime_type: file.type || 'application/octet-stream',
-          parsed_text: parsedText,
-          ocr_status: 'COMPLETED',
-          ocr_result: {
-            raw_text: parsedText,
-            confidence: 0.8,
-            source: 'text-extraction',
-            completed_at: now,
-          },
-          status: 'PENDING',
-          updated_at: now,
-        })
-        .eq('id', contractId)
-        .eq('org_id', orgId)
-
-      if (updateError) {
-        await logError({
-          req,
-          source: 'api',
-          userId: user.id,
-          message: updateError.message,
-          error: updateError,
-          context: {
-            route: '/api/contracts/[id]/upload',
-            contractId,
-            phase: 'update_contract',
-          },
-        })
-        await supabaseAdmin.storage.from('contracts').remove([storagePath])
-        return errorResponse(createApiError('DB_ERROR', '合同文件记录更新失败'))
-      }
-    }
-
-    const { data: insertedVersion, error: versionError } = await supabaseAdmin
-      .from('contract_versions')
-      .insert({
-        contract_id: contractId,
-        version_number: nextVersionNumber,
-        source: versionSource,
-        storage_path: storagePath,
-        file_size: file.size,
-        mime_type: file.type || 'application/octet-stream',
-        parent_version_id: latestVersion?.id || null,
-        change_summary: uploadPurpose === 'customer-return'
-          ? `客户回传版：${file.name}`
-          : versionSource === 'manual_revision'
-            ? `人工补充版本：${file.name}`
-            : '用户上传合同源文件',
-        uploaded_by: user.id,
-      })
-      .select('id, version_number, source')
-      .single()
-
-    if (versionError) {
-      await logError({
-        req,
-        source: 'api',
-        userId: user.id,
-        message: versionError.message,
-        error: versionError,
-        context: {
-          route: '/api/contracts/[id]/upload',
-          contractId,
-          phase: 'create_contract_version',
-        },
-      })
-      return errorResponse(createApiError('DB_ERROR', '合同版本记录创建失败'))
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        fileUrl: urlData.publicUrl,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        storagePath,
-        versionId: insertedVersion?.id || null,
-        versionNumber: insertedVersion?.version_number || nextVersionNumber,
-        versionSource: insertedVersion?.source || versionSource,
-        contractUpdated: !isVersionOnlyUpload,
-        status: isVersionOnlyUpload ? contract.status : 'PENDING',
-      },
-      message: isVersionOnlyUpload ? '版本上传成功' : '上传成功',
+    const finalized = await finalizeContractSourceUpload({
+      contract: contract as SourceContractSnapshot,
+      orgId,
+      userId: user.id,
+      fileName: file.name,
+      fileType: preparation.mimeType,
+      bytes,
+      uploadId: await stableSourceUploadId(contractId, preparation.sourceHash),
+      preparation,
     })
-  } catch (error: unknown) {
-    const err = error as Error
+    return successResponse({
+      ...finalized,
+      fileUrl: `/api/contracts/${contractId}/file?path=${encodeURIComponent(finalized.storagePath)}`,
+      uploadPurpose: parsed.data.purpose || 'source',
+      contractUpdated: true,
+    })
+  } catch (error) {
+    const response = authError(error)
+    if (response) return response
+    if (error instanceof SourcePreparationError) {
+      return errorResponse(createApiError('VALIDATION_ERROR', error.message))
+    }
+    if (error instanceof SourceFinalizationError) {
+      const key = error.status === 409 ? 'CONFLICT' : 'DB_ERROR'
+      return errorResponse(createApiError(key, error.message), error.status)
+    }
     await logError({
       req,
       source: 'api',
-      message: err.message,
+      message: error instanceof Error ? error.message : String(error),
       error,
-      context: {
-        route: '/api/contracts/[id]/upload',
-      },
+      context: { route: '/api/contracts/[id]/upload' },
     })
-    return errorResponse(createApiError('INTERNAL_ERROR', '服务器错误'))
+    return errorResponse(createApiError('INTERNAL_ERROR'))
   }
 }

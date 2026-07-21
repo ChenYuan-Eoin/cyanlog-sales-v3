@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import {
+  ContractAnalysisLeaseError,
   enqueueContractAnalysisJob,
   formatAnalysisError,
-  markContractAnalysisCompleted,
   markContractAnalysisFailed,
   markContractAnalysisRunning,
   runStructuredAnalysis,
   saveStructuredReport,
-  type ReviewOptions,
 } from '@/lib/contract-analysis'
 import { requireAuth } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+import {
+  canAccessContractAction,
+  listFreshAccessibleUserIds,
+} from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 import {
@@ -29,24 +31,7 @@ const reviewRunSchema = z.object({
     'rule_policy_updated',
   ]).default('manual_rerun'),
   comparison_id: z.string().uuid().optional(),
-  strategy: z.enum(['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE']).optional(),
-  strategy_id: z.string().trim().min(1).optional(),
-  semantic_provider_profile: z.string()
-    .trim()
-    .min(1)
-    .max(80)
-    .regex(/^[A-Za-z0-9_-]+$/)
-    .optional(),
-  semantic_model_asset_id: z.string()
-    .trim()
-    .min(1)
-    .max(128)
-    .regex(/^[a-z0-9][a-z0-9._-]*$/)
-    .optional(),
-}).refine(
-  (value) => !(value.semantic_model_asset_id && value.semantic_provider_profile),
-  { message: '不能同时提交新旧模型选择字段' },
-)
+}).strict()
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -81,8 +66,14 @@ export async function POST(
 
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
+    const {
+      orgId,
+      assignments,
+      userIds: accessibleUserIds,
+    } = await listFreshAccessibleUserIds(user.id)
+    if (!canAccessContractAction(assignments, orgId, 'review')) {
+      return errorResponse('没有发起合同复审的权限', 403, 'FORBIDDEN')
+    }
     routeId = await resolveIdParam(params)
     const id = routeId
 
@@ -105,7 +96,7 @@ export async function POST(
 
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
-      .select('id, status, storage_path, created_by, org_id')
+      .select('id, status, storage_path, current_version_id, created_by, org_id')
       .eq('id', id)
       .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
@@ -116,6 +107,9 @@ export async function POST(
     }
     if (!contract) {
       return errorResponse('合同不存在或无权访问', 404, 'NOT_FOUND')
+    }
+    if (!contract.current_version_id) {
+      return errorResponse('当前合同还没有可审核的源文件版本', 409, 'SOURCE_VERSION_MISSING')
     }
     if (contract.status === 'PARSING' || contract.status === 'ANALYZING') {
       return errorResponse('合同正在审核中，请勿重复提交', 409, 'ALREADY_IN_PROGRESS')
@@ -138,9 +132,21 @@ export async function POST(
       .from('contract_reviews')
       .select('id')
       .eq('contract_id', id)
+      .eq('contract_version_id', contract.current_version_id)
+      .eq('source_storage_path', sourceIdentity.source_storage_path)
+      .eq('source_hash', sourceIdentity.source_hash)
+      .eq('source_text_hash', sourceIdentity.source_text_hash)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
+
+    if (!parentReview?.id) {
+      return errorResponse(
+        '当前文件还没有审核记录，请先发起当前版本的首次审核',
+        409,
+        'CURRENT_REVIEW_MISSING',
+      )
+    }
 
     const { data: updatedContract, error: updateError } = await supabaseAdmin
       .from('contracts')
@@ -159,6 +165,7 @@ export async function POST(
       .from('contract_reviews')
       .insert({
         contract_id: id,
+        contract_version_id: contract.current_version_id,
         status: 'PARSING',
         started_at: new Date().toISOString(),
         review_trigger: 'direct',
@@ -183,37 +190,16 @@ export async function POST(
     let processingError: string | undefined
     let degradationReasons: string[] = []
 
-    const reviewOptions: ReviewOptions = {}
-    let strategyId: string | undefined
-    if (options.strategy_id) {
-      strategyId = options.strategy_id
-    } else if (options.strategy) {
-      const { data: strategyData } = await supabaseAdmin
-        .from('review_strategies')
-        .select('id, code')
-        .or(`org_id.is.null,org_id.eq.${orgId}`)
-        .eq('code', options.strategy)
-        .limit(1)
-        .maybeSingle()
-      if (strategyData) strategyId = strategyData.id
-      reviewOptions.strategyCode = options.strategy
-    }
-    const semanticModelAssetId = options.semantic_model_asset_id || options.semantic_provider_profile
-    if (semanticModelAssetId) {
-      reviewOptions.semanticModelAssetId = semanticModelAssetId
-    }
-
     try {
       await markContractAnalysisRunning(job)
       const structuredReport = await runStructuredAnalysis(id, {
-        ...reviewOptions,
         reviewId: review.id,
         requestedBy: user.id,
         reviewTrigger: 'direct',
         reviewEvent: options.trigger_event,
       })
-      await saveStructuredReport(review.id, id, structuredReport, strategyId)
-      await markContractAnalysisCompleted(job, structuredReport.result)
+      await markContractAnalysisRunning(job)
+      await saveStructuredReport(job, structuredReport)
       degradationReasons = structuredReport.result.degradationReasons || []
       responseStatus = structuredReport.result.degraded ? 'DEGRADED' : 'COMPLETED'
       responseMessage = structuredReport.result.degraded
@@ -222,6 +208,7 @@ export async function POST(
           : '再审核已完成，但存在降级或未绑定项，需要人工复核'
         : '再审核已完成'
     } catch (error) {
+      if (error instanceof ContractAnalysisLeaseError) throw error
       processingError = formatAnalysisError(error)
       await markContractAnalysisFailed(job, error)
       responseStatus = 'FAILED'
@@ -252,8 +239,6 @@ export async function POST(
       parentReviewId: parentReview?.id || null,
       triggerEvent: options.trigger_event,
       comparisonId: options.comparison_id || null,
-      semanticModelAssetId: semanticModelAssetId || null,
-      semanticProviderProfile: options.semantic_provider_profile || null,
       status: responseStatus,
       message: responseMessage,
       degraded: responseStatus === 'DEGRADED',
@@ -275,6 +260,20 @@ export async function POST(
       startedAt,
       error
     )
+    if (error instanceof ContractAnalysisLeaseError) {
+      if (error.code === 'ANALYSIS_LEASE_LOST') {
+        return errorResponse(
+          '再审核任务已由新的执行者接管，本次旧执行已停止，请刷新查看当前状态',
+          409,
+          error.code,
+        )
+      }
+      return errorResponse(
+        '再审核任务状态未能安全写入，系统已停止继续发布结果',
+        500,
+        error.code,
+      )
+    }
     return errorResponse('服务器内部错误', 500, 'INTERNAL_ERROR')
   }
 }

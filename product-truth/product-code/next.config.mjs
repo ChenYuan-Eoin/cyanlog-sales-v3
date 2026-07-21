@@ -12,6 +12,7 @@ const nextConfig = {
     '@opentelemetry/instrumentation',
     '@sentry/node',
     '@sentry/nextjs',
+    'pdfjs-dist',
     'require-in-the-middle',
   ],
 }
