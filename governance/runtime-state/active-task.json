@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-21T14:16:47+08:00",
+  "updated_at": "2026-07-21T18:31:22+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,15 +128,15 @@
     ]
   },
   "active_task": {
-    "id": "WP03",
-    "slug": "rule-collection",
-    "name": "规则集合、问题分类与属性判定产品化",
+    "id": "WP05",
+    "slug": "multiformat-review-cycle",
+    "name": "审核工作台风险定位与默认任务交互纠偏",
     "kind": "product",
     "status": "active",
-    "objective": "把现有为了展示树而形成的规则管理重建为可发布、可审计、可被业务消费的产品模型：规则集定义场景发布边界，问题分类组织业务问题，具体规则表达明确判断，规则详情配置金额、比例、时间、枚举等通用业务属性及运算符、阈值、风险与处理动作；语义能力只在运行时定位原文和读取事实，不在配置时把规则变成模糊 Prompt。",
-    "current_step": "WP03 技术实现、隔离 Preview 迁移、历史不可变性校验、规则管理桌面/iPad 验收与独立复审均已通过；现有 R001-R015 只形成逐条业务确认草案，未伪造 confirmed 合同、current SkillBundle 或正式 ReviewRun。当前只等待用户对推荐 V1 业务口径的一次确认；确认后原子发布 RuleSet/SkillBundle，并以真实合同 ReviewRun 验证规则与 WP02 模型计划同时生效。",
-    "started_at": "2026-07-21T12:05:00+08:00",
-    "activation_basis": "WP02 已由提交 c25ec17a8e51ec6476432ccccf9c30ee0dd9553b 完成五个业务用点、真实本地/云端调用、RoutePolicy 降级、token、model_invocations、不可漂移计划和真实合同 ReviewRun 证据；当前 ReviewRun 的明确阻断是现有发布规则资产无法编译。IN-20260721-053 记录本次切换。",
+    "objective": "恢复审核工作台最短业务链路：用户从合同列表进入审核时默认看到审查任务；选择任一风险后，原文件阅读区滚动到该风险的原文证据，页面外层不跳动，定位完成后仍可继续滚动、切换风险和执行处理。URL 只记录用户明确选择的面板，运行状态和下一步动作不得暗中替用户切到证据页。",
+    "current_step": "IN-20260721-051 已定位两项根因：合同列表把运行状态 detailPanel=evidence 错当成入口面板；DOCX 阅读区只有 min-height，内层滚动容器被全文撑开且 overscroll-contain 吞掉滚轮。当前只修入口状态与文档滚动边界，再用真实长 DOCX、文本 PDF、扫描 PDF 在桌面和 iPad 验收。",
+    "started_at": "2026-07-21T18:31:22+08:00",
+    "activation_basis": "WP03 已由提交 ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5 完成从空白业务配置、五路径测试、发布、真实 DOCX、真实 Provider/ReviewRun、规则快照和桌面/iPad 证据；IN-20260721-055 记录本次切换。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
     "allowed_paths": [
       "AGENTS.md",
@@ -147,70 +147,50 @@
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/00-master/PROJECT-主文档.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/feature-packets/F005-contract-review.md",
       "product-truth/feature-packets/F006-contract-review-skill-runtime.md",
-      "product-truth/feature-packets/F009-contract-rule-config.md",
-      "product-truth/product-code/app/configs",
-      "product-truth/product-code/app/contracts",
-      "product-truth/product-code/app/api/contract-policies",
-      "product-truth/product-code/app/api/contracts",
-      "product-truth/product-code/app/api/rules",
-      "product-truth/product-code/app/admin/contract-policies",
-      "product-truth/product-code/app/admin/rule-review",
-      "product-truth/product-code/app/admin/rule-simulator",
-      "product-truth/product-code/lib/rules",
-      "product-truth/product-code/lib/contracts/skill-bundle.ts",
-      "product-truth/product-code/lib/contracts/skill-bundle.test.ts",
-      "product-truth/product-code/lib/contract-analysis.ts",
-      "product-truth/product-code/lib/contract-analysis.test.ts",
-      "product-truth/product-code/lib/ai/runtime-executor.ts",
-      "product-truth/product-code/lib/ai/runtime-executor.test.ts",
-      "product-truth/product-code/lib/ai/contract-semantic.ts",
-      "product-truth/product-code/lib/ai/contract-semantic.test.ts",
-      "product-truth/product-code/lib/contracts/review-evidence.ts",
-      "product-truth/product-code/lib/contracts/review-evidence.test.ts",
+      "product-truth/product-code/app/contracts/page.tsx",
+      "product-truth/product-code/app/contracts/page.test.tsx",
+      "product-truth/product-code/app/contracts/[id]/page.tsx",
+      "product-truth/product-code/app/contracts/[id]/page.test.tsx",
+      "product-truth/product-code/components/contracts",
+      "product-truth/product-code/lib/contracts/review-navigation.ts",
+      "product-truth/product-code/lib/contracts/review-navigation.test.ts",
+      "product-truth/product-code/lib/contracts/review-state-machine.ts",
+      "product-truth/product-code/lib/contracts/review-state-machine.test.ts",
       "product-truth/product-code/lib/contracts/review-workbench-state.ts",
       "product-truth/product-code/lib/contracts/review-workbench-state.test.ts",
-      "product-truth/product-code/docs/rule-framework-design.md",
-      "product-truth/product-code/lib/tech-architecture/data.ts",
-      "product-truth/product-code/types",
-      "product-truth/product-code/supabase/migrations",
-      "product-truth/product-code/output/evidence/wp03"
+      "product-truth/product-code/output/evidence/wp05"
     ],
     "non_goals": [
-      "重新设计 Provider、模型目录、AI 应用或路由运行；这些已由 WP01/WP02 完成",
-      "在配置期建立独立属性提取中心，或用 Prompt、关键词和执行引擎替代清晰的规则详情",
-      "把正文滚动、默认页签或循环复审交互混入规则产品；这些属于 WP05 的独立后续批次",
-      "用规则能保存、树能展开或测试夹具通过冒充真实 ReviewRun 已有效消费规则",
+      "调整模型准确率、规则内容或独立金标；这些仍是 WP05 的后续质量门，而不是本交互子批",
+      "实现上传新版本、风险迁移、循环复审和最终交付",
+      "修复上传后先分析再建立 source_page_map 的编排缺陷；该问题已独立进入 Inbox",
+      "修改 AI 平台、规则配置、文档对比或合同起草",
       "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
     ],
     "exit_criteria": [
-      "产品与数据对象明确区分规则集、问题分类、具体规则、规则详情、通用业务属性、判定和处理动作；树只作为导航，不是领域模型",
-      "金额、比例、时间、枚举、布尔和文本等属性使用白名单类型、运算符和单位；未知/证据不足路径显式，配置页面不暴露机器 Prompt 或含糊语义指令",
-      "现有无效 current 快照逐条有原因；历史发布快照不改写，通过 forward-only Preview 迁移/API 生成新的有效不可变版本，SkillBundle 编译成功且引用完整",
-      "真实合同 ReviewRun 同时绑定有效规则快照和 WP02 运行计划；受控样本能产生符合预期的规则命中/未命中/证据不足结果，模型与规则的责任边界可追溯",
-      "规则管理 UI 以人的业务任务和问题含义组织，桌面与 iPad 无白块、遮罩、横向溢出或不可达操作",
-      "目标/全量测试、lint、typecheck、build、Preview 数据读回与清理、文档治理和独立复审通过；准确率缺独立金标时继续明确阻断"
+      "合同列表和无 panel 的工作台 URL 在所有 ReviewRun 状态下默认进入审查；只有用户显式切到摘要、对话或证据时才写入对应 panel，刷新、返回和前进一致",
+      "文档阅读区具有受视口约束的确定高度和唯一纵向滚动轴；点击风险只改变文档滚动容器 scrollTop，不改变 window scrollY",
+      "证据定位完成后滚轮、触控、键盘、连续切换风险仍可用，不被 overscroll、布局扩张或覆盖层锁死",
+      "真实长 DOCX、文本 PDF 和扫描 PDF 在桌面与 iPad 覆盖默认入口、首尾风险定位和持续滚动；无法精确定位时显示可理解的降级状态而不假装成功",
+      "目标/全量测试、lint、typecheck、build、浏览器控制台与网络检查通过；准确率和循环复审继续保持未完成，不用本交互修复冒充关闭"
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP03",
-      "slug": "rule-collection",
-      "reason": "WP02 已由 c25ec17a 完成真实运行闭环；当前真实 ReviewRun 的首个下游阻断是发布规则资产无效"
-    },
-    "next": {
       "id": "WP05",
       "slug": "multiformat-review-cycle",
-      "name": "审核工作台交互纠偏子批",
-      "entry_gate": "WP03 发布有效规则候选并证明真实 ReviewRun 可同时消费规则与模型；本子批只修正文滚动和默认页签，准确率与循环复审继续受独立门禁约束",
+      "reason": "WP03 已由 ebdb3c59 完成业务配置到真实触发；当前用户主线的最近阻断是风险无法稳定定位原文以及入口被运行状态强制切到证据"
+    },
+    "next": {
+      "id": "WP04",
+      "slug": "contract-center-ia",
+      "name": "合同中心入口与任务身份",
+      "entry_gate": "WP05 交互子批完成且不再由默认面板和滚动错误阻断合同任务入口复验",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
-      {
-        "id": "WP04",
-        "slug": "contract-center-ia",
-        "name": "合同中心入口与任务身份"
-      },
       {
         "id": "WP07",
         "slug": "contract-drafting",
@@ -276,26 +256,34 @@
         "completed_at": "2026-07-21T12:05:00+08:00",
         "evidence_commit": "c25ec17a8e51ec6476432ccccf9c30ee0dd9553b",
         "result": "五个注册业务用点均由发布路由执行并有当前真实证据；本地 Gemma、云端模型、顺序降级、token、model_invocations、不可漂移计划、真实合同 ReviewRun 与桌面/iPad 验收完成；规则编译和独立准确率明确转交 WP03/WP05，Production 未写入或部署"
+      },
+      {
+        "id": "WP03",
+        "slug": "rule-collection",
+        "completed_at": "2026-07-21T18:31:22+08:00",
+        "evidence_commit": "ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5",
+        "result": "业务人员可从空白建立规则集、问题分类、具体规则、业务属性、判定和处理，完成五路径测试与发布；真实 DOCX 经真实 Provider 形成可追溯 ReviewRun、token、规则快照和风险证据；桌面/iPad 与全量工程门禁通过，独立金标准确率仍明确阻断"
       }
     ]
   },
   "verification": {
     "wp03_rule_collection_20260721": {
-      "status": "technical_preview_passed_business_confirmation_required",
-      "preview": "隔离项目 vsfropnfsmnonkotywsx 已应用三份 forward-only 迁移：唯一 active/default STANDARD_SALES_CONTRACT_REVIEW 含 R001-R015 共 15 个成员，生成 15 份与当前版本对齐的业务确认草案；confirmed rule_contracts、current SkillBundle 和 preview_candidate channel 均为 0，未把未确认规则冒充可发布资产",
+      "status": "passed_preview_generic_configuration_runtime_accuracy_blocked",
+      "commit": "ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5",
+      "preview": "隔离项目 vsfropnfsmnonkotywsx 中，新建隔离组织从空白创建规则集、问题分类和金额规则，五条业务用例全部通过后生成 current RuleSetSnapshot 321e217e-ba19-455c-9b20-61a1854a74dc 与 published SkillBundle abf5c05f-15c3-4088-a44e-dd7697d7f2c8；R001-R015 仍只是另一组织的可编辑预置草稿，未被自动发布",
       "history": "23 个 SkillBundle、71 个既有规则快照、34 个规则集快照、7 个测试运行和 39 个发布快照的数量与聚合指纹在迁移前后完全一致；13 个历史分类形规则集与受控 canary 只被归档，历史不可变记录未改写",
-      "runtime": "ReviewRun 证据门禁改为 fail-closed：必须绑定计划内、completed、not-degraded 的 OpenAI-compatible HTTP 调用，具有 token、provider、输出验证和风险输出审计；缺字段、警告、丢弃项或不可用风险项均不得通过",
-      "browser": "规则管理页在桌面 1200x818 与 iPad 1024x768 通过，无横向溢出、白块/固定遮罩或控制台错误；页面明确显示结构完整但待发布验收，不再把规则详情误标为已确认",
-      "engineering": "199 个测试文件通过、2 个跳过；1411 个测试通过、5 个跳过；目标 6 文件 106 测试、lint、typecheck、Next build 76/76 pages、Harness selftest、迁移回滚重放和独立代码复审通过",
-      "audit": "独立复审确认 SkillBundle 文档引用、ReviewRun 假绿、工作台未知状态放行、迁移 NULL 绕过和 canary 并发窗口均已关闭，无新增 P0/P1；最终迁移源在 Preview 事务中重放并回滚验证",
-      "business_gate": "R001-R015 的金额、比例、期限、风险级别、证据不足动作和处理建议会直接改变合同判断结果；推荐 V1 已给出：通用证据不足进入人工复核，R006 拆 3 条，R010 至少拆 5 条，R003/R012/R015 强制专业人工复核，其余历史阈值只作为组织可配置默认值",
+      "runtime": "真实 DOCX b18f949a-7194-4a7a-86b9-64938ee01fb0 经发布路由形成 COMPLETED 且 not-degraded 的 ReviewRun 92d0a165-ce85-4b5b-9bd1-b1f7a8653f9f；真实调用 450c58c8-c77f-4650-8354-13209e51e6ad 使用本地 google/gemma-4-e4b，记录 607 input、561 output、1168 total token，并产生绑定不可变规则快照的 30000 CNY 风险证据",
+      "browser": "规则管理页在桌面 1440x900 与 iPad 1024x768 通过，无横向溢出、白块/固定遮罩或不可达操作；页面只使用业务步骤和业务名词，机器编码自动生成且不作为主任务输入",
+      "engineering": "201 个测试文件通过、2 个跳过；1437 个测试通过、5 个跳过；WP03 目标 15 文件 206 测试、lint、typecheck、Next build 76/76 pages、迁移重放和独立复审通过",
+      "audit": "发布就绪哈希使用数据库精确 JSON；可选缺失证据语义、模型 null 输出、硬编码规则复制、覆盖不足、无风险假绿与规则 ID 追溯均失败关闭",
+      "business_gate": "已通过：没有预置规则的新组织无需代码、Prompt、模型名或机器字段即可完成规则集、问题分类、具体规则、金额属性、运算条件、风险/正常/缺失/冲突处理、五路径测试、发布和正式 ReviewRun 触发；R001-R015 仅保留为可编辑预置业务数据",
       "evidence": [
-        "product-truth/product-code/output/evidence/wp03/preview-apply-proof.md",
+        "product-truth/product-code/output/evidence/wp03/generic-configuration-runtime-acceptance.md",
         "product-truth/product-code/output/evidence/wp03/r001-r015-business-confirmation-candidates.md",
-        "product-truth/product-code/output/playwright/wp03/desktop-rules-final.png",
-        "product-truth/product-code/output/playwright/wp03/ipad-rules-final.png"
+        "product-truth/product-code/output/evidence/wp03/rule-config-desktop.png",
+        "product-truth/product-code/output/evidence/wp03/rule-config-ipad.png"
       ],
-      "boundary": "尚未获得会改变业务结果的 V1 口径确认，因此未发布正式 RuleSet/SkillBundle，也未制造虚假 ReviewRun；Production 数据库保持只读，未 push 或部署 Production"
+      "boundary": "本次仅证明规则产品与运行链真实可用，不证明合同审核准确率；没有事前独立金标时继续阻断准确率结论。Production 数据库保持只读，未经批准不部署 Production"
     },
     "wp02_ai_runtime_20260721": {
       "status": "passed_preview_runtime_accuracy_blocked",

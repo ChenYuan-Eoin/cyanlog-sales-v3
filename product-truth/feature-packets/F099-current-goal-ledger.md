@@ -2,7 +2,7 @@
 
 **Status**: active_work_package_ledger
 **Updated**: 2026-07-21
-**Ledger Version**: v2026-07-21.03
+**Ledger Version**: v2026-07-21.04
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
 
@@ -23,21 +23,21 @@
 | WP00 | goal-baseline-consolidation | G1/G10/G11 | Completed / `18dad230` | 已统一编号、真相源、Harness 和候选分支治理快照 |
 | WP01 | ai-platform-foundation | G4；支撑 G3/G7 | Completed / `4269840f` | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
 | WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Completed / `c25ec17a` | 五业务用点、真实 invocation/token、ReviewRun、降级、route/pinned 证据 |
-| WP03 | rule-collection | G3/G4；支撑 G7/G10 | **Active** / technical_preview_passed_business_confirmation_required | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
+| WP03 | rule-collection | G3/G4；支撑 G7/G10 | Completed / `ebdb3c59` | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | contract-center-ia | G6；支撑 G8 | needs_reacceptance | 合同中心入口、任务身份、版本和下一步 |
-| WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | parked / NO-GO | 新源文件、事前独立金标、文件版本、风险迁移与循环复审 |
+| WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | **Active** / interaction_correction | 默认审查入口、风险定位、正文滚动；准确率与循环复审仍独立受门禁 |
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
 | WP07 | contract-drafting | G6；支撑 G2/G8/G10 | queued | 可编辑草稿、版本、DOCX 导出、转审核/对比 |
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
 | WP09 | release-acceptance | G7/G8/G9/G10/G11 | queued | 唯一候选、测试/build、桌面/iPad、真实文件、Preview/Production |
 
-执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（Active） -> WP05 交互纠偏子批 -> WP04/WP07 -> WP08 子包 -> WP09`。WP05 的准确率和循环复审闭环仍受独立金标门禁约束，但正文滚动和默认任务页签不再因此冻结。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
+执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏子批（Active） -> WP04/WP07 -> WP05 准确率与循环复审（满足门禁后） -> WP08 子包 -> WP09`。WP05 当前只修正文滚动和默认审查入口，不借此宣称准确率或循环复审完成。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
 
 ## 2. 候选边界
 
-WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成；WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成。WP03-WP05 的旧“本地完成”总括结论仍无效，必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
+WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成；WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成；WP03 已由提交 `ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5` 完成。WP05 的旧“本地完成”总括结论仍无效，必须把交互、准确率和循环复审按当前 Git SHA 与环境分别验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
 
-Production 数据库继续只读；WP01/WP02 未部署 Production，也未覆盖根工作区受保护 dirty 快照。
+Production 数据库继续只读；WP01-WP03 未部署 Production，也未覆盖根工作区受保护 dirty 快照。
 
 ## 3. WP01 完成证据（2026-07-20）
 
@@ -65,14 +65,20 @@ Production 数据库继续只读；WP01/WP02 未部署 Production，也未覆盖
 
 证据索引：`product-code/output/evidence/wp02/README.md`。WP02 完成提交为 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b`。
 
-**当前与下游门禁**：Active WP03 修复规则资产和规则集合产品模型；WP05 恢复后处理交互纠偏与独立金标准确率；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、Hosted 路由和正式发布。
+**当前与下游门禁**：WP03 已完成规则资产和规则集合产品模型；Active WP05 先处理交互纠偏，独立金标准确率与循环复审继续分别受门禁；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、Hosted 路由和正式发布。
 
-## 5. WP03 当前证据与唯一产品门（2026-07-21）
+## 5. WP03 完成证据（2026-07-21）
 
 - 领域模型已固定为 `RuleSet → ProblemCategory → Rule → RuleDetail → 业务属性 → 判定与处理`；问题分类只组织问题，模型只在运行时读取已定义属性和原文证据。
-- 隔离 Preview 已保留全部历史快照/测试/Bundle 内容，并形成 `1` 个场景规则集、`15` 个成员、`15` 个版本对齐待确认草稿和 `13` 个业务分类；旧 current Bundle 与受控验收噪音均已退出当前指针。
-- ReviewRun 运行门禁已打通执行器到证据页：Provider、HTTP transport、Provider token、输出校验、warning/drop/usable 审计字段必须齐全；缺字段或未知状态失败关闭。
-- 全量门禁为 `199` 个测试文件 / `1411` 项测试通过（另有 `2` 文件 / `5` 个真实 live 测试按默认策略跳过），lint、typecheck、76-page build、Harness selftest、文档治理、桌面/iPad 与独立终审通过。Harness strict doctor 为 `0 failure / 2 warning`：项目 hook 信任仍需在 Codex UI 复核，因此不把项目级 hooks 声称为已加载生效。
-- 证据索引：`product-code/output/evidence/wp03/preview-apply-proof.md`；业务候选：`product-code/output/evidence/wp03/r001-r015-business-confirmation-candidates.md`。
+- 隔离 Preview 的新组织已从空白创建“合同金额不得低于 5 万元”：金额/CNY、`< 50000` 风险、`>= 50000` 正常、缺失/冲突人工处理，五条用例通过后原子发布；R001-R015 保持另一组织的可编辑预置业务数据，未自动发布。
+- 真实 DOCX 经已发布规则与 AI 路由生成 ReviewRun `92d0a165-ce85-4b5b-9bd1-b1f7a8653f9f`，本地 `google/gemma-4-e4b` 调用记录 `607/561/1168` token，并产生绑定规则快照、原文位置和 `30000 CNY` 的风险事实。
+- 全量门禁为 `201` 个测试文件 / `1437` 项测试通过（另有 `2` 文件 / `5` 个真实 live 测试按默认策略跳过），WP03 目标 `15` 文件 / `206` 测试、lint、typecheck、76-page build、桌面 1440×900、iPad 1024×768 与独立复审通过。
+- 证据索引：`product-code/output/evidence/wp03/generic-configuration-runtime-acceptance.md`；历史预置数据审计：`product-code/output/evidence/wp03/r001-r015-business-confirmation-candidates.md`（确认门结论已废止）。
 
-**唯一未关闭项是产品规则确认，不是技术授权**：R001–R015 当前仍为 `0` 个已确认 `rule_contract`，所以不得发布正式 RuleSet/SkillBundle 或声称真实 ReviewRun 已消费新规则。推荐 V1 一次确认：接受公共缺证据转人工复核口径；R006 拆三条、R010 至少拆五条；R003/R012/R015 在财税/隐私/法务口径确认前强制人工复核；其余旧阈值只作为当前组织可配置默认值，不作为普遍法律真相。确认后立即进入测试矩阵、原子发布、真实合同 ReviewRun 和证据绑定，不再追加技术选择题。
+**WP03 退出结论**：系统支持项与业务数据已分离。没有预置数据的新组织可由业务人员使用“规则集—问题分类—具体规则—业务属性—判定与处理”完成配置、测试、发布和真实触发；R001–R015 只是可选预置草稿。此结论证明配置及运行链真实，不证明合同审核准确率，独立金标仍是 WP05 后续门禁。
+
+## 6. WP05 当前交互子批（2026-07-21）
+
+- 默认入口：运行状态只决定下一步提示，不决定用户进入哪个面板；无 `panel` 时始终进入“审查”，只有用户显式切换才把面板写入 URL。
+- 风险定位：文档阅读区必须由视口约束并拥有唯一纵向滚动轴；点风险只滚动文档，不滚动浏览器窗口，定位后滚轮、触控、键盘和连续风险切换仍可用。
+- 验收范围：真实长 DOCX、文本 PDF、扫描 PDF，桌面与 iPad；准确率、上传新版本、风险迁移、循环复审和最终交付不混入本子批。

@@ -45,21 +45,21 @@
 | WP00 | G1/G10/G11 | Completed；`18dad230` | 已统一编号、真相源、队列、Harness 和发布候选治理快照 |
 | WP01 | G4（支撑 G3/G7） | Completed；`4269840f` | 全局 Provider 接入、模型目录、AI 应用、业务用点、绑定和路由 |
 | WP02 | G3（支撑 G7/G10） | Completed；`c25ec17a` | 五个业务用点均由发布路由驱动，真实模型、降级、token、`model_invocations` 与 ReviewRun 可追溯 |
-| WP03 | G3/G4（支撑 G7/G10） | **Active**；技术/Preview 已通过，待一次业务规则确认 | 规则集→问题分类→具体规则→规则详情→业务属性→判定与处理 |
+| WP03 | G3/G4（支撑 G7/G10） | Completed；`ebdb3c59` | 规则集→问题分类→具体规则→规则详情→业务属性→判定与处理 |
 | WP04 | G6（支撑 G8） | 排队复验 | 合同中心入口、任务身份、版本和下一步 |
-| WP05 | G2（支撑 G3/G6/G8/G10） | Parked / NO-GO | Word/PDF 风险处理、下一版本、全量复审、风险迁移与最终交付 |
+| WP05 | G2（支撑 G3/G6/G8/G10） | **Active**；风险定位与默认审查入口 | 当前只纠偏工作台交互；准确率、下一版本、风险迁移与循环复审继续独立受门禁 |
 | WP06 | G6（支撑 G7/G8/G10） | Preview 候选完成，非 Production | 冻结旧/新文件、原文级对比、定位和真实 DOCX 报告 |
 | WP07 | G6（支撑 G2/G8/G10） | 排队 | 可编辑合同起草、版本、DOCX 导出、转审核/对比 |
 | WP08 | G5/G8 | 激活前必须拆包 | 伞目标；激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包 |
 | WP09 | G7/G8/G9/G10/G11 | 排队 | 分支收敛、全量门禁、Preview 与获批后的 Production 验收 |
 
-当前唯一 Active 是 WP03。WP02 已由提交 `c25ec17a` 完成：五个注册业务用点均能编译并由发布路由执行，运行计划冻结业务用点、应用、路由、模型、Provider 和连接版本；`route` 与 `pinned` 两种执行身份严格分离；本地 Gemma 与云端模型都完成真实调用，降级尝试逐条记录 provider、model、token、耗时和失败原因，真实合同 ReviewRun 可追溯到不可漂移计划快照。配置中心当前汇总为 `5 registered / 5 compilable / 5 verified / 0 blocked`。
+当前唯一 Active 是 WP05 的交互纠偏子批。WP02 已由提交 `c25ec17a` 完成：五个注册业务用点均能编译并由发布路由执行，运行计划冻结业务用点、应用、路由、模型、Provider 和连接版本；`route` 与 `pinned` 两种执行身份严格分离；本地 Gemma 与云端模型都完成真实调用，降级尝试逐条记录 provider、model、token、耗时和失败原因，真实合同 ReviewRun 可追溯到不可漂移计划快照。配置中心当前汇总为 `5 registered / 5 compilable / 5 verified / 0 blocked`。
 
-WP03 已完成技术与隔离 Preview 收口：领域链路固定为 `RuleSet → ProblemCategory → Rule → RuleDetail → 业务属性 → 判定与处理`；历史快照与测试指纹不变，Preview 当前为 1 个场景规则集、15 个成员、15 个待业务确认草稿和 13 个业务分类；页面桌面/iPad 无横向溢出和大遮罩；ReviewRun 的 HTTP、Provider token、warning/drop/usable 审计字段缺一即失败关闭。当前不得把它写成 WP03 完成，因为 R001–R015 仍有 0 个用户确认的 canonical `rule_contract`，尚无正式 RuleSet/SkillBundle 和绑定新规则的真实 ReviewRun。唯一需要用户判断的是候选业务口径，而不是技术步骤；完整推荐及证据见 F099 与 `product-code/output/evidence/wp03/`。WP04 仍需按当前入口语义复验；WP05 的正文滚动和默认标签在 WP03 后进入独立交互子批，准确率与循环复审继续受独立金标门禁约束；WP06 只完成免费隔离 Preview 候选，Production 仍未发布。
+WP03 的领域链路固定为 `RuleSet → ProblemCategory → Rule → RuleDetail → 业务属性 → 判定与处理`，并已由提交 `ebdb3c59` 完成：隔离 Preview 新组织无需代码和机器字段即可从空白配置金额规则，完成风险/正常/缺失/冲突五路径测试和发布；真实 DOCX 经真实 Provider 形成带 token、规则快照与原文证据的 ReviewRun；桌面/iPad 和全量工程门禁通过。R001–R015 只是可编辑预置业务数据，未被自动发布。当前 WP05 只修复两项业务主线阻断：合同入口无显式面板时默认“审查”，以及选择风险后原文阅读区可定位且继续滚动。准确率与循环复审继续受独立金标和版本门禁约束；WP06 只完成免费隔离 Preview 候选，Production 仍未发布。
 
 WP01/WP02 已验收的兼容边界：六对象以“一行一个严格对象”存入既有 `configs`；新业务运行只消费完整发布图编译出的 `AIRuntimePlanSnapshot`，旧 `AI_CONFIG / ModelPolicy` 与环境变量不得静默旁路。业务用点来自代码注册表，业务模块不直接绑定具体模型；固定模型调试必须以 `pinned` 身份单独留痕，不能冒充路由健康。未做不可逆迁移、未写 Production。完整对象、生命周期、执行身份和证据边界以 `F012-ai-runtime-config.md` 为准。
 
-执行顺序固定为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（Active） -> WP05 交互纠偏子批 -> WP04/WP07 -> WP05 准确率与循环复审（满足恢复门禁后） -> WP08 -> WP09`。新需求继续进入 Inbox，只有满足调度规则才切换 Active；发布、AI 平台、规则产品和工作台交互不再合成一个混合任务。
+执行顺序固定为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏子批（Active） -> WP04/WP07 -> WP05 准确率与循环复审（满足恢复门禁后） -> WP08 -> WP09`。新需求继续进入 Inbox，只有满足调度规则才切换 Active；发布、AI 平台、规则产品和工作台交互不再合成一个混合任务。
 
 ---
 
@@ -3540,7 +3540,7 @@ DETECTED
 
 规则状态必须按运行事实拆开展示：`is_active=true` 只表示规则可维护/未停用，不等于生产发布；进入正式合同审核必须同时满足 `is_active=true`、`lifecycle_status='published'`、`translation_status='ready'`、`published_at` 存在，并由所属 RuleSet 的唯一 `current_snapshot_id` 指向精确已发布成员。已发布 RuleSnapshot / RuleSetSnapshot 只追加不改写；新发布只能原子写入新快照并切换当前指针。配置中心、规则统计、SkillBundle 编译、ReviewRun 证据和底层规则引擎必须使用同一口径；未发布、未转译或缺少当前快照指针的规则只能进入设计/测试/沙箱，不能被展示为“可正式审核”。
 
-R001-R015 的历史预置规则必须按规则集资产管理，而不是平铺表单。legacy adapter 只保证旧审核暂时可运行；规则详情经业务人员确认、通过新测试矩阵并随规则集发布后，才成为 canonical 配置。R001 `付款节奏` 是多属性规则，至少覆盖首付款比例和账期；AI 可以识别同义原文，最终阈值、结果和处理动作仍由服务端已发布判定确定。
+R001-R015 的历史预置规则必须按规则集资产管理，而不是平铺表单。它们是可编辑业务数据，不是平台真相，也不是 WP03 的用户确认门。legacy adapter 只保证历史审核可回放；组织选择预置数据或从空白创建的规则，都必须先形成 canonical `rule_contract`、通过测试矩阵并随规则集主动发布后才可用于新审核。AI 可以识别同义原文，最终阈值、结果和处理动作仍由服务端已发布判定确定。
 
 文档比对不是“上传两个文件”的占位入口。第一阶段必须至少支持 Word/PDF 两类合同版本的可解释比对：明确基准版本和候选版本，展示新增、删除、修改、移动/语义变化，提供差异列表、双栏定位、上一处/下一处导航和导出；比对结果可进入 RiskFinding、NegotiationTask 或客户反馈再审核链路。
 
