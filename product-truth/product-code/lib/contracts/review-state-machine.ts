@@ -37,7 +37,6 @@ export type ReviewWorkflowState = {
   nextActionLabel: string
   nextActionDescription: string
   primaryButtonLabel: string
-  detailPanel: 'review' | 'evidence'
   canStartReview: boolean
   canExportComments: boolean
   shouldShowProgress: boolean
@@ -63,7 +62,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
       nextActionLabel: '补充审核源文件',
       nextActionDescription: '先上传合同源文件，再创建 ReviewRun。',
       primaryButtonLabel: '补充审核源文件',
-      detailPanel: 'review',
       canStartReview: false,
       canExportComments: false,
       shouldShowProgress: false,
@@ -79,7 +77,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
       nextActionLabel: '发起审核',
       nextActionDescription: '源文件已登记，下一步创建 ReviewRun 并进入规则与模型审核。',
       primaryButtonLabel: '发起审核',
-      detailPanel: 'review',
       canStartReview: hasSourceAsset,
       canExportComments: false,
       shouldShowProgress: false,
@@ -95,7 +92,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
       nextActionLabel: '查看进度',
       nextActionDescription: '回到当前 ReviewRun，查看解析、模型调用、规则和批注意图进度。',
       primaryButtonLabel: '审核中',
-      detailPanel: 'review',
       canStartReview: false,
       canExportComments: false,
       shouldShowProgress: true,
@@ -111,7 +107,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
       nextActionLabel: '问题复核',
       nextActionDescription: '查看失败原因、模型调用和规则证据后再次发起审核。',
       primaryButtonLabel: '再次审核',
-      detailPanel: 'evidence',
       canStartReview: hasSourceAsset,
       canExportComments: false,
       shouldShowProgress: false,
@@ -128,7 +123,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
         nextActionLabel: '检查批注准备',
         nextActionDescription: '正在补齐规则快照、SkillBundle、模型调用和批注导出门禁。',
         primaryButtonLabel: '检查导出准备',
-        detailPanel: 'evidence',
         canStartReview: true,
         canExportComments: false,
         shouldShowProgress: false,
@@ -144,7 +138,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
         nextActionLabel: '导出批注版',
         nextActionDescription: '审核证据和批注意图已满足门禁，可生成源文件 Word 原生批注版。',
         primaryButtonLabel: '导出批注版',
-        detailPanel: 'evidence',
         canStartReview: true,
         canExportComments: true,
         shouldShowProgress: false,
@@ -159,7 +152,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
       nextActionLabel: hasReviewArtifacts ? '处理批注门禁' : '查看审核结果',
       nextActionDescription: exportBlockedReasons[0] || '审核已完成，但还不能证明源文件批注版已可导出。',
       primaryButtonLabel: hasReviewArtifacts ? '查看导出原因' : '查看审核结果',
-      detailPanel: 'evidence',
       canStartReview: true,
       canExportComments: false,
       shouldShowProgress: false,
@@ -174,7 +166,6 @@ export function deriveReviewWorkflowState(input: ReviewStateInput): ReviewWorkfl
     nextActionLabel: '打开工作台',
     nextActionDescription: '查看当前合同的版本、审核和输出状态。',
     primaryButtonLabel: '打开工作台',
-    detailPanel: 'review',
     canStartReview: false,
     canExportComments: false,
     shouldShowProgress: false,

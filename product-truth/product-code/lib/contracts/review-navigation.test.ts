@@ -3,9 +3,11 @@ import {
   buildContractCompareHref,
   buildContractNewReviewHref,
   buildContractsCenterHref,
+  buildContractWorkbenchPanelHref,
   buildContractWorkbenchHref,
   buildCompareBaselineUploadHref,
   buildCustomerReturnUploadHref,
+  normalizeContractWorkbenchPanel,
 } from './review-navigation'
 
 describe('contract review navigation', () => {
@@ -24,11 +26,11 @@ describe('contract review navigation', () => {
     })).toBe('/contracts/contract-1?panel=evidence&from=list')
   })
 
-  it('returns from compare to the review panel instead of a contextless detail page', () => {
+  it('returns from compare to the canonical default review route', () => {
     expect(buildContractWorkbenchHref('contract-1', {
       panel: 'review',
       from: 'compare',
-    })).toBe('/contracts/contract-1?panel=review&from=compare')
+    })).toBe('/contracts/contract-1?from=compare')
   })
 
   it('keeps compare results bound to a specific comparison id when present', () => {
@@ -50,5 +52,28 @@ describe('contract review navigation', () => {
 
   it('routes baseline upload into the compare baseline flow', () => {
     expect(buildCompareBaselineUploadHref('contract-1')).toBe('/contracts/contract-1/edit?intent=compare-baseline&next=compare')
+  })
+
+  it('treats missing, invalid and explicit review queries as the default review panel', () => {
+    expect(normalizeContractWorkbenchPanel(null)).toBe('review')
+    expect(normalizeContractWorkbenchPanel('unknown')).toBe('review')
+    expect(normalizeContractWorkbenchPanel('review')).toBe('review')
+    expect(normalizeContractWorkbenchPanel('evidence')).toBe('evidence')
+  })
+
+  it('preserves unrelated query state while only explicit non-review panels remain in the URL', () => {
+    const evidenceHref = buildContractWorkbenchPanelHref(
+      'contract-1',
+      'from=list&comparison_id=compare-1',
+      'evidence'
+    )
+    expect(evidenceHref).toBe('/contracts/contract-1?from=list&comparison_id=compare-1&panel=evidence')
+
+    const reviewHref = buildContractWorkbenchPanelHref(
+      'contract-1',
+      'from=list&comparison_id=compare-1&panel=evidence',
+      'review'
+    )
+    expect(reviewHref).toBe('/contracts/contract-1?from=list&comparison_id=compare-1')
   })
 })

@@ -1,3 +1,5 @@
+import type { ReviewWorkflowState } from './review-state-machine'
+
 export type ContractWorkbenchPanel = 'review' | 'summary' | 'assistant' | 'evidence'
 
 export type ContractNavigationSource =
@@ -11,6 +13,46 @@ export type ContractNavigationSource =
 function appendSearch(pathname: string, params: URLSearchParams) {
   const query = params.toString()
   return query ? `${pathname}?${query}` : pathname
+}
+
+export type ContractListReviewNavigation = {
+  href: string
+  nextAction: string
+  nextActionDescription: string
+}
+
+export function buildContractListReviewNavigation(
+  contractId: string,
+  workflowState: Pick<ReviewWorkflowState, 'nextActionLabel' | 'nextActionDescription'>
+): ContractListReviewNavigation {
+  return {
+    href: buildContractWorkbenchHref(contractId, { from: 'list' }),
+    nextAction: workflowState.nextActionLabel,
+    nextActionDescription: workflowState.nextActionDescription,
+  }
+}
+
+export function normalizeContractWorkbenchPanel(
+  panel: string | null | undefined
+): ContractWorkbenchPanel {
+  if (panel === 'summary' || panel === 'assistant' || panel === 'evidence') {
+    return panel
+  }
+  return 'review'
+}
+
+export function buildContractWorkbenchPanelHref(
+  contractId: string,
+  currentSearch: string,
+  panel: ContractWorkbenchPanel
+) {
+  const params = new URLSearchParams(currentSearch)
+  if (panel === 'review') {
+    params.delete('panel')
+  } else {
+    params.set('panel', panel)
+  }
+  return appendSearch(`/contracts/${contractId}`, params)
 }
 
 export function buildContractsCenterHref() {
@@ -31,7 +73,7 @@ export function buildContractWorkbenchHref(
   } = {}
 ) {
   const params = new URLSearchParams()
-  if (options.panel) params.set('panel', options.panel)
+  if (options.panel && options.panel !== 'review') params.set('panel', options.panel)
   if (options.from) params.set('from', options.from)
   return appendSearch(`/contracts/${contractId}`, params)
 }

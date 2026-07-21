@@ -14,6 +14,13 @@ import { Badge } from '@/components/ui/badge'
 import { AlertTriangleIcon, ExternalLinkIcon, FileTextIcon, Loader2Icon, MapPinIcon } from 'lucide-react'
 import { inferDocumentLocator } from '@/lib/contracts/document-locator'
 import { fitWidthScale } from '@/lib/contracts/compare-viewer'
+import {
+  focusEvidenceText,
+  normalizeEvidenceNeedle,
+  renderedPageElements,
+  type EvidenceFocusState,
+  type EvidenceSourceRange,
+} from './source-document-evidence'
 
 export interface SourceDocumentPreviewFile {
   label: string
@@ -26,6 +33,8 @@ export interface SourceDocumentPreviewProps {
   file: SourceDocumentPreviewFile | null | undefined
   title?: string
   selectedText?: string
+  sourceText?: string | null
+  sourceRange?: EvidenceSourceRange | null
   fallbackLabel?: string
   minHeightClassName?: string
   surfaceMinHeightClassName?: string
@@ -44,12 +53,6 @@ export interface SourceDocumentViewerCapabilities {
   fidelity: 'browser-approximation' | 'native-pdf' | 'unavailable'
 }
 
-type EvidenceFocusState = 'idle' | 'found' | 'missing'
-type EvidenceFocusResult = {
-  state: EvidenceFocusState
-  pageNumber: number | null
-}
-
 function isPdf(file: SourceDocumentPreviewFile | null | undefined) {
   return Boolean(file?.mimeType?.includes('pdf') || (file?.label || '').toLowerCase().endsWith('.pdf'))
 }
@@ -65,34 +68,6 @@ function needsAuthorizedPreviewFetch(url: string | null | undefined) {
   return Boolean(url?.startsWith('/api/'))
 }
 
-function normalizeNeedle(text?: string) {
-  const normalized = (text || '').replace(/\s+/g, '')
-  if (normalized.length <= 0) return ''
-  return normalized.slice(0, 48)
-}
-
-function clearEvidenceFocus(container: HTMLElement) {
-  container.querySelectorAll<HTMLElement>('[data-ones-evidence-focus="true"]').forEach((element) => {
-    element.removeAttribute('data-ones-evidence-focus')
-    element.style.outline = ''
-    element.style.background = ''
-    element.style.borderRadius = ''
-    element.style.scrollMargin = ''
-  })
-}
-
-function renderedPageElements(container: HTMLElement) {
-  const directPages = Array.from(container.querySelectorAll<HTMLElement>('.docx-wrapper > section, section.docx'))
-  if (directPages.length > 0) return directPages
-  return Array.from(container.querySelectorAll<HTMLElement>('section'))
-}
-
-function renderedPageNumberFor(container: HTMLElement, host: HTMLElement) {
-  const pages = renderedPageElements(container)
-  const index = pages.findIndex((page) => page.contains(host))
-  return index >= 0 ? index + 1 : null
-}
-
 function hasVisibleDocxRender(container: HTMLElement) {
   const pageCount = renderedPageElements(container).length
   const textLength = (container.textContent || '').replace(/\s+/g, '').length
@@ -100,39 +75,12 @@ function hasVisibleDocxRender(container: HTMLElement) {
   return pageCount > 0 || textLength > 0 || elementCount > 3
 }
 
-function focusEvidenceText(container: HTMLElement | null, evidenceText?: string): EvidenceFocusResult {
-  if (!container) return { state: 'idle', pageNumber: null }
-  clearEvidenceFocus(container)
-  const needle = normalizeNeedle(evidenceText)
-  if (!needle) return { state: 'idle', pageNumber: null }
-
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  let node = walker.nextNode()
-  while (node) {
-    const haystack = node.textContent?.replace(/\s+/g, '') || ''
-    if (haystack.includes(needle)) {
-      const host = node.parentElement
-      if (!host) return { state: 'missing', pageNumber: null }
-      const pageNumber = renderedPageNumberFor(container, host)
-      host.dataset.onesEvidenceFocus = 'true'
-      host.style.outline = '2px solid rgba(79, 70, 229, 0.75)'
-      host.style.background = 'rgba(254, 249, 195, 0.82)'
-      host.style.borderRadius = '3px'
-      host.style.scrollMargin = '96px'
-      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-      host.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' })
-      return { state: 'found', pageNumber }
-    }
-    node = walker.nextNode()
-  }
-
-  return { state: 'missing', pageNumber: null }
-}
-
 export function SourceDocumentPreview({
   file,
   title = '原件预览',
   selectedText,
+  sourceText,
+  sourceRange,
   fallbackLabel = '未绑定文件',
   minHeightClassName = 'min-h-[680px]',
   surfaceMinHeightClassName = 'min-h-[680px]',
@@ -146,7 +94,6 @@ export function SourceDocumentPreview({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const internalScrollViewportRef = useRef<HTMLDivElement | null>(null)
   const naturalPageWidthRef = useRef(0)
-  const selectedTextRef = useRef(selectedText)
   const [authorizedPreviewUrl, setAuthorizedPreviewUrl] = useState('')
   const [authorizedPreviewError, setAuthorizedPreviewError] = useState('')
   const [authorizedPreviewLoading, setAuthorizedPreviewLoading] = useState(false)
@@ -163,7 +110,9 @@ export function SourceDocumentPreview({
   const canPreviewPdf = Boolean(effectiveFileUrl && isPdf(file))
   const canPreviewDocx = Boolean(effectiveFileUrl && isDocx(file))
   const locator = inferDocumentLocator(selectedText)
-  const evidenceNeedle = useMemo(() => normalizeNeedle(selectedText), [selectedText])
+  const evidenceNeedle = useMemo(() => normalizeEvidenceNeedle(selectedText), [selectedText])
+  const sourceRangeStart = sourceRange?.start ?? null
+  const sourceRangeEnd = sourceRange?.end ?? null
   const renderModeLabel = canPreviewPdf
     ? 'PDF 原件'
     : canPreviewDocx && docxState === 'failed'
@@ -210,10 +159,6 @@ export function SourceDocumentPreview({
     if (!viewport || naturalPageWidth <= 0) return
     setFitZoom(fitWidthScale(viewport.clientWidth, naturalPageWidth))
   }, [zoomMode])
-
-  useEffect(() => {
-    selectedTextRef.current = selectedText
-  }, [selectedText])
 
   useEffect(() => {
     let cancelled = false
@@ -266,6 +211,8 @@ export function SourceDocumentPreview({
     if (!container) return
     container.innerHTML = ''
     setDocxError('')
+    setEvidenceFocusState('idle')
+    setEvidencePageNumber(null)
     naturalPageWidthRef.current = 0
     setFitZoom(1)
 
@@ -313,15 +260,13 @@ export function SourceDocumentPreview({
           naturalPageWidthRef.current = firstPage?.getBoundingClientRect().width || 0
           setRenderedPageCount(pageCount > 0 ? pageCount : null)
           setDocxState('ready')
-          const focusResult = focusEvidenceText(containerRef.current, selectedTextRef.current)
-          setEvidenceFocusState(focusResult.state)
-          setEvidencePageNumber(focusResult.pageNumber)
         }
       } catch (error) {
         if (cancelled) return
         setDocxState('failed')
         setRenderedPageCount(null)
         setEvidencePageNumber(null)
+        setEvidenceFocusState('missing')
         setDocxError(error instanceof Error ? error.message : 'DOCX 渲染失败')
       }
     }
@@ -371,18 +316,46 @@ export function SourceDocumentPreview({
   }, [canPreviewDocx, canPreviewPdf, docxState, onViewerCapabilitiesChange])
 
   useEffect(() => {
-    if (!canPreviewDocx || docxState !== 'ready') {
-      if (!evidenceNeedle) setEvidenceFocusState('idle')
-      if (!evidenceNeedle) setEvidencePageNumber(null)
+    if (!canPreviewDocx) {
+      setEvidenceFocusState('idle')
+      setEvidencePageNumber(null)
       return
     }
-    const focusResult = focusEvidenceText(containerRef.current, selectedText)
-    setEvidenceFocusState(focusResult.state)
-    setEvidencePageNumber(focusResult.pageNumber)
-  }, [canPreviewDocx, docxState, evidenceNeedle, selectedText])
+    if (docxState === 'failed') {
+      setEvidenceFocusState(evidenceNeedle ? 'missing' : 'idle')
+      setEvidencePageNumber(null)
+      return
+    }
+    if (docxState !== 'ready') {
+      setEvidenceFocusState('idle')
+      setEvidencePageNumber(null)
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const focusResult = focusEvidenceText(containerRef.current, selectedText, {
+        sourceText,
+        sourceRange: { start: sourceRangeStart, end: sourceRangeEnd },
+      })
+      setEvidenceFocusState(focusResult.state)
+      setEvidencePageNumber(focusResult.pageNumber)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [
+    canPreviewDocx,
+    docxState,
+    effectiveZoom,
+    evidenceNeedle,
+    selectedText,
+    sourceRangeEnd,
+    sourceRangeStart,
+    sourceText,
+  ])
 
   return (
-    <div className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white ${minHeightClassName}`}>
+    <div
+      data-source-document-preview="true"
+      className={`flex min-h-0 max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white ${minHeightClassName}`}
+    >
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start gap-2">
@@ -439,8 +412,17 @@ export function SourceDocumentPreview({
             </span>
             {canPreviewDocx && evidenceNeedle ? (
               <Badge variant={evidenceFocusState === 'found' ? 'default' : 'outline'} className="shrink-0">
-                {evidenceFocusState === 'found' ? '已定位原文' : evidenceFocusState === 'missing' ? '需人工定位' : '等待定位'}
+                {evidenceFocusState === 'found'
+                  ? '已定位原文'
+                  : evidenceFocusState === 'ambiguous'
+                    ? '多处相同原文，需人工定位'
+                    : evidenceFocusState === 'missing'
+                      ? '需人工定位'
+                      : '等待定位'}
               </Badge>
+            ) : null}
+            {canPreviewPdf ? (
+              <Badge variant="outline" className="shrink-0">PDF 需按页人工定位</Badge>
             ) : null}
           </div>
         </div>
@@ -454,13 +436,20 @@ export function SourceDocumentPreview({
           </div>
         </div>
       ) : canPreviewPdf ? (
-        <iframe
-          title={`${file?.label || fallbackLabel} PDF 原件预览`}
-          src={effectiveFileUrl}
-          className={`${frameHeightClassName} min-h-[480px] w-full flex-1 bg-white`}
-        />
+        <div className="flex min-h-0 flex-1 flex-col bg-white">
+          <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+            {sourceText?.trim()
+              ? '浏览器原生 PDF 查看器不提供可靠的合同文本偏移跳转；当前风险需按页核对，系统不会把模糊命中冒充已定位。'
+              : '该 PDF 没有可用文本层，可能是扫描件；请在原件中按页核对，OCR 结果只能辅助定位，不能冒充原文锚点。'}
+          </div>
+          <iframe
+            title={`${file?.label || fallbackLabel} PDF 原件预览`}
+            src={effectiveFileUrl}
+            className={`${frameHeightClassName} min-h-0 w-full flex-1 bg-white`}
+          />
+        </div>
       ) : canPreviewDocx ? (
-        <div className={`relative min-h-0 flex-1 bg-slate-100 ${frameHeightClassName}`}>
+        <div className={`relative min-h-0 flex-1 overflow-hidden bg-slate-100 ${frameHeightClassName}`}>
           {docxState === 'loading' ? (
             <div role="status" aria-live="polite" className="absolute inset-x-3 top-3 z-10 flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
               <Loader2Icon className="h-4 w-4 animate-spin" />
@@ -471,7 +460,11 @@ export function SourceDocumentPreview({
             ref={assignScrollViewport}
             onScroll={onScroll}
             data-compare-scroll-owner="true"
-            className="h-full min-h-0 touch-pan-x touch-pan-y overflow-auto overscroll-contain p-3 [scrollbar-gutter:stable]"
+            data-document-scroll-viewport="true"
+            role="region"
+            aria-label={`${file?.label || fallbackLabel} 文档滚动区`}
+            tabIndex={0}
+            className="absolute inset-0 min-h-0 touch-pan-x touch-pan-y overflow-auto overscroll-auto p-3 [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
           >
             {docxState === 'failed' ? (
               <div role="alert" className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">

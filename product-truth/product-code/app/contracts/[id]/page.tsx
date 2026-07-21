@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react'
 import Link from 'next/link'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -33,12 +33,17 @@ import {
   needsManualRiskLocation,
 } from '@/lib/contracts/review-workbench-state'
 import { reviewStyleStrategy, type ReviewStyle } from '@/lib/contracts/review-style'
+import {
+  buildContractWorkbenchPanelHref,
+  normalizeContractWorkbenchPanel,
+  type ContractWorkbenchPanel,
+} from '@/lib/contracts/review-navigation'
 import { SourceDocumentPreview, type SourceDocumentPreviewFile } from '@/components/contracts/source-document-preview'
 import { error as toastError, success as toastSuccess } from '@/lib/toast'
 
 type ContractStatus = 'DRAFT' | 'PENDING' | 'PARSING' | 'ANALYZING' | 'COMPLETED' | 'FAILED'
 type RiskSeverity = 'red' | 'yellow' | 'green' | 'white'
-type SidePanelMode = 'review' | 'summary' | 'assistant' | 'evidence'
+type SidePanelMode = ContractWorkbenchPanel
 type RiskFilter = 'all' | RiskSeverity
 type CustomerFeedbackStatus = 'needs_customer_confirmation' | 'accepted' | 'rejected' | 'special_approval'
 type ExportDownload = {
@@ -518,6 +523,7 @@ function negotiationBottomLine(risk: RiskFinding) {
 
 export default function ContractWorkbenchPage() {
   const params = useParams()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const contractId = params.id as string
   const [data, setData] = useState<WorkbenchData | null>(null)
@@ -529,7 +535,6 @@ export default function ContractWorkbenchPage() {
   const [exportPhase, setExportPhase] = useState<ExportPhase>('idle')
   const [exportNotice, setExportNotice] = useState('')
   const [exportDownload, setExportDownload] = useState<ExportDownload>(null)
-  const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>('review')
   const [evidenceRefreshing, setEvidenceRefreshing] = useState(false)
   const [riskControlNote, setRiskControlNote] = useState('')
   const [riskFeedbackStatus, setRiskFeedbackStatus] = useState<CustomerFeedbackStatus>('needs_customer_confirmation')
@@ -538,13 +543,16 @@ export default function ContractWorkbenchPage() {
   const returnHref = '/contracts'
   const compareReturnHref = `/contracts/${contractId}/compare?from=workbench`
   const showCompareReturn = searchParams.get('from') === 'compare'
+  const requestedPanel = searchParams.get('panel')
+  const sidePanelMode = normalizeContractWorkbenchPanel(requestedPanel)
 
-  useEffect(() => {
-    const panel = new URLSearchParams(window.location.search).get('panel')
-    if (panel === 'summary' || panel === 'assistant' || panel === 'evidence') {
-      setSidePanelMode(panel)
-    }
-  }, [])
+  const handleSidePanelModeChange = useCallback((nextPanel: SidePanelMode) => {
+    const currentSearch = searchParams.toString()
+    const nextHref = buildContractWorkbenchPanelHref(contractId, currentSearch, nextPanel)
+    const currentHref = `/contracts/${contractId}${currentSearch ? `?${currentSearch}` : ''}`
+    if (nextHref === currentHref) return
+    router.push(nextHref, { scroll: false })
+  }, [contractId, router, searchParams])
 
   useEffect(() => () => {
     if (exportDownload?.url) {
@@ -683,14 +691,14 @@ export default function ContractWorkbenchPage() {
     }
     if (currentData.annotations.length === 0 && currentData.riskFindings.length === 0) {
       setExportNotice('当前合同还没有可写入 Word 的风险项或批注意图，请先完成审核或重新审查。')
-      setSidePanelMode('review')
+      handleSidePanelModeChange('review')
       toastError('当前合同还没有可写入 Word 的风险项或批注意图')
       return
     }
     const blockingExportIssues = buildExportGateIssues(currentData, currentReviewHealth)
     if (blockingExportIssues.length > 0) {
       setExportNotice(blockingExportIssues.slice(0, 3).join('；') || '当前结果还没有通过源文件批注导出门禁。')
-      setSidePanelMode('review')
+      handleSidePanelModeChange('review')
       toastError(`暂不能导出源文件批注版：${blockingExportIssues.slice(0, 2).join('；') || '当前结果还没有通过源文件批注导出门禁'}`)
       return
     }
@@ -820,6 +828,12 @@ export default function ContractWorkbenchPage() {
 
   const isBusy = data.status === 'PARSING' || data.status === 'ANALYZING'
   const selectedSnippet = firstEvidence(selectedRisk)
+  const evidenceSourceRange = selectedRisk?.evidence?.source_range
+  const selectedSourceRange = selectedRisk
+    ? evidenceSourceRange?.start != null && evidenceSourceRange?.end != null
+      ? evidenceSourceRange
+      : selectedRisk.position
+    : null
   const redCount = data.stats?.red || data.riskFindings.filter((risk) => risk.severity === 'red').length
   const yellowCount = data.stats?.yellow || data.riskFindings.filter((risk) => risk.severity === 'yellow').length
   const displayName = data.filename?.trim() || data.title?.trim() || '未命名合同审核'
@@ -967,7 +981,7 @@ export default function ContractWorkbenchPage() {
           notice={exportNotice}
           canExport={canExport}
           reviewHealth={displayReviewHealth}
-          onOpenReview={() => setSidePanelMode('review')}
+          onOpenReview={() => handleSidePanelModeChange('review')}
         />
       )}
 
@@ -993,7 +1007,7 @@ export default function ContractWorkbenchPage() {
         yellowCount={yellowCount}
         openRiskCount={openRiskCount}
         selectedRisk={selectedRisk}
-        onModeChange={setSidePanelMode}
+        onModeChange={handleSidePanelModeChange}
       />
 
       <div className="grid gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[150px_280px_minmax(0,1fr)] 2xl:grid-cols-[160px_300px_minmax(0,1fr)]">
@@ -1010,7 +1024,7 @@ export default function ContractWorkbenchPage() {
                 <CardTitle className="text-base">谈判跟进</CardTitle>
                 <Badge variant="outline">{data.reviewRun?.status || '未开始'}</Badge>
               </div>
-              <SidePanelTabs value={sidePanelMode} onChange={setSidePanelMode} />
+              <SidePanelTabs value={sidePanelMode} onChange={handleSidePanelModeChange} />
             </CardHeader>
             <CardContent className="pt-4">
               {sidePanelMode === 'review' && (
@@ -1131,6 +1145,8 @@ export default function ContractWorkbenchPage() {
                 file={sourcePreviewFile}
                 title="源文件原件与批注定位预览"
                 selectedText={selectedSnippet}
+                sourceText={data.parsed_text}
+                sourceRange={selectedSourceRange}
                 fallbackLabel="未绑定可渲染源文件"
                 minHeightClassName="min-h-[calc(100dvh-260px)]"
               />

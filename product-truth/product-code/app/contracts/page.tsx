@@ -28,9 +28,9 @@ import { readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/
 import { CONTRACTS_LIST_CACHE_PREFIX, loadContractsListForCache } from '@/lib/core-page-warmup'
 import { deriveReviewWorkflowState } from '@/lib/contracts/review-state-machine'
 import {
+  buildContractListReviewNavigation,
   buildContractCompareHref,
   buildContractNewReviewHref,
-  buildContractWorkbenchHref,
 } from '@/lib/contracts/review-navigation'
 import { handleError } from '@/lib/toast'
 import { LoadingState } from '@/components/ui/LoadingState'
@@ -522,6 +522,7 @@ export default function ContractCenterPage() {
         hasSourceAsset: Boolean(c.parsed_text?.trim() || c.storage_path),
         exportReady: false,
       })
+      const navigation = buildContractListReviewNavigation(c.id, workflowState)
       return {
         id: c.id,
         name: c.filename,
@@ -533,12 +534,10 @@ export default function ContractCenterPage() {
         status: status.label,
         statusColor: status.color as string,
         updatedAt: c.updated_at,
-        href: workflowState.detailPanel === 'evidence'
-          ? buildContractWorkbenchHref(c.id, { panel: 'evidence', from: 'list' })
-          : buildContractWorkbenchHref(c.id, { from: 'list' }),
+        href: navigation.href,
         meta: '合同',
-        nextAction: workflowState.nextActionLabel,
-        nextActionDescription: workflowState.nextActionDescription,
+        nextAction: navigation.nextAction,
+        nextActionDescription: navigation.nextActionDescription,
       } satisfies TaskItemView
     })
 

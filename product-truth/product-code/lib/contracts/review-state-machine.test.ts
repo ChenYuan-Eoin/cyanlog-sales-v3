@@ -56,14 +56,14 @@ describe('deriveReviewWorkflowState', () => {
     expect(state.nextActionDescription).toContain('人工定位')
   })
 
-  it('routes failed reviews to evidence review and retry', () => {
+  it('routes failed reviews to retry without prescribing a workbench panel', () => {
     const state = deriveReviewWorkflowState({
       status: 'FAILED',
       hasSourceAsset: true,
     })
 
     expect(state.phase).toBe('review_failed')
-    expect(state.detailPanel).toBe('evidence')
+    expect(state).not.toHaveProperty('detailPanel')
     expect(state.primaryButtonLabel).toBe('再次审核')
     expect(state.canStartReview).toBe(true)
   })

@@ -19,4 +19,14 @@ describe('contract review evidence labels', () => {
     expect(pageSource).not.toContain('skill_bundle?.static_eval_status')
     expect(pageSource).not.toContain('skill_bundle?.runtime_eval_status')
   })
+
+  it('derives the panel from reactive URL state and routes every explicit panel choice', () => {
+    expect(pageSource).toContain("const requestedPanel = searchParams.get('panel')")
+    expect(pageSource).toContain('const sidePanelMode = normalizeContractWorkbenchPanel(requestedPanel)')
+    expect(pageSource).toContain('buildContractWorkbenchPanelHref(contractId, currentSearch, nextPanel)')
+    expect(pageSource).toContain('if (nextHref === currentHref) return')
+    expect(pageSource).toContain('onChange={handleSidePanelModeChange}')
+    expect(pageSource).toContain('onModeChange={handleSidePanelModeChange}')
+    expect(pageSource).not.toContain('new URLSearchParams(window.location.search)')
+  })
 })
