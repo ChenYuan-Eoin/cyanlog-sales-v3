@@ -1,8 +1,8 @@
 # F099-当前开发工作包账本
 
 **Status**: active_work_package_ledger
-**Updated**: 2026-07-21
-**Ledger Version**: v2026-07-21.05
+**Updated**: 2026-07-22
+**Ledger Version**: v2026-07-22.01
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
 
@@ -24,18 +24,18 @@
 | WP01 | ai-platform-foundation | G4；支撑 G3/G7 | Completed / `4269840f` | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
 | WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Completed / `c25ec17a` | 五业务用点、真实 invocation/token、ReviewRun、降级、route/pinned 证据 |
 | WP03 | rule-collection | G3/G4；支撑 G7/G10 | Completed / `ebdb3c59` | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
-| WP04 | contract-center-ia | G6；支撑 G8 | **Active** / entry_and_upload_orchestration | 四类合同任务入口、源文件身份、版本、ReviewRun 和下一步 |
+| WP04 | contract-center-ia | G6；支撑 G8 | Completed / `a987f85d` | 四类合同任务、源文件身份、上传幂等编排与真实 Preview 工作台复验 |
 | WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | interaction_completed / `12b977fa`; accuracy_cycle_pending | 默认审查、风险定位和正文滚动已完成；准确率与循环复审仍独立受门禁 |
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
 | WP07 | contract-drafting | G6；支撑 G2/G8/G10 | queued | 可编辑草稿、版本、DOCX 导出、转审核/对比 |
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
-| WP09 | release-acceptance | G7/G8/G9/G10/G11 | queued | 唯一候选、测试/build、桌面/iPad、真实文件、Preview/Production |
+| WP09 | release-acceptance | G7/G8/G9/G10/G11 | **Active** / hosted_ai_runtime_and_release_candidate | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
 
-执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（Active） -> WP07 -> WP05 准确率与循环复审（满足门禁后） -> WP08 子包 -> WP09`。WP04 只处理四类合同任务入口和上传编排，不把合同起草、对比算法或循环复审混入当前批次。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
+执行顺序当前为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（已完成） -> WP09（Active） -> WP07`。WP09 本批只处理托管环境 AI 路由、业务可读配置和同一 release commit 的 Preview 验收；规则业务数据、合同工作台、准确率和循环复审不混入。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回独立工作包，不再作为 Active。
 
 ## 2. 候选边界
 
-WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成；WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成；WP03 已由提交 `ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5` 完成；WP05 交互纠偏已由提交 `12b977fa` 独立完成。WP05 的旧“本地完成”总括结论仍无效，准确率和循环复审必须继续按当前 Git SHA、独立金标和真实版本链分别验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
+WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成；WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成；WP03 已由提交 `ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5` 完成；WP05 交互纠偏已由提交 `12b977fa` 独立完成；WP04 已由提交 `a987f85d5701a38a13a245e0ebc5484cadecb3ab` 固化，并由隔离 Preview deployment `dpl_2P11eFtwxutsQXMUoU8R46XdDGUx` 完成真实入口和滚动复验。WP05 的旧“本地完成”总括结论仍无效，准确率和循环复审必须继续按当前 Git SHA、独立金标和真实版本链分别验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
 
 Production 数据库继续只读；WP01-WP05 的上述候选均未部署 Production，也未覆盖根工作区受保护 dirty 快照。
 
@@ -52,7 +52,7 @@ Production 数据库继续只读；WP01-WP05 的上述候选均未部署 Product
 
 门禁结果：独立 API/安全与 UI 复审均为 GO；182 个测试文件 / 1255 项测试、lint、typecheck、75/75 build、桌面 1440×900、iPad 1024×768、0/1/14/50 发布筛选、50 卡自然高度、Provider Bearer 探测、两个模型最小生成、完整发布图、能力不匹配负向门禁、草稿历史回滚和 Preview 零残留均通过。证据索引为 `product-code/output/evidence/wp01/README.md`。
 
-**WP01 退出结论**：六对象/API、Provider 安全、五任务 UI、工程门禁、桌面/iPad、隔离 Preview 六对象闭环以及旧 `AI_CONFIG / ModelPolicy` 兼容回退已通过，WP01 已转 completed。隔离 Preview `vsfropnfsmnonkotywsx` 已应用 `secure_ai_config_control_plane`；动态 bearer canary 与最终读回证明当前记录可持有凭据、历史版本无凭据且临时记录清理完成。此结论不外推到 Production。
+**WP01 退出结论**：六对象/API、Provider 安全、旧版控制面五任务 UI、工程门禁、桌面/iPad、隔离 Preview 六对象闭环，以及旧 `AI_CONFIG / ModelPolicy` 的只读保留与回滚追溯已通过，WP01 已转 completed。正式业务不再消费旧 ModelPolicy 的运行切换由 WP02 完成，不属于 WP01 的“兼容回退”。隔离 Preview `vsfropnfsmnonkotywsx` 已应用 `secure_ai_config_control_plane`；动态 bearer canary 与最终读回证明当前记录可持有凭据、历史版本无凭据且临时记录清理完成。此结论不外推到 Production。
 
 ## 4. WP02 完成证据（2026-07-21）
 
@@ -65,7 +65,7 @@ Production 数据库继续只读；WP01-WP05 的上述候选均未部署 Product
 
 证据索引：`product-code/output/evidence/wp02/README.md`。WP02 完成提交为 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b`。
 
-**当前与下游门禁**：WP03 已完成规则资产和规则集合产品模型；WP05 交互纠偏已完成，独立金标准确率与循环复审继续分别受门禁；Active WP04 先恢复四类合同任务入口和上传编排；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、Hosted 路由和正式发布。
+**当前与下游门禁**：WP03 已完成规则资产和规则集合产品模型；WP05 交互纠偏已完成，独立金标准确率与循环复审继续分别受门禁；WP04 已完成四类合同任务入口和上传编排；Active WP09 先关闭 Hosted 路由短路、业务可读配置和同一 release commit 的 Preview 运行证据。Production 前的专用事务/RPC、RLS 和正式发布仍保持独立门禁。
 
 ## 5. WP03 完成证据（2026-07-21）
 
@@ -88,10 +88,20 @@ Production 数据库继续只读；WP01-WP05 的上述候选均未部署 Product
 
 **WP05 子批退出结论**：默认审查入口、风险定位和正文连续阅读已完成。此结论只关闭交互纠偏，不证明审核准确率、风险迁移、循环复审或最终交付完成。
 
-## 7. WP04 当前批次（2026-07-21）
+## 7. WP04 完成证据（2026-07-22）
 
 - 四个业务任务必须分别可理解：`起草合同`、`上传并发起风险审核`、`继续/查看已有审核`、`选择两个版本进行文档比对`；入口说明对象、前置条件、目标页和下一步，不允许全部退回上传页。
 - 入口矩阵覆盖无合同、单版本、已有 ReviewRun、多版本四类状态；URL 只表达用户选择的任务，不用运行状态暗中切换页面。
 - 上传编排固定为：建立合同与唯一版本身份 → 保存原文件与哈希 → 解析文本 → 建立当前 `source_page_map` → 启动且只启动一次正式 ReviewRun。
 - 重复上传回调、解析完成通知和页面重试必须幂等；失败停留在可解释步骤并可恢复，不能先生成 `SOURCE_IDENTITY_MISSING` 的失败审核再补数据。
-- 当前已知事实来自 `IN-20260721-056`：真实 DOCX 曾在页映射就绪前启动审核。该问题必须以代码顺序、并发/重试测试和真实文件浏览器证据同时关闭。
+- 提交 `a987f85d5701a38a13a245e0ebc5484cadecb3ab` 通过 pre-commit：237 个测试文件通过、2 个跳过；1743 项测试通过、5 项跳过，并完成 lint、typecheck 与治理校验。
+- 隔离 Preview `dpl_2P11eFtwxutsQXMUoU8R46XdDGUx` 的真实合同列表链接不再强制 `panel=evidence`；桌面 1440×1000 与 iPad 1180×820 均默认进入“审查”。
+- 选中第 45 页风险后，DOCX 内部正文 `scrollTop` 可继续变化，`window.scrollY` 保持不动；临时风险与短期认证 token 均按精确 ID 清理为 0。Production 未写入或部署。
+
+## 8. WP09 当前批次（2026-07-22）
+
+- 产品链不变：平台层管理 Provider、模型目录、可复用 AI 应用和路由；业务模块只选择已发布应用；合同规则集与问题分类仍由 F009 管理。
+- 页面主任务必须让业务人员依次看懂“接入了什么模型能力 → 哪些产品功能在使用 → 管理员配置的主备顺序 → 当前环境实际会执行什么”，内部表名、环境变量和机器编码只能作为次级审计信息。
+- 同一路由在本机可按 `local → cloud` 执行；在 Hosted 环境必须排除只能从用户电脑访问的 local Provider，并把 cloud 作为第 1 次真实尝试。环境排除不是 Provider 失败，不得生成 local invocation 或标记为降级。
+- `AIRuntimePlanSnapshot` 同时保存管理员配置顺序和当前环境有效顺序；有效顺序必须是配置顺序的有序子序列，历史快照继续兼容。
+- 本批退出必须由同一个 release commit 的隔离 Preview 证明：真实 cloud Provider、真实业务用点、ReviewRun、`model_invocations`、token、桌面/iPad 与工程门禁。Production 继续只读且不部署。

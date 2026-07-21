@@ -228,17 +228,75 @@ describe('six-object AI runtime plan compiler', () => {
     )
   })
 
-  it('rejects a local Provider when compiling for a hosted runtime', () => {
+  it('keeps local-first order locally but projects cloud as the first hosted attempt', () => {
     const localRows = replaceAsset(fixtures(), 'provider.primary', {
       runtime_location: 'local',
       base_url: 'http://127.0.0.1:1234/v1',
     })
-    expectPlanError(() => compile(localRows, 'hosted'), 'RUNTIME_LOCATION_INCOMPATIBLE')
-
-    expect(compile(localRows, 'local').candidates[0]).toMatchObject({
+    const localPlan = compile(localRows, 'local')
+    expect(localPlan.candidates.map((candidate) => ({
+      position: candidate.position,
+      modelAssetId: candidate.modelAssetId,
+      runtimeLocation: candidate.runtimeLocation,
+    }))).toEqual([{
+      position: 0,
+      modelAssetId: 'model.primary',
       runtimeLocation: 'local',
-      endpoint: 'http://127.0.0.1:1234/v1',
+    }, {
+      position: 1,
+      modelAssetId: 'model.backup',
+      runtimeLocation: 'cloud',
+    }])
+    expect(localPlan.snapshot.route).toMatchObject({
+      orderedModelAssetIds: ['model.primary', 'model.backup'],
+      effectiveOrderedModelAssetIds: ['model.primary', 'model.backup'],
     })
+
+    const hostedRows = replaceAsset(localRows, 'provider.primary', { api_key: undefined })
+    const hostedPlan = compile(hostedRows, 'hosted')
+    expect(hostedPlan.candidates).toHaveLength(1)
+    expect(hostedPlan.candidates[0]).toMatchObject({
+      position: 0,
+      modelAssetId: 'model.backup',
+      providerAssetId: 'provider.backup',
+      runtimeLocation: 'cloud',
+    })
+    expect(hostedPlan.snapshot.route).toMatchObject({
+      orderedModelAssetIds: ['model.primary', 'model.backup'],
+      effectiveOrderedModelAssetIds: ['model.backup'],
+    })
+    expect(hostedPlan.snapshot.candidates.map((candidate) => candidate.model.assetId))
+      .toEqual(['model.backup'])
+    expect(JSON.stringify(hostedPlan.snapshot)).not.toContain('provider.primary')
+
+    // Credential validation happens after environment projection: the same
+    // missing local token still fails when that local candidate is executable.
+    expectPlanError(() => compile(hostedRows, 'local'), 'PROVIDER_CREDENTIAL_MISSING')
+  })
+
+  it('fails closed when a hosted route contains only local Providers', () => {
+    let localOnlyRows = replaceAsset(fixtures(), 'provider.primary', {
+      runtime_location: 'local',
+      base_url: 'http://127.0.0.1:1234/v1',
+    })
+    localOnlyRows = replaceAsset(localOnlyRows, 'model.backup', {
+      provider_connection_id: 'provider.primary',
+    })
+
+    try {
+      compile(localOnlyRows, 'hosted')
+      throw new Error('expected RUNTIME_LOCATION_INCOMPATIBLE')
+    } catch (error) {
+      expect(error).toBeInstanceOf(AIExecutionPlanError)
+      expect(error).toMatchObject({
+        code: 'RUNTIME_LOCATION_INCOMPATIBLE',
+        details: {
+          executionEnvironment: 'hosted',
+          excludedModelAssetIds: ['model.primary', 'model.backup'],
+          excludedProviderAssetIds: ['provider.primary'],
+        },
+      })
+    }
   })
 
   it('produces the same hash for equivalent rows regardless of fetch and set ordering', () => {

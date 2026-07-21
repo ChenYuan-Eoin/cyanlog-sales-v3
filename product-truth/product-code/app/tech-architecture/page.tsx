@@ -62,8 +62,8 @@ export default function TechArchitecturePage() {
 ┌────────┐  ┌────────┐   ┌────────┐
 │报价中心│  │Redis   │   │本地模型│
 │合同审核│  │Stream  │   │云端模型│
-│配置中心│  │        │   │规则引擎│
-│标书中心│  │        │   │        │
+│规则引擎│  │        │   │降级顺序│
+│标书中心│  │        │   │运行证据│
 └────────┘  └────────┘   └────────┘
     │            │            │
     ▼            ▼            ▼
@@ -328,7 +328,7 @@ export default function TechArchitecturePage() {
         <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded mx-1">
           product-truth/02-technical-truth/技术架构.md
         </code>
-        · 与 F022 AI 服务降级联动
+        · 现行 AI 模型路由以 F012 AI 平台配置与运行边界为准
       </footer>
     </div>
   )

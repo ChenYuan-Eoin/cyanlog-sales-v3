@@ -1,12 +1,25 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  hashAIExecutionPlanSnapshot,
+  type AIExecutionPlanSnapshot,
+} from '../ai/runtime-plan'
 import { buildReviewRunEvidence } from './review-evidence'
 
 const reviewRouteSource = readFileSync(
   join(process.cwd(), 'app/api/contracts/[id]/review/route.ts'),
   'utf8'
 )
+
+function withRuntimePlanHash<T extends { snapshot: unknown }>(
+  row: T,
+): T & { snapshot_sha256: string } {
+  return {
+    ...row,
+    snapshot_sha256: hashAIExecutionPlanSnapshot(row.snapshot as AIExecutionPlanSnapshot),
+  }
+}
 
 describe('buildReviewRunEvidence', () => {
   it('binds ReviewRun to published rule snapshots and analysis job provider', () => {
@@ -1100,18 +1113,17 @@ describe('buildReviewRunEvidence', () => {
   })
 
   it('makes the immutable six-object plan primary and exposes every ordered model attempt', () => {
-    const planSnapshot = {
+    const planSnapshot = withRuntimePlanHash({
       id: 'plan-snapshot-1',
       org_id: 'org-1',
       business_use_point_id: 'contract.review.semantic',
       application_id: 'app.contract.review',
       route_policy_id: 'route.contract.review',
-      snapshot_sha256: 'a'.repeat(64),
       created_at: '2026-07-21T01:00:00.000Z',
       snapshot: {
         schemaVersion: 'ai-runtime-plan.v1',
         orgId: 'org-1',
-        executionEnvironment: 'hosted',
+        executionEnvironment: 'local',
         usePoint: {
           configId: 'config-use-point', configKey: 'USE_POINT', assetId: 'contract.review.semantic',
           moduleId: 'contract_review', requiredCapabilities: ['text_generation'],
@@ -1128,6 +1140,7 @@ describe('buildReviewRunEvidence', () => {
           configId: 'config-route', configKey: 'ROUTE', assetId: 'route.contract.review',
           strategy: 'ordered_fallback', timeoutMs: 45000, failureAction: 'manual_review',
           orderedModelAssetIds: ['model.local', 'model.cloud'],
+          effectiveOrderedModelAssetIds: ['model.local', 'model.cloud'],
         },
         candidates: [{
           position: 0,
@@ -1153,9 +1166,12 @@ describe('buildReviewRunEvidence', () => {
           },
         }],
       },
-    }
+    })
     const sharedInvocation = {
       plan_snapshot_id: 'plan-snapshot-1',
+      execution_id: '11111111-1111-4111-8111-111111111111',
+      execution_mode: 'route' as const,
+      pinned_model_catalog_entry_id: null,
       business_use_point_id: 'contract.review.semantic',
       application_id: 'app.contract.review',
       route_policy_id: 'route.contract.review',
@@ -1222,13 +1238,14 @@ describe('buildReviewRunEvidence', () => {
       model_invocation_ids: ['invocation-1', 'invocation-2'],
       runtime_plan: {
         id: 'plan-snapshot-1',
-        snapshot_sha256: 'a'.repeat(64),
+        snapshot_sha256: planSnapshot.snapshot_sha256,
         business_use_point: { asset_id: 'contract.review.semantic' },
         application_binding: { asset_id: 'binding.contract.review' },
         ai_application: { asset_id: 'app.contract.review' },
         route_policy: {
           asset_id: 'route.contract.review',
           ordered_model_catalog_entry_ids: ['model.local', 'model.cloud'],
+          effective_ordered_model_catalog_entry_ids: ['model.local', 'model.cloud'],
         },
         integrity: { valid: true, errors: [] },
       },
@@ -1245,9 +1262,13 @@ describe('buildReviewRunEvidence', () => {
       },
       model_invocations: [{
         id: 'invocation-1', attempt_no: 1, provider_connection_id: 'provider.local',
+        execution_id: '11111111-1111-4111-8111-111111111111', execution_mode: 'route',
+        pinned_model_catalog_entry_id: null,
         input_tokens: null, output_tokens: null, total_tokens: null,
       }, {
         id: 'invocation-2', attempt_no: 2, provider_connection_id: 'provider.cloud',
+        execution_id: '11111111-1111-4111-8111-111111111111', execution_mode: 'route',
+        pinned_model_catalog_entry_id: null,
         input_tokens: 100, output_tokens: 20, total_tokens: 120,
       }],
     })
@@ -1259,15 +1280,331 @@ describe('buildReviewRunEvidence', () => {
     ])
   })
 
+  it('audits hosted environment projection without inventing a local attempt or fallback', () => {
+    const localCandidate = {
+      position: 0,
+      model: {
+        configId: 'config-model-local', configKey: 'MODEL_LOCAL', assetId: 'model.local',
+        modelId: 'google/gemma-4-e4b', capabilities: ['text_generation'], contextWindow: 8192,
+      },
+      provider: {
+        configId: 'config-provider-local', configKey: 'PROVIDER_LOCAL', assetId: 'provider.local',
+        providerType: 'openai_compatible', runtimeLocation: 'local', authMode: 'bearer',
+        credentialState: 'stored', connectionTimeoutMs: 1000,
+      },
+    }
+    const cloudCandidate = {
+      position: 0,
+      model: {
+        configId: 'config-model-cloud', configKey: 'MODEL_CLOUD', assetId: 'model.cloud',
+        modelId: 'gpt-5.5', capabilities: ['text_generation'], contextWindow: 128000,
+      },
+      provider: {
+        configId: 'config-provider-cloud', configKey: 'PROVIDER_CLOUD', assetId: 'provider.cloud',
+        providerType: 'openai_compatible', runtimeLocation: 'cloud', authMode: 'bearer',
+        credentialState: 'stored', connectionTimeoutMs: 1000,
+      },
+    }
+    const runtimePlanSnapshot = withRuntimePlanHash({
+      id: 'plan-hosted-projection',
+      org_id: 'org-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      created_at: '2026-07-22T01:00:00.000Z',
+      snapshot: {
+        schemaVersion: 'ai-runtime-plan.v1',
+        orgId: 'org-1',
+        executionEnvironment: 'hosted',
+        usePoint: {
+          configId: 'config-use-point', configKey: 'USE_POINT', assetId: 'contract.review.semantic',
+          moduleId: 'contract_review', requiredCapabilities: ['text_generation'],
+        },
+        binding: {
+          configId: 'config-binding', configKey: 'BINDING', assetId: 'binding.contract.review',
+          usePointId: 'contract.review.semantic', applicationId: 'app.contract.review',
+        },
+        application: {
+          configId: 'config-app', configKey: 'APP', assetId: 'app.contract.review',
+          capabilities: ['text_generation'],
+        },
+        route: {
+          configId: 'config-route', configKey: 'ROUTE', assetId: 'route.contract.review',
+          strategy: 'ordered_fallback', timeoutMs: 45000, failureAction: 'manual_review',
+          orderedModelAssetIds: ['model.local', 'model.cloud'],
+          effectiveOrderedModelAssetIds: ['model.cloud'],
+        },
+        candidates: [cloudCandidate],
+      },
+    })
+    const cloudInvocation = {
+      id: 'invocation-cloud-first',
+      plan_snapshot_id: 'plan-hosted-projection',
+      execution_id: '22222222-2222-4222-8222-222222222222',
+      execution_mode: 'route' as const,
+      pinned_model_catalog_entry_id: null,
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.cloud',
+      provider_connection_id: 'provider.cloud',
+      phase: 'contract.review.semantic',
+      attempt_no: 1,
+      provider: 'provider.cloud',
+      model: 'gpt-5.5',
+      status: 'completed',
+      degraded: false,
+      fallback_reason: null,
+      latency_ms: 450,
+      input_tokens: 100,
+      output_tokens: 20,
+      total_tokens: 120,
+    }
+    type RuntimePlanSnapshotInput = NonNullable<
+      Parameters<typeof buildReviewRunEvidence>[0]['runtimePlanSnapshot']
+    >
+    type ModelInvocationInput = NonNullable<
+      Parameters<typeof buildReviewRunEvidence>[0]['modelInvocations']
+    >[number]
+    const buildEvidence = (
+      snapshot: RuntimePlanSnapshotInput,
+      modelInvocations: ModelInvocationInput[],
+    ) => buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-hosted-projection', status: 'COMPLETED',
+        plan_snapshot_id: snapshot.id,
+      },
+      latestJob: { provider: 'provider.cloud', status: 'completed', degraded: false },
+      currentVersion: { id: 'version-1' },
+      risks: [],
+      snapshots: [],
+      expectedOrgId: 'org-1',
+      runtimePlanSnapshot: snapshot,
+      modelInvocations,
+    })
+
+    const evidence = buildEvidence(runtimePlanSnapshot, [cloudInvocation])
+    expect(evidence?.runtime_plan).toMatchObject({
+      execution_environment: 'hosted',
+      route_policy: {
+        ordered_model_catalog_entry_ids: ['model.local', 'model.cloud'],
+        effective_ordered_model_catalog_entry_ids: ['model.cloud'],
+      },
+      integrity: { valid: true, errors: [] },
+    })
+    expect(evidence?.runtime_plan?.model_catalog_entries.map((item) => ({
+      position: item.position,
+      asset_id: item.asset_id,
+    }))).toEqual([{ position: 0, asset_id: 'model.cloud' }])
+    expect(evidence?.model_invocations).toEqual([
+      expect.objectContaining({
+        id: 'invocation-cloud-first', attempt_no: 1,
+        model_catalog_entry_id: 'model.cloud', degraded: false, fallback_reason: null,
+      }),
+    ])
+    expect(evidence?.model_policy).toMatchObject({
+      intended_provider_profile: 'provider.cloud',
+      intended_provider_model: 'gpt-5.5',
+      provider: 'provider.cloud',
+      model: 'gpt-5.5',
+      attempt_error_count: 0,
+      degraded: false,
+    })
+
+    const tamperedHash = {
+      ...runtimePlanSnapshot,
+      snapshot_sha256: 'b'.repeat(64),
+    }
+    expect(buildEvidence(tamperedHash, [cloudInvocation])?.runtime_plan?.integrity.errors)
+      .toContain('runtime_plan_sha256_mismatch')
+
+    const hostedLocalSnapshot = withRuntimePlanHash({
+      ...runtimePlanSnapshot,
+      snapshot: {
+        ...runtimePlanSnapshot.snapshot,
+        route: {
+          ...runtimePlanSnapshot.snapshot.route,
+          effectiveOrderedModelAssetIds: ['model.local'],
+        },
+        candidates: [localCandidate],
+      },
+    })
+    expect(buildEvidence(hostedLocalSnapshot, [{
+      ...cloudInvocation,
+      id: 'invocation-hosted-local',
+      model_catalog_entry_id: 'model.local',
+      provider_connection_id: 'provider.local',
+      provider: 'provider.local',
+      model: 'google/gemma-4-e4b',
+    }])?.runtime_plan?.integrity.errors).toContain('runtime_plan_hosted_local_candidate:provider.local')
+
+    expect(buildEvidence(runtimePlanSnapshot, [{
+      ...cloudInvocation,
+      degraded: true,
+      fallback_reason: 'TIMEOUT',
+    }])?.runtime_plan?.integrity.errors).toEqual(expect.arrayContaining([
+      'runtime_invocation_primary_success_degraded:1',
+      'runtime_invocation_primary_success_fallback_invalid:1',
+    ]))
+
+    const invalidSubsequence = withRuntimePlanHash({
+      ...runtimePlanSnapshot,
+      snapshot: {
+        ...runtimePlanSnapshot.snapshot,
+        route: {
+          ...runtimePlanSnapshot.snapshot.route,
+          effectiveOrderedModelAssetIds: ['model.cloud', 'model.local'],
+        },
+        candidates: [cloudCandidate, { ...localCandidate, position: 1 }],
+      },
+    })
+    expect(buildEvidence(invalidSubsequence, [cloudInvocation])?.runtime_plan?.integrity.errors)
+      .toContain('runtime_plan_effective_route_not_configured_subsequence')
+
+    const invocationOutOfOrder = {
+      ...cloudInvocation,
+      id: 'invocation-excluded-local',
+      model_catalog_entry_id: 'model.local',
+      provider_connection_id: 'provider.local',
+      provider: 'provider.local',
+      model: 'google/gemma-4-e4b',
+    }
+    expect(buildEvidence(runtimePlanSnapshot, [invocationOutOfOrder])?.runtime_plan?.integrity.errors)
+      .toContain('runtime_invocation_candidate_order_mismatch:1')
+
+    const {
+      effectiveOrderedModelAssetIds: _effectiveOrderedModelAssetIds,
+      ...historicalRoute
+    } = runtimePlanSnapshot.snapshot.route
+    const historicalSnapshot = withRuntimePlanHash({
+      ...runtimePlanSnapshot,
+      snapshot: {
+        ...runtimePlanSnapshot.snapshot,
+        executionEnvironment: 'local',
+        route: historicalRoute,
+        candidates: [localCandidate, { ...cloudCandidate, position: 1 }],
+      },
+    })
+    const localInvocation = {
+      ...cloudInvocation,
+      id: 'invocation-historical-local',
+      model_catalog_entry_id: 'model.local',
+      provider_connection_id: 'provider.local',
+      provider: 'provider.local',
+      model: 'google/gemma-4-e4b',
+    }
+    expect(buildEvidence(historicalSnapshot, [localInvocation])?.runtime_plan).toMatchObject({
+      route_policy: {
+        ordered_model_catalog_entry_ids: ['model.local', 'model.cloud'],
+        effective_ordered_model_catalog_entry_ids: ['model.local', 'model.cloud'],
+      },
+      integrity: { valid: true, errors: [] },
+    })
+
+    const failedLocalInvocation = {
+      ...localInvocation,
+      id: 'invocation-fallback-local',
+      status: 'failed',
+      degraded: true,
+      fallback_reason: 'TIMEOUT',
+      error_message: '模型请求超时。',
+      input_tokens: null,
+      output_tokens: null,
+      total_tokens: null,
+    }
+    const completedCloudFallback = {
+      ...cloudInvocation,
+      id: 'invocation-fallback-cloud',
+      attempt_no: 2,
+      degraded: true,
+      fallback_reason: 'TIMEOUT',
+    }
+    expect(buildEvidence(historicalSnapshot, [
+      failedLocalInvocation,
+      completedCloudFallback,
+    ])?.runtime_plan?.integrity).toEqual({ valid: true, errors: [] })
+
+    expect(buildEvidence(historicalSnapshot, [
+      failedLocalInvocation,
+      { ...completedCloudFallback, fallback_reason: 'PROVIDER_UNAVAILABLE' },
+    ])?.runtime_plan?.integrity.errors).toContain('runtime_invocation_fallback_reason_mismatch:2')
+
+    expect(buildEvidence(historicalSnapshot, [
+      failedLocalInvocation,
+      {
+        ...completedCloudFallback,
+        execution_id: '44444444-4444-4444-8444-444444444444',
+      },
+    ])?.runtime_plan?.integrity.errors).toContain('runtime_invocation_execution_id_mixed')
+
+    const explicitlyPinnedCloudInvocation = {
+      ...cloudInvocation,
+      id: 'invocation-pinned-cloud',
+      execution_id: '33333333-3333-4333-8333-333333333333',
+      execution_mode: 'pinned' as const,
+      pinned_model_catalog_entry_id: 'model.cloud',
+      request_meta: { pinned_model: 'model.cloud' },
+    }
+    expect(buildEvidence(runtimePlanSnapshot, [explicitlyPinnedCloudInvocation])?.runtime_plan?.integrity.errors)
+      .toEqual(expect.arrayContaining([
+        'runtime_invocation_execution_mode_invalid:1',
+        'runtime_invocation_pinned_model_forbidden:1',
+      ]))
+  })
+
   it('passes a plan-bound invocation only for clean OpenAI-compatible HTTP provider evidence', () => {
     const coverageRequestMeta = {
       semantic_validation_revision: 'canonical-rule-property-coverage-v1',
       expected_canonical_rule_count: 2,
       expected_canonical_property_count: 4,
     }
+    const runtimePlanSnapshot = withRuntimePlanHash({
+      id: 'plan-snapshot-1',
+      org_id: 'org-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      created_at: '2026-07-22T01:00:00.000Z',
+      snapshot: {
+        schemaVersion: 'ai-runtime-plan.v1',
+        orgId: 'org-1',
+        executionEnvironment: 'hosted',
+        usePoint: {
+          configId: 'config-use-point', configKey: 'USE_POINT', assetId: 'contract.review.semantic',
+          moduleId: 'contract_review', requiredCapabilities: ['text_generation'],
+        },
+        binding: {
+          configId: 'config-binding', configKey: 'BINDING', assetId: 'binding.contract.review',
+          usePointId: 'contract.review.semantic', applicationId: 'app.contract.review',
+        },
+        application: {
+          configId: 'config-app', configKey: 'APP', assetId: 'app.contract.review',
+          capabilities: ['text_generation'],
+        },
+        route: {
+          configId: 'config-route', configKey: 'ROUTE', assetId: 'route.contract.review',
+          strategy: 'ordered_fallback', timeoutMs: 45000, failureAction: 'manual_review',
+          orderedModelAssetIds: ['model.cloud'], effectiveOrderedModelAssetIds: ['model.cloud'],
+        },
+        candidates: [{
+          position: 0,
+          model: {
+            configId: 'config-model', configKey: 'MODEL', assetId: 'model.cloud',
+            modelId: 'gpt-5.5', capabilities: ['text_generation'], contextWindow: 128000,
+          },
+          provider: {
+            configId: 'config-provider', configKey: 'PROVIDER', assetId: 'provider.cloud',
+            providerType: 'openai_compatible', runtimeLocation: 'cloud', authMode: 'bearer',
+            credentialState: 'stored', connectionTimeoutMs: 45000,
+          },
+        }],
+      },
+    })
+    type RuntimePlanSnapshotInput = Parameters<typeof buildReviewRunEvidence>[0]['runtimePlanSnapshot']
     const buildPlanBoundEvidence = (
       responseMeta: Record<string, unknown>,
       requestMeta: Record<string, unknown> = coverageRequestMeta,
+      snapshot: RuntimePlanSnapshotInput = runtimePlanSnapshot,
     ) => buildReviewRunEvidence({
       latestReview: {
         id: 'review-plan-quality-gate', status: 'COMPLETED', skill_bundle_id: 'skill-1',
@@ -1277,6 +1614,8 @@ describe('buildReviewRunEvidence', () => {
       currentVersion: { id: 'version-1' },
       risks: [],
       snapshots: [],
+      expectedOrgId: 'org-1',
+      runtimePlanSnapshot: snapshot,
       skillBundle: {
         id: 'skill-1', version: 1, rule_snapshot_ids: [], model_policy_id: null,
         status: 'published',
@@ -1290,8 +1629,14 @@ describe('buildReviewRunEvidence', () => {
       },
       modelInvocations: [{
         id: 'invocation-semantic', plan_snapshot_id: 'plan-snapshot-1',
+        execution_id: '55555555-5555-4555-8555-555555555555', execution_mode: 'route',
+        pinned_model_catalog_entry_id: null,
+        business_use_point_id: 'contract.review.semantic', application_id: 'app.contract.review',
+        route_policy_id: 'route.contract.review', model_catalog_entry_id: 'model.cloud',
+        provider_connection_id: 'provider.cloud', attempt_no: 1,
         phase: 'semantic_review', provider: 'provider.cloud', model: 'gpt-5.5',
-        status: 'completed', degraded: false, input_tokens: 100, output_tokens: 20,
+        status: 'completed', degraded: false, fallback_reason: null,
+        input_tokens: 100, output_tokens: 20,
         total_tokens: 120, request_meta: requestMeta, response_meta: responseMeta,
       }],
     })
@@ -1304,6 +1649,8 @@ describe('buildReviewRunEvidence', () => {
     }
     expect(buildPlanBoundEvidence(cleanResponseMeta)?.skill_bundle?.runtime_invocation_status)
       .toBe('latest_review_model_invocation_passed')
+    expect(buildPlanBoundEvidence(cleanResponseMeta, coverageRequestMeta, null)?.skill_bundle?.runtime_invocation_status)
+      .toBe('latest_review_model_invocation_not_passed')
     expect(buildPlanBoundEvidence({
       ...cleanResponseMeta, validation_warnings: ['one result was normalized'], dropped_risk_count: 1,
     })?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_partial')
@@ -1368,5 +1715,6 @@ describe('buildReviewRunEvidence', () => {
     expect(reviewRouteSource).toContain(".eq('plan_snapshot_id', selectedReview.plan_snapshot_id)")
     expect(reviewRouteSource).toContain(".order('attempt_no', { ascending: true })")
     expect(reviewRouteSource).toContain('input_tokens, output_tokens, total_tokens')
+    expect(reviewRouteSource).toContain('execution_id, execution_mode, pinned_model_catalog_entry_id')
   })
 })

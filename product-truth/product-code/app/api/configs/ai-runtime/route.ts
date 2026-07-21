@@ -196,13 +196,17 @@ function attemptOutcome(
   if (!candidateMatchesAttempt) return 'incomplete_evidence' as const
   if (reviewRunRequired && !row.review_id) return 'incomplete_evidence' as const
   if (row.status === 'failed') {
-    return stringValue(row.fallback_reason) ? 'failed' as const : 'incomplete_evidence' as const
+    return row.degraded === true && stringValue(row.fallback_reason)
+      ? 'failed' as const
+      : 'incomplete_evidence' as const
   }
   if (row.status !== 'completed' || !hasCompleteTokenEvidence(row)) {
     return 'incomplete_evidence' as const
   }
   if (executionMode === 'pinned') {
-    return row.degraded ? 'incomplete_evidence' as const : 'passed' as const
+    return row.degraded || stringValue(row.fallback_reason)
+      ? 'incomplete_evidence' as const
+      : 'passed' as const
   }
 
   if (row.degraded) {
@@ -213,25 +217,42 @@ function attemptOutcome(
         && candidate.id !== row.id
       ))
       .map((candidate) => [candidate.attempt_no, candidate]))
+    const predecessorAttempts = Array.from({ length: row.attempt_no - 1 }, (_, index) => index + 1)
+    const predecessors = predecessorAttempts.map((attemptNo) => predecessorByAttempt.get(attemptNo))
+    const auditedPredecessors = predecessors.every((predecessor, index) => {
+      const attemptNo = index + 1
+      if (
+        !predecessor
+        || predecessor.status !== 'failed'
+        || predecessor.degraded !== true
+        || predecessor.pinned_model_catalog_entry_id !== null
+        || !stringValue(predecessor.fallback_reason)
+      ) {
+        return false
+      }
+      const predecessorSnapshot = verifySnapshotEvidence(predecessor)
+      return predecessor.plan_snapshot_id === row.plan_snapshot_id
+        && predecessor.review_id === row.review_id
+        && predecessorSnapshot?.embed.snapshot_sha256 === verifySnapshotEvidence(row)?.embed.snapshot_sha256
+        && snapshotCandidatePosition(predecessor, predecessorSnapshot) === attemptNo - 1
+    })
+    const expectedFallbackReason = predecessors
+      .map((predecessor) => stringValue(predecessor?.fallback_reason))
+      .filter((reason): reason is string => Boolean(reason))
+      .join(',')
     const auditedFallback = row.attempt_no >= 2
       && candidatePosition === row.attempt_no - 1
-      && Boolean(stringValue(row.fallback_reason))
-      && Array.from({ length: row.attempt_no - 1 }, (_, index) => index + 1).every((attemptNo) => {
-        const predecessor = predecessorByAttempt.get(attemptNo)
-        if (!predecessor || predecessor.status !== 'failed' || !stringValue(predecessor.fallback_reason)) {
-          return false
-        }
-        const predecessorSnapshot = verifySnapshotEvidence(predecessor)
-        return predecessor.plan_snapshot_id === row.plan_snapshot_id
-          && predecessor.review_id === row.review_id
-          && predecessorSnapshot?.embed.snapshot_sha256 === verifySnapshotEvidence(row)?.embed.snapshot_sha256
-          && snapshotCandidatePosition(predecessor, predecessorSnapshot) === attemptNo - 1
-      })
+      && auditedPredecessors
+      && Boolean(expectedFallbackReason)
+      && stringValue(row.fallback_reason) === expectedFallbackReason
     return auditedFallback ? 'fallback_passed' as const : 'incomplete_evidence' as const
   }
 
-  // A non-degraded route success must be the first (primary) candidate.
-  return row.attempt_no === 1 ? 'passed' as const : 'incomplete_evidence' as const
+  // A non-degraded route success must be the first candidate and must not
+  // carry a fallback reason. This matches the formal ReviewRun audit contract.
+  return row.attempt_no === 1 && !stringValue(row.fallback_reason)
+    ? 'passed' as const
+    : 'incomplete_evidence' as const
 }
 
 function attemptFreshness(row: RuntimeAttemptRow, nowMs: number) {
@@ -335,27 +356,53 @@ function clonePresentedAttempt(attempt: ReturnType<typeof sanitizeAttempt>) {
 
 function planErrorAction(code: string): string {
   switch (code) {
-    case 'USE_POINT_NOT_FOUND': return '登记并发布这个业务用点。'
-    case 'USE_POINT_DISABLED': return '启用并发布这个业务用点的新版本。'
-    case 'USE_POINT_REGISTRY_MISMATCH': return '让业务用点的模块与能力要求和产品注册事实保持一致。'
-    case 'BINDING_NOT_FOUND': return '为这个业务用点发布一条应用绑定。'
-    case 'BINDING_DISABLED': return '启用并发布这个业务用点的应用绑定。'
-    case 'BINDING_AMBIGUOUS': return '只保留一条已发布且启用的应用绑定。'
-    case 'APPLICATION_NOT_FOUND': return '发布绑定所指向的 AI 应用。'
-    case 'APPLICATION_DISABLED': return '启用并发布绑定所指向的 AI 应用。'
-    case 'APPLICATION_CAPABILITY_MISMATCH': return '补齐 AI 应用所需能力，或改绑到能力匹配的应用。'
-    case 'ROUTE_NOT_FOUND': return '为 AI 应用发布一条路由策略。'
-    case 'ROUTE_DISABLED': return '启用并发布 AI 应用的路由策略。'
-    case 'ROUTE_AMBIGUOUS': return '只保留一条已发布且启用的路由策略。'
+    case 'USE_POINT_NOT_FOUND': return '登记并发布这个产品功能入口。'
+    case 'USE_POINT_DISABLED': return '启用并发布这个产品功能入口的新版本。'
+    case 'USE_POINT_REGISTRY_MISMATCH': return '让产品功能所属模块与所需 AI 能力保持一致。'
+    case 'BINDING_NOT_FOUND': return '为这个产品功能选择并发布一项 AI 能力。'
+    case 'BINDING_DISABLED': return '启用并发布这个产品功能的 AI 能力选择。'
+    case 'BINDING_AMBIGUOUS': return '只保留一项已发布且启用的 AI 能力选择。'
+    case 'APPLICATION_NOT_FOUND': return '发布产品功能所选择的 AI 能力。'
+    case 'APPLICATION_DISABLED': return '启用并发布产品功能所选择的 AI 能力。'
+    case 'APPLICATION_CAPABILITY_MISMATCH': return '补齐所需 AI 能力，或为产品功能改选能力匹配的方案。'
+    case 'ROUTE_NOT_FOUND': return '为这项 AI 能力发布模型降级顺序。'
+    case 'ROUTE_DISABLED': return '启用并发布这项 AI 能力的模型降级顺序。'
+    case 'ROUTE_AMBIGUOUS': return '只保留一条已发布且启用的模型降级顺序。'
     case 'EMPTY_ROUTE': return '按主模型到降级模型的顺序添加至少一个候选。'
-    case 'MODEL_NOT_FOUND': return '发布路由引用的模型目录条目。'
-    case 'MODEL_DISABLED': return '启用并发布路由引用的模型。'
-    case 'MODEL_CAPABILITY_MISMATCH': return '选择覆盖应用能力要求的模型。'
-    case 'PROVIDER_NOT_FOUND': return '发布模型所引用的 Provider 连接。'
-    case 'PROVIDER_DISABLED': return '启用并发布模型所引用的 Provider 连接。'
-    case 'PROVIDER_CREDENTIAL_MISSING': return '为 Bearer Provider 保存真实凭据并发布新版本。'
-    case 'RUNTIME_LOCATION_INCOMPATIBLE': return '托管环境改用公网可达 Provider；本地模型只在本机运行环境验收。'
-    default: return '修正已发布六对象依赖后重新检查。'
+    case 'MODEL_NOT_FOUND': return '发布降级顺序中引用的可用模型。'
+    case 'MODEL_DISABLED': return '启用并发布降级顺序中引用的模型。'
+    case 'MODEL_CAPABILITY_MISMATCH': return '选择能够完成这项 AI 能力的模型。'
+    case 'PROVIDER_NOT_FOUND': return '发布该模型使用的模型服务。'
+    case 'PROVIDER_DISABLED': return '启用并发布该模型使用的模型服务。'
+    case 'PROVIDER_CREDENTIAL_MISSING': return '为模型服务保存有效密钥并发布新版本。'
+    case 'RUNTIME_LOCATION_INCOMPATIBLE': return '托管环境改用公网可达的模型服务；本机模型只用于本机开发验收。'
+    default: return '补齐并发布产品功能、AI 能力、降级顺序、模型与模型服务后重新检查。'
+  }
+}
+
+function planErrorReason(code: string): string {
+  switch (code) {
+    case 'USE_POINT_NOT_FOUND': return '这个产品功能还没有登记到 AI 平台。'
+    case 'USE_POINT_DISABLED': return '这个产品功能目前未启用。'
+    case 'USE_POINT_REGISTRY_MISMATCH': return '产品功能登记的模块或所需能力不一致。'
+    case 'BINDING_NOT_FOUND': return '这个产品功能还没有选择 AI 能力。'
+    case 'BINDING_DISABLED': return '这个产品功能选择的 AI 能力目前未启用。'
+    case 'BINDING_AMBIGUOUS': return '这个产品功能同时选择了多项 AI 能力，系统无法确定使用哪一项。'
+    case 'APPLICATION_NOT_FOUND': return '这个产品功能选择的 AI 能力尚未发布。'
+    case 'APPLICATION_DISABLED': return '这个产品功能选择的 AI 能力目前未启用。'
+    case 'APPLICATION_CAPABILITY_MISMATCH': return '所选 AI 能力不能完成这个产品功能需要的任务。'
+    case 'ROUTE_NOT_FOUND': return '所选 AI 能力还没有发布模型降级顺序。'
+    case 'ROUTE_DISABLED': return '所选 AI 能力的模型降级顺序目前未启用。'
+    case 'ROUTE_AMBIGUOUS': return '所选 AI 能力存在多条生效的模型降级顺序。'
+    case 'EMPTY_ROUTE': return '模型降级顺序中还没有可执行模型。'
+    case 'MODEL_NOT_FOUND': return '模型降级顺序引用了尚未发布的模型。'
+    case 'MODEL_DISABLED': return '模型降级顺序引用了未启用的模型。'
+    case 'MODEL_CAPABILITY_MISMATCH': return '模型不具备这个产品功能所需的能力。'
+    case 'PROVIDER_NOT_FOUND': return '模型使用的服务尚未发布。'
+    case 'PROVIDER_DISABLED': return '模型使用的服务目前未启用。'
+    case 'PROVIDER_CREDENTIAL_MISSING': return '模型服务缺少可用的访问密钥。'
+    case 'RUNTIME_LOCATION_INCOMPATIBLE': return '当前运行环境无法访问所选模型服务。'
+    default: return '已发布的 AI 配置关系不完整，当前不能安全执行。'
   }
 }
 
@@ -363,7 +410,48 @@ function rowName(rowsById: Map<string, AIExecutionPlanConfigRow>, id: string): s
   return rowsById.get(id)?.name || rowsById.get(id)?.key || id
 }
 
-function presentPlan(plan: AIExecutionPlan, rowsById: Map<string, AIExecutionPlanConfigRow>) {
+function logicalAssetKey(kind: string, assetId: string): string {
+  return `${kind}:${assetId}`
+}
+
+function indexRowsByLogicalAsset(rows: AIExecutionPlanConfigRow[]) {
+  return new Map(rows.flatMap((row) => {
+    const value = recordValue(row.value)
+    const kind = stringValue(value.kind)
+    const assetId = stringValue(value.asset_id)
+    return kind && assetId ? [[logicalAssetKey(kind, assetId), row] as const] : []
+  }))
+}
+
+function presentPlan(
+  plan: AIExecutionPlan,
+  rowsById: Map<string, AIExecutionPlanConfigRow>,
+  rowsByAsset: Map<string, AIExecutionPlanConfigRow>,
+) {
+  const configuredCandidates = plan.snapshot.route.orderedModelAssetIds.map((modelAssetId, index) => {
+    const modelRow = rowsByAsset.get(logicalAssetKey('model_catalog_entry', modelAssetId))
+    const modelValue = recordValue(modelRow?.value)
+    const providerAssetId = stringValue(modelValue.provider_connection_id) || 'unknown-provider'
+    const providerRow = rowsByAsset.get(logicalAssetKey('provider_connection', providerAssetId))
+    const providerValue = recordValue(providerRow?.value)
+    const effectiveCandidate = plan.candidates.find((candidate) => (
+      candidate.modelAssetId === modelAssetId
+      && candidate.providerAssetId === providerAssetId
+    ))
+
+    return {
+      position: index + 1,
+      model_catalog_entry_id: modelAssetId,
+      model_name: modelRow?.name || modelRow?.key || modelAssetId,
+      model_id: stringValue(modelValue.model_id) || modelAssetId,
+      provider_connection_id: providerAssetId,
+      provider_name: providerRow?.name || providerRow?.key || providerAssetId,
+      runtime_location: providerValue.runtime_location === 'local' ? 'local' as const : 'cloud' as const,
+      execution_status: effectiveCandidate ? 'effective' as const : 'excluded_from_hosted' as const,
+      effective_position: effectiveCandidate ? effectiveCandidate.position + 1 : null,
+    }
+  })
+
   return {
     state: 'ready' as const,
     snapshot_hash: plan.snapshotHash,
@@ -379,6 +467,7 @@ function presentPlan(plan: AIExecutionPlan, rowsById: Map<string, AIExecutionPla
       timeout_ms: plan.timeoutMs,
       failure_action: plan.failureAction,
     },
+    configured_candidates: configuredCandidates,
     candidates: plan.candidates.map((candidate) => ({
       position: candidate.position + 1,
       role: candidate.position === 0 ? 'primary' as const : 'fallback' as const,
@@ -394,12 +483,34 @@ function presentPlan(plan: AIExecutionPlan, rowsById: Map<string, AIExecutionPla
   }
 }
 
-function blockedPlan(error: AIExecutionPlanError) {
+function blockedPlan(error: AIExecutionPlanError, executionEnvironment: AIExecutionEnvironment) {
   return {
     state: 'blocked' as const,
+    execution_environment: executionEnvironment,
     code: error.code,
-    reason: error.message,
+    reason: planErrorReason(error.code),
     next_action: planErrorAction(error.code),
+  }
+}
+
+function compilePresentedPlan(params: {
+  orgId: string
+  usePointId: string
+  executionEnvironment: AIExecutionEnvironment
+  rows: AIExecutionPlanConfigRow[]
+  rowsById: Map<string, AIExecutionPlanConfigRow>
+  rowsByAsset: Map<string, AIExecutionPlanConfigRow>
+}) {
+  try {
+    return presentPlan(compilePublishedAIExecutionPlan({
+      orgId: params.orgId,
+      usePointId: params.usePointId,
+      executionEnvironment: params.executionEnvironment,
+      rows: params.rows,
+    }), params.rowsById, params.rowsByAsset)
+  } catch (error) {
+    if (!(error instanceof AIExecutionPlanError)) throw error
+    return blockedPlan(error, params.executionEnvironment)
   }
 }
 
@@ -508,6 +619,7 @@ export async function GET(req: NextRequest) {
 
       const publishedRows = await listPublishedConfigsByType('AI_CONFIG', orgId) as AIExecutionPlanConfigRow[]
       const rowsById = new Map(publishedRows.map((row) => [row.id, row]))
+      const rowsByAsset = indexRowsByLogicalAsset(publishedRows)
       const executionEnvironment = currentExecutionEnvironment()
       const now = new Date()
       const evidenceResults = await Promise.all(BUSINESS_USE_POINT_REGISTRY.map(async (definition) => {
@@ -529,18 +641,36 @@ export async function GET(req: NextRequest) {
       const evidenceByUsePoint = new Map(evidenceResults.map((result) => [result.usePointId, result]))
 
       const usePoints = BUSINESS_USE_POINT_REGISTRY.map((definition) => {
-        let plan: ReturnType<typeof presentPlan> | ReturnType<typeof blockedPlan>
-        try {
-          plan = presentPlan(compilePublishedAIExecutionPlan({
+        const environmentProjections = {
+          local: compilePresentedPlan({
             orgId,
             usePointId: definition.asset_id,
-            executionEnvironment,
+            executionEnvironment: 'local',
             rows: publishedRows,
-          }), rowsById)
-        } catch (error) {
-          if (!(error instanceof AIExecutionPlanError)) throw error
-          plan = blockedPlan(error)
+            rowsById,
+            rowsByAsset,
+          }),
+          hosted: compilePresentedPlan({
+            orgId,
+            usePointId: definition.asset_id,
+            executionEnvironment: 'hosted',
+            rows: publishedRows,
+            rowsById,
+            rowsByAsset,
+          }),
         }
+        // Keep the current-environment view structurally independent from the
+        // two comparison projections. Secret redaction deliberately treats
+        // repeated object references as circular, so recompile this small,
+        // deterministic plan instead of aliasing one projection object.
+        const plan = compilePresentedPlan({
+          orgId,
+          usePointId: definition.asset_id,
+          executionEnvironment,
+          rows: publishedRows,
+          rowsById,
+          rowsByAsset,
+        })
 
         const evidence = evidenceByUsePoint.get(definition.asset_id)
         const currentPlan = plan.state === 'ready' ? plan : null
@@ -578,6 +708,7 @@ export async function GET(req: NextRequest) {
           },
           evidence_available: evidenceAvailable,
           plan,
+          environment_projections: environmentProjections,
           verification,
           latest_current_attempt: latestCurrentAttempt ? clonePresentedAttempt(latestCurrentAttempt) : null,
           latest_current_execution_complete: currentExecution.complete,

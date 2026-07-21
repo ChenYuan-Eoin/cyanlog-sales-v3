@@ -17,6 +17,8 @@ function baseReviewData(overrides: Partial<WorkbenchReviewDataLike> = {}): Workb
       skill_bundle_id: 'bundle-1',
       evidence_status: 'snapshot_bound',
       rule_snapshot_refs: [{ id: 'snapshot-1' }],
+      runtime_source: 'runtime_plan',
+      runtime_plan: { integrity: { valid: true, errors: [] } },
       skill_bundle: {
         production_source: {
           source_of_truth: 'config_center_published_rules',
@@ -211,6 +213,23 @@ describe('review workbench state', () => {
     expect(health.issues.join('\n')).toContain('模型质量金标评测状态为 blocked_without_independent_gold')
     expect(health.issues.join('\n')).not.toContain('规则验收状态')
     expect(health.issues.join('\n')).not.toContain('语义模型调用未通过')
+  })
+
+  it('rejects a nominally passed invocation when the bound runtime plan fails integrity', () => {
+    const base = baseReviewData()
+    if (!base.reviewRun) throw new Error('base review must include a ReviewRun')
+    const data = baseReviewData({
+      reviewRun: {
+        ...base.reviewRun,
+        runtime_source: 'runtime_plan',
+        runtime_plan: { integrity: { valid: false, errors: ['runtime_plan_sha256_mismatch'] } },
+      },
+    })
+
+    const health = buildReviewHealth(data)
+
+    expect(health.degraded).toBe(true)
+    expect(health.issues.join('\n')).toContain('运行计划快照或模型调用绑定未通过完整性校验')
   })
 
   it('reports missing rule acceptance and missing semantic invocation as separate blockers', () => {

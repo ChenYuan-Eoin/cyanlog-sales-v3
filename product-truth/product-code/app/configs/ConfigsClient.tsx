@@ -92,7 +92,7 @@ const CONFIG_TABS: Record<ConfigTabId, {
   },
   ai: {
     label: 'AI 模型与消费',
-    description: '统一管理模型接入、可用模型、路由降级和业务应用绑定，供所有业务模块消费。',
+    description: '统一管理模型接入、可用模型、降级顺序和业务能力选择，供所有业务模块消费。',
     section: 'ai-platform',
     icon: BotIcon,
   },
@@ -125,7 +125,7 @@ const CONFIG_SECTIONS: Array<{
   {
     id: 'ai-platform',
     label: 'AI 平台',
-    description: '管理全局模型能力与业务应用绑定，不从属于合同模块。',
+    description: '管理全局模型能力与业务功能选择，不从属于合同模块。',
     tabs: ['ai'],
   },
   {
@@ -592,7 +592,7 @@ export default function ConfigsClient({
               const runtimeJson = await fetchJsonOrThrow<{ data?: unknown }>(
                 '/api/configs/ai-runtime',
                 { headers, cache: 'no-store' },
-                'AI 运行计划与真实调用证据加载失败'
+                'AI 实际执行路线与调用结果加载失败'
               )
               if (!isAIRuntimeOverview(runtimeJson.data)) {
                 throw new Error('AI 运行证据结构版本不兼容，请刷新后重试')
@@ -619,7 +619,7 @@ export default function ConfigsClient({
             deleteBrowserCache(runtimeCacheKey)
             setAiRuntimeError(runtimeResult.reason instanceof Error
               ? runtimeResult.reason.message
-              : 'AI 运行计划与真实调用证据加载失败')
+              : 'AI 实际执行路线与调用结果加载失败')
           }
           break
         }
@@ -880,16 +880,10 @@ export default function ConfigsClient({
         ]
       }
       case 'ai': {
-        const aiConfigs = getConfigsByType('AI_CONFIG')
-        const logicalGroups = groupPlatformConfigRevisions(aiConfigs)
-        const countKinds = (...kinds: AIPlatformAssetKind[]) => logicalGroups
-          .filter((group) => kinds.includes(group.kind)).length
-        return [
-          { label: 'Provider 连接', value: countValue(countKinds('provider_connection')) },
-          { label: '模型目录', value: countValue(countKinds('model_catalog_entry')) },
-          { label: 'AI 应用 / 路由', value: countValue(countKinds('ai_application', 'route_policy')) },
-          { label: '业务用点 / 绑定', value: countValue(countKinds('business_use_point', 'application_binding')) },
-        ]
+        // AI configuration is a relationship graph. Raw object counts do not
+        // tell administrators whether a business feature is actually usable,
+        // so the AI workspace presents plan-derived status instead.
+        return []
       }
       case 'theme': {
         const themeConfigs = getConfigsByType('UI_THEME')
@@ -1271,12 +1265,12 @@ export default function ConfigsClient({
       route_policy: 'AI_ROUTE',
     }
     const aiName: Record<AIPlatformAssetKind, string> = {
-      provider_connection: '新 Provider 连接',
+      provider_connection: '新模型服务',
       model_catalog_entry: '新模型',
-      ai_application: '新 AI 应用',
-      business_use_point: '新业务用点',
-      application_binding: '新应用绑定',
-      route_policy: '新路由策略',
+      ai_application: '新 AI 能力',
+      business_use_point: '新产品功能入口',
+      application_binding: '新业务能力选择',
+      route_policy: '新模型降级顺序',
     }
     const aiAssetPrefix: Record<AIPlatformAssetKind, string> = {
       provider_connection: 'provider.connection',
@@ -1562,7 +1556,7 @@ export default function ConfigsClient({
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div className="text-xs font-medium text-slate-500">消费端</div>
-              <div className="mt-2 text-sm font-semibold text-slate-900">报价 / 合同 / AI</div>
+              <div className="mt-2 text-sm font-semibold text-slate-900">报价 / 合同 / 标书</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div className="text-xs font-medium text-slate-500">当前配置集</div>
@@ -1596,7 +1590,7 @@ export default function ConfigsClient({
                 >
                   {section.label}
                   <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${isActiveSection ? 'bg-white/10' : 'bg-slate-100'}`}>
-                    {formatSectionCount(section.tabs)}
+                    {formatSectionCount(section.tabs)} 项
                   </span>
                 </button>
               )
@@ -1631,7 +1625,7 @@ export default function ConfigsClient({
                         <div className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           isActiveSection ? 'bg-white/10 text-slate-100' : 'bg-white text-slate-500'
                         }`}>
-                          {formatSectionCount(section.tabs)}
+                          {formatSectionCount(section.tabs)} 项
                         </div>
                       </div>
                       <p className={`mt-2 text-xs leading-5 ${
@@ -1680,18 +1674,20 @@ export default function ConfigsClient({
                   </div>
                 </div>
 
-                <div className={`hidden gap-3 xl:grid xl:w-full 2xl:w-auto ${
-                  activeModuleMetrics.length === 4
-                    ? 'xl:grid-cols-2 2xl:min-w-[520px] 2xl:grid-cols-4'
-                    : 'xl:grid-cols-3 2xl:min-w-[360px]'
-                }`}>
-                  {activeModuleMetrics.map((metric) => (
-                    <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <div className="text-xs font-medium text-slate-500">{metric.label}</div>
-                      <div className="mt-2 text-lg font-semibold text-slate-900">{metric.value}</div>
-                    </div>
-                  ))}
-                </div>
+                {activeModuleMetrics.length > 0 && (
+                  <div className={`hidden gap-3 xl:grid xl:w-full 2xl:w-auto ${
+                    activeModuleMetrics.length === 4
+                      ? 'xl:grid-cols-2 2xl:min-w-[520px] 2xl:grid-cols-4'
+                      : 'xl:grid-cols-3 2xl:min-w-[360px]'
+                  }`}>
+                    {activeModuleMetrics.map((metric) => (
+                      <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div className="text-xs font-medium text-slate-500">{metric.label}</div>
+                        <div className="mt-2 text-lg font-semibold text-slate-900">{metric.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 xl:mt-6 xl:pt-6">
@@ -1716,7 +1712,7 @@ export default function ConfigsClient({
                       <span className={`rounded-full px-2 py-0.5 text-xs ${
                         isActive ? 'bg-white/10 text-slate-100' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {formatModuleCount(tabId)}
+                        {formatModuleCount(tabId)} 项
                       </span>
                     </button>
                   )

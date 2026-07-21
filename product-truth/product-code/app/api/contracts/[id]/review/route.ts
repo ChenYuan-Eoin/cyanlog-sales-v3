@@ -494,7 +494,7 @@ export async function GET(
       }
 
       let modelInvocations: ReviewEvidenceModelInvocation[] = []
-      const invocationSelection = 'id, plan_snapshot_id, business_use_point_id, application_id, route_policy_id, model_catalog_entry_id, provider_connection_id, attempt_no, provider, model, phase, status, degraded, fallback_reason, error_message, latency_ms, input_tokens, output_tokens, total_tokens, request_meta, response_meta, started_at, completed_at, created_at'
+      const invocationSelection = 'id, plan_snapshot_id, execution_id, execution_mode, pinned_model_catalog_entry_id, business_use_point_id, application_id, route_policy_id, model_catalog_entry_id, provider_connection_id, attempt_no, provider, model, phase, status, degraded, fallback_reason, error_message, latency_ms, input_tokens, output_tokens, total_tokens, request_meta, response_meta, started_at, completed_at, created_at'
 
       if (selectedReview?.plan_snapshot_id && selectedReview.id) {
         const { data, error } = await supabaseAdmin

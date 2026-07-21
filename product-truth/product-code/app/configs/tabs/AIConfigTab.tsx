@@ -20,6 +20,7 @@ import type { AIPlatformAssetKind } from '@/lib/configs/types'
 import type {
   AIRuntimeAttempt,
   AIRuntimeOverview,
+  AIRuntimePlan,
   AIRuntimeUsePointOverview,
   Config,
   ConfigPublishFeedback,
@@ -37,6 +38,7 @@ import { PublishActionControl } from './PublishActionControl'
 import {
   MODULE_LABELS,
   VERIFICATION_PRESENTATION,
+  attemptFailureSummary,
   attemptOutcomeLabel,
   formatRuntimeNumber,
   formatRuntimeTime,
@@ -48,7 +50,7 @@ import {
   RuntimeReviewRunStatus,
 } from './ai-runtime-status'
 
-type AIWorkspaceView = 'connections' | 'models' | 'applications' | 'bindings' | 'release' | 'runtime'
+type AIWorkspaceView = 'models' | 'usage' | 'routing' | 'runtime' | 'release'
 
 interface AIConfigTabProps {
   configs: Config[]
@@ -71,17 +73,21 @@ const TASKS: Array<{
   label: string
   description: string
 }> = [
-  { id: 'connections', step: '1', label: '模型接入', description: '账号、端点与认证' },
-  { id: 'models', step: '2', label: '模型目录', description: '同一连接下的可用模型' },
-  { id: 'applications', step: '3', label: 'AI 应用', description: '能力、候选模型与降级' },
-  { id: 'bindings', step: '4', label: '业务绑定', description: '业务用点只绑定应用' },
-  { id: 'release', step: '5', label: '发布状态', description: '依赖检查与版本' },
-  { id: 'runtime', step: '6', label: '运行验证', description: '当前计划与真实调用' },
+  { id: 'models', step: '1', label: '模型能力', description: '接入、可选模型与可用状态' },
+  { id: 'usage', step: '2', label: '业务使用', description: '哪些产品功能使用 AI' },
+  { id: 'routing', step: '3', label: '降级顺序', description: '主模型、备用模型与失败动作' },
+  { id: 'runtime', step: '4', label: '实际执行', description: '本机与托管路线、真实调用' },
+  { id: 'release', step: '5', label: '发布与版本', description: '依赖检查、草稿与历史' },
 ]
 
 function viewFromUrl(href: string): AIWorkspaceView {
   const requested = new URL(href).searchParams.get('view')
-  return TASKS.some((task) => task.id === requested) ? requested as AIWorkspaceView : 'connections'
+  const migrated = requested === 'connections'
+    ? 'models'
+    : requested === 'applications' || requested === 'bindings'
+      ? 'usage'
+      : requested
+  return TASKS.some((task) => task.id === migrated) ? migrated as AIWorkspaceView : 'models'
 }
 
 function releaseQueryFromUrl(href: string) {
@@ -217,28 +223,38 @@ function AssetHeader({ config, showStatus = true }: { config: Config; showStatus
 }
 
 function RevisionSummary({ group }: { group: PlatformConfigRevisionGroup }) {
+  const hasPublished = group.published.length > 0
+  const hasDraft = group.drafts.length > 0
+
   return (
     <div className="mt-3">
       <div className="flex flex-wrap gap-2" aria-label="版本状态摘要">
-        {group.published.length > 0 && <Badge className="bg-emerald-100 text-emerald-800">当前 {group.published.length}</Badge>}
-        {group.drafts.length > 0 && <Badge className="bg-blue-100 text-blue-800">草稿 {group.drafts.length}</Badge>}
-        {group.archived.length > 0 && <Badge variant="outline">归档 {group.archived.length}</Badge>}
+        {hasPublished && <Badge className="bg-emerald-100 text-emerald-800">当前已发布版本</Badge>}
+        {hasDraft && <Badge className="bg-blue-100 text-blue-800">待发布草稿 {group.drafts.length} 份</Badge>}
+        {group.archived.length > 0 && <Badge variant="outline">历史版本 {group.archived.length} 个</Badge>}
       </div>
+      {hasDraft && (
+        <p className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
+          {hasPublished
+            ? '草稿尚未影响当前业务。下方展示的是已发布版本；编辑、发布和删除操作只针对草稿。'
+            : '当前还没有已发布版本，草稿不会被业务功能使用；完成检查并发布后才会生效。'}
+        </p>
+      )}
       <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-slate-700">版本与高级标识</summary>
+        <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-slate-700">查看版本与审计标识</summary>
         <div className="border-t border-slate-200 pt-3">
-          <div className="text-xs text-slate-500">稳定资产标识</div>
+          <div className="text-xs text-slate-500">稳定配置编号</div>
           <div className="mt-1 break-all font-mono text-xs text-slate-700">{group.assetId}</div>
           <ol className="mt-3 space-y-2">
             {group.records.map((record) => (
               <li key={record.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium text-slate-900">
-                    {record.status === 'PUBLISHED' ? '当前' : record.status === 'DRAFT' ? '草稿' : '归档'}
+                    {record.status === 'PUBLISHED' ? '当前已发布' : record.status === 'DRAFT' ? '待发布草稿' : '历史版本'}
                   </span>
                   <span>{formatUpdatedAt(record.updated_at)}</span>
                 </div>
-                <div className="mt-1 break-all font-mono">记录键：{record.key}</div>
+                <div className="mt-1 break-all font-mono">版本记录编号：{record.key}</div>
               </li>
             ))}
           </ol>
@@ -256,15 +272,62 @@ function RevisionCard({
   group: PlatformConfigRevisionGroup
   children: React.ReactNode
 }) {
+  const actionTarget = group.drafts[0] || group.primary
+
   return (
     <article className="rounded-2xl border border-slate-200 p-4 [contain-intrinsic-size:auto_320px] [content-visibility:auto]">
       <AssetHeader config={group.primary} showStatus={false} />
       <RevisionSummary group={group} />
       {children}
       <div className="mt-4 border-t border-slate-100 pt-4">
-        <AssetActions config={group.primary} {...actions} />
+        <AssetActions config={actionTarget} {...actions} />
       </div>
     </article>
+  )
+}
+
+function BusinessStatusLayers({ item }: { item?: AIRuntimeUsePointOverview }) {
+  const planReady = item?.plan.state === 'ready'
+  const verification = item?.verification
+  const invocationState = verification === 'passed'
+    ? '当前计划调用通过'
+    : verification === 'fallback_passed'
+      ? '备用模型调用通过'
+      : verification === 'failed'
+        ? '最近调用失败'
+        : verification === 'incomplete_evidence'
+          ? '调用记录不完整'
+          : verification === 'stale'
+            ? '调用结果已过期'
+            : verification === 'evidence_unavailable'
+              ? '调用记录暂不可读'
+              : verification === 'not_verified'
+                ? '尚未执行真实任务'
+                : planReady
+                  ? '尚未执行真实任务'
+                  : '需先补全运行计划'
+  const layers = [
+    {
+      label: '1. 配置发布',
+      value: planReady ? '所需配置已发布' : item ? '发布关系待补全' : '状态尚未加载',
+    },
+    {
+      label: '2. 当前环境',
+      value: planReady ? '具备可执行路线' : item ? '暂不可执行' : '状态尚未加载',
+    },
+    { label: '3. 模型调用', value: invocationState },
+    { label: '4. 业务结果', value: '回到对应功能验收' },
+  ]
+
+  return (
+    <ol className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="配置到业务验收的四层状态">
+      {layers.map((layer) => (
+        <li key={layer.label} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <div className="text-xs font-medium text-slate-500">{layer.label}</div>
+          <div className="mt-1 text-sm font-medium text-slate-900">{layer.value}</div>
+        </li>
+      ))}
+    </ol>
   )
 }
 
@@ -282,7 +345,7 @@ export default function AIConfigTab({
   publishingConfigIds,
   publishFeedback,
 }: AIConfigTabProps) {
-  const [view, setView] = useState<AIWorkspaceView>('connections')
+  const [view, setView] = useState<AIWorkspaceView>('models')
   const grouped = useMemo(() => groupAIConfigs(configs), [configs])
   const platformConfigs = useMemo(() => configs.filter((config) => {
     const kind = getAIConfigKind(config.value)
@@ -322,15 +385,6 @@ export default function AIConfigTab({
     window.history.pushState({}, '', url)
   }
 
-  const counts: Record<AIWorkspaceView, number> = {
-    connections: providerGroups.length,
-    models: modelGroups.length,
-    applications: applicationGroups.length + routeGroups.length,
-    bindings: usePointGroups.length + bindingGroups.length,
-    release: revisionGroups.length,
-    runtime: runtimeOverview?.use_points.length || 0,
-  }
-
   return (
     <div className="space-y-6" data-testid="ai-platform-workspace">
       <Card>
@@ -339,17 +393,17 @@ export default function AIConfigTab({
             <div>
               <CardTitle className="text-lg">AI 平台配置</CardTitle>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                平台先接入模型服务和模型目录，再由 AI 应用定义路由；业务模块只绑定已发布应用，不直接写死 Provider 或模型。
+                先确认有哪些模型能力可用，再决定哪些产品功能使用它、失败时按什么顺序切换，最后核对本机与托管环境真正会执行哪条路线。
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
-              <div className="font-semibold text-slate-900">配置状态</div>
-              这里负责建立和发布平台资产；真实业务调用与输出质量需要单独运行验证。
+              <div className="font-semibold text-slate-900">四层状态不能混淆</div>
+              配置已发布、当前环境可执行、模型真实调用、业务结果验收，必须逐层确认。
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <nav aria-label="AI 平台配置任务" className="flex gap-2 overflow-x-auto pb-1 xl:grid xl:grid-cols-6 xl:overflow-visible xl:pb-0">
+          <nav aria-label="AI 平台配置任务" className="flex gap-2 overflow-x-auto pb-1 xl:grid xl:grid-cols-5 xl:overflow-visible xl:pb-0">
             {TASKS.map((task) => {
               const active = view === task.id
               return (
@@ -364,12 +418,7 @@ export default function AIConfigTab({
                       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold">{task.step}. {task.label}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${active ? 'bg-white/10' : 'bg-slate-100'}`}>
-                      {counts[task.id]}
-                    </span>
-                  </div>
+                  <div className="text-sm font-semibold">{task.step}. {task.label}</div>
                   <div className={`mt-1 text-xs ${active ? 'text-slate-300' : 'text-slate-500'}`}>{task.description}</div>
                 </button>
               )
@@ -378,63 +427,248 @@ export default function AIConfigTab({
         </CardContent>
       </Card>
 
-      {view === 'connections' && (
-        <TaskSection
-          title="模型接入"
-          description="一条连接只回答“如何访问模型服务”。具体模型、合同阶段、规则集和降级顺序都不在这里配置。"
-          actionLabel="新增 Provider 连接"
-          onAction={() => onNew('provider_connection')}
-        >
-          {providerGroups.length === 0 ? (
-            <EmptyState title="还没有平台 Provider 连接。" action="创建第一条连接" onClick={() => onNew('provider_connection')} />
-          ) : (
-            <IntrinsicCardStack label="Provider 连接列表">
-              {providerGroups.map((group) => {
-                const config = group.primary
+      {view === 'models' && (
+        <div className="space-y-6">
+          <TaskSection
+            title="模型服务接入"
+            description="先配置如何访问本地或云端模型服务。这里不选择合同功能，也不决定降级顺序。"
+            actionLabel="新增模型服务"
+            onAction={() => onNew('provider_connection')}
+          >
+            {providerGroups.length === 0 ? (
+              <EmptyState title="还没有模型服务连接。" action="创建第一条连接" onClick={() => onNew('provider_connection')} />
+            ) : (
+              <IntrinsicCardStack label="模型服务连接列表">
+                {providerGroups.map((group) => {
+                  const config = group.primary
+                  const isLocal = config.value.runtime_location === 'local'
+                  return (
+                    <RevisionCard
+                      key={group.key}
+                      group={group}
+                      {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                    >
+                      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                        <Fact label="服务位置" value={isLocal ? '本机模型服务' : '公网云模型服务'} />
+                        <Fact label="访问方式" value={credentialText(config)} />
+                        <Fact label="服务地址" value={String(config.value.base_url || '未配置')} wide />
+                      </dl>
+                      <p className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${isLocal
+                        ? 'border-blue-200 bg-blue-50 text-blue-900'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}
+                      >
+                        {isLocal
+                          ? '仅本机运行时可以访问；部署到托管环境后会在调用前排除，不会记成模型失败或降级。'
+                          : '本机和托管环境都可加入执行路线；是否真实可用仍以模型测试和业务调用记录为准。'}
+                      </p>
+                    </RevisionCard>
+                  )
+                })}
+              </IntrinsicCardStack>
+            )}
+          </TaskSection>
+
+          <TaskSection
+            title="可用模型与能力"
+            description="一个模型服务可以登记多个模型。这里说明模型能做什么；业务模块和降级顺序在后续步骤选择。"
+            actionLabel="新增模型"
+            onAction={() => onNew('model_catalog_entry')}
+          >
+            {modelGroups.length === 0 ? (
+              <EmptyState title="还没有可供业务选择的模型。" action="登记模型" onClick={() => onNew('model_catalog_entry')} />
+            ) : (
+              <IntrinsicCardStack label="可用模型列表">
+                {modelGroups.map((group) => {
+                  const config = group.primary
+                  const provider = providerGroups.find((item) => item.assetId === config.value.provider_connection_id)
+                  return (
+                    <RevisionCard
+                      key={group.key}
+                      group={group}
+                      {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                    >
+                      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                        <Fact label="所属模型服务" value={provider?.primary.name || '连接已停用或不存在'} />
+                        <Fact label="服务商模型名称" value={String(config.value.model_id || '未设置')} />
+                        <Fact label="可提供能力" value={capabilityText(stringList(config.value.capabilities)) || '未定义'} />
+                      </dl>
+                      <ModelAvailabilitySummary
+                        modelGroup={group}
+                        providerGroup={provider}
+                        overview={runtimeOverview}
+                      />
+                    </RevisionCard>
+                  )
+                })}
+              </IntrinsicCardStack>
+            )}
+          </TaskSection>
+        </div>
+      )}
+
+      {view === 'usage' && (
+        <div className="space-y-6">
+          <TaskSection
+            title="业务使用总览"
+            description="从产品功能出发查看它需要什么 AI 能力、当前绑定到哪个应用，以及是否已经具备可执行路线。"
+          >
+            <IntrinsicCardStack label="业务使用总览列表">
+              {BUSINESS_USE_POINT_REGISTRY.map((definition) => {
+                const runtimeItem = runtimeOverview?.use_points.find((item) => item.use_point.asset_id === definition.asset_id)
+                const readyPlan = runtimeItem?.plan.state === 'ready' ? runtimeItem.plan : null
+                const planReady = readyPlan !== null
                 return (
-                <RevisionCard
-                  key={group.key}
-                  group={group}
-                  {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
-                >
-                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                    <Fact label="位置" value={config.value.runtime_location === 'local' ? '本地服务' : '云端服务'} />
-                    <Fact label="协议" value="OpenAI compatible" />
-                    <Fact label="端点" value={String(config.value.base_url || '未配置')} wide />
-                    <Fact label="认证" value={credentialText(config)} />
-                  </dl>
-                </RevisionCard>
+                  <article key={definition.asset_id} className="rounded-2xl border border-slate-200 p-4">
+                    <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-slate-950">{definition.display_name}</h3>
+                          <Badge variant="outline">{MODULE_LABELS[definition.module_id] || definition.module_id}</Badge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{definition.description}</p>
+                      </div>
+                      <Badge className={planReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}>
+                        {planReady ? '当前环境可执行' : runtimeItem ? '运行计划待补全' : '状态尚未加载'}
+                      </Badge>
+                    </header>
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                      <Fact label="需要的能力" value={capabilityText(definition.required_capabilities)} />
+                      <Fact label="当前 AI 能力" value={readyPlan?.application.name || '尚无可执行选择'} />
+                      <Fact label="执行与降级" value={readyPlan?.route.name || '尚无可执行路线'} />
+                    </dl>
+                    <BusinessStatusLayers item={runtimeItem} />
+                  </article>
                 )
               })}
             </IntrinsicCardStack>
-          )}
-        </TaskSection>
+          </TaskSection>
+
+          <details className="rounded-2xl border border-slate-200 bg-white px-4 py-2">
+            <summary className="min-h-12 cursor-pointer py-3 text-sm font-semibold text-slate-900">
+              调整产品功能与 AI 能力的详细配置
+            </summary>
+            <div className="space-y-6 border-t border-slate-200 py-5">
+              <TaskSection
+                title="可复用 AI 能力"
+                description="一项 AI 能力可以被多个产品功能复用；它不直接保存服务地址或具体模型。"
+                actionLabel="新增 AI 能力"
+                onAction={() => onNew('ai_application')}
+              >
+                <AssetList
+                  groups={applicationGroups}
+                  empty="还没有可复用的 AI 能力。"
+                  detail={(config) => `可以提供：${capabilityText(stringList(config.value.capabilities)) || '未定义'}`}
+                  {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                />
+              </TaskSection>
+
+              <TaskSection
+                title="产品功能入口"
+                description="登记产品中真正需要 AI 的动作和能力要求；这里只选择系统已经支持的功能入口。"
+                actionLabel="登记功能入口"
+                onAction={() => onNew('business_use_point')}
+              >
+                <IntrinsicCardStack label="产品功能入口列表">
+                  {BUSINESS_USE_POINT_REGISTRY.map((definition) => {
+                    const group = usePointGroups.find((item) => item.assetId === definition.asset_id)
+                    const detail = (
+                      <>
+                        <p className="mt-3 text-sm leading-6 text-slate-600">{definition.description}</p>
+                        <p className="mt-2 text-xs text-slate-500">需要：{capabilityText(definition.required_capabilities)}</p>
+                      </>
+                    )
+                    if (group) {
+                      return (
+                        <RevisionCard
+                          key={group.key}
+                          group={group}
+                          {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                        >
+                          {detail}
+                        </RevisionCard>
+                      )
+                    }
+                    return (
+                      <article key={definition.asset_id} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-slate-950">{definition.display_name}</h3>
+                          <Badge variant="outline">未登记</Badge>
+                        </div>
+                        {detail}
+                      </article>
+                    )
+                  })}
+                </IntrinsicCardStack>
+              </TaskSection>
+              <TaskSection
+                title="选择每个功能使用的 AI 能力"
+                description="把产品功能连接到已发布 AI 能力。模型选择和备用顺序仍由下一步统一管理。"
+                actionLabel="新增业务选择"
+                onAction={() => onNew('application_binding')}
+              >
+                <AssetList
+                  groups={bindingGroups}
+                  empty="还没有产品功能与 AI 能力的选择关系。"
+                  detail={(config) => {
+                    const usePoint = usePointGroups.find((item) => item.assetId === config.value.business_use_point_id)
+                    const application = applicationGroups.find((item) => item.assetId === config.value.ai_application_id)
+                    return `${usePoint?.primary.name || '产品功能入口已停用或不存在'} → ${application?.primary.name || 'AI 能力已停用或不存在'}`
+                  }}
+                  {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
+                />
+              </TaskSection>
+            </div>
+          </details>
+        </div>
       )}
 
-      {view === 'models' && (
+      {view === 'routing' && (
         <TaskSection
-          title="模型目录"
-          description="同一个 Provider 可以登记多个模型。模型条目说明远端模型 ID 和通用能力，不包含任何合同规则。"
-          actionLabel="新增模型"
-          onAction={() => onNew('model_catalog_entry')}
+          title="主模型与备用模型顺序"
+          description="管理员为每项 AI 能力配置主模型、备用模型和全部失败后的处理方式。这里保存的是发布顺序；托管环境会在调用前排除仅本机可达的模型。"
+          actionLabel="新增降级策略"
+          onAction={() => onNew('route_policy')}
         >
-          {modelGroups.length === 0 ? (
-            <EmptyState title="还没有可供应用选择的模型。" action="登记模型" onClick={() => onNew('model_catalog_entry')} />
+          {routeGroups.length === 0 ? (
+            <EmptyState title="还没有模型执行顺序。" action="配置第一条降级策略" onClick={() => onNew('route_policy')} />
           ) : (
-            <IntrinsicCardStack label="模型目录列表">
-              {modelGroups.map((group) => {
+            <IntrinsicCardStack label="模型降级策略列表">
+              {routeGroups.map((group) => {
                 const config = group.primary
-                const provider = providerGroups.find((item) => item.assetId === config.value.provider_connection_id)
+                const application = applicationGroups.find((item) => item.assetId === config.value.ai_application_id)
+                const modelIds = stringList(config.value.model_catalog_entry_ids)
                 return (
                   <RevisionCard
                     key={group.key}
                     group={group}
                     {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
                   >
-                    <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
-                      <Fact label="Provider" value={provider?.primary.name || '连接已停用或不存在'} />
-                      <Fact label="远端模型 ID" value={String(config.value.model_id || '未设置')} />
-                      <Fact label="能力" value={capabilityText(stringList(config.value.capabilities)) || '未定义'} />
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <div className="font-medium text-slate-950">
+                        服务能力：{application?.primary.name || 'AI 能力已停用或不存在'}
+                      </div>
+                      <ol className="mt-3 space-y-2" aria-label="管理员配置的模型降级顺序">
+                        {modelIds.map((modelId, index) => {
+                          const model = modelGroups.find((item) => item.assetId === modelId)
+                          const provider = providerGroups.find((item) => item.assetId === model?.primary.value.provider_connection_id)
+                          const isLocal = provider?.primary.value.runtime_location === 'local'
+                          return (
+                            <li key={modelId} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3 sm:flex-row sm:items-center">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">{index + 1}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate font-medium text-slate-950">{model?.primary.name || '不可用模型'}</div>
+                                <div className="mt-1 truncate text-xs text-slate-500">{provider?.primary.name || '模型服务不可用'}</div>
+                              </div>
+                              <Badge variant="outline" className={isLocal ? 'border-blue-200 bg-blue-50 text-blue-900' : undefined}>
+                                {isLocal ? '仅本机可达' : '托管可达'}
+                              </Badge>
+                            </li>
+                          )
+                        })}
+                      </ol>
+                      <p className="mt-3 text-xs leading-5 text-slate-600">
+                        全部可执行模型失败后：{config.value.failure_action === 'stop' ? '停止任务并提示错误' : '转交人工处理'}。
+                      </p>
                     </div>
                   </RevisionCard>
                 )
@@ -444,108 +678,11 @@ export default function AIConfigTab({
         </TaskSection>
       )}
 
-      {view === 'applications' && (
-        <div className="space-y-6">
-          <TaskSection
-            title="AI 应用"
-            description="AI 应用定义可被多个业务模块复用的逻辑能力；它不保存 Provider 或具体模型。"
-            actionLabel="新增 AI 应用"
-            onAction={() => onNew('ai_application')}
-          >
-            <AssetList
-              groups={applicationGroups}
-              empty="还没有 AI 应用。"
-              detail={(config) => `能力：${capabilityText(stringList(config.value.capabilities)) || '未定义'}`}
-              {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
-            />
-          </TaskSection>
-          <TaskSection
-            title="路由与降级"
-            description="路由把应用连接到有序候选模型；候选全部失败后只能转人工或明确停止。"
-            actionLabel="新增路由策略"
-            onAction={() => onNew('route_policy')}
-          >
-            <AssetList
-              groups={routeGroups}
-              empty="还没有应用路由。"
-              detail={(config) => {
-                const application = applicationGroups.find((item) => item.assetId === config.value.ai_application_id)
-                const modelNames = stringList(config.value.model_catalog_entry_ids).map((modelId) => (
-                  modelGroups.find((item) => item.assetId === modelId)?.primary.name || '不可用模型'
-                ))
-                return `${application?.primary.name || '应用已停用或不存在'} → ${modelNames.join(' → ') || '未选择模型'}`
-              }}
-              {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
-            />
-          </TaskSection>
-        </div>
-      )}
-
-      {view === 'bindings' && (
-        <div className="space-y-6">
-          <TaskSection
-            title="业务用点"
-            description="业务用点代表产品里真正需要 AI 的动作。这里只登记已有功能入口和所需能力，不创建系统无法执行的虚假入口。"
-            actionLabel="登记业务用点"
-            onAction={() => onNew('business_use_point')}
-          >
-            <IntrinsicCardStack label="业务用点列表">
-              {BUSINESS_USE_POINT_REGISTRY.map((definition) => {
-                const group = usePointGroups.find((item) => item.assetId === definition.asset_id)
-                const detail = (
-                  <>
-                    <p className="mt-3 text-sm leading-6 text-slate-600">{definition.description}</p>
-                    <p className="mt-2 text-xs text-slate-500">需要：{capabilityText(definition.required_capabilities)}</p>
-                  </>
-                )
-                if (group) {
-                  return (
-                    <RevisionCard
-                      key={group.key}
-                      group={group}
-                      {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
-                    >
-                      {detail}
-                    </RevisionCard>
-                  )
-                }
-                return (
-                  <article key={definition.asset_id} className="rounded-2xl border border-slate-200 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-slate-950">{definition.display_name}</h3>
-                      <Badge variant="outline">未登记</Badge>
-                    </div>
-                    {detail}
-                  </article>
-                )
-              })}
-            </IntrinsicCardStack>
-          </TaskSection>
-          <TaskSection
-            title="应用绑定"
-            description="绑定只连接“业务用点 → 已发布 AI 应用”；具体模型由应用路由决定。"
-            actionLabel="新增绑定"
-            onAction={() => onNew('application_binding')}
-          >
-            <AssetList
-              groups={bindingGroups}
-              empty="还没有业务应用绑定。"
-              detail={(config) => {
-                const usePoint = usePointGroups.find((item) => item.assetId === config.value.business_use_point_id)
-                const application = applicationGroups.find((item) => item.assetId === config.value.ai_application_id)
-                return `${usePoint?.primary.name || '产品功能入口已停用或不存在'} → ${application?.primary.name || 'AI 应用已停用或不存在'}`
-              }}
-              {...{ onEdit, onRevise, onPublish, onVersions, onDelete, publishingConfigIds, publishFeedback }}
-            />
-          </TaskSection>
-        </div>
-      )}
-
       {view === 'release' && (
         <div className="space-y-6">
           <TaskSection
             title="发布检查"
-            description="每类资产独立发布。系统在发布前检查引用、启用状态和能力匹配；缺少哪一环会明确说明。"
+            description="每类配置独立发布。系统在发布前检查引用、启用状态和能力匹配；缺少哪一环会明确说明。"
           >
             <ReleaseList
               configs={platformConfigs}
@@ -586,28 +723,174 @@ export default function AIConfigTab({
   )
 }
 
-function currentCandidateAttempt(
-  item: AIRuntimeUsePointOverview,
-  modelAssetId: string,
-  providerAssetId: string,
-) {
-  return item.latest_current_execution_attempts.find((attempt) => (
-    attempt.model_catalog_entry_id === modelAssetId
-    && attempt.provider_connection_id === providerAssetId
-  )) || null
+function ModelAvailabilitySummary({
+  modelGroup,
+  providerGroup,
+  overview,
+}: {
+  modelGroup: PlatformConfigRevisionGroup
+  providerGroup?: PlatformConfigRevisionGroup
+  overview: AIRuntimeOverview | null
+}) {
+  const publishedModel = modelGroup.published[0]
+  const publishedProvider = providerGroup?.published[0]
+  const isLocal = publishedProvider?.value.runtime_location === 'local'
+  const publishedModelAssetId = publishedModel && String(publishedModel.value.asset_id || modelGroup.assetId)
+  const publishedProviderAssetId = publishedProvider && String(publishedProvider.value.asset_id || providerGroup?.assetId || '')
+  const latestAttempt = publishedModelAssetId && publishedProviderAssetId
+    ? overview?.use_points
+      .flatMap((item) => item.latest_attempts)
+      .filter((attempt) => (
+        attempt.matches_current_plan
+        && attempt.model_catalog_entry_id === publishedModelAssetId
+        && attempt.provider_connection_id === publishedProviderAssetId
+      ))
+      .sort((left, right) => String(right.occurred_at || '').localeCompare(String(left.occurred_at || '')))[0]
+    : undefined
+
+  let label = '已发布，尚未真实验证'
+  let description = '可以加入业务执行顺序；请通过模型测试或真实业务任务验证。'
+  let className = 'border-slate-200 bg-slate-50 text-slate-800'
+
+  if (!publishedModel) {
+    label = '模型尚未发布'
+    description = '草稿不会被任何业务功能使用。'
+    className = 'border-amber-200 bg-amber-50 text-amber-900'
+  } else if (!publishedProvider) {
+    label = '模型服务尚未发布'
+    description = '先发布并启用所属模型服务，模型才能进入业务路线。'
+    className = 'border-rose-200 bg-rose-50 text-rose-900'
+  } else if (publishedModel.value.enabled === false) {
+    label = '模型已停用'
+    description = '已停用模型不会进入任何产品功能的执行路线。'
+    className = 'border-amber-200 bg-amber-50 text-amber-900'
+  } else if (publishedProvider.value.enabled === false) {
+    label = '模型服务已停用'
+    description = '先启用并重新发布模型服务，所属模型才可能进入执行路线。'
+    className = 'border-amber-200 bg-amber-50 text-amber-900'
+  } else if (latestAttempt?.snapshot_integrity === 'invalid') {
+    label = '最近调用记录无效'
+    description = '记录无法对应当前已发布计划，不能用来判断这个模型是否可用。'
+    className = 'border-amber-200 bg-amber-50 text-amber-900'
+  } else if (latestAttempt?.freshness === 'stale') {
+    label = '最近验证已过期'
+    description = '需要在当前已发布计划下重新执行模型测试或真实业务任务。'
+    className = 'border-amber-200 bg-amber-50 text-amber-900'
+  } else if (
+    latestAttempt?.snapshot_integrity === 'verified'
+    && latestAttempt.freshness === 'fresh'
+    && (latestAttempt.outcome === 'passed' || latestAttempt.outcome === 'fallback_passed')
+  ) {
+    label = latestAttempt.execution_mode === 'pinned' ? '最近模型测试通过' : '最近真实业务调用通过'
+    description = latestAttempt.tokens.total === null
+      ? '调用成功但用量记录缺失，不能作为完整验收。'
+      : `已记录 ${formatRuntimeNumber(latestAttempt.tokens.total)} token；业务输出质量仍在对应功能中验收。${isLocal ? ' 此模型只在本机可达，托管路线会在调用前排除。' : ''}`
+    className = 'border-emerald-200 bg-emerald-50 text-emerald-900'
+  } else if (latestAttempt?.freshness === 'fresh' && latestAttempt.outcome === 'failed') {
+    label = '最近真实调用失败'
+    description = `${attemptFailureSummary(latestAttempt) || '请检查模型服务后重新验证。'}${isLocal ? ' 此模型只在本机可达，托管路线不会执行。' : ''}`
+    className = 'border-rose-200 bg-rose-50 text-rose-900'
+  } else if (isLocal) {
+    label = '本机可选，托管路线会排除'
+    description = '此模型服务只在本机可达；托管环境会在调用前排除，不记为模型失败或降级。'
+    className = 'border-blue-200 bg-blue-50 text-blue-900'
+  }
+
+  return (
+    <div
+      className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${className}`}
+      data-testid={`model-availability-${modelGroup.assetId}`}
+    >
+      <div className="font-semibold">{label}</div>
+      <p className="mt-1">{description}</p>
+    </div>
+  )
 }
 
-function pinnedCandidateAttempt(
-  item: AIRuntimeUsePointOverview,
-  modelAssetId: string,
-  providerAssetId: string,
-) {
-  const attempt = item.latest_pinned_attempt
-  return attempt
-    && attempt.model_catalog_entry_id === modelAssetId
-    && attempt.provider_connection_id === providerAssetId
-    ? attempt
-    : null
+function ProjectionPlanColumn({ title, plan }: { title: string; plan: AIRuntimePlan }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h5 className="text-sm font-semibold text-slate-900">{title}</h5>
+        <Badge className={plan.state === 'ready'
+          ? 'bg-emerald-100 text-emerald-800'
+          : 'bg-amber-100 text-amber-900'}
+        >
+          {plan.state === 'ready' ? '可执行' : '待补全'}
+        </Badge>
+      </div>
+      {plan.state === 'blocked' ? (
+        <div className="mt-3 rounded-lg bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-900">
+          <div>{plan.reason}</div>
+          <div className="mt-2 font-medium">下一步：{plan.next_action}</div>
+        </div>
+      ) : (
+        <ol className="mt-3 space-y-2">
+          {plan.candidates.map((candidate) => (
+            <li key={`${title}:${candidate.model_catalog_entry_id}:${candidate.provider_connection_id}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-slate-950">{candidate.position}. {candidate.model_name}</span>
+                <span className="text-xs text-slate-500">{candidate.role === 'primary' ? '本环境首选' : '失败后备用'}</span>
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {candidate.provider_name} · {candidate.runtime_location === 'local' ? '本机模型服务' : '云模型服务'}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}
+
+function RuntimeRouteProjection({ item }: { item: AIRuntimeUsePointOverview }) {
+  const localPlan = item.environment_projections.local
+  const hostedPlan = item.environment_projections.hosted
+  const configuredPlan = localPlan.state === 'ready'
+    ? localPlan
+    : hostedPlan.state === 'ready'
+      ? hostedPlan
+      : null
+  const hostedExcluded = hostedPlan.state === 'ready'
+    ? hostedPlan.configured_candidates.filter((candidate) => candidate.execution_status === 'excluded_from_hosted')
+    : []
+
+  return (
+    <section className="rounded-2xl border border-slate-200" data-testid="runtime-route-projection">
+      <div className="border-b border-slate-200 px-4 py-3">
+        <h4 className="text-sm font-semibold text-slate-950">配置顺序与实际执行</h4>
+        <p className="mt-1 text-xs leading-5 text-slate-500">实际调用只沿管理员发布的顺序执行，不会绕过配置选择其他模型。</p>
+      </div>
+      <div className="grid gap-4 p-4 xl:grid-cols-3">
+        <section className="rounded-xl border border-slate-200 bg-white p-3">
+          <h5 className="text-sm font-semibold text-slate-900">管理员发布顺序</h5>
+          {configuredPlan ? (
+            <ol className="mt-3 space-y-2">
+              {configuredPlan.configured_candidates.map((candidate) => (
+                <li key={`configured:${candidate.model_catalog_entry_id}:${candidate.provider_connection_id}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+                  <div className="font-medium text-slate-950">{candidate.position}. {candidate.model_name}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {candidate.provider_name} · {candidate.runtime_location === 'local' ? '仅本机可达' : '本机与托管均可达'}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-900">
+              发布关系尚未形成完整路线，暂时无法展示管理员模型顺序。
+            </p>
+          )}
+        </section>
+        <ProjectionPlanColumn title="本机实际路线" plan={localPlan} />
+        <ProjectionPlanColumn title="托管实际路线" plan={hostedPlan} />
+      </div>
+      {hostedExcluded.length > 0 && (
+        <p className="border-t border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-950">
+          托管路线已排除 {hostedExcluded.length} 个仅本机模型。排除发生在调用前，不计为失败或降级；排除后的第一个云模型仍是托管执行的首选模型。
+        </p>
+      )}
+    </section>
+  )
 }
 
 export function RuntimeTruthPanel({
@@ -647,10 +930,9 @@ export function RuntimeTruthPanel({
         <CardHeader>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <CardTitle className="text-base">当前运行真相</CardTitle>
+              <CardTitle className="text-base">实际执行路线与真实结果</CardTitle>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                每个业务用点都必须沿“业务用点 → 应用绑定 → AI 应用 → 路由 → 模型 → Provider”形成唯一计划。
-                只有当前计划快照的真实模型尝试和 token 记录，才能证明可用。
+                每个产品功能先选择 AI 能力，再使用管理员发布的模型顺序。这里分别展示管理员配置、本机路线和托管路线，避免把本机可用误当成线上可用。
               </p>
             </div>
             <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -661,23 +943,23 @@ export function RuntimeTruthPanel({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <RuntimeMetric label="业务用点" value={overview.summary.registered_use_points} />
-            <RuntimeMetric label="计划可编译" value={overview.summary.ready_plans} />
-            <RuntimeMetric label="当前计划真实通过" value={overview.summary.verified_current_plans} />
-            <RuntimeMetric label="计划被阻断" value={overview.summary.blocked_plans} tone={overview.summary.blocked_plans > 0 ? 'danger' : 'neutral'} />
-          </dl>
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+            本次检查覆盖 {formatRuntimeNumber(overview.summary.registered_use_points)} 个产品功能：
+            {formatRuntimeNumber(overview.summary.ready_plans)} 个在{environmentLabel}具备可执行路线，
+            {formatRuntimeNumber(overview.summary.blocked_plans)} 个仍需补全配置，
+            {formatRuntimeNumber(overview.summary.verified_current_plans)} 个已有当前计划的真实调用结果。
+          </p>
           {!overview.evidence.available && (
             <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
               {overview.evidence.error || '真实模型调用证据不可读；当前不能判断模型是否可用。'}
             </div>
           )}
           <p className="text-xs leading-5 text-slate-500">
-            “计划可编译”只说明六对象发布关系完整；它不等于模型连接成功，也不等于业务输出通过验收。
+            “当前环境可执行”只说明发布关系完整且至少有一个当前环境可达的模型；它不等于模型连接成功，也不等于业务输出通过验收。
           </p>
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900">
-            “模型真实通过”只证明同一次 execution 内获得 Provider 响应、完整 token 和所需 ReviewRun 绑定；
-            规则包加载、业务输出质量与独立金标准确度仍需在对应业务模块单独验收。
+            “模型真实通过”只证明同一次执行获得模型服务响应、完整用量记录和所需审核记录；
+            规则加载、业务输出质量与独立金标准确度仍需回到对应产品功能单独验收。
           </p>
         </CardContent>
       </Card>
@@ -691,37 +973,15 @@ export function RuntimeTruthPanel({
   )
 }
 
-function RuntimeMetric({
-  label,
-  value,
-  tone = 'neutral',
-}: {
-  label: string
-  value: number
-  tone?: 'neutral' | 'danger'
-}) {
-  return (
-    <div className={tone === 'danger'
-      ? 'rounded-2xl border border-rose-200 bg-rose-50 p-4'
-      : 'rounded-2xl border border-slate-200 bg-slate-50 p-4'}
-    >
-      <dt className={tone === 'danger' ? 'text-xs font-medium text-rose-700' : 'text-xs font-medium text-slate-500'}>{label}</dt>
-      <dd className={tone === 'danger'
-        ? 'mt-2 text-2xl font-semibold tabular-nums text-rose-900'
-        : 'mt-2 text-2xl font-semibold tabular-nums text-slate-950'}
-      >
-        {formatRuntimeNumber(value)}
-      </dd>
-    </div>
-  )
-}
-
 function RuntimeUsePointCard({ item }: { item: AIRuntimeUsePointOverview }) {
   const presentation = VERIFICATION_PRESENTATION[item.verification]
   const currentAttempt = item.latest_current_attempt
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 [contain-intrinsic-size:auto_520px] [content-visibility:auto]">
+    <article
+      className="rounded-2xl border border-slate-200 bg-white p-5 [contain-intrinsic-size:auto_520px] [content-visibility:auto]"
+      data-testid={`runtime-use-point-${item.use_point.asset_id}`}
+    >
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -739,9 +999,11 @@ function RuntimeUsePointCard({ item }: { item: AIRuntimeUsePointOverview }) {
         {presentation.description}
       </p>
 
+      <BusinessStatusLayers item={item} />
+
       {!item.evidence_available && (
         <div role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-          这个业务用点的调用证据暂时不可读；计划仍可检查，但不能判断模型是否可用。
+          这个产品功能的调用结果暂时不可读；执行路线仍可检查，但不能判断模型是否可用。
         </div>
       )}
 
@@ -755,85 +1017,34 @@ function RuntimeUsePointCard({ item }: { item: AIRuntimeUsePointOverview }) {
       ) : (
         <div className="mt-4 space-y-4">
           <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-            <RuntimeFact label="消费模块" value={MODULE_LABELS[item.use_point.module_id] || item.use_point.module_id} />
-            <RuntimeFact label="AI 应用" value={item.plan.application.name} />
-            <RuntimeFact label="路由" value={item.plan.route.name} />
+            <RuntimeFact label="业务模块" value={MODULE_LABELS[item.use_point.module_id] || item.use_point.module_id} />
+            <RuntimeFact label="使用的 AI 能力" value={item.plan.application.name} />
+            <RuntimeFact label="降级策略" value={item.plan.route.name} />
             <RuntimeFact
               label="全部候选失败后"
               value={item.plan.route.failure_action === 'manual_review' ? '转人工处理' : '停止并报错'}
             />
           </dl>
 
-          <div className="rounded-2xl border border-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <h4 className="text-sm font-semibold text-slate-950">模型执行顺序</h4>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                严格按顺序尝试；状态来自同一个 execution ID 的最近执行链，不会跨运行拼接，也不会改走环境变量或历史策略。
-              </p>
-            </div>
-            <ol className="divide-y divide-slate-100">
-              {item.plan.candidates.map((candidate) => {
-                const attempt = currentCandidateAttempt(
-                  item,
-                  candidate.model_catalog_entry_id,
-                  candidate.provider_connection_id,
-                )
-                const pinnedAttempt = pinnedCandidateAttempt(
-                  item,
-                  candidate.model_catalog_entry_id,
-                  candidate.provider_connection_id,
-                )
-                return (
-                  <li key={`${candidate.model_catalog_entry_id}:${candidate.provider_connection_id}`} className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[64px_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
-                    <span className="text-xs font-semibold text-slate-500">第 {candidate.position} 位</span>
-                    <div className="min-w-0">
-                      <div className="truncate font-medium text-slate-950">{candidate.model_name}</div>
-                      <div className="mt-1 truncate text-xs text-slate-500" translate="no">{candidate.model_id}</div>
-                    </div>
-                    <div className="min-w-0 text-slate-700">
-                      <div className="truncate">{candidate.provider_name}</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {candidate.runtime_location === 'local' ? '本地 Provider' : '云端 Provider'} · {candidate.auth_mode === 'none' ? '免认证' : 'Bearer 已保存'}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-start gap-1 md:items-end">
-                      <span className={attempt
-                        ? 'rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700'
-                        : 'rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-500'}
-                      >
-                        {attempt ? attemptOutcomeLabel(attempt) : '路由状态未确认'}
-                      </span>
-                      {pinnedAttempt && (
-                        <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800">
-                          {attemptOutcomeLabel(pinnedAttempt)}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                )
-              })}
-            </ol>
-          </div>
-
           {item.latest_current_execution_attempts.length > 0 && !item.latest_current_execution_complete && (
             <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-              最近 execution 的候选序号、前序失败或最终结果不完整；这组记录只作为排错线索，不能证明模型可用。
+              最近一次业务执行的候选序号、前序失败或最终结果不完整；这组记录只作为排错线索，不能证明模型可用。
             </div>
           )}
 
           {item.latest_pinned_attempt && (
             <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
-              <div className="font-semibold">最近指定模型探测：{attemptOutcomeLabel(item.latest_pinned_attempt)}</div>
+              <div className="font-semibold">最近单模型测试：{attemptOutcomeLabel(item.latest_pinned_attempt)}</div>
               <p className="mt-1 leading-6">
                 模型 {item.latest_pinned_attempt.model || '标识缺失'} · {formatRuntimeTime(item.latest_pinned_attempt.occurred_at)}。
                 这只证明该模型单独被调用，不计入当前发布路由的通过或失败。
               </p>
               <p className="mt-1 text-xs leading-5">
-                Token：{item.latest_pinned_attempt.tokens.total === null
+                模型用量：{item.latest_pinned_attempt.tokens.total === null
                   ? '缺失'
-                  : formatRuntimeNumber(item.latest_pinned_attempt.tokens.total)}
+                  : `${formatRuntimeNumber(item.latest_pinned_attempt.tokens.total)} token`}
                 {(item.latest_pinned_attempt.failure_code || item.latest_pinned_attempt.error_message)
-                  ? ` · 原因：${item.latest_pinned_attempt.failure_code || item.latest_pinned_attempt.error_message}`
+                  ? ` · 原因：${attemptFailureSummary(item.latest_pinned_attempt)}`
                   : ''}
               </p>
             </div>
@@ -845,6 +1056,10 @@ function RuntimeUsePointCard({ item }: { item: AIRuntimeUsePointOverview }) {
           />
         </div>
       )}
+
+      <div className="mt-4">
+        <RuntimeRouteProjection item={item} />
+      </div>
 
       {item.latest_attempts.length > 0 && (
         <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2">
@@ -883,7 +1098,7 @@ function CurrentAttemptEvidence({
       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600">
         {hasHistoricalAttempts
           ? '存在旧计划的历史尝试，但当前发布计划还没有真实调用，历史成功不能证明当前模型可用。'
-          : '当前发布计划还没有真实模型尝试。请从对应业务入口执行一次真实任务，再回到这里核对结果和 token。'}
+          : '当前发布计划还没有真实模型尝试。请从对应产品功能执行一次真实任务，再回到这里核对结果和模型用量。'}
       </div>
     )
   }
@@ -898,14 +1113,14 @@ function CurrentAttemptEvidence({
         : 'rounded-2xl border border-emerald-200 bg-emerald-50 p-4'}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold text-slate-950">最近一次当前计划尝试</h4>
+        <h4 className="text-sm font-semibold text-slate-950">最近一次当前业务调用</h4>
         <span className="text-xs text-slate-600">{formatRuntimeTime(attempt.occurred_at)}</span>
       </div>
       <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <RuntimeFact label="结果" value={<RuntimeAttemptOutcomeStatus attempt={attempt} />} />
         <RuntimeFact label="模型" value={attempt.model || '模型标识缺失'} />
         <RuntimeFact
-          label="Token 证据"
+          label="模型用量"
           value={attempt.tokens.evidence === 'provider' && attempt.tokens.total !== null
             ? `${formatRuntimeNumber(attempt.tokens.total)}（输入 ${formatRuntimeNumber(attempt.tokens.input || 0)} / 输出 ${formatRuntimeNumber(attempt.tokens.output || 0)}）`
             : '缺失，不能验收为成功'}
@@ -917,9 +1132,7 @@ function CurrentAttemptEvidence({
       </dl>
       {(attempt.failure_code || attempt.error_message) && (
         <p className="mt-3 break-words text-sm leading-6 text-slate-800">
-          {attempt.failure_code ? `原因：${attempt.failure_code}` : ''}
-          {attempt.failure_code && attempt.error_message ? '；' : ''}
-          {attempt.error_message || ''}
+          原因：{attemptFailureSummary(attempt)}
         </p>
       )}
       <RuntimeReviewRunStatus attempt={attempt} />
@@ -934,7 +1147,7 @@ function RuntimeAttemptRow({ attempt }: { attempt: AIRuntimeAttempt }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-slate-950">{attemptOutcomeLabel(attempt)}</span>
           <Badge variant="outline">{attempt.matches_current_plan ? '当前计划' : '历史计划'}</Badge>
-          <Badge variant="outline">{attempt.execution_mode === 'route' ? '发布路由' : attempt.execution_mode === 'pinned' ? '指定模型探测' : '旧证据'}</Badge>
+          <Badge variant="outline">{attempt.execution_mode === 'route' ? '业务路线' : attempt.execution_mode === 'pinned' ? '单模型测试' : '旧记录'}</Badge>
           {attempt.snapshot_integrity === 'invalid' && <Badge variant="outline">快照无效</Badge>}
           {attempt.attempt_no && <span className="text-xs text-slate-500">第 {attempt.attempt_no} 次候选</span>}
         </div>
@@ -942,12 +1155,12 @@ function RuntimeAttemptRow({ attempt }: { attempt: AIRuntimeAttempt }) {
       </div>
       <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
         <span className="min-w-0 truncate" translate="no">模型：{attempt.model || '未记录'}</span>
-        <span className="min-w-0 truncate">Token：{attempt.tokens.total === null ? '缺失' : formatRuntimeNumber(attempt.tokens.total)}</span>
-        <span className="min-w-0 truncate">ReviewRun：{attempt.review_run_id ? '已绑定' : '未绑定'}</span>
+        <span className="min-w-0 truncate">模型用量：{attempt.tokens.total === null ? '缺失' : `${formatRuntimeNumber(attempt.tokens.total)} token`}</span>
+        <span className="min-w-0 truncate">审核记录：{attempt.review_run_id ? '已关联' : '未关联'}</span>
       </div>
       {(attempt.error_message || attempt.failure_code) && (
         <p className="mt-2 break-words text-xs leading-5 text-rose-700">
-          {attempt.failure_code || attempt.error_message}
+          {attemptFailureSummary(attempt)}
         </p>
       )}
       <details className="mt-2">
@@ -957,6 +1170,8 @@ function RuntimeAttemptRow({ attempt }: { attempt: AIRuntimeAttempt }) {
           <div>Execution: {attempt.execution_id || '未记录'}</div>
           <div>Plan: {attempt.plan_snapshot_id || '未记录'}</div>
           {attempt.review_run_id && <div>ReviewRun: {attempt.review_run_id}</div>}
+          {attempt.failure_code && <div>Failure code: {attempt.failure_code}</div>}
+          {attempt.error_message && <div>Error summary: {attempt.error_message}</div>}
         </div>
       </details>
     </li>
@@ -1015,7 +1230,7 @@ function AssetList({
     return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">{empty}</div>
   }
   return (
-    <IntrinsicCardStack label="平台资产列表">
+    <IntrinsicCardStack label="平台配置列表">
       {groups.map((group) => (
         <RevisionCard key={group.key} group={group} {...actions}>
           <p className="mt-3 break-words text-sm leading-6 text-slate-600">{detail(group.primary)}</p>
@@ -1063,13 +1278,13 @@ function ReleaseList({
   }, [query, status, urlReady])
 
   if (configs.length === 0) {
-    return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">还没有平台资产。</div>
+    return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">还没有平台配置。</div>
   }
   return (
     <div className="space-y-4">
       <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_180px]">
         <div>
-          <label htmlFor="release-config-search" className="text-xs font-medium text-slate-600">搜索发布资产</label>
+          <label htmlFor="release-config-search" className="text-xs font-medium text-slate-600">搜索待发布配置</label>
           <Input
             id="release-config-search"
             name="release-config-search"
@@ -1077,7 +1292,7 @@ function ReleaseList({
             autoComplete="off"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="按名称、配置编号或资产 ID 搜索"
+            placeholder="按名称或配置编号搜索"
             className="mt-1 min-h-11 bg-white"
           />
         </div>
@@ -1098,13 +1313,13 @@ function ReleaseList({
           </select>
         </div>
         <p className="text-xs text-slate-500 sm:col-span-2" aria-live="polite">
-          按“连接 → 模型 → 应用 → 业务用点 → 路由 → 绑定”的依赖顺序显示，共 {visibleConfigs.length} / {configs.length} 条版本记录。
+          按“模型服务 → 可用模型 → AI 能力 → 产品功能 → 模型顺序 → 业务选择”的依赖顺序显示，共 {visibleConfigs.length} / {configs.length} 条版本记录。
         </p>
       </div>
 
       {visibleConfigs.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-          没有符合当前搜索和状态条件的资产。
+          没有符合当前搜索和状态条件的配置。
         </div>
       )}
 
@@ -1121,7 +1336,7 @@ function ReleaseList({
               }`}>
                 {validation?.valid ? '依赖检查通过，可以提交发布。' : (
                   <ul className="list-disc space-y-1 pl-5">
-                    {(validation?.reasons || ['请补全资产字段后再发布。']).map((reason) => <li key={reason}>{reason}</li>)}
+                    {(validation?.reasons || ['请补全配置必填项后再发布。']).map((reason) => <li key={reason}>{reason}</li>)}
                   </ul>
                 )}
               </div>

@@ -152,6 +152,46 @@ function publishedRows(apiKey = CANARY_SECRET): AIExecutionPlanConfigRow[] {
   ]
 }
 
+function hostedMixedRows(): AIExecutionPlanConfigRow[] {
+  const rows = publishedRows()
+  const cloudProvider = rows.find((row) => row.value?.kind === 'provider_connection')!
+  const cloudModel = rows.find((row) => row.value?.kind === 'model_catalog_entry')!
+  const providerWithoutKey = { ...(cloudProvider.value || {}) }
+  delete providerWithoutKey.api_key
+  const localProvider: AIExecutionPlanConfigRow = {
+    ...cloudProvider,
+    id: 'provider-local-config',
+    key: 'PROVIDER_LOCAL',
+    name: 'LM Studio 本机服务',
+    value: {
+      ...providerWithoutKey,
+      asset_id: 'provider.local',
+      runtime_location: 'local',
+      auth_mode: 'none',
+      base_url: 'http://127.0.0.1:1234/v1',
+    },
+  }
+  const localModel: AIExecutionPlanConfigRow = {
+    ...cloudModel,
+    id: 'model-local-config',
+    key: 'MODEL_LOCAL',
+    name: 'Gemma 本机模型',
+    value: {
+      ...cloudModel.value,
+      asset_id: 'model.local',
+      provider_connection_id: 'provider.local',
+      model_id: 'google/gemma-4-e4b',
+    },
+  }
+  return [
+    localProvider,
+    localModel,
+    ...rows.map((row) => row.value?.kind === 'route_policy'
+      ? { ...row, value: { ...row.value, model_catalog_entry_ids: ['model.local', 'model.review.primary'] } }
+      : row),
+  ]
+}
+
 function makeInvocationQueries(
   rowsByUsePoint: Record<string, unknown[]> = {},
   error: unknown = null,
@@ -351,6 +391,10 @@ describe('GET /api/configs/ai-runtime', () => {
       snapshot_hash: snapshotHash,
       application: { name: '合同风险识别应用' },
       route: { name: '合同审核默认路由', failure_action: 'manual_review' },
+      configured_candidates: [
+        expect.objectContaining({ position: 1, execution_status: 'effective', effective_position: 1 }),
+        expect.objectContaining({ position: 2, execution_status: 'effective', effective_position: 2 }),
+      ],
       candidates: expect.arrayContaining([
         expect.objectContaining({
           position: 1,
@@ -366,6 +410,14 @@ describe('GET /api/configs/ai-runtime', () => {
           model_id: 'review-model-fallback-v1',
         }),
       ]),
+    })
+    expect(semantic.environment_projections.local).toMatchObject({
+      state: 'ready',
+      execution_environment: 'local',
+    })
+    expect(semantic.environment_projections.hosted).toMatchObject({
+      state: 'ready',
+      execution_environment: 'hosted',
     })
     expect(semantic.verification).toBe('fallback_passed')
     expect(semantic.latest_current_attempt).toMatchObject({
@@ -401,6 +453,29 @@ describe('GET /api/configs/ai-runtime', () => {
       pinned_model_catalog_entry_id: 'model.review.fallback',
     }
     expect(isAIRuntimeOverview(pinnedAttemptInRouteSlot)).toBe(false)
+
+    const forgedPassedWithoutExecution = structuredClone(body.data)
+    const forgedSemantic = forgedPassedWithoutExecution.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
+    forgedSemantic.verification = 'passed'
+    forgedSemantic.latest_current_attempt = null
+    forgedSemantic.latest_current_execution_attempts = []
+    forgedSemantic.latest_current_execution_complete = false
+    forgedPassedWithoutExecution.summary.verified_current_plans = forgedPassedWithoutExecution.use_points
+      .filter((item: any) => item.verification === 'passed' || item.verification === 'fallback_passed').length
+    expect(isAIRuntimeOverview(forgedPassedWithoutExecution)).toBe(false)
+
+    const driftedSelectedProjection = structuredClone(body.data)
+    const driftedSemantic = driftedSelectedProjection.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
+    driftedSemantic.environment_projections.local.application.name = '漂移的应用名称'
+    expect(isAIRuntimeOverview(driftedSelectedProjection)).toBe(false)
+
+    const forgedSummary = structuredClone(body.data)
+    forgedSummary.summary.ready_plans += 1
+    expect(isAIRuntimeOverview(forgedSummary)).toBe(false)
     expect(queries).toHaveLength(5)
     expect(queries[0].select).toHaveBeenCalledTimes(1)
     expect(queries[0].not).toHaveBeenCalledWith('plan_snapshot_id', 'is', null)
@@ -454,6 +529,79 @@ describe('GET /api/configs/ai-runtime', () => {
     })
     expect(semantic.latest_current_execution_attempts).toHaveLength(1)
     expect(semantic.latest_current_execution_complete).toBe(false)
+  })
+
+  it('uses the same primary and fallback audit semantics as formal ReviewRun evidence', async () => {
+    const rows = publishedRows()
+    const snapshot = snapshotEmbed(rows)
+    const completedAt = new Date(Date.now() - 1_000).toISOString()
+    const primarySuccess = {
+      id: 'primary-success-with-fallback-reason',
+      execution_id: EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.primary',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-v1',
+      attempt_no: 1,
+      status: 'completed',
+      degraded: false,
+      fallback_reason: 'SHOULD_NOT_EXIST',
+      latency_ms: 500,
+      input_tokens: 20,
+      output_tokens: 10,
+      total_tokens: 30,
+      error_message: null,
+      review_id: 'review-run-1',
+      created_at: completedAt,
+      completed_at: completedAt,
+      plan_snapshot: snapshot,
+    }
+    makeInvocationQueries({ 'contract.review.semantic': [primarySuccess] })
+    const primaryResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    const primaryBody = await primaryResponse.json()
+    const primarySemantic = primaryBody.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    expect(primarySemantic.verification).toBe('incomplete_evidence')
+    expect(primarySemantic.latest_current_attempt.outcome).toBe('incomplete_evidence')
+
+    const failedPrimary = {
+      ...primarySuccess,
+      id: 'primary-failure-without-degraded-truth',
+      status: 'failed',
+      degraded: false,
+      fallback_reason: 'TIMEOUT',
+      input_tokens: null,
+      output_tokens: null,
+      total_tokens: null,
+      error_message: '模型请求超时。',
+      created_at: new Date(Date.now() - 2_000).toISOString(),
+    }
+    const fallbackSuccess = {
+      ...primarySuccess,
+      id: 'fallback-success',
+      model_catalog_entry_id: 'model.review.fallback',
+      model: 'review-model-fallback-v1',
+      attempt_no: 2,
+      degraded: true,
+      fallback_reason: 'TIMEOUT',
+    }
+    makeInvocationQueries({ 'contract.review.semantic': [fallbackSuccess, failedPrimary] })
+    const degradedResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    const degradedBody = await degradedResponse.json()
+    const degradedSemantic = degradedBody.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    expect(degradedSemantic.verification).toBe('incomplete_evidence')
+
+    makeInvocationQueries({ 'contract.review.semantic': [
+      { ...fallbackSuccess, fallback_reason: 'PROVIDER_UNAVAILABLE' },
+      { ...failedPrimary, degraded: true },
+    ] })
+    const mismatchResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    const mismatchBody = await mismatchResponse.json()
+    const mismatchSemantic = mismatchBody.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    expect(mismatchSemantic.verification).toBe('incomplete_evidence')
   })
 
   it('only calls a failed execution complete after the published route is exhausted', async () => {
@@ -860,8 +1008,18 @@ describe('GET /api/configs/ai-runtime', () => {
     expect(semantic.verification).toBe('blocked')
     expect(semantic.plan).toMatchObject({
       state: 'blocked',
+      execution_environment: 'local',
       code: 'BINDING_NOT_FOUND',
-      next_action: '为这个业务用点发布一条应用绑定。',
+      reason: '这个产品功能还没有选择 AI 能力。',
+      next_action: '为这个产品功能选择并发布一项 AI 能力。',
+    })
+    expect(semantic.plan.reason).not.toContain('business_use_point')
+    expect(semantic.plan.reason).not.toContain('contract.review.semantic')
+    expect(semantic.environment_projections.local).toEqual(semantic.plan)
+    expect(semantic.environment_projections.hosted).toMatchObject({
+      state: 'blocked',
+      execution_environment: 'hosted',
+      code: 'BINDING_NOT_FOUND',
     })
     expect(body.data.summary.blocked_plans).toBeGreaterThan(0)
   })
@@ -901,6 +1059,82 @@ describe('GET /api/configs/ai-runtime', () => {
     makeInvocationQueries()
     const hostedResponse = await GET({ method: 'GET', headers: new Headers() } as any)
     expect((await hostedResponse.json()).data.execution_environment).toBe('hosted')
+  })
+
+  it('shows the administrator route and hosted projection without treating local exclusion as fallback', async () => {
+    const rows = hostedMixedRows()
+    mocks.listPublishedConfigsByType.mockResolvedValue(rows)
+    vi.stubEnv('VERCEL', '1')
+    vi.stubEnv('VERCEL_URL', 'candidate.vercel.app')
+    makeInvocationQueries()
+
+    const response = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await response.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(response.status).toBe(200)
+    expect(isAIRuntimeOverview(body.data)).toBe(true)
+    expect(semantic.verification).toBe('not_verified')
+    expect(semantic.plan.configured_candidates).toEqual([
+      expect.objectContaining({
+        position: 1,
+        model_catalog_entry_id: 'model.local',
+        runtime_location: 'local',
+        execution_status: 'excluded_from_hosted',
+        effective_position: null,
+      }),
+      expect.objectContaining({
+        position: 2,
+        model_catalog_entry_id: 'model.review.primary',
+        runtime_location: 'cloud',
+        execution_status: 'effective',
+        effective_position: 1,
+      }),
+    ])
+    expect(semantic.plan.candidates).toEqual([
+      expect.objectContaining({
+        position: 1,
+        role: 'primary',
+        model_catalog_entry_id: 'model.review.primary',
+      }),
+    ])
+    expect(semantic.environment_projections.local).toMatchObject({
+      state: 'ready',
+      execution_environment: 'local',
+      configured_candidates: [
+        expect.objectContaining({
+          model_catalog_entry_id: 'model.local',
+          execution_status: 'effective',
+          effective_position: 1,
+        }),
+        expect.objectContaining({
+          model_catalog_entry_id: 'model.review.primary',
+          execution_status: 'effective',
+          effective_position: 2,
+        }),
+      ],
+      candidates: [
+        expect.objectContaining({ model_catalog_entry_id: 'model.local', position: 1, role: 'primary' }),
+        expect.objectContaining({ model_catalog_entry_id: 'model.review.primary', position: 2, role: 'fallback' }),
+      ],
+    })
+    expect(semantic.environment_projections.hosted).toEqual(semantic.plan)
+    expect(semantic.latest_current_execution_attempts).toEqual([])
+
+    const invalidHostedExclusion = structuredClone(body.data)
+    const invalidSemantic = invalidHostedExclusion.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    invalidSemantic.plan.configured_candidates[0].runtime_location = 'cloud'
+    expect(isAIRuntimeOverview(invalidHostedExclusion)).toBe(false)
+
+    const invalidLocalProjection = structuredClone(body.data)
+    const invalidLocalSemantic = invalidLocalProjection.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    invalidLocalSemantic.environment_projections.local.candidates = []
+    expect(isAIRuntimeOverview(invalidLocalProjection)).toBe(false)
+
+    const mismatchedCurrentProjection = structuredClone(body.data)
+    const mismatchedCurrentSemantic = mismatchedCurrentProjection.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    mismatchedCurrentSemantic.environment_projections.hosted.snapshot_hash = 'f'.repeat(64)
+    expect(isAIRuntimeOverview(mismatchedCurrentProjection)).toBe(false)
   })
 
   it('returns 403 before reading platform assets or invocation evidence', async () => {

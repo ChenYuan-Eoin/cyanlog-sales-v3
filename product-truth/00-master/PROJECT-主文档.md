@@ -46,20 +46,20 @@
 | WP01 | G4（支撑 G3/G7） | Completed；`4269840f` | 全局 Provider 接入、模型目录、AI 应用、业务用点、绑定和路由 |
 | WP02 | G3（支撑 G7/G10） | Completed；`c25ec17a` | 五个业务用点均由发布路由驱动，真实模型、降级、token、`model_invocations` 与 ReviewRun 可追溯 |
 | WP03 | G3/G4（支撑 G7/G10） | Completed；`ebdb3c59` | 规则集→问题分类→具体规则→规则详情→业务属性→判定与处理 |
-| WP04 | G6（支撑 G8） | **Active**；入口与上传编排复验 | 四类合同任务入口、源文件身份、版本、ReviewRun 和下一步 |
+| WP04 | G6（支撑 G8） | Completed；`a987f85d` | 四类合同任务、源文件身份、上传编排与真实 Preview 工作台复验 |
 | WP05 | G2（支撑 G3/G6/G8/G10） | 交互纠偏完成；`12b977fa` | 默认审查、风险定位和正文滚动已完成；准确率、下一版本、风险迁移与循环复审继续独立受门禁 |
 | WP06 | G6（支撑 G7/G8/G10） | Preview 候选完成，非 Production | 冻结旧/新文件、原文级对比、定位和真实 DOCX 报告 |
 | WP07 | G6（支撑 G2/G8/G10） | 排队 | 可编辑合同起草、版本、DOCX 导出、转审核/对比 |
 | WP08 | G5/G8 | 激活前必须拆包 | 伞目标；激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包 |
-| WP09 | G7/G8/G9/G10/G11 | 排队 | 分支收敛、全量门禁、Preview 与获批后的 Production 验收 |
+| WP09 | G7/G8/G9/G10/G11 | **Active**；Hosted AI 运行与发布候选 | 托管路由投影、业务可读 AI 配置、同一 release commit 的 Preview 验收；Production 仍受门禁 |
 
-当前唯一 Active 是 WP04 的合同中心入口与上传编排复验。WP02 已由提交 `c25ec17a` 完成：五个注册业务用点均能编译并由发布路由执行，运行计划冻结业务用点、应用、路由、模型、Provider 和连接版本；`route` 与 `pinned` 两种执行身份严格分离；本地 Gemma 与云端模型都完成真实调用，降级尝试逐条记录 provider、model、token、耗时和失败原因，真实合同 ReviewRun 可追溯到不可漂移计划快照。配置中心当前汇总为 `5 registered / 5 compilable / 5 verified / 0 blocked`。
+当前唯一 Active 是 WP09 的 Hosted AI 运行与发布候选验收。WP02 已由提交 `c25ec17a` 完成六对象业务运行切换；WP09 不回退其完成态，而是修复发布环境投影缺口：管理员可以配置本机模型到云模型的有序路由，但 Hosted 必须排除用户电脑上的 local Provider，从第一个真实可执行 cloud 候选开始计次，同时在快照和页面分别保留“配置顺序”与“当前环境实际顺序”。环境排除不得伪造成模型失败或降级。
 
-WP03 的领域链路固定为 `RuleSet → ProblemCategory → Rule → RuleDetail → 业务属性 → 判定与处理`，并已由提交 `ebdb3c59` 完成：隔离 Preview 新组织无需代码和机器字段即可从空白配置金额规则，完成风险/正常/缺失/冲突五路径测试和发布；真实 DOCX 经真实 Provider 形成带 token、规则快照与原文证据的 ReviewRun；桌面/iPad 和全量工程门禁通过。R001–R015 只是可编辑预置业务数据，未被自动发布。WP05 的默认审查入口、风险定位和正文连续滚动已由 `12b977fa` 完成真实长 DOCX、文本 PDF、扫描 PDF、桌面/iPad 和工程门禁验收；准确率与循环复审继续受独立金标和版本门禁约束。当前 WP04 必须把起草、上传审核、继续审核、版本比对组织成四个清楚的业务任务，并把真实上传固定为“源文件身份与页映射就绪后只启动一次 ReviewRun”。WP06 只完成免费隔离 Preview 候选，Production 仍未发布。
+WP03 的领域链路固定为 `RuleSet → ProblemCategory → Rule → RuleDetail → 业务属性 → 判定与处理`，并已由提交 `ebdb3c59` 完成；R001–R015 只是可编辑预置业务数据。WP05 的默认审查入口、风险定位和正文连续滚动已由 `12b977fa` 完成。WP04 已由 `a987f85d` 和隔离 Preview `dpl_2P11eFtwxutsQXMUoU8R46XdDGUx` 完成四类合同任务、源文件身份、上传编排、默认审查和桌面/iPad 长 DOCX 内部滚动复验。准确率、循环复审和 Production 发布仍分别受独立门禁。
 
 WP01/WP02 已验收的兼容边界：六对象以“一行一个严格对象”存入既有 `configs`；新业务运行只消费完整发布图编译出的 `AIRuntimePlanSnapshot`，旧 `AI_CONFIG / ModelPolicy` 与环境变量不得静默旁路。业务用点来自代码注册表，业务模块不直接绑定具体模型；固定模型调试必须以 `pinned` 身份单独留痕，不能冒充路由健康。未做不可逆迁移、未写 Production。完整对象、生命周期、执行身份和证据边界以 `F012-ai-runtime-config.md` 为准。
 
-执行顺序固定为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（Active） -> WP07 -> WP05 准确率与循环复审（满足恢复门禁后） -> WP08 -> WP09`。新需求继续进入 Inbox，只有满足调度规则才切换 Active；发布、AI 平台、规则产品、合同入口和工作台交互不再合成一个混合任务。
+执行顺序当前为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（已完成） -> WP09（Active） -> WP07`。WP09 本批只关闭 Hosted 路由、业务可读配置和单一 Preview 候选；新需求继续进入 Inbox，发布、AI 平台、规则产品、合同入口和工作台交互不再合成一个混合任务。
 
 ---
 
@@ -828,7 +828,7 @@ WP01/WP02 已验收的兼容边界：六对象以“一行一个严格对象”�
 |---|---|---|---|---|
 | G1 需求与问题资产治理 | 建立“产品愿景 -> 模块目标 -> F0xx -> 需求 -> Bug -> 验收证据”的追踪链。 | PD01 / PD09 / PD10 | F027 / `REQ_REGISTRY.yml` | 每个 P0/P1 问题都有 REQ、Bug ID、证据、修复批次、验收标准和收尾结论。 |
 | G2 合同审核产品闭环 | 合同审核从文本框审核升级为合同版本、审核运行、风险项、谈判、客户反馈、批注和报告的多流工作台。 | PD04 / PD05 / PD07 | F005v2 / F007 | 真实合同能走通上传/解析、ReviewRun、RiskFinding、谈判、Word 批注、报告归档的第一阶段闭环。 |
-| G3 审核规则与 Skill 闭环 | 后台维护的规则、模板、知识和模型策略能转译成可追溯 SkillBundle，作为审核依据。 | PD06 / PD03 | F006 / F009 / F012 | ReviewRun 绑定 RuleSnapshot、SkillBundle、ModelPolicy，规则变更不影响历史结果。 |
+| G3 审核规则与 Skill 闭环 | 后台维护的规则、模板、知识和模型策略能转译成可追溯 SkillBundle，作为审核依据。 | PD06 / PD03 | F006 / F009 / F012 | 新 ReviewRun 绑定 RuleSnapshot、SkillBundle 与不可漂移的已解析路由快照；历史 ModelPolicy 只保留原引用，规则或路由变更不影响历史结果。 |
 | G4 配置中心数据底座 | 配置中心作为控制面，能维护组织、角色、主题、品牌、规则、模型策略，并区分真实空和失败。 | PD02 / PD03 / PD08 | F000 / F011 / F009 / F012 | 生产数据存在时不显示 0；401/403/500/未配置/未发布都有清晰错误态。 |
 | G5 组织权限与外部同步 | 本地组织、角色、成员、销售空间和飞书同步形成可诊断、可恢复的权限底座。 | PD02 / PD08 | F003 / F011 | 超管、管理员、普通用户视角验收通过；新增/删除/分配后组织页和角色页同步刷新。 |
 | G6 合同中心信息架构 | 起草、上传、风险审核、文档比对四个入口具有不同目的、前置条件、状态和结果。 | PD04 / PD05 | F005v2 | 四个入口在无合同、有合同、已审核、多版本状态下均有明确页面和阻断提示。 |
@@ -3414,9 +3414,9 @@ interface CRMIntegration {
 - `ModelCatalogEntry` 在同一 Provider 下登记一个或多个具体模型及其通用能力。
 - `AIApplication` 定义可复用逻辑能力，`RoutePolicy` 定义有序候选模型、单次超时和全失败动作。
 - 业务代码先注册稳定 `BusinessUsePoint`，管理员再用 `ApplicationBinding` 选择已发布应用；业务模块不直接读 Provider URL 或绑定具体模型。
-- `rule-engine` 是确定性业务执行能力或失败处理路径，不是 Provider、模型或路由层级。
+- `rule-engine` 只执行已发布业务规则的确定性判定并保留规则证据；它不是 Provider、模型、路由层级或模型失败处理路径。
 
-WP01 只建立这六类平台资产的配置控制面。`connection/model` probe 只验证当前草稿参数：结果不持久化为生产健康状态，不写 `model_invocations`，不证明业务模块已使用该模型，也不证明 ReviewRun、token、降级或审核准确率。新发布图真正切入合同审核、起草和标书等业务，并用 `model_invocations + token + ReviewRun` 证明运行一致性，属于 WP02。旧 `AI_CONFIG / ModelPolicy` 在此之前只读保留，不得与新图混合或冒充新平台已运行。
+WP01 建立六类平台对象的配置控制面；WP02 已把已发布运行计划切入合同审核、起草和标书等业务，并以 `model_invocations + token + ReviewRun` 固化运行证据；WP09 负责 Hosted 环境投影和发布候选复验。`connection/model` probe 仍只验证当前草稿参数：结果不持久化为生产健康状态，不写 `model_invocations`，不证明业务模块已使用该模型，也不证明审核准确率。旧 `AI_CONFIG / ModelPolicy` 只保留历史只读与回滚追溯，正式业务运行不再消费，也不得与新图混合。
 
 ### 5.1 第一阶段多流业务图景
 
@@ -3813,15 +3813,17 @@ approval_flow:
 
 **管理员五个主任务**：
 
-1. 模型接入：保存 Provider 草稿，对当前参数执行一次性 probe；
-2. 模型目录：在同一 Provider 下登记一个或多个模型及其能力；
-3. AI 应用：定义逻辑能力，为其维护可审计的有序候选模型；
-4. 业务绑定：从代码注册用点选择已发布应用；
-5. 发布状态：按 Provider → 模型 → 应用 → 用点 → 路由 → 绑定的依赖事实检查草稿、版本和发布阻断。
+1. 模型能力：接入本机或云端模型服务，登记该服务下可用模型及其通用能力，并明确区分“已保存”和“当次连接/模型测试通过”；
+2. 业务使用：从产品功能出发，选择可复用 AI 能力，不让合同审核、起草、标书等业务代码直接绑定 Provider、URL 或具体模型；
+3. 降级顺序：为每项 AI 能力配置主模型、备用模型和全部失败后的转人工/停止动作；
+4. 实际执行：分别查看管理员配置顺序、本机可执行顺序和托管环境实际顺序，并用真实 `model_invocations`、token 与所需业务记录判断是否运行成功；
+5. 发布与版本：按依赖事实检查草稿、当前发布版本、历史版本和发布阻断，不把保存、连接测试、业务运行或输出质量合并成一个状态。
+
+**运行环境投影**：`RoutePolicy` 永久保留管理员发布的完整候选顺序。本机环境可以执行本机与云端候选；Hosted 环境在调用前排除仅本机可达的 Provider，并从第一个真实可执行云模型重新连续计次。环境排除不生成 `model_invocations`、不算模型失败或降级；若 Hosted 路由全部是本机候选，则失败关闭，不得静默改走旧 ModelPolicy、环境变量或规则引擎。
 
 **候选存储与安全边界**：WP01 暂时把六类对象作为六种严格 discriminated 记录存入既有 `configs`，不做不可逆迁移、不写 Production。草稿 probe 只对当次参数有效，不持久化 Provider 健康、不写 `model_invocations`、不充当发布成功或生产可用的证据。隔离 Preview `vsfropnfsmnonkotywsx` 已应用 `secure_ai_config_control_plane` 迁移，动态 bearer canary 证明当前记录可持有凭据而历史版本无该凭据，fixture 已清理；此结论仅对 Preview 数据层成立，不外推到 Production。通用 `configs` 发布非数据库原子事务是 WP09 的 Production 发布门禁，不阻塞 WP01 配置控制面退出。
 
-**WP01 完成与下游边界**：WP01 已在候选提交 `4269840f` 通过六对象/API、Provider 安全、五任务 UI、182 文件 / 1255 测试、lint、typecheck、75/75 build、桌面/iPad、隔离 Preview 控制面闭环和旧运行链兼容回退，并已让 WP02 进入 Active。业务运行切换、真实 Provider 调用、token、`model_invocations`、ReviewRun、降级一致性和准确率属于 WP02；原子事务、RLS、环境和 Production 发布属于 WP09。完整验收以 `F012-ai-runtime-config.md` 与 `product-code/output/evidence/wp01/README.md` 为准。
+**完成态与当前边界**：WP01 已由提交 `4269840f` 完成六对象控制面、Provider 安全、旧版控制面五任务 UI、版本/回滚和隔离 Preview 验收；该证据不等于本节现行五个业务任务已通过。WP02 已由提交 `c25ec17a` 完成业务运行切换、真实 Provider、token、`model_invocations`、ReviewRun 与有序降级证据。当前 Active WP09 不回退上述完成态；当前候选代码已修复 Hosted 环境投影并重组业务可读配置，仍待同一 release commit 的 Preview 发布候选验收。模型可运行不等于业务输出质量或审核准确率；准确率继续由 WP05 的独立金标门禁管理。数据库原子发布、RLS 与 Production 发布仍属 WP09 的后续发布门禁。完整产品合同以 `F012-ai-runtime-config.md` 为准。
 
 ---
 
@@ -4022,9 +4024,9 @@ interface ConfigVersion {
 **P0（必须）**：
 - [x] 合同审核规则配置（结构化规则、语义规则）
 - [x] 报价规则配置（税率、折扣权限）
-- [ ] AI 平台六对象控制面（WP01 实现候选，以最终同 SHA 重验结论为准）
+- [x] AI 平台六对象控制面（WP01 已由 `4269840f` 完成）
 - [x] 配置版本记录
-- [ ] 配置回滚（可做）
+- [x] 配置回滚（WP01 已完成草稿历史回滚与版本验收）
 
 **P1（重要）**：
 - [ ] 审批流程配置（超时、升级、代理）
@@ -6902,7 +6904,7 @@ Response 200:
       "status": "COMPLETED",
       "skill_bundle_id": "contract-rules:published",
       "rule_snapshot_id": "contract_rules_v2:published",
-      "model_policy_id": "rule-engine"
+      "plan_snapshot_id": "plan_789"
     },
     "stats": { "red": 2, "yellow": 5, "green": 10, "open": 7 },
     "riskFindings": [
@@ -7045,8 +7047,11 @@ Response 200:
 }
 ```
 
-#### A.3.5 模型健康检查
-检测本地AI模型连接状态。
+#### A.3.5 历史模型健康检查接口（已废止）
+
+以下 `/api/admin/ai/health-check` 只保留旧接口追溯，不属于现行 F012 控制面，也不得据此声明生产健康或触发自动切云。现行连接验证使用 `POST /api/configs/ai-runtime/probe`：`connection` 只检查 Provider 和模型列表，`model` 只做当次最小生成；两者都不持久化为运行健康。正式业务只按已发布运行计划的当前环境实际候选顺序执行。
+
+**历史响应示例（不可作为现行契约）**：
 ```
 POST /api/admin/ai/health-check
 Headers:
@@ -7069,12 +7074,12 @@ Response 200:
   }
 }
 
-Response 503 (本地模型不可用):
+Response 503（历史：本地模型连接检查失败）:
 {
   "success": false,
   "error": {
     "code": "MODEL_UNHEALTHY",
-    "message": "本地模型连接失败，已自动切换到云端备用"
+    "message": "本地模型连接检查失败；本次检查不会改变已发布运行路线"
   }
 }
 ```
@@ -9446,7 +9451,7 @@ export default function () {
 **解决方案**：
 1. 降低temperature到0.1
 2. 优化提示词，增加示例
-3. 规则引擎兜底
+3. 用独立规则引擎复核已发布的确定性业务规则；它不冒充模型调用成功，也不进入模型降级链
 4. 建立测试集持续优化
 
 #### X.19.3 Q3：配置中心性能瓶颈？
@@ -11581,7 +11586,7 @@ Response 200:
       "status": "COMPLETED",
       "skill_bundle_id": "contract-rules:published",
       "rule_snapshot_id": "contract_rules_v2:published",
-      "model_policy_id": "rule-engine"
+      "plan_snapshot_id": "plan_123"
     },
     "stats": { "red": 2, "yellow": 5, "green": 10, "open": 7 },
     "riskFindings": [

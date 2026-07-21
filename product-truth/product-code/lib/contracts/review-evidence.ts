@@ -1,3 +1,7 @@
+import {
+  hashAIExecutionPlanSnapshot,
+  type AIExecutionPlanSnapshot,
+} from '@/lib/ai/runtime-plan'
 import { reviewRunMatchesSourceVersion } from './review-source-identity'
 
 type ReviewStatus = string | null | undefined
@@ -103,6 +107,9 @@ export type ReviewEvidenceRuntimePlanSnapshot = {
 export type ReviewEvidenceModelInvocation = {
   id: string
   plan_snapshot_id?: string | null
+  execution_id?: string | null
+  execution_mode?: 'route' | 'pinned' | null
+  pinned_model_catalog_entry_id?: string | null
   business_use_point_id?: string | null
   application_id?: string | null
   route_policy_id?: string | null
@@ -155,6 +162,7 @@ export type ReviewRuntimePlanEvidence = {
     timeout_ms: number | null
     failure_action: string | null
     ordered_model_catalog_entry_ids: string[]
+    effective_ordered_model_catalog_entry_ids: string[]
   }) | null
   model_catalog_entries: Array<RuntimeAssetIdentity & {
     position: number | null
@@ -290,6 +298,9 @@ export type ReviewRunEvidence = {
   model_invocations: Array<{
     id: string
     plan_snapshot_id: string | null
+    execution_id: string | null
+    execution_mode: 'route' | 'pinned' | null
+    pinned_model_catalog_entry_id: string | null
     business_use_point_id: string | null
     application_id: string | null
     route_policy_id: string | null
@@ -365,6 +376,15 @@ function sameStringSet(left: string[], right: string[]): boolean {
 
 function hasDuplicates(values: string[]): boolean {
   return new Set(values).size !== values.length
+}
+
+function isOrderedSubsequence(values: string[], configuredValues: string[]): boolean {
+  let valueIndex = 0
+  for (const configuredValue of configuredValues) {
+    if (configuredValue === values[valueIndex]) valueIndex += 1
+    if (valueIndex === values.length) return true
+  }
+  return values.length === 0
 }
 
 function extractSnapshotCode(snapshot: ReviewEvidenceSnapshot): string | null {
@@ -489,6 +509,11 @@ function buildRuntimePlanEvidence(input: {
   }
   if (!/^[0-9a-f]{64}$/.test(snapshotRow.snapshot_sha256 || '')) {
     errors.push('runtime_plan_sha256_invalid')
+  } else if (
+    snapshot
+    && hashAIExecutionPlanSnapshot(snapshot as unknown as AIExecutionPlanSnapshot) !== snapshotRow.snapshot_sha256
+  ) {
+    errors.push('runtime_plan_sha256_mismatch')
   }
   if (!usePointIdentity?.config_id || !usePointIdentity.config_key || !usePointIdentity.asset_id) {
     errors.push('runtime_plan_business_use_point_invalid')
@@ -518,13 +543,41 @@ function buildRuntimePlanEvidence(input: {
     capabilities: stringListValue(applicationRecord?.capabilities),
   } : null
   const orderedModelIds = stringListValue(routeRecord?.orderedModelAssetIds)
+  const effectiveRouteValue = routeRecord?.effectiveOrderedModelAssetIds
+  const hasEffectiveRoute = Boolean(
+    routeRecord && Object.prototype.hasOwnProperty.call(routeRecord, 'effectiveOrderedModelAssetIds')
+  )
+  // Historical ai-runtime-plan.v1 snapshots did not persist the environment
+  // projection. For those rows the configured route was also the effective
+  // route, so falling back preserves their original audit meaning.
+  const effectiveModelIds = hasEffectiveRoute
+    ? stringListValue(effectiveRouteValue)
+    : orderedModelIds
   const routePolicy = routeIdentity ? {
     ...routeIdentity,
     strategy: stringValue(routeRecord?.strategy),
     timeout_ms: numberValue(routeRecord?.timeoutMs),
     failure_action: stringValue(routeRecord?.failureAction),
     ordered_model_catalog_entry_ids: orderedModelIds,
+    effective_ordered_model_catalog_entry_ids: effectiveModelIds,
   } : null
+
+  if (orderedModelIds.length === 0) errors.push('runtime_plan_configured_route_missing')
+  if (
+    hasEffectiveRoute
+    && (
+      !Array.isArray(effectiveRouteValue)
+      || effectiveModelIds.length !== effectiveRouteValue.length
+      || effectiveModelIds.length === 0
+    )
+  ) {
+    errors.push('runtime_plan_effective_route_invalid')
+  }
+  if (hasDuplicates(orderedModelIds)) errors.push('runtime_plan_configured_route_duplicated')
+  if (hasDuplicates(effectiveModelIds)) errors.push('runtime_plan_effective_route_duplicated')
+  if (!isOrderedSubsequence(effectiveModelIds, orderedModelIds)) {
+    errors.push('runtime_plan_effective_route_not_configured_subsequence')
+  }
 
   if (snapshotRow.business_use_point_id !== businessUsePoint?.asset_id) {
     errors.push('runtime_plan_business_use_point_binding_mismatch')
@@ -598,18 +651,31 @@ function buildRuntimePlanEvidence(input: {
   const actualModelIds = modelCatalogEntries.map((entry) => entry.asset_id).filter((id): id is string => Boolean(id))
   if (hasDuplicates(actualModelIds)) errors.push('runtime_plan_model_catalog_entries_duplicated')
   if (
-    orderedModelIds.length !== actualModelIds.length
-    || orderedModelIds.some((id, index) => id !== actualModelIds[index])
+    effectiveModelIds.length !== actualModelIds.length
+    || effectiveModelIds.some((id, index) => id !== actualModelIds[index])
   ) {
     errors.push('runtime_plan_candidate_order_mismatch')
   }
+
+  const executionEnvironment = stringValue(snapshot?.executionEnvironment)
+  if (executionEnvironment !== 'local' && executionEnvironment !== 'hosted') {
+    errors.push('runtime_plan_execution_environment_invalid')
+  }
+  providerConnections.forEach((provider, index) => {
+    if (provider.runtime_location !== 'local' && provider.runtime_location !== 'cloud') {
+      errors.push(`runtime_plan_provider_runtime_location_invalid:${index}`)
+    }
+    if (executionEnvironment === 'hosted' && provider.runtime_location === 'local') {
+      errors.push(`runtime_plan_hosted_local_candidate:${provider.asset_id || index}`)
+    }
+  })
 
   return {
     id: snapshotRow.id,
     source: 'ai_runtime_plan_snapshots',
     snapshot_sha256: snapshotRow.snapshot_sha256 || null,
     schema_version: stringValue(snapshot?.schemaVersion),
-    execution_environment: stringValue(snapshot?.executionEnvironment),
+    execution_environment: executionEnvironment,
     business_use_point: businessUsePoint,
     application_binding: applicationBinding,
     ai_application: aiApplication,
@@ -637,13 +703,29 @@ function validateRuntimeInvocationBindings(
   const modelToProvider = new Map(plan.model_catalog_entries.map((model) => (
     [model.asset_id, model.provider_connection_id] as const
   )))
+  const effectiveModels = [...plan.model_catalog_entries].sort((left, right) => (
+    (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER)
+  ))
   const attemptNumbers: number[] = []
+  const executionIds: string[] = []
 
   invocations.forEach((invocation) => {
     const attempt = invocation.attempt_no
     const suffix = attempt ?? invocation.id
     if (invocation.plan_snapshot_id !== plan.id) {
       errors.push(`runtime_invocation_plan_mismatch:${suffix}`)
+    }
+    const executionId = stringValue(invocation.execution_id)
+    if (!executionId) {
+      errors.push(`runtime_invocation_execution_id_missing:${suffix}`)
+    } else {
+      executionIds.push(executionId)
+    }
+    if (invocation.execution_mode !== 'route') {
+      errors.push(`runtime_invocation_execution_mode_invalid:${suffix}`)
+    }
+    if (invocation.pinned_model_catalog_entry_id !== null) {
+      errors.push(`runtime_invocation_pinned_model_forbidden:${suffix}`)
     }
     if (invocation.business_use_point_id !== usePointId) {
       errors.push(`runtime_invocation_use_point_mismatch:${suffix}`)
@@ -663,22 +745,76 @@ function validateRuntimeInvocationBindings(
       errors.push(`runtime_invocation_attempt_invalid:${suffix}`)
     } else {
       attemptNumbers.push(attempt)
+      const expectedModel = effectiveModels[attempt - 1]
+      if (!expectedModel) {
+        errors.push(`runtime_invocation_attempt_out_of_route:${suffix}`)
+      } else if (invocation.model_catalog_entry_id !== expectedModel.asset_id) {
+        errors.push(`runtime_invocation_candidate_order_mismatch:${suffix}`)
+      }
     }
-    if (invocation.status === 'completed') {
+    if (invocation.status === 'failed') {
+      if (invocation.degraded !== true) {
+        errors.push(`runtime_invocation_failure_degradation_invalid:${suffix}`)
+      }
+      if (!stringValue(invocation.fallback_reason)) {
+        errors.push(`runtime_invocation_failure_reason_missing:${suffix}`)
+      }
+    } else if (invocation.status === 'completed') {
+      if (attempt === 1) {
+        if (invocation.degraded !== false) {
+          errors.push(`runtime_invocation_primary_success_degraded:${suffix}`)
+        }
+        if (stringValue(invocation.fallback_reason)) {
+          errors.push(`runtime_invocation_primary_success_fallback_invalid:${suffix}`)
+        }
+      } else {
+        if (invocation.degraded !== true) {
+          errors.push(`runtime_invocation_fallback_degradation_invalid:${suffix}`)
+        }
+      }
       const tokensValid = typeof invocation.input_tokens === 'number'
         && typeof invocation.output_tokens === 'number'
         && typeof invocation.total_tokens === 'number'
         && invocation.total_tokens > 0
         && invocation.total_tokens === invocation.input_tokens + invocation.output_tokens
       if (!tokensValid) errors.push(`runtime_invocation_tokens_invalid:${suffix}`)
+    } else {
+      errors.push(`runtime_invocation_status_invalid:${suffix}`)
     }
   })
 
+  if (new Set(executionIds).size > 1) errors.push('runtime_invocation_execution_id_mixed')
   if (hasDuplicates(attemptNumbers.map(String))) errors.push('runtime_invocation_attempt_duplicated')
   const sortedAttempts = [...attemptNumbers].sort((left, right) => left - right)
   if (sortedAttempts.some((attempt, index) => attempt !== index + 1)) {
     errors.push('runtime_invocation_attempt_sequence_invalid')
   }
+
+  const invocationByAttempt = new Map(invocations
+    .filter((invocation): invocation is ReviewEvidenceModelInvocation & { attempt_no: number } => (
+      typeof invocation.attempt_no === 'number'
+      && Number.isInteger(invocation.attempt_no)
+      && invocation.attempt_no >= 1
+    ))
+    .map((invocation) => [invocation.attempt_no, invocation]))
+  invocations.forEach((invocation) => {
+    const attempt = invocation.attempt_no
+    if (typeof attempt !== 'number' || !Number.isInteger(attempt) || attempt < 2) return
+    const predecessors = Array.from({ length: attempt - 1 }, (_, index) => invocationByAttempt.get(index + 1))
+    if (predecessors.some((predecessor) => predecessor?.status !== 'failed')) {
+      errors.push(`runtime_invocation_fallback_predecessor_invalid:${attempt}`)
+      return
+    }
+    if (invocation.status === 'completed') {
+      const expectedFallbackReason = predecessors
+        .map((predecessor) => stringValue(predecessor?.fallback_reason))
+        .filter((reason): reason is string => Boolean(reason))
+        .join(',')
+      if (!expectedFallbackReason || stringValue(invocation.fallback_reason) !== expectedFallbackReason) {
+        errors.push(`runtime_invocation_fallback_reason_mismatch:${attempt}`)
+      }
+    }
+  })
   return Array.from(new Set(errors))
 }
 
@@ -1110,6 +1246,9 @@ function summarizeInvocation(invocation: ReviewEvidenceModelInvocation) {
   return {
     id: invocation.id,
     plan_snapshot_id: invocation.plan_snapshot_id || null,
+    execution_id: invocation.execution_id || null,
+    execution_mode: invocation.execution_mode || null,
+    pinned_model_catalog_entry_id: invocation.pinned_model_catalog_entry_id || null,
     business_use_point_id: invocation.business_use_point_id || null,
     application_id: invocation.application_id || null,
     route_policy_id: invocation.route_policy_id || null,
@@ -1280,6 +1419,13 @@ export function buildReviewRunEvidence(input: {
   const skillBundleId = latestReview.skill_bundle_id
     || skillBundle?.id
     || `contract-skill:ruleset:${formatRuleSet(refs)}`
+  const runtimeInvocationSummary = hasRuntimePlanBinding && runtimePlan?.integrity.valid !== true
+    ? {
+        status: 'latest_review_model_invocation_not_passed',
+        note: 'The runtime plan snapshot or its invocation bindings failed integrity validation, so the model invocation cannot be accepted as passed.',
+        invocation_id: invocation?.id || null,
+      }
+    : deriveRuntimeInvocationStatus(modelInvocations)
 
   return {
     id: latestReview.id,
@@ -1310,7 +1456,7 @@ export function buildReviewRunEvidence(input: {
     skill_bundle: buildSkillBundleSummary(
       skillBundle ?? null,
       refs,
-      deriveRuntimeInvocationStatus(modelInvocations)
+      runtimeInvocationSummary
     ),
     model_policy: {
       id: modelPolicyId,

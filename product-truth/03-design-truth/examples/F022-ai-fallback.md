@@ -1,12 +1,17 @@
 ---
 req_id: F022
 type: design-asset
-status: implemented
+status: superseded
+superseded_by: F012
+superseded_at: "2026-07-20"
+historical_evidence_only: true
 ---
 
-# F022 AI 降级 - 设计资产
+# F022 AI 降级 - 历史设计资产（已废弃）
 
-## 视觉规范
+> 本文件只保留 2026-06-02 旧版三级降级页面的视觉追溯，不再指导产品、代码、测试或发布。现行真相是 `product-truth/feature-packets/F012-ai-runtime-config.md`：业务功能选择已发布 AI 能力，模型候选由 RoutePolicy 管理，规则引擎不属于模型降级链。
+
+## 历史视觉规范（不可复用为现行产品拓扑）
 
 ### Level 卡片颜色
 

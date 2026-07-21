@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { CloseIcon } from '@/components/icons'
 import { getAIConfigKind, isAIPlatformAssetKind } from '@/lib/configs/ai-config-kind'
+import { confirmAction } from '@/lib/toast'
 import type { Config, EditableConfig } from '../types'
 
 function DialogChunkFallback() {
@@ -46,8 +48,27 @@ const CONFIG_TYPE_META: Record<string, { label: string }> = {
   CONTRACT_RULE: { label: '合同审核策略' },
   TAX_RULE: { label: '税率规则' },
   APPROVAL_RULE: { label: '审批权限' },
-  AI_CONFIG: { label: 'AI 平台资产' },
+  AI_CONFIG: { label: 'AI 配置' },
   UI_THEME: { label: '界面主题' },
+}
+
+function normalizeConfigSnapshot(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeConfigSnapshot)
+  if (!value || typeof value !== 'object') return value
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, normalizeConfigSnapshot(entry)]),
+  )
+}
+
+function configSnapshot(config: EditableConfig) {
+  return JSON.stringify(normalizeConfigSnapshot({
+    ...config,
+    description: config.description || '',
+  }))
 }
 
 interface ConfigEditDialogProps {
@@ -75,9 +96,40 @@ export default function ConfigEditDialog({
 }: ConfigEditDialogProps) {
   const aiKind = configType === 'AI_CONFIG' ? getAIConfigKind(config.value) : null
   const isReadOnlyAIAsset = configType === 'AI_CONFIG' && !isAIPlatformAssetKind(aiKind)
+  const initialConfigSnapshotRef = useRef(configSnapshot(config))
+  const closeConfirmationInFlightRef = useRef(false)
+  const hasUnsavedChanges = configSnapshot(config) !== initialConfigSnapshotRef.current
+
+  const requestOpenChange = async (nextOpen: boolean) => {
+    if (nextOpen) {
+      onOpenChange(true)
+      return
+    }
+    if (saving || closeConfirmationInFlightRef.current) return
+    if (!hasUnsavedChanges) {
+      onOpenChange(false)
+      return
+    }
+
+    closeConfirmationInFlightRef.current = true
+    try {
+      const shouldClose = await confirmAction(
+        '当前修改尚未保存。关闭后这些修改会丢失，是否继续？',
+        {
+          title: '放弃未保存修改',
+          confirmText: '放弃修改',
+          cancelText: '继续编辑',
+          danger: true,
+        },
+      )
+      if (shouldClose) onOpenChange(false)
+    } finally {
+      closeConfirmationInFlightRef.current = false
+    }
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => void requestOpenChange(nextOpen)}>
       <DialogContent
         showCloseButton={false}
         aria-busy={saving}
@@ -93,7 +145,7 @@ export default function ConfigEditDialog({
             aria-label="关闭编辑窗口"
             className="absolute right-3 top-1/2 min-h-11 min-w-11 -translate-y-1/2"
             disabled={saving}
-            onClick={() => onOpenChange(false)}
+            onClick={() => void requestOpenChange(false)}
           >
             <CloseIcon size={18} />
           </Button>
@@ -114,7 +166,7 @@ export default function ConfigEditDialog({
 
           {isReadOnlyAIAsset ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-              该记录属于{aiKind === 'provider' ? '旧混合 Provider' : aiKind === 'application' ? '旧模型应用' : aiKind === 'tool_policy' ? '旧工具策略' : '未知 AI 资产'}，
+              该记录属于{aiKind === 'provider' ? '旧版模型服务与模型混合配置' : aiKind === 'application' ? '旧版 AI 能力配置' : aiKind === 'tool_policy' ? '旧版工具策略配置' : '无法识别的旧版 AI 配置'}，
               只作为运行切换前的兼容记录保留，不能继续通过混合表单修改。
             </div>
           ) : (
@@ -143,7 +195,7 @@ export default function ConfigEditDialog({
         </div>
 
         <DialogFooter className="mx-0 mb-0 shrink-0 border-t border-slate-200 bg-white px-6 py-4">
-          <Button type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => void requestOpenChange(false)}>
             {isReadOnlyAIAsset ? '关闭' : '取消'}
           </Button>
           {!isReadOnlyAIAsset && (

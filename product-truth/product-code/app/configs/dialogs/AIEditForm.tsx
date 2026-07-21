@@ -34,12 +34,12 @@ const CAPABILITY_OPTIONS = [
 ]
 
 const KIND_LABELS: Record<AIPlatformAssetKind, string> = {
-  provider_connection: 'Provider 连接',
-  model_catalog_entry: '模型目录条目',
-  ai_application: 'AI 应用',
-  business_use_point: '业务用点',
-  application_binding: '应用绑定',
-  route_policy: '路由策略',
+  provider_connection: '模型服务',
+  model_catalog_entry: '可用模型',
+  ai_application: 'AI 能力',
+  business_use_point: '产品功能入口',
+  application_binding: '业务能力选择',
+  route_policy: '模型降级顺序',
 }
 
 function runtimeStateTone(state: AIRuntimeState) {
@@ -61,6 +61,15 @@ function credentialCheckedText(state: ProbeResult['credential_checked']) {
   if (state === 'stored') return '已安全复用保存的凭据'
   if (state === 'missing') return '缺少访问凭据'
   return '此连接无需凭据'
+}
+
+function businessProbeText(value: string) {
+  return value
+    .replaceAll('OpenAI-compatible Provider', '兼容接口的模型服务')
+    .replaceAll('Provider', '模型服务')
+    .replaceAll('base URL', '服务地址')
+    .replaceAll('Base URL', '服务地址')
+    .replaceAll('semantic_review', '合同语义审核')
 }
 
 function CapabilityPicker({
@@ -117,7 +126,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
   if (!kind || !isAIPlatformAssetKind(kind)) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-        这是旧版运行配置，不能继续用混合表单修改。请在对应的平台配置任务中创建新资产；旧记录会保持只读，直到业务运行完成安全切换。
+        这是旧版运行配置，不能继续用混合表单修改。请在对应的平台配置任务中创建新的 AI 配置；旧记录会保持只读，直到业务运行完成安全切换。
       </div>
     )
   }
@@ -183,7 +192,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
       if (kind === 'model_catalog_entry') {
         providerConfig = selectedPublishedProvider
         if (!providerConfig) {
-          setProbeError('当前模型没有可用的已发布 Provider 连接，请重新选择后再测试。')
+          setProbeError('当前模型没有可用的已发布模型服务，请重新选择后再测试。')
           return
         }
         baseUrl = String(providerConfig?.value.base_url || '')
@@ -242,10 +251,10 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
         />
       </div>
       <details className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-slate-700">高级标识（通常无需修改）</summary>
+        <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-slate-700">配置编号（通常无需修改）</summary>
         <div className="space-y-4 border-t border-slate-200 pt-4">
           <div>
-            <label htmlFor="ai-config-key" className="text-sm font-medium">记录键</label>
+            <label htmlFor="ai-config-key" className="text-sm font-medium">版本记录编号</label>
             <Input
               id="ai-config-key"
               name="ai-config-key"
@@ -256,10 +265,10 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
               onChange={(event) => onChange({ ...config, key: event.target.value.toUpperCase() })}
               placeholder="系统自动生成"
             />
-            <p className="mt-1 text-xs text-slate-500">系统为每个草稿版本生成唯一记录键。</p>
+            <p className="mt-1 text-xs text-slate-500">系统为每个草稿版本生成唯一编号。</p>
           </div>
           {kind !== 'business_use_point' && <div>
-            <label htmlFor="ai-asset-id" className="text-sm font-medium">稳定资产标识</label>
+            <label htmlFor="ai-asset-id" className="text-sm font-medium">配置编号</label>
           <Input
             id="ai-asset-id"
             name="ai-asset-id"
@@ -270,7 +279,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
             onChange={(event) => updateValue({ asset_id: event.target.value.trim().toLowerCase() })}
             placeholder="系统自动生成"
           />
-            <p className="mt-1 text-xs text-slate-500">应用绑定使用这个稳定标识；编辑已有资产时不可改变。</p>
+            <p className="mt-1 text-xs text-slate-500">同一配置的不同版本共用这个编号；已有配置不能更改。</p>
           </div>}
         </div>
       </details>
@@ -282,7 +291,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
         <div className="font-semibold">{KIND_LABELS[kind]}</div>
         <p className="mt-1 leading-6">
-          当前只编辑这一类平台对象。连接测试只证明草稿端点可达，不代表真实业务调用或输出质量已经验收。
+          当前只编辑这一类平台配置。模型测试只证明当前输入可以访问服务，不代表产品功能已经运行或业务结果已经验收。
         </p>
       </div>
 
@@ -355,7 +364,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
           </div>
           <div>
             <div className="flex items-center justify-between gap-3">
-              <label htmlFor="provider-base-url" className="text-sm font-medium">Base URL</label>
+              <label htmlFor="provider-base-url" className="text-sm font-medium">服务地址（Base URL）</label>
               <Button type="button" variant="outline" size="sm" className="min-h-11" disabled={probing} onClick={() => void handleProbe('connection')}>
                 {probing ? '测试中…' : '测试连接'}
               </Button>
@@ -403,7 +412,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
         <section className="space-y-4" aria-labelledby="model-fields-heading">
           <h3 id="model-fields-heading" className="text-sm font-semibold text-slate-950">模型信息</h3>
           <div>
-            <label htmlFor="model-provider" className="text-sm font-medium">Provider 连接</label>
+            <label htmlFor="model-provider" className="text-sm font-medium">所属模型服务</label>
             <select
               id="model-provider"
               name="model-provider"
@@ -425,7 +434,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
           </div>
           <div>
             <div className="flex items-center justify-between gap-3">
-              <label htmlFor="model-id" className="text-sm font-medium">Provider 模型 ID</label>
+              <label htmlFor="model-id" className="text-sm font-medium">服务商模型名称 / ID</label>
               <Button
                 type="button"
                 variant="outline"
@@ -448,7 +457,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
             />
             {!selectedPublishedProvider && (
               <p className="mt-1 text-xs leading-5 text-amber-700">
-                请先选择一个已发布且启用的 Provider 连接，才能测试模型。
+                请先选择一个已发布且启用的模型服务，才能测试模型。
               </p>
             )}
           </div>
@@ -487,7 +496,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
       {kind === 'business_use_point' && (
         <section className="space-y-3" aria-labelledby="use-point-heading">
           <h3 id="use-point-heading" className="text-sm font-semibold text-slate-950">选择产品功能入口</h3>
-          <p className="text-xs leading-5 text-slate-500">选择一个已经存在的产品动作，后续再把它绑定到已发布的 AI 应用。</p>
+          <p className="text-xs leading-5 text-slate-500">选择一个已经存在的产品动作，后续再为它选择已发布的 AI 能力。</p>
           <label htmlFor="business-use-point" className="sr-only">选择产品功能入口</label>
           <select
             id="business-use-point"
@@ -526,9 +535,9 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
 
       {kind === 'route_policy' && (
         <section className="space-y-4" aria-labelledby="route-heading">
-          <h3 id="route-heading" className="text-sm font-semibold text-slate-950">模型路由与失败动作</h3>
+          <h3 id="route-heading" className="text-sm font-semibold text-slate-950">模型顺序与失败动作</h3>
           <div>
-            <label htmlFor="route-application" className="text-sm font-medium">AI 应用</label>
+            <label htmlFor="route-application" className="text-sm font-medium">使用这条顺序的 AI 能力</label>
             <select
               id="route-application"
               name="route-application"
@@ -537,7 +546,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
               value={String(value.ai_application_id || '')}
               onChange={(event) => updateValue({ ai_application_id: event.target.value })}
             >
-              <option value="">请选择已发布应用</option>
+              <option value="">请选择已发布 AI 能力</option>
               {publishedApplications.map((application) => (
                 <option key={application.id} value={String(application.value.asset_id || '')}>
                   {application.name}
@@ -614,7 +623,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="text-sm font-medium text-slate-900">可添加的已发布模型</div>
               {availableRouteModels.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">没有其他可用模型；请先在模型目录完成发布。</p>
+                <p className="mt-2 text-sm text-slate-500">没有其他可用模型；请先在“模型能力”中完成发布。</p>
               ) : (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {availableRouteModels.map((model) => {
@@ -673,9 +682,9 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
 
       {kind === 'application_binding' && (
         <section className="grid gap-4 sm:grid-cols-2" aria-labelledby="binding-heading">
-          <h3 id="binding-heading" className="sr-only">业务应用绑定</h3>
+          <h3 id="binding-heading" className="sr-only">产品功能选择 AI 能力</h3>
           <div>
-            <label htmlFor="binding-use-point" className="text-sm font-medium">业务用点</label>
+            <label htmlFor="binding-use-point" className="text-sm font-medium">产品功能入口</label>
             <select
               id="binding-use-point"
               name="binding-use-point"
@@ -684,7 +693,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
               value={String(value.business_use_point_id || '')}
               onChange={(event) => updateValue({ business_use_point_id: event.target.value })}
             >
-              <option value="">请选择已登记用点</option>
+              <option value="">请选择已登记产品功能</option>
               {publishedUsePoints.map((usePoint) => (
                 <option key={usePoint.id} value={String(usePoint.value.asset_id || '')}>
                   {usePoint.name}
@@ -693,7 +702,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
             </select>
           </div>
           <div>
-            <label htmlFor="binding-application" className="text-sm font-medium">AI 应用</label>
+            <label htmlFor="binding-application" className="text-sm font-medium">要使用的 AI 能力</label>
             <select
               id="binding-application"
               name="binding-application"
@@ -702,7 +711,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
               value={String(value.ai_application_id || '')}
               onChange={(event) => updateValue({ ai_application_id: event.target.value })}
             >
-              <option value="">请选择已发布应用</option>
+              <option value="">请选择已发布 AI 能力</option>
               {publishedApplications.map((application) => (
                 <option key={application.id} value={String(application.value.asset_id || '')}>
                   {application.name}
@@ -717,20 +726,20 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
         <div role={probeError ? 'alert' : 'status'} aria-live={probeError ? 'assertive' : 'polite'} className={probeResult
           ? `rounded-xl border p-4 text-sm leading-6 ${runtimeStateTone(probeResult.runtime_state)}`
           : 'rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800'}>
-          {probeError || (
+          {probeError ? businessProbeText(probeError) : (
             <>
-              <div className="font-semibold">{probeResult?.runtime_reason}</div>
+              <div className="font-semibold">{businessProbeText(probeResult?.runtime_reason || '')}</div>
               <p className="mt-1">凭据状态：{probeResult ? credentialCheckedText(probeResult.credential_checked) : '未知'}</p>
-              {probeResult?.runtime_action && <p className="mt-1">建议处理：{probeResult.runtime_action}</p>}
+              {probeResult?.runtime_action && <p className="mt-1">建议处理：{businessProbeText(probeResult.runtime_action)}</p>}
               {probeResult?.chat_probe && (
-                <p className="mt-1">最小生成：{probeResult.chat_probe.ok ? `通过 · ${probeResult.chat_probe.latency_ms}ms` : `失败 · ${probeResult.chat_probe.error}`}</p>
+                <p className="mt-1">最小生成：{probeResult.chat_probe.ok ? `通过 · ${probeResult.chat_probe.latency_ms}ms` : `失败 · ${businessProbeText(probeResult.chat_probe.error || '未知错误')}`}</p>
               )}
               {probeResult?.available_models && probeResult.available_models.length > 0 && (
                 <div className="mt-3">
-                  <div className="font-medium">服务发现 {probeResult.available_models.length} 个模型</div>
+                  <div className="font-medium">检测到 {probeResult.available_models.length} 个可用模型</div>
                   {kind === 'provider_connection' ? (
                     <>
-                      <p className="mt-1 text-xs">连接测试不登记具体模型；保存连接后，请到“模型目录”选择并登记。</p>
+                      <p className="mt-1 text-xs">模型服务测试不会自动添加具体模型；保存连接后，请到“可用模型”中选择并添加。</p>
                       <div className="mt-2 flex flex-wrap gap-2" aria-label="发现的模型（只读）">
                         {probeResult.available_models.slice(0, 12).map((modelId) => (
                           <span key={modelId} className="rounded-lg border border-current/20 bg-white/70 px-3 py-2 font-mono text-xs">
@@ -741,13 +750,13 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
                     </>
                   ) : (
                     <>
-                      <p className="mt-1 text-xs">选择一个模型填入当前目录条目。</p>
+                      <p className="mt-1 text-xs">选择一个检测到的模型，作为当前可用模型。</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {probeResult.available_models.slice(0, 12).map((modelId) => (
                           <button
                             key={modelId}
                             type="button"
-                            className="min-h-11 rounded-lg border border-current/20 bg-white/70 px-3 py-2 font-mono text-xs"
+                            className="min-h-11 cursor-pointer rounded-lg border border-current/20 bg-white/70 px-3 py-2 font-mono text-xs transition-colors hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                             onClick={() => updateValue({ model_id: modelId })}
                           >
                             {modelId}
@@ -770,7 +779,7 @@ export default function AIEditForm({ config, configs, onChange }: AIEditFormProp
           checked={value.enabled === true}
           onChange={(event) => updateValue({ enabled: event.target.checked })}
         />
-        启用此资产（引用方只能使用已发布且启用的资产）
+        启用此配置（产品功能只能使用已发布且启用的配置）
       </label>
     </div>
   )

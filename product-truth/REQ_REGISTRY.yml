@@ -9,8 +9,8 @@
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
 
-version: "2026-07-21.2"
-last_updated: "2026-07-21T19:27:00+08:00"
+version: "2026-07-22.1"
+last_updated: "2026-07-22T01:23:24+08:00"
 
 goal_governance:
   status: active
@@ -28,12 +28,12 @@ goal_governance:
     WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: completed_commit_4269840f}
     WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: completed_commit_c25ec17a}
     WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: completed_commit_ebdb3c59}
-    WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: active_entry_and_upload_orchestration_reacceptance}
+    WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: completed_commit_a987f85d_preview_dpl_2P11eFtwxutsQXMUoU8R46XdDGUx}
     WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: interaction_completed_commit_12b977fa_accuracy_cycle_pending}
     WP06: {name: 文档对比, primary_goals: [G6], supporting_goals: [G7, G8, G10], state: completed_preview_candidate_not_production}
     WP07: {name: 合同起草, primary_goals: [G6], supporting_goals: [G2, G8, G10], state: queued}
     WP08: {name: 横切体验伞, primary_goals: [G5, G8], state: must_split_before_activation}
-    WP09: {name: 工程与发布验收, primary_goals: [G7, G8, G9, G10, G11], state: queued}
+    WP09: {name: 工程与发布验收, primary_goals: [G7, G8, G9, G10, G11], state: active_hosted_ai_runtime_and_release_candidate}
   legacy_aliases:
     - "2026-07-10 至 2026-07-18 的执行账本旧 G1-G9，依次解释为 WP01-WP09。"
     - "F027 0.0.1 的批次卡旧 G0-G7，依次解释为 DG0-DG7。"
@@ -418,7 +418,7 @@ requirements:
       - 生成 ReviewEvidence、RiskFinding 和 F007 可消费的 CommentPatchDraft
       - 新 ReviewRun 必须绑定不可漂移的 SkillBundle / RuleSnapshot / 已解析路由快照；历史 ModelPolicy 绑定保留但不是新控制面对象
     audit_supplement:
-      current_gap: "WP02 已由 c25ec17a 把五个业务用点切到新六对象发布图，冻结不可漂移运行计划并绑定 model_invocations 与真实合同 ReviewRun；旧 ModelPolicy 只保留历史引用，不能旁路新执行链。当前阻断转为 WP03：现有发布规则快照无法编译，ReviewRun 虽能调用真实模型却只能明确降级；此外仍缺独立 Skill 编译控制台、模板快照、变体词典快照和 eval case 门禁。"
+      current_gap: "WP02 已由 c25ec17a 把五个业务用点切到新六对象发布图，冻结不可漂移运行计划并绑定 model_invocations 与真实合同 ReviewRun；旧 ModelPolicy 只保留历史引用，不能旁路新执行链。WP03 已由 ebdb3c59 完成空白组织从规则配置、测试、发布到真实合同触发的通用闭环，不再把旧‘规则快照无法编译’列为当前阻断。剩余门禁是独立 Skill 编译控制台、模板快照、变体词典快照、eval case，以及 WP05 的独立金标准确率与循环复审验收。"
       supplemental_requirements:
         - "F009 发布后的规则、模板、字段抽取提示、话术和测试用例必须编译为 SkillBundle。"
         - "ReviewRun 必须记录 SkillBundle、RuleSnapshot、TemplateSnapshot 和已解析路由快照，不允许只记录当前规则表或当前 RoutePolicy 状态。"
@@ -540,10 +540,10 @@ requirements:
         - "API 返回 401/403/500/ORG_CONTEXT 错误时，前端不渲染为 0 部门 0 成员。"
 
   F012:
-    name: AI平台配置与运行边界
-    module: 配置中心
+    name: AI模型能力与业务使用边界
+    module: 全局AI平台（配置中心）
     source: PROJECT-主文档.md#6.2.3
-    status: wp01_completed_wp02_active
+    status: wp01_wp02_completed_wp09_hosted_runtime_active
     priority: P1
     feature_packet: product-truth/feature-packets/F012-ai-runtime-config.md
     code_locations:
@@ -563,23 +563,26 @@ requirements:
       - supabase/migrations/20260701033715_f006_f012_runtime_objects.sql
       - lib/configs/runtime.ts
       - lib/ai/failover.ts
-    description: 全局 Provider 连接、模型目录、AI 应用、业务用点、绑定与路由配置；运行时只消费不可漂移的已发布路由计划
+    description: 为所有现有及未来业务模块提供可复用 AI 能力；业务人员先确认可用模型能力，再让产品功能选择 AI 能力与降级顺序，运行时只消费不可漂移的已发布计划，合同规则保持独立
     audit_supplement:
-      current_gap: "WP01 已完成六对象控制面；WP02 已由 c25ec17a 完成运行切换。隔离 Preview 的五个注册业务用点均可编译且均有 24 小时内真实路由证据（5/5/5/0），本地 Gemma 与云端模型、顺序降级、token、model_invocations、不可漂移计划和真实合同 ReviewRun 可追溯；route 与 pinned 身份严格分离。该结果证明模型平台能运行，不证明审核准确率：规则资产当前无法编译且缺独立金标。Production 保持只读，数据库原子发布仍属 WP09。"
+      current_gap: "WP01 已完成六对象控制面，WP02 已完成业务运行切换；WP09 当前候选代码已实现按 executionEnvironment 投影，Hosted 会排除 local Provider 并继续使用后续 cloud 候选，页面也已分开管理员配置顺序、本机可执行顺序与托管实际顺序。尚未完成的是以同一 release commit 在隔离 Preview 重新建立真实 cloud Provider probe、ReviewRun、model_invocations、token 和桌面/iPad 证据，并完成发布候选复审；在这些证据完成前不得把代码实现写成 Hosted 已验收。该结果仍不能替代独立金标准确率。Production 保持只读。"
       supplemental_requirements:
-        - "Provider 只管理端点、协议和认证；同一 Provider 的多个具体模型必须进入模型目录。"
-        - "业务模块先注册稳定 BusinessUsePoint，只绑定已发布 AIApplication；模型选择由 RoutePolicy 决定。"
+        - "页面先回答业务问题：有哪些模型能力可用、哪些产品功能正在使用、主备顺序是什么、本机与托管环境实际执行什么；内部对象名只作为次级审计信息。"
+        - "业务模块先注册稳定产品功能入口，只选择已发布 AI 能力；具体模型和 Provider 由模型降级顺序统一管理。"
+        - "模型服务只管理端点、协议和认证；同一服务下的多个具体模型必须作为独立可用模型维护。"
         - "规则集、合同阶段、Prompt 和 rule-engine 不得进入 Provider 或模型目录。"
-        - "F006 执行时只能消费完整发布图编译出的运行策略，并记录每次模型调用、降级、失败和确定性兜底原因；WP02 已完成该运行切换。"
+        - "F006 执行时只能消费完整发布图编译出的运行策略，并记录每次模型调用、候选失败和模型降级；确定性规则由独立规则引擎记录规则快照、判定结果与证据，不作为模型兜底。WP02 已完成模型运行切换。"
       acceptance_requirements:
-        - "WP01：六对象可独立保存草稿、校验引用、发布、建立新版本和查看历史；桌面与 iPad 五任务无白块或横向溢出。"
+        - "WP01：六对象可独立保存草稿、校验引用、发布、建立新版本和查看历史；桌面与 iPad 的旧版控制面五任务无白块或横向溢出。该证据不替代 WP09 对现行业务五任务的验收。"
         - "WP01：草稿参数 probe 不持久化连接状态，不回填密钥掩码，不把测试冒充生产健康或 ReviewRun；同一 Provider 可登记多个模型。"
         - "WP01：隔离 Preview vsfropnfsmnonkotywsx 已应用 secure_ai_config_control_plane 迁移；动态 bearer canary 证明当前记录可持有凭据、config_versions 不保留凭据且 fixture 可清理。该证据不外推到 Production。"
-        - "WP01：旧 AI_CONFIG / ModelPolicy 仍可只读消费，新图不与旧图混合，候选可安全回退而不丢失历史引用。"
+        - "WP01：旧 AI_CONFIG / ModelPolicy 仅保留历史只读与回滚追溯，不再被正式业务运行消费；新图不与旧图混合，候选可安全回滚而不丢失历史引用。"
         - "WP02：五个注册业务用点均从已发布 BusinessUsePoint 编译唯一运行计划；真实 route 调用、pinned 调试、降级尝试、token、model_invocations 和 ReviewRun 身份可审计，配置中心不得把 probe 或 pinned 证据冒充当前路由健康。"
+        - "WP09：运行计划必须按 executionEnvironment 投影；Hosted 排除 local Provider 后重新连续编号，环境排除不生成 invocation、不算失败降级；快照同时保留 configured route 与 effective route。"
+        - "WP09：配置页面按业务可理解顺序显示模型能力、产品功能选择的 AI 能力、管理员配置顺序及本机/托管实际执行顺序，机器字段只作为次级审计信息。"
       downstream_release_gates:
         - "WP03（不回退 WP02 完成态）：修复无效发布规则资产，使真实 ReviewRun 能同时绑定有效规则快照与已解析路由快照；规则执行质量和独立金标仍不得由模型运行证据替代。"
-        - "WP09（不阻塞 WP01 退出）：Production 前验收数据库原子发布、RLS、环境及正式发布。"
+        - "WP09（Active，不回退 WP01/WP02 完成态）：先验收 Hosted 路由与同一 release commit 的 Preview 真实运行；Production 前仍须验收数据库原子发布、RLS 与正式发布。"
 
   # ═══════════════════════════════════════════════════════════════
   # 标书中心 (Tender Center)
@@ -696,12 +699,12 @@ requirements:
   F022:
     name: AI服务降级
     module: 技术架构
-    source: 技术架构.md#4
+    source: feature-packets/F022-ai-fallback.md#1
     status: deprecated
     priority: P0
     code_locations: []
-    superseded_by: F012 / WP02
-    description: 历史“本地→云端→规则引擎”三级降级占位，不再是现行产品或验收依据。现行口径由 F012 RoutePolicy 配置任意有序模型候选和全失败动作，rule-engine 作为独立确定性能力；真实运行证据属于 WP02。
+    superseded_by: F012
+    description: 历史“本地→云端→规则引擎”三级降级占位，不再是现行产品或验收依据。唯一替代需求是 F012；WP02 只记录已完成的运行审计证据，WP09 只负责 Hosted 投影与发布候选验收，不是 F022 的替代需求。rule-engine 是独立确定性能力。
 
   # ═══════════════════════════════════════════════════════════════
   # 销售赋能与考核中心 (Sales Enablement Center)

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { isAIRuntimeOverview, type AIRuntimeAttempt } from '../types'
 import {
   VERIFICATION_PRESENTATION,
+  attemptFailureSummary,
   attemptOutcomeLabel,
   formatRuntimeTime,
 } from './ai-runtime-presentation'
@@ -50,7 +51,7 @@ describe('AI runtime human presentation', () => {
       not_verified: '当前计划未验证',
       stale: '当前验证已过期',
       evidence_unavailable: '真实证据不可读',
-      blocked: '运行计划被阻断',
+      blocked: '当前环境暂不可执行',
     })
   })
 
@@ -58,8 +59,16 @@ describe('AI runtime human presentation', () => {
     expect(attemptOutcomeLabel(attempt())).toBe('真实通过')
     expect(attemptOutcomeLabel(attempt({ freshness: 'stale' }))).toBe('验证已过期')
     expect(attemptOutcomeLabel(attempt({ snapshot_integrity: 'invalid' }))).toBe('快照证据无效')
-    expect(attemptOutcomeLabel(attempt({ execution_mode: 'pinned' }))).toBe('指定模型探测通过')
-    expect(attemptOutcomeLabel(attempt({ execution_mode: 'pinned', outcome: 'failed' }))).toBe('指定模型探测失败')
+    expect(attemptOutcomeLabel(attempt({ execution_mode: 'pinned' }))).toBe('单模型测试通过')
+    expect(attemptOutcomeLabel(attempt({ execution_mode: 'pinned', outcome: 'failed' }))).toBe('单模型测试失败')
+  })
+
+  it('translates runtime error codes for the business view without exposing unknown machine codes', () => {
+    expect(attemptFailureSummary(attempt({ failure_code: 'TIMEOUT' }))).toBe('模型服务响应超时')
+    expect(attemptFailureSummary(attempt({ failure_code: 'PROVIDER_UNAVAILABLE,TOKEN_USAGE_MISSING' })))
+      .toBe('模型服务暂时不可用；模型服务未返回完整用量，无法验收')
+    expect(attemptFailureSummary(attempt({ failure_code: 'INTERNAL_FUTURE_CODE' }))).toBe('模型调用未完成')
+    expect(attemptFailureSummary(attempt({ error_message: 'Provider 请求失败。' }))).toBe('模型服务请求失败。')
   })
 
   it('rejects the legacy RuntimePolicy cache shape and handles invalid timestamps', () => {

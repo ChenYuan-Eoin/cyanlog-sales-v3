@@ -3,12 +3,12 @@ import type { AIPlatformAssetKind } from '@/lib/configs/types'
 import type { Config } from '../types'
 
 export const AI_PLATFORM_KIND_LABELS: Record<AIPlatformAssetKind, string> = {
-  provider_connection: 'Provider 连接',
-  model_catalog_entry: '模型目录条目',
-  ai_application: 'AI 应用',
-  business_use_point: '业务用点',
-  application_binding: '应用绑定',
-  route_policy: '路由策略',
+  provider_connection: '模型服务',
+  model_catalog_entry: '可用模型',
+  ai_application: 'AI 能力',
+  business_use_point: '产品功能入口',
+  application_binding: '业务能力选择',
+  route_policy: '模型降级顺序',
 }
 
 const RELEASE_KIND_ORDER: Record<AIPlatformAssetKind, number> = {
@@ -70,7 +70,10 @@ export function groupPlatformConfigRevisions(configs: Config[]): PlatformConfigR
       drafts,
       published,
       archived,
-      primary: drafts[0] || published[0] || archived[0] || records[0],
+      // The current product fact is the published revision. A newer draft is
+      // only a proposed change and must never replace what business modules
+      // are consuming on the overview screens.
+      primary: published[0] || drafts[0] || archived[0] || records[0],
     }
   })
 }

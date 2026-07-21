@@ -22,6 +22,13 @@ export type WorkbenchAnnotationLike = {
 
 export type WorkbenchReviewRunLike = {
   status?: string | null
+  runtime_source?: 'runtime_plan' | 'legacy_model_policy' | string | null
+  runtime_plan?: {
+    integrity?: {
+      valid?: boolean | null
+      errors?: string[] | null
+    } | null
+  } | null
   skill_bundle_id?: string | null
   evidence_status?: 'snapshot_bound' | 'partial_snapshot' | 'missing_snapshot' | null
   rule_snapshot_refs?: Array<unknown> | null
@@ -120,6 +127,12 @@ export function buildReviewHealth(data: WorkbenchReviewDataLike): ReviewHealth {
   }
   if (data.reviewRun?.evidence_status && data.reviewRun.evidence_status !== 'snapshot_bound') {
     issues.push(`证据状态为 ${evidenceStatusLabel[data.reviewRun.evidence_status]}。`)
+  }
+  if (
+    data.reviewRun?.runtime_source === 'runtime_plan'
+    && data.reviewRun.runtime_plan?.integrity?.valid !== true
+  ) {
+    issues.push('运行计划快照或模型调用绑定未通过完整性校验，不能证明本次 AI 调用来自已发布计划。')
   }
   if (data.reviewRun?.skill_bundle) {
     const bundle = data.reviewRun.skill_bundle

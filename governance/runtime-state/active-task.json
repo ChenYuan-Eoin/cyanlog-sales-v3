@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-21T21:10:01+08:00",
+  "updated_at": "2026-07-22T01:23:24+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,15 +128,15 @@
     ]
   },
   "active_task": {
-    "id": "WP04",
-    "slug": "contract-center-ia",
-    "name": "合同中心入口、任务身份与上传编排复验",
+    "id": "WP09",
+    "slug": "release-acceptance",
+    "name": "AI 托管路由、业务可读配置与发布候选验收",
     "kind": "product",
     "status": "active",
-    "objective": "把合同中心恢复为四个可理解且不可混淆的业务任务：起草合同、上传并发起风险审核、继续/查看已有 ReviewRun、选择版本进行文档比对。每个入口必须说明对象、前置条件、目标页面和下一步；真实上传必须先完成源文件身份、解析和 page map，再且仅再启动一次正式审核，不能把上传页、审核工作台和比对准备页互相代替。",
-    "current_step": "入口审计已确认不能再用 Contract.status 推测用户任务；先选择性回收受保护快照中已验证的 uploadId/SHA/CAS、可信正文提取、source identity/page map 生产与原子 ReviewRun 启动不变量，适配当前 WP02/WP03 runtime，修复 IN-20260721-056 的必现断链和重复合同路径；再用统一业务任务模型重构无合同、单版本、已审核、多版本四类入口。不得整文件覆盖当前 analyze runtime，也不得把内部摄取状态直接暴露给业务用户。",
-    "started_at": "2026-07-21T19:27:00+08:00",
-    "activation_basis": "WP05 交互纠偏已由提交 12b977fa 完成，并通过真实长 DOCX、文本 PDF、扫描 PDF、桌面/iPad、URL 前进后退、source_range 定位、203 files/1459 tests、lint/typecheck/76-page build 与独立复审；IN-20260721-057 记录切换。",
+    "objective": "把已经存在的六对象 AI 平台能力变成业务人员能理解、托管环境能真实执行且审计事实不失真的发布候选：配置页面先表达可供业务模块选择的模型能力、接入状态和降级路径，再分别呈现管理员配置路由、本机可执行路由与托管实际路由；托管环境必须排除仅本机可达的 Provider，并从第一个真实可执行云模型开始计次，不得把环境排除伪造成失败降级。最终以同一 release commit 的隔离 Preview、真实 Provider probe、真实业务 ReviewRun、model_invocations 与 token 证据验收。",
+    "current_step": "先修正 runtime plan 的环境投影与不可漂移审计契约：保留发布配置顺序，新增本环境实际可执行顺序，托管环境排除 local Provider 后连续重编号；随后把配置页面改成业务能力、业务模块与实际执行路径三层可读表达，并在隔离 Preview 完成一次云模型和业务 ReviewRun 端到端验收。",
+    "started_at": "2026-07-22T01:23:24+08:00",
+    "activation_basis": "用户明确要求继续解决模型未拆出、线上不能运行和配置只对机器可读的问题；WP04 已由提交 a987f85d5701a38a13a245e0ebc5484cadecb3ab 固化，并在同一隔离 Preview 通过合同列表真实入口、默认审查、桌面/iPad 长 DOCX 风险定位后内部滚动与精确临时数据清理。现有源码审计进一步证明托管环境会在首个 local Provider 处立即失败，根本不会进入已配置云模型，因此该纠正属于 WP09 发布真实性门。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
     "allowed_paths": [
       "AGENTS.md",
@@ -144,57 +144,60 @@
       "governance/runtime-state/demand-inbox.jsonl",
       "governance/runtime-state/CONTINUE_WORK.md",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json",
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/00-master/PROJECT-主文档.md",
+      "product-truth/02-technical-truth/技术架构.md",
+      "product-truth/02-technical-truth/FREEZE-SPEC.md",
+      "product-truth/02-technical-truth/architecture-decisions/ADR-001-ai-failover-chain.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F005v2-contract-center.md",
-      "product-truth/feature-packets/F005-contract-review.md",
-      "product-truth/product-code/app/contracts",
-      "product-truth/product-code/app/api/contracts",
-      "product-truth/product-code/components/contracts",
-      "product-truth/product-code/lib/contracts",
-      "product-truth/product-code/lib/ask",
-      "product-truth/product-code/lib/documents",
-      "product-truth/product-code/lib/hooks",
+      "product-truth/feature-packets/F012-ai-runtime-config.md",
+      "product-truth/feature-packets/F022-ai-fallback.md",
+      "product-truth/03-design-truth/examples/F022-ai-fallback.md",
+      "product-truth/04-implementation-truth/F022-ai-fallback.md",
+      "product-truth/product-code/app/configs",
+      "product-truth/product-code/app/api/configs",
+      "product-truth/product-code/app/api/contracts/[id]/review",
+      "product-truth/product-code/app/tech-architecture/page.tsx",
+      "product-truth/product-code/lib/ai",
+      "product-truth/product-code/lib/configs",
+      "product-truth/product-code/lib/contracts/review-evidence.ts",
+      "product-truth/product-code/lib/contracts/review-evidence.test.ts",
+      "product-truth/product-code/lib/contracts/review-workbench-state.ts",
+      "product-truth/product-code/lib/contracts/review-workbench-state.test.ts",
       "product-truth/product-code/lib/contract-analysis.ts",
       "product-truth/product-code/lib/contract-analysis.test.ts",
-      "product-truth/product-code/lib/scoped-access.ts",
-      "product-truth/product-code/lib/scoped-access.test.ts",
-      "product-truth/product-code/lib/core-page-warmup.ts",
-      "product-truth/product-code/lib/core-page-warmup.test.ts",
       "product-truth/product-code/package.json",
       "product-truth/product-code/pnpm-lock.yaml",
       "product-truth/product-code/next.config.mjs",
-      "product-truth/product-code/supabase/migrations",
-      "product-truth/product-code/output/evidence/wp04",
-      "product-truth/product-code/output/playwright/wp04"
+      "product-truth/product-code/output/evidence/wp09",
+      "product-truth/product-code/output/playwright/wp09"
     ],
     "non_goals": [
-      "修改模型、规则集、审核准确率或独立金标",
-      "实现合同起草编辑器、DOCX 导出或草稿内部能力；这些属于 WP07",
-      "重写文档差异算法或把 WP06 的历史 Preview 候选冒充 Production 完成",
-      "实现风险迁移、客户反馈循环复审或最终批注交付；这些仍属于 WP05 后续子批",
+      "修改 R001-R015 等租户业务规则数据、审核准确率口径或独立金标",
+      "修改合同中心、审核工作台、文档对比、起草或循环复审产品流程",
+      "注册新的付费账号、引入持续付费 Provider 或用开发工具代理冒充产品运行网关",
       "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
     ],
     "exit_criteria": [
-      "起草、上传/发起审核、继续/查看风险审核、文档比对四类入口在无合同、单版本、已审核和多版本状态下分别给出正确对象、前置条件、目标 URL 与阻断提示，不互相退回同一上传页",
-      "真实文件上传只创建一个合同版本；只有源文件身份、解析文本和当前 source_page_map 就绪后才启动正式 ReviewRun",
-      "重复上传回调、重复解析完成通知和页面重试保持幂等，不生成重复版本、重复 ReviewRun 或假完成状态；失败可从明确步骤恢复",
-      "合同列表和工作台显示当前版本、ReviewRun 状态及业务下一步；入口参数只表达用户任务，不把运行状态误作页面选择",
-      "目标/全量测试、lint、typecheck、build、桌面与 iPad 真实 DOCX/PDF 浏览器链通过；Production 继续只读且不部署"
+      "同一发布 RoutePolicy 在本机保留 local 到 cloud 顺序；在托管环境排除 local 后从 cloud 的 candidatePosition 0 / attempt 1 执行，且不生成虚假的 local invocation 或 fallback 状态；托管全 local 时失败关闭",
+      "运行计划快照同时保留 configured route 与 effective route，历史快照兼容；审核证据验证 effective 是 configured 的有序子序列并与真实 invocation 顺序一致",
+      "配置页面用业务人员可读的对象与动作显示模型接入、可用模型、业务模块选择和降级结果，同时明确本机与托管实际执行差异，不把内部表名、环境变量或机器策略当作主任务",
+      "隔离 Preview 由一个 release commit 构建；真实云 Provider probe 和至少一个真实业务用点形成 ReviewRun、model_invocations、token 与运行计划证据，并清楚区分配置成功、连接成功和业务运行成功",
+      "目标/全量测试、lint、typecheck、build、桌面与 iPad 浏览器验收通过；Production 数据库继续只读且不部署，push 失败必须如实记录而不得冒充线上已更新"
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP04",
-      "slug": "contract-center-ia",
-      "reason": "WP05 交互纠偏已由 12b977fa 完成；当前用户业务主线需要先厘清四个合同任务入口并修复真实上传先审核后 page map 的错误编排"
+      "id": "WP09",
+      "slug": "release-acceptance",
+      "reason": "WP04 已由 a987f85d 和同一隔离 Preview 的桌面/iPad 真实列表入口、默认审查与 DOCX 内部滚动证据关闭；当前用户主线要求修复托管路由短路并把模型能力配置改为业务可读、真实可运行的发布候选"
     },
     "next": {
       "id": "WP07",
       "slug": "contract-drafting",
       "name": "合同起草闭环",
-      "entry_gate": "WP04 完成四入口与版本/ReviewRun 身份复验，起草入口不再与上传或审核混淆",
+      "entry_gate": "WP09 完成托管环境路由投影、业务可读 AI 配置和单一 release commit 的 Preview 运行验收",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
@@ -203,11 +206,6 @@
         "slug": "experience-umbrella",
         "name": "品牌、组织与响应式体验",
         "activation_requirement": "激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包"
-      },
-      {
-        "id": "WP09",
-        "slug": "release-acceptance",
-        "name": "工程、分支、Preview 与 Production 验收"
       }
     ],
     "release_blockers": [
@@ -273,6 +271,14 @@
         "completed_at": "2026-07-21T19:27:00+08:00",
         "evidence_commit": "12b977fa",
         "result": "默认审查入口、URL 页签状态、长 DOCX 单一滚动轴、source_range 确定性定位、重复/跨段证据失败关闭以及文本/扫描 PDF 人工定位边界通过；准确率、版本迁移和循环复审仍未完成"
+      },
+      {
+        "id": "WP04",
+        "slug": "contract-center-ia",
+        "completed_at": "2026-07-22T01:23:24+08:00",
+        "evidence_commit": "a987f85d5701a38a13a245e0ebc5484cadecb3ab",
+        "preview_deployment": "dpl_2P11eFtwxutsQXMUoU8R46XdDGUx",
+        "result": "四类合同任务、源文件身份与上传编排候选已固化；同一隔离 Preview 的真实合同列表入口默认进入审查，桌面/iPad 选中第 45 页风险后只滚动 DOCX 内部正文，window 不移动；临时风险和认证 token 已精确清理，Production 未写入或部署"
       }
     ]
   },

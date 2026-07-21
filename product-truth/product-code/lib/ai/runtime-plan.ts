@@ -47,7 +47,7 @@ interface ConfigIdentity {
 }
 
 export interface AIExecutionCandidate {
-  /** Zero-based order copied exactly from RoutePolicy.model_catalog_entry_ids. */
+  /** Zero-based order within the candidates executable in this environment. */
   readonly position: number
   readonly modelConfigId: string
   readonly modelConfigKey: string
@@ -106,7 +106,10 @@ export interface AIExecutionPlanSnapshot {
     readonly strategy: 'ordered_fallback'
     readonly timeoutMs: number
     readonly failureAction: 'manual_review' | 'stop'
+    /** Published administrator configuration, preserved even when an environment cannot execute every item. */
     readonly orderedModelAssetIds: readonly string[]
+    /** Actual environment projection. Optional only so historical v1 snapshots remain readable. */
+    readonly effectiveOrderedModelAssetIds?: readonly string[]
   }
   readonly candidates: readonly AIExecutionPlanSnapshotCandidate[]
 }
@@ -453,7 +456,7 @@ export function compilePublishedAIExecutionPlan(
     fail('EMPTY_ROUTE', `路由没有模型候选：${route.value.asset_id}`, { routeId: route.value.asset_id })
   }
 
-  const candidateSources = route.value.model_catalog_entry_ids.map((modelAssetId, position) => {
+  const configuredCandidateSources = route.value.model_catalog_entry_ids.map((modelAssetId) => {
     const model = getAsset<ModelCatalogEntryValue>(
       assets,
       'model_catalog_entry',
@@ -477,14 +480,35 @@ export function compilePublishedAIExecutionPlan(
       'PROVIDER_NOT_FOUND',
       'PROVIDER_DISABLED',
     )
-    if (input.executionEnvironment === 'hosted' && provider.value.runtime_location === 'local') {
-      fail(
-        'RUNTIME_LOCATION_INCOMPATIBLE',
-        `托管运行时不能消费本地 Provider：${provider.value.asset_id}`,
-        { providerAssetId: provider.value.asset_id, executionEnvironment: input.executionEnvironment },
-      )
-    }
+    return { model, provider }
+  })
 
+  const excludedLocalSources = input.executionEnvironment === 'hosted'
+    ? configuredCandidateSources.filter(({ provider }) => provider.value.runtime_location === 'local')
+    : []
+  const executableSources = input.executionEnvironment === 'hosted'
+    ? configuredCandidateSources.filter(({ provider }) => provider.value.runtime_location !== 'local')
+    : configuredCandidateSources
+
+  if (executableSources.length === 0) {
+    fail(
+      'RUNTIME_LOCATION_INCOMPATIBLE',
+      `当前环境没有可执行模型：${route.value.asset_id}`,
+      {
+        routeId: route.value.asset_id,
+        executionEnvironment: input.executionEnvironment,
+        excludedModelAssetIds: excludedLocalSources.map(({ model }) => model.value.asset_id),
+        excludedProviderAssetIds: sortedUnique(
+          excludedLocalSources.map(({ provider }) => provider.value.asset_id),
+        ),
+      },
+    )
+  }
+
+  // Credentials belong to the effective runtime path. A hosted execution must
+  // not fail because a local-only candidate (which it will never call) has no
+  // usable credential.
+  const candidateSources = executableSources.map(({ model, provider }, position) => {
     const authMode = effectiveAuthMode(provider.value)
     if (authMode === 'bearer' && !isUsableCredential(provider.value.api_key)) {
       fail('PROVIDER_CREDENTIAL_MISSING', `Bearer Provider 没有真实凭据：${provider.value.asset_id}`, {
@@ -539,6 +563,7 @@ export function compilePublishedAIExecutionPlan(
       timeoutMs: route.value.timeout_ms,
       failureAction: route.value.failure_action,
       orderedModelAssetIds: [...route.value.model_catalog_entry_ids],
+      effectiveOrderedModelAssetIds: candidateSources.map(({ model }) => model.value.asset_id),
     },
     candidates: candidateSources.map(({ position, model, provider, authMode }) => ({
       position,

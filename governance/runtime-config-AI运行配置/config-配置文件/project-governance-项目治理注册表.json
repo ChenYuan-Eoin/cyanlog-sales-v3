@@ -91,6 +91,14 @@
       "description": "设计真相层（tokens + primitives + examples），作为 UI 实现的唯一视觉口径"
     },
     {
+      "id": "technical-truth",
+      "path": "product-truth/02-technical-truth",
+      "kind": "directory",
+      "required": false,
+      "maintained": true,
+      "description": "产品技术真相层，登记现行架构、冻结规范与架构决策"
+    },
+    {
       "id": "requirements",
       "path": "product-truth/REQ_REGISTRY.yml",
       "kind": "file",

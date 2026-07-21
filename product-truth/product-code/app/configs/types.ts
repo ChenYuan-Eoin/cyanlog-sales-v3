@@ -135,6 +135,18 @@ export interface AIRuntimePlanCandidate {
   credential_state: 'not_required' | 'stored'
 }
 
+export interface AIRuntimeConfiguredCandidate {
+  position: number
+  model_catalog_entry_id: string
+  model_name: string
+  model_id: string
+  provider_connection_id: string
+  provider_name: string
+  runtime_location: 'local' | 'cloud' | 'builtin'
+  execution_status: 'effective' | 'excluded_from_hosted'
+  effective_position: number | null
+}
+
 export interface AIRuntimeReadyPlan {
   state: 'ready'
   snapshot_hash: string
@@ -147,14 +159,23 @@ export interface AIRuntimeReadyPlan {
     timeout_ms: number
     failure_action: 'manual_review' | 'stop'
   }
+  configured_candidates: AIRuntimeConfiguredCandidate[]
   candidates: AIRuntimePlanCandidate[]
 }
 
 export interface AIRuntimeBlockedPlan {
   state: 'blocked'
+  execution_environment: 'local' | 'hosted'
   code: string
   reason: string
   next_action: string
+}
+
+export type AIRuntimePlan = AIRuntimeReadyPlan | AIRuntimeBlockedPlan
+
+export interface AIRuntimeEnvironmentProjections {
+  local: AIRuntimePlan
+  hosted: AIRuntimePlan
 }
 
 export type AIRuntimeVerificationState =
@@ -175,7 +196,10 @@ export interface AIRuntimeUsePointOverview {
     description: string
   }
   evidence_available: boolean
-  plan: AIRuntimeReadyPlan | AIRuntimeBlockedPlan
+  /** The plan that applies to the environment serving this response. */
+  plan: AIRuntimePlan
+  /** Both projections are shown so administrators do not mistake local readiness for hosted readiness. */
+  environment_projections: AIRuntimeEnvironmentProjections
   verification: AIRuntimeVerificationState
   latest_current_attempt: AIRuntimeAttempt | null
   latest_current_execution_complete: boolean
@@ -289,11 +313,32 @@ function isRuntimePlanCandidate(value: unknown): value is AIRuntimePlanCandidate
     && (value.credential_state === 'not_required' || value.credential_state === 'stored')
 }
 
-function isRuntimePlan(value: unknown): value is AIRuntimeReadyPlan | AIRuntimeBlockedPlan {
+function isRuntimeConfiguredCandidate(value: unknown): value is AIRuntimeConfiguredCandidate {
+  if (!isRecord(value)) return false
+  return isFiniteNumber(value.position)
+    && isString(value.model_catalog_entry_id)
+    && isString(value.model_name)
+    && isString(value.model_id)
+    && isString(value.provider_connection_id)
+    && isString(value.provider_name)
+    && ['local', 'cloud', 'builtin'].includes(String(value.runtime_location))
+    && (value.execution_status === 'effective' || value.execution_status === 'excluded_from_hosted')
+    && isNullableNumber(value.effective_position)
+    && (value.execution_status === 'effective'
+      ? value.effective_position !== null
+      : value.effective_position === null)
+}
+
+function isRuntimePlan(value: unknown): value is AIRuntimePlan {
   if (!isRecord(value)) return false
   if (value.state === 'blocked') {
-    return isString(value.code) && isString(value.reason) && isString(value.next_action)
+    return ['local', 'hosted'].includes(String(value.execution_environment))
+      && isString(value.code)
+      && isString(value.reason)
+      && isString(value.next_action)
   }
+  const configuredCandidates = value.configured_candidates
+  const candidates = value.candidates
   if (
     value.state !== 'ready'
     || !isString(value.snapshot_hash)
@@ -307,57 +352,156 @@ function isRuntimePlan(value: unknown): value is AIRuntimeReadyPlan | AIRuntimeB
     || value.route.strategy !== 'ordered_fallback'
     || !isFiniteNumber(value.route.timeout_ms)
     || !['manual_review', 'stop'].includes(String(value.route.failure_action))
-    || !Array.isArray(value.candidates)
+    || !Array.isArray(configuredCandidates)
+    || !Array.isArray(candidates)
   ) return false
-  return value.candidates.every(isRuntimePlanCandidate)
+  if (
+    !configuredCandidates.every(isRuntimeConfiguredCandidate)
+    || !candidates.every(isRuntimePlanCandidate)
+  ) return false
+
+  const validConfiguredCandidates = configuredCandidates as AIRuntimeConfiguredCandidate[]
+  const validCandidates = candidates as AIRuntimePlanCandidate[]
+  const effectiveConfiguredCandidates = validConfiguredCandidates.filter((candidate) => (
+    candidate.execution_status === 'effective'
+  ))
+  if (
+    validCandidates.length === 0
+    || effectiveConfiguredCandidates.length !== validCandidates.length
+    || !validConfiguredCandidates.every((candidate, index) => candidate.position === index + 1)
+    || !validCandidates.every((candidate, index) => candidate.position === index + 1)
+    || !validCandidates.every((candidate) => (
+      candidate.role === (candidate.position === 1 ? 'primary' : 'fallback')
+    ))
+    || !effectiveConfiguredCandidates
+      .map((candidate) => candidate.effective_position)
+      .sort((left, right) => Number(left) - Number(right))
+      .every((position, index) => position === index + 1)
+    || validConfiguredCandidates.some((candidate) => (
+      candidate.execution_status === 'excluded_from_hosted'
+      && (value.execution_environment !== 'hosted' || candidate.runtime_location !== 'local')
+    ))
+    || (value.execution_environment === 'hosted' && effectiveConfiguredCandidates.some((candidate) => (
+      candidate.runtime_location === 'local'
+    )))
+    || new Set(effectiveConfiguredCandidates.map((candidate) => (
+      `${candidate.model_catalog_entry_id}:${candidate.provider_connection_id}`
+    ))).size !== effectiveConfiguredCandidates.length
+    || new Set(validCandidates.map((candidate) => (
+      `${candidate.model_catalog_entry_id}:${candidate.provider_connection_id}`
+    ))).size !== validCandidates.length
+  ) return false
+
+  const configuredMatchesCandidates = effectiveConfiguredCandidates.every((configured) => validCandidates.some((candidate) => (
+    configured.model_catalog_entry_id === candidate.model_catalog_entry_id
+    && configured.provider_connection_id === candidate.provider_connection_id
+    && configured.effective_position === candidate.position
+  )))
+  const candidatesMatchConfigured = validCandidates.every((candidate) => effectiveConfiguredCandidates.some((configured) => (
+    configured.model_catalog_entry_id === candidate.model_catalog_entry_id
+    && configured.provider_connection_id === candidate.provider_connection_id
+    && configured.effective_position === candidate.position
+  )))
+  return configuredMatchesCandidates && candidatesMatchConfigured
+}
+
+function hasSameRuntimePlanIdentity(left: AIRuntimePlan, right: AIRuntimePlan): boolean {
+  return left.state === right.state
+    && left.execution_environment === right.execution_environment
+    && JSON.stringify(left) === JSON.stringify(right)
+}
+
+function expectedRuntimeVerification(
+  plan: AIRuntimePlan,
+  evidenceAvailable: boolean,
+  latestAttempt: AIRuntimeAttempt | null,
+  executionComplete: boolean,
+): AIRuntimeVerificationState {
+  if (plan.state === 'blocked') return 'blocked'
+  if (!evidenceAvailable) return 'evidence_unavailable'
+  if (!latestAttempt) return 'not_verified'
+  if (latestAttempt.freshness === 'stale') return 'stale'
+  if (latestAttempt.freshness === 'unknown' || !executionComplete) return 'incomplete_evidence'
+  if (latestAttempt.outcome === 'passed') return 'passed'
+  if (latestAttempt.outcome === 'fallback_passed') return 'fallback_passed'
+  if (latestAttempt.outcome === 'failed') return 'failed'
+  return 'incomplete_evidence'
 }
 
 function isRuntimeUsePoint(value: unknown): value is AIRuntimeUsePointOverview {
-  if (!isRecord(value) || !isRecord(value.use_point)) return false
+  if (!isRecord(value) || !isRecord(value.use_point) || !isRecord(value.environment_projections)) return false
   if (
-    !Array.isArray(value.latest_current_execution_attempts)
+    typeof value.evidence_available !== 'boolean'
+    || !Array.isArray(value.latest_current_execution_attempts)
     || !value.latest_current_execution_attempts.every((attempt) => (
       isRuntimeAttempt(attempt) && attempt.execution_mode === 'route'
     ))
     || !Array.isArray(value.latest_attempts)
     || !value.latest_attempts.every(isRuntimeAttempt)
   ) return false
+  const currentPlan = value.plan
+  const localProjection = value.environment_projections.local
+  const hostedProjection = value.environment_projections.hosted
+  if (
+    !isRuntimePlan(currentPlan)
+    || !isRuntimePlan(localProjection)
+    || localProjection.execution_environment !== 'local'
+    || !isRuntimePlan(hostedProjection)
+    || hostedProjection.execution_environment !== 'hosted'
+  ) return false
 
-  const latestCurrentAttempt = value.latest_current_attempt
-  const latestPinnedAttempt = value.latest_pinned_attempt
-  const currentExecutionAttempts = value.latest_current_execution_attempts
+  const selectedProjection = currentPlan.execution_environment === 'local'
+    ? localProjection
+    : hostedProjection
+  if (!hasSameRuntimePlanIdentity(currentPlan, selectedProjection)) return false
+
+  if (value.latest_current_attempt !== null && !isRuntimeAttempt(value.latest_current_attempt)) return false
+  if (value.latest_pinned_attempt !== null && !isRuntimeAttempt(value.latest_pinned_attempt)) return false
+  const latestCurrentAttempt = value.latest_current_attempt as AIRuntimeAttempt | null
+  const latestPinnedAttempt = value.latest_pinned_attempt as AIRuntimeAttempt | null
+  const currentExecutionAttempts = value.latest_current_execution_attempts as AIRuntimeAttempt[]
   const currentExecutionId = currentExecutionAttempts[0]?.execution_id || null
+  const continuousAttempts = currentExecutionAttempts.every((attempt, index) => attempt.attempt_no === index + 1)
   const currentExecutionIsConsistent = latestCurrentAttempt === null
     ? currentExecutionAttempts.length === 0
-    : isRuntimeAttempt(latestCurrentAttempt)
-      && latestCurrentAttempt.execution_mode === 'route'
+    : latestCurrentAttempt.execution_mode === 'route'
+      && latestCurrentAttempt.matches_current_plan
       && currentExecutionAttempts.length > 0
-      && currentExecutionAttempts.every((attempt) => attempt.execution_id === latestCurrentAttempt.execution_id)
-      && currentExecutionAttempts.some((attempt) => attempt.id === latestCurrentAttempt.id)
+      && continuousAttempts
+      && currentExecutionAttempts.every((attempt) => (
+        attempt.matches_current_plan
+        && attempt.execution_id === latestCurrentAttempt.execution_id
+      ))
+      && JSON.stringify(currentExecutionAttempts.at(-1)) === JSON.stringify(latestCurrentAttempt)
   const pinnedAttemptIsConsistent = latestPinnedAttempt === null
-    || (isRuntimeAttempt(latestPinnedAttempt) && latestPinnedAttempt.execution_mode === 'pinned')
+    || (latestPinnedAttempt.execution_mode === 'pinned' && latestPinnedAttempt.matches_current_plan)
+  const finalAttempt = currentExecutionAttempts.at(-1) || null
+  const completedBySuccess = finalAttempt?.outcome === 'passed' || finalAttempt?.outcome === 'fallback_passed'
+  const completedByExhaustion = currentPlan.state === 'ready'
+    && currentExecutionAttempts.length === currentPlan.candidates.length
+    && currentExecutionAttempts.every((attempt) => attempt.outcome === 'failed')
+  const expectedExecutionComplete = currentExecutionAttempts.length > 0
+    && continuousAttempts
+    && (completedBySuccess || completedByExhaustion)
+  const expectedVerification = expectedRuntimeVerification(
+    currentPlan,
+    value.evidence_available as boolean,
+    latestCurrentAttempt,
+    expectedExecutionComplete,
+  )
 
   return isString(value.use_point.asset_id)
     && isString(value.use_point.name)
     && isString(value.use_point.module_id)
     && isString(value.use_point.description)
     && typeof value.evidence_available === 'boolean'
-    && isRuntimePlan(value.plan)
-    && [
-      'blocked',
-      'evidence_unavailable',
-      'not_verified',
-      'stale',
-      'passed',
-      'fallback_passed',
-      'failed',
-      'incomplete_evidence',
-    ].includes(String(value.verification))
+    && value.verification === expectedVerification
     && currentExecutionIsConsistent
     && typeof value.latest_current_execution_complete === 'boolean'
-    && (!value.latest_current_execution_complete || Boolean(currentExecutionId && latestCurrentAttempt))
+    && value.latest_current_execution_complete === expectedExecutionComplete
+    && (!expectedExecutionComplete || Boolean(currentExecutionId && latestCurrentAttempt))
     && pinnedAttemptIsConsistent
-    && (value.plan.state !== 'blocked'
+    && (currentPlan.state !== 'blocked'
       || (latestCurrentAttempt === null && latestPinnedAttempt === null && currentExecutionAttempts.length === 0))
 }
 
@@ -365,22 +509,49 @@ export function isAIRuntimeOverview(value: unknown): value is AIRuntimeOverview 
   if (!isRecord(value) || !isRecord(value.summary) || !isRecord(value.evidence) || !isRecord(value.truth_contract)) {
     return false
   }
-  return value.schema_version === 'ai-runtime-overview.v1'
+  if (
+    value.schema_version !== 'ai-runtime-overview.v1'
+    || value.source !== 'published_ai_platform_assets'
+    || !isString(value.generated_at)
+    || (value.execution_environment !== 'local' && value.execution_environment !== 'hosted')
+    || typeof value.evidence.available !== 'boolean'
+    || value.evidence.source !== 'immutable_plan_snapshots_and_model_invocations'
+    || !isFiniteNumber(value.evidence.freshness_window_hours)
+    || !Array.isArray(value.evidence.unavailable_use_points)
+    || !value.evidence.unavailable_use_points.every(isString)
+    || !isNullableString(value.evidence.error)
+    || !isFiniteNumber(value.summary.registered_use_points)
+    || !isFiniteNumber(value.summary.ready_plans)
+    || !isFiniteNumber(value.summary.blocked_plans)
+    || !isFiniteNumber(value.summary.verified_current_plans)
+    || !Array.isArray(value.use_points)
+    || !value.use_points.every(isRuntimeUsePoint)
+  ) return false
+
+  const usePoints = value.use_points as AIRuntimeUsePointOverview[]
+  const unavailableUsePoints = value.evidence.unavailable_use_points as string[]
+  const expectedUnavailableUsePoints = usePoints
+    .filter((item) => !item.evidence_available)
+    .map((item) => item.use_point.asset_id)
+  const summaryMatches = value.summary.registered_use_points === usePoints.length
+    && value.summary.ready_plans === usePoints.filter((item) => item.plan.state === 'ready').length
+    && value.summary.blocked_plans === usePoints.filter((item) => item.plan.state === 'blocked').length
+    && value.summary.verified_current_plans === usePoints.filter((item) => (
+      item.verification === 'passed' || item.verification === 'fallback_passed'
+    )).length
+  const evidenceMatches = value.evidence.available === (expectedUnavailableUsePoints.length === 0)
+    && new Set(unavailableUsePoints).size === unavailableUsePoints.length
+    && unavailableUsePoints.length === expectedUnavailableUsePoints.length
+    && unavailableUsePoints.every((assetId, index) => assetId === expectedUnavailableUsePoints[index])
+    && (value.evidence.available ? value.evidence.error === null : Boolean(value.evidence.error))
+  const environmentMatches = usePoints.every((item) => (
+    item.plan.execution_environment === value.execution_environment
+  ))
+
+  return summaryMatches
+    && evidenceMatches
+    && environmentMatches
     && value.source === 'published_ai_platform_assets'
-    && isString(value.generated_at)
-    && (value.execution_environment === 'local' || value.execution_environment === 'hosted')
-    && typeof value.evidence.available === 'boolean'
-    && value.evidence.source === 'immutable_plan_snapshots_and_model_invocations'
-    && isFiniteNumber(value.evidence.freshness_window_hours)
-    && Array.isArray(value.evidence.unavailable_use_points)
-    && value.evidence.unavailable_use_points.every(isString)
-    && isNullableString(value.evidence.error)
-    && isFiniteNumber(value.summary.registered_use_points)
-    && isFiniteNumber(value.summary.ready_plans)
-    && isFiniteNumber(value.summary.blocked_plans)
-    && isFiniteNumber(value.summary.verified_current_plans)
-    && Array.isArray(value.use_points)
-    && value.use_points.every(isRuntimeUsePoint)
     && value.truth_contract.legacy_model_policy_consumed === false
     && value.truth_contract.environment_route_fallback_consumed === false
     && value.truth_contract.configured_or_published_is_not_verified === true

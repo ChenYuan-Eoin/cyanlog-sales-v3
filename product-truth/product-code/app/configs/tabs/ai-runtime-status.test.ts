@@ -53,13 +53,13 @@ describe('AI runtime status components', () => {
     }))
 
     expect(screen.getByRole('alert').textContent).toContain('证据库暂时不可读')
-    fireEvent.click(screen.getByRole('button', { name: '重新读取证据' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查最新状态' }))
     expect(refreshError).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(screen.getByRole('button', { name: '重新读取证据' })).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('button', { name: '检查最新状态' })).toBeTruthy())
 
     rerender(createElement(RuntimeOverviewUnavailable, { error: '', onRefresh: vi.fn() }))
-    expect(screen.getByRole('status').textContent).toContain('运行计划与真实调用证据尚未加载')
-    expect(screen.getByRole('button', { name: '重新读取证据' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toContain('实际执行路线与调用结果尚未加载')
+    expect(screen.getByRole('button', { name: '检查最新状态' })).toBeTruthy()
   })
 
   it('renders stale outcome and refuses to hide a required ReviewRun gap', () => {
@@ -73,6 +73,6 @@ describe('AI runtime status components', () => {
     ))
 
     expect(screen.getByTestId('runtime-attempt-outcome').textContent).toBe('验证已过期')
-    expect(screen.getByText('该业务用点必须绑定 ReviewRun；当前记录缺失绑定，不能作为完成证据。')).toBeTruthy()
+    expect(screen.getByText('该产品功能要求关联审核记录；当前记录缺失，不能作为完整业务证据。')).toBeTruthy()
   })
 })
