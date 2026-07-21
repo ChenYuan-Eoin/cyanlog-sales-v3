@@ -115,10 +115,10 @@ type ReviewRun = {
     rule_translation_ready: boolean
     rule_translation_blocking_reasons: string[]
     official_review_allowed: boolean
-    eval_status: string | null
+    rule_acceptance_status: string | null
+    model_quality_eval_status: string | null
+    runtime_invocation_status: string | null
     eval_gate: string | null
-    static_eval_status: string | null
-    runtime_eval_status: string | null
     eval_note: string | null
     eval_total_cases: number | null
     eval_passed_cases: number | null
@@ -375,7 +375,8 @@ const lifecycleLabel: Record<string, string> = {
   latest_review_model_invocation_partial: '最近模型复核部分通过',
   latest_review_model_invocation_not_passed: '最近模型复核未通过',
   latest_review_model_invocation_local_cli: '最近由本地模型完成',
-  model_quality_eval_not_run: '模型质量评测未运行',
+  semantic_invocation_not_recorded: '本次未记录语义模型调用',
+  blocked_without_independent_gold: '缺少独立金标，尚未验收',
 }
 
 const invocationPhaseLabel: Record<string, string> = {
@@ -2176,8 +2177,9 @@ function EvidencePanel({
           ? `${reviewRun.skill_bundle.rules.actual}/${reviewRun.skill_bundle.rules.expected ?? '未知'}`
           : '未记录'}
       />
-      <InfoLine label="发布门禁" value={formatLifecycle(reviewRun?.skill_bundle?.static_eval_status || reviewRun?.skill_bundle?.eval_status)} />
-      <InfoLine label="模型质量评测" value={formatLifecycle(reviewRun?.skill_bundle?.runtime_eval_status)} />
+      <InfoLine label="规则验收" value={formatLifecycle(reviewRun?.skill_bundle?.rule_acceptance_status)} />
+      <InfoLine label="模型质量金标" value={formatLifecycle(reviewRun?.skill_bundle?.model_quality_eval_status)} />
+      <InfoLine label="本次语义模型调用" value={formatLifecycle(reviewRun?.skill_bundle?.runtime_invocation_status)} />
       <InfoLine label="模型策略" value={reviewRun?.model_policy_id || 'rule-engine'} />
       <InfoLine
         label="模型来源"

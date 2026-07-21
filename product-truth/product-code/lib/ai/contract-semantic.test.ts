@@ -134,6 +134,12 @@ describe('contract semantic runtime', () => {
       })
       const validation = await input.validateOutput(raw)
       if (!validation.ok) throw new Error(validation.error)
+      expect(validation.evidence).toEqual({
+        itemKind: 'risk',
+        validationWarnings: [],
+        droppedItemCount: 0,
+        usableItemCount: 1,
+      })
       return {
         value: validation.value, provider: 'provider-0', model: 'model-api-0', degraded: false,
         invocationId: 'invocation-1', invocationIds: ['invocation-1'],

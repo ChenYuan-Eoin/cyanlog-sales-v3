@@ -56,7 +56,10 @@ function skillBundle(overrides: Record<string, unknown> = {}) {
       production_rule_source: { source_of_truth: 'config_center_published_rules' },
       rule_translation_gate: { status: 'ready', official_review_allowed: true },
       rule_set_document_gate: { status: 'ready' },
-      eval_results: { status: 'passed' },
+      eval_results: {
+        rule_acceptance_status: 'passed',
+        model_quality_eval_status: 'blocked_without_independent_gold',
+      },
       rules: [
         {
           id: 'snapshot-1', rule_id: 'rule-1', code: 'R001', version: 2,
@@ -164,7 +167,12 @@ describe('runStructuredAnalysis', () => {
       status: 'compiled', is_current: false,
       compiled_from: {
         rule_translation_gate: { status: 'needs_ai_translation', official_review_allowed: false },
-        rule_set_document_gate: { status: 'ready' }, eval_results: { status: 'failed' }, rules: [],
+        rule_set_document_gate: { status: 'ready' },
+        eval_results: {
+          rule_acceptance_status: 'failed',
+          model_quality_eval_status: 'blocked_without_independent_gold',
+        },
+        rules: [],
       },
     }))
 

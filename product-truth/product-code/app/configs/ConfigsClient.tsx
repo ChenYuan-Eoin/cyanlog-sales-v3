@@ -1045,8 +1045,11 @@ export default function ConfigsClient({
     }
   }
 
-  async function handleDeleteRule(id: string) {
-    if (!await confirmAction('确定要删除这条规则吗？', { confirmText: '删除', danger: true })) return
+  async function handleDeleteRule(id: string): Promise<boolean> {
+    if (!await confirmAction(
+      '停用会先生成规则集草稿；当前线上版本继续生效，直到所属规则集完成测试并统一发布。是否继续？',
+      { title: '停用规则', confirmText: '标记待停用', danger: true }
+    )) return false
 
     try {
       const token = localStorage.getItem('token')
@@ -1056,13 +1059,16 @@ export default function ConfigsClient({
       })
 
       if (!res.ok) {
-        setError('删除失败')
-        return
+        const payload = await res.json().catch(() => ({}))
+        setError(getApiErrorMessage(payload, '停用规则失败'))
+        return false
       }
 
       await refreshTabData('rules')
+      return true
     } catch {
       setError('网络错误')
+      return false
     }
   }
 

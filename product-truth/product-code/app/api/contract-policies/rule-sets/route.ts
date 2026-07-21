@@ -107,10 +107,19 @@ type RuleSetSnapshotRow = {
   rule_set_id: string
   status: string
   rule_snapshot_ids: unknown
+  test_results: unknown
 }
 
-type RuleSnapshotRefRow = { id: string; rule_id: string; version: number }
-type RuleSnapshotBindingRow = RuleSnapshotRefRow & {
+type RuleSnapshotRefRow = {
+  id: string
+  rule_id: string
+  version: number
+  config_snapshot: unknown
+}
+type RuleSnapshotBindingRow = {
+  id: string
+  rule_id: string
+  version: number
   status: 'draft' | 'published'
   created_at: string
 }
@@ -136,13 +145,127 @@ function isBlockedRule(rule: RuleRow) {
   return !isPublishedRule(rule)
 }
 
+type PublishedAcceptanceEvidence = {
+  acceptedDraftSnapshotId: string
+  ruleContractSha256: string
+  evaluatorRevision: string
+}
+
+const frozenTestCaseKinds = new Set(['risk', 'pass', 'missing_evidence', 'value_conflict', 'unit_conflict'])
+const frozenOutcomes = new Set(['pass', 'negotiate', 'block', 'manual_review'])
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function publishedAcceptanceEvidence(snapshot: RuleSnapshotRefRow): PublishedAcceptanceEvidence | null {
+  if (!snapshot.config_snapshot || typeof snapshot.config_snapshot !== 'object' || Array.isArray(snapshot.config_snapshot)) {
+    return null
+  }
+  const releaseEvidence = (snapshot.config_snapshot as Record<string, unknown>)._release_evidence
+  if (!releaseEvidence || typeof releaseEvidence !== 'object' || Array.isArray(releaseEvidence)) {
+    return null
+  }
+  const evidence = releaseEvidence as Record<string, unknown>
+  const snapshotId = evidence.accepted_draft_snapshot_id
+  const contractSha256 = evidence.rule_contract_sha256
+  const evaluatorRevision = evidence.evaluator_revision
+  if (
+    typeof snapshotId !== 'string' || snapshotId.trim().length === 0
+    || typeof contractSha256 !== 'string' || contractSha256.trim().length === 0
+    || typeof evaluatorRevision !== 'string' || evaluatorRevision.trim().length === 0
+  ) {
+    return null
+  }
+  return {
+    acceptedDraftSnapshotId: snapshotId.trim(),
+    ruleContractSha256: contractSha256.trim(),
+    evaluatorRevision: evaluatorRevision.trim(),
+  }
+}
+
+function frozenAcceptanceRuns(input: {
+  ruleSetSnapshot: RuleSetSnapshotRow
+  publishedRuleSnapshot: RuleSnapshotRefRow
+  rule: RuleRow
+}): RuleTestRunRow[] | null {
+  const contract = normalizeRuleContract(input.rule.rule_contract)
+  const evidence = publishedAcceptanceEvidence(input.publishedRuleSnapshot)
+  if (!contract || !evidence) return null
+  const expectedContractSha256 = ruleContractSha256(contract)
+  if (
+    evidence.ruleContractSha256 !== expectedContractSha256
+    || evidence.evaluatorRevision !== RULE_CONTRACT_EVALUATOR_REVISION
+  ) {
+    return null
+  }
+
+  const testResults = recordValue(input.ruleSetSnapshot.test_results)
+  const ruleRuns = recordValue(testResults?.rule_runs)
+  const rawRuns = ruleRuns?.[input.rule.id]
+  if (
+    testResults?.gate !== 'snapshot_bound_latest_asserted_rule_matrix'
+    || !Array.isArray(rawRuns)
+    || rawRuns.length === 0
+  ) {
+    return null
+  }
+
+  const runs: RuleTestRunRow[] = []
+  for (const rawRun of rawRuns) {
+    const run = recordValue(rawRun)
+    if (
+      !run
+      || typeof run.id !== 'string' || run.id.trim().length === 0
+      || typeof run.case_kind !== 'string' || !frozenTestCaseKinds.has(run.case_kind)
+      || (run.expected_status !== 'decided' && run.expected_status !== 'missing_evidence')
+      || typeof run.expected_outcome !== 'string' || !frozenOutcomes.has(run.expected_outcome)
+      || (run.expected_decision_id !== null && typeof run.expected_decision_id !== 'string')
+      || run.assertion_passed !== true
+      || run.rule_snapshot_id !== evidence.acceptedDraftSnapshotId
+      || run.rule_contract_sha256 !== evidence.ruleContractSha256
+      || run.evaluator_revision !== evidence.evaluatorRevision
+      || typeof run.created_at !== 'string' || run.created_at.length === 0
+    ) {
+      return null
+    }
+    runs.push({
+      id: run.id,
+      rule_id: input.rule.id,
+      rule_version: input.rule.version,
+      case_kind: run.case_kind as RuleTestRunRow['case_kind'],
+      expected_status: run.expected_status,
+      expected_outcome: run.expected_outcome as RuleTestRunRow['expected_outcome'],
+      expected_decision_id: run.expected_decision_id,
+      assertion_passed: true,
+      rule_snapshot_id: evidence.acceptedDraftSnapshotId,
+      rule_contract_sha256: evidence.ruleContractSha256,
+      evaluator_revision: evidence.evaluatorRevision,
+      created_at: run.created_at,
+    })
+  }
+
+  const readiness = ruleReleaseReadiness({
+    ruleId: input.rule.id,
+    ruleVersion: input.rule.version,
+    ruleContract: contract,
+    runs,
+    ruleSnapshotId: evidence.acceptedDraftSnapshotId,
+    ruleContractSha256: expectedContractSha256,
+    evaluatorRevision: RULE_CONTRACT_EVALUATOR_REVISION,
+  })
+  return readiness.complete ? runs : null
+}
+
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'read')) {
       return errorResponse(createApiError('FORBIDDEN', '缺少当前组织的 config:read 权限'))
     }
 
-    const [setsResult, docsResult, rulesResult, testRunsResult] = await Promise.all([
+    const [setsResult, docsResult, rulesResult] = await Promise.all([
       supabaseAdmin
         .from('contract_rule_sets')
         .select('id, org_id, code, name, description, applicable_scenario, priority, is_default, is_active, version, lifecycle_status, translation_status, published_at, published_by, current_snapshot_id, release_note, metadata, created_by, created_at, updated_at')
@@ -161,10 +284,6 @@ export async function GET(req: NextRequest) {
         .select('id, code, rule_set_id, problem_category_id, rule_contract, version, lifecycle_status, translation_status, is_active, published_at')
         .eq('org_id', orgId)
         .neq('lifecycle_status', 'archived'),
-      supabaseAdmin
-        .from('contract_rule_test_runs')
-        .select('id, rule_id, rule_version, case_kind, expected_status, expected_outcome, expected_decision_id, assertion_passed, rule_snapshot_id, rule_contract_sha256, evaluator_revision, created_at')
-        .eq('org_id', orgId),
     ])
 
     if (setsResult.error) {
@@ -176,10 +295,8 @@ export async function GET(req: NextRequest) {
     if (rulesResult.error) {
       return errorResponse(createApiError('DB_ERROR', '获取规则统计失败'))
     }
-    if (testRunsResult.error) {
-      return errorResponse(createApiError('DB_ERROR', '获取规则测试证据失败'))
-    }
     const ruleSetRows = (setsResult.data || []) as RuleSetRow[]
+    const ruleRows = (rulesResult.data || []) as RuleRow[]
     const inconsistentPointers = ruleSetRows.filter((set) => (
       Boolean(set.published_at) !== Boolean(set.current_snapshot_id)
     ))
@@ -190,16 +307,31 @@ export async function GET(req: NextRequest) {
     const currentSetSnapshotIds = ruleSetRows
       .map((set) => set.current_snapshot_id)
       .filter((snapshotId): snapshotId is string => Boolean(snapshotId))
-    const setSnapshotsResult = currentSetSnapshotIds.length > 0
-      ? await supabaseAdmin
-        .from('contract_rule_set_snapshots')
-        .select('id, org_id, rule_set_id, status, rule_snapshot_ids')
-        .in('id', currentSetSnapshotIds)
-        .eq('org_id', orgId)
-        .eq('status', 'published')
-      : { data: [], error: null }
+    const changedRuleIds = ruleRows
+      .filter((rule) => rule.is_active && rule.lifecycle_status === 'ready_to_publish')
+      .map((rule) => rule.id)
+    const [setSnapshotsResult, testRunsResult] = await Promise.all([
+      currentSetSnapshotIds.length > 0
+        ? supabaseAdmin
+          .from('contract_rule_set_snapshots')
+          .select('id, org_id, rule_set_id, status, rule_snapshot_ids, test_results')
+          .in('id', currentSetSnapshotIds)
+          .eq('org_id', orgId)
+          .eq('status', 'published')
+        : Promise.resolve({ data: [], error: null }),
+      changedRuleIds.length > 0
+        ? supabaseAdmin
+          .from('contract_rule_test_runs')
+          .select('id, rule_id, rule_version, case_kind, expected_status, expected_outcome, expected_decision_id, assertion_passed, rule_snapshot_id, rule_contract_sha256, evaluator_revision, created_at')
+          .eq('org_id', orgId)
+          .in('rule_id', changedRuleIds)
+        : Promise.resolve({ data: [], error: null }),
+    ])
     if (setSnapshotsResult.error) {
       return errorResponse(createApiError('DB_ERROR', '获取规则集当前发布快照失败'))
+    }
+    if (testRunsResult.error) {
+      return errorResponse(createApiError('DB_ERROR', '获取规则测试证据失败'))
     }
 
     const setSnapshotsById = new Map(
@@ -235,22 +367,19 @@ export async function GET(req: NextRequest) {
     const activeSnapshotIds = Array.from(new Set(
       Array.from(currentRuleSnapshotIdsBySet.values()).flat()
     ))
-    const currentRuleIds = ((rulesResult.data || []) as RuleRow[])
-      .filter((rule) => rule.is_active)
-      .map((rule) => rule.id)
     const [ruleSnapshotResult, ruleBindingSnapshotResult] = await Promise.all([
       activeSnapshotIds.length > 0
         ? supabaseAdmin
           .from('contract_rule_snapshots')
-          .select('id, rule_id, version')
+          .select('id, rule_id, version, config_snapshot')
           .in('id', activeSnapshotIds)
           .eq('status', 'published')
         : Promise.resolve({ data: [], error: null }),
-      currentRuleIds.length > 0
+      changedRuleIds.length > 0
         ? supabaseAdmin
           .from('contract_rule_snapshots')
           .select('id, rule_id, version, status, created_at')
-          .in('rule_id', currentRuleIds)
+          .in('rule_id', changedRuleIds)
           .eq('status', 'draft')
           .order('created_at', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
@@ -268,7 +397,9 @@ export async function GET(req: NextRequest) {
     if (unresolvedCurrentRuleSnapshotIds.length > 0) {
       return errorResponse(createApiError('DB_ERROR', '规则集当前发布成员快照无效'))
     }
-    const testRuns = (testRunsResult.data || []) as RuleTestRunRow[]
+    const changedRuleIdSet = new Set(changedRuleIds)
+    const liveTestRuns = ((testRunsResult.data || []) as RuleTestRunRow[])
+      .filter((run) => changedRuleIdSet.has(run.rule_id))
     const ruleBindings = new Map<string, RuleSnapshotBindingRow>()
     for (const snapshot of (ruleBindingSnapshotResult.data || []) as RuleSnapshotBindingRow[]) {
       const key = `${snapshot.rule_id}:${snapshot.version}:${snapshot.status}`
@@ -284,7 +415,7 @@ export async function GET(req: NextRequest) {
 
     const rulesBySetId = new Map<string, RuleRow[]>()
     const rulesById = new Map<string, RuleRow>()
-    for (const rule of (rulesResult.data || []) as RuleRow[]) {
+    for (const rule of ruleRows) {
       rulesById.set(rule.id, rule)
       if (!rule.rule_set_id) continue
       rulesBySetId.set(rule.rule_set_id, [...(rulesBySetId.get(rule.rule_set_id) || []), rule])
@@ -300,6 +431,33 @@ export async function GET(req: NextRequest) {
         return errorResponse(createApiError('DB_ERROR', '规则集当前发布成员与规则集不一致'))
       }
     }
+    const missingPublishedAcceptanceEvidence = activeSnapshotIds.some((snapshotId) => {
+      const snapshot = snapshotRefs.get(snapshotId)
+      return !snapshot || !publishedAcceptanceEvidence(snapshot)
+    })
+    if (missingPublishedAcceptanceEvidence) {
+      return errorResponse(createApiError('DB_ERROR', '规则集当前发布成员缺少不可变验收证据'))
+    }
+    const frozenTestRunsByRuleId = new Map<string, RuleTestRunRow[]>()
+    for (const [ruleSetId, ruleSetSnapshot] of currentSetSnapshots) {
+      const memberSnapshots = (currentRuleSnapshotIdsBySet.get(ruleSetId) || [])
+        .map((snapshotId) => snapshotRefs.get(snapshotId))
+        .filter((snapshot): snapshot is RuleSnapshotRefRow => Boolean(snapshot))
+      const unchangedRules = (rulesBySetId.get(ruleSetId) || [])
+        .filter((rule) => rule.is_active && rule.lifecycle_status === 'published')
+      for (const rule of unchangedRules) {
+        const publishedRuleSnapshot = memberSnapshots.find((snapshot) => (
+          snapshot.rule_id === rule.id && snapshot.version === rule.version
+        ))
+        const frozenRuns = publishedRuleSnapshot
+          ? frozenAcceptanceRuns({ ruleSetSnapshot, publishedRuleSnapshot, rule })
+          : null
+        if (!frozenRuns) {
+          return errorResponse(createApiError('DB_ERROR', '规则集当前发布成员冻结验收矩阵缺失或损坏'))
+        }
+        frozenTestRunsByRuleId.set(rule.id, frozenRuns)
+      }
+    }
 
     const ruleSets = ruleSetRows.map((set) => {
       const setRules = rulesBySetId.get(set.id) || []
@@ -307,8 +465,11 @@ export async function GET(req: NextRequest) {
       for (const snapshotId of currentRuleSnapshotIdsBySet.get(set.id) || []) {
         const snapshot = snapshotRefs.get(snapshotId)
         if (!snapshot) continue
+        const acceptanceEvidence = publishedAcceptanceEvidence(snapshot)
+        if (!acceptanceEvidence) continue
         currentPublishedBindings.set(`${snapshot.rule_id}:${snapshot.version}:published`, {
           ...snapshot,
+          id: acceptanceEvidence.acceptedDraftSnapshotId,
           status: 'published',
           created_at: '',
         })
@@ -329,11 +490,14 @@ export async function GET(req: NextRequest) {
         rule.id,
         (() => {
           const contract = normalizeRuleContract(rule.rule_contract)
+          const usesLiveDraftEvidence = rule.lifecycle_status === 'ready_to_publish'
           return ruleReleaseReadiness({
             ruleId: rule.id,
             ruleVersion: rule.version,
             ruleContract: rule.rule_contract,
-            runs: testRuns,
+            runs: usesLiveDraftEvidence
+              ? liveTestRuns
+              : frozenTestRunsByRuleId.get(rule.id) || [],
             ruleSnapshotId: bindingForRule(rule)?.id || null,
             ruleContractSha256: contract ? ruleContractSha256(contract) : null,
             evaluatorRevision: RULE_CONTRACT_EVALUATOR_REVISION,

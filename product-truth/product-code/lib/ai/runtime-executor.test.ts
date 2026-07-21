@@ -180,6 +180,43 @@ describe('executeAIUsePoint', () => {
     expect(deps.close).toHaveBeenCalledTimes(1)
   })
 
+  it('persists transport and explicit output-quality evidence from the business validator', async () => {
+    const request = vi.fn(async () => completion('{"risks":[{"id":"risk-1"}]}')) as typeof fetch
+    const deps = dependencies([request])
+
+    await executeAIUsePoint({
+      ...baseInput,
+      plan: plan(),
+      validateOutput: () => ({
+        ok: true,
+        value: { risks: [{ id: 'risk-1' }] },
+        evidence: {
+          itemKind: 'risk',
+          validationWarnings: [],
+          droppedItemCount: 0,
+          usableItemCount: 1,
+        },
+      }),
+    }, deps)
+
+    expect(deps.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'completed',
+      responseMeta: expect.objectContaining({
+        provider_kind: 'openai_compatible',
+        transport: 'openai_compatible_http',
+        output_validation: 'passed',
+        token_evidence: 'provider',
+        validation_audit_version: '1',
+        validation_item_kind: 'risk',
+        validation_warnings: [],
+        dropped_item_count: 0,
+        usable_item_count: 1,
+        dropped_risk_count: 0,
+        usable_risk_count: 1,
+      }),
+    }))
+  })
+
   it('attributes execution to the provider-reported model when it differs from configuration', async () => {
     const request = vi.fn(async () => completion(
       '{"ok":true}',

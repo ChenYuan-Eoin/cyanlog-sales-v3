@@ -30,8 +30,9 @@ function baseReviewData(overrides: Partial<WorkbenchReviewDataLike> = {}): Workb
         },
         second_verification_required: true,
         official_review_allowed: true,
-        eval_status: 'passed',
-        runtime_eval_status: 'latest_review_model_invocation_passed',
+        rule_acceptance_status: 'passed',
+        model_quality_eval_status: 'passed',
+        runtime_invocation_status: 'latest_review_model_invocation_passed',
       },
       model_policy: {
         degraded: false,
@@ -188,5 +189,69 @@ describe('review workbench state', () => {
     expect(health.issues.join('\n')).toContain('审核执行发生降级：rule-engine')
     expect(health.exportBlocked).toBe(false)
     expect(gateIssues).toEqual([])
+  })
+
+  it('keeps rule acceptance, model-quality gold and runtime invocation independent', () => {
+    const base = baseReviewData()
+    if (!base.reviewRun?.skill_bundle) throw new Error('base review must include a skill bundle')
+    const data = baseReviewData({
+      reviewRun: {
+        ...base.reviewRun,
+        skill_bundle: {
+          ...base.reviewRun.skill_bundle,
+          rule_acceptance_status: 'passed',
+          model_quality_eval_status: 'blocked_without_independent_gold',
+          runtime_invocation_status: 'latest_review_model_invocation_passed',
+        },
+      },
+    })
+
+    const health = buildReviewHealth(data)
+
+    expect(health.issues.join('\n')).toContain('模型质量金标评测状态为 blocked_without_independent_gold')
+    expect(health.issues.join('\n')).not.toContain('规则验收状态')
+    expect(health.issues.join('\n')).not.toContain('语义模型调用未通过')
+  })
+
+  it('reports missing rule acceptance and missing semantic invocation as separate blockers', () => {
+    const base = baseReviewData()
+    if (!base.reviewRun?.skill_bundle) throw new Error('base review must include a skill bundle')
+    const data = baseReviewData({
+      reviewRun: {
+        ...base.reviewRun,
+        skill_bundle: {
+          ...base.reviewRun.skill_bundle,
+          rule_acceptance_status: null,
+          model_quality_eval_status: 'passed',
+          runtime_invocation_status: 'semantic_invocation_not_recorded',
+        },
+      },
+    })
+
+    const issues = buildReviewHealth(data).issues.join('\n')
+
+    expect(issues).toContain('规则验收状态为 missing')
+    expect(issues).toContain('本次 ReviewRun 未记录语义模型调用')
+  })
+
+  it.each([null, 'unexpected_runtime_state'])('fails closed for an absent or unknown runtime invocation status: %s', (runtimeStatus) => {
+    const base = baseReviewData()
+    if (!base.reviewRun?.skill_bundle) throw new Error('base review must include a skill bundle')
+    const data = baseReviewData({
+      reviewRun: {
+        ...base.reviewRun,
+        skill_bundle: {
+          ...base.reviewRun.skill_bundle,
+          rule_acceptance_status: 'passed',
+          model_quality_eval_status: 'passed',
+          runtime_invocation_status: runtimeStatus,
+        },
+      },
+    })
+
+    const health = buildReviewHealth(data)
+
+    expect(health.degraded).toBe(true)
+    expect(health.issues.join('\n')).toContain(`语义模型调用状态为 ${runtimeStatus || 'missing'}`)
   })
 })

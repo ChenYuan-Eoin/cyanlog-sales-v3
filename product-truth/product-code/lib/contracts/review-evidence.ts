@@ -242,10 +242,10 @@ export type ReviewRunEvidence = {
       rule_set_count: number | null
       rule_set_document_count: number | null
       official_review_allowed: boolean
-      eval_status: string | null
+      rule_acceptance_status: string | null
+      model_quality_eval_status: string | null
+      runtime_invocation_status: string | null
       eval_gate: string | null
-      static_eval_status: string | null
-      runtime_eval_status: string | null
       eval_note: string | null
       eval_total_cases: number | null
     eval_passed_cases: number | null
@@ -680,21 +680,21 @@ function invocationSortValue(invocation: ReviewEvidenceModelInvocation): number 
   return new Date(invocation.created_at || 0).getTime()
 }
 
-type RuntimeModelEvalSummary = {
+type RuntimeInvocationSummary = {
   status: string | null
   note: string | null
   invocation_id: string | null
 }
 
-function deriveRuntimeModelEvalStatus(
+function deriveRuntimeInvocationStatus(
   modelInvocations: ReviewEvidenceModelInvocation[]
-): RuntimeModelEvalSummary {
+): RuntimeInvocationSummary {
   const semanticInvocation = representativeInvocation(
     modelInvocations.filter(isSemanticInvocation)
   )
   if (!semanticInvocation) {
     return {
-      status: 'model_quality_eval_not_run',
+      status: 'semantic_invocation_not_recorded',
       note: 'No semantic_review model invocation was recorded for the latest ReviewRun.',
       invocation_id: null,
     }
@@ -705,9 +705,15 @@ function deriveRuntimeModelEvalStatus(
   const transport = stringValue(responseMeta?.transport)
   const warningCount = Array.isArray(responseMeta?.validation_warnings)
     ? responseMeta.validation_warnings.length
-    : 0
-  const droppedRiskCount = numberValue(responseMeta?.dropped_risk_count) ?? 0
+    : null
+  const droppedRiskCount = numberValue(responseMeta?.dropped_risk_count)
   const usableRiskCount = numberValue(responseMeta?.usable_risk_count)
+  const validationItemKind = stringValue(responseMeta?.validation_item_kind)
+  const validationAuditComplete = validationItemKind === 'risk'
+    && warningCount !== null
+    && droppedRiskCount !== null
+    && Number.isSafeInteger(droppedRiskCount)
+    && droppedRiskCount >= 0
 
   if (semanticInvocation.plan_snapshot_id) {
     const tokenAccountingValid = typeof semanticInvocation.input_tokens === 'number'
@@ -721,13 +727,18 @@ function deriveRuntimeModelEvalStatus(
     if (
       semanticInvocation.status === 'completed'
       && !semanticInvocation.degraded
+      && providerKind === 'openai_compatible'
+      && transport === 'openai_compatible_http'
       && tokenAccountingValid
       && outputValidated
       && tokenEvidence
+      && validationAuditComplete
+      && warningCount === 0
+      && droppedRiskCount === 0
     ) {
       return {
         status: 'latest_review_model_invocation_passed',
-        note: `Latest plan-bound semantic invocation completed with ${semanticInvocation.total_tokens} provider-reported token(s) and passed output validation.`,
+        note: `Latest plan-bound semantic invocation completed over OpenAI-compatible HTTP with ${semanticInvocation.total_tokens} provider-reported token(s), no dropped risk, and no validation warning.`,
         invocation_id: semanticInvocation.id,
       }
     }
@@ -735,7 +746,7 @@ function deriveRuntimeModelEvalStatus(
     if (semanticInvocation.status === 'completed') {
       return {
         status: 'latest_review_model_invocation_partial',
-        note: `Latest plan-bound semantic invocation completed, but fallback, token accounting or output validation requires review.`,
+        note: `Latest plan-bound semantic invocation completed, but transport, fallback, token accounting, output validation, validation audit (${warningCount ?? 'missing'} warning(s), ${droppedRiskCount ?? 'missing'} dropped risk(s)) requires review.`,
         invocation_id: semanticInvocation.id,
       }
     }
@@ -752,6 +763,7 @@ function deriveRuntimeModelEvalStatus(
     && !semanticInvocation.degraded
     && providerKind === 'openai_compatible'
     && transport === 'openai_compatible_http'
+    && validationAuditComplete
     && warningCount === 0
     && droppedRiskCount === 0
   ) {
@@ -769,6 +781,7 @@ function deriveRuntimeModelEvalStatus(
     && !semanticInvocation.degraded
     && providerKind === 'openai_compatible'
     && transport === 'lm_studio_cli'
+    && validationAuditComplete
     && warningCount === 0
     && droppedRiskCount === 0
   ) {
@@ -801,7 +814,7 @@ function deriveRuntimeModelEvalStatus(
 function buildSkillBundleSummary(
   skillBundle: ReviewEvidenceSkillBundle,
   refs: RuleSnapshotRef[],
-  runtimeModelEval: RuntimeModelEvalSummary
+  runtimeInvocation: RuntimeInvocationSummary
 ): ReviewRunEvidence['skill_bundle'] {
   if (!skillBundle) return null
 
@@ -814,6 +827,7 @@ function buildSkillBundleSummary(
   const commentTemplate = nestedRecord(compiledFrom, 'comment_template')
   const evalResults = nestedRecord(compiledFrom, 'eval_results')
   const ruleTranslationGate = nestedRecord(compiledFrom, 'rule_translation_gate')
+  const ruleSetSnapshotGate = nestedRecord(compiledFrom, 'rule_set_snapshot_gate')
   const ruleSetDocumentGate = nestedRecord(compiledFrom, 'rule_set_document_gate')
   const releaseMeta = asRecord(skillBundle.release_meta)
   const referenceAssetItems = Array.isArray(compiledFrom?.reference_assets)
@@ -826,12 +840,18 @@ function buildSkillBundleSummary(
       .filter((item): item is string => Boolean(item))
   const ruleTranslationStatus = stringValue(ruleTranslationGate?.status)
   const ruleSetDocumentStatus = stringValue(ruleSetDocumentGate?.status)
-  const evalStatus = stringValue(evalResults?.status)
+  // Historical bundles used one aggregate `status`. New bundles keep three
+  // independent facts: deterministic rule acceptance, independent-gold model
+  // quality, and the semantic invocation performed by this ReviewRun.
+  const ruleAcceptanceStatus = stringValue(evalResults?.rule_acceptance_status)
+    || stringValue(evalResults?.status)
+  const modelQualityEvalStatus = stringValue(evalResults?.model_quality_eval_status)
   const officialReviewAllowed = Boolean(releaseMeta?.official_review_allowed)
     && skillBundle.status === 'published'
     && ruleTranslationStatus === 'ready'
+    && stringValue(ruleSetSnapshotGate?.status) === 'ready'
     && ruleSetDocumentStatus === 'ready'
-    && evalStatus === 'passed'
+    && ruleAcceptanceStatus === 'passed'
 
   return {
     id: skillBundle.id,
@@ -871,11 +891,11 @@ function buildSkillBundleSummary(
     rule_set_count: numberValue(ruleSetDocumentGate?.total_rule_sets),
     rule_set_document_count: numberValue(ruleSetDocumentGate?.ready_documents),
     official_review_allowed: officialReviewAllowed,
-    eval_status: evalStatus,
+    rule_acceptance_status: ruleAcceptanceStatus,
+    model_quality_eval_status: modelQualityEvalStatus,
+    runtime_invocation_status: runtimeInvocation.status,
     eval_gate: stringValue(evalResults?.gate),
-    static_eval_status: stringValue(evalResults?.static_eval_status),
-    runtime_eval_status: runtimeModelEval.status || stringValue(evalResults?.runtime_eval_status),
-    eval_note: runtimeModelEval.note || stringValue(evalResults?.note),
+    eval_note: runtimeInvocation.note || stringValue(evalResults?.note),
     eval_total_cases: numberValue(evalResults?.total_cases),
     eval_passed_cases: numberValue(evalResults?.passed_cases),
     eval_failed_cases: arrayOfStrings(evalResults?.failed_cases),
@@ -1243,7 +1263,7 @@ export function buildReviewRunEvidence(input: {
     skill_bundle: buildSkillBundleSummary(
       skillBundle ?? null,
       refs,
-      deriveRuntimeModelEvalStatus(modelInvocations)
+      deriveRuntimeInvocationStatus(modelInvocations)
     ),
     model_policy: {
       id: modelPolicyId,

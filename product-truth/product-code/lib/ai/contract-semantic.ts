@@ -316,6 +316,12 @@ export async function executeContractSemanticReview(
               warnings: validation.warnings || [],
               droppedRisks: validation.droppedRisks || 0,
             },
+            evidence: {
+              itemKind: 'risk',
+              validationWarnings: validation.warnings || [],
+              droppedItemCount: validation.droppedRisks || 0,
+              usableItemCount: validation.data.risks.length,
+            },
           }
         : { ok: false, error: validation.error || '合同语义输出未通过校验' }
     },

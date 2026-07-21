@@ -1,66 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/auth', () => ({
-  requireAuth: vi.fn(),
-}))
-
-vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: {
-    from: vi.fn(),
-  },
-}))
-
-vi.mock('@/lib/rules/engine', () => ({
-  executeRules: vi.fn(),
-}))
+vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
 
 import { requireAuth } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase'
-import { executeRules } from '@/lib/rules/engine'
 import { POST } from './route'
 
-function makeMalformedRequest(): any {
-  return {
-    json: async () => {
-      throw new SyntaxError('Unexpected token')
-    },
-    method: 'POST',
-    headers: new Headers({ 'content-type': 'application/json' }),
-  }
-}
-
-function makeJsonRequest(body: unknown): any {
-  return {
-    json: async () => body,
-    method: 'POST',
-    headers: new Headers({ 'content-type': 'application/json' }),
-  }
-}
-
-describe('POST /api/rules/simulate validation', () => {
+describe('legacy /api/rules/simulate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
+    vi.mocked(requireAuth).mockResolvedValue({ id: 'user-1' } as never)
   })
 
-  it('无效 JSON 返回参数错误且不访问规则引擎和数据库', async () => {
-    const res = await POST(makeMalformedRequest())
-    const body = await res.json()
+  it('rejects the A/B/C facade and points to snapshot-backed rule testing', async () => {
+    const response = await POST({} as never)
+    const body = await response.json()
 
-    expect(res.status).toBe(400)
-    expect(body.error).toBe('请提供合同文本')
-    expect(executeRules).not.toHaveBeenCalled()
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
-  })
-
-  it('字段类型错误返回参数错误且不访问规则引擎和数据库', async () => {
-    const res = await POST(makeJsonRequest({ text: 123 }))
-    const body = await res.json()
-
-    expect(res.status).toBe(400)
-    expect(body.error).toBe('请提供合同文本')
-    expect(executeRules).not.toHaveBeenCalled()
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(response.status).toBe(410)
+    expect(body.code).toBe('RULE_CONTROL_PLANE_MOVED')
+    expect(body.canonicalEndpoint).toBe('/api/rules/test')
+    expect(body.error).toContain('旧模拟')
   })
 })

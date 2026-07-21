@@ -28,8 +28,15 @@ export type AIExecutionUsage = Readonly<{
   evidence: 'provider' | 'missing'
 }>
 
+export type AIOutputValidationEvidence = Readonly<{
+  itemKind: string
+  validationWarnings: readonly string[]
+  droppedItemCount: number
+  usableItemCount: number
+}>
+
 export type AIOutputValidation<T> =
-  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: true; value: T; evidence?: AIOutputValidationEvidence }>
   | Readonly<{ ok: false; error: string }>
 
 export interface AIExecutionAttemptRecord {
@@ -158,6 +165,41 @@ function safePositiveInteger(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
     ? value
     : null
+}
+
+function outputValidationResponseMeta(
+  evidence: AIOutputValidationEvidence | undefined,
+): JsonRecord {
+  if (!evidence) return {}
+  const itemKind = typeof evidence.itemKind === 'string' ? evidence.itemKind.trim() : ''
+  const warnings = evidence.validationWarnings
+  const droppedItemCount = safePositiveInteger(evidence.droppedItemCount)
+  const usableItemCount = safePositiveInteger(evidence.usableItemCount)
+  if (
+    !/^[a-z][a-z0-9_]{0,63}$/.test(itemKind)
+    || !Array.isArray(warnings)
+    || warnings.some((warning) => typeof warning !== 'string')
+    || droppedItemCount === null
+    || usableItemCount === null
+  ) {
+    throw new CandidateAttemptError(
+      'OUTPUT_VALIDATION_EVIDENCE_INVALID',
+      '模型输出校验器未返回完整、可审计的质量计数。',
+    )
+  }
+
+  const normalizedWarnings = warnings.slice(0, 50).map((warning) => warning.slice(0, 500))
+  return {
+    validation_audit_version: '1',
+    validation_item_kind: itemKind,
+    validation_warnings: normalizedWarnings,
+    dropped_item_count: droppedItemCount,
+    usable_item_count: usableItemCount,
+    ...(itemKind === 'risk' ? {
+      dropped_risk_count: droppedItemCount,
+      usable_risk_count: usableItemCount,
+    } : {}),
+  }
 }
 
 function readUsage(payload: unknown): AIExecutionUsage {
@@ -533,11 +575,14 @@ export async function executeAIUsePoint<T = string>(
         },
         responseMeta: {
           ...modelIdentityResponseMeta(candidate.modelId, reportedModel),
+          provider_kind: candidate.providerType,
+          transport: 'openai_compatible_http',
           finish_reason: parsed.finishReason,
           output_sha256: outputHash(parsed.text),
           output_character_count: parsed.text.length,
           output_validation: 'passed',
           token_evidence: parsed.usage.evidence,
+          ...outputValidationResponseMeta(validation.evidence),
         },
         errorMessage: null,
         startedAt,

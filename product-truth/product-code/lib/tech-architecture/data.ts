@@ -124,12 +124,12 @@ return response.json();`,
   },
   {
     name: '异步调用',
-    description: '适用于耗时操作（如 AI 审核）',
-    code: `const task = await fetch('/api/contracts/analyze', {
+    description: '适用于耗时操作（如绑定源文件与 ReviewRun 的 AI 审核）',
+    code: `const task = await fetch(\`/api/contracts/\${contractId}/analyze\`, {
   method: 'POST',
-  body: JSON.stringify({ contractId }),
+  headers: { Authorization: \`Bearer \${token}\` },
 });
-return task.json(); // { taskId, status: 'PENDING' }`,
+return task.json(); // ReviewRun/job；后续读取 model_invocations、token 与计划快照证据`,
   },
   {
     name: '事件驱动',
@@ -148,7 +148,7 @@ eventBus.on('QuoteCreated', async (event) => {
 
 export const deploymentComparison = {
   dev: ['Next.js Dev Server (localhost:3000)', 'Supabase (localhost:54321)', 'Redis (localhost:6379)', 'MinIO (localhost:9000)', 'LM Studio (localhost:1234)'],
-  prod: ['Vercel (Next.js)', 'Supabase (PostgreSQL + Auth)', 'Upstash (Redis)', 'AWS S3 (文件存储)', 'LM Studio (本地服务器)'],
+  prod: ['Vercel (Next.js)', 'Supabase (PostgreSQL + Auth)', 'Upstash (Redis)', 'AWS S3 (文件存储)', '公网可达 AI Gateway / Provider（RoutePolicy 路由）'],
 }
 
 // ============ 9 个章节标题 ============

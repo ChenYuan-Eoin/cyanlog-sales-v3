@@ -226,6 +226,7 @@ export interface ContractRuleSet {
   translation_status: ContractRuleSetTranslationStatus
   published_at?: string | null
   published_by?: string | null
+  current_snapshot_id?: string | null
   release_note?: string | null
   metadata?: unknown
   created_by?: string | null

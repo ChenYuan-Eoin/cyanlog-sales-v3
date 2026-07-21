@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-21T12:05:00+08:00",
+  "updated_at": "2026-07-21T14:16:47+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -134,7 +134,7 @@
     "kind": "product",
     "status": "active",
     "objective": "把现有为了展示树而形成的规则管理重建为可发布、可审计、可被业务消费的产品模型：规则集定义场景发布边界，问题分类组织业务问题，具体规则表达明确判断，规则详情配置金额、比例、时间、枚举等通用业务属性及运算符、阈值、风险与处理动作；语义能力只在运行时定位原文和读取事实，不在配置时把规则变成模糊 Prompt。",
-    "current_step": "盘点隔离 Preview 中 15 条规则、39 个发布规则快照、34 个发布规则集快照、13 个规则文档和 23 个 SkillBundle，复现当前 v21 的 15 个无效快照并逐条归因；在不改历史快照的前提下，通过 forward-only schema/API 建立规则集→问题分类→具体规则→规则详情→业务属性→判定与处理合同，再修复并发布可编译候选。",
+    "current_step": "WP03 技术实现、隔离 Preview 迁移、历史不可变性校验、规则管理桌面/iPad 验收与独立复审均已通过；现有 R001-R015 只形成逐条业务确认草案，未伪造 confirmed 合同、current SkillBundle 或正式 ReviewRun。当前只等待用户对推荐 V1 业务口径的一次确认；确认后原子发布 RuleSet/SkillBundle，并以真实合同 ReviewRun 验证规则与 WP02 模型计划同时生效。",
     "started_at": "2026-07-21T12:05:00+08:00",
     "activation_basis": "WP02 已由提交 c25ec17a8e51ec6476432ccccf9c30ee0dd9553b 完成五个业务用点、真实本地/云端调用、RoutePolicy 降级、token、model_invocations、不可漂移计划和真实合同 ReviewRun 证据；当前 ReviewRun 的明确阻断是现有发布规则资产无法编译。IN-20260721-053 记录本次切换。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
@@ -148,7 +148,7 @@
       "product-truth/00-master/PROJECT-主文档.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
       "product-truth/feature-packets/F006-contract-review-skill-runtime.md",
-      "product-truth/feature-packets/F009-contract-rules-knowledge.md",
+      "product-truth/feature-packets/F009-contract-rule-config.md",
       "product-truth/product-code/app/configs",
       "product-truth/product-code/app/contracts",
       "product-truth/product-code/app/api/contract-policies",
@@ -162,6 +162,16 @@
       "product-truth/product-code/lib/contracts/skill-bundle.test.ts",
       "product-truth/product-code/lib/contract-analysis.ts",
       "product-truth/product-code/lib/contract-analysis.test.ts",
+      "product-truth/product-code/lib/ai/runtime-executor.ts",
+      "product-truth/product-code/lib/ai/runtime-executor.test.ts",
+      "product-truth/product-code/lib/ai/contract-semantic.ts",
+      "product-truth/product-code/lib/ai/contract-semantic.test.ts",
+      "product-truth/product-code/lib/contracts/review-evidence.ts",
+      "product-truth/product-code/lib/contracts/review-evidence.test.ts",
+      "product-truth/product-code/lib/contracts/review-workbench-state.ts",
+      "product-truth/product-code/lib/contracts/review-workbench-state.test.ts",
+      "product-truth/product-code/docs/rule-framework-design.md",
+      "product-truth/product-code/lib/tech-architecture/data.ts",
       "product-truth/product-code/types",
       "product-truth/product-code/supabase/migrations",
       "product-truth/product-code/output/evidence/wp03"
@@ -270,6 +280,23 @@
     ]
   },
   "verification": {
+    "wp03_rule_collection_20260721": {
+      "status": "technical_preview_passed_business_confirmation_required",
+      "preview": "隔离项目 vsfropnfsmnonkotywsx 已应用三份 forward-only 迁移：唯一 active/default STANDARD_SALES_CONTRACT_REVIEW 含 R001-R015 共 15 个成员，生成 15 份与当前版本对齐的业务确认草案；confirmed rule_contracts、current SkillBundle 和 preview_candidate channel 均为 0，未把未确认规则冒充可发布资产",
+      "history": "23 个 SkillBundle、71 个既有规则快照、34 个规则集快照、7 个测试运行和 39 个发布快照的数量与聚合指纹在迁移前后完全一致；13 个历史分类形规则集与受控 canary 只被归档，历史不可变记录未改写",
+      "runtime": "ReviewRun 证据门禁改为 fail-closed：必须绑定计划内、completed、not-degraded 的 OpenAI-compatible HTTP 调用，具有 token、provider、输出验证和风险输出审计；缺字段、警告、丢弃项或不可用风险项均不得通过",
+      "browser": "规则管理页在桌面 1200x818 与 iPad 1024x768 通过，无横向溢出、白块/固定遮罩或控制台错误；页面明确显示结构完整但待发布验收，不再把规则详情误标为已确认",
+      "engineering": "199 个测试文件通过、2 个跳过；1411 个测试通过、5 个跳过；目标 6 文件 106 测试、lint、typecheck、Next build 76/76 pages、Harness selftest、迁移回滚重放和独立代码复审通过",
+      "audit": "独立复审确认 SkillBundle 文档引用、ReviewRun 假绿、工作台未知状态放行、迁移 NULL 绕过和 canary 并发窗口均已关闭，无新增 P0/P1；最终迁移源在 Preview 事务中重放并回滚验证",
+      "business_gate": "R001-R015 的金额、比例、期限、风险级别、证据不足动作和处理建议会直接改变合同判断结果；推荐 V1 已给出：通用证据不足进入人工复核，R006 拆 3 条，R010 至少拆 5 条，R003/R012/R015 强制专业人工复核，其余历史阈值只作为组织可配置默认值",
+      "evidence": [
+        "product-truth/product-code/output/evidence/wp03/preview-apply-proof.md",
+        "product-truth/product-code/output/evidence/wp03/r001-r015-business-confirmation-candidates.md",
+        "product-truth/product-code/output/playwright/wp03/desktop-rules-final.png",
+        "product-truth/product-code/output/playwright/wp03/ipad-rules-final.png"
+      ],
+      "boundary": "尚未获得会改变业务结果的 V1 口径确认，因此未发布正式 RuleSet/SkillBundle，也未制造虚假 ReviewRun；Production 数据库保持只读，未 push 或部署 Production"
+    },
     "wp02_ai_runtime_20260721": {
       "status": "passed_preview_runtime_accuracy_blocked",
       "commit": "c25ec17a8e51ec6476432ccccf9c30ee0dd9553b",

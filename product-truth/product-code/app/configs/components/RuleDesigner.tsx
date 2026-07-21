@@ -433,7 +433,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
 
       {initialConfigurationStatus === 'legacy_compatible' ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-900">
-          这是一条旧规则。系统仍可按旧协议兼容运行，但这里展示的是迁移草稿；请逐项确认属性、判定和处理后保存，再完成测试矩阵并随规则集发布。
+          这是一条待迁移的历史规则。历史审核只能按当时冻结的旧快照回放；当前迁移草稿不能用于新的正式审核。请逐项确认属性、判定和处理，保存并完成测试矩阵，再随规则集统一发布。
         </div>
       ) : null}
 

@@ -33,7 +33,7 @@ interface RuleTabProps {
   focusRuleId?: string | null
   ruleMode?: string | null
   onSave: (rule: Partial<ContractPolicyRule>, id?: string) => void | ContractPolicyRule | Promise<void | ContractPolicyRule>
-  onDelete: (id: string) => void
+  onDelete: (id: string) => Promise<boolean>
   onRefresh?: () => void | Promise<void>
 }
 
@@ -453,8 +453,17 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
     }
   }
 
-  const ruleSetSummary = selectedRuleSet
-    ? `v${selectedRuleSet.version} · ${selectedRuleSet.lifecycle_status === 'published' ? '已发布' : selectedRuleSet.lifecycle_status === 'ready_to_publish' ? '待发布' : '草稿'} · ${selectedRuleSet.rule_count || 0} 条规则 · 验收 ${selectedRuleSet.passed_test_case_count || 0}/${selectedRuleSet.required_test_case_count || 0}`
+  const ruleSetReleaseState = selectedRuleSet
+    ? selectedRuleSet.current_snapshot_id && selectedRuleSet.lifecycle_status !== 'published'
+      ? `线上发布版本仍在生效 · 草稿 v${selectedRuleSet.version} 待发布`
+      : selectedRuleSet.lifecycle_status === 'published'
+        ? `线上 v${selectedRuleSet.version} 已发布`
+        : selectedRuleSet.lifecycle_status === 'ready_to_publish'
+          ? `草稿 v${selectedRuleSet.version} 待首次发布`
+          : `草稿 v${selectedRuleSet.version} 尚未发布`
+    : null
+  const ruleSetSummary = selectedRuleSet && ruleSetReleaseState
+    ? `${ruleSetReleaseState} · ${selectedRuleSet.rule_count || 0} 条规则 · 验收 ${selectedRuleSet.passed_test_case_count || 0}/${selectedRuleSet.required_test_case_count || 0}`
     : '尚未创建规则集'
 
   return (
@@ -640,7 +649,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                           : 'bg-amber-50 text-amber-700'
                       }`}>
                         {configurationStatus === 'canonical_complete'
-                          ? '规则详情已确认'
+                          ? '结构完整 · 待发布验收'
                           : configurationStatus === 'legacy_compatible'
                             ? '旧规则待业务确认'
                             : '待补属性或判定'}
@@ -683,11 +692,15 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                       <Button type="button" variant="outline" size="sm" onClick={openTestWorkspace}>
                         <Settings2Icon className="mr-1 h-4 w-4" />测试
                       </Button>
-                      <Button type="button" variant="outline" size="sm" className="text-rose-600" onClick={() => {
+                      <Button type="button" variant="outline" size="sm" className="text-rose-600" onClick={async () => {
                         if (!confirmLeaveDirtyRule()) return
+                        const stopped = await onDelete(selectedRule.id)
+                        if (!stopped) return
                         setDetailDirty(false)
-                        onDelete(selectedRule.id)
-                        setSelectedRule(null)
+                        setFeedback({
+                          tone: 'success',
+                          message: '规则已标记为待停用；当前线上版本会保留到所属规则集完成下一次统一发布。',
+                        })
                       }}>
                         <Trash2Icon className="mr-1 h-4 w-4" />停用
                       </Button>

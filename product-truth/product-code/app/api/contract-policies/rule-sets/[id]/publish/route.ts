@@ -14,6 +14,15 @@ const schema = z.object({
 
 function publicationErrorMessage(message: string) {
   const ruleCode = message.split(':')[1]?.split(/\s/)[0] || '规则'
+  if ([
+    'RULE_PUBLISHED_ACCEPTANCE_BINDING_MISSING',
+    'RULE_PUBLISHED_ACCEPTANCE_DRAFT_INVALID',
+    'RULE_PUBLISHED_ACCEPTANCE_BINDING_INVALID',
+    'RULE_SET_CURRENT_SNAPSHOT_INVALID',
+    'RULE_SET_FROZEN_ACCEPTANCE_INVALID',
+  ].some((code) => message.includes(code))) {
+    return '当前线上规则集验收证据链损坏，已阻止发布，请管理员恢复快照证据'
+  }
   if (message.includes('RULE_SET_EMPTY')) return '规则集没有可发布的规则'
   if (message.includes('RULE_TEST_EVIDENCE_MISSING:')) {
     return `${message.split('RULE_TEST_EVIDENCE_MISSING:')[1]?.split(/\s/)[0] || '规则'} 缺少当前版本的测试记录`

@@ -157,4 +157,55 @@ describe('POST /api/contract-policies/rule-sets/[id]/publish', () => {
     expect(body.error.message).toContain('rule_contract.risk_handling')
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
+
+  it.each([
+    'RULE_PUBLISHED_ACCEPTANCE_BINDING_MISSING:PAYMENT_MINIMUM',
+    'RULE_PUBLISHED_ACCEPTANCE_DRAFT_INVALID:PAYMENT_MINIMUM',
+    'RULE_PUBLISHED_ACCEPTANCE_BINDING_INVALID:PAYMENT_MINIMUM',
+    'RULE_SET_CURRENT_SNAPSHOT_INVALID',
+    'RULE_SET_FROZEN_ACCEPTANCE_INVALID',
+  ])('maps %s to one safe snapshot-evidence recovery message', async (databaseMessage) => {
+    const ruleSetQuery = queryResult({
+      data: { id: ruleSetId, name: '标准销售合同', lifecycle_status: 'ready_to_publish' },
+      error: null,
+    })
+    const rulesQuery = queryResult({
+      data: [{
+        id: 'rule-1',
+        code: 'PAYMENT_MINIMUM',
+        name: '合同金额底线',
+        org_id: '11111111-1111-4111-8111-111111111111',
+        rule_set_id: ruleSetId,
+        problem_category_id: '44444444-4444-4444-8444-444444444444',
+        business_domain: 'contract_review',
+        applicable_scenarios: ['standard_contract_review'],
+        scope: 'org',
+        is_active: true,
+        lifecycle_status: 'ready_to_publish',
+        translation_status: 'ready',
+        rule_contract: {
+          schema_version: '1.0',
+          properties: [{ key: 'contract_amount', label: '合同金额', type: 'money', required: true, currency: 'CNY' }],
+          decisions: [{
+            id: 'amount_block', label: '低于底线', outcome: 'block', priority: 100, match: 'all',
+            conditions: [{ property_key: 'contract_amount', operator: '<', value: 50000 }],
+            action: '提交例外审批', message: '合同金额低于五万元。',
+          }],
+          missing_evidence_outcome: 'manual_review',
+        },
+      }],
+      error: null,
+    })
+    mocks.from.mockImplementation((table: string) => (
+      table === 'contract_rule_sets' ? ruleSetQuery : rulesQuery
+    ))
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: databaseMessage } })
+
+    const response = await POST(request({}), { params: Promise.resolve({ id: ruleSetId }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.message).toBe('当前线上规则集验收证据链损坏，已阻止发布，请管理员恢复快照证据')
+    expect(body.error.message).not.toContain(databaseMessage)
+  })
 })

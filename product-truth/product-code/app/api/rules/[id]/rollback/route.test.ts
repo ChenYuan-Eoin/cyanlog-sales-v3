@@ -1,70 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/auth', () => ({
-  requireAuth: vi.fn(),
-}))
-
-vi.mock('@/lib/scoped-access', () => ({
-  getDefaultOrgId: vi.fn(),
-}))
-
-vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: {
-    from: vi.fn(),
-  },
-}))
+vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
 
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
-import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
-function makeMalformedRequest(): any {
-  return {
-    json: async () => {
-      throw new SyntaxError('Unexpected token')
-    },
-    method: 'POST',
-    headers: new Headers({ 'content-type': 'application/json' }),
-  }
-}
-
-function makeJsonRequest(body: unknown): any {
-  return {
-    json: async () => body,
-    method: 'POST',
-    headers: new Headers({ 'content-type': 'application/json' }),
-  }
-}
-
-describe('POST /api/rules/[id]/rollback validation', () => {
+describe('legacy /api/rules/[id]/rollback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
+    vi.mocked(requireAuth).mockResolvedValue({ id: 'user-1' } as never)
   })
 
-  it('无效 JSON 返回参数错误且不访问组织和数据库', async () => {
-    const res = await POST(makeMalformedRequest(), {
-      params: Promise.resolve({ id: 'rule-1' }),
-    })
-    const body = await res.json()
+  it('rejects independent rollback that would create a mixed release', async () => {
+    const response = await POST({} as never)
+    const body = await response.json()
 
-    expect(res.status).toBe(400)
-    expect(body.error).toBe('请指定回滚目标版本')
-    expect(getDefaultOrgId).not.toHaveBeenCalled()
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
-  })
-
-  it('字段类型错误返回参数错误且不访问组织和数据库', async () => {
-    const res = await POST(makeJsonRequest({ version: '1' }), {
-      params: Promise.resolve({ id: 'rule-1' }),
-    })
-    const body = await res.json()
-
-    expect(res.status).toBe(400)
-    expect(body.error).toBe('请指定回滚目标版本')
-    expect(getDefaultOrgId).not.toHaveBeenCalled()
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(response.status).toBe(410)
+    expect(body.code).toBe('RULE_CONTROL_PLANE_MOVED')
+    expect(body.error).toContain('单条回滚')
+    expect(body.canonicalEndpoint).toBe('/api/contract-policies/rule-sets')
   })
 })

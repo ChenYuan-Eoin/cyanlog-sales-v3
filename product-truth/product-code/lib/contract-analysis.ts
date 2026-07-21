@@ -816,7 +816,7 @@ function stringValue(value: unknown): string | null {
 function skillBundleEvalStatus(skillBundle: ContractSkillBundle | null): string | null {
   if (!skillBundle) return null
   const evalResults = recordValue(recordValue(skillBundle.compiled_from).eval_results)
-  return stringValue(evalResults.status)
+  return stringValue(evalResults.rule_acceptance_status)
 }
 
 function booleanValue(value: unknown): boolean | null {

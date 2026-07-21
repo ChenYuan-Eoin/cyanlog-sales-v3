@@ -2,7 +2,7 @@
 
 **Status**: active_work_package_ledger
 **Updated**: 2026-07-21
-**Ledger Version**: v2026-07-21.02
+**Ledger Version**: v2026-07-21.03
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
 
@@ -23,7 +23,7 @@
 | WP00 | goal-baseline-consolidation | G1/G10/G11 | Completed / `18dad230` | 已统一编号、真相源、Harness 和候选分支治理快照 |
 | WP01 | ai-platform-foundation | G4；支撑 G3/G7 | Completed / `4269840f` | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
 | WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Completed / `c25ec17a` | 五业务用点、真实 invocation/token、ReviewRun、降级、route/pinned 证据 |
-| WP03 | rule-collection | G3/G4；支撑 G7/G10 | **Active** / repair_invalid_published_rule_assets | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
+| WP03 | rule-collection | G3/G4；支撑 G7/G10 | **Active** / technical_preview_passed_business_confirmation_required | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | contract-center-ia | G6；支撑 G8 | needs_reacceptance | 合同中心入口、任务身份、版本和下一步 |
 | WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | parked / NO-GO | 新源文件、事前独立金标、文件版本、风险迁移与循环复审 |
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
@@ -66,3 +66,13 @@ Production 数据库继续只读；WP01/WP02 未部署 Production，也未覆盖
 证据索引：`product-code/output/evidence/wp02/README.md`。WP02 完成提交为 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b`。
 
 **当前与下游门禁**：Active WP03 修复规则资产和规则集合产品模型；WP05 恢复后处理交互纠偏与独立金标准确率；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、Hosted 路由和正式发布。
+
+## 5. WP03 当前证据与唯一产品门（2026-07-21）
+
+- 领域模型已固定为 `RuleSet → ProblemCategory → Rule → RuleDetail → 业务属性 → 判定与处理`；问题分类只组织问题，模型只在运行时读取已定义属性和原文证据。
+- 隔离 Preview 已保留全部历史快照/测试/Bundle 内容，并形成 `1` 个场景规则集、`15` 个成员、`15` 个版本对齐待确认草稿和 `13` 个业务分类；旧 current Bundle 与受控验收噪音均已退出当前指针。
+- ReviewRun 运行门禁已打通执行器到证据页：Provider、HTTP transport、Provider token、输出校验、warning/drop/usable 审计字段必须齐全；缺字段或未知状态失败关闭。
+- 全量门禁为 `199` 个测试文件 / `1411` 项测试通过（另有 `2` 文件 / `5` 个真实 live 测试按默认策略跳过），lint、typecheck、76-page build、Harness selftest、文档治理、桌面/iPad 与独立终审通过。Harness strict doctor 为 `0 failure / 2 warning`：项目 hook 信任仍需在 Codex UI 复核，因此不把项目级 hooks 声称为已加载生效。
+- 证据索引：`product-code/output/evidence/wp03/preview-apply-proof.md`；业务候选：`product-code/output/evidence/wp03/r001-r015-business-confirmation-candidates.md`。
+
+**唯一未关闭项是产品规则确认，不是技术授权**：R001–R015 当前仍为 `0` 个已确认 `rule_contract`，所以不得发布正式 RuleSet/SkillBundle 或声称真实 ReviewRun 已消费新规则。推荐 V1 一次确认：接受公共缺证据转人工复核口径；R006 拆三条、R010 至少拆五条；R003/R012/R015 在财税/隐私/法务口径确认前强制人工复核；其余旧阈值只作为当前组织可配置默认值，不作为普遍法律真相。确认后立即进入测试矩阵、原子发布、真实合同 ReviewRun 和证据绑定，不再追加技术选择题。

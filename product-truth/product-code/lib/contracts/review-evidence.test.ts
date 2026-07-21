@@ -621,7 +621,9 @@ describe('buildReviewRunEvidence', () => {
           rule_translation_status: 'ready',
           rule_translation_ready: true,
           official_review_allowed: false,
-          eval_status: 'runtime_eval_not_run',
+          rule_acceptance_status: 'runtime_eval_not_run',
+          model_quality_eval_status: null,
+          runtime_invocation_status: 'latest_review_model_invocation_not_passed',
           eval_gate: 'bundle_static_completeness',
         eval_total_cases: 14,
         eval_passed_cases: 0,
@@ -656,6 +658,47 @@ describe('buildReviewRunEvidence', () => {
         created_at: null,
       }],
     })
+  })
+
+  it('keeps rule acceptance, independent-gold model quality and ReviewRun invocation separate', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-separated-gates',
+        status: 'COMPLETED',
+        skill_bundle_id: 'skill-separated-gates',
+      },
+      latestJob: null,
+      currentVersion: { id: 'version-1' },
+      risks: [],
+      snapshots: [],
+      skillBundle: {
+        id: 'skill-separated-gates',
+        status: 'published',
+        release_meta: { official_review_allowed: true },
+        compiled_from: {
+          rule_translation_gate: { status: 'ready' },
+          rule_set_snapshot_gate: { status: 'ready' },
+          rule_set_document_gate: { status: 'ready' },
+          eval_results: {
+            rule_acceptance_status: 'passed',
+            model_quality_eval_status: 'blocked_without_independent_gold',
+            static_eval_status: 'reference_only_not_release_evidence',
+            runtime_eval_status: 'model_quality_eval_not_run',
+          },
+        },
+      },
+      modelInvocations: [],
+    })
+
+    expect(evidence?.skill_bundle).toMatchObject({
+      official_review_allowed: true,
+      rule_acceptance_status: 'passed',
+      model_quality_eval_status: 'blocked_without_independent_gold',
+      runtime_invocation_status: 'semantic_invocation_not_recorded',
+    })
+    expect(evidence?.skill_bundle).not.toHaveProperty('eval_status')
+    expect(evidence?.skill_bundle).not.toHaveProperty('runtime_eval_status')
+    expect(evidence?.skill_bundle).not.toHaveProperty('static_eval_status')
   })
 
   it('keeps all bound ReviewRun snapshots even when current risks reference only one rule', () => {
@@ -794,10 +837,10 @@ describe('buildReviewRunEvidence', () => {
       invocation_id: 'invocation-semantic',
       fallback_reason: 'semantic_review_degraded_to_rule_engine',
     })
-    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_not_passed')
+    expect(evidence?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_not_passed')
   })
 
-  it('does not mark completed builtin semantic invocation as AI model quality passed', () => {
+  it('does not mark a builtin semantic invocation as a passing provider invocation', () => {
     const evidence = buildReviewRunEvidence({
       latestReview: {
         id: 'review-builtin-semantic',
@@ -841,7 +884,7 @@ describe('buildReviewRunEvidence', () => {
       }],
     })
 
-    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_not_passed')
+    expect(evidence?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_not_passed')
     expect(evidence?.skill_bundle?.eval_note).toContain('did not use a passing AI provider path')
   })
 
@@ -914,6 +957,7 @@ describe('buildReviewRunEvidence', () => {
         response_meta: {
           provider_kind: 'openai_compatible',
           transport: 'lm_studio_cli',
+          validation_item_kind: 'risk',
           usable_risk_count: 3,
           dropped_risk_count: 0,
           validation_warnings: [],
@@ -921,7 +965,7 @@ describe('buildReviewRunEvidence', () => {
       }],
     })
 
-    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_local_cli')
+    expect(evidence?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_local_cli')
     expect(evidence?.skill_bundle?.eval_note).toContain('local LM Studio CLI with 3 usable risk')
     expect(evidence?.model_policy).toMatchObject({
       provider: 'AI_LEVEL_1',
@@ -934,7 +978,7 @@ describe('buildReviewRunEvidence', () => {
     })
   })
 
-  it('marks runtime model quality passed only from clean OpenAI-compatible HTTP semantic invocation', () => {
+  it('marks runtime invocation passed only from a clean OpenAI-compatible HTTP semantic invocation', () => {
     const evidence = buildReviewRunEvidence({
       latestReview: {
         id: 'review-model-pass-http',
@@ -991,6 +1035,7 @@ describe('buildReviewRunEvidence', () => {
         response_meta: {
           provider_kind: 'openai_compatible',
           transport: 'openai_compatible_http',
+          validation_item_kind: 'risk',
           usable_risk_count: 3,
           dropped_risk_count: 0,
           validation_warnings: [],
@@ -998,7 +1043,7 @@ describe('buildReviewRunEvidence', () => {
       }],
     })
 
-    expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_passed')
+    expect(evidence?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_passed')
     expect(evidence?.skill_bundle?.eval_note).toContain('3 usable risk')
   })
 
@@ -1160,6 +1205,54 @@ describe('buildReviewRunEvidence', () => {
     expect(evidence?.runtime_plan?.provider_connections.map((item) => item.asset_id)).toEqual([
       'provider.local', 'provider.cloud',
     ])
+  })
+
+  it('passes a plan-bound invocation only for clean OpenAI-compatible HTTP provider evidence', () => {
+    const buildPlanBoundEvidence = (responseMeta: Record<string, unknown>) => buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-plan-quality-gate', status: 'COMPLETED', skill_bundle_id: 'skill-1',
+        plan_snapshot_id: 'plan-snapshot-1', model_invocation_ids: ['invocation-semantic'],
+      },
+      latestJob: { provider: 'provider.cloud', status: 'completed', degraded: false },
+      currentVersion: { id: 'version-1' },
+      risks: [],
+      snapshots: [],
+      skillBundle: {
+        id: 'skill-1', version: 1, rule_snapshot_ids: [], model_policy_id: null,
+        status: 'published',
+        compiled_from: {
+          rule_translation_gate: { status: 'ready', official_review_allowed: true },
+          rule_set_snapshot_gate: { status: 'ready' },
+          rule_set_document_gate: { status: 'ready' },
+          eval_results: { rule_acceptance_status: 'passed' },
+        },
+        release_meta: { official_review_allowed: true },
+      },
+      modelInvocations: [{
+        id: 'invocation-semantic', plan_snapshot_id: 'plan-snapshot-1',
+        phase: 'semantic_review', provider: 'provider.cloud', model: 'gpt-5.5',
+        status: 'completed', degraded: false, input_tokens: 100, output_tokens: 20,
+        total_tokens: 120, response_meta: responseMeta,
+      }],
+    })
+
+    const cleanResponseMeta = {
+      provider_kind: 'openai_compatible', transport: 'openai_compatible_http',
+      output_validation: 'passed', token_evidence: 'provider',
+      validation_item_kind: 'risk',
+      validation_warnings: [], dropped_risk_count: 0, usable_risk_count: 2,
+    }
+    expect(buildPlanBoundEvidence(cleanResponseMeta)?.skill_bundle?.runtime_invocation_status)
+      .toBe('latest_review_model_invocation_passed')
+    expect(buildPlanBoundEvidence({
+      ...cleanResponseMeta, validation_warnings: ['one result was normalized'], dropped_risk_count: 1,
+    })?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_partial')
+    expect(buildPlanBoundEvidence({
+      ...cleanResponseMeta, transport: 'lm_studio_cli',
+    })?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_partial')
+    const { validation_warnings: _warnings, ...missingAudit } = cleanResponseMeta
+    expect(buildPlanBoundEvidence(missingAudit)?.skill_bundle?.runtime_invocation_status)
+      .toBe('latest_review_model_invocation_partial')
   })
 
   it('fails closed when a plan-bound ReviewRun cannot load its snapshot instead of using legacy ModelPolicy', () => {

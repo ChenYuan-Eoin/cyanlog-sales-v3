@@ -38,8 +38,9 @@ export type WorkbenchReviewRunLike = {
     }
     second_verification_required: boolean
     official_review_allowed: boolean
-    eval_status: string | null
-    runtime_eval_status: string | null
+    rule_acceptance_status: string | null
+    model_quality_eval_status: string | null
+    runtime_invocation_status: string | null
   } | null
   model_policy?: {
     degraded?: boolean | null
@@ -137,17 +138,22 @@ export function buildReviewHealth(data: WorkbenchReviewDataLike): ReviewHealth {
     if (!bundle.official_review_allowed) {
       issues.push('规则发布包尚未满足正式审核发布门禁，本次结果只能作为降级/复核结果。')
     }
-    if (bundle.eval_status && bundle.eval_status !== 'passed') {
-      issues.push(`规则发布包质量评测状态为 ${bundle.eval_status}，不能视为模型质量已验收。`)
+    if (bundle.rule_acceptance_status !== 'passed') {
+      issues.push(`规则验收状态为 ${bundle.rule_acceptance_status || 'missing'}，不能视为当前规则版本已通过确定性用例。`)
     }
-    if (bundle.runtime_eval_status === 'model_quality_eval_not_run') {
-      issues.push('模型质量评测尚未运行，本次结果必须结合模型调用记录和人工复核证据验收。')
-    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_local_cli') {
+    if (bundle.model_quality_eval_status !== 'passed') {
+      issues.push(`模型质量金标评测状态为 ${bundle.model_quality_eval_status || 'missing'}，真实模型调用成功不能替代独立金标准确率验收。`)
+    }
+    if (bundle.runtime_invocation_status === 'semantic_invocation_not_recorded') {
+      issues.push('本次 ReviewRun 未记录语义模型调用，不能证明模型链路已实际执行。')
+    } else if (bundle.runtime_invocation_status === 'latest_review_model_invocation_local_cli') {
       issues.push('最新语义模型通过本机 LM Studio CLI 完成，能证明本地模型运行，但不能证明 OpenAI-compatible HTTP 或线上模型链已验收。')
-    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_partial') {
+    } else if (bundle.runtime_invocation_status === 'latest_review_model_invocation_partial') {
       issues.push('最新语义模型调用只达到部分通过：存在被剔除风险或校验警告，必须查看调用链。')
-    } else if (bundle.runtime_eval_status === 'latest_review_model_invocation_not_passed') {
+    } else if (bundle.runtime_invocation_status === 'latest_review_model_invocation_not_passed') {
       issues.push('最新语义模型调用未通过运行质量门禁，不能视为 AI 审核完成。')
+    } else if (bundle.runtime_invocation_status !== 'latest_review_model_invocation_passed') {
+      issues.push(`本次 ReviewRun 的语义模型调用状态为 ${bundle.runtime_invocation_status || 'missing'}，只有通过运行质量门禁的真实 HTTP 调用才能视为 AI 审核完成。`)
     }
   }
   if (data.reviewRun?.status === 'DEGRADED') {
