@@ -3,7 +3,7 @@
 **Created**: 2026-06-09  
 **Rebased**: 2026-07-20
 **REQ ID**: F012  
-**Status**: WP01-completed / WP02-active
+**Status**: WP01-completed / WP02-completed
 **Parent**: 配置中心  
 **Depends On**: `F000-config-center-architecture`
 
@@ -44,7 +44,7 @@ F012 把 AI 建成可以被任意业务模块消费的全局平台能力，不�
 - 合同规则集、问题分类、具体规则、规则属性、判定与处理，属于 `F009 / WP03`；
 - Prompt 中的业务规则含义和 Skill 编译，属于 `F006`；
 - 合同审核工作台、循环复审和文件交付，属于 `F005`；
-- 真实 Provider 调用、token、`model_invocations`、ReviewRun 和准确率验收，属于 `WP02`；
+- 真实 Provider 调用、token、`model_invocations`、ReviewRun 和准确率边界，由已完成的 `WP02` 固化；
 - `rule-engine`。规则引擎是确定性业务执行能力或失败后的处理路径，不是 Provider 或模型。
 
 ## 3. 六个独立平台对象
@@ -120,8 +120,8 @@ WP01 不做不可逆数据库迁移，不写 Production。六类对象当前以�
 - 上述结论只证明隔离 Preview 数据层的密钥历史边界；不证明最终应用候选或 Production 已通过，Production 仍保持只读；
 - 禁止把六类对象聚合成一个嵌套 JSON 图；
 - 旧 `kind=provider/application/tool_policy` 只读保留；
-- 新图未切运行时，旧 `AI_CONFIG / ModelPolicy` 继续作为 WP02 前的兼容运行事实；
-- 严禁把一部分新图和一部分旧配置拼成混合运行链。
+- 新六对象图已经由 WP02 切入正式业务运行；旧 `AI_CONFIG / ModelPolicy` 仅保留历史只读事实，不再作为新 ReviewRun 的模型选择来源；
+- 严禁把一部分新图和一部分旧配置拼成混合运行链或静默走环境变量旁路。
 
 这是可回滚的过渡方案，不推翻 F000 的长期原则。若以后迁入独立强类型表，必须先在隔离 Preview 完成新增式迁移、RLS、租户隔离、事务发布和回滚验证，再单独进入发布工作包；不得在 WP01 暗改 Production。
 
@@ -174,16 +174,18 @@ WP01 负责：
 - 旧配置只读兼容；
 - 桌面与 iPad 配置任务验收。
 
-### 7.2 WP02 运行真实性
+### 7.2 WP02 运行真实性（已完成）
 
-WP02 才负责：
+WP02 已完成：
 
 - 让所有业务调用点从 `BusinessUsePoint` 解析到唯一发布应用；
 - 将完整新图编译成运行路由，禁止环境变量静默旁路；
 - Provider 真实 probe、最小生成和多个模型样本；
 - `model_invocations`、token、ReviewRun、降级原因与运行配置一致；
 - 证明合同审核、起草、标书等实际业务按绑定应用运行；
-- 审核准确率和共同真实合同对比。
+- 共同真实合同的双模型固定探测、当前 route ReviewRun 和准确率声明边界。
+
+实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 已将五个业务用点全部切入新图运行，并通过隔离 Preview、真实 LM Studio、云端降级、token、ReviewRun、桌面和 iPad 验收。准确率仍为 `blocked_without_independent_gold`：这不是运行失败，而是明确禁止在规则快照无效、没有事前独立金标时把模型响应冒充审核质量通过。完整证据位于 `output/evidence/wp02/README.md`。
 
 因此，WP01 页面只展示简短兼容摘要，不再用大段 ReviewRun / ModelPolicy 机器证据占据配置主任务。
 
@@ -197,7 +199,10 @@ WP02 才负责：
 | CRUD / 发布 / 回滚 | `app/api/configs/route.ts`、`app/api/configs/[id]/*` |
 | 连接与模型探测 | `app/api/configs/ai-runtime/probe/route.ts` |
 | 管理员任务 UI | `app/configs/tabs/AIConfigTab.tsx`、`app/configs/dialogs/AIEditForm.tsx` |
-| 旧运行时兼容 | `lib/configs/runtime.ts`、`lib/contracts/model-policy.ts` |
+| 运行计划与执行 | `lib/ai/runtime-plan.ts`、`lib/ai/runtime-executor.ts`、`lib/ai/contract-semantic.ts`、`lib/ai/tender-extract.ts` |
+| 业务调用入口 | `app/api/contracts/[id]/review-runs/route.ts`、`app/api/contracts/[id]/ai-chat/route.ts`、`app/api/contracts/draft/route.ts`、`app/api/tenders/ocr/route.ts` |
+| 运行真相 UI | `app/api/configs/ai-runtime/route.ts`、`app/configs/tabs/AIConfigTab.tsx` |
+| 历史只读兼容 | `lib/configs/runtime.ts`、`lib/contracts/model-policy.ts` |
 
 ## 9. 验收与下游发布门禁
 
@@ -215,19 +220,25 @@ WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 和回滚交�
 
 上述 WP01 退出门禁已通过，WP01 已转为 completed，WP02 已进入 Active。Harness selftest 与文档治理通过；doctor 为 0 failures / 2 条既有 Codex 项目信任警告，因此只声明本地门禁结果，不声明项目级 hooks 已加载生效。
 
-### 9.2 下游门禁（不阻塞 WP01 退出）
+### 9.2 WP02 退出结论与下游门禁
 
-- **WP02 运行真实性**：真实业务调用从业务用点解析到已发布应用，并提供 invocation/token/ReviewRun、降级一致性和准确率证据；
-- **WP09 发布验收**：Production 前完成数据库原子发布、RLS、环境和正式发布验收。
+- [x] **唯一运行计划**：五个业务用点只解析完整六对象发布图；旧 ModelPolicy、环境变量、CLI 和 rule-engine 不再成为模型旁路；
+- [x] **真实模型与降级**：LM Studio Gemma 和云端 `gpt-5.5` 均有 Provider token 证据；route 失败/降级严格按同一 `execution_id` 连续记录；
+- [x] **route / pinned 隔离**：数据库和 UI 都区分完整路由与指定模型探测，pinned 永不计入路由验证；
+- [x] **真实业务**：合同审核、辅助对话、合同起草、标书解析和通用分析当前计划汇总为 `5 / 5 / 5 / 0`；
+- [x] **ReviewRun**：真实 15,686 字合同沿当前发布 route 生成 ReviewRun 并绑定源文件身份、计划快照、invocation 和 token；
+- [x] **工程与浏览器**：195 files / 1342 tests、lint、typecheck、75-page build、1280×720 与 iPad 1024×1366、无横向溢出、0 console error/warning；
+- [ ] **审核准确率**：没有事前独立人工金标，且当前规则发布资产无效，声明保持 `blocked_without_independent_gold`；规则修复进入 WP03，准确率验证由 WP05 恢复门禁管理；
+- [ ] **WP09 发布验收**：Production 前完成数据库原子发布、RLS、Hosted 非 localhost 路由和正式发布验收。
 
-两项都是 WP01 完成后的下游工作，不得回填为 WP01 的完成前置条件。
+WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成。未完成项没有被隐藏为“整体完成”，而是分别进入 WP03、WP05 和 WP09。
 
 ## 10. 历史口径
 
 2026-07-20 之前的 `L1 本地 / L2 云端 / L3 规则兜底`、合同阶段复选框和 `ModelPolicy provider_chain` 是旧运行兼容口径，不再是平台配置产品模型：
 
-- L1/L2 旧 Provider 行可在 WP02 迁移时投影为 ProviderConnection + ModelCatalogEntry；
+- L1/L2 旧 Provider 行已由 WP02 的新六对象发布图取代；历史行只读保留，不再驱动新执行；
 - `rule-engine` 不能投影为 Provider 或模型；
 - 合同运行阶段属于业务用点、规则/Skill 和运行审计，不回填 Provider；
 - 历史 `model_invocations` 继续作为当时运行证据，不改写、不删除；
-- WP01 退出前必须证明旧配置仍可只读消费且候选可安全回退；WP02 提供完整新图运行证据后，才能单独决定旧运行链的退役。
+- WP01 的旧配置只读兼容证据继续保留；WP02 已提供完整新图运行证据，旧运行链不得再作为新业务调用的兼容回退。

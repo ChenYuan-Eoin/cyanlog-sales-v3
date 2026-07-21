@@ -28,22 +28,23 @@
 
 ## 当前恢复点
 
-- 唯一 Active：`WP02`（`ai-runtime-truth`）。
-- 当前步骤：审计旧 ModelPolicy、环境变量与 failover 的真实消费路径，建立新六对象图到不可漂移运行快照的唯一编译边界；再用可用 Provider 跑通真实调用、token、`model_invocations`、ReviewRun 与降级证据。
-- Next：`WP03`（规则集、问题分类、具体规则与规则详情）。
+- 唯一 Active：`WP03`（`rule-collection`）。
+- 当前步骤：盘点隔离 Preview 的 15 条规则、39 个发布规则快照、34 个发布规则集快照、13 个规则文档和 23 个 SkillBundle，复现 v21 的 15 个无效快照并逐条归因；随后以 forward-only 方式建立和修复“规则集→问题分类→具体规则→规则详情→业务属性→判定与处理”。
+- Next：`WP05` 的工作台交互纠偏子批，仅处理正文滚动与默认页签；准确率和循环复审仍受独立金标与产品门禁约束。
 - WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化完成；唯一 G/WP/F/IN/DG/HG 命名空间和六门 Harness 已通过本地门禁。
 - WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 完成；六对象、Provider 安全、五任务 UI、Preview 与桌面/iPad 证据见 `product-truth/product-code/output/evidence/wp01/README.md`。
+- WP02 已由提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成；五个业务用点均由已发布路由驱动，本地 Gemma、云端模型、降级、token、`model_invocations`、不可漂移计划、真实合同 ReviewRun 与桌面/iPad 证据见 `product-truth/product-code/output/evidence/wp02/README.md`。现有规则无效和缺独立金标使准确率仍明确阻断。
 - 旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆为 WP01、WP03、WP09，不再执行。
-- WP03 的旧整包验收为 `acceptance_disputed`；WP02 缺当前真实运行证据；WP04 需重验；WP05 为 `NO-GO`；WP06 只完成历史 Preview 候选；WP08 激活前必须拆成独立子包。
+- WP03 的旧整包验收为 `acceptance_disputed`，本批必须以当前代码和 Preview 数据重新建立证据；WP04 需重验；WP05 准确率/循环复审仍为 `NO-GO`，但已定位的滚动和默认标签作为后续独立子批；WP06 只完成历史 Preview 候选；WP08 激活前必须拆成独立子包。
 
-## WP02 退出门禁
+## WP03 退出门禁
 
-- 所有纳入验收的业务调用点只从已发布 BusinessUsePoint 解析到唯一完整发布图，不被环境变量或旧 ModelPolicy 静默旁路。
-- 至少两个可用模型完成真实 Provider 调用和最小生成，并持久化 provider、model、输入输出 token、耗时、状态和失败原因。
-- 真实合同 ReviewRun 绑定不可漂移的应用、路由、模型和规则快照，`model_invocations` 与 ReviewRun 可双向追溯。
-- 主模型不可用或输出无效时按 RoutePolicy 顺序降级，全失败动作和原因在运行证据与用户界面一致。
-- 同一真实合同由多个模型按冻结输入运行并与独立验收口径比较；缺金标时不得声称准确率完成。
-- 目标/全量测试、lint、typecheck、build、桌面/iPad、Preview 读回与清理通过，并同步 F012、REQ、主文档和 F099。
+- 规则域必须明确区分规则集、问题分类、具体规则、规则详情、通用业务属性、判定和处理动作；树只用于导航，不能充当领域模型。
+- 金额、比例、时间、枚举、布尔和文本等属性使用白名单类型、运算符、单位与未知路径；配置时不暴露 Prompt，也不以模糊语义指令替代规则。
+- 当前 15 个无效快照逐条有可复核原因；历史发布快照不改写，新版本通过 forward-only Preview 迁移/API 发布为不可变且可编译的候选。
+- SkillBundle 能编译完整规则引用；真实合同 ReviewRun 同时绑定有效规则快照和 WP02 运行计划，受控样本输出预期的命中、未命中与证据不足结果。
+- 规则管理 UI 以业务问题而非机器字段组织，桌面和 iPad 无白块、遮罩、横向溢出或不可达操作。
+- 目标/全量测试、lint、typecheck、build、Preview 数据读回与清理、文档治理和独立复审通过；缺独立金标时不得声称准确率完成。
 
 ## 新输入路由
 
@@ -60,4 +61,4 @@
 - Production 数据库继续只读；未经批准不部署 Production。
 - 持续或按量付费依赖默认淘汰。
 - 不得用配置存在、页面能打开或旧环境证据冒充当前模型/文件/Production 验收。
-- 不得越过 WP01 的 allowed paths，也不得把规则 UX、真实模型运行证明或 Production 发布混入本批。
+- 只修改 WP03 `allowed_paths`；不得重做 WP01/WP02 模型底座，不得把工作台滚动、循环复审或 Production 发布混入本批。

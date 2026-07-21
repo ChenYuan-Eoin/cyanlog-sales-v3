@@ -1,8 +1,8 @@
 # F099-当前开发工作包账本
 
 **Status**: active_work_package_ledger
-**Updated**: 2026-07-20
-**Ledger Version**: v2026-07-20.01
+**Updated**: 2026-07-21
+**Ledger Version**: v2026-07-21.02
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
 
@@ -22,8 +22,8 @@
 |---|---|---|---|---|
 | WP00 | goal-baseline-consolidation | G1/G10/G11 | Completed / `18dad230` | 已统一编号、真相源、Harness 和候选分支治理快照 |
 | WP01 | ai-platform-foundation | G4；支撑 G3/G7 | Completed / `4269840f` | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
-| WP02 | ai-runtime-truth | G3；支撑 G7/G10 | **Active** / needs_current_runtime_proof | 当前 probe、真实 invocation/token、ReviewRun、降级 |
-| WP03 | rule-collection | G3/G4；支撑 G7/G10 | acceptance_disputed | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
+| WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Completed / `c25ec17a` | 五业务用点、真实 invocation/token、ReviewRun、降级、route/pinned 证据 |
+| WP03 | rule-collection | G3/G4；支撑 G7/G10 | **Active** / repair_invalid_published_rule_assets | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
 | WP04 | contract-center-ia | G6；支撑 G8 | needs_reacceptance | 合同中心入口、任务身份、版本和下一步 |
 | WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | parked / NO-GO | 新源文件、事前独立金标、文件版本、风险迁移与循环复审 |
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
@@ -31,13 +31,13 @@
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
 | WP09 | release-acceptance | G7/G8/G9/G10/G11 | queued | 唯一候选、测试/build、桌面/iPad、真实文件、Preview/Production |
 
-执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（Active） -> WP03（Next） -> WP04 -> WP05（恢复门禁满足后）/WP07 -> WP08 子包 -> WP09`。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
+执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（Active） -> WP05 交互纠偏子批 -> WP04/WP07 -> WP08 子包 -> WP09`。WP05 的准确率和循环复审闭环仍受独立金标门禁约束，但正文滚动和默认任务页签不再因此冻结。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
 
 ## 2. 候选边界
 
-WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成。WP02-WP05 的旧“本地完成”总括结论仍无效，必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
+WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成；WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成。WP03-WP05 的旧“本地完成”总括结论仍无效，必须在各 WP 内按当前 Git SHA 与环境重新验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
 
-Production 数据库继续只读；WP01 未部署 Production，也未覆盖根工作区受保护 dirty 快照。
+Production 数据库继续只读；WP01/WP02 未部署 Production，也未覆盖根工作区受保护 dirty 快照。
 
 ## 3. WP01 完成证据（2026-07-20）
 
@@ -54,4 +54,15 @@ Production 数据库继续只读；WP01 未部署 Production，也未覆盖根�
 
 **WP01 退出结论**：六对象/API、Provider 安全、五任务 UI、工程门禁、桌面/iPad、隔离 Preview 六对象闭环以及旧 `AI_CONFIG / ModelPolicy` 兼容回退已通过，WP01 已转 completed。隔离 Preview `vsfropnfsmnonkotywsx` 已应用 `secure_ai_config_control_plane`；动态 bearer canary 与最终读回证明当前记录可持有凭据、历史版本无凭据且临时记录清理完成。此结论不外推到 Production。
 
-**当前与下游门禁**：Active WP02 验收真实 provider、invocation/token、ReviewRun、降级一致性和准确率；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、环境和正式发布。
+## 4. WP02 完成证据（2026-07-21）
+
+- 五个业务用点只从六对象发布图编译不可变运行计划，页面当前汇总为 `5 / 5 / 5 / 0`；
+- LM Studio `google/gemma-4-e4b` 按实际 8K 上下文运行，云端 `gpt-5.5` 完成降级和长上下文标书解析；
+- route/pinned、`execution_id`、连续 attempt、plan snapshot、Provider reported model、token 与 ReviewRun 均有数据库约束和反向测试；
+- 真实 15,686 字合同沿当前发布 route 生成 ReviewRun `910d67ad-d109-444e-b009-4fa60352df66`；
+- 195 files / 1342 tests、lint、typecheck、75-page build、桌面/iPad 浏览器、0 console error/warning通过；
+- 审核准确率仍明确阻断：没有事前独立人工金标，且现有已发布规则资产编译无效，不能把模型可运行解释为审核质量通过。
+
+证据索引：`product-code/output/evidence/wp02/README.md`。WP02 完成提交为 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b`。
+
+**当前与下游门禁**：Active WP03 修复规则资产和规则集合产品模型；WP05 恢复后处理交互纠偏与独立金标准确率；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、Hosted 路由和正式发布。

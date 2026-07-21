@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-20T20:59:57+08:00",
+  "updated_at": "2026-07-21T12:05:00+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -31,7 +31,7 @@
     "activation_evidence": "用户明确表示整体方案整合进当前项目目标并继续开发；2026-07-17 进一步明确目标是源文件含既有修订/批注时可高还原预览，导出为源文件副本加 AI 原生批注而非重新渲染，并允许为了成本把 legacy DOC 同格式输出限制在常规 DOCX/DOCM/PDF。"
   },
   "goal_namespace": {
-    "version": "2026-07-20.1",
+    "version": "2026-07-21.2",
     "rules": {
       "G": "不可变的长期产品组合目标，只允许 G1-G11；不直接进入 execution_queue.active",
       "WP": "可排序、可验收、WIP=1 的开发工作包；一个 WP 可服务多个 G",
@@ -128,15 +128,15 @@
     ]
   },
   "active_task": {
-    "id": "WP02",
-    "slug": "ai-runtime-truth",
-    "name": "真实模型调用、路由降级与运行证据",
+    "id": "WP03",
+    "slug": "rule-collection",
+    "name": "规则集合、问题分类与属性判定产品化",
     "kind": "product",
     "status": "active",
-    "objective": "让实际业务调用从 BusinessUsePoint 唯一解析到已发布 AIApplication 与 RoutePolicy，按有序模型候选执行并记录 provider、model、token、降级原因、配置快照、model_invocations 与 ReviewRun；用同一真实合同和多个可用模型验证运行一致性与审核质量。",
-    "current_step": "先审计旧 ModelPolicy、环境变量与现有 failover 的真实消费路径，建立新六对象图到不可漂移运行快照的唯一编译边界；随后用零持续费用的可用 Provider 跑通 probe、最小生成、业务 ReviewRun、token/invocation 和降级证据，再进行共同真实合同对比。",
-    "started_at": "2026-07-20T20:59:57+08:00",
-    "activation_basis": "WP01 已由提交 4269840fbc798eb9a92faee44d6e467a250033b4 完成六对象控制面、Provider 安全、桌面/iPad、Preview 创建/修订/发布/回滚/清理及 182 文件 1255 测试验收；IN-20260720-049 记录本次工作包切换。",
+    "objective": "把现有为了展示树而形成的规则管理重建为可发布、可审计、可被业务消费的产品模型：规则集定义场景发布边界，问题分类组织业务问题，具体规则表达明确判断，规则详情配置金额、比例、时间、枚举等通用业务属性及运算符、阈值、风险与处理动作；语义能力只在运行时定位原文和读取事实，不在配置时把规则变成模糊 Prompt。",
+    "current_step": "盘点隔离 Preview 中 15 条规则、39 个发布规则快照、34 个发布规则集快照、13 个规则文档和 23 个 SkillBundle，复现当前 v21 的 15 个无效快照并逐条归因；在不改历史快照的前提下，通过 forward-only schema/API 建立规则集→问题分类→具体规则→规则详情→业务属性→判定与处理合同，再修复并发布可编译候选。",
+    "started_at": "2026-07-21T12:05:00+08:00",
+    "activation_basis": "WP02 已由提交 c25ec17a8e51ec6476432ccccf9c30ee0dd9553b 完成五个业务用点、真实本地/云端调用、RoutePolicy 降级、token、model_invocations、不可漂移计划和真实合同 ReviewRun 证据；当前 ReviewRun 的明确阻断是现有发布规则资产无法编译。IN-20260721-053 记录本次切换。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
     "allowed_paths": [
       "AGENTS.md",
@@ -147,49 +147,52 @@
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/00-master/PROJECT-主文档.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F012-ai-runtime-config.md",
+      "product-truth/feature-packets/F006-contract-review-skill-runtime.md",
+      "product-truth/feature-packets/F009-contract-rules-knowledge.md",
       "product-truth/product-code/app/configs",
       "product-truth/product-code/app/contracts",
-      "product-truth/product-code/app/api/ai",
-    "product-truth/product-code/app/api/contracts",
-    "product-truth/product-code/app/api/tenders",
-    "product-truth/product-code/app/api/configs/ai-runtime",
-    "product-truth/product-code/lib/ai",
-    "product-truth/product-code/lib/contract-analysis.ts",
-    "product-truth/product-code/lib/contract-analysis.test.ts",
-    "product-truth/product-code/lib/configs",
-      "product-truth/product-code/lib/contracts",
+      "product-truth/product-code/app/api/contract-policies",
+      "product-truth/product-code/app/api/contracts",
+      "product-truth/product-code/app/api/rules",
+      "product-truth/product-code/app/admin/contract-policies",
+      "product-truth/product-code/app/admin/rule-review",
+      "product-truth/product-code/app/admin/rule-simulator",
+      "product-truth/product-code/lib/rules",
+      "product-truth/product-code/lib/contracts/skill-bundle.ts",
+      "product-truth/product-code/lib/contracts/skill-bundle.test.ts",
+      "product-truth/product-code/lib/contract-analysis.ts",
+      "product-truth/product-code/lib/contract-analysis.test.ts",
       "product-truth/product-code/types",
       "product-truth/product-code/supabase/migrations",
-      "product-truth/product-code/output/evidence/wp02"
+      "product-truth/product-code/output/evidence/wp03"
     ],
     "non_goals": [
-      "把规则集、问题分类、具体规则或规则详情混入 AI 平台运行路由；这些属于 WP03",
-      "重做合同工作台、循环复审、文档对比、合同起草或品牌组织体验",
-      "用配置存在、连接 probe 或单次模型响应冒充 ReviewRun 和准确率闭环",
-      "引入持续或按量付费依赖作为默认前提；优先复用本地、自托管或已有免费能力",
+      "重新设计 Provider、模型目录、AI 应用或路由运行；这些已由 WP01/WP02 完成",
+      "在配置期建立独立属性提取中心，或用 Prompt、关键词和执行引擎替代清晰的规则详情",
+      "把正文滚动、默认页签或循环复审交互混入规则产品；这些属于 WP05 的独立后续批次",
+      "用规则能保存、树能展开或测试夹具通过冒充真实 ReviewRun 已有效消费规则",
       "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
     ],
     "exit_criteria": [
-      "所有纳入验收的业务调用点只从已发布 BusinessUsePoint 解析唯一 ApplicationBinding、AIApplication、RoutePolicy、ModelCatalogEntry 与 ProviderConnection，不被环境变量或旧 ModelPolicy 静默旁路",
-      "至少两个可用模型候选完成真实 provider probe 和最小生成；每次调用持久化 provider、model、输入输出 token、耗时、状态和失败原因",
-      "真实合同 ReviewRun 绑定不可漂移的应用、路由、模型和规则快照，model_invocations 与 ReviewRun 可双向追溯",
-      "主模型不可用或输出无效时按 RoutePolicy 顺序降级，全失败动作和原因在运行证据与用户界面一致",
-      "同一真实合同由多个可用模型按同一冻结输入运行，并与独立验收口径比较；缺金标时明确停止准确率完成声明",
-      "目标/全量测试、lint、typecheck、build、桌面/iPad、Preview 数据读回与清理通过，F012、REQ、主文档和 F099 同步证据与未完成项"
+      "产品与数据对象明确区分规则集、问题分类、具体规则、规则详情、通用业务属性、判定和处理动作；树只作为导航，不是领域模型",
+      "金额、比例、时间、枚举、布尔和文本等属性使用白名单类型、运算符和单位；未知/证据不足路径显式，配置页面不暴露机器 Prompt 或含糊语义指令",
+      "现有无效 current 快照逐条有原因；历史发布快照不改写，通过 forward-only Preview 迁移/API 生成新的有效不可变版本，SkillBundle 编译成功且引用完整",
+      "真实合同 ReviewRun 同时绑定有效规则快照和 WP02 运行计划；受控样本能产生符合预期的规则命中/未命中/证据不足结果，模型与规则的责任边界可追溯",
+      "规则管理 UI 以人的业务任务和问题含义组织，桌面与 iPad 无白块、遮罩、横向溢出或不可达操作",
+      "目标/全量测试、lint、typecheck、build、Preview 数据读回与清理、文档治理和独立复审通过；准确率缺独立金标时继续明确阻断"
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP02",
-      "slug": "ai-runtime-truth",
-      "reason": "WP01 已绑定最终候选提交、Preview 与浏览器证据完成；按批准序列进入真实运行闭环"
-    },
-    "next": {
       "id": "WP03",
       "slug": "rule-collection",
-      "name": "规则集、问题分类、具体规则与规则详情",
-      "entry_gate": "WP02 的真实调用、路由降级、token、model_invocations 与 ReviewRun 一致性通过验收",
+      "reason": "WP02 已由 c25ec17a 完成真实运行闭环；当前真实 ReviewRun 的首个下游阻断是发布规则资产无效"
+    },
+    "next": {
+      "id": "WP05",
+      "slug": "multiformat-review-cycle",
+      "name": "审核工作台交互纠偏子批",
+      "entry_gate": "WP03 发布有效规则候选并证明真实 ReviewRun 可同时消费规则与模型；本子批只修正文滚动和默认页签，准确率与循环复审继续受独立门禁约束",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
@@ -230,11 +233,6 @@
         "reason": "免费 Preview 候选已完成并清理；状态仅为 completed_preview_candidate，Production 验收仍归 WP09"
       },
       {
-        "id": "WP05",
-        "slug": "multiformat-review-cycle",
-        "reason": "NO-GO / waiting_external_gold，且最新循环复审与工作台验收争议未关闭；只有新源文件与事前独立人工金标到位后按队列恢复"
-      },
-      {
         "id": "LEGACY-P0-ONLINE-SYNC-RULE-COLLECTION-RESET",
         "reason": "原任务把发布同步、规则产品和平台 AI 纠偏混成一个 Active；已拆分为 WP01、WP03、WP09，仅保留追溯"
       },
@@ -261,10 +259,36 @@
         "completed_at": "2026-07-20T20:59:57+08:00",
         "evidence_commit": "4269840fbc798eb9a92faee44d6e467a250033b4",
         "result": "六对象 AI 平台控制面、Provider 安全、五任务 UI、Preview 创建/修订/发布/回滚/清理和桌面/iPad 验收完成；Production 未写入或部署"
+      },
+      {
+        "id": "WP02",
+        "slug": "ai-runtime-truth",
+        "completed_at": "2026-07-21T12:05:00+08:00",
+        "evidence_commit": "c25ec17a8e51ec6476432ccccf9c30ee0dd9553b",
+        "result": "五个注册业务用点均由发布路由执行并有当前真实证据；本地 Gemma、云端模型、顺序降级、token、model_invocations、不可漂移计划、真实合同 ReviewRun 与桌面/iPad 验收完成；规则编译和独立准确率明确转交 WP03/WP05，Production 未写入或部署"
       }
     ]
   },
   "verification": {
+    "wp02_ai_runtime_20260721": {
+      "status": "passed_preview_runtime_accuracy_blocked",
+      "commit": "c25ec17a8e51ec6476432ccccf9c30ee0dd9553b",
+      "runtime": "五个注册 BusinessUsePoint 均可编译且均有 24 小时内 route 证据：5 registered / 5 compilable / 5 verified / 0 blocked；所有业务入口只消费冻结的 AIRuntimePlanSnapshot，route 与 pinned 执行身份严格分离",
+      "providers": "本机 LM Studio google/gemma-4-e4b 以真实 OpenAI-compatible 请求完成 semantic、draft 和受控最小生成；现有云端模型完成 chat、tender、generic 及本地失败后的 RoutePolicy 顺序降级，无新增持续付费依赖",
+      "audit": "每个尝试独立记录 ProviderConnection、ModelCatalogEntry、token、耗时、状态和失败原因；model_invocations 绑定 execution identity 与 plan snapshot，pinned 调试不计入 route verification",
+      "real_contract": "真实 15686 字符 DOCX 的 ReviewRun 910d67ad-d109-444e-b009-4fa60352df66 绑定 route execution ca981d27-db8f-40bc-9c52-166ed83476fa、plan 68dc9b97-9b20-4e2e-8866-aa17de6dadd0 与 2471 token 的本地 Gemma 调用",
+      "preview": "隔离项目 vsfropnfsmnonkotywsx 仅应用四份 forward migration，缺失/route-with-pin/pinned-mismatch 等无效执行身份写入被数据库拒绝；临时浏览器认证令牌已删除",
+      "browser": "配置中心运行验证页在桌面 1280 和 iPad 1024 通过；修复 1280 宽度下标题与四项统计被三栏布局挤压的真实根因，页面无横向溢出、遮罩残留或控制台错误",
+      "engineering": "195 test files / 1342 tests passed，2 files / 5 live tests 默认跳过；lint、typecheck、Next build 75 pages、Harness selftest、文档治理和独立 API/UI 复审通过",
+      "accuracy_boundary": "现有 current bundle 的 15 个规则快照均无法通过规则编译，且无独立盲测金标；因此平台运行真实性通过，但审核准确率和规则质量不得声明完成",
+      "evidence": [
+        "product-truth/product-code/output/evidence/wp02/README.md",
+        "product-truth/product-code/output/evidence/wp02/runtime-acceptance.json",
+        "product-truth/product-code/output/evidence/wp02/desktop-runtime.png",
+        "product-truth/product-code/output/evidence/wp02/ipad-runtime.png"
+      ],
+      "boundary": "WP03 修复规则产品和无效发布资产；WP05 验收准确率及工作台循环；WP09 处理托管环境与 Production 发布。Production 仍只读且未部署"
+    },
     "wp01_ai_platform_20260720": {
       "status": "passed_preview_control_plane_not_production",
       "implementation_commit": "5a22f769ac03baf80d7436eecf79fe57a24c509b",
@@ -282,7 +306,7 @@
         "product-truth/product-code/output/evidence/wp01/desktop-config.png",
         "product-truth/product-code/output/evidence/wp01/ipad-config.png"
       ],
-      "boundary": "WP02 owns real business runtime, token/model_invocations/ReviewRun/failover and accuracy; WP09 owns atomic multi-row publication and Production release"
+      "boundary": "WP02 已完成真实业务运行、token/model_invocations/ReviewRun/failover；规则质量与准确率分别由 WP03/WP05 承担，WP09 负责原子发布和 Production"
     },
     "wp00_goal_baseline_20260720": {
       "status": "passed_with_runtime_trust_warning",
