@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-21T18:31:22+08:00",
+  "updated_at": "2026-07-21T19:27:00+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,15 +128,15 @@
     ]
   },
   "active_task": {
-    "id": "WP05",
-    "slug": "multiformat-review-cycle",
-    "name": "审核工作台风险定位与默认任务交互纠偏",
+    "id": "WP04",
+    "slug": "contract-center-ia",
+    "name": "合同中心入口、任务身份与上传编排复验",
     "kind": "product",
     "status": "active",
-    "objective": "恢复审核工作台最短业务链路：用户从合同列表进入审核时默认看到审查任务；选择任一风险后，原文件阅读区滚动到该风险的原文证据，页面外层不跳动，定位完成后仍可继续滚动、切换风险和执行处理。URL 只记录用户明确选择的面板，运行状态和下一步动作不得暗中替用户切到证据页。",
-    "current_step": "IN-20260721-051 已定位两项根因：合同列表把运行状态 detailPanel=evidence 错当成入口面板；DOCX 阅读区只有 min-height，内层滚动容器被全文撑开且 overscroll-contain 吞掉滚轮。当前只修入口状态与文档滚动边界，再用真实长 DOCX、文本 PDF、扫描 PDF 在桌面和 iPad 验收。",
-    "started_at": "2026-07-21T18:31:22+08:00",
-    "activation_basis": "WP03 已由提交 ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5 完成从空白业务配置、五路径测试、发布、真实 DOCX、真实 Provider/ReviewRun、规则快照和桌面/iPad 证据；IN-20260721-055 记录本次切换。",
+    "objective": "把合同中心恢复为四个可理解且不可混淆的业务任务：起草合同、上传并发起风险审核、继续/查看已有 ReviewRun、选择版本进行文档比对。每个入口必须说明对象、前置条件、目标页面和下一步；真实上传必须先完成源文件身份、解析和 page map，再且仅再启动一次正式审核，不能把上传页、审核工作台和比对准备页互相代替。",
+    "current_step": "先按无合同、单版本、已审核、多版本四类状态审计现有入口和 URL；随后处理 IN-20260721-056：上传、解析、source identity、page map 与 ReviewRun 启动的顺序和幂等性。WP05 已修复的默认审查页签和文档滚动作为稳定底座，不回退也不混入准确率/循环复审。",
+    "started_at": "2026-07-21T19:27:00+08:00",
+    "activation_basis": "WP05 交互纠偏已由提交 12b977fa 完成，并通过真实长 DOCX、文本 PDF、扫描 PDF、桌面/iPad、URL 前进后退、source_range 定位、203 files/1459 tests、lint/typecheck/76-page build 与独立复审；IN-20260721-057 记录切换。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
     "allowed_paths": [
       "AGENTS.md",
@@ -147,55 +147,44 @@
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/00-master/PROJECT-主文档.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/feature-packets/F005v2-contract-center.md",
       "product-truth/feature-packets/F005-contract-review.md",
-      "product-truth/feature-packets/F006-contract-review-skill-runtime.md",
-      "product-truth/product-code/app/contracts/page.tsx",
-      "product-truth/product-code/app/contracts/page.test.tsx",
-      "product-truth/product-code/app/contracts/[id]/page.tsx",
-      "product-truth/product-code/app/contracts/[id]/page.test.tsx",
+      "product-truth/product-code/app/contracts",
+      "product-truth/product-code/app/api/contracts",
       "product-truth/product-code/components/contracts",
-      "product-truth/product-code/lib/contracts/review-navigation.ts",
-      "product-truth/product-code/lib/contracts/review-navigation.test.ts",
-      "product-truth/product-code/lib/contracts/review-state-machine.ts",
-      "product-truth/product-code/lib/contracts/review-state-machine.test.ts",
-      "product-truth/product-code/lib/contracts/review-workbench-state.ts",
-      "product-truth/product-code/lib/contracts/review-workbench-state.test.ts",
-      "product-truth/product-code/output/evidence/wp05"
+      "product-truth/product-code/lib/contracts",
+      "product-truth/product-code/output/evidence/wp04",
+      "product-truth/product-code/output/playwright/wp04"
     ],
     "non_goals": [
-      "调整模型准确率、规则内容或独立金标；这些仍是 WP05 的后续质量门，而不是本交互子批",
-      "实现上传新版本、风险迁移、循环复审和最终交付",
-      "修复上传后先分析再建立 source_page_map 的编排缺陷；该问题已独立进入 Inbox",
-      "修改 AI 平台、规则配置、文档对比或合同起草",
+      "修改模型、规则集、审核准确率或独立金标",
+      "实现合同起草编辑器、DOCX 导出或草稿内部能力；这些属于 WP07",
+      "重写文档差异算法或把 WP06 的历史 Preview 候选冒充 Production 完成",
+      "实现风险迁移、客户反馈循环复审或最终批注交付；这些仍属于 WP05 后续子批",
       "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
     ],
     "exit_criteria": [
-      "合同列表和无 panel 的工作台 URL 在所有 ReviewRun 状态下默认进入审查；只有用户显式切到摘要、对话或证据时才写入对应 panel，刷新、返回和前进一致",
-      "文档阅读区具有受视口约束的确定高度和唯一纵向滚动轴；点击风险只改变文档滚动容器 scrollTop，不改变 window scrollY",
-      "证据定位完成后滚轮、触控、键盘、连续切换风险仍可用，不被 overscroll、布局扩张或覆盖层锁死",
-      "真实长 DOCX、文本 PDF 和扫描 PDF 在桌面与 iPad 覆盖默认入口、首尾风险定位和持续滚动；无法精确定位时显示可理解的降级状态而不假装成功",
-      "目标/全量测试、lint、typecheck、build、浏览器控制台与网络检查通过；准确率和循环复审继续保持未完成，不用本交互修复冒充关闭"
+      "起草、上传/发起审核、继续/查看风险审核、文档比对四类入口在无合同、单版本、已审核和多版本状态下分别给出正确对象、前置条件、目标 URL 与阻断提示，不互相退回同一上传页",
+      "真实文件上传只创建一个合同版本；只有源文件身份、解析文本和当前 source_page_map 就绪后才启动正式 ReviewRun",
+      "重复上传回调、重复解析完成通知和页面重试保持幂等，不生成重复版本、重复 ReviewRun 或假完成状态；失败可从明确步骤恢复",
+      "合同列表和工作台显示当前版本、ReviewRun 状态及业务下一步；入口参数只表达用户任务，不把运行状态误作页面选择",
+      "目标/全量测试、lint、typecheck、build、桌面与 iPad 真实 DOCX/PDF 浏览器链通过；Production 继续只读且不部署"
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP05",
-      "slug": "multiformat-review-cycle",
-      "reason": "WP03 已由 ebdb3c59 完成业务配置到真实触发；当前用户主线的最近阻断是风险无法稳定定位原文以及入口被运行状态强制切到证据"
-    },
-    "next": {
       "id": "WP04",
       "slug": "contract-center-ia",
-      "name": "合同中心入口与任务身份",
-      "entry_gate": "WP05 交互子批完成且不再由默认面板和滚动错误阻断合同任务入口复验",
+      "reason": "WP05 交互纠偏已由 12b977fa 完成；当前用户业务主线需要先厘清四个合同任务入口并修复真实上传先审核后 page map 的错误编排"
+    },
+    "next": {
+      "id": "WP07",
+      "slug": "contract-drafting",
+      "name": "合同起草闭环",
+      "entry_gate": "WP04 完成四入口与版本/ReviewRun 身份复验，起草入口不再与上传或审核混淆",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
-      {
-        "id": "WP07",
-        "slug": "contract-drafting",
-        "name": "合同起草闭环"
-      },
       {
         "id": "WP08",
         "slug": "experience-umbrella",
@@ -263,10 +252,37 @@
         "completed_at": "2026-07-21T18:31:22+08:00",
         "evidence_commit": "ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5",
         "result": "业务人员可从空白建立规则集、问题分类、具体规则、业务属性、判定和处理，完成五路径测试与发布；真实 DOCX 经真实 Provider 形成可追溯 ReviewRun、token、规则快照和风险证据；桌面/iPad 与全量工程门禁通过，独立金标准确率仍明确阻断"
+      },
+      {
+        "id": "WP05",
+        "slug": "multiformat-review-cycle",
+        "completed_scope": "interaction_correction",
+        "completed_at": "2026-07-21T19:27:00+08:00",
+        "evidence_commit": "12b977fa",
+        "result": "默认审查入口、URL 页签状态、长 DOCX 单一滚动轴、source_range 确定性定位、重复/跨段证据失败关闭以及文本/扫描 PDF 人工定位边界通过；准确率、版本迁移和循环复审仍未完成"
       }
     ]
   },
   "verification": {
+    "wp05_interaction_20260721": {
+      "status": "passed_preview_interaction_only_accuracy_and_cycle_open",
+      "commit": "12b977fa",
+      "navigation": "所有 ReviewRun 状态的合同列表入口均无隐式 panel；无 panel 默认审查，显式证据选择、刷新、切回审查、后退和前进的 URL/页签/window.scrollY 一致",
+      "docx": "真实 15686 字符、4 页 DOCX 在桌面与 iPad 形成唯一内部滚动轴；滚轮从 2000 到 2800 时 window 不动，source_range 15102..15121 定位第 4 页 scrollTop 11784；同块跨 run 可定位、跨段和重复无锚点失败关闭",
+      "pdf": "8 页文本 PDF 与 50 页无文本层扫描 PDF 在桌面/iPad 使用 Chromium 原生 viewer，内部滚动不带动 window；页面明确文本 PDF 按页核对、扫描 PDF/OCR 仅辅助且不冒充原文锚点",
+      "browser": "桌面 1440x900 与 iPad 1024x768 无横向溢出、白色遮罩或 console error；review/file API 均为 200",
+      "engineering": "203 个测试文件通过、2 个跳过；1459 个测试通过、5 个 live 测试默认跳过；WP05 目标 6 文件 47 测试、lint、typecheck、Next build 76/76 pages 与两轮独立复审通过",
+      "cleanup": "DOCX 风险 canary 3 条和两轮 PDF 合同引用均已精确删除；canary contracts/risk rows 为 0，原合同和原 Storage 对象保持 2/2",
+      "evidence": [
+        "product-truth/product-code/output/evidence/wp05/workbench-interaction-acceptance.md",
+        "product-truth/product-code/output/playwright/wp05/desktop-workbench-clean.png",
+        "product-truth/product-code/output/playwright/wp05/desktop-source-range-anchor.png",
+        "product-truth/product-code/output/playwright/wp05/ipad-long-docx.png",
+        "product-truth/product-code/output/playwright/wp05/pdf-text-desktop-after-wheel.png",
+        "product-truth/product-code/output/playwright/wp05/pdf-scan-ipad-after-wheel.png"
+      ],
+      "boundary": "只关闭 WP05 交互纠偏子批；审核准确率、上传新版本、风险迁移、循环复审和最终交付仍必须独立验收。Production 数据库保持只读，未 push 或部署"
+    },
     "wp03_rule_collection_20260721": {
       "status": "passed_preview_generic_configuration_runtime_accuracy_blocked",
       "commit": "ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5",

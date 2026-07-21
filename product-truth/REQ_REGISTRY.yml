@@ -10,7 +10,7 @@
 #   - 代码中的 REQ 标记必须与之一致
 
 version: "2026-07-21.2"
-last_updated: "2026-07-21T12:05:00+08:00"
+last_updated: "2026-07-21T19:27:00+08:00"
 
 goal_governance:
   status: active
@@ -27,9 +27,9 @@ goal_governance:
     WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
     WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: completed_commit_4269840f}
     WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: completed_commit_c25ec17a}
-    WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: active_repair_invalid_published_rule_assets}
-    WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: needs_reacceptance}
-    WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: parked_waiting_external_gold_and_product_reacceptance}
+    WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: completed_commit_ebdb3c59}
+    WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: active_entry_and_upload_orchestration_reacceptance}
+    WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: interaction_completed_commit_12b977fa_accuracy_cycle_pending}
     WP06: {name: 文档对比, primary_goals: [G6], supporting_goals: [G7, G8, G10], state: completed_preview_candidate_not_production}
     WP07: {name: 合同起草, primary_goals: [G6], supporting_goals: [G2, G8, G10], state: queued}
     WP08: {name: 横切体验伞, primary_goals: [G5, G8], state: must_split_before_activation}

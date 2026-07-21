@@ -2,7 +2,7 @@
 
 **Status**: active_work_package_ledger
 **Updated**: 2026-07-21
-**Ledger Version**: v2026-07-21.04
+**Ledger Version**: v2026-07-21.05
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
 
@@ -24,20 +24,20 @@
 | WP01 | ai-platform-foundation | G4；支撑 G3/G7 | Completed / `4269840f` | Provider、模型目录、AI 应用、业务用点、绑定、路由 |
 | WP02 | ai-runtime-truth | G3；支撑 G7/G10 | Completed / `c25ec17a` | 五业务用点、真实 invocation/token、ReviewRun、降级、route/pinned 证据 |
 | WP03 | rule-collection | G3/G4；支撑 G7/G10 | Completed / `ebdb3c59` | 规则集→问题分类→具体规则→规则详情→属性/判定/处理 |
-| WP04 | contract-center-ia | G6；支撑 G8 | needs_reacceptance | 合同中心入口、任务身份、版本和下一步 |
-| WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | **Active** / interaction_correction | 默认审查入口、风险定位、正文滚动；准确率与循环复审仍独立受门禁 |
+| WP04 | contract-center-ia | G6；支撑 G8 | **Active** / entry_and_upload_orchestration | 四类合同任务入口、源文件身份、版本、ReviewRun 和下一步 |
+| WP05 | multiformat-review-cycle | G2；支撑 G3/G6/G8/G10 | interaction_completed / `12b977fa`; accuracy_cycle_pending | 默认审查、风险定位和正文滚动已完成；准确率与循环复审仍独立受门禁 |
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
 | WP07 | contract-drafting | G6；支撑 G2/G8/G10 | queued | 可编辑草稿、版本、DOCX 导出、转审核/对比 |
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
 | WP09 | release-acceptance | G7/G8/G9/G10/G11 | queued | 唯一候选、测试/build、桌面/iPad、真实文件、Preview/Production |
 
-执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏子批（Active） -> WP04/WP07 -> WP05 准确率与循环复审（满足门禁后） -> WP08 子包 -> WP09`。WP05 当前只修正文滚动和默认审查入口，不借此宣称准确率或循环复审完成。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
+执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（Active） -> WP07 -> WP05 准确率与循环复审（满足门禁后） -> WP08 子包 -> WP09`。WP04 只处理四类合同任务入口和上传编排，不把合同起草、对比算法或循环复审混入当前批次。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回 WP01、WP03、WP09，不再作为 Active。
 
 ## 2. 候选边界
 
-WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成；WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成；WP03 已由提交 `ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5` 完成。WP05 的旧“本地完成”总括结论仍无效，必须把交互、准确率和循环复审按当前 Git SHA 与环境分别验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
+WP00 已由提交 `18dad230bbc12a6cf664e5868cc25d57bbb65fd3` 固化；WP01 已由实现提交 `5a22f769ac03baf80d7436eecf79fe57a24c509b` 与收口提交 `4269840fbc798eb9a92faee44d6e467a250033b4` 重新验收完成；WP02 已由实现提交 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b` 完成；WP03 已由提交 `ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5` 完成；WP05 交互纠偏已由提交 `12b977fa` 独立完成。WP05 的旧“本地完成”总括结论仍无效，准确率和循环复审必须继续按当前 Git SHA、独立金标和真实版本链分别验收。WP06 仅保留“历史免费 Preview 候选”状态，不代表本分支或 Production 已重新验证。
 
-Production 数据库继续只读；WP01-WP03 未部署 Production，也未覆盖根工作区受保护 dirty 快照。
+Production 数据库继续只读；WP01-WP05 的上述候选均未部署 Production，也未覆盖根工作区受保护 dirty 快照。
 
 ## 3. WP01 完成证据（2026-07-20）
 
@@ -65,7 +65,7 @@ Production 数据库继续只读；WP01-WP03 未部署 Production，也未覆盖
 
 证据索引：`product-code/output/evidence/wp02/README.md`。WP02 完成提交为 `c25ec17a8e51ec6476432ccccf9c30ee0dd9553b`。
 
-**当前与下游门禁**：WP03 已完成规则资产和规则集合产品模型；Active WP05 先处理交互纠偏，独立金标准确率与循环复审继续分别受门禁；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、Hosted 路由和正式发布。
+**当前与下游门禁**：WP03 已完成规则资产和规则集合产品模型；WP05 交互纠偏已完成，独立金标准确率与循环复审继续分别受门禁；Active WP04 先恢复四类合同任务入口和上传编排；WP09 在 Production 前验收专用事务/RPC 或强类型表、RLS、Hosted 路由和正式发布。
 
 ## 5. WP03 完成证据（2026-07-21）
 
@@ -77,8 +77,21 @@ Production 数据库继续只读；WP01-WP03 未部署 Production，也未覆盖
 
 **WP03 退出结论**：系统支持项与业务数据已分离。没有预置数据的新组织可由业务人员使用“规则集—问题分类—具体规则—业务属性—判定与处理”完成配置、测试、发布和真实触发；R001–R015 只是可选预置草稿。此结论证明配置及运行链真实，不证明合同审核准确率，独立金标仍是 WP05 后续门禁。
 
-## 6. WP05 当前交互子批（2026-07-21）
+## 6. WP05 交互子批完成证据（2026-07-21）
 
 - 默认入口：运行状态只决定下一步提示，不决定用户进入哪个面板；无 `panel` 时始终进入“审查”，只有用户显式切换才把面板写入 URL。
 - 风险定位：文档阅读区必须由视口约束并拥有唯一纵向滚动轴；点风险只滚动文档，不滚动浏览器窗口，定位后滚轮、触控、键盘和连续风险切换仍可用。
-- 验收范围：真实长 DOCX、文本 PDF、扫描 PDF，桌面与 iPad；准确率、上传新版本、风险迁移、循环复审和最终交付不混入本子批。
+- 真实长 DOCX 在桌面与 iPad 均保持唯一文档滚动轴；点击末页风险只改变正文容器位置，滚轮继续有效，浏览器窗口不跳动。
+- 文本 PDF 与扫描 PDF 均使用受约束的浏览器原生阅读区；文本 PDF 明示原生阅读器不能可靠跳转字符偏移，扫描 PDF 明示 OCR 只辅助定位，两者均不伪造“已定位”。
+- 无 `panel`、显式证据、刷新、前进与后退的 URL/页签状态一致；运行状态不再替用户选择页面。
+- 目标 `6` 文件 / `47` 测试与全量 `203` 文件 / `1459` 测试、lint、typecheck、76-page build、桌面/iPad、真实 DOCX/PDF 均通过；证据索引为 `product-code/output/evidence/wp05/workbench-interaction-acceptance.md`，完成提交为 `12b977fa`。
+
+**WP05 子批退出结论**：默认审查入口、风险定位和正文连续阅读已完成。此结论只关闭交互纠偏，不证明审核准确率、风险迁移、循环复审或最终交付完成。
+
+## 7. WP04 当前批次（2026-07-21）
+
+- 四个业务任务必须分别可理解：`起草合同`、`上传并发起风险审核`、`继续/查看已有审核`、`选择两个版本进行文档比对`；入口说明对象、前置条件、目标页和下一步，不允许全部退回上传页。
+- 入口矩阵覆盖无合同、单版本、已有 ReviewRun、多版本四类状态；URL 只表达用户选择的任务，不用运行状态暗中切换页面。
+- 上传编排固定为：建立合同与唯一版本身份 → 保存原文件与哈希 → 解析文本 → 建立当前 `source_page_map` → 启动且只启动一次正式 ReviewRun。
+- 重复上传回调、解析完成通知和页面重试必须幂等；失败停留在可解释步骤并可恢复，不能先生成 `SOURCE_IDENTITY_MISSING` 的失败审核再补数据。
+- 当前已知事实来自 `IN-20260721-056`：真实 DOCX 曾在页映射就绪前启动审核。该问题必须以代码顺序、并发/重试测试和真实文件浏览器证据同时关闭。
