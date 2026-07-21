@@ -5,6 +5,7 @@ export type ReviewEvidenceReview = {
   status?: ReviewStatus
   rule_version?: number | null
   skill_bundle_id?: string | null
+  plan_snapshot_id?: string | null
   model_policy_id?: string | null
   rule_snapshot_ids?: string[] | null
   rule_set_snapshot_ids?: string[] | null
@@ -78,8 +79,26 @@ export type ReviewEvidenceModelPolicy = {
   published_at?: string | null
 } | null
 
+export type ReviewEvidenceRuntimePlanSnapshot = {
+  id: string
+  org_id?: string | null
+  business_use_point_id?: string | null
+  application_id?: string | null
+  route_policy_id?: string | null
+  snapshot?: unknown
+  snapshot_sha256?: string | null
+  created_at?: string | null
+} | null
+
 export type ReviewEvidenceModelInvocation = {
   id: string
+  plan_snapshot_id?: string | null
+  business_use_point_id?: string | null
+  application_id?: string | null
+  route_policy_id?: string | null
+  model_catalog_entry_id?: string | null
+  provider_connection_id?: string | null
+  attempt_no?: number | null
   provider?: string | null
   model?: string | null
   phase?: string | null
@@ -88,9 +107,64 @@ export type ReviewEvidenceModelInvocation = {
   fallback_reason?: string | null
   error_message?: string | null
   latency_ms?: number | null
+  input_tokens?: number | null
+  output_tokens?: number | null
+  total_tokens?: number | null
   request_meta?: unknown
   response_meta?: unknown
+  started_at?: string | null
+  completed_at?: string | null
   created_at?: string | null
+}
+
+type RuntimeAssetIdentity = {
+  config_id: string | null
+  config_key: string | null
+  asset_id: string | null
+}
+
+export type ReviewRuntimePlanEvidence = {
+  id: string
+  source: 'ai_runtime_plan_snapshots'
+  snapshot_sha256: string | null
+  schema_version: string | null
+  execution_environment: string | null
+  business_use_point: (RuntimeAssetIdentity & {
+    module_id: string | null
+    required_capabilities: string[]
+  }) | null
+  application_binding: (RuntimeAssetIdentity & {
+    business_use_point_id: string | null
+    application_id: string | null
+  }) | null
+  ai_application: (RuntimeAssetIdentity & {
+    capabilities: string[]
+  }) | null
+  route_policy: (RuntimeAssetIdentity & {
+    strategy: string | null
+    timeout_ms: number | null
+    failure_action: string | null
+    ordered_model_catalog_entry_ids: string[]
+  }) | null
+  model_catalog_entries: Array<RuntimeAssetIdentity & {
+    position: number | null
+    model_id: string | null
+    capabilities: string[]
+    context_window: number | null
+    provider_connection_id: string | null
+  }>
+  provider_connections: Array<RuntimeAssetIdentity & {
+    provider_type: string | null
+    runtime_location: string | null
+    auth_mode: string | null
+    credential_state: string | null
+    connection_timeout_ms: number | null
+  }>
+  created_at: string | null
+  integrity: {
+    valid: boolean
+    errors: string[]
+  }
 }
 
 export type RuleSnapshotRef = {
@@ -116,6 +190,9 @@ export type ReviewRunEvidence = {
   rule_snapshot_id: string
   rule_set_snapshot_ids: string[]
   rule_set_document_ids: string[]
+  plan_snapshot_id: string | null
+  runtime_source: 'runtime_plan' | 'legacy_model_policy'
+  runtime_plan: ReviewRuntimePlanEvidence | null
   model_policy_id: string
   model_invocation_ids: string[]
   started_at: string | null
@@ -177,7 +254,7 @@ export type ReviewRunEvidence = {
   model_policy: {
     id: string
     provider: string
-    source: 'model_policies' | 'analysis_job.provider' | 'fallback'
+    source: 'runtime_plan' | 'model_policies' | 'analysis_job.provider' | 'fallback'
     model?: string | null
     phase?: string | null
     provider_kind?: string | null
@@ -199,6 +276,13 @@ export type ReviewRunEvidence = {
   }
   model_invocations: Array<{
     id: string
+    plan_snapshot_id: string | null
+    business_use_point_id: string | null
+    application_id: string | null
+    route_policy_id: string | null
+    model_catalog_entry_id: string | null
+    provider_connection_id: string | null
+    attempt_no: number | null
     phase: string | null
     provider: string | null
     model: string | null
@@ -207,6 +291,9 @@ export type ReviewRunEvidence = {
     transport: string | null
     provider_kind: string | null
     latency_ms: number | null
+    input_tokens: number | null
+    output_tokens: number | null
+    total_tokens: number | null
     actual_provider_profile: string | null
     actual_provider_model: string | null
     intended_provider_profile: string | null
@@ -220,6 +307,8 @@ export type ReviewRunEvidence = {
     attempt_errors: string[]
     fallback_reason: string | null
     error_message: string | null
+    started_at: string | null
+    completed_at: string | null
     created_at: string | null
   }>
 }
@@ -322,6 +411,275 @@ function nestedRecord(record: Record<string, unknown> | null, key: string): Reco
   return asRecord(record?.[key])
 }
 
+function runtimeAssetIdentity(value: unknown): RuntimeAssetIdentity | null {
+  const record = asRecord(value)
+  if (!record) return null
+  const identity = {
+    config_id: stringValue(record.configId),
+    config_key: stringValue(record.configKey),
+    asset_id: stringValue(record.assetId),
+  }
+  return identity.config_id || identity.config_key || identity.asset_id ? identity : null
+}
+
+function emptyRuntimePlanEvidence(
+  id: string,
+  error: string
+): ReviewRuntimePlanEvidence {
+  return {
+    id,
+    source: 'ai_runtime_plan_snapshots',
+    snapshot_sha256: null,
+    schema_version: null,
+    execution_environment: null,
+    business_use_point: null,
+    application_binding: null,
+    ai_application: null,
+    route_policy: null,
+    model_catalog_entries: [],
+    provider_connections: [],
+    created_at: null,
+    integrity: { valid: false, errors: [error] },
+  }
+}
+
+function buildRuntimePlanEvidence(input: {
+  expectedPlanSnapshotId: string | null
+  expectedOrgId?: string | null
+  snapshotRow: ReviewEvidenceRuntimePlanSnapshot
+}): ReviewRuntimePlanEvidence | null {
+  const { expectedPlanSnapshotId, expectedOrgId, snapshotRow } = input
+  if (!expectedPlanSnapshotId) return null
+  if (!snapshotRow) {
+    return emptyRuntimePlanEvidence(expectedPlanSnapshotId, 'runtime_plan_snapshot_missing')
+  }
+
+  const errors: string[] = []
+  const snapshot = asRecord(snapshotRow.snapshot)
+  const usePointRecord = nestedRecord(snapshot, 'usePoint')
+  const bindingRecord = nestedRecord(snapshot, 'binding')
+  const applicationRecord = nestedRecord(snapshot, 'application')
+  const routeRecord = nestedRecord(snapshot, 'route')
+  const usePointIdentity = runtimeAssetIdentity(usePointRecord)
+  const bindingIdentity = runtimeAssetIdentity(bindingRecord)
+  const applicationIdentity = runtimeAssetIdentity(applicationRecord)
+  const routeIdentity = runtimeAssetIdentity(routeRecord)
+
+  if (snapshotRow.id !== expectedPlanSnapshotId) errors.push('runtime_plan_snapshot_id_mismatch')
+  if (expectedOrgId && snapshotRow.org_id !== expectedOrgId) errors.push('runtime_plan_snapshot_org_mismatch')
+  if (!snapshot) errors.push('runtime_plan_snapshot_payload_invalid')
+  if (stringValue(snapshot?.schemaVersion) !== 'ai-runtime-plan.v1') {
+    errors.push('runtime_plan_schema_version_invalid')
+  }
+  if (expectedOrgId && stringValue(snapshot?.orgId) !== expectedOrgId) {
+    errors.push('runtime_plan_payload_org_mismatch')
+  }
+  if (!/^[0-9a-f]{64}$/.test(snapshotRow.snapshot_sha256 || '')) {
+    errors.push('runtime_plan_sha256_invalid')
+  }
+  if (!usePointIdentity?.config_id || !usePointIdentity.config_key || !usePointIdentity.asset_id) {
+    errors.push('runtime_plan_business_use_point_invalid')
+  }
+  if (!bindingIdentity?.config_id || !bindingIdentity.config_key || !bindingIdentity.asset_id) {
+    errors.push('runtime_plan_application_binding_invalid')
+  }
+  if (!applicationIdentity?.config_id || !applicationIdentity.config_key || !applicationIdentity.asset_id) {
+    errors.push('runtime_plan_ai_application_invalid')
+  }
+  if (!routeIdentity?.config_id || !routeIdentity.config_key || !routeIdentity.asset_id) {
+    errors.push('runtime_plan_route_policy_invalid')
+  }
+
+  const businessUsePoint = usePointIdentity ? {
+    ...usePointIdentity,
+    module_id: stringValue(usePointRecord?.moduleId),
+    required_capabilities: stringListValue(usePointRecord?.requiredCapabilities),
+  } : null
+  const applicationBinding = bindingIdentity ? {
+    ...bindingIdentity,
+    business_use_point_id: stringValue(bindingRecord?.usePointId),
+    application_id: stringValue(bindingRecord?.applicationId),
+  } : null
+  const aiApplication = applicationIdentity ? {
+    ...applicationIdentity,
+    capabilities: stringListValue(applicationRecord?.capabilities),
+  } : null
+  const orderedModelIds = stringListValue(routeRecord?.orderedModelAssetIds)
+  const routePolicy = routeIdentity ? {
+    ...routeIdentity,
+    strategy: stringValue(routeRecord?.strategy),
+    timeout_ms: numberValue(routeRecord?.timeoutMs),
+    failure_action: stringValue(routeRecord?.failureAction),
+    ordered_model_catalog_entry_ids: orderedModelIds,
+  } : null
+
+  if (snapshotRow.business_use_point_id !== businessUsePoint?.asset_id) {
+    errors.push('runtime_plan_business_use_point_binding_mismatch')
+  }
+  if (snapshotRow.application_id !== aiApplication?.asset_id) {
+    errors.push('runtime_plan_ai_application_binding_mismatch')
+  }
+  if (snapshotRow.route_policy_id !== routePolicy?.asset_id) {
+    errors.push('runtime_plan_route_policy_binding_mismatch')
+  }
+  if (applicationBinding?.business_use_point_id !== businessUsePoint?.asset_id) {
+    errors.push('runtime_plan_application_binding_use_point_mismatch')
+  }
+  if (applicationBinding?.application_id !== aiApplication?.asset_id) {
+    errors.push('runtime_plan_application_binding_application_mismatch')
+  }
+
+  const candidates = Array.isArray(snapshot?.candidates) ? snapshot.candidates : []
+  if (candidates.length === 0) errors.push('runtime_plan_candidates_missing')
+  const modelCatalogEntries: ReviewRuntimePlanEvidence['model_catalog_entries'] = []
+  const providerConnections: ReviewRuntimePlanEvidence['provider_connections'] = []
+  const providerByAssetId = new Map<string, ReviewRuntimePlanEvidence['provider_connections'][number]>()
+
+  candidates.forEach((candidateValue, index) => {
+    const candidate = asRecord(candidateValue)
+    const modelRecord = nestedRecord(candidate, 'model')
+    const providerRecord = nestedRecord(candidate, 'provider')
+    const modelIdentity = runtimeAssetIdentity(modelRecord)
+    const providerIdentity = runtimeAssetIdentity(providerRecord)
+    const position = numberValue(candidate?.position)
+
+    if (position !== index) errors.push(`runtime_plan_candidate_position_invalid:${index}`)
+    if (!modelIdentity?.config_id || !modelIdentity.config_key || !modelIdentity.asset_id) {
+      errors.push(`runtime_plan_model_catalog_entry_invalid:${index}`)
+    }
+    if (!providerIdentity?.config_id || !providerIdentity.config_key || !providerIdentity.asset_id) {
+      errors.push(`runtime_plan_provider_connection_invalid:${index}`)
+    }
+
+    if (modelIdentity) {
+      modelCatalogEntries.push({
+        ...modelIdentity,
+        position,
+        model_id: stringValue(modelRecord?.modelId),
+        capabilities: stringListValue(modelRecord?.capabilities),
+        context_window: numberValue(modelRecord?.contextWindow),
+        provider_connection_id: providerIdentity?.asset_id || null,
+      })
+    }
+
+    if (providerIdentity) {
+      const provider = {
+        ...providerIdentity,
+        provider_type: stringValue(providerRecord?.providerType),
+        runtime_location: stringValue(providerRecord?.runtimeLocation),
+        auth_mode: stringValue(providerRecord?.authMode),
+        credential_state: stringValue(providerRecord?.credentialState),
+        connection_timeout_ms: numberValue(providerRecord?.connectionTimeoutMs),
+      }
+      const providerKey = provider.asset_id || provider.config_id || `candidate:${index}`
+      const existing = providerByAssetId.get(providerKey)
+      if (existing && JSON.stringify(existing) !== JSON.stringify(provider)) {
+        errors.push(`runtime_plan_provider_connection_conflict:${providerKey}`)
+      } else if (!existing) {
+        providerByAssetId.set(providerKey, provider)
+        providerConnections.push(provider)
+      }
+    }
+  })
+
+  const actualModelIds = modelCatalogEntries.map((entry) => entry.asset_id).filter((id): id is string => Boolean(id))
+  if (hasDuplicates(actualModelIds)) errors.push('runtime_plan_model_catalog_entries_duplicated')
+  if (
+    orderedModelIds.length !== actualModelIds.length
+    || orderedModelIds.some((id, index) => id !== actualModelIds[index])
+  ) {
+    errors.push('runtime_plan_candidate_order_mismatch')
+  }
+
+  return {
+    id: snapshotRow.id,
+    source: 'ai_runtime_plan_snapshots',
+    snapshot_sha256: snapshotRow.snapshot_sha256 || null,
+    schema_version: stringValue(snapshot?.schemaVersion),
+    execution_environment: stringValue(snapshot?.executionEnvironment),
+    business_use_point: businessUsePoint,
+    application_binding: applicationBinding,
+    ai_application: aiApplication,
+    route_policy: routePolicy,
+    model_catalog_entries: modelCatalogEntries,
+    provider_connections: providerConnections,
+    created_at: snapshotRow.created_at || null,
+    integrity: {
+      valid: errors.length === 0,
+      errors: Array.from(new Set(errors)),
+    },
+  }
+}
+
+function validateRuntimeInvocationBindings(
+  plan: ReviewRuntimePlanEvidence,
+  invocations: ReviewEvidenceModelInvocation[]
+): string[] {
+  const errors: string[] = []
+  if (invocations.length === 0) return ['runtime_plan_invocations_missing']
+
+  const usePointId = plan.business_use_point?.asset_id || null
+  const applicationId = plan.ai_application?.asset_id || null
+  const routePolicyId = plan.route_policy?.asset_id || null
+  const modelToProvider = new Map(plan.model_catalog_entries.map((model) => (
+    [model.asset_id, model.provider_connection_id] as const
+  )))
+  const attemptNumbers: number[] = []
+
+  invocations.forEach((invocation) => {
+    const attempt = invocation.attempt_no
+    const suffix = attempt ?? invocation.id
+    if (invocation.plan_snapshot_id !== plan.id) {
+      errors.push(`runtime_invocation_plan_mismatch:${suffix}`)
+    }
+    if (invocation.business_use_point_id !== usePointId) {
+      errors.push(`runtime_invocation_use_point_mismatch:${suffix}`)
+    }
+    if (invocation.application_id !== applicationId) {
+      errors.push(`runtime_invocation_application_mismatch:${suffix}`)
+    }
+    if (invocation.route_policy_id !== routePolicyId) {
+      errors.push(`runtime_invocation_route_mismatch:${suffix}`)
+    }
+    if (!invocation.model_catalog_entry_id || !modelToProvider.has(invocation.model_catalog_entry_id)) {
+      errors.push(`runtime_invocation_model_mismatch:${suffix}`)
+    } else if (modelToProvider.get(invocation.model_catalog_entry_id) !== invocation.provider_connection_id) {
+      errors.push(`runtime_invocation_provider_mismatch:${suffix}`)
+    }
+    if (typeof attempt !== 'number' || attempt < 1 || !Number.isInteger(attempt)) {
+      errors.push(`runtime_invocation_attempt_invalid:${suffix}`)
+    } else {
+      attemptNumbers.push(attempt)
+    }
+    if (invocation.status === 'completed') {
+      const tokensValid = typeof invocation.input_tokens === 'number'
+        && typeof invocation.output_tokens === 'number'
+        && typeof invocation.total_tokens === 'number'
+        && invocation.total_tokens > 0
+        && invocation.total_tokens === invocation.input_tokens + invocation.output_tokens
+      if (!tokensValid) errors.push(`runtime_invocation_tokens_invalid:${suffix}`)
+    }
+  })
+
+  if (hasDuplicates(attemptNumbers.map(String))) errors.push('runtime_invocation_attempt_duplicated')
+  const sortedAttempts = [...attemptNumbers].sort((left, right) => left - right)
+  if (sortedAttempts.some((attempt, index) => attempt !== index + 1)) {
+    errors.push('runtime_invocation_attempt_sequence_invalid')
+  }
+  return Array.from(new Set(errors))
+}
+
+function isSemanticInvocation(invocation: ReviewEvidenceModelInvocation): boolean {
+  return invocation.phase === 'semantic_review'
+    || invocation.phase === 'contract.review.semantic'
+    || invocation.business_use_point_id === 'contract.review.semantic'
+}
+
+function invocationSortValue(invocation: ReviewEvidenceModelInvocation): number {
+  if (typeof invocation.attempt_no === 'number') return invocation.attempt_no
+  return new Date(invocation.created_at || 0).getTime()
+}
+
 type RuntimeModelEvalSummary = {
   status: string | null
   note: string | null
@@ -331,7 +689,9 @@ type RuntimeModelEvalSummary = {
 function deriveRuntimeModelEvalStatus(
   modelInvocations: ReviewEvidenceModelInvocation[]
 ): RuntimeModelEvalSummary {
-  const semanticInvocation = modelInvocations.find((invocation) => invocation.phase === 'semantic_review')
+  const semanticInvocation = representativeInvocation(
+    modelInvocations.filter(isSemanticInvocation)
+  )
   if (!semanticInvocation) {
     return {
       status: 'model_quality_eval_not_run',
@@ -348,6 +708,44 @@ function deriveRuntimeModelEvalStatus(
     : 0
   const droppedRiskCount = numberValue(responseMeta?.dropped_risk_count) ?? 0
   const usableRiskCount = numberValue(responseMeta?.usable_risk_count)
+
+  if (semanticInvocation.plan_snapshot_id) {
+    const tokenAccountingValid = typeof semanticInvocation.input_tokens === 'number'
+      && typeof semanticInvocation.output_tokens === 'number'
+      && typeof semanticInvocation.total_tokens === 'number'
+      && semanticInvocation.total_tokens > 0
+      && semanticInvocation.total_tokens === semanticInvocation.input_tokens + semanticInvocation.output_tokens
+    const outputValidated = responseMeta?.output_validation === 'passed'
+    const tokenEvidence = responseMeta?.token_evidence === 'provider'
+
+    if (
+      semanticInvocation.status === 'completed'
+      && !semanticInvocation.degraded
+      && tokenAccountingValid
+      && outputValidated
+      && tokenEvidence
+    ) {
+      return {
+        status: 'latest_review_model_invocation_passed',
+        note: `Latest plan-bound semantic invocation completed with ${semanticInvocation.total_tokens} provider-reported token(s) and passed output validation.`,
+        invocation_id: semanticInvocation.id,
+      }
+    }
+
+    if (semanticInvocation.status === 'completed') {
+      return {
+        status: 'latest_review_model_invocation_partial',
+        note: `Latest plan-bound semantic invocation completed, but fallback, token accounting or output validation requires review.`,
+        invocation_id: semanticInvocation.id,
+      }
+    }
+
+    return {
+      status: 'latest_review_model_invocation_not_passed',
+      note: `Latest plan-bound semantic invocation failed: ${semanticInvocation.fallback_reason || semanticInvocation.error_message || 'unknown reason'}.`,
+      invocation_id: semanticInvocation.id,
+    }
+  }
 
   if (
     semanticInvocation.status === 'completed'
@@ -629,9 +1027,15 @@ function firstProviderFromPolicy(modelPolicy: ReviewEvidenceModelPolicy): { prov
 function representativeInvocation(
   modelInvocations: ReviewEvidenceModelInvocation[]
 ): ReviewEvidenceModelInvocation | null {
-  return modelInvocations.find((invocation) => invocation.phase === 'semantic_review')
-    || modelInvocations.find((invocation) => invocation.degraded || invocation.status === 'failed')
-    || modelInvocations[0]
+  const ordered = [...modelInvocations].sort((left, right) => (
+    invocationSortValue(right) - invocationSortValue(left)
+  ))
+  const semantic = ordered.filter(isSemanticInvocation)
+  return semantic.find((invocation) => invocation.status === 'completed')
+    || semantic[0]
+    || ordered.find((invocation) => invocation.status === 'completed')
+    || ordered.find((invocation) => invocation.degraded || invocation.status === 'failed')
+    || ordered[0]
     || null
 }
 
@@ -655,6 +1059,13 @@ function summarizeInvocation(invocation: ReviewEvidenceModelInvocation) {
   const attemptErrors = stringListValue(responseMeta?.attempt_errors).map(sanitizeEvidenceMessage)
   return {
     id: invocation.id,
+    plan_snapshot_id: invocation.plan_snapshot_id || null,
+    business_use_point_id: invocation.business_use_point_id || null,
+    application_id: invocation.application_id || null,
+    route_policy_id: invocation.route_policy_id || null,
+    model_catalog_entry_id: invocation.model_catalog_entry_id || null,
+    provider_connection_id: invocation.provider_connection_id || null,
+    attempt_no: invocation.attempt_no ?? null,
     phase: invocation.phase || null,
     provider: invocation.provider || null,
     model: invocation.model || null,
@@ -663,6 +1074,9 @@ function summarizeInvocation(invocation: ReviewEvidenceModelInvocation) {
     transport: stringValue(responseMeta?.transport),
     provider_kind: stringValue(responseMeta?.provider_kind),
     latency_ms: invocation.latency_ms ?? null,
+    input_tokens: invocation.input_tokens ?? null,
+    output_tokens: invocation.output_tokens ?? null,
+    total_tokens: invocation.total_tokens ?? null,
     actual_provider_profile: stringValue(responseMeta?.actual_provider_profile)
       || stringValue(responseMeta?.provider_profile)
       || invocation.provider
@@ -685,6 +1099,8 @@ function summarizeInvocation(invocation: ReviewEvidenceModelInvocation) {
     attempt_errors: attemptErrors.slice(0, 3),
     fallback_reason: invocation.fallback_reason || null,
     error_message: invocation.error_message || null,
+    started_at: invocation.started_at || null,
+    completed_at: invocation.completed_at || null,
     created_at: invocation.created_at || null,
   }
 }
@@ -716,8 +1132,10 @@ export function buildReviewRunEvidence(input: {
   ruleSetSnapshots?: ReviewEvidenceRuleSetSnapshot[]
   expectedOrgId?: string | null
   skillBundle?: ReviewEvidenceSkillBundle
+  runtimePlanSnapshot?: ReviewEvidenceRuntimePlanSnapshot
   modelPolicy?: ReviewEvidenceModelPolicy
   modelInvocations?: ReviewEvidenceModelInvocation[]
+  modelInvocationsLoaded?: boolean
 }): ReviewRunEvidence | null {
   const {
     latestReview,
@@ -728,8 +1146,10 @@ export function buildReviewRunEvidence(input: {
     ruleSetSnapshots = [],
     expectedOrgId,
     skillBundle,
+    runtimePlanSnapshot = null,
     modelPolicy,
     modelInvocations = [],
+    modelInvocationsLoaded = true,
   } = input
   if (!latestReview) return null
 
@@ -752,18 +1172,46 @@ export function buildReviewRunEvidence(input: {
     expectedOrgId,
   })
   const refs = buildBoundSnapshotRefs(snapshots, snapshotIntegrityErrors)
+  const hasRuntimePlanBinding = Boolean(latestReview.plan_snapshot_id)
+  const runtimePlan = buildRuntimePlanEvidence({
+    expectedPlanSnapshotId: latestReview.plan_snapshot_id || null,
+    expectedOrgId,
+    snapshotRow: runtimePlanSnapshot,
+  })
+  if (runtimePlan && modelInvocationsLoaded) {
+    const invocationIntegrityErrors = validateRuntimeInvocationBindings(runtimePlan, modelInvocations)
+    runtimePlan.integrity = {
+      valid: runtimePlan.integrity.valid && invocationIntegrityErrors.length === 0,
+      errors: Array.from(new Set([
+        ...runtimePlan.integrity.errors,
+        ...invocationIntegrityErrors,
+      ])),
+    }
+  }
   const invocation = representativeInvocation(modelInvocations)
   const requestMeta = invocationRequestMeta(invocation)
   const responseMeta = invocationResponseMeta(invocation)
-  const modelInvocationIds = latestReview.model_invocation_ids?.length
+  const modelInvocationIds = hasRuntimePlanBinding
+    ? modelInvocations.map((item) => item.id)
+    : latestReview.model_invocation_ids?.length
     ? latestReview.model_invocation_ids
     : modelInvocations.map((item) => item.id)
-  const policyProvider = firstProviderFromPolicy(modelPolicy ?? null)
-  const provider = invocation?.provider || policyProvider?.provider || latestJob?.provider || 'rule-engine'
-  const modelPolicyId = latestReview.model_policy_id
-    || skillBundle?.model_policy_id
-    || modelPolicy?.id
-    || `model-policy:${provider}${latestJob?.degraded ? ':degraded' : ''}`
+  const primaryModel = runtimePlan?.model_catalog_entries[0] || null
+  const primaryProvider = runtimePlan?.provider_connections.find((provider) => (
+    provider.asset_id === primaryModel?.provider_connection_id
+  )) || runtimePlan?.provider_connections[0] || null
+  const policyProvider = hasRuntimePlanBinding ? null : firstProviderFromPolicy(modelPolicy ?? null)
+  const provider = invocation?.provider
+    || primaryProvider?.asset_id
+    || (hasRuntimePlanBinding
+      ? 'runtime-plan'
+      : policyProvider?.provider || latestJob?.provider || 'rule-engine')
+  const modelPolicyId = hasRuntimePlanBinding
+    ? `runtime-plan:${latestReview.plan_snapshot_id}${runtimePlan?.integrity.valid ? '' : ':invalid'}`
+    : latestReview.model_policy_id
+      || skillBundle?.model_policy_id
+      || modelPolicy?.id
+      || `model-policy:${provider}${latestJob?.degraded ? ':degraded' : ''}`
   const status = evidenceStatus(risks, refs)
   const skillBundleId = latestReview.skill_bundle_id
     || skillBundle?.id
@@ -777,6 +1225,9 @@ export function buildReviewRunEvidence(input: {
     rule_snapshot_id: summarizeBoundRuleSnapshotId(ruleBinding.ids, refs),
     rule_set_snapshot_ids: ruleSetBinding.ids,
     rule_set_document_ids: boundRuleSetDocumentIds,
+    plan_snapshot_id: latestReview.plan_snapshot_id || null,
+    runtime_source: hasRuntimePlanBinding ? 'runtime_plan' : 'legacy_model_policy',
+    runtime_plan: runtimePlan,
     model_policy_id: modelPolicyId,
     model_invocation_ids: modelInvocationIds,
     started_at: latestJob?.started_at || latestReview.created_at || null,
@@ -797,11 +1248,19 @@ export function buildReviewRunEvidence(input: {
     model_policy: {
       id: modelPolicyId,
       provider,
-      source: modelPolicy ? 'model_policies' : (latestJob?.provider ? 'analysis_job.provider' : 'fallback'),
-      model: invocation?.model || policyProvider?.model || null,
+      source: hasRuntimePlanBinding
+        ? 'runtime_plan'
+        : modelPolicy
+          ? 'model_policies'
+          : (latestJob?.provider ? 'analysis_job.provider' : 'fallback'),
+      model: invocation?.model || primaryModel?.model_id || policyProvider?.model || null,
       phase: invocation?.phase || null,
-      provider_kind: stringValue(responseMeta?.provider_kind),
-      transport: stringValue(responseMeta?.transport),
+      provider_kind: stringValue(responseMeta?.provider_kind)
+        || (hasRuntimePlanBinding ? primaryProvider?.provider_type || null : null),
+      transport: stringValue(responseMeta?.transport)
+        || (hasRuntimePlanBinding && primaryProvider?.provider_type === 'openai_compatible'
+          ? 'openai_compatible_http'
+          : null),
       latency_ms: invocation?.latency_ms ?? null,
       actual_provider_profile: stringValue(responseMeta?.actual_provider_profile)
         || stringValue(responseMeta?.provider_profile)
@@ -810,20 +1269,24 @@ export function buildReviewRunEvidence(input: {
       actual_provider_model: stringValue(responseMeta?.actual_provider_model)
         || invocation?.model
         || null,
-      intended_provider_profile: stringValue(requestMeta?.intended_provider_profile),
-      intended_provider_model: stringValue(requestMeta?.intended_provider_model),
+      intended_provider_profile: stringValue(requestMeta?.intended_provider_profile)
+        || primaryProvider?.asset_id
+        || null,
+      intended_provider_model: stringValue(requestMeta?.intended_provider_model)
+        || primaryModel?.model_id
+        || null,
       requested_provider_profile: stringValue(requestMeta?.requested_provider_profile),
       requested_provider_model: stringValue(requestMeta?.requested_provider_model),
       requested_provider_accepted: typeof requestMeta?.requested_provider_accepted === 'boolean'
         ? requestMeta.requested_provider_accepted
         : null,
-      attempt_error_count: invocationAttemptErrorCount(invocation),
+      attempt_error_count: hasRuntimePlanBinding
+        ? modelInvocations.filter((item) => item.status === 'failed').length
+        : invocationAttemptErrorCount(invocation),
       degraded: Boolean(
         invocation?.degraded
-        ?? (
-          modelInvocations.some((item) => item.degraded || item.status === 'failed')
-          || latestJob?.degraded
-        )
+        || modelInvocations.some((item) => item.degraded || item.status === 'failed')
+        || latestJob?.degraded
       ),
       status: invocation?.status || latestJob?.status || modelPolicy?.status || null,
       last_error: invocation?.error_message || latestJob?.last_error || null,

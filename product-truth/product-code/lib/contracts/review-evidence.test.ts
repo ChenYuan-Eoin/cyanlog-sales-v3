@@ -1001,4 +1001,214 @@ describe('buildReviewRunEvidence', () => {
     expect(evidence?.skill_bundle?.runtime_eval_status).toBe('latest_review_model_invocation_passed')
     expect(evidence?.skill_bundle?.eval_note).toContain('3 usable risk')
   })
+
+  it('makes the immutable six-object plan primary and exposes every ordered model attempt', () => {
+    const planSnapshot = {
+      id: 'plan-snapshot-1',
+      org_id: 'org-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      snapshot_sha256: 'a'.repeat(64),
+      created_at: '2026-07-21T01:00:00.000Z',
+      snapshot: {
+        schemaVersion: 'ai-runtime-plan.v1',
+        orgId: 'org-1',
+        executionEnvironment: 'hosted',
+        usePoint: {
+          configId: 'config-use-point', configKey: 'USE_POINT', assetId: 'contract.review.semantic',
+          moduleId: 'contract_review', requiredCapabilities: ['text_generation'],
+        },
+        binding: {
+          configId: 'config-binding', configKey: 'BINDING', assetId: 'binding.contract.review',
+          usePointId: 'contract.review.semantic', applicationId: 'app.contract.review',
+        },
+        application: {
+          configId: 'config-app', configKey: 'APP', assetId: 'app.contract.review',
+          capabilities: ['text_generation'],
+        },
+        route: {
+          configId: 'config-route', configKey: 'ROUTE', assetId: 'route.contract.review',
+          strategy: 'ordered_fallback', timeoutMs: 45000, failureAction: 'manual_review',
+          orderedModelAssetIds: ['model.local', 'model.cloud'],
+        },
+        candidates: [{
+          position: 0,
+          model: {
+            configId: 'config-model-local', configKey: 'MODEL_LOCAL', assetId: 'model.local',
+            modelId: 'google/gemma-4-e4b', capabilities: ['text_generation'], contextWindow: 8192,
+          },
+          provider: {
+            configId: 'config-provider-local', configKey: 'PROVIDER_LOCAL', assetId: 'provider.local',
+            providerType: 'openai_compatible', runtimeLocation: 'local', authMode: 'bearer',
+            credentialState: 'stored', connectionTimeoutMs: 1000,
+          },
+        }, {
+          position: 1,
+          model: {
+            configId: 'config-model-cloud', configKey: 'MODEL_CLOUD', assetId: 'model.cloud',
+            modelId: 'gpt-5.5', capabilities: ['text_generation'], contextWindow: 128000,
+          },
+          provider: {
+            configId: 'config-provider-cloud', configKey: 'PROVIDER_CLOUD', assetId: 'provider.cloud',
+            providerType: 'openai_compatible', runtimeLocation: 'cloud', authMode: 'bearer',
+            credentialState: 'stored', connectionTimeoutMs: 1000,
+          },
+        }],
+      },
+    }
+    const sharedInvocation = {
+      plan_snapshot_id: 'plan-snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      phase: 'contract.review.semantic',
+    }
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-plan-bound',
+        status: 'COMPLETED',
+        plan_snapshot_id: 'plan-snapshot-1',
+        model_policy_id: 'legacy-policy-must-not-win',
+        model_invocation_ids: ['stale-legacy-invocation'],
+      },
+      latestJob: { provider: 'legacy-job-provider', status: 'completed' },
+      currentVersion: { id: 'version-1' },
+      risks: [],
+      snapshots: [],
+      expectedOrgId: 'org-1',
+      runtimePlanSnapshot: planSnapshot,
+      modelPolicy: {
+        id: 'legacy-policy-must-not-win',
+        provider_chain: [{ provider: 'legacy-provider', model: 'legacy-model' }],
+      },
+      modelInvocations: [{
+        id: 'invocation-1',
+        ...sharedInvocation,
+        model_catalog_entry_id: 'model.local',
+        provider_connection_id: 'provider.local',
+        attempt_no: 1,
+        provider: 'provider.local',
+        model: 'google/gemma-4-e4b',
+        status: 'failed',
+        degraded: true,
+        fallback_reason: 'PROVIDER_UNAVAILABLE',
+        error_message: '模型连接或传输失败。',
+        latency_ms: 120,
+        input_tokens: null,
+        output_tokens: null,
+        total_tokens: null,
+        response_meta: { output_validation: 'failed' },
+      }, {
+        id: 'invocation-2',
+        ...sharedInvocation,
+        model_catalog_entry_id: 'model.cloud',
+        provider_connection_id: 'provider.cloud',
+        attempt_no: 2,
+        provider: 'provider.cloud',
+        model: 'gpt-5.5',
+        status: 'completed',
+        degraded: true,
+        fallback_reason: 'PROVIDER_UNAVAILABLE',
+        latency_ms: 450,
+        input_tokens: 100,
+        output_tokens: 20,
+        total_tokens: 120,
+        response_meta: { output_validation: 'passed', token_evidence: 'provider' },
+      }],
+    })
+
+    expect(evidence).toMatchObject({
+      plan_snapshot_id: 'plan-snapshot-1',
+      runtime_source: 'runtime_plan',
+      model_policy_id: 'runtime-plan:plan-snapshot-1',
+      model_invocation_ids: ['invocation-1', 'invocation-2'],
+      runtime_plan: {
+        id: 'plan-snapshot-1',
+        snapshot_sha256: 'a'.repeat(64),
+        business_use_point: { asset_id: 'contract.review.semantic' },
+        application_binding: { asset_id: 'binding.contract.review' },
+        ai_application: { asset_id: 'app.contract.review' },
+        route_policy: {
+          asset_id: 'route.contract.review',
+          ordered_model_catalog_entry_ids: ['model.local', 'model.cloud'],
+        },
+        integrity: { valid: true, errors: [] },
+      },
+      model_policy: {
+        id: 'runtime-plan:plan-snapshot-1',
+        source: 'runtime_plan',
+        provider: 'provider.cloud',
+        model: 'gpt-5.5',
+        intended_provider_profile: 'provider.local',
+        intended_provider_model: 'google/gemma-4-e4b',
+        attempt_error_count: 1,
+        degraded: true,
+        invocation_id: 'invocation-2',
+      },
+      model_invocations: [{
+        id: 'invocation-1', attempt_no: 1, provider_connection_id: 'provider.local',
+        input_tokens: null, output_tokens: null, total_tokens: null,
+      }, {
+        id: 'invocation-2', attempt_no: 2, provider_connection_id: 'provider.cloud',
+        input_tokens: 100, output_tokens: 20, total_tokens: 120,
+      }],
+    })
+    expect(evidence?.runtime_plan?.model_catalog_entries.map((item) => item.asset_id)).toEqual([
+      'model.local', 'model.cloud',
+    ])
+    expect(evidence?.runtime_plan?.provider_connections.map((item) => item.asset_id)).toEqual([
+      'provider.local', 'provider.cloud',
+    ])
+  })
+
+  it('fails closed when a plan-bound ReviewRun cannot load its snapshot instead of using legacy ModelPolicy', () => {
+    const evidence = buildReviewRunEvidence({
+      latestReview: {
+        id: 'review-plan-missing',
+        status: 'COMPLETED',
+        plan_snapshot_id: 'plan-missing',
+        model_policy_id: 'legacy-policy',
+      },
+      latestJob: { provider: 'legacy-job-provider', status: 'completed' },
+      currentVersion: null,
+      risks: [],
+      snapshots: [],
+      expectedOrgId: 'org-1',
+      runtimePlanSnapshot: null,
+      modelPolicy: {
+        id: 'legacy-policy',
+        provider_chain: [{ provider: 'legacy-provider', model: 'legacy-model' }],
+      },
+      modelInvocations: [],
+    })
+
+    expect(evidence).toMatchObject({
+      plan_snapshot_id: 'plan-missing',
+      runtime_source: 'runtime_plan',
+      model_policy_id: 'runtime-plan:plan-missing:invalid',
+      runtime_plan: {
+        id: 'plan-missing',
+        integrity: {
+          valid: false,
+          errors: ['runtime_plan_snapshot_missing', 'runtime_plan_invocations_missing'],
+        },
+      },
+      model_policy: {
+        source: 'runtime_plan',
+        provider: 'runtime-plan',
+        model: null,
+      },
+    })
+  })
+
+  it('loads plan-bound attempts by ReviewRun and plan while keeping ModelPolicy legacy-only', () => {
+    expect(reviewRouteSource).toContain(".from('ai_runtime_plan_snapshots')")
+    expect(reviewRouteSource).toContain(".eq('id', latestReview.plan_snapshot_id)")
+    expect(reviewRouteSource).toContain('const modelPolicyId = latestReview?.plan_snapshot_id')
+    expect(reviewRouteSource).toContain(".eq('review_id', latestReview.id)")
+    expect(reviewRouteSource).toContain(".eq('plan_snapshot_id', latestReview.plan_snapshot_id)")
+    expect(reviewRouteSource).toContain(".order('attempt_no', { ascending: true })")
+    expect(reviewRouteSource).toContain('input_tokens, output_tokens, total_tokens')
+  })
 })

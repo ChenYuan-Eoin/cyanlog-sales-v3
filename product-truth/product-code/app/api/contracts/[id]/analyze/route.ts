@@ -6,6 +6,10 @@ import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import {
+  loadCurrentReviewSourceIdentity,
+  ReviewSourceIdentityError,
+} from '@/lib/contracts/review-source-identity'
 
 const analyzeOptionsSchema = z.object({
   strategy: z.enum(['AGGRESSIVE', 'BALANCED', 'CONSERVATIVE']).optional(),
@@ -107,6 +111,16 @@ export async function POST(
       return errorResponse('24小时内已有进行中的审核任务', 409, 'RECENT_REVIEW_EXISTS')
     }
 
+    let sourceIdentity
+    try {
+      sourceIdentity = await loadCurrentReviewSourceIdentity(id, contract.storage_path)
+    } catch (error) {
+      if (error instanceof ReviewSourceIdentityError) {
+        return errorResponse(error.message, 409, error.code)
+      }
+      throw error
+    }
+
     // 更新合同状态为解析中（乐观锁）
     const { error: updateError } = await supabaseAdmin
       .from('contracts')
@@ -140,6 +154,8 @@ export async function POST(
         contract_id: id,
         status: 'PARSING',
         started_at: new Date().toISOString(),
+        review_trigger: 'direct',
+        ...sourceIdentity,
       })
       .select()
       .single()
@@ -199,7 +215,8 @@ export async function POST(
         ...reviewOptions,
         reviewId: review.id,
         requestedBy: user.id,
-        reviewTrigger: 'initial_generate',
+        reviewTrigger: 'direct',
+        reviewEvent: 'initial_generate',
       })
       await saveStructuredReport(review.id, id, structuredReport, strategyId)
       await markContractAnalysisCompleted(job, structuredReport.result)

@@ -1,10 +1,6 @@
 import crypto from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
-  resolvePublishedModelPolicy,
-  type ContractModelPolicy,
-} from '@/lib/contracts/model-policy'
-import {
   buildRuleUnits,
   summarizeRuleTranslationGate,
 } from '@/lib/contracts/rule-unit'
@@ -144,7 +140,7 @@ type RuleSetSnapshotRow = {
   released_at: string | null
 }
 
-type SkillBundleRow = Omit<ContractSkillBundle, 'model_policy' | 'compiled_from' | 'output_schema'> & {
+type SkillBundleRow = Omit<ContractSkillBundle, 'compiled_from' | 'output_schema'> & {
   compiled_from: unknown
   output_schema: unknown
 }
@@ -194,8 +190,8 @@ export type ContractSkillBundle = {
   template_snapshot_ids: string[]
   document_snapshot_ids: string[]
   output_schema: JsonRecord
-  model_policy_id: string
-  model_policy: ContractModelPolicy
+  /** Legacy read-only pointer. WP02 freezes AIExecutionPlan separately. */
+  model_policy_id: string | null
   eval_case_ids: string[]
   release_meta: JsonRecord
   compiled_from: JsonRecord
@@ -236,7 +232,7 @@ export function isContractSkillBundleFormalReviewAllowed(bundle: FormalReviewBun
     && stringValue(evalResults.status) === 'passed'
 }
 
-function normalizeBundle(row: SkillBundleRow, modelPolicy: ContractModelPolicy): ContractSkillBundle {
+function normalizeBundle(row: SkillBundleRow): ContractSkillBundle {
   return {
     ...row,
     rule_snapshot_ids: Array.isArray(row.rule_snapshot_ids) ? row.rule_snapshot_ids : [],
@@ -247,7 +243,6 @@ function normalizeBundle(row: SkillBundleRow, modelPolicy: ContractModelPolicy):
     output_schema: asRecord(row.output_schema),
     release_meta: asRecord(row.release_meta),
     compiled_from: asRecord(row.compiled_from),
-    model_policy: modelPolicy,
   }
 }
 
@@ -531,7 +526,7 @@ function summarizeRuleSetSnapshotGate(
   }
 }
 
-async function fetchCurrentBundle(orgId: string, modelPolicy: ContractModelPolicy) {
+async function fetchCurrentBundle(orgId: string) {
   const { data, error } = await supabaseAdmin
     .from('contract_skill_bundles')
     .select('*')
@@ -545,7 +540,7 @@ async function fetchCurrentBundle(orgId: string, modelPolicy: ContractModelPolic
 
   if (error) throw error
   if (!data) return null
-  const bundle = normalizeBundle(data as SkillBundleRow, modelPolicy)
+  const bundle = normalizeBundle(data as SkillBundleRow)
   return isContractSkillBundleFormalReviewAllowed(bundle) ? bundle : null
 }
 
@@ -568,7 +563,6 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
   requestedBy?: string | null
 }): Promise<ContractSkillBundle> {
   const { orgId, requestedBy } = input
-  const modelPolicy = await resolvePublishedModelPolicy(orgId, requestedBy)
   const ruleSetSnapshots = await loadPublishedRuleSetSnapshots(orgId)
   const { rules, snapshots } = await loadRulesFromRuleSetSnapshots(orgId, ruleSetSnapshots)
   const snapshotsByRuleId = new Map(
@@ -742,33 +736,16 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       case_ids: ONES_SKILL_EVAL_CASES,
       note: 'First-stage static publication eval verifies config-center published rules, RuleUnit readiness, published snapshots, and output schema binding. It does not claim model-quality eval has been run.',
     },
-    model_policy: {
-      id: modelPolicy.id,
-      version: modelPolicy.version,
-      routing_policy: modelPolicy.routing_policy,
-      fallback_policy: modelPolicy.fallback_policy,
-      provider_chain: modelPolicy.provider_chain.map((provider) => ({
-        profile: provider.profile,
-        provider_kind: provider.provider_kind,
-        model: provider.model,
-        runtime_location: provider.runtime_location,
-        level: provider.level,
-        stages: provider.stages,
-        role: provider.role,
-        capabilities: provider.capabilities,
-      })),
-    },
     output_schema_version: schema.schema_version,
   }
   const compiledHash = stableHash(compiledFrom)
 
   const [current, latestVersion] = await Promise.all([
-    fetchCurrentBundle(orgId, modelPolicy),
+    fetchCurrentBundle(orgId),
     fetchLatestBundleVersion(orgId),
   ])
   if (
     current?.compiled_hash === compiledHash
-    && current.model_policy_id === modelPolicy.id
     && current.status === bundleStatus
   ) {
     return current
@@ -799,7 +776,7 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
       template_snapshot_ids: [],
       document_snapshot_ids: documentSnapshotIds,
       output_schema: schema,
-      model_policy_id: modelPolicy.id,
+      model_policy_id: null,
       eval_case_ids: ONES_SKILL_EVAL_CASES,
       release_meta: {
         product_scope: 'F005_CONTRACT_REVIEW_WORKBENCH',
@@ -836,10 +813,10 @@ export async function getOrCompilePublishedContractSkillBundle(input: {
     .single()
 
   if (error) {
-    const refetched = await fetchCurrentBundle(orgId, modelPolicy)
+    const refetched = await fetchCurrentBundle(orgId)
     if (refetched) return refetched
     throw error
   }
 
-  return normalizeBundle(data as SkillBundleRow, modelPolicy)
+  return normalizeBundle(data as SkillBundleRow)
 }

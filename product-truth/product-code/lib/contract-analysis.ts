@@ -1,15 +1,14 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOrgIdForUser } from '@/lib/configs/runtime'
 import { executeRules } from '@/lib/rules/engine'
-import { reviewWithFailoverSync, type SyncReviewResult } from '@/lib/ai/failover'
+import {
+  executeContractSemanticReview,
+  type ContractSemanticReviewResult,
+} from '@/lib/ai/contract-semantic'
+import { AIExecutionError } from '@/lib/ai/runtime-executor'
 import { logError } from '@/lib/error-log'
 import { buildCommentPatchesFromRiskCards } from '@/lib/contracts/comment-patch'
 import { getOrCompilePublishedContractSkillBundle, type ContractSkillBundle } from '@/lib/contracts/skill-bundle'
-import {
-  recordModelInvocation,
-  selectReviewExecutionProvider,
-  type ModelPolicyProvider,
-} from '@/lib/contracts/model-policy'
 import type { RuleExecutionPropertyReading } from '@/lib/rules/types'
 import type { ContractRuleContract } from '@/types/rules'
 
@@ -103,12 +102,19 @@ export interface ReviewOptions {
   reviewId?: string
   requestedBy?: string | null
   reviewTrigger?: string
+  reviewEvent?: string
+  /** Exact ModelCatalogEntry asset for controlled comparison runs only. */
+  semanticModelAssetId?: string
+  /** @deprecated legacy caller field; interpreted only as an exact model asset id. */
   semanticProviderProfile?: string
 }
 
 export interface ReviewRuntimeBinding {
-  skill_bundle_id: string
-  model_policy_id: string
+  skill_bundle_id: string | null
+  /** Legacy read-only pointer; new ReviewRuns bind plan_snapshot_id. */
+  model_policy_id: string | null
+  plan_snapshot_id: string | null
+  plan_snapshot_hash?: string | null
   rule_snapshot_ids: string[]
   rule_set_snapshot_ids: string[]
   rule_set_document_ids: string[]
@@ -807,22 +813,10 @@ function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
-function skillBundleRuleTranslationStatus(skillBundle: ContractSkillBundle | null): string | null {
-  if (!skillBundle) return null
-  const gate = recordValue(recordValue(skillBundle.compiled_from).rule_translation_gate)
-  return stringValue(gate.status)
-}
-
 function skillBundleEvalStatus(skillBundle: ContractSkillBundle | null): string | null {
   if (!skillBundle) return null
   const evalResults = recordValue(recordValue(skillBundle.compiled_from).eval_results)
   return stringValue(evalResults.status)
-}
-
-function skillBundleRuleSetDocumentStatus(skillBundle: ContractSkillBundle | null): string | null {
-  if (!skillBundle) return null
-  const gate = recordValue(recordValue(skillBundle.compiled_from).rule_set_document_gate)
-  return stringValue(gate.status)
 }
 
 function booleanValue(value: unknown): boolean | null {
@@ -868,22 +862,6 @@ function skillBundleFormalReadinessReasons(skillBundle: ContractSkillBundle | nu
   }
 
   return Array.from(new Set(reasons))
-}
-
-function isSkillBundleFormalReviewReady(skillBundle: ContractSkillBundle | null): boolean {
-  return skillBundleFormalReadinessReasons(skillBundle).length === 0
-}
-
-function isSkillReadinessReason(reason: string) {
-  return reason === 'skill_bundle_not_published'
-    || reason === 'skill_bundle_not_current'
-    || reason === 'rule_translation_gate_missing'
-    || reason === 'rule_translation_not_ready'
-    || reason === 'ruleset_document_gate_missing'
-    || reason === 'ruleset_document_not_ready'
-    || reason === 'skill_eval_missing'
-    || reason === 'skill_eval_not_run'
-    || reason === 'skill_eval_not_passed'
 }
 
 function skillContextSource(skillBundle: ContractSkillBundle) {
@@ -967,15 +945,8 @@ function mergeReviewRisks(
   return { risks: slots.map((slot) => slot.risk), added }
 }
 
-function shouldUseSemanticRisks(result: SyncReviewResult): boolean {
-  return result.providerKind === 'openai_compatible' && !result.degraded
-}
-
-function buildCombinedSummary(ruleSummary: string, semanticResult: SyncReviewResult | null): string {
+function buildCombinedSummary(ruleSummary: string, semanticResult: ContractSemanticReviewResult | null): string {
   if (!semanticResult) return ruleSummary
-  if (!shouldUseSemanticRisks(semanticResult)) {
-    return `${ruleSummary}\n\n语义审核：外部模型未完成正式调用，已按规则引擎兜底；请查看模型调用记录确认降级原因。`
-  }
   return `${ruleSummary}\n\n语义审核（${semanticResult.provider}/${semanticResult.model}）：${semanticResult.summary}`
 }
 
@@ -983,28 +954,23 @@ function buildDegradationReasons(input: {
   skillBundle: ContractSkillBundle | null
   structuredDegraded: boolean
   unlocatedCommentableRiskCount?: number
-  semanticResult?: SyncReviewResult | null
+  semanticResult?: ContractSemanticReviewResult | null
+  semanticError?: string | null
+  skillBundleLoadError?: string | null
 }) {
   const reasons: string[] = []
   reasons.push(...skillBundleFormalReadinessReasons(input.skillBundle))
+  if (input.skillBundleLoadError) reasons.push('skill_bundle_load_failed')
   if (input.structuredDegraded) {
     reasons.push('rule_engine_no_rules_applied')
   }
   if (input.unlocatedCommentableRiskCount && input.unlocatedCommentableRiskCount > 0) {
     reasons.push('source_location_unbound')
   }
-  if (input.semanticResult?.degraded) {
-    reasons.push(
-      input.semanticResult.provider === 'manual-fallback'
-        ? 'model_output_invalid_or_unavailable'
-        : 'semantic_review_degraded'
-    )
-  }
+  if (input.semanticResult?.degraded) reasons.push('semantic_review_route_fallback')
+  if (input.semanticError) reasons.push('semantic_review_failed')
   if (input.semanticResult?.inputStats?.coverage_limited) {
     reasons.push('semantic_review_input_coverage_limited')
-  }
-  if (input.semanticResult?.attemptErrors?.some((error) => error.includes('long_contract_cloud_provider_unavailable'))) {
-    reasons.push('long_contract_cloud_provider_unavailable')
   }
   return Array.from(new Set(reasons))
 }
@@ -1019,31 +985,23 @@ function countUnlocatedCommentableRisks(risks: AnalysisRisk[], clauses: ClauseMa
 async function runSemanticReviewStage(input: {
   text: string
   orgId: string
-  skillBundle: ContractSkillBundle
+  skillBundle: ContractSkillBundle | null
   contractId: string
   reviewId?: string
-  requestedBy?: string | null
   reviewTrigger?: string
-  semanticProviderProfile?: string
+  reviewEvent?: string
+  semanticModelAssetId?: string
 }): Promise<{
-  result: SyncReviewResult | null
-  invocationId: string | null
+  result: ContractSemanticReviewResult | null
+  invocationIds: string[]
+  planSnapshotId: string | null
+  planSnapshotHash: string | null
+  error: string | null
   addedRiskCount: number
   risks: AnalysisRisk[]
 }> {
-  const semanticSelection = selectSemanticReviewProvider(
-    input.skillBundle.model_policy,
-    input.semanticProviderProfile,
-    input.text
-  )
-  const semanticProvider = semanticSelection.provider
-  const startedAt = performance.now()
-
   try {
-    if (semanticSelection.longContractCloudRequired && !isCloudLongDocumentProvider(semanticProvider)) {
-      throw new Error('long_contract_cloud_provider_unavailable: 长合同/长 PDF 审核必须配置支持 tender_long_document_parse 的云端 OpenAI-compatible Provider')
-    }
-    const skillRules = extractRuntimeSnapshotRefs(input.skillBundle).map((ref) => ({
+    const skillRules = (input.skillBundle ? extractRuntimeSnapshotRefs(input.skillBundle) : []).map((ref) => ({
       code: ref.code,
       version: ref.version,
       clause_category: ref.category,
@@ -1052,238 +1010,50 @@ async function runSemanticReviewStage(input: {
       execution_protocol: ref.executionProtocol,
       rule_contract: ref.ruleContract,
     }))
-    const semanticResult = await reviewWithFailoverSync(input.text, {
-      orgId: input.orgId,
-      preferredProvider: semanticProvider.profile,
-      skillContext: {
-        source: skillContextSource(input.skillBundle),
-        compiledFrom: input.skillBundle.compiled_from,
-        outputSchema: input.skillBundle.output_schema,
-        rules: skillRules,
-      },
-    }, 1)
-    const latencyMs = performance.now() - startedAt
-    const usableRisks = shouldUseSemanticRisks(semanticResult) ? semanticResult.risks : []
-
-    const invocation = await recordModelInvocation({
+    const semanticResult = await executeContractSemanticReview({
       orgId: input.orgId,
       contractId: input.contractId,
-      reviewId: input.reviewId || null,
-      skillBundleId: input.skillBundle.id,
-      modelPolicyId: input.skillBundle.model_policy_id,
-      provider: semanticResult.provider,
-      model: semanticResult.model,
-      phase: 'semantic_review',
-      status: semanticResult.degraded ? 'degraded' : 'completed',
-      degraded: semanticResult.degraded,
-      fallbackReason: semanticResult.degraded
-        ? semanticResult.inputStats?.coverage_limited
-          ? 'semantic_review_input_coverage_limited'
-          : semanticResult.providerKind === 'builtin'
-          ? 'semantic_review_degraded_to_rule_engine'
-          : 'semantic_review_external_model_unavailable'
-        : null,
-      latencyMs,
-      requestMeta: {
-        phase: 'semantic_contract_review',
-        model_policy_stage: 'semantic_review',
-        intended_provider_profile: semanticProvider.profile,
-        intended_provider_model: semanticProvider.model,
-        requested_provider_profile: semanticSelection.requestedProfile,
-        requested_provider_accepted: semanticSelection.requestedAccepted,
-        provider_selection_reason: semanticSelection.selectionReason,
-        text_length: semanticSelection.textLength,
-        estimated_page_count: semanticSelection.estimatedPageCount,
-        long_contract: semanticSelection.longContract,
-        long_contract_cloud_required: semanticSelection.longContractCloudRequired,
-        skill_bundle_id: input.skillBundle.id,
-        skill_bundle_version: input.skillBundle.version,
-        skill_rule_count: skillRules.length,
-        review_trigger: input.reviewTrigger || 'initial_generate',
+      reviewId: input.reviewId,
+      skillBundleId: input.skillBundle?.id || null,
+      contractText: input.text,
+      executionEnvironment: process.env.VERCEL === '1' && Boolean(process.env.VERCEL_URL || process.env.VERCEL_REGION)
+        ? 'hosted'
+        : 'local',
+      pinModelAssetId: input.semanticModelAssetId,
+      reviewTrigger: input.reviewTrigger,
+      reviewEvent: input.reviewEvent,
+      skillContext: {
+        source: input.skillBundle ? skillContextSource(input.skillBundle) : {
+          source_of_truth: 'no_valid_published_rule_bundle',
+        },
+        compiledFrom: input.skillBundle?.compiled_from,
+        outputSchema: input.skillBundle?.output_schema,
+        rules: skillRules,
       },
-      responseMeta: {
-        provider_kind: semanticResult.providerKind,
-        transport: semanticResult.transport,
-        risk_count: semanticResult.risks.length,
-        usable_risk_count: usableRisks.length,
-        dropped_risk_count: semanticResult.droppedRiskCount || 0,
-        validation_warnings: semanticResult.validationWarnings || [],
-        summary_available: Boolean(semanticResult.summary),
-        attempt_errors: semanticResult.attemptErrors || [],
-        input_stats: semanticResult.inputStats || null,
-      },
-      errorMessage: semanticResult.degraded && semanticResult.attemptErrors?.length
-        ? semanticResult.attemptErrors.join('\n')
-        : null,
     })
+    const usableRisks = semanticResult.risks
 
     return {
       result: semanticResult,
-      invocationId: invocation.id,
+      invocationIds: semanticResult.invocationIds,
+      planSnapshotId: semanticResult.planSnapshotId,
+      planSnapshotHash: semanticResult.planSnapshotHash,
+      error: null,
       addedRiskCount: usableRisks.length,
       risks: usableRisks,
     }
   } catch (error) {
-    const latencyMs = performance.now() - startedAt
-    const invocation = await recordModelInvocation({
-      orgId: input.orgId,
-      contractId: input.contractId,
-      reviewId: input.reviewId || null,
-      skillBundleId: input.skillBundle.id,
-      modelPolicyId: input.skillBundle.model_policy_id,
-      provider: semanticProvider.provider,
-      model: semanticProvider.model,
-      phase: 'semantic_review',
-      status: 'failed',
-      degraded: true,
-      fallbackReason: semanticSelection.longContractCloudRequired && !isCloudLongDocumentProvider(semanticProvider)
-        ? 'long_contract_cloud_provider_unavailable'
-        : 'semantic_review_failed_before_rule_merge',
-      latencyMs,
-      requestMeta: {
-        phase: 'semantic_contract_review',
-        model_policy_stage: 'semantic_review',
-        intended_provider_profile: semanticProvider.profile,
-        requested_provider_profile: semanticSelection.requestedProfile,
-        requested_provider_accepted: semanticSelection.requestedAccepted,
-        provider_selection_reason: semanticSelection.selectionReason,
-        text_length: semanticSelection.textLength,
-        estimated_page_count: semanticSelection.estimatedPageCount,
-        long_contract: semanticSelection.longContract,
-        long_contract_cloud_required: semanticSelection.longContractCloudRequired,
-        review_trigger: input.reviewTrigger || 'initial_generate',
-      },
-      responseMeta: {},
-      errorMessage: formatAnalysisError(error),
-    })
-
     return {
-      result: {
-        risks: [],
-        summary: '语义审核执行失败，已保留结构化规则审核结果。',
-        provider: semanticProvider.provider,
-        model: semanticProvider.model,
-        providerKind: semanticProvider.provider_kind,
-        transport: semanticProvider.provider_kind === 'builtin' ? 'builtin_rule_engine' : 'openai_compatible_http',
-        degraded: true,
-        attemptErrors: [formatAnalysisError(error)],
-      },
-      invocationId: invocation.id,
+      result: null,
+      invocationIds: error instanceof AIExecutionError
+        ? error.attempts.map((attempt) => attempt.id)
+        : [],
+      planSnapshotId: error instanceof AIExecutionError ? error.planSnapshotId : null,
+      planSnapshotHash: null,
+      error: formatAnalysisError(error),
       addedRiskCount: 0,
       risks: [],
     }
-  }
-}
-
-function estimateContractPageCount(text: string): number {
-  const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
-  const englishWords = text.split(/\s+/).filter((word) => /^[a-zA-Z]+$/.test(word)).length
-  return Math.max(1, Math.ceil(chineseChars / 500 + englishWords / 300))
-}
-
-function isCloudLongDocumentProvider(provider: ModelPolicyProvider): boolean {
-  return provider.provider_kind === 'openai_compatible'
-    && provider.runtime_location === 'cloud'
-    && provider.stages.includes('tender_long_document_parse')
-}
-
-function shouldRequireCloudForContract(text: string, policy: ContractSkillBundle['model_policy']): boolean {
-  const estimatedPages = estimateContractPageCount(text)
-  const localMaxPages = policy.provider_chain
-    .filter((provider) => provider.runtime_location === 'local' && provider.provider_kind === 'openai_compatible')
-    .map((provider) => provider.routing?.max_pages || 15)
-    .sort((left, right) => left - right)[0] || 15
-
-  return text.length >= 20_000 || estimatedPages > localMaxPages
-}
-
-function findCloudLongDocumentProvider(
-  policy: ContractSkillBundle['model_policy'],
-  requested?: string
-): ModelPolicyProvider | null {
-  const candidates = policy.provider_chain.filter(isCloudLongDocumentProvider)
-  if (requested) {
-    const matched = candidates.find((provider) => (
-      provider.profile === requested || provider.provider === requested
-    ))
-    if (matched) return matched
-  }
-  return candidates[0] || null
-}
-
-function selectSemanticReviewProvider(
-  policy: ContractSkillBundle['model_policy'],
-  requestedProfile?: string,
-  contractText = ''
-): {
-  provider: ModelPolicyProvider
-  requestedProfile: string | null
-  requestedAccepted: boolean | null
-  selectionReason: string
-  textLength: number
-  estimatedPageCount: number
-  longContract: boolean
-  longContractCloudRequired: boolean
-} {
-  const requested = requestedProfile?.trim()
-  const defaultProvider = selectReviewExecutionProvider(policy, 'semantic_review')
-  const estimatedPageCount = estimateContractPageCount(contractText)
-  const longContractCloudRequired = shouldRequireCloudForContract(contractText, policy)
-
-  if (longContractCloudRequired) {
-    const cloudProvider = findCloudLongDocumentProvider(policy, requested)
-    if (cloudProvider) {
-      return {
-        provider: cloudProvider,
-        requestedProfile: requested || null,
-        requestedAccepted: requested ? (cloudProvider.profile === requested || cloudProvider.provider === requested) : null,
-        selectionReason: requested ? 'requested_long_contract_cloud_provider' : 'long_contract_cloud_enhancement',
-        textLength: contractText.length,
-        estimatedPageCount,
-        longContract: true,
-        longContractCloudRequired: true,
-      }
-    }
-
-    return {
-      provider: defaultProvider,
-      requestedProfile: requested || null,
-      requestedAccepted: requested ? false : null,
-      selectionReason: 'long_contract_cloud_unavailable',
-      textLength: contractText.length,
-      estimatedPageCount,
-      longContract: true,
-      longContractCloudRequired: true,
-    }
-  }
-
-  if (!requested) {
-    return {
-      provider: defaultProvider,
-      requestedProfile: null,
-      requestedAccepted: null,
-      selectionReason: 'default_semantic_review_provider',
-      textLength: contractText.length,
-      estimatedPageCount,
-      longContract: false,
-      longContractCloudRequired: false,
-    }
-  }
-
-  const matched = policy.provider_chain.find((provider) => (
-    provider.stages.includes('semantic_review')
-    && (provider.profile === requested || provider.provider === requested)
-  ))
-
-  return {
-    provider: matched || defaultProvider,
-    requestedProfile: requested,
-    requestedAccepted: Boolean(matched),
-    selectionReason: matched ? 'requested_semantic_provider' : 'requested_semantic_provider_not_found',
-    textLength: contractText.length,
-    estimatedPageCount,
-    longContract: false,
-    longContractCloudRequired: false,
   }
 }
 
@@ -1292,35 +1062,41 @@ export async function runStructuredAnalysis(
   options?: ReviewOptions
 ): Promise<StructuredReport> {
   const context = await fetchContractContext(contractId)
-  const skillBundle = context.orgId
-    ? await getOrCompilePublishedContractSkillBundle({
+  let skillBundle: ContractSkillBundle | null = null
+  let skillBundleLoadError: string | null = null
+  if (context.orgId) {
+    try {
+      skillBundle = await getOrCompilePublishedContractSkillBundle({
         orgId: context.orgId,
         requestedBy: options?.requestedBy,
       })
-    : null
-  const structuredProvider = skillBundle
-    ? selectReviewExecutionProvider(skillBundle.model_policy, 'structured_rules')
-    : null
+    } catch (error) {
+      // A broken rule asset is a rule-release failure, not permission to hide
+      // the platform model use point. Continue with an empty rule context and
+      // keep the official review degraded and auditable.
+      skillBundleLoadError = formatAnalysisError(error)
+    }
+  }
 
-  const analysisStartedAt = performance.now()
   const ruleSnapshotIds = skillBundle?.rule_snapshot_ids || []
   const ruleResult = await executeRules(context.text, context.orgId, {
     ruleSnapshotIds,
   })
-  const analysisLatencyMs = performance.now() - analysisStartedAt
 
   let semanticStage: Awaited<ReturnType<typeof runSemanticReviewStage>> | null = null
-  const skillBundleFormalReviewReady = isSkillBundleFormalReviewReady(skillBundle)
-  if (skillBundle && context.orgId && skillBundleFormalReviewReady) {
+  // Platform model execution and rule-release eligibility are independent
+  // dimensions. An incomplete rule bundle still degrades the official review,
+  // but must not silently prevent the configured AI use point from running.
+  if (context.orgId) {
     semanticStage = await runSemanticReviewStage({
       text: context.text,
       orgId: context.orgId,
       skillBundle,
       contractId,
       reviewId: options?.reviewId,
-      requestedBy: options?.requestedBy,
       reviewTrigger: options?.reviewTrigger,
-      semanticProviderProfile: options?.semanticProviderProfile,
+      reviewEvent: options?.reviewEvent,
+      semanticModelAssetId: options?.semanticModelAssetId || options?.semanticProviderProfile,
     })
   }
 
@@ -1333,86 +1109,39 @@ export async function runStructuredAnalysis(
     structuredDegraded,
     unlocatedCommentableRiskCount,
     semanticResult: semanticStage?.result || null,
+    semanticError: semanticStage?.error || null,
+    skillBundleLoadError,
   })
-  const skillReadinessDegraded = degradationReasons.some(isSkillReadinessReason)
-
   const result: ContractAnalysisResult = {
     risks: merged.risks,
     summary: buildCombinedSummary(ruleResult.summary, semanticStage?.result || null),
     appliedRules: ruleResult.appliedRules,
     matchedRules: ruleResult.matchedRules,
-    provider: semanticStage?.result && shouldUseSemanticRisks(semanticStage.result)
-      ? `${structuredProvider?.provider || 'rule-engine'}+${semanticStage.result.provider}`
-      : structuredProvider?.provider || 'rule-engine',
+    provider: semanticStage?.result
+      ? `rule-engine+${semanticStage.result.provider}`
+      : 'rule-engine',
     degraded: degradationReasons.length > 0,
     degradationReasons,
   }
 
   let runtime: ReviewRuntimeBinding | undefined
-  if (skillBundle && context.orgId) {
-    const invocation = await recordModelInvocation({
-      orgId: context.orgId,
-      contractId,
-      reviewId: options?.reviewId || null,
-      skillBundleId: skillBundle.id,
-      modelPolicyId: skillBundle.model_policy_id,
-      provider: structuredProvider?.provider || 'rule-engine',
-      model: structuredProvider?.model || 'rule-engine',
-      phase: 'structured_rules',
-      status: structuredDegraded || unlocatedCommentableRiskCount > 0 || skillReadinessDegraded
-        ? 'degraded'
-        : 'completed',
-      degraded: structuredDegraded || unlocatedCommentableRiskCount > 0 || skillReadinessDegraded,
-      fallbackReason: structuredDegraded
-        ? structuredProvider?.provider_kind === 'builtin'
-          ? 'rule_engine_selected_by_model_policy'
-          : 'rule_engine_degraded'
-        : unlocatedCommentableRiskCount > 0
-          ? 'source_location_unbound'
-          : skillReadinessDegraded
-            ? 'skill_bundle_not_formally_ready'
-          : null,
-      latencyMs: analysisLatencyMs,
-      requestMeta: {
-        phase: 'structured_contract_review',
-        model_policy_stage: 'structured_rules',
-        rule_snapshot_count: skillBundle.rule_snapshot_ids.length,
-        rule_set_snapshot_count: skillBundle.rule_set_snapshot_ids.length,
-        rule_set_document_count: skillBundle.document_snapshot_ids.length,
-        rule_execution_source: ruleSnapshotIds.length > 0
-          ? 'skill_bundle_rule_snapshots'
-          : 'current_published_rules_without_snapshot_binding',
-        output_schema_version: skillBundle.output_schema.schema_version,
-        review_trigger: options?.reviewTrigger || 'initial_generate',
-      },
-	      responseMeta: {
-	        provider_kind: structuredProvider?.provider_kind || 'builtin',
-	        transport: 'builtin_rule_engine',
-	        applied_rules: result.appliedRules,
-	        matched_rules: result.matchedRules,
-        risk_count: ruleResult.risks.length,
-        semantic_risk_count: semanticStage?.result?.risks.length || 0,
-        semantic_merged_risk_count: merged.added,
-        unlocated_commentable_risk_count: unlocatedCommentableRiskCount,
-        rule_translation_status: skillBundleRuleTranslationStatus(skillBundle),
-        rule_set_document_status: skillBundleRuleSetDocumentStatus(skillBundle),
-        skill_eval_status: skillBundleEvalStatus(skillBundle),
-      },
-    })
-
+  if (context.orgId) {
     runtime = {
-      skill_bundle_id: skillBundle.id,
-      model_policy_id: skillBundle.model_policy_id,
-      rule_snapshot_ids: skillBundle.rule_snapshot_ids,
-      rule_set_snapshot_ids: skillBundle.rule_set_snapshot_ids,
-      rule_set_document_ids: skillBundle.document_snapshot_ids,
-      rule_snapshot_refs: extractRuntimeSnapshotRefs(skillBundle),
-      model_invocation_ids: [invocation.id, semanticStage?.invocationId]
-        .filter((id): id is string => Boolean(id)),
+      skill_bundle_id: skillBundle?.id || null,
+      model_policy_id: null,
+      plan_snapshot_id: semanticStage?.planSnapshotId || null,
+      plan_snapshot_hash: semanticStage?.planSnapshotHash || null,
+      rule_snapshot_ids: skillBundle?.rule_snapshot_ids || [],
+      rule_set_snapshot_ids: skillBundle?.rule_set_snapshot_ids || [],
+      rule_set_document_ids: skillBundle?.document_snapshot_ids || [],
+      rule_snapshot_refs: skillBundle ? extractRuntimeSnapshotRefs(skillBundle) : [],
+      // Deterministic rule execution is evidenced by frozen rule snapshots,
+      // not fabricated as a model invocation.
+      model_invocation_ids: semanticStage?.invocationIds || [],
       provider: result.provider,
-      model: semanticStage?.result && shouldUseSemanticRisks(semanticStage.result)
+      model: semanticStage?.result
         ? semanticStage.result.model
-        : structuredProvider?.model || 'rule-engine',
+        : 'not-invoked',
       review_trigger: options?.reviewTrigger,
     }
   }
@@ -1533,6 +1262,7 @@ export async function saveStructuredReport(
     report_version: 2,
     skill_bundle_id: report.runtime?.skill_bundle_id || null,
     model_policy_id: report.runtime?.model_policy_id || null,
+    plan_snapshot_id: report.runtime?.plan_snapshot_id || null,
     rule_snapshot_ids: report.runtime?.rule_snapshot_ids || [],
     rule_set_snapshot_ids: report.runtime?.rule_set_snapshot_ids || [],
     rule_set_document_ids: report.runtime?.rule_set_document_ids || [],

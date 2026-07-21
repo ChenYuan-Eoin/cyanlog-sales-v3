@@ -15,6 +15,10 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import {
+  loadCurrentReviewSourceIdentity,
+  ReviewSourceIdentityError,
+} from '@/lib/contracts/review-source-identity'
 
 const reviewRunSchema = z.object({
   trigger_event: z.enum([
@@ -33,7 +37,16 @@ const reviewRunSchema = z.object({
     .max(80)
     .regex(/^[A-Za-z0-9_-]+$/)
     .optional(),
-})
+  semantic_model_asset_id: z.string()
+    .trim()
+    .min(1)
+    .max(128)
+    .regex(/^[a-z0-9][a-z0-9._-]*$/)
+    .optional(),
+}).refine(
+  (value) => !(value.semantic_model_asset_id && value.semantic_provider_profile),
+  { message: '不能同时提交新旧模型选择字段' },
+)
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -51,6 +64,9 @@ function hasFormalReviewGateFailure(reasons: string[]) {
     || reason === 'skill_eval_not_run'
     || reason === 'skill_eval_not_passed'
     || reason === 'skill_bundle_not_formally_ready'
+    || reason === 'skill_not_applied'
+    || reason === 'skill_bundle_load_failed'
+    || reason === 'rule_engine_no_rules_applied'
   ))
 }
 
@@ -89,7 +105,7 @@ export async function POST(
 
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
-      .select('id, status, created_by, org_id')
+      .select('id, status, storage_path, created_by, org_id')
       .eq('id', id)
       .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
@@ -106,6 +122,16 @@ export async function POST(
     }
     if (!['PENDING', 'FAILED', 'COMPLETED'].includes(String(contract.status))) {
       return errorResponse('合同当前状态无法创建再审核', 400, 'INVALID_STATUS')
+    }
+
+    let sourceIdentity
+    try {
+      sourceIdentity = await loadCurrentReviewSourceIdentity(id, contract.storage_path)
+    } catch (error) {
+      if (error instanceof ReviewSourceIdentityError) {
+        return errorResponse(error.message, 409, error.code)
+      }
+      throw error
     }
 
     const { data: parentReview } = await supabaseAdmin
@@ -135,8 +161,9 @@ export async function POST(
         contract_id: id,
         status: 'PARSING',
         started_at: new Date().toISOString(),
-        review_trigger: options.trigger_event,
+        review_trigger: 'direct',
         parent_review_id: parentReview?.id || null,
+        ...sourceIdentity,
       })
       .select()
       .single()
@@ -171,8 +198,9 @@ export async function POST(
       if (strategyData) strategyId = strategyData.id
       reviewOptions.strategyCode = options.strategy
     }
-    if (options.semantic_provider_profile) {
-      reviewOptions.semanticProviderProfile = options.semantic_provider_profile
+    const semanticModelAssetId = options.semantic_model_asset_id || options.semantic_provider_profile
+    if (semanticModelAssetId) {
+      reviewOptions.semanticModelAssetId = semanticModelAssetId
     }
 
     try {
@@ -181,7 +209,8 @@ export async function POST(
         ...reviewOptions,
         reviewId: review.id,
         requestedBy: user.id,
-        reviewTrigger: options.trigger_event,
+        reviewTrigger: 'direct',
+        reviewEvent: options.trigger_event,
       })
       await saveStructuredReport(review.id, id, structuredReport, strategyId)
       await markContractAnalysisCompleted(job, structuredReport.result)
@@ -223,6 +252,7 @@ export async function POST(
       parentReviewId: parentReview?.id || null,
       triggerEvent: options.trigger_event,
       comparisonId: options.comparison_id || null,
+      semanticModelAssetId: semanticModelAssetId || null,
       semanticProviderProfile: options.semantic_provider_profile || null,
       status: responseStatus,
       message: responseMessage,

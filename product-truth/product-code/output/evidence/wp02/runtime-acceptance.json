@@ -1,0 +1,246 @@
+{
+  "schema": "wp02-runtime-acceptance.v2",
+  "captured_at": "2026-07-21T11:56:00+08:00",
+  "preview_project": "vsfropnfsmnonkotywsx",
+  "production_mutated": false,
+  "accuracy_claim": "blocked_without_independent_gold",
+  "lm_studio": {
+    "server_running": true,
+    "authentication_enabled": true,
+    "loaded_model": "google/gemma-4-e4b",
+    "loaded_context_length": 8192,
+    "catalog_context_before_correction": 131072,
+    "published_catalog_revision": {
+      "config_id": "ebe5a1d4-7956-40d5-99b6-02027c14010b",
+      "version": 4,
+      "context_window": 8192,
+      "capabilities": ["text_generation", "structured_output"]
+    }
+  },
+  "minimal_generations": {
+    "plan_snapshot_id": "485f6ee3-7010-466f-a221-6eaf7173016d",
+    "plan_snapshot_sha256": "76be0227e1fe1954ef92443b8dbb80d5585c82179239752912ad8efd32694dbb",
+    "input_sha256": "b36079ab4ad3abcc627d3b615e401a5be9783f50cd254fe71698367f64c8ea25",
+    "invocations": [
+      {
+        "invocation_id": "03844b1e-684d-46d7-8b5e-69d5bb8c6a8b",
+        "execution_id": "f67d3f23-cdfe-43e2-bd35-6affb2b98623",
+        "provider": "provider.lm-studio.local",
+        "model": "google/gemma-4-e4b",
+        "input_tokens": 38,
+        "output_tokens": 6,
+        "total_tokens": 44,
+        "reported_model_matches_catalog": true
+      },
+      {
+        "invocation_id": "6fa40564-2c14-48d7-96f7-eea345b9e637",
+        "execution_id": "d0019afd-2106-4c64-8607-5d826a4f4309",
+        "provider": "provider.cloud.gateway",
+        "model": "gpt-5.5",
+        "input_tokens": 4412,
+        "output_tokens": 9,
+        "total_tokens": 4421,
+        "reported_model_matches_catalog": true
+      }
+    ]
+  },
+  "ordered_failover": {
+    "plan_snapshot_id": "71a0f974-e361-4ea8-b3aa-d52809867282",
+    "plan_snapshot_sha256": "d46dbd8a656c9160bff226a7e2084b3944eee8b92e5e21ae184c9fbe0d4ce7a4",
+    "execution_id": "84607ece-7e54-4343-a1ca-d91d620e1c84",
+    "input_sha256": "b36079ab4ad3abcc627d3b615e401a5be9783f50cd254fe71698367f64c8ea25",
+    "degraded": true,
+    "attempts": [
+      {
+        "invocation_id": "7e95ab0b-eb8a-498f-8c70-ba7b60a74a16",
+        "attempt_no": 1,
+        "provider": "provider.lm-studio.local",
+        "model": "google/gemma-4-e4b",
+        "status": "failed",
+        "fallback_reason": "TRANSPORT_FAILED",
+        "total_tokens": null
+      },
+      {
+        "invocation_id": "b22dd657-3de9-40ce-b631-81de3684c222",
+        "attempt_no": 2,
+        "provider": "provider.cloud.gateway",
+        "model": "gpt-5.5",
+        "status": "completed",
+        "fallback_reason": "TRANSPORT_FAILED",
+        "input_tokens": 32,
+        "output_tokens": 9,
+        "total_tokens": 41
+      }
+    ],
+    "provider_restored_after_probe": true,
+    "restored_base_url": "http://127.0.0.1:1234/v1"
+  },
+  "execution_semantics": {
+    "route_execution_id": "e79183df-72e8-4fe2-a763-8c73a826e6ad",
+    "route_execution_mode": "route",
+    "route_attempts": [1, 2],
+    "route_result": "fallback_completed",
+    "pinned_execution_id": "adbedec2-6a85-437b-800d-b27779bb2555",
+    "pinned_execution_mode": "pinned",
+    "pinned_model_catalog_entry_id": "model.gpt-5.5.cloud",
+    "pinned_attempts": [1],
+    "pinned_total_tokens": 41,
+    "pinned_counts_as_route_verification": false,
+    "invalid_preview_writes_rejected": [
+      "missing_execution_mode",
+      "route_with_pinned_model",
+      "pinned_model_mismatch"
+    ]
+  },
+  "current_business_routes": {
+    "summary": {
+      "registered_use_points": 5,
+      "ready_plans": 5,
+      "verified_current_plans": 5,
+      "blocked_plans": 0
+    },
+    "executions": [
+      {
+        "business_use_point_id": "contract.review.semantic",
+        "execution_id": "ca981d27-db8f-40bc-9c52-166ed83476fa",
+        "plan_snapshot_id": "68dc9b97-9b20-4e2e-8866-aa17de6dadd0",
+        "result": "completed",
+        "model": "google/gemma-4-e4b",
+        "total_tokens": 2471,
+        "review_id": "910d67ad-d109-444e-b009-4fa60352df66"
+      },
+      {
+        "business_use_point_id": "contract.review.chat",
+        "execution_id": "05e55529-591e-4362-835f-86cf892692bc",
+        "plan_snapshot_id": "bbdd97a8-e93c-4847-a5a3-36234dd42ded",
+        "result": "fallback_completed",
+        "attempts": [
+          {"attempt_no": 1, "model": "google/gemma-4-e4b", "status": "failed", "fallback_reason": "PROVIDER_REJECTED"},
+          {"attempt_no": 2, "model": "gpt-5.5", "status": "completed", "total_tokens": 15526}
+        ]
+      },
+      {
+        "business_use_point_id": "contract.draft.generate",
+        "execution_id": "ecf1d2d5-b078-4fff-ab65-18e7a526ea95",
+        "plan_snapshot_id": "ec4d5355-3ec9-4ce0-83cd-87553713c93d",
+        "result": "completed",
+        "model": "google/gemma-4-e4b",
+        "total_tokens": 2052
+      },
+      {
+        "business_use_point_id": "tender.document.extract",
+        "execution_id": "7f931d1f-f031-468d-9b41-64133bf9b16f",
+        "plan_snapshot_id": "31d4097a-f6f5-4af4-bd6e-2477ab028e48",
+        "result": "completed",
+        "model": "gpt-5.5",
+        "total_tokens": 4884,
+        "ocr_result_id": "8a87524e-8835-4508-89b0-b179e4f4fc90"
+      },
+      {
+        "business_use_point_id": "generic.ai.analyze",
+        "execution_id": "e79183df-72e8-4fe2-a763-8c73a826e6ad",
+        "plan_snapshot_id": "aed05570-6955-429b-9848-d1590ab82938",
+        "result": "fallback_completed",
+        "attempts": [
+          {"attempt_no": 1, "model": "google/gemma-4-e4b", "status": "failed", "fallback_reason": "TRANSPORT_FAILED"},
+          {"attempt_no": 2, "model": "gpt-5.5", "status": "completed", "total_tokens": 4427}
+        ]
+      }
+    ]
+  },
+  "real_contract_reviews": {
+    "contract_id": "5cdabf0a-0d5a-4435-bca5-062ffad52c53",
+    "source_filename": "修订批注版_软件采买合同-普生医疗.docx-ONES批注版.docx",
+    "source_character_count": 15686,
+    "plan_snapshot_id": "9fe2ff34-2a61-41e0-a6a8-28efdab623c2",
+    "plan_snapshot_sha256": "db770f1b347f35b86f8df87f663e1bf3baaf340d41a32e46e0e51a7dd22f1ae6",
+    "input_sha256": "d30dd4908e3b988d97c88c87c501d21a6f326bb8d11f25dce7b53509fce528d3",
+    "reviews": [
+      {
+        "review_id": "9e6d89fc-cb6a-4f36-8fa4-d016e326124a",
+        "execution_id": "bdc87a67-12a0-4ad6-b580-b5ea6c0424ea",
+        "invocation_id": "0e9670b5-6c3e-4caf-9c3c-f0cd3a4f84a6",
+        "provider": "provider.lm-studio.local",
+        "model": "google/gemma-4-e4b",
+        "input_tokens": 1970,
+        "output_tokens": 315,
+        "total_tokens": 2285,
+        "status": "DEGRADED"
+      },
+      {
+        "review_id": "70af52a7-0f1b-43c1-ab03-4dffe02db4fe",
+        "execution_id": "3e1f815d-b5c0-4b67-9b3e-c67db1696835",
+        "invocation_id": "20da833d-5745-415f-b816-d8b7045c1783",
+        "provider": "provider.cloud.gateway",
+        "model": "gpt-5.5",
+        "input_tokens": 6629,
+        "output_tokens": 70,
+        "total_tokens": 6699,
+        "status": "DEGRADED"
+      }
+    ],
+    "shared_degradation_reasons": [
+      "skill_not_applied",
+      "skill_bundle_load_failed",
+      "rule_engine_no_rules_applied",
+      "semantic_review_input_coverage_limited"
+    ],
+    "risk_count": 0,
+    "current_route_review": {
+      "review_id": "910d67ad-d109-444e-b009-4fa60352df66",
+      "execution_id": "ca981d27-db8f-40bc-9c52-166ed83476fa",
+      "execution_mode": "route",
+      "invocation_id": "492b8e46-b2b9-4eb3-86d7-e04037d99bae",
+      "provider": "provider.lm-studio.local",
+      "model": "google/gemma-4-e4b",
+      "total_tokens": 2471,
+      "status": "DEGRADED"
+    },
+    "interpretation": "当前发布 route 与模型运行闭环通过；规则发布和审核准确率未通过，不能宣称正式审核完成。"
+  },
+  "schema_evidence": {
+    "runtime_plan_migration": "20260721020919_wp02_ai_runtime_plan_truth.sql",
+    "execution_identity_migration": "20260721030423_wp02_execution_identity.sql",
+    "execution_mode_migration": "20260721032554_wp02_execution_mode_truth.sql",
+    "execution_mode_null_fix_migration": "20260721032827_wp02_execution_mode_not_null_fix.sql",
+    "preview_execution_identity_history_version": "20260721030638",
+    "new_plan_linked_attempts_require_execution_id": true,
+    "same_execution_attempt_number_unique": true,
+    "new_plan_linked_attempts_require_execution_mode": true,
+    "pinned_model_cross_constraints_enforced": true
+  },
+  "browser_evidence": {
+    "desktop": {
+      "viewport": "1280x720",
+      "horizontal_overflow": false,
+      "runtime_summary": "5/5/5/0",
+      "screenshot": "desktop-runtime.png"
+    },
+    "ipad": {
+      "viewport": "1024x1366",
+      "document_scroll_width": 1024,
+      "document_client_width": 1024,
+      "overlay_residue": false,
+      "screenshot": "ipad-runtime.png"
+    },
+    "console_errors": 0,
+    "console_warnings": 0,
+    "temporary_auth_token_deleted": true
+  },
+  "engineering_evidence": {
+    "runtime_targeted_tests": "10 files / 63 tests",
+    "config_regression_tests": "26 files / 231 tests",
+    "final_increment_tests": "10 passed / 2 live tests skipped by default",
+    "typecheck": "passed",
+    "targeted_eslint": "passed",
+    "next_build": "passed / 75 pages",
+    "diff_check": "passed",
+    "independent_review": "no remaining P0/P1"
+  },
+  "open_boundaries": [
+    "现有规则集引用的 current rule snapshots 无效，转入 WP03 修复。",
+    "没有独立事前人工金标，审核准确率声明保持 blocked_without_independent_gold。",
+    "本地 Provider 仅可在本机开发/验收环境消费；Hosted/Production 路由必须发布不含 localhost 的环境适配路线。",
+    "Production 数据库和 Production 部署均未改动。"
+  ]
+}

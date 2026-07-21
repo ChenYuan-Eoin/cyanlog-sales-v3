@@ -1,15 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isAIRuntimeOverview } from '@/app/configs/types'
+import { compilePublishedAIExecutionPlan, type AIExecutionPlanConfigRow } from '@/lib/ai/runtime-plan'
 
 const mocks = vi.hoisted(() => ({
-  listPublishedAIProviders: vi.fn(),
-  getCurrentPublishedModelPolicy: vi.fn(),
-  validatePublishedModelPolicy: vi.fn(),
+  listPublishedConfigsByType: vi.fn(),
   from: vi.fn(),
-  assessProviderRuntime: vi.fn(),
-  selectRuntimeInvocationEvidence: vi.fn(),
-  buildRuntimeSourceSummary: vi.fn(),
-  runtimeProviderSourceMeta: vi.fn(),
   insert: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
@@ -26,93 +22,148 @@ const accessMocks = vi.hoisted(() => ({
 vi.mock('@/lib/configs/access', () => accessMocks)
 
 vi.mock('@/lib/configs/runtime', () => ({
-  listPublishedAIProviders: mocks.listPublishedAIProviders,
-}))
-
-vi.mock('@/lib/contracts/model-policy', () => ({
-  getCurrentPublishedModelPolicy: mocks.getCurrentPublishedModelPolicy,
-  validatePublishedModelPolicy: mocks.validatePublishedModelPolicy,
+  listPublishedConfigsByType: mocks.listPublishedConfigsByType,
 }))
 
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { from: mocks.from },
 }))
 
-vi.mock('@/lib/configs/ai-runtime-readiness', () => ({
-  assessProviderRuntime: mocks.assessProviderRuntime,
-}))
-
-vi.mock('@/lib/configs/ai-runtime-invocation-evidence', () => ({
-  selectRuntimeInvocationEvidence: mocks.selectRuntimeInvocationEvidence,
-}))
-
-vi.mock('@/lib/configs/ai-runtime-source', () => ({
-  buildRuntimeSourceSummary: mocks.buildRuntimeSourceSummary,
-  runtimeProviderSourceMeta: mocks.runtimeProviderSourceMeta,
-}))
-
 import { GET } from './route'
 
 const CANARY_SECRET = 'sk-canary-never-return-this-value'
+const EXECUTION_ID = '11111111-1111-4111-8111-111111111111'
+const OLD_EXECUTION_ID = '22222222-2222-4222-8222-222222222222'
 
-describe('GET /api/configs/ai-runtime', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
-    mocks.listPublishedAIProviders.mockResolvedValue([
-      { config_id: 'provider-1', kind: 'provider', model: 'gpt-5.5' },
-    ])
-    mocks.getCurrentPublishedModelPolicy.mockResolvedValue({ id: 'polluted-policy' })
-    mocks.validatePublishedModelPolicy.mockReturnValue({
-      ok: false,
-      reasons: ['策略引用了非 provider 配置', '策略包含 unknown 或空模型'],
-    })
-    mocks.selectRuntimeInvocationEvidence.mockReturnValue({
-      actual: null,
-      intended: null,
-      requested: null,
-      related: null,
-    })
-    mocks.assessProviderRuntime.mockResolvedValue({ runtime_state: 'builtin_ready' })
-    mocks.buildRuntimeSourceSummary.mockReturnValue({ source: 'published' })
-    mocks.runtimeProviderSourceMeta.mockReturnValue({ source_kind: 'builtin', source_label: '规则引擎' })
-  })
-
-  it('blocks an unsafe policy without reading invocation evidence or writing data', async () => {
-    const res = await GET({ method: 'GET', headers: new Headers() } as any)
-    const body = await res.json()
-
-    expect(res.status).toBe(409)
-    expect(body).toEqual({
-      success: false,
-      error: {
-        code: 'R003',
-        message: 'AI 运行时策略已阻断：当前发布策略不可安全消费，请先显式修复并发布。',
-        details: {
-          reasons: ['策略引用了非 provider 配置', '策略包含 unknown 或空模型'],
-        },
+function publishedRows(apiKey = CANARY_SECRET): AIExecutionPlanConfigRow[] {
+  const common = {
+    type: 'AI_CONFIG',
+    status: 'PUBLISHED' as const,
+    org_id: 'org-1',
+    updated_at: '2026-07-21T00:00:00.000Z',
+  }
+  return [
+    {
+      ...common,
+      id: 'provider-config',
+      key: 'PROVIDER_CLOUD',
+      name: '云端模型网关',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'provider_connection',
+        asset_id: 'provider.cloud',
+        enabled: true,
+        provider_type: 'openai_compatible',
+        runtime_location: 'cloud',
+        auth_mode: 'bearer',
+        base_url: 'https://models.example/v1',
+        api_key: apiKey,
+        connection_timeout_ms: 5_000,
       },
-    })
-    expect(mocks.getCurrentPublishedModelPolicy).toHaveBeenCalledWith('org-1')
-    expect(mocks.from).not.toHaveBeenCalled()
-  })
+    },
+    {
+      ...common,
+      id: 'model-config',
+      key: 'MODEL_REVIEW_PRIMARY',
+      name: '审核主模型',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'model_catalog_entry',
+        asset_id: 'model.review.primary',
+        enabled: true,
+        provider_connection_id: 'provider.cloud',
+        model_id: 'review-model-v1',
+        capabilities: ['text_generation', 'structured_output'],
+      },
+    },
+    {
+      ...common,
+      id: 'model-fallback-config',
+      key: 'MODEL_REVIEW_FALLBACK',
+      name: '审核降级模型',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'model_catalog_entry',
+        asset_id: 'model.review.fallback',
+        enabled: true,
+        provider_connection_id: 'provider.cloud',
+        model_id: 'review-model-fallback-v1',
+        capabilities: ['text_generation', 'structured_output'],
+      },
+    },
+    {
+      ...common,
+      id: 'application-config',
+      key: 'APP_CONTRACT_REVIEW',
+      name: '合同风险识别应用',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'ai_application',
+        asset_id: 'app.contract.review',
+        enabled: true,
+        capabilities: ['text_generation', 'structured_output'],
+      },
+    },
+    {
+      ...common,
+      id: 'use-point-config',
+      key: 'USE_POINT_CONTRACT_REVIEW',
+      name: '合同语义审核',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'business_use_point',
+        asset_id: 'contract.review.semantic',
+        enabled: true,
+        module_id: 'contract_review',
+        required_capabilities: ['text_generation', 'structured_output'],
+      },
+    },
+    {
+      ...common,
+      id: 'binding-config',
+      key: 'BINDING_CONTRACT_REVIEW',
+      name: '合同审核应用绑定',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'application_binding',
+        asset_id: 'binding.contract.review',
+        enabled: true,
+        business_use_point_id: 'contract.review.semantic',
+        ai_application_id: 'app.contract.review',
+      },
+    },
+    {
+      ...common,
+      id: 'route-config',
+      key: 'ROUTE_CONTRACT_REVIEW',
+      name: '合同审核默认路由',
+      value: {
+        schema_version: 'ai-platform.v1',
+        kind: 'route_policy',
+        asset_id: 'route.contract.review',
+        enabled: true,
+        ai_application_id: 'app.contract.review',
+        model_catalog_entry_ids: ['model.review.primary', 'model.review.fallback'],
+        strategy: 'ordered_fallback',
+        timeout_ms: 60_000,
+        failure_action: 'manual_review',
+      },
+    },
+  ]
+}
 
-  it('没有 config:read 时返回 403 且不读取 Provider、策略或运行记录', async () => {
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+function makeInvocationQueries(
+  rowsByUsePoint: Record<string, unknown[]> = {},
+  error: unknown = null,
+) {
+  const queries: Array<ReturnType<typeof makeQuery>> = []
 
-    const res = await GET({ method: 'GET', headers: new Headers() } as any)
-
-    expect(res.status).toBe(403)
-    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'read')
-    expect(mocks.listPublishedAIProviders).not.toHaveBeenCalled()
-    expect(mocks.getCurrentPublishedModelPolicy).not.toHaveBeenCalled()
-    expect(mocks.from).not.toHaveBeenCalled()
-  })
-
-  it('keeps the valid response path SELECT-only', async () => {
+  function makeQuery() {
+    let usePointId = ''
     const query = {
       select: vi.fn(),
       eq: vi.fn(),
+      not: vi.fn(),
       order: vi.fn(),
       limit: vi.fn(),
       insert: mocks.insert,
@@ -120,64 +171,746 @@ describe('GET /api/configs/ai-runtime', () => {
       delete: mocks.delete,
     }
     query.select.mockReturnValue(query)
-    query.eq.mockReturnValue(query)
-    query.order.mockReturnValue(query)
-    query.limit.mockResolvedValue({ data: [], error: null })
-    mocks.from.mockReturnValue(query)
-    mocks.listPublishedAIProviders.mockResolvedValue([{
-      config_id: 'provider-secret-source',
-      api_key: CANARY_SECRET,
-      model: 'provider-model',
-    }])
-    mocks.assessProviderRuntime.mockResolvedValue({
-      runtime_state: 'builtin_ready',
-      runtime_reason: `upstream accidentally echoed ${CANARY_SECRET}`,
+    query.eq.mockImplementation((column: string, value: string) => {
+      if (column === 'business_use_point_id') usePointId = value
+      return query
     })
-    mocks.getCurrentPublishedModelPolicy.mockResolvedValue({
-      id: 'policy-26',
-      key: 'CONTRACT_REVIEW_DEFAULT',
-      name: '合同审核默认模型策略',
-      version: 26,
-      status: 'published',
-      is_current: true,
-      timeout_ms: 15000,
-      routing_policy: {},
-      fallback_policy: {},
-      audit_policy: {},
-      source_config_ids: [],
-      published_at: '2026-07-15T00:00:00.000Z',
-      provider_chain: [{
-        profile: 'rule_engine',
-        provider_kind: 'builtin',
-        provider: 'rule-engine',
-        model: 'rule-engine',
-        runtime_location: 'builtin',
-        level: 99,
-        timeout_ms: 15000,
-        stages: ['structured_rules', 'rule_fallback'],
-        role: 'fallback',
-        capabilities: ['deterministic_rule_scan'],
-        data_boundary: 'rules_only',
-        health_check_required: false,
-        source_config_id: null,
+    query.not.mockReturnValue(query)
+    query.order.mockReturnValue(query)
+    query.limit.mockImplementation(async () => ({
+      data: (rowsByUsePoint[usePointId] || []).map((row) => (
+        row && typeof row === 'object' && !Array.isArray(row)
+          ? {
+              execution_mode: 'route',
+              pinned_model_catalog_entry_id: null,
+              ...row,
+            }
+          : row
+      )),
+      error,
+    }))
+    return query
+  }
+
+  mocks.from.mockImplementation(() => {
+    const query = makeQuery()
+    queries.push(query)
+    return query
+  })
+  return queries
+}
+
+function semanticPlanHash(rows: AIExecutionPlanConfigRow[]) {
+  return semanticPlan(rows).snapshotHash
+}
+
+function semanticPlan(rows: AIExecutionPlanConfigRow[]) {
+  return compilePublishedAIExecutionPlan({
+    orgId: 'org-1',
+    usePointId: 'contract.review.semantic',
+    executionEnvironment: 'local',
+    rows,
+  })
+}
+
+function snapshotEmbed(rows: AIExecutionPlanConfigRow[], id = 'snapshot-1') {
+  const plan = semanticPlan(rows)
+  return {
+    id,
+    business_use_point_id: plan.usePointId,
+    application_id: plan.applicationId,
+    route_policy_id: plan.routeId,
+    snapshot_sha256: plan.snapshotHash,
+    snapshot: plan.snapshot,
+  }
+}
+
+function pinnedInvocation(rows: AIExecutionPlanConfigRow[], overrides: Record<string, unknown> = {}) {
+  const completedAt = new Date(Date.now() - 1_000).toISOString()
+  return {
+    id: 'pinned-fallback-probe',
+    execution_id: EXECUTION_ID,
+    execution_mode: 'pinned',
+    pinned_model_catalog_entry_id: 'model.review.fallback',
+    plan_snapshot_id: 'snapshot-1',
+    business_use_point_id: 'contract.review.semantic',
+    application_id: 'app.contract.review',
+    route_policy_id: 'route.contract.review',
+    model_catalog_entry_id: 'model.review.fallback',
+    provider_connection_id: 'provider.cloud',
+    provider: 'provider.cloud',
+    model: 'review-model-fallback-v1',
+    attempt_no: 1,
+    status: 'completed',
+    degraded: false,
+    fallback_reason: null,
+    latency_ms: 500,
+    input_tokens: 20,
+    output_tokens: 10,
+    total_tokens: 30,
+    error_message: null,
+    review_id: 'review-run-1',
+    created_at: completedAt,
+    completed_at: completedAt,
+    plan_snapshot: snapshotEmbed(rows),
+    ...overrides,
+  }
+}
+
+describe('GET /api/configs/ai-runtime', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubEnv('VERCEL', '')
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
+    mocks.listPublishedConfigsByType.mockResolvedValue(publishedRows())
+    makeInvocationQueries()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('returns one six-object current plan with plan-linked attempt and token truth', async () => {
+    const rows = publishedRows()
+    const snapshotHash = semanticPlanHash(rows)
+    const snapshot = snapshotEmbed(rows)
+    const completedAt = new Date(Date.now() - 1_000).toISOString()
+    mocks.listPublishedConfigsByType.mockResolvedValue(rows)
+    const queries = makeInvocationQueries({
+      'contract.review.semantic': [{
+        id: 'invocation-fallback',
+        execution_id: EXECUTION_ID,
+        plan_snapshot_id: 'snapshot-1',
+        business_use_point_id: 'contract.review.semantic',
+        application_id: 'app.contract.review',
+        route_policy_id: 'route.contract.review',
+        model_catalog_entry_id: 'model.review.fallback',
+        provider_connection_id: 'provider.cloud',
+        provider: 'provider.cloud',
+        model: 'review-model-fallback-v1-202607',
+        attempt_no: 2,
+        status: 'completed',
+        degraded: true,
+        fallback_reason: 'PROVIDER_UNAVAILABLE',
+        latency_ms: 840,
+        input_tokens: 120,
+        output_tokens: 30,
+        total_tokens: 150,
+        error_message: null,
+        review_id: 'review-run-1',
+        created_at: completedAt,
+        completed_at: completedAt,
+        plan_snapshot: snapshot,
+      },
+      {
+        id: 'invocation-primary-failed',
+        execution_id: EXECUTION_ID,
+        plan_snapshot_id: 'snapshot-1',
+        business_use_point_id: 'contract.review.semantic',
+        application_id: 'app.contract.review',
+        route_policy_id: 'route.contract.review',
+        model_catalog_entry_id: 'model.review.primary',
+        provider_connection_id: 'provider.cloud',
+        provider: 'provider.cloud',
+        model: 'review-model-v1',
+        attempt_no: 1,
+        status: 'failed',
+        degraded: true,
+        fallback_reason: 'PROVIDER_UNAVAILABLE',
+        latency_ms: 300,
+        input_tokens: null,
+        output_tokens: null,
+        total_tokens: null,
+        error_message: '模型连接或传输失败。',
+        review_id: 'review-run-1',
+        created_at: new Date(Date.now() - 2_000).toISOString(),
+        completed_at: new Date(Date.now() - 1_700).toISOString(),
+        plan_snapshot: snapshot,
       }],
     })
-    mocks.validatePublishedModelPolicy.mockReturnValue({ ok: true })
 
     const res = await GET({ method: 'GET', headers: new Headers() } as any)
     const responseText = await res.text()
+    const body = JSON.parse(responseText)
+    const semantic = body.data.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
 
     expect(res.status).toBe(200)
+    expect(isAIRuntimeOverview(body.data)).toBe(true)
+    expect(responseText).not.toContain('[REDACTED:CIRCULAR]')
     expect(responseText).not.toContain(CANARY_SECRET)
-    expect(mocks.from).toHaveBeenCalledTimes(2)
-    expect(mocks.from).toHaveBeenNthCalledWith(1, 'model_invocations')
-    expect(mocks.from).toHaveBeenNthCalledWith(2, 'model_invocations')
+    expect(body.data.source).toBe('published_ai_platform_assets')
+    expect(body.data.truth_contract).toEqual({
+      legacy_model_policy_consumed: false,
+      environment_route_fallback_consumed: false,
+      configured_or_published_is_not_verified: true,
+    })
+    expect(semantic.plan).toMatchObject({
+      state: 'ready',
+      snapshot_hash: snapshotHash,
+      application: { name: '合同风险识别应用' },
+      route: { name: '合同审核默认路由', failure_action: 'manual_review' },
+      candidates: expect.arrayContaining([
+        expect.objectContaining({
+          position: 1,
+          role: 'primary',
+          model_name: '审核主模型',
+          model_id: 'review-model-v1',
+          provider_name: '云端模型网关',
+        }),
+        expect.objectContaining({
+          position: 2,
+          role: 'fallback',
+          model_name: '审核降级模型',
+          model_id: 'review-model-fallback-v1',
+        }),
+      ]),
+    })
+    expect(semantic.verification).toBe('fallback_passed')
+    expect(semantic.latest_current_attempt).toMatchObject({
+      id: 'invocation-fallback',
+      execution_id: EXECUTION_ID,
+      matches_current_plan: true,
+      outcome: 'fallback_passed',
+      model: 'review-model-fallback-v1-202607',
+      snapshot_integrity: 'verified',
+      freshness: 'fresh',
+      review_run_id: 'review-run-1',
+      tokens: { input: 120, output: 30, total: 150, evidence: 'provider' },
+    })
+    expect(semantic.latest_current_execution_attempts.map((attempt: any) => attempt.id)).toEqual([
+      'invocation-primary-failed',
+      'invocation-fallback',
+    ])
+    expect(semantic.latest_current_execution_complete).toBe(true)
+    const routeAttemptWithPinnedIdentity = structuredClone(body.data)
+    routeAttemptWithPinnedIdentity.use_points[0].latest_attempts[0].pinned_model_catalog_entry_id = 'model.review.fallback'
+    expect(isAIRuntimeOverview(routeAttemptWithPinnedIdentity)).toBe(false)
+
+    const routeAttemptInPinnedSlot = structuredClone(body.data)
+    routeAttemptInPinnedSlot.use_points[0].latest_pinned_attempt = {
+      ...routeAttemptInPinnedSlot.use_points[0].latest_current_attempt,
+    }
+    expect(isAIRuntimeOverview(routeAttemptInPinnedSlot)).toBe(false)
+
+    const pinnedAttemptInRouteSlot = structuredClone(body.data)
+    pinnedAttemptInRouteSlot.use_points[0].latest_current_attempt = {
+      ...pinnedAttemptInRouteSlot.use_points[0].latest_current_attempt,
+      execution_mode: 'pinned',
+      pinned_model_catalog_entry_id: 'model.review.fallback',
+    }
+    expect(isAIRuntimeOverview(pinnedAttemptInRouteSlot)).toBe(false)
+    expect(queries).toHaveLength(5)
+    expect(queries[0].select).toHaveBeenCalledTimes(1)
+    expect(queries[0].not).toHaveBeenCalledWith('plan_snapshot_id', 'is', null)
+    expect(queries[0].eq).toHaveBeenCalledWith('business_use_point_id', 'contract.review.semantic')
+    expect(mocks.listPublishedConfigsByType).toHaveBeenCalledWith('AI_CONFIG', 'org-1')
+    expect(mocks.from).toHaveBeenCalledTimes(5)
+    expect(mocks.from).toHaveBeenCalledWith('model_invocations')
     expect(mocks.insert).not.toHaveBeenCalled()
     expect(mocks.update).not.toHaveBeenCalled()
     expect(mocks.delete).not.toHaveBeenCalled()
-    expect(mocks.assessProviderRuntime).toHaveBeenCalledTimes(2)
-    for (const [input] of mocks.assessProviderRuntime.mock.calls) {
-      expect(input).toMatchObject({ checkRemoteHealth: false })
+  })
+
+  it('does not call an isolated second-candidate success a fallback without the same execution failure chain', async () => {
+    const rows = publishedRows()
+    const completedAt = new Date(Date.now() - 1_000).toISOString()
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      id: 'orphan-fallback-success',
+      execution_id: EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.fallback',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-fallback-v1',
+      attempt_no: 2,
+      status: 'completed',
+      degraded: true,
+      fallback_reason: 'PROVIDER_UNAVAILABLE',
+      latency_ms: 840,
+      input_tokens: 120,
+      output_tokens: 30,
+      total_tokens: 150,
+      error_message: null,
+      review_id: 'review-run-1',
+      created_at: completedAt,
+      completed_at: completedAt,
+      plan_snapshot: snapshotEmbed(rows),
+    }] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(semantic.verification).toBe('incomplete_evidence')
+    expect(semantic.latest_current_attempt).toMatchObject({
+      id: 'orphan-fallback-success',
+      matches_current_plan: true,
+      outcome: 'incomplete_evidence',
+    })
+    expect(semantic.latest_current_execution_attempts).toHaveLength(1)
+    expect(semantic.latest_current_execution_complete).toBe(false)
+  })
+
+  it('only calls a failed execution complete after the published route is exhausted', async () => {
+    const rows = publishedRows()
+    const snapshot = snapshotEmbed(rows)
+    const primaryFailure = {
+      id: 'primary-failed',
+      execution_id: EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.primary',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-v1',
+      attempt_no: 1,
+      status: 'failed',
+      degraded: true,
+      fallback_reason: 'PROVIDER_UNAVAILABLE',
+      latency_ms: 200,
+      input_tokens: null,
+      output_tokens: null,
+      total_tokens: null,
+      error_message: '主模型不可达',
+      review_id: 'review-run-1',
+      created_at: new Date(Date.now() - 2_000).toISOString(),
+      completed_at: new Date(Date.now() - 1_800).toISOString(),
+      plan_snapshot: snapshot,
     }
+    makeInvocationQueries({ 'contract.review.semantic': [primaryFailure] })
+
+    const inProgressResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    const inProgressBody = await inProgressResponse.json()
+    const inProgress = inProgressBody.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    expect(inProgress.verification).toBe('incomplete_evidence')
+    expect(inProgress.latest_current_execution_complete).toBe(false)
+
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      ...primaryFailure,
+      id: 'fallback-failed',
+      model_catalog_entry_id: 'model.review.fallback',
+      model: 'review-model-fallback-v1',
+      attempt_no: 2,
+      error_message: '降级模型也不可达',
+      created_at: new Date(Date.now() - 1_000).toISOString(),
+      completed_at: new Date(Date.now() - 800).toISOString(),
+    }, primaryFailure] })
+
+    const exhaustedResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    const exhaustedBody = await exhaustedResponse.json()
+    const exhausted = exhaustedBody.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    expect(exhausted.verification).toBe('failed')
+    expect(exhausted.latest_current_execution_complete).toBe(true)
+    expect(exhausted.latest_current_execution_attempts.map((attempt: any) => attempt.attempt_no)).toEqual([1, 2])
+
+    const failuresWithoutReviewRun = [{
+      ...primaryFailure,
+      id: 'fallback-failed-without-review',
+      model_catalog_entry_id: 'model.review.fallback',
+      model: 'review-model-fallback-v1',
+      attempt_no: 2,
+      review_id: null,
+      created_at: new Date(Date.now() - 1_000).toISOString(),
+      completed_at: new Date(Date.now() - 800).toISOString(),
+    }, {
+      ...primaryFailure,
+      id: 'primary-failed-without-review',
+      review_id: null,
+    }]
+    makeInvocationQueries({ 'contract.review.semantic': failuresWithoutReviewRun })
+
+    const unauditedResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    const unauditedBody = await unauditedResponse.json()
+    const unaudited = unauditedBody.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+    expect(unaudited.verification).toBe('incomplete_evidence')
+    expect(unaudited.latest_current_execution_complete).toBe(false)
+    expect(unaudited.latest_current_execution_attempts.every((attempt: any) => (
+      attempt.outcome === 'incomplete_evidence' && attempt.review_run_id === null
+    ))).toBe(true)
+  })
+
+  it('keeps pre-migration rows without execution identity as history, not current availability proof', async () => {
+    const rows = publishedRows()
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      id: 'legacy-un-grouped-success',
+      execution_id: null,
+      execution_mode: null,
+      pinned_model_catalog_entry_id: null,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.primary',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-v1',
+      attempt_no: 1,
+      status: 'completed',
+      degraded: false,
+      fallback_reason: null,
+      latency_ms: 500,
+      input_tokens: 20,
+      output_tokens: 10,
+      total_tokens: 30,
+      review_id: 'review-run-old',
+      created_at: new Date(Date.now() - 2_000).toISOString(),
+      completed_at: new Date(Date.now() - 1_500).toISOString(),
+      plan_snapshot: snapshotEmbed(rows),
+    }] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(semantic.verification).toBe('not_verified')
+    expect(semantic.latest_current_attempt).toBeNull()
+    expect(semantic.latest_attempts[0]).toMatchObject({
+      id: 'legacy-un-grouped-success',
+      matches_current_plan: false,
+      outcome: 'incomplete_evidence',
+    })
+  })
+
+  it('shows a successful pinned model probe without counting it as published-route verification', async () => {
+    const rows = publishedRows()
+    makeInvocationQueries({ 'contract.review.semantic': [pinnedInvocation(rows)] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(isAIRuntimeOverview(body.data)).toBe(true)
+    expect(semantic.verification).toBe('not_verified')
+    expect(semantic.latest_current_attempt).toBeNull()
+    expect(semantic.latest_current_execution_attempts).toEqual([])
+    expect(semantic.latest_pinned_attempt).toMatchObject({
+      id: 'pinned-fallback-probe',
+      execution_mode: 'pinned',
+      outcome: 'passed',
+      matches_current_plan: true,
+    })
+    expect(body.data.summary.verified_current_plans).toBe(0)
+
+    const mismatchedPinnedIdentity = structuredClone(body.data)
+    const pinned = mismatchedPinnedIdentity.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
+    pinned.latest_pinned_attempt.pinned_model_catalog_entry_id = 'model.review.primary'
+    expect(isAIRuntimeOverview(mismatchedPinnedIdentity)).toBe(false)
+  })
+
+  it('shows a failed pinned probe as a complete single-model failure without failing the route', async () => {
+    const rows = publishedRows()
+    makeInvocationQueries({ 'contract.review.semantic': [pinnedInvocation(rows, {
+      id: 'pinned-fallback-failed',
+      status: 'failed',
+      degraded: true,
+      fallback_reason: 'PROVIDER_UNAVAILABLE',
+      input_tokens: null,
+      output_tokens: null,
+      total_tokens: null,
+      error_message: '指定模型不可达',
+    })] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(semantic.verification).toBe('not_verified')
+    expect(semantic.latest_current_execution_complete).toBe(false)
+    expect(semantic.latest_pinned_attempt).toMatchObject({
+      id: 'pinned-fallback-failed',
+      execution_mode: 'pinned',
+      outcome: 'failed',
+      failure_code: 'PROVIDER_UNAVAILABLE',
+    })
+  })
+
+  it('does not let an older plan success verify the current published plan', async () => {
+    const currentRows = publishedRows()
+    const oldRows = currentRows.map((row) => row.id === 'model-config'
+      ? { ...row, value: { ...row.value, model_id: 'review-model-v0' } }
+      : row)
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      id: 'stale-success',
+      execution_id: OLD_EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-old',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.primary',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-v0',
+      attempt_no: 1,
+      status: 'completed',
+      degraded: false,
+      latency_ms: 500,
+      input_tokens: 20,
+      output_tokens: 10,
+      total_tokens: 30,
+      review_id: 'review-run-old',
+      created_at: new Date(Date.now() - 2_000).toISOString(),
+      completed_at: new Date(Date.now() - 1_500).toISOString(),
+      plan_snapshot: snapshotEmbed(oldRows, 'snapshot-old'),
+    }] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
+
+    expect(semantic.plan.state).toBe('ready')
+    expect(semantic.verification).toBe('not_verified')
+    expect(semantic.latest_current_attempt).toBeNull()
+    expect(semantic.latest_attempts[0]).toMatchObject({
+      id: 'stale-success',
+      matches_current_plan: false,
+      outcome: 'passed',
+    })
+  })
+
+  it('rejects an attempt whose hash matches but whose model/provider are not candidates in the current plan', async () => {
+    const rows = publishedRows()
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      id: 'unrelated-candidate',
+      execution_id: EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.not-in-route',
+      provider_connection_id: 'provider.not-in-route',
+      provider: 'provider.not-in-route',
+      model: 'unrelated-model',
+      attempt_no: 1,
+      status: 'completed',
+      degraded: false,
+      latency_ms: 500,
+      input_tokens: 20,
+      output_tokens: 10,
+      total_tokens: 30,
+      review_id: 'review-run-1',
+      created_at: new Date(Date.now() - 2_000).toISOString(),
+      completed_at: new Date(Date.now() - 1_500).toISOString(),
+      plan_snapshot: snapshotEmbed(rows),
+    }] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
+
+    expect(semantic.verification).toBe('not_verified')
+    expect(semantic.latest_current_attempt).toBeNull()
+    expect(semantic.latest_attempts[0].matches_current_plan).toBe(false)
+    expect(semantic.latest_attempts[0].snapshot_integrity).toBe('verified')
+    expect(semantic.latest_attempts[0].outcome).toBe('incomplete_evidence')
+  })
+
+  it('rejects a tampered immutable snapshot even when its stored hash claims to be current', async () => {
+    const rows = publishedRows()
+    const snapshot = snapshotEmbed(rows)
+    const tamperedSnapshot = {
+      ...snapshot,
+      snapshot: {
+        ...snapshot.snapshot,
+        application: {
+          ...snapshot.snapshot.application,
+          assetId: 'app.tampered',
+        },
+      },
+    }
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      id: 'tampered-snapshot-attempt',
+      execution_id: EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.primary',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-v1',
+      attempt_no: 1,
+      status: 'completed',
+      degraded: false,
+      latency_ms: 500,
+      input_tokens: 20,
+      output_tokens: 10,
+      total_tokens: 30,
+      review_id: 'review-run-1',
+      created_at: new Date(Date.now() - 2_000).toISOString(),
+      completed_at: new Date(Date.now() - 1_500).toISOString(),
+      plan_snapshot: tamperedSnapshot,
+    }] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(semantic.verification).toBe('not_verified')
+    expect(semantic.latest_current_attempt).toBeNull()
+    expect(semantic.latest_attempts[0]).toMatchObject({
+      id: 'tampered-snapshot-attempt',
+      snapshot_integrity: 'invalid',
+      matches_current_plan: false,
+      outcome: 'incomplete_evidence',
+    })
+  })
+
+  it('expires an old success instead of claiming the model is currently available', async () => {
+    const rows = publishedRows()
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      id: 'old-current-success',
+      execution_id: OLD_EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.primary',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-v1',
+      attempt_no: 1,
+      status: 'completed',
+      degraded: false,
+      latency_ms: 500,
+      input_tokens: 20,
+      output_tokens: 10,
+      total_tokens: 30,
+      review_id: 'review-run-old',
+      created_at: new Date(Date.now() - 49 * 60 * 60 * 1_000).toISOString(),
+      completed_at: new Date(Date.now() - 48 * 60 * 60 * 1_000).toISOString(),
+      plan_snapshot: snapshotEmbed(rows),
+    }] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(semantic.verification).toBe('stale')
+    expect(semantic.latest_current_attempt).toMatchObject({
+      id: 'old-current-success',
+      matches_current_plan: true,
+      freshness: 'stale',
+      outcome: 'passed',
+    })
+    expect(body.data.summary.verified_current_plans).toBe(0)
+  })
+
+  it('does not accept a contract semantic completion without ReviewRun linkage', async () => {
+    const rows = publishedRows()
+    makeInvocationQueries({ 'contract.review.semantic': [{
+      id: 'missing-review-run',
+      execution_id: EXECUTION_ID,
+      plan_snapshot_id: 'snapshot-1',
+      business_use_point_id: 'contract.review.semantic',
+      application_id: 'app.contract.review',
+      route_policy_id: 'route.contract.review',
+      model_catalog_entry_id: 'model.review.primary',
+      provider_connection_id: 'provider.cloud',
+      provider: 'provider.cloud',
+      model: 'review-model-v1',
+      attempt_no: 1,
+      status: 'completed',
+      degraded: false,
+      latency_ms: 500,
+      input_tokens: 20,
+      output_tokens: 10,
+      total_tokens: 30,
+      review_id: null,
+      created_at: new Date(Date.now() - 2_000).toISOString(),
+      completed_at: new Date(Date.now() - 1_500).toISOString(),
+      plan_snapshot: snapshotEmbed(rows),
+    }] })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => item.use_point.asset_id === 'contract.review.semantic')
+
+    expect(semantic.verification).toBe('incomplete_evidence')
+    expect(semantic.latest_current_attempt).toMatchObject({
+      outcome: 'incomplete_evidence',
+      review_run_required: true,
+      review_run_id: null,
+    })
+  })
+
+  it('returns a human-actionable blocked use point without falling back to ModelPolicy', async () => {
+    const rows = publishedRows().filter((row) => row.value?.kind !== 'application_binding')
+    mocks.listPublishedConfigsByType.mockResolvedValue(rows)
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
+
+    expect(res.status).toBe(200)
+    expect(semantic.verification).toBe('blocked')
+    expect(semantic.plan).toMatchObject({
+      state: 'blocked',
+      code: 'BINDING_NOT_FOUND',
+      next_action: '为这个业务用点发布一条应用绑定。',
+    })
+    expect(body.data.summary.blocked_plans).toBeGreaterThan(0)
+  })
+
+  it('keeps plans visible but refuses to claim availability when evidence storage is unavailable', async () => {
+    makeInvocationQueries({}, { message: 'model_invocations evidence schema unavailable' })
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+    const body = await res.json()
+    const semantic = body.data.use_points.find((item: any) => (
+      item.use_point.asset_id === 'contract.review.semantic'
+    ))
+
+    expect(res.status).toBe(200)
+    expect(body.data.evidence).toMatchObject({
+      available: false,
+      source: 'immutable_plan_snapshots_and_model_invocations',
+      freshness_window_hours: 24,
+      error: '部分业务用点的真实模型调用证据暂时无法读取；对应业务用点不能据此判断模型可用。',
+    })
+    expect(body.data.evidence.unavailable_use_points).toContain('contract.review.semantic')
+    expect(semantic.plan.state).toBe('ready')
+    expect(semantic.evidence_available).toBe(false)
+    expect(semantic.verification).toBe('evidence_unavailable')
+  })
+
+  it('uses the same hosted environment predicate as the real business entrypoints', async () => {
+    vi.stubEnv('VERCEL', '1')
+    vi.stubEnv('VERCEL_URL', '')
+    vi.stubEnv('VERCEL_REGION', '')
+    makeInvocationQueries()
+
+    const localResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    expect((await localResponse.json()).data.execution_environment).toBe('local')
+
+    vi.stubEnv('VERCEL_URL', 'candidate.vercel.app')
+    makeInvocationQueries()
+    const hostedResponse = await GET({ method: 'GET', headers: new Headers() } as any)
+    expect((await hostedResponse.json()).data.execution_environment).toBe('hosted')
+  })
+
+  it('returns 403 before reading platform assets or invocation evidence', async () => {
+    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+
+    const res = await GET({ method: 'GET', headers: new Headers() } as any)
+
+    expect(res.status).toBe(403)
+    expect(accessMocks.userHasOrgConfigAccess).toHaveBeenCalledWith('user-1', 'org-1', 'read')
+    expect(mocks.listPublishedConfigsByType).not.toHaveBeenCalled()
+    expect(mocks.from).not.toHaveBeenCalled()
   })
 })

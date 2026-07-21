@@ -17,7 +17,13 @@ import {
 import { BUSINESS_USE_POINT_REGISTRY } from '@/lib/configs/ai-platform-registry'
 import { isMaskedApiKey } from '@/lib/configs/runtime'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
-import type { Config, ConfigPublishFeedback, RuntimePolicy } from '../types'
+import type {
+  AIRuntimeAttempt,
+  AIRuntimeOverview,
+  AIRuntimeUsePointOverview,
+  Config,
+  ConfigPublishFeedback,
+} from '../types'
 import {
   AI_PLATFORM_KIND_LABELS,
   groupPlatformConfigRevisions,
@@ -28,13 +34,27 @@ import {
 import ConfigStatusBadge from './ConfigStatusBadge'
 import { IntrinsicCardStack } from './IntrinsicCardStack'
 import { PublishActionControl } from './PublishActionControl'
+import {
+  MODULE_LABELS,
+  VERIFICATION_PRESENTATION,
+  attemptOutcomeLabel,
+  formatRuntimeNumber,
+  formatRuntimeTime,
+} from './ai-runtime-presentation'
+import {
+  RuntimeAttemptOutcomeStatus,
+  RuntimeOverviewUnavailable,
+  RuntimeRefreshButton,
+  RuntimeReviewRunStatus,
+} from './ai-runtime-status'
 
-type AIWorkspaceView = 'connections' | 'models' | 'applications' | 'bindings' | 'release'
+type AIWorkspaceView = 'connections' | 'models' | 'applications' | 'bindings' | 'release' | 'runtime'
 
 interface AIConfigTabProps {
   configs: Config[]
-  runtimePolicy: RuntimePolicy | null
+  runtimeOverview: AIRuntimeOverview | null
   runtimeError: string
+  onRefreshRuntime: () => void | Promise<void>
   onNew: (kind: AIPlatformAssetKind) => void
   onEdit: (config: Config) => void
   onRevise: (config: Config) => void
@@ -55,7 +75,8 @@ const TASKS: Array<{
   { id: 'models', step: '2', label: '模型目录', description: '同一连接下的可用模型' },
   { id: 'applications', step: '3', label: 'AI 应用', description: '能力、候选模型与降级' },
   { id: 'bindings', step: '4', label: '业务绑定', description: '业务用点只绑定应用' },
-  { id: 'release', step: '5', label: '发布状态', description: '依赖检查、版本与兼容' },
+  { id: 'release', step: '5', label: '发布状态', description: '依赖检查与版本' },
+  { id: 'runtime', step: '6', label: '运行验证', description: '当前计划与真实调用' },
 ]
 
 function viewFromUrl(href: string): AIWorkspaceView {
@@ -249,8 +270,9 @@ function RevisionCard({
 
 export default function AIConfigTab({
   configs,
-  runtimePolicy,
+  runtimeOverview,
   runtimeError,
+  onRefreshRuntime,
   onNew,
   onEdit,
   onRevise,
@@ -306,6 +328,7 @@ export default function AIConfigTab({
     applications: applicationGroups.length + routeGroups.length,
     bindings: usePointGroups.length + bindingGroups.length,
     release: revisionGroups.length,
+    runtime: runtimeOverview?.use_points.length || 0,
   }
 
   return (
@@ -326,7 +349,7 @@ export default function AIConfigTab({
           </div>
         </CardHeader>
         <CardContent>
-          <nav aria-label="AI 平台配置任务" className="flex gap-2 overflow-x-auto pb-1 xl:grid xl:grid-cols-5 xl:overflow-visible xl:pb-0">
+          <nav aria-label="AI 平台配置任务" className="flex gap-2 overflow-x-auto pb-1 xl:grid xl:grid-cols-6 xl:overflow-visible xl:pb-0">
             {TASKS.map((task) => {
               const active = view === task.id
               return (
@@ -532,16 +555,11 @@ export default function AIConfigTab({
           </TaskSection>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">兼容运行边界</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">历史配置边界</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm leading-6 text-slate-600">
               <p>
-                当前有 <strong className="text-slate-950">{legacyConfigs.length}</strong> 条旧版运行配置只读保留。
-                新平台资产尚未切换业务运行；配置发布不等于真实调用已经验证。
-              </p>
-              <p>
-                旧版兼容状态：{runtimePolicy
-                  ? `保留 ${runtimePolicy.provider_chain.length} 个历史连接，仅供切换前回溯`
-                  : runtimeError || '暂无可回溯的旧版运行配置'}
+                当前只读保留 <strong className="text-slate-950">{legacyConfigs.length}</strong> 条旧版配置记录。
+                它们不参与当前运行计划，也不能作为模型可用证据。
               </p>
               {legacyConfigs.length > 0 && (
                 <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -560,7 +578,388 @@ export default function AIConfigTab({
           </Card>
         </div>
       )}
+
+      {view === 'runtime' && (
+        <RuntimeTruthPanel overview={runtimeOverview} error={runtimeError} onRefresh={onRefreshRuntime} />
+      )}
     </div>
+  )
+}
+
+function currentCandidateAttempt(
+  item: AIRuntimeUsePointOverview,
+  modelAssetId: string,
+  providerAssetId: string,
+) {
+  return item.latest_current_execution_attempts.find((attempt) => (
+    attempt.model_catalog_entry_id === modelAssetId
+    && attempt.provider_connection_id === providerAssetId
+  )) || null
+}
+
+function pinnedCandidateAttempt(
+  item: AIRuntimeUsePointOverview,
+  modelAssetId: string,
+  providerAssetId: string,
+) {
+  const attempt = item.latest_pinned_attempt
+  return attempt
+    && attempt.model_catalog_entry_id === modelAssetId
+    && attempt.provider_connection_id === providerAssetId
+    ? attempt
+    : null
+}
+
+export function RuntimeTruthPanel({
+  overview,
+  error,
+  onRefresh,
+}: {
+  overview: AIRuntimeOverview | null
+  error: string
+  onRefresh: () => void | Promise<void>
+}) {
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <RuntimeOverviewUnavailable error={error} onRefresh={onRefresh} />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!overview) {
+    return (
+      <Card>
+        <CardContent className="py-4">
+          <RuntimeOverviewUnavailable error="" onRefresh={onRefresh} />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const environmentLabel = overview.execution_environment === 'hosted' ? '托管服务端' : '本机服务端'
+
+  return (
+    <div className="space-y-6" aria-live="polite" data-testid="ai-runtime-truth">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle className="text-base">当前运行真相</CardTitle>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                每个业务用点都必须沿“业务用点 → 应用绑定 → AI 应用 → 路由 → 模型 → Provider”形成唯一计划。
+                只有当前计划快照的真实模型尝试和 token 记录，才能证明可用。
+              </p>
+            </div>
+            <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <div className="font-semibold text-slate-950">检查环境：{environmentLabel}</div>
+              <div className="mt-1 text-xs text-slate-500">更新于 {formatRuntimeTime(overview.generated_at)}</div>
+              <RuntimeRefreshButton onRefresh={onRefresh} className="mt-3 w-full" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <RuntimeMetric label="业务用点" value={overview.summary.registered_use_points} />
+            <RuntimeMetric label="计划可编译" value={overview.summary.ready_plans} />
+            <RuntimeMetric label="当前计划真实通过" value={overview.summary.verified_current_plans} />
+            <RuntimeMetric label="计划被阻断" value={overview.summary.blocked_plans} tone={overview.summary.blocked_plans > 0 ? 'danger' : 'neutral'} />
+          </dl>
+          {!overview.evidence.available && (
+            <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+              {overview.evidence.error || '真实模型调用证据不可读；当前不能判断模型是否可用。'}
+            </div>
+          )}
+          <p className="text-xs leading-5 text-slate-500">
+            “计划可编译”只说明六对象发布关系完整；它不等于模型连接成功，也不等于业务输出通过验收。
+          </p>
+          <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900">
+            “模型真实通过”只证明同一次 execution 内获得 Provider 响应、完整 token 和所需 ReviewRun 绑定；
+            规则包加载、业务输出质量与独立金标准确度仍需在对应业务模块单独验收。
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        {overview.use_points.map((item) => (
+          <RuntimeUsePointCard key={item.use_point.asset_id} item={item} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RuntimeMetric({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string
+  value: number
+  tone?: 'neutral' | 'danger'
+}) {
+  return (
+    <div className={tone === 'danger'
+      ? 'rounded-2xl border border-rose-200 bg-rose-50 p-4'
+      : 'rounded-2xl border border-slate-200 bg-slate-50 p-4'}
+    >
+      <dt className={tone === 'danger' ? 'text-xs font-medium text-rose-700' : 'text-xs font-medium text-slate-500'}>{label}</dt>
+      <dd className={tone === 'danger'
+        ? 'mt-2 text-2xl font-semibold tabular-nums text-rose-900'
+        : 'mt-2 text-2xl font-semibold tabular-nums text-slate-950'}
+      >
+        {formatRuntimeNumber(value)}
+      </dd>
+    </div>
+  )
+}
+
+function RuntimeUsePointCard({ item }: { item: AIRuntimeUsePointOverview }) {
+  const presentation = VERIFICATION_PRESENTATION[item.verification]
+  const currentAttempt = item.latest_current_attempt
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 [contain-intrinsic-size:auto_520px] [content-visibility:auto]">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-slate-950">{item.use_point.name}</h3>
+            <Badge variant="outline">{MODULE_LABELS[item.use_point.module_id] || item.use_point.module_id}</Badge>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{item.use_point.description}</p>
+        </div>
+        <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${presentation.className}`}>
+          {presentation.label}
+        </span>
+      </header>
+
+      <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+        {presentation.description}
+      </p>
+
+      {!item.evidence_available && (
+        <div role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          这个业务用点的调用证据暂时不可读；计划仍可检查，但不能判断模型是否可用。
+        </div>
+      )}
+
+      {item.plan.state === 'blocked' ? (
+        <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">
+          <div className="font-semibold">阻断原因</div>
+          <p className="mt-1 break-words">{item.plan.reason}</p>
+          <div className="mt-3 font-semibold">下一步</div>
+          <p className="mt-1 break-words">{item.plan.next_action}</p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+            <RuntimeFact label="消费模块" value={MODULE_LABELS[item.use_point.module_id] || item.use_point.module_id} />
+            <RuntimeFact label="AI 应用" value={item.plan.application.name} />
+            <RuntimeFact label="路由" value={item.plan.route.name} />
+            <RuntimeFact
+              label="全部候选失败后"
+              value={item.plan.route.failure_action === 'manual_review' ? '转人工处理' : '停止并报错'}
+            />
+          </dl>
+
+          <div className="rounded-2xl border border-slate-200">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h4 className="text-sm font-semibold text-slate-950">模型执行顺序</h4>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                严格按顺序尝试；状态来自同一个 execution ID 的最近执行链，不会跨运行拼接，也不会改走环境变量或历史策略。
+              </p>
+            </div>
+            <ol className="divide-y divide-slate-100">
+              {item.plan.candidates.map((candidate) => {
+                const attempt = currentCandidateAttempt(
+                  item,
+                  candidate.model_catalog_entry_id,
+                  candidate.provider_connection_id,
+                )
+                const pinnedAttempt = pinnedCandidateAttempt(
+                  item,
+                  candidate.model_catalog_entry_id,
+                  candidate.provider_connection_id,
+                )
+                return (
+                  <li key={`${candidate.model_catalog_entry_id}:${candidate.provider_connection_id}`} className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[64px_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
+                    <span className="text-xs font-semibold text-slate-500">第 {candidate.position} 位</span>
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-slate-950">{candidate.model_name}</div>
+                      <div className="mt-1 truncate text-xs text-slate-500" translate="no">{candidate.model_id}</div>
+                    </div>
+                    <div className="min-w-0 text-slate-700">
+                      <div className="truncate">{candidate.provider_name}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {candidate.runtime_location === 'local' ? '本地 Provider' : '云端 Provider'} · {candidate.auth_mode === 'none' ? '免认证' : 'Bearer 已保存'}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-start gap-1 md:items-end">
+                      <span className={attempt
+                        ? 'rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700'
+                        : 'rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-500'}
+                      >
+                        {attempt ? attemptOutcomeLabel(attempt) : '路由状态未确认'}
+                      </span>
+                      {pinnedAttempt && (
+                        <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800">
+                          {attemptOutcomeLabel(pinnedAttempt)}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+
+          {item.latest_current_execution_attempts.length > 0 && !item.latest_current_execution_complete && (
+            <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+              最近 execution 的候选序号、前序失败或最终结果不完整；这组记录只作为排错线索，不能证明模型可用。
+            </div>
+          )}
+
+          {item.latest_pinned_attempt && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
+              <div className="font-semibold">最近指定模型探测：{attemptOutcomeLabel(item.latest_pinned_attempt)}</div>
+              <p className="mt-1 leading-6">
+                模型 {item.latest_pinned_attempt.model || '标识缺失'} · {formatRuntimeTime(item.latest_pinned_attempt.occurred_at)}。
+                这只证明该模型单独被调用，不计入当前发布路由的通过或失败。
+              </p>
+              <p className="mt-1 text-xs leading-5">
+                Token：{item.latest_pinned_attempt.tokens.total === null
+                  ? '缺失'
+                  : formatRuntimeNumber(item.latest_pinned_attempt.tokens.total)}
+                {(item.latest_pinned_attempt.failure_code || item.latest_pinned_attempt.error_message)
+                  ? ` · 原因：${item.latest_pinned_attempt.failure_code || item.latest_pinned_attempt.error_message}`
+                  : ''}
+              </p>
+            </div>
+          )}
+
+          <CurrentAttemptEvidence
+            attempt={currentAttempt}
+            hasHistoricalAttempts={item.latest_attempts.some((attempt) => !attempt.matches_current_plan)}
+          />
+        </div>
+      )}
+
+      {item.latest_attempts.length > 0 && (
+        <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2">
+          <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-slate-800">
+            查看最近 {item.latest_attempts.length} 次真实模型尝试
+          </summary>
+          <ol className="space-y-3 border-t border-slate-200 py-4">
+            {item.latest_attempts.map((attempt) => (
+              <RuntimeAttemptRow key={attempt.id} attempt={attempt} />
+            ))}
+          </ol>
+        </details>
+      )}
+    </article>
+  )
+}
+
+function RuntimeFact({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-3">
+      <dt className="text-xs font-medium text-slate-500">{label}</dt>
+      <dd className="mt-1 break-words font-medium text-slate-900">{value}</dd>
+    </div>
+  )
+}
+
+function CurrentAttemptEvidence({
+  attempt,
+  hasHistoricalAttempts,
+}: {
+  attempt: AIRuntimeAttempt | null
+  hasHistoricalAttempts: boolean
+}) {
+  if (!attempt) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600">
+        {hasHistoricalAttempts
+          ? '存在旧计划的历史尝试，但当前发布计划还没有真实调用，历史成功不能证明当前模型可用。'
+          : '当前发布计划还没有真实模型尝试。请从对应业务入口执行一次真实任务，再回到这里核对结果和 token。'}
+      </div>
+    )
+  }
+
+  return (
+    <div className={attempt.freshness === 'stale'
+      ? 'rounded-2xl border border-amber-200 bg-amber-50 p-4'
+      : attempt.outcome === 'failed' || attempt.outcome === 'incomplete_evidence'
+      ? 'rounded-2xl border border-rose-200 bg-rose-50 p-4'
+      : attempt.outcome === 'fallback_passed'
+        ? 'rounded-2xl border border-amber-200 bg-amber-50 p-4'
+        : 'rounded-2xl border border-emerald-200 bg-emerald-50 p-4'}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-slate-950">最近一次当前计划尝试</h4>
+        <span className="text-xs text-slate-600">{formatRuntimeTime(attempt.occurred_at)}</span>
+      </div>
+      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+        <RuntimeFact label="结果" value={<RuntimeAttemptOutcomeStatus attempt={attempt} />} />
+        <RuntimeFact label="模型" value={attempt.model || '模型标识缺失'} />
+        <RuntimeFact
+          label="Token 证据"
+          value={attempt.tokens.evidence === 'provider' && attempt.tokens.total !== null
+            ? `${formatRuntimeNumber(attempt.tokens.total)}（输入 ${formatRuntimeNumber(attempt.tokens.input || 0)} / 输出 ${formatRuntimeNumber(attempt.tokens.output || 0)}）`
+            : '缺失，不能验收为成功'}
+        />
+        <RuntimeFact
+          label="耗时"
+          value={attempt.latency_ms === null ? '未记录' : `${formatRuntimeNumber(attempt.latency_ms)} ms`}
+        />
+      </dl>
+      {(attempt.failure_code || attempt.error_message) && (
+        <p className="mt-3 break-words text-sm leading-6 text-slate-800">
+          {attempt.failure_code ? `原因：${attempt.failure_code}` : ''}
+          {attempt.failure_code && attempt.error_message ? '；' : ''}
+          {attempt.error_message || ''}
+        </p>
+      )}
+      <RuntimeReviewRunStatus attempt={attempt} />
+    </div>
+  )
+}
+
+function RuntimeAttemptRow({ attempt }: { attempt: AIRuntimeAttempt }) {
+  return (
+    <li className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-slate-950">{attemptOutcomeLabel(attempt)}</span>
+          <Badge variant="outline">{attempt.matches_current_plan ? '当前计划' : '历史计划'}</Badge>
+          <Badge variant="outline">{attempt.execution_mode === 'route' ? '发布路由' : attempt.execution_mode === 'pinned' ? '指定模型探测' : '旧证据'}</Badge>
+          {attempt.snapshot_integrity === 'invalid' && <Badge variant="outline">快照无效</Badge>}
+          {attempt.attempt_no && <span className="text-xs text-slate-500">第 {attempt.attempt_no} 次候选</span>}
+        </div>
+        <span className="text-xs text-slate-500">{formatRuntimeTime(attempt.occurred_at)}</span>
+      </div>
+      <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+        <span className="min-w-0 truncate" translate="no">模型：{attempt.model || '未记录'}</span>
+        <span className="min-w-0 truncate">Token：{attempt.tokens.total === null ? '缺失' : formatRuntimeNumber(attempt.tokens.total)}</span>
+        <span className="min-w-0 truncate">ReviewRun：{attempt.review_run_id ? '已绑定' : '未绑定'}</span>
+      </div>
+      {(attempt.error_message || attempt.failure_code) && (
+        <p className="mt-2 break-words text-xs leading-5 text-rose-700">
+          {attempt.failure_code || attempt.error_message}
+        </p>
+      )}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-slate-500">审计标识</summary>
+        <div className="mt-2 space-y-1 break-all font-mono text-[11px] leading-5 text-slate-500" translate="no">
+          <div>Invocation: {attempt.id}</div>
+          <div>Execution: {attempt.execution_id || '未记录'}</div>
+          <div>Plan: {attempt.plan_snapshot_id || '未记录'}</div>
+          {attempt.review_run_id && <div>ReviewRun: {attempt.review_run_id}</div>}
+        </div>
+      </details>
+    </li>
   )
 }
 

@@ -18,6 +18,7 @@ import {
   type ReviewEvidenceModelInvocation,
   type ReviewEvidenceModelPolicy,
   type ReviewEvidenceRuleSetSnapshot,
+  type ReviewEvidenceRuntimePlanSnapshot,
   type ReviewEvidenceSkillBundle,
   type ReviewEvidenceSnapshot,
 } from '@/lib/contracts/review-evidence'
@@ -30,6 +31,7 @@ type ContractReviewRow = {
   results?: unknown
   rule_version?: number | null
   skill_bundle_id?: string | null
+  plan_snapshot_id?: string | null
   model_policy_id?: string | null
   rule_snapshot_ids?: string[] | null
   rule_set_snapshot_ids?: string[] | null
@@ -308,6 +310,21 @@ export async function GET(
     const currentVersion = sourceVersions[0] || versions[0] || null
     const latestJob = jobs[0] || null
 
+    let runtimePlanSnapshot: ReviewEvidenceRuntimePlanSnapshot = null
+    if (latestReview?.plan_snapshot_id) {
+      const { data, error } = await supabaseAdmin
+        .from('ai_runtime_plan_snapshots')
+        .select('id, org_id, business_use_point_id, application_id, route_policy_id, snapshot, snapshot_sha256, created_at')
+        .eq('id', latestReview.plan_snapshot_id)
+        .eq('org_id', orgId)
+        .maybeSingle()
+
+      if (error) {
+        return errorResponse(createApiError('DB_ERROR', '获取 AI 运行计划快照失败'))
+      }
+      runtimePlanSnapshot = data as ReviewEvidenceRuntimePlanSnapshot
+    }
+
     let reviewRun = buildReviewRunEvidence({
       latestReview,
       latestJob,
@@ -315,8 +332,10 @@ export async function GET(
       risks: orderedRiskCards,
       snapshots: [],
       skillBundle: null,
+      runtimePlanSnapshot,
       modelPolicy: null,
       modelInvocations: [],
+      modelInvocationsLoaded: false,
     })
 
     if (!summaryOnly) {
@@ -373,7 +392,11 @@ export async function GET(
       }
 
       let modelPolicy: ReviewEvidenceModelPolicy = null
-      const modelPolicyId = latestReview?.model_policy_id || skillBundle?.model_policy_id || null
+      // WP02 ReviewRuns resolve from the immutable six-object plan. ModelPolicy
+      // is queried only for historical runs which have no plan_snapshot_id.
+      const modelPolicyId = latestReview?.plan_snapshot_id
+        ? null
+        : latestReview?.model_policy_id || skillBundle?.model_policy_id || null
       if (modelPolicyId) {
         const { data, error } = await supabaseAdmin
           .from('model_policies')
@@ -388,10 +411,26 @@ export async function GET(
       }
 
       let modelInvocations: ReviewEvidenceModelInvocation[] = []
-      if (latestReview?.model_invocation_ids?.length) {
+      const invocationSelection = 'id, plan_snapshot_id, business_use_point_id, application_id, route_policy_id, model_catalog_entry_id, provider_connection_id, attempt_no, provider, model, phase, status, degraded, fallback_reason, error_message, latency_ms, input_tokens, output_tokens, total_tokens, request_meta, response_meta, started_at, completed_at, created_at'
+
+      if (latestReview?.plan_snapshot_id && latestReview.id) {
         const { data, error } = await supabaseAdmin
           .from('model_invocations')
-          .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, latency_ms, request_meta, response_meta, created_at')
+          .select(invocationSelection)
+          .eq('review_id', latestReview.id)
+          .eq('plan_snapshot_id', latestReview.plan_snapshot_id)
+          .eq('org_id', orgId)
+          .order('attempt_no', { ascending: true })
+          .order('created_at', { ascending: true })
+
+        if (error) {
+          return errorResponse(createApiError('DB_ERROR', '获取模型调用记录失败'))
+        }
+        modelInvocations = (data || []) as ReviewEvidenceModelInvocation[]
+      } else if (latestReview?.model_invocation_ids?.length) {
+        const { data, error } = await supabaseAdmin
+          .from('model_invocations')
+          .select(invocationSelection)
           .in('id', latestReview.model_invocation_ids)
           .order('created_at', { ascending: false })
 
@@ -402,7 +441,7 @@ export async function GET(
       } else if (latestReview?.id) {
         const { data, error } = await supabaseAdmin
           .from('model_invocations')
-          .select('id, provider, model, phase, status, degraded, fallback_reason, error_message, latency_ms, request_meta, response_meta, created_at')
+          .select(invocationSelection)
           .eq('review_id', latestReview.id)
           .order('created_at', { ascending: false })
           .limit(5)
@@ -422,8 +461,10 @@ export async function GET(
         ruleSetSnapshots: ruleSetSnapshotRows,
         expectedOrgId: orgId,
         skillBundle,
+        runtimePlanSnapshot,
         modelPolicy,
         modelInvocations,
+        modelInvocationsLoaded: true,
       })
     }
 

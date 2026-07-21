@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
-import type { ProductRecord, Config, ConfigPublishFeedback, OrgSummaryPayload, FeishuSyncFeedback, RuntimePolicy } from '../types'
+import type { AIRuntimeOverview, ProductRecord, Config, ConfigPublishFeedback, OrgSummaryPayload, FeishuSyncFeedback } from '../types'
 import type { ContractPolicyRule } from '@/types/rules'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
@@ -61,7 +61,7 @@ export interface TabsContentProps {
   onRefreshRules?: () => void | Promise<void>
   // config-based tabs (tax, approval, ai, theme)
   configs: Config[]
-  aiRuntimePolicy: RuntimePolicy | null
+  aiRuntimeOverview: AIRuntimeOverview | null
   aiRuntimeError: string
   onNewConfig: (type: Config['type'], aiKind?: AIPlatformAssetKind) => void
   onEditConfig: (config: Config) => void
@@ -105,7 +105,7 @@ export default function TabsContent({
   onDeleteRule,
   onRefreshRules,
   configs,
-  aiRuntimePolicy,
+  aiRuntimeOverview,
   aiRuntimeError,
   onNewConfig,
   onEditConfig,
@@ -248,8 +248,9 @@ export default function TabsContent({
       return (
         <AIConfigTab
           configs={aiConfigs}
-          runtimePolicy={aiRuntimePolicy}
+          runtimeOverview={aiRuntimeOverview}
           runtimeError={aiRuntimeError}
+          onRefreshRuntime={onRefreshConfigs || (() => undefined)}
           onNew={(kind) => onNewConfig('AI_CONFIG', kind)}
           onEdit={onEditConfig}
           onRevise={onReviseConfig}

@@ -7,6 +7,14 @@ import type { Config } from '../types'
 import { groupPlatformConfigRevisions, orderAndFilterReleaseConfigs } from './ai-config-presentation'
 
 const source = readFileSync(resolve(process.cwd(), 'app/configs/tabs/AIConfigTab.tsx'), 'utf8')
+const runtimePresentationSource = readFileSync(
+  resolve(process.cwd(), 'app/configs/tabs/ai-runtime-presentation.ts'),
+  'utf8',
+)
+const runtimeStatusSource = readFileSync(
+  resolve(process.cwd(), 'app/configs/tabs/ai-runtime-status.ts'),
+  'utf8',
+)
 
 const dependencyOrder: AIPlatformAssetKind[] = [
   'provider_connection',
@@ -39,8 +47,8 @@ function makeConfig(index: number, kind: AIPlatformAssetKind = 'provider_connect
 }
 
 describe('AI platform workspace source contract', () => {
-  it('keeps the five administrator tasks in product order without masonry columns', () => {
-    const labels = ['模型接入', '模型目录', 'AI 应用', '业务绑定', '发布状态']
+  it('keeps the six administrator tasks in product order without masonry columns', () => {
+    const labels = ['模型接入', '模型目录', 'AI 应用', '业务绑定', '发布状态', '运行验证']
     const offsets = labels.map((label) => source.indexOf(`label: '${label}'`))
 
     expect(offsets.every((offset) => offset >= 0)).toBe(true)
@@ -49,15 +57,47 @@ describe('AI platform workspace source contract', () => {
     expect(source).not.toContain('break-inside-avoid')
   })
 
-  it('keeps runtime evidence in a compact compatibility boundary instead of the main task flow', () => {
-    expect(source).toContain('兼容运行边界')
-    expect(source).toContain('配置发布不等于真实调用已经验证')
+  it('makes six-object runtime plans and real attempt evidence a dedicated human task', () => {
+    expect(source).toContain('当前运行真相')
+    expect(source).toContain('业务用点 → 应用绑定 → AI 应用 → 路由 → 模型 → Provider')
+    expect(source).toContain('当前计划真实通过')
+    expect(source).toContain('真实模型尝试')
+    expect(source).toContain('Token 证据')
+    expect(source).toContain('独立金标准确度仍需在对应业务模块单独验收')
+    expect(source).toContain('历史成功不能证明当前模型可用')
+    expect(source).toContain('不会跨运行拼接')
+    expect(source).toContain('不计入当前发布路由的通过或失败')
+    expect(runtimeStatusSource).toContain('重新读取证据')
+    expect(source).toContain('历史配置边界')
+    expect(source).not.toContain('runtimePolicy')
+    expect(source).not.toContain('provider_chain')
+    expect(source).not.toContain('ModelPolicy')
     expect(source).not.toContain('WP01')
     expect(source).not.toContain('WP02')
     expect(source).not.toContain('旧 AI_CONFIG')
     expect(source).not.toContain('旧 L1/L2/L3')
     expect(source).not.toContain('规则引擎兜底')
     expect(source).not.toContain('L1 本地模型优先')
+  })
+
+  it('distinguishes plan readiness, real success, fallback, failure and unavailable evidence', () => {
+    expect(runtimePresentationSource).toContain("label: '当前计划真实通过'")
+    expect(runtimePresentationSource).toContain("label: '降级后真实通过'")
+    expect(runtimePresentationSource).toContain("label: '最近真实调用失败'")
+    expect(runtimePresentationSource).toContain("label: '调用证据不完整'")
+    expect(runtimePresentationSource).toContain("label: '当前计划未验证'")
+    expect(runtimePresentationSource).toContain("label: '当前验证已过期'")
+    expect(runtimePresentationSource).toContain("label: '真实证据不可读'")
+    expect(runtimePresentationSource).toContain("label: '运行计划被阻断'")
+    expect(source).toContain('aria-live="polite"')
+  })
+
+  it('versions and validates runtime browser cache before rendering the new contract', () => {
+    const clientSource = readFileSync(resolve(process.cwd(), 'app/configs/ConfigsClient.tsx'), 'utf8')
+
+    expect(clientSource).toContain("'configs:ai-runtime:v1'")
+    expect(clientSource).toContain('isAIRuntimeOverview(cachedRuntimeEntry?.value)')
+    expect(clientSource).toContain('AI 运行证据结构版本不兼容')
   })
 
   it('uses a single intrinsic-height card flow so unequal cards cannot share row height', () => {
@@ -108,6 +148,14 @@ describe('AI platform workspace source contract', () => {
     expect(clientSource).toContain('xl:hidden')
     expect(clientSource).toContain('hidden self-start xl:sticky xl:top-8 xl:block')
     expect(source).toContain('overflow-x-auto pb-1 xl:grid')
+  })
+
+  it('does not squeeze the module title beside four metrics at a 1280px desktop viewport', () => {
+    const clientSource = readFileSync(resolve(process.cwd(), 'app/configs/ConfigsClient.tsx'), 'utf8')
+
+    expect(clientSource).toContain('2xl:flex-row 2xl:items-start 2xl:justify-between')
+    expect(clientSource).toContain('xl:grid-cols-2 2xl:min-w-[520px] 2xl:grid-cols-4')
+    expect(clientSource).not.toContain('lg:flex-row lg:items-start lg:justify-between')
   })
 
   it('keeps publish progress and feedback scoped to the triggering row', () => {

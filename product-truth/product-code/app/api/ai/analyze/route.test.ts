@@ -1,34 +1,26 @@
-// 测试 app/api/ai/analyze/route.ts
-// 覆盖：参数验证、降级链集成、错误处理
-// 迁移到 reviewWithFailover 后的新测试
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockFailoverResult } = vi.hoisted(() => ({
-  mockFailoverResult: {
-    risks: [{ level: 'red', title: 'test', description: 'test', suggestion: 'test' }],
-    summary: 'mock summary',
-    provider: 'local',
-    degraded: false,
-  },
+const mocks = vi.hoisted(() => ({
+  executeAIUsePoint: vi.fn(),
+  getAuthUser: vi.fn(),
+  getDefaultOrgId: vi.fn(),
 }))
 
-vi.mock('@/lib/ai/failover', () => ({
-  reviewWithFailoverSync: vi.fn().mockResolvedValue(mockFailoverResult),
-}))
+vi.mock('@/lib/ai/runtime-executor', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/runtime-executor')>()
+  return { ...actual, executeAIUsePoint: mocks.executeAIUsePoint }
+})
 
-vi.mock('@/lib/auth', () => ({
-  getAuthUser: vi.fn().mockResolvedValue(null),
-}))
-
-vi.mock('@/lib/scoped-access', () => ({
-  getDefaultOrgId: vi.fn().mockResolvedValue('org-1'),
-}))
+vi.mock('@/lib/auth', () => ({ getAuthUser: mocks.getAuthUser }))
+vi.mock('@/lib/scoped-access', () => ({ getDefaultOrgId: mocks.getDefaultOrgId }))
 
 import { POST } from './route'
+import { AIExecutionError } from '@/lib/ai/runtime-executor'
 
-function makeRequest(body: any): any {
+function makeRequest(body: unknown): any {
   return {
     json: async () => body,
     method: 'POST',
@@ -39,77 +31,109 @@ function makeRequest(body: any): any {
 describe('POST /api/ai/analyze', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  describe('参数验证', () => {
-    it('空 body → 400', async () => {
-      const res = await POST(makeRequest({}))
-      expect(res.status).toBe(400)
-    })
-
-    it('text 缺失 → 400', async () => {
-      const res = await POST(makeRequest({ pageCount: 10 }))
-      expect(res.status).toBe(400)
-    })
-
-    it('pageCount 超出范围 → 400', async () => {
-      const res = await POST(makeRequest({ text: 'abc', pageCount: 0 }))
-      expect(res.status).toBe(400)
-    })
-
-    it('text 超长 → 400', async () => {
-      const longText = 'a'.repeat(100001)
-      const res = await POST(makeRequest({ text: longText, pageCount: 5 }))
-      expect(res.status).toBe(400)
+    mocks.getAuthUser.mockResolvedValue({ id: 'user-1' })
+    mocks.getDefaultOrgId.mockResolvedValue('org-1')
+    mocks.executeAIUsePoint.mockResolvedValue({
+      provider: 'provider-cloud',
+      model: 'model-cloud',
+      value: {
+        risks: [{ level: 'red', title: '付款风险', description: '周期过长', suggestion: '改为 30 天' }],
+        summary: '存在付款风险',
+      },
+      latencyMs: 42,
+      degraded: false,
+      usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30, evidence: 'provider' },
+      planSnapshotHash: 'hash-1',
+      invocationIds: ['invocation-1'],
     })
   })
 
-  describe('降级链集成', () => {
-    it('正常调用 → 200 with provider info', async () => {
-      const res = await POST(makeRequest({ text: '合同内容', pageCount: 5 }))
-      const body = await res.json()
-      expect(res.status).toBe(200)
-      // 测试环境无真实模型，会降级到 manual-fallback
-      expect(body.provider).toBeDefined()
-      expect(typeof body.degraded).toBe('boolean')
-    })
+  it.each([
+    {},
+    { pageCount: 10 },
+    { text: 'abc', pageCount: 0 },
+    { text: 'a'.repeat(100001), pageCount: 5 },
+  ])('invalid body returns 400 without auth or execution: %j', async (body) => {
+    const res = await POST(makeRequest(body))
 
-    it('返回结构符合 schema', async () => {
-      const res = await POST(makeRequest({ text: 'x', pageCount: 5 }))
-      const body = await res.json()
-      expect(body).toHaveProperty('level')
-      expect(body).toHaveProperty('source')
-      expect(body).toHaveProperty('result')
-      expect(body).toHaveProperty('degraded')
-    })
+    expect(res.status).toBe(400)
+    expect(mocks.getAuthUser).not.toHaveBeenCalled()
+    expect(mocks.executeAIUsePoint).not.toHaveBeenCalled()
   })
 
-  describe('错误处理', () => {
-    it('降级链抛出 → 500 INTERNAL_ERROR', async () => {
-      const { reviewWithFailoverSync } = await import('@/lib/ai/failover')
-      vi.mocked(reviewWithFailoverSync).mockRejectedValueOnce(new Error('all failed'))
+  it('requires an authenticated organization before resolving the platform route', async () => {
+    mocks.getAuthUser.mockResolvedValueOnce(null)
 
-      const res = await POST(makeRequest({ text: 'x', pageCount: 5 }))
-      expect(res.status).toBe(500)
+    const res = await POST(makeRequest({ text: '合同内容', pageCount: 5 }))
+    const body = await res.json()
+
+    expect(res.status).toBe(401)
+    expect(body.code).toBe('UNAUTHORIZED')
+    expect(mocks.executeAIUsePoint).not.toHaveBeenCalled()
+  })
+
+  it('executes only the registered generic use point and returns auditable runtime evidence', async () => {
+    const res = await POST(makeRequest({ text: '合同内容', pageCount: 5, task: 'semantic' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({
+      provider: 'provider-cloud',
+      model: 'model-cloud',
+      result: { summary: '存在付款风险' },
+      usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+      planSnapshotHash: 'hash-1',
+      invocationIds: ['invocation-1'],
     })
+    expect(mocks.executeAIUsePoint).toHaveBeenCalledWith(expect.objectContaining({
+      orgId: 'org-1',
+      usePointId: 'generic.ai.analyze',
+      executionEnvironment: 'local',
+      messages: expect.arrayContaining([expect.objectContaining({ role: 'user' })]),
+      validateOutput: expect.any(Function),
+    }))
+  })
 
-    it('请求体非 JSON → 400 VALIDATION_ERROR 且不进入鉴权和模型链路', async () => {
-      const { reviewWithFailoverSync } = await import('@/lib/ai/failover')
-      const { getAuthUser } = await import('@/lib/auth')
-      const req: any = {
-        json: async () => {
-          throw new Error('invalid json')
-        },
-        method: 'POST',
-        headers: new Headers(),
-      }
-      const res = await POST(req)
-      const body = await res.json()
+  it('rejects a request-time cloud override because RoutePolicy owns model choice', async () => {
+    const res = await POST(makeRequest({ text: '合同内容', pageCount: 5, forceCloud: true }))
+    const body = await res.json()
 
-      expect(res.status).toBe(400)
-      expect(body.code).toBe('VALIDATION_ERROR')
-      expect(getAuthUser).not.toHaveBeenCalled()
-      expect(reviewWithFailoverSync).not.toHaveBeenCalled()
-    })
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('ROUTE_POLICY_CONTROLLED')
+    expect(mocks.executeAIUsePoint).not.toHaveBeenCalled()
+  })
+
+  it('maps a published manual-review failure action to an explicit 503', async () => {
+    mocks.executeAIUsePoint.mockRejectedValueOnce(new AIExecutionError(
+      'ALL_CANDIDATES_FAILED', 'all failed', 'manual_review', [], 'snapshot-1'
+    ))
+
+    const res = await POST(makeRequest({ text: '合同内容', pageCount: 5 }))
+    const body = await res.json()
+
+    expect(res.status).toBe(503)
+    expect(body.code).toBe('AI_MANUAL_REVIEW_REQUIRED')
+  })
+
+  it('invalid JSON body stops before auth and execution', async () => {
+    const res = await POST({
+      json: async () => { throw new Error('invalid json') },
+      method: 'POST',
+      headers: new Headers(),
+    } as any)
+
+    expect(res.status).toBe(400)
+    expect(mocks.getAuthUser).not.toHaveBeenCalled()
+    expect(mocks.executeAIUsePoint).not.toHaveBeenCalled()
+  })
+
+  it('has no legacy failover, ModelPolicy, CLI or environment credential bypass', () => {
+    const source = readFileSync(join(process.cwd(), 'app/api/ai/analyze/route.ts'), 'utf8')
+
+    expect(source).toContain("usePointId: 'generic.ai.analyze'")
+    expect(source).not.toContain("@/lib/ai/failover")
+    expect(source).not.toContain('reviewWithFailover')
+    expect(source).not.toContain('ModelPolicy')
+    expect(source).not.toMatch(/AI_GATEWAY|LOCAL_MODEL|OPENAI_API_KEY|lm-studio-cli/)
   })
 })

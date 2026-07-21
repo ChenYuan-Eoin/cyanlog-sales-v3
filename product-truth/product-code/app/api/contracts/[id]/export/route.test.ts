@@ -33,10 +33,6 @@ vi.mock('@/lib/export/word-generator', () => ({
   generateWordDocument: vi.fn(),
 }))
 
-vi.mock('@/lib/contracts/model-policy', () => ({
-  recordModelInvocation: vi.fn(),
-}))
-
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
@@ -52,7 +48,6 @@ import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { resolveIdParam } from '@/lib/route-params'
 import { generateWordDocument } from '@/lib/export/word-generator'
 import { supabaseAdmin } from '@/lib/supabase'
-import { recordModelInvocation } from '@/lib/contracts/model-policy'
 
 const tempFiles: string[] = []
 
@@ -204,14 +199,10 @@ function installSupabaseExportMocks(options: {
 describe('POST /api/contracts/[id]/export', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(recordModelInvocation as any).mockReset()
     ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
     ;(listAccessibleUserIds as any).mockResolvedValue({ userIds: ['user-1'] })
     ;(resolveIdParam as any).mockResolvedValue('contract-1')
-    ;(recordModelInvocation as any)
-      .mockResolvedValueOnce({ id: 'invocation-comment-patch' })
-      .mockResolvedValueOnce({ id: 'invocation-report-summary' })
   })
 
   it('拒绝把非源文件批注版当作导出成功', async () => {
@@ -260,35 +251,8 @@ describe('POST /api/contracts/[id]/export', () => {
         contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       })
     )
-    expect(recordModelInvocation).toHaveBeenCalledTimes(2)
-    expect(recordModelInvocation).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      orgId: 'org-1',
-      contractId: 'contract-1',
-      reviewId: 'review-1',
-      provider: 'rule-engine',
-      model: 'source-comment-template',
-      phase: 'comment_patch_draft',
-      status: 'degraded',
-      degraded: true,
-      fallbackReason: 'comment_patch_rule_template_no_external_model',
-      responseMeta: expect.objectContaining({
-        provider_kind: 'builtin',
-        transport: 'builtin_rule_engine',
-        source_comment_mode: 'source_comments',
-      }),
-    }))
-    expect(recordModelInvocation).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      orgId: 'org-1',
-      contractId: 'contract-1',
-      reviewId: 'review-1',
-      provider: 'rule-engine',
-      model: 'review-summary-existing',
-      phase: 'report_summary',
-      status: 'degraded',
-      degraded: true,
-      fallbackReason: 'report_summary_reused_review_result_no_external_model',
-    }))
-    expect(supabaseAdmin.from).toHaveBeenCalledWith('contract_reviews')
+    // Deterministic source patching and summary reuse are evidenced by the
+    // registered contract version; they must never fabricate model attempts.
   })
 
   it('传给 Word 生成器的批注为客户侧修改建议，不泄露内部追踪字段', async () => {
@@ -418,10 +382,9 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(body.code).toBe('EXPORT_GATE_BLOCKED')
     expect(body.error).toContain('疑似跨段')
     expect(generateWordDocument).not.toHaveBeenCalled()
-    expect(recordModelInvocation).not.toHaveBeenCalled()
   })
 
-  it('模型调用未通过质量门禁时仍可导出已定位批注版，但审计记录模型门禁警告', async () => {
+  it('模型调用未通过质量门禁时仍可导出已定位批注版，且不伪造规则引擎模型调用', async () => {
     installSupabaseExportMocks({
       modelInvocations: [{
         id: 'invocation-semantic',
@@ -456,15 +419,6 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(res.status).toBe(200)
     expect(body).toEqual(Buffer.from([9, 8, 7]))
     expect(generateWordDocument).toHaveBeenCalled()
-    expect(recordModelInvocation).toHaveBeenCalledTimes(2)
-    expect(recordModelInvocation).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      responseMeta: expect.objectContaining({
-        model_gate_warnings: expect.arrayContaining([
-          expect.stringContaining('semantic_review 已降级'),
-          expect.stringContaining('OpenAI-compatible HTTP'),
-        ]),
-      }),
-    }))
   })
 
   it('同一 ReviewRun 已有源文件批注产物时直接复用，不重复生成版本噪音', async () => {
@@ -501,7 +455,18 @@ describe('POST /api/contracts/[id]/export', () => {
     expect(res.headers.get('x-export-reused')).toBe('true')
     expect(res.headers.get('x-contract-version-number')).toBe('2')
     expect(generateWordDocument).not.toHaveBeenCalled()
-    expect(recordModelInvocation).not.toHaveBeenCalled()
     expect(storage.upload).not.toHaveBeenCalled()
+  })
+
+  it('确定性导出步骤不导入旧模型策略，也不伪造 model_invocations', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/contracts/[id]/export/route.ts'),
+      'utf8'
+    )
+
+    expect(source).not.toContain("from '@/lib/contracts/model-policy'")
+    expect(source).not.toContain('source-comment-template')
+    expect(source).not.toContain('review-summary-existing')
+    expect(source).not.toContain("provider: 'rule-engine'")
   })
 })

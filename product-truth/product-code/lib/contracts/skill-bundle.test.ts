@@ -4,15 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
-  resolvePublishedModelPolicy: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { from: mocks.from },
-}))
-
-vi.mock('@/lib/contracts/model-policy', () => ({
-  resolvePublishedModelPolicy: mocks.resolvePublishedModelPolicy,
 }))
 
 import {
@@ -70,7 +65,13 @@ function formalBundle(overrides: Record<string, unknown> = {}) {
 describe('SkillBundle formal review gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.resolvePublishedModelPolicy.mockResolvedValue({ id: 'policy-1' })
+  })
+
+  it('compiles rule assets independently from AI routes and legacy ModelPolicy', () => {
+    expect(skillBundleSource).not.toContain('resolvePublishedModelPolicy')
+    expect(skillBundleSource).not.toContain("@/lib/contracts/model-policy")
+    expect(skillBundleSource).not.toContain('provider_chain: modelPolicy')
+    expect(skillBundleSource).toContain('model_policy_id: null')
   })
 
   it('only consumes atomic ruleset snapshots and never becomes a second ruleset publisher', () => {
@@ -112,7 +113,6 @@ describe('SkillBundle formal review gate', () => {
       ['snapshot-1', 'snapshot-1'],
     ]) {
       vi.clearAllMocks()
-      mocks.resolvePublishedModelPolicy.mockResolvedValue({ id: 'policy-1' })
       const pointerQuery = queryResult([{
         id: 'set-1', org_id: 'org-1', current_snapshot_id: 'set-snapshot-1',
         published_at: '2026-07-20T00:00:00.000Z',

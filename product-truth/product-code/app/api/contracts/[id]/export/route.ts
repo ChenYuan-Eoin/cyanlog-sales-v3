@@ -17,7 +17,6 @@ import {
   extractRiskFindingId,
   type RiskCardCommentSource,
 } from '@/lib/contracts/comment-patch'
-import { recordModelInvocation } from '@/lib/contracts/model-policy'
 import { hasUsableWordCommentAnchor } from '@/lib/contracts/word-comment-anchor'
 
 type ExportReviewRow = {
@@ -192,11 +191,8 @@ function createExportTiming() {
   }
 }
 
-async function recordExportFallbackInvocations(input: {
-  orgId: string
-  contractId: string
+function buildDeterministicExportAudit(input: {
   review: ExportReviewRow
-  userId: string
   annotationCount: number
   generatedPatchCount: number
   riskCount: number
@@ -206,87 +202,24 @@ async function recordExportFallbackInvocations(input: {
   exportTiming: Record<string, number>
   modelGateIssues: string[]
 }) {
-  const common = {
-    orgId: input.orgId,
-    contractId: input.contractId,
-    reviewId: input.review.id,
-    skillBundleId: input.review.skill_bundle_id || null,
-    modelPolicyId: input.review.model_policy_id || null,
-  }
-  const commonRequestMeta = {
-    review_trigger: 'export_source_comments',
-    output_storage_path: input.outputStoragePath,
-    source_version_id: input.sourceVersionId || null,
-    output_version_number: input.outputVersionNumber,
-    requested_by: input.userId,
-  }
-
-  const commentPatchInvocation = await recordModelInvocation({
-    ...common,
-    provider: 'rule-engine',
-    model: 'source-comment-template',
-    phase: 'comment_patch_draft',
-    status: 'degraded',
-    degraded: true,
-    fallbackReason: 'comment_patch_rule_template_no_external_model',
-    requestMeta: {
-      ...commonRequestMeta,
-      phase: 'comment_patch_draft',
-      source: 'contract_risk_cards_and_annotations',
-    },
-    responseMeta: {
-      provider_kind: 'builtin',
-      transport: 'builtin_rule_engine',
-      generated_patch_count: input.generatedPatchCount,
-      annotation_count: input.annotationCount,
-      risk_count: input.riskCount,
-      source_comment_mode: 'source_comments',
-      export_timing: input.exportTiming,
-      model_gate_warnings: input.modelGateIssues,
-    },
-  })
-
-  const reportSummaryInvocation = await recordModelInvocation({
-    ...common,
-    provider: 'rule-engine',
-    model: 'review-summary-existing',
-    phase: 'report_summary',
-    status: 'degraded',
-    degraded: true,
-    fallbackReason: 'report_summary_reused_review_result_no_external_model',
-    requestMeta: {
-      ...commonRequestMeta,
-      phase: 'report_summary',
-      source: 'latest_review_results',
-    },
-    responseMeta: {
-      provider_kind: 'builtin',
-      transport: 'builtin_rule_engine',
-      summary_source: 'contract_reviews.results.summary',
-      risk_count: input.riskCount,
-      source_comment_mode: 'source_comments',
-      export_timing: input.exportTiming,
-      model_gate_warnings: input.modelGateIssues,
-    },
-  })
-
-  const nextInvocationIds = Array.from(new Set([
-    ...(Array.isArray(input.review.model_invocation_ids) ? input.review.model_invocation_ids : []),
-    commentPatchInvocation.id,
-    reportSummaryInvocation.id,
-  ]))
-
-  const { error } = await supabaseAdmin
-    .from('contract_reviews')
-    .update({ model_invocation_ids: nextInvocationIds })
-    .eq('id', input.review.id)
-
-  if (error) throw error
-
   return {
-    commentPatchInvocationId: commentPatchInvocation.id,
-    reportSummaryInvocationId: reportSummaryInvocation.id,
-    modelInvocationIds: nextInvocationIds,
+    // model_invocations is reserved for real model requests. Patching a source
+    // document and reusing an existing summary are deterministic export steps;
+    // their durable evidence is the registered contract version and identities.
+    modelInvocationIds: Array.from(new Set(
+      Array.isArray(input.review.model_invocation_ids) ? input.review.model_invocation_ids : []
+    )),
+    deterministicSteps: {
+      source: 'contract_risk_cards_annotations_and_existing_review_summary',
+      annotation_count: input.annotationCount,
+      generated_patch_count: input.generatedPatchCount,
+      risk_count: input.riskCount,
+      output_storage_path: input.outputStoragePath,
+      source_version_id: input.sourceVersionId || null,
+      output_version_number: input.outputVersionNumber,
+      export_timing: input.exportTiming,
+      model_gate_warnings: input.modelGateIssues,
+    },
   }
 }
 
@@ -745,39 +678,17 @@ export async function POST(
       return errorResponse('报告版本关联批注文件失败', 500, 'EXPORT_REPORT_LINK_FAILED')
     }
 
-    let exportInvocationEvidence: Awaited<ReturnType<typeof recordExportFallbackInvocations>>
-    try {
-      exportInvocationEvidence = await exportTiming.measure('export_invocation_audit', () => (
-        recordExportFallbackInvocations({
-          orgId,
-          contractId: id,
-          review: latestReview,
-          userId: user.id,
-          annotationCount: exportAnnotations.length,
-          generatedPatchCount: missingCommentPatches.length,
-          riskCount: reviewResults.risks?.length || 0,
-          outputStoragePath,
-          sourceVersionId: sourceVersion?.id || null,
-          outputVersionNumber: nextVersionNumber,
-          exportTiming: exportTiming.toJSON(),
-          modelGateIssues,
-        })
-      ))
-    } catch (auditError) {
-      fs.unlinkSync(outputPath)
-      await supabaseAdmin.storage.from('contracts').remove([outputStoragePath])
-      await supabaseAdmin
-        .from('contract_versions')
-        .delete()
-        .eq('contract_id', id)
-        .eq('version_number', nextVersionNumber)
-        .eq('source', 'review_revision')
-      return errorResponse(
-        auditError instanceof Error ? auditError.message : '批注导出模型调用证据登记失败',
-        500,
-        'EXPORT_INVOCATION_AUDIT_FAILED'
-      )
-    }
+    const exportAuditEvidence = buildDeterministicExportAudit({
+      review: latestReview,
+      annotationCount: exportAnnotations.length,
+      generatedPatchCount: missingCommentPatches.length,
+      riskCount: reviewResults.risks?.length || 0,
+      outputStoragePath,
+      sourceVersionId: sourceVersion?.id || null,
+      outputVersionNumber: nextVersionNumber,
+      exportTiming: exportTiming.toJSON(),
+      modelGateIssues,
+    })
 
     // Clean up temp output file
     fs.unlinkSync(outputPath)
@@ -803,7 +714,8 @@ export async function POST(
           {
             reviewId: latestReview.id,
             versionNumber: nextVersionNumber,
-            modelInvocationIds: exportInvocationEvidence.modelInvocationIds,
+            modelInvocationIds: exportAuditEvidence.modelInvocationIds,
+            deterministicExport: exportAuditEvidence.deterministicSteps,
             exportTiming: exportTiming.toJSON(),
           }
         )

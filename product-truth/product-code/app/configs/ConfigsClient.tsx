@@ -14,7 +14,8 @@ import {
   UsersIcon,
   FileTextIcon,
 } from '@/components/icons'
-import type { Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback, RuntimePolicy } from './types'
+import { isAIRuntimeOverview } from './types'
+import type { AIRuntimeOverview, Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback } from './types'
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
@@ -270,7 +271,7 @@ function clearOrgAccessBrowserCache(token: string | null) {
 }
 
 function aiRuntimeCacheKey(token: string | null) {
-  return scopedCacheKey(token, 'configs:ai-runtime')
+  return scopedCacheKey(token, 'configs:ai-runtime:v1')
 }
 
 type ConfigRoleRecord = {
@@ -379,7 +380,9 @@ export default function ConfigsClient({
   // 优先使用服务端预取的数据，避免客户端重复请求
   const [rules, setRules] = useState<ContractPolicyRule[]>(initialData?.rules || [])
   const [configs, setConfigs] = useState<Config[]>(initialData?.configs || [])
-  const [aiRuntimePolicy, setAiRuntimePolicy] = useState<RuntimePolicy | null>(initialData?.aiRuntimePolicy || null)
+  const [aiRuntimeOverview, setAiRuntimeOverview] = useState<AIRuntimeOverview | null>(() => (
+    isAIRuntimeOverview(initialData?.aiRuntimePolicy) ? initialData.aiRuntimePolicy : null
+  ))
   const [aiRuntimeError, setAiRuntimeError] = useState('')
   const [products, setProducts] = useState<ProductRecord[]>(initialData?.products || [])
   const [loading, setLoading] = useState(!initialData)  // 有初始数据则不显示 loading
@@ -440,10 +443,16 @@ export default function ConfigsClient({
       const cached = cacheAgeMs <= TAB_CACHE_TTL_MS ? cachedEntry?.value : null
       const runtimeCacheKey = aiRuntimeCacheKey(token)
       const cachedRuntimeEntry = tab === 'ai' && !options?.force
-        ? readBrowserCacheEntry<RuntimePolicy>(runtimeCacheKey)
+        ? readBrowserCacheEntry<AIRuntimeOverview>(runtimeCacheKey)
         : null
       const runtimeCacheAgeMs = cachedRuntimeEntry ? Date.now() - cachedRuntimeEntry.savedAt : Number.POSITIVE_INFINITY
-      const cachedRuntimePolicy = runtimeCacheAgeMs <= TAB_CACHE_TTL_MS ? cachedRuntimeEntry?.value : null
+      const cachedRuntimeOverview = runtimeCacheAgeMs <= TAB_CACHE_TTL_MS
+        && isAIRuntimeOverview(cachedRuntimeEntry?.value)
+        ? cachedRuntimeEntry.value
+        : null
+      if (cachedRuntimeEntry && !isAIRuntimeOverview(cachedRuntimeEntry.value)) {
+        deleteBrowserCache(runtimeCacheKey)
+      }
       let didLoad = Boolean(cached)
 
       if (cached) {
@@ -465,8 +474,8 @@ export default function ConfigsClient({
             } else {
               setConfigs(cachedConfigs)
             }
-            if (tab === 'ai' && cachedRuntimePolicy) {
-              setAiRuntimePolicy(cachedRuntimePolicy)
+            if (tab === 'ai' && cachedRuntimeOverview) {
+              setAiRuntimeOverview(cachedRuntimeOverview)
               setAiRuntimeError('')
             }
             break
@@ -487,7 +496,7 @@ export default function ConfigsClient({
       const shouldSkipBackgroundRefresh = (
         cached
         && cacheAgeMs < TAB_BACKGROUND_REFRESH_MS
-        && (tab !== 'ai' || (cachedRuntimePolicy && runtimeCacheAgeMs < TAB_BACKGROUND_REFRESH_MS))
+        && (tab !== 'ai' || (cachedRuntimeOverview && runtimeCacheAgeMs < TAB_BACKGROUND_REFRESH_MS))
         && !CONFIG_TYPE_BY_TAB[tab]
         && tab !== 'org-structure'
         && tab !== 'role-access'
@@ -579,13 +588,16 @@ export default function ConfigsClient({
               )
               return configsJson.data ?? []
             }),
-            loadInflightTabValue<RuntimePolicy>(runtimeCacheKey, async () => {
-              const runtimeJson = await fetchJsonOrThrow<{ data?: RuntimePolicy }>(
+            loadInflightTabValue<AIRuntimeOverview>(runtimeCacheKey, async () => {
+              const runtimeJson = await fetchJsonOrThrow<{ data?: unknown }>(
                 '/api/configs/ai-runtime',
                 { headers, cache: 'no-store' },
-                'AI 运行时策略加载失败'
+                'AI 运行计划与真实调用证据加载失败'
               )
-              return runtimeJson.data ?? null
+              if (!isAIRuntimeOverview(runtimeJson.data)) {
+                throw new Error('AI 运行证据结构版本不兼容，请刷新后重试')
+              }
+              return runtimeJson.data
             }),
           ])
 
@@ -599,15 +611,15 @@ export default function ConfigsClient({
           }
 
           if (runtimeResult.status === 'fulfilled' && runtimeResult.value) {
-            setAiRuntimePolicy(runtimeResult.value)
+            setAiRuntimeOverview(runtimeResult.value)
             setAiRuntimeError('')
             writeBrowserCache(runtimeCacheKey, runtimeResult.value)
           } else if (runtimeResult.status === 'rejected') {
-            setAiRuntimePolicy(null)
+            setAiRuntimeOverview(null)
             deleteBrowserCache(runtimeCacheKey)
             setAiRuntimeError(runtimeResult.reason instanceof Error
               ? runtimeResult.reason.message
-              : 'AI 运行时策略加载失败')
+              : 'AI 运行计划与真实调用证据加载失败')
           }
           break
         }
@@ -686,7 +698,7 @@ export default function ConfigsClient({
       deleteBrowserCache(scopedCacheKey(token, `configs:${tab}`))
       if (tab === 'ai') {
         deleteBrowserCache(aiRuntimeCacheKey(token))
-        setAiRuntimePolicy(null)
+        setAiRuntimeOverview(null)
         setAiRuntimeError('')
       }
     }
@@ -1639,7 +1651,7 @@ export default function ConfigsClient({
 
           <main className="min-w-0">
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:p-6">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start 2xl:justify-between">
                 <div className="min-w-0">
                   <div className="hidden items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400 xl:flex">
                     <span>配置中心</span>
@@ -1662,10 +1674,10 @@ export default function ConfigsClient({
                   </div>
                 </div>
 
-                <div className={`hidden gap-3 xl:grid ${
+                <div className={`hidden gap-3 xl:grid xl:w-full 2xl:w-auto ${
                   activeModuleMetrics.length === 4
-                    ? 'xl:min-w-[520px] xl:grid-cols-4'
-                    : 'xl:min-w-[360px] xl:grid-cols-3'
+                    ? 'xl:grid-cols-2 2xl:min-w-[520px] 2xl:grid-cols-4'
+                    : 'xl:grid-cols-3 2xl:min-w-[360px]'
                 }`}>
                   {activeModuleMetrics.map((metric) => (
                     <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -1721,7 +1733,7 @@ export default function ConfigsClient({
                 onDeleteRule={handleDeleteRule}
                 onRefreshRules={() => refreshTabData('rules')}
                 configs={configs}
-                aiRuntimePolicy={aiRuntimePolicy}
+                aiRuntimeOverview={aiRuntimeOverview}
                 aiRuntimeError={aiRuntimeError}
                 onNewConfig={openNewConfig}
                 onEditConfig={openEditConfig}

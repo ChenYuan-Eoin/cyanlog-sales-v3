@@ -2,25 +2,26 @@
 // PURPOSE: AI 智能起草、模板起草、上传合同起草
 
 import { NextRequest, NextResponse } from 'next/server'
-import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
-import { generateTextWithFailover } from '@/lib/ai/failover'
+import { AIExecutionError, executeAIUsePoint } from '@/lib/ai/runtime-executor'
+import { validateGeneratedContractOutput } from '@/lib/ai/business-output-validation'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
+
+export const runtime = 'nodejs'
 
 // Zod schema for request validation
 const DraftRequestSchema = z.object({
   mode: z.enum(['ai_generate', 'template', 'upload'], { message: '请指定有效的起草方式' }),
-  purpose: z.string().min(1, '请填写合同签署目的'),
-  party_a: z.string().min(1, '请填写甲方信息'),
-  party_b: z.string().min(1, '请填写乙方信息'),
-  contract_type: z.string().min(1, '请选择合同类型'),
-  key_terms: z.string().optional(),
+  purpose: z.string().trim().min(1, '请填写合同签署目的').max(4000, '签署目的不能超过 4000 字'),
+  party_a: z.string().trim().min(1, '请填写甲方信息').max(500, '甲方信息不能超过 500 字'),
+  party_b: z.string().trim().min(1, '请填写乙方信息').max(500, '乙方信息不能超过 500 字'),
+  contract_type: z.string().trim().min(1, '请选择合同类型').max(200, '合同类型不能超过 200 字'),
+  key_terms: z.string().max(10_000, '关键条款不能超过 10000 字').optional(),
   template_id: z.string().optional(),
   source_contract_id: z.string().optional(),
-  provider: z.string().optional(),
-})
+}).strict()
 
 type DraftRequest = z.infer<typeof DraftRequestSchema>
 
@@ -31,91 +32,10 @@ function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
 
-// 从条款库生成合同
-function buildContractFromLibrary(
-  purpose: string,
-  partyA: string,
-  partyB: string,
-  contractType: string,
-  library: Array<{ id: string; name: string; category: string; template_text: string; legal_basis: string | null }>
-): string {
-  const now = new Date().toISOString().slice(0, 10)
-  const contractNum = `HT-${now.replace(/-/g, '')}-${randomUUID().slice(0, 8).toUpperCase()}`
-
-  // 按类别分组
-  const grouped: Record<string, typeof library> = {}
-  for (const lib of library) {
-    if (!grouped[lib.category]) grouped[lib.category] = []
-    grouped[lib.category].push(lib)
-  }
-
-  const lines: string[] = []
-  lines.push(`${contractType}合同`)
-  lines.push(``)
-  lines.push(`合同编号：${contractNum}`)
-  lines.push(`签订日期：${now}`)
-  lines.push(``)
-  lines.push(`甲方：${partyA}`)
-  lines.push(`乙方：${partyB}`)
-  lines.push(``)
-  lines.push(`鉴于：${purpose}`)
-  lines.push(``)
-  lines.push(`经甲乙双方友好协商，达成如下协议：`)
-  lines.push(``)
-
-  const categoryOrder = ['主体', '标的', 'payment', 'delivery', 'quality', 'breach', 'dispute', 'liability', 'ip', '其他']
-  let articleNo = 1
-  for (const cat of categoryOrder) {
-    const items = grouped[cat]
-    if (!items || items.length === 0) continue
-    lines.push(`第${toChineseNumber(articleNo++)}条 ${catName(cat)}`)
-    for (const item of items) {
-      lines.push(`${item.template_text.replace(/乙方/g, partyB).replace(/甲方/g, partyA)}`)
-      lines.push(``)
-    }
-  }
-
-  lines.push(`【签署】`)
-  lines.push(``)
-  lines.push(`甲方（盖章）：${partyA}`)
-  lines.push(`法定代表人/授权代表：________________`)
-  lines.push(`日期：____年__月__日`)
-  lines.push(``)
-  lines.push(`乙方（盖章）：${partyB}`)
-  lines.push(`法定代表人/授权代表：________________`)
-  lines.push(`日期：____年__月__日`)
-  lines.push(``)
-
-  return lines.join('\n')
-}
-
-function toChineseNumber(n: number): string {
-  const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
-  if (n < 10) return digits[n]
-  if (n === 10) return '十'
-  if (n < 20) return '十' + digits[n - 10]
-  if (n < 100) {
-    const tens = Math.floor(n / 10)
-    const ones = n % 10
-    return digits[tens] + '十' + (ones > 0 ? digits[ones] : '')
-  }
-  return String(n)
-}
-
-function catName(cat: string): string {
-  const map: Record<string, string> = {
-    主体: '合同主体',
-    标的: '合同标的',
-    payment: '付款条款',
-    delivery: '交付条款',
-    quality: '质量保证',
-    breach: '违约责任',
-    dispute: '争议解决',
-    liability: '责任限制',
-    ip: '知识产权',
-    其他: '其他条款',
-  }
-  return map[cat] || cat
+function executionEnvironment(): 'local' | 'hosted' {
+  return process.env.VERCEL === '1' && Boolean(process.env.VERCEL_URL || process.env.VERCEL_REGION)
+    ? 'hosted'
+    : 'local'
 }
 
 // POST /api/contracts/draft - 起草合同
@@ -134,6 +54,7 @@ export async function POST(req: NextRequest) {
     const body = bodyResult.data
 
     let generatedContent = ''
+    let aiRuntime: Record<string, unknown> | null = null
 
     if (body.mode === 'ai_generate') {
       // AI 智能起草：调用 AI 生成
@@ -147,31 +68,60 @@ ${body.key_terms ? `关键条款要求：${body.key_terms}` : ''}
 
 要求：
 1. 结构完整，包含合同标的、价款、付款方式、履行期限、违约责任、争议解决等必备条款
-2. 语言规范、严谨，符合中国合同法
+2. 语言规范、严谨，符合《中华人民共和国民法典》等现行法律
 3. 直接输出合同正文，不要任何解释`
 
       try {
-        const aiResult = await generateTextWithFailover(prompt, {
+        const aiResult = await executeAIUsePoint({
           orgId,
-          system: '你是企业合同起草助手。请根据用户给出的合同类型、双方主体、签署目的和关键条款，直接输出完整合同正文；不要输出解释、Markdown、JSON 或审核风险清单。',
+          usePointId: 'contract.draft.generate',
+          executionEnvironment: executionEnvironment(),
+          messages: [
+            {
+              role: 'system',
+              content: [
+                '你是企业合同起草助手。',
+                '只根据用户提供的签约主体、目的与关键条款起草完整合同正文。',
+                '遵循中华人民共和国现行民商事法律；不得引用已废止的合同法。',
+                '不要输出解释、Markdown、JSON、审核风险清单或模型推理过程。',
+              ].join('\n'),
+            },
+            { role: 'user', content: prompt },
+          ],
+          maxTokens: 8192,
+          temperature: 0.2,
+          validateOutput: (text) => validateGeneratedContractOutput(text, {
+            partyA: body.party_a,
+            partyB: body.party_b,
+          }),
+          requestMeta: {
+            contract_type: body.contract_type,
+            has_key_terms: Boolean(body.key_terms),
+          },
         })
-        generatedContent = aiResult.text
-      } catch {
-        // AI 失败时用条款库生成
-        const { data: library } = await supabaseAdmin
-          .from('clause_library')
-          .select('id, name, category, template_text, legal_basis, stance')
-          .or(`org_id.is.null,org_id.eq.${orgId}`)
-          .order('category', { ascending: true })
-          .limit(20)
-
-        if (library && library.length > 0) {
-          generatedContent = buildContractFromLibrary(
-            body.purpose, body.party_a, body.party_b, body.contract_type, library
-          )
-        } else {
-          return errorResponse('AI 起草失败，且条款库为空', 500, 'AI_AND_LIBRARY_FAILED')
+        generatedContent = aiResult.value
+        aiRuntime = {
+          provider: aiResult.provider,
+          model: aiResult.model,
+          degraded: aiResult.degraded,
+          usage: aiResult.usage,
+          plan_snapshot_hash: aiResult.planSnapshotHash,
+          invocation_ids: aiResult.invocationIds,
         }
+      } catch (error) {
+        console.error('Contract draft AI runtime error:', error)
+        if (error instanceof AIExecutionError) {
+          return errorResponse(
+            error.failureAction === 'manual_review'
+              ? '可用模型均失败，请改用模板起草或人工起草。'
+              : '可用模型均失败，起草运行已停止。',
+            503,
+            error.failureAction === 'manual_review'
+              ? 'AI_MANUAL_REVIEW_REQUIRED'
+              : 'AI_RUNTIME_STOPPED',
+          )
+        }
+        return errorResponse('AI 运行配置不可用，请联系管理员', 503, 'AI_RUNTIME_UNAVAILABLE')
       }
     } else if (body.mode === 'template') {
       // 模板起草：基于现有合同模板
@@ -232,6 +182,7 @@ ${body.key_terms ? `关键条款要求：${body.key_terms}` : ''}
         party_a: body.party_a,
         party_b: body.party_b,
         contract_type: body.contract_type,
+        ...(aiRuntime ? { ai_runtime: aiRuntime } : {}),
       },
     })
   } catch (error) {

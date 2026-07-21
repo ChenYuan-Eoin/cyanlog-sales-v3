@@ -26,6 +26,21 @@ vi.mock('@/lib/route-params', () => ({
   resolveIdParam: vi.fn(),
 }))
 
+vi.mock('@/lib/contracts/review-source-identity', () => ({
+  loadCurrentReviewSourceIdentity: vi.fn().mockResolvedValue({
+    source_storage_path: 'contracts/a.docx',
+    source_hash: 'a'.repeat(64),
+    source_text_hash: 'b'.repeat(64),
+  }),
+  ReviewSourceIdentityError: class ReviewSourceIdentityError extends Error {
+    code: string
+    constructor(code: string, message: string) {
+      super(message)
+      this.code = code
+    }
+  },
+}))
+
 vi.mock('@/lib/scoped-access', () => ({
   getDefaultOrgId: vi.fn(),
   listAccessibleUserIds: vi.fn(),
@@ -43,6 +58,10 @@ import { enqueueContractAnalysisJob, runStructuredAnalysis } from '@/lib/contrac
 import { resolveIdParam } from '@/lib/route-params'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
+import {
+  loadCurrentReviewSourceIdentity,
+  ReviewSourceIdentityError,
+} from '@/lib/contracts/review-source-identity'
 
 function makeRequest(body: unknown = {}) {
   return new NextRequest('http://localhost:3000/api/contracts/contract-1/review-runs', {
@@ -99,7 +118,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
 
   it('允许已完成合同创建手动再审核运行', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -125,7 +144,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
 
     const res = await POST(makeRequest({
       trigger_event: 'manual_rerun',
-      semantic_provider_profile: 'sales_cloud_backup',
+      semantic_model_asset_id: 'model.gpt-5.5.cloud',
     }), {
       params: Promise.resolve({ id: 'contract-1' }),
     })
@@ -137,20 +156,27 @@ describe('POST /api/contracts/[id]/review-runs', () => {
       reviewId: 'review-rerun',
       parentReviewId: 'review-parent',
       triggerEvent: 'manual_rerun',
-      semanticProviderProfile: 'sales_cloud_backup',
+      semanticModelAssetId: 'model.gpt-5.5.cloud',
       status: 'COMPLETED',
     })
     expect(runStructuredAnalysis).toHaveBeenCalledWith('contract-1', expect.objectContaining({
       reviewId: 'review-rerun',
       requestedBy: 'u-admin',
-      reviewTrigger: 'manual_rerun',
-      semanticProviderProfile: 'sales_cloud_backup',
+      reviewTrigger: 'direct',
+      reviewEvent: 'manual_rerun',
+      semanticModelAssetId: 'model.gpt-5.5.cloud',
+    }))
+    expect(reviewInsertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      review_trigger: 'direct',
+      source_storage_path: 'contracts/a.docx',
+      source_hash: 'a'.repeat(64),
+      source_text_hash: 'b'.repeat(64),
     }))
   })
 
   it('降级再审核必须在响应主状态中显式返回 DEGRADED', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -197,7 +223,7 @@ describe('POST /api/contracts/[id]/review-runs', () => {
 
   it('允许文档对比完成后以客户回传版本事件创建再审核', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -239,13 +265,14 @@ describe('POST /api/contracts/[id]/review-runs', () => {
     })
     expect(runStructuredAnalysis).toHaveBeenCalledWith('contract-1', expect.objectContaining({
       reviewId: 'review-from-compare',
-      reviewTrigger: 'customer_version_received',
+      reviewTrigger: 'direct',
+      reviewEvent: 'customer_version_received',
     }))
   })
 
   it('规则发布或 SkillBundle 未过正式门时不得描述为正式审核完成', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'COMPLETED', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
     const parentReviewQuery = makeQuery({
@@ -290,9 +317,32 @@ describe('POST /api/contracts/[id]/review-runs', () => {
     })
   })
 
+  it('当前源文件没有冻结身份时拒绝创建 ReviewRun', async () => {
+    const contractQuery = makeQuery({
+      data: { id: 'contract-1', status: 'COMPLETED', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
+      error: null,
+    })
+    ;(loadCurrentReviewSourceIdentity as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ReviewSourceIdentityError(
+        'SOURCE_IDENTITY_MISSING',
+        '合同当前源文件尚未完成可审计解析，不能创建 ReviewRun',
+      ),
+    )
+    ;(supabaseAdmin.from as ReturnType<typeof vi.fn>).mockReturnValueOnce(contractQuery)
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'contract-1' }) })
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toEqual({
+      error: '合同当前源文件尚未完成可审计解析，不能创建 ReviewRun',
+      code: 'SOURCE_IDENTITY_MISSING',
+    })
+    expect(enqueueContractAnalysisJob).not.toHaveBeenCalled()
+  })
+
   it('拒绝正在审核中的合同重复创建再审核', async () => {
     const contractQuery = makeQuery({
-      data: { id: 'contract-1', status: 'ANALYZING', created_by: 'u-owner', org_id: 'org-1' },
+      data: { id: 'contract-1', status: 'ANALYZING', storage_path: 'contracts/a.docx', created_by: 'u-owner', org_id: 'org-1' },
       error: null,
     })
 

@@ -25,6 +25,15 @@ vi.mock('@/lib/route-params', () => ({
   resolveIdParam: vi.fn(),
 }))
 
+vi.mock('@/lib/contracts/review-source-identity', () => ({
+  loadCurrentReviewSourceIdentity: vi.fn().mockResolvedValue({
+    source_storage_path: 'contracts/a.docx',
+    source_hash: 'a'.repeat(64),
+    source_text_hash: 'b'.repeat(64),
+  }),
+  ReviewSourceIdentityError: class ReviewSourceIdentityError extends Error {},
+}))
+
 vi.mock('@/lib/scoped-access', () => ({
   getDefaultOrgId: vi.fn(),
   listAccessibleUserIds: vi.fn(),
@@ -143,6 +152,16 @@ describe('POST /api/contracts/[id]/analyze', () => {
       reviewId: 'review-1',
       status: 'COMPLETED',
     })
+    expect(reviewInsertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      review_trigger: 'direct',
+      source_storage_path: 'contracts/a.docx',
+      source_hash: 'a'.repeat(64),
+      source_text_hash: 'b'.repeat(64),
+    }))
+    expect(runStructuredAnalysis).toHaveBeenCalledWith('contract-1', expect.objectContaining({
+      reviewTrigger: 'direct',
+      reviewEvent: 'initial_generate',
+    }))
   })
 
   it('降级审核必须在响应主状态中显式返回 DEGRADED', async () => {
