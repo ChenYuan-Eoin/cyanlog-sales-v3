@@ -514,7 +514,9 @@ const ruleBusinessFieldsSchema = z.object({
 }).strict()
 
 export const createRuleSchema = ruleBusinessFieldsSchema.extend({
-  code: z.string().trim().min(1, '规则编码不能为空').max(80).regex(/^[A-Z0-9_-]+$/, '规则编码只允许大写字母、数字、下划线和连字符'),
+  // API imports may provide a stable code. Interactive creation can omit it;
+  // the server creates the internal identifier so it is not a business field.
+  code: z.string().trim().min(1, '规则编码不能为空').max(80).regex(/^[A-Z0-9_-]+$/, '规则编码只允许大写字母、数字、下划线和连字符').optional(),
 }).strict()
 
 export const updateRuleSchema = ruleBusinessFieldsSchema.partial().extend({

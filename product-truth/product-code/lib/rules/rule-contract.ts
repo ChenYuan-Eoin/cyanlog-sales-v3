@@ -1247,6 +1247,24 @@ export function evaluateRuleContractReadings(
 }
 
 /**
+ * Whether an all-missing input can reach the contract's generic
+ * missing-evidence outcome.
+ *
+ * Optional properties may deliberately use an explicit `not_exists`
+ * decision. In that case absence is a configured business fact with its own
+ * decision branch, not generic missing evidence. Release acceptance must test
+ * that decision branch and must not invent an unreachable missing-evidence
+ * obligation.
+ */
+export function ruleContractRequiresMissingEvidenceCase(
+  contractValue: ContractRuleContract
+): boolean {
+  const contract = normalizeRuleContract(contractValue)
+  if (!contract) return false
+  return evaluatePreparedRuleContractReadings(contract, {}).status === 'missing_evidence'
+}
+
+/**
  * Execute the canonical business contract. Runtime first locates relevant source
  * clauses, then reads only pre-defined properties inside those clauses.
  */

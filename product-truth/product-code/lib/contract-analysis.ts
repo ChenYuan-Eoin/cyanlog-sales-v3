@@ -969,6 +969,12 @@ function buildDegradationReasons(input: {
   }
   if (input.semanticResult?.degraded) reasons.push('semantic_review_route_fallback')
   if (input.semanticError) reasons.push('semantic_review_failed')
+  if (
+    (input.semanticResult?.validationWarnings?.length || 0) > 0
+    || (input.semanticResult?.droppedRiskCount || 0) > 0
+  ) {
+    reasons.push('semantic_review_output_validation_partial')
+  }
   if (input.semanticResult?.inputStats?.coverage_limited) {
     reasons.push('semantic_review_input_coverage_limited')
   }
@@ -1182,7 +1188,10 @@ export async function saveStructuredReport(
       return {
       review_id: reviewId,
       contract_id: contractId,
-      rule_id: risk.ruleId || null,
+      // Canonical model output identifies the published rule by its frozen
+      // code/version. The model must not be asked to invent internal UUIDs;
+      // recover the source rule id from the already-bound immutable snapshot.
+      rule_id: risk.ruleId || snapshotRef?.rule_id || null,
       rule_code: risk.ruleCode || null,
       rule_version: risk.ruleVersion || null,
       level: risk.level,

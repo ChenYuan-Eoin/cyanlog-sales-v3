@@ -1,5 +1,8 @@
 import crypto from 'node:crypto'
-import { normalizeRuleContract } from '@/lib/rules/rule-contract'
+import {
+  normalizeRuleContract,
+  ruleContractRequiresMissingEvidenceCase,
+} from '@/lib/rules/rule-contract'
 import type {
   ContractRuleContract,
   ContractRuleOutcome,
@@ -43,7 +46,14 @@ function canonicalJson(value: unknown): string {
     .join(',')}}`
 }
 
-export function ruleContractSha256(contract: ContractRuleContract): string {
+/**
+ * Hash the exact persisted JSON contract after canonical key ordering.
+ *
+ * Do not normalize before calling this for snapshot/test evidence. Normalizing
+ * intentionally removes empty optional fields, while the database release
+ * transaction binds evidence to the exact JSON stored in the draft snapshot.
+ */
+export function ruleContractSha256(contract: unknown): string {
   return crypto.createHash('sha256').update(canonicalJson(contract)).digest('hex')
 }
 
@@ -56,13 +66,15 @@ export function ruleReleaseRequirements(contract: ContractRuleContract): RuleRel
     expectedOutcome: decision.outcome,
     label: `判定“${decision.label}”`,
   }))
-  requirements.push({
-    key: 'missing_evidence',
-    caseKind: 'missing_evidence',
-    expectedStatus: 'missing_evidence',
-    expectedOutcome: contract.missing_evidence_outcome,
-    label: '缺少证据转人工',
-  })
+  if (ruleContractRequiresMissingEvidenceCase(contract)) {
+    requirements.push({
+      key: 'missing_evidence',
+      caseKind: 'missing_evidence',
+      expectedStatus: 'missing_evidence',
+      expectedOutcome: contract.missing_evidence_outcome,
+      label: '缺少证据转人工',
+    })
+  }
   if (contract.properties.some((property) => (
     property.type !== 'text'
     && (property.type !== 'enum' || (property.options?.length || 0) >= 2)
@@ -103,6 +115,22 @@ export function ruleReleaseReadiness(input: {
       requiredCount: 0,
       passedCount: 0,
       missingLabels: ['规则详情尚未完成结构化配置'],
+    }
+  }
+  const structuralMissingLabels = [
+    ...(!contract.decisions.some((decision) => decision.outcome === 'pass')
+      ? ['补充“其他情况通过”的正常结果']
+      : []),
+    ...(!contract.decisions.some((decision) => decision.outcome !== 'pass')
+      ? ['至少配置一种风险结果']
+      : []),
+  ]
+  if (structuralMissingLabels.length > 0) {
+    return {
+      complete: false,
+      requiredCount: 0,
+      passedCount: 0,
+      missingLabels: structuralMissingLabels,
     }
   }
   const requirements = ruleReleaseRequirements(contract)

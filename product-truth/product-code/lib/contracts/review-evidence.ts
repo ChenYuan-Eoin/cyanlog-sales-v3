@@ -686,6 +686,8 @@ type RuntimeInvocationSummary = {
   invocation_id: string | null
 }
 
+const CONTRACT_SEMANTIC_COVERAGE_REVISION = 'canonical-rule-property-coverage-v1'
+
 function deriveRuntimeInvocationStatus(
   modelInvocations: ReviewEvidenceModelInvocation[]
 ): RuntimeInvocationSummary {
@@ -701,6 +703,7 @@ function deriveRuntimeInvocationStatus(
   }
 
   const responseMeta = invocationResponseMeta(semanticInvocation)
+  const requestMeta = invocationRequestMeta(semanticInvocation)
   const providerKind = stringValue(responseMeta?.provider_kind)
   const transport = stringValue(responseMeta?.transport)
   const warningCount = Array.isArray(responseMeta?.validation_warnings)
@@ -708,12 +711,28 @@ function deriveRuntimeInvocationStatus(
     : null
   const droppedRiskCount = numberValue(responseMeta?.dropped_risk_count)
   const usableRiskCount = numberValue(responseMeta?.usable_risk_count)
+  const semanticValidationRevision = stringValue(requestMeta?.semantic_validation_revision)
+  const expectedCanonicalRuleCount = numberValue(requestMeta?.expected_canonical_rule_count)
+  const expectedCanonicalPropertyCount = numberValue(requestMeta?.expected_canonical_property_count)
   const validationItemKind = stringValue(responseMeta?.validation_item_kind)
   const validationAuditComplete = validationItemKind === 'risk'
     && warningCount !== null
     && droppedRiskCount !== null
     && Number.isSafeInteger(droppedRiskCount)
     && droppedRiskCount >= 0
+    && usableRiskCount !== null
+    && Number.isSafeInteger(usableRiskCount)
+    && usableRiskCount > 0
+  const canonicalCoverageAuditComplete = semanticValidationRevision === CONTRACT_SEMANTIC_COVERAGE_REVISION
+    && expectedCanonicalRuleCount !== null
+    && Number.isSafeInteger(expectedCanonicalRuleCount)
+    && expectedCanonicalRuleCount > 0
+    && expectedCanonicalPropertyCount !== null
+    && Number.isSafeInteger(expectedCanonicalPropertyCount)
+    && expectedCanonicalPropertyCount > 0
+    && usableRiskCount !== null
+    && usableRiskCount >= expectedCanonicalRuleCount
+  const formalValidationAuditComplete = validationAuditComplete && canonicalCoverageAuditComplete
 
   if (semanticInvocation.plan_snapshot_id) {
     const tokenAccountingValid = typeof semanticInvocation.input_tokens === 'number'
@@ -732,13 +751,13 @@ function deriveRuntimeInvocationStatus(
       && tokenAccountingValid
       && outputValidated
       && tokenEvidence
-      && validationAuditComplete
+      && formalValidationAuditComplete
       && warningCount === 0
       && droppedRiskCount === 0
     ) {
       return {
         status: 'latest_review_model_invocation_passed',
-        note: `Latest plan-bound semantic invocation completed over OpenAI-compatible HTTP with ${semanticInvocation.total_tokens} provider-reported token(s), no dropped risk, and no validation warning.`,
+        note: `Latest plan-bound semantic invocation completed over OpenAI-compatible HTTP with ${semanticInvocation.total_tokens} provider-reported token(s) and ${usableRiskCount} usable risk(s) covering ${expectedCanonicalRuleCount} canonical rule(s) / ${expectedCanonicalPropertyCount} property reading(s), no dropped risk, and no validation warning.`,
         invocation_id: semanticInvocation.id,
       }
     }
@@ -746,7 +765,7 @@ function deriveRuntimeInvocationStatus(
     if (semanticInvocation.status === 'completed') {
       return {
         status: 'latest_review_model_invocation_partial',
-        note: `Latest plan-bound semantic invocation completed, but transport, fallback, token accounting, output validation, validation audit (${warningCount ?? 'missing'} warning(s), ${droppedRiskCount ?? 'missing'} dropped risk(s)) requires review.`,
+        note: `Latest plan-bound semantic invocation completed, but transport, fallback, token accounting, output validation, or canonical coverage audit (${usableRiskCount ?? 'missing'} usable risk(s), ${expectedCanonicalRuleCount ?? 'missing'} expected canonical rule(s), ${warningCount ?? 'missing'} warning(s), ${droppedRiskCount ?? 'missing'} dropped risk(s)) requires review.`,
         invocation_id: semanticInvocation.id,
       }
     }
@@ -763,15 +782,13 @@ function deriveRuntimeInvocationStatus(
     && !semanticInvocation.degraded
     && providerKind === 'openai_compatible'
     && transport === 'openai_compatible_http'
-    && validationAuditComplete
+    && formalValidationAuditComplete
     && warningCount === 0
     && droppedRiskCount === 0
   ) {
     return {
       status: 'latest_review_model_invocation_passed',
-      note: usableRiskCount === null
-        ? 'Latest semantic_review model invocation completed without degradation or validation warnings.'
-        : `Latest semantic_review model invocation completed with ${usableRiskCount} usable risk(s), no dropped risk, and no validation warning.`,
+      note: `Latest semantic_review model invocation completed with ${usableRiskCount} usable risk(s) covering ${expectedCanonicalRuleCount} canonical rule(s) / ${expectedCanonicalPropertyCount} property reading(s), no dropped risk, and no validation warning.`,
       invocation_id: semanticInvocation.id,
     }
   }

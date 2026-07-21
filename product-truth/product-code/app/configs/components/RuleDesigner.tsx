@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertCircleIcon, CheckCircle2Icon, PlusIcon, Trash2Icon } from 'lucide-react'
+import { AlertCircleIcon, ArrowDownIcon, ArrowUpIcon, CheckCircle2Icon, PlusIcon, Trash2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -80,10 +80,10 @@ const operatorOptions: Array<{ value: ContractRuleConditionOperator; label: stri
 ]
 
 const tabOptions: Array<{ value: EditorTab; label: string }> = [
-  { value: 'definition', label: '基本信息' },
-  { value: 'properties', label: '属性' },
-  { value: 'decisions', label: '判定与处理' },
-  { value: 'validation', label: '测试' },
+  { value: 'definition', label: '1. 定义要检查的问题' },
+  { value: 'properties', label: '2. 定义要读取的信息' },
+  { value: 'decisions', label: '3. 设置判断与处理' },
+  { value: 'validation', label: '4. 验证发布准备' },
 ]
 
 function fromCsv(value: string) {
@@ -147,13 +147,26 @@ function reconcileEnumOptions(
   })
 }
 
-function createDecision(properties: ContractRuleProperty[], existing: ContractRuleDecision[]): ContractRuleDecision {
+export function orderRuleDecisionsForExecution(decisions: ContractRuleDecision[]) {
+  return [...decisions].sort((left, right) => right.priority - left.priority)
+}
+
+export function resequenceRuleDecisions(decisions: ContractRuleDecision[]) {
+  return decisions.map((decision, index) => ({
+    ...decision,
+    priority: (decisions.length - index) * 10,
+  }))
+}
+
+export function createDecision(properties: ContractRuleProperty[], existing: ContractRuleDecision[]): ContractRuleDecision {
   const firstProperty = properties[0]
   return {
     id: newStableKey('decision', existing.map((item) => item.id)),
     label: '',
     outcome: 'manual_review',
-    priority: Math.max(100, ...existing.map((item) => item.priority + 10)),
+    // The caller appends this decision and then numbers the complete visible
+    // list. A temporary zero avoids inventing a second, hidden ordering rule.
+    priority: 0,
     match: 'all',
     conditions: firstProperty
       ? [defaultCondition(firstProperty)]
@@ -201,9 +214,8 @@ function parseConditionValue(
   return value
 }
 
-function validationMessages(draft: RuleDraft, contract: ContractRuleContract) {
+export function validationMessages(draft: RuleDraft, contract: ContractRuleContract) {
   const messages: string[] = []
-  if (!draft.code?.trim()) messages.push('填写规则编码')
   if (!draft.name?.trim()) messages.push('填写规则名称')
   if (!draft.rule_set_id) messages.push('选择规则集')
   if (!draft.problem_category_id) messages.push('选择问题分类')
@@ -215,12 +227,50 @@ function validationMessages(draft: RuleDraft, contract: ContractRuleContract) {
   if (contract.decisions.some((decision) => !decision.label.trim())) messages.push('补齐判定名称')
   if (contract.decisions.some((decision) => decision.conditions.length === 0)) messages.push('每条判定至少需要一个条件')
   if (!contract.decisions.some((decision) => decision.outcome !== 'pass')) messages.push('至少添加一条风险判定')
+  if (!contract.decisions.some((decision) => decision.outcome === 'pass')) messages.push('添加一条覆盖正常情况的“通过”判定')
   if (contract.decisions.some((decision) => (
     decision.outcome !== 'pass' && (!decision.action?.trim() || !decision.message?.trim())
   ))) messages.push('为风险判定补齐处理动作和用户说明')
+  if (!['manual_review', 'block'].includes(contract.missing_evidence_outcome)) {
+    messages.push('明确缺少信息或内容冲突时的处理方式')
+  }
   messages.push(...ruleContractMatrixIssues(contract).map((issue) => issue.message))
   if (!normalizeRuleContract(contract)) messages.push('检查属性与判定之间的引用关系')
   return Array.from(new Set(messages))
+}
+
+function createAutoRuleCode() {
+  return `RULE_${Date.now().toString(36).toUpperCase()}`
+}
+
+function firstValidationTarget(draft: RuleDraft, contract: ContractRuleContract): { tab: EditorTab; id: string } {
+  if (!draft.name?.trim()) return { tab: 'definition', id: 'rule-name' }
+  if (!draft.rule_set_id || !draft.problem_category_id) return { tab: 'definition', id: 'rule-business-module' }
+  if (contract.properties.length === 0) return { tab: 'properties', id: 'add-rule-property' }
+  const missingPropertyLabel = contract.properties.findIndex((property) => !property.label.trim())
+  if (missingPropertyLabel >= 0) return { tab: 'properties', id: `property-label-${missingPropertyLabel}` }
+  const missingCurrency = contract.properties.findIndex((property) => property.type === 'money' && !property.currency)
+  if (missingCurrency >= 0) return { tab: 'properties', id: `property-currency-${missingCurrency}` }
+  const missingOptions = contract.properties.findIndex((property) => property.type === 'enum' && !property.options?.length)
+  if (missingOptions >= 0) return { tab: 'properties', id: `property-options-${missingOptions}` }
+  if (contract.decisions.length === 0) return { tab: 'decisions', id: 'add-rule-decision' }
+  const missingDecisionLabel = contract.decisions.findIndex((decision) => !decision.label.trim())
+  if (missingDecisionLabel >= 0) return { tab: 'decisions', id: `decision-label-${missingDecisionLabel}` }
+  const missingCondition = contract.decisions.findIndex((decision) => decision.conditions.length === 0)
+  if (missingCondition >= 0) return { tab: 'decisions', id: `add-condition-${missingCondition}` }
+  const missingRiskHandling = contract.decisions.findIndex((decision) => (
+    decision.outcome !== 'pass' && (!decision.action?.trim() || !decision.message?.trim())
+  ))
+  if (missingRiskHandling >= 0) {
+    const decision = contract.decisions[missingRiskHandling]
+    return {
+      tab: 'decisions',
+      id: !decision.action?.trim() ? `decision-action-${missingRiskHandling}` : `decision-message-${missingRiskHandling}`,
+    }
+  }
+  if (!contract.decisions.some((decision) => decision.outcome !== 'pass')) return { tab: 'decisions', id: 'add-rule-decision' }
+  if (!contract.decisions.some((decision) => decision.outcome === 'pass')) return { tab: 'decisions', id: 'add-rule-decision' }
+  return { tab: 'validation', id: 'rule-validation-summary' }
 }
 
 export default function RuleDesigner({ initialRule, context, saving = false, onSave, onTest, onDirtyChange }: RuleDesignerProps) {
@@ -238,10 +288,14 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
     let nextContract: ContractRuleContract
     if (initialRule) {
       nextDraft = { ...initialRule }
-      nextContract = reconcileRuleContractForEditing(resolveRuleContract(initialRule))
+      const reconciled = reconcileRuleContractForEditing(resolveRuleContract(initialRule))
+      nextContract = {
+        ...reconciled,
+        decisions: orderRuleDecisionsForExecution(reconciled.decisions),
+      }
     } else {
       nextDraft = {
-        code: '',
+        code: createAutoRuleCode(),
         name: '',
         description: '',
         business_domain: 'contract_review',
@@ -329,6 +383,21 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
     }))
   }
 
+  function moveDecision(index: number, direction: -1 | 1) {
+    setContract((current) => {
+      const decisions = orderRuleDecisionsForExecution(current.decisions)
+      const targetIndex = index + direction
+      if (!decisions[index] || targetIndex < 0 || targetIndex >= decisions.length) return current
+      const [moved] = decisions.splice(index, 1)
+      decisions.splice(targetIndex, 0, moved)
+      return {
+        ...current,
+        // Persist the same top-to-bottom order that the runtime will execute.
+        decisions: resequenceRuleDecisions(decisions),
+      }
+    })
+  }
+
   function updateCondition(decisionIndex: number, conditionIndex: number, patch: Partial<ContractRuleCondition>) {
     setContract((current) => ({
       ...current,
@@ -369,11 +438,14 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
     const missing = validationMessages(draft, contract)
     if (missing.length > 0) {
       setFeedback(`保存前还需：${missing.join('、')}。`)
+      const target = firstValidationTarget(draft, contract)
+      setActiveTab(target.tab)
+      window.setTimeout(() => document.getElementById(target.id)?.focus(), 0)
       return
     }
     setFeedback(null)
     void onSave({
-      code: draft.code,
+      code: draft.code?.trim() || createAutoRuleCode(),
       name: draft.name,
       description: draft.description || '',
       business_domain: draft.business_domain || 'contract_review',
@@ -397,6 +469,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
           <div className="mt-1 truncate text-sm font-semibold text-slate-900">
             {context?.ruleSetLabel || '未指定规则集'} / {draft.problem_category?.name || context?.problemCategory?.name || '未选择问题分类'} / {draft.name || '新规则'}
           </div>
+          <div className="mt-1 text-xs text-slate-500">应用模块：合同审核（当前产品固定）</div>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <span className={`rounded-full px-2.5 py-1 font-medium ${
@@ -409,14 +482,14 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                 : 'bg-blue-50 text-blue-700'
           }`}>
             {draft.is_active === false && context?.activePublishedVersion
-              ? `线上 v${context?.activePublishedVersion} · 待停用`
+              ? `当前生效 v${context?.activePublishedVersion} · 下次发布移除`
               : draft.is_active === false
-                ? '待停用'
+                ? '草稿 · 下次发布移除'
                 : context?.activePublishedVersion === draft.version
-                  ? `线上 v${context?.activePublishedVersion}`
+                  ? `当前生效版本 v${context?.activePublishedVersion}`
                   : context?.activePublishedVersion
-                    ? `线上 v${context?.activePublishedVersion} · 草稿 v${draft.version} 待发布`
-                    : `草稿 v${draft.version || 1} · 尚未上线`}
+                    ? `当前生效 v${context?.activePublishedVersion} · 修改尚未生效`
+                    : `草稿 v${draft.version || 1} · 尚未发布`}
           </span>
           <span className="rounded-full bg-white px-2.5 py-1 text-slate-600 ring-1 ring-slate-200">
             {contract.properties.length} 个属性 · {contract.decisions.length} 条判定
@@ -441,7 +514,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
         <div className="overflow-x-auto border-b border-slate-200">
           <TabsList variant="line" className="h-11 min-w-max gap-5 px-1">
             {tabOptions.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="h-10 px-1">
+              <TabsTrigger id={`rule-editor-tab-${tab.value}`} key={tab.value} value={tab.value} className="h-10 px-1">
                 {tab.label}
                 {tab.value === 'properties' ? ` ${contract.properties.length}` : ''}
                 {tab.value === 'decisions' ? ` ${contract.decisions.length}` : ''}
@@ -452,62 +525,80 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
 
         <TabsContent value="definition" className="pt-4">
           <section className="grid gap-4 lg:grid-cols-2">
-            <Field label="规则编码" htmlFor="rule-code">
-              <Input
-                id="rule-code"
-                value={draft.code || ''}
-                onChange={(event) => updateDraft('code', event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '_'))}
-                placeholder="如：PAYMENT_MIN_AMOUNT"
-                disabled={Boolean(initialRule)}
-              />
-            </Field>
-            <Field label="规则名称" htmlFor="rule-name">
+            <div className="lg:col-span-2">
+              <Field label="要检查的问题" htmlFor="rule-name" hint="使用业务人员日常沟通中的问题名称">
               <Input
                 id="rule-name"
+                name="rule-name"
+                autoComplete="off"
                 value={draft.name || ''}
                 onChange={(event) => updateDraft('name', event.target.value)}
-                placeholder="如：合同金额不得低于 5 万元"
+                placeholder="例如：合同金额不得低于 5 万元…"
               />
-            </Field>
+              </Field>
+            </div>
             <div className="lg:col-span-2">
-              <Field label="业务说明" htmlFor="rule-description">
+              <Field label="为什么要检查" htmlFor="rule-description">
                 <Textarea
                   id="rule-description"
+                  name="rule-description"
+                  autoComplete="off"
                   value={draft.description || ''}
                   onChange={(event) => updateDraft('description', event.target.value)}
-                  placeholder="说明要管理的问题、适用边界和业务原因。"
+                  placeholder="说明要管理的问题、适用边界和业务原因…"
                   rows={4}
                 />
               </Field>
             </div>
-            <Field label="应用模块" htmlFor="rule-business-module" hint="由业务模块选择规则资产，不在单条规则里自由填写">
-              <div id="rule-business-module" className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
-                合同审核（当前产品固定）
+            <Field label="发布后用于" htmlFor="rule-business-module">
+              <div id="rule-business-module" tabIndex={-1} className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                合同审核
               </div>
             </Field>
-            <Field label="优先级" htmlFor="rule-priority" hint="数字越大越先判断">
-              <Input
-                id="rule-priority"
-                type="number"
-                min={0}
-                value={draft.priority ?? 100}
-                onChange={(event) => updateDraft('priority', Number(event.target.value))}
-              />
-            </Field>
-            <Field label="规则状态" htmlFor="rule-status">
+            <Field label="下次发布" htmlFor="rule-status" hint="草稿保存不会立即影响当前审核">
               <select
                 id="rule-status"
+                name="rule-status"
+                autoComplete="off"
                 value={draft.is_active === false ? 'disabled' : 'enabled'}
                 onChange={(event) => updateDraft('is_active', event.target.value === 'enabled')}
                 className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
               >
-                <option value="enabled">启用</option>
-                <option value="disabled">停用</option>
+                <option value="enabled">保留这条规则</option>
+                <option value="disabled">从下次版本移除</option>
               </select>
             </Field>
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-3 text-sm leading-6 text-blue-800">
               当前问题分类：<span className="font-semibold">{draft.problem_category?.name || context?.problemCategory?.name || '未选择'}</span>。分类用于组织问题，不用于定义属性类型。
             </div>
+            <details className="lg:col-span-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">高级设置（通常无需修改）</summary>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Field label="内部标识" htmlFor="rule-code" hint="系统已自动生成">
+                  <Input
+                    id="rule-code"
+                    name="rule-code"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={draft.code || ''}
+                    onChange={(event) => updateDraft('code', event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '_'))}
+                    placeholder="例如：PAYMENT_MIN_AMOUNT…"
+                    disabled={Boolean(initialRule)}
+                  />
+                </Field>
+                <Field label="跨规则判断顺序" htmlFor="rule-priority" hint="仅用于同一规则集内的技术排序">
+                  <Input
+                    id="rule-priority"
+                    name="rule-priority"
+                    autoComplete="off"
+                    type="number"
+                    min={0}
+                    value={draft.priority ?? 100}
+                    onChange={(event) => updateDraft('priority', Number(event.target.value))}
+                  />
+                </Field>
+              </div>
+            </details>
           </section>
         </TabsContent>
 
@@ -515,10 +606,11 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
           <section className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">这条规则包含哪些业务属性</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">属性直接属于当前规则，是金额、比例、时限等判定条件的明确依据。</p>
+                <h3 className="text-sm font-semibold text-slate-950">系统需要从合同中读取什么？</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">这条规则包含哪些业务属性，由你在这里明确；金额、比例、时限等属性会成为后续判断的依据。</p>
               </div>
               <Button
+                id="add-rule-property"
                 type="button"
                 size="sm"
                 onClick={() => setContract((current) => ({
@@ -546,9 +638,11 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                       <Field label="属性名称" htmlFor={`property-label-${index}`}>
                         <Input
                           id={`property-label-${index}`}
+                          name={`property-label-${index}`}
+                          autoComplete="off"
                           value={property.label}
                           onChange={(event) => updateProperty(index, { label: event.target.value })}
-                          placeholder="如：合同金额"
+                          placeholder="例如：合同金额…"
                         />
                       </Field>
                       <Field label="属性类型" htmlFor={`property-type-${index}`}>
@@ -579,9 +673,11 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                         <Field label="业务说明" htmlFor={`property-description-${index}`}>
                           <Textarea
                             id={`property-description-${index}`}
+                            name={`property-description-${index}`}
+                            autoComplete="off"
                             value={property.description || ''}
                             onChange={(event) => updateProperty(index, { description: event.target.value })}
-                            placeholder="说明这个属性在合同中的业务含义。"
+                            placeholder="说明这个属性在合同中的业务含义…"
                             rows={2}
                           />
                         </Field>
@@ -632,12 +728,14 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                         <div className="lg:col-span-2">
                           <Field label="可选值" htmlFor={`property-options-${index}`} hint="多个选项用逗号分隔">
                             <Input
-                              id={`property-options-${index}`}
+                            id={`property-options-${index}`}
+                            name={`property-options-${index}`}
+                            autoComplete="off"
                               value={property.options?.map((option) => option.label).join('，') || ''}
                               onChange={(event) => updateProperty(index, {
                                 options: reconcileEnumOptions(property.options, fromCsv(event.target.value)),
                               })}
-                              placeholder="如：预付款，分期付款，验收后付款"
+                              placeholder="例如：预付款，分期付款，验收后付款…"
                             />
                           </Field>
                         </div>
@@ -663,10 +761,11 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
           <section className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">属性满足什么条件时，系统应如何处理</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">多条件必须明确选择“全部满足”或“任一满足”；优先级高的判定先执行。</p>
+                <h3 className="text-sm font-semibold text-slate-950">读到什么情况时，应给出什么结果？</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">属性满足什么条件时，系统应如何处理：系统严格按页面从上到下判断，命中第一条后停止。</p>
               </div>
               <Button
+                id="add-rule-decision"
                 type="button"
                 size="sm"
                 onClick={() => {
@@ -675,14 +774,24 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                     setActiveTab('properties')
                     return
                   }
-                  setContract((current) => ({
-                    ...current,
-                    decisions: [...current.decisions, createDecision(current.properties, current.decisions)],
-                  }))
+                  setContract((current) => {
+                    const ordered = orderRuleDecisionsForExecution(current.decisions)
+                    return {
+                      ...current,
+                      decisions: resequenceRuleDecisions([
+                        ...ordered,
+                        createDecision(current.properties, ordered),
+                      ]),
+                    }
+                  })
                 }}
               >
                 <PlusIcon className="mr-1 h-4 w-4" />添加判定
               </Button>
+            </div>
+
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 text-sm leading-6 text-blue-900">
+              发布前必须同时覆盖风险情况和正常情况：先放更具体、更严格的风险判断，最后设置覆盖正常情况的“通过”判定；缺少信息或内容冲突则单独转人工或阻断。
             </div>
 
             {contract.decisions.length === 0 ? (
@@ -695,22 +804,54 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white">{decisionIndex + 1}</span>
                         <Input
+                          id={`decision-label-${decisionIndex}`}
+                          name={`decision-label-${decisionIndex}`}
+                          autoComplete="off"
                           aria-label={`判定 ${decisionIndex + 1} 名称`}
                           value={decision.label}
                           onChange={(event) => updateDecision(decisionIndex, { label: event.target.value })}
-                          placeholder="如：低于公司最低签约金额"
+                          placeholder="例如：低于公司最低签约金额…"
                           className="min-w-0 sm:w-80"
                         />
                       </div>
-                      <Button type="button" variant="ghost" size="sm" className="text-rose-600" onClick={() => setContract((current) => ({
-                        ...current,
-                        decisions: current.decisions.filter((_, currentIndex) => currentIndex !== decisionIndex),
-                      }))}>
-                        <Trash2Icon className="mr-1 h-4 w-4" />删除
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`将判定 ${decisionIndex + 1} 上移`}
+                          disabled={decisionIndex === 0}
+                          onClick={() => moveDecision(decisionIndex, -1)}
+                        >
+                          <ArrowUpIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`将判定 ${decisionIndex + 1} 下移`}
+                          disabled={decisionIndex === contract.decisions.length - 1}
+                          onClick={() => moveDecision(decisionIndex, 1)}
+                        >
+                          <ArrowDownIcon className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" className="text-rose-600" onClick={() => setContract((current) => ({
+                          ...current,
+                          decisions: current.decisions.filter((_, currentIndex) => currentIndex !== decisionIndex),
+                        }))}>
+                          <Trash2Icon className="mr-1 h-4 w-4" />删除
+                        </Button>
+                      </div>
                     </div>
 
-                    <div className="grid gap-4 lg:grid-cols-3">
+                    <div className="mb-4 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                      第 {decisionIndex + 1} 个判断：当下列条件{decision.match === 'all' ? '全部满足' : '任一满足'}时 →
+                      <span className={`ml-1 font-semibold ${outcomeOptions.find((option) => option.value === decision.outcome)?.tone || ''}`}>
+                        {outcomeOptions.find((option) => option.value === decision.outcome)?.label || decision.outcome}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-2">
                       <Field label="满足方式" htmlFor={`decision-match-${decisionIndex}`}>
                         <select
                           id={`decision-match-${decisionIndex}`}
@@ -731,15 +872,6 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                         >
                           {outcomeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
-                      </Field>
-                      <Field label="优先级" htmlFor={`decision-priority-${decisionIndex}`} hint="数字越大越先判断">
-                        <Input
-                          id={`decision-priority-${decisionIndex}`}
-                          type="number"
-                          min={0}
-                          value={decision.priority}
-                          onChange={(event) => updateDecision(decisionIndex, { priority: Number(event.target.value) })}
-                        />
                       </Field>
                     </div>
 
@@ -860,7 +992,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                           </div>
                         )
                       })}
-                      <Button type="button" variant="outline" size="sm" onClick={() => addCondition(decisionIndex)}>
+                      <Button id={`add-condition-${decisionIndex}`} type="button" variant="outline" size="sm" onClick={() => addCondition(decisionIndex)}>
                         <PlusIcon className="mr-1 h-4 w-4" />添加条件
                       </Button>
                     </div>
@@ -897,7 +1029,7 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
             )}
 
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <Field label="缺少明确值时" htmlFor="missing-evidence-outcome">
+              <Field label="缺少明确值或内容冲突时" htmlFor="missing-evidence-outcome">
                 <select
                   id="missing-evidence-outcome"
                   value={contract.missing_evidence_outcome}
@@ -911,14 +1043,14 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                   <option value="block">直接阻断</option>
                 </select>
               </Field>
-              <p className="mt-2 text-xs leading-5 text-amber-800">未读取到必填值、单位冲突或同一内容出现多个无法判断的值时，不能默认通过。</p>
+              <p className="mt-2 text-xs leading-5 text-amber-800">缺少明确值时，以及发生单位冲突或同一内容出现多个值时，不能默认通过；这里定义统一的安全处理方式。</p>
             </div>
           </section>
         </TabsContent>
 
         <TabsContent value="validation" className="pt-4">
           <section className="space-y-4">
-            <div className={`rounded-lg border p-4 ${
+            <div id="rule-validation-summary" tabIndex={-1} className={`rounded-lg border p-4 ${
               validation.length === 0
                 ? 'border-emerald-200 bg-emerald-50'
                 : 'border-amber-200 bg-amber-50'
@@ -929,21 +1061,21 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
                   : <AlertCircleIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />}
                 <div>
                   <div className="text-sm font-semibold text-slate-900">
-                    {validation.length === 0 ? '规则结构完整，可以保存并测试' : '规则还不能进入测试'}
+                    {validation.length === 0 ? '规则结构完整，可以保存并检查条件' : '规则还没有覆盖完整业务结果'}
                   </div>
                   {validation.length > 0 ? (
                     <ul className="mt-2 space-y-1 text-sm text-amber-800">
                       {validation.map((message) => <li key={message}>• {message}</li>)}
                     </ul>
                   ) : (
-                    <p className="mt-1 text-sm leading-6 text-emerald-800">保存后请用真实合同段落验证正常、越界、缺失和冲突四类结果；正式生效由所属规则集统一发布。</p>
+                    <p className="mt-1 text-sm leading-6 text-emerald-800">保存后先检查正常、风险、缺失和冲突等条件，再随所属规则集统一发布。完整合同审核与模型调用需要在业务模块中另行验证。</p>
                   )}
                 </div>
               </div>
             </div>
             {onTest ? (
               <Button type="button" variant="outline" disabled={validation.length > 0 || isDirty} onClick={onTest}>
-                测试真实合同段落
+                打开快速条件检查（不调用模型）
               </Button>
             ) : null}
           </section>
@@ -955,9 +1087,9 @@ export default function RuleDesigner({ initialRule, context, saving = false, onS
           {isDirty ? '当前有未保存修改；切换规则前请先保存或确认放弃。' : '保存的是当前规则草稿；正式审核只读取规则集发布版本。'}
         </p>
         <div className="flex items-center justify-end gap-2">
-          {onTest ? <Button type="button" variant="outline" disabled={validation.length > 0 || isDirty} onClick={onTest}>测试</Button> : null}
-          <Button type="button" disabled={saving || validation.length > 0} onClick={submit}>
-            {saving ? '保存中...' : '保存草稿'}
+          {onTest ? <Button type="button" variant="outline" disabled={validation.length > 0 || isDirty} onClick={onTest}>快速检查</Button> : null}
+          <Button type="button" disabled={saving} onClick={submit}>
+            {saving ? '保存中…' : '保存草稿'}
           </Button>
         </div>
       </div>

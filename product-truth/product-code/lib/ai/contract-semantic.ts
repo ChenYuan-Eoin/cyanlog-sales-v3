@@ -77,6 +77,116 @@ type ValidatedSemanticOutput = {
   droppedRisks: number
 }
 
+const CONTRACT_SEMANTIC_COVERAGE_REVISION = 'canonical-rule-property-coverage-v1'
+
+type CanonicalCoverageRule = {
+  code: string | null
+  propertyKeys: string[]
+}
+
+function normalizedRuleCode(value: string | null | undefined) {
+  return (value || '').trim().toUpperCase().replace(/@V\d+$/, '')
+}
+
+/**
+ * Structured-output models commonly serialize an unknown optional field as
+ * `null`, while the canonical contract deliberately represents it by omitting
+ * the field.  Normalize only those three optional reading fields before the
+ * strict validator runs.  We do not coerce values or statuses: a `read`
+ * reading whose value was null still fails because the canonical validator
+ * requires a typed value.
+ */
+function normalizeCanonicalReadingNulls(rawOutput: string): string {
+  const start = rawOutput.indexOf('{')
+  const end = rawOutput.lastIndexOf('}')
+  if (start < 0 || end <= start) return rawOutput
+
+  try {
+    const parsed = JSON.parse(rawOutput.slice(start, end + 1)) as {
+      risks?: Array<{ propertyReadings?: Array<Record<string, unknown>> }>
+    }
+    if (!Array.isArray(parsed.risks)) return rawOutput
+
+    for (const risk of parsed.risks) {
+      if (!Array.isArray(risk.propertyReadings)) continue
+      for (const reading of risk.propertyReadings) {
+        if (reading.value === null) delete reading.value
+        if (reading.unit === null) delete reading.unit
+        if (reading.evidence === null) delete reading.evidence
+      }
+    }
+    return JSON.stringify(parsed)
+  } catch {
+    return rawOutput
+  }
+}
+
+function canonicalCoverageRules(rules: RuntimeRuleConstraint[]): CanonicalCoverageRule[] {
+  return rules
+    .filter((rule) => rule.execution_protocol === 'rule_contract_v1' || Boolean(rule.rule_contract))
+    .map((rule) => ({
+      code: normalizedRuleCode(rule.code) || null,
+      propertyKeys: (rule.rule_contract?.properties || []).map((property) => property.key),
+    }))
+}
+
+function canonicalCoverageError(
+  output: AIReviewOutput,
+  expectedRules: CanonicalCoverageRule[],
+  requireComplete: boolean,
+): string | null {
+  if (expectedRules.length === 0) return null
+
+  const invalidRules = expectedRules.filter((rule) => !rule.code || rule.propertyKeys.length === 0)
+  if (invalidRules.length > 0) {
+    return 'Canonical coverage validation failed: published canonical rule is missing a code or property definition'
+  }
+
+  const expectedCodes = expectedRules.map((rule) => rule.code as string)
+  const duplicateExpectedCodes = expectedCodes.filter((code, index) => expectedCodes.indexOf(code) !== index)
+  if (duplicateExpectedCodes.length > 0) {
+    return `Canonical coverage validation failed: duplicate published rule code ${Array.from(new Set(duplicateExpectedCodes)).join(', ')}`
+  }
+
+  const risksByCode = new Map<string, AIReviewOutput['risks']>()
+  for (const risk of output.risks) {
+    const code = normalizedRuleCode(risk.ruleCode)
+    const matches = risksByCode.get(code) || []
+    matches.push(risk)
+    risksByCode.set(code, matches)
+  }
+
+  const duplicateOutputCodes = expectedCodes.filter((code) => (risksByCode.get(code)?.length || 0) > 1)
+  if (duplicateOutputCodes.length > 0) {
+    return `Canonical coverage validation failed: duplicate model output for ${duplicateOutputCodes.join(', ')}`
+  }
+
+  const missingRules: string[] = []
+  const incompleteProperties: string[] = []
+  for (const expected of expectedRules) {
+    const code = expected.code as string
+    const risk = risksByCode.get(code)?.[0]
+    if (!risk) {
+      if (requireComplete) missingRules.push(code)
+      continue
+    }
+    const propertyKeys = (risk.propertyReadings || []).map((reading) => reading.propertyKey)
+    const missingKeys = expected.propertyKeys.filter((key) => !propertyKeys.includes(key))
+    const duplicateKeys = propertyKeys.filter((key, index) => propertyKeys.indexOf(key) !== index)
+    if (missingKeys.length > 0 || duplicateKeys.length > 0) {
+      incompleteProperties.push(`${code}[missing=${missingKeys.join('|') || 'none'},duplicate=${Array.from(new Set(duplicateKeys)).join('|') || 'none'}]`)
+    }
+  }
+
+  if (missingRules.length > 0) {
+    return `Canonical coverage validation failed: missing rule output ${missingRules.join(', ')}`
+  }
+  if (incompleteProperties.length > 0) {
+    return `Canonical coverage validation failed: incomplete property readings ${incompleteProperties.join(', ')}`
+  }
+  return null
+}
+
 function estimatePageCount(text: string): number {
   const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
   const englishWords = text.split(/\s+/).filter((word) => /^[a-zA-Z]+$/.test(word)).length
@@ -234,6 +344,32 @@ export function prepareContractSemanticInput(
 }
 
 function buildContractSemanticSystemPrompt(skillContext: ContractSemanticSkillContext): string {
+  const canonicalRules = skillContext.rules.filter((rule) => (
+    Boolean(rule.code) && (rule.execution_protocol === 'rule_contract_v1' || Boolean(rule.rule_contract))
+  ))
+  const firstCanonicalRule = canonicalRules[0]
+  const firstCanonicalProperty = firstCanonicalRule?.rule_contract?.properties[0]
+  const canonicalExample = firstCanonicalRule?.code && firstCanonicalProperty
+    ? JSON.stringify({
+        risks: [{
+          ruleCode: firstCanonicalRule.code,
+          ruleVersion: firstCanonicalRule.version ?? 1,
+          propertyReadings: [{
+            propertyKey: firstCanonicalProperty.key,
+            status: 'read',
+            value: firstCanonicalProperty.type === 'boolean' ? true
+              : ['money', 'percentage', 'duration', 'number'].includes(firstCanonicalProperty.type) ? 50000
+                : '原文读取值',
+            ...(firstCanonicalProperty.unit || firstCanonicalProperty.currency
+              ? { unit: firstCanonicalProperty.unit || firstCanonicalProperty.currency }
+              : {}),
+            evidence: '必须替换为合同中的连续原文',
+            confidence: 0.95,
+          }],
+        }],
+        summary: '总体评估',
+      })
+    : '{"risks":[],"summary":"未绑定 canonical 规则"}'
   const rules = skillContext.rules
     .filter((rule) => rule.code)
     .map((rule) => {
@@ -257,10 +393,13 @@ function buildContractSemanticSystemPrompt(skillContext: ContractSemanticSkillCo
     '你是 ONES 业务运营合同审核角色。',
     '只依据已发布规则快照和合同原文读取事实；不得编造属性、规则、数字、日期、主体或条款。',
     'canonical 规则只读取该规则已定义属性，判定条件、风险等级和处理动作由服务端规则引擎独立执行。',
-    'canonical 每个属性必须返回 propertyReadings：propertyKey、status、类型正确的 value、unit、逐字 evidence、0-1 confidence。',
+    `canonical 的 ruleCode、ruleVersion 和 propertyKey 必须逐字复制当前快照，禁止使用示例编号或自行编号。当前 canonical ruleCode 允许值：${canonicalRules.map((rule) => rule.code).join('、') || '无'}。`,
+    'canonical 每个属性都必须返回一条 propertyReadings：propertyKey、status、0-1 confidence；不得遗漏任何已定义属性。',
+    'status=read 时必须返回类型正确的 value：money/percentage/duration/number 使用 JSON 数字，boolean 使用 JSON 布尔值，enum/date/text 使用 JSON 字符串；按属性定义返回 unit，并给出合同原文连续片段 evidence。',
+    'status=missing/ambiguous/unit_conflict 时不得返回 value；未知的 unit 或 evidence 必须省略字段，禁止写 null。ambiguous/unit_conflict 仍须给出支持该状态的原文 evidence。',
     'legacy_adapter 仅返回高置信风险；每条 evidence 必须是合同原文连续片段，不能摘要、拼接或只给通用词。',
     '输出 JSON 对象，不要 Markdown或解释前后缀。',
-    '格式：{"risks":[{"ruleCode":"R001","ruleVersion":1,"propertyReadings":[{"propertyKey":"amount","status":"read|missing|ambiguous|unit_conflict","value":50000,"unit":"CNY","evidence":"逐字原文","confidence":0.95}]}],"summary":"总体评估"}',
+    `格式示例（编码和属性键已经取自当前快照，原文证据仍必须替换）：${canonicalExample}`,
     'legacy_adapter 才输出 level/title/description/suggestion/evidence；canonical 不自行做风险判断。',
     rules ? `可用规则快照：\n${rules}` : '可用规则快照缺失：返回空 risks 并说明未绑定。',
   ].join('\n')
@@ -276,6 +415,8 @@ export async function executeContractSemanticReview(
   })
   const prepared = prepareContractSemanticInput(input.contractText, plan, input.skillContext)
   const budgets = semanticBudgets(plan, input.skillContext)
+  const canonicalCoverage = canonicalCoverageRules(input.skillContext.rules)
+  const canonicalPropertyCount = canonicalCoverage.reduce((total, rule) => total + rule.propertyKeys.length, 0)
   const result = await executeAIUsePoint<ValidatedSemanticOutput>({
     orgId: input.orgId,
     usePointId: 'contract.review.semantic',
@@ -285,6 +426,7 @@ export async function executeContractSemanticReview(
     contractId: input.contractId,
     reviewId: input.reviewId,
     skillBundleId: input.skillBundleId,
+    temperature: 0,
     maxTokens: budgets.maxTokens,
     messages: [
       { role: 'system', content: buildContractSemanticSystemPrompt(input.skillContext) },
@@ -301,34 +443,52 @@ export async function executeContractSemanticReview(
       },
     ],
     validateOutput: (text) => {
-      const validation = validateAIOutput(text, {
+      const validation = validateAIOutput(normalizeCanonicalReadingNulls(text), {
         contractText: input.contractText,
         rules: input.skillContext.rules,
         requireEvidenceInSource: true,
         requireRuleEvidenceHint: true,
         allowPartialRiskAcceptance: true,
       })
-      return validation.valid && validation.data
-        ? {
-            ok: true,
-            value: {
-              data: validation.data,
-              warnings: validation.warnings || [],
-              droppedRisks: validation.droppedRisks || 0,
-            },
-            evidence: {
-              itemKind: 'risk',
-              validationWarnings: validation.warnings || [],
-              droppedItemCount: validation.droppedRisks || 0,
-              usableItemCount: validation.data.risks.length,
-            },
-          }
-        : { ok: false, error: validation.error || '合同语义输出未通过校验' }
+      if (!validation.valid || !validation.data) {
+        return { ok: false, error: validation.error || '合同语义输出未通过校验' }
+      }
+
+      const coverageError = canonicalCoverageError(
+        validation.data,
+        canonicalCoverage,
+        !prepared.stats.coverage_limited,
+      )
+      if (coverageError) return { ok: false, error: coverageError }
+
+      const warnings = [
+        ...(validation.warnings || []),
+        ...(prepared.stats.coverage_limited && canonicalCoverage.length > 0
+          ? ['semantic_input_coverage_limited:canonical_rule_property_completeness_not_proven']
+          : []),
+      ]
+      return {
+        ok: true,
+        value: {
+          data: validation.data,
+          warnings,
+          droppedRisks: validation.droppedRisks || 0,
+        },
+        evidence: {
+          itemKind: 'risk',
+          validationWarnings: warnings,
+          droppedItemCount: validation.droppedRisks || 0,
+          usableItemCount: validation.data.risks.length,
+        },
+      }
     },
     requestMeta: {
       review_trigger: input.reviewTrigger || 'direct',
       review_event: input.reviewEvent || 'initial_generate',
       skill_rule_count: input.skillContext.rules.length,
+      semantic_validation_revision: CONTRACT_SEMANTIC_COVERAGE_REVISION,
+      expected_canonical_rule_count: canonicalCoverage.length,
+      expected_canonical_property_count: canonicalPropertyCount,
       input_stats: prepared.stats,
     },
   })

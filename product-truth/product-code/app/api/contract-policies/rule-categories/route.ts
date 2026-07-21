@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { createdResponse, errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
         org_id: orgId,
         created_by: user.id,
         ...parsed.data,
+        code: parsed.data.code || `category_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`,
       })
       .select(PROBLEM_CATEGORY_SELECT)
       .single()

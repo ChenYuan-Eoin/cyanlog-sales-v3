@@ -23,6 +23,7 @@ describe('rule collection product source contract', () => {
     expect(designerSource).toContain('属性满足什么条件时，系统应如何处理')
     expect(designerSource).toContain('缺少明确值时')
     expect(tabSource).toContain('结构完整 · 待发布验收')
+    expect(tabSource).toContain('配置完整 · 已通过发布验收')
     expect(tabSource).not.toContain('规则详情已确认')
   })
 
@@ -54,8 +55,18 @@ describe('rule collection product source contract', () => {
     expect(tabSource).toContain('/publish')
     expect(tabSource).toContain('规则集“${selectedRuleSet.name}”已发布')
     expect(tabSource).toContain('当前规则还有未保存修改')
-    expect(tabSource).toContain('使用真实合同段落验证当前已保存规则')
+    expect(tabSource).toContain('快速检查当前规则的条件与结果（不调用 AI 模型）')
     expect(tabSource).not.toContain('/versions/${versionId}/publish')
+  })
+
+  it('keeps machine identifiers out of the business creation flow and exposes every release blocker', () => {
+    expect(tabSource).not.toContain('label="规则集编码"')
+    expect(tabSource).not.toContain('label="分类编码"')
+    expect(tabSource).toContain('内部标识由系统自动生成')
+    expect(tabSource).toContain('selectedRuleSet.publish_blockers.map')
+    expect(tabSource).toContain('从空白规则集开始')
+    expect(tabSource).toContain('规则版本 v{rule.version || 1}')
+    expect(tabSource).not.toContain('{rule.code} · v{rule.version || 1}')
   })
 
   it('allows historical replay without claiming an unconfirmed migration draft can run', () => {

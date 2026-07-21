@@ -5,10 +5,15 @@ import { AlertCircleIcon, CheckCircle2Icon, Loader2Icon, PlayIcon } from 'lucide
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { resolveRuleContract, type RulePropertyReading } from '@/lib/rules/rule-contract'
+import {
+  resolveRuleContract,
+  ruleContractRequiresMissingEvidenceCase,
+  type RulePropertyReading,
+} from '@/lib/rules/rule-contract'
 import type {
   ContractPolicyRule,
   ContractRuleCondition,
+  ContractRuleContract,
   ContractRuleDecision,
   ContractRuleOutcome,
   ContractRuleProperty,
@@ -130,7 +135,19 @@ type AcceptanceExample = {
   expectedDecisionId?: string
 }
 
-function buildExamples(properties: ContractRuleProperty[], decisions: ContractRuleDecision[]): AcceptanceExample[] {
+type BatchResult = {
+  key: string
+  label: string
+  passed: boolean
+  error?: string
+}
+
+function exampleKey(example: AcceptanceExample) {
+  return `${example.caseKind}:${example.expectedDecisionId || example.label}`
+}
+
+function buildExamples(contract: ContractRuleContract): AcceptanceExample[] {
+  const { properties, decisions } = contract
   // 发布门禁要求每条判定分别有一次精确通过记录，因此这里不能只
   // 暴露第一条风险和第一条通过判定。
   const examples: AcceptanceExample[] = decisions.map((decision) => ({
@@ -139,11 +156,13 @@ function buildExamples(properties: ContractRuleProperty[], decisions: ContractRu
     caseKind: decision.outcome === 'pass' ? 'pass' : 'risk',
     expectedDecisionId: decision.id,
   }))
-  examples.push({
-    label: '缺少证据',
-    text: '合同仅说明双方后续协商，未写明本规则所需的具体信息。',
-    caseKind: 'missing_evidence',
-  })
+  if (ruleContractRequiresMissingEvidenceCase(contract)) {
+    examples.push({
+      label: '缺少证据',
+      text: '合同仅说明双方后续协商，未写明本规则所需的具体信息。',
+      caseKind: 'missing_evidence',
+    })
+  }
   const conflictProperty = properties.find((property) => (
     property.type !== 'text'
     && (property.type !== 'enum' || (property.options?.length || 0) > 1)
@@ -178,12 +197,13 @@ function buildExamples(properties: ContractRuleProperty[], decisions: ContractRu
 
 export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxProps) {
   const contract = useMemo(() => resolveRuleContract(rule), [rule])
-  const examples = useMemo(() => buildExamples(contract.properties, contract.decisions), [contract.decisions, contract.properties])
+  const examples = useMemo(() => buildExamples(contract), [contract])
   const [text, setText] = useState(examples[0]?.text || '')
   const [caseKind, setCaseKind] = useState<ContractRuleTestCaseKind>(examples[0]?.caseKind || 'risk')
   const [expectedDecisionId, setExpectedDecisionId] = useState<string | undefined>(examples[0]?.expectedDecisionId)
-  const [loading, setLoading] = useState(false)
+  const [loadingMode, setLoadingMode] = useState<'single' | 'all' | null>(null)
   const [result, setResult] = useState<RuleTestResult | null>(null)
+  const [batchResults, setBatchResults] = useState<BatchResult[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -193,42 +213,85 @@ export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxPr
     setCaseKind(first.caseKind)
     setExpectedDecisionId(first.expectedDecisionId)
     setResult(null)
+    setBatchResults([])
     setError(null)
   }, [examples, rule.id, rule.version])
 
+  async function requestTest(source: Pick<AcceptanceExample, 'text' | 'caseKind' | 'expectedDecisionId'>) {
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/rules/test', {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: source.text,
+        rule_id: rule.id,
+        case_kind: source.caseKind,
+        expected_decision_id: source.expectedDecisionId,
+      }),
+    })
+    const payload = await response.json().catch(() => ({})) as RuleTestResponse
+    if (!response.ok || !payload.test) throw new Error(payload.error || '条件检查失败')
+    return payload.test
+  }
+
   async function runTest() {
     if (text.trim().length < 10) {
-      setError('请至少输入 10 个字的真实合同段落。')
+      setError('请至少输入 10 个字的合同文字。')
       return
     }
-    setLoading(true)
+    setLoadingMode('single')
     setError(null)
     setResult(null)
+    setBatchResults([])
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/rules/test', {
-        method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          rule_id: rule.id,
-          case_kind: caseKind,
-          expected_decision_id: expectedDecisionId,
-        }),
-      })
-      const payload = await response.json().catch(() => ({})) as RuleTestResponse
-      if (!response.ok || !payload.test) {
-        throw new Error(payload.error || '规则测试失败')
-      }
-      setResult(payload.test)
+      const test = await requestTest({ text, caseKind, expectedDecisionId })
+      setResult(test)
       await onTestSaved?.()
     } catch (testError) {
-      setError(testError instanceof Error ? testError.message : '规则测试失败')
+      setError(testError instanceof Error ? testError.message : '条件检查失败')
     } finally {
-      setLoading(false)
+      setLoadingMode(null)
+    }
+  }
+
+  async function runAllTests() {
+    if (examples.length === 0) {
+      setError('当前规则还没有可检查的判定。')
+      return
+    }
+    setLoadingMode('all')
+    setError(null)
+    setResult(null)
+    setBatchResults([])
+    try {
+      const nextResults: BatchResult[] = []
+      let latestResult: RuleTestResult | null = null
+      for (const example of examples) {
+        try {
+          const test = await requestTest(example)
+          latestResult = test
+          nextResults.push({ key: exampleKey(example), label: example.label, passed: test.assertion.passed })
+        } catch (testError) {
+          nextResults.push({
+            key: exampleKey(example),
+            label: example.label,
+            passed: false,
+            error: testError instanceof Error ? testError.message : '条件检查失败',
+          })
+        }
+      }
+      setBatchResults(nextResults)
+      setResult(latestResult)
+      const failedCount = nextResults.filter((item) => !item.passed).length
+      if (failedCount > 0) setError(`${failedCount} 个用例未通过，请按下方结果修正规则或检查文字。`)
+      await onTestSaved?.()
+    } catch (testError) {
+      setError(testError instanceof Error ? testError.message : '保存条件检查结果失败')
+    } finally {
+      setLoadingMode(null)
     }
   }
 
@@ -237,8 +300,8 @@ export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxPr
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-900">当前测试规则</div>
-            <div className="mt-1 text-sm text-slate-600">{rule.code} · {rule.name} · v{rule.version || 1}</div>
+            <div className="text-sm font-semibold text-slate-900">当前规则草稿</div>
+            <div className="mt-1 text-sm text-slate-600">{rule.name} · 草稿 v{rule.version || 1}</div>
           </div>
           <Badge variant="outline">{contract.properties.length} 个属性 · {contract.decisions.length} 条判定</Badge>
         </div>
@@ -251,18 +314,27 @@ export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxPr
         </div>
       </div>
 
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+        <div className="font-semibold">快速条件检查（不调用模型）</div>
+        <p className="mt-1">
+          这里仅检查当前规则的属性、条件、阈值、单位和处理结果，不会调用 AI 模型，也不代表完整合同审核已经跑通。规则发布后，请在合同审核中用真实文件验证模型读取、ReviewRun 和风险证据链。
+        </p>
+      </div>
+
       <div className="space-y-2">
-        <label htmlFor="rule-test-source" className="text-sm font-medium text-slate-800">测试合同原文</label>
+        <label htmlFor="rule-test-source" className="text-sm font-medium text-slate-800">检查用合同文字</label>
         <Textarea
           id="rule-test-source"
+          name="rule-test-source"
+          autoComplete="off"
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="粘贴一段真实合同原文，系统会按当前规则读取属性并执行判定。"
+          placeholder="粘贴一段合同文字，快速检查当前规则的字段和条件…"
           rows={7}
         />
         <div className="flex flex-wrap gap-2">
           {examples.map((example) => (
-            <Button key={`${example.caseKind}:${example.expectedDecisionId || example.label}`} type="button" variant="outline" size="sm" onClick={() => {
+            <Button key={exampleKey(example)} type="button" variant="outline" size="sm" onClick={() => {
               setText(example.text)
               setCaseKind(example.caseKind)
               setExpectedDecisionId(example.expectedDecisionId)
@@ -275,14 +347,40 @@ export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxPr
         </div>
         <p className="text-xs text-slate-500">
           当前验收目标：{caseKind === 'risk' ? '命中指定风险判定' : caseKind === 'pass' ? '命中指定通过判定' : caseKind === 'unit_conflict' ? '发现币种冲突并转人工' : caseKind === 'value_conflict' ? '发现同文多值冲突并转人工' : '缺少证据时转人工'}。
-          每条判定都要分别验收；示例只是可编辑起点，只有实际结果与当前目标完全一致才计入发布门禁。若总被另一条高优先级判定覆盖，应修正规则条件，而不是伪造通过记录。
+           每条判定都要分别验收；示例只是可编辑起点，只有实际结果与当前目标完全一致才计入发布准备。若总被前面的判定覆盖，应调整页面中的判断顺序或条件。
         </p>
       </div>
 
-      <Button type="button" onClick={() => void runTest()} disabled={loading || text.trim().length < 10}>
-        {loading ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <PlayIcon className="mr-2 h-4 w-4" />}
-        {loading ? '测试中...' : '运行测试'}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={() => void runTest()} disabled={loadingMode !== null || text.trim().length < 10}>
+          {loadingMode === 'single' ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <PlayIcon className="mr-2 h-4 w-4" />}
+          {loadingMode === 'single' ? '检查中…' : '检查当前用例'}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => void runAllTests()} disabled={loadingMode !== null || examples.length === 0}>
+          {loadingMode === 'all' ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : <PlayIcon className="mr-2 h-4 w-4" />}
+          {loadingMode === 'all' ? '正在检查全部用例…' : `一键检查全部 ${examples.length} 个用例`}
+        </Button>
+      </div>
+
+      {batchResults.length > 0 ? (
+        <div role="status" aria-live="polite" className="rounded-lg border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
+            全部用例：{batchResults.filter((item) => item.passed).length}/{batchResults.length} 通过
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {batchResults.map((item) => (
+              <li key={item.key} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
+                <span className="min-w-0 break-words text-slate-700">{item.label}{item.error ? `：${item.error}` : ''}</span>
+                <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                  item.passed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                }`}>
+                  {item.passed ? '通过' : '未通过'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {error ? (
         <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
@@ -298,7 +396,7 @@ export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxPr
                 {result.outcome === 'pass'
                   ? <CheckCircle2Icon className="h-5 w-5" />
                   : <AlertCircleIcon className="h-5 w-5" />}
-                {result.assertion.passed ? '验收通过' : '验收未通过'} · 实际结果：{outcomeLabels[result.outcome]}
+                {result.assertion.passed ? '条件检查通过' : '条件检查未通过'} · 实际结果：{outcomeLabels[result.outcome]}
               </div>
               <span className="text-xs">{result.decision?.label || '未形成明确判定'}</span>
             </div>
@@ -308,8 +406,8 @@ export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxPr
 
           <div className="rounded-lg border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-4 py-3">
-              <div className="text-sm font-semibold text-slate-900">属性读取结果</div>
-              <p className="mt-1 text-xs text-slate-500">逐项核对合同原文、读取值和单位；缺失或冲突不会默认通过。</p>
+              <div className="text-sm font-semibold text-slate-900">本地规则读取结果</div>
+              <p className="mt-1 text-xs text-slate-500">逐项核对输入文字、读取值和单位；这里不验证模型能否理解不同措辞。</p>
             </div>
             <div className="divide-y divide-slate-100">
               {contract.properties.map((property) => {
@@ -354,8 +452,8 @@ export default function RuleTestSandbox({ rule, onTestSaved }: RuleTestSandboxPr
           {result.testRunId ? (
             <p className={`text-xs ${result.assertion.passed ? 'text-emerald-700' : 'text-rose-700'}`}>
               {result.assertion.passed
-                ? '本次断言已保存，可计入当前规则版本的发布矩阵。'
-                : '本次结果已留痕，但不会计入发布通过；请修正规则或测试原文后重试。'}
+                ? '本次条件断言已保存，可计入当前规则版本的发布准备。'
+                : '本次结果已留痕，但不会计入发布通过；请修正规则或检查文字后重试。'}
             </p>
           ) : null}
         </div>

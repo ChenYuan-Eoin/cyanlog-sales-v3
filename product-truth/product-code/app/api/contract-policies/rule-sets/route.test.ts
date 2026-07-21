@@ -21,14 +21,14 @@ vi.mock('@/lib/configs/access', () => ({
   userHasFreshOrgConfigAccess: mocks.configAccess,
 }))
 
-import { GET } from './route'
+import { GET, POST } from './route'
 import {
   RULE_CONTRACT_EVALUATOR_REVISION,
   ruleContractSha256,
 } from '@/lib/rules/rule-release-readiness'
 
-function request(): NextRequest {
-  return {} as NextRequest
+function request(body?: unknown): NextRequest {
+  return { json: async () => body } as unknown as NextRequest
 }
 
 function queryResult(data: unknown) {
@@ -106,6 +106,26 @@ describe('GET /api/contract-policies/rule-sets', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.configAccess.mockResolvedValue(true)
+  })
+
+  it('creates an empty organization RuleSet without asking for a machine code', async () => {
+    const insert = vi.fn()
+    const chain = {
+      select: vi.fn(),
+      single: vi.fn().mockResolvedValue({ data: { id: 'set-new', name: '客户合同审核' }, error: null }),
+    }
+    chain.select.mockReturnValue(chain)
+    insert.mockReturnValue(chain)
+    mocks.from.mockReturnValue({ insert })
+
+    const response = await POST(request({ name: '客户合同审核' }))
+
+    expect(response.status).toBe(201)
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      name: '客户合同审核',
+      code: expect.stringMatching(/^RULESET_[0-9A-F]{12}$/),
+      lifecycle_status: 'draft',
+    }))
   })
 
   it('uses the latest snapshot-bound run, including a failed retry, for publish readiness', async () => {

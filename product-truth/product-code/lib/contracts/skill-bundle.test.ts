@@ -397,13 +397,20 @@ describe('SkillBundle formal review gate', () => {
       schema_version: '1.0' as const,
       properties: [{
         key: 'payment_method', label: '付款方式', type: 'enum' as const, required: true,
-        options: [{ value: 'prepaid', label: '预付款' }],
+        options: [{ value: 'prepaid', label: '预付款' }, { value: 'pay_later', label: '后付款' }],
       }],
-      decisions: [{
-        id: 'prepaid_ok', label: '预付款通过', outcome: 'pass' as const, priority: 100,
-        match: 'all' as const,
-        conditions: [{ property_key: 'payment_method', operator: '=' as const, value: 'prepaid' }],
-      }],
+      decisions: [
+        {
+          id: 'pay_later_risk', label: '后付款需处理', outcome: 'block' as const, priority: 200,
+          match: 'all' as const,
+          conditions: [{ property_key: 'payment_method', operator: '=' as const, value: 'pay_later' }],
+        },
+        {
+          id: 'prepaid_ok', label: '预付款通过', outcome: 'pass' as const, priority: 100,
+          match: 'all' as const,
+          conditions: [{ property_key: 'payment_method', operator: '=' as const, value: 'prepaid' }],
+        },
+      ],
       missing_evidence_outcome: 'manual_review' as const,
     }
     const summary = summarizePublishedRuleEval({
@@ -428,6 +435,7 @@ describe('SkillBundle formal review gate', () => {
     })
     expect(summary.blocking_reasons).toEqual(expect.arrayContaining([
       'ruleset_acceptance_gate_missing:set-snapshot-1',
+      'rule_acceptance_missing:snapshot-1:判定“后付款需处理”',
       'rule_acceptance_missing:snapshot-1:判定“预付款通过”',
       'rule_acceptance_missing:snapshot-1:缺少证据转人工',
     ]))
@@ -438,13 +446,20 @@ describe('SkillBundle formal review gate', () => {
       schema_version: '1.0' as const,
       properties: [{
         key: 'payment_method', label: '付款方式', type: 'enum' as const, required: true,
-        options: [{ value: 'prepaid', label: '预付款' }],
+        options: [{ value: 'prepaid', label: '预付款' }, { value: 'pay_later', label: '后付款' }],
       }],
-      decisions: [{
-        id: 'prepaid_ok', label: '预付款通过', outcome: 'pass' as const, priority: 100,
-        match: 'all' as const,
-        conditions: [{ property_key: 'payment_method', operator: '=' as const, value: 'prepaid' }],
-      }],
+      decisions: [
+        {
+          id: 'pay_later_risk', label: '后付款需处理', outcome: 'block' as const, priority: 200,
+          match: 'all' as const,
+          conditions: [{ property_key: 'payment_method', operator: '=' as const, value: 'pay_later' }],
+        },
+        {
+          id: 'prepaid_ok', label: '预付款通过', outcome: 'pass' as const, priority: 100,
+          match: 'all' as const,
+          conditions: [{ property_key: 'payment_method', operator: '=' as const, value: 'prepaid' }],
+        },
+      ],
       missing_evidence_outcome: 'manual_review' as const,
     }
     const binding = {
@@ -466,11 +481,20 @@ describe('SkillBundle formal review gate', () => {
           rule_runs: {
             'rule-1': [
               {
+                ...binding, id: 'run-risk', case_kind: 'risk', expected_status: 'decided',
+                expected_outcome: 'block', expected_decision_id: 'pay_later_risk',
+              },
+              {
                 ...binding, id: 'run-pass', case_kind: 'pass', expected_status: 'decided',
                 expected_outcome: 'pass', expected_decision_id: 'prepaid_ok',
               },
               {
                 ...binding, id: 'run-missing', case_kind: 'missing_evidence',
+                expected_status: 'missing_evidence', expected_outcome: 'manual_review',
+                expected_decision_id: null,
+              },
+              {
+                ...binding, id: 'run-value-conflict', case_kind: 'value_conflict',
                 expected_status: 'missing_evidence', expected_outcome: 'manual_review',
                 expected_decision_id: null,
               },
@@ -493,8 +517,8 @@ describe('SkillBundle formal review gate', () => {
       status: 'passed',
       total_rules: 1,
       passed_rules: 1,
-      required_cases: 2,
-      passed_cases: 2,
+      required_cases: 4,
+      passed_cases: 4,
       blocking_reasons: [],
     })
   })

@@ -12,8 +12,9 @@ const schema = z.object({
   release_note: z.string().trim().max(1000).optional().nullable(),
 }).strict()
 
-function publicationErrorMessage(message: string) {
+function publicationErrorMessage(message: string, ruleNamesByCode: ReadonlyMap<string, string>) {
   const ruleCode = message.split(':')[1]?.split(/\s/)[0] || '规则'
+  const ruleName = ruleNamesByCode.get(ruleCode) || '该规则'
   if ([
     'RULE_PUBLISHED_ACCEPTANCE_BINDING_MISSING',
     'RULE_PUBLISHED_ACCEPTANCE_DRAFT_INVALID',
@@ -25,12 +26,12 @@ function publicationErrorMessage(message: string) {
   }
   if (message.includes('RULE_SET_EMPTY')) return '规则集没有可发布的规则'
   if (message.includes('RULE_TEST_EVIDENCE_MISSING:')) {
-    return `${message.split('RULE_TEST_EVIDENCE_MISSING:')[1]?.split(/\s/)[0] || '规则'} 缺少当前版本的测试记录`
+    return `“${ruleName}”缺少当前版本的测试记录`
   }
-  if (message.includes('RULE_TEST_DECISION_MATRIX_MISSING:')) return `${ruleCode} 尚未通过每一条判定的验收用例`
-  if (message.includes('RULE_TEST_MISSING_EVIDENCE_MISSING:')) return `${ruleCode} 尚未通过“缺少证据”验收`
-  if (message.includes('RULE_TEST_VALUE_CONFLICT_MISSING:')) return `${ruleCode} 尚未通过“同文多值冲突”验收`
-  if (message.includes('RULE_TEST_UNIT_CONFLICT_MISSING:')) return `${ruleCode} 尚未通过“币种冲突”验收`
+  if (message.includes('RULE_TEST_DECISION_MATRIX_MISSING:')) return `“${ruleName}”尚未通过每一条判定的验收用例`
+  if (message.includes('RULE_TEST_MISSING_EVIDENCE_MISSING:')) return `“${ruleName}”尚未通过“缺少证据”验收`
+  if (message.includes('RULE_TEST_VALUE_CONFLICT_MISSING:')) return `“${ruleName}”尚未通过“同文多值冲突”验收`
+  if (message.includes('RULE_TEST_UNIT_CONFLICT_MISSING:')) return `“${ruleName}”尚未通过“币种冲突”验收`
   if (message.includes('RULE_DRAFT_SNAPSHOT_MISSING:')) return '规则草稿快照缺失，请重新保存后再发布'
   if (message.includes('RULE_PUBLISHED_SNAPSHOT_MISSING:')) return '已有发布规则缺少对应快照，已停止发布'
   if (message.includes('RULE_NOT_READY:')) return '规则集中仍有未完成的规则'
@@ -95,10 +96,14 @@ export async function POST(
       if (missing.length > 0) {
         return errorResponse(createApiError(
           'VALIDATION_ERROR',
-          `${rule.code || rule.name || '规则'} 尚不能发布：${missing.join('、')}`
+          `“${rule.name || '该规则'}”尚不能发布：${missing.join('、')}`
         ))
       }
     }
+
+    const ruleNamesByCode = new Map(
+      rules.map((rule) => [String(rule.code || ''), String(rule.name || '该规则')])
+    )
 
     const { data, error } = await supabaseAdmin.rpc('publish_contract_rule_set_v1', {
       p_org_id: orgId,
@@ -110,7 +115,7 @@ export async function POST(
     if (error || !data) {
       return errorResponse(createApiError(
         'VALIDATION_ERROR',
-        publicationErrorMessage(error?.message || '')
+        publicationErrorMessage(error?.message || '', ruleNamesByCode)
       ))
     }
 

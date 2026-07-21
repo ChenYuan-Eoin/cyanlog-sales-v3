@@ -118,4 +118,25 @@ describe('/api/contract-policies/rule-categories', () => {
       code: 'performance_guarantee',
     }))
   })
+
+  it('lets a business user create a category by name and generates the internal code', async () => {
+    const insert = vi.fn()
+    const chain = {
+      select: vi.fn(),
+      single: vi.fn().mockResolvedValue({ data: { id: 'category-3' }, error: null }),
+    }
+    chain.select.mockReturnValue(chain)
+    insert.mockReturnValue(chain)
+    mocks.from.mockReturnValue({ insert })
+
+    const response = await POST(request('http://localhost/api/contract-policies/rule-categories', {
+      name: '付款条件',
+    }))
+
+    expect(response.status).toBe(201)
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      name: '付款条件',
+      code: expect.stringMatching(/^category_[0-9a-f]{12}$/),
+    }))
+  })
 })

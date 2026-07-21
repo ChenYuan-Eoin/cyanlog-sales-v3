@@ -9,6 +9,7 @@ import {
   normalizeRuleContract,
   parseChineseNumericText,
   resolveRuleContract,
+  ruleContractRequiresMissingEvidenceCase,
   type RuleContractAsset,
 } from './rule-contract'
 
@@ -329,6 +330,26 @@ describe('multi-property and common property types', () => {
 
     expect(result.status).toBe('decided')
     expect(result.outcome).toBe('block')
+    expect(ruleContractRequiresMissingEvidenceCase(contract)).toBe(false)
+  })
+
+  it('keeps generic missing-evidence acceptance when an all-missing input is not decided', () => {
+    expect(ruleContractRequiresMissingEvidenceCase(amountContract())).toBe(true)
+
+    const optionalWithoutAbsenceDecision: ContractRuleContract = {
+      schema_version: '1.0',
+      properties: [{ key: 'renewal_exit', label: '续约退出机制', type: 'text', required: false }],
+      decisions: [{
+        id: 'exit_present',
+        label: '已有退出机制',
+        outcome: 'pass',
+        priority: 1,
+        match: 'all',
+        conditions: [{ property_key: 'renewal_exit', operator: 'exists' }],
+      }],
+      missing_evidence_outcome: 'manual_review',
+    }
+    expect(ruleContractRequiresMissingEvidenceCase(optionalWithoutAbsenceDecision)).toBe(true)
   })
 
   it('reads enum, boolean, text, number, and date only from their matched clauses', () => {

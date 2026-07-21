@@ -2,21 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
-  requireAuth: vi.fn(),
-  getDefaultOrgId: vi.fn(),
+  withAuthAndOrg: vi.fn(),
   executeRules: vi.fn(),
   loadFlexibleRules: vi.fn(),
   evaluateRuleContract: vi.fn(),
   resolveRuleContract: vi.fn(),
   normalizeRuleContract: vi.fn(),
+  requiresMissingEvidenceCase: vi.fn(),
   from: vi.fn(),
   configAccess: vi.fn(),
   insert: vi.fn(),
   snapshotMaybeSingle: vi.fn(),
+  persistedRuleSingle: vi.fn(),
 }))
 
-vi.mock('@/lib/auth', () => ({ requireAuth: mocks.requireAuth }))
-vi.mock('@/lib/scoped-access', () => ({ getDefaultOrgId: mocks.getDefaultOrgId }))
+vi.mock('@/lib/api/auth-wrapper', () => ({
+  withAuthAndOrg: mocks.withAuthAndOrg,
+}))
 vi.mock('@/lib/rules/engine', () => ({
   executeRules: mocks.executeRules,
   loadFlexibleRules: mocks.loadFlexibleRules,
@@ -25,6 +27,7 @@ vi.mock('@/lib/rules/rule-contract', () => ({
   evaluateRuleContract: mocks.evaluateRuleContract,
   resolveRuleContract: mocks.resolveRuleContract,
   normalizeRuleContract: mocks.normalizeRuleContract,
+  ruleContractRequiresMissingEvidenceCase: mocks.requiresMissingEvidenceCase,
 }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 vi.mock('@/lib/configs/access', () => ({
@@ -32,6 +35,7 @@ vi.mock('@/lib/configs/access', () => ({
 }))
 
 import { POST } from './route'
+import { ruleContractSha256 } from '@/lib/rules/rule-release-readiness'
 
 const ruleId = '11111111-1111-4111-8111-111111111111'
 
@@ -50,10 +54,14 @@ function malformedRequest() {
 describe('POST /api/rules/test', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.requireAuth.mockResolvedValue({ id: 'user-1' })
-    mocks.getDefaultOrgId.mockResolvedValue('org-1')
+    mocks.withAuthAndOrg.mockImplementation(
+      async (_req: NextRequest, handler: (user: { id: string }, orgId: string) => Promise<Response>) => (
+        handler({ id: 'user-1' }, 'org-1')
+      )
+    )
     mocks.configAccess.mockResolvedValue(true)
     mocks.normalizeRuleContract.mockImplementation((value) => value)
+    mocks.requiresMissingEvidenceCase.mockReturnValue(true)
     mocks.executeRules.mockResolvedValue({ risks: [], summary: 'ok', appliedRules: 1, matchedRules: 1 })
     mocks.resolveRuleContract.mockReturnValue({
       schema_version: '1.0',
@@ -76,6 +84,17 @@ describe('POST /api/rules/test', () => {
       },
       error: null,
     })
+    mocks.persistedRuleSingle.mockResolvedValue({
+      data: {
+        rule_contract: {
+          schema_version: '1.0',
+          properties: [],
+          decisions: [{ id: 'below_minimum', label: '低于最低金额', outcome: 'block', priority: 100, match: 'all', conditions: [] }],
+          missing_evidence_outcome: 'manual_review',
+        },
+      },
+      error: null,
+    })
     const snapshotQuery = {
       select: vi.fn(),
       eq: vi.fn(),
@@ -89,6 +108,13 @@ describe('POST /api/rules/test', () => {
     snapshotQuery.in.mockReturnValue(snapshotQuery)
     snapshotQuery.order.mockReturnValue(snapshotQuery)
     snapshotQuery.limit.mockReturnValue(snapshotQuery)
+    const persistedRuleQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      single: mocks.persistedRuleSingle,
+    }
+    persistedRuleQuery.select.mockReturnValue(persistedRuleQuery)
+    persistedRuleQuery.eq.mockReturnValue(persistedRuleQuery)
     const insertResult = {
       select: vi.fn(),
       single: vi.fn().mockResolvedValue({
@@ -98,9 +124,11 @@ describe('POST /api/rules/test', () => {
     }
     insertResult.select.mockReturnValue(insertResult)
     mocks.insert.mockReturnValue(insertResult)
-    mocks.from.mockImplementation((table: string) => table === 'contract_rule_snapshots'
-      ? snapshotQuery
-      : { insert: mocks.insert })
+    mocks.from.mockImplementation((table: string) => {
+      if (table === 'contract_rule_snapshots') return snapshotQuery
+      if (table === 'contract_rules_v2') return persistedRuleQuery
+      return { insert: mocks.insert }
+    })
   })
 
   it('checks organization permission before rejecting invalid JSON', async () => {
@@ -109,9 +137,51 @@ describe('POST /api/rules/test', () => {
 
     expect(response.status).toBe(400)
     expect(body.error).toBe('文本长度需在 10-50000 字符之间')
-    expect(mocks.getDefaultOrgId).toHaveBeenCalledWith('user-1')
     expect(mocks.configAccess).toHaveBeenCalledWith('user-1', 'org-1', 'write')
     expect(mocks.executeRules).not.toHaveBeenCalled()
+  })
+
+  it('uses the organization resolved by withAuthAndOrg for permission, rule lookup, and evidence', async () => {
+    mocks.withAuthAndOrg.mockImplementationOnce(
+      async (_req: NextRequest, handler: (user: { id: string }, orgId: string) => Promise<Response>) => (
+        handler({ id: 'user-2' }, 'org-current')
+      )
+    )
+    const rule = { id: ruleId, code: 'PAYMENT_MIN', name: '最低金额', version: 3 }
+    mocks.loadFlexibleRules.mockResolvedValue([rule])
+    mocks.evaluateRuleContract.mockReturnValue({
+      status: 'decided',
+      outcome: 'block',
+      risk_level: 'red',
+      decision: {
+        id: 'below_minimum',
+        label: '低于最低金额',
+        match: 'all',
+        outcome: 'block',
+        action: '提交例外审批',
+        message: '合同金额低于公司标准',
+      },
+      readings: {},
+      evidence: [],
+      missing_property_keys: [],
+      ambiguous_property_keys: [],
+      unit_conflict_property_keys: [],
+    })
+
+    const response = await POST(request({
+      text: '本合同金额为40000元，双方确认按本合同约定履行。',
+      rule_id: ruleId,
+      case_kind: 'risk',
+      expected_decision_id: 'below_minimum',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.configAccess).toHaveBeenCalledWith('user-2', 'org-current', 'write')
+    expect(mocks.loadFlexibleRules).toHaveBeenCalledWith({ orgId: 'org-current', includeUnpublished: true })
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({
+      org_id: 'org-current',
+      tested_by: 'user-2',
+    }))
   })
 
   it('returns 403 before parsing or running rules without fresh config:write', async () => {
@@ -208,6 +278,24 @@ describe('POST /api/rules/test', () => {
     }))
   })
 
+  it('routes optional not_exists absence through its explicit decision instead of a generic missing test', async () => {
+    const rule = { id: ruleId, code: 'RENEWAL_EXIT', name: '续约退出机制', version: 3 }
+    mocks.loadFlexibleRules.mockResolvedValue([rule])
+    mocks.requiresMissingEvidenceCase.mockReturnValue(false)
+
+    const response = await POST(request({
+      text: '合同仅约定自动续约，未填写任何退出机制的具体安排。',
+      rule_id: ruleId,
+      case_kind: 'missing_evidence',
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error).toContain('明确判定处理“未填写”')
+    expect(mocks.evaluateRuleContract).not.toHaveBeenCalled()
+    expect(mocks.insert).not.toHaveBeenCalled()
+  })
+
   it('rejects a selected-rule test when the current row and snapshot contracts diverge', async () => {
     const rule = { id: ruleId, code: 'PAYMENT_MIN', name: '最低金额', version: 3 }
     mocks.loadFlexibleRules.mockResolvedValue([rule])
@@ -239,6 +327,45 @@ describe('POST /api/rules/test', () => {
     expect(body.error).toContain('先保存')
     expect(mocks.evaluateRuleContract).not.toHaveBeenCalled()
     expect(mocks.insert).not.toHaveBeenCalled()
+  })
+
+  it('binds evidence to exact persisted JSON instead of a normalized projection', async () => {
+    const persistedContract = {
+      schema_version: '1.0',
+      properties: [],
+      decisions: [{
+        id: 'below_minimum', label: '低于最低金额', outcome: 'block', priority: 100, match: 'all', conditions: [],
+        action: '', message: '',
+      }],
+      missing_evidence_outcome: 'manual_review',
+    }
+    mocks.persistedRuleSingle.mockResolvedValue({ data: { rule_contract: persistedContract }, error: null })
+    mocks.snapshotMaybeSingle.mockResolvedValue({
+      data: { id: 'snapshot-v3', status: 'draft', config_snapshot: { rule_contract: persistedContract } },
+      error: null,
+    })
+    const rule = { id: ruleId, code: 'PAYMENT_MIN', name: '最低金额', version: 3 }
+    mocks.loadFlexibleRules.mockResolvedValue([rule])
+    mocks.evaluateRuleContract.mockReturnValue({
+      status: 'decided', outcome: 'block', risk_level: 'red',
+      decision: { id: 'below_minimum', label: '低于最低金额', match: 'all', outcome: 'block' },
+      readings: {}, evidence: [], missing_property_keys: [], ambiguous_property_keys: [], unit_conflict_property_keys: [],
+    })
+
+    const response = await POST(request({
+      text: '本合同金额为40000元，双方确认按本合同约定履行。',
+      rule_id: ruleId,
+      case_kind: 'risk',
+      expected_decision_id: 'below_minimum',
+    }))
+
+    expect(response.status).toBe(200)
+    const inserted = mocks.insert.mock.calls[0]?.[0]
+    expect(inserted.rule_contract_sha256).toBe(ruleContractSha256(persistedContract))
+    expect(inserted.rule_contract_sha256).not.toBe(ruleContractSha256({
+      ...persistedContract,
+      decisions: persistedContract.decisions.map(({ action: _action, message: _message, ...decision }) => decision),
+    }))
   })
 
   it('does not allow a rule from outside the current organization to be tested', async () => {

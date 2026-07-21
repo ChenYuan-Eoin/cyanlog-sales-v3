@@ -4,15 +4,20 @@
 import crypto from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { evaluateRuleContract, normalizeRuleContract, resolveRuleContract } from '@/lib/rules/rule-contract'
+import {
+  evaluateRuleContract,
+  normalizeRuleContract,
+  resolveRuleContract,
+  ruleContractRequiresMissingEvidenceCase,
+} from '@/lib/rules/rule-contract'
 import {
   RULE_CONTRACT_EVALUATOR_REVISION,
   ruleContractSha256,
 } from '@/lib/rules/rule-release-readiness'
 import type { ContractRuleTestCaseKind } from '@/types/rules'
 import { executeRules, loadFlexibleRules } from '@/lib/rules/engine'
-import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import type { AuthUser } from '@/lib/auth'
 import { userHasFreshOrgConfigAccess } from '@/lib/configs/access'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -46,6 +51,11 @@ function resolveExpectedResult(input: {
       expectedDecisionId: decision.id,
     }
   }
+  if (caseKind === 'missing_evidence' && !ruleContractRequiresMissingEvidenceCase(contract)) {
+    return {
+      error: '这条规则已用明确判定处理“未填写”，请检查对应的风险或通过判定',
+    } as const
+  }
   return {
     expectedStatus: 'missing_evidence' as const,
     expectedOutcome: contract.missing_evidence_outcome,
@@ -53,10 +63,8 @@ function resolveExpectedResult(input: {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handleRuleTest(req: NextRequest, user: AuthUser, orgId: string) {
   try {
-    const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
     if (!await userHasFreshOrgConfigAccess(user.id, orgId, 'write')) {
       return NextResponse.json(
         { error: '缺少当前组织的 config:write 权限' },
@@ -81,7 +89,23 @@ export async function POST(req: NextRequest) {
     }
 
     const contract = resolveRuleContract(rule)
-    const contractSha256 = ruleContractSha256(contract)
+    // Runtime uses the normalized contract, but release evidence must hash the
+    // exact persisted JSON. Optional empty fields are semantically harmless,
+    // yet normalizing them away would produce a different hash from the atomic
+    // database publish function and make a 5/5-tested rule impossible to ship.
+    const { data: persistedRule, error: persistedRuleError } = await supabaseAdmin
+      .from('contract_rules_v2')
+      .select('rule_contract')
+      .eq('id', rule.id)
+      .eq('org_id', orgId)
+      .single()
+    if (persistedRuleError || !persistedRule || !normalizeRuleContract(persistedRule.rule_contract)) {
+      return NextResponse.json(
+        { error: '当前规则详情无效，请重新保存后再测试' },
+        { status: 409 }
+      )
+    }
+    const contractSha256 = ruleContractSha256(persistedRule.rule_contract)
     const { data: snapshot, error: snapshotError } = await supabaseAdmin
       .from('contract_rule_snapshots')
       .select('id, status, config_snapshot')
@@ -99,8 +123,9 @@ export async function POST(req: NextRequest) {
       && !Array.isArray(snapshot.config_snapshot)
       ? snapshot.config_snapshot as Record<string, unknown>
       : null
-    const snapshotContract = normalizeRuleContract(snapshotConfig?.rule_contract)
-    if (!snapshot || !snapshotContract || ruleContractSha256(snapshotContract) !== contractSha256) {
+    const snapshotContractSource = snapshotConfig?.rule_contract
+    const snapshotContract = normalizeRuleContract(snapshotContractSource)
+    if (!snapshot || !snapshotContract || ruleContractSha256(snapshotContractSource) !== contractSha256) {
       return NextResponse.json(
         { error: '当前规则详情尚未形成一致快照，请先保存后再测试' },
         { status: 409 }
@@ -195,11 +220,11 @@ export async function POST(req: NextRequest) {
       test: { ...testResult, testRunId: testRun.id, testedAt: testRun.created_at },
     })
   } catch (error) {
-    const authError = error instanceof Error && error.name === 'AuthError'
-    if (authError) {
-      return NextResponse.json({ error: '未登录或登录已过期' }, { status: 401 })
-    }
     console.error('Rule test error:', error)
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
   }
+}
+
+export async function POST(req: NextRequest) {
+  return withAuthAndOrg(req, (user, orgId) => handleRuleTest(req, user, orgId))
 }

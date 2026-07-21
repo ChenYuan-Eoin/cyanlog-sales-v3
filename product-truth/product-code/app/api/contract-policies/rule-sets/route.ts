@@ -21,7 +21,9 @@ import {
 import { supabaseAdmin } from '@/lib/supabase'
 
 const ruleSetSchema = z.object({
-  code: z.string().trim().min(1).max(80).regex(/^[A-Z0-9_-]+$/),
+  // Stable machine codes remain accepted for imports, but the configuration
+  // UI does not make a business administrator invent one.
+  code: z.string().trim().min(1).max(80).regex(/^[A-Z0-9_-]+$/).optional(),
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(2000).optional().nullable(),
   applicable_scenario: z.string().trim().max(120).optional().nullable(),
@@ -76,6 +78,7 @@ type RuleSetDocumentRow = {
 type RuleRow = {
   id: string
   code: string
+  name: string
   rule_set_id: string | null
   problem_category_id: string | null
   rule_contract: unknown
@@ -194,7 +197,7 @@ function frozenAcceptanceRuns(input: {
   const contract = normalizeRuleContract(input.rule.rule_contract)
   const evidence = publishedAcceptanceEvidence(input.publishedRuleSnapshot)
   if (!contract || !evidence) return null
-  const expectedContractSha256 = ruleContractSha256(contract)
+  const expectedContractSha256 = ruleContractSha256(input.rule.rule_contract)
   if (
     evidence.ruleContractSha256 !== expectedContractSha256
     || evidence.evaluatorRevision !== RULE_CONTRACT_EVALUATOR_REVISION
@@ -281,7 +284,7 @@ export async function GET(req: NextRequest) {
         .order('version', { ascending: false }),
       supabaseAdmin
         .from('contract_rules_v2')
-        .select('id, code, rule_set_id, problem_category_id, rule_contract, version, lifecycle_status, translation_status, is_active, published_at')
+        .select('id, code, name, rule_set_id, problem_category_id, rule_contract, version, lifecycle_status, translation_status, is_active, published_at')
         .eq('org_id', orgId)
         .neq('lifecycle_status', 'archived'),
     ])
@@ -499,16 +502,17 @@ export async function GET(req: NextRequest) {
               ? liveTestRuns
               : frozenTestRunsByRuleId.get(rule.id) || [],
             ruleSnapshotId: bindingForRule(rule)?.id || null,
-            ruleContractSha256: contract ? ruleContractSha256(contract) : null,
+            ruleContractSha256: contract ? ruleContractSha256(rule.rule_contract) : null,
             evaluatorRevision: RULE_CONTRACT_EVALUATOR_REVISION,
           })
         })(),
       ]))
       const missingTestRules = activeRules.filter((rule) => !readiness.get(rule.id)?.complete)
+      const businessRuleLabel = (rule: RuleRow) => `“${rule.name || '该规则'}”`
       const publishBlockers = [
-        ...notReadyRules.map((rule) => `${rule.code} 尚未形成可发布规则详情`),
-        ...missingSnapshotRules.map((rule) => `${rule.code} 当前版本尚未形成可发布快照`),
-        ...missingTestRules.map((rule) => `${rule.code} 尚缺：${readiness.get(rule.id)?.missingLabels.join('、') || '验收矩阵'}`),
+        ...notReadyRules.map((rule) => `${businessRuleLabel(rule)}尚未形成可发布规则详情`),
+        ...missingSnapshotRules.map((rule) => `${businessRuleLabel(rule)}当前版本尚未形成可发布快照`),
+        ...missingTestRules.map((rule) => `${businessRuleLabel(rule)}尚缺：${readiness.get(rule.id)?.missingLabels.join('、') || '验收矩阵'}`),
         ...(activeRules.length === 0 ? ['规则集至少需要保留一条启用规则'] : []),
       ]
       const hasPendingVersion = set.lifecycle_status !== 'published'
@@ -558,12 +562,13 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = parsed.data
+    const code = payload.code || `RULESET_${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`
     const { data, error } = await supabaseAdmin
       .from('contract_rule_sets')
       .insert({
         org_id: orgId,
         created_by: user.id,
-        code: payload.code,
+        code,
         name: payload.name,
         description: payload.description || null,
         applicable_scenario: 'contract_review',
@@ -574,7 +579,7 @@ export async function POST(req: NextRequest) {
         translation_status: 'not_started',
         metadata: {
           created_from: 'config_center_ruleset_api',
-          content_hash: hashContent(`${payload.code}:${payload.name}:${payload.description || ''}`),
+          content_hash: hashContent(`${code}:${payload.name}:${payload.description || ''}`),
         },
       })
       .select()

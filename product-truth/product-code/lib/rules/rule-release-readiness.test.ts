@@ -41,6 +41,25 @@ describe('rule release readiness', () => {
     expect(result.passedCount).toBe(0)
   })
 
+  it('blocks release when a rule has risk handling but no normal pass result', () => {
+    const result = ruleReleaseReadiness({
+      ruleId: 'rule-1',
+      ruleVersion: 1,
+      ruleContract: {
+        ...contract,
+        decisions: contract.decisions.filter((decision) => decision.outcome !== 'pass'),
+      },
+      runs: [],
+    })
+
+    expect(result).toEqual({
+      complete: false,
+      requiredCount: 0,
+      passedCount: 0,
+      missingLabels: ['补充“其他情况通过”的正常结果'],
+    })
+  })
+
   it('accepts only an exact same-version asserted matrix', () => {
     const base = {
       rule_id: 'rule-1',
@@ -174,6 +193,47 @@ describe('rule release readiness', () => {
       'decision:prepaid',
       'missing_evidence',
     ])
+  })
+
+  it('tests an optional not_exists branch as a decision without inventing an unreachable missing case', () => {
+    const optionalAbsenceContract = {
+      schema_version: '1.0' as const,
+      properties: [{ key: 'renewal_exit', label: '续约退出机制', type: 'text' as const, required: false }],
+      decisions: [
+        {
+          id: 'missing_exit', label: '未填写退出机制', outcome: 'block' as const, priority: 200, match: 'all' as const,
+          conditions: [{ property_key: 'renewal_exit', operator: 'not_exists' as const }],
+        },
+        {
+          id: 'has_exit', label: '已填写退出机制', outcome: 'pass' as const, priority: 100, match: 'all' as const,
+          conditions: [{ property_key: 'renewal_exit', operator: 'exists' as const }],
+        },
+      ],
+      missing_evidence_outcome: 'manual_review' as const,
+    }
+    expect(ruleReleaseRequirements(optionalAbsenceContract).map((item) => item.key)).toEqual([
+      'decision:missing_exit',
+      'decision:has_exit',
+    ])
+
+    const runs = [
+      {
+        rule_id: 'rule-optional', rule_version: 1, case_kind: 'risk' as const,
+        expected_status: 'decided', expected_outcome: 'block' as const,
+        expected_decision_id: 'missing_exit', assertion_passed: true,
+      },
+      {
+        rule_id: 'rule-optional', rule_version: 1, case_kind: 'pass' as const,
+        expected_status: 'decided', expected_outcome: 'pass' as const,
+        expected_decision_id: 'has_exit', assertion_passed: true,
+      },
+    ]
+    expect(ruleReleaseReadiness({
+      ruleId: 'rule-optional',
+      ruleVersion: 1,
+      ruleContract: optionalAbsenceContract,
+      runs,
+    })).toMatchObject({ complete: true, requiredCount: 2, passedCount: 2, missingLabels: [] })
   })
 
   it('produces a stable canonical contract fingerprint independent of object key order', () => {

@@ -91,8 +91,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
   const [creatingRuleSet, setCreatingRuleSet] = useState(false)
   const [publishingRuleSet, setPublishingRuleSet] = useState(false)
   const [detailDirty, setDetailDirty] = useState(false)
-  const [categoryDraft, setCategoryDraft] = useState({ name: '', code: '', description: '', sort_order: 100 })
-  const [ruleSetDraft, setRuleSetDraft] = useState({ name: '', code: '', description: '' })
+  const [categoryDraft, setCategoryDraft] = useState({ name: '', description: '', sort_order: 100 })
+  const [ruleSetDraft, setRuleSetDraft] = useState({ name: '', description: '' })
   const handledFocusRef = useRef('')
   const categoryListRef = useRef<HTMLDivElement>(null)
   const selectedCategoryButtonRef = useRef<HTMLButtonElement>(null)
@@ -337,9 +337,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   async function handleCreateCategory() {
     const name = categoryDraft.name.trim()
-    const code = categoryDraft.code.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '')
-    if (!name || !code) {
-      setFeedback({ tone: 'error', message: '请填写问题分类名称和编码。' })
+    if (!name) {
+      setFeedback({ tone: 'error', message: '请填写问题分类名称。' })
       return
     }
     setCreatingCategory(true)
@@ -349,7 +348,6 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          code,
           description: categoryDraft.description.trim() || null,
           sort_order: categoryDraft.sort_order,
         }),
@@ -359,7 +357,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       const created = payload?.data as ContractProblemCategory | undefined
       const switchToCreated = Boolean(created?.id) && confirmLeaveDirtyRule()
       setCategoryDialogOpen(false)
-      setCategoryDraft({ name: '', code: '', description: '', sort_order: 100 })
+      setCategoryDraft({ name: '', description: '', sort_order: 100 })
       await loadHierarchy()
       if (created?.id && switchToCreated) {
         setDetailDirty(false)
@@ -382,9 +380,8 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
 
   async function handleCreateRuleSet() {
     const name = ruleSetDraft.name.trim()
-    const code = ruleSetDraft.code.trim().toUpperCase().replace(/[^A-Z0-9_-]+/g, '_')
-    if (!name || !code) {
-      setFeedback({ tone: 'error', message: '请填写规则集名称和编码。' })
+    if (!name) {
+      setFeedback({ tone: 'error', message: '请填写规则集名称。' })
       return
     }
     setCreatingRuleSet(true)
@@ -394,7 +391,6 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          code,
           description: ruleSetDraft.description.trim() || null,
           applicable_scenario: 'contract_review',
           priority: 100,
@@ -405,7 +401,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
       const created = payload?.data as ContractRuleSet | undefined
       const switchToCreated = Boolean(created?.id) && confirmLeaveDirtyRule()
       setRuleSetDialogOpen(false)
-      setRuleSetDraft({ name: '', code: '', description: '' })
+      setRuleSetDraft({ name: '', description: '' })
       await loadHierarchy()
       if (created?.id && switchToCreated) {
         setDetailDirty(false)
@@ -480,6 +476,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   规则集是一套可统一发布的审核规则；在规则集内按问题分类维护具体规则、属性、判定和处理。
                 </p>
+                <ol className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600" aria-label="规则配置进度">
+                  {['1 创建规则集', '2 建立问题分类', '3 配置具体规则', '4 检查并发布'].map((step) => (
+                    <li key={step} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">{step}</li>
+                  ))}
+                </ol>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                 <div className="min-w-64">
@@ -507,15 +508,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                     {ruleSets.map((ruleSet) => <option key={ruleSet.id} value={ruleSet.id}>{ruleSet.name}</option>)}
                   </select>
                   <div className="mt-1 text-[11px] text-slate-400">{ruleSetSummary}</div>
-                  {selectedRuleSet?.publish_blockers?.length ? (
-                    <div className="mt-1 max-w-sm text-[11px] text-amber-700">{selectedRuleSet.publish_blockers[0]}</div>
-                  ) : null}
                 </div>
                 <Button
                   type="button"
                   onClick={() => void handlePublishRuleSet()}
                   disabled={!selectedRuleSet?.can_publish || publishingRuleSet}
-                  title={selectedRuleSet?.publish_blockers?.join('；') || undefined}
                 >
                   {publishingRuleSet ? '发布中...' : '发布规则集'}
                 </Button>
@@ -537,6 +534,31 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
               : 'border-rose-200 bg-rose-50 text-rose-800'
           }`}>
             {feedback.message}
+          </div>
+        ) : null}
+
+        {!loadingHierarchy && ruleSets.length === 0 ? (
+          <Card className="border-blue-200 bg-blue-50/60">
+            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-slate-950">从空白规则集开始</div>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  新组织不需要预置规则，也不需要填写机器编码。先创建一套规则，再按业务问题添加分类和具体判断。
+                </p>
+              </div>
+              <Button type="button" className="shrink-0" onClick={() => setRuleSetDialogOpen(true)}>
+                创建第一套规则
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {selectedRuleSet?.publish_blockers?.length ? (
+          <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="text-sm font-semibold text-amber-950">发布前还要完成 {selectedRuleSet.publish_blockers.length} 项</div>
+            <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-900">
+              {selectedRuleSet.publish_blockers.map((blocker) => <li key={blocker}>• {blocker}</li>)}
+            </ul>
           </div>
         ) : null}
 
@@ -637,7 +659,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                       <FileTextIcon className={`mt-0.5 h-4 w-4 shrink-0 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold text-slate-900">{rule.name}</div>
-                        <div className="mt-1 truncate text-[11px] text-slate-400">{rule.code} · v{rule.version || 1}</div>
+                        <div className="mt-1 truncate text-[11px] text-slate-400">规则版本 v{rule.version || 1}</div>
                       </div>
                       <ChevronRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
                     </div>
@@ -648,10 +670,12 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                           ? 'bg-emerald-50 text-emerald-700'
                           : 'bg-amber-50 text-amber-700'
                       }`}>
-                        {configurationStatus === 'canonical_complete'
-                          ? '结构完整 · 待发布验收'
+                         {configurationStatus === 'canonical_complete'
+                          ? activePublishedVersionForRule(rule) === rule.version
+                            ? '配置完整 · 已通过发布验收'
+                            : '结构完整 · 待发布验收'
                           : configurationStatus === 'legacy_compatible'
-                            ? '旧规则待业务确认'
+                            ? '可编辑预置草稿 · 尚未发布'
                             : '待补属性或判定'}
                       </span>
                     </div>
@@ -667,7 +691,7 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
                 <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-slate-100 p-4">
                   <div className="min-w-0">
                     <CardTitle className="truncate text-base">测试：{selectedRule.name}</CardTitle>
-                    <p className="mt-1 text-xs text-slate-500">使用真实合同段落验证当前已保存规则</p>
+                    <p className="mt-1 text-xs text-slate-500">快速检查当前规则的条件与结果（不调用 AI 模型）</p>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => setDetailMode('details')}>返回规则详情</Button>
                 </CardHeader>
@@ -743,14 +767,11 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             <DialogField label="分类名称" htmlFor="category-name">
               <Input id="category-name" value={categoryDraft.name} onChange={(event) => setCategoryDraft((current) => ({ ...current, name: event.target.value }))} placeholder="如：付款与结算" />
             </DialogField>
-            <DialogField label="分类编码" htmlFor="category-code">
-              <Input id="category-code" value={categoryDraft.code} onChange={(event) => setCategoryDraft((current) => ({ ...current, code: event.target.value }))} placeholder="如：payment_settlement" />
-            </DialogField>
             <DialogField label="分类说明" htmlFor="category-description">
               <Textarea id="category-description" value={categoryDraft.description} onChange={(event) => setCategoryDraft((current) => ({ ...current, description: event.target.value }))} placeholder="说明这类问题覆盖的业务范围。" rows={3} />
             </DialogField>
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
-              问题分类用于组织规则，例如付款、验收、违约；金额、比例、时限属于具体规则中的属性，不是分类。
+              问题分类用于组织规则，例如付款、验收、违约；金额、比例、时限属于具体规则中的属性，不是分类。内部标识由系统自动生成。
             </div>
           </div>
           <DialogFooter>
@@ -767,17 +788,14 @@ export default function RuleTab({ rules, focusRuleId, ruleMode, onSave, onDelete
             <DialogField label="规则集名称" htmlFor="rule-set-name">
               <Input id="rule-set-name" value={ruleSetDraft.name} onChange={(event) => setRuleSetDraft((current) => ({ ...current, name: event.target.value }))} placeholder="如：标准销售合同" />
             </DialogField>
-            <DialogField label="规则集编码" htmlFor="rule-set-code">
-              <Input id="rule-set-code" value={ruleSetDraft.code} onChange={(event) => setRuleSetDraft((current) => ({ ...current, code: event.target.value }))} placeholder="如：STANDARD_SALES" />
-            </DialogField>
             <DialogField label="规则集说明" htmlFor="rule-set-description">
               <Textarea id="rule-set-description" value={ruleSetDraft.description} onChange={(event) => setRuleSetDraft((current) => ({ ...current, description: event.target.value }))} placeholder="说明这组规则解决什么问题、由谁维护。" rows={3} />
             </DialogField>
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
-              应用模块：合同审核（当前产品固定）。其它业务模块以后选择自己的规则资产，不在这里填模糊场景词。
+              应用模块：合同审核（当前产品固定）。其它业务模块以后选择自己的规则资产；内部标识由系统自动生成。
             </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-              规则集控制版本和统一发布；问题分类组织问题，具体属性、判定和处理在规则详情中维护。
+              规则集控制版本和统一发布；问题分类组织问题，具体属性、判定与处理在规则详情中维护。
             </div>
           </div>
           <DialogFooter>

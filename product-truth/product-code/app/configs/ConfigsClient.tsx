@@ -979,9 +979,9 @@ export default function ConfigsClient({
   }
 
   async function handleSaveRule(rule: Partial<ContractPolicyRule>, id?: string) {
-    if (!rule.code || !rule.name) {
-      setError('请填写规则编码和名称')
-      throw new Error('请填写规则编码和名称')
+    if (!rule.name) {
+      setError('请填写规则名称')
+      throw new Error('请填写规则名称')
     }
 
     try {

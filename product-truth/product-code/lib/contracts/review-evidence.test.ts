@@ -954,6 +954,11 @@ describe('buildReviewRunEvidence', () => {
         status: 'completed',
         degraded: false,
         latency_ms: 28000,
+        request_meta: {
+          semantic_validation_revision: 'canonical-rule-property-coverage-v1',
+          expected_canonical_rule_count: 3,
+          expected_canonical_property_count: 5,
+        },
         response_meta: {
           provider_kind: 'openai_compatible',
           transport: 'lm_studio_cli',
@@ -1032,6 +1037,11 @@ describe('buildReviewRunEvidence', () => {
         status: 'completed',
         degraded: false,
         latency_ms: 28000,
+        request_meta: {
+          semantic_validation_revision: 'canonical-rule-property-coverage-v1',
+          expected_canonical_rule_count: 3,
+          expected_canonical_property_count: 5,
+        },
         response_meta: {
           provider_kind: 'openai_compatible',
           transport: 'openai_compatible_http',
@@ -1208,7 +1218,15 @@ describe('buildReviewRunEvidence', () => {
   })
 
   it('passes a plan-bound invocation only for clean OpenAI-compatible HTTP provider evidence', () => {
-    const buildPlanBoundEvidence = (responseMeta: Record<string, unknown>) => buildReviewRunEvidence({
+    const coverageRequestMeta = {
+      semantic_validation_revision: 'canonical-rule-property-coverage-v1',
+      expected_canonical_rule_count: 2,
+      expected_canonical_property_count: 4,
+    }
+    const buildPlanBoundEvidence = (
+      responseMeta: Record<string, unknown>,
+      requestMeta: Record<string, unknown> = coverageRequestMeta,
+    ) => buildReviewRunEvidence({
       latestReview: {
         id: 'review-plan-quality-gate', status: 'COMPLETED', skill_bundle_id: 'skill-1',
         plan_snapshot_id: 'plan-snapshot-1', model_invocation_ids: ['invocation-semantic'],
@@ -1232,7 +1250,7 @@ describe('buildReviewRunEvidence', () => {
         id: 'invocation-semantic', plan_snapshot_id: 'plan-snapshot-1',
         phase: 'semantic_review', provider: 'provider.cloud', model: 'gpt-5.5',
         status: 'completed', degraded: false, input_tokens: 100, output_tokens: 20,
-        total_tokens: 120, response_meta: responseMeta,
+        total_tokens: 120, request_meta: requestMeta, response_meta: responseMeta,
       }],
     })
 
@@ -1252,6 +1270,11 @@ describe('buildReviewRunEvidence', () => {
     })?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_partial')
     const { validation_warnings: _warnings, ...missingAudit } = cleanResponseMeta
     expect(buildPlanBoundEvidence(missingAudit)?.skill_bundle?.runtime_invocation_status)
+      .toBe('latest_review_model_invocation_partial')
+    expect(buildPlanBoundEvidence({
+      ...cleanResponseMeta, usable_risk_count: 0,
+    })?.skill_bundle?.runtime_invocation_status).toBe('latest_review_model_invocation_partial')
+    expect(buildPlanBoundEvidence(cleanResponseMeta, {})?.skill_bundle?.runtime_invocation_status)
       .toBe('latest_review_model_invocation_partial')
   })
 

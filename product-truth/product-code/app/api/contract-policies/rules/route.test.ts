@@ -124,7 +124,6 @@ describe('/api/contract-policies/rules', () => {
 
   it('rejects legacy prompt/model/engine fields before any database write', async () => {
     const response = await POST(request('http://localhost/api/contract-policies/rules', {
-      code: 'R100',
       name: '付款节奏',
       rule_set_id: ruleSetId,
       problem_category_id: problemCategoryId,
@@ -194,7 +193,6 @@ describe('/api/contract-policies/rules', () => {
     })
 
     const response = await POST(request('http://localhost/api/contract-policies/rules', {
-      code: 'R100',
       name: '付款节奏',
       rule_set_id: ruleSetId,
       problem_category_id: problemCategoryId,
@@ -209,6 +207,7 @@ describe('/api/contract-policies/rules', () => {
       p_user_id: 'user-1',
       p_rule_id: null,
       p_payload: expect.objectContaining({
+        code: expect.stringMatching(/^RULE_[0-9A-F]{12}$/),
         rule_set_id: ruleSetId,
         problem_category_id: problemCategoryId,
         rule_contract: contract(),

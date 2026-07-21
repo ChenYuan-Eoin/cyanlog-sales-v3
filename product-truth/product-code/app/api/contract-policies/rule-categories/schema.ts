@@ -21,7 +21,9 @@ export const problemCategoryCodeSchema = z.string()
   .refine((code) => !PROPERTY_TYPE_CODES.has(code), '金额、比例、时间等是规则属性类型，不能作为问题分类')
 
 export const createProblemCategorySchema = z.object({
-  code: problemCategoryCodeSchema,
+  // `code` is an internal stable identifier. Integrations may still provide
+  // one, but business users should be able to create a category by name only.
+  code: problemCategoryCodeSchema.optional(),
   name: z.string().trim().min(1, '分类名称不能为空').max(120),
   description: z.string().trim().max(2000).optional().nullable(),
   sort_order: z.number().int().min(0).max(100_000).optional().default(100),

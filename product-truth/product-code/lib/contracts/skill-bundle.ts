@@ -328,7 +328,7 @@ export function summarizePublishedRuleEval(input: {
       // release transaction then creates a distinct published snapshot and
       // records that draft id in immutable release evidence.
       ruleSnapshotId: stringValue(releaseEvidence.accepted_draft_snapshot_id) || snapshot.id,
-      ruleContractSha256: ruleContractSha256(contract),
+      ruleContractSha256: ruleContractSha256(config.rule_contract),
       evaluatorRevision: RULE_CONTRACT_EVALUATOR_REVISION,
     })
     requiredCases += readiness.requiredCount

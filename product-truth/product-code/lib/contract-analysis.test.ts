@@ -226,6 +226,18 @@ describe('runStructuredAnalysis', () => {
     expect(report.runtime?.model_invocation_ids).toEqual(['invocation-semantic'])
   })
 
+  it('degrades official review when semantic output is only partially validated', async () => {
+    mocks.executeContractSemanticReview.mockResolvedValueOnce(semanticResult({
+      validationWarnings: ['semantic_input_coverage_limited:canonical_rule_property_completeness_not_proven'],
+      droppedRiskCount: 0,
+    }))
+
+    const report = await runStructuredAnalysis('contract-1', { reviewId: 'review-1' })
+
+    expect(report.result.degraded).toBe(true)
+    expect(report.result.degradationReasons).toContain('semantic_review_output_validation_partial')
+  })
+
   it('keeps a validated fallback-model result but reports route degradation', async () => {
     mocks.executeContractSemanticReview.mockResolvedValueOnce(semanticResult({
       provider: 'provider-backup', model: 'model-backup', degraded: true,
@@ -276,7 +288,7 @@ describe('saveStructuredReport', () => {
     await saveStructuredReport('review-1', 'contract-1', {
       result: {
         risks: [{
-          ruleId: 'rule-1', ruleCode: 'PAYMENT_MINIMUM', ruleVersion: 4,
+          ruleCode: 'PAYMENT_MINIMUM', ruleVersion: 4,
           decisionId: 'below_minimum',
           propertyReadings: [{
             propertyKey: 'contract_amount', status: 'read', value: 40_000,

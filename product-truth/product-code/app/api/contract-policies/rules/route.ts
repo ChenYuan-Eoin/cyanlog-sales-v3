@@ -2,6 +2,7 @@
 // POST /api/contract-policies/rules
 // 规则 CRUD。业务分类与属性类型分离；新写入协议以 rule_contract v1 为准。
 
+import crypto from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
@@ -77,6 +78,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const rulePayload = {
+      ...parsed.data,
+      code: parsed.data.code || `RULE_${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`,
+    }
+
     const { data: problemCategory, error: categoryError } = await supabaseAdmin
       .from('contract_rule_problem_categories')
       .select('id, code')
@@ -101,13 +107,13 @@ export async function POST(req: NextRequest) {
       return errorResponse(createApiError('VALIDATION_ERROR', '所选规则集不存在或已停用'))
     }
 
-    const legacyAdapter = buildLegacyRuleAdapter(parsed.data.rule_contract, problemCategory.code)
+    const legacyAdapter = buildLegacyRuleAdapter(rulePayload.rule_contract, problemCategory.code)
 
     const { data: saved, error } = await supabaseAdmin.rpc('save_contract_rule_draft_v1', {
       p_org_id: orgId,
       p_user_id: user.id,
       p_rule_id: null,
-      p_payload: { ...parsed.data, ...legacyAdapter },
+      p_payload: { ...rulePayload, ...legacyAdapter },
     })
 
     if (error || !saved || typeof saved !== 'object') {

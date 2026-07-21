@@ -26,6 +26,10 @@ const wp03CanaryCategoryReconciliation = readFileSync(join(
   process.cwd(),
   'supabase/migrations/20260721054500_archive_wp03_controlled_canary_category.sql'
 ), 'utf8')
+const optionalNotExistsReleaseAlignment = readFileSync(join(
+  process.cwd(),
+  'supabase/migrations/20260721094437_align_optional_not_exists_release_matrix.sql'
+), 'utf8')
 
 describe('canonical ruleset release migration', () => {
   it('keeps the WP03 SQL structurally balanced before remote parsing', () => {
@@ -101,6 +105,34 @@ describe('canonical ruleset release migration', () => {
     expect(hardening).toContain("property ->> 'type' <> 'enum'")
     expect(hardening).toContain("jsonb_array_length(COALESCE(property -> 'options', '[]'::jsonb)) >= 2")
     expect(hardening).toContain("property ->> 'type' = 'money'")
+  })
+
+  it('requires generic missing evidence only when the deterministic contract can produce it', () => {
+    expect(optionalNotExistsReleaseAlignment.match(
+      /CREATE OR REPLACE FUNCTION public\.publish_contract_rule_set_v1/g
+    )).toHaveLength(1)
+    expect(optionalNotExistsReleaseAlignment).toContain('v_requires_missing_evidence BOOLEAN')
+    expect(optionalNotExistsReleaseAlignment).toContain(
+      "COALESCE(property -> 'required', 'true'::jsonb) <> 'false'::jsonb"
+    )
+    expect(optionalNotExistsReleaseAlignment).toContain("decision ->> 'match' = 'any'")
+    expect(optionalNotExistsReleaseAlignment).toContain("condition ->> 'operator' = 'not_exists'")
+    expect(optionalNotExistsReleaseAlignment).toContain(
+      "condition ->> 'operator' IS DISTINCT FROM 'not_exists'"
+    )
+    expect(optionalNotExistsReleaseAlignment).toContain(
+      'IF v_requires_missing_evidence AND NOT EXISTS ('
+    )
+    expect(optionalNotExistsReleaseAlignment).toContain('RULE_TEST_DECISION_MATRIX_MISSING')
+    expect(optionalNotExistsReleaseAlignment).toContain('RULE_TEST_VALUE_CONFLICT_MISSING')
+    expect(optionalNotExistsReleaseAlignment).toContain('RULE_TEST_UNIT_CONFLICT_MISSING')
+    expect(optionalNotExistsReleaseAlignment).toContain(
+      'REVOKE ALL ON FUNCTION public.publish_contract_rule_set_v1(UUID, UUID, UUID, TEXT)'
+    )
+    expect(optionalNotExistsReleaseAlignment).toContain(
+      'GRANT EXECUTE ON FUNCTION public.publish_contract_rule_set_v1(UUID, UUID, UUID, TEXT)'
+    )
+    expect(optionalNotExistsReleaseAlignment).not.toContain('INSERT INTO public.contract_rule_test_runs')
   })
 
   it('supports first publication and rebuilds evidence from final active membership', () => {
