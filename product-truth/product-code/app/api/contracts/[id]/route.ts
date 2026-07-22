@@ -184,28 +184,43 @@ export async function DELETE(
       return errorResponse('合同不存在', 404, 'NOT_FOUND')
     }
 
-    // 删除Storage中的文件（异步，不阻塞）
-    if (contract.storage_path) {
-      supabaseAdmin.storage.from('contracts').remove([contract.storage_path])
-        .catch(async (storageError) => {
-          await logError({
-            req,
-            source: 'api',
-            userId: user.id,
-            message: storageError instanceof Error ? storageError.message : String(storageError),
-            error: storageError,
-            context: {
-              route,
-              requestId,
-              contractId: id,
-              phase: 'delete_contract_storage',
-              storagePath: contract.storage_path,
-            },
-          })
-        })
+    // G6 冻结快照是历史审计事实。任何字节删除前必须确认合同未被引用；
+    // 查询异常同样 fail closed，避免先删 Storage 后才发现数据库仍需该源文件。
+    const { data: comparisonSource, error: comparisonSourceError } = await supabaseAdmin
+      .from('contract_comparison_sources')
+      .select('id')
+      .eq('contract_id', id)
+      .limit(1)
+      .maybeSingle()
+
+    if (comparisonSourceError) {
+      await logRouteFailure(
+        req,
+        {
+          route,
+          requestId,
+          userId: user.id,
+          details: { contractId: id, method: 'DELETE' },
+        },
+        startedAt,
+        comparisonSourceError,
+        {
+          phase: 'check_comparison_source_references',
+        }
+      )
+      return errorResponse('合同历史比对引用检查失败', 500, 'DB_ERROR')
     }
 
-    // 删除数据库记录（带 owner 校验）
+    if (comparisonSource) {
+      return errorResponse(
+        '合同已被历史比对冻结引用，不能删除',
+        409,
+        'CONTRACT_COMPARISON_SOURCE_REFERENCED'
+      )
+    }
+
+    // 先提交数据库删除，再清理不再被引用的对象。数据库失败时绝不能先丢字节；
+    // Storage 失败时合同记录仍然已经删除，因此返回明确的部分完成状态，不能伪装回滚成功。
     const { error } = await supabaseAdmin
       .from('contracts')
       .delete()
@@ -228,6 +243,55 @@ export async function DELETE(
         }
       )
       return errorResponse('删除失败', 500, 'DB_ERROR')
+    }
+
+    if (contract.storage_path) {
+      let storageError: unknown = null
+      try {
+        const result = await supabaseAdmin.storage
+          .from('contracts')
+          .remove([contract.storage_path])
+        storageError = result.error
+      } catch (error) {
+        storageError = error
+      }
+
+      if (storageError) {
+        await logError({
+          req,
+          source: 'api',
+          userId: user.id,
+          statusCode: 202,
+          message: storageError instanceof Error ? storageError.message : String(storageError),
+          error: storageError,
+          context: {
+            route,
+            requestId,
+            contractId: id,
+            phase: 'delete_contract_storage_after_record',
+            storagePath: contract.storage_path,
+            databaseDeleted: true,
+            storageCleanup: 'pending',
+          },
+        })
+        logRouteDone(
+          {
+            route,
+            requestId,
+            userId: user.id,
+            details: { contractId: id, method: 'DELETE' },
+          },
+          startedAt,
+          { databaseDeleted: true, storageCleanup: 'pending' }
+        )
+        return NextResponse.json({
+          success: true,
+          deleted: true,
+          storage_cleanup: 'pending',
+          code: 'STORAGE_CLEANUP_PENDING',
+          message: '合同记录已删除，源文件清理待重试',
+        }, { status: 202 })
+      }
     }
 
     logRouteDone(

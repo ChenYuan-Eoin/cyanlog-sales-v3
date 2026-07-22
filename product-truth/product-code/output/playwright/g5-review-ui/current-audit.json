@@ -1,0 +1,74 @@
+{
+  "generated_at": "2026-07-17T18:30:42+08:00",
+  "scope": "合同审核详情页沉浸式风险处理工作台",
+  "status": "implementation_verified_browser_blocked",
+  "implementation": {
+    "main_navigation_collapsible": "implemented",
+    "risk_rail_narrowed": "implemented",
+    "source_document_primary_axis": "implemented",
+    "right_panel_tabs": [
+      "谈判指南",
+      "依据",
+      "条款演变"
+    ],
+    "tab1_business_logic": "preserved",
+    "tab_keyboard_navigation": "implemented",
+    "unsaved_decision_guard": "preserved",
+    "truthful_missing_data_states": "implemented"
+  },
+  "verification": {
+    "targeted_tests": "3 files / 26 tests passed",
+    "full_vitest": "66 files / 426 tests passed",
+    "typescript": "tsc --noEmit passed",
+    "next_build": "Next.js 14.2.35 build passed, 81/81 pages",
+    "desktop_1440x900": "pending_authenticated_real-data_session",
+    "ipad_1180x820": "pending_authenticated_real-data_session"
+  },
+  "data_contract_audit": {
+    "available": [
+      "法务风险说明",
+      "当前原文锚点与页码",
+      "已发布谈判策略、话术与底线",
+      "规则包版本"
+    ],
+    "missing": [
+      "独立标准条款字段",
+      "风险到图片或 PDF 证据文件的关系",
+      "跨版本稳定条款身份",
+      "逐版本条款文本",
+      "逐版本修改人",
+      "逐版本修改时间"
+    ],
+    "isolated_preview_inventory": {
+      "users": 1,
+      "roles": 0,
+      "user_roles": 0,
+      "contracts": 0,
+      "contract_reviews": 0,
+      "contract_risk_cards": 0,
+      "contract_review_decision_drafts": 0,
+      "contract_source_page_maps": 0
+    },
+    "production_read_only_inventory": {
+      "contracts": 32,
+      "contract_reviews": 85,
+      "contract_risk_cards": 444,
+      "contract_review_decision_drafts": 44,
+      "contract_source_page_maps": 5
+    },
+    "guardrail": "不使用测试种子、规则包版本或 ReviewRun 时间冒充证据附件与条款演变"
+  },
+  "browser_blocker": {
+    "reason": "隔离 Preview 没有可验收的真实合同与审核数据；Production 虽有真实合同和风险，但有效既有 token 访问本地候选页时，middleware 连续返回 503 AUTH_DEPENDENCY_UNAVAILABLE，无法进入审核工作台完成双视口只读验收",
+    "attempts": [
+      "使用隔离 Preview 真实库存核验：合同、ReviewRun、风险卡均为 0",
+      "使用 Production 现有未过期 token 做只读本地候选验收：三份真实风险合同均返回 Authentication unavailable",
+      "浏览器路由层阻断所有非 GET/HEAD/OPTIONS 请求，未执行决策、复审、导出或其他 Production 写入"
+    ],
+    "rejected_shortcuts": [
+      "写入 Production 创建新会话",
+      "复制 Production 合同数据到 Preview",
+      "使用网络 mock 或伪造版本完成验收"
+    ]
+  }
+}

@@ -1,0 +1,467 @@
+- generic [ref=f4e1]:
+  - button "打开主导航" [ref=f4e2] [cursor=pointer]:
+    - img [ref=f4e3]
+  - complementary [ref=f4e5]:
+    - generic [ref=f4e6]:
+      - img "ONES Sales" [ref=f4e8]
+      - generic [ref=f4e9]:
+        - generic [ref=f4e10]: ONES Sales
+        - paragraph [ref=f4e11]: 智能协作平台
+    - navigation [ref=f4e12]:
+      - link "工作台" [ref=f4e13] [cursor=pointer]:
+        - /url: /
+        - img [ref=f4e14]
+        - generic [ref=f4e18]: 工作台
+      - link "报价中心" [ref=f4e19] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f4e20]
+        - generic [ref=f4e24]: 报价中心
+      - link "合同审核" [ref=f4e25] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f4e26]
+        - generic [ref=f4e31]: 合同审核
+      - link "标书中心" [ref=f4e32] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f4e33]
+        - generic [ref=f4e37]: 标书中心
+      - link "知识库" [ref=f4e38] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f4e39]
+        - generic [ref=f4e44]: 知识库
+      - link "日程" [ref=f4e45] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f4e46]
+        - generic [ref=f4e52]: 日程
+      - link "配置中心" [ref=f4e53] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f4e54]
+        - generic [ref=f4e58]: 配置中心
+    - generic [ref=f4e59]:
+      - link "个人信息" [ref=f4e60] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f4e61]
+        - generic [ref=f4e64]: 个人信息
+      - button "退出登录" [ref=f4e65] [cursor=pointer]:
+        - img [ref=f4e66]
+        - generic [ref=f4e69]: 退出登录
+  - main [ref=f4e70]:
+    - generic [ref=f4e72]:
+      - generic [ref=f4e73]:
+        - generic [ref=f4e74]:
+          - generic [ref=f4e75]:
+            - img [ref=f4e76]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f4e80]
+          - paragraph [ref=f4e81]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f4e82]:
+          - generic [ref=f4e83]:
+            - generic [ref=f4e84]: 生效范围
+            - generic [ref=f4e85]: 组织级统一发布
+          - generic [ref=f4e86]:
+            - generic [ref=f4e87]: 消费端
+            - generic [ref=f4e88]: 报价 / 合同 / AI
+          - generic [ref=f4e89]:
+            - generic [ref=f4e90]: 当前配置集
+            - generic [ref=f4e91]: 合同审核策略
+      - generic [ref=f4e92]:
+        - complementary [ref=f4e93]:
+          - generic [ref=f4e94]:
+            - generic [ref=f4e95]:
+              - generic [ref=f4e96]: 配置域
+              - paragraph [ref=f4e97]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f4e98]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=f4e99] [cursor=pointer]:
+                - generic [ref=f4e100]:
+                  - generic [ref=f4e101]: 交易配置
+                  - generic [ref=f4e102]: ...
+                - paragraph [ref=f4e103]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f4e244] [cursor=pointer]:
+                - generic [ref=f4e105]:
+                  - generic [ref=f4e106]: 合同与 AI 规则
+                  - generic [ref=f4e107]: 15+
+                - paragraph [ref=f4e108]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f4e109] [cursor=pointer]:
+                - generic [ref=f4e110]:
+                  - generic [ref=f4e111]: 组织与权限
+                  - generic [ref=f4e112]: ...
+                - paragraph [ref=f4e113]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=f4e114] [cursor=pointer]:
+                - generic [ref=f4e115]:
+                  - generic [ref=f4e116]: 界面与体验
+                  - generic [ref=f4e117]: ...
+                - paragraph [ref=f4e118]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f4e119]:
+              - generic [ref=f4e120]: 结构约束
+              - list [ref=f4e121]:
+                - listitem [ref=f4e122]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f4e123]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f4e124]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f4e125]:
+          - generic [ref=f4e126]:
+            - generic [ref=f4e127]:
+              - generic [ref=f4e128]:
+                - generic [ref=f4e129]:
+                  - generic [ref=f4e130]: 配置中心
+                  - generic [ref=f4e131]: /
+                  - generic [ref=f4e132]: 合同与 AI 规则
+                - generic [ref=f4e133]:
+                  - img [ref=f4e135]
+                  - generic [ref=f4e138]:
+                    - heading "合同审核策略" [level=2] [ref=f4e139]
+                    - paragraph [ref=f4e140]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=f4e141]:
+                - generic [ref=f4e142]:
+                  - generic [ref=f4e143]: 规则总数
+                  - generic [ref=f4e144]: "15"
+                - generic [ref=f4e145]:
+                  - generic [ref=f4e146]: 启用规则
+                  - generic [ref=f4e147]: "15"
+                - generic [ref=f4e148]:
+                  - generic [ref=f4e149]: 语义规则
+                  - generic [ref=f4e150]: "15"
+            - generic [ref=f4e151]:
+              - button "合同审核策略 15" [ref=f4e245] [cursor=pointer]:
+                - img [ref=f4e153]
+                - generic [ref=f4e156]: 合同审核策略
+                - generic [ref=f4e157]: "15"
+              - button "AI 模型配置 ..." [ref=f4e158] [cursor=pointer]:
+                - img [ref=f4e159]
+                - generic [ref=f4e164]: AI 模型配置
+                - generic [ref=f4e165]: ...
+          - generic [ref=f4e246]:
+            - generic [ref=f4e247]:
+              - generic [ref=f4e248]:
+                - generic [ref=f4e249]: 规则集树 (14)
+                - button "新建" [ref=f4e250] [cursor=pointer]:
+                  - img
+                  - text: 新建
+              - generic [ref=f4e252]:
+                - generic [ref=f4e253]:
+                  - generic [ref=f4e254]:
+                    - paragraph [ref=f4e255]: 总览
+                    - paragraph [ref=f4e256]: 全部规则资产与未归类入口
+                  - button "全部规则集 15 ALL 全部规则资产 已发布 15 可执行 15 待处理 0" [ref=f4e257] [cursor=pointer]:
+                    - generic [ref=f4e258]:
+                      - img [ref=f4e260]
+                      - generic [ref=f4e265]:
+                        - generic [ref=f4e266]:
+                          - generic [ref=f4e267]: 全部规则集
+                          - generic [ref=f4e268]: "15"
+                        - generic [ref=f4e269]: ALL
+                        - generic [ref=f4e270]: 全部规则资产
+                        - generic [ref=f4e271]:
+                          - generic [ref=f4e272]: 已发布 15
+                          - generic [ref=f4e273]: 可执行 15
+                          - generic [ref=f4e274]: 待处理 0
+                  - button "默认规则集 0 default 声明文档 v- · 未转译 已发布 0 可执行 0 待处理 0" [ref=f4e275] [cursor=pointer]:
+                    - generic [ref=f4e276]:
+                      - img [ref=f4e278]
+                      - generic [ref=f4e283]:
+                        - generic [ref=f4e284]:
+                          - generic [ref=f4e285]: 默认规则集
+                          - generic [ref=f4e286]: "0"
+                        - generic [ref=f4e287]: default
+                        - generic [ref=f4e288]: 声明文档 v- · 未转译
+                        - generic [ref=f4e289]:
+                          - generic [ref=f4e290]: 已发布 0
+                          - generic [ref=f4e291]: 可执行 0
+                          - generic [ref=f4e292]: 待处理 0
+                - generic [ref=f4e293]:
+                  - generic [ref=f4e294]:
+                    - paragraph [ref=f4e295]: 审查逻辑
+                    - paragraph [ref=f4e296]: 上下文、主体、验收、SLA 和争议路径
+                  - button "验收与交付规则集 2 ACCEPTANCE 声明文档 v1 · 转译就绪 已发布 2 可执行 2 待处理 0" [ref=f4e297] [cursor=pointer]:
+                    - generic [ref=f4e298]:
+                      - img [ref=f4e300]
+                      - generic [ref=f4e305]:
+                        - generic [ref=f4e306]:
+                          - generic [ref=f4e307]: 验收与交付规则集
+                          - generic [ref=f4e308]: "2"
+                        - generic [ref=f4e309]: ACCEPTANCE
+                        - generic [ref=f4e310]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e311]:
+                          - generic [ref=f4e312]: 已发布 2
+                          - generic [ref=f4e313]: 可执行 2
+                          - generic [ref=f4e314]: 待处理 0
+                  - button "主体与金额一致性规则集 1 BUSINESS_INTEGRITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e315] [cursor=pointer]:
+                    - generic [ref=f4e316]:
+                      - img [ref=f4e318]
+                      - generic [ref=f4e323]:
+                        - generic [ref=f4e324]:
+                          - generic [ref=f4e325]: 主体与金额一致性规则集
+                          - generic [ref=f4e326]: "1"
+                        - generic [ref=f4e327]: BUSINESS_INTEGRITY
+                        - generic [ref=f4e328]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e329]:
+                          - generic [ref=f4e330]: 已发布 1
+                          - generic [ref=f4e331]: 可执行 1
+                          - generic [ref=f4e332]: 待处理 0
+                  - button "SLA 与服务承诺规则集 1 SLA 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e333] [cursor=pointer]:
+                    - generic [ref=f4e334]:
+                      - img [ref=f4e336]
+                      - generic [ref=f4e341]:
+                        - generic [ref=f4e342]:
+                          - generic [ref=f4e343]: SLA 与服务承诺规则集
+                          - generic [ref=f4e344]: "1"
+                        - generic [ref=f4e345]: SLA
+                        - generic [ref=f4e346]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e347]:
+                          - generic [ref=f4e348]: 已发布 1
+                          - generic [ref=f4e349]: 可执行 1
+                          - generic [ref=f4e350]: 待处理 0
+                  - button "续约与退出规则集 1 RENEWAL 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e351] [cursor=pointer]:
+                    - generic [ref=f4e352]:
+                      - img [ref=f4e354]
+                      - generic [ref=f4e359]:
+                        - generic [ref=f4e360]:
+                          - generic [ref=f4e361]: 续约与退出规则集
+                          - generic [ref=f4e362]: "1"
+                        - generic [ref=f4e363]: RENEWAL
+                        - generic [ref=f4e364]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e365]:
+                          - generic [ref=f4e366]: 已发布 1
+                          - generic [ref=f4e367]: 可执行 1
+                          - generic [ref=f4e368]: 待处理 0
+                  - button "争议解决规则集 1 DISPUTE 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e369] [cursor=pointer]:
+                    - generic [ref=f4e370]:
+                      - img [ref=f4e372]
+                      - generic [ref=f4e377]:
+                        - generic [ref=f4e378]:
+                          - generic [ref=f4e379]: 争议解决规则集
+                          - generic [ref=f4e380]: "1"
+                        - generic [ref=f4e381]: DISPUTE
+                        - generic [ref=f4e382]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e383]:
+                          - generic [ref=f4e384]: 已发布 1
+                          - generic [ref=f4e385]: 可执行 1
+                          - generic [ref=f4e386]: 待处理 0
+                - generic [ref=f4e387]:
+                  - generic [ref=f4e388]:
+                    - paragraph [ref=f4e389]: 违约与责任
+                    - paragraph [ref=f4e390]: 付款、税务、违约、责任上限和终止退款
+                  - button "付款与结算规则集 1 PAYMENT 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [active] [ref=f4e391] [cursor=pointer]:
+                    - generic [ref=f4e392]:
+                      - img [ref=f4e394]
+                      - generic [ref=f4e399]:
+                        - generic [ref=f4e400]:
+                          - generic [ref=f4e401]: 付款与结算规则集
+                          - generic [ref=f4e402]: "1"
+                        - generic [ref=f4e403]: PAYMENT
+                        - generic [ref=f4e404]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e405]:
+                          - generic [ref=f4e406]: 已发布 1
+                          - generic [ref=f4e407]: 可执行 1
+                          - generic [ref=f4e408]: 待处理 0
+                  - button "终止与退款规则集 1 TERMINATION 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e409] [cursor=pointer]:
+                    - generic [ref=f4e410]:
+                      - img [ref=f4e412]
+                      - generic [ref=f4e417]:
+                        - generic [ref=f4e418]:
+                          - generic [ref=f4e419]: 终止与退款规则集
+                          - generic [ref=f4e420]: "1"
+                        - generic [ref=f4e421]: TERMINATION
+                        - generic [ref=f4e422]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e423]:
+                          - generic [ref=f4e424]: 已发布 1
+                          - generic [ref=f4e425]: 可执行 1
+                          - generic [ref=f4e426]: 待处理 0
+                  - button "税务与发票规则集 1 TAX 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e427] [cursor=pointer]:
+                    - generic [ref=f4e428]:
+                      - img [ref=f4e430]
+                      - generic [ref=f4e435]:
+                        - generic [ref=f4e436]:
+                          - generic [ref=f4e437]: 税务与发票规则集
+                          - generic [ref=f4e438]: "1"
+                        - generic [ref=f4e439]: TAX
+                        - generic [ref=f4e440]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e441]:
+                          - generic [ref=f4e442]: 已发布 1
+                          - generic [ref=f4e443]: 可执行 1
+                          - generic [ref=f4e444]: 待处理 0
+                  - button "违约责任规则集 1 BREACH 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e445] [cursor=pointer]:
+                    - generic [ref=f4e446]:
+                      - img [ref=f4e448]
+                      - generic [ref=f4e453]:
+                        - generic [ref=f4e454]:
+                          - generic [ref=f4e455]: 违约责任规则集
+                          - generic [ref=f4e456]: "1"
+                        - generic [ref=f4e457]: BREACH
+                        - generic [ref=f4e458]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e459]:
+                          - generic [ref=f4e460]: 已发布 1
+                          - generic [ref=f4e461]: 可执行 1
+                          - generic [ref=f4e462]: 待处理 0
+                  - button "责任边界规则集 2 LIABILITY 声明文档 v1 · 转译就绪 已发布 2 可执行 2 待处理 0" [ref=f4e463] [cursor=pointer]:
+                    - generic [ref=f4e464]:
+                      - img [ref=f4e466]
+                      - generic [ref=f4e471]:
+                        - generic [ref=f4e472]:
+                          - generic [ref=f4e473]: 责任边界规则集
+                          - generic [ref=f4e474]: "2"
+                        - generic [ref=f4e475]: LIABILITY
+                        - generic [ref=f4e476]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e477]:
+                          - generic [ref=f4e478]: 已发布 2
+                          - generic [ref=f4e479]: 可执行 2
+                          - generic [ref=f4e480]: 待处理 0
+                - generic [ref=f4e481]:
+                  - generic [ref=f4e482]:
+                    - paragraph [ref=f4e483]: 知识产权与数据
+                    - paragraph [ref=f4e484]: IP 归属、保密、数据安全和客户资料处理
+                  - button "保密义务规则集 1 CONFIDENTIALITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e485] [cursor=pointer]:
+                    - generic [ref=f4e486]:
+                      - img [ref=f4e488]
+                      - generic [ref=f4e493]:
+                        - generic [ref=f4e494]:
+                          - generic [ref=f4e495]: 保密义务规则集
+                          - generic [ref=f4e496]: "1"
+                        - generic [ref=f4e497]: CONFIDENTIALITY
+                        - generic [ref=f4e498]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e499]:
+                          - generic [ref=f4e500]: 已发布 1
+                          - generic [ref=f4e501]: 可执行 1
+                          - generic [ref=f4e502]: 待处理 0
+                  - button "知识产权规则集 1 IP 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e503] [cursor=pointer]:
+                    - generic [ref=f4e504]:
+                      - img [ref=f4e506]
+                      - generic [ref=f4e511]:
+                        - generic [ref=f4e512]:
+                          - generic [ref=f4e513]: 知识产权规则集
+                          - generic [ref=f4e514]: "1"
+                        - generic [ref=f4e515]: IP
+                        - generic [ref=f4e516]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e517]:
+                          - generic [ref=f4e518]: 已发布 1
+                          - generic [ref=f4e519]: 可执行 1
+                          - generic [ref=f4e520]: 待处理 0
+                  - button "数据安全规则集 1 DATA_SECURITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=f4e521] [cursor=pointer]:
+                    - generic [ref=f4e522]:
+                      - img [ref=f4e524]
+                      - generic [ref=f4e529]:
+                        - generic [ref=f4e530]:
+                          - generic [ref=f4e531]: 数据安全规则集
+                          - generic [ref=f4e532]: "1"
+                        - generic [ref=f4e533]: DATA_SECURITY
+                        - generic [ref=f4e534]: 声明文档 v1 · 转译就绪
+                        - generic [ref=f4e535]:
+                          - generic [ref=f4e536]: 已发布 1
+                          - generic [ref=f4e537]: 可执行 1
+                          - generic [ref=f4e538]: 待处理 0
+            - generic [ref=f4e540]:
+              - generic [ref=f4e541]:
+                - generic [ref=f4e542]:
+                  - generic [ref=f4e543]: 付款与结算规则集 (1)
+                  - paragraph [ref=f4e544]: PAYMENT · 声明文档 / 结构化规则 / 发布门禁
+                - button "测试" [ref=f4e545] [cursor=pointer]:
+                  - img
+                  - text: 测试
+              - generic [ref=f4e548]:
+                - button "R001 付款节奏 已发布 转译就绪 启用 可正式审核 比例类 混合 付款与结算 黄色 v4 ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日" [ref=f4e549] [cursor=pointer]:
+                  - generic [ref=f4e550]:
+                    - generic [ref=f4e551]:
+                      - generic [ref=f4e552]:
+                        - generic [ref=f4e553]: R001
+                        - generic [ref=f4e554]: 付款节奏
+                        - generic [ref=f4e555]: 已发布
+                        - generic [ref=f4e556]: 转译就绪
+                        - generic [ref=f4e557]: 启用
+                        - generic [ref=f4e558]: 可正式审核
+                      - generic [ref=f4e559]:
+                        - generic [ref=f4e560]: 比例类
+                        - generic [ref=f4e561]: 混合
+                        - generic [ref=f4e562]: 付款与结算
+                        - generic [ref=f4e563]: 黄色
+                        - generic [ref=f4e564]: v4
+                      - paragraph [ref=f4e565]: ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日
+                    - img [ref=f4e566]
+                - generic [ref=f4e568]:
+                  - generic [ref=f4e569]: A 不少于 30% / B 不少于 15% / C 低于 15%
+                  - generic [ref=f4e570]:
+                    - button "生成执行草稿" [ref=f4e571] [cursor=pointer]:
+                      - img
+                    - button "版本管理" [ref=f4e572] [cursor=pointer]:
+                      - img
+                    - button "停用规则" [ref=f4e573] [cursor=pointer]:
+                      - img
+            - generic [ref=f4e938]:
+              - generic [ref=f4e939]:
+                - generic [ref=f4e940]: 规则闭环栏
+                - paragraph [ref=f4e941]: 第三栏只回答三件事：这个规则集能否进入正式审核、为什么被阻断、下一步该做什么。
+              - generic [ref=f4e942]:
+                - generic [ref=f4e943]:
+                  - button "规则明细" [ref=f4e944] [cursor=pointer]
+                  - button "结构化编辑" [ref=f4e945] [cursor=pointer]
+                  - button "试运行" [ref=f4e946] [cursor=pointer]
+                - generic [ref=f4e947]:
+                  - generic [ref=f4e948]:
+                    - generic [ref=f4e949]:
+                      - generic [ref=f4e950]: 当前规则集
+                      - generic [ref=f4e951]: 付款与结算规则集
+                      - generic [ref=f4e952]: 规则集 v1 · 已发布 · 转译就绪
+                    - generic [ref=f4e953]: 可发布
+                  - generic [ref=f4e954]:
+                    - generic [ref=f4e955]:
+                      - generic [ref=f4e956]: "1"
+                      - generic [ref=f4e957]: 规则
+                    - generic [ref=f4e958]:
+                      - generic [ref=f4e959]: "1"
+                      - generic [ref=f4e960]: 启用
+                    - generic [ref=f4e961]:
+                      - generic [ref=f4e962]: "1"
+                      - generic [ref=f4e963]: 已发布
+                    - generic [ref=f4e964]:
+                      - generic [ref=f4e965]: "1"
+                      - generic [ref=f4e966]: 可执行
+                  - generic [ref=f4e967]: 当前规则集规则均满足发布、转译和执行字段要求，可进入正式审核编译检查。
+                - generic [ref=f4e968]:
+                  - generic [ref=f4e969]:
+                    - generic [ref=f4e970]:
+                      - generic [ref=f4e971]: 发布流水线
+                      - generic [ref=f4e972]: 维护规则集 → 转译确认 → 发布版本 → 正式审核可用
+                    - generic [ref=f4e973]: 闭环
+                  - generic [ref=f4e974]:
+                    - generic [ref=f4e975]:
+                      - generic [ref=f4e976]: ✓
+                      - generic [ref=f4e977]: 规则集文档
+                      - generic [ref=f4e978]: v1
+                    - generic [ref=f4e979]:
+                      - generic [ref=f4e980]: ✓
+                      - generic [ref=f4e981]: 结构化规则
+                      - generic [ref=f4e982]: 1 条
+                    - generic [ref=f4e983]:
+                      - generic [ref=f4e984]: ✓
+                      - generic [ref=f4e985]: 转译确认
+                      - generic [ref=f4e986]: 1 可执行
+                    - generic [ref=f4e987]:
+                      - generic [ref=f4e988]: ✓
+                      - generic [ref=f4e989]: 发布版本
+                      - generic [ref=f4e990]: 1 已发布
+                    - generic [ref=f4e991]:
+                      - generic [ref=f4e992]: ✓
+                      - generic [ref=f4e993]: 正式审核
+                      - generic [ref=f4e994]: 可用
+                - generic [ref=f4e1008]:
+                  - generic [ref=f4e1009]:
+                    - generic [ref=f4e1010]:
+                      - generic [ref=f4e1011]: 规则集声明文档
+                      - generic [ref=f4e1012]: v1 · published
+                    - generic [ref=f4e1013]: ready
+                  - generic [ref=f4e1014]:
+                    - textbox "规则集文档标题" [ref=f4e1015]: 付款与结算规则集 初始规则声明
+                    - textbox "在这里维护 Markdown/自然语言规则声明。保存后只作为规则资产来源，必须转译为字段级 RuleUnit 并人工确认后才能发布。" [ref=f4e1016]: "# 付款与结算规则集 付款比例、账期、付款触发条件与结算风险。 - 来源：F009 canonical seed - 用途：作为规则集文档资产的初始版本，后续可由配置中心 Markdown 文档维护并转译为 RuleUnit。 - 约束：正式审核仍以已发布 RuleSnapshot / SkillBundle 为准。"
+                    - button "保存规则集文档版本" [ref=f4e1017] [cursor=pointer]
+                  - generic [ref=f4e1018]: 文档只是高效维护入口；进入正式审核前必须显示字段级转译差异、人工确认并发布版本。
+                - generic [ref=f4e995]:
+                  - generic [ref=f4e996]: 规则资产
+                  - generic [ref=f4e997]:
+                    - generic [ref=f4e998]:
+                      - generic [ref=f4e999]: "15"
+                      - generic [ref=f4e1000]: 总数
+                    - generic [ref=f4e1001]:
+                      - generic [ref=f4e1002]: "15"
+                      - generic [ref=f4e1003]: 启用
+                    - generic [ref=f4e1004]:
+                      - generic [ref=f4e1005]: "15"
+                      - generic [ref=f4e1006]: 发布
+                - generic [ref=f4e1007]: 选择规则后显示结构化字段、发布阻断和模拟测试入口
+  - alert [ref=f4e243]

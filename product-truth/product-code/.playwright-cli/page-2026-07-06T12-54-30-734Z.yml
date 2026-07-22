@@ -1,0 +1,312 @@
+- generic [active] [ref=f4e1]:
+  - complementary [ref=f4e2]:
+    - generic [ref=f4e3]:
+      - img "ONES Sales" [ref=f4e5]
+      - generic [ref=f4e6]:
+        - generic [ref=f4e7]: ONES Sales
+        - paragraph [ref=f4e8]: 智能协作平台
+    - navigation [ref=f4e9]:
+      - link "工作台" [ref=f4e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f4e11]
+        - generic [ref=f4e15]: 工作台
+      - link "报价中心" [ref=f4e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f4e17]
+        - generic [ref=f4e21]: 报价中心
+      - link "合同审核" [ref=f4e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f4e23]
+        - generic [ref=f4e28]: 合同审核
+      - link "标书中心" [ref=f4e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f4e30]
+        - generic [ref=f4e34]: 标书中心
+      - link "知识库" [ref=f4e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f4e36]
+        - generic [ref=f4e41]: 知识库
+      - link "日程" [ref=f4e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f4e43]
+        - generic [ref=f4e49]: 日程
+      - link "配置中心" [ref=f4e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f4e51]
+        - generic [ref=f4e55]: 配置中心
+    - generic [ref=f4e56]:
+      - link "个人信息" [ref=f4e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f4e58]
+        - generic [ref=f4e61]: 个人信息
+      - button "退出登录" [ref=f4e62] [cursor=pointer]:
+        - img [ref=f4e63]
+        - generic [ref=f4e66]: 退出登录
+  - main [ref=f4e67]:
+    - generic [ref=f4e69]:
+      - generic [ref=f4e70]:
+        - generic [ref=f4e71]:
+          - generic [ref=f4e72]:
+            - img [ref=f4e73]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f4e77]
+          - paragraph [ref=f4e78]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f4e79]:
+          - generic [ref=f4e80]:
+            - generic [ref=f4e81]: 生效范围
+            - generic [ref=f4e82]: 组织级统一发布
+          - generic [ref=f4e83]:
+            - generic [ref=f4e84]: 消费端
+            - generic [ref=f4e85]: 报价 / 合同 / AI
+          - generic [ref=f4e86]:
+            - generic [ref=f4e87]: 当前配置集
+            - generic [ref=f4e88]: 合同审核策略
+      - generic [ref=f4e89]:
+        - complementary [ref=f4e90]:
+          - generic [ref=f4e91]:
+            - generic [ref=f4e92]:
+              - generic [ref=f4e93]: 配置域
+              - paragraph [ref=f4e94]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f4e95]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=f4e96] [cursor=pointer]:
+                - generic [ref=f4e97]:
+                  - generic [ref=f4e98]: 交易配置
+                  - generic [ref=f4e99]: ...
+                - paragraph [ref=f4e100]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f4e241] [cursor=pointer]:
+                - generic [ref=f4e102]:
+                  - generic [ref=f4e103]: 合同与 AI 规则
+                  - generic [ref=f4e104]: 15+
+                - paragraph [ref=f4e105]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f4e106] [cursor=pointer]:
+                - generic [ref=f4e107]:
+                  - generic [ref=f4e108]: 组织与权限
+                  - generic [ref=f4e109]: ...
+                - paragraph [ref=f4e110]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=f4e111] [cursor=pointer]:
+                - generic [ref=f4e112]:
+                  - generic [ref=f4e113]: 界面与体验
+                  - generic [ref=f4e114]: ...
+                - paragraph [ref=f4e115]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f4e116]:
+              - generic [ref=f4e117]: 结构约束
+              - list [ref=f4e118]:
+                - listitem [ref=f4e119]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f4e120]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f4e121]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f4e122]:
+          - generic [ref=f4e123]:
+            - generic [ref=f4e124]:
+              - generic [ref=f4e125]:
+                - generic [ref=f4e126]:
+                  - generic [ref=f4e127]: 配置中心
+                  - generic [ref=f4e128]: /
+                  - generic [ref=f4e129]: 合同与 AI 规则
+                - generic [ref=f4e130]:
+                  - img [ref=f4e132]
+                  - generic [ref=f4e135]:
+                    - heading "合同审核策略" [level=2] [ref=f4e136]
+                    - paragraph [ref=f4e137]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=f4e138]:
+                - generic [ref=f4e139]:
+                  - generic [ref=f4e140]: 规则总数
+                  - generic [ref=f4e141]: "15"
+                - generic [ref=f4e142]:
+                  - generic [ref=f4e143]: 启用规则
+                  - generic [ref=f4e144]: "15"
+                - generic [ref=f4e145]:
+                  - generic [ref=f4e146]: 语义规则
+                  - generic [ref=f4e147]: "15"
+            - generic [ref=f4e148]:
+              - button "合同审核策略 15" [ref=f4e242] [cursor=pointer]:
+                - img [ref=f4e150]
+                - generic [ref=f4e153]: 合同审核策略
+                - generic [ref=f4e154]: "15"
+              - button "AI 模型配置 ..." [ref=f4e155] [cursor=pointer]:
+                - img [ref=f4e156]
+                - generic [ref=f4e161]: AI 模型配置
+                - generic [ref=f4e162]: ...
+          - generic [ref=f4e705]:
+            - generic [ref=f4e706]:
+              - generic [ref=f4e1201]: 编辑规则：R001 付款节奏
+              - button "测试" [ref=f4e710] [cursor=pointer]:
+                - img
+                - text: 测试
+            - generic [ref=f4e1202]:
+              - generic [ref=f4e1204]:
+                - generic [ref=f4e1205]:
+                  - text: ID / 编码
+                  - textbox "ID / 编码" [ref=f4e1206]:
+                    - /placeholder: R1001
+                    - text: R001
+                - generic [ref=f4e1207]:
+                  - text: 规则名称
+                  - textbox "规则名称" [ref=f4e1208]:
+                    - /placeholder: 预付款超标审查
+                    - text: 付款节奏
+                - generic [ref=f4e1209]:
+                  - text: 状态
+                  - combobox "状态" [ref=f4e1210]:
+                    - option "启用" [selected]
+                    - option "停用"
+              - generic [ref=f4e1211]:
+                - generic [ref=f4e1212]:
+                  - heading "触发器配置" [level=3] [ref=f4e1213]
+                  - paragraph [ref=f4e1214]: 规则器只看可执行条件：关键词定位、语义判断、数值字段。规则来源可以是 Markdown，但这里必须可见可改。
+                - generic [ref=f4e1215]:
+                  - generic [ref=f4e1216]:
+                    - text: 关键词 / 原文定位线索
+                    - textbox "关键词 / 原文定位线索" [ref=f4e1217]:
+                      - /placeholder: 首付款, 账期, 验收后付款
+                      - text: 首期, 首付款, 预付款, 付款节奏, 账期, 尾款
+                  - generic [ref=f4e1218]:
+                    - text: 适用范围
+                    - textbox "适用范围" [ref=f4e1219]:
+                      - /placeholder: 标准销售合同, 框架协议
+                      - text: customer_contract, customer_redline, quote_to_contract, renewal, source_docx_review
+                  - generic [ref=f4e1220]:
+                    - text: 触发方式
+                    - combobox "触发方式" [ref=f4e1221]:
+                      - option "时限类"
+                      - option "金额类"
+                      - option "比例类" [selected]
+                      - option "枚举类"
+                      - option "条款语义"
+                  - generic [ref=f4e1222]:
+                    - text: 执行引擎
+                    - combobox "执行引擎" [ref=f4e1223]:
+                      - option "结构化字段校验"
+                      - option "AI 语义审查"
+                      - option "字段 + 语义混合" [selected]
+                  - generic [ref=f4e1224]:
+                    - text: 数值字段
+                    - textbox "数值字段" [ref=f4e1225]:
+                      - /placeholder: payment_schedule / payment_days
+                      - text: payment_schedule
+                  - generic [ref=f4e1226]:
+                    - text: 默认风险等级
+                    - combobox "默认风险等级" [ref=f4e1227]:
+                      - option "绿色"
+                      - option "黄色" [selected]
+                      - option "红线"
+                  - generic [ref=f4e1229]:
+                    - text: 语义触发条件
+                    - textbox "语义触发条件" [ref=f4e1230]:
+                      - /placeholder: 描述 AI 需要识别的条款语义，例如：客户单方终止后要求全额退款且不计息。
+                      - text: 你是 ONES 业务运营合同审核角色，只能依据配置中心发布规则判断「付款节奏」。 规则来源：suoyidev/ones-internal-skills/ones-contract-assistant v2.2.2，commit f8b0c27f5c19a499c1563923ca372a2171aaca58。 Level A 可接受：首期≥30%，三段式 30/60/10，尾款账期≤30工作日 Level B 偏离可让步：首期 15–29% 红线：首期<15% / 100%验收后付首款 / 账期>30工作日 请输出风险等级、命中原文、判断依据、销售谈判建议、Word 批注文案，并保留规则编号与快照引用。
+                  - generic [ref=f4e1232]:
+                    - text: 例外条件 / 白名单
+                    - textbox "例外条件 / 白名单" [ref=f4e1233]:
+                      - /placeholder: 例如：已上传特批签报，或项目所在地为海外。
+                  - generic [ref=f4e1234]:
+                    - generic [ref=f4e1235]: 实时转译预览
+                    - paragraph [ref=f4e1236]: 命中“首期 / 首付款 / 预付款 / 付款节奏 / 账期 / 尾款”后， 由字段 + 语义混合判断：你是 ONES 业务运营合同审核角色，只能依据配置中心发布规则判断「付款节奏」。 规则来源：suoyidev/ones-internal-skills/ones-contract-assistant v2.2.2，commit f8b0c27f5c19a499c1563923ca372a2171aaca58。 Level A 可接受：首期≥30%，三段式 30/60/10，尾款账期≤30工作日 Level B 偏离可让步：首期 15–29% 红线：首期<15% / 100%验收后付首款 / 账期>30工作日 请输出风险等级、命中原文、判断依据、销售谈判建议、Word 批注文案，并保留规则编号与快照引用。。 尚未配置例外。
+              - generic [ref=f4e1237]:
+                - heading "红绿灯等级定义" [level=3] [ref=f4e1239]
+                - generic [ref=f4e1240]:
+                  - generic [ref=f4e1241]:
+                    - generic [ref=f4e1242]: 绿色通过
+                    - generic [ref=f4e1243]:
+                      - text: 操作符
+                      - combobox "操作符" [ref=f4e1244]:
+                        - option "不超过"
+                        - option "不少于" [selected]
+                        - option "超过"
+                        - option "少于"
+                        - option "等于"
+                        - option "包含"
+                        - option "属于"
+                    - generic [ref=f4e1245]:
+                      - text: 阈值
+                      - spinbutton "阈值" [ref=f4e1246]: "30"
+                    - generic [ref=f4e1247]:
+                      - text: 单位
+                      - textbox "单位" [ref=f4e1248]:
+                        - /placeholder: 天 / % / 元
+                        - text: percent
+                    - generic [ref=f4e1249]:
+                      - text: 处理动作
+                      - combobox "处理动作" [ref=f4e1250]:
+                        - option "验收通过" [selected]
+                        - option "进入销售谈判"
+                        - option "人工复核"
+                        - option "红线阻断"
+                  - generic [ref=f4e1251]:
+                    - generic [ref=f4e1252]: 黄色谈判
+                    - generic [ref=f4e1253]:
+                      - text: 操作符
+                      - combobox "操作符" [ref=f4e1254]:
+                        - option "不超过"
+                        - option "不少于" [selected]
+                        - option "超过"
+                        - option "少于"
+                        - option "等于"
+                        - option "包含"
+                        - option "属于"
+                    - generic [ref=f4e1255]:
+                      - text: 阈值
+                      - spinbutton "阈值" [ref=f4e1256]: "15"
+                    - generic [ref=f4e1257]:
+                      - text: 单位
+                      - textbox "单位" [ref=f4e1258]:
+                        - /placeholder: 天 / % / 元
+                        - text: percent
+                    - generic [ref=f4e1259]:
+                      - text: 处理动作
+                      - combobox "处理动作" [ref=f4e1260]:
+                        - option "验收通过" [selected]
+                        - option "进入销售谈判"
+                        - option "人工复核"
+                        - option "红线阻断"
+                  - generic [ref=f4e1261]:
+                    - generic [ref=f4e1262]: 红线阻断
+                    - generic [ref=f4e1263]:
+                      - text: 操作符
+                      - combobox "操作符" [ref=f4e1264]:
+                        - option "不超过"
+                        - option "不少于"
+                        - option "超过"
+                        - option "少于" [selected]
+                        - option "等于"
+                        - option "包含"
+                        - option "属于"
+                    - generic [ref=f4e1265]:
+                      - text: 阈值
+                      - spinbutton "阈值" [ref=f4e1266]: "15"
+                    - generic [ref=f4e1267]:
+                      - text: 单位
+                      - textbox "单位" [ref=f4e1268]:
+                        - /placeholder: 天 / % / 元
+                        - text: percent
+                    - generic [ref=f4e1269]:
+                      - text: 处理动作
+                      - combobox "处理动作" [ref=f4e1270]:
+                        - option "验收通过" [selected]
+                        - option "进入销售谈判"
+                        - option "人工复核"
+                        - option "红线阻断"
+              - generic [ref=f4e1271]:
+                - generic [ref=f4e1272]:
+                  - heading "输出模板" [level=3] [ref=f4e1273]
+                  - paragraph [ref=f4e1274]: 这里是给审核引擎和 Word 批注生成读取的模板，不是让业务人员填写长报告。
+                - generic [ref=f4e1275]:
+                  - generic [ref=f4e1276]:
+                    - text: 批注标题
+                    - textbox "批注标题" [ref=f4e1277]:
+                      - /placeholder: 预付款比例超标
+                  - generic [ref=f4e1278]:
+                    - text: 客户侧修改建议模板
+                    - textbox "客户侧修改建议模板" [ref=f4e1279]:
+                      - /placeholder: "建议修改为：{recommended_clause}"
+                  - generic [ref=f4e1280]:
+                    - text: Word 批注文案模板
+                    - textbox "Word 批注文案模板" [ref=f4e1281]:
+                      - /placeholder: 请将该条款调整为双方可确认的付款节奏。
+                  - generic [ref=f4e1282]:
+                    - text: 谈判动作模板
+                    - textbox "谈判动作模板" [ref=f4e1283]:
+                      - /placeholder: 销售需要确认的客户反馈、可接受底线和下一步动作。
+              - generic [ref=f4e1284]:
+                - button "测试规则" [ref=f4e1285] [cursor=pointer]
+                - button "保存规则" [ref=f4e1286] [cursor=pointer]
+  - alert [ref=f4e240]

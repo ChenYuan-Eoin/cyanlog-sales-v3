@@ -1,0 +1,129 @@
+- generic [active] [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: CY
+      - generic [ref=e5]:
+        - generic [ref=e6]: Cyanlog
+        - paragraph [ref=e7]: 智能销售支撑平台
+    - navigation [ref=e8]:
+      - link "工作台" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e14]: 工作台
+      - link "报价中心" [ref=e15] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e16]
+        - generic [ref=e20]: 报价中心
+      - link "合同审核" [ref=e21] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e22]
+        - generic [ref=e27]: 合同审核
+      - link "标书中心" [ref=e28] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e29]
+        - generic [ref=e33]: 标书中心
+      - link "知识库" [ref=e34] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e35]
+        - generic [ref=e40]: 知识库
+      - link "日程" [ref=e41] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e42]
+        - generic [ref=e48]: 日程
+      - link "配置中心" [ref=e49] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e50]
+        - generic [ref=e54]: 配置中心
+    - generic [ref=e55]:
+      - link "个人信息" [ref=e56] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e57]
+        - generic [ref=e60]: 个人信息
+      - button "退出登录" [ref=e61] [cursor=pointer]:
+        - img [ref=e62]
+        - generic [ref=e65]: 退出登录
+  - main [ref=e66]:
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - generic [ref=e71]:
+            - img [ref=e72]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=e76]
+          - paragraph [ref=e77]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e80]: 生效范围
+            - generic [ref=e81]: 组织级统一发布
+          - generic [ref=e82]:
+            - generic [ref=e83]: 消费端
+            - generic [ref=e84]: 报价 / 合同 / AI
+          - generic [ref=e85]:
+            - generic [ref=e86]: 当前配置集
+            - generic [ref=e87]: 角色权限
+      - generic [ref=e88]:
+        - complementary [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]:
+              - generic [ref=e92]: 配置域
+              - paragraph [ref=e93]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e94]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=e95] [cursor=pointer]:
+                - generic [ref=e96]:
+                  - generic [ref=e97]: 交易配置
+                  - generic [ref=e98]: ...
+                - paragraph [ref=e99]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 ... 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=e100] [cursor=pointer]:
+                - generic [ref=e101]:
+                  - generic [ref=e102]: 合同与 AI 规则
+                  - generic [ref=e103]: ...
+                - paragraph [ref=e104]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=e105] [cursor=pointer]:
+                - generic [ref=e106]:
+                  - generic [ref=e107]: 组织与权限
+                  - generic [ref=e108]: ...
+                - paragraph [ref=e109]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=e110] [cursor=pointer]:
+                - generic [ref=e111]:
+                  - generic [ref=e112]: 界面与体验
+                  - generic [ref=e113]: ...
+                - paragraph [ref=e114]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e115]:
+              - generic [ref=e116]: 结构约束
+              - list [ref=e117]:
+                - listitem [ref=e118]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e119]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e120]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e121]:
+          - generic [ref=e122]:
+            - generic [ref=e123]:
+              - generic [ref=e124]:
+                - generic [ref=e125]:
+                  - generic [ref=e126]: 配置中心
+                  - generic [ref=e127]: /
+                  - generic [ref=e128]: 组织与权限
+                - generic [ref=e129]:
+                  - img [ref=e131]
+                  - generic [ref=e135]:
+                    - heading "角色权限" [level=2] [ref=e136]
+                    - paragraph [ref=e137]: 按业务能力维护角色，并通过组织/部门/销售空间分配数据范围。
+              - generic [ref=e138]:
+                - generic [ref=e139]:
+                  - generic [ref=e140]: 角色总数
+                  - generic [ref=e141]: ...
+                - generic [ref=e142]:
+                  - generic [ref=e143]: 能力分组
+                  - generic [ref=e144]: "5"
+                - generic [ref=e145]:
+                  - generic [ref=e146]: 作用域层级
+                  - generic [ref=e147]: "4"
+            - generic [ref=e148]:
+              - button "组织架构 ..." [ref=e149] [cursor=pointer]:
+                - img [ref=e150]
+                - generic [ref=e154]: 组织架构
+                - generic [ref=e155]: ...
+              - button "角色权限 ..." [ref=e156] [cursor=pointer]:
+                - img [ref=e157]
+                - generic [ref=e161]: 角色权限
+                - generic [ref=e162]: ...
+  - alert [ref=e181]

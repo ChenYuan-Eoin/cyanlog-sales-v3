@@ -8,11 +8,11 @@ import { getUserScopedRoleAssignments, getOrgRoleCodes } from '@/lib/scoped-acce
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { askId: string } }
+  { params }: { params: Promise<{ askId: string }> }
 ) {
   try {
     const user = await requireAuth(req)
-    const askId = params.askId
+    const { askId } = await params
     const { response_text, attachments } = await req.json()
 
     // 获取用户角色（取第一个组织级角色）

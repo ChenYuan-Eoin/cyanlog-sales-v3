@@ -1,0 +1,97 @@
+{
+  "base": "http://localhost:3000",
+  "labels": {
+    "review": true,
+    "compare": true,
+    "draft": true,
+    "version": true
+  },
+  "failures": [],
+  "sampleText": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同中心\n\n全生命周期管理\n\n审核\n起草\n合同中心\n\n一级入口只保留合同审核、文档对比、AI 起草合同。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。\n\n上传源文件并发起审核\n1\n合同审核\n入口\n源文件审核\n动作\n上传源文件并创建 ReviewRun\n对象\nDOCX / PDF 源文件\n当前目标\n新建合同版本\n结果\n风险定位、AI 批注、源文件批注版\n边界：审核自动消费配置中心已发布规则，不在这里选择规则版本\n2\n合同文档对比\n入口\n旧/新文件\n动作\n选择旧文件和新文件\n对象\n合同版本流或客户回传件\n当前目标\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx\n结果\n差异列表、并排高亮、风险变化判断\n边界：对比不替代审核；红线或需谈判变化进入再审核\n3\n合同起草\n入口\n需求起草\n动作\n输入需求生成合同草稿\n对象\n客户需求、模板、条款限制\n当前目标\n等待选择\n结果\n可编辑合同草稿，可进入审核或对比\n边界：起草是独立路径，不等同于上传审核或版本对比\n\n20\n\n全部合同\n\n0\n\n进行中\n\n0\n\n需关注\n\n17\n\n已完成\n\n全部\n29\n审核\n20\n对比\n9\n起草\n0\n待审核\n已完成\n合同审核\nv4\n合同源文件\n7月7日 15:46\n\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n文档对比\nv1 → v2\n版本差异任务\n7月7日 13:36\n\n【修】第三方代投ONES产品原厂授权书-上海鼎茂信息技术有限公司2026.docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 4 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n合同审核\nv2\n合同源文件\n7月7日 13:33\n\n【修】第三方代投ONES产品原厂授权书-上海鼎茂信息技术有限公司2026.docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n文档对比\nv1 → v4\n版本差异任务\n7月7日 13:30\n\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 6 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n文档对比\nv2 → v3\n版本差异任务\n7月7日 08:04\n\n(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 6 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n合同审核\nv3\n合同源文件\n7月6日 22:50\n\n(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n文档对比\nv1 → v8\n版本差异任务\n7月6日 21:15\n\n关联主体合作补充协议（模板）.docx-ONES批注版.docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 17 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n合同审核\nv8\n合同源文件\n7月6日 18:27\n\n关联主体合作补充协议（模板）.docx-ONES批注版.docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n文档对比\nv2 → 新稿\n版本差异任务\n7月6日 16:34\n\n关联主体合作补充协议（模板）.docx-ONES批注版.docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 17 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n合同审核\nv2\n合同源文件\n7月6日 16:28\n\n关联主体合作补充协议（模板）.docx-ONES批注版.docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n合同审核\nv2\n合同源文件\n7月6日 16:13\n\n关联主体合作补充协议（模板）.docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n文档对比\nv6 → 新稿\n版本差异任务\n7月6日 16:03\n\nprod-gemini-review-sample-1782906641409.docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 14 处红线差",
+  "hrefs": [
+    {
+      "text": "工作台",
+      "href": "http://localhost:3000/"
+    },
+    {
+      "text": "报价中心",
+      "href": "http://localhost:3000/quotes"
+    },
+    {
+      "text": "合同审核",
+      "href": "http://localhost:3000/contracts"
+    },
+    {
+      "text": "标书中心",
+      "href": "http://localhost:3000/tenders"
+    },
+    {
+      "text": "知识库",
+      "href": "http://localhost:3000/knowledge"
+    },
+    {
+      "text": "日程",
+      "href": "http://localhost:3000/schedule"
+    },
+    {
+      "text": "配置中心",
+      "href": "http://localhost:3000/configs"
+    },
+    {
+      "text": "个人信息",
+      "href": "http://localhost:3000/profile"
+    },
+    {
+      "text": "审核",
+      "href": "http://localhost:3000/contracts/new?from=workbench"
+    },
+    {
+      "text": "起草",
+      "href": "http://localhost:3000/contracts/draft"
+    },
+    {
+      "text": "上传源文件并发起审核",
+      "href": "http://localhost:3000/contracts/new"
+    },
+    {
+      "text": "1合同审核入口源文件审核动作上传源文件并创建 ReviewRun对象DOCX / PDF 源文件当前目标新建合同版本结果风险定位、AI 批注、源文件批注版边界：审核自动消费配置中心已发布规则，不在这里选择规则版本",
+      "href": "http://localhost:3000/contracts/new?from=workbench"
+    },
+    {
+      "text": "2合同文档对比入口旧/新文件动作选择旧文件和新文件对象合同版本流或客户回传件当前目标(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx结果差异列表、并排高亮、风险变化判断边界：对比不替代审核；红线或需谈判变化进入再审核",
+      "href": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177/compare?from=workbench"
+    },
+    {
+      "text": "3合同起草入口需求起草动作输入需求生成合同草稿对象客户需求、模板、条款限制当前目标等待选择结果可编辑合同草稿，可进入审核或对比边界：起草是独立路径，不等同于上传审核或版本对比",
+      "href": "http://localhost:3000/contracts/draft"
+    },
+    {
+      "text": "合同审核v4合同源文件7月7日 15:46(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx审核完成下一步：查看审核结果审核源文件版本审核已完成，但还不能证明源文件批注版已可导出。",
+      "href": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177?panel=evidence&from=list"
+    },
+    {
+      "text": "文档对比v1 → v2版本差异任务7月7日 13:36【修】第三方代投ONES产品原厂授权书-上海鼎茂信息技术有限公司2026.docx对比完成下一步：查看红线差异旧文件 → 新文件发现 4 处红线差异，进入文档对比工作台复核旧稿与新稿。",
+      "href": "http://localhost:3000/contracts/707be693-bc77-4b46-82e7-e08bd6457b86/compare?from=list&comparison_id=2d8e0235-b9c2-48e3-b64e-b070e3319d7d"
+    },
+    {
+      "text": "合同审核v2合同源文件7月7日 13:33【修】第三方代投ONES产品原厂授权书-上海鼎茂信息技术有限公司2026.docx审核完成下一步：查看审核结果审核源文件版本审核已完成，但还不能证明源文件批注版已可导出。",
+      "href": "http://localhost:3000/contracts/707be693-bc77-4b46-82e7-e08bd6457b86?panel=evidence&from=list"
+    },
+    {
+      "text": "文档对比v1 → v4版本差异任务7月7日 13:30(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx对比完成下一步：查看红线差异旧文件 → 新文件发现 6 处红线差异，进入文档对比工作台复核旧稿与新稿。",
+      "href": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177/compare?from=list&comparison_id=817440e9-4888-4d72-bba0-9e9733f0ca21"
+    },
+    {
+      "text": "文档对比v2 → v3版本差异任务7月7日 08:04(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx对比完成下一步：查看红线差异旧文件 → 新文件发现 6 处红线差异，进入文档对比工作台复核旧稿与新稿。",
+      "href": "http://localhost:3000/contracts/72562618-9afa-41c1-ad47-60ad9278fb74/compare?from=list&comparison_id=d0931e90-f154-4d1b-afe0-d34444aecb93"
+    },
+    {
+      "text": "合同审核v3合同源文件7月6日 22:50(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx审核完成下一步：查看审核结果审核源文件版本审核已完成，但还不能证明源文件批注版已可导出。",
+      "href": "http://localhost:3000/contracts/72562618-9afa-41c1-ad47-60ad9278fb74?panel=evidence&from=list"
+    }
+  ],
+  "screenshots": [
+    "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/local-contract-labels-preview-20260707b/contracts-desktop.png",
+    "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/local-contract-labels-preview-20260707b/contracts-ipad.png"
+  ]
+}

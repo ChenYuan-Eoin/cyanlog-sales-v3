@@ -1,115 +1,82 @@
-// GET /api/contract-policies/rules
-// POST /api/contract-policies/rules
-// 属性化规则 CRUD（Tier 1 可索引性）
-
 import { NextRequest } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
-import { z } from 'zod'
-import {
-  errorResponse,
-  successResponse,
-  createdResponse,
-} from '@/lib/api/common'
-import { createApiError } from '@/lib/api/errors'
+
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
+import { createdResponse, errorResponse, successResponse } from '@/lib/api/common'
+import { createApiError } from '@/lib/api/errors'
 import type { AuthUser } from '@/lib/auth'
+import { ruleCreateSchema, sanitizeRuleMutation } from '@/lib/rules/rule-assets'
+import { loadRuleSetAssets } from '@/lib/rules/rule-assets-server'
+import { supabaseAdmin } from '@/lib/supabase'
 
-// 规则创建/更新验证
-const ruleSchema = z.object({
-  code: z.string().min(1, '规则编码不能为空'),
-  name: z.string().min(1, '规则名称不能为空'),
-  description: z.string().optional(),
-  category: z.enum(['ratio', 'amount', 'duration', 'enum', 'text']),
-  applicable_scenarios: z.array(z.string()).optional(),
-  scope: z.enum(['org', 'dept', 'user']).optional(),
-
-  // Level A
-  level_a_operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in']),
-  level_a_threshold: z.number(),
-  level_a_unit: z.string().optional(),
-  level_a_action: z.string().optional(),
-
-  // Level B
-  level_b_operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in']),
-  level_b_threshold: z.number(),
-  level_b_unit: z.string().optional(),
-  level_b_action: z.string().optional(),
-  level_b_counterparty: z.string().optional(),
-
-  // Level C
-  level_c_operator: z.enum(['>=', '<=', '=', '>', '<', 'contains', 'in']),
-  level_c_threshold: z.number(),
-  level_c_unit: z.string().optional(),
-  level_c_action: z.string().optional(),
-  level_c_message: z.string().optional(),
-
-  // 其他
-  approval_roles: z.array(z.string()).optional(),
-  script_id: z.string().uuid().optional(),
-  priority: z.number().optional(),
-  is_active: z.boolean().optional(),
-})
-
-// GET - 规则列表
 export async function GET(req: NextRequest) {
-  return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
-    const { searchParams } = new URL(req.url)
-    const category = searchParams.get('category')
-    const isActive = searchParams.get('is_active')
-
-    let query = supabaseAdmin
-      .from('contract_rules_v2')
-      .select('*')
-      .eq('org_id', orgId)
-      .order('priority', { ascending: false })
-
-    if (category) {
-      query = query.eq('category', category)
-    }
-    if (isActive !== null) {
-      query = query.eq('is_active', isActive === 'true')
-    }
-
-    const { data: rules, error } = await query
-
-    if (error) {
+  return withAuthAndOrg(req, async (_user: AuthUser, orgId: string) => {
+    try {
+      const ruleSetId = new URL(req.url).searchParams.get('rule_set_id')
+      const payload = await loadRuleSetAssets(orgId)
+      return successResponse(
+        ruleSetId ? payload.rules.filter((rule) => rule.rule_set_id === ruleSetId) : payload.rules
+      )
+    } catch (error) {
+      console.error('[contract-policy-rules] load failed', error)
       return errorResponse(createApiError('DB_ERROR', '获取规则失败'))
     }
-
-    return successResponse(rules || [])
   })
 }
 
-// POST - 创建规则
 export async function POST(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const body = await req.json().catch(() => ({}))
-    const parsed = ruleSchema.safeParse(body)
-
+    const parsed = ruleCreateSchema.safeParse(body)
     if (!parsed.success) {
-      return errorResponse(
-        createApiError(
-          'VALIDATION_ERROR',
-          `参数验证失败: ${parsed.error.issues.map((e) => e.message).join(', ')}`
-        )
-      )
+      return errorResponse(createApiError(
+        'VALIDATION_ERROR',
+        parsed.error.issues.map((issue) => issue.message).join('；')
+      ))
     }
 
-    const { data: rule, error } = await supabaseAdmin
+    const { data: ruleSet } = await supabaseAdmin
+      .from('contract_rule_sets')
+      .select('id')
+      .eq('id', parsed.data.rule_set_id)
+      .eq('org_id', orgId)
+      .eq('is_active', true)
+      .maybeSingle()
+    if (!ruleSet) return errorResponse(createApiError('NOT_FOUND', '所属规则集不存在'))
+
+    const mutation = sanitizeRuleMutation(parsed.data)
+    const { data, error } = await supabaseAdmin
       .from('contract_rules_v2')
       .insert({
         org_id: orgId,
         created_by: user.id,
-        ...parsed.data,
+        ...mutation,
+        applicable_scenarios: mutation.applicable_scenarios || [],
+        approval_roles: mutation.approval_roles || [],
+        field_hints: mutation.field_hints || [],
+        message_template: mutation.message_template || {},
+        priority: mutation.priority ?? 0,
+        is_active: mutation.is_active ?? true,
         version: 1,
+        lifecycle_status: 'draft',
+        translation_status: mutation.translation_status || 'needs_ai_translation',
       })
-      .select()
+      .select('*')
       .single()
 
     if (error) {
-      return errorResponse(createApiError('DB_ERROR', '创建规则失败'))
+      const duplicate = error.code === '23505'
+      return errorResponse(createApiError(
+        duplicate ? 'DUPLICATE_KEY' : 'DB_ERROR',
+        duplicate ? '规则编码已存在' : '创建规则失败'
+      ))
     }
 
-    return createdResponse(rule)
+    await supabaseAdmin
+      .from('contract_rule_sets')
+      .update({ lifecycle_status: 'draft', updated_at: new Date().toISOString() })
+      .eq('id', parsed.data.rule_set_id)
+      .eq('org_id', orgId)
+
+    return createdResponse(data)
   })
 }

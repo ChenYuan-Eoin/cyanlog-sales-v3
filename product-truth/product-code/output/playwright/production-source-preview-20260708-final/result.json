@@ -1,0 +1,39 @@
+{
+  "url": "https://sales.cyanlog.icu/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177?panel=evidence&from=list",
+  "contractData": {
+    "reviewSamples": [
+      "审核 · v4",
+      "审核 · v4",
+      "审核 · v2",
+      "审核 · v2",
+      "审核 · v3",
+      "审核 · v3",
+      "审核 · v8",
+      "审核 · v8"
+    ],
+    "compareSamples": [
+      "对比 · v1 → v2",
+      "对比 · v1 → v2",
+      "对比 · v1 → v4",
+      "对比 · v1 → v4",
+      "对比 · v2 → v3",
+      "对比 · v2 → v3",
+      "对比 · v1 → v8",
+      "对比 · v1 → v8"
+    ],
+    "draftSamples": []
+  },
+  "reviewHref": "/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177?panel=evidence&from=list",
+  "review": {
+    "statusBadges": [
+      "DOCX 页级渲染",
+      "已渲染",
+      "浏览器页数 1"
+    ],
+    "hasFalseReady": false,
+    "hasReviewStyle": true,
+    "hasExport": true,
+    "hasNegotiation": true
+  },
+  "consoleErrors": []
+}

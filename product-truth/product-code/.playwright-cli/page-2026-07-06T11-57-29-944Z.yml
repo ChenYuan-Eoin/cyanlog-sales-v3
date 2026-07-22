@@ -1,0 +1,34 @@
+- generic [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "ONES Sales" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: ONES Sales
+            - generic [ref=e10]: 智能协作平台
+        - generic [ref=e11]:
+          - generic [ref=e12]: 访问验证
+          - heading "ONES Sales" [level=1] [ref=e13]
+          - paragraph [ref=e14]: 从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。
+        - generic:
+          - img
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: 企业工作空间
+          - heading "企业协作支撑平台" [level=1] [ref=e18]
+          - paragraph [ref=e19]: 使用企业账号进入工作台首页
+          - generic [ref=e20]:
+            - generic [ref=e21]:
+              - generic [ref=e22]: 企业邮箱
+              - textbox "企业邮箱" [ref=e23]:
+                - /placeholder: name@company.com
+                - text: E2ETestPassword123!e2e-admin@huarun.com
+            - generic [ref=e24]:
+              - generic [ref=e25]: 密码
+              - textbox "密码" [active] [ref=e26]:
+                - /placeholder: ••••••••
+            - button "进入工作台" [ref=e27] [cursor=pointer]
+            - button "使用企业 SSO 登录（请联系管理员开通）" [disabled] [ref=e28]
+        - paragraph [ref=e29]: 仅授权成员可访问机会、报价、合同、审批和协同记录。
+  - alert [ref=e30]

@@ -10,7 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import type { Rule } from '@/types/rules'
+import type { ContractRuleAssetSummary } from '@/types/contract-rule-assets'
 import {
   BotIcon,
   KeyRoundIcon,
@@ -28,7 +28,6 @@ import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import TabsContent from './tabs/TabsContent'
 import ConfigStatusBadge from './tabs/ConfigStatusBadge'
 import ProductDialog from './dialogs/ProductDialog'
-import RuleDialog from './dialogs/RuleDialog'
 import TaxEditForm from './dialogs/TaxEditForm'
 import ApprovalEditForm from './dialogs/ApprovalEditForm'
 import AIEditForm from './dialogs/AIEditForm'
@@ -225,17 +224,13 @@ const DATA_SCOPE_LEVELS = [
 
 export default function ConfigsClient({ initialData, orgId: _orgId }: { initialData?: ConfigsInitialData; orgId?: string }) {
   // 优先使用服务端预取的数据，避免客户端重复请求
-  const [rules, setRules] = useState<Rule[]>(initialData?.rules || [])
+  const [ruleSummary, setRuleSummary] = useState<ContractRuleAssetSummary>({ sets: 0, rules: 0, published: 0 })
   const [configs, setConfigs] = useState<Config[]>(initialData?.configs || [])
   const [products, setProducts] = useState<ProductRecord[]>(initialData?.products || [])
   const [loading, setLoading] = useState(!initialData)  // 有初始数据则不显示 loading
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<ConfigTabId>('price-list')
   const [tabReady, setTabReady] = useState(false)
-
-  // Rule dialog
-  const [isRuleEditOpen, setIsRuleEditOpen] = useState(false)
-  const [editingRule, setEditingRule] = useState<Partial<Rule> | null>(null)
 
   // Config dialog
   const [isConfigEditOpen, setIsConfigEditOpen] = useState(false)
@@ -326,12 +321,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         }
 
         case 'rules': {
-          // 只加载 rules (分页格式)
-          const rulesRes = await fetch('/api/rules', { headers })
-          if (rulesRes.ok) {
-            const rulesJson = await rulesRes.json()
-            setRules(rulesJson.data ?? [])
-          }
+          // RuleTab owns the canonical rule-set/rule asset request.
           break
         }
 
@@ -390,18 +380,12 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
 
-      const [rulesRes, configsRes, rolesRes, productsRes, orgRes] = await Promise.all([
-        fetch('/api/rules', { headers }),
+      const [configsRes, rolesRes, productsRes, orgRes] = await Promise.all([
         fetch('/api/configs', { headers }),
         fetch('/api/roles', { headers }),
         fetch('/api/products', { headers }),
         fetch('/api/admin/org', { headers }),
       ])
-
-      if (rulesRes.ok) {
-        const rulesJson = await rulesRes.json()
-        setRules(rulesJson.data ?? [])
-      }
 
       if (configsRes.ok) {
         const configsJson = await configsRes.json()
@@ -438,14 +422,14 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
 
   const moduleCounts = useMemo(() => ({
     'price-list': products.length,
-    rules: rules.length,
+    rules: ruleSummary.rules,
     tax: getConfigsByType('TAX_RULE').length,
     approval: getConfigsByType('APPROVAL_RULE').length,
     ai: getConfigsByType('AI_CONFIG').length,
     theme: getConfigsByType('UI_THEME').length,
     'org-structure': orgSummary?.departments.length ?? 0,
     'role-access': roles.length,
-  }), [getConfigsByType, orgSummary?.departments.length, products, rules, roles])
+  }), [getConfigsByType, orgSummary?.departments.length, products, roles, ruleSummary.rules])
 
   const activeModuleMetrics = useMemo(() => {
     switch (activeTab) {
@@ -457,9 +441,9 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
         ]
       case 'rules':
         return [
-          { label: '规则总数', value: String(rules.length) },
-          { label: '启用规则', value: String(rules.filter((rule) => rule.enabled).length) },
-          { label: '语义规则', value: String(rules.filter((rule) => rule.rule_type === 'semantic').length) },
+          { label: '规则集', value: String(ruleSummary.sets) },
+          { label: '规则资产', value: String(ruleSummary.rules) },
+          { label: '已发布', value: String(ruleSummary.published) },
         ]
       case 'tax': {
         const taxConfigs = getConfigsByType('TAX_RULE')
@@ -479,10 +463,17 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       }
       case 'ai': {
         const aiConfigs = getConfigsByType('AI_CONFIG')
+        const kindOf = (config: Config) => {
+          const kind = config.value?.kind
+          return kind === 'application' || kind === 'tool_policy' ? kind : 'provider'
+        }
+        const providerConfigs = aiConfigs.filter((config) => kindOf(config) === 'provider')
+        const applicationConfigs = aiConfigs.filter((config) => kindOf(config) === 'application')
+        const policyConfigs = aiConfigs.filter((config) => kindOf(config) === 'tool_policy')
         return [
-          { label: '模型档位', value: String(aiConfigs.length) },
-          { label: '启用模型', value: String(aiConfigs.filter((config) => config.value?.enabled === true).length) },
-          { label: '已发布', value: String(aiConfigs.filter((config) => config.status === 'PUBLISHED').length) },
+          { label: 'Provider', value: String(providerConfigs.length) },
+          { label: '模型应用', value: String(applicationConfigs.length) },
+          { label: '工具策略', value: String(policyConfigs.length) },
         ]
       }
       case 'theme': {
@@ -508,7 +499,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
       default:
         return []
     }
-  }, [activeTab, getConfigsByType, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.users.length, products, roles.length, rules])
+  }, [activeTab, getConfigsByType, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.users.length, products, roles.length, ruleSummary])
 
   function switchSection(sectionId: ConfigSectionId) {
     const nextSection = CONFIG_SECTIONS.find((section) => section.id === sectionId)
@@ -565,79 +556,6 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     } finally {
       setFeishuSyncing(false)
     }
-  }
-
-  // Rule handlers
-  async function handleSaveRule() {
-    if (!editingRule?.name || !editingRule?.rule_type || !editingRule?.risk_level) {
-      return
-    }
-
-    try {
-      const token = localStorage.getItem('token')
-      const isUpdate = 'id' in editingRule && editingRule.id
-      const url = isUpdate ? `/api/rules/${editingRule.id}` : '/api/rules'
-      const method = isUpdate ? 'PUT' : 'POST'
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`,
-        },
-        body: JSON.stringify(editingRule),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.error || '保存失败')
-        return
-      }
-
-      setIsRuleEditOpen(false)
-      setEditingRule(null)
-      await fetchData()
-    } catch {
-      setError('网络错误')
-    }
-  }
-
-  async function handleDeleteRule(id: string) {
-    if (!confirm('确定要删除这条规则吗？')) return
-
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`/api/rules/${id}`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      })
-
-      if (!res.ok) {
-        setError('删除失败')
-        return
-      }
-
-      await fetchData()
-    } catch {
-      setError('网络错误')
-    }
-  }
-
-  function openNewRule() {
-    setEditingRule({
-      name: '',
-      description: '',
-      rule_type: 'structured',
-      risk_level: 'yellow',
-      enabled: true,
-      config: {},
-    })
-    setIsRuleEditOpen(true)
-  }
-
-  function openEditRule(rule: Rule) {
-    setEditingRule({ ...rule })
-    setIsRuleEditOpen(true)
   }
 
   // Config handlers
@@ -780,12 +698,12 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     }
   }
 
-  function openNewConfig(type: Config['type']) {
+  function openNewConfig(type: Config['type'], aiKind: 'provider' | 'application' | 'tool_policy' = 'provider') {
     setConfigType(type)
     setEditingConfig({
       key: '',
       name: '',
-      value: getDefaultValue(type),
+      value: getDefaultValue(type, aiKind),
       description: '',
     })
     setIsConfigEditOpen(true)
@@ -797,23 +715,65 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     setIsConfigEditOpen(true)
   }
 
-  function getDefaultValue(type: Config['type']): Record<string, unknown> {
+  function getDefaultValue(
+    type: Config['type'],
+    aiKind: 'provider' | 'application' | 'tool_policy' = 'provider'
+  ): Record<string, unknown> {
     switch (type) {
       case 'TAX_RULE':
         return { rate: 0.13, category: '货物销售', enabled: true }
       case 'APPROVAL_RULE':
         return { rule_type: 'discount', thresholds: [{ limit: 5, approver_role: 'auto', enabled: true }] }
       case 'AI_CONFIG':
+        if (aiKind === 'application') {
+          return {
+            kind: 'application',
+            name: '合同审核 Agent',
+            enabled: true,
+            application_id: 'contract_review_agent',
+            plan_mode: 'always_on',
+            capabilities: ['contract_review', 'comment_patch', 'report_summary'],
+            bound_tools: ['contract_review', 'comment_patch', 'report_summary'],
+            system_prompt: '',
+            default_policy_key: 'contract_review_local_first',
+            json_config: {},
+          }
+        }
+        if (aiKind === 'tool_policy') {
+          return {
+            kind: 'tool_policy',
+            name: '合同审核本地优先策略',
+            enabled: true,
+            tool: 'contract_review',
+            capability: 'contract_review',
+            application_key: 'contract_review_agent',
+            strategy: 'local_first',
+            priority: 100,
+            provider_chain: ['local_primary'],
+            fallback_chain: ['sales_cloud_backup', 'rule_engine'],
+            timeout_ms: 45000,
+            retry_count: 1,
+            cost_tracking: true,
+            conditions: { sensitive_data: 'any' },
+            json_config: {},
+          }
+        }
         return {
-          level: 1,
-          name: '新模型',
+          kind: 'provider',
+          level: 10,
+          name: 'LM Studio 本地模型',
+          instance_id: 'local_primary',
           profile: 'local_primary',
-          provider_kind: 'openai_compatible',
-          base_url: '',
-          model: '',
+          provider_name: 'LM Studio',
+          provider_url: 'https://lmstudio.ai',
+          provider_kind: 'lm_studio',
+          api_format: 'lm_studio',
+          base_url: 'http://127.0.0.1:1234/v1',
+          model: 'openai/gpt-oss-20b',
           timeout_ms: 45000,
           enabled: true,
-          routing: { max_pages: 15, strategy: 'full' },
+          model_mappings: [{ role: 'default', display_name: 'GPT-OSS 20B 本地模型', request_model: 'openai/gpt-oss-20b', enabled: true }],
+          json_config: {},
         }
       case 'CONTRACT_RULE':
         return { pattern: '', field: '', operator: 'gt', value: 0 }
@@ -1100,18 +1060,11 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
             </div>
 
             <div className="mt-6 space-y-6">
-              <TabsContent activeTab={activeTab} loading={loading && !loadedTabs.has(activeTab)} products={products} onNewProduct={openNewProduct} onEditProduct={openEditProduct} onDeleteProduct={handleDeleteProduct} rules={rules} onNewRule={openNewRule} onEditRule={openEditRule} onDeleteRule={handleDeleteRule} configs={configs} onNewConfig={openNewConfig} onEditConfig={openEditConfig} onPublishConfig={handlePublishConfig} onFetchVersions={handleFetchVersions} onDeleteConfig={handleDeleteConfig} orgSummary={orgSummary} feishuSyncing={feishuSyncing} feishuResult={feishuResult} onFeishuSync={handleFeishuSync} roles={roles} savingRoleId={savingRoleId} onSaveRole={handleSaveRole} />
+              <TabsContent activeTab={activeTab} loading={loading && !loadedTabs.has(activeTab)} products={products} onNewProduct={openNewProduct} onEditProduct={openEditProduct} onDeleteProduct={handleDeleteProduct} onRuleSummaryChange={setRuleSummary} configs={configs} onNewConfig={openNewConfig} onEditConfig={openEditConfig} onPublishConfig={handlePublishConfig} onFetchVersions={handleFetchVersions} onDeleteConfig={handleDeleteConfig} orgSummary={orgSummary} feishuSyncing={feishuSyncing} feishuResult={feishuResult} onFeishuSync={handleFeishuSync} roles={roles} savingRoleId={savingRoleId} onSaveRole={handleSaveRole} />
             </div>
           </main>
         </div>
       </div>
-
-      <RuleDialog
-        rule={editingRule}
-        open={isRuleEditOpen}
-        onOpenChange={setIsRuleEditOpen}
-        onSave={handleSaveRule}
-      />
 
       {/* Config Edit Dialog */}
       {editingConfig && (
@@ -1126,7 +1079,7 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
             <div className="py-4">
               {configType === 'TAX_RULE' && <TaxEditForm config={editingConfig} onChange={setEditingConfig} />}
               {configType === 'APPROVAL_RULE' && <ApprovalEditForm config={editingConfig} onChange={setEditingConfig} />}
-              {configType === 'AI_CONFIG' && <AIEditForm config={editingConfig} onChange={setEditingConfig} />}
+              {configType === 'AI_CONFIG' && <AIEditForm config={editingConfig} availableConfigs={configs} onChange={setEditingConfig} />}
               {configType === 'UI_THEME' && <ThemeEditForm config={editingConfig} onChange={setEditingConfig} />}
 
               <div className="mt-4">
@@ -1195,4 +1148,3 @@ export default function ConfigsClient({ initialData, orgId: _orgId }: { initialD
     </div>
   )
 }
-

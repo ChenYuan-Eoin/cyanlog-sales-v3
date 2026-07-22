@@ -52,7 +52,9 @@ export interface QuoteItem {
 export interface Contract {
   id: string
   filename: string
+  contract_no?: string | null
   title?: string
+  party_b_name?: string | null
   storage_path: string
   size: number
   mime_type: string
@@ -69,8 +71,41 @@ export interface Contract {
   created_at: string
   updated_at: string
   contract_reviews?: ContractReview[]
+  contract_versions?: ContractVersionSummary[]
+  latest_version?: ContractVersionSummary | null
+  version_count?: number
+  latest_comparison?: ContractComparisonSummary | null
   contract_analysis_jobs?: ContractAnalysisJob[]
   latest_analysis_job?: ContractAnalysisJob | null
+}
+
+export interface ContractDraftSummary {
+  id: string
+  title: string | null
+  status: 'draft' | 'generated' | 'submitted_for_review' | 'approved'
+  version_number: number | null
+  generated_filename?: string | null
+  submitted_contract_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ContractVersionSummary {
+  contract_id: string
+  version_number: number
+  source: 'original' | 'review_revision' | 'manual_revision' | string
+  created_at: string | null
+}
+
+export interface ContractComparisonSummary {
+  id: string
+  contract_id: string
+  baseline_type: string
+  baseline_doc_id: string | null
+  compare_doc_id: string | null
+  status: 'pending' | 'processing' | 'completed' | 'failed' | string
+  created_at: string | null
+  completed_at: string | null
 }
 
 export interface ContractReview {

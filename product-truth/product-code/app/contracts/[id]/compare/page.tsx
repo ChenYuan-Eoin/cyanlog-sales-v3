@@ -1,39 +1,91 @@
 'use client'
 
-import { useCallback, useEffect, useState, useRef } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   ArrowLeftIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   DownloadIcon,
   GitCompareIcon,
-  SparklesIcon,
-  CheckCircleIcon,
-  LockIcon,
-  Edit3Icon,
+  Link2Icon,
+  Loader2Icon,
+  Maximize2Icon,
+  RefreshCcwIcon,
+  Unlink2Icon,
+  ZoomInIcon,
+  ZoomOutIcon,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  ComparisonSourcePreview,
+  type ComparisonDiffPosition,
+  type ComparisonSourceIdentity,
+} from '@/components/contracts/comparison-source-preview'
+import {
+  nextCompareViewerZoom,
+  synchronizedTargetScrollTop,
+  type CompareViewerScrollMode,
+} from '@/lib/contracts/compare-viewer'
+import { cn } from '@/lib/utils'
 
 interface DiffItem {
   id: string
   diff_type: 'deleted' | 'added' | 'modified' | 'moved'
-  baseline_text?: string
-  compare_text?: string
-  semantic_change?: string
-  risk_level?: 'red' | 'yellow' | 'green'
+  baseline_position?: ComparisonDiffPosition | null
+  compare_position?: ComparisonDiffPosition | null
+  baseline_text?: string | null
+  compare_text?: string | null
+  semantic_change?: string | null
+  risk_level?: 'red' | 'yellow' | 'green' | null
   sort_order: number
 }
 
 interface ComparisonData {
   id: string
   contract_id: string
+  org_id: string
   baseline_type: string
   status: string
-  ai_summary?: string
-  ai_recommendation?: string
+  ai_summary?: string | null
+  error_message?: string | null
   diffs: DiffItem[]
+  sources: {
+    old: ComparisonSourceIdentity
+    new: ComparisonSourceIdentity
+  }
   created_at: string
+  completed_at?: string | null
+}
+
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem('token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+function responseMessage(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== 'object') return fallback
+  const error = (payload as { error?: string | { message?: string } }).error
+  if (typeof error === 'string') return error || fallback
+  return error?.message || fallback
+}
+
+function diffLabel(type: DiffItem['diff_type']) {
+  if (type === 'deleted') return '删除'
+  if (type === 'added') return '新增'
+  if (type === 'moved') return '移动'
+  return '修改'
+}
+
+function fileSize(value: number) {
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
+function shortHash(value: string) {
+  return `${value.slice(0, 8)}…${value.slice(-6)}`
 }
 
 export default function ContractComparePage() {
@@ -41,422 +93,258 @@ export default function ContractComparePage() {
   const searchParams = useSearchParams()
   const contractId = params.id as string
   const comparisonId = searchParams.get('comparison_id')
-
   const [comparison, setComparison] = useState<ComparisonData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedDiffId, setSelectedDiffId] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'dual' | 'merge'>('dual')
-
-  const leftPaneRef = useRef<HTMLDivElement>(null)
-  const rightPaneRef = useRef<HTMLDivElement>(null)
-  const isSyncing = useRef(false)
+  const [reportError, setReportError] = useState('')
+  const [reportLoading, setReportLoading] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [zoom, setZoom] = useState(100)
+  const [fitWidth, setFitWidth] = useState(true)
+  const [scrollMode, setScrollMode] = useState<CompareViewerScrollMode>('synchronized')
+  const oldPaneRef = useRef<HTMLDivElement>(null)
+  const newPaneRef = useRef<HTMLDivElement>(null)
+  const syncingRef = useRef(false)
+  const differenceJumpRef = useRef(false)
+  const syncFrameRef = useRef<number | null>(null)
+  const jumpTimerRef = useRef<number | null>(null)
 
   const fetchComparison = useCallback(async () => {
+    setLoading(true)
+    setError('')
     try {
-      const token = localStorage.getItem('token')
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
-
-      let url = `/api/contracts/${contractId}/compare`
-      if (comparisonId) {
-        url = `/api/comparisons/${comparisonId}`
+      const endpoint = comparisonId
+        ? `/api/comparisons/${comparisonId}`
+        : `/api/contracts/${contractId}/compare`
+      const response = await fetch(endpoint, { headers: authHeaders(), cache: 'no-store' })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.data) {
+        throw new Error(responseMessage(payload, '获取比对结果失败'))
       }
-
-      const res = await fetch(url, { headers })
-      if (!res.ok) {
-        setError('获取比对结果失败')
-        return
-      }
-
-      const data = await res.json()
-      setComparison(data.data)
-      if (data.data?.diffs?.length > 0) {
-        setSelectedDiffId(data.data.diffs[0].id)
-      }
-    } catch {
-      setError('网络错误')
+      setComparison(payload.data as ComparisonData)
+      setSelectedIndex(0)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '获取比对结果失败')
     } finally {
       setLoading(false)
     }
-  }, [contractId, comparisonId])
+  }, [comparisonId, contractId])
 
   useEffect(() => {
     void fetchComparison()
   }, [fetchComparison])
 
-  // 同步滚动
-  const handleScroll = useCallback((source: 'left' | 'right') => {
-    if (isSyncing.current) return
-    isSyncing.current = true
-
-    const sourceRef = source === 'left' ? leftPaneRef : rightPaneRef
-    const targetRef = source === 'left' ? rightPaneRef : leftPaneRef
-
-    if (sourceRef.current && targetRef.current) {
-      targetRef.current.scrollTop = sourceRef.current.scrollTop
-    }
-
-    setTimeout(() => {
-      isSyncing.current = false
-    }, 50)
+  useEffect(() => () => {
+    if (syncFrameRef.current !== null) window.cancelAnimationFrame(syncFrameRef.current)
+    if (jumpTimerRef.current !== null) window.clearTimeout(jumpTimerRef.current)
   }, [])
 
-  // 跳转到指定差异
-  const scrollToDiff = useCallback((diffId: string) => {
-    setSelectedDiffId(diffId)
-    const element = document.getElementById(`diff-${diffId}`)
-    if (element && leftPaneRef.current) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const diffs = useMemo(() => comparison?.diffs ?? [], [comparison?.diffs])
+  const selectedDiff = diffs[selectedIndex] || null
+  const stats = useMemo(() => ({
+    deleted: diffs.filter((item) => item.diff_type === 'deleted').length,
+    added: diffs.filter((item) => item.diff_type === 'added').length,
+    modified: diffs.filter((item) => item.diff_type === 'modified').length,
+    moved: diffs.filter((item) => item.diff_type === 'moved').length,
+  }), [diffs])
+
+  const syncScroll = useCallback((sourceRole: 'old' | 'new') => {
+    if (syncingRef.current || differenceJumpRef.current) return
+    const source = sourceRole === 'old' ? oldPaneRef.current : newPaneRef.current
+    const target = sourceRole === 'old' ? newPaneRef.current : oldPaneRef.current
+    if (!source || !target) return
+    const targetTop = synchronizedTargetScrollTop(scrollMode, {
+      scrollTop: source.scrollTop,
+      scrollHeight: source.scrollHeight,
+      clientHeight: source.clientHeight,
+    }, {
+      scrollHeight: target.scrollHeight,
+      clientHeight: target.clientHeight,
+    })
+    if (targetTop === null) return
+    syncingRef.current = true
+    target.scrollTop = targetTop
+    if (syncFrameRef.current !== null) window.cancelAnimationFrame(syncFrameRef.current)
+    syncFrameRef.current = window.requestAnimationFrame(() => {
+      syncingRef.current = false
+      syncFrameRef.current = null
+    })
+  }, [scrollMode])
+
+  const selectDiff = useCallback((index: number) => {
+    if (!comparison || diffs.length === 0) return
+    const bounded = Math.max(0, Math.min(diffs.length - 1, index))
+    differenceJumpRef.current = true
+    if (jumpTimerRef.current !== null) window.clearTimeout(jumpTimerRef.current)
+    jumpTimerRef.current = window.setTimeout(() => {
+      differenceJumpRef.current = false
+      jumpTimerRef.current = null
+    }, 700)
+    setSelectedIndex(bounded)
+    const diff = diffs[bounded]
+    window.requestAnimationFrame(() => {
+      const targets: Array<[HTMLDivElement | null, ComparisonDiffPosition | null | undefined]> = [
+        [oldPaneRef.current, diff.baseline_position],
+        [newPaneRef.current, diff.compare_position],
+      ]
+      targets.forEach(([pane, position]) => {
+        if (!pane || !position?.page) return
+        pane.querySelector<HTMLElement>(`[data-comparison-page="${position.page}"]`)
+          ?.scrollIntoView({ behavior: 'auto', block: 'center' })
+      })
+    })
+  }, [comparison, diffs])
+
+  const downloadReport = useCallback(async () => {
+    if (!comparison) return
+    setReportLoading(true)
+    setReportError('')
+    try {
+      const response = await fetch(`/api/comparisons/${comparison.id}/report`, {
+        headers: authHeaders(),
+        cache: 'no-store',
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(responseMessage(payload, '差异报告生成失败'))
+      }
+      const blob = await response.blob()
+      if (blob.size < 1) throw new Error('差异报告文件为空')
+      const disposition = response.headers.get('content-disposition') || ''
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+      const name = encodedName ? decodeURIComponent(encodedName) : `合同差异报告-${comparison.id}.docx`
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = name
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (downloadError) {
+      setReportError(downloadError instanceof Error ? downloadError.message : '差异报告生成失败')
+    } finally {
+      setReportLoading(false)
     }
-  }, [])
+  }, [comparison])
 
   if (loading) {
+    return <div className="flex h-dvh items-center justify-center bg-slate-100 text-sm text-slate-600"><Loader2Icon className="mr-2 size-5 animate-spin" />正在读取冻结的旧/新原文件…</div>
+  }
+  if (error || !comparison) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-slate-500">加载比对结果...</div>
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-slate-100 p-8 text-center">
+        <p className="max-w-xl text-sm text-red-700">{error || '未找到可审计比对记录'}</p>
+        <Button variant="outline" onClick={() => void fetchComparison()}><RefreshCcwIcon />重新加载</Button>
       </div>
     )
   }
-
-  if (error) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-red-600">{error}</div>
-      </div>
-    )
-  }
-
-  if (!comparison) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-slate-500">未找到比对记录</div>
-      </div>
-    )
-  }
-
-  // 统计
-  const stats = {
-    deleted: comparison.diffs?.filter((d) => d.diff_type === 'deleted').length || 0,
-    added: comparison.diffs?.filter((d) => d.diff_type === 'added').length || 0,
-    modified: comparison.diffs?.filter((d) => d.diff_type === 'modified' || d.diff_type === 'moved').length || 0,
-  }
-
-  const totalChanges = stats.deleted + stats.added + stats.modified
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* 差异导航面板 */}
-      <aside className="w-80 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-100">
-          <Link href={`/contracts/${contractId}`}>
-            <Button variant="ghost" size="sm" className="mb-2">
-              <ArrowLeftIcon className="h-4 w-4 mr-1" />
-              返回合同
-            </Button>
-          </Link>
-          <h2 className="font-bold text-slate-900 flex items-center gap-2">
-            <GitCompareIcon className="h-5 w-5 text-indigo-500" />
-            文档比对
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            检测到 {totalChanges} 处差异
-          </p>
+    <div className="flex h-dvh min-h-[640px] overflow-hidden bg-slate-100" data-testid="g6-compare-workbench">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
+        <div className="border-b border-slate-200 p-3">
+          <Link href="/contracts/compare"><Button variant="ghost" size="sm"><ArrowLeftIcon />返回文件选择</Button></Link>
+          <div className="mt-3 flex items-center gap-2"><GitCompareIcon className="size-5 text-indigo-600" /><h1 className="font-semibold">文档对比</h1></div>
+          <p className="mt-1 text-xs text-slate-500">{diffs.length} 处已定位差异</p>
         </div>
-
-        {/* 差异统计 */}
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex gap-4 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 bg-red-200 border border-red-300 rounded-sm" />
-            <span className="text-slate-600">删除 {stats.deleted}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 bg-green-200 border border-green-300 rounded-sm" />
-            <span className="text-slate-600">新增 {stats.added}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 bg-blue-100 border border-blue-300 rounded-sm" />
-            <span className="text-slate-600">修改 {stats.modified}</span>
-          </div>
+        <div className="grid grid-cols-2 gap-2 border-b border-slate-200 p-3 text-[11px]">
+          <span className="rounded bg-red-50 px-2 py-1 text-red-700">删除 {stats.deleted}</span>
+          <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">新增 {stats.added}</span>
+          <span className="rounded bg-blue-50 px-2 py-1 text-blue-700">修改 {stats.modified}</span>
+          <span className="rounded bg-violet-50 px-2 py-1 text-violet-700">移动 {stats.moved}</span>
         </div>
-
-        {/* 变更列表 */}
-        <div className="flex-1 overflow-y-auto">
-          {comparison.diffs?.map((diff, index) => (
+        <div className="min-h-0 flex-1 overflow-y-auto" aria-label="差异列表">
+          {diffs.length === 0 ? <p className="p-4 text-sm text-slate-500">两份冻结文本没有可报告差异。</p> : diffs.map((diff, index) => (
             <button
               key={diff.id}
-              onClick={() => scrollToDiff(diff.id)}
-              className={`w-full text-left p-4 border-l-4 transition-colors ${
-                selectedDiffId === diff.id
-                  ? 'bg-indigo-50 border-indigo-500'
-                  : 'border-transparent hover:bg-slate-50'
-              } ${
-                diff.diff_type === 'deleted'
-                  ? 'border-l-red-500'
-                  : diff.diff_type === 'added'
-                    ? 'border-l-green-500'
-                    : 'border-l-blue-500'
-              }`}
+              type="button"
+              onClick={() => selectDiff(index)}
+              className={cn('w-full border-b border-slate-100 p-3 text-left hover:bg-slate-50', index === selectedIndex && 'bg-indigo-50 ring-1 ring-inset ring-indigo-200')}
             >
-              <div className="flex justify-between items-start mb-1">
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] ${
-                    diff.diff_type === 'deleted'
-                      ? 'border-red-200 text-red-600 bg-red-50'
-                      : diff.diff_type === 'added'
-                        ? 'border-green-200 text-green-600 bg-green-50'
-                        : 'border-blue-200 text-blue-600 bg-blue-50'
-                  }`}
-                >
-                  {diff.diff_type === 'deleted'
-                    ? '删除'
-                    : diff.diff_type === 'added'
-                      ? '新增'
-                      : '修改'}
-                </Badge>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  #{index + 1}
-                </span>
+              <div className="flex items-center justify-between gap-2">
+                <Badge variant="outline" className="text-[10px]">{diffLabel(diff.diff_type)}</Badge>
+                <span className="text-[10px] text-slate-400">{index + 1}/{diffs.length}</span>
               </div>
-              <p className="text-xs font-medium text-slate-800 truncate">
-                {diff.semantic_change ||
-                  diff.baseline_text?.slice(0, 30) ||
-                  diff.compare_text?.slice(0, 30) ||
-                  '内容变更'}
-              </p>
-              {diff.risk_level && diff.risk_level !== 'green' && (
-                <div className="mt-2 flex items-center gap-1">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      diff.risk_level === 'red' ? 'bg-red-500' : 'bg-amber-500'
-                    }`}
-                  />
-                  <span
-                    className={`text-[10px] ${
-                      diff.risk_level === 'red' ? 'text-red-600' : 'text-amber-600'
-                    }`}
-                  >
-                    {diff.risk_level === 'red' ? '高风险' : '需注意'}
-                  </span>
-                </div>
-              )}
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-700">{diff.semantic_change || diff.baseline_text || diff.compare_text}</p>
             </button>
           ))}
         </div>
-
-        {/* AI 总结 */}
-        {comparison.ai_summary && (
-          <div className="p-4 m-4 bg-indigo-600 rounded-xl text-white shadow-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <SparklesIcon className="h-4 w-4" />
-              <span className="text-xs font-bold">AI 差异深度解读</span>
-            </div>
-            <p className="text-xs leading-relaxed opacity-90">
-              {comparison.ai_summary}
-            </p>
-          </div>
-        )}
       </aside>
 
-      {/* 主内容区 */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* 顶部操作栏 */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <h1 className="font-bold text-slate-900">
-              {comparison.baseline_type === 'template'
-                ? '标准模板 vs 客户回传'
-                : '版本比对'}
-            </h1>
-            {totalChanges > 0 && (
-              <Badge
-                variant="outline"
-                className="bg-amber-50 border-amber-200 text-amber-700"
-              >
-                {totalChanges} 处差异
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center bg-slate-100 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode('dual')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                  viewMode === 'dual'
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                双栏视图
-              </button>
-              <button
-                onClick={() => setViewMode('merge')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                  viewMode === 'merge'
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                合并视图
-              </button>
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 overflow-x-auto border-b border-slate-200 bg-white px-3">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={() => selectDiff(Math.max(0, selectedIndex - 1))}><ChevronLeftIcon /></Button>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">旧/新原文件对比</p>
+              <p className="text-[10px] text-slate-500">创建时快照 · {new Date(comparison.created_at).toLocaleString('zh-CN')}</p>
             </div>
-            <Button size="sm">
-              <DownloadIcon className="h-4 w-4 mr-1.5" />
-              导出报告
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center rounded-md border border-slate-200">
+              <Button variant="ghost" size="icon-sm" onClick={() => { setFitWidth(false); setZoom((value) => nextCompareViewerZoom(value, 'out')) }} aria-label="缩小"><ZoomOutIcon /></Button>
+              <span className="w-12 text-center text-[11px]">{fitWidth ? '适宽' : `${zoom}%`}</span>
+              <Button variant="ghost" size="icon-sm" onClick={() => { setFitWidth(false); setZoom((value) => nextCompareViewerZoom(value, 'in')) }} aria-label="放大"><ZoomInIcon /></Button>
+              <Button variant="ghost" size="icon-sm" onClick={() => { setZoom(100); setFitWidth(true) }} aria-label="适合宽度"><Maximize2Icon /></Button>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setScrollMode((value) => value === 'synchronized' ? 'independent' : 'synchronized')}>
+              {scrollMode === 'synchronized' ? <Link2Icon /> : <Unlink2Icon />}{scrollMode === 'synchronized' ? '同步滚动' : '独立滚动'}
+            </Button>
+            <Button size="sm" onClick={() => void downloadReport()} disabled={reportLoading || comparison.status !== 'completed'}>
+              {reportLoading ? <Loader2Icon className="animate-spin" /> : <DownloadIcon />}导出报告
             </Button>
           </div>
         </header>
 
-        {/* 差异高亮说明 */}
-        <div className="h-10 bg-slate-50 border-b border-slate-200 flex items-center px-4 gap-6 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 bg-red-100 border border-red-300 rounded" />
-            <span className="text-slate-500">删除内容</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 bg-green-100 border border-green-300 rounded" />
-            <span className="text-slate-500">新增内容</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 bg-blue-50 border border-blue-300 rounded" />
-            <span className="text-slate-500">移动/修改</span>
-          </div>
+        {(reportError || comparison.error_message) && <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900" role="alert">{reportError || comparison.error_message}</div>}
+        {comparison.ai_summary && <div className="shrink-0 border-b border-indigo-100 bg-indigo-50 px-4 py-2 text-xs text-indigo-900"><span className="font-semibold">差异摘要：</span>{comparison.ai_summary}</div>}
+
+        <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-slate-300">
+          {(['old', 'new'] as const).map((role) => {
+            const source = comparison.sources[role]
+            const position = role === 'old' ? selectedDiff?.baseline_position : selectedDiff?.compare_position
+            const text = role === 'old' ? selectedDiff?.baseline_text : selectedDiff?.compare_text
+            return (
+              <section key={role} className="flex min-w-0 flex-col overflow-hidden bg-slate-200" aria-label={role === 'old' ? '旧文件原文' : '新文件原文'}>
+                <div className={cn('shrink-0 border-b px-3 py-2', role === 'old' ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50')}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2"><Badge className={role === 'old' ? 'bg-red-600' : 'bg-emerald-600'}>{role === 'old' ? '旧文件' : '新文件'}</Badge><p className="truncate text-xs font-semibold">{source.file_name}</p></div>
+                      <p className="mt-1 truncate font-mono text-[9px] text-slate-500">SHA {shortHash(source.file_sha256)} · {fileSize(source.file_size)} · {source.page_map.page_count} 页</p>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  ref={role === 'old' ? oldPaneRef : newPaneRef}
+                  onScroll={() => syncScroll(role)}
+                  className="min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain"
+                  data-testid={`${role}-source-scroll`}
+                  data-scroll-mode={scrollMode}
+                >
+                  <ComparisonSourcePreview
+                    comparisonId={comparison.id}
+                    source={source}
+                    zoom={zoom}
+                    fitWidth={fitWidth}
+                    selectedDiffId={selectedDiff?.id}
+                    selectedText={text}
+                    selectedPosition={position}
+                  />
+                </div>
+              </section>
+            )
+          })}
         </div>
 
-        {/* 双栏对比区 */}
-        <div className="flex-1 flex overflow-hidden bg-slate-100 p-4 gap-4">
-          {/* 左窗格：基准文档 */}
-          <div
-            ref={leftPaneRef}
-            onScroll={() => handleScroll('left')}
-            className="flex-1 bg-white rounded-xl shadow-sm overflow-y-auto custom-scrollbar relative"
-          >
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                基准文档
-              </span>
-              <LockIcon className="h-3 w-3 text-slate-300" />
-            </div>
-            <div className="p-8">
-              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-                系统服务采购协议
-              </h2>
-              <div className="space-y-6 text-sm leading-loose text-slate-600">
-                {comparison.diffs?.map((diff) => (
-                  <div
-                    key={`left-${diff.id}`}
-                    id={`diff-${diff.id}`}
-                    className={`p-3 rounded-lg transition-colors ${
-                      selectedDiffId === diff.id ? 'bg-indigo-50/50 ring-1 ring-indigo-200' : ''
-                    } ${
-                      diff.diff_type === 'moved' ? 'border-l-2 border-blue-500 bg-blue-50/30' : ''
-                    }`}
-                  >
-                    {diff.diff_type === 'deleted' ? (
-                      <div className="bg-red-50/50 p-2 rounded">
-                        <span className="bg-red-100 text-red-800 line-through decoration-red-400">
-                          {diff.baseline_text}
-                        </span>
-                      </div>
-                    ) : diff.diff_type === 'modified' ? (
-                      <div className="space-y-2">
-                        <h4 className="font-bold text-slate-800">条款内容</h4>
-                        <p className="bg-red-50/50 p-2 rounded">
-                          <span className="bg-red-100 text-red-800 line-through decoration-red-400">
-                            {diff.baseline_text}
-                          </span>
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <h4 className="font-bold text-slate-800 mb-2">条款内容</h4>
-                        <p>{diff.baseline_text || '（无变化）'}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {(!comparison.diffs || comparison.diffs.length === 0) && (
-                  <div className="text-center py-12 text-slate-400">
-                    <CheckCircleIcon className="h-12 w-12 mx-auto mb-4 text-green-400" />
-                    <p>未发现差异</p>
-                  </div>
-                )}
-              </div>
-            </div>
+        <footer className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-3">
+          <div className="min-w-0 text-xs text-slate-600">
+            {selectedDiff ? <><span className="font-semibold">{diffLabel(selectedDiff.diff_type)}：</span><span className="line-clamp-1">{selectedDiff.semantic_change || '双侧原文已定位'}</span></> : '没有差异项'}
           </div>
-
-          {/* 右窗格：对比文档 */}
-          <div
-            ref={rightPaneRef}
-            onScroll={() => handleScroll('right')}
-            className="flex-1 bg-white rounded-xl shadow-sm overflow-y-auto custom-scrollbar relative"
-          >
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 p-4 flex justify-between items-center z-10">
-              <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
-                对比文档
-              </span>
-              <Edit3Icon className="h-3 w-3 text-indigo-300" />
-            </div>
-            <div className="p-8">
-              <h2 className="text-xl font-bold text-center text-slate-900 mb-10">
-                系统服务采购协议
-              </h2>
-              <div className="space-y-6 text-sm leading-loose text-slate-600">
-                {comparison.diffs?.map((diff) => (
-                  <div
-                    key={`right-${diff.id}`}
-                    className={`p-3 rounded-lg transition-colors ${
-                      selectedDiffId === diff.id ? 'bg-indigo-50/50 ring-1 ring-indigo-200' : ''
-                    } ${
-                      diff.diff_type === 'moved' ? 'border-l-2 border-blue-500 bg-blue-50/30' : ''
-                    }`}
-                  >
-                    {diff.diff_type === 'added' ? (
-                      <div className="bg-green-50/50 p-2 rounded">
-                        <span className="bg-green-100 text-green-800 underline decoration-green-400">
-                          {diff.compare_text}
-                        </span>
-                      </div>
-                    ) : diff.diff_type === 'modified' ? (
-                      <div className="space-y-2">
-                        <h4 className="font-bold text-slate-800">条款内容</h4>
-                        <p className="bg-green-50/50 p-2 rounded">
-                          <span className="bg-green-100 text-green-800 underline decoration-green-400">
-                            {diff.compare_text}
-                          </span>
-                        </p>
-                      </div>
-                    ) : diff.diff_type === 'moved' ? (
-                      <div className="bg-blue-50/50 p-2 rounded">
-                        <h4 className="font-bold text-slate-800 italic">条款位置移动</h4>
-                        <p>{diff.compare_text}</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <h4 className="font-bold text-slate-800 mb-2">条款内容</h4>
-                        <p>{diff.compare_text || '（保持原样）'}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {(!comparison.diffs || comparison.diffs.length === 0) && (
-                  <div className="text-center py-12 text-slate-400">
-                    <CheckCircleIcon className="h-12 w-12 mx-auto mb-4 text-green-400" />
-                    <p>未发现差异</p>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button variant="outline" size="sm" onClick={() => selectDiff(selectedIndex - 1)} disabled={selectedIndex <= 0}><ChevronLeftIcon />上一处</Button>
+            <span className="min-w-16 text-center text-xs">{diffs.length ? `${selectedIndex + 1}/${diffs.length}` : '0/0'}</span>
+            <Button variant="outline" size="sm" onClick={() => selectDiff(selectedIndex + 1)} disabled={selectedIndex >= diffs.length - 1}>下一处<ChevronRightIcon /></Button>
           </div>
-
-          {/* VS 标记 */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-            <div className="w-10 h-10 bg-white rounded-full shadow-xl flex items-center justify-center border-2 border-indigo-100">
-              <span className="text-[10px] font-black text-indigo-500">VS</span>
-            </div>
-          </div>
-        </div>
+        </footer>
       </main>
     </div>
   )

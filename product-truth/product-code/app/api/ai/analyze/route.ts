@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
     const analysis = await reviewWithFailoverSync(input.text, {
       orgId,
       preferredProvider: input.forceCloud ? 'sales_cloud_backup' : undefined,
+      tool: input.task === 'extract' ? 'tender_parse' : input.task === 'classify' ? 'rule_translation' : 'contract_review',
+      capability: input.task === 'extract' ? 'long_text' : input.task === 'classify' ? 'deterministic_rule_scan' : 'contract_review',
+      phase: input.task ? `ai_analyze_${input.task}` : 'ai_analyze_semantic',
     })
 
     return NextResponse.json({

@@ -1,0 +1,178 @@
+- generic [active] [ref=f5e1]:
+  - button "打开主导航" [ref=f5e2] [cursor=pointer]:
+    - img [ref=f5e3]
+  - complementary [ref=f5e5]:
+    - generic [ref=f5e6]:
+      - img "ONES Sales" [ref=f5e8]
+      - generic [ref=f5e9]:
+        - generic [ref=f5e10]: ONES Sales
+        - paragraph [ref=f5e11]: 智能协作平台
+    - navigation [ref=f5e12]:
+      - link "工作台" [ref=f5e13] [cursor=pointer]:
+        - /url: /
+        - img [ref=f5e14]
+        - generic [ref=f5e18]: 工作台
+      - link "报价中心" [ref=f5e19] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f5e20]
+        - generic [ref=f5e24]: 报价中心
+      - link "合同审核" [ref=f5e25] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f5e26]
+        - generic [ref=f5e31]: 合同审核
+      - link "标书中心" [ref=f5e32] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f5e33]
+        - generic [ref=f5e37]: 标书中心
+      - link "知识库" [ref=f5e38] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f5e39]
+        - generic [ref=f5e44]: 知识库
+      - link "日程" [ref=f5e45] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f5e46]
+        - generic [ref=f5e52]: 日程
+      - link "配置中心" [ref=f5e53] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f5e54]
+        - generic [ref=f5e58]: 配置中心
+    - generic [ref=f5e59]:
+      - link "个人信息" [ref=f5e60] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f5e61]
+        - generic [ref=f5e64]: 个人信息
+      - button "退出登录" [ref=f5e65] [cursor=pointer]:
+        - img [ref=f5e66]
+        - generic [ref=f5e69]: 退出登录
+  - main [ref=f5e70]:
+    - generic [ref=f5e71]:
+      - generic [ref=f5e74]:
+        - generic [ref=f5e76]:
+          - img [ref=f5e77]
+          - textbox "搜索合同..." [ref=f5e80]
+        - button [ref=f5e81] [cursor=pointer]:
+          - img
+      - main [ref=f5e82]:
+        - generic [ref=f5e83]:
+          - generic [ref=f5e84]:
+            - generic [ref=f5e85]:
+              - img [ref=f5e87]
+              - generic [ref=f5e90]:
+                - heading "发起合同审核" [level=2] [ref=f5e91]
+                - paragraph [ref=f5e92]: 上传合同源文件，绑定已发布规则、Skill 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。
+            - link "发起审核" [ref=f5e93] [cursor=pointer]:
+              - /url: /contracts/new
+              - button "发起审核" [ref=f5e94]:
+                - img
+                - text: 发起审核
+          - generic [ref=f5e95]:
+            - generic [ref=f5e96]: 源文件docx / pdf
+            - generic [ref=f5e97]: 审核依据规则快照 / Skill
+            - generic [ref=f5e98]: 业务处理复核 / 谈判
+            - generic [ref=f5e99]: 输出批注版 / 报告
+        - generic [ref=f5e100]:
+          - generic [ref=f5e103]:
+            - img [ref=f5e105]
+            - generic [ref=f5e108]:
+              - paragraph [ref=f5e109]: "6"
+              - paragraph [ref=f5e110]: 全部合同
+          - generic [ref=f5e113]:
+            - img [ref=f5e115]
+            - generic [ref=f5e118]:
+              - paragraph [ref=f5e119]: "1"
+              - paragraph [ref=f5e120]: 进行中
+          - generic [ref=f5e123]:
+            - img [ref=f5e125]
+            - generic [ref=f5e127]:
+              - paragraph [ref=f5e128]: "0"
+              - paragraph [ref=f5e129]: 需关注
+          - generic [ref=f5e132]:
+            - img [ref=f5e134]
+            - generic [ref=f5e136]:
+              - paragraph [ref=f5e137]: "4"
+              - paragraph [ref=f5e138]: 已完成
+        - tablist [ref=f5e141]:
+          - tab "全部" [selected] [ref=f5e142] [cursor=pointer]
+          - tab "起草中" [ref=f5e143] [cursor=pointer]
+          - tab "待审核" [ref=f5e144] [cursor=pointer]
+          - tab "已完成" [ref=f5e145] [cursor=pointer]
+        - generic [ref=f5e146]:
+          - link "打开合同_ONES_-_2026.docx" [ref=f5e147] [cursor=pointer]:
+            - /url: /contracts/13aca6c2-e902-4458-9e94-6d8db8ae7a09
+            - generic [ref=f5e150]:
+              - img [ref=f5e152]
+              - generic [ref=f5e155]:
+                - paragraph [ref=f5e157]: _ONES_-_2026.docx
+                - generic [ref=f5e158]:
+                  - generic [ref=f5e159]: 审核完成
+                  - generic [ref=f5e160]: 6月30日
+              - img [ref=f5e161]
+          - link "打开合同Hemory_.docx" [ref=f5e163] [cursor=pointer]:
+            - /url: /contracts/44301b16-6551-4720-afa5-f1d80b1604de
+            - generic [ref=f5e166]:
+              - img [ref=f5e168]
+              - generic [ref=f5e171]:
+                - paragraph [ref=f5e173]: Hemory_.docx
+                - generic [ref=f5e174]:
+                  - generic [ref=f5e175]: 审核完成
+                  - generic [ref=f5e176]: 6月30日
+              - img [ref=f5e177]
+          - link "打开合同ones-contract-e2e-risk.docx" [ref=f5e179] [cursor=pointer]:
+            - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8
+            - generic [ref=f5e182]:
+              - img [ref=f5e184]
+              - generic [ref=f5e187]:
+                - paragraph [ref=f5e189]: ones-contract-e2e-risk.docx
+                - generic [ref=f5e190]:
+                  - generic [ref=f5e191]: 审核完成
+                  - generic [ref=f5e192]: 6月30日
+              - img [ref=f5e193]
+          - link "打开合同" [ref=f5e195] [cursor=pointer]:
+            - /url: /contracts/25d3192e-32d1-44c5-9396-179f1a7309ab
+            - generic [ref=f5e198]:
+              - img [ref=f5e200]
+              - generic [ref=f5e203]:
+                - generic:
+                  - paragraph
+                - generic [ref=f5e204]:
+                  - generic [ref=f5e205]: DRAFT
+                  - generic [ref=f5e206]: 6月30日
+              - img [ref=f5e207]
+          - link "打开合同_2026_ONES_1_.docx" [ref=f5e209] [cursor=pointer]:
+            - /url: /contracts/0286f885-fc49-4a43-9543-798aca2dda16
+            - generic [ref=f5e212]:
+              - img [ref=f5e214]
+              - generic [ref=f5e217]:
+                - paragraph [ref=f5e219]: _2026_ONES_1_.docx
+                - generic [ref=f5e220]:
+                  - generic [ref=f5e221]: 审核完成
+                  - generic [ref=f5e222]: 6月25日
+              - img [ref=f5e223]
+          - link "打开合同minimal.pdf" [ref=f5e225] [cursor=pointer]:
+            - /url: /contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c
+            - generic [ref=f5e228]:
+              - img [ref=f5e230]
+              - generic [ref=f5e233]:
+                - paragraph [ref=f5e235]: minimal.pdf
+                - generic [ref=f5e236]:
+                  - generic [ref=f5e237]: 待审核
+                  - generic [ref=f5e238]: 6月25日
+              - img [ref=f5e239]
+      - generic [ref=f5e242]:
+        - link "起草" [ref=f5e243] [cursor=pointer]:
+          - /url: /contracts/draft
+          - img [ref=f5e245]
+          - generic [ref=f5e250]: 起草
+        - link "导入" [ref=f5e251] [cursor=pointer]:
+          - /url: /contracts/upload
+          - img [ref=f5e253]
+          - generic [ref=f5e256]: 导入
+        - link "审核" [ref=f5e257] [cursor=pointer]:
+          - /url: /contracts/new
+          - img [ref=f5e259]
+          - generic [ref=f5e262]: 审核
+        - link "比对" [ref=f5e263] [cursor=pointer]:
+          - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare
+          - img [ref=f5e265]
+          - generic [ref=f5e270]: 比对
+  - alert [ref=f5e271]

@@ -1,9 +1,21 @@
 {
-  "timestamp": "2026-06-24T09:35:42.121Z",
+  "timestamp": "2026-07-09T08:33:05.629Z",
   "typecheck": {
-    "success": true,
-    "errors": 0,
-    "message": "类型检查通过"
+    "success": false,
+    "errors": 59,
+    "message": "类型检查失败",
+    "details": [
+      ".next/types/app/api/admin/clause-library/[id]/route.ts(244,7): error TS2344: Type '{ __tag__: \"DELETE\"; __param_position__: \"second\"; __param_type__: AsyncRouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/admin/clause-library/[id]/route.ts(283,7): error TS2344: Type '{ __tag__: \"PATCH\"; __param_position__: \"second\"; __param_type__: AsyncRouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/asks/[askId]/responses/route.ts(166,7): error TS2344: Type '{ __tag__: \"POST\"; __param_position__: \"second\"; __param_type__: { params: { askId: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/cases/[id]/route.ts(49,7): error TS2344: Type '{ __tag__: \"GET\"; __param_position__: \"second\"; __param_type__: AsyncRouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/cases/[id]/route.ts(244,7): error TS2344: Type '{ __tag__: \"DELETE\"; __param_position__: \"second\"; __param_type__: AsyncRouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/cases/[id]/route.ts(283,7): error TS2344: Type '{ __tag__: \"PATCH\"; __param_position__: \"second\"; __param_type__: AsyncRouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/contracts/[id]/ai-review/route.ts(166,7): error TS2344: Type '{ __tag__: \"POST\"; __param_position__: \"second\"; __param_type__: AsyncRouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/contracts/[id]/analyze/route.ts(166,7): error TS2344: Type '{ __tag__: \"POST\"; __param_position__: \"second\"; __param_type__: AsyncRouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/contracts/[id]/asks/[askId]/responses/route.ts(166,7): error TS2344: Type '{ __tag__: \"POST\"; __param_position__: \"second\"; __param_type__: RouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.",
+      ".next/types/app/api/contracts/[id]/asks/[askId]/route.ts(49,7): error TS2344: Type '{ __tag__: \"GET\"; __param_position__: \"second\"; __param_type__: RouteParams; }' does not satisfy the constraint 'ParamCheck<RouteContext>'."
+    ]
   },
   "lint": {
     "success": true,
@@ -12,15 +24,14 @@
     "message": "Lint 检查通过"
   },
   "test": {
-    "success": false,
-    "passed": 0,
-    "failed": 1,
-    "message": "测试失败",
-    "details": []
+    "success": true,
+    "passed": 45,
+    "failed": 0,
+    "message": "测试执行完成"
   },
   "summary": {
     "allPassed": false,
-    "totalErrors": 1,
-    "recommendation": "⚠️ 发现 1 个问题，请修正后再提交"
+    "totalErrors": 59,
+    "recommendation": "⚠️ 发现 59 个问题，请修正后再提交"
   }
 }

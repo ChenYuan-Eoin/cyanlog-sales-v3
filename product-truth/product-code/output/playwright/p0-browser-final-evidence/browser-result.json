@@ -1,0 +1,62 @@
+{
+  "desktop": {
+    "loginMs": 3431,
+    "loginTiming": "parse_payload;dur=0.1, login_rpc;dur=1803.2, login_rpc_timeout;dur=1803.2, rate_limit;dur=1194.6, user_query;dur=168.3, bcrypt_compare;dur=67.1, token_insert;dur=178.1, cache_prime;dur=0.1, response_json;dur=0.3, auth_context_cookie;dur=1.9, total;dur=3414.5",
+    "contractsOk": true,
+    "uploadFirstOk": true,
+    "rulesOk": true,
+    "syncOk": true,
+    "syncMs": 10803,
+    "syncJson": {
+      "success": true,
+      "connector": "feishu",
+      "scope": "departments_and_members",
+      "sync_status": "completed",
+      "departments": {
+        "imported": 0,
+        "updated": 2,
+        "total": 2
+      },
+      "members": {
+        "imported": 0,
+        "updated": 4,
+        "skipped": 0,
+        "total": 4
+      },
+      "warnings": [],
+      "message": "飞书组织架构同步完成"
+    },
+    "orgOk": true,
+    "events": []
+  },
+  "mobile": {
+    "loginMs": 595,
+    "loginTiming": "parse_payload;dur=0.1, login_rpc;dur=558.8, rpc_total;dur=88.5, rpc_audit_write;dur=0.2, rpc_token_write;dur=0.5, rpc_user_lookup;dur=0.7, rpc_auth_context;dur=1.1, rpc_initial_core;dur=4.4, rpc_ip_rate_limit;dur=0.3, rpc_password_verify;dur=73.5, rpc_input_validation;dur=0.8, rpc_initial_dashboard;dur=6.2, rpc_account_rate_limit;dur=0.5, login_rpc_transport;dur=470.3, cache_prime;dur=0.1, response_json;dur=0.3, auth_context_cookie;dur=0.5, total;dur=560.1",
+    "contractsOk": true,
+    "uploadFirstOk": true,
+    "rulesOk": true,
+    "syncOk": true,
+    "syncMs": 8109,
+    "syncJson": {
+      "success": true,
+      "connector": "feishu",
+      "scope": "departments_and_members",
+      "sync_status": "completed",
+      "departments": {
+        "imported": 0,
+        "updated": 2,
+        "total": 2
+      },
+      "members": {
+        "imported": 0,
+        "updated": 4,
+        "skipped": 0,
+        "total": 4
+      },
+      "warnings": [],
+      "message": "飞书组织架构同步完成"
+    },
+    "orgOk": true,
+    "events": []
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "verified_at": "2026-07-18T05:55:25Z",
+  "project_ref": "vsfropnfsmnonkotywsx",
+  "production_touched": false,
+  "paid_dependency": false,
+  "source_manifest": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/preview-browser-cleanup.json",
+  "cleanup_mode": "exact_preview_admin",
+  "removed": {
+    "comparison_ids": 2,
+    "contract_ids": 4,
+    "storage_paths": 8,
+    "auth_token_rows": 1
+  },
+  "postconditions": {
+    "comparison_rows": 0,
+    "diff_rows": 0,
+    "source_rows": 0,
+    "contract_rows": 0,
+    "token_rows": 0,
+    "storage_rows": 0,
+    "enabled_immutability_guards": 3,
+    "all_preview_g6_comparisons": 0,
+    "all_preview_g6_sources": 0
+  },
+  "status": "passed"
+}

@@ -13,6 +13,9 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
 import { handleError } from '@/lib/toast'
+import { useChunkUpload } from '@/lib/hooks/useChunkUpload'
+import { validateUploadSize } from '@/lib/documents/chunk-upload-protocol'
+import { CONTRACT_SOURCE_ACCEPT, contractSourceFormatFromFilename } from '@/lib/documents/source-format'
 
 interface Contract {
   id: string
@@ -121,6 +124,14 @@ export default function ContractEditPage() {
     }
   }, [contractId])
 
+  const { startUpload } = useChunkUpload({
+    onComplete: () => {
+      setSuccess('上传成功')
+      void fetchContract()
+    },
+    onError: (message) => setError(message),
+  })
+
   useEffect(() => {
     void fetchContract()
     void fetchItems()
@@ -161,28 +172,27 @@ export default function ContractEditPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    if (!contractSourceFormatFromFilename(file.name)) {
+      setError('不支持的文件类型，请上传 PDF、DOC、DOCX 或 DOCM 文件')
+      return
+    }
+    const sizeValidation = validateUploadSize(file.size)
+    if (!sizeValidation.ok) {
+      setError(sizeValidation.error)
+      return
+    }
+
     setUploading(true)
     setError('')
 
     try {
       const token = localStorage.getItem('token')
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const res = await fetch(`/api/contracts/${contractId}/upload`, {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.error || '上传失败')
+      if (!token) {
+        setError('请先登录')
         return
       }
 
-      setSuccess('上传成功')
-      await fetchContract()
+      await startUpload(file, contractId, token)
     } catch {
       setError('网络错误')
     } finally {
@@ -487,7 +497,7 @@ export default function ContractEditPage() {
                   <label className="block">
                     <input
                       type="file"
-                      accept=".doc,.docx,.pdf"
+                      accept={CONTRACT_SOURCE_ACCEPT}
                       onChange={handleFileUpload}
                       className="hidden"
                     />

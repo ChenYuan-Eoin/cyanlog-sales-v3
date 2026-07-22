@@ -1,0 +1,327 @@
+- generic:
+  - complementary:
+    - generic:
+      - generic:
+        - generic: ONES Sales
+        - paragraph: 智能协作平台
+    - navigation:
+      - link:
+        - /url: /
+        - generic: 工作台
+      - link:
+        - /url: /quotes
+        - generic: 报价中心
+      - link:
+        - /url: /contracts
+        - generic: 合同审核
+      - link:
+        - /url: /tenders
+        - generic: 标书中心
+      - link:
+        - /url: /knowledge
+        - generic: 知识库
+      - link:
+        - /url: /schedule
+        - generic: 日程
+      - link:
+        - /url: /configs
+        - generic: 配置中心
+    - generic:
+      - link:
+        - /url: /profile
+        - generic: 个人信息
+      - button:
+        - generic: 退出登录
+  - main:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic: 组织级配置工作台
+            - heading [level=1]: 配置中心
+            - paragraph: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+          - generic:
+            - generic:
+              - generic: 生效范围
+              - generic: 组织级统一发布
+            - generic:
+              - generic: 消费端
+              - generic: 报价 / 合同 / AI
+            - generic:
+              - generic: 当前配置集
+              - generic: 组织架构
+        - generic:
+          - complementary:
+            - generic:
+              - generic:
+                - generic: 配置域
+                - paragraph: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+              - generic:
+                - button:
+                  - generic:
+                    - generic: 交易配置
+                    - generic: "0"
+                  - paragraph: 围绕报价工作台的价盘、税率和审批配置。
+                - button:
+                  - generic:
+                    - generic: 合同与 AI 规则
+                    - generic: "0"
+                  - paragraph: 围绕合同审核规则、模型路由和运行时策略的配置集。
+                - button:
+                  - generic:
+                    - generic: 组织与权限
+                    - generic: "15"
+                  - paragraph: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+                - button:
+                  - generic:
+                    - generic: 界面与体验
+                    - generic: "0"
+                  - paragraph: 运行时主题和界面变量集中配置发布。
+              - generic:
+                - generic: 结构约束
+                - list:
+                  - listitem: 配置中心只拥有配置，不承载业务执行。
+                  - listitem: 报价工作台、合同审核页只读消费已发布配置。
+                  - listitem: 配置项需要有版本、状态和作用范围。
+          - main:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: 配置中心
+                    - generic: /
+                    - generic: 组织与权限
+                  - generic:
+                    - generic:
+                      - heading [level=2]: 组织架构
+                      - paragraph: 维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。
+                - generic:
+                  - generic:
+                    - generic: 部门总数
+                    - generic: "15"
+                  - generic:
+                    - generic: 成员总数
+                    - generic: "43"
+                  - generic:
+                    - generic: 销售空间
+                    - generic: "3"
+              - generic:
+                - button:
+                  - generic: 组织架构
+                  - generic: "15"
+                - button:
+                  - generic: 角色权限
+                  - generic: "0"
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic: "15"
+                        - generic: 部门
+                    - generic:
+                      - generic:
+                        - generic: "43"
+                        - generic: 成员
+                    - generic:
+                      - generic:
+                        - generic: "3"
+                        - generic: 销售空间
+                  - generic:
+                    - button: 添加部门
+                    - button: 添加成员
+                    - button: 从飞书同步
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - heading [level=3]: 部门结构
+                        - paragraph: 点击选择部门
+                      - generic:
+                        - button:
+                          - generic: 全部成员
+                          - generic: "43"
+                        - generic:
+                          - generic:
+                            - button:
+                              - button
+                              - generic:
+                                - text: 安全部门
+                                - generic: 👤 钱会计
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 光谷神奇
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: Happy 得不行
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 销售部
+                              - button
+                              - generic: "1"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 法务部
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 财务部
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 信息技术部
+                              - button
+                              - generic: "3"
+                        - button [expanded]: 添加部门
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: 安全部门 的成员
+                            - paragraph: 共 2 人（含子部门）
+                          - button: 查看全部
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - searchbox
+                            - generic: 共 2 人
+                          - generic:
+                            - generic:
+                              - table:
+                                - rowgroup:
+                                  - row:
+                                    - columnheader: 姓名
+                                    - columnheader: 职位
+                                    - columnheader: 部门
+                                    - columnheader: 角色
+                                    - columnheader: 状态
+                                    - columnheader: 操作
+                                - rowgroup:
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 啦
+                                        - generic: 啦啦
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 安全部门
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: P
+                                        - generic:
+                                          - generic: PANG 源
+                                          - generic: 877791189@qq.com
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 安全部门
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                          - generic:
+                            - generic: 第 1 / 1 页 （每页 10 条）
+                            - generic:
+                              - button [disabled]
+                              - button [disabled]
+  - button "Open Next.js Dev Tools" [ref=f1e78] [cursor=pointer]
+  - alert
+  - dialog:
+    - generic:
+      - heading [level=2]: 编辑部门
+    - generic:
+      - generic:
+        - text: 部门名称
+        - textbox:
+          - /placeholder: 例如：销售部
+          - text: 安全部门
+      - generic:
+        - text: 部门编码
+        - textbox:
+          - /placeholder: 例如：SALES
+          - text: "008"
+      - generic:
+        - text: 上级部门
+        - combobox:
+          - generic: 无（根部门）
+        - combobox
+      - generic:
+        - text: 部门主管
+        - combobox [expanded]:
+          - generic: 钱会计 · 会计
+        - combobox
+      - generic:
+        - button: 取消
+        - button: 保存
+    - button:
+      - generic: Close
+  - listbox [ref=f1e701]:
+    - option "暂无主管" [ref=f1e705]
+    - option "啦啦 ·" [ref=f1e708]
+    - option "PANG 源 ·" [ref=f1e711]
+    - option "张晔 ·" [ref=f1e714]
+    - option "胖妞 ·" [ref=f1e717]
+    - option "秦小雯 ·" [ref=f1e720]
+    - option "解舟林 ·" [ref=f1e723]
+    - option "超管验证成员 1782493268886 · 临时验证" [ref=f1e726]
+    - option "超管验证成员 1782493177199 · 临时验证" [ref=f1e729]
+    - option "超管验证成员 1782493132105 · 临时验证" [ref=f1e732]
+    - option "超管验证成员 1782493036126 · 临时验证" [ref=f1e735]
+    - option "预览临时成员 12624 · 预览刷新验收" [ref=f1e738]
+    - option "验收临时成员 22243 · 刷新链路验收" [ref=f1e741]
+    - option "验收临时成员 35056 · 刷新链路验收" [ref=f1e744]
+    - option "验收临时成员 31535 · 刷新链路验收" [ref=f1e747]
+    - option "Codex 超管验收成员 · Super Role Verify" [ref=f1e750]
+    - option "Codex 管理员验收成员 · Admin Role Verify" [ref=f1e753]
+    - option "Codex 角色验收成员 · Role UI Verify" [ref=f1e756]
+    - option "验收临时成员 · 验收岗" [ref=f1e759]
+    - option "张雪丽 · 销售" [ref=f1e762]
+    - option "E2E 测试管理员 · E2E 管理员" [ref=f1e765]
+    - option "孙出纳 · 出纳" [ref=f1e768]
+    - option "李华东 · 华东销售总监" [ref=f1e771]
+    - option "王管理 · 组织管理员" [ref=f1e774]
+    - option "系统超管 · 超级管理员" [ref=f1e777]
+    - option "钱会计 · 会计" [active] [selected] [ref=f1e780]
+    - option "赵法务 · 法务主管" [ref=f1e786]
+    - option "陈法务 · 法务专员" [ref=f1e789]
+    - option "杨丽华 · 销售经理" [ref=f1e792]
+    - option "何健明 · 销售代表" [ref=f1e795]
+    - option "林小青 · 销售代表" [ref=f1e798]
+    - option "郭永福 · 销售代表" [ref=f1e801]
+    - option "胡建华 · 销售经理" [ref=f1e804]
+    - option "高小明 · 销售代表" [ref=f1e807]
+    - option "马建飞 · 销售代表" [ref=f1e810]
+    - option "孙丽丽 · 销售代表" [ref=f1e813]
+    - option "赵美娜 · 销售代表" [ref=f1e816]
+    - option "刘建华 · 销售代表" [ref=f1e819]
+    - option "陈慧娟 · 销售经理" [ref=f1e822]
+    - option "王志远 · 销售代表" [ref=f1e825]
+    - option "李芳颖 · 销售代表" [ref=f1e828]
+    - option "张一鸣 · 高级销售代表" [ref=f1e831]
+    - option "陈华南 · 华南销售总监" [ref=f1e834]
+    - option "王华北 · 华北销售总监" [ref=f1e837]

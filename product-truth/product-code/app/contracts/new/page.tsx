@@ -9,10 +9,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import { uploadErrorMessage } from '@/lib/documents/upload-error'
+import { useChunkUpload } from '@/lib/hooks/useChunkUpload'
+import { validateUploadSize } from '@/lib/documents/chunk-upload-protocol'
+import { CONTRACT_SOURCE_ACCEPT, contractSourceFormatFromFilename } from '@/lib/documents/source-format'
+import { createdContractId } from '@/lib/documents/upload-queue'
 
 // 合同上传 — 完整信息录入 + 文件上传（分两阶段）
 // Phase 1: 录入合同信息 → POST /api/contracts 创建
-// Phase 2: 上传文件 → 自动跳转到详情页并触发审核
+// Phase 2: 上传文件 → 跳转到详情页，由用户确认审核策略后启动审核
 
 type Phase = 'info' | 'file' | 'done'
 
@@ -57,6 +62,33 @@ export default function NewContractPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const { startUpload } = useChunkUpload({
+    onComplete: () => {
+      setLoading(false)
+      router.push(contractId ? `/contracts/${contractId}` : '/contracts')
+    },
+    onError: (message) => {
+      setError(message)
+      setLoading(false)
+    },
+  })
+
+  const selectFile = useCallback((candidate: File) => {
+    if (!contractSourceFormatFromFilename(candidate.name)) {
+      setFile(null)
+      setError('不支持的文件类型，请上传 PDF、DOC、DOCX 或 DOCM 文件')
+      return
+    }
+    const sizeValidation = validateUploadSize(candidate.size)
+    if (!sizeValidation.ok) {
+      setFile(null)
+      setError(sizeValidation.error)
+      return
+    }
+    setFile(candidate)
+    setError('')
+  }, [])
+
   const handleInputChange = useCallback((field: keyof ContractForm, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setError('')
@@ -75,15 +107,13 @@ export default function NewContractPage() {
     e.preventDefault()
     setDragActive(false)
     if (e.dataTransfer.files?.[0]) {
-      setFile(e.dataTransfer.files[0])
-      setError('')
+      selectFile(e.dataTransfer.files[0])
     }
-  }, [])
+  }, [selectFile])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
-      setFile(e.target.files[0])
-      setError('')
+      selectFile(e.target.files[0])
     }
   }
 
@@ -119,12 +149,17 @@ export default function NewContractPage() {
 
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || '创建失败')
+        setError(uploadErrorMessage(data, '创建失败'))
         setLoading(false)
         return
       }
 
-      setContractId(data.contract_id)
+      const createdId = createdContractId(data)
+      if (!createdId) {
+        setError('创建合同失败：未返回合同ID')
+        return
+      }
+      setContractId(createdId)
       setPhase('file')
     } catch {
       setError('网络错误，请稍后重试')
@@ -144,25 +179,13 @@ export default function NewContractPage() {
 
     try {
       const token = localStorage.getItem('token')
-      const formData = new FormData()
-      formData.append('file', file)
-
-      // 上传文件
-      const uploadRes = await fetch(`/api/contracts/${contractId}/upload`, {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        body: formData,
-      })
-
-      if (!uploadRes.ok) {
-        const data = await uploadRes.json()
-        setError(data.error || '文件上传失败')
+      if (!token) {
+        setError('请先登录')
         setLoading(false)
         return
       }
 
-      // 跳转到详情页
-      router.push(`/contracts/${contractId}`)
+      await startUpload(file, contractId, token)
     } catch {
       setError('网络错误，请稍后重试')
       setLoading(false)
@@ -422,7 +445,7 @@ export default function NewContractPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx,.doc"
+              accept={CONTRACT_SOURCE_ACCEPT}
               onChange={handleFileChange}
               className="hidden"
               id="contract-file"
@@ -462,7 +485,7 @@ export default function NewContractPage() {
               onClick={handleUploadAndStart}
               disabled={!file || loading}
             >
-              {loading ? '上传中...' : '上传并提交审核'}
+              {loading ? '上传中...' : '上传并进入合同详情'}
             </Button>
             <Button
               variant="outline"
@@ -477,7 +500,7 @@ export default function NewContractPage() {
           </div>
 
           <p className="text-xs text-slate-400">
-            上传后将自动解析合同文本并启动AI审核，预计 30 秒完成。
+            上传后进入合同详情；确认审核策略后再启动 AI 审核。
           </p>
         </CardContent>
       </Card>

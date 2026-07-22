@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
+            "command": "node",
             "args": [
               "${CLAUDE_PROJECT_DIR}/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
               "claude-user-prompt-submit"
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
+            "command": "node",
             "args": [
               "${CLAUDE_PROJECT_DIR}/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
               "generate-changelog"
@@ -149,27 +149,81 @@
     }
   },
   "gates": {
-    "G2": {
-      "description": "审查门 - 只读工具",
+    "HG0": {
+      "description": "目标入口门 - 只允许目标澄清、事实读取和向用户提问",
+      "phase": "intake",
       "tools": [
         "Read",
         "Grep",
-        "Glob"
+        "Glob",
+        "AskUserQuestion"
+      ],
+      "skills": []
+    },
+    "HG1": {
+      "description": "调研门 - 允许只读调研和本地只读命令",
+      "phase": "research",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "skills": []
+    },
+    "HG2": {
+      "description": "契约审查门 - 只读审查和意图确认",
+      "phase": "contract_review",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "AskUserQuestion"
       ],
       "skills": [
         "skill-req-review",
         "skill-code-review"
       ]
     },
-    "G4": {
-      "description": "复核门 - 只读工具",
+    "HG3": {
+      "description": "执行门 - 允许受控实现和本地验证",
+      "phase": "execute",
       "tools": [
         "Read",
-        "Grep"
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "MultiEdit",
+        "Bash"
+      ],
+      "skills": [
+        "skill-code-review"
+      ]
+    },
+    "HG4": {
+      "description": "验证证据门 - 只允许验证、读取和证据打包",
+      "phase": "verify",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash"
       ],
       "skills": [
         "skill-socrates"
       ]
+    },
+    "HG5": {
+      "description": "高风险审批门 - 生产、DB、Auth、Billing、删除、部署等必须停下确认",
+      "phase": "approval",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "AskUserQuestion"
+      ],
+      "skills": []
     }
   }
 }

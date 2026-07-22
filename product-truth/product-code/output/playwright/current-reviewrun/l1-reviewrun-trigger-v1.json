@@ -1,0 +1,18 @@
+{
+  "contractId": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+  "durationMs": 91036,
+  "response": {
+    "status": 200,
+    "body": {
+      "jobId": "491a42bb-4799-4999-9326-7f78c7fc8d6e",
+      "reviewId": "24cee96c-3293-4bec-90ef-b2d6a5ab9d52",
+      "parentReviewId": "d904ded8-5e5f-43c0-a67e-51af2f6d76fc",
+      "triggerEvent": "manual_rerun",
+      "semanticProviderProfile": "AI_LEVEL_1",
+      "status": "COMPLETED",
+      "message": "再审核已完成",
+      "degraded": false
+    }
+  },
+  "generatedAt": "2026-07-02T05:14:24.391Z"
+}

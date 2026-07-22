@@ -1,0 +1,32 @@
+- generic [active] [ref=f42e1]:
+  - main [ref=f42e2]:
+    - generic [ref=f42e3]:
+      - generic [ref=f42e4]:
+        - generic [ref=f42e5]:
+          - img "ONES Sales" [ref=f42e7]
+          - generic [ref=f42e8]:
+            - generic [ref=f42e9]: ONES Sales
+            - generic [ref=f42e10]: 智能协作平台
+        - generic [ref=f42e11]:
+          - generic [ref=f42e12]: 访问验证
+          - heading "ONES Sales" [level=1] [ref=f42e13]
+          - paragraph [ref=f42e14]: 从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。
+      - generic [ref=f42e38]:
+        - generic [ref=f42e39]:
+          - generic [ref=f42e40]: 企业工作空间
+          - heading "企业协作支撑平台" [level=1] [ref=f42e41]
+          - paragraph [ref=f42e42]: 使用企业账号进入工作台首页
+          - generic [ref=f42e43]:
+            - generic [ref=f42e44]:
+              - generic [ref=f42e45]: 企业邮箱
+              - textbox "企业邮箱" [ref=f42e46]:
+                - /placeholder: name@company.com
+            - generic [ref=f42e47]:
+              - generic [ref=f42e48]: 密码
+              - textbox "密码" [ref=f42e49]:
+                - /placeholder: ••••••••
+            - button "进入工作台" [ref=f42e50] [cursor=pointer]
+            - button "使用企业 SSO 登录（请联系管理员开通）" [disabled] [ref=f42e51]
+        - paragraph [ref=f42e52]: 仅授权成员可访问机会、报价、合同、审批和协同记录。
+  - button "Open Next.js Dev Tools" [ref=f42e58] [cursor=pointer]
+  - alert [ref=f42e62]

@@ -34,6 +34,9 @@ export interface AnalysisResults {
     description: string
     suggestion: string
     counterparty?: string
+    rule_id: string
+    rule_code?: string
+    rule_version: number
   }>
   summary: string
   appliedRules: number

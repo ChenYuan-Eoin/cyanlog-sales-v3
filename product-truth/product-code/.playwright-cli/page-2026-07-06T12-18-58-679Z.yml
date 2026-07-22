@@ -1,0 +1,77 @@
+- generic [active] [ref=f3e1]:
+  - complementary [ref=f3e2]:
+    - generic [ref=f3e3]:
+      - img "ONES Sales" [ref=f3e5]
+      - generic [ref=f3e6]:
+        - generic [ref=f3e7]: ONES Sales
+        - paragraph [ref=f3e8]: 智能协作平台
+    - navigation [ref=f3e9]:
+      - link "工作台" [ref=f3e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f3e11]
+        - generic [ref=f3e15]: 工作台
+      - link "报价中心" [ref=f3e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f3e17]
+        - generic [ref=f3e21]: 报价中心
+      - link "合同审核" [ref=f3e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f3e23]
+        - generic [ref=f3e28]: 合同审核
+      - link "标书中心" [ref=f3e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f3e30]
+        - generic [ref=f3e34]: 标书中心
+      - link "知识库" [ref=f3e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f3e36]
+        - generic [ref=f3e41]: 知识库
+      - link "日程" [ref=f3e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f3e43]
+        - generic [ref=f3e49]: 日程
+      - link "配置中心" [ref=f3e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f3e51]
+        - generic [ref=f3e55]: 配置中心
+    - generic [ref=f3e56]:
+      - link "个人信息" [ref=f3e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f3e58]
+        - generic [ref=f3e61]: 个人信息
+      - button "退出登录" [ref=f3e62] [cursor=pointer]:
+        - img [ref=f3e63]
+        - generic [ref=f3e66]: 退出登录
+  - main [ref=f3e67]:
+    - generic [ref=f3e205]:
+      - generic [ref=f3e206]:
+        - link "返回合同中心" [ref=f3e207] [cursor=pointer]:
+          - /url: /contracts
+          - button "返回合同中心" [ref=f3e208]:
+            - img
+            - text: 返回合同中心
+        - link "返回审核工作台" [ref=f3e209] [cursor=pointer]:
+          - /url: /contracts/f8ec027a-5633-4429-8c0b-b69053b1a9ef?panel=review&from=compare
+          - button "返回审核工作台" [ref=f3e210]
+      - generic [ref=f3e211]:
+        - generic [ref=f3e212]:
+          - generic [ref=f3e213]:
+            - img [ref=f3e214]
+            - text: 正在打开文档比对工作台
+          - paragraph [ref=f3e216]: 系统会先读取当前合同版本流，再检查是否已有客户回传版或历史比对结果。
+          - paragraph [ref=f3e217]: 对比目标是旧文件、新文件、差异列表、并排高亮和再审核闭环，不会替代合同风险审核结论。
+        - generic [ref=f3e218]: 旧/新文件装载中
+      - generic [ref=f3e219]:
+        - generic [ref=f3e221]:
+          - generic [ref=f3e222]: "1"
+          - generic [ref=f3e223]: 旧文件
+        - generic [ref=f3e227]:
+          - generic [ref=f3e228]: "2"
+          - generic [ref=f3e229]: 新文件
+        - generic [ref=f3e233]:
+          - generic [ref=f3e234]: "3"
+          - generic [ref=f3e235]: 差异列表
+        - generic [ref=f3e239]:
+          - generic [ref=f3e240]: "4"
+          - generic [ref=f3e241]: 并排高亮
+  - alert [ref=f3e196]

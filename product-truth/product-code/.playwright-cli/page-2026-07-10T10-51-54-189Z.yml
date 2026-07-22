@@ -1,0 +1,259 @@
+- generic [ref=f1e1]:
+  - complementary [ref=f1e2]:
+    - generic [ref=f1e6]:
+      - generic [ref=f1e7]: ONES Sales
+      - paragraph [ref=f1e8]: 智能协作平台
+    - navigation [ref=f1e9]:
+      - link [ref=f1e549] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f1e15]: 工作台
+      - link [ref=f1e550] [cursor=pointer]:
+        - /url: /quotes
+        - generic [ref=f1e21]: 报价中心
+      - link [ref=f1e551] [cursor=pointer]:
+        - /url: /contracts
+        - generic [ref=f1e28]: 合同审核
+      - link [ref=f1e552] [cursor=pointer]:
+        - /url: /tenders
+        - generic [ref=f1e34]: 标书中心
+      - link [ref=f1e553] [cursor=pointer]:
+        - /url: /knowledge
+        - generic [ref=f1e41]: 知识库
+      - link [ref=f1e554] [cursor=pointer]:
+        - /url: /schedule
+        - generic [ref=f1e49]: 日程
+      - link [ref=f1e555] [cursor=pointer]:
+        - /url: /configs
+        - generic [ref=f1e55]: 配置中心
+    - generic [ref=f1e56]:
+      - link [ref=f1e556] [cursor=pointer]:
+        - /url: /profile
+        - generic [ref=f1e61]: 个人信息
+      - button [ref=f1e557] [cursor=pointer]:
+        - generic [ref=f1e66]: 退出登录
+  - main [ref=f1e67]:
+    - generic [ref=f1e83]:
+      - generic [ref=f1e84]:
+        - generic [ref=f1e85]:
+          - generic [ref=f1e86]: 组织级配置工作台
+          - heading [level=1] [ref=f1e558]: 配置中心
+          - paragraph [ref=f1e92]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f1e93]:
+          - generic [ref=f1e94]:
+            - generic [ref=f1e95]: 生效范围
+            - generic [ref=f1e96]: 组织级统一发布
+          - generic [ref=f1e97]:
+            - generic [ref=f1e98]: 消费端
+            - generic [ref=f1e99]: 报价 / 合同 / AI
+          - generic [ref=f1e100]:
+            - generic [ref=f1e101]: 当前配置集
+            - generic [ref=f1e102]: 组织架构
+      - generic [ref=f1e103]:
+        - complementary [ref=f1e104]:
+          - generic [ref=f1e105]:
+            - generic [ref=f1e106]:
+              - generic [ref=f1e107]: 配置域
+              - paragraph [ref=f1e108]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f1e109]:
+              - button [ref=f1e559] [cursor=pointer]:
+                - generic [ref=f1e111]:
+                  - generic [ref=f1e112]: 交易配置
+                  - generic [ref=f1e113]: "0"
+                - paragraph [ref=f1e114]: 围绕报价工作台的价盘、税率和审批配置。
+              - button [ref=f1e560] [cursor=pointer]:
+                - generic [ref=f1e116]:
+                  - generic [ref=f1e117]: 合同与 AI 规则
+                  - generic [ref=f1e118]: "0"
+                - paragraph [ref=f1e119]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button [ref=f1e561] [cursor=pointer]:
+                - generic [ref=f1e121]:
+                  - generic [ref=f1e122]: 组织与权限
+                  - generic [ref=f1e123]: "15"
+                - paragraph [ref=f1e124]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button [ref=f1e562] [cursor=pointer]:
+                - generic [ref=f1e126]:
+                  - generic [ref=f1e127]: 界面与体验
+                  - generic [ref=f1e128]: "0"
+                - paragraph [ref=f1e129]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f1e130]:
+              - generic [ref=f1e131]: 结构约束
+              - list [ref=f1e132]:
+                - listitem [ref=f1e133]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f1e134]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f1e135]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f1e136]:
+          - generic [ref=f1e137]:
+            - generic [ref=f1e138]:
+              - generic [ref=f1e139]:
+                - generic [ref=f1e140]:
+                  - generic [ref=f1e141]: 配置中心
+                  - generic [ref=f1e142]: /
+                  - generic [ref=f1e143]: 组织与权限
+                - generic [ref=f1e150]:
+                  - heading [level=2] [ref=f1e563]: 组织架构
+                  - paragraph [ref=f1e152]: 维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。
+              - generic [ref=f1e153]:
+                - generic [ref=f1e154]:
+                  - generic [ref=f1e155]: 部门总数
+                  - generic [ref=f1e156]: "15"
+                - generic [ref=f1e157]:
+                  - generic [ref=f1e158]: 成员总数
+                  - generic [ref=f1e159]: "43"
+                - generic [ref=f1e160]:
+                  - generic [ref=f1e161]: 销售空间
+                  - generic [ref=f1e162]: "3"
+            - generic [ref=f1e163]:
+              - button [ref=f1e564] [cursor=pointer]:
+                - generic [ref=f1e169]: 组织架构
+                - generic [ref=f1e170]: "15"
+              - button [ref=f1e565] [cursor=pointer]:
+                - generic [ref=f1e176]: 角色权限
+                - generic [ref=f1e177]: "0"
+          - generic [ref=f1e179]:
+            - generic [ref=f1e180]:
+              - generic [ref=f1e181]:
+                - generic [ref=f1e187]:
+                  - generic [ref=f1e188]: "15"
+                  - generic [ref=f1e189]: 部门
+                - generic [ref=f1e197]:
+                  - generic [ref=f1e198]: "43"
+                  - generic [ref=f1e199]: 成员
+                - generic [ref=f1e205]:
+                  - generic [ref=f1e206]: "3"
+                  - generic [ref=f1e207]: 销售空间
+              - generic [ref=f1e208]:
+                - button [ref=f1e566] [cursor=pointer]: 添加部门
+                - button [ref=f1e567] [cursor=pointer]: 添加成员
+                - button [ref=f1e568] [cursor=pointer]: 从飞书同步
+            - generic [ref=f1e212]:
+              - generic [ref=f1e214]:
+                - generic [ref=f1e215]:
+                  - heading [level=3] [ref=f1e569]: 部门结构
+                  - paragraph [ref=f1e217]: 点击选择部门
+                - generic [ref=f1e218]:
+                  - button [ref=f1e570] [cursor=pointer]:
+                    - generic [ref=f1e225]: 全部成员
+                    - generic [ref=f1e226]: "43"
+                  - generic [ref=f1e228]:
+                    - button [ref=f1e572] [cursor=pointer]:
+                      - button [ref=f1e573]
+                      - generic [ref=f1e575]:
+                        - text: 安全部门
+                        - generic [ref=f1e576]: 👤 钱会计
+                      - button [ref=f1e577]
+                      - generic [ref=f1e582]: "2"
+                    - button [ref=f1e584] [cursor=pointer]:
+                      - button [ref=f1e585]
+                      - generic [ref=f1e587]: 光谷神奇
+                      - button [ref=f1e588]
+                      - generic [ref=f1e593]: "2"
+                    - button [ref=f1e595] [cursor=pointer]:
+                      - button [ref=f1e596]
+                      - generic [ref=f1e598]: Happy 得不行
+                      - button [ref=f1e599]
+                      - generic [ref=f1e604]: "2"
+                    - button [ref=f1e606] [cursor=pointer]:
+                      - button [ref=f1e607]
+                      - generic [ref=f1e610]: 销售部
+                      - button [ref=f1e611]
+                      - generic [ref=f1e616]: "1"
+                    - button [ref=f1e618] [cursor=pointer]:
+                      - button [ref=f1e619]
+                      - generic [ref=f1e621]: 法务部
+                      - button [ref=f1e622]
+                      - generic [ref=f1e627]: "2"
+                    - button [ref=f1e629] [cursor=pointer]:
+                      - button [ref=f1e630]
+                      - generic [ref=f1e632]: 财务部
+                      - button [ref=f1e633]
+                      - generic [ref=f1e638]: "2"
+                    - button [ref=f1e640] [cursor=pointer]:
+                      - button [ref=f1e641]
+                      - generic [ref=f1e643]: 信息技术部
+                      - button [ref=f1e644]
+                      - generic [ref=f1e649]: "3"
+                  - button [expanded] [ref=f1e650] [cursor=pointer]: 添加部门
+              - generic [ref=f1e309]:
+                - generic [ref=f1e311]:
+                  - generic [ref=f1e312]:
+                    - heading [level=3] [ref=f1e651]: 安全部门 的成员
+                    - paragraph [ref=f1e314]: 共 2 人（含子部门）
+                  - button [ref=f1e652] [cursor=pointer]: 查看全部
+                - generic [ref=f1e316]:
+                  - generic [ref=f1e317]:
+                    - searchbox [ref=f1e653]
+                    - generic [ref=f1e323]: 共 2 人
+                  - table [ref=f1e326]:
+                    - rowgroup [ref=f1e327]:
+                      - row [ref=f1e654]:
+                        - columnheader [ref=f1e655]: 姓名
+                        - columnheader [ref=f1e656]: 职位
+                        - columnheader [ref=f1e657]: 部门
+                        - columnheader [ref=f1e658]: 角色
+                        - columnheader [ref=f1e659]: 状态
+                        - columnheader [ref=f1e660]: 操作
+                    - rowgroup [ref=f1e335]:
+                      - row [ref=f1e661]:
+                        - cell [ref=f1e662]:
+                          - generic [ref=f1e338]:
+                            - generic [ref=f1e339]: 啦
+                            - generic [ref=f1e340]: 啦啦
+                        - cell [ref=f1e663]:
+                          - generic [ref=f1e343]: "-"
+                        - cell [ref=f1e664]:
+                          - generic [ref=f1e345]: 安全部门
+                        - cell [ref=f1e346]
+                        - cell [ref=f1e665]:
+                          - generic [ref=f1e350]: 在职
+                        - cell [ref=f1e353]:
+                          - button [ref=f1e354] [cursor=pointer]
+                      - row [ref=f1e666]:
+                        - cell [ref=f1e667]:
+                          - generic [ref=f1e357]:
+                            - generic [ref=f1e358]: P
+                            - generic [ref=f1e359]:
+                              - generic [ref=f1e360]: PANG 源
+                              - generic [ref=f1e361]: 877791189@qq.com
+                        - cell [ref=f1e668]:
+                          - generic [ref=f1e363]: "-"
+                        - cell [ref=f1e669]:
+                          - generic [ref=f1e365]: 安全部门
+                        - cell [ref=f1e366]
+                        - cell [ref=f1e670]:
+                          - generic [ref=f1e370]: 在职
+                        - cell [ref=f1e373]:
+                          - button [ref=f1e374] [cursor=pointer]
+                  - generic [ref=f1e531]:
+                    - generic [ref=f1e532]: 第 1 / 1 页 （每页 10 条）
+                    - generic [ref=f1e533]:
+                      - button [disabled]
+                      - button [disabled]
+  - button "Open Next.js Dev Tools" [ref=f1e78] [cursor=pointer]
+  - alert [ref=f1e82]
+  - dialog [ref=f1e674]:
+    - heading "编辑部门" [level=2] [ref=f1e676]
+    - generic [ref=f1e680]:
+      - generic [ref=f1e681]:
+        - text: 部门名称
+        - textbox "部门名称" [active] [ref=f1e682]:
+          - /placeholder: 例如：销售部
+          - text: 安全部门
+      - generic [ref=f1e683]:
+        - text: 部门编码
+        - textbox "部门编码" [ref=f1e684]:
+          - /placeholder: 例如：SALES
+          - text: "008"
+      - generic [ref=f1e685]:
+        - text: 上级部门
+        - combobox "上级部门" [ref=f1e686] [cursor=pointer]:
+          - generic: 无（根部门）
+        - combobox [ref=f1e689]
+      - generic [ref=f1e690]:
+        - text: 部门主管
+        - combobox "部门主管" [ref=f1e691] [cursor=pointer]:
+          - generic: 钱会计 · 会计
+        - combobox [ref=f1e694]
+      - generic [ref=f1e695]:
+        - button "取消" [ref=f1e696] [cursor=pointer]
+        - button "保存" [ref=f1e697] [cursor=pointer]
+    - button "Close" [ref=f1e698] [cursor=pointer]

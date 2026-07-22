@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "statusText": "OK",
+  "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "timing": "review_data_load;dur=471.5, clauses_load;dur=205.4, annotations_load;dur=180.4, risk_patches_load;dur=182.4, versions_load;dur=175.9, storage_download;dur=572.7, source_temp_write;dur=2.4, docx_generate;dur=17.7, output_file_read;dur=0.1, storage_upload;dur=441.3, version_register;dur=180.9, report_version_link;dur=174.3",
+  "ms": 2972,
+  "bytes": 3060
+}

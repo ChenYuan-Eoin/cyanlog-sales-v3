@@ -1,0 +1,82 @@
+{
+  "evidence_version": "g5-v12",
+  "captured_at": "2026-07-16T23:43:00+08:00",
+  "scope": "trusted-fixture-local-proof-and-red-gate",
+  "release_acceptance": false,
+  "production_adapter_enabled": false,
+  "toolchain": {
+    "next": "14.2.35",
+    "typescript": "5.9.3",
+    "vitest": "4.1.7",
+    "libreoffice": "local macOS soffice",
+    "python_environment": "/tmp/price-v3-doc-venv"
+  },
+  "positive_fixture": {
+    "name": "Apache POI SimpleMacro.doc",
+    "upstream": "https://github.com/apache/poi/blob/4554f204cbbf00ecbcaed134fe57e43a1779a612/test-data/document/SimpleMacro.doc",
+    "source_sha256": "39e9608c711d38f298ed20a5bfae12fcdaed6f4be2be4d26db670475216ca393",
+    "output_sha256": "25d360dc322def960e818f3f69ead0273bfcde26bc70524c8151552f0a768a42",
+    "source_text_sha256": "9b3c329f695b2287e5154a89fb2167bdc2f469fbff137593e0d94815fc78dc71",
+    "output_text_sha256": "9b3c329f695b2287e5154a89fb2167bdc2f469fbff137593e0d94815fc78dc71",
+    "source_render_sha256": "99008a26bead9a1c752e42ae1aacd143619d67280629568df03a32ba736ccecd",
+    "output_render_sha256": "99008a26bead9a1c752e42ae1aacd143619d67280629568df03a32ba736ccecd",
+    "macro_streams_verified": 10,
+    "object_streams_verified": 0,
+    "native_comments_added": 1,
+    "page_geometry_points": [[612.0, 792.0]],
+    "target_load_macro_policy": "MacroExecutionMode=0",
+    "conversion_macro_canary": "not-proven",
+    "network_isolation": "remote-denied-local-ipc-only",
+    "proof_scope": "trusted-fixture-local-proof",
+    "artifacts": [
+      "simple-macro-annotated.doc.b64",
+      "simple-macro-source-page-1.png.b64",
+      "simple-macro-output-page-1.png.b64"
+    ]
+  },
+  "object_red_gate": {
+    "name": "Apache POI word_with_embeded.doc",
+    "upstream": "https://github.com/apache/poi/blob/4554f204cbbf00ecbcaed134fe57e43a1779a612/test-data/document/word_with_embeded.doc",
+    "source_sha256": "206acf1f7eb7b7d2075e04015d005ae9bb56f025560f2583ad3878257bc4c7",
+    "failed_roundtrip_sha256": "5514cb7880df6ee5cd4007585058a977639536bee4df9a1f4276dab9b0ea5a00",
+    "object_streams": 27,
+    "embedded_objects": ["Excel.Sheet.8", "Excel.Sheet.8", "PowerPoint.Show.8", "Word.Document.8"],
+    "worker_result": "DOC_OBJECT_STREAM_CHANGED",
+    "published_output": false,
+    "source_render_sha256": "a8ff412439eb95330c5dffb30bf1f67e4f49bf04520ba8882fbde6aca135dff3",
+    "failed_roundtrip_render_sha256": "03e240dea576e6817b76c0f58a47b4a412a7bf4db993c0ebccd6778972fbdf13",
+    "visual_result": "PowerPoint preview and at least one Excel preview are lost after LibreOffice round-trip",
+    "artifacts": [
+      "embedded-objects-source-page-1.png.b64",
+      "embedded-objects-failed-roundtrip-page-1.png.b64"
+    ]
+  },
+  "automated_verification": {
+    "targeted_vitest": "2 files / 8 tests passed",
+    "full_vitest": "63 files / 411 tests passed",
+    "python_default_gate": "39 passed / 3 real-integration tests skipped",
+    "python_explicit_doc_integration": "9/9 passed",
+    "typescript": "pnpm tsc --noEmit passed",
+    "build": "Next.js 14.2.35, 81/81 static pages, exit 0",
+    "direct_importer_mismatches": 0,
+    "broken_dependency_symlinks": 0,
+    "scheduler_validate": "passed"
+  },
+  "known_non_blocking_build_diagnostics": [
+    "three existing review page lint warnings",
+    "existing dynamic API prerender diagnostics",
+    "Sentry require-in-the-middle static extraction warning"
+  ],
+  "hard_blockers": [
+    "Python and verification parsers are outside the LibreOffice sandbox",
+    "the bubblewrap prototype exposes the host read-only root and Unix sockets",
+    "conversion-path macro non-execution has no canary proof",
+    "embedded-object fidelity fails on a real DOC fixture",
+    "no deployable isolated DOC worker service exists in the current Vercel topology"
+  ],
+  "decision_required": [
+    "Aspose.Words isolated real-file POC plus license review",
+    "LibreOffice support limited to a strictly audited no-embedded-object DOC subset",
+    "change legacy DOC delivery to preserve original plus annotated DOCX/report"
+  ]
+}

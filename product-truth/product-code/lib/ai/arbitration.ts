@@ -55,7 +55,12 @@ export class Arbitrator {
     // 并发调用多个模型
     const modelResults: ModelResult[] = await Promise.all(
       providers.map(async (provider) => {
-        const result = await reviewWithFailoverSync(contractText, provider)
+        const result = await reviewWithFailoverSync(contractText, {
+          preferredProvider: provider,
+          tool: 'contract_review',
+          capability: 'contract_review',
+          phase: 'arbitration_review',
+        })
         return { provider, result }
       })
     )

@@ -1,0 +1,63 @@
+{
+  "base": "https://sales.cyanlog.icu",
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/prod-postdeploy-smoke-1782802396264",
+  "loginDesktop": {
+    "status": 200,
+    "elapsedMs": 1040,
+    "timing": "parse_payload;dur=3.6, login_rpc;dur=283.8, rpc_total;dur=104.9, rpc_audit_write;dur=0.3, rpc_token_write;dur=1.1, rpc_user_lookup;dur=0.8, rpc_auth_context;dur=3.0, rpc_initial_core;dur=7.0, rpc_ip_rate_limit;dur=0.4, rpc_password_verify;dur=78.0, rpc_input_validation;dur=1.2, rpc_initial_dashboard;dur=10.9, rpc_account_rate_limit;dur=1.7, login_rpc_transport;dur=178.9, cache_prime;dur=0.2, response_json;dur=2.0, auth_context_cookie;dur=17.4, total;dur=311.5"
+  },
+  "loginMobile": {
+    "status": 200,
+    "elapsedMs": 453,
+    "timing": "parse_payload;dur=0.6, login_rpc;dur=144.0, rpc_total;dur=90.2, rpc_audit_write;dur=0.2, rpc_token_write;dur=0.7, rpc_user_lookup;dur=0.3, rpc_auth_context;dur=1.7, rpc_initial_core;dur=3.9, rpc_ip_rate_limit;dur=0.3, rpc_password_verify;dur=74.1, rpc_input_validation;dur=0.8, rpc_initial_dashboard;dur=6.8, rpc_account_rate_limit;dur=0.8, login_rpc_transport;dur=53.8, cache_prime;dur=0.0, response_json;dur=0.3, auth_context_cookie;dur=0.6, total;dur=146.3"
+  },
+  "desktop": {
+    "contractsMetrics": {
+      "innerWidth": 1440,
+      "scrollWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "url": "https://sales.cyanlog.icu/contracts"
+    },
+    "selectedContract": {
+      "id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+      "filename": "ones-contract-e2e-risk.docx",
+      "status": "COMPLETED"
+    },
+    "detailMetrics": {
+      "innerWidth": 1440,
+      "scrollWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "url": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8"
+    },
+    "risks": 8,
+    "annotations": 7
+  },
+  "mobile": {
+    "defaultConfigMetrics": {
+      "innerWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "url": "https://sales.cyanlog.icu/configs?tab=price-list"
+    },
+    "roleMetrics": {
+      "innerWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "url": "https://sales.cyanlog.icu/configs?tab=role-access"
+    },
+    "orgCounts": {
+      "departments": 11,
+      "users": 25,
+      "roles": 7,
+      "spaces": 3
+    },
+    "orgSource": "rpc",
+    "orgTiming": "auth;dur=45.5, rpc_payload;dur=58.9, total;dur=104.6"
+  },
+  "errors": {
+    "desktopConsole": [],
+    "desktopPage": [],
+    "mobileConsole": [],
+    "mobilePage": []
+  }
+}

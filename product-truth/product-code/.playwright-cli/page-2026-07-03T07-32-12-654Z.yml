@@ -1,0 +1,398 @@
+- generic [active] [ref=f1e1]:
+  - complementary [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - img "ONES Sales" [ref=f1e5]
+      - generic [ref=f1e6]:
+        - generic [ref=f1e7]: ONES Sales
+        - paragraph [ref=f1e8]: 智能协作平台
+    - navigation [ref=f1e9]:
+      - link "工作台" [ref=f1e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f1e11]
+        - generic [ref=f1e15]: 工作台
+      - link "报价中心" [ref=f1e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f1e17]
+        - generic [ref=f1e21]: 报价中心
+      - link "合同审核" [ref=f1e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f1e23]
+        - generic [ref=f1e28]: 合同审核
+      - link "标书中心" [ref=f1e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f1e30]
+        - generic [ref=f1e34]: 标书中心
+      - link "知识库" [ref=f1e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f1e36]
+        - generic [ref=f1e41]: 知识库
+      - link "日程" [ref=f1e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f1e43]
+        - generic [ref=f1e49]: 日程
+      - link "配置中心" [ref=f1e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f1e51]
+        - generic [ref=f1e55]: 配置中心
+    - generic [ref=f1e56]:
+      - link "个人信息" [ref=f1e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f1e58]
+        - generic [ref=f1e61]: 个人信息
+      - button "退出登录" [ref=f1e62] [cursor=pointer]:
+        - img [ref=f1e63]
+        - generic [ref=f1e66]: 退出登录
+  - main [ref=f1e67]:
+    - generic [ref=f1e658]:
+      - generic [ref=f1e659]:
+        - generic [ref=f1e660]:
+          - generic [ref=f1e661]:
+            - link "合同审核" [ref=f1e662] [cursor=pointer]:
+              - /url: /contracts
+            - generic [ref=f1e663]: /
+            - generic [ref=f1e664]: 审核工作台
+          - generic [ref=f1e665]:
+            - heading "ones-contract-e2e-risk.docx" [level=1] [ref=f1e666]
+            - generic [ref=f1e667]: 审核完成
+          - paragraph [ref=f1e668]: ONES 业务运营按后台发布规则和模型策略生成风险定位、谈判任务和源文件 Word 原生批注版本。
+        - generic [ref=f1e669]:
+          - link "返回合同中心" [ref=f1e670] [cursor=pointer]:
+            - /url: /contracts
+            - button "返回合同中心" [ref=f1e671]:
+              - img
+              - text: 返回合同中心
+          - button "重新审查" [ref=f1e672] [cursor=pointer]:
+            - img
+            - text: 重新审查
+          - link "文档比对" [ref=f1e673] [cursor=pointer]:
+            - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare?from=workbench
+            - button "文档比对" [ref=f1e674]:
+              - img
+              - text: 文档比对
+          - button "导出源文件 Word 原生批注版" [ref=f1e675] [cursor=pointer]:
+            - img
+            - text: 检查导出准备
+      - generic [ref=f1e676]:
+        - generic [ref=f1e677]:
+          - generic [ref=f1e678]: 主交付物
+          - generic [ref=f1e679]: 源 Word 原生批注版
+          - paragraph [ref=f1e680]: 以用户上传源文件为事实来源，只写入 Word 批注，不用重新生成版式文档替代。
+        - generic [ref=f1e681]:
+          - generic [ref=f1e682]: 当前源文件
+          - generic [ref=f1e683]: v1 源文件
+          - paragraph [ref=f1e684]: application/vnd.openxmlformats-officedocument.wordprocessingml.document · 1.6 KB
+        - generic [ref=f1e685]:
+          - generic [ref=f1e686]: 批注输出状态
+          - generic [ref=f1e687]: 最近批注版 v22
+          - paragraph [ref=f1e688]: 规则快照、SkillBundle 和模型调用证据正在后台补齐，完成后再判断源文件批注导出门禁。
+        - generic [ref=f1e689]:
+          - generic [ref=f1e690]: 操作闭环
+          - generic [ref=f1e691]: 风险 → 谈判 → 批注 → 回传
+          - paragraph [ref=f1e692]: 红线和需谈判风险先进入审查侧栏，客户修改后作为新版本回到文档比对和再审核。
+      - generic [ref=f1e693]:
+        - generic [ref=f1e695]:
+          - generic [ref=f1e696]: 红线风险
+          - generic [ref=f1e697]: "4"
+        - generic [ref=f1e699]:
+          - generic [ref=f1e700]: 需谈判风险
+          - generic [ref=f1e701]: "0"
+        - generic [ref=f1e703]:
+          - generic [ref=f1e704]: 开放风险
+          - generic [ref=f1e705]: "4"
+        - generic [ref=f1e707]:
+          - generic [ref=f1e708]: 批注数量
+          - generic [ref=f1e709]: "4"
+      - generic [ref=f1e710]:
+        - generic [ref=f1e711]:
+          - paragraph [ref=f1e712]: 当前状态
+          - paragraph [ref=f1e713]: 可进入批注输出
+        - generic [ref=f1e714]:
+          - paragraph [ref=f1e715]: 审核依据
+          - paragraph [ref=f1e716]: 已绑定规则发布包
+        - generic [ref=f1e717]:
+          - paragraph [ref=f1e718]: 批注输出
+          - paragraph [ref=f1e719]: 规则快照、SkillBundle 和模型调用证据正在后台补齐，完成后再判断源文件批注导出门禁。
+      - generic [ref=f1e721]:
+        - generic [ref=f1e722]:
+          - generic [ref=f1e723]:
+            - img [ref=f1e724]
+            - text: 正在补齐审核证据包
+          - paragraph [ref=f1e726]: 首屏已先打开。系统正在后台读取规则发布包、模型调用和质量门禁，完成后才会判断正式审核与批注导出状态。
+        - generic [ref=f1e727]:
+          - generic [ref=f1e728]:
+            - generic [ref=f1e729]: "1"
+            - generic [ref=f1e730]: 规则快照
+          - generic [ref=f1e731]:
+            - generic [ref=f1e732]: "2"
+            - generic [ref=f1e733]: SkillBundle
+          - generic [ref=f1e734]:
+            - generic [ref=f1e735]: "3"
+            - generic [ref=f1e736]: 模型调用
+          - generic [ref=f1e737]:
+            - generic [ref=f1e738]: "4"
+            - generic [ref=f1e739]: 质量门禁
+      - generic [ref=f1e741]:
+        - generic [ref=f1e742]:
+          - paragraph [ref=f1e743]: 暂不能导出源文件批注版
+          - paragraph [ref=f1e744]: 导出按钮只在风险证据可定位、批注意图可写入源 Word 时启用；不会用报告文件伪装成批注版。
+          - list [ref=f1e745]:
+            - listitem [ref=f1e746]: 规则快照、SkillBundle 和模型调用证据正在后台补齐，完成后再判断源文件批注导出门禁。
+        - button "查看需定位风险" [ref=f1e747] [cursor=pointer]
+      - generic [ref=f1e748]:
+        - generic [ref=f1e749]:
+          - generic [ref=f1e750]:
+            - generic [ref=f1e751]:
+              - generic [ref=f1e752]:
+                - generic [ref=f1e753]:
+                  - generic [ref=f1e754]:
+                    - img [ref=f1e755]
+                    - text: 源文件证据预览
+                  - paragraph [ref=f1e758]: 这里用于定位证据和批注意图，不是交付文件。交付以“源文件原生批注版”为准，不能用重新排版文档替代。
+                - generic [ref=f1e759]: 当前版本用于审核定位
+              - generic [ref=f1e760]:
+                - generic [ref=f1e761]: v22 · 批注版
+                - generic [ref=f1e762]: v21 · 批注版
+                - generic [ref=f1e763]: v20 · 批注版
+                - generic [ref=f1e764]: v19 · 批注版
+                - generic [ref=f1e765]: 批注版 21
+            - generic [ref=f1e766]:
+              - generic [ref=f1e767]:
+                - generic [ref=f1e768]:
+                  - generic [ref=f1e769]: 付款节奏
+                  - generic [ref=f1e771]: 红线
+                - generic [ref=f1e772]:
+                  - generic [ref=f1e773]:
+                    - generic [ref=f1e774]: 原文内容
+                    - paragraph [ref=f1e775]: 账期120天
+                  - generic [ref=f1e776]:
+                    - generic [ref=f1e777]: 批注建议
+                    - paragraph [ref=f1e778]: 必须修改合同条款
+                  - generic [ref=f1e779]:
+                    - generic [ref=f1e780]: 风险说明
+                    - paragraph [ref=f1e781]: 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日
+                - generic [ref=f1e782]: R001 · v3 · 67a2ae46-331a-476e-9621-fe1f3ecce3ff
+                - generic [ref=f1e783]: 定位状态：located；evidence_text_exact_match
+              - generic [ref=f1e786]:
+                - text: 销售合同 第一条 合同金额：人民币100万元。 第二条 付款条款：乙方验收后120天内付款，
+                - mark [ref=f1e787]: 账期120天
+                - text: 。 第三条 质保条款：质保金20%，质保期为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化、经营困难，客户可单方延期履行。
+          - generic [ref=f1e788]:
+            - generic [ref=f1e790]:
+              - img [ref=f1e791]
+              - text: Word 批注
+            - generic [ref=f1e794]:
+              - generic [ref=f1e795]:
+                - generic [ref=f1e796]:
+                  - generic [ref=f1e797]: 账期120天
+                  - generic [ref=f1e799]: urgent
+                - paragraph [ref=f1e800]: "【红线风险】付款节奏 问题：触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 建议：必须修改合同条款 证据原文：账期120天 规则：R001 v3 RuleSnapshot: 67a2ae46-331a-476e-9621-fe1f3ecce3ff SourceRange: 46-52 RiskFinding: bc98824e-c34a-4ef0-8726-6cf5040aa47a"
+              - generic [ref=f1e801]:
+                - generic [ref=f1e802]:
+                  - generic [ref=f1e803]: 第五条 知识产权未明确归属，双方后续另行协商。
+                  - generic [ref=f1e805]: urgent
+                - paragraph [ref=f1e806]: "【红线风险】IP 归属 问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让 建议：必须修改合同条款 证据原文：第五条 知识产权未明确归属，双方后续另行协商。 规则：R011 v3 RuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2 SourceRange: 109-132 RiskFinding: 47872ef4-858c-4085-bc84-6b17f5299e8a"
+              - generic [ref=f1e807]:
+                - generic [ref=f1e808]:
+                  - generic [ref=f1e809]: 第六条 争议解决方式未明确，管辖法院待定。
+                  - generic [ref=f1e811]: urgent
+                - paragraph [ref=f1e812]: "【红线风险】争议解决 问题：触发「争议解决」红线：境外仲裁/法院/法律 建议：必须修改合同条款 证据原文：第六条 争议解决方式未明确，管辖法院待定。 规则：R015 v3 RuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef SourceRange: 133-154 RiskFinding: f9d0f6b8-aadd-4170-97f5-ed46ef2acbb2"
+              - generic [ref=f1e813]:
+                - generic [ref=f1e814]:
+                  - generic [ref=f1e815]: 逾期付款违约金为日万分之十。
+                  - generic [ref=f1e817]: urgent
+                - paragraph [ref=f1e818]: "【红线风险】逾期付款违约金标准偏低且对我方补偿不足 问题：合同仅约定逾期付款违约金为日万分之十，违约责任偏弱，可能不足以覆盖长账期下的资金占用损失。 建议：建议提高逾期付款违约金标准，并补充逾期达到一定期限时的暂停服务、加速到期或解除合同权利。 证据原文：逾期付款违约金为日万分之十。 规则：R006 v3 RuleSnapshot: 144594c3-5610-41ff-8771-bb476b6f5197 SourceRange: 94-108 RiskFinding: 59b4d15c-f09b-4b7c-984b-921e00f909d2"
+        - complementary [ref=f1e819]:
+          - generic [ref=f1e820]:
+            - generic [ref=f1e821]:
+              - generic [ref=f1e822]:
+                - generic [ref=f1e823]: 审核侧栏
+                - generic [ref=f1e824]: COMPLETED
+              - generic [ref=f1e825]:
+                - button "审查" [ref=f1e826] [cursor=pointer]:
+                  - img [ref=f1e827]
+                  - generic [ref=f1e829]: 审查
+                - button "摘要" [ref=f1e830] [cursor=pointer]:
+                  - img [ref=f1e831]
+                  - generic [ref=f1e834]: 摘要
+                - button "对话" [ref=f1e835] [cursor=pointer]:
+                  - img [ref=f1e836]
+                  - generic [ref=f1e838]: 对话
+                - button "证据" [ref=f1e839] [cursor=pointer]:
+                  - img [ref=f1e840]
+                  - generic [ref=f1e843]: 证据
+            - generic [ref=f1e845]:
+              - generic [ref=f1e846]:
+                - generic [ref=f1e847]: 运行状态
+                - generic [ref=f1e848]: COMPLETED
+              - generic [ref=f1e849]:
+                - generic [ref=f1e850]: 运行编号
+                - generic [ref=f1e851]: 6ec3ec3e-f53e-44f1-829c-f290c9d7e274
+              - generic [ref=f1e852]:
+                - generic [ref=f1e853]: 证据状态
+                - generic [ref=f1e854]: 缺少规则快照
+              - generic [ref=f1e855]:
+                - generic [ref=f1e856]: 规则快照
+                - generic [ref=f1e857]: contract_rule_snapshots:bound_unpublished_or_missing:15
+              - generic [ref=f1e858]:
+                - generic [ref=f1e859]: 快照数量
+                - generic [ref=f1e860]: "0"
+              - generic [ref=f1e861]:
+                - generic [ref=f1e862]: 规则发布包
+                - generic [ref=f1e863]: 568dfd6e-68b4-4140-8298-3d61c186c704
+              - generic [ref=f1e864]:
+                - generic [ref=f1e865]: 规则源
+                - generic [ref=f1e866]: 未记录
+              - generic [ref=f1e867]:
+                - generic [ref=f1e868]: 转译状态
+                - generic [ref=f1e869]: 未记录
+              - generic [ref=f1e870]:
+                - generic [ref=f1e871]: 规则完整性
+                - generic [ref=f1e872]: 未记录
+              - generic [ref=f1e873]:
+                - generic [ref=f1e874]: 发布门禁
+                - generic [ref=f1e875]: 未记录
+              - generic [ref=f1e876]:
+                - generic [ref=f1e877]: 模型质量评测
+                - generic [ref=f1e878]: 未记录
+              - generic [ref=f1e879]:
+                - generic [ref=f1e880]: 模型策略
+                - generic [ref=f1e881]: f66c64f9-f80f-486b-b249-0a4fb14bb070
+              - generic [ref=f1e882]:
+                - generic [ref=f1e883]: 模型来源
+                - generic [ref=f1e884]: 分析任务记录
+              - generic [ref=f1e885]:
+                - generic [ref=f1e886]: 语义模型
+                - generic [ref=f1e887]: 未记录
+              - generic [ref=f1e888]:
+                - generic [ref=f1e889]: 调用阶段
+                - generic [ref=f1e890]: 未记录
+              - generic [ref=f1e891]:
+                - generic [ref=f1e892]: 调用通道
+                - generic [ref=f1e893]: 未记录
+              - generic [ref=f1e894]:
+                - generic [ref=f1e895]: 调用耗时
+                - generic [ref=f1e896]: 未记录
+              - generic [ref=f1e897]:
+                - generic [ref=f1e898]: 调用记录
+                - generic [ref=f1e899]: 未记录
+              - generic [ref=f1e900]:
+                - generic [ref=f1e901]: 实际档位
+                - generic [ref=f1e902]: rule-engine+AI_LEVEL_2
+              - generic [ref=f1e903]:
+                - generic [ref=f1e904]: 实际模型
+                - generic [ref=f1e905]: 未记录
+              - generic [ref=f1e906]:
+                - generic [ref=f1e907]: 目标档位
+                - generic [ref=f1e908]: rule-engine+AI_LEVEL_2
+              - generic [ref=f1e909]:
+                - generic [ref=f1e910]: 目标模型
+                - generic [ref=f1e911]: 未记录
+              - generic [ref=f1e912]:
+                - generic [ref=f1e913]: 请求档位
+                - generic [ref=f1e914]: 未记录
+              - generic [ref=f1e915]:
+                - generic [ref=f1e916]: 请求模型
+                - generic [ref=f1e917]: 未记录
+              - generic [ref=f1e918]:
+                - generic [ref=f1e919]: 请求被接受
+                - generic [ref=f1e920]: 未记录
+              - generic [ref=f1e921]:
+                - generic [ref=f1e922]: 尝试错误
+                - generic [ref=f1e923]: 未记录
+              - generic [ref=f1e924]:
+                - generic [ref=f1e925]: 开始时间
+                - generic [ref=f1e926]: 2026/7/3 00:11:26
+              - generic [ref=f1e927]:
+                - generic [ref=f1e928]: 完成时间
+                - generic [ref=f1e929]: 2026/7/3 00:11:42
+              - generic [ref=f1e930]:
+                - generic [ref=f1e931]:
+                  - generic [ref=f1e932]: 最近执行器
+                  - generic [ref=f1e933]: 规则引擎 + 云端增强模型
+                - generic [ref=f1e934]:
+                  - generic [ref=f1e935]: 执行状态
+                  - generic [ref=f1e936]: 已完成
+                - generic [ref=f1e937]:
+                  - generic [ref=f1e938]: 降级
+                  - generic [ref=f1e939]: 否
+          - generic [ref=f1e940]:
+            - generic [ref=f1e942]:
+              - generic [ref=f1e943]:
+                - generic [ref=f1e944]:
+                  - img [ref=f1e945]
+                  - text: 版本与产物
+                - paragraph [ref=f1e949]: 客户谈判后的回传文件会形成新的合同版本，不作为发起审核入口。
+              - link "导入客户回传件" [ref=f1e950] [cursor=pointer]:
+                - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/edit
+                - button "导入客户回传件" [ref=f1e951]:
+                  - img
+                  - text: 导入客户回传件
+            - generic [ref=f1e952]:
+              - generic [ref=f1e953]:
+                - generic [ref=f1e954]: 文件大小
+                - generic [ref=f1e955]: 1.6 KB
+              - generic [ref=f1e956]:
+                - generic [ref=f1e957]: 文件类型
+                - generic [ref=f1e958]: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+              - generic [ref=f1e959]:
+                - generic [ref=f1e960]: 创建时间
+                - generic [ref=f1e961]: 2026/6/30 13:51:25
+              - generic [ref=f1e962]:
+                - generic [ref=f1e963]: 更新时间
+                - generic [ref=f1e964]: 2026/7/3 00:11:42
+              - generic [ref=f1e965]:
+                - paragraph [ref=f1e966]: 版本记录
+                - generic [ref=f1e967]:
+                  - generic [ref=f1e968]:
+                    - generic [ref=f1e969]:
+                      - generic [ref=f1e970]: v22
+                      - generic [ref=f1e971]: 批注版
+                    - paragraph [ref=f1e972]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f1e973]:
+                    - generic [ref=f1e974]:
+                      - generic [ref=f1e975]: v21
+                      - generic [ref=f1e976]: 批注版
+                    - paragraph [ref=f1e977]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f1e978]:
+                    - generic [ref=f1e979]:
+                      - generic [ref=f1e980]: v20
+                      - generic [ref=f1e981]: 批注版
+                    - paragraph [ref=f1e982]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f1e983]:
+                    - generic [ref=f1e984]:
+                      - generic [ref=f1e985]: v19
+                      - generic [ref=f1e986]: 批注版
+                    - paragraph [ref=f1e987]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f1e988]:
+                    - generic [ref=f1e989]:
+                      - generic [ref=f1e990]: v18
+                      - generic [ref=f1e991]: 批注版
+                    - paragraph [ref=f1e992]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f1e993]:
+                    - generic [ref=f1e994]:
+                      - generic [ref=f1e995]: v17
+                      - generic [ref=f1e996]: 批注版
+                    - paragraph [ref=f1e997]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f1e998]: 已收起 16 个更早版本。版本流需要保持可追溯，但默认只展示最近记录，避免批注产物污染主视图。
+              - generic [ref=f1e999]:
+                - paragraph [ref=f1e1000]: 源文件批注产物
+                - generic [ref=f1e1001]:
+                  - generic [ref=f1e1002]:
+                    - generic [ref=f1e1003]:
+                      - generic [ref=f1e1004]: 批注版 v22
+                      - generic [ref=f1e1005]: 最新
+                    - generic [ref=f1e1006]: 2026/7/3 00:43:15
+                  - generic [ref=f1e1007]:
+                    - generic [ref=f1e1009]: 批注版 v21
+                    - generic [ref=f1e1010]: 2026/7/3 00:11:21
+                  - generic [ref=f1e1011]:
+                    - generic [ref=f1e1013]: 批注版 v20
+                    - generic [ref=f1e1014]: 2026/7/2 23:35:35
+                  - generic [ref=f1e1015]:
+                    - generic [ref=f1e1017]: 批注版 v19
+                    - generic [ref=f1e1018]: 2026/7/2 23:16:07
+                  - generic [ref=f1e1019]:
+                    - generic [ref=f1e1021]: 批注版 v18
+                    - generic [ref=f1e1022]: 2026/7/2 23:11:32
+                  - generic [ref=f1e1023]: 另有 16 个历史批注产物已折叠。后续应通过导出幂等和版本归档治理，避免同一 ReviewRun 重复生成大量批注版。
+  - alert [ref=f1e657]

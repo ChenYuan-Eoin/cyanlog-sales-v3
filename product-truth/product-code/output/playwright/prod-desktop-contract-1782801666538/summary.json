@@ -1,0 +1,74 @@
+{
+  "base": "https://sales.cyanlog.icu",
+  "browser": "Google Chrome",
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/prod-desktop-contract-1782801666538",
+  "login": {
+    "status": 200,
+    "elapsedMs": 1121,
+    "headerTiming": "parse_payload;dur=3.9, login_rpc;dur=313.0, rpc_total;dur=110.1, rpc_audit_write;dur=1.7, rpc_token_write;dur=1.7, rpc_user_lookup;dur=1.7, rpc_auth_context;dur=3.1, rpc_initial_core;dur=7.3, rpc_ip_rate_limit;dur=0.4, rpc_password_verify;dur=78.7, rpc_input_validation;dur=1.3, rpc_initial_dashboard;dur=11.7, rpc_account_rate_limit;dur=1.8, login_rpc_transport;dur=202.9, cache_prime;dur=0.3, response_json;dur=1.4, auth_context_cookie;dur=16.7, total;dur=339.3"
+  },
+  "contracts": {
+    "count": 6,
+    "meta": {
+      "page": 1,
+      "pageSize": 20,
+      "total": 6,
+      "totalPages": 1,
+      "hasNext": false,
+      "hasPrev": false
+    },
+    "selectedContract": {
+      "id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+      "filename": "ones-contract-e2e-risk.docx",
+      "status": "COMPLETED"
+    },
+    "metrics": {
+      "innerWidth": 1440,
+      "documentScrollWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "url": "https://sales.cyanlog.icu/contracts"
+    }
+  },
+  "detail": {
+    "metrics": {
+      "innerWidth": 1440,
+      "documentScrollWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "url": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8"
+    },
+    "riskFindings": 8,
+    "annotations": 7,
+    "outputs": 6
+  },
+  "export": {
+    "commentCount": 7,
+    "hasCommentsXml": true,
+    "hasCommentReference": true
+  },
+  "errors": {
+    "consoleErrors": [],
+    "pageErrors": [],
+    "failedRequests": [
+      {
+        "url": "https://sales.cyanlog.icu/?_rsc=utQopaZyVbfSG9h2",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://sales.cyanlog.icu/api/auth/login",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://sales.cyanlog.icu/configs?_rsc=utQopaZyVbfSG9h2",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://sales.cyanlog.icu/contracts?_rsc=Ys9WLWa4IicbDT0R",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://sales.cyanlog.icu/contracts/new?_rsc=Ys9WLWa4IicbDT0R",
+        "failure": "net::ERR_ABORTED"
+      }
+    ]
+  }
+}

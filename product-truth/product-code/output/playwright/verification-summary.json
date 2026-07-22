@@ -1,0 +1,64 @@
+[
+  {
+    "name": "verify-ai-platform",
+    "url": "http://localhost:3000/configs?tab=ai",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-ai-platform.png",
+    "checkResults": {
+      "aiBase": true,
+      "modelInstance": true,
+      "strategy": true,
+      "fallback": true,
+      "invocationEvidence": true,
+      "noModelLevelText": false
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\nAI 能力底座\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n...\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同审核规则\n...\n\n围绕合同审核规则集、转译、发布和审核引擎编译的配置集。\n\nAI 能力底座\n0\n\n平台级模型接入、能力路由、策略降级、调用证据和成本治理。\n\n组织与权限\n...\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n...\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\nAI 能力底座\nAI 能力底座\n\n平台级管理模型 Provider、能力路由、降级策略、调用证据和 Token 成本口径。\n\n模型实例\n0\n启用模型\n0\n已发布\n0\nAI 能力底座\n0\n模型实例 (0)\n+ 新增\n\n暂无 AI 模型配置\n\n点击上方按钮创建第一条模型实例\n\n模型路由与能力策略\n默认策略模板：本地优先降级链\nP1\n本地模型候选池\n敏感合同正文、常规审核和批注草案优先走本机可用模型实例\n未配置\n阶段：semantic_review / rule_translation\n配置：新增并发布 AI_CONFIG\nP2\n云模型候选池\n标书解析、长文本/长 PDF、复杂规则和低置信度仲裁\n未配置\n阶段：long_document_parse / ambiguity_arbitration / low_confidence_review\n配置：新增并发布 AI_CONFIG\nFB\n规则引擎兜底\n确定性校验、证据定位和失败可解释\n未配置\n阶段：deterministic_check / evidence_anchor\n配置：新增并发布 AI_CONFIG\n模型实例\n\n每个 Provider 是一个可独立探测和调用的实例：Base URL、Token、模型 ID、能力阶段和优先级都来自配置。\n\n策略\n\n业务侧只传任务类型、文本长度、敏感级别和可选偏好；策略按顺序选择候选模型，不要求前端理解底层模型。\n\n降级链\n\n模型失败、超时、Token 不可用或超长文本时，网关进入下一个候选实例，最后才走规则引擎兜底。\n\n调用证据\n\n每次正式任务必须写入 model_invocations，记录 provider、model、phase、状态、降级原因和耗时。\n\n平台能力路由矩阵\n合同审核\nReviewRun / 再审核\n路由：前端只提交 task_type=contract_review；网关按当前策略匹配本地/云端候选池，失败后进入规则兜底\n证据：必须写入 semantic_review 的 model_invocations；规则兜底不能显示 AI 审核完成\n文档对比\n旧文件 + 新文件\n路由：先做文本/结构差异规则计算，再按策略调用具备长文档能力的模型解释风险变化\n证据：对比差异报告记录文件版本、精度、差异类型和风险解释来源\n合同起草\n客户需求 + 模板 + 条款约束\n路由：按 drafting 策略选择长上下文生成模型；规则引擎校验条款限制和必填结构\n证据：草稿需记录模型、Token 成本、模板版本和条款约束命中情况\n标书 / 长文档解析\n长 PDF / 长 DOCX / 标书附件\n路由：按 tender_long_document_parse 策"
+  },
+  {
+    "name": "verify-rules-tree",
+    "url": "http://localhost:3000/configs?tab=rules",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-rules-tree.png",
+    "checkResults": {
+      "ruleTree": true,
+      "createRule": true,
+      "createRuleSet": true,
+      "triggerLogic": true
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n合同审核规则集\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n...\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同审核规则\n15\n\n围绕合同审核规则集、转译、发布和审核引擎编译的配置集。\n\nAI 能力底座\n...\n\n平台级模型接入、能力路由、策略降级、调用证据和成本治理。\n\n组织与权限\n...\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n...\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n合同审核规则\n合同审核规则集\n\n管理规则库、规则集、结构化规则、转译确认与发布门禁，供合同审核消费。\n\n规则总数\n15\n启用规则\n15\n语义规则\n15\n合同审核规则集\n15\n规则库树 (14)\n新建规则\n新建规则集\n合同审核规则集\n选择规则集后展开具体规则；选择规则后编辑触发、判定和输出\n15\n\n总览\n\n全部规则资产与未归类入口\n\n全部规则集\n15\nALL\n发布 15\n转译 15\n待处理 0\nR001付款节奏\n✅\nR002终止退款\n✅\nR003税率\n✅\nR004默示验收期\n✅\nR005验收不通过\n✅\nR006违约金\n✅\nR007间接损失\n✅\nR008责任总额上限 Cap\n✅\nR009保密期\n✅\nR010主体·收款·金额\n✅\nR011IP 归属\n✅\nR012数据安全\n✅\nR013SLA\n✅\nR014续约\n✅\nR015争议解决\n✅\n默认规则集\n0\ndefault\n发布 0\n转译 0\n待处理 0\n\n审查逻辑\n\n上下文、主体、验收、SLA 和争议路径\n\n验收与交付规则集\n2\nACCEPTANCE\n发布 2\n转译 2\n待处理 0\nR004默示验收期\n✅\nR005验收不通过\n✅\n主体与金额一致性规则集\n1\nBUSINESS_INTEGRITY\n发布 1\n转译 1\n待处理 0\nR010主体·收款·金额\n✅\nSLA 与服务承诺规则集\n1\nSLA\n发布 1\n转译 1\n待处理 0\nR013SLA\n✅\n续约与退出规则集\n1\nRENEWAL\n发布 1\n转译 1\n待处理 0\nR014续约\n✅\n争议解决规则集\n1\nDISPUTE\n发布 1\n转译 1\n待处理 0\nR015争议解决\n✅\n\n违约与责任\n\n付款、税务、违约、责任上限和终止退款\n\n付款与结算规则集\n1\nPAYMENT\n发布 1\n转译 1\n待处理 0\nR001付款节奏\n✅\n终止与退款规则集\n1\nTERMINATION\n发布 1\n转译 1\n待处理 0\nR002终止退款\n✅\n税务与发票规则集\n1\nTAX\n发布 1\n转译 1\n待处理 0\nR003税率\n✅\n违约责任规则集\n1\nBREACH\n发布 1\n转译 1\n待处理 0\nR006违约金\n✅\n责任边界规则集\n2\nLIABILITY\n发布 2\n转译 2\n待处理 0\nR007间接损失\n✅\nR008责任总额上限 Cap\n✅\n\n知识产权与数据\n\nIP 归属、保密、数据安全和客户资料处理\n\n保密义务规则集\n1\nCONFIDENTIALITY\n发布 1\n转译 1\n待处理 0\nR009保密期\n✅\n知识产权规则集\n1\nIP\n发布 1\n转译 1\n待处理 0\nR011IP 归属\n✅\n数据安全规则集\n1\nDATA_SECURITY\n发布 1\n转译 1\n待处理 0\nR012数据安全\n✅\n编辑规"
+  },
+  {
+    "name": "verify-contract-center",
+    "url": "http://localhost:3000/contracts",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-contract-center.png",
+    "checkResults": {
+      "draft": true,
+      "review": true,
+      "compare": true,
+      "taskType": true
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同中心\n\n全生命周期管理\n\n起草\n审核\n合同中心\n\n一级入口只保留合同审核、文档对比、AI 起草合同。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。\n\n上传源文件并发起审核\n1\n合同起草\n入口\n需求起草\n动作\n输入需求生成合同草稿\n对象\n客户需求、模板、条款限制\n当前目标\n等待选择\n结果\n可编辑合同草稿，可进入审核或对比\n边界：起草是独立路径，不等同于上传审核或版本对比\n2\n合同审核\n入口\n源文件审核\n动作\n上传源文件并创建 ReviewRun\n对象\nDOCX / PDF 源文件\n当前目标\n新建合同版本\n结果\n风险定位、AI 批注、源文件批注版\n边界：审核自动消费配置中心已发布规则，不在这里选择规则版本\n3\n合同文档对比\n入口\n旧/新文件\n动作\n选择旧文件和新文件\n对象\n合同版本流或客户回传件\n当前目标\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx\n结果\n差异列表、并排高亮、风险变化判断\n边界：对比不替代审核；红线或需谈判变化进入再审核\n\n20\n\n全部合同\n\n0\n\n进行中\n\n0\n\n需关注\n\n17\n\n已完成\n\n全部\n29\n审核\n20\n对比\n9\n起草\n0\n待审核\n已完成\n任务：文档对比\n版本：v6 → v7\n版本差异任务\n7月8日 09:57\n\n文档对比 v6 → v7\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx\n\n对比完成\n下一步：查看差异结果\n旧文件 → 新文件\n\n对比已完成，进入文档对比工作台查看差异列表、原文定位和处理动作。\n\n任务：合同审核\n版本：v7\n合同源文件\n7月7日 15:46\n\n合同审核 v7\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n任务：文档对比\n版本：v1 → v2\n版本差异任务\n7月7日 13:36\n\n文档对比 v1 → v2\n【修】第三方代投ONES产品原厂授权书-上海鼎茂信息技术有限公司2026.docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 4 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n任务：合同审核\n版本：v2\n合同源文件\n7月7日 13:33\n\n合同审核 v2\n【修】第三方代投ONES产品原厂授权书-上海鼎茂信息技术有限公司2026.docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n任务：文档对比\n版本：v2 → v3\n版本差异任务\n7月7日 08:04\n\n文档对比 v2 → v3\n(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 6 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n任务：合同审核\n版本：v3\n合同源文件\n7月6日 22:50\n\n合同审核 v3\n(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx\n\n审核完成\n下一步：查看审核结果\n审核源文件版本\n\n审核已完成，但还不能证明源文件批注版已可导出。\n\n任务：文档对比\n版本：v1 → v8\n版本差异任务\n7月6日 21:15\n\n文档对比 v1 → v8\n关联主体合作补充协议（模板）.docx-ONES批注版.docx\n\n对比完成\n下一步：查看红线差异\n旧文件 → 新文件\n\n发现 17 处红线差异，进入文档对比工作台复核旧稿与新稿。\n\n任务：合同审核\n版本：v8\n合同源文件\n7月6日 18:27\n\n合同"
+  },
+  {
+    "name": "verify-contract-detail",
+    "url": "http://localhost:3000/contracts/draft",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-contract-detail.png",
+    "checkResults": {
+      "reviewDefault": false,
+      "styleSelector": true,
+      "sourcePreview": true,
+      "modelEvidence": false
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同起草\n保存\n起草目标\n\n输入业务需求后，系统提取交易要素、匹配模板和条款限制，生成可修改草案；草案必须能进入合同审核，而不是停留在一次性文本。\n\n选择合同模板\n\n标准服务协议\n\n适用于通用 SaaS 服务、实施与运维交付。\n\n服务协议\n\n私有部署协议\n\n适用于私有化部署、验收和维保场景。\n\n部署协议\n\n订阅续约协议\n\n适用于续费、扩容和订阅期限变更。\n\n订阅协议\n\n请先选择一个模板以继续\n\n¥\n关联报价单（可选）\n\n暂无已审批的报价单\n\n基础信息\n合同标题\n甲方\n乙方\n联系人\n合同金额\n业务参数\n付款方式\n请选择\n3-4-3分期\n预付全款\n验收支付\n部署方式\n请选择\n公有云\n私有部署\n争议解决地点\n请选择\n深圳南山区法院\n北京仲裁委员会\n条款开关\n知识产权加强保护\n启用后自动追加相关条款\n交付违约金补偿\n启用后自动追加相关条款\nAI 增补诉求\nAI 智能转换\n审核风格\n严审\nAGGRESSIVE\n均衡\nBALANCED\n商务\nCONSERVATIVE\n\n按发布规则默认阈值执行，适合大多数合同审核。\n\nAI 生成合同\n导出 DOCX\n进入审核\n\n浏览器内只是 Word 草案近似预览；正式交付以导出的可编辑 DOCX 为准。进入审核时会把 DOCX 作为源文件写入合同版本流，不能用页面预览替代源文件。\n\nLIVE PREVIEW\n等待生成\n导出可编辑 DOCX\n合同标题\n\nPREVIEW MODE\n\n甲方 (采购方)\n\n甲方名称\n\n乙方 (供应商)\n\n乙方名称\n\n第二条 费用与结算\n\n本合同总金额为人民币 金额待填写\n\n已根据左侧参数配置自动生成\n\n甲方（盖章）：____\n\n法定代表人/授权代表：________________\n\n日期：____年__月__日\n\n乙方（盖章）：____\n\n法定代表人/授权代表：________________\n\n日期：____年__月__日\n\n起草闭环\n需求 → 模板 → 草案 → 预审\n\n合同起草是合同中心第三条独立能力，产物应进入版本流和审核工作台。\n\n审核风格\n均衡\n\n按发布规则默认阈值执行，适合大多数合同审核。\n\n1\n需求理解\n\n等待标题或补充诉求\n\n2\n模板约束\n\n请选择合同模板\n\n3\nCRM 补全\n\n可选报价单补全客户和金额\n\n4\n生成草案\n\n等待生成\n\n5\n进入审核\n\n生成后可进入审核\n\n起草与审核的边界：本页负责生成可编辑 DOCX 草案；合同审核只接受源文件上传形成版本，不把页面预览当作审核文件。"
+  },
+  {
+    "name": "verify-contract-compare",
+    "url": "http://localhost:3000/contracts/draft/compare",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-contract-compare.png",
+    "checkResults": {
+      "syncToggle": false,
+      "exportReport": false,
+      "oldNew": false,
+      "zoomOrOriginal": false
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n暂不能发起文档比对\n\n候选版本加载失败。仍可先上传客户回传版；上传后会作为当前合同版本流参与比对。\n\n返回合同中心\n返回审核工作台\n返回工作台补充文件"
+  }
+]

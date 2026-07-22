@@ -1,0 +1,2 @@
+[  808021ms] [ERROR] Failed to load resource: the server responded with a status of 405 (Method Not Allowed) @ http://localhost:3000/api/contracts/draft:0
+[  808519ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/contracts/draft/review:0

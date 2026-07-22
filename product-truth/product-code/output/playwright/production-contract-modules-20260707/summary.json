@@ -1,0 +1,36 @@
+[
+  {
+    "viewport": "desktop",
+    "page": "/contracts",
+    "labelsOk": true,
+    "hasVersion": true,
+    "zeroTasks": true
+  },
+  {
+    "viewport": "desktop",
+    "page": "/contracts/draft",
+    "draftOk": true
+  },
+  {
+    "viewport": "desktop",
+    "page": "/configs?tab=rules",
+    "rulesOk": true
+  },
+  {
+    "viewport": "ipad",
+    "page": "/contracts",
+    "labelsOk": true,
+    "hasVersion": true,
+    "zeroTasks": true
+  },
+  {
+    "viewport": "ipad",
+    "page": "/contracts/draft",
+    "draftOk": true
+  },
+  {
+    "viewport": "ipad",
+    "page": "/configs?tab=rules",
+    "rulesOk": true
+  }
+]

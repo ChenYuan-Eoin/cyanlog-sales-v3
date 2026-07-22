@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, isValidElement } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -91,23 +91,28 @@ export function UserFormDialog({
     [onSubmit, form, onOpenChange]
   )
 
+  const defaultTrigger = (
+    <Button variant="outline" size="sm">
+      {editingUser ? (
+        <>
+          <EditIcon className="h-4 w-4 mr-1" />
+          编辑成员
+        </>
+      ) : (
+        <>
+          <PlusIcon className="h-4 w-4 mr-1" />
+          添加成员
+        </>
+      )}
+    </Button>
+  )
+  const resolvedTrigger = trigger === undefined ? defaultTrigger : trigger
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>{trigger ?? (
-        <Button variant="outline" size="sm">
-          {editingUser ? (
-            <>
-              <EditIcon className="h-4 w-4 mr-1" />
-              编辑成员
-            </>
-          ) : (
-            <>
-              <PlusIcon className="h-4 w-4 mr-1" />
-              添加成员
-            </>
-          )}
-        </Button>
-      )}</DialogTrigger>
+      {isValidElement(resolvedTrigger) ? (
+        <DialogTrigger render={resolvedTrigger} />
+      ) : null}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

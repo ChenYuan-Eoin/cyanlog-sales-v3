@@ -1,0 +1,46 @@
+{
+  "review": {
+    "id": "7fcdd769-9512-47a1-ad59-ef64e14ec93a",
+    "contract_id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+    "status": "COMPLETED",
+    "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+    "model_policy_id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+    "model_invocation_ids": [
+      "97a9eb6f-e4ba-4335-a653-af1213c43311",
+      "c19d4ef2-d8eb-4a5c-83fe-5fd09d3860ec"
+    ],
+    "degraded": false,
+    "degradationReasons": []
+  },
+  "invocations": [
+    {
+      "id": "c19d4ef2-d8eb-4a5c-83fe-5fd09d3860ec",
+      "provider": "AI_LEVEL_1",
+      "model": "gpt-oss-20b",
+      "phase": "semantic_review",
+      "status": "completed",
+      "degraded": false,
+      "latency_ms": 55847,
+      "fallback_reason": null,
+      "error_message": null,
+      "intended_provider_profile": "AI_LEVEL_1",
+      "transport": "lm_studio_cli",
+      "provider_kind": "openai_compatible",
+      "attempt_error_count": 0
+    },
+    {
+      "id": "97a9eb6f-e4ba-4335-a653-af1213c43311",
+      "provider": "rule-engine",
+      "model": "rule-engine",
+      "phase": "structured_rules",
+      "status": "completed",
+      "degraded": false,
+      "latency_ms": 278,
+      "fallback_reason": null,
+      "error_message": null,
+      "transport": null,
+      "provider_kind": null,
+      "attempt_error_count": null
+    }
+  ]
+}

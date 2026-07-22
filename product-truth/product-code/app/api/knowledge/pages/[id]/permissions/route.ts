@@ -1,6 +1,6 @@
 // GET /api/knowledge/pages/[id]/permissions - 获取页面权限
 // POST /api/knowledge/pages/[id]/permissions - 添加权限
-// DELETE /api/knowledge/pages/[id]/permissions/[permId] - 删除权限
+// DELETE /api/knowledge/pages/[id]/permissions?permId=xxx - 删除权限
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -10,12 +10,12 @@ import { getDefaultOrgId } from '@/lib/scoped-access'
 // 获取页面权限
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { id } = params
+    const { id } = await params
 
     // 检查页面是否属于当前组织
     const { data: page } = await supabaseAdmin
@@ -52,12 +52,12 @@ export async function GET(
 // 添加权限
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { id } = params
+    const { id } = await params
     const body = await req.json()
 
     // 检查页面是否属于当前组织
@@ -102,12 +102,17 @@ export async function POST(
 // 删除权限
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; permId: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { id, permId } = params
+    const { id } = await params
+    const permId = req.nextUrl.searchParams.get('permId')
+
+    if (!permId) {
+      return NextResponse.json({ error: '缺少权限 ID' }, { status: 400 })
+    }
 
     // 检查页面是否属于当前组织
     const { data: page } = await supabaseAdmin

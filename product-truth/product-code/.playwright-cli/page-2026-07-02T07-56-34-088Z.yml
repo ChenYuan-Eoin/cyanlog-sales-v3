@@ -1,0 +1,67 @@
+- generic [active] [ref=f3e1]:
+  - complementary [ref=f3e2]:
+    - generic [ref=f3e3]:
+      - img "ONES Sales" [ref=f3e5]
+      - generic [ref=f3e6]:
+        - generic [ref=f3e7]: ONES Sales
+        - paragraph [ref=f3e8]: 智能协作平台
+    - navigation [ref=f3e9]:
+      - link "工作台" [ref=f3e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f3e11]
+        - generic [ref=f3e15]: 工作台
+      - link "报价中心" [ref=f3e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f3e17]
+        - generic [ref=f3e21]: 报价中心
+      - link "合同审核" [ref=f3e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f3e23]
+        - generic [ref=f3e28]: 合同审核
+      - link "标书中心" [ref=f3e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f3e30]
+        - generic [ref=f3e34]: 标书中心
+      - link "知识库" [ref=f3e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f3e36]
+        - generic [ref=f3e41]: 知识库
+      - link "日程" [ref=f3e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f3e43]
+        - generic [ref=f3e49]: 日程
+      - link "配置中心" [ref=f3e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f3e51]
+        - generic [ref=f3e55]: 配置中心
+    - generic [ref=f3e56]:
+      - link "个人信息" [ref=f3e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f3e58]
+        - generic [ref=f3e61]: 个人信息
+      - button "退出登录" [ref=f3e62] [cursor=pointer]:
+        - img [ref=f3e63]
+        - generic [ref=f3e66]: 退出登录
+  - main [ref=f3e67]:
+    - generic [ref=f3e68]:
+      - generic [ref=f3e69]:
+        - link "返回标书中心" [ref=f3e70] [cursor=pointer]:
+          - /url: /tenders
+        - heading "上传招标文件" [level=1] [ref=f3e71]
+        - paragraph [ref=f3e72]: PDF、Word、长文本会进入云端分块解析，并保留模型调用证据。
+      - generic [ref=f3e73]:
+        - generic [ref=f3e74] [cursor=pointer]:
+          - button "选择招标文件 支持 PDF、DOC、DOCX、TXT；扫描件 PDF 仍需要 OCR/视觉模型补齐。" [ref=f3e75]
+          - generic [ref=f3e76]:
+            - img [ref=f3e78]
+            - generic [ref=f3e81]: 选择招标文件
+            - generic [ref=f3e82]: 支持 PDF、DOC、DOCX、TXT；扫描件 PDF 仍需要 OCR/视觉模型补齐。
+        - generic [ref=f3e83]:
+          - generic [ref=f3e84]: 上传后生成结构化结果和 AI 解析证据。
+          - generic [ref=f3e85]:
+            - link "取消" [ref=f3e86] [cursor=pointer]:
+              - /url: /tenders
+              - button "取消" [ref=f3e87]
+            - button "开始解析" [disabled]:
+              - img
+              - text: 开始解析

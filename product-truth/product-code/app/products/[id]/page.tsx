@@ -12,14 +12,14 @@ import { isSchemaDriftError } from '@/lib/db-compat'
 import { getServerAuthToken } from '@/lib/server-auth'
 
 interface PageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProductDetailPage({ params }: PageProps) {
   const { id } = await resolveRouteParams(params)
-  const token = getServerAuthToken()
+  const token = await getServerAuthToken()
   const orgId = await getOrgIdForToken(token)
   if (!orgId) {
     notFound()

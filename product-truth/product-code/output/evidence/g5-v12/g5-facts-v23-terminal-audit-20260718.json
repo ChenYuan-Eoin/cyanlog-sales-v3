@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-18T11:30:00+08:00",
+  "scope": {
+    "active_goal": "G5-MULTIFORMAT-ANNOTATION",
+    "preview_project_id": "vsfropnfsmnonkotywsx",
+    "production_written": false,
+    "git_pushed": false,
+    "production_deployed": false,
+    "new_account_registered": false,
+    "paid_external_provider_called": false,
+    "incremental_cost_usd": 0
+  },
+  "release_state": {
+    "release_current": {
+      "bundle_id": "f0c9573f-25d4-4549-9919-e5211de30233",
+      "version": 21,
+      "is_current": true
+    },
+    "preview_candidate": {
+      "bundle_id": "b948eaff-a8f1-4a36-a488-c07faffa33a5",
+      "version": 23,
+      "model_policy_id": "399fa442-ffcd-4eea-9c76-342114494d3e",
+      "is_current": false
+    }
+  },
+  "controlled_runtime_canary": {
+    "runtime_acceptance": "passed",
+    "accuracy_acceptance": "not_evaluated",
+    "contract_id": "863119df-4e1a-46b5-9780-bedee49065c7",
+    "review_id": "765147ec-7d73-468b-a1b2-15516c4f6985",
+    "analysis_job_id": "ae6d8568-c876-4440-a532-e8c9006834a7",
+    "job_status": "completed",
+    "job_attempts": 1,
+    "review_status": "COMPLETED",
+    "provider": "local-qwen35-9b",
+    "model": "qwen3.5-9b-local",
+    "degraded": false,
+    "checkpoint_count": 1,
+    "checkpoint_total": 1,
+    "all_source_anchor_validated": true,
+    "input_tokens": 2504,
+    "output_tokens": 496,
+    "total_tokens": 3000,
+    "fact_run_count": 1,
+    "document_outcome_count": 15,
+    "risk_card_count": 13,
+    "completion_receipt_count": 1,
+    "source_storage_path": "863119df-4e1a-46b5-9780-bedee49065c7/d7179db2-e858-422f-94be-0cb2a556e6fd_controlled-sla-macro.docm",
+    "source_hash": "5b44c4fd64730f4c1864157bcd3a717f22968740b17db7954bf65283d14d2d6f",
+    "source_text_hash": "d954528a82af29c08e7a34a29f1b1165e06ce36e3c1066aa4880add069e60333"
+  },
+  "real_contract_candidate": {
+    "runtime_acceptance": "failed",
+    "blind_accuracy_acceptance": "not_evaluated",
+    "release_acceptance": false,
+    "contract_id": "5cdabf0a-0d5a-4435-bca5-062ffad52c53",
+    "review_id": "f0f0225f-2cbe-47c6-917f-e2af5346e839",
+    "analysis_job_id": "14541e1d-9df1-450d-91d8-33c32ecdb27c",
+    "job_status": "failed",
+    "job_attempts": 3,
+    "review_status": "FAILED",
+    "contract_status": "FAILED",
+    "failure_stage": "chunk_8_fact_schema_validation",
+    "failure_code": "facts.compensation_basis_outside_frozen_enum",
+    "bounded_resume_used": true,
+    "same_failure_repeated_once": true,
+    "new_reviewrun_after_terminal_failure": false,
+    "checkpoint_count": 7,
+    "checkpoint_total": 13,
+    "checkpoint_indices": [1, 2, 3, 4, 5, 6, 7],
+    "all_source_anchor_validated": true,
+    "checkpoint_tokens": 28337,
+    "completed_invocations": 7,
+    "failed_invocations": 2,
+    "degraded_fallback_records": 2,
+    "qwen_provider_calls": 9,
+    "all_recorded_tokens": 38621,
+    "fact_run_count": 0,
+    "completion_receipt_count": 0,
+    "risk_card_count": 0,
+    "source_storage_path": "5cdabf0a-0d5a-4435-bca5-062ffad52c53/1784279215384_____________-____.docx-ONES___.docx",
+    "source_hash_before": "83a603959f671618cbc3149d18b94a7fb6b70b5d040eaf758298c0942988e425",
+    "source_hash_after": "83a603959f671618cbc3149d18b94a7fb6b70b5d040eaf758298c0942988e425",
+    "source_text_hash_before": "8390b17b703d3ca3071898e14ccc944dafff7f1e500bacac586be71b673d8e7b",
+    "source_text_hash_after": "8390b17b703d3ca3071898e14ccc944dafff7f1e500bacac586be71b673d8e7b"
+  },
+  "deterministic_remediation": {
+    "model_enum_transport": "unique formatting aliases canonicalize; otherwise an explicitly allowed unknown or nullable null is used without guessing a business value",
+    "deterministic_schema_errors_requeued": false,
+    "coverage_audit_preserved_across_source_preparation": true,
+    "source_quote_projection": "delete_all_whitespace",
+    "overlapping_duplicate_quotes_rejected": true,
+    "idempotent_checkpoint_requires_source_anchor_validated": true,
+    "normalization_count_must_equal_audit_array_length": true,
+    "preview_migration_local_file": "20260718067000_align_fact_transport_normalization.sql",
+    "preview_migration_name": "align_fact_transport_normalization",
+    "preview_migration_ledger_version": "20260718030234",
+    "preview_migration_applied": true,
+    "empty_matched_levels": "all A/B/C false is a valid default-unknown envelope rather than a NULL comparison failure",
+    "preview_forward_migrations": [
+      {
+        "local_file": "20260718068000_align_empty_matched_level_validation.sql",
+        "name": "align_empty_matched_level_validation",
+        "ledger_version": "20260718032358",
+        "applied": true
+      },
+      {
+        "local_file": "20260718069000_fix_empty_matched_level_coalesce.sql",
+        "name": "fix_empty_matched_level_coalesce",
+        "ledger_version": "20260718032520",
+        "applied": true
+      }
+    ]
+  },
+  "verification": {
+    "targeted_vitest": "4 files, 103 tests passed",
+    "typescript": "pnpm exec tsc --noEmit --incremental false passed",
+    "diff_check": "passed",
+    "preview_acl_postflight": "passed",
+    "preview_quote_parity_postflight": "passed",
+    "preview_checkpoint_to_stage_whitespace_transaction": "passed_and_rolled_back",
+    "preview_quote_negative_matrix": "repeated_overlap_and_non_whitespace_rejected",
+    "preview_probe_residue": {
+      "contracts": 0,
+      "jobs": 0,
+      "invocations": 0,
+      "adjudications": 0
+    },
+    "preview_final_stage_acl": {
+      "anon_stage_v1": false,
+      "authenticated_stage_v2": false,
+      "service_role_stage_v2": true
+    },
+    "preview_final_empty_match_function": {
+      "valid_coalesce_occurrences": 3,
+      "invalid_pg_catalog_qualification_present": false
+    },
+    "transaction_probe_script": "output/evidence/g5-v12/g5-067-whitespace-stage-transaction-probe.sql",
+    "probe_adjustments_before_pass": [
+      "fixture contract_no uniqueness; rolled back",
+      "fixture current page-map insertion order; rolled back",
+      "existing empty matched_levels false-versus-null bug; fixed forward in 068",
+      "068 invalid pg_catalog qualification; fixed forward in 069"
+    ],
+    "probe_model_calls": 0,
+    "new_advisor_warn_for_067": false,
+    "advisor_post_069": {
+      "security_warn": 22,
+      "performance_warn": 95,
+      "new_warn_attributable_to_068_069": false,
+      "relevant_notices": [
+        "INFO: intentionally private facts/checkpoint/receipt tables have RLS enabled with no browser policies",
+        "INFO: checkpoint skill_bundle_id and completion receipt document_fact foreign keys have no dedicated covering index"
+      ]
+    },
+    "known_checkpoint_advisor_info": [
+      "RLS enabled with no policies on the intentionally private checkpoint table",
+      "skill_bundle_id foreign key has no dedicated covering index"
+    ],
+    "build_in_this_batch": "isolated Next.js 14.2.35 build passed 81/81 pages with .env*, output and prior .next excluded",
+    "desktop_browser_in_this_batch": "not_run",
+    "ipad_browser_in_this_batch": "not_run",
+    "native_file_export_in_this_batch": "not_run"
+  },
+  "decision": {
+    "g5_status": "in_progress",
+    "candidate_promotion": "blocked",
+    "production_release": "blocked",
+    "reason": "The controlled runtime chain passed, but the real contract candidate failed before document staging and no independent blind accuracy gold set was evaluated."
+  }
+}

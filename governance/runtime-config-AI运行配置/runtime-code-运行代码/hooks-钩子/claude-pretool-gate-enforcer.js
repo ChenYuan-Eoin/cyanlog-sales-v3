@@ -20,6 +20,28 @@ const SETTINGS_PATH = path.join(
   WORKSPACE_ROOT,
   'governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json'
 );
+const PROJECT_REGISTRY_PATH = path.join(
+  WORKSPACE_ROOT,
+  'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js'
+);
+
+function enforceSchedulerPath(toolName, toolInput) {
+  if (!['Edit', 'Write', 'NotebookEdit'].includes(toolName)) return;
+  const filePath = toolInput.file_path || toolInput.notebook_path;
+  if (!filePath) {
+    console.error('SCHEDULER_BLOCKED: write tool did not provide a file path');
+    process.exit(2);
+  }
+  const { spawnSync } = require('child_process');
+  const result = spawnSync(process.execPath, [PROJECT_REGISTRY_PATH, 'scheduler-check', filePath], {
+    cwd: WORKSPACE_ROOT,
+    encoding: 'utf8'
+  });
+  if (result.status !== 0) {
+    console.error(result.stdout || result.stderr || 'SCHEDULER_BLOCKED');
+    process.exit(2);
+  }
+}
 
 // 读取当前激活的Gate
 function getActiveGate() {
@@ -77,6 +99,8 @@ function main() {
     console.error('❌ Gate Enforcer: 无法获取工具名称');
     process.exit(1);
   }
+
+  enforceSchedulerPath(toolName, toolInput);
 
   // 获取当前激活的Gate
   const activeGateId = getActiveGate();

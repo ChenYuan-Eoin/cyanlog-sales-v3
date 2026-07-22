@@ -127,8 +127,16 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
 
     return (
       <div>
-        <button
+        <div
           onClick={() => handleDeptClick(dept.id, hasChildren)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              handleDeptClick(dept.id, hasChildren)
+            }
+          }}
+          role="button"
+          tabIndex={0}
           className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition group ${
             isSelected
               ? 'bg-blue-50 text-blue-900 hover:bg-blue-100'
@@ -137,7 +145,8 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
           style={{ paddingLeft: `${depth * 20 + 12}px` }}
         >
           {/* Expand/collapse button */}
-          <div
+          <button
+            type="button"
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-slate-200/50"
             onClick={(e) => {
               e.stopPropagation()
@@ -153,7 +162,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
             ) : (
               <span className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-blue-300' : 'bg-slate-300'}`} />
             )}
-          </div>
+          </button>
 
           {/* Department name + leader */}
           <div className="min-w-0 flex-1 truncate">
@@ -171,6 +180,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
+                type="button"
                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-slate-200/50"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -205,7 +215,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
           <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
             {dept.member_count}
           </Badge>
-        </button>
+        </div>
 
         {isExpanded && hasChildren && (
           <div>

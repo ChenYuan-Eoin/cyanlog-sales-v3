@@ -57,6 +57,7 @@ const PASSWORD_CHANGE_ALLOWED_PATHS = [
   '/api/auth/me',
   '/api/auth/change-password',
 ]
+const AUTH_MIDDLEWARE_TIMEOUT_MS = 8_000
 
 // REQ: F003 自主可控 + RBAC
 // 路径 → 所需权限（路由级权限，权限可配置于 roles.permissions）
@@ -121,6 +122,16 @@ function createMiddlewareSupabaseClient() {
   })
 }
 
+function authenticationUnavailable(pathname: string): NextResponse {
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json(
+      { error: 'Authentication unavailable', code: 'AUTH_DEPENDENCY_UNAVAILABLE' },
+      { status: 503 },
+    )
+  }
+  return new NextResponse('Authentication unavailable', { status: 503 })
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host')?.toLowerCase()
@@ -147,15 +158,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(buildRedirectUrl(request, '/login'))
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), AUTH_MIDDLEWARE_TIMEOUT_MS)
+
   try {
     const supabase = createMiddlewareSupabaseClient()
 
     // 步骤1: 验证token（必须先做，获取user_id）
-    const { data: tokenRecord } = await supabase
+    const { data: tokenRecord, error: tokenError } = await supabase
       .from('auth_tokens')
       .select('user_id, expires_at')
       .eq('token', token)
-      .single()
+      .abortSignal(controller.signal)
+      .maybeSingle()
+
+    if (tokenError) {
+      return authenticationUnavailable(pathname)
+    }
 
     if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) {
       if (pathname.startsWith('/api/')) {
@@ -167,20 +186,29 @@ export async function middleware(request: NextRequest) {
     // 步骤2: 并行查询用户信息和角色权限
     const userId = tokenRecord.user_id
 
-    const [{ data: userRow }, { data: userRolesData }] = await Promise.all([
+    const [userResult, rolesResult] = await Promise.all([
       // 查询用户基本信息
       supabase
         .from('users')
         .select('id, org_id, must_change_password')
         .eq('id', userId)
+        .abortSignal(controller.signal)
         .maybeSingle(),
       // 查询角色和权限（一次查询获取code和permissions）
       supabase
         .from('user_roles')
         .select('scope_type, scope_id, roles:roles(code, permissions)')
         .eq('user_id', userId)
-        .eq('scope_type', 'org'),
+        .eq('scope_type', 'org')
+        .abortSignal(controller.signal),
     ])
+
+    if (userResult.error || rolesResult.error) {
+      return authenticationUnavailable(pathname)
+    }
+
+    const userRow = userResult.data
+    const userRolesData = rolesResult.data
 
     if (!userRow) {
       if (pathname.startsWith('/api/')) {
@@ -236,16 +264,13 @@ export async function middleware(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message.includes('auth middleware')) {
       console.error('Auth middleware misconfigured:', error.message)
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.json({ error: 'Authentication unavailable' }, { status: 503 })
-      }
-      return new NextResponse('Authentication unavailable', { status: 503 })
+      return authenticationUnavailable(pathname)
     }
 
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    return NextResponse.redirect(buildRedirectUrl(request, '/login'))
+    // 只有“无 token / 查无 token / 已过期”才是 401；远端异常不得清空有效登录态。
+    return authenticationUnavailable(pathname)
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

@@ -1,0 +1,30 @@
+{
+  "file": "output/playwright/current-reviewrun/docx-l1/export-l1.docx",
+  "size_bytes": 3032,
+  "zip_entries": [
+    "[Content_Types].xml",
+    "_rels/.rels",
+    "word/document.xml",
+    "word/_rels/document.xml.rels",
+    "word/",
+    "word/comments.xml",
+    "word/_rels/"
+  ],
+  "has_document_xml": true,
+  "has_comments_xml": true,
+  "has_comments_relationship": true,
+  "has_comments_content_type": true,
+  "comment_count": 3,
+  "comment_range_start_count": 3,
+  "comment_range_end_count": 3,
+  "comment_reference_count": 3,
+  "paragraph_count": 9,
+  "table_count": 0,
+  "section_count": 1,
+  "has_header_footer_refs": false,
+  "comment_authors": [
+    "ONES 业务运营"
+  ],
+  "comment_preview": "      【红线风险】IP 归属      问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让      建议：必须修改合同条款      证据原文：第五条 知识产权未明确归属，双方后续另行协商。      规则：R011 v3      RuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2      SourceRange: 109-132      RiskFinding: be627a00-7a1d-4066-9f9f-cfcead8aa2e4        【红线风险】争议解决      问题：触发「争议解决」红线：境外仲裁/法院/法律      建议：必须修改合同条款      证据原文：第六条 争议解决方式未明确，管辖法院待定。      规则：R015 v3      RuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef      SourceRange: 133-154      RiskFinding: a16b5eb3-bc0d-4227-b134-6a3ae1434fc5        【红线风险】违约金缺乏上限限制      问题：合同中规定逾期付款违约金为日万分之十，但未对总额设定上限，可能导致违约金金额过高      建议：在合同中加入违约金上限条款，例如不超过总金额的5%      证据原文：第四条 违约责任：逾期付款违约金为日万分之十。      规则：R006 v3      RuleSnapshot: 144594c3-5610-41ff-8771-bb476b6f5197      SourceRange: 85-108      RiskFinding: 2bdba343-c831-447b-8400-ae51a03043f9     ",
+  "document_text_preview": "      销售合同      第一条 合同金额：人民币100万元。      第二条 付款条款：乙方验收后120天内付款，账期120天。      第三条 质保条款：质保金20%，质保期为合同签订后36个月。       第四条 违约责任：逾期付款违约金为日万分之十。           第五条 知识产权未明确归属，双方后续另行协商。           第六条 争议解决方式未明确，管辖法院待定。          第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。      第八条 如发生市场变化、经营困难，客户可单方延期履行。      "
+}

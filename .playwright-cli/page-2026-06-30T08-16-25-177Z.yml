@@ -1,0 +1,239 @@
+- generic [active] [ref=e1]:
+  - button "打开主导航" [ref=e926] [cursor=pointer]:
+    - img [ref=e3]
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - img "ONES Sales" [ref=e927]
+      - generic [ref=e9]:
+        - generic [ref=e10]: ONES Sales
+        - paragraph [ref=e11]: 智能协作平台
+    - navigation [ref=e12]:
+      - link "工作台" [ref=e928] [cursor=pointer]:
+        - /url: /
+        - img [ref=e14]
+        - generic [ref=e18]: 工作台
+      - link "报价中心" [ref=e929] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e20]
+        - generic [ref=e24]: 报价中心
+      - link "合同审核" [ref=e930] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e26]
+        - generic [ref=e31]: 合同审核
+      - link "标书中心" [ref=e931] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e33]
+        - generic [ref=e37]: 标书中心
+      - link "知识库" [ref=e932] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e39]
+        - generic [ref=e44]: 知识库
+      - link "日程" [ref=e933] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e46]
+        - generic [ref=e52]: 日程
+      - link "配置中心" [ref=e934] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e54]
+        - generic [ref=e58]: 配置中心
+    - generic [ref=e59]:
+      - link "个人信息" [ref=e935] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e61]
+        - generic [ref=e64]: 个人信息
+      - button "退出登录" [ref=e936] [cursor=pointer]:
+        - img [ref=e66]
+        - generic [ref=e69]: 退出登录
+  - main [ref=e70]:
+    - generic [ref=e72]:
+      - generic [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - img [ref=e76]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=e937]
+          - paragraph [ref=e81]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+            - generic [ref=e84]: 生效范围
+            - generic [ref=e85]: 组织级统一发布
+          - generic [ref=e86]:
+            - generic [ref=e87]: 消费端
+            - generic [ref=e88]: 报价 / 合同 / AI
+          - generic [ref=e89]:
+            - generic [ref=e90]: 当前配置集
+            - generic [ref=e91]: 角色权限
+      - generic [ref=e92]:
+        - complementary [ref=e93]:
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - generic [ref=e96]: 配置域
+              - paragraph [ref=e97]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e98]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=e938] [cursor=pointer]:
+                - generic [ref=e100]:
+                  - generic [ref=e101]: 交易配置
+                  - generic [ref=e102]: ...
+                - paragraph [ref=e103]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 ... 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=e939] [cursor=pointer]:
+                - generic [ref=e105]:
+                  - generic [ref=e106]: 合同与 AI 规则
+                  - generic [ref=e107]: ...
+                - paragraph [ref=e108]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 18 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=e940] [cursor=pointer]:
+                - generic [ref=e110]:
+                  - generic [ref=e111]: 组织与权限
+                  - generic [ref=e112]: "18"
+                - paragraph [ref=e113]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=e941] [cursor=pointer]:
+                - generic [ref=e115]:
+                  - generic [ref=e116]: 界面与体验
+                  - generic [ref=e117]: ...
+                - paragraph [ref=e118]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e119]:
+              - generic [ref=e120]: 结构约束
+              - list [ref=e121]:
+                - listitem [ref=e122]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e123]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e124]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e125]:
+          - generic [ref=e126]:
+            - generic [ref=e127]:
+              - generic [ref=e128]:
+                - generic [ref=e129]:
+                  - generic [ref=e130]: 配置中心
+                  - generic [ref=e131]: /
+                  - generic [ref=e132]: 组织与权限
+                - generic [ref=e133]:
+                  - img [ref=e533]
+                  - generic [ref=e139]:
+                    - heading "角色权限" [level=2] [ref=e942]
+                    - paragraph [ref=e141]: 按业务能力维护角色，并通过组织/部门/销售空间分配数据范围。
+              - generic [ref=e142]:
+                - generic [ref=e538]:
+                  - generic [ref=e539]: 角色总数
+                  - generic [ref=e540]: "7"
+                - generic [ref=e541]:
+                  - generic [ref=e542]: 能力分组
+                  - generic [ref=e543]: "5"
+                - generic [ref=e544]:
+                  - generic [ref=e545]: 作用域层级
+                  - generic [ref=e546]: "4"
+            - generic [ref=e152]:
+              - button "组织架构 11" [ref=e943] [cursor=pointer]:
+                - img [ref=e154]
+                - generic [ref=e158]: 组织架构
+                - generic [ref=e159]: "11"
+              - button "角色权限 7" [ref=e944] [cursor=pointer]:
+                - img [ref=e161]
+                - generic [ref=e165]: 角色权限
+                - generic [ref=e166]: "7"
+          - generic [ref=e548]:
+            - generic [ref=e550]:
+              - generic [ref=e551]:
+                - heading "角色列表" [level=3] [ref=e945]
+                - paragraph [ref=e553]: 选择角色查看详情
+              - generic [ref=e555]:
+                - img [ref=e556]
+                - textbox "搜索角色..." [ref=e946]
+              - generic [ref=e560]:
+                - button "超级管理员 超级管理员 SUPER_ADMIN 1" [ref=e947] [cursor=pointer]:
+                  - img [ref=e563]
+                  - generic [ref=e565]:
+                    - generic [ref=e566]:
+                      - generic [ref=e567]: 超级管理员
+                      - generic [ref=e568]: 超级管理员
+                    - generic [ref=e569]: SUPER_ADMIN
+                  - generic [ref=e570]:
+                    - generic [ref=e571]: "1"
+                    - img [ref=e572]
+                - button "管理员 ADMIN 4" [ref=e948] [cursor=pointer]:
+                  - img [ref=e576]
+                  - generic [ref=e581]:
+                    - generic [ref=e583]: 管理员
+                    - generic [ref=e584]: ADMIN
+                  - generic [ref=e585]:
+                    - generic [ref=e586]: "4"
+                    - img [ref=e587]
+                - button "销售经理 SALES_MANAGER 6" [ref=e949] [cursor=pointer]:
+                  - img [ref=e591]
+                  - generic [ref=e596]:
+                    - generic [ref=e598]: 销售经理
+                    - generic [ref=e599]: SALES_MANAGER
+                  - generic [ref=e600]:
+                    - generic [ref=e601]: "6"
+                    - img [ref=e602]
+                - button "销售 SALES 17" [ref=e950] [cursor=pointer]:
+                  - img [ref=e606]
+                  - generic [ref=e611]:
+                    - generic [ref=e613]: 销售
+                    - generic [ref=e614]: SALES
+                  - generic [ref=e615]:
+                    - generic [ref=e616]: "17"
+                    - img [ref=e617]
+                - button "法务 LEGAL 2" [ref=e951] [cursor=pointer]:
+                  - img [ref=e621]
+                  - generic [ref=e626]:
+                    - generic [ref=e628]: 法务
+                    - generic [ref=e629]: LEGAL
+                  - generic [ref=e630]:
+                    - generic [ref=e631]: "2"
+                    - img [ref=e632]
+                - button "财务 FINANCE 2" [ref=e952] [cursor=pointer]:
+                  - img [ref=e636]
+                  - generic [ref=e641]:
+                    - generic [ref=e643]: 财务
+                    - generic [ref=e644]: FINANCE
+                  - generic [ref=e645]:
+                    - generic [ref=e646]: "2"
+                    - img [ref=e647]
+                - button "只读用户 READONLY 0" [ref=e953] [cursor=pointer]:
+                  - img [ref=e651]
+                  - generic [ref=e656]:
+                    - generic [ref=e658]: 只读用户
+                    - generic [ref=e659]: READONLY
+                  - generic [ref=e660]:
+                    - generic [ref=e661]: "0"
+                    - img [ref=e662]
+            - generic [ref=e665]:
+              - generic [ref=e668]:
+                - img [ref=e670]
+                - generic [ref=e672]:
+                  - generic [ref=e673]:
+                    - heading "超级管理员" [level=2] [ref=e954]
+                    - generic [ref=e675]: 拥有所有权限
+                  - generic [ref=e676]: SUPER_ADMIN · 1 名成员 · 1 条作用域绑定
+                  - paragraph [ref=e677]: 全平台最高权限
+              - generic [ref=e678]:
+                - tablist [ref=e680]:
+                  - tab "员工分配 (1)" [selected] [ref=e955] [cursor=pointer]
+                  - tab "权限设置" [ref=e956] [cursor=pointer]
+                - tabpanel "员工分配 (1)" [ref=e957]:
+                  - generic [ref=e685]:
+                    - generic [ref=e686]:
+                      - heading "已分配成员 (1)" [level=4] [ref=e958]
+                      - button "添加成员" [ref=e959] [cursor=pointer]:
+                        - img
+                        - text: 添加成员
+                    - table [ref=e691]:
+                      - rowgroup [ref=e692]:
+                        - row "成员 部门 职位 操作" [ref=e960]:
+                          - columnheader "成员" [ref=e961]
+                          - columnheader "部门" [ref=e962]
+                          - columnheader "职位" [ref=e963]
+                          - columnheader "操作" [ref=e964]
+                      - rowgroup [ref=e698]:
+                        - row "系 系统超管 superadmin@huarun.com 信息技术部 超级管理员 从角色中移除 系统超管" [ref=e965]:
+                          - cell "系 系统超管 superadmin@huarun.com" [ref=e966]:
+                            - generic [ref=e701]:
+                              - generic [ref=e702]: 系
+                              - generic [ref=e703]:
+                                - generic [ref=e704]: 系统超管
+                                - generic [ref=e705]: superadmin@huarun.com
+                          - cell "信息技术部" [ref=e967]:
+                            - generic [ref=e707]: 信息技术部
+                          - cell "超级管理员" [ref=e968]
+                          - cell "从角色中移除 系统超管" [ref=e969]:
+                            - button "从角色中移除 系统超管" [ref=e970] [cursor=pointer]:
+                              - img
+  - alert [ref=e202]: Cyanlog Sales

@@ -1,0 +1,411 @@
+- generic [active] [ref=f3e1]:
+  - complementary [ref=f3e2]:
+    - generic [ref=f3e3]:
+      - img "ONES Sales" [ref=f3e5]
+      - generic [ref=f3e6]:
+        - generic [ref=f3e7]: ONES Sales
+        - paragraph [ref=f3e8]: 智能协作平台
+    - navigation [ref=f3e9]:
+      - link "工作台" [ref=f3e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f3e11]
+        - generic [ref=f3e15]: 工作台
+      - link "报价中心" [ref=f3e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f3e17]
+        - generic [ref=f3e21]: 报价中心
+      - link "合同审核" [ref=f3e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f3e23]
+        - generic [ref=f3e28]: 合同审核
+      - link "标书中心" [ref=f3e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f3e30]
+        - generic [ref=f3e34]: 标书中心
+      - link "知识库" [ref=f3e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f3e36]
+        - generic [ref=f3e41]: 知识库
+      - link "日程" [ref=f3e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f3e43]
+        - generic [ref=f3e49]: 日程
+      - link "配置中心" [ref=f3e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f3e51]
+        - generic [ref=f3e55]: 配置中心
+    - generic [ref=f3e56]:
+      - link "个人信息" [ref=f3e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f3e58]
+        - generic [ref=f3e61]: 个人信息
+      - button "退出登录" [ref=f3e62] [cursor=pointer]:
+        - img [ref=f3e63]
+        - generic [ref=f3e66]: 退出登录
+  - main [ref=f3e67]:
+    - generic [ref=f3e68]:
+      - generic [ref=f3e72]:
+        - generic [ref=f3e73]:
+          - generic [ref=f3e74]:
+            - link "合同审核" [ref=f3e75] [cursor=pointer]:
+              - /url: /contracts
+            - generic [ref=f3e76]: /
+            - generic [ref=f3e77]: 审核工作台
+          - generic [ref=f3e78]:
+            - heading "ones-contract-e2e-risk.docx" [level=1] [ref=f3e79]
+            - generic [ref=f3e80]: 审核完成
+          - paragraph [ref=f3e81]: ONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。
+        - generic [ref=f3e82]:
+          - link "返回" [ref=f3e83] [cursor=pointer]:
+            - /url: /contracts
+            - button "返回" [ref=f3e84]:
+              - img
+              - text: 返回
+          - button "重新审查" [disabled]:
+            - img
+            - text: 重新审查
+          - button "导出批注版" [ref=f3e86] [cursor=pointer]:
+            - img
+            - text: 导出批注版
+      - generic [ref=f3e87]:
+        - generic [ref=f3e89]:
+          - generic [ref=f3e90]: 红线风险
+          - generic [ref=f3e91]: "4"
+        - generic [ref=f3e93]:
+          - generic [ref=f3e94]: 需谈判风险
+          - generic [ref=f3e95]: "3"
+        - generic [ref=f3e97]:
+          - generic [ref=f3e98]: 开放风险
+          - generic [ref=f3e99]: "8"
+        - generic [ref=f3e101]:
+          - generic [ref=f3e102]: 批注数量
+          - generic [ref=f3e103]: "7"
+      - generic [ref=f3e104]:
+        - generic [ref=f3e105]:
+          - generic [ref=f3e106]:
+            - generic [ref=f3e107]:
+              - generic [ref=f3e108]:
+                - generic [ref=f3e109]:
+                  - generic [ref=f3e110]:
+                    - img [ref=f3e111]
+                    - text: 原文与批注意图
+                  - paragraph [ref=f3e114]: 以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。
+                - link "上传客户回传版" [ref=f3e115] [cursor=pointer]:
+                  - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/edit
+                  - button "上传客户回传版" [ref=f3e116]:
+                    - img
+                    - text: 上传客户回传版
+              - generic [ref=f3e117]:
+                - generic [ref=f3e118]: v9 · 批注版
+                - generic [ref=f3e119]: v8 · 批注版
+                - generic [ref=f3e120]: v7 · 批注版
+                - generic [ref=f3e121]: v6 · 批注版
+                - generic [ref=f3e122]: 批注版 8
+            - generic [ref=f3e123]:
+              - generic [ref=f3e124]:
+                - generic [ref=f3e125]:
+                  - generic [ref=f3e126]: 不可抗力范围
+                  - generic [ref=f3e127]: 红线
+                - generic [ref=f3e128]: 必须修改合同条款
+                - generic [ref=f3e129]: R013 · v1
+              - generic [ref=f3e130]:
+                - text: 销售合同 第一条 合同金额：人民币100万元。 第二条 付款条款：乙方验收后120天内付款，账期120天。 第三条 质保条款：质保金20%，质保期为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生
+                - mark [ref=f3e131]: 市场变化、经营困难
+                - text: ，客户可单方延期履行。
+          - generic [ref=f3e132]:
+            - generic [ref=f3e134]:
+              - img [ref=f3e135]
+              - text: Word 批注
+            - generic [ref=f3e138]:
+              - generic [ref=f3e139]:
+                - generic [ref=f3e140]:
+                  - generic [ref=f3e141]: 合同变更、补充协议、书面、补充协议、口头、无需书面、电话确认
+                  - generic [ref=f3e142]: urgent
+                - paragraph [ref=f3e143]: "【红线风险】变更流程 问题：合同变更流程缺失，必须修改合同 建议：必须修改合同条款 RiskFinding: e2756ed2-b63c-4ba7-9023-f0937287954a"
+              - generic [ref=f3e144]:
+                - generic [ref=f3e145]:
+                  - generic [ref=f3e146]: 知识产权、归属
+                  - generic [ref=f3e147]: urgent
+                - paragraph [ref=f3e148]: "【红线风险】知识产权归属 问题：知识产权归属未明确，必须修改合同 建议：必须修改合同条款 RiskFinding: cf1cec6f-33f9-4f08-a30d-fa44d6635b06"
+              - generic [ref=f3e149]:
+                - generic [ref=f3e150]:
+                  - generic [ref=f3e151]: 争议解决、管辖、法院、管辖法院、争议解决方式
+                  - generic [ref=f3e152]: urgent
+                - paragraph [ref=f3e153]: "【红线风险】争议解决方式 问题：争议解决方式未明确，必须修改合同 建议：必须修改合同条款 RiskFinding: cc30e879-6f1b-4967-9980-e3668d0734ea"
+              - generic [ref=f3e154]:
+                - generic [ref=f3e155]:
+                  - generic [ref=f3e156]: 市场变化、经营困难
+                  - generic [ref=f3e157]: urgent
+                - paragraph [ref=f3e158]: "【红线风险】不可抗力范围 问题：不可抗力范围包含商业风险，必须修改合同 建议：必须修改合同条款 RiskFinding: a2625ead-7286-4860-b4cd-5c2b9d4a1286"
+              - generic [ref=f3e159]:
+                - generic [ref=f3e160]:
+                  - generic [ref=f3e161]: 账期120天
+                  - generic [ref=f3e162]: high
+                - paragraph [ref=f3e163]: "【需谈判风险】付款周期 问题：付款周期偏离建议区间 建议：建议换取：提供银行保函 RiskFinding: f7604f4b-3868-4167-846d-b1a60fa29cc5"
+              - generic [ref=f3e164]:
+                - generic [ref=f3e165]:
+                  - generic [ref=f3e166]: 质保金20%
+                  - generic [ref=f3e167]: high
+                - paragraph [ref=f3e168]: "【需谈判风险】质保金比例 问题：质保金比例偏离建议区间 建议：建议换取：提高违约赔偿倍数 RiskFinding: 4e104578-56a6-427b-b90b-f3848755ac4f"
+              - generic [ref=f3e169]:
+                - generic [ref=f3e170]:
+                  - generic [ref=f3e171]: 逾期付款违约金为日万分之十
+                  - generic [ref=f3e172]: high
+                - paragraph [ref=f3e173]: "【需谈判风险】滞纳金比例 问题：滞纳金比例偏离建议区间 建议：建议换取：降低滞纳金比例 RiskFinding: e0dbbb59-bf71-43d5-8643-1651b343dc5a"
+        - complementary [ref=f3e174]:
+          - generic [ref=f3e175]:
+            - generic [ref=f3e176]:
+              - generic [ref=f3e177]:
+                - generic [ref=f3e178]: 审核侧栏
+                - generic [ref=f3e179]: COMPLETED
+              - generic [ref=f3e180]:
+                - button "审查" [ref=f3e181] [cursor=pointer]:
+                  - img [ref=f3e182]
+                  - generic [ref=f3e184]: 审查
+                - button "摘要" [ref=f3e185] [cursor=pointer]:
+                  - img [ref=f3e186]
+                  - generic [ref=f3e189]: 摘要
+                - button "对话" [ref=f3e190] [cursor=pointer]:
+                  - img [ref=f3e191]
+                  - generic [ref=f3e193]: 对话
+                - button "证据" [ref=f3e194] [cursor=pointer]:
+                  - img [ref=f3e195]
+                  - generic [ref=f3e198]: 证据
+            - generic [ref=f3e200]:
+              - generic [ref=f3e201]:
+                - generic [ref=f3e202]:
+                  - heading "风险定位" [level=3] [ref=f3e203]
+                  - generic [ref=f3e204]: "8"
+                - generic [ref=f3e205]:
+                  - button "不可抗力范围 红线 不可抗力范围包含商业风险，必须修改合同 R013 八 open" [ref=f3e206] [cursor=pointer]:
+                    - generic [ref=f3e207]:
+                      - generic [ref=f3e208]: 不可抗力范围
+                      - generic [ref=f3e209]: 红线
+                    - paragraph [ref=f3e210]: 不可抗力范围包含商业风险，必须修改合同
+                    - generic [ref=f3e211]:
+                      - generic [ref=f3e212]: R013
+                      - generic [ref=f3e213]: 八
+                      - generic [ref=f3e214]: open
+                  - button "变更流程 红线 合同变更流程缺失，必须修改合同 R015 一 open" [ref=f3e215] [cursor=pointer]:
+                    - generic [ref=f3e216]:
+                      - generic [ref=f3e217]: 变更流程
+                      - generic [ref=f3e218]: 红线
+                    - paragraph [ref=f3e219]: 合同变更流程缺失，必须修改合同
+                    - generic [ref=f3e220]:
+                      - generic [ref=f3e221]: R015
+                      - generic [ref=f3e222]: 一
+                      - generic [ref=f3e223]: open
+                  - button "知识产权归属 红线 知识产权归属未明确，必须修改合同 R009 一 open" [ref=f3e224] [cursor=pointer]:
+                    - generic [ref=f3e225]:
+                      - generic [ref=f3e226]: 知识产权归属
+                      - generic [ref=f3e227]: 红线
+                    - paragraph [ref=f3e228]: 知识产权归属未明确，必须修改合同
+                    - generic [ref=f3e229]:
+                      - generic [ref=f3e230]: R009
+                      - generic [ref=f3e231]: 一
+                      - generic [ref=f3e232]: open
+                  - button "争议解决方式 红线 争议解决方式未明确，必须修改合同 R012 六 open" [ref=f3e233] [cursor=pointer]:
+                    - generic [ref=f3e234]:
+                      - generic [ref=f3e235]: 争议解决方式
+                      - generic [ref=f3e236]: 红线
+                    - paragraph [ref=f3e237]: 争议解决方式未明确，必须修改合同
+                    - generic [ref=f3e238]:
+                      - generic [ref=f3e239]: R012
+                      - generic [ref=f3e240]: 六
+                      - generic [ref=f3e241]: open
+                  - button "付款周期 需谈判 付款周期偏离建议区间 R002 二 open" [ref=f3e242] [cursor=pointer]:
+                    - generic [ref=f3e243]:
+                      - generic [ref=f3e244]: 付款周期
+                      - generic [ref=f3e245]: 需谈判
+                    - paragraph [ref=f3e246]: 付款周期偏离建议区间
+                    - generic [ref=f3e247]:
+                      - generic [ref=f3e248]: R002
+                      - generic [ref=f3e249]: 二
+                      - generic [ref=f3e250]: open
+                  - button "质保金比例 需谈判 质保金比例偏离建议区间 R003 三 open" [ref=f3e251] [cursor=pointer]:
+                    - generic [ref=f3e252]:
+                      - generic [ref=f3e253]: 质保金比例
+                      - generic [ref=f3e254]: 需谈判
+                    - paragraph [ref=f3e255]: 质保金比例偏离建议区间
+                    - generic [ref=f3e256]:
+                      - generic [ref=f3e257]: R003
+                      - generic [ref=f3e258]: 三
+                      - generic [ref=f3e259]: open
+                  - button "滞纳金比例 需谈判 滞纳金比例偏离建议区间 R006 四 open" [ref=f3e260] [cursor=pointer]:
+                    - generic [ref=f3e261]:
+                      - generic [ref=f3e262]: 滞纳金比例
+                      - generic [ref=f3e263]: 需谈判
+                    - paragraph [ref=f3e264]: 滞纳金比例偏离建议区间
+                    - generic [ref=f3e265]:
+                      - generic [ref=f3e266]: R006
+                      - generic [ref=f3e267]: 四
+                      - generic [ref=f3e268]: open
+                  - button "质保期 通过 质保期在合规范围内 R004 三 open" [ref=f3e269] [cursor=pointer]:
+                    - generic [ref=f3e270]:
+                      - generic [ref=f3e271]: 质保期
+                      - generic [ref=f3e272]: 通过
+                    - paragraph [ref=f3e273]: 质保期在合规范围内
+                    - generic [ref=f3e274]:
+                      - generic [ref=f3e275]: R004
+                      - generic [ref=f3e276]: 三
+                      - generic [ref=f3e277]: open
+              - generic [ref=f3e278]:
+                - generic [ref=f3e279]:
+                  - heading "销售谈判任务" [level=3] [ref=f3e280]
+                  - generic [ref=f3e281]: "7"
+                - generic [ref=f3e282]:
+                  - generic [ref=f3e283]:
+                    - generic [ref=f3e284]:
+                      - generic [ref=f3e285]: 必须谈判
+                      - generic [ref=f3e286]: 强制
+                    - paragraph [ref=f3e287]: 必须修改合同条款
+                    - generic [ref=f3e288]:
+                      - generic [ref=f3e289]: 责任角色：sales
+                      - generic [ref=f3e290]: 状态：待处理
+                  - generic [ref=f3e291]:
+                    - generic [ref=f3e292]:
+                      - generic [ref=f3e293]: 必须谈判
+                      - generic [ref=f3e294]: 强制
+                    - paragraph [ref=f3e295]: 必须修改合同条款
+                    - generic [ref=f3e296]:
+                      - generic [ref=f3e297]: 责任角色：sales
+                      - generic [ref=f3e298]: 状态：待处理
+                  - generic [ref=f3e299]:
+                    - generic [ref=f3e300]:
+                      - generic [ref=f3e301]: 必须谈判
+                      - generic [ref=f3e302]: 强制
+                    - paragraph [ref=f3e303]: 必须修改合同条款
+                    - generic [ref=f3e304]:
+                      - generic [ref=f3e305]: 责任角色：sales
+                      - generic [ref=f3e306]: 状态：待处理
+                  - generic [ref=f3e307]:
+                    - generic [ref=f3e308]:
+                      - generic [ref=f3e309]: 必须谈判
+                      - generic [ref=f3e310]: 强制
+                    - paragraph [ref=f3e311]: 必须修改合同条款
+                    - generic [ref=f3e312]:
+                      - generic [ref=f3e313]: 责任角色：sales
+                      - generic [ref=f3e314]: 状态：待处理
+                  - generic [ref=f3e315]:
+                    - generic [ref=f3e316]:
+                      - generic [ref=f3e317]: 建议谈判
+                      - generic [ref=f3e318]: 建议
+                    - paragraph [ref=f3e319]: 建议换取：提供银行保函
+                    - generic [ref=f3e320]:
+                      - generic [ref=f3e321]: 责任角色：sales
+                      - generic [ref=f3e322]: 状态：待处理
+                  - generic [ref=f3e323]:
+                    - generic [ref=f3e324]:
+                      - generic [ref=f3e325]: 建议谈判
+                      - generic [ref=f3e326]: 建议
+                    - paragraph [ref=f3e327]: 建议换取：提高违约赔偿倍数
+                    - generic [ref=f3e328]:
+                      - generic [ref=f3e329]: 责任角色：sales
+                      - generic [ref=f3e330]: 状态：待处理
+                  - generic [ref=f3e331]:
+                    - generic [ref=f3e332]:
+                      - generic [ref=f3e333]: 建议谈判
+                      - generic [ref=f3e334]: 建议
+                    - paragraph [ref=f3e335]: 建议换取：降低滞纳金比例
+                    - generic [ref=f3e336]:
+                      - generic [ref=f3e337]: 责任角色：sales
+                      - generic [ref=f3e338]: 状态：待处理
+          - generic [ref=f3e339]:
+            - generic [ref=f3e341]:
+              - generic [ref=f3e342]:
+                - img [ref=f3e343]
+                - text: 版本与产物
+              - link "上传客户回传版" [ref=f3e347] [cursor=pointer]:
+                - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/edit
+                - button "上传客户回传版" [ref=f3e348]:
+                  - img
+                  - text: 上传客户回传版
+            - generic [ref=f3e349]:
+              - generic [ref=f3e350]:
+                - generic [ref=f3e351]: 文件大小
+                - generic [ref=f3e352]: 1.6 KB
+              - generic [ref=f3e353]:
+                - generic [ref=f3e354]: 文件类型
+                - generic [ref=f3e355]: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+              - generic [ref=f3e356]:
+                - generic [ref=f3e357]: 创建时间
+                - generic [ref=f3e358]: 2026/6/30 13:51:25
+              - generic [ref=f3e359]:
+                - generic [ref=f3e360]: 更新时间
+                - generic [ref=f3e361]: 2026/6/30 13:53:16
+              - generic [ref=f3e362]:
+                - paragraph [ref=f3e363]: 版本记录
+                - generic [ref=f3e364]:
+                  - generic [ref=f3e365]:
+                    - generic [ref=f3e366]:
+                      - generic [ref=f3e367]: v9
+                      - generic [ref=f3e368]: 批注版
+                    - paragraph [ref=f3e369]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e370]:
+                    - generic [ref=f3e371]:
+                      - generic [ref=f3e372]: v8
+                      - generic [ref=f3e373]: 批注版
+                    - paragraph [ref=f3e374]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e375]:
+                    - generic [ref=f3e376]:
+                      - generic [ref=f3e377]: v7
+                      - generic [ref=f3e378]: 批注版
+                    - paragraph [ref=f3e379]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e380]:
+                    - generic [ref=f3e381]:
+                      - generic [ref=f3e382]: v6
+                      - generic [ref=f3e383]: 批注版
+                    - paragraph [ref=f3e384]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e385]:
+                    - generic [ref=f3e386]:
+                      - generic [ref=f3e387]: v5
+                      - generic [ref=f3e388]: 批注版
+                    - paragraph [ref=f3e389]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e390]:
+                    - generic [ref=f3e391]:
+                      - generic [ref=f3e392]: v4
+                      - generic [ref=f3e393]: 批注版
+                    - paragraph [ref=f3e394]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e395]:
+                    - generic [ref=f3e396]:
+                      - generic [ref=f3e397]: v3
+                      - generic [ref=f3e398]: 批注版
+                    - paragraph [ref=f3e399]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e400]:
+                    - generic [ref=f3e401]:
+                      - generic [ref=f3e402]: v2
+                      - generic [ref=f3e403]: 批注版
+                    - paragraph [ref=f3e404]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f3e405]:
+                    - generic [ref=f3e406]:
+                      - generic [ref=f3e407]: v1
+                      - generic [ref=f3e408]: 源文件
+                    - paragraph [ref=f3e409]: 用户上传合同源文件
+              - generic [ref=f3e410]:
+                - paragraph [ref=f3e411]: 输出文件
+                - generic [ref=f3e412]:
+                  - generic [ref=f3e413]:
+                    - generic [ref=f3e414]: 批注版 v9
+                    - generic [ref=f3e415]: 2026/6/30 14:55:47
+                  - generic [ref=f3e416]:
+                    - generic [ref=f3e417]: 批注版 v8
+                    - generic [ref=f3e418]: 2026/6/30 14:41:21
+                  - generic [ref=f3e419]:
+                    - generic [ref=f3e420]: 批注版 v7
+                    - generic [ref=f3e421]: 2026/6/30 14:27:48
+                  - generic [ref=f3e422]:
+                    - generic [ref=f3e423]: 批注版 v6
+                    - generic [ref=f3e424]: 2026/6/30 14:22:50
+                  - generic [ref=f3e425]:
+                    - generic [ref=f3e426]: 批注版 v5
+                    - generic [ref=f3e427]: 2026/6/30 14:02:49
+                  - generic [ref=f3e428]:
+                    - generic [ref=f3e429]: 批注版 v4
+                    - generic [ref=f3e430]: 2026/6/30 13:58:04
+                  - generic [ref=f3e431]:
+                    - generic [ref=f3e432]: 批注版 v3
+                    - generic [ref=f3e433]: 2026/6/30 13:55:52
+                  - generic [ref=f3e434]:
+                    - generic [ref=f3e435]: 批注版 v2
+                    - generic [ref=f3e436]: 2026/6/30 13:53:23
+  - alert [ref=f3e71]

@@ -21,12 +21,21 @@ const ruleSchema = z.object({
   risk_level: z.enum(['red', 'yellow', 'green']),
   enabled: z.boolean().default(true),
   config: z.object({
+    category: z.string().optional(),
+    code: z.string().optional(),
+    engine: z.string().optional(),
+    evidence: z.string().optional(),
+    exception: z.string().optional(),
     pattern: z.string().optional(),
     field: z.string().optional(),
     operator: z.enum(['gt', 'lt', 'eq', 'contains']).optional(),
+    output_template: z.string().optional(),
+    rule_set: z.string().optional(),
+    test_status: z.enum(['passed', 'failed', 'untested']).optional(),
+    trigger_type: z.enum(['keyword', 'semantic', 'field', 'ratio', 'amount', 'duration']).optional(),
     value: z.union([z.string(), z.number()]).optional(),
     prompt: z.string().optional(),
-  }).optional(),
+  }).passthrough().optional(),
 })
 
 // GET /api/rules - 获取规则列表（需登录，分页）

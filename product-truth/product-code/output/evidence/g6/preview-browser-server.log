@@ -1,0 +1,24 @@
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3110
+
+ ✓ Starting...
+[Sentry] DSN not configured, server error tracking disabled
+ ✓ Ready in 197ms
+[PERF] getUserIdForToken=171ms found=true
+[PERF] getOrgIdForUser (user_orgs)=156ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=174ms found=true
+[PERF] getOrgIdForUser (user_orgs)=289ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=453ms found=true
+[PERF] getOrgIdForUser (user_orgs)=150ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=192ms found=true
+[PERF] getOrgIdForUser (user_orgs)=167ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=149ms found=true
+[PERF] getOrgIdForUser (user_orgs)=189ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=507ms found=true
+[PERF] getOrgIdForUser (user_orgs)=158ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=159ms found=true
+[PERF] getOrgIdForUser (user_orgs)=196ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=151ms found=true
+[PERF] getOrgIdForUser (user_orgs)=166ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5
+[PERF] getUserIdForToken=167ms found=true
+[PERF] getOrgIdForUser (user_orgs)=170ms orgId=a226ed0f-5e6f-445f-82c4-378362b45ab5

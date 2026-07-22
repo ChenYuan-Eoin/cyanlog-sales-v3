@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "elapsedMs": 4681,
+  "headers": {
+    "connection": "keep-alive",
+    "content-disposition": "attachment; filename=\"ones-contract-e2e-risk-.docx\"; filename*=UTF-8''ones-contract-e2e-risk-%E5%AE%A1%E6%A0%B8%E7%BB%93%E6%9E%9C.docx",
+    "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "date": "Thu, 02 Jul 2026 02:57:50 GMT",
+    "keep-alive": "timeout=5",
+    "server-timing": "review_data_load;dur=394.4, clauses_load;dur=181.8, annotations_load;dur=182.0, risk_patches_load;dur=173.7, versions_load;dur=189.5, storage_download;dur=568.3, source_temp_write;dur=1.5, docx_generate;dur=19.6, output_file_read;dur=0.1, storage_upload;dur=427.4, version_register;dur=198.7, report_version_link;dur=193.5",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-export-timing": "review_data_load;dur=394.4, clauses_load;dur=181.8, annotations_load;dur=182.0, risk_patches_load;dur=173.7, versions_load;dur=189.5, storage_download;dur=568.3, source_temp_write;dur=1.5, docx_generate;dur=19.6, output_file_read;dur=0.1, storage_upload;dur=427.4, version_register;dur=198.7, report_version_link;dur=193.5"
+  }
+}

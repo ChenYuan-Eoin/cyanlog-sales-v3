@@ -10,7 +10,7 @@ import { listAccessibleSalesSpaces, normalizeSalesSpaceName } from '@/lib/scoped
 import { getServerAuthToken } from '@/lib/server-auth'
 
 interface PageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
@@ -33,7 +33,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function OpportunityDetailPage({ params }: PageProps) {
   const { id } = await resolveRouteParams(params)
-  const token = getServerAuthToken()
+  const token = await getServerAuthToken()
 
   if (!token) {
     redirect('/login')

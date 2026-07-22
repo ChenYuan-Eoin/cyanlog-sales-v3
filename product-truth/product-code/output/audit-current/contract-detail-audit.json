@@ -1,0 +1,773 @@
+{
+  "selectedContract": {
+    "id": "92958890-0b9f-411c-a283-1c9f7849afbe",
+    "filename": "_上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx",
+    "status": "COMPLETED",
+    "contract_no": "CT-20260702-008",
+    "quote_id": null,
+    "party_b_name": "待识别客户",
+    "created_by": "30000001-0000-0000-0000-000000000000",
+    "created_at": "2026-07-02T16:00:01.637358+00:00",
+    "updated_at": "2026-07-02T16:00:28.605528+00:00"
+  },
+  "api": {
+    "/api/contracts/92958890-0b9f-411c-a283-1c9f7849afbe": {
+      "status": 200,
+      "text": "{\"id\":\"92958890-0b9f-411c-a283-1c9f7849afbe\",\"filename\":\"_上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx\",\"storage_path\":\"92958890-0b9f-411c-a283-1c9f7849afbe/1783008002535___________________2024_______-YK20241029-__.docx\",\"size\":41059,\"mime_type\":\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"status\":\"COMPLETED\",\"parsed_text\":\"合同编号：SALES-20241111-2222\\n\\n项目管理平台维保服务合同\\n\\n（甲方）： 上证所信息网络有限公司\\n住  所  地：中国（上海）自由贸易试验区张东路1387幢37号101（复式）\\n法定代表人：张晓京\\n项目联系人：孙力辉\\n联系方式：  18918208623\\n通讯地址： 上海市浦东新区张东路1387号37栋\\n电    话：  021-58960632\\n传    真：  021-68792027\\n电子信箱：  lhsun@sse.com.cn\\n\\n（乙方）： 深圳复临科技有限公司\\n住  所  地：深圳市南山区粤海街道高新南十道16号金地威新中心A座20层\\n法定代表人：王颖奇\\n项目联系人：张柳云\\n联系方式 ：17317837325\\n通讯地址： 深圳市南山区粤海街道高新南十道16号金地威新中心A座20层\\n电子信箱： zhangliuyun@ones.ai\\n\\n鉴于乙方为甲方提供项目管理平台维保服务，故甲乙双方本着平等互利、等价有偿、诚实信用的原则，根据《中华人民共和国民法典》等的有关规定，经友好协商，特签订本合同，以便双方共同遵守。\\n\\n一、服务要求\\n乙方为甲方提供项目管理平台维保服务（不含［应用］办公协同编辑能力包），提供6*12小时线上支持服务，5*8小时线上故障修复及新功能版本升级服务。\\n二、服务期限\\n维保服务期自合同签订之日至 2025年10月30日。\\n三、合同价款\\n合同不含税价格￥87735.85元，增值税（税率6%）￥5264.15元，价税合计（即合同总价）￥93000.00元,大写：人民币玖万叁仟元整。为免歧义，除合同总价外，双方确认甲方无需再就本合同额外支付任何款项。合同履行期间，如遇国家增值税税率调整，在不含税价格不变的基础上按调整后的税率计算税额及价税合计（即合同总价）付款。\\n四、付款约定和付款期限\\n1、付款方式：甲方以 银行转账 方式分二期向乙方指定账户支付合同价款。\\"
+    },
+    "/api/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/reports/current": {
+      "status": 200,
+      "text": "{\"success\":true,\"data\":{\"contract_id\":\"92958890-0b9f-411c-a283-1c9f7849afbe\",\"has_report\":false,\"ask_summary\":{\"total\":0,\"pending\":0,\"responded\":0,\"closed\":0},\"can_export\":false}}"
+    },
+    "/api/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/review-runs": {
+      "status": 405,
+      "text": ""
+    },
+    "/api/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/compare": {
+      "status": 200,
+      "text": "{\"success\":true,\"data\":null}"
+    }
+  },
+  "shots": {
+    "detailDesktop": {
+      "url": "http://localhost:3002/contracts/92958890-0b9f-411c-a283-1c9f7849afbe",
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 加载合同审核工作台...",
+      "buttons": [
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 96,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 134,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 171,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 209,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 246,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 284,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 321,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 899,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 940,
+            "w": 218,
+            "h": 38
+          }
+        }
+      ],
+      "overflowX": false,
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "mainRects": [
+        {
+          "tag": "aside",
+          "cls": "fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white will-change-transform w-[min(20rem,calc(100vw-2rem))] sm:w-80 lg:w-64 lg:translate-x-0 -translate-x-full",
+          "x": 0,
+          "y": 0,
+          "w": 240,
+          "h": 1000
+        },
+        {
+          "tag": "main",
+          "cls": "min-h-screen bg-background pt-14 pb-4 px-4 md:pt-16 md:pb-6 md:px-6 lg:pt-0 lg:pb-0 lg:px-0 lg:ml-64",
+          "x": 240,
+          "y": 0,
+          "w": 1200,
+          "h": 1000
+        }
+      ]
+    },
+    "compareDesktop": {
+      "url": "http://localhost:3002/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/compare",
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同中心 / 审核工作台 / 文档比对 文档比对工作台 先选择基准合同和客户回传/候选版本，再生成差异列表、并排高亮和风险解读。 返回审核工作台 上传客户回传版 开始比对 基准文件 当前合同 合同编号：未记录 客户：未记录 报价：未绑定 基准文件来自当前合同版本流，不重新生成源文件。比对只读取可解析文本并保留原始文件作为事实来源。 新版/客户回传文件 优先从当前合同版本流选择客户回传版；必要时再选择同客户候选合同。 0 个回传版本 当前没有可用于比对的已完成合同。请先为当前合同补充客户回传版本，或完成另一份同客户/同报价合同审核。 输出闭环 ✓ 1. 选择基准文件 当前合同 · 2. 选择新版文件 等待选择 · 3. 生成差异列表 删除 / 新增 / 修改 / 风险等级 · 4. 并排高亮复核 左旧右新，差异可跳转 比对结果不会替代合同审核结论；红线差异仍应进入风险审核或再审核。",
+      "buttons": [
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 96,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 134,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 171,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 209,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 246,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 284,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 321,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 899,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 940,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "合同中心",
+          "href": "/contracts",
+          "disabled": false,
+          "rect": {
+            "x": 263,
+            "y": 23,
+            "w": 52,
+            "h": 19
+          }
+        },
+        {
+          "tag": "a",
+          "text": "审核工作台",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe",
+          "disabled": false,
+          "rect": {
+            "x": 337,
+            "y": 23,
+            "w": 66,
+            "h": 19
+          }
+        },
+        {
+          "tag": "a",
+          "text": "返回审核工作台",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe",
+          "disabled": false,
+          "rect": {
+            "x": 1048,
+            "y": 47,
+            "w": 141,
+            "h": 30
+          }
+        },
+        {
+          "tag": "button",
+          "text": "返回审核工作台",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 1048,
+            "y": 47,
+            "w": 141,
+            "h": 30
+          }
+        },
+        {
+          "tag": "a",
+          "text": "上传客户回传版",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/edit?intent=customer-return&next=compare",
+          "disabled": false,
+          "rect": {
+            "x": 1196,
+            "y": 47,
+            "w": 113,
+            "h": 30
+          }
+        },
+        {
+          "tag": "button",
+          "text": "上传客户回传版",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 1196,
+            "y": 47,
+            "w": 113,
+            "h": 30
+          }
+        },
+        {
+          "tag": "button",
+          "text": "开始比对",
+          "href": null,
+          "disabled": true,
+          "rect": {
+            "x": 1316,
+            "y": 47,
+            "w": 101,
+            "h": 30
+          }
+        }
+      ],
+      "overflowX": false,
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "mainRects": [
+        {
+          "tag": "aside",
+          "cls": "fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white will-change-transform w-[min(20rem,calc(100vw-2rem))] sm:w-80 lg:w-64 lg:translate-x-0 -translate-x-full",
+          "x": 0,
+          "y": 0,
+          "w": 240,
+          "h": 1000
+        },
+        {
+          "tag": "main",
+          "cls": "min-h-screen bg-background pt-14 pb-4 px-4 md:pt-16 md:pb-6 md:px-6 lg:pt-0 lg:pb-0 lg:px-0 lg:ml-64",
+          "x": 240,
+          "y": 0,
+          "w": 1200,
+          "h": 1000
+        },
+        {
+          "tag": "div",
+          "cls": "grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)_360px]",
+          "x": 263,
+          "y": 132,
+          "w": 1155,
+          "h": 409
+        },
+        {
+          "tag": "aside",
+          "cls": "rounded-lg border border-slate-200 bg-white p-4 shadow-sm",
+          "x": 1058,
+          "y": 132,
+          "w": 360,
+          "h": 409
+        }
+      ]
+    },
+    "detailIpad": {
+      "url": "http://localhost:3002/contracts/92958890-0b9f-411c-a283-1c9f7849afbe",
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 加载合同审核工作台...",
+      "buttons": [
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 96,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 134,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 171,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 209,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 246,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 284,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 321,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 1265,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 1306,
+            "w": 218,
+            "h": 38
+          }
+        }
+      ],
+      "overflowX": false,
+      "scrollWidth": 1024,
+      "clientWidth": 1024,
+      "mainRects": [
+        {
+          "tag": "aside",
+          "cls": "fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white will-change-transform w-[min(20rem,calc(100vw-2rem))] sm:w-80 lg:w-64 lg:translate-x-0 -translate-x-full",
+          "x": 0,
+          "y": 0,
+          "w": 240,
+          "h": 1366
+        },
+        {
+          "tag": "main",
+          "cls": "min-h-screen bg-background pt-14 pb-4 px-4 md:pt-16 md:pb-6 md:px-6 lg:pt-0 lg:pb-0 lg:px-0 lg:ml-64",
+          "x": 240,
+          "y": 0,
+          "w": 784,
+          "h": 1366
+        }
+      ]
+    },
+    "compareIpad": {
+      "url": "http://localhost:3002/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/compare",
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同中心 / 审核工作台 / 文档比对 文档比对工作台 先选择基准合同和客户回传/候选版本，再生成差异列表、并排高亮和风险解读。 返回审核工作台 上传客户回传版 开始比对 基准文件 当前合同 合同编号：未记录 客户：未记录 报价：未绑定 基准文件来自当前合同版本流，不重新生成源文件。比对只读取可解析文本并保留原始文件作为事实来源。 新版/客户回传文件 优先从当前合同版本流选择客户回传版；必要时再选择同客户候选合同。 0 个回传版本 当前没有可用于比对的已完成合同。请先为当前合同补充客户回传版本，或完成另一份同客户/同报价合同审核。 输出闭环 ✓ 1. 选择基准文件 当前合同 · 2. 选择新版文件 等待选择 · 3. 生成差异列表 删除 / 新增 / 修改 / 风险等级 · 4. 并排高亮复核 左旧右新，差异可跳转 比对结果不会替代合同审核结论；红线差异仍应进入风险审核或再审核。",
+      "buttons": [
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 96,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 134,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 171,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 209,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 246,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 284,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 321,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 1265,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 11,
+            "y": 1306,
+            "w": 218,
+            "h": 38
+          }
+        },
+        {
+          "tag": "a",
+          "text": "合同中心",
+          "href": "/contracts",
+          "disabled": false,
+          "rect": {
+            "x": 263,
+            "y": 23,
+            "w": 52,
+            "h": 19
+          }
+        },
+        {
+          "tag": "a",
+          "text": "审核工作台",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe",
+          "disabled": false,
+          "rect": {
+            "x": 337,
+            "y": 23,
+            "w": 66,
+            "h": 19
+          }
+        },
+        {
+          "tag": "a",
+          "text": "返回审核工作台",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe",
+          "disabled": false,
+          "rect": {
+            "x": 679,
+            "y": 38,
+            "w": 141,
+            "h": 30
+          }
+        },
+        {
+          "tag": "button",
+          "text": "返回审核工作台",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 679,
+            "y": 38,
+            "w": 141,
+            "h": 30
+          }
+        },
+        {
+          "tag": "a",
+          "text": "上传客户回传版",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/edit?intent=customer-return&next=compare",
+          "disabled": false,
+          "rect": {
+            "x": 828,
+            "y": 38,
+            "w": 113,
+            "h": 30
+          }
+        },
+        {
+          "tag": "button",
+          "text": "上传客户回传版",
+          "href": null,
+          "disabled": false,
+          "rect": {
+            "x": 828,
+            "y": 38,
+            "w": 113,
+            "h": 30
+          }
+        },
+        {
+          "tag": "button",
+          "text": "开始比对",
+          "href": null,
+          "disabled": true,
+          "rect": {
+            "x": 679,
+            "y": 75,
+            "w": 101,
+            "h": 30
+          }
+        }
+      ],
+      "overflowX": false,
+      "scrollWidth": 1024,
+      "clientWidth": 1024,
+      "mainRects": [
+        {
+          "tag": "aside",
+          "cls": "fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white will-change-transform w-[min(20rem,calc(100vw-2rem))] sm:w-80 lg:w-64 lg:translate-x-0 -translate-x-full",
+          "x": 0,
+          "y": 0,
+          "w": 240,
+          "h": 1366
+        },
+        {
+          "tag": "main",
+          "cls": "min-h-screen bg-background pt-14 pb-4 px-4 md:pt-16 md:pb-6 md:px-6 lg:pt-0 lg:pb-0 lg:px-0 lg:ml-64",
+          "x": 240,
+          "y": 0,
+          "w": 784,
+          "h": 1776
+        },
+        {
+          "tag": "div",
+          "cls": "grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)_360px]",
+          "x": 263,
+          "y": 151,
+          "w": 739,
+          "h": 1602
+        },
+        {
+          "tag": "aside",
+          "cls": "rounded-lg border border-slate-200 bg-white p-4 shadow-sm",
+          "x": 642,
+          "y": 151,
+          "w": 360,
+          "h": 1602
+        }
+      ]
+    }
+  }
+}

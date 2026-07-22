@@ -1,0 +1,85 @@
+- generic [active] [ref=f5e1]:
+  - complementary [ref=f5e2]:
+    - generic [ref=f5e3]:
+      - img "ONES Sales" [ref=f5e5]
+      - generic [ref=f5e6]:
+        - generic [ref=f5e7]: ONES Sales
+        - paragraph [ref=f5e8]: 智能协作平台
+    - navigation [ref=f5e9]:
+      - link "工作台" [ref=f5e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f5e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f5e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f5e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f5e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f5e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f5e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f5e56]:
+      - link "个人信息" [ref=f5e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f5e62] [cursor=pointer]
+  - main [ref=f5e67]:
+    - generic [ref=f5e68]:
+      - generic [ref=f5e70]:
+        - generic [ref=f5e71]:
+          - generic [ref=f5e72]:
+            - heading "合同中心" [level=1] [ref=f5e73]
+            - paragraph [ref=f5e74]: 全生命周期管理
+          - textbox "搜索合同名称、编号、客户..." [ref=f5e80]
+          - generic [ref=f5e81]:
+            - link [ref=f5e82] [cursor=pointer]:
+              - /url: /contracts/draft
+              - button "起草" [ref=f5e83]
+            - link [ref=f5e84] [cursor=pointer]:
+              - /url: /contracts/upload
+              - button "审核" [ref=f5e85]
+            - link [ref=f5e86] [cursor=pointer]:
+              - /url: /contracts/compare
+              - button "比对" [ref=f5e87]
+        - generic [ref=f5e88]:
+          - link [ref=f5e89] [cursor=pointer]:
+            - /url: /contracts/draft
+            - generic [ref=f5e97]:
+              - paragraph [ref=f5e98]: 合同起草
+              - paragraph [ref=f5e99]: 需求生成可编辑草稿
+          - link [ref=f5e100] [cursor=pointer]:
+            - /url: /contracts/upload
+            - generic [ref=f5e106]:
+              - paragraph [ref=f5e107]: 合同审核
+              - paragraph [ref=f5e108]: 上传源文件发起审查
+          - link [ref=f5e109] [cursor=pointer]:
+            - /url: /contracts/compare
+            - generic [ref=f5e117]:
+              - paragraph [ref=f5e118]: 合同文档对比
+              - paragraph [ref=f5e119]: 旧版/新版差异审计
+      - main [ref=f5e120]:
+        - generic [ref=f5e121]:
+          - generic [ref=f5e129]:
+            - paragraph [ref=f5e130]: "0"
+            - paragraph [ref=f5e131]: 全部任务
+          - generic [ref=f5e139]:
+            - paragraph [ref=f5e140]: "0"
+            - paragraph [ref=f5e141]: 进行中
+          - generic [ref=f5e148]:
+            - paragraph [ref=f5e149]: "0"
+            - paragraph [ref=f5e150]: 需关注
+          - generic [ref=f5e157]:
+            - paragraph [ref=f5e158]: "0"
+            - paragraph [ref=f5e159]: 已完成
+        - tablist [ref=f5e162]:
+          - tab "全部 0" [selected] [ref=f5e163] [cursor=pointer]:
+            - text: 全部
+            - generic [ref=f5e164]: "0"
+          - tab "起草中" [ref=f5e165] [cursor=pointer]
+          - tab "待审核" [ref=f5e166] [cursor=pointer]
+          - tab "已完成" [ref=f5e167] [cursor=pointer]
+          - tab "文档对比" [ref=f5e168] [cursor=pointer]
+        - paragraph [ref=f5e172]: 加载合同中...
+  - button "Open Next.js Dev Tools" [ref=f5e178] [cursor=pointer]
+  - alert [ref=f5e182]

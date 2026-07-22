@@ -1,0 +1,97 @@
+- generic [ref=f7e1]:
+  - complementary [ref=f7e2]:
+    - generic [ref=f7e3]:
+      - img "ONES Sales" [ref=f7e5]
+      - generic [ref=f7e6]:
+        - generic [ref=f7e7]: ONES Sales
+        - paragraph [ref=f7e8]: 智能协作平台
+    - navigation [ref=f7e9]:
+      - link "工作台" [ref=f7e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f7e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f7e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f7e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f7e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f7e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f7e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f7e56]:
+      - link "个人信息" [ref=f7e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f7e62] [cursor=pointer]
+  - main [ref=f7e67]:
+    - generic [ref=f7e68]:
+      - generic [ref=f7e81]:
+        - link "返回合同中心" [ref=f7e82] [cursor=pointer]:
+          - /url: /contracts
+        - generic [ref=f7e85]:
+          - heading "source.pdf" [level=1] [ref=f7e89]
+          - generic [ref=f7e90]: 审查 / 任务跟进 · 规则包 v27
+        - generic "审核风格" [ref=f7e91]:
+          - button "宽松" [ref=f7e92] [cursor=pointer]
+          - button "均衡" [ref=f7e93] [cursor=pointer]
+          - button "严格" [ref=f7e94] [cursor=pointer]
+        - button "提交结论并复审" [disabled]
+        - button "导出源文件批注版" [ref=f7e95] [cursor=pointer]
+      - generic [ref=f7e96]:
+        - complementary "全局风险导航" [ref=f7e97]:
+          - generic [ref=f7e98]:
+            - generic [ref=f7e99]:
+              - generic [ref=f7e100]: 决策覆盖
+              - generic [ref=f7e101]: 0/0
+            - generic "已通过 0，待复审 0，未决策 0" [ref=f7e102]
+            - generic [ref=f7e103]:
+              - generic [ref=f7e104]:
+                - paragraph [ref=f7e105]: 已通过 0
+                - paragraph [ref=f7e107]: 待复审 0
+                - paragraph [ref=f7e109]: 未决策 0
+                - paragraph [ref=f7e111]: 冲突 0
+              - generic "页级风险地图" [ref=f7e112]:
+                - generic [ref=f7e114]:
+                  - generic [ref=f7e115]: "1"
+                  - generic [ref=f7e116]: "1"
+            - generic [ref=f7e117]:
+              - button "全部" [ref=f7e118] [cursor=pointer]
+              - button "红线" [ref=f7e119] [cursor=pointer]
+              - button "未决策" [ref=f7e120] [cursor=pointer]
+              - button "待复审" [ref=f7e121] [cursor=pointer]
+          - generic [ref=f7e123]:
+            - paragraph [ref=f7e124]: 已通过 0 · 待复审 0 · 未决策 0 · 冲突 0
+            - button "提交全部结论并复审" [disabled]
+            - paragraph [ref=f7e125]: 提交前检查未处理项和跨条款冲突；通过后才创建新 ReviewRun。
+        - main "源文件主轴" [ref=f7e126]:
+          - generic [ref=f7e127]:
+            - generic [ref=f7e128]:
+              - paragraph [ref=f7e129]: 源文件原文
+              - paragraph [ref=f7e130]: 估算第 1 页 · 待页级定位
+            - button "上一风险" [ref=f7e131] [cursor=pointer]
+            - button "下一风险" [ref=f7e132] [cursor=pointer]
+            - generic [ref=f7e133]:
+              - button "缩小" [ref=f7e134] [cursor=pointer]
+              - generic [ref=f7e135]: 110%
+              - button "放大" [ref=f7e136] [cursor=pointer]
+            - button "请点击页面" [active] [ref=f7e156] [cursor=pointer]
+            - button "切换聚光灯" [ref=f7e138] [cursor=pointer]
+          - button "点击设置 PDF 人工批注位置" [ref=f7e157]:
+            - img "合同真实源文件第 1 页" [ref=f7e142]
+          - generic [ref=f7e143]:
+            - generic [ref=f7e144]: 键盘 J/K 或 ↑/↓ 跳转风险 · S 切换聚光灯
+            - generic [ref=f7e145]: 源 PDF/DOC/DOCX/DOCM · 认证页级懒加载
+        - complementary "当前风险处理轨道" [ref=f7e146]:
+          - generic [ref=f7e147]:
+            - generic [ref=f7e148]:
+              - generic [ref=f7e149]:
+                - generic [ref=f7e150]: 1. 问题与业务影响
+                - generic [ref=f7e151]: 无风险
+              - generic [ref=f7e152]:
+                - checkbox "自动下一条" [ref=f7e153]
+                - text: 自动下一条
+            - heading "当前 ReviewRun 没有待处理风险" [level=2] [ref=f7e154]
+            - paragraph [ref=f7e155]: 请从左侧选择风险。
+  - button "Open Next.js Dev Tools" [ref=f7e76] [cursor=pointer]
+  - alert [ref=f7e80]

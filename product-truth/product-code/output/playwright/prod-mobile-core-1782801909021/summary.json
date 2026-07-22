@@ -1,0 +1,67 @@
+{
+  "base": "https://sales.cyanlog.icu",
+  "browser": "Google Chrome mobile emulation",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/prod-mobile-core-1782801909021",
+  "login": {
+    "status": 200,
+    "elapsedMs": 765,
+    "headerTiming": "parse_payload;dur=0.5, login_rpc;dur=241.7, rpc_total;dur=91.5, rpc_audit_write;dur=0.2, rpc_token_write;dur=1.3, rpc_user_lookup;dur=0.8, rpc_auth_context;dur=1.8, rpc_initial_core;dur=4.3, rpc_ip_rate_limit;dur=0.4, rpc_password_verify;dur=73.5, rpc_input_validation;dur=0.9, rpc_initial_dashboard;dur=6.6, rpc_account_rate_limit;dur=1.2, login_rpc_transport;dur=150.2, cache_prime;dur=0.0, response_json;dur=0.4, auth_context_cookie;dur=0.5, total;dur=243.6"
+  },
+  "contracts": {
+    "textSample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n\n6\n\n全部合同\n\n1\n\n进行中\n\n0\n\n需关注\n\n4\n\n已完成\n\n全部\n起草中\n待审核\n已完成\n\nones-contract-e2e-risk.docx\n\n审核完成\n6月30日\n\nDRAFT\n6月30日\n\nHemory_.docx\n\n审核完成\n6月25日\n\n_ONES_-_2026.docx\n\n审核完成\n6月25日\n\n_2026_ONES_1_.docx\n\n审核完成\n6月25日\n\nminimal.pdf\n\n待审核\n6月25日\n起草\n上传\n审核\n比对",
+    "metrics": {
+      "innerWidth": 390,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "innerHeight": 844,
+      "documentScrollHeight": 1109,
+      "url": "https://sales.cyanlog.icu/contracts"
+    },
+    "hasDesktopTitle": false
+  },
+  "selectedContract": {
+    "id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+    "filename": "ones-contract-e2e-risk.docx",
+    "status": "COMPLETED"
+  },
+  "detail": {
+    "textSample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同审核\n/\n审核工作台\nones-contract-e2e-risk.docx\n审核完成\n\nONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。\n\n返回\n上传新版本\n导出批注版\n红线风险\n4\n需谈判风险\n3\n开放风险\n8\n批注数量\n7\n审批情况\n审核运行\nCOMPLETED\n规则快照\ncontract_rules_v2:published\n技能包\ncontract-rules:published\n模型策略\nrule-engine\n开始时间\n2026/6/30 13:53:13\n完成时间\n2026/6/30 13:53:16\n风险定位\n不可抗力范围\n红线\n\n不可抗力范围包含商业风险，必须修改合同\n\n变更流程\n红线\n\n合同变更流程缺失，必须修改合同\n\n知识产权归属\n红线\n\n知识产权归属未明确，必须修改合同\n\n争议解决方式\n红线\n\n争议解决方式未明确，必须修改合同\n\n付款周期\n需谈判\n\n付款周期偏离建议区间\n\n质保金比例\n需谈判\n\n质保金比例偏离建议区间\n\n滞纳金比例\n需谈判\n\n滞纳金比例偏离建议区间\n\n质保期\n通过\n\n质保期在合规范围内\n\n谈判任务\n必须谈判\n强制\n\n必须修改合同条款\n\n必须谈判\n强制\n\n必须修改合同条款\n\n必须谈判\n强制\n\n必须修改合同条款\n\n必须谈判\n强制\n\n必须修改合同条款\n\n建议谈判\n建议\n\n建议换取：提供银行保函\n\n建议谈判\n建议\n\n建议换取：提高违约赔偿倍数\n\n建议谈判\n建议\n\n建议换取：降低滞纳金比例\n\n原文",
+    "metrics": {
+      "innerWidth": 390,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "innerHeight": 844,
+      "documentScrollHeight": 5666,
+      "url": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8"
+    }
+  },
+  "configs": {
+    "textSample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n价盘与阶梯价\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n1\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n0\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n0\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n0\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n交易配置\n价盘与阶梯价\n\n配置中心拥有 SKU、基础价、最低价和阶梯价，报价工作台只读消费已发布价格。\n\nSKU 总数\n1\n启用阶梯价\n0\n在售 SKU\n1\n价盘与阶梯价\n1\n税率规则\n0\n审批权限\n0\n价盘与阶梯价\n\n配置中心拥有 SKU、基础价、最低价和阶梯价；报价中心只读消费。\n\n+ 新增 SKU\n企业版SaaS授权\nP001\n在售\n年度授权，支持100用户 · 年 · 软件服务\n基础价 ¥50,000\n最低价 ¥0\n仅基础价\n编辑\n删除",
+    "metrics": {
+      "innerWidth": 390,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "innerHeight": 844,
+      "documentScrollHeight": 2111,
+      "url": "https://sales.cyanlog.icu/configs?tab=price-list"
+    }
+  },
+  "adminOrg": {
+    "departments": 11,
+    "users": 25,
+    "roles": 7,
+    "headers": {
+      "source": "rpc",
+      "timing": "auth;dur=0.1, rpc_payload;dur=41.6, total;dur=41.7"
+    }
+  },
+  "errors": {
+    "consoleErrors": [],
+    "pageErrors": [],
+    "failedRequests": []
+  }
+}

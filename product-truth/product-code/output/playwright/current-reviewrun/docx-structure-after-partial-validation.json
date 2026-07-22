@@ -1,0 +1,11 @@
+{
+  "hasCommentsXml": true,
+  "commentCount": 3,
+  "commentRangeStartCount": 3,
+  "commentRangeEndCount": 3,
+  "commentReferenceCount": 3,
+  "authorOnes": true,
+  "hasCommentsRelationship": true,
+  "documentChars": 1084,
+  "commentsPreview": "【红线风险】IP 归属 问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让 建议：必须修改合同条款 证据原文：第五条 知识产权未明确归属，双方后续另行协商。 规则：R011 v3 RuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2 SourceRange: 109-132 RiskFinding: dc8eb6b7-bdee-44d0-b769-4ab0d223e323 【红线风险】争议解决 问题：触发「争议解决」红线：境外仲裁/法院/法律 建议：必须修改合同条款 证据原文：第六条 争议解决方式未明确，管辖法院待定。 规则：R015 v3 RuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef SourceRange: 133-154 RiskFinding: a7b53fa3-92d7-4e9e-844e-247c228d7c04 【红线风险】违约金缺乏上限约定 问题：合同中仅规定逾期付款违约金为日万分之十，但未对总额或单笔金额设定上限，可能导"
+}

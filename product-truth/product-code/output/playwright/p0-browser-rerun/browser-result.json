@@ -1,0 +1,111 @@
+{
+  "desktop": {
+    "loginMs": 2866,
+    "syncStatus": 200,
+    "syncMs": 13247,
+    "syncJson": {
+      "success": true,
+      "connector": "feishu",
+      "scope": "departments_and_members",
+      "sync_status": "completed",
+      "departments": {
+        "imported": 0,
+        "updated": 2,
+        "total": 2
+      },
+      "members": {
+        "imported": 0,
+        "updated": 4,
+        "skipped": 0,
+        "total": 4
+      },
+      "warnings": [],
+      "message": "飞书组织架构同步完成"
+    },
+    "contracts": {
+      "hasWorkbenchTitle": true,
+      "noLoadFailed": true,
+      "hasUploadReviewEntry": true,
+      "hasReviewRunCopy": true
+    },
+    "contractNew": {
+      "hasUploadFirstCopy": true,
+      "requiredCount": 0,
+      "hasOldBasicInfoHeading": false,
+      "hasOptionalBusinessContext": true
+    },
+    "rules": {
+      "hasR001": true,
+      "hasR013": true,
+      "hasRuleCount15": true,
+      "hasCategoryText": true
+    },
+    "org": {
+      "beforeHasMembers": false,
+      "afterHasMembers": true,
+      "afterHasFeishuMessage": false,
+      "afterHasFeishuDept": true
+    },
+    "events": [
+      {
+        "type": "response",
+        "status": 403,
+        "url": "http://localhost:3001/api/admin/org"
+      },
+      {
+        "type": "console",
+        "level": "error",
+        "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      }
+    ]
+  },
+  "mobile": {
+    "loginMs": 592,
+    "syncStatus": 200,
+    "syncMs": 10465,
+    "syncJson": {
+      "success": true,
+      "connector": "feishu",
+      "scope": "departments_and_members",
+      "sync_status": "completed",
+      "departments": {
+        "imported": 0,
+        "updated": 2,
+        "total": 2
+      },
+      "members": {
+        "imported": 0,
+        "updated": 4,
+        "skipped": 0,
+        "total": 4
+      },
+      "warnings": [],
+      "message": "飞书组织架构同步完成"
+    },
+    "contracts": {
+      "hasWorkbenchTitle": false,
+      "noLoadFailed": true,
+      "hasUploadReviewEntry": true,
+      "hasReviewRunCopy": true
+    },
+    "contractNew": {
+      "hasUploadFirstCopy": true,
+      "requiredCount": 0,
+      "hasOldBasicInfoHeading": false,
+      "hasOptionalBusinessContext": true
+    },
+    "rules": {
+      "hasR001": true,
+      "hasR013": true,
+      "hasRuleCount15": true,
+      "hasCategoryText": true
+    },
+    "org": {
+      "beforeHasMembers": true,
+      "afterHasMembers": true,
+      "afterHasFeishuMessage": false,
+      "afterHasFeishuDept": true
+    },
+    "events": []
+  }
+}

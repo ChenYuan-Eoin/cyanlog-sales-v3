@@ -148,7 +148,13 @@ ${body.key_terms ? `关键条款要求：${body.key_terms}` : ''}
 3. 直接输出合同正文，不要任何解释`
 
       try {
-        const aiResult = await reviewWithFailoverSync(prompt, { orgId })
+        const aiResult = await reviewWithFailoverSync(prompt, {
+          orgId,
+          preferredProvider: body.provider,
+          tool: 'contract_draft',
+          capability: 'long_text',
+          phase: 'contract_draft',
+        })
         // 解析 AI 输出（取响应文本）
         generatedContent = aiResult.summary || ''
       } catch {

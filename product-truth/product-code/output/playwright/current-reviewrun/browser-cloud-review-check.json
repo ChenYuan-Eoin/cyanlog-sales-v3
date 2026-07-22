@@ -1,0 +1,24 @@
+{
+  "urls": {
+    "config": "http://127.0.0.1:3016/configs?tab=ai",
+    "contract": "http://127.0.0.1:3016/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8"
+  },
+  "config": {
+    "hasL1": true,
+    "hasL2": true,
+    "hasL3": true,
+    "hasYiyongLink": true,
+    "textPreview": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\nAI 模型配置\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n7+\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n3+\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n...\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n1+\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n合同与 AI 规则\nAI 模型配置\n\n管理本地模型、云端 OpenAI 兼容模型和运行时路由策略。\n\n模型档位\n3\n启用模型\n3\n已发布\n3\n合同审核策略\n...\nAI 模型配置\n3\n模型 Provider (3)\n+ 新增\nLevel 1 · 本地 gpt-oss-20b\n已发布\n启用\n画像: AI_LEVEL_1\n类型: openai_compatible\n模型: gpt-oss-20b\n地址: http://127.0.0.1:1234/v1\n超时: 120s\n密钥: 未配置\n编辑\n删除\nLevel 2 · Gemini 云端模型\n已发布\n启用\n画像: sales_cloud_backup\n类型: openai_compatible\n模型: gemini-2.5-flash-lite\n地址: https://generativelanguage.googleapis.com/v1beta/openai/\n超时: 60s\n密钥: 已保存\n编辑\n删除\nLevel 3 · 规则引擎 (兜底)\n已发布\n启用\n画像: rule_engine\n类型: builtin\n模型: rule-engine\n地址: （内置）\n超时: 1s\n密钥: 无需密钥\n编辑\n删除\n路由与执行策略\nL1 / L2 / L3 模型旅程\nL1\n本地模型优先\n合同正文、规则声明优先在本机处理\nCLI 可调用 · gpt-oss-20b\n阶段：semantic_review / rule_translation\n配置：保存 LM Studio Token，或保留本机 CLI 通道\nL2\n云模型增强\n复杂规则、低置信度、长文档仲裁\n具备调用条件 · gemini-2.5-flash-lite\n阶段：ambiguity_arbitration / low_confidence_rev"
+  },
+  "contract": {
+    "hasCloudProfile": true,
+    "hasRateLimit": true,
+    "hasDegraded": true,
+    "textPreview": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同审核\n/\n审核工作台\nones-contract-e2e-risk.docx\n审核降级（需复核）\n\nONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。\n\n返回\n重新审查\n导出批注版\n红线风险\n2\n需谈判风险\n1\n开放风险\n3\n批注数量\n3\n\n当前审核结果未达到正式验收状态\n\n最新语义模型调用未通过运行质量门禁，不能视为 AI 审核完成。\nReviewRun 状态为 DEGRADED，本次结果不能作为无条件审核完成。\n审核执行发生降级：rule-engine。\n最近审核错误：AI_LEVEL_2: Failed after 3 attempts. Last error: Too Many Requests\n原文与批注意图\n\n以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。\n\n当前版本用于审核定位\nv16 · 批注版\nv15 · 批注版\nv14 · 批注版\nv13 · 批注版\n批注版 15\nIP 归属\n红线\n原文内容\n\n为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化\n\n批注建议\n\n必须修改合同条款\n\n风险说明\n\n触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让\n\nR011 · v3 · d2575e16-51de-43c5-9b85-32a319d7e2e2\n定位状态：located；evidence_text_exact_match\n销售合同\n第一条 合同金额：人民币100万元。\n第二条 付款条款：乙方验收后120天内付款，账期120天。\n第三条 质保条款：质保金20%，质保期为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化、经营困难，客户可单方延期履行。\nWord 批注\n第五条 知识产权未明确归属，双方后续另行协商。\nurgent\n\n【红线风险】IP 归属\n问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让\n建议：必须修改合同条款\n证据原文：第五条 知识产权未明确归属，双方后续另行协商。\n规则：R011 v3\nRuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2\nSourceRange: 109-132\nRiskFinding: 50b32bef-bc36-4366-81f1-b2b2ebc89fe7\n\n第六条 争议解决方式未明确，管辖法院待定。\nurgent\n\n【红线风险】争议解决\n问题：触发「争议解决」红线：境外仲裁/法院/法律\n建议：必须修改合同条款\n证据原文：第六条 争议解决方式未明确，管辖法院待定。\n规则：R015 v3\nRuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef\nSourceRange: 133-154\nRiskFinding: cd18b0ba-367c-4fba-857d-256baa6e704c\n\n逾期付款违约金为日万分之十\nhigh\n\n【需谈判风险】违约金\n问题：违约金偏离建议区间\n建议：建议换取：销售需围绕风险项取得对价或客户确认，并记录谈判结果。\n证据原文：逾期"
+  },
+  "mobile": {
+    "hasCloudProfile": true,
+    "hasDegraded": true,
+    "textPreview": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同审核\n/\n审核工作台\nones-contract-e2e-risk.docx\n审核降级（需复核）\n\nONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。\n\n返回\n重新审查\n导出批注版\n红线风险\n2\n需谈判风险\n1\n开放风险\n3\n批注数量\n3\n\n当前审核结果未达到正式验收状态\n\n最新语义模型调用未通过运行质量门禁，不能视为 AI 审核完成。\nReviewRun 状态为 DEGRADED，本次结果不能作为无条件审核完成。\n审核执行发生降级：rule-engine。\n最近审核错误：AI_LEVEL_2: Failed after 3 attempts. Last error: Too Many Requests\n原文与批注意图\n\n以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。\n\n当前版本用于审核定位\nv16 · 批注版\nv15 · 批注版\nv14 · 批注版\nv13 · 批注版\n批注版 15\nIP 归属\n红线\n原文内容\n\n为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化\n\n批注建议\n\n必须修改合同条款\n\n风险说明\n\n触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让\n\nR011 · v3 · d2575e16-51de-43c5-9b85-32a319d7e2e2\n定位状态：located；evidence_text_exact_match\n销售合同\n第一条 合同金额：人民币100万元。\n第二条 付款条款：乙方验收后120天内付款，账期120天。\n第三条 质保条款：质保金20%，质保期为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化、经营困难，客户可单方延期履行。\nW"
+  }
+}

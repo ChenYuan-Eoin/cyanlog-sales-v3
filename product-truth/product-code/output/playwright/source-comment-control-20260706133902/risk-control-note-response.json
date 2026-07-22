@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "data": {
+    "message": "已保存风险可控化说明",
+    "riskCard": {
+      "id": "ff2f4b82-e953-4e17-85e2-1ab69fb162ba",
+      "status": "open",
+      "fix_action": {
+        "control_note": "回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；客户需在回传版中明确比例、账期和验收节点。",
+        "proposed_value": null,
+        "control_status": "needs_customer_confirmation",
+        "control_source": "manual_review_note",
+        "controlled_by": "00030001-0000-0000-0000-000000000000",
+        "controlled_at": "2026-07-06T05:39:05.922Z"
+      }
+    }
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "review": {
+    "id": "7d48a3af-bc2b-4409-b4fb-f715b1abef47",
+    "contract_id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+    "status": "COMPLETED",
+    "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+    "model_policy_id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+    "rule_snapshot_ids": [
+      "67a2ae46-331a-476e-9621-fe1f3ecce3ff",
+      "a5f534f6-24fa-4fbe-bfd0-30c66821ad8d",
+      "b6113a01-8896-4aaf-98f6-5e399ed31f9c",
+      "5a8c9a8c-e6db-441b-99cf-1ed341e31747",
+      "100e8867-1489-44fc-98f3-38e0a0f46c33",
+      "144594c3-5610-41ff-8771-bb476b6f5197",
+      "568a0f2e-f7c9-4ea1-865a-384fe2d610d2",
+      "83e91048-ee62-4f24-9183-1cc33095e1e9",
+      "de76a77d-3bb0-43ad-92c4-1f21a7827cc9",
+      "9bb550e9-a7f7-44a0-9aec-d35afe3c7e02",
+      "d2575e16-51de-43c5-9b85-32a319d7e2e2",
+      "41a74371-f1a6-462b-ad8b-4f85d6e7520b",
+      "5b16685c-3e87-49d3-9e36-d52cb2996954",
+      "90c6d4b1-3917-4c21-a793-0b9817649e93",
+      "782a9ff7-db77-4735-9a6d-50f28b3411ef"
+    ],
+    "model_invocation_ids": [
+      "dd237f0c-38f8-4173-997b-fc3c72ad1a05",
+      "90640a45-09c7-429f-9607-a635a4b78c22"
+    ],
+    "results": {
+      "risks": [
+        {
+          "level": "red",
+          "title": "IP 归属",
+          "ruleId": "ca6c9806-385b-4805-b18b-7e997a9c06fa",
+          "evidence": [
+            "为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化"
+          ],
+          "ruleCode": "R011",
+          "suggestion": "必须修改合同条款",
+          "description": "触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让",
+          "ruleVersion": 3
+        },
+        {
+          "level": "red",
+          "title": "争议解决",
+          "ruleId": "fedf90a2-4f47-44e4-b1af-a7b465281deb",
+          "evidence": [
+            "款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化、经营困难，客户可单方延期履行。"
+          ],
+          "ruleCode": "R015",
+          "suggestion": "必须修改合同条款",
+          "description": "触发「争议解决」红线：境外仲裁/法院/法律",
+          "ruleVersion": 3
+        },
+        {
+          "level": "red",
+          "title": "违约金缺乏上限约定",
+          "evidence": [
+            "逾期付款违约金为日万分之十。"
+          ],
+          "ruleCode": "R006",
+          "suggestion": "建议增设违约金上限条款，如“单笔违约金不超过合同金额的5%”，以防范风险。",
+          "description": "合同中仅规定逾期付款违约金为日万分之十，但未对总额或单笔金额设定上限，可能导致违约金过高。",
+          "ruleVersion": 3
+        }
+      ],
+      "summary": "发现 2 项红线问题，必须修改；1 项偏离建议区间，可协商换取对价。共执行 15 条规则。\n\n语义审核（AI_LEVEL_1/gpt-oss-20b）：已识别三项高风险点",
+      "degraded": false,
+      "provider": "rule-engine+AI_LEVEL_1",
+      "appliedRules": 15,
+      "matchedRules": 3,
+      "degradationReasons": []
+    }
+  },
+  "invocations": [
+    {
+      "id": "90640a45-09c7-429f-9607-a635a4b78c22",
+      "provider": "AI_LEVEL_1",
+      "model": "gpt-oss-20b",
+      "phase": "semantic_review",
+      "status": "completed",
+      "degraded": false,
+      "latency_ms": 27970,
+      "fallback_reason": null,
+      "error_message": null,
+      "request_meta": {
+        "phase": "semantic_contract_review",
+        "review_trigger": "manual_rerun",
+        "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+        "skill_rule_count": 15,
+        "model_policy_stage": "semantic_review",
+        "skill_bundle_version": 10,
+        "intended_provider_model": "gpt-oss-20b",
+        "intended_provider_profile": "AI_LEVEL_1"
+      },
+      "response_meta": {
+        "transport": "lm_studio_cli",
+        "risk_count": 3,
+        "provider_kind": "openai_compatible",
+        "attempt_errors": [],
+        "summary_available": true,
+        "usable_risk_count": 3,
+        "dropped_risk_count": 0,
+        "validation_warnings": []
+      }
+    },
+    {
+      "id": "dd237f0c-38f8-4173-997b-fc3c72ad1a05",
+      "provider": "rule-engine",
+      "model": "rule-engine",
+      "phase": "structured_rules",
+      "status": "completed",
+      "degraded": false,
+      "latency_ms": 329,
+      "fallback_reason": null,
+      "error_message": null,
+      "request_meta": {
+        "phase": "structured_contract_review",
+        "review_trigger": "manual_rerun",
+        "model_policy_stage": "structured_rules",
+        "rule_snapshot_count": 15,
+        "output_schema_version": "f006.review.v1"
+      },
+      "response_meta": {
+        "transport": "builtin_rule_engine",
+        "risk_count": 3,
+        "applied_rules": 15,
+        "matched_rules": 3,
+        "provider_kind": "builtin",
+        "skill_eval_status": "passed",
+        "semantic_risk_count": 3,
+        "rule_translation_status": "ready",
+        "semantic_merged_risk_count": 1,
+        "unlocated_commentable_risk_count": 0
+      }
+    }
+  ],
+  "risks": [
+    {
+      "id": "42c3f9e5-6934-4e6e-a763-13b70dec6794",
+      "rule_code": "R006",
+      "rule_version": 3,
+      "title": "违约金缺乏上限约定",
+      "level": "red",
+      "detected_by": "rule",
+      "confidence": 0.8,
+      "evidence": {
+        "snippets": [
+          "逾期付款违约金为日万分之十。"
+        ],
+        "rule_code": "R006",
+        "counterparty": null,
+        "rule_version": 3,
+        "source_range": {
+          "end": 108,
+          "start": 94
+        },
+        "location_reason": "evidence_text_exact_match",
+        "location_status": "located",
+        "rule_snapshot_id": "144594c3-5610-41ff-8771-bb476b6f5197"
+      }
+    },
+    {
+      "id": "dc8eb6b7-bdee-44d0-b769-4ab0d223e323",
+      "rule_code": "R011",
+      "rule_version": 3,
+      "title": "IP 归属",
+      "level": "red",
+      "detected_by": "rule",
+      "confidence": 0.8,
+      "evidence": {
+        "snippets": [
+          "为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化"
+        ],
+        "rule_code": "R011",
+        "counterparty": null,
+        "rule_version": 3,
+        "source_range": {
+          "end": 197,
+          "start": 73
+        },
+        "location_reason": "evidence_text_exact_match",
+        "location_status": "located",
+        "rule_snapshot_id": "d2575e16-51de-43c5-9b85-32a319d7e2e2"
+      }
+    },
+    {
+      "id": "a7b53fa3-92d7-4e9e-844e-247c228d7c04",
+      "rule_code": "R015",
+      "rule_version": 3,
+      "title": "争议解决",
+      "level": "red",
+      "detected_by": "rule",
+      "confidence": 0.8,
+      "evidence": {
+        "snippets": [
+          "款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化、经营困难，客户可单方延期履行。"
+        ],
+        "rule_code": "R015",
+        "counterparty": null,
+        "rule_version": 3,
+        "source_range": {
+          "end": 213,
+          "start": 97
+        },
+        "location_reason": "evidence_text_exact_match",
+        "location_status": "located",
+        "rule_snapshot_id": "782a9ff7-db77-4735-9a6d-50f28b3411ef"
+      }
+    }
+  ]
+}

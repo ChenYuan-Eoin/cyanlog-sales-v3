@@ -124,6 +124,9 @@ async function callAIWithFallback(
     const result = await reviewWithFailoverSync(prompt, {
       preferredProvider: config?.model,
       orgId,
+      tool: 'contract_review',
+      capability: 'rule_semantic_eval',
+      phase: 'semantic_rule_execution',
     })
 
     // 将结果转换为语义规则需要的格式

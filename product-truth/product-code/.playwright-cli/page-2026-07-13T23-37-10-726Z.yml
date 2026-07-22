@@ -1,0 +1,28 @@
+- generic [active] [ref=f52e1]:
+  - complementary [ref=f52e2]:
+    - generic [ref=f52e3]:
+      - img "ONES Sales" [ref=f52e5]
+      - generic [ref=f52e6]:
+        - generic [ref=f52e7]: ONES Sales
+        - paragraph [ref=f52e8]: 智能协作平台
+    - navigation [ref=f52e9]:
+      - link "工作台" [ref=f52e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f52e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f52e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f52e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f52e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f52e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f52e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f52e56]:
+      - link "个人信息" [ref=f52e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f52e62] [cursor=pointer]
+  - main [ref=f52e67]:
+    - generic [ref=f52e68]: 加载审核任务…

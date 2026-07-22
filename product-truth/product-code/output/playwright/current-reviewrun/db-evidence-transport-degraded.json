@@ -1,0 +1,124 @@
+{
+  "review": {
+    "id": "a5a7ff28-9e64-40ed-8123-18e7c66717c2",
+    "contract_id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+    "status": "DEGRADED",
+    "model_invocation_ids": [
+      "51b9a197-de51-4c96-92cb-b5c7b2b54839",
+      "9d5c10f9-4f62-46ab-8241-5b08cfc8b200"
+    ],
+    "results": {
+      "risks": [
+        {
+          "level": "red",
+          "title": "IP 归属",
+          "ruleId": "ca6c9806-385b-4805-b18b-7e997a9c06fa",
+          "evidence": [
+            "为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化"
+          ],
+          "ruleCode": "R011",
+          "suggestion": "必须修改合同条款",
+          "description": "触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让",
+          "ruleVersion": 3
+        },
+        {
+          "level": "red",
+          "title": "争议解决",
+          "ruleId": "fedf90a2-4f47-44e4-b1af-a7b465281deb",
+          "evidence": [
+            "款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化、经营困难，客户可单方延期履行。"
+          ],
+          "ruleCode": "R015",
+          "suggestion": "必须修改合同条款",
+          "description": "触发「争议解决」红线：境外仲裁/法院/法律",
+          "ruleVersion": 3
+        },
+        {
+          "level": "yellow",
+          "title": "违约金",
+          "ruleId": "e44c92b2-a8b1-4d31-bc36-916bd5e8bbfb",
+          "evidence": [
+            "逾期付款违约金为日万分之十"
+          ],
+          "ruleCode": "R006",
+          "suggestion": "建议换取：销售需围绕风险项取得对价或客户确认，并记录谈判结果。",
+          "description": "违约金偏离建议区间",
+          "ruleVersion": 3,
+          "counterparty": "销售需围绕风险项取得对价或客户确认，并记录谈判结果。"
+        }
+      ],
+      "summary": "发现 2 项红线问题，必须修改；1 项偏离建议区间，可协商换取对价。共执行 15 条规则。\n\n语义审核：外部模型未完成正式调用，已按规则引擎兜底；请查看模型调用记录确认降级原因。",
+      "degraded": true,
+      "provider": "rule-engine",
+      "appliedRules": 15,
+      "matchedRules": 3,
+      "degradationReasons": [
+        "model_output_invalid_or_unavailable"
+      ]
+    }
+  },
+  "invocations": [
+    {
+      "id": "9d5c10f9-4f62-46ab-8241-5b08cfc8b200",
+      "provider": "manual-fallback",
+      "model": "manual-review",
+      "phase": "semantic_review",
+      "status": "degraded",
+      "degraded": true,
+      "latency_ms": 48576,
+      "fallback_reason": "semantic_review_external_model_unavailable",
+      "error_message": "AI_LEVEL_1: output_validation_failed: Runtime validation failed: risks.4.evidence: evidence does not match rule field hints; risks.5.evidence: evidence does not match rule field hints\nAI_LEVEL_1: output_validation_failed: Runtime validation failed: risks.1.evidence: evidence does not match rule field hints; risks.5.evidence: evidence does not match rule field hints; risks.6.evidence: evidence does not match rule field hints",
+      "request_meta": {
+        "phase": "semantic_contract_review",
+        "review_trigger": "manual_rerun",
+        "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+        "skill_rule_count": 15,
+        "model_policy_stage": "semantic_review",
+        "skill_bundle_version": 10,
+        "intended_provider_model": "gpt-oss-20b",
+        "intended_provider_profile": "AI_LEVEL_1"
+      },
+      "response_meta": {
+        "transport": "manual_fallback",
+        "risk_count": 1,
+        "provider_kind": "manual",
+        "attempt_errors": [
+          "AI_LEVEL_1: output_validation_failed: Runtime validation failed: risks.4.evidence: evidence does not match rule field hints; risks.5.evidence: evidence does not match rule field hints",
+          "AI_LEVEL_1: output_validation_failed: Runtime validation failed: risks.1.evidence: evidence does not match rule field hints; risks.5.evidence: evidence does not match rule field hints; risks.6.evidence: evidence does not match rule field hints"
+        ],
+        "summary_available": true,
+        "usable_risk_count": 0
+      }
+    },
+    {
+      "id": "51b9a197-de51-4c96-92cb-b5c7b2b54839",
+      "provider": "rule-engine",
+      "model": "rule-engine",
+      "phase": "structured_rules",
+      "status": "completed",
+      "degraded": false,
+      "latency_ms": 401,
+      "fallback_reason": null,
+      "error_message": null,
+      "request_meta": {
+        "phase": "structured_contract_review",
+        "review_trigger": "manual_rerun",
+        "model_policy_stage": "structured_rules",
+        "rule_snapshot_count": 15,
+        "output_schema_version": "f006.review.v1"
+      },
+      "response_meta": {
+        "transport": "builtin_rule_engine",
+        "risk_count": 3,
+        "applied_rules": 15,
+        "matched_rules": 3,
+        "provider_kind": "builtin",
+        "skill_eval_status": "passed",
+        "semantic_risk_count": 1,
+        "rule_translation_status": "ready",
+        "semantic_merged_risk_count": 0,
+        "unlocated_commentable_risk_count": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "g5-benchmark-journal.v2",
+  "attempt_id": "20260717T183454753Z-caab251d",
+  "state": "evidence_written",
+  "created_at": "2026-07-17T18:34:55.523Z",
+  "preview_project_ref": "vsfropnfsmnonkotywsx",
+  "source_sha256": "67079a251c2ab9197bb40881151563cda23e97fa4ba02ba047102d8b549a849d",
+  "gold_sha256": "a0963fe1a19a785404e90d720c7bf86a68f37b81de3e2d26d34167f41f5a126e",
+  "scorer_sha256": "8e008e800d9369c8361270edef794bc7eb586f88d0bd5edd822bbe87472690bc",
+  "contract_id": "9a5c7790-d47e-4e7b-a102-48773422882c",
+  "upload_id": "0359bd53-adcc-4f85-93bb-64c6170283fa",
+  "storage_path": "9a5c7790-d47e-4e7b-a102-48773422882c/0359bd53-adcc-4f85-93bb-64c6170283fa_g5-50-page-10-risk-sample.docx",
+  "analyze_requested_at": "2026-07-17T18:35:09.221Z",
+  "review_id": "34600d3e-9b64-4162-b317-f011daed5d24",
+  "job_id": "0e67d6b6-06cc-45cd-a0d8-4f7b9d843f5a",
+  "review_status": "COMPLETED",
+  "job_status": "completed",
+  "threshold_passed": false,
+  "run_path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g5-v12/g5-50-page-qwen-v21-20260717T183454753Z-caab251d-run.json",
+  "auth_token_verified_absent": true
+}

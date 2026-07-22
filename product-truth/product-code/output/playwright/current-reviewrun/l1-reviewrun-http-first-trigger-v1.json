@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-07-02T05:30:50.532Z",
+  "contractId": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+  "durationMs": 60814,
+  "response": {
+    "status": 200,
+    "body": {
+      "jobId": "62607287-bf11-4d31-b73e-3de9ada6c1d9",
+      "reviewId": "b1fb6947-d545-4f4a-ba81-a9df2fa396b9",
+      "parentReviewId": "24cee96c-3293-4bec-90ef-b2d6a5ab9d52",
+      "triggerEvent": "manual_rerun",
+      "semanticProviderProfile": "AI_LEVEL_1",
+      "status": "COMPLETED",
+      "message": "再审核已完成",
+      "degraded": false
+    }
+  },
+  "detailStatus": 200,
+  "reviewRun": {
+    "id": "b1fb6947-d545-4f4a-ba81-a9df2fa396b9",
+    "status": "COMPLETED",
+    "model_policy": {
+      "id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+      "provider": "AI_LEVEL_1",
+      "source": "model_policies",
+      "model": "gpt-oss-20b",
+      "phase": "semantic_review",
+      "provider_kind": "openai_compatible",
+      "transport": "lm_studio_cli",
+      "latency_ms": 52833,
+      "intended_provider_profile": "AI_LEVEL_1",
+      "intended_provider_model": "gpt-oss-20b",
+      "attempt_error_count": 1,
+      "degraded": false,
+      "status": "completed",
+      "last_error": null,
+      "invocation_id": "09917978-4e2c-4ceb-a558-7f3fd96e2bed",
+      "fallback_reason": null
+    },
+    "model_invocations": [
+      {
+        "id": "71456f68-e391-4f56-b194-e4534fbe3972",
+        "phase": "structured_rules",
+        "provider": "rule-engine",
+        "model": "rule-engine",
+        "status": "completed",
+        "degraded": false,
+        "transport": "builtin_rule_engine",
+        "provider_kind": "builtin",
+        "latency_ms": 272,
+        "dropped_risk_count": null,
+        "validation_warning_count": null,
+        "fallback_reason": null,
+        "error_message": null,
+        "created_at": "2026-07-02T05:30:43.596003+00:00"
+      },
+      {
+        "id": "09917978-4e2c-4ceb-a558-7f3fd96e2bed",
+        "phase": "semantic_review",
+        "provider": "AI_LEVEL_1",
+        "model": "gpt-oss-20b",
+        "status": "completed",
+        "degraded": false,
+        "transport": "lm_studio_cli",
+        "provider_kind": "openai_compatible",
+        "latency_ms": 52833,
+        "dropped_risk_count": 0,
+        "validation_warning_count": 0,
+        "fallback_reason": null,
+        "error_message": null,
+        "created_at": "2026-07-02T05:30:42.945868+00:00"
+      }
+    ]
+  },
+  "assertions": {
+    "triggerOk": true,
+    "reviewIdReturned": true,
+    "detailOk": true,
+    "latestReviewMatchesTrigger": true,
+    "semanticCompleted": true,
+    "semanticTransportCli": true,
+    "semanticAttemptErrorsMentionHttp": false,
+    "modelPolicyAttemptErrorsMentionHttp": true
+  }
+}

@@ -1,0 +1,632 @@
+- generic [ref=e1]:
+  - complementary [ref=e30]:
+    - generic [ref=e31]:
+      - generic [ref=e32]: OS
+      - generic [ref=e33]:
+        - generic [ref=e34]: ONES Sales
+        - paragraph [ref=e35]: 智能协作平台
+    - navigation [ref=e36]:
+      - link "工作台" [ref=e37] [cursor=pointer]:
+        - /url: /
+        - img [ref=e38]
+        - generic [ref=e42]: 工作台
+      - link "报价中心" [ref=e43] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e44]
+        - generic [ref=e48]: 报价中心
+      - link "合同审核" [ref=e49] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e50]
+        - generic [ref=e55]: 合同审核
+      - link "标书中心" [ref=e56] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e57]
+        - generic [ref=e61]: 标书中心
+      - link "知识库" [ref=e62] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e63]
+        - generic [ref=e68]: 知识库
+      - link "日程" [ref=e69] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e70]
+        - generic [ref=e76]: 日程
+      - link "配置中心" [ref=e77] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e78]
+        - generic [ref=e82]: 配置中心
+    - generic [ref=e83]:
+      - link "个人信息" [ref=e84] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e85]
+        - generic [ref=e88]: 个人信息
+      - button "退出登录" [ref=e89] [cursor=pointer]:
+        - img [ref=e90]
+        - generic [ref=e93]: 退出登录
+  - main [ref=e2]:
+    - generic [ref=e209]:
+      - generic [ref=e210]:
+        - generic [ref=e211]:
+          - generic [ref=e212]:
+            - img [ref=e213]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=e217]
+          - paragraph [ref=e218]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e219]:
+          - generic [ref=e220]:
+            - generic [ref=e221]: 生效范围
+            - generic [ref=e222]: 组织级统一发布
+          - generic [ref=e223]:
+            - generic [ref=e224]: 消费端
+            - generic [ref=e225]: 报价 / 合同 / AI
+          - generic [ref=e226]:
+            - generic [ref=e227]: 当前配置集
+            - generic [ref=e228]: 合同审核策略
+      - generic [ref=e229]:
+        - complementary [ref=e230]:
+          - generic [ref=e231]:
+            - generic [ref=e232]:
+              - generic [ref=e233]: 配置域
+              - paragraph [ref=e234]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e235]:
+              - button "交易配置 1+ 围绕报价工作台的价盘、税率和审批配置。" [ref=e236] [cursor=pointer]:
+                - generic [ref=e237]:
+                  - generic [ref=e238]: 交易配置
+                  - generic [ref=e239]: 1+
+                - paragraph [ref=e240]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=e329] [cursor=pointer]:
+                - generic [ref=e242]:
+                  - generic [ref=e243]: 合同与 AI 规则
+                  - generic [ref=e244]: 15+
+                - paragraph [ref=e245]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=e246] [cursor=pointer]:
+                - generic [ref=e247]:
+                  - generic [ref=e248]: 组织与权限
+                  - generic [ref=e249]: ...
+                - paragraph [ref=e250]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=e251] [cursor=pointer]:
+                - generic [ref=e252]:
+                  - generic [ref=e253]: 界面与体验
+                  - generic [ref=e254]: ...
+                - paragraph [ref=e255]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e256]:
+              - generic [ref=e257]: 结构约束
+              - list [ref=e258]:
+                - listitem [ref=e259]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e260]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e261]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e262]:
+          - generic [ref=e263]:
+            - generic [ref=e264]:
+              - generic [ref=e265]:
+                - generic [ref=e266]:
+                  - generic [ref=e267]: 配置中心
+                  - generic [ref=e268]: /
+                  - generic [ref=e269]: 合同与 AI 规则
+                - generic [ref=e270]:
+                  - img [ref=e330]
+                  - generic [ref=e274]:
+                    - heading "合同审核策略" [level=2] [ref=e333]
+                    - paragraph [ref=e276]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=e277]:
+                - generic [ref=e334]:
+                  - generic [ref=e335]: 规则总数
+                  - generic [ref=e336]: "15"
+                - generic [ref=e337]:
+                  - generic [ref=e338]: 启用规则
+                  - generic [ref=e339]: "15"
+                - generic [ref=e340]:
+                  - generic [ref=e341]: 语义规则
+                  - generic [ref=e342]: "15"
+            - generic [ref=e287]:
+              - button "合同审核策略 15" [ref=e343] [cursor=pointer]:
+                - img [ref=e344]
+                - generic [ref=e347]: 合同审核策略
+                - generic [ref=e348]: "15"
+              - button "AI 模型配置 ..." [ref=e349] [cursor=pointer]:
+                - img [ref=e350]
+                - generic [ref=e355]: AI 模型配置
+                - generic [ref=e356]: ...
+          - generic [ref=e357]:
+            - generic [ref=e358]:
+              - generic [ref=e359]:
+                - generic [ref=e360]: 规则资产目录 (14)
+                - button "新建" [ref=e361] [cursor=pointer]:
+                  - img
+                  - text: 新建
+              - generic [ref=e363]:
+                - generic [ref=e364]:
+                  - generic [ref=e365]:
+                    - paragraph [ref=e366]: 总览
+                    - paragraph [ref=e367]: 全部规则资产与未归类入口
+                  - button "全部规则集 15 ALL 全部规则资产 已发布 15 可执行 15 待处理 0" [ref=e368] [cursor=pointer]:
+                    - generic [ref=e369]:
+                      - img [ref=e371]
+                      - generic [ref=e376]:
+                        - generic [ref=e377]:
+                          - generic [ref=e378]: 全部规则集
+                          - generic [ref=e379]: "15"
+                        - generic [ref=e380]: ALL
+                        - generic [ref=e381]: 全部规则资产
+                        - generic [ref=e382]:
+                          - generic [ref=e383]: 已发布 15
+                          - generic [ref=e384]: 可执行 15
+                          - generic [ref=e385]: 待处理 0
+                  - button "默认规则集 0 default 声明文档 v- · 未转译 已发布 0 可执行 0 待处理 0" [ref=e386] [cursor=pointer]:
+                    - generic [ref=e387]:
+                      - img [ref=e389]
+                      - generic [ref=e394]:
+                        - generic [ref=e395]:
+                          - generic [ref=e396]: 默认规则集
+                          - generic [ref=e397]: "0"
+                        - generic [ref=e398]: default
+                        - generic [ref=e399]: 声明文档 v- · 未转译
+                        - generic [ref=e400]:
+                          - generic [ref=e401]: 已发布 0
+                          - generic [ref=e402]: 可执行 0
+                          - generic [ref=e403]: 待处理 0
+                - generic [ref=e404]:
+                  - generic [ref=e405]:
+                    - paragraph [ref=e406]: 审查逻辑
+                    - paragraph [ref=e407]: 上下文、主体、验收、SLA 和争议路径
+                  - button "验收与交付规则集 2 ACCEPTANCE 声明文档 v1 · 转译就绪 已发布 2 可执行 2 待处理 0" [ref=e408] [cursor=pointer]:
+                    - generic [ref=e409]:
+                      - img [ref=e411]
+                      - generic [ref=e416]:
+                        - generic [ref=e417]:
+                          - generic [ref=e418]: 验收与交付规则集
+                          - generic [ref=e419]: "2"
+                        - generic [ref=e420]: ACCEPTANCE
+                        - generic [ref=e421]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e422]:
+                          - generic [ref=e423]: 已发布 2
+                          - generic [ref=e424]: 可执行 2
+                          - generic [ref=e425]: 待处理 0
+                  - button "主体与金额一致性规则集 1 BUSINESS_INTEGRITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e426] [cursor=pointer]:
+                    - generic [ref=e427]:
+                      - img [ref=e429]
+                      - generic [ref=e434]:
+                        - generic [ref=e435]:
+                          - generic [ref=e436]: 主体与金额一致性规则集
+                          - generic [ref=e437]: "1"
+                        - generic [ref=e438]: BUSINESS_INTEGRITY
+                        - generic [ref=e439]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e440]:
+                          - generic [ref=e441]: 已发布 1
+                          - generic [ref=e442]: 可执行 1
+                          - generic [ref=e443]: 待处理 0
+                  - button "SLA 与服务承诺规则集 1 SLA 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e444] [cursor=pointer]:
+                    - generic [ref=e445]:
+                      - img [ref=e447]
+                      - generic [ref=e452]:
+                        - generic [ref=e453]:
+                          - generic [ref=e454]: SLA 与服务承诺规则集
+                          - generic [ref=e455]: "1"
+                        - generic [ref=e456]: SLA
+                        - generic [ref=e457]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e458]:
+                          - generic [ref=e459]: 已发布 1
+                          - generic [ref=e460]: 可执行 1
+                          - generic [ref=e461]: 待处理 0
+                  - button "续约与退出规则集 1 RENEWAL 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e462] [cursor=pointer]:
+                    - generic [ref=e463]:
+                      - img [ref=e465]
+                      - generic [ref=e470]:
+                        - generic [ref=e471]:
+                          - generic [ref=e472]: 续约与退出规则集
+                          - generic [ref=e473]: "1"
+                        - generic [ref=e474]: RENEWAL
+                        - generic [ref=e475]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e476]:
+                          - generic [ref=e477]: 已发布 1
+                          - generic [ref=e478]: 可执行 1
+                          - generic [ref=e479]: 待处理 0
+                  - button "争议解决规则集 1 DISPUTE 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e480] [cursor=pointer]:
+                    - generic [ref=e481]:
+                      - img [ref=e483]
+                      - generic [ref=e488]:
+                        - generic [ref=e489]:
+                          - generic [ref=e490]: 争议解决规则集
+                          - generic [ref=e491]: "1"
+                        - generic [ref=e492]: DISPUTE
+                        - generic [ref=e493]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e494]:
+                          - generic [ref=e495]: 已发布 1
+                          - generic [ref=e496]: 可执行 1
+                          - generic [ref=e497]: 待处理 0
+                - generic [ref=e498]:
+                  - generic [ref=e499]:
+                    - paragraph [ref=e500]: 违约与责任
+                    - paragraph [ref=e501]: 付款、税务、违约、责任上限和终止退款
+                  - button "付款与结算规则集 1 PAYMENT 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e502] [cursor=pointer]:
+                    - generic [ref=e503]:
+                      - img [ref=e505]
+                      - generic [ref=e510]:
+                        - generic [ref=e511]:
+                          - generic [ref=e512]: 付款与结算规则集
+                          - generic [ref=e513]: "1"
+                        - generic [ref=e514]: PAYMENT
+                        - generic [ref=e515]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e516]:
+                          - generic [ref=e517]: 已发布 1
+                          - generic [ref=e518]: 可执行 1
+                          - generic [ref=e519]: 待处理 0
+                  - button "终止与退款规则集 1 TERMINATION 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e520] [cursor=pointer]:
+                    - generic [ref=e521]:
+                      - img [ref=e523]
+                      - generic [ref=e528]:
+                        - generic [ref=e529]:
+                          - generic [ref=e530]: 终止与退款规则集
+                          - generic [ref=e531]: "1"
+                        - generic [ref=e532]: TERMINATION
+                        - generic [ref=e533]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e534]:
+                          - generic [ref=e535]: 已发布 1
+                          - generic [ref=e536]: 可执行 1
+                          - generic [ref=e537]: 待处理 0
+                  - button "税务与发票规则集 1 TAX 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e538] [cursor=pointer]:
+                    - generic [ref=e539]:
+                      - img [ref=e541]
+                      - generic [ref=e546]:
+                        - generic [ref=e547]:
+                          - generic [ref=e548]: 税务与发票规则集
+                          - generic [ref=e549]: "1"
+                        - generic [ref=e550]: TAX
+                        - generic [ref=e551]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e552]:
+                          - generic [ref=e553]: 已发布 1
+                          - generic [ref=e554]: 可执行 1
+                          - generic [ref=e555]: 待处理 0
+                  - button "违约责任规则集 1 BREACH 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e556] [cursor=pointer]:
+                    - generic [ref=e557]:
+                      - img [ref=e559]
+                      - generic [ref=e564]:
+                        - generic [ref=e565]:
+                          - generic [ref=e566]: 违约责任规则集
+                          - generic [ref=e567]: "1"
+                        - generic [ref=e568]: BREACH
+                        - generic [ref=e569]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e570]:
+                          - generic [ref=e571]: 已发布 1
+                          - generic [ref=e572]: 可执行 1
+                          - generic [ref=e573]: 待处理 0
+                  - button "责任边界规则集 2 LIABILITY 声明文档 v1 · 转译就绪 已发布 2 可执行 2 待处理 0" [ref=e574] [cursor=pointer]:
+                    - generic [ref=e575]:
+                      - img [ref=e577]
+                      - generic [ref=e582]:
+                        - generic [ref=e583]:
+                          - generic [ref=e584]: 责任边界规则集
+                          - generic [ref=e585]: "2"
+                        - generic [ref=e586]: LIABILITY
+                        - generic [ref=e587]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e588]:
+                          - generic [ref=e589]: 已发布 2
+                          - generic [ref=e590]: 可执行 2
+                          - generic [ref=e591]: 待处理 0
+                - generic [ref=e592]:
+                  - generic [ref=e593]:
+                    - paragraph [ref=e594]: 知识产权与数据
+                    - paragraph [ref=e595]: IP 归属、保密、数据安全和客户资料处理
+                  - button "保密义务规则集 1 CONFIDENTIALITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e596] [cursor=pointer]:
+                    - generic [ref=e597]:
+                      - img [ref=e599]
+                      - generic [ref=e604]:
+                        - generic [ref=e605]:
+                          - generic [ref=e606]: 保密义务规则集
+                          - generic [ref=e607]: "1"
+                        - generic [ref=e608]: CONFIDENTIALITY
+                        - generic [ref=e609]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e610]:
+                          - generic [ref=e611]: 已发布 1
+                          - generic [ref=e612]: 可执行 1
+                          - generic [ref=e613]: 待处理 0
+                  - button "知识产权规则集 1 IP 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e614] [cursor=pointer]:
+                    - generic [ref=e615]:
+                      - img [ref=e617]
+                      - generic [ref=e622]:
+                        - generic [ref=e623]:
+                          - generic [ref=e624]: 知识产权规则集
+                          - generic [ref=e625]: "1"
+                        - generic [ref=e626]: IP
+                        - generic [ref=e627]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e628]:
+                          - generic [ref=e629]: 已发布 1
+                          - generic [ref=e630]: 可执行 1
+                          - generic [ref=e631]: 待处理 0
+                  - button "数据安全规则集 1 DATA_SECURITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0" [ref=e632] [cursor=pointer]:
+                    - generic [ref=e633]:
+                      - img [ref=e635]
+                      - generic [ref=e640]:
+                        - generic [ref=e641]:
+                          - generic [ref=e642]: 数据安全规则集
+                          - generic [ref=e643]: "1"
+                        - generic [ref=e644]: DATA_SECURITY
+                        - generic [ref=e645]: 声明文档 v1 · 转译就绪
+                        - generic [ref=e646]:
+                          - generic [ref=e647]: 已发布 1
+                          - generic [ref=e648]: 可执行 1
+                          - generic [ref=e649]: 待处理 0
+            - generic [ref=e651]:
+              - generic [ref=e652]:
+                - generic [ref=e1091]: 新建合同审核规则
+                - button "测试" [ref=e656] [cursor=pointer]:
+                  - img
+                  - text: 测试
+              - generic [ref=e1092]:
+                - generic [ref=e1093]:
+                  - generic [ref=e1094]:
+                    - text: 规则编码
+                    - textbox "规则编码" [ref=e1095]:
+                      - /placeholder: PAYMENT_DAYS_STANDARD
+                  - generic [ref=e1096]:
+                    - text: 规则名称
+                    - textbox "规则名称" [ref=e1097]:
+                      - /placeholder: 付款账期标准
+                  - generic [ref=e1098]:
+                    - text: 业务域
+                    - textbox "业务域" [ref=e1099]:
+                      - /placeholder: contract_review
+                      - text: contract_review
+                  - generic [ref=e1100]:
+                    - text: 风险等级
+                    - combobox "风险等级" [ref=e1101]:
+                      - option "绿色"
+                      - option "黄色" [selected]
+                      - option "红线"
+                  - generic [ref=e1102]:
+                    - text: 规则分类
+                    - combobox "规则分类" [ref=e1103]:
+                      - option "时限类" [selected]
+                      - option "金额类"
+                      - option "比例类"
+                      - option "枚举类"
+                      - option "条款语义"
+                  - generic [ref=e1104]:
+                    - text: 执行引擎
+                    - combobox "执行引擎" [ref=e1105]:
+                      - option "结构化" [selected]
+                      - option "语义"
+                      - option "混合"
+                  - generic [ref=e1106]:
+                    - text: 命中字段
+                    - textbox "命中字段" [ref=e1107]:
+                      - /placeholder: payment_days
+                      - text: payment_days
+                  - generic [ref=e1108]:
+                    - text: 规则集目录
+                    - combobox "规则集目录" [ref=e1109]:
+                      - option "选择规则集目录" [selected]
+                      - option "审查逻辑 / 主体与金额一致性"
+                      - option "审查逻辑 / 验收与交付"
+                      - option "审查逻辑 / SLA 与服务承诺"
+                      - option "审查逻辑 / 争议解决"
+                      - option "违约与责任 / 付款与结算"
+                      - option "违约与责任 / 违约责任"
+                      - option "违约与责任 / 责任边界"
+                      - option "违约与责任 / 终止与退款"
+                      - option "违约与责任 / 税务与发票"
+                      - option "知识产权与数据 / 知识产权"
+                      - option "知识产权与数据 / 数据安全"
+                      - option "知识产权与数据 / 保密义务"
+                  - generic [ref=e1110]:
+                    - text: 执行顺序
+                    - spinbutton "执行顺序" [ref=e1111]: "100"
+                - generic [ref=e1112]:
+                  - text: 规则描述
+                  - textbox "规则描述" [ref=e1113]:
+                    - /placeholder: 说明规则适用的合同场景、风险判断依据和审批处理方式。
+                - generic [ref=e1114]:
+                  - generic [ref=e1115]:
+                    - text: 原文命中提示
+                    - textbox "原文命中提示" [ref=e1116]:
+                      - /placeholder: payment_days, account_period
+                  - generic [ref=e1117]:
+                    - text: 适用场景
+                    - textbox "适用场景" [ref=e1118]:
+                      - /placeholder: 标准销售合同, 框架协议
+                - generic [ref=e1119]:
+                  - heading "批注与谈判模板" [level=3] [ref=e1121]
+                  - generic [ref=e1122]:
+                    - generic [ref=e1123]:
+                      - generic [ref=e1124]:
+                        - text: 风险标题模板
+                        - textbox "风险标题模板" [ref=e1125]:
+                          - /placeholder: 如：付款节奏风险
+                      - generic [ref=e1126]:
+                        - text: 责任角色
+                        - textbox "责任角色" [ref=e1127]:
+                          - /placeholder: sales / legal / finance
+                          - text: sales
+                    - generic [ref=e1128]:
+                      - text: 风险说明模板
+                      - textbox "风险说明模板" [ref=e1129]:
+                        - /placeholder: 描述命中该规则时应如何解释风险。
+                    - generic [ref=e1130]:
+                      - text: 批注文案模板
+                      - textbox "批注文案模板" [ref=e1131]:
+                        - /placeholder: 写给客户可见的 Word 批注意见。
+                    - generic [ref=e1132]:
+                      - text: 销售谈判动作
+                      - textbox "销售谈判动作" [ref=e1133]:
+                        - /placeholder: 销售需要向客户争取、确认或让步的动作。
+                    - generic [ref=e1134]:
+                      - generic [ref=e1135]:
+                        - text: 修改建议
+                        - textbox "修改建议" [ref=e1136]:
+                          - /placeholder: 内部建议或推荐替代条款。
+                      - generic [ref=e1137]:
+                        - text: 谈判底线
+                        - textbox "谈判底线" [ref=e1138]:
+                          - /placeholder: 不可突破的商业或法务底线。
+                    - generic [ref=e1139]:
+                      - checkbox "必须进入销售谈判任务" [ref=e1140]
+                      - text: 必须进入销售谈判任务
+                - generic [ref=e1141]:
+                  - generic [ref=e1142]:
+                    - heading "审核执行单元预览" [level=3] [ref=e1143]
+                    - paragraph [ref=e1144]: 保存后进入转译、人工确认、发布和引擎编译；这里用于确认规则不是黑盒文档。
+                  - generic [ref=e1145]:
+                    - generic [ref=e1146]:
+                      - generic [ref=e1147]: 规则集
+                      - generic [ref=e1148]: 选择规则集目录
+                    - generic [ref=e1149]:
+                      - generic [ref=e1150]: 触发条件
+                      - generic [ref=e1151]: payment_days
+                    - generic [ref=e1152]:
+                      - generic [ref=e1153]: 风险条件
+                      - generic [ref=e1154]: A <= 30day；B > 90day；C > 180day
+                    - generic [ref=e1155]:
+                      - generic [ref=e1156]: 例外/通过条件
+                      - generic [ref=e1157]: auto_approve
+                    - generic [ref=e1158]:
+                      - generic [ref=e1159]: 证据要求
+                      - generic [ref=e1160]: evidence_text 必须 exact match，导出前必须有 source range
+                    - generic [ref=e1161]:
+                      - generic [ref=e1162]: 谈判动作
+                      - generic [ref=e1163]: 非强制谈判
+                    - generic [ref=e1164]:
+                      - generic [ref=e1165]: 批注模板
+                      - generic [ref=e1166]: 未配置客户可见批注模板
+                    - generic [ref=e1167]:
+                      - generic [ref=e1168]: 适用场景
+                      - generic [ref=e1169]: 全组织默认适用
+                - generic [ref=e1170]:
+                  - heading "风险等级阈值" [level=3] [ref=e1172]
+                  - generic [ref=e1173]:
+                    - generic [ref=e1174]:
+                      - generic [ref=e1175]: 通过档
+                      - generic [ref=e1176]:
+                        - text: 操作符
+                        - combobox "操作符" [ref=e1177]:
+                          - option "<=" [selected]
+                          - option ">="
+                          - option ">"
+                          - option "<"
+                          - option "="
+                          - option "contains"
+                          - option "in"
+                      - generic [ref=e1178]:
+                        - text: 阈值
+                        - spinbutton "阈值" [ref=e1179]: "30"
+                      - generic [ref=e1180]:
+                        - text: 单位
+                        - textbox "单位" [ref=e1181]:
+                          - /placeholder: day
+                          - text: day
+                      - generic [ref=e1182]:
+                        - text: 处理动作
+                        - combobox "处理动作" [ref=e1183]:
+                          - option "自动通过" [selected]
+                          - option "进入谈判/会签"
+                          - option "人工复核"
+                          - option "阻断"
+                    - generic [ref=e1184]:
+                      - generic [ref=e1185]: 谈判档
+                      - generic [ref=e1186]:
+                        - text: 操作符
+                        - combobox "操作符" [ref=e1187]:
+                          - option "<="
+                          - option ">="
+                          - option ">" [selected]
+                          - option "<"
+                          - option "="
+                          - option "contains"
+                          - option "in"
+                      - generic [ref=e1188]:
+                        - text: 阈值
+                        - spinbutton "阈值" [ref=e1189]: "90"
+                      - generic [ref=e1190]:
+                        - text: 单位
+                        - textbox "单位" [ref=e1191]:
+                          - /placeholder: day
+                          - text: day
+                      - generic [ref=e1192]:
+                        - text: 处理动作
+                        - combobox "处理动作" [ref=e1193]:
+                          - option "自动通过"
+                          - option "进入谈判/会签" [selected]
+                          - option "人工复核"
+                          - option "阻断"
+                    - generic [ref=e1194]:
+                      - generic [ref=e1195]: 红线档
+                      - generic [ref=e1196]:
+                        - text: 操作符
+                        - combobox "操作符" [ref=e1197]:
+                          - option "<="
+                          - option ">="
+                          - option ">" [selected]
+                          - option "<"
+                          - option "="
+                          - option "contains"
+                          - option "in"
+                      - generic [ref=e1198]:
+                        - text: 阈值
+                        - spinbutton "阈值" [ref=e1199]: "180"
+                      - generic [ref=e1200]:
+                        - text: 单位
+                        - textbox "单位" [ref=e1201]:
+                          - /placeholder: day
+                          - text: day
+                      - generic [ref=e1202]:
+                        - text: 处理动作
+                        - combobox "处理动作" [ref=e1203]:
+                          - option "自动通过"
+                          - option "进入谈判/会签"
+                          - option "人工复核"
+                          - option "阻断" [selected]
+                - generic [ref=e1204]:
+                  - generic [ref=e1205]:
+                    - text: B 级会签建议
+                    - textbox "B 级会签建议" [ref=e1206]:
+                      - /placeholder: 法务、财务或销售负责人
+                  - generic [ref=e1207]:
+                    - text: C 级阻断提示
+                    - textbox "C 级阻断提示" [ref=e1208]:
+                      - /placeholder: 超过红线阈值，需重新谈判条款
+                - generic [ref=e1209]:
+                  - checkbox "启用规则" [checked] [ref=e1210]
+                  - text: 启用规则
+                - generic [ref=e1211]:
+                  - button "测试规则" [ref=e1212] [cursor=pointer]
+                  - button "保存规则" [ref=e1213] [cursor=pointer]
+            - generic [ref=e1049]:
+              - generic [ref=e1051]: 规则集维护闭环
+              - generic [ref=e1052]:
+                - generic [ref=e1053]:
+                  - button "规则列表" [ref=e1054] [cursor=pointer]
+                  - button "可视化编辑" [active] [ref=e1055] [cursor=pointer]
+                  - button "沙盒测试" [ref=e1056] [cursor=pointer]
+                - generic [ref=e1057]:
+                  - generic [ref=e1058]:
+                    - generic [ref=e1059]:
+                      - generic [ref=e1060]: 当前规则集
+                      - generic [ref=e1061]: 全部规则集
+                      - generic [ref=e1062]: 全部规则资产汇总
+                    - generic [ref=e1063]: 可发布
+                  - generic [ref=e1064]:
+                    - generic [ref=e1065]:
+                      - generic [ref=e1066]: "15"
+                      - generic [ref=e1067]: 规则
+                    - generic [ref=e1068]:
+                      - generic [ref=e1069]: "15"
+                      - generic [ref=e1070]: 启用
+                    - generic [ref=e1071]:
+                      - generic [ref=e1072]: "15"
+                      - generic [ref=e1073]: 已发布
+                    - generic [ref=e1074]:
+                      - generic [ref=e1075]: "15"
+                      - generic [ref=e1076]: 可执行
+                  - generic [ref=e1077]: 当前规则集规则均满足发布、转译和执行字段要求，可进入审核引擎编译检查。
+                - generic [ref=e1078]:
+                  - generic [ref=e1079]: 规则资产
+                  - generic [ref=e1080]:
+                    - generic [ref=e1081]:
+                      - generic [ref=e1082]: "15"
+                      - generic [ref=e1083]: 总数
+                    - generic [ref=e1084]:
+                      - generic [ref=e1085]: "15"
+                      - generic [ref=e1086]: 启用
+                    - generic [ref=e1087]:
+                      - generic [ref=e1088]: "15"
+                      - generic [ref=e1089]: 发布
+                - generic [ref=e1090]: 选择规则后显示结构化字段、发布阻断和模拟测试入口
+  - alert [ref=e29]: ONES Sales

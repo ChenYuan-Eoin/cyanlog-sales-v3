@@ -1,0 +1,63 @@
+{
+  "desktop": {
+    "name": "desktop",
+    "snapshots": [
+      {
+        "key": "contracts",
+        "url": "http://localhost:3001/contracts",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同中心\n\n全生命周期管理\n\n起草\n审核\n比对\n\n起草合同\n\nAI智能生成\n\n发起审核\n\n上传源文件并创建 ReviewRun\n\n文档比对\n\n进入最近完成合同的比对工作台\n\n批量发起审核\n\n多文件创建审核运行\n\n合同审核工作台入口\n\n新建 ReviewRun，上传合同源文件，绑定已发布规则、SkillBundle 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。\n\n上传源文件并发起审核\n源文件docx / pdf\n审核依据规则快照 / Skill\n风险定位复核 / 谈判\n输出批注版 / 报告\n\n9\n\n全部合同\n\n1\n\n进行中\n\n0\n\n需关注\n\n6\n\n已完成\n\n全部\n9\n起草中\n待审核\n已完成\n\nprod-gemini-review-sample-1782906641409.docx\n\n合同\n审核完成\n7月1日 20:06\n\n(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx\n\n合同\n审核完成\n7月1日 18:33\n\n合同\nDRAFT\n7月1日 16:42\n\nones-contract-e2e-risk.docx\n\n合同\n审核完成\n7月1日 15:39\n\n_ONES_-_2026.docx\n\n合同\n审核完成\n6月30日 16:37\n\nHemory_.docx\n\n合同\n审核完成\n6月30日 16:26\n\n合同\nDRAFT\n6月30日 13:50\n\n_2026_ONES_1_.docx\n\n合同\n审核完成\n6月25日 16:16\n\nminimal.pdf\n\n合同\n待审核\n6月25日 16:16"
+      },
+      {
+        "key": "contract-new",
+        "url": "http://localhost:3001/contracts/new",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n单合同审核\n发起合同审核\n\n先上传合同源文件形成可审核版本，客户、金额、日期等业务上下文可由 CRM 或文件解析回填。\n\n返回合同中心\n合同源文件\nPDF\n\n拖拽或选择合同文件\n\n支持 PDF、DOCX，最大 50MB\n\n选择文件\n上传源文件并发起审核\n清除文件\n审核上下文\n\n当前阶段\n\n文件先行，先创建 ContractVersion 与 ReviewRun，再进入合同工作台。\n\n上下文来源\n\nCRM 对接、报价转合同和文件解析会逐步回填客户、金额、日期和联系人。\n\n审核依据\n\n进入审核后按已发布规则、SkillBundle 和模型策略执行，不依赖临时输入文本。\n\n业务上下文（可选，CRM 或解析未回填时再补充）"
+      },
+      {
+        "key": "config-rules",
+        "url": "http://localhost:3001/configs?tab=rules",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n合同审核策略\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n...\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n15+\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n...\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n...\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n合同与 AI 规则\n合同审核策略\n\n管理合同审核策略规则，供合同审核与本地模型执行。\n\n规则总数\n15\n启用规则\n15\n语义规则\n15\n合同审核策略\n15\nAI 模型配置\n...\n合同审核规则 (15)\n新建\n付款与结算\n1\nR001\n付款节奏\n生效\n比例类\n混合\n付款与结算\nv2\n\nONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日\n\nA >= 30percent / B >= 15percent / C < 15percent\n终止与退款\n1\nR002\n终止退款\n生效\n条款语义\n混合\n终止与退款\nv2\n\nONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息\n\nA contains 0text / B contains 0text / C contains 0text\n税务与发票\n1\nR003\n税率\n生效\n比例类\n混合\n税务与发票\nv2\n\nONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率\n\nA contains 0percent / B contains 0percent / C contains 0percent\n验收与交付\n2\nR004\n默示验收期\n生效\n时限类\n混合\n验收与交付\nv2\n\nONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收\n\nA <= 10day / B <= 15day / C > 30day\nR005\n验收不通过\n生效\n条款语义\n混合\n验收与交付\nv2\n\nONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失\n\nA contains 0text / B contains 0text / C contains 0text\n违约责任\n1\nR006\n违约金\n生效\n比例类\n混合\n违约责任\nv2\n\nONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五\n\nA <= 10percent / B <= 50percent / C > 100percent\n责任边界\n2\nR007\n间接损失\n生效\n条款语义\n混合\n责任边界\nv2\n\nONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿\n\nA contains 0text / B contains 0text / C contains 0text\nR008\n责任总额上限 Cap\n生效\n比例类\n混合\n责任边界\nv2\n\nONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向\n\nA <= 50percent / B <= 100percent / C > 100percent\n保密义务\n1\nR009\n保密期\n生效\n时限类\n混合\n保密义务\nv2\n\nONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）\n\nA <= 7year / B <= 10year / C > 10year\n主体与金额一致性\n1\nR010\n主体"
+      },
+      {
+        "key": "config-org",
+        "url": "http://localhost:3001/configs?tab=org-structure",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n组织架构\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n...\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n...\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n12+\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n...\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n组织与权限\n组织架构\n\n维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。\n\n部门总数\n12\n成员总数\n25\n销售空间\n3\n组织架构\n12\n角色权限\n...\n12\n部门\n25\n成员\n3\n销售空间\n当前筛选：全部成员\n部门结构\n\n点击选择部门\n\n全部成员\n25\n0\n0\n销售部\n1\n法务部\n2\n财务部\n2\n信息技术部\n3\n全部成员\n\n共 25 人\n\n共 25 人\n姓名\t职位\t部门\t角色\t状态\t操作\n\n张\n张雪丽\n99999999@qq.com\n\t\n销售\n\t售前组\t\n\t\n在职\n\t\n\n\nE\nE2E 测试管理员\ne2e-admin@huarun.com\n\t\nE2E 管理员\n\t信息技术部\t\n超级管理员\n管理员\n\t\n在职\n\t\n\n\n赵\n赵法务\nlegal02@huarun.com\n\t\n法务主管\n\t法务部\t\n法务\n\t\n在职\n\t\n\n\n李\n李华东\neast.lead@huarun.com\n\t\n华东销售总监\n\t华东销售\t\n销售经理\n\t\n在职\n\t\n\n\n系\n系统超管\nsuperadmin@huarun.com\n\t\n超级管理员\n\t信息技术部\t\n超级管理员\n\t\n在职\n\t\n\n\n王\n王管理\nadmin@huarun.com\n\t\n组织管理员\n\t信息技术部\t\n管理员\n\t\n在职\n\t\n\n\n钱\n钱会计\nfinance01@huarun.com\n\t\n会计\n\t财务部\t\n财务\n\t\n在职\n\t\n\n\n陈\n陈法务\nlegal01@huarun.com\n\t\n法务专员\n\t法务部\t\n法务\n\t\n在职\n\t\n\n\n王\n王华北\nnorth.lead@huarun.com\n\t\n华北销售总监\n\t华北销售\t\n销售经理\n\t\n在职\n\t\n\n\n杨\n杨丽华\nyang.lh@huarun.com\n\t\n销售经理\n\t华南销售\t\n销售经理\n\t\n在职\n\t\n第 1 / 3 页 （每页 10 条）\n组织操作\n添加部门\n添加成员\n同步飞书组织\n当前上下文\n部门\n全部成员\n筛选成员\n25\n飞书同步当前只导入部门结构；成员同步需要飞书通讯录权限和成员映射策略，不应静默伪造成员数据。"
+      }
+    ],
+    "events": []
+  },
+  "mobile": {
+    "name": "mobile",
+    "snapshots": [
+      {
+        "key": "contracts",
+        "url": "http://localhost:3001/contracts",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同审核工作台入口\n\n新建 ReviewRun，上传合同源文件，绑定已发布规则、SkillBundle 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。\n\n上传源文件并发起审核\n源文件docx / pdf\n审核依据规则快照 / Skill\n风险定位复核 / 谈判\n输出批注版 / 报告\n\n9\n\n全部合同\n\n1\n\n进行中\n\n0\n\n需关注\n\n6\n\n已完成\n\n全部\n起草中\n待审核\n已完成\n\nprod-gemini-review-sample-1782906641409.docx\n\n审核完成\n7月1日\n\n(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx\n\n审核完成\n7月1日\n\nDRAFT\n7月1日\n\nones-contract-e2e-risk.docx\n\n审核完成\n7月1日\n\n_ONES_-_2026.docx\n\n审核完成\n6月30日\n\nHemory_.docx\n\n审核完成\n6月30日\n\nDRAFT\n6月30日\n\n_2026_ONES_1_.docx\n\n审核完成\n6月25日\n\nminimal.pdf\n\n待审核\n6月25日\n起草\n审核\n比对\n批量"
+      },
+      {
+        "key": "contract-new",
+        "url": "http://localhost:3001/contracts/new",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n单合同审核\n发起合同审核\n\n先上传合同源文件形成可审核版本，客户、金额、日期等业务上下文可由 CRM 或文件解析回填。\n\n返回合同中心\n合同源文件\nPDF\n\n拖拽或选择合同文件\n\n支持 PDF、DOCX，最大 50MB\n\n选择文件\n上传源文件并发起审核\n清除文件\n审核上下文\n\n当前阶段\n\n文件先行，先创建 ContractVersion 与 ReviewRun，再进入合同工作台。\n\n上下文来源\n\nCRM 对接、报价转合同和文件解析会逐步回填客户、金额、日期和联系人。\n\n审核依据\n\n进入审核后按已发布规则、SkillBundle 和模型策略执行，不依赖临时输入文本。\n\n业务上下文（可选，CRM 或解析未回填时再补充）"
+      },
+      {
+        "key": "config-rules",
+        "url": "http://localhost:3001/configs?tab=rules",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n合同审核策略\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n...\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n15+\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n...\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n...\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n合同与 AI 规则\n合同审核策略\n\n管理合同审核策略规则，供合同审核与本地模型执行。\n\n规则总数\n15\n启用规则\n15\n语义规则\n15\n合同审核策略\n15\nAI 模型配置\n...\n合同审核规则 (15)\n新建\n付款与结算\n1\nR001\n付款节奏\n生效\n比例类\n混合\n付款与结算\nv2\n\nONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日\n\nA >= 30percent / B >= 15percent / C < 15percent\n终止与退款\n1\nR002\n终止退款\n生效\n条款语义\n混合\n终止与退款\nv2\n\nONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息\n\nA contains 0text / B contains 0text / C contains 0text\n税务与发票\n1\nR003\n税率\n生效\n比例类\n混合\n税务与发票\nv2\n\nONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率\n\nA contains 0percent / B contains 0percent / C contains 0percent\n验收与交付\n2\nR004\n默示验收期\n生效\n时限类\n混合\n验收与交付\nv2\n\nONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收\n\nA <= 10day / B <= 15day / C > 30day\nR005\n验收不通过\n生效\n条款语义\n混合\n验收与交付\nv2\n\nONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失\n\nA contains 0text / B contains 0text / C contains 0text\n违约责任\n1\nR006\n违约金\n生效\n比例类\n混合\n违约责任\nv2\n\nONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五\n\nA <= 10percent / B <= 50percent / C > 100percent\n责任边界\n2\nR007\n间接损失\n生效\n条款语义\n混合\n责任边界\nv2\n\nONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿\n\nA contains 0text / B contains 0text / C contains 0text\nR008\n责任总额上限 Cap\n生效\n比例类\n混合\n责任边界\nv2\n\nONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向\n\nA <= 50percent / B <= 100percent / C > 100percent\n保密义务\n1\nR009\n保密期\n生效\n时限类\n混合\n保密义务\nv2\n\nONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）\n\nA <= 7year / B <= 10year / C > 10year\n主体与金额一致性\n1\nR010\n主体"
+      },
+      {
+        "key": "config-org",
+        "url": "http://localhost:3001/configs?tab=org-structure",
+        "title": "ONES Sales",
+        "text": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n组织架构\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n...\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n...\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n12+\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n...\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n组织与权限\n组织架构\n\n维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。\n\n部门总数\n12\n成员总数\n25\n销售空间\n3\n组织架构\n12\n角色权限\n...\n12\n部门\n25\n成员\n3\n销售空间\n当前筛选：全部成员\n部门结构\n\n点击选择部门\n\n全部成员\n25\n0\n0\n销售部\n1\n法务部\n2\n财务部\n2\n信息技术部\n3\n全部成员\n\n共 25 人\n\n共 25 人\n姓名\t职位\t部门\t角色\t状态\t操作\n\n张\n张雪丽\n99999999@qq.com\n\t\n销售\n\t售前组\t\n\t\n在职\n\t\n\n\nE\nE2E 测试管理员\ne2e-admin@huarun.com\n\t\nE2E 管理员\n\t信息技术部\t\n超级管理员\n管理员\n\t\n在职\n\t\n\n\n赵\n赵法务\nlegal02@huarun.com\n\t\n法务主管\n\t法务部\t\n法务\n\t\n在职\n\t\n\n\n李\n李华东\neast.lead@huarun.com\n\t\n华东销售总监\n\t华东销售\t\n销售经理\n\t\n在职\n\t\n\n\n系\n系统超管\nsuperadmin@huarun.com\n\t\n超级管理员\n\t信息技术部\t\n超级管理员\n\t\n在职\n\t\n\n\n王\n王管理\nadmin@huarun.com\n\t\n组织管理员\n\t信息技术部\t\n管理员\n\t\n在职\n\t\n\n\n钱\n钱会计\nfinance01@huarun.com\n\t\n会计\n\t财务部\t\n财务\n\t\n在职\n\t\n\n\n陈\n陈法务\nlegal01@huarun.com\n\t\n法务专员\n\t法务部\t\n法务\n\t\n在职\n\t\n\n\n王\n王华北\nnorth.lead@huarun.com\n\t\n华北销售总监\n\t华北销售\t\n销售经理\n\t\n在职\n\t\n\n\n杨\n杨丽华\nyang.lh@huarun.com\n\t\n销售经理\n\t华南销售\t\n销售经理\n\t\n在职\n\t\n第 1 / 3 页 （每页 10 条）\n组织操作\n添加部门\n添加成员\n同步飞书组织\n当前上下文\n部门\n全部成员\n筛选成员\n25\n飞书同步当前只导入部门结构；成员同步需要飞书通讯录权限和成员映射策略，不应静默伪造成员数据。"
+      }
+    ],
+    "events": []
+  },
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/p0-browser"
+}

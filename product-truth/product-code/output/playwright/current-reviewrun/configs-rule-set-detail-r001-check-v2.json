@@ -1,0 +1,9 @@
+{
+  "viewport": "desktop-detail",
+  "url": "http://localhost:3016/configs?tab=rules",
+  "hasSelectedRule": true,
+  "hasSkillFields": true,
+  "hasPublishGate": true,
+  "hasNegotiationOrComment": false,
+  "stayedInListView": true
+}

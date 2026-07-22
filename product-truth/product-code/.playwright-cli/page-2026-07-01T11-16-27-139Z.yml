@@ -1,0 +1,477 @@
+- generic [active] [ref=f7e1]:
+  - complementary [ref=f7e2]:
+    - generic [ref=f7e3]:
+      - img "ONES Sales" [ref=f7e5]
+      - generic [ref=f7e6]:
+        - generic [ref=f7e7]: ONES Sales
+        - paragraph [ref=f7e8]: 智能协作平台
+    - navigation [ref=f7e9]:
+      - link "工作台" [ref=f7e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f7e11]
+        - generic [ref=f7e15]: 工作台
+      - link "报价中心" [ref=f7e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f7e17]
+        - generic [ref=f7e21]: 报价中心
+      - link "合同审核" [ref=f7e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f7e23]
+        - generic [ref=f7e28]: 合同审核
+      - link "标书中心" [ref=f7e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f7e30]
+        - generic [ref=f7e34]: 标书中心
+      - link "知识库" [ref=f7e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f7e36]
+        - generic [ref=f7e41]: 知识库
+      - link "日程" [ref=f7e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f7e43]
+        - generic [ref=f7e49]: 日程
+      - link "配置中心" [ref=f7e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f7e51]
+        - generic [ref=f7e55]: 配置中心
+    - generic [ref=f7e56]:
+      - link "个人信息" [ref=f7e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f7e58]
+        - generic [ref=f7e61]: 个人信息
+      - button "退出登录" [ref=f7e62] [cursor=pointer]:
+        - img [ref=f7e63]
+        - generic [ref=f7e66]: 退出登录
+  - main [ref=f7e67]:
+    - generic [ref=f7e69]:
+      - generic [ref=f7e70]:
+        - generic [ref=f7e71]:
+          - generic [ref=f7e72]:
+            - img [ref=f7e73]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f7e77]
+          - paragraph [ref=f7e78]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f7e79]:
+          - generic [ref=f7e80]:
+            - generic [ref=f7e81]: 生效范围
+            - generic [ref=f7e82]: 组织级统一发布
+          - generic [ref=f7e83]:
+            - generic [ref=f7e84]: 消费端
+            - generic [ref=f7e85]: 报价 / 合同 / AI
+          - generic [ref=f7e86]:
+            - generic [ref=f7e87]: 当前配置集
+            - generic [ref=f7e88]: 合同审核策略
+      - generic [ref=f7e89]:
+        - complementary [ref=f7e90]:
+          - generic [ref=f7e91]:
+            - generic [ref=f7e92]:
+              - generic [ref=f7e93]: 配置域
+              - paragraph [ref=f7e94]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f7e95]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=f7e96] [cursor=pointer]:
+                - generic [ref=f7e97]:
+                  - generic [ref=f7e98]: 交易配置
+                  - generic [ref=f7e99]: ...
+                - paragraph [ref=f7e100]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f7e101] [cursor=pointer]:
+                - generic [ref=f7e102]:
+                  - generic [ref=f7e103]: 合同与 AI 规则
+                  - generic [ref=f7e104]: 15+
+                - paragraph [ref=f7e105]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f7e106] [cursor=pointer]:
+                - generic [ref=f7e107]:
+                  - generic [ref=f7e108]: 组织与权限
+                  - generic [ref=f7e109]: ...
+                - paragraph [ref=f7e110]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=f7e111] [cursor=pointer]:
+                - generic [ref=f7e112]:
+                  - generic [ref=f7e113]: 界面与体验
+                  - generic [ref=f7e114]: ...
+                - paragraph [ref=f7e115]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f7e116]:
+              - generic [ref=f7e117]: 结构约束
+              - list [ref=f7e118]:
+                - listitem [ref=f7e119]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f7e120]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f7e121]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f7e122]:
+          - generic [ref=f7e123]:
+            - generic [ref=f7e124]:
+              - generic [ref=f7e125]:
+                - generic [ref=f7e126]:
+                  - generic [ref=f7e127]: 配置中心
+                  - generic [ref=f7e128]: /
+                  - generic [ref=f7e129]: 合同与 AI 规则
+                - generic [ref=f7e130]:
+                  - img [ref=f7e132]
+                  - generic [ref=f7e135]:
+                    - heading "合同审核策略" [level=2] [ref=f7e136]
+                    - paragraph [ref=f7e137]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=f7e138]:
+                - generic [ref=f7e139]:
+                  - generic [ref=f7e140]: 规则总数
+                  - generic [ref=f7e141]: "15"
+                - generic [ref=f7e142]:
+                  - generic [ref=f7e143]: 启用规则
+                  - generic [ref=f7e144]: "15"
+                - generic [ref=f7e145]:
+                  - generic [ref=f7e146]: 语义规则
+                  - generic [ref=f7e147]: "15"
+            - generic [ref=f7e148]:
+              - button "合同审核策略 15" [ref=f7e149] [cursor=pointer]:
+                - img [ref=f7e150]
+                - generic [ref=f7e153]: 合同审核策略
+                - generic [ref=f7e154]: "15"
+              - button "AI 模型配置 ..." [ref=f7e155] [cursor=pointer]:
+                - img [ref=f7e156]
+                - generic [ref=f7e161]: AI 模型配置
+                - generic [ref=f7e162]: ...
+          - generic [ref=f7e164]:
+            - generic [ref=f7e165]:
+              - generic [ref=f7e166]:
+                - generic [ref=f7e167]: 合同审核规则 (15)
+                - button "新建" [ref=f7e168] [cursor=pointer]:
+                  - img
+                  - text: 新建
+              - generic [ref=f7e170]:
+                - generic [ref=f7e171]:
+                  - button "R001 付款节奏 生效 比例类 混合 v2 ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日" [ref=f7e172] [cursor=pointer]:
+                    - generic [ref=f7e173]:
+                      - generic [ref=f7e174]:
+                        - generic [ref=f7e175]:
+                          - generic [ref=f7e176]: R001
+                          - generic [ref=f7e177]: 付款节奏
+                          - generic [ref=f7e178]: 生效
+                        - generic [ref=f7e179]:
+                          - generic [ref=f7e180]: 比例类
+                          - generic [ref=f7e181]: 混合
+                          - generic [ref=f7e182]: v2
+                        - paragraph [ref=f7e183]: ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日
+                      - img [ref=f7e184]
+                  - generic [ref=f7e186]:
+                    - generic [ref=f7e187]: A >= 30percent / B >= 15percent / C < 15percent
+                    - generic [ref=f7e188]:
+                      - button "版本管理" [ref=f7e189] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e190] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e191]:
+                  - button "R002 终止退款 生效 条款语义 混合 v2 ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息" [ref=f7e192] [cursor=pointer]:
+                    - generic [ref=f7e193]:
+                      - generic [ref=f7e194]:
+                        - generic [ref=f7e195]:
+                          - generic [ref=f7e196]: R002
+                          - generic [ref=f7e197]: 终止退款
+                          - generic [ref=f7e198]: 生效
+                        - generic [ref=f7e199]:
+                          - generic [ref=f7e200]: 条款语义
+                          - generic [ref=f7e201]: 混合
+                          - generic [ref=f7e202]: v2
+                        - paragraph [ref=f7e203]: ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息
+                      - img [ref=f7e204]
+                  - generic [ref=f7e206]:
+                    - generic [ref=f7e207]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e208]:
+                      - button "版本管理" [ref=f7e209] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e210] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e211]:
+                  - button "R003 税率 生效 比例类 混合 v2 ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率" [ref=f7e212] [cursor=pointer]:
+                    - generic [ref=f7e213]:
+                      - generic [ref=f7e214]:
+                        - generic [ref=f7e215]:
+                          - generic [ref=f7e216]: R003
+                          - generic [ref=f7e217]: 税率
+                          - generic [ref=f7e218]: 生效
+                        - generic [ref=f7e219]:
+                          - generic [ref=f7e220]: 比例类
+                          - generic [ref=f7e221]: 混合
+                          - generic [ref=f7e222]: v2
+                        - paragraph [ref=f7e223]: ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率
+                      - img [ref=f7e224]
+                  - generic [ref=f7e226]:
+                    - generic [ref=f7e227]: A contains 0percent / B contains 0percent / C contains 0percent
+                    - generic [ref=f7e228]:
+                      - button "版本管理" [ref=f7e229] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e230] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e231]:
+                  - button "R004 默示验收期 生效 时限类 混合 v2 ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收" [ref=f7e232] [cursor=pointer]:
+                    - generic [ref=f7e233]:
+                      - generic [ref=f7e234]:
+                        - generic [ref=f7e235]:
+                          - generic [ref=f7e236]: R004
+                          - generic [ref=f7e237]: 默示验收期
+                          - generic [ref=f7e238]: 生效
+                        - generic [ref=f7e239]:
+                          - generic [ref=f7e240]: 时限类
+                          - generic [ref=f7e241]: 混合
+                          - generic [ref=f7e242]: v2
+                        - paragraph [ref=f7e243]: ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收
+                      - img [ref=f7e244]
+                  - generic [ref=f7e246]:
+                    - generic [ref=f7e247]: A <= 10day / B <= 15day / C > 30day
+                    - generic [ref=f7e248]:
+                      - button "版本管理" [ref=f7e249] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e250] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e251]:
+                  - button "R005 验收不通过 生效 条款语义 混合 v2 ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失" [ref=f7e252] [cursor=pointer]:
+                    - generic [ref=f7e253]:
+                      - generic [ref=f7e254]:
+                        - generic [ref=f7e255]:
+                          - generic [ref=f7e256]: R005
+                          - generic [ref=f7e257]: 验收不通过
+                          - generic [ref=f7e258]: 生效
+                        - generic [ref=f7e259]:
+                          - generic [ref=f7e260]: 条款语义
+                          - generic [ref=f7e261]: 混合
+                          - generic [ref=f7e262]: v2
+                        - paragraph [ref=f7e263]: ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失
+                      - img [ref=f7e264]
+                  - generic [ref=f7e266]:
+                    - generic [ref=f7e267]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e268]:
+                      - button "版本管理" [ref=f7e269] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e270] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e271]:
+                  - button "R006 违约金 生效 比例类 混合 v2 ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五" [ref=f7e272] [cursor=pointer]:
+                    - generic [ref=f7e273]:
+                      - generic [ref=f7e274]:
+                        - generic [ref=f7e275]:
+                          - generic [ref=f7e276]: R006
+                          - generic [ref=f7e277]: 违约金
+                          - generic [ref=f7e278]: 生效
+                        - generic [ref=f7e279]:
+                          - generic [ref=f7e280]: 比例类
+                          - generic [ref=f7e281]: 混合
+                          - generic [ref=f7e282]: v2
+                        - paragraph [ref=f7e283]: ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五
+                      - img [ref=f7e284]
+                  - generic [ref=f7e286]:
+                    - generic [ref=f7e287]: A <= 10percent / B <= 50percent / C > 100percent
+                    - generic [ref=f7e288]:
+                      - button "版本管理" [ref=f7e289] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e290] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e291]:
+                  - button "R007 间接损失 生效 条款语义 混合 v2 ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿" [ref=f7e292] [cursor=pointer]:
+                    - generic [ref=f7e293]:
+                      - generic [ref=f7e294]:
+                        - generic [ref=f7e295]:
+                          - generic [ref=f7e296]: R007
+                          - generic [ref=f7e297]: 间接损失
+                          - generic [ref=f7e298]: 生效
+                        - generic [ref=f7e299]:
+                          - generic [ref=f7e300]: 条款语义
+                          - generic [ref=f7e301]: 混合
+                          - generic [ref=f7e302]: v2
+                        - paragraph [ref=f7e303]: ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿
+                      - img [ref=f7e304]
+                  - generic [ref=f7e306]:
+                    - generic [ref=f7e307]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e308]:
+                      - button "版本管理" [ref=f7e309] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e310] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e311]:
+                  - button "R008 责任总额上限 Cap 生效 比例类 混合 v2 ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向" [ref=f7e312] [cursor=pointer]:
+                    - generic [ref=f7e313]:
+                      - generic [ref=f7e314]:
+                        - generic [ref=f7e315]:
+                          - generic [ref=f7e316]: R008
+                          - generic [ref=f7e317]: 责任总额上限 Cap
+                          - generic [ref=f7e318]: 生效
+                        - generic [ref=f7e319]:
+                          - generic [ref=f7e320]: 比例类
+                          - generic [ref=f7e321]: 混合
+                          - generic [ref=f7e322]: v2
+                        - paragraph [ref=f7e323]: ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向
+                      - img [ref=f7e324]
+                  - generic [ref=f7e326]:
+                    - generic [ref=f7e327]: A <= 50percent / B <= 100percent / C > 100percent
+                    - generic [ref=f7e328]:
+                      - button "版本管理" [ref=f7e329] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e330] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e331]:
+                  - button "R009 保密期 生效 时限类 混合 v2 ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）" [ref=f7e332] [cursor=pointer]:
+                    - generic [ref=f7e333]:
+                      - generic [ref=f7e334]:
+                        - generic [ref=f7e335]:
+                          - generic [ref=f7e336]: R009
+                          - generic [ref=f7e337]: 保密期
+                          - generic [ref=f7e338]: 生效
+                        - generic [ref=f7e339]:
+                          - generic [ref=f7e340]: 时限类
+                          - generic [ref=f7e341]: 混合
+                          - generic [ref=f7e342]: v2
+                        - paragraph [ref=f7e343]: ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）
+                      - img [ref=f7e344]
+                  - generic [ref=f7e346]:
+                    - generic [ref=f7e347]: A <= 7year / B <= 10year / C > 10year
+                    - generic [ref=f7e348]:
+                      - button "版本管理" [ref=f7e349] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e350] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e351]:
+                  - button "R010 主体·收款·金额 生效 条款语义 混合 v2 ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=大写=附件=报价单；B=旧版模板（建议更新）；红线=主体错/外部账户/金额不一致/含税不等/日期逻辑错" [ref=f7e352] [cursor=pointer]:
+                    - generic [ref=f7e353]:
+                      - generic [ref=f7e354]:
+                        - generic [ref=f7e355]:
+                          - generic [ref=f7e356]: R010
+                          - generic [ref=f7e357]: 主体·收款·金额
+                          - generic [ref=f7e358]: 生效
+                        - generic [ref=f7e359]:
+                          - generic [ref=f7e360]: 条款语义
+                          - generic [ref=f7e361]: 混合
+                          - generic [ref=f7e362]: v2
+                        - paragraph [ref=f7e363]: ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=大写=附件=报价单；B=旧版模板（建议更新）；红线=主体错/外部账户/金额不一致/含税不等/日期逻辑错
+                      - img [ref=f7e364]
+                  - generic [ref=f7e366]:
+                    - generic [ref=f7e367]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e368]:
+                      - button "版本管理" [ref=f7e369] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e370] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e371]:
+                  - button "R011 IP 归属 生效 条款语义 混合 v2 ONES skill 条款速查：A=ONES 保留全部 IP + 客户使用许可；B=二次开发归属让步需提价；红线=客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让" [ref=f7e372] [cursor=pointer]:
+                    - generic [ref=f7e373]:
+                      - generic [ref=f7e374]:
+                        - generic [ref=f7e375]:
+                          - generic [ref=f7e376]: R011
+                          - generic [ref=f7e377]: IP 归属
+                          - generic [ref=f7e378]: 生效
+                        - generic [ref=f7e379]:
+                          - generic [ref=f7e380]: 条款语义
+                          - generic [ref=f7e381]: 混合
+                          - generic [ref=f7e382]: v2
+                        - paragraph [ref=f7e383]: ONES skill 条款速查：A=ONES 保留全部 IP + 客户使用许可；B=二次开发归属让步需提价；红线=客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让
+                      - img [ref=f7e384]
+                  - generic [ref=f7e386]:
+                    - generic [ref=f7e387]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e388]:
+                      - button "版本管理" [ref=f7e389] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e390] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e391]:
+                  - button "R012 数据安全 生效 条款语义 混合 v2 ONES skill 条款速查：A=客户数据归客户 + ONES 受限处理；B=加密/本地化/立即删除可让；红线=AI训练无授权；海外/境外主体/跨境处理涉个信无 DPA（境内客户不因缺DPA单列风险）" [ref=f7e392] [cursor=pointer]:
+                    - generic [ref=f7e393]:
+                      - generic [ref=f7e394]:
+                        - generic [ref=f7e395]:
+                          - generic [ref=f7e396]: R012
+                          - generic [ref=f7e397]: 数据安全
+                          - generic [ref=f7e398]: 生效
+                        - generic [ref=f7e399]:
+                          - generic [ref=f7e400]: 条款语义
+                          - generic [ref=f7e401]: 混合
+                          - generic [ref=f7e402]: v2
+                        - paragraph [ref=f7e403]: ONES skill 条款速查：A=客户数据归客户 + ONES 受限处理；B=加密/本地化/立即删除可让；红线=AI训练无授权；海外/境外主体/跨境处理涉个信无 DPA（境内客户不因缺DPA单列风险）
+                      - img [ref=f7e404]
+                  - generic [ref=f7e406]:
+                    - generic [ref=f7e407]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e408]:
+                      - button "版本管理" [ref=f7e409] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e410] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e411]:
+                  - button "R013 SLA 生效 枚举类 混合 v2 ONES skill 条款速查：A=公有云 99.5% + 服务费比例赔偿；B=99.9% 需售后评估架构；红线=按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24" [ref=f7e412] [cursor=pointer]:
+                    - generic [ref=f7e413]:
+                      - generic [ref=f7e414]:
+                        - generic [ref=f7e415]:
+                          - generic [ref=f7e416]: R013
+                          - generic [ref=f7e417]: SLA
+                          - generic [ref=f7e418]: 生效
+                        - generic [ref=f7e419]:
+                          - generic [ref=f7e420]: 枚举类
+                          - generic [ref=f7e421]: 混合
+                          - generic [ref=f7e422]: v2
+                        - paragraph [ref=f7e423]: ONES skill 条款速查：A=公有云 99.5% + 服务费比例赔偿；B=99.9% 需售后评估架构；红线=按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24
+                      - img [ref=f7e424]
+                  - generic [ref=f7e426]:
+                    - generic [ref=f7e427]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e428]:
+                      - button "版本管理" [ref=f7e429] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e430] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e431]:
+                  - button "R014 续约 生效 条款语义 混合 v2 ONES skill 条款速查：A=书面续约、到期自动终止；B=自动续期+≥30日通知；年涨幅≤5%；红线=永久锁价 / 自动续期无退出权" [ref=f7e432] [cursor=pointer]:
+                    - generic [ref=f7e433]:
+                      - generic [ref=f7e434]:
+                        - generic [ref=f7e435]:
+                          - generic [ref=f7e436]: R014
+                          - generic [ref=f7e437]: 续约
+                          - generic [ref=f7e438]: 生效
+                        - generic [ref=f7e439]:
+                          - generic [ref=f7e440]: 条款语义
+                          - generic [ref=f7e441]: 混合
+                          - generic [ref=f7e442]: v2
+                        - paragraph [ref=f7e443]: ONES skill 条款速查：A=书面续约、到期自动终止；B=自动续期+≥30日通知；年涨幅≤5%；红线=永久锁价 / 自动续期无退出权
+                      - img [ref=f7e444]
+                  - generic [ref=f7e446]:
+                    - generic [ref=f7e447]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e448]:
+                      - button "版本管理" [ref=f7e449] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e450] [cursor=pointer]:
+                        - img
+                - generic [ref=f7e451]:
+                  - button "R015 争议解决 生效 条款语义 混合 v2 ONES skill 条款速查：A=深圳 SCIA 仲裁、中国法律；B=北京/上海仲裁；一线城市法院；红线=境外仲裁/法院/法律" [ref=f7e452] [cursor=pointer]:
+                    - generic [ref=f7e453]:
+                      - generic [ref=f7e454]:
+                        - generic [ref=f7e455]:
+                          - generic [ref=f7e456]: R015
+                          - generic [ref=f7e457]: 争议解决
+                          - generic [ref=f7e458]: 生效
+                        - generic [ref=f7e459]:
+                          - generic [ref=f7e460]: 条款语义
+                          - generic [ref=f7e461]: 混合
+                          - generic [ref=f7e462]: v2
+                        - paragraph [ref=f7e463]: ONES skill 条款速查：A=深圳 SCIA 仲裁、中国法律；B=北京/上海仲裁；一线城市法院；红线=境外仲裁/法院/法律
+                      - img [ref=f7e464]
+                  - generic [ref=f7e466]:
+                    - generic [ref=f7e467]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f7e468]:
+                      - button "版本管理" [ref=f7e469] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f7e470] [cursor=pointer]:
+                        - img
+            - generic [ref=f7e472]:
+              - paragraph [ref=f7e473]: 选择左侧规则查看详情，或新建付款比例、账期、条款语义规则。
+              - button "新建规则" [ref=f7e474] [cursor=pointer]:
+                - img
+                - text: 新建规则
+            - generic [ref=f7e475]:
+              - generic [ref=f7e477]: 运行摘要
+              - generic [ref=f7e478]:
+                - generic [ref=f7e479]:
+                  - button "浏览" [ref=f7e480] [cursor=pointer]
+                  - button "设计" [ref=f7e481] [cursor=pointer]
+                  - button "测试" [ref=f7e482] [cursor=pointer]
+                - generic [ref=f7e483]:
+                  - generic [ref=f7e484]: 规则资产
+                  - generic [ref=f7e485]:
+                    - generic [ref=f7e486]:
+                      - generic [ref=f7e487]: "15"
+                      - generic [ref=f7e488]: 总数
+                    - generic [ref=f7e489]:
+                      - generic [ref=f7e490]: "15"
+                      - generic [ref=f7e491]: 启用
+                    - generic [ref=f7e492]:
+                      - generic [ref=f7e493]: "15"
+                      - generic [ref=f7e494]: 混合
+                - generic [ref=f7e495]: 选择规则后显示 Skill 转译摘要
+  - alert [ref=f7e496]

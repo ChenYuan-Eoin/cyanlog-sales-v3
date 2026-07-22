@@ -1,0 +1,37 @@
+[
+  {
+    "name": "verify-contract-review-real-loaded",
+    "url": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177?panel=evidence&from=list",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-contract-review-real-loaded.png",
+    "checkResults": {
+      "reviewDefault": true,
+      "styleSelector": true,
+      "sourcePreview": true,
+      "modelEvidence": true,
+      "reviewEntryStrong": true
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同审核\n/\n审核工作台\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx\n审核降级（需复核）\n\nONES 业务运营按后台发布规则和模型策略生成风险定位、谈判任务和源文件 Word 原生批注版本。\n\n返回合同中心\n重新审查\n文档比对\n查看导出原因\n源文件批注\nv1 源文件|application/vnd.openxmlformats-officedocument.wordprocessingml.document · 40.9 KB\n风险 → 谈判 → 批注 → 回传\n红线\n2\n谈判\n0\n开放\n7\n批注\n2\n审查风格\n严审\n均衡\n商务\n批注导出待满足门禁\n|\n1 条 Word 批注意图疑似跨段或证据过短，不能稳定写入源文件批注。\n\n审核降级，需复核后交付\n\n规则发布包尚未满足正式审核发布门禁，本次结果只能作为降级/复核结果。\n模型质量评测尚未运行，本次结果必须结合模型调用记录和人工复核证据验收。\n审核运行状态为降级，本次结果不能作为无条件审核完成。\n审核执行发生降级：rule-engine。\n风险导航\n\n只负责定位。\n\n7\n全部\n7\n红线\n2\n谈判\n0\n通过\n5\n终止退款\n待强谈\n\n触发「终止退款」红线：全额退款 / 计息\n\n红线\n已定位原文\n税率\n待强谈\n\n触发「税率」红线：错套税率 / 统一税率 / 未写税率\n\n红线\n已定位原文\n验收不通过\n已通过\n\n验收不通过已约定验收失败处理\n\n通过\n已定位原文\nIP 归属\n已通过\n\nIP 归属已明确\n\n通过\n已定位原文\n数据安全\n已通过\n\n数据安全已覆盖数据安全要求\n\n通过\n已定位原文\n续约\n已通过\n\n续约已明确续约安排\n\n通过\n已定位原文\n争议解决\n已通过\n\n争议解决已明确\n\n通过\n已定位原文\n谈判跟进\nDEGRADED\n审查\n入口\n摘要\n对话\n证据\n运行状态\nDEGRADED\n运行编号\n2372af9e-8117-48d8-a82d-d4dc53d041be\n证据状态\n已绑定规则快照\n规则快照\ncontract_rule_snapshots:bound:15\n快照数量\n15\n规则发布包\n8af80238-15ce-4d7f-9ffa-7bcfe91849b8\n规则源\n配置中心发布规则\n转译状态\n已就绪\n规则完整性\n15/15\n发布门禁\n已通过\n模型质量评测\n模型质量评测未运行\n模型策略\ne5b7bf04-664c-4c0f-bd7a-313951f31ffb\n模型来源\n已发布模型策略\n语义模型\nrule-engine\n调用阶段\n结构化规则扫描\n调用通道\n规则引擎\n调用耗时\n53ms\n调用记录\nf00339d1-2211-4de7-9716-4e4363bf5f7a\n实际实例\n规则引擎\n实际模型\nrule-engine\n策略目标\n规则引擎\n目标模型\n未记录\n复审指定\n未记录\n请求模型\n未记录\n请求被接受\n未记录\n尝试错误\n未记录\n开始时间\n2026/7/7 15:46:17\n完成时间\n2026/7/7 15:46:18\n最近执行器\n规则引擎\n执行状态\n已完成\n降级\n是\n\n调用链\n\n结构化规则扫描\ndegraded\n规则引擎 / rule-engine / 规则引擎\n53ms\nf00339d1\nskill_bundle_not_formally_ready\n\nskill_bundle_not_formally_ready\n\n版本与产物\n\n客户谈判后的回传文件会形成新的合同版本，不作为发起审核入口。\n\n导入客户回传件\n文件大小\n40.9 KB\n文件类型\napplication/vnd.openxmlformats-officedocument.wordprocessingml.document\n创建时间\n2026/7/7 08:06:33\n更新时间\n2026/7/7 15:46:18\n\n版本记录\n\nv7\n客户/人工版本\n\n客户回传版：开标一览表-上海保交所标书.docx\n\nv6\n客户/人工版本\n\n人工补充版本：(清洁版）深圳复临上海驿创2026续约合同确认版0514-OA定稿-finalized.pdf\n\nv5\n客户/人工版本\n\n人工补充版本：开标一览表-上海保交所标书.docx\n\nv4\n客户/人工版本\n\n客户回传版：关联主体合作补充协议（模板）.docx-ONES批注版.docx\n\nv3\n客户/人工版本\n\n客户回传版：(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx\n\nv2\n客户/人工版本\n\n人工补充版本：(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx\n\n已收起 1 个更早版本。版本流需要保持可追溯，但默认只展示最近记录，避免批注产物污染主视图。\n\n源文件批注产物\n\n尚未生成 ONES 批注版本。\n\n源文件与批注预览\n\n主画布只服务两件事：定位原文证据，预览客户侧批注将如何写入源 Word。\n\n当前版本用于审核定位\nv7 · 客户/人工版本\nv6 · 客户/人工版本\nv5 · 客户/人工版本\nv4 · 客户/人工版本\n终止退款\n红线\n原文证"
+  },
+  {
+    "name": "verify-contract-compare-result-real",
+    "url": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177/compare?from=list&comparison_id=fb0788dd-12a4-4692-a68f-c04f9dd9327f",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-contract-compare-result-real.png",
+    "checkResults": {
+      "syncToggle": true,
+      "exportReport": true,
+      "oldNew": true,
+      "zoomOrOriginal": true,
+      "diffNav": true
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n返回合同中心\n返回审核工作台\n返回文件选择\n文档比对\n\n检测到 8 处差异，当前筛选 8 处\n\n删 2\n增 6\n改 0\n差异筛选\n全部\n红线\n需关注\n删除\n新增\n修改\n删除\n#1\n\n对比文档缺少该条款或表述已被删除\n\n需注意 · [实质修改] 内容被删除或替换\n删除\n#2\n\n对比文档缺少该条款或表述已被删除\n\n需注意 · [实质修改] 内容被删除或替换\n新增\n#3\n\n对比文档新增该条款或表述\n\n需注意 · 新增风险\n新增\n#4\n\n对比文档新增该条款或表述\n\n需注意 · 新增风险\n新增\n#5\n\n对比文档新增该条款或表述\n\n需注意 · 新增风险\n新增\n#6\n\n对比文档新增该条款或表述\n\n需注意 · 新增风险\n新增\n#7\n\n对比文档新增该条款或表述\n\n需注意 · 新增风险\n新增\n#8\n\n对比文档新增该条款或表述\n\n需注意 · 新增风险\nAI 差异披露摘要\n\n发现 8 处文本差异，其中高风险 0 处、需关注 8 处。\n\n版本比对\n8 处差异\n当前：需关注\n基准文件 · 基准版本 v6\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx v6\n回传文件 · 新版/客户回传 v7\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx v7\n1/8\n双栏视图\n合并视图\n同步滚动\n导出差异报告\nPDF 直接内嵌；私有 DOCX 使用签名源文件做浏览器页级渲染，并保留打开原件与文本证据定位复核入口。当前差异定位仍以文本证据为准。\n删除内容\n新增内容\n移动/修改\n旧文件原件预览 · 基准版本 v6\nPDF 原件\n浏览器内嵌\n\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx v6 · d0cc9911-e9fc-4e13-adee-6963d45b2177/1783475810168______________2026_______0514-OA__-finalized.pdf\n\n-\n100%\n+\n打开原件\n条款片段\n页码需原件渲染确认\n证据：ÚØëü\u000eñ#ÛCõS§±vÁ \u0018Ñ\u0014í¤¨èÌÂÔÂÒR4ÙÛû¨gÓÆ0nR¦zwk¿hÎ¦Nm®\u0016ÉjéßnèÆ5Æ\u00187\u0018ÚöèJÞ@¦ËúzXäQdH\u001dë5ø\\Â...\n旧文件文本证据 · 条款片段页码需原件渲染确认\n需关注\n\nÚØëü\u000eñ#ÛCõS§±vÁ \u0018Ñ\u0014í¤¨èÌÂÔÂÒR4ÙÛû¨gÓÆ0nR¦zwk¿hÎ¦Nm®\u0016ÉjéßnèÆ5Æ\u00187\u0018ÚöèJÞ@¦ËúzXäQdH\u001dë5ø\\Â...\n\n新文件原件预览 · 新版/客户回传 v7\nDOCX 页级渲染\n已渲染\n浏览器页数 1\n\n(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx v7 · d0cc9911-e9fc-4e13-adee-6963d45b2177/1783475825783______-_______.docx\n\n-\n100%\n+\n打开原件\n\n开标一览表\n\n项目名称：上海保交所2026年信创采购项目\n\n招标编号：PCMET-2602YG0582/02\n\n投标包号：包件2 上海保交所2026年项目管理系统改造项目\n\n投标人：深圳复临科技有限公司 （ 盖单位章）\n\n法定代表人或其委托代理人：   （签字或盖章）\n\n2026年7月8日\n\n新文件文本证据 · 无对应文本\n需关注\n\n无对应文本；请以原件预览和右侧差异说明为准。\n\nVS\n复核闭环\nAI 差异披露与合规建议\n\n对比只定位版本差异；红线或需谈判变化应回到审核工作台发起再审核。\n\n8\n差异\n0\n红线\n8\n需关注\n当前差异\n需关注\n序号\n1 / 8\n类型\n删除\n风险变化\n[实质修改] 内容被删除或替换\n业务影响\n对比文档缺少该条款或表述已被删除\n旧文件内容\nÚØëü\u000eñ#ÛCõS§±vÁ \u0018Ñ\u0014í¤¨èÌÂÔÂÒR4ÙÛû¨gÓÆ0nR¦zwk¿hÎ¦Nm®\u0016ÉjéßnèÆ5Æ\u00187\u0018ÚöèJÞ@¦ËúzXäQdH\u001dë5ø\\Âªc¾(¦ú\u0002ö'à± ÍÄ\u0012´®X\u001da\u0005O¦ ehp+¥\u0004Ç\u00102\u0013ÈÙ\u0005/\u0011\u000b1ùA4YçÓ¡8¶´\fQÒnDC¡èKØtÓt{`¨nº\n新文件内容\n无\n文件关系\n旧文件/基准\n基准版本 v6：(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx v6\n新文件/回传\n新版/客户回传 v7：(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx v7\n版本流动作\n驳回用印（风险拦截）接受差异（特批通过）返回合同中心返回审核工作台返回文件选择进入风险再审核\n\n点击“进入风险再审核”会基于当前比对任务创建新的 ReviewRun；比对结果只作为版本变化证据，不替代审核结论。"
+  },
+  {
+    "name": "verify-compare-export-action-real",
+    "url": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177/compare?from=list&comparison_id=fb0788dd-12a4-4692-a68f-c04f9dd9327f",
+    "exportResult": {
+      "clicked": true,
+      "downloaded": true,
+      "filename": "contract-diff-report-fb0788dd-12a4-4692-a68f-c04f9dd9327f.md"
+    }
+  }
+]

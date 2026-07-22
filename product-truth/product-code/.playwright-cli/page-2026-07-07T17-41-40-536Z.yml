@@ -1,0 +1,194 @@
+- generic [active] [ref=f3e1]:
+  - button "打开主导航" [ref=f3e2] [cursor=pointer]:
+    - img [ref=f3e3]
+  - complementary [ref=f3e5]:
+    - generic [ref=f3e6]:
+      - img "ONES Sales" [ref=f3e8]
+      - generic [ref=f3e9]:
+        - generic [ref=f3e10]: ONES Sales
+        - paragraph [ref=f3e11]: 智能协作平台
+    - navigation [ref=f3e12]:
+      - link "工作台" [ref=f3e13] [cursor=pointer]:
+        - /url: /
+        - img [ref=f3e14]
+        - generic [ref=f3e18]: 工作台
+      - link "报价中心" [ref=f3e19] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f3e20]
+        - generic [ref=f3e24]: 报价中心
+      - link "合同审核" [ref=f3e25] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f3e26]
+        - generic [ref=f3e31]: 合同审核
+      - link "标书中心" [ref=f3e32] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f3e33]
+        - generic [ref=f3e37]: 标书中心
+      - link "知识库" [ref=f3e38] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f3e39]
+        - generic [ref=f3e44]: 知识库
+      - link "日程" [ref=f3e45] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f3e46]
+        - generic [ref=f3e52]: 日程
+      - link "配置中心" [ref=f3e53] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f3e54]
+        - generic [ref=f3e58]: 配置中心
+    - generic [ref=f3e59]:
+      - link "个人信息" [ref=f3e60] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f3e61]
+        - generic [ref=f3e64]: 个人信息
+      - button "退出登录" [ref=f3e65] [cursor=pointer]:
+        - img [ref=f3e66]
+        - generic [ref=f3e69]: 退出登录
+  - main [ref=f3e70]:
+    - generic [ref=f3e71]:
+      - generic [ref=f3e74]:
+        - generic [ref=f3e75]:
+          - heading "合同中心" [level=1] [ref=f3e76]
+          - paragraph [ref=f3e77]: 全生命周期管理
+        - generic [ref=f3e79]:
+          - img [ref=f3e80]
+          - textbox "搜索合同名称、编号、客户..." [ref=f3e83]
+        - generic [ref=f3e84]:
+          - link "审核" [ref=f3e85] [cursor=pointer]:
+            - /url: /contracts/new?from=workbench
+            - button "审核" [ref=f3e86]:
+              - img
+              - text: 审核
+          - link "起草" [ref=f3e87] [cursor=pointer]:
+            - /url: /contracts/draft
+            - button "起草" [ref=f3e88]:
+              - img
+              - text: 起草
+      - main [ref=f3e89]:
+        - generic [ref=f3e90]:
+          - generic [ref=f3e91]:
+            - generic [ref=f3e92]:
+              - img [ref=f3e94]
+              - generic [ref=f3e97]:
+                - heading "合同中心" [level=2] [ref=f3e98]
+                - paragraph [ref=f3e99]: 一级入口只保留合同审核、文档对比、AI 起草合同。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
+            - link "上传源文件并发起审核" [ref=f3e100] [cursor=pointer]:
+              - /url: /contracts/new
+              - button "上传源文件并发起审核" [ref=f3e101]:
+                - img
+                - text: 上传源文件并发起审核
+          - generic [ref=f3e102]:
+            - link "1 合同审核 入口 源文件审核 动作 上传源文件并创建 ReviewRun 对象 DOCX / PDF 源文件 当前目标 新建合同版本 结果 风险定位、AI 批注、源文件批注版 边界：审核自动消费配置中心已发布规则，不在这里选择规则版本" [ref=f3e103] [cursor=pointer]:
+              - /url: /contracts/new?from=workbench
+              - generic [ref=f3e104]:
+                - generic [ref=f3e105]:
+                  - generic [ref=f3e106]:
+                    - generic [ref=f3e107]: "1"
+                    - generic [ref=f3e108]: 合同审核
+                  - img [ref=f3e109]
+                - generic [ref=f3e112]:
+                  - generic [ref=f3e113]:
+                    - generic [ref=f3e114]: 入口
+                    - generic [ref=f3e115]: 源文件审核
+                  - generic [ref=f3e116]:
+                    - generic [ref=f3e117]: 动作
+                    - generic [ref=f3e118]: 上传源文件并创建 ReviewRun
+                  - generic [ref=f3e119]:
+                    - generic [ref=f3e120]: 对象
+                    - generic [ref=f3e121]: DOCX / PDF 源文件
+                  - generic [ref=f3e122]:
+                    - generic [ref=f3e123]: 当前目标
+                    - generic [ref=f3e124]: 新建合同版本
+                  - generic [ref=f3e125]:
+                    - generic [ref=f3e126]: 结果
+                    - generic [ref=f3e127]: 风险定位、AI 批注、源文件批注版
+                - generic [ref=f3e128]: 边界：审核自动消费配置中心已发布规则，不在这里选择规则版本
+            - generic "暂无可作为版本流入口的合同；请先上传源文件或完成一个合同版本" [ref=f3e129]:
+              - generic [ref=f3e130]:
+                - generic [ref=f3e131]:
+                  - generic [ref=f3e132]:
+                    - generic [ref=f3e133]: "2"
+                    - generic [ref=f3e134]: 合同文档对比
+                  - img [ref=f3e135]
+                - generic [ref=f3e140]:
+                  - generic [ref=f3e141]:
+                    - generic [ref=f3e142]: 入口
+                    - generic [ref=f3e143]: 旧/新文件
+                  - generic [ref=f3e144]:
+                    - generic [ref=f3e145]: 动作
+                    - generic [ref=f3e146]: 选择旧文件和新文件
+                  - generic [ref=f3e147]:
+                    - generic [ref=f3e148]: 对象
+                    - generic [ref=f3e149]: 合同版本流或客户回传件
+                  - generic [ref=f3e150]:
+                    - generic [ref=f3e151]: 当前目标
+                    - generic [ref=f3e152]: 缺少合同版本流
+                  - generic [ref=f3e153]:
+                    - generic [ref=f3e154]: 结果
+                    - generic [ref=f3e155]: 差异列表、并排高亮、风险变化判断
+                - generic [ref=f3e156]: 当前不可用：暂无可作为版本流入口的合同；请先上传源文件或完成一个合同版本
+            - link "3 合同起草 入口 需求起草 动作 输入需求生成合同草稿 对象 客户需求、模板、条款限制 当前目标 等待选择 结果 可编辑合同草稿，可进入审核或对比 边界：起草是独立路径，不等同于上传审核或版本对比" [ref=f3e157] [cursor=pointer]:
+              - /url: /contracts/draft
+              - generic [ref=f3e158]:
+                - generic [ref=f3e159]:
+                  - generic [ref=f3e160]:
+                    - generic [ref=f3e161]: "3"
+                    - generic [ref=f3e162]: 合同起草
+                  - img [ref=f3e163]
+                - generic [ref=f3e168]:
+                  - generic [ref=f3e169]:
+                    - generic [ref=f3e170]: 入口
+                    - generic [ref=f3e171]: 需求起草
+                  - generic [ref=f3e172]:
+                    - generic [ref=f3e173]: 动作
+                    - generic [ref=f3e174]: 输入需求生成合同草稿
+                  - generic [ref=f3e175]:
+                    - generic [ref=f3e176]: 对象
+                    - generic [ref=f3e177]: 客户需求、模板、条款限制
+                  - generic [ref=f3e178]:
+                    - generic [ref=f3e179]: 当前目标
+                    - generic [ref=f3e180]: 等待选择
+                  - generic [ref=f3e181]:
+                    - generic [ref=f3e182]: 结果
+                    - generic [ref=f3e183]: 可编辑合同草稿，可进入审核或对比
+                - generic [ref=f3e184]: 边界：起草是独立路径，不等同于上传审核或版本对比
+        - generic [ref=f3e185]:
+          - generic [ref=f3e188]:
+            - img [ref=f3e190]
+            - generic [ref=f3e193]:
+              - paragraph [ref=f3e194]: "0"
+              - paragraph [ref=f3e195]: 全部合同
+          - generic [ref=f3e198]:
+            - img [ref=f3e200]
+            - generic [ref=f3e203]:
+              - paragraph [ref=f3e204]: "0"
+              - paragraph [ref=f3e205]: 进行中
+          - generic [ref=f3e208]:
+            - img [ref=f3e210]
+            - generic [ref=f3e212]:
+              - paragraph [ref=f3e213]: "0"
+              - paragraph [ref=f3e214]: 需关注
+          - generic [ref=f3e217]:
+            - img [ref=f3e219]
+            - generic [ref=f3e221]:
+              - paragraph [ref=f3e222]: "0"
+              - paragraph [ref=f3e223]: 已完成
+        - tablist [ref=f3e226]:
+          - tab "全部 0" [selected] [ref=f3e227] [cursor=pointer]:
+            - text: 全部
+            - generic [ref=f3e228]: "0"
+          - tab "审核 0" [ref=f3e229] [cursor=pointer]:
+            - text: 审核
+            - generic [ref=f3e230]: "0"
+          - tab "对比 0" [ref=f3e231] [cursor=pointer]:
+            - text: 对比
+            - generic [ref=f3e232]: "0"
+          - tab "起草 0" [ref=f3e233] [cursor=pointer]:
+            - text: 起草
+            - generic [ref=f3e234]: "0"
+          - tab "待审核" [ref=f3e235] [cursor=pointer]
+          - tab "已完成" [ref=f3e236] [cursor=pointer]
+        - generic [ref=f3e237]:
+          - img [ref=f3e238]
+          - paragraph [ref=f3e240]: 加载合同中...
+  - alert [ref=f3e241]

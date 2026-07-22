@@ -1,0 +1,58 @@
+{
+  "baseURL": "http://localhost:3000",
+  "steps": [
+    {
+      "name": "login",
+      "ok": false,
+      "error": "page.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"], input[type=\"email\"]')\u001b[22m\n\u001b[2m    - locator resolved to <input disabled value=\"\" required=\"\" type=\"email\" name=\"email\" id=\"login-email\" inputmode=\"email\" autocomplete=\"username\" placeholder=\"name@company.com\"/>\u001b[22m\n\u001b[2m    - fill(\"e2e-admin@huarun.com\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m       - element is not enabled\u001b[22m\n\u001b[2m     - retrying fill action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\n    at [stdin]:20:16\n    at async step ([stdin]:11:20)\n    at async [stdin]:18:3"
+    },
+    {
+      "name": "brand-head",
+      "ok": true,
+      "data": {
+        "title": "ONES Sales",
+        "brandName": "ONES Sales",
+        "logoUrl": "",
+        "faviconLinks": [
+          "http://localhost:3000/favicon.ico?v=20260626",
+          "http://localhost:3000/favicon.ico?v=20260626",
+          "http://localhost:3000/favicon.png?v=20260626",
+          "http://localhost:3000/favicon.svg?v=20260626",
+          "http://localhost:3000/favicon.png?v=20260626"
+        ]
+      }
+    },
+    {
+      "name": "contracts-desktop-state-machine",
+      "ok": true,
+      "data": {
+        "url": "http://localhost:3000/login",
+        "hasNewReview": false,
+        "hasContinue": false,
+        "hasAnnotations": false,
+        "hasCompare": false,
+        "overflowX": false
+      }
+    },
+    {
+      "name": "contracts-ipad-layout",
+      "ok": true,
+      "data": {
+        "width": 820,
+        "scrollWidth": 820,
+        "overflowX": false,
+        "actionTiles": 0
+      }
+    },
+    {
+      "name": "rules-page-business-editor",
+      "ok": true,
+      "data": {
+        "hasRuleTree": false,
+        "hasBusinessEditor": false,
+        "hasPreviewCopy": false,
+        "overflowX": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "elapsedMs": 17462,
+  "body": {
+    "jobId": "30993918-2046-4a9e-b32c-859ea1fb3b84",
+    "reviewId": "d904ded8-5e5f-43c0-a67e-51af2f6d76fc",
+    "parentReviewId": "7d48a3af-bc2b-4409-b4fb-f715b1abef47",
+    "triggerEvent": "manual_rerun",
+    "semanticProviderProfile": "sales_cloud_backup",
+    "status": "DEGRADED",
+    "message": "再审核已完成，但存在降级或未绑定项，需要人工复核",
+    "degraded": true,
+    "degradationReasons": [
+      "semantic_review_degraded"
+    ]
+  }
+}

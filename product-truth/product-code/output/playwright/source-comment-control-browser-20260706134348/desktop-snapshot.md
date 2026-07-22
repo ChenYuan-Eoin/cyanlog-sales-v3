@@ -1,0 +1,228 @@
+- generic [active] [ref=f4e1] [box=0,0,1440,2465]:
+  - complementary [ref=f4e2] [box=0,0,240,1000]:
+    - generic [ref=f4e3] [box=0,0,240,81]:
+      - img "ONES Sales" [ref=f4e5] [box=26,23,29,36]
+      - generic [ref=f4e6] [box=70,24,75,34]:
+        - generic [ref=f4e7] [box=70,24,75,19]: ONES Sales
+        - paragraph [ref=f4e8] [box=70,42,75,15]: 智能协作平台
+    - navigation [ref=f4e9] [box=0,81,240,818]:
+      - link "工作台" [ref=f4e10] [cursor=pointer] [box=11,96,218,38]:
+        - /url: /
+        - img [ref=f4e11] [box=23,106,18,18]
+        - generic [ref=f4e15] [box=52,105,39,19]: 工作台
+      - link "报价中心" [ref=f4e16] [cursor=pointer] [box=11,134,218,38]:
+        - /url: /quotes
+        - img [ref=f4e17] [box=23,143,18,18]
+        - generic [ref=f4e21] [box=52,143,53,19]: 报价中心
+      - link "合同审核" [ref=f4e22] [cursor=pointer] [box=11,171,218,38]:
+        - /url: /contracts
+        - img [ref=f4e23] [box=23,181,18,18]
+        - generic [ref=f4e28] [box=52,180,53,19]: 合同审核
+      - link "标书中心" [ref=f4e29] [cursor=pointer] [box=11,209,218,38]:
+        - /url: /tenders
+        - img [ref=f4e30] [box=23,218,18,18]
+        - generic [ref=f4e34] [box=52,218,53,19]: 标书中心
+      - link "知识库" [ref=f4e35] [cursor=pointer] [box=11,246,218,38]:
+        - /url: /knowledge
+        - img [ref=f4e36] [box=23,256,18,18]
+        - generic [ref=f4e41] [box=52,255,39,19]: 知识库
+      - link "日程" [ref=f4e42] [cursor=pointer] [box=11,284,218,38]:
+        - /url: /schedule
+        - img [ref=f4e43] [box=23,293,18,18]
+        - generic [ref=f4e49] [box=52,293,26,19]: 日程
+      - link "配置中心" [ref=f4e50] [cursor=pointer] [box=11,321,218,38]:
+        - /url: /configs
+        - img [ref=f4e51] [box=23,331,18,18]
+        - generic [ref=f4e55] [box=52,330,53,19]: 配置中心
+    - generic [ref=f4e56] [box=0,899,240,101]:
+      - link "个人信息" [ref=f4e57] [cursor=pointer] [box=11,899,218,38]:
+        - /url: /profile
+        - img [ref=f4e58] [box=23,909,18,18]
+        - generic [ref=f4e61] [box=52,908,53,19]: 个人信息
+      - button "退出登录" [ref=f4e62] [cursor=pointer] [box=11,940,218,38]:
+        - img [ref=f4e63] [box=23,950,18,18]
+        - generic [ref=f4e66] [box=52,949,53,19]: 退出登录
+  - main [ref=f4e67] [box=240,0,1200,2465]:
+    - generic [ref=f4e68] [box=240,0,1200,2465]:
+      - generic [ref=f4e69] [box=270,30,1140,132]:
+        - generic [ref=f4e70] [box=270,30,664,113]:
+          - generic [ref=f4e71] [box=270,30,664,19]:
+            - link "合同审核" [ref=f4e72] [cursor=pointer] [box=270,30,53,19]:
+              - /url: /contracts
+            - generic [ref=f4e73] [box=330,30,7,19]: /
+            - generic [ref=f4e74] [box=344,30,66,19]: 审核工作台
+          - generic [ref=f4e75] [box=270,56,664,60]:
+            - heading "prod-gemini-review-sample-1782906641409.docx" [level=1] [ref=f4e76] [box=270,56,545,30]
+            - generic [ref=f4e77] [box=270,98,118,19]: 审核降级（需复核）
+          - paragraph [ref=f4e78] [box=270,124,664,19]: ONES 业务运营按后台发布规则和模型策略生成风险定位、谈判任务和源文件 Word 原生批注版本。
+        - generic [ref=f4e79] [box=949,30,461,68]:
+          - link "返回合同中心" [ref=f4e80] [cursor=pointer] [box=949,30,128,30]:
+            - /url: /contracts
+            - button "返回合同中心" [ref=f4e81] [box=949,30,128,30]:
+              - img [box=960,38,15,15]
+              - text: 返回合同中心
+          - button "重新审查" [ref=f4e82] [cursor=pointer] [box=1084,30,101,30]:
+            - img [box=1095,38,15,15]
+            - text: 重新审查
+          - link "文档比对" [ref=f4e83] [cursor=pointer] [box=1193,30,101,30]:
+            - /url: /contracts/0ca03c97-8104-4211-a65f-3d76e5f14b8a/compare?from=workbench
+            - button "文档比对" [ref=f4e84] [box=1193,30,101,30]:
+              - img [box=1204,38,15,15]
+              - text: 文档比对
+          - button "导出源文件 Word 原生批注版" [ref=f4e85] [cursor=pointer] [box=949,68,115,30]:
+            - img [box=960,75,15,15]
+            - text: 导出批注版
+      - generic [ref=f4e86] [box=270,181,1140,150]:
+        - generic [ref=f4e87] [box=282,193,300,125]:
+          - generic [ref=f4e88] [box=294,205,277,15]: 主交付物
+          - generic [ref=f4e89] [box=294,223,277,24]: 源 Word 原生批注版
+          - paragraph [ref=f4e90] [box=294,251,277,38]: 以用户上传源文件为事实来源，只写入 Word 批注，不用重新生成版式文档替代。
+        - generic [ref=f4e91] [box=593,193,261,125]:
+          - generic [ref=f4e92] [box=605,205,238,15]: 当前源文件
+          - generic [ref=f4e93] [box=605,223,238,24]: v1 源文件
+          - paragraph [ref=f4e94] [box=605,251,238,56]: application/vnd.openxmlformats-officedocument.wordprocessingml.document · 1.5 KB
+        - generic [ref=f4e95] [box=865,193,261,125]:
+          - generic [ref=f4e96] [box=876,205,238,15]: 批注输出状态
+          - generic [ref=f4e97] [box=876,223,238,24]: 最近批注版 v5
+          - paragraph [ref=f4e98] [box=876,251,238,19]: 导出后会登记为合同版本流中的批注产物。
+        - generic [ref=f4e99] [box=1137,193,261,125]:
+          - generic [ref=f4e100] [box=1148,205,238,15]: 操作闭环
+          - generic [ref=f4e101] [box=1148,223,238,24]: 风险 → 谈判 → 批注 → 回传
+          - paragraph [ref=f4e102] [box=1148,251,238,38]: 红线和需谈判风险先进入审查侧栏，客户修改后作为新版本回到文档比对和再审核。
+      - generic [ref=f4e103] [box=270,350,1140,113]:
+        - generic [ref=f4e105] [box=270,365,274,83]:
+          - generic [ref=f4e106] [box=285,380,244,19]: 红线风险
+          - generic [ref=f4e107] [box=285,402,244,30]: "1"
+        - generic [ref=f4e109] [box=559,365,274,83]:
+          - generic [ref=f4e110] [box=574,380,244,19]: 需谈判风险
+          - generic [ref=f4e111] [box=574,402,244,30]: "1"
+        - generic [ref=f4e113] [box=848,365,274,83]:
+          - generic [ref=f4e114] [box=863,380,244,19]: 开放风险
+          - generic [ref=f4e115] [box=863,402,244,30]: "3"
+        - generic [ref=f4e117] [box=1136,365,274,83]:
+          - generic [ref=f4e118] [box=1151,380,244,19]: 批注数量
+          - generic [ref=f4e119] [box=1151,402,244,30]: "2"
+      - generic [ref=f4e120] [box=270,481,1140,62]:
+        - generic [ref=f4e121] [box=270,481,373,62]:
+          - paragraph [ref=f4e122] [box=286,493,341,15]: 当前状态
+          - paragraph [ref=f4e123] [box=286,512,341,19]: 需人工复核
+        - generic [ref=f4e124] [box=654,481,373,62]:
+          - paragraph [ref=f4e125] [box=670,493,341,15]: 审核依据
+          - paragraph [ref=f4e126] [box=670,512,341,19]: 已绑定规则发布包
+        - generic [ref=f4e127] [box=1038,481,373,62]:
+          - paragraph [ref=f4e128] [box=1054,493,341,15]: 批注输出
+          - paragraph [ref=f4e129] [box=1054,512,341,19]: 源文件批注版可导出
+      - generic [ref=f4e131] [box=286,574,1108,45]:
+        - img [ref=f4e132] [box=286,576,15,15]
+        - generic [ref=f4e134] [box=309,574,504,45]:
+          - paragraph [ref=f4e135] [box=309,574,504,19]: 当前审核结果未达到正式验收状态
+          - list [ref=f4e136] [box=309,600,504,19]:
+            - listitem [ref=f4e137] [box=327,600,486,19]: 最新语义模型调用只达到部分通过：存在被剔除风险或校验警告，必须查看调用链。
+      - generic [ref=f4e138] [box=270,650,1140,1785]:
+        - complementary [ref=f4e139] [box=270,650,300,1785]:
+          - generic [ref=f4e140] [box=270,650,300,830]:
+            - generic [ref=f4e141] [box=270,650,296,445]:
+              - generic [ref=f4e142] [box=270,665,296,75]:
+                - generic [ref=f4e143] [box=285,665,266,23]: 审查导航
+                - paragraph [ref=f4e144] [box=285,691,266,38]: 版本、ReviewRun 和风险队列放在这里，右侧只处理当前风险。
+              - generic [ref=f4e145] [box=270,755,296,325]:
+                - generic [ref=f4e146] [box=285,755,266,68]
+                - generic [ref=f4e156] [box=285,834,266,81]
+                - generic [ref=f4e160] [box=285,926,266,81]
+                - generic [ref=f4e164] [box=285,1018,266,62]
+            - generic [ref=f4e167] [box=270,1110,296,370]:
+              - generic [ref=f4e168] [box=270,1125,296,102]:
+                - generic [ref=f4e169] [box=285,1125,266,23]
+                - generic [ref=f4e172] [box=285,1151,266,64]
+              - generic [ref=f4e178] [box=285,1241,266,224]:
+                - button "付款节奏 红线 R001 open" [ref=f4e179] [cursor=pointer] [box=285,1241,266,70]
+                - button "默示验收期 需谈判 R004 open" [ref=f4e186] [cursor=pointer] [box=285,1318,266,70]
+                - button "争议解决 通过 R015 open" [ref=f4e193] [cursor=pointer] [box=285,1395,266,70]
+        - generic [ref=f4e200] [box=585,650,430,1785]:
+          - generic [ref=f4e201] [box=585,650,430,1108]:
+            - generic [ref=f4e202] [box=585,665,430,136]:
+              - generic [ref=f4e203] [box=600,665,400,83]:
+                - generic [ref=f4e204] [box=600,665,259,83]
+                - generic [ref=f4e210] [box=871,697,130,19]: 当前版本用于审核定位
+              - generic [ref=f4e211] [box=600,766,400,19]:
+                - generic [ref=f4e212] [box=600,766,76,19]: v5 · 批注版
+                - generic [ref=f4e213] [box=684,766,76,19]: v4 · 批注版
+                - generic [ref=f4e214] [box=768,766,76,19]: v3 · 批注版
+                - generic [ref=f4e215] [box=851,766,76,19]: v2 · 批注版
+                - generic [ref=f4e216] [box=935,766,61,19]: 批注版 4
+            - generic [ref=f4e217] [box=585,816,430,927]:
+              - generic [ref=f4e218] [box=600,831,400,212]:
+                - generic [ref=f4e219] [box=612,843,376,19]
+                - generic [ref=f4e223] [box=612,873,376,113]
+                - generic [ref=f4e233] [box=612,993,376,15]: R001 · v3 · 67a2ae46-331a-476e-9621-fe1f3ecce3ff
+                - generic [ref=f4e234] [box=612,1016,376,15]: 定位状态：located；evidence_text_exact_match
+              - generic [ref=f4e237] [box=660,1125,280,525]:
+                - text: 销售云服务采购合同 甲方：ONES Sales 测试公司 乙方：验收客户有限公司 第一条 合同金额：人民币 100000 元。 第二条 付款条款：甲方应在合同签订后
+                - mark [ref=f4e238] [box=660,1340,273,42]: 180 日内支付
+                - text: 全部款项。 第三条 验收条款：乙方提交成果后，如甲方 3 日内未提出书面异议，视为自动验收通过。 第四条 违约责任：任一方违约时，仅退还已收费用，不承担其他赔偿责任。 第五条 争议解决：由乙方所在地人民法院管辖。 本合同用于线上模型调用验收。
+          - generic [ref=f4e239] [box=585,1773,430,662]:
+            - generic [ref=f4e241] [box=600,1788,400,23]:
+              - img [ref=f4e242] [box=600,1792,15,15]
+              - text: Word 批注
+            - generic [ref=f4e245] [box=600,1837,400,583]:
+              - generic [ref=f4e246] [box=600,1837,194,583]:
+                - generic [ref=f4e247] [box=612,1849,170,38]
+                - paragraph [ref=f4e251] [box=612,1890,170,518]: "【需谈判风险】默示验收期 问题：默示验收期偏离建议区间 建议：建议换取：销售需围绕风险项取得对价或客户确认，并记录谈判结果。 证据原文：3 日内未提出书面异议，视为自动验收 规则：R004 v3 RuleSnapshot: 5a8c9a8c-e6db-441b-99cf-1ed341e31747 SourceRange: 123-141 RiskFinding: 8e2cd9b5-254f-4ceb-ba34-40a23181524b 可控化动作：请补充明确回款批次、付款比例、账期或验收节点，并让客户书面确认。 处理边界：没有明确数值或客户确认前，不得标记为风险已解决。"
+              - generic [ref=f4e252] [box=806,1837,194,583]:
+                - generic [ref=f4e253] [box=818,1849,170,19]
+                - paragraph [ref=f4e257] [box=818,1871,170,518]: "【红线风险】付款节奏 问题：触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 建议：必须修改合同条款 证据原文：180 日内支付 规则：R001 v3 RuleSnapshot: 67a2ae46-331a-476e-9621-fe1f3ecce3ff SourceRange: 87-95 RiskFinding: ff2f4b82-e953-4e17-85e2-1ab69fb162ba 可控化说明：回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；客户需在回传版中明确比例、账期和验收节点。 处理边界：该说明用于销售与客户确认，确认前风险仍保持开放，客户回传后需再审核。"
+        - complementary [ref=f4e258] [box=1030,650,380,970]:
+          - generic [ref=f4e259] [box=1030,650,380,937]:
+            - generic [ref=f4e260] [box=1030,665,380,91]:
+              - generic [ref=f4e261] [box=1045,665,350,23]:
+                - generic [ref=f4e262] [box=1045,665,60,23]: 审核侧栏
+                - generic [ref=f4e263] [box=1308,667,87,19]: COMPLETED
+              - generic [ref=f4e264] [box=1045,702,350,41]:
+                - button "审查" [ref=f4e265] [cursor=pointer] [box=1049,706,83,34]
+                - button "摘要" [ref=f4e269] [cursor=pointer] [box=1135,706,83,34]
+                - button "对话" [ref=f4e274] [cursor=pointer] [box=1222,706,83,34]
+                - button "证据" [ref=f4e278] [cursor=pointer] [box=1308,706,83,34]
+            - generic [ref=f4e285] [box=1045,786,350,786]:
+              - generic [ref=f4e286] [box=1045,786,350,122]:
+                - generic [ref=f4e287] [box=1057,798,326,41]
+                - paragraph [ref=f4e293] [box=1057,851,326,45]: 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日
+              - generic [ref=f4e294] [box=1045,923,350,178]:
+                - heading "证据与规则依据" [level=3] [ref=f4e295] [box=1057,935,326,19]
+                - generic [ref=f4e296] [box=1057,961,326,71]
+                - paragraph [ref=f4e306] [box=1057,1044,326,45]: 180 日内支付
+              - generic [ref=f4e307] [box=1045,1116,350,195]:
+                - heading "批注与谈判动作" [level=3] [ref=f4e308] [box=1057,1128,326,19]
+                - paragraph [ref=f4e309] [box=1057,1155,326,45]: 必须修改合同条款
+                - generic [ref=f4e311] [box=1057,1211,326,88]
+              - generic [ref=f4e317] [box=1045,1326,350,246]:
+                - generic [ref=f4e318] [box=1057,1339,326,79]
+                - textbox "例如：回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；客户需在回传版中明确比例和账期。" [ref=f4e323] [box=1057,1429,326,90]: 回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；客户需在回传版中明确比例、账期和验收节点。
+                - generic [ref=f4e324] [box=1057,1530,326,30]
+          - generic [ref=f4e327] [box=1030,1602,380,903]:
+            - generic [ref=f4e329] [box=1045,1617,350,64]:
+              - generic [ref=f4e330] [box=1045,1617,215,64]:
+                - generic [ref=f4e331] [box=1045,1617,215,23]
+                - paragraph [ref=f4e336] [box=1045,1643,215,38]: 客户谈判后的回传文件会形成新的合同版本，不作为发起审核入口。
+              - link "导入客户回传件" [ref=f4e337] [cursor=pointer] [box=1272,1636,124,26]:
+                - /url: /contracts/0ca03c97-8104-4211-a65f-3d76e5f14b8a/edit
+                - button "导入客户回传件" [ref=f4e338] [box=1272,1636,124,26]
+            - generic [ref=f4e339] [box=1030,1707,380,783]:
+              - generic [ref=f4e340] [box=1045,1707,350,19]:
+                - generic [ref=f4e341] [box=1045,1707,53,19]: 文件大小
+                - generic [ref=f4e342] [box=1356,1707,39,19]: 1.5 KB
+              - generic [ref=f4e343] [box=1045,1737,350,38]:
+                - generic [ref=f4e344] [box=1045,1737,53,19]: 文件类型
+                - generic [ref=f4e345] [box=1113,1737,283,38]: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+              - generic [ref=f4e346] [box=1045,1786,350,19]:
+                - generic [ref=f4e347] [box=1045,1786,53,19]: 创建时间
+                - generic [ref=f4e348] [box=1282,1786,113,19]: 2026/7/1 19:50:43
+              - generic [ref=f4e349] [box=1045,1816,350,19]:
+                - generic [ref=f4e350] [box=1045,1816,53,19]: 更新时间
+                - generic [ref=f4e351] [box=1282,1816,113,19]: 2026/7/3 19:00:31
+              - generic [ref=f4e352] [box=1045,1846,350,357]:
+                - paragraph [ref=f4e353] [box=1045,1858,350,15]: 版本记录
+                - generic [ref=f4e354] [box=1045,1881,350,323]
+              - generic [ref=f4e380] [box=1045,2214,350,275]:
+                - paragraph [ref=f4e381] [box=1045,2227,350,15]: 源文件批注产物
+                - generic [ref=f4e382] [box=1045,2249,350,241]
+  - alert [ref=f4e400] [box=-1,2464,1,1]

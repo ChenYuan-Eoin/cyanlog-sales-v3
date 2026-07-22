@@ -1,0 +1,62 @@
+{
+  "desktop": {
+    "loginMs": 1336,
+    "contractsOk": true,
+    "uploadFirstOk": true,
+    "rulesOk": true,
+    "orgBeforeHasMembers": true,
+    "syncStatus": 200,
+    "syncJson": {
+      "success": true,
+      "connector": "feishu",
+      "scope": "departments_and_members",
+      "sync_status": "completed",
+      "departments": {
+        "imported": 0,
+        "updated": 2,
+        "total": 2
+      },
+      "members": {
+        "imported": 0,
+        "updated": 4,
+        "skipped": 0,
+        "total": 4
+      },
+      "warnings": [],
+      "message": "飞书组织架构同步完成"
+    },
+    "orgAfterHasMembers": true,
+    "orgAfterHasFeishuDept": true,
+    "events": []
+  },
+  "mobile": {
+    "loginMs": 623,
+    "contractsOk": false,
+    "uploadFirstOk": true,
+    "rulesOk": true,
+    "orgBeforeHasMembers": true,
+    "syncStatus": 200,
+    "syncJson": {
+      "success": true,
+      "connector": "feishu",
+      "scope": "departments_and_members",
+      "sync_status": "completed",
+      "departments": {
+        "imported": 0,
+        "updated": 2,
+        "total": 2
+      },
+      "members": {
+        "imported": 0,
+        "updated": 4,
+        "skipped": 0,
+        "total": 4
+      },
+      "warnings": [],
+      "message": "飞书组织架构同步完成"
+    },
+    "orgAfterHasMembers": true,
+    "orgAfterHasFeishuDept": true,
+    "events": []
+  }
+}

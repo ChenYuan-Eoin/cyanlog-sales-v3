@@ -1,0 +1,131 @@
+- generic [active] [ref=f4e1]:
+  - button "打开主导航" [ref=f4e2] [cursor=pointer]:
+    - img [ref=f4e3]
+  - complementary [ref=f4e5]:
+    - generic [ref=f4e6]:
+      - img "ONES Sales" [ref=f4e8]
+      - generic [ref=f4e9]:
+        - generic [ref=f4e10]: ONES Sales
+        - paragraph [ref=f4e11]: 智能协作平台
+    - navigation [ref=f4e12]:
+      - link "工作台" [ref=f4e13] [cursor=pointer]:
+        - /url: /
+        - img [ref=f4e14]
+        - generic [ref=f4e18]: 工作台
+      - link "报价中心" [ref=f4e19] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f4e20]
+        - generic [ref=f4e24]: 报价中心
+      - link "合同审核" [ref=f4e25] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f4e26]
+        - generic [ref=f4e31]: 合同审核
+      - link "标书中心" [ref=f4e32] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f4e33]
+        - generic [ref=f4e37]: 标书中心
+      - link "知识库" [ref=f4e38] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f4e39]
+        - generic [ref=f4e44]: 知识库
+      - link "日程" [ref=f4e45] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f4e46]
+        - generic [ref=f4e52]: 日程
+      - link "配置中心" [ref=f4e53] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f4e54]
+        - generic [ref=f4e58]: 配置中心
+    - generic [ref=f4e59]:
+      - link "个人信息" [ref=f4e60] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f4e61]
+        - generic [ref=f4e64]: 个人信息
+      - button "退出登录" [ref=f4e65] [cursor=pointer]:
+        - img [ref=f4e66]
+        - generic [ref=f4e69]: 退出登录
+  - main [ref=f4e70]:
+    - generic [ref=f4e72]:
+      - generic [ref=f4e73]:
+        - generic [ref=f4e74]:
+          - generic [ref=f4e75]:
+            - img [ref=f4e76]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f4e80]
+          - paragraph [ref=f4e81]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f4e82]:
+          - generic [ref=f4e83]:
+            - generic [ref=f4e84]: 生效范围
+            - generic [ref=f4e85]: 组织级统一发布
+          - generic [ref=f4e86]:
+            - generic [ref=f4e87]: 消费端
+            - generic [ref=f4e88]: 报价 / 合同 / AI
+          - generic [ref=f4e89]:
+            - generic [ref=f4e90]: 当前配置集
+            - generic [ref=f4e91]: 合同审核策略
+      - generic [ref=f4e92]:
+        - complementary [ref=f4e93]:
+          - generic [ref=f4e94]:
+            - generic [ref=f4e95]:
+              - generic [ref=f4e96]: 配置域
+              - paragraph [ref=f4e97]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f4e98]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=f4e99] [cursor=pointer]:
+                - generic [ref=f4e100]:
+                  - generic [ref=f4e101]: 交易配置
+                  - generic [ref=f4e102]: ...
+                - paragraph [ref=f4e103]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 ... 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f4e104] [cursor=pointer]:
+                - generic [ref=f4e105]:
+                  - generic [ref=f4e106]: 合同与 AI 规则
+                  - generic [ref=f4e107]: ...
+                - paragraph [ref=f4e108]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f4e109] [cursor=pointer]:
+                - generic [ref=f4e110]:
+                  - generic [ref=f4e111]: 组织与权限
+                  - generic [ref=f4e112]: ...
+                - paragraph [ref=f4e113]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=f4e114] [cursor=pointer]:
+                - generic [ref=f4e115]:
+                  - generic [ref=f4e116]: 界面与体验
+                  - generic [ref=f4e117]: ...
+                - paragraph [ref=f4e118]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f4e119]:
+              - generic [ref=f4e120]: 结构约束
+              - list [ref=f4e121]:
+                - listitem [ref=f4e122]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f4e123]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f4e124]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f4e125]:
+          - generic [ref=f4e126]:
+            - generic [ref=f4e127]:
+              - generic [ref=f4e128]:
+                - generic [ref=f4e129]:
+                  - generic [ref=f4e130]: 配置中心
+                  - generic [ref=f4e131]: /
+                  - generic [ref=f4e132]: 合同与 AI 规则
+                - generic [ref=f4e133]:
+                  - img [ref=f4e135]
+                  - generic [ref=f4e138]:
+                    - heading "合同审核策略" [level=2] [ref=f4e139]
+                    - paragraph [ref=f4e140]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=f4e141]:
+                - generic [ref=f4e142]:
+                  - generic [ref=f4e143]: 规则总数
+                  - generic [ref=f4e144]: ...
+                - generic [ref=f4e145]:
+                  - generic [ref=f4e146]: 启用规则
+                  - generic [ref=f4e147]: ...
+                - generic [ref=f4e148]:
+                  - generic [ref=f4e149]: 语义规则
+                  - generic [ref=f4e150]: ...
+            - generic [ref=f4e151]:
+              - button "合同审核策略 ..." [ref=f4e152] [cursor=pointer]:
+                - img [ref=f4e153]
+                - generic [ref=f4e156]: 合同审核策略
+                - generic [ref=f4e157]: ...
+              - button "AI 模型配置 ..." [ref=f4e158] [cursor=pointer]:
+                - img [ref=f4e159]
+                - generic [ref=f4e164]: AI 模型配置
+                - generic [ref=f4e165]: ...
+  - alert [ref=f4e243]

@@ -1,0 +1,297 @@
+- generic [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e3]:
+      - img [ref=e221]
+      - generic [ref=e5]:
+        - generic [ref=e6]: ONES Sales
+        - paragraph [ref=e7]: 智能协作平台
+    - navigation [ref=e8]:
+      - link [ref=e222] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e14]: 工作台
+      - link [ref=e223] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e16]
+        - generic [ref=e20]: 报价中心
+      - link [ref=e224] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e22]
+        - generic [ref=e27]: 合同审核
+      - link [ref=e225] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e29]
+        - generic [ref=e33]: 标书中心
+      - link [ref=e226] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e35]
+        - generic [ref=e40]: 知识库
+      - link [ref=e227] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e42]
+        - generic [ref=e48]: 日程
+      - link [ref=e228] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e50]
+        - generic [ref=e54]: 配置中心
+    - generic [ref=e55]:
+      - link [ref=e229] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e57]
+        - generic [ref=e60]: 个人信息
+      - button [ref=e230] [cursor=pointer]:
+        - img [ref=e62]
+        - generic [ref=e65]: 退出登录
+  - main [ref=e66]:
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - generic [ref=e71]:
+            - img [ref=e72]
+            - text: 组织级配置工作台
+          - heading [level=1] [ref=e231]: 配置中心
+          - paragraph [ref=e77]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e80]: 生效范围
+            - generic [ref=e81]: 组织级统一发布
+          - generic [ref=e82]:
+            - generic [ref=e83]: 消费端
+            - generic [ref=e84]: 报价 / 合同 / AI
+          - generic [ref=e85]:
+            - generic [ref=e86]: 当前配置集
+            - generic [ref=e87]: 界面主题
+      - generic [ref=e88]:
+        - complementary [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]:
+              - generic [ref=e92]: 配置域
+              - paragraph [ref=e93]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e94]:
+              - button [ref=e232] [cursor=pointer]:
+                - generic [ref=e96]:
+                  - generic [ref=e97]: 交易配置
+                  - generic [ref=e98]: 7+
+                - paragraph [ref=e99]: 围绕报价工作台的价盘、税率和审批配置。
+              - button [ref=e233] [cursor=pointer]:
+                - generic [ref=e101]:
+                  - generic [ref=e102]: 合同与 AI 规则
+                  - generic [ref=e103]: 3+
+                - paragraph [ref=e104]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button [ref=e234] [cursor=pointer]:
+                - generic [ref=e106]:
+                  - generic [ref=e107]: 组织与权限
+                  - generic [ref=e108]: ...
+                - paragraph [ref=e109]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button [ref=e235] [cursor=pointer]:
+                - generic [ref=e111]:
+                  - generic [ref=e112]: 界面与体验
+                  - generic [ref=e113]: "1"
+                - paragraph [ref=e114]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e115]:
+              - generic [ref=e116]: 结构约束
+              - list [ref=e117]:
+                - listitem [ref=e118]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e119]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e120]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e121]:
+          - generic [ref=e122]:
+            - generic [ref=e123]:
+              - generic [ref=e124]:
+                - generic [ref=e125]:
+                  - generic [ref=e126]: 配置中心
+                  - generic [ref=e127]: /
+                  - generic [ref=e128]: 界面与体验
+                - generic [ref=e129]:
+                  - img [ref=e131]
+                  - generic [ref=e134]:
+                    - heading [level=2] [ref=e236]: 界面主题
+                    - paragraph [ref=e136]: 控制运行时主题变量与视觉发布，确保业务界面一致可控。
+              - generic [ref=e137]:
+                - generic [ref=e138]:
+                  - generic [ref=e139]: 主题方案
+                  - generic [ref=e140]: "1"
+                - generic [ref=e141]:
+                  - generic [ref=e142]: 已发布
+                  - generic [ref=e143]: "1"
+                - generic [ref=e144]:
+                  - generic [ref=e145]: 草稿
+                  - generic [ref=e146]: "0"
+            - button [ref=e237] [cursor=pointer]:
+              - img [ref=e149]
+              - generic [ref=e152]: 界面主题
+              - generic [ref=e153]: "1"
+          - generic [ref=e185]:
+            - generic [ref=e186]:
+              - generic [ref=e187]: 运行时主题
+              - button [ref=e238] [cursor=pointer]: + 新增主题
+            - generic [ref=e192]:
+              - generic [ref=e193]:
+                - generic [ref=e194]:
+                  - generic [ref=e195]: 默认界面主题
+                  - generic [ref=e196]: 已发布
+                - generic [ref=e197]:
+                  - generic [ref=e198]: 品牌：ONES Sales
+                  - generic [ref=e199]: 标题：ONES Sales
+                  - generic [ref=e200]: 副标题：智能协作平台
+                - generic [ref=e201]:
+                  - generic [ref=e204]: Primary
+                  - generic [ref=e207]: Secondary
+                  - generic [ref=e210]: Border
+                  - generic [ref=e213]: Background
+                - generic [ref=e214]:
+                  - generic [ref=e215]: "radius-md: 10px"
+                  - generic [ref=e216]: "radius-lg: 16px"
+              - generic [ref=e217]:
+                - button [ref=e239] [cursor=pointer]: 编辑
+                - button [ref=e240] [cursor=pointer]: 版本
+                - button [ref=e241] [cursor=pointer]: 删除
+  - alert [ref=e179]
+  - dialog "编辑配置" [ref=e245]:
+    - heading "编辑配置" [level=2] [ref=e247]
+    - generic [ref=e248]:
+      - generic [ref=e249]:
+        - generic [ref=e250]:
+          - text: 配置键 (Key)
+          - 'textbox "如: UI_THEME_DEFAULT" [disabled]': UI_THEME_DEFAULT
+        - generic [ref=e251]:
+          - text: 显示名称
+          - 'textbox "如: 蓝色主题" [ref=e252]': 默认界面主题
+        - generic [ref=e253]:
+          - generic [ref=e254]:
+            - text: 品牌名称
+            - 'textbox "如: ONES Sales" [ref=e255]': ONES Sales
+          - generic [ref=e256]:
+            - text: 品牌简称
+            - 'textbox "如: OS" [ref=e257]': ONES
+          - generic [ref=e258]:
+            - text: 浏览器标题
+            - 'textbox "如: ONES Sales" [ref=e259]': ONES Sales
+          - generic [ref=e260]:
+            - text: 侧栏副标题
+            - 'textbox "如: 智能协作平台" [ref=e261]': 智能协作平台
+          - generic [ref=e262]:
+            - text: 登录页标题
+            - 'textbox "如: 企业协作支撑平台" [ref=e263]': 企业销售支持平台
+          - generic [ref=e264]:
+            - text: 登录页副标题
+            - 'textbox "如: 使用企业账号进入工作台首页" [ref=e265]': 企业销售支持平台
+          - generic [ref=e266]:
+            - text: 主题外观
+            - combobox [ref=e267]:
+              - option "跟随系统" [selected]
+              - option "强制亮色"
+              - option "强制暗色"
+            - paragraph [ref=e268]: 决定 Logo 调用亮色版还是暗色版
+          - generic [ref=e269]:
+            - heading "品牌资产配置" [level=4] [ref=e270]
+            - generic [ref=e271]:
+              - paragraph [ref=e272]: 完整 Logo
+              - generic [ref=e273]:
+                - generic [ref=e274]:
+                  - text: 亮色版
+                  - paragraph [ref=e275]: 用于浅色背景
+                  - generic [ref=e277]:
+                    - img "Uploaded" [ref=e278]
+                    - button "移除图片" [ref=e279] [cursor=pointer]:
+                      - img [ref=e280]
+                - generic [ref=e282]:
+                  - text: 暗色版
+                  - paragraph [ref=e283]: 用于深色背景
+                  - generic [ref=e285]:
+                    - img "Uploaded" [ref=e286]
+                    - button "移除图片" [ref=e287] [cursor=pointer]:
+                      - img [ref=e288]
+            - generic [ref=e290]:
+              - paragraph [ref=e291]: 图标符号（侧边栏折叠、移动端）
+              - generic [ref=e292]:
+                - generic [ref=e293]:
+                  - text: 亮色版
+                  - paragraph [ref=e294]: 浅色背景使用
+                  - generic [ref=e296]:
+                    - img "Uploaded" [ref=e297]
+                    - button "移除图片" [ref=e298] [cursor=pointer]:
+                      - img [ref=e299]
+                - generic [ref=e301]:
+                  - text: 暗色版
+                  - paragraph [ref=e302]: 深色背景使用
+                  - generic [ref=e304]:
+                    - img "Uploaded" [ref=e305]
+                    - button "移除图片" [ref=e306] [cursor=pointer]:
+                      - img [ref=e307]
+            - generic [ref=e309]:
+              - paragraph [ref=e310]: 浏览器 Favicon
+              - generic [ref=e311]:
+                - text: Favicon 图标
+                - paragraph [ref=e312]: 1:1 正方形，建议 32×32 或 64×64 像素
+                - generic [ref=e314]:
+                  - img "Uploaded" [ref=e315]
+                  - button "移除图片" [ref=e316] [cursor=pointer]:
+                    - img [ref=e317]
+        - generic [ref=e319]:
+          - generic [ref=e320]:
+            - text: 主按钮背景
+            - generic [ref=e321]:
+              - textbox [ref=e322]: "#2563eb"
+              - textbox "#2563eb" [ref=e323]
+          - generic [ref=e324]:
+            - text: 主按钮文字
+            - generic [ref=e325]:
+              - textbox [ref=e326]: "#ffffff"
+              - textbox "#2563eb" [ref=e327]: "#ffffff"
+          - generic [ref=e328]:
+            - text: 次按钮背景
+            - generic [ref=e329]:
+              - textbox [ref=e330]: "#eff6ff"
+              - textbox "#2563eb" [ref=e331]: "#eff6ff"
+          - generic [ref=e332]:
+            - text: 次按钮文字
+            - generic [ref=e333]:
+              - textbox [ref=e334]: "#0f172a"
+              - textbox "#2563eb" [ref=e335]: "#0f172a"
+          - generic [ref=e336]:
+            - text: 页面背景
+            - generic [ref=e337]:
+              - textbox [ref=e338]: "#eef3f8"
+              - textbox "#2563eb" [ref=e339]: "#eef3f8"
+          - generic [ref=e340]:
+            - text: 基础文字
+            - generic [ref=e341]:
+              - textbox [ref=e342]: "#0f172a"
+              - textbox "#2563eb" [ref=e343]: "#0f172a"
+          - generic [ref=e344]:
+            - text: 边框
+            - generic [ref=e345]:
+              - textbox [ref=e346]: "#dbe4ee"
+              - textbox "#2563eb" [ref=e347]: "#dbe4ee"
+          - generic [ref=e348]:
+            - text: 输入框背景
+            - generic [ref=e349]:
+              - textbox [ref=e350]: "#ffffff"
+              - textbox "#2563eb" [ref=e351]: "#ffffff"
+          - generic [ref=e352]:
+            - text: 焦点高亮
+            - generic [ref=e353]:
+              - textbox [ref=e354]: "#60a5fa"
+              - textbox "#2563eb" [ref=e355]: "#60a5fa"
+          - generic [ref=e356]:
+            - text: 危险态
+            - generic [ref=e357]:
+              - textbox [ref=e358]: "#dc2626"
+              - textbox "#2563eb" [ref=e359]: "#dc2626"
+        - generic [ref=e360]:
+          - generic [ref=e361]:
+            - text: 按钮圆角
+            - spinbutton [ref=e362]: "10"
+          - generic [ref=e363]:
+            - text: 卡片圆角
+            - spinbutton [ref=e364]: "16"
+      - generic [ref=e365]:
+        - text: 描述
+        - textbox "配置描述（可选）" [active] [ref=e366]: 运行时主题变量，适用于按钮、输入框、卡片等基础组件
+    - generic [ref=e367]:
+      - button "取消" [ref=e368] [cursor=pointer]
+      - button "保存" [ref=e369] [cursor=pointer]
+    - button "Close" [ref=e370] [cursor=pointer]:
+      - img
+      - generic [ref=e371]: Close

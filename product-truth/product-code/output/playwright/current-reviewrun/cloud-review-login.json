@@ -1,0 +1,6 @@
+{
+  "status": 200,
+  "elapsedMs": 1907,
+  "hasCookie": true,
+  "bodyPreview": "{\"user\":{\"id\":\"00030001-0000-0000-0000-000000000000\",\"email\":\"e2e-admin@huarun.com\",\"phone\":null,\"displayName\":\"E2E 测试管理员\"},\"token\":\"56a96873-8a16-462e-819d-a7b51c579480\",\"expiresAt\":\"2026-07-09T04:16:49.121Z\",\"mustChangePassword\":false,\"authContextReady\":true,\"initialDashboard\":{\"spaces\":[{\"id\":\"40000001-0000-0000-0000-000000000000\",\"name\":\"华东销售空间\",\"owner_id\":\"30000010-0000-0000-0000-000000000000\",\"description\":\"面向华东地区销售协同\",\"department_id\":\"20000011-0000-0000-0000-000000000000\",\"pending_milesto"
+}

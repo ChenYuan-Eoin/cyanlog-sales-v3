@@ -1,0 +1,27 @@
+{
+  "base": "https://sales.cyanlog.icu",
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/prod-mobile-config-org-1782801990724",
+  "orgStructure": {
+    "textSample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n组织架构\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n0\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n0\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n11\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n0\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n组织与权限\n组织架构\n\n维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。\n\n部门总数\n11\n成员总数\n25\n销售空间\n3\n组织架构\n11\n角色权限\n0\n11\n部门\n25\n成员\n3\n销售空间\n添加部门\n添加成员\n同步飞书部门\n部门结构\n\n点击选择部门\n\n全部成员\n25\n销售部\n1\n法务部\n2\n财务部\n2\n信息技术部\n3\n全部成员\n\n共 25 人\n\n共 25 人\n姓名\t职位\t部门\t角色\t状态\t操作\n\n张\n张雪丽\n99999999@qq.com\n\t\n销售\n\t售前组\t\n\t\n在职\n\t\n\n\nE\nE2E 测试管理员\ne2e-admin@huarun.com\n\t\nE2E 管理员\n\t信息技术部\t\n管理员\n\t\n在职\n\t\n\n\n赵\n赵法务\nlegal02@huarun.com\n\t\n法务主管\n\t法务部\t\n法务\n\t\n在职\n\t\n\n\n李\n李华东\neast.lead@huarun.com",
+    "metrics": {
+      "innerWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "url": "https://sales.cyanlog.icu/configs?tab=org-structure"
+    }
+  },
+  "roleAccess": {
+    "textSample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n角色权限\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n0\n\n围绕报价工作台的价盘、税率和审批配置。\n\n合同与 AI 规则\n0\n\n围绕合同审核规则、模型路由和运行时策略的配置集。\n\n组织与权限\n18\n\n围绕部门、成员、角色能力和作用域分配的组织控制面。\n\n界面与体验\n0\n\n运行时主题和界面变量集中配置发布。\n\n结构约束\n配置中心只拥有配置，不承载业务执行。\n报价工作台、合同审核页只读消费已发布配置。\n配置项需要有版本、状态和作用范围。\n配置中心\n/\n组织与权限\n角色权限\n\n按业务能力维护角色，并通过组织/部门/销售空间分配数据范围。\n\n角色总数\n7\n能力分组\n5\n作用域层级\n4\n组织架构\n11\n角色权限\n7\n角色列表\n\n选择角色查看详情\n\n超级管理员\n超级管理员\nSUPER_ADMIN\n1\n管理员\nADMIN\n4\n销售经理\nSALES_MANAGER\n6\n销售\nSALES\n17\n法务\nLEGAL\n2\n财务\nFINANCE\n2\n只读用户\nREADONLY\n0\n超级管理员\n拥有所有权限\nSUPER_ADMIN · 1 名成员 · 1 条作用域绑定\n\n全平台最高权限\n\n员工分配 (1)\n权限设置\n已分配成员 (1)\n添加成员\n系\n系统超管\nsuperadmin@huarun.com\n信息技术部\n超级管理员",
+    "metrics": {
+      "innerWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "url": "https://sales.cyanlog.icu/configs?tab=role-access"
+    }
+  },
+  "errors": {
+    "consoleErrors": [],
+    "pageErrors": [],
+    "failedRequests": []
+  }
+}

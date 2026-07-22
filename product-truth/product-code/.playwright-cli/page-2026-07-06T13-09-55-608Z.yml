@@ -1,0 +1,67 @@
+- generic [active] [ref=f7e1]:
+  - complementary [ref=f7e2]:
+    - generic [ref=f7e3]:
+      - img "ONES Sales" [ref=f7e5]
+      - generic [ref=f7e6]:
+        - generic [ref=f7e7]: ONES Sales
+        - paragraph [ref=f7e8]: 智能协作平台
+    - navigation [ref=f7e9]:
+      - link "工作台" [ref=f7e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f7e11]
+        - generic [ref=f7e15]: 工作台
+      - link "报价中心" [ref=f7e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f7e17]
+        - generic [ref=f7e21]: 报价中心
+      - link "合同审核" [ref=f7e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f7e23]
+        - generic [ref=f7e28]: 合同审核
+      - link "标书中心" [ref=f7e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f7e30]
+        - generic [ref=f7e34]: 标书中心
+      - link "知识库" [ref=f7e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f7e36]
+        - generic [ref=f7e41]: 知识库
+      - link "日程" [ref=f7e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f7e43]
+        - generic [ref=f7e49]: 日程
+      - link "配置中心" [ref=f7e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f7e51]
+        - generic [ref=f7e55]: 配置中心
+    - generic [ref=f7e56]:
+      - link "个人信息" [ref=f7e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f7e58]
+        - generic [ref=f7e61]: 个人信息
+      - button "退出登录" [ref=f7e62] [cursor=pointer]:
+        - img [ref=f7e63]
+        - generic [ref=f7e66]: 退出登录
+  - main [ref=f7e67]:
+    - generic [ref=f7e69]:
+      - generic [ref=f7e70]:
+        - generic [ref=f7e71]:
+          - generic [ref=f7e72]:
+            - img [ref=f7e73]
+            - text: 正在打开合同审核工作台
+          - paragraph [ref=f7e75]: 工作台会同时读取合同版本、规则快照、模型调用和批注意图。长合同首次打开可能需要数秒，但每一步都应能解释正在处理什么。
+        - generic [ref=f7e76]: ReviewRun 装载中
+      - generic [ref=f7e77]:
+        - generic [ref=f7e79]:
+          - generic [ref=f7e80]: "1"
+          - generic [ref=f7e81]: 读取合同源文件与版本流
+        - generic [ref=f7e85]:
+          - generic [ref=f7e86]: "2"
+          - generic [ref=f7e87]: 装载最近一次 ReviewRun
+        - generic [ref=f7e91]:
+          - generic [ref=f7e92]: "3"
+          - generic [ref=f7e93]: 绑定规则发布包与模型调用证据
+        - generic [ref=f7e97]:
+          - generic [ref=f7e98]: "4"
+          - generic [ref=f7e99]: 整理风险定位、谈判任务和批注意图
+  - alert [ref=f7e102]

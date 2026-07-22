@@ -1,0 +1,776 @@
+{
+  "schema_version": "g5-source-only-browser-canary.v1",
+  "generated_at": "2026-07-17T20:08:40.838Z",
+  "scope": "source preview format/load canary only; no accuracy claim; no model calls",
+  "cost": {
+    "recurring_usd_per_month": 0,
+    "paid_action_taken": false
+  },
+  "environment": {
+    "expected_project_ref": "vsfropnfsmnonkotywsx",
+    "actual_project_ref": "vsfropnfsmnonkotywsx",
+    "production_touched": false,
+    "app_url": "http://127.0.0.1:3107",
+    "production_build": true
+  },
+  "fixture": {
+    "path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g5/g5-50-page-10-risk-sample.docx",
+    "sha256": "67079a251c2ab9197bb40881151563cda23e97fa4ba02ba047102d8b549a849d",
+    "size": 38508,
+    "format": "docx",
+    "known_synthetic": true,
+    "accuracy_scoring": false
+  },
+  "upload": {
+    "contract_id": "3c52499e-ea91-489b-8506-a74db89b7f72",
+    "upload_id": "227f8362-c1d7-4dc8-aa3f-3aa116460353",
+    "storage_path": "3c52499e-ea91-489b-8506-a74db89b7f72/227f8362-c1d7-4dc8-aa3f-3aa116460353_g5-50-page-source-only-canary.docx",
+    "chunk_count": 1,
+    "timing_ms": {
+      "create": 3153.943,
+      "upload_chunk": 2680.954,
+      "merge": 4986.961,
+      "review_page_map": 4937.805
+    }
+  },
+  "source_identity": {
+    "source_hash": "67079a251c2ab9197bb40881151563cda23e97fa4ba02ba047102d8b549a849d",
+    "source_text_hash": "83a32d11b911f756cd2fc20c3267f000f7856583810d286c58805143a88a7fb3",
+    "page_map_count": 1,
+    "page_map_locator": "provisional"
+  },
+  "model_execution": {
+    "analyze_endpoint_called": false,
+    "expected_review_runs": 0,
+    "expected_model_invocations": 0,
+    "actual_precleanup_counts": {
+      "contract_reviews": 0,
+      "contract_analysis_jobs": 0,
+      "model_invocations": 0,
+      "contract_risk_cards": 0
+    }
+  },
+  "desktop": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "ready_elapsed_ms": 8627,
+    "phase": "ready",
+    "host_phase": "ready",
+    "loading_visible": false,
+    "alert_visible": false,
+    "shadow_root": true,
+    "section_count": 50,
+    "contains_page_01_anchor": true,
+    "contains_page_50_anchor": true,
+    "root_overflow_x": false,
+    "root_widths": {
+      "scroll": 1440,
+      "client": 1440
+    },
+    "source_viewport_overflow_x": true,
+    "source_viewport_widths": {
+      "scroll": 962,
+      "client": 799
+    },
+    "ticket": [
+      {
+        "path": "/api/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/source",
+        "duration_ms": 1318.8,
+        "start_ms": 5235.9,
+        "initiator": "fetch",
+        "transfer_size": 947,
+        "encoded_size": 647
+      }
+    ],
+    "download": [
+      {
+        "path": "/storage/v1/object/sign/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/227f8362-c1d7-4dc8-aa3f-3aa116460353_g5-50-page-source-only-canary.docx",
+        "duration_ms": 1056.1,
+        "start_ms": 6555.4,
+        "initiator": "fetch",
+        "transfer_size": 0,
+        "encoded_size": 0
+      }
+    ],
+    "dynamic_chunks": [
+      {
+        "path": "/_next/static/chunks/webpack-1cc4b759cf29a590.js",
+        "duration_ms": 7.8,
+        "start_ms": 2484.4,
+        "initiator": "link",
+        "transfer_size": 2105,
+        "encoded_size": 1805
+      },
+      {
+        "path": "/_next/static/chunks/main-app-53c68bfebed72408.js",
+        "duration_ms": 8.3,
+        "start_ms": 2484.4,
+        "initiator": "script",
+        "transfer_size": 773,
+        "encoded_size": 473
+      },
+      {
+        "path": "/_next/static/chunks/8336-547f85ba45227441.js",
+        "duration_ms": 8.7,
+        "start_ms": 2484.4,
+        "initiator": "script",
+        "transfer_size": 4604,
+        "encoded_size": 4304
+      },
+      {
+        "path": "/_next/static/chunks/7076-67e4c28983e3f07b.js",
+        "duration_ms": 9.4,
+        "start_ms": 2484.4,
+        "initiator": "script",
+        "transfer_size": 9038,
+        "encoded_size": 8738
+      },
+      {
+        "path": "/_next/static/chunks/2050-7646b6f6cb22668c.js",
+        "duration_ms": 9.9,
+        "start_ms": 2484.4,
+        "initiator": "script",
+        "transfer_size": 8894,
+        "encoded_size": 8594
+      },
+      {
+        "path": "/_next/static/chunks/7616-2cf77d6cd5aad236.js",
+        "duration_ms": 10.9,
+        "start_ms": 2484.4,
+        "initiator": "script",
+        "transfer_size": 3500,
+        "encoded_size": 3200
+      },
+      {
+        "path": "/_next/static/chunks/4115-be13a9dc6e84f5f7.js",
+        "duration_ms": 11.5,
+        "start_ms": 2484.4,
+        "initiator": "script",
+        "transfer_size": 32292,
+        "encoded_size": 31992
+      },
+      {
+        "path": "/_next/static/chunks/7ccf2aca-b401372f5267bc1f.js",
+        "duration_ms": 13.6,
+        "start_ms": 2484.4,
+        "initiator": "script",
+        "transfer_size": 54044,
+        "encoded_size": 53744
+      },
+      {
+        "path": "/_next/static/chunks/app/loading-bd5f1bcda80dda9e.js",
+        "duration_ms": 11.9,
+        "start_ms": 2484.5,
+        "initiator": "script",
+        "transfer_size": 1573,
+        "encoded_size": 1273
+      },
+      {
+        "path": "/_next/static/chunks/1374-16315f3972b36564.js",
+        "duration_ms": 12.3,
+        "start_ms": 2484.5,
+        "initiator": "script",
+        "transfer_size": 3802,
+        "encoded_size": 3502
+      },
+      {
+        "path": "/_next/static/chunks/7342-81bfd21dcd0a8f08.js",
+        "duration_ms": 13.3,
+        "start_ms": 2484.5,
+        "initiator": "script",
+        "transfer_size": 4173,
+        "encoded_size": 3873
+      },
+      {
+        "path": "/_next/static/chunks/1181-35b807e1b4b7f50d.js",
+        "duration_ms": 13.6,
+        "start_ms": 2484.5,
+        "initiator": "script",
+        "transfer_size": 2100,
+        "encoded_size": 1800
+      },
+      {
+        "path": "/_next/static/chunks/app/contracts/%5Bid%5D/review/page-7db24908d6a89597.js",
+        "duration_ms": 12.9,
+        "start_ms": 2484.5,
+        "initiator": "script",
+        "transfer_size": 21488,
+        "encoded_size": 21188
+      },
+      {
+        "path": "/_next/static/chunks/app/layout-67305bc70d83a8f9.js",
+        "duration_ms": 13.8,
+        "start_ms": 2484.6,
+        "initiator": "script",
+        "transfer_size": 5902,
+        "encoded_size": 5602
+      },
+      {
+        "path": "/_next/static/chunks/app/error-e05ef1a2f3fe4570.js",
+        "duration_ms": 13.9,
+        "start_ms": 2484.6,
+        "initiator": "script",
+        "transfer_size": 2422,
+        "encoded_size": 2122
+      },
+      {
+        "path": "/_next/static/chunks/app/not-found-226cea9141234dfb.js",
+        "duration_ms": 14.5,
+        "start_ms": 2484.6,
+        "initiator": "script",
+        "transfer_size": 2170,
+        "encoded_size": 1870
+      },
+      {
+        "path": "/_next/static/chunks/6139-d9ca7ea088227d06.js",
+        "duration_ms": 677.3,
+        "start_ms": 3362.4,
+        "initiator": "script",
+        "transfer_size": 8041,
+        "encoded_size": 7741
+      },
+      {
+        "path": "/_next/static/chunks/28f4b452-a4daf989187d3ece.js",
+        "duration_ms": 677.1,
+        "start_ms": 3362.4,
+        "initiator": "script",
+        "transfer_size": 13042,
+        "encoded_size": 12742
+      },
+      {
+        "path": "/_next/static/chunks/343-d616bdcb4881b4bf.js",
+        "duration_ms": 680.7,
+        "start_ms": 3362.5,
+        "initiator": "script",
+        "transfer_size": 41526,
+        "encoded_size": 41226
+      },
+      {
+        "path": "/_next/static/chunks/app/page-19295eea660f6fe2.js",
+        "duration_ms": 678.3,
+        "start_ms": 3362.6,
+        "initiator": "script",
+        "transfer_size": 5139,
+        "encoded_size": 4839
+      },
+      {
+        "path": "/_next/static/chunks/5757-ac2533b57deecffa.js",
+        "duration_ms": 344.1,
+        "start_ms": 3697.6,
+        "initiator": "script",
+        "transfer_size": 3218,
+        "encoded_size": 2918
+      },
+      {
+        "path": "/_next/static/chunks/2412-0168fc1d175772d1.js",
+        "duration_ms": 345,
+        "start_ms": 3697.7,
+        "initiator": "script",
+        "transfer_size": 5503,
+        "encoded_size": 5203
+      },
+      {
+        "path": "/_next/static/chunks/4250-c675be308578a412.js",
+        "duration_ms": 346.1,
+        "start_ms": 3697.7,
+        "initiator": "script",
+        "transfer_size": 6362,
+        "encoded_size": 6062
+      },
+      {
+        "path": "/_next/static/chunks/app/contracts/page-e8b285b4211aa464.js",
+        "duration_ms": 346.9,
+        "start_ms": 3697.7,
+        "initiator": "script",
+        "transfer_size": 9375,
+        "encoded_size": 9075
+      },
+      {
+        "path": "/_next/static/chunks/3374.5bc964b4e2f3108d.js",
+        "duration_ms": 7.9,
+        "start_ms": 7612.3,
+        "initiator": "script",
+        "transfer_size": 48509,
+        "encoded_size": 48209
+      }
+    ],
+    "url": "http://127.0.0.1:3107/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/review",
+    "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g5-review-ui/g5-source-only-canary-desktop-20260718.png",
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "request_failures": [
+      {
+        "path": "/quotes",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/contracts",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/tenders",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/_vercel/insights/script.js",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/knowledge",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/schedule",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/_vercel/speed-insights/script.js",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/",
+        "error": "net::ERR_ABORTED"
+      }
+    ],
+    "responses": [
+      {
+        "path": "/api/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/source",
+        "status": 200
+      },
+      {
+        "path": "/storage/v1/object/sign/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/227f8362-c1d7-4dc8-aa3f-3aa116460353_g5-50-page-source-only-canary.docx",
+        "status": 200
+      }
+    ],
+    "docx_preview_dynamic_chunk": {
+      "path": "/_next/static/chunks/3374.5bc964b4e2f3108d.js",
+      "duration_ms": 7.9,
+      "start_ms": 7612.3,
+      "initiator": "script",
+      "transfer_size": 48509,
+      "encoded_size": 48209
+    },
+    "unexpected_request_failures": [],
+    "local_platform_noise": {
+      "vercel_telemetry_paths": [
+        "/_vercel/insights/script.js",
+        "/_vercel/speed-insights/script.js"
+      ],
+      "console_404_count": 2,
+      "classification": "local Next production server does not serve Vercel telemetry endpoints; not part of source preview chain"
+    },
+    "contained_internal_document_scroll": {
+      "blocking": false,
+      "source_viewport_overflow_x": true,
+      "root_overflow_x": false,
+      "reason": "Word page canvas is intentionally contained by the source-document overflow-auto viewport; it does not widen the application root"
+    }
+  },
+  "ipad": {
+    "viewport": {
+      "width": 1180,
+      "height": 820
+    },
+    "ready_elapsed_ms": 6028,
+    "phase": "ready",
+    "host_phase": "ready",
+    "loading_visible": false,
+    "alert_visible": false,
+    "shadow_root": true,
+    "section_count": 50,
+    "contains_page_01_anchor": true,
+    "contains_page_50_anchor": true,
+    "root_overflow_x": false,
+    "root_widths": {
+      "scroll": 1180,
+      "client": 1180
+    },
+    "source_viewport_overflow_x": true,
+    "source_viewport_widths": {
+      "scroll": 962,
+      "client": 634
+    },
+    "ticket": [
+      {
+        "path": "/api/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/source",
+        "duration_ms": 882.5,
+        "start_ms": 3157.4,
+        "initiator": "fetch",
+        "transfer_size": 947,
+        "encoded_size": 647
+      }
+    ],
+    "download": [
+      {
+        "path": "/storage/v1/object/sign/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/227f8362-c1d7-4dc8-aa3f-3aa116460353_g5-50-page-source-only-canary.docx",
+        "duration_ms": 875,
+        "start_ms": 4040.5,
+        "initiator": "fetch",
+        "transfer_size": 0,
+        "encoded_size": 0
+      }
+    ],
+    "dynamic_chunks": [
+      {
+        "path": "/_next/static/chunks/webpack-1cc4b759cf29a590.js",
+        "duration_ms": 6.4,
+        "start_ms": 907.2,
+        "initiator": "link",
+        "transfer_size": 2105,
+        "encoded_size": 1805
+      },
+      {
+        "path": "/_next/static/chunks/main-app-53c68bfebed72408.js",
+        "duration_ms": 7.1,
+        "start_ms": 907.2,
+        "initiator": "script",
+        "transfer_size": 773,
+        "encoded_size": 473
+      },
+      {
+        "path": "/_next/static/chunks/8336-547f85ba45227441.js",
+        "duration_ms": 8,
+        "start_ms": 907.2,
+        "initiator": "script",
+        "transfer_size": 4604,
+        "encoded_size": 4304
+      },
+      {
+        "path": "/_next/static/chunks/4115-be13a9dc6e84f5f7.js",
+        "duration_ms": 10.4,
+        "start_ms": 907.2,
+        "initiator": "script",
+        "transfer_size": 32292,
+        "encoded_size": 31992
+      },
+      {
+        "path": "/_next/static/chunks/7ccf2aca-b401372f5267bc1f.js",
+        "duration_ms": 12.5,
+        "start_ms": 907.2,
+        "initiator": "script",
+        "transfer_size": 54044,
+        "encoded_size": 53744
+      },
+      {
+        "path": "/_next/static/chunks/2050-7646b6f6cb22668c.js",
+        "duration_ms": 9,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 8894,
+        "encoded_size": 8594
+      },
+      {
+        "path": "/_next/static/chunks/7076-67e4c28983e3f07b.js",
+        "duration_ms": 9.2,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 9038,
+        "encoded_size": 8738
+      },
+      {
+        "path": "/_next/static/chunks/7616-2cf77d6cd5aad236.js",
+        "duration_ms": 9.9,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 3500,
+        "encoded_size": 3200
+      },
+      {
+        "path": "/_next/static/chunks/app/loading-bd5f1bcda80dda9e.js",
+        "duration_ms": 11.9,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 1573,
+        "encoded_size": 1273
+      },
+      {
+        "path": "/_next/static/chunks/1374-16315f3972b36564.js",
+        "duration_ms": 12,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 3802,
+        "encoded_size": 3502
+      },
+      {
+        "path": "/_next/static/chunks/7342-81bfd21dcd0a8f08.js",
+        "duration_ms": 13.1,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 4173,
+        "encoded_size": 3873
+      },
+      {
+        "path": "/_next/static/chunks/1181-35b807e1b4b7f50d.js",
+        "duration_ms": 13.3,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 2100,
+        "encoded_size": 1800
+      },
+      {
+        "path": "/_next/static/chunks/app/contracts/%5Bid%5D/review/page-7db24908d6a89597.js",
+        "duration_ms": 13.2,
+        "start_ms": 907.3,
+        "initiator": "script",
+        "transfer_size": 21488,
+        "encoded_size": 21188
+      },
+      {
+        "path": "/_next/static/chunks/app/error-e05ef1a2f3fe4570.js",
+        "duration_ms": 14.7,
+        "start_ms": 907.4,
+        "initiator": "script",
+        "transfer_size": 2422,
+        "encoded_size": 2122
+      },
+      {
+        "path": "/_next/static/chunks/app/layout-67305bc70d83a8f9.js",
+        "duration_ms": 15.2,
+        "start_ms": 907.4,
+        "initiator": "script",
+        "transfer_size": 5902,
+        "encoded_size": 5602
+      },
+      {
+        "path": "/_next/static/chunks/app/not-found-226cea9141234dfb.js",
+        "duration_ms": 15.2,
+        "start_ms": 907.4,
+        "initiator": "script",
+        "transfer_size": 2170,
+        "encoded_size": 1870
+      },
+      {
+        "path": "/_next/static/chunks/28f4b452-a4daf989187d3ece.js",
+        "duration_ms": 713.5,
+        "start_ms": 1589.5,
+        "initiator": "script",
+        "transfer_size": 13042,
+        "encoded_size": 12742
+      },
+      {
+        "path": "/_next/static/chunks/6139-d9ca7ea088227d06.js",
+        "duration_ms": 714.4,
+        "start_ms": 1589.6,
+        "initiator": "script",
+        "transfer_size": 8041,
+        "encoded_size": 7741
+      },
+      {
+        "path": "/_next/static/chunks/343-d616bdcb4881b4bf.js",
+        "duration_ms": 717.2,
+        "start_ms": 1589.7,
+        "initiator": "script",
+        "transfer_size": 41526,
+        "encoded_size": 41226
+      },
+      {
+        "path": "/_next/static/chunks/app/page-19295eea660f6fe2.js",
+        "duration_ms": 717.9,
+        "start_ms": 1589.7,
+        "initiator": "script",
+        "transfer_size": 5139,
+        "encoded_size": 4839
+      },
+      {
+        "path": "/_next/static/chunks/5757-ac2533b57deecffa.js",
+        "duration_ms": 365.3,
+        "start_ms": 1943.1,
+        "initiator": "script",
+        "transfer_size": 3218,
+        "encoded_size": 2918
+      },
+      {
+        "path": "/_next/static/chunks/2412-0168fc1d175772d1.js",
+        "duration_ms": 366.1,
+        "start_ms": 1943.1,
+        "initiator": "script",
+        "transfer_size": 5503,
+        "encoded_size": 5203
+      },
+      {
+        "path": "/_next/static/chunks/4250-c675be308578a412.js",
+        "duration_ms": 366.9,
+        "start_ms": 1943.1,
+        "initiator": "script",
+        "transfer_size": 6362,
+        "encoded_size": 6062
+      },
+      {
+        "path": "/_next/static/chunks/app/contracts/page-e8b285b4211aa464.js",
+        "duration_ms": 367.7,
+        "start_ms": 1943.3,
+        "initiator": "script",
+        "transfer_size": 9375,
+        "encoded_size": 9075
+      },
+      {
+        "path": "/_next/static/chunks/3374.5bc964b4e2f3108d.js",
+        "duration_ms": 3.7,
+        "start_ms": 4916,
+        "initiator": "script",
+        "transfer_size": 48509,
+        "encoded_size": 48209
+      }
+    ],
+    "url": "http://127.0.0.1:3107/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/review",
+    "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g5-review-ui/g5-source-only-canary-ipad-20260718.png",
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "request_failures": [
+      {
+        "path": "/",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/quotes",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/contracts",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/tenders",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/knowledge",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/_vercel/insights/script.js",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/_vercel/speed-insights/script.js",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/schedule",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/profile",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/",
+        "error": "net::ERR_ABORTED"
+      }
+    ],
+    "responses": [
+      {
+        "path": "/api/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/source",
+        "status": 200
+      },
+      {
+        "path": "/storage/v1/object/sign/contracts/3c52499e-ea91-489b-8506-a74db89b7f72/227f8362-c1d7-4dc8-aa3f-3aa116460353_g5-50-page-source-only-canary.docx",
+        "status": 200
+      }
+    ],
+    "docx_preview_dynamic_chunk": {
+      "path": "/_next/static/chunks/3374.5bc964b4e2f3108d.js",
+      "duration_ms": 3.7,
+      "start_ms": 4916,
+      "initiator": "script",
+      "transfer_size": 48509,
+      "encoded_size": 48209
+    },
+    "unexpected_request_failures": [],
+    "local_platform_noise": {
+      "vercel_telemetry_paths": [
+        "/_vercel/insights/script.js",
+        "/_vercel/speed-insights/script.js"
+      ],
+      "console_404_count": 2,
+      "classification": "local Next production server does not serve Vercel telemetry endpoints; not part of source preview chain"
+    },
+    "contained_internal_document_scroll": {
+      "blocking": false,
+      "source_viewport_overflow_x": true,
+      "root_overflow_x": false,
+      "reason": "Word page canvas is intentionally contained by the source-document overflow-auto viewport; it does not widen the application root"
+    }
+  },
+  "passed": true,
+  "cleanup": {
+    "projectRef": "vsfropnfsmnonkotywsx",
+    "production_touched": false,
+    "contract_id": "3c52499e-ea91-489b-8506-a74db89b7f72",
+    "actions": {
+      "formal_storage_remove": {
+        "ok": true,
+        "removed": [
+          "3c52499e-ea91-489b-8506-a74db89b7f72/227f8362-c1d7-4dc8-aa3f-3aa116460353_g5-50-page-source-only-canary.docx"
+        ]
+      },
+      "chunk_storage_remove": {
+        "ok": true,
+        "removed": []
+      },
+      "page_map_delete": {
+        "ok": true,
+        "error": null
+      },
+      "contract_delete": {
+        "ok": true,
+        "error": null
+      },
+      "auth_token_delete": {
+        "ok": true,
+        "error": null
+      }
+    },
+    "residue": {
+      "contract": 0,
+      "auth_token": 0,
+      "related": {
+        "contract_reviews": 0,
+        "contract_analysis_jobs": 0,
+        "model_invocations": 0,
+        "contract_risk_cards": 0,
+        "contract_source_page_maps": 0,
+        "contract_review_submission_batches": 0,
+        "contract_review_decision_drafts": 0,
+        "contract_annotations": 0,
+        "contract_versions": 0,
+        "contract_items": 0,
+        "contract_clauses": 0,
+        "contract_ai_chats": 0,
+        "contract_comparisons": 0,
+        "contract_parties": 0,
+        "contract_signatures": 0
+      },
+      "storage_formal": 0,
+      "storage_chunks": 0
+    },
+    "all_zero": true
+  },
+  "build": {
+    "status": "passed",
+    "static_pages": "81/81",
+    "isolated_runtime_dir": "/private/tmp/g5-preview-canary-build.YmbTjh",
+    "warnings": "existing OpenTelemetry bundling warning, three review-page lint warnings, dynamic-route diagnostics"
+  },
+  "product_gate": {
+    "preview_ref_match": true,
+    "production_untouched": true,
+    "source_hash_matches_fixture": true,
+    "source_page_map_created": true,
+    "zero_model_execution": true,
+    "desktop": true,
+    "ipad": true,
+    "cleanup_all_zero": true
+  },
+  "passed_formula": "all(product_gate values)"
+}

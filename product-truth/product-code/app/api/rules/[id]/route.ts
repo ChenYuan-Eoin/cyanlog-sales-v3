@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import { isSchemaDriftError } from '@/lib/db-compat'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -19,12 +20,21 @@ const ruleUpdateSchema = z.object({
   risk_level: z.enum(['red', 'yellow', 'green']).optional(),
   enabled: z.boolean().optional(),
   config: z.object({
+    category: z.string().optional(),
+    code: z.string().optional(),
+    engine: z.string().optional(),
+    evidence: z.string().optional(),
+    exception: z.string().optional(),
     pattern: z.string().optional(),
     field: z.string().optional(),
     operator: z.enum(['gt', 'lt', 'eq', 'contains']).optional(),
+    output_template: z.string().optional(),
+    rule_set: z.string().optional(),
+    test_status: z.enum(['passed', 'failed', 'untested']).optional(),
+    trigger_type: z.enum(['keyword', 'semantic', 'field', 'ratio', 'amount', 'duration']).optional(),
     value: z.union([z.string(), z.number()]).optional(),
     prompt: z.string().optional(),
-  }).optional(),
+  }).passthrough().optional(),
 })
 
 export async function GET(
@@ -36,23 +46,31 @@ export async function GET(
     const orgId = await getDefaultOrgId(user.id)
     const id = await resolveIdParam(params)
 
-    const { data: rule, error } = await supabaseAdmin
+    let ruleResult = await supabaseAdmin
       .from('rules')
       .select('*')
       .eq('id', id)
       .eq('org_id', orgId)
-      .single()
+      .maybeSingle()
 
-    if (error) {
-      console.error('Get rule error:', error)
+    if (ruleResult.error && isSchemaDriftError(ruleResult.error)) {
+      ruleResult = await supabaseAdmin
+        .from('rules')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+    }
+
+    if (ruleResult.error) {
+      console.error('Get rule error:', ruleResult.error)
       return errorResponse('查询失败', 500, 'DB_ERROR')
     }
 
-    if (!rule) {
+    if (!ruleResult.data) {
       return errorResponse('规则不存在', 404, 'NOT_FOUND')
     }
 
-    return NextResponse.json(rule)
+    return NextResponse.json(ruleResult.data)
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
@@ -79,7 +97,7 @@ export async function PUT(
       return errorResponse('规则数据无效', 400, 'INVALID_DATA')
     }
 
-    const { data: rule, error } = await supabaseAdmin
+    let updateResult = await supabaseAdmin
       .from('rules')
       .update({
         ...validated.data,
@@ -88,14 +106,30 @@ export async function PUT(
       .eq('id', id)
       .eq('org_id', orgId)
       .select()
-      .single()
+      .maybeSingle()
 
-    if (error) {
-      console.error('Update rule error:', error)
+    if (updateResult.error && isSchemaDriftError(updateResult.error)) {
+      updateResult = await supabaseAdmin
+        .from('rules')
+        .update({
+          ...validated.data,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .maybeSingle()
+    }
+
+    if (updateResult.error) {
+      console.error('Update rule error:', updateResult.error)
       return errorResponse('更新规则失败', 500, 'DB_ERROR')
     }
 
-    return NextResponse.json(rule)
+    if (!updateResult.data) {
+      return errorResponse('规则不存在', 404, 'NOT_FOUND')
+    }
+
+    return NextResponse.json(updateResult.data)
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {
@@ -115,14 +149,21 @@ export async function DELETE(
     const orgId = await getDefaultOrgId(user.id)
     const id = await resolveIdParam(params)
 
-    const { error } = await supabaseAdmin
+    let deleteResult = await supabaseAdmin
       .from('rules')
       .delete()
       .eq('id', id)
       .eq('org_id', orgId)
 
-    if (error) {
-      console.error('Delete rule error:', error)
+    if (deleteResult.error && isSchemaDriftError(deleteResult.error)) {
+      deleteResult = await supabaseAdmin
+        .from('rules')
+        .delete()
+        .eq('id', id)
+    }
+
+    if (deleteResult.error) {
+      console.error('Delete rule error:', deleteResult.error)
       return errorResponse('删除规则失败', 500, 'DB_ERROR')
     }
 

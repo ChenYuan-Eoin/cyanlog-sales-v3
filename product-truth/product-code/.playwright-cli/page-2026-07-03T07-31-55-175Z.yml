@@ -1,0 +1,204 @@
+- generic [active] [ref=f1e1]:
+  - complementary [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - img "ONES Sales" [ref=f1e5]
+      - generic [ref=f1e6]:
+        - generic [ref=f1e7]: ONES Sales
+        - paragraph [ref=f1e8]: 智能协作平台
+    - navigation [ref=f1e9]:
+      - link "工作台" [ref=f1e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f1e11]
+        - generic [ref=f1e15]: 工作台
+      - link "报价中心" [ref=f1e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f1e17]
+        - generic [ref=f1e21]: 报价中心
+      - link "合同审核" [ref=f1e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f1e23]
+        - generic [ref=f1e28]: 合同审核
+      - link "标书中心" [ref=f1e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f1e30]
+        - generic [ref=f1e34]: 标书中心
+      - link "知识库" [ref=f1e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f1e36]
+        - generic [ref=f1e41]: 知识库
+      - link "日程" [ref=f1e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f1e43]
+        - generic [ref=f1e49]: 日程
+      - link "配置中心" [ref=f1e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f1e51]
+        - generic [ref=f1e55]: 配置中心
+    - generic [ref=f1e56]:
+      - link "个人信息" [ref=f1e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f1e58]
+        - generic [ref=f1e61]: 个人信息
+      - button "退出登录" [ref=f1e62] [cursor=pointer]:
+        - img [ref=f1e63]
+        - generic [ref=f1e66]: 退出登录
+  - main [ref=f1e67]:
+    - generic [ref=f1e68]:
+      - generic [ref=f1e71]:
+        - generic [ref=f1e72]:
+          - heading "合同中心" [level=1] [ref=f1e73]
+          - paragraph [ref=f1e74]: 全生命周期管理
+        - generic [ref=f1e76]:
+          - img [ref=f1e77]
+          - textbox "搜索合同名称、编号、客户..." [ref=f1e80]
+        - generic [ref=f1e81]:
+          - link "发起" [ref=f1e82] [cursor=pointer]:
+            - /url: /contracts/new?from=workbench
+            - button "发起" [ref=f1e83]:
+              - img
+              - text: 发起
+          - button "继续" [disabled]:
+            - img
+            - text: 继续
+      - main [ref=f1e84]:
+        - generic [ref=f1e85]:
+          - generic [ref=f1e86]:
+            - generic [ref=f1e87]:
+              - img [ref=f1e89]
+              - generic [ref=f1e92]:
+                - heading "合同审核状态机" [level=2] [ref=f1e93]
+                - paragraph [ref=f1e94]: 合同中心只做四类动作：发起新的审核运行、继续未完成运行、查看源文件批注产物、对比客户回传版本。每个入口必须绑定明确对象，不能互相替代。
+            - link "上传源文件并发起审核" [ref=f1e95] [cursor=pointer]:
+              - /url: /contracts/new
+              - button "上传源文件并发起审核" [ref=f1e96]:
+                - img
+                - text: 上传源文件并发起审核
+          - generic [ref=f1e97]:
+            - link "1 发起合同审核 入口 新任务 动作 创建新的 ReviewRun 对象 新的源文件 当前目标 新建合同版本 结果 进入风险定位与批注工作台 边界：不会打开历史批注或旧对比结果" [ref=f1e98] [cursor=pointer]:
+              - /url: /contracts/new?from=workbench
+              - generic [ref=f1e99]:
+                - generic [ref=f1e100]:
+                  - generic [ref=f1e101]:
+                    - generic [ref=f1e102]: "1"
+                    - generic [ref=f1e103]: 发起合同审核
+                  - img [ref=f1e104]
+                - generic [ref=f1e107]:
+                  - generic [ref=f1e108]:
+                    - generic [ref=f1e109]: 入口
+                    - generic [ref=f1e110]: 新任务
+                  - generic [ref=f1e111]:
+                    - generic [ref=f1e112]: 动作
+                    - generic [ref=f1e113]: 创建新的 ReviewRun
+                  - generic [ref=f1e114]:
+                    - generic [ref=f1e115]: 对象
+                    - generic [ref=f1e116]: 新的源文件
+                  - generic [ref=f1e117]:
+                    - generic [ref=f1e118]: 当前目标
+                    - generic [ref=f1e119]: 新建合同版本
+                  - generic [ref=f1e120]:
+                    - generic [ref=f1e121]: 结果
+                    - generic [ref=f1e122]: 进入风险定位与批注工作台
+                - generic [ref=f1e123]: 边界：不会打开历史批注或旧对比结果
+            - generic "暂无进行中 ReviewRun；请先上传源文件发起合同审核" [ref=f1e124]:
+              - generic [ref=f1e125]:
+                - generic [ref=f1e126]:
+                  - generic [ref=f1e127]:
+                    - generic [ref=f1e128]: "2"
+                    - generic [ref=f1e129]: 继续合同审核
+                  - img [ref=f1e130]
+                - generic [ref=f1e133]:
+                  - generic [ref=f1e134]:
+                    - generic [ref=f1e135]: 入口
+                    - generic [ref=f1e136]: 进行中
+                  - generic [ref=f1e137]:
+                    - generic [ref=f1e138]: 动作
+                    - generic [ref=f1e139]: 回到未完成 ReviewRun
+                  - generic [ref=f1e140]:
+                    - generic [ref=f1e141]: 对象
+                    - generic [ref=f1e142]: 未完成审核运行
+                  - generic [ref=f1e143]:
+                    - generic [ref=f1e144]: 当前目标
+                    - generic [ref=f1e145]: 没有进行中任务
+                  - generic [ref=f1e146]:
+                    - generic [ref=f1e147]: 结果
+                    - generic [ref=f1e148]: 查看真实处理进度与失败原因
+                - generic [ref=f1e149]: 当前不可用：暂无进行中 ReviewRun；请先上传源文件发起合同审核
+            - generic "暂无已完成 ReviewRun；批注版只来自已完成的源文件审核" [ref=f1e150]:
+              - generic [ref=f1e151]:
+                - generic [ref=f1e152]:
+                  - generic [ref=f1e153]:
+                    - generic [ref=f1e154]: "3"
+                    - generic [ref=f1e155]: 查看批注版
+                  - img [ref=f1e156]
+                - generic [ref=f1e158]:
+                  - generic [ref=f1e159]:
+                    - generic [ref=f1e160]: 入口
+                    - generic [ref=f1e161]: 已完成
+                  - generic [ref=f1e162]:
+                    - generic [ref=f1e163]: 动作
+                    - generic [ref=f1e164]: 打开已完成输出
+                  - generic [ref=f1e165]:
+                    - generic [ref=f1e166]: 对象
+                    - generic [ref=f1e167]: 源文件 Word 批注产物
+                  - generic [ref=f1e168]:
+                    - generic [ref=f1e169]: 当前目标
+                    - generic [ref=f1e170]: 暂无批注版
+                  - generic [ref=f1e171]:
+                    - generic [ref=f1e172]: 结果
+                    - generic [ref=f1e173]: 下载源文件原生批注版并复核证据
+                - generic [ref=f1e174]: 当前不可用：暂无已完成 ReviewRun；批注版只来自已完成的源文件审核
+            - generic "暂无可作为基准的合同版本；先完成审核或补充源文件" [ref=f1e175]:
+              - generic [ref=f1e176]:
+                - generic [ref=f1e177]:
+                  - generic [ref=f1e178]:
+                    - generic [ref=f1e179]: "4"
+                    - generic [ref=f1e180]: 合同文档对比
+                  - img [ref=f1e181]
+                - generic [ref=f1e186]:
+                  - generic [ref=f1e187]:
+                    - generic [ref=f1e188]: 入口
+                    - generic [ref=f1e189]: 版本流
+                  - generic [ref=f1e190]:
+                    - generic [ref=f1e191]: 动作
+                    - generic [ref=f1e192]: 旧版 / 新版差异复核
+                  - generic [ref=f1e193]:
+                    - generic [ref=f1e194]: 对象
+                    - generic [ref=f1e195]: 同一合同版本流
+                  - generic [ref=f1e196]:
+                    - generic [ref=f1e197]: 当前目标
+                    - generic [ref=f1e198]: 暂无可比对基准
+                  - generic [ref=f1e199]:
+                    - generic [ref=f1e200]: 结果
+                    - generic [ref=f1e201]: 选择基准与客户回传件，生成差异列表
+                - generic [ref=f1e202]: 当前不可用：暂无可作为基准的合同版本；先完成审核或补充源文件
+        - generic [ref=f1e203]:
+          - generic [ref=f1e206]:
+            - img [ref=f1e208]
+            - generic [ref=f1e211]:
+              - paragraph [ref=f1e212]: "0"
+              - paragraph [ref=f1e213]: 全部合同
+          - generic [ref=f1e216]:
+            - img [ref=f1e218]
+            - generic [ref=f1e221]:
+              - paragraph [ref=f1e222]: "0"
+              - paragraph [ref=f1e223]: 进行中
+          - generic [ref=f1e226]:
+            - img [ref=f1e228]
+            - generic [ref=f1e230]:
+              - paragraph [ref=f1e231]: "0"
+              - paragraph [ref=f1e232]: 需关注
+          - generic [ref=f1e235]:
+            - img [ref=f1e237]
+            - generic [ref=f1e239]:
+              - paragraph [ref=f1e240]: "0"
+              - paragraph [ref=f1e241]: 已完成
+        - tablist [ref=f1e244]:
+          - tab "全部 0" [selected] [ref=f1e245] [cursor=pointer]:
+            - text: 全部
+            - generic [ref=f1e246]: "0"
+          - tab "起草中" [ref=f1e247] [cursor=pointer]
+          - tab "待审核" [ref=f1e248] [cursor=pointer]
+          - tab "已完成" [ref=f1e249] [cursor=pointer]
+        - generic [ref=f1e250]:
+          - img [ref=f1e251]
+          - paragraph [ref=f1e253]: 加载合同中...

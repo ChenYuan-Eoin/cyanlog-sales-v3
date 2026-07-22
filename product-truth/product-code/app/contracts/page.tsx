@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/card'
 import {
   PenToolIcon,
-  EyeIcon,
   GitCompareIcon,
   FileTextIcon,
   AlertTriangleIcon,
@@ -24,60 +23,62 @@ import {
   ChevronRightIcon,
   XIcon,
 } from 'lucide-react'
-import type { Contract } from '@/types'
+import type { Contract, ContractDraftSummary } from '@/types'
 import { handleError } from '@/lib/toast'
 import { LoadingState } from '@/components/ui/LoadingState'
+import {
+  comparisonTaskState,
+  contractVersionLabel,
+  draftVersionLabel,
+  reviewTaskState,
+  versionSourceLabel,
+} from '@/lib/contracts/task-model'
 
-type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'approved'
+type TaskFilter = 'all' | 'draft' | 'pending' | 'review' | 'compare'
 type ViewMode = 'desktop' | 'mobile'
+type ContractTaskType = 'draft' | 'review' | 'compare'
 
-// 快捷操作配置 - 桌面端顶部工具栏 + 移动端底部快捷栏共用
+function getContractDisplayName(contract: Contract): string {
+  return contract.title || contract.filename || contract.contract_no || '未命名合同'
+}
+
+// 合同中心只保留三条主产品线：起草、审核、对比。
 const quickActions = [
   {
     id: 'draft',
-    title: '起草合同',
+    title: '合同起草',
     shortTitle: '起草',
     icon: PenToolIcon,
     color: 'bg-indigo-600',
     hoverColor: 'hover:bg-indigo-700',
     href: '/contracts/draft',
-    description: 'AI智能生成',
+    description: '需求生成可编辑草稿',
   },
   {
-    id: 'upload',
-    title: '上传合同',
-    shortTitle: '上传',
+    id: 'review',
+    title: '合同审核',
+    shortTitle: '审核',
     icon: UploadIcon,
     color: 'bg-slate-800',
     hoverColor: 'hover:bg-slate-900',
     href: '/contracts/upload',
-    description: '上传并审核',
-  },
-  {
-    id: 'review',
-    title: '风险审核',
-    shortTitle: '审核',
-    icon: EyeIcon,
-    color: 'bg-rose-600',
-    hoverColor: 'hover:bg-rose-700',
-    href: '/admin/rule-review',
-    description: '选择合同审核',
+    description: '上传源文件发起审查',
   },
   {
     id: 'compare',
-    title: '文档比对',
+    title: '合同文档对比',
     shortTitle: '比对',
     icon: GitCompareIcon,
     color: 'bg-emerald-600',
     hoverColor: 'hover:bg-emerald-700',
-    href: '#',
-    description: '先选择合同后点击比对',
+    href: '/contracts/compare',
+    description: '旧版/新版差异审计',
   },
 ]
 
 export default function ContractCenterPage() {
   const [contracts, setContracts] = useState<Contract[]>([])
-  const [drafts, setDrafts] = useState<Contract[]>([])
+  const [drafts, setDrafts] = useState<ContractDraftSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [taskFilter, setTaskFilter] = useState<TaskFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -188,35 +189,59 @@ export default function ContractCenterPage() {
       id: d.id,
       name: d.title || '未命名草稿',
       type: 'draft' as const,
+      kindLabel: '合同起草' as const,
       status: '起草中' as const,
       statusColor: 'bg-slate-100 text-slate-600' as const,
       updatedAt: d.updated_at,
       href: `/contracts/draft?id=${d.id}`,
-      meta: '草稿',
+      meta: '可编辑 Word 草稿',
+      versionLabel: draftVersionLabel(d.version_number),
+      nextAction: d.status === 'generated' ? '导出 DOCX / 转审核或对比' : '继续编辑 / 生成 Word 草稿',
     }))
 
     const contractTasks = contracts.map((c) => {
-      const statusMap: Record<string, { label: string; color: string }> = {
-        COMPLETED: { label: '审核完成', color: 'bg-green-100 text-green-700' },
-        PENDING: { label: '待审核', color: 'bg-amber-100 text-amber-700' },
-        PARSING: { label: '解析中', color: 'bg-blue-100 text-blue-700' },
-        ANALYZING: { label: '审核中', color: 'bg-indigo-100 text-indigo-700' },
-        FAILED: { label: '审核失败', color: 'bg-red-100 text-red-700' },
-      }
-      const status = statusMap[c.status] || { label: c.status, color: 'bg-slate-100 text-slate-600' }
+      const status = reviewTaskState(c.status)
+      const latestVersion = c.latest_version ?? c.contract_versions?.[0]
+      const versionLabel = contractVersionLabel(c)
+      const sourceLabel = versionSourceLabel(latestVersion?.source)
       return {
         id: c.id,
-        name: c.filename,
-        type: 'contract' as const,
+        name: getContractDisplayName(c),
+        type: 'review' as const,
+        kindLabel: '合同审核' as const,
         status: status.label,
         statusColor: status.color as string,
         updatedAt: c.updated_at,
-        href: `/contracts/${c.id}`,
-        meta: '合同',
+        href: `/contracts/${c.id}/review`,
+        meta: c.contract_no ? `合同编号：${c.contract_no}` : '源文件审核',
+        versionLabel,
+        sourceLabel,
+        nextAction: status.nextAction,
       }
     })
 
-    const all = [...draftTasks, ...contractTasks].sort(
+    const compareTasks = contracts
+      .filter((contract) => Boolean(contract.latest_comparison))
+      .map((contract) => {
+        const comparison = contract.latest_comparison!
+        const comparisonStatus = comparisonTaskState(comparison.status)
+        return {
+          id: comparison.id,
+          name: getContractDisplayName(contract),
+          type: 'compare' as const,
+          kindLabel: '文档对比' as const,
+          status: comparisonStatus.label,
+          statusColor: comparisonStatus.color,
+          updatedAt: comparison.completed_at || comparison.created_at || contract.updated_at,
+          href: `/contracts/${contract.id}/compare`,
+          meta: comparison.baseline_type === 'uploaded' ? '上传基准 / 客户回传' : '版本流对比',
+          versionLabel: `${contractVersionLabel(contract)} 对比`,
+          sourceLabel: '旧版 vs 新版',
+          nextAction: comparisonStatus.nextAction,
+        }
+      })
+
+    const all = [...draftTasks, ...contractTasks, ...compareTasks].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     )
 
@@ -224,6 +249,7 @@ export default function ContractCenterPage() {
     if (taskFilter === 'draft') return all.filter((t) => t.type === 'draft')
     if (taskFilter === 'pending') return all.filter((t) => t.status === '待审核' || t.status === '解析中' || t.status === '审核中')
     if (taskFilter === 'review') return all.filter((t) => t.status === '审核完成')
+    if (taskFilter === 'compare') return all.filter((t) => t.type === 'compare')
     return all.filter((t) => t.status === '审核失败')
   }, [contracts, drafts, taskFilter])
 
@@ -265,7 +291,7 @@ export default function ContractCenterPage() {
 
             {/* 桌面端快捷操作 */}
             <div className={`hidden md:flex items-center gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
-              {quickActions.slice(0, 3).map((action) => (
+              {quickActions.map((action) => (
                 <Link key={action.id} href={action.href}>
                   <Button size="sm" variant="outline" className="gap-1.5">
                     <action.icon className="h-4 w-4" />
@@ -273,12 +299,6 @@ export default function ContractCenterPage() {
                   </Button>
                 </Link>
               ))}
-              <Link href="/contracts/new">
-                <Button size="sm" className="gap-1.5">
-                  <PlusIcon className="h-4 w-4" />
-                  新建
-                </Button>
-              </Link>
             </div>
 
             {/* 移动端筛选按钮 */}
@@ -291,7 +311,7 @@ export default function ContractCenterPage() {
 
           {/* 桌面端快捷操作大按钮 */}
           {!isMobile && (
-            <div className="grid grid-cols-4 gap-3 mt-4">
+            <div className="grid grid-cols-3 gap-3 mt-4">
               {quickActions.map((action) => (
                 <Link key={action.id} href={action.href} className="group">
                   <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all">
@@ -316,7 +336,7 @@ export default function ContractCenterPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
           <StatCard
             icon={<FileTextIcon className="h-4 w-4 md:h-5 md:w-5 text-slate-500" />}
-            label="全部合同"
+            label="全部任务"
             value={stats.total}
             isMobile={isMobile}
           />
@@ -353,6 +373,7 @@ export default function ContractCenterPage() {
               <TabsTrigger value="draft" className="text-xs md:text-sm">起草中</TabsTrigger>
               <TabsTrigger value="pending" className="text-xs md:text-sm">待审核</TabsTrigger>
               <TabsTrigger value="review" className="text-xs md:text-sm">已完成</TabsTrigger>
+              <TabsTrigger value="compare" className="text-xs md:text-sm">文档对比</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -480,9 +501,21 @@ function TaskItem({
     updatedAt: string
     href: string
     meta: string
+    kindLabel: string
+    versionLabel: string
+    sourceLabel?: string
+    nextAction: string
   }
   isMobile: boolean
 }) {
+  const taskType = task.type as ContractTaskType
+  const Icon = taskType === 'draft' ? PenToolIcon : taskType === 'compare' ? GitCompareIcon : UploadIcon
+  const kindClassName = taskType === 'draft'
+    ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+    : taskType === 'compare'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : 'border-slate-300 bg-slate-900 text-white'
+
   return (
     <Link href={task.href}>
       <Card className="hover:shadow-sm hover:border-indigo-200 transition-all cursor-pointer group">
@@ -490,12 +523,23 @@ function TaskItem({
           <div className="flex items-center gap-3">
             {/* 图标 */}
             <div className={`${isMobile ? 'w-9 h-9' : 'w-10 h-10'} rounded-lg bg-slate-100 flex items-center justify-center shrink-0`}>
-              <FileTextIcon className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-slate-400`} />
+              <Icon className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-slate-500`} />
             </div>
 
             {/* 内容 */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+                <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${kindClassName}`}>
+                  {task.kindLabel}
+                </span>
+                <span className="shrink-0 rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {task.versionLabel}
+                </span>
+                {task.sourceLabel && (
+                  <span className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    {task.sourceLabel}
+                  </span>
+                )}
                 <p className={`font-medium text-slate-900 truncate ${isMobile ? 'text-sm' : 'text-sm'}`}>
                   {task.name}
                 </p>
@@ -506,6 +550,9 @@ function TaskItem({
               <div className="flex items-center gap-2 mt-0.5">
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${task.statusColor}`}>
                   {task.status}
+                </span>
+                <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                  {task.nextAction}
                 </span>
                 <span className="text-[10px] text-slate-400">
                   {new Date(task.updatedAt).toLocaleDateString('zh-CN', {
@@ -537,10 +584,10 @@ function EmptyState({ isMobile }: { isMobile: boolean }) {
       <p className={`text-slate-500 ${isMobile ? 'text-sm' : 'text-base'}`}>暂无合同记录</p>
       <p className="text-xs text-slate-400 mt-1">点击上方按钮创建新合同</p>
       {!isMobile && (
-        <Link href="/contracts/draft">
+        <Link href="/contracts/upload">
           <Button variant="outline" size="sm" className="mt-4">
             <PlusIcon className="h-4 w-4 mr-1" />
-            创建合同
+            上传源文件并发起审核
           </Button>
         </Link>
       )}

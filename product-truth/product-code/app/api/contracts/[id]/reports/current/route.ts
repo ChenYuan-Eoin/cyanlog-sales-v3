@@ -12,7 +12,7 @@ interface AskItem {
 }
 
 interface RouteParams {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function GET(

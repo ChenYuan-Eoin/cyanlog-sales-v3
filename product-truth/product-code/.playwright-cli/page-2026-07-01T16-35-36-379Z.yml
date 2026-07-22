@@ -1,0 +1,119 @@
+- generic [active] [ref=f4e1]:
+  - button "打开主导航" [ref=f4e2] [cursor=pointer]:
+    - img [ref=f4e3]
+  - complementary [ref=f4e5]:
+    - generic [ref=f4e6]:
+      - img "ONES Sales" [ref=f4e8]
+      - generic [ref=f4e9]:
+        - generic [ref=f4e10]: ONES Sales
+        - paragraph [ref=f4e11]: 智能协作平台
+    - navigation [ref=f4e12]:
+      - link "工作台" [ref=f4e13] [cursor=pointer]:
+        - /url: /
+        - img [ref=f4e14]
+        - generic [ref=f4e18]: 工作台
+      - link "报价中心" [ref=f4e19] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f4e20]
+        - generic [ref=f4e24]: 报价中心
+      - link "合同审核" [ref=f4e25] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f4e26]
+        - generic [ref=f4e31]: 合同审核
+      - link "标书中心" [ref=f4e32] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f4e33]
+        - generic [ref=f4e37]: 标书中心
+      - link "知识库" [ref=f4e38] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f4e39]
+        - generic [ref=f4e44]: 知识库
+      - link "日程" [ref=f4e45] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f4e46]
+        - generic [ref=f4e52]: 日程
+      - link "配置中心" [ref=f4e53] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f4e54]
+        - generic [ref=f4e58]: 配置中心
+    - generic [ref=f4e59]:
+      - link "个人信息" [ref=f4e60] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f4e61]
+        - generic [ref=f4e64]: 个人信息
+      - button "退出登录" [ref=f4e65] [cursor=pointer]:
+        - img [ref=f4e66]
+        - generic [ref=f4e69]: 退出登录
+  - main [ref=f4e70]:
+    - generic [ref=f4e71]:
+      - generic [ref=f4e74]:
+        - generic [ref=f4e76]:
+          - img [ref=f4e77]
+          - textbox "搜索合同..." [ref=f4e80]
+        - button [ref=f4e81] [cursor=pointer]:
+          - img
+      - main [ref=f4e82]:
+        - generic [ref=f4e83]:
+          - generic [ref=f4e84]:
+            - generic [ref=f4e85]:
+              - img [ref=f4e87]
+              - generic [ref=f4e90]:
+                - heading "合同审核工作台入口" [level=2] [ref=f4e91]
+                - paragraph [ref=f4e92]: 新建 ReviewRun，上传合同源文件，绑定已发布规则、SkillBundle 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。
+            - link "上传源文件并发起审核" [ref=f4e93] [cursor=pointer]:
+              - /url: /contracts/new
+              - button "上传源文件并发起审核" [ref=f4e94]:
+                - img
+                - text: 上传源文件并发起审核
+          - generic [ref=f4e95]:
+            - generic [ref=f4e96]: 源文件docx / pdf
+            - generic [ref=f4e97]: 审核依据规则快照 / Skill
+            - generic [ref=f4e98]: 风险定位复核 / 谈判
+            - generic [ref=f4e99]: 输出批注版 / 报告
+        - generic [ref=f4e100]:
+          - generic [ref=f4e103]:
+            - img [ref=f4e105]
+            - generic [ref=f4e108]:
+              - paragraph [ref=f4e109]: "0"
+              - paragraph [ref=f4e110]: 全部合同
+          - generic [ref=f4e113]:
+            - img [ref=f4e115]
+            - generic [ref=f4e118]:
+              - paragraph [ref=f4e119]: "0"
+              - paragraph [ref=f4e120]: 进行中
+          - generic [ref=f4e123]:
+            - img [ref=f4e125]
+            - generic [ref=f4e127]:
+              - paragraph [ref=f4e128]: "0"
+              - paragraph [ref=f4e129]: 需关注
+          - generic [ref=f4e132]:
+            - img [ref=f4e134]
+            - generic [ref=f4e136]:
+              - paragraph [ref=f4e137]: "0"
+              - paragraph [ref=f4e138]: 已完成
+        - tablist [ref=f4e141]:
+          - tab "全部" [selected] [ref=f4e142] [cursor=pointer]
+          - tab "起草中" [ref=f4e143] [cursor=pointer]
+          - tab "待审核" [ref=f4e144] [cursor=pointer]
+          - tab "已完成" [ref=f4e145] [cursor=pointer]
+        - generic [ref=f4e146]:
+          - img [ref=f4e147]
+          - paragraph [ref=f4e149]: 加载合同中...
+      - generic [ref=f4e151]:
+        - link "审核" [ref=f4e152] [cursor=pointer]:
+          - /url: /contracts/new
+          - img [ref=f4e154]
+          - generic [ref=f4e157]: 审核
+        - link "继续" [ref=f4e158] [cursor=pointer]:
+          - /url: /contracts/new
+          - img [ref=f4e160]
+          - generic [ref=f4e163]: 继续
+        - link "批注" [ref=f4e164] [cursor=pointer]:
+          - /url: /contracts/new
+          - img [ref=f4e166]
+          - generic [ref=f4e168]: 批注
+        - link "比对" [ref=f4e169] [cursor=pointer]:
+          - /url: /contracts/upload?intent=compare
+          - img [ref=f4e171]
+          - generic [ref=f4e176]: 比对
+  - alert [ref=f4e177]

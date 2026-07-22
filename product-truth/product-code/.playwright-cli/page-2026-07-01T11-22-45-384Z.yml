@@ -1,0 +1,168 @@
+- generic [active] [ref=f9e1]:
+  - complementary [ref=f9e30]:
+    - generic [ref=f9e31]:
+      - generic [ref=f9e32]: OS
+      - generic [ref=f9e33]:
+        - generic [ref=f9e34]: ONES Sales
+        - paragraph [ref=f9e35]: 智能协作平台
+    - navigation [ref=f9e36]:
+      - link "工作台" [ref=f9e37] [cursor=pointer]:
+        - /url: /
+        - img [ref=f9e38]
+        - generic [ref=f9e42]: 工作台
+      - link "报价中心" [ref=f9e43] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f9e44]
+        - generic [ref=f9e48]: 报价中心
+      - link "合同审核" [ref=f9e49] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f9e50]
+        - generic [ref=f9e55]: 合同审核
+      - link "标书中心" [ref=f9e56] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f9e57]
+        - generic [ref=f9e61]: 标书中心
+      - link "知识库" [ref=f9e62] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f9e63]
+        - generic [ref=f9e68]: 知识库
+      - link "日程" [ref=f9e69] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f9e70]
+        - generic [ref=f9e76]: 日程
+      - link "配置中心" [ref=f9e77] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f9e78]
+        - generic [ref=f9e82]: 配置中心
+    - generic [ref=f9e83]:
+      - link "个人信息" [ref=f9e84] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f9e85]
+        - generic [ref=f9e88]: 个人信息
+      - button "退出登录" [ref=f9e89] [cursor=pointer]:
+        - img [ref=f9e90]
+        - generic [ref=f9e93]: 退出登录
+  - main [ref=f9e2]:
+    - generic [ref=f9e94]:
+      - generic [ref=f9e95]:
+        - generic [ref=f9e96]:
+          - generic [ref=f9e97]: 首页
+          - heading "销售工作台" [level=1] [ref=f9e98]
+          - paragraph [ref=f9e99]: 系统超管，华东销售空间。今天要处理的项目、待办和切换入口都在这里。
+        - generic [ref=f9e100]:
+          - generic [ref=f9e101]:
+            - img [ref=f9e102]
+            - textbox "搜索机会、客户、节点" [ref=f9e105]
+            - generic [ref=f9e106]: ⌘K
+          - generic [ref=f9e107]:
+            - generic [ref=f9e108]:
+              - generic [ref=f9e109]:
+                - generic [ref=f9e110]: 系统超管
+                - generic [ref=f9e111]: 销售 · 7月1日星期三
+                - generic [ref=f9e112]: 华东销售空间
+              - generic [ref=f9e113]: 系
+            - generic [ref=f9e114]:
+              - link "配置中心" [ref=f9e115] [cursor=pointer]:
+                - /url: /configs
+              - button "退出" [ref=f9e116] [cursor=pointer]
+      - generic [ref=f9e118]:
+        - generic [ref=f9e119]:
+          - generic [ref=f9e120]: 华东销售空间
+          - generic [ref=f9e121]: 4 个活跃机会 · 4 个硬节点
+        - generic [ref=f9e122]:
+          - button "华东销售空间" [ref=f9e123] [cursor=pointer]
+          - button "华北销售空间" [ref=f9e124] [cursor=pointer]
+          - button "华南销售空间" [ref=f9e125] [cursor=pointer]
+      - generic [ref=f9e126]:
+        - generic [ref=f9e127]:
+          - generic [ref=f9e128]:
+            - generic [ref=f9e129]: 活跃机会
+            - generic [ref=f9e130]: 总览
+          - generic [ref=f9e131]: "4"
+          - generic [ref=f9e132]: 本空间
+        - generic [ref=f9e133]:
+          - generic [ref=f9e134]:
+            - generic [ref=f9e135]: 今日硬节点
+            - generic [ref=f9e136]: "0"
+          - generic [ref=f9e137]: 0 个
+          - generic [ref=f9e138]: 需跨角色协同
+        - generic [ref=f9e139]:
+          - generic [ref=f9e140]:
+            - generic [ref=f9e141]: 待审批
+            - generic [ref=f9e142]: "1"
+          - generic [ref=f9e143]: 1 项
+          - generic [ref=f9e144]: 在审
+        - generic [ref=f9e145]:
+          - generic [ref=f9e146]:
+            - generic [ref=f9e147]: 本月已签约
+            - generic [ref=f9e148]: "0"
+          - generic [ref=f9e149]: "0"
+          - generic [ref=f9e150]: 单
+      - generic [ref=f9e151]:
+        - generic [ref=f9e152]:
+          - generic [ref=f9e153]: 华东销售空间
+          - heading "今日优先队列" [level=2] [ref=f9e154]
+          - paragraph [ref=f9e155]: 优先处理下列项目与动作。每一项都还差一个明确节点。
+          - generic [ref=f9e156]:
+            - link "华润万家云平台二期 合同中 · 华润万家 · 截止 2026-06-30" [ref=f9e157] [cursor=pointer]:
+              - /url: /opportunities/60000002-0000-0000-0000-000000000000
+              - generic [ref=f9e158]: 华润万家云平台二期
+              - generic [ref=f9e159]:
+                - generic [ref=f9e160]: 合同中
+                - text: · 华润万家 · 截止 2026-06-30
+            - link "省医疗云平台招标 报价中 · 省人民医院 · 截止 2026-07-15" [ref=f9e161] [cursor=pointer]:
+              - /url: /opportunities/60000001-0000-0000-0000-000000000000
+              - generic [ref=f9e162]: 省医疗云平台招标
+              - generic [ref=f9e163]:
+                - generic [ref=f9e164]: 报价中
+                - text: · 省人民医院 · 截止 2026-07-15
+            - link "永辉超市连锁收银系统 已验证 · 永辉 · 截止 2026-08-20" [ref=f9e165] [cursor=pointer]:
+              - /url: /opportunities/60000003-0000-0000-0000-000000000000
+              - generic [ref=f9e166]: 永辉超市连锁收银系统
+              - generic [ref=f9e167]:
+                - generic [ref=f9e168]: 已验证
+                - text: · 永辉 · 截止 2026-08-20
+        - generic [ref=f9e169]:
+          - generic [ref=f9e170]:
+            - generic [ref=f9e171]: 今日安排
+            - generic [ref=f9e172]: 今日无安排
+          - generic [ref=f9e173]:
+            - generic [ref=f9e174]:
+              - generic [ref=f9e175]: 今日提醒
+              - generic [ref=f9e176]: "0"
+            - generic [ref=f9e177]: 没有未读提醒
+      - generic [ref=f9e178]:
+        - generic [ref=f9e179]: 硬节点时间线（7 天内）
+        - generic [ref=f9e180]:
+          - generic [ref=f9e181]: 06/02
+          - generic [ref=f9e182]:
+            - paragraph [ref=f9e183]: 华润万家云平台二期 · 报价确认中·待补交付日
+            - generic [ref=f9e184]:
+              - generic [ref=f9e185]: 进行中
+              - text: ·
+              - generic [ref=f9e186]: 紧急
+        - generic [ref=f9e187]:
+          - generic [ref=f9e188]: 06/03
+          - generic [ref=f9e189]:
+            - paragraph [ref=f9e190]: 省医疗云平台招标 · 标书准备中·待校案例
+            - generic [ref=f9e191]:
+              - generic [ref=f9e192]: 进行中
+              - text: ·
+              - generic [ref=f9e193]: 高
+        - generic [ref=f9e194]:
+          - generic [ref=f9e195]: 06/04
+          - generic [ref=f9e196]:
+            - paragraph [ref=f9e197]: 华润万家云平台二期 · 合同审核中·待确认账期
+            - generic [ref=f9e198]:
+              - generic [ref=f9e199]: 待开始
+              - text: ·
+              - generic [ref=f9e200]: 中
+        - generic [ref=f9e201]:
+          - generic [ref=f9e202]: 06/10
+          - generic [ref=f9e203]:
+            - paragraph [ref=f9e204]: 永辉超市连锁收银系统 · 连锁零售续约协议
+            - generic [ref=f9e205]:
+              - generic [ref=f9e206]: 待开始
+              - text: ·
+              - generic [ref=f9e207]: 中
+  - alert [ref=f9e29]

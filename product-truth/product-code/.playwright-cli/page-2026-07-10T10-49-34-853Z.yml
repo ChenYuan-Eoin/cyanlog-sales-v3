@@ -1,0 +1,378 @@
+- generic:
+  - complementary:
+    - generic:
+      - generic:
+        - generic: ONES Sales
+        - paragraph: 智能协作平台
+    - navigation:
+      - link:
+        - /url: /
+        - generic: 工作台
+      - link:
+        - /url: /quotes
+        - generic: 报价中心
+      - link:
+        - /url: /contracts
+        - generic: 合同审核
+      - link:
+        - /url: /tenders
+        - generic: 标书中心
+      - link:
+        - /url: /knowledge
+        - generic: 知识库
+      - link:
+        - /url: /schedule
+        - generic: 日程
+      - link:
+        - /url: /configs
+        - generic: 配置中心
+    - generic:
+      - link:
+        - /url: /profile
+        - generic: 个人信息
+      - button:
+        - generic: 退出登录
+  - main:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic: 组织级配置工作台
+            - heading [level=1]: 配置中心
+            - paragraph: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+          - generic:
+            - generic:
+              - generic: 生效范围
+              - generic: 组织级统一发布
+            - generic:
+              - generic: 消费端
+              - generic: 报价 / 合同 / AI
+            - generic:
+              - generic: 当前配置集
+              - generic: 组织架构
+        - generic:
+          - complementary:
+            - generic:
+              - generic:
+                - generic: 配置域
+                - paragraph: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+              - generic:
+                - button:
+                  - generic:
+                    - generic: 交易配置
+                    - generic: "0"
+                  - paragraph: 围绕报价工作台的价盘、税率和审批配置。
+                - button:
+                  - generic:
+                    - generic: 合同与 AI 规则
+                    - generic: "0"
+                  - paragraph: 围绕合同审核规则、模型路由和运行时策略的配置集。
+                - button:
+                  - generic:
+                    - generic: 组织与权限
+                    - generic: "15"
+                  - paragraph: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+                - button:
+                  - generic:
+                    - generic: 界面与体验
+                    - generic: "0"
+                  - paragraph: 运行时主题和界面变量集中配置发布。
+              - generic:
+                - generic: 结构约束
+                - list:
+                  - listitem: 配置中心只拥有配置，不承载业务执行。
+                  - listitem: 报价工作台、合同审核页只读消费已发布配置。
+                  - listitem: 配置项需要有版本、状态和作用范围。
+          - main:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: 配置中心
+                    - generic: /
+                    - generic: 组织与权限
+                  - generic:
+                    - generic:
+                      - heading [level=2]: 组织架构
+                      - paragraph: 维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。
+                - generic:
+                  - generic:
+                    - generic: 部门总数
+                    - generic: "15"
+                  - generic:
+                    - generic: 成员总数
+                    - generic: "43"
+                  - generic:
+                    - generic: 销售空间
+                    - generic: "3"
+              - generic:
+                - button:
+                  - generic: 组织架构
+                  - generic: "15"
+                - button:
+                  - generic: 角色权限
+                  - generic: "0"
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic: "15"
+                        - generic: 部门
+                    - generic:
+                      - generic:
+                        - generic: "43"
+                        - generic: 成员
+                    - generic:
+                      - generic:
+                        - generic: "3"
+                        - generic: 销售空间
+                  - generic:
+                    - button: 添加部门
+                    - button: 添加成员
+                    - button: 从飞书同步
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - heading [level=3]: 部门结构
+                        - paragraph: 点击选择部门
+                      - generic:
+                        - button:
+                          - generic: 全部成员
+                          - generic: "43"
+                        - generic:
+                          - generic:
+                            - button:
+                              - button
+                              - generic:
+                                - text: 安全部门
+                                - generic: 👤 钱会计
+                              - button [expanded]
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 光谷神奇
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: Happy 得不行
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 销售部
+                              - button
+                              - generic: "1"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 法务部
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 财务部
+                              - button
+                              - generic: "2"
+                          - generic:
+                            - button:
+                              - button
+                              - generic: 信息技术部
+                              - button
+                              - generic: "3"
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: 全部成员
+                            - paragraph: 共 43 人
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - searchbox
+                            - generic: 共 43 人
+                          - generic:
+                            - generic:
+                              - table:
+                                - rowgroup:
+                                  - row:
+                                    - columnheader: 姓名
+                                    - columnheader: 职位
+                                    - columnheader: 部门
+                                    - columnheader: 角色
+                                    - columnheader: 状态
+                                    - columnheader: 操作
+                                - rowgroup:
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 啦
+                                        - generic: 啦啦
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 安全部门
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: P
+                                        - generic:
+                                          - generic: PANG 源
+                                          - generic: 877791189@qq.com
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 安全部门
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 张
+                                        - generic: 张晔
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 光谷神奇
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 胖
+                                        - generic: 胖妞
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 光谷神奇
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 秦
+                                        - generic: 秦小雯
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: Happy 得不行
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 解
+                                        - generic: 解舟林
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: Happy 得不行
+                                    - cell
+                                    - cell:
+                                      - generic: 在职
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 超
+                                        - generic:
+                                          - generic: 超管验证成员 1782493268886
+                                          - generic: codex-super-admin-1782493268886@example.com
+                                    - cell:
+                                      - generic: 临时验证
+                                    - cell:
+                                      - generic: "-"
+                                    - cell
+                                    - cell:
+                                      - generic: 未激活
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 超
+                                        - generic:
+                                          - generic: 超管验证成员 1782493177199
+                                          - generic: codex-super-admin-1782493177199@example.com
+                                    - cell:
+                                      - generic: 临时验证
+                                    - cell:
+                                      - generic: "-"
+                                    - cell
+                                    - cell:
+                                      - generic: 未激活
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 超
+                                        - generic:
+                                          - generic: 超管验证成员 1782493132105
+                                          - generic: codex-super-admin-1782493132105@example.com
+                                    - cell:
+                                      - generic: 临时验证
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 超级管理员
+                                    - cell:
+                                      - generic: 未激活
+                                    - cell:
+                                      - button
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - generic: 超
+                                        - generic:
+                                          - generic: 超管验证成员 1782493036126
+                                          - generic: codex-super-admin-1782493036126@example.com
+                                    - cell:
+                                      - generic: 临时验证
+                                    - cell:
+                                      - generic: "-"
+                                    - cell:
+                                      - generic: 超级管理员
+                                    - cell:
+                                      - generic: 未激活
+                                    - cell:
+                                      - button
+                          - generic:
+                            - generic: 第 1 / 5 页 （每页 10 条）
+                            - generic:
+                              - button [disabled]
+                              - button
+  - button "Open Next.js Dev Tools" [ref=f1e78] [cursor=pointer]
+  - alert
+  - menu [active] [ref=f1e535]:
+    - menuitem "编辑" [ref=f1e536] [cursor=pointer]
+    - menuitem "添加同级部门" [ref=f1e540] [cursor=pointer]
+    - menuitem "添加下级部门" [ref=f1e542] [cursor=pointer]
+    - menuitem "删除" [ref=f1e544] [cursor=pointer]

@@ -65,7 +65,12 @@ export async function POST(
       : undefined
     const { stream, provider, degraded } = await reviewWithFailover(contractText, {
       orgId,
+      contractId,
       preferredProvider,
+      tool: 'contract_review',
+      capability: 'contract_review',
+      phase: 'semantic_review_stream',
+      requestId,
     })
 
     // 添加响应头标识降级状态和用户画像信息

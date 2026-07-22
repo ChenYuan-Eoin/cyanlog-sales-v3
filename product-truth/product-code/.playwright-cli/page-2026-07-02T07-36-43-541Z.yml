@@ -1,0 +1,69 @@
+- generic [active] [ref=f5e1]:
+  - complementary [ref=f5e2]:
+    - generic [ref=f5e3]:
+      - img "ONES Sales" [ref=f5e5]
+      - generic [ref=f5e6]:
+        - generic [ref=f5e7]: ONES Sales
+        - paragraph [ref=f5e8]: 智能协作平台
+    - navigation [ref=f5e9]:
+      - link "工作台" [ref=f5e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f5e11]
+        - generic [ref=f5e15]: 工作台
+      - link "报价中心" [ref=f5e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f5e17]
+        - generic [ref=f5e21]: 报价中心
+      - link "合同审核" [ref=f5e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f5e23]
+        - generic [ref=f5e28]: 合同审核
+      - link "标书中心" [ref=f5e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f5e30]
+        - generic [ref=f5e34]: 标书中心
+      - link "知识库" [ref=f5e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f5e36]
+        - generic [ref=f5e41]: 知识库
+      - link "日程" [ref=f5e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f5e43]
+        - generic [ref=f5e49]: 日程
+      - link "配置中心" [ref=f5e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f5e51]
+        - generic [ref=f5e55]: 配置中心
+    - generic [ref=f5e56]:
+      - link "个人信息" [ref=f5e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f5e58]
+        - generic [ref=f5e61]: 个人信息
+      - button "退出登录" [ref=f5e62] [cursor=pointer]:
+        - img [ref=f5e63]
+        - generic [ref=f5e66]: 退出登录
+  - main [ref=f5e67]:
+    - generic [ref=f5e68]:
+      - generic [ref=f5e69]:
+        - generic [ref=f5e70]:
+          - heading "标书中心" [level=1] [ref=f5e71]
+          - paragraph [ref=f5e72]: 招标文件 OCR 解析、关键信息提取、标书生成
+        - link "+ 上传招标文件" [ref=f5e73] [cursor=pointer]:
+          - /url: /contracts/new
+          - button "+ 上传招标文件" [ref=f5e74]
+      - generic [ref=f5e75]:
+        - generic [ref=f5e76]:
+          - generic [ref=f5e77]: 总标书数
+          - generic [ref=f5e78]: "0"
+        - generic [ref=f5e79]:
+          - generic [ref=f5e80]: 高置信度
+          - generic [ref=f5e81]: "0"
+        - generic [ref=f5e82]:
+          - generic [ref=f5e83]: 处理中
+          - generic [ref=f5e84]: "0"
+        - generic [ref=f5e85]:
+          - generic [ref=f5e86]: 失败
+          - generic [ref=f5e87]: "0"
+      - generic [ref=f5e88]:
+        - img [ref=f5e89]
+        - paragraph [ref=f5e91]: 加载标书...

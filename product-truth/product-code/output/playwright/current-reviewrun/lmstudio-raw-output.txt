@@ -1,0 +1,58 @@
+[K[?25h<think>
+Need identify risks. Use rules: payment schedule, termination? not. Tax none. Acceptance none. Breach penalty cap R006. Indirect loss R007? not present. Liability cap R008? none. Confidentiality none. IP R011. Dispute resolution R015. Renewal not. So risks: R001 payment schedule? clause says 120 days after acceptance. R006 breach penalty cap: daily 0.001%? but clause says 万分之十 = 0.01%. That's high. R011 IP ownership unclear. R015 dispute resolution missing. Also contract change via phone or oral - maybe breach? not rule. Provide JSON with risks array.
+
+Let's craft evidence snippets.
+</think>
+{
+  "risks": [
+    {
+      "ruleCode": "R001",
+      "ruleVersion": 1,
+      "level": "yellow",
+      "title": "付款节奏与账期不匹配，潜在现金流风险",
+      "description": "合同仅规定乙方在验收后120天内付款，且账期为120天，但未明确首期或预付款条款。若项目初始投入大，缺乏前置资金保障。",
+      "suggestion": "建议在合同中增加首期付款比例或预付款条款，并明确收款账户信息，确保项目启动资金到位。",
+      "counterparty": "",
+      "evidence": [
+        "第二条 付款条款：乙方验收后120天内付款，账期120天。"
+      ]
+    },
+    {
+      "ruleCode": "R006",
+      "ruleVersion": 1,
+      "level": "red",
+      "title": "违约金设定过高，可能导致对方拒付或诉讼风险",
+      "description": "违约金为日万分之十（0.01%/天），远高于行业常见的1%-3%日违约金或固定比例，且未设定最高上限。若乙方逾期付款，将面临高额违约金，易引发争议。",
+      "suggestion": "建议将日违约金调整为行业标准（如0.001%/天或固定金额），并设定违约金上限，避免对方因过高违约金拒付或提起诉讼。",
+      "counterparty": "",
+      "evidence": [
+        "第四条 违约责任：逾期付款违约金为日万分之十。"
+      ]
+    },
+    {
+      "ruleCode": "R011",
+      "ruleVersion": 1,
+      "level": "red",
+      "title": "知识产权归属不明确，导致后续纠纷风险",
+      "description": "合同未说明交付成果的知识产权归属，双方仅约定“后续另行协商”。这可能导致开发成果归属争议，影响双方的使用权和商业化收益。",
+      "suggestion": "建议在合同中明确知识产权归属条款，例如交付成果全部或部分转让给甲方，或者保留开发者权利并授权使用。",
+      "counterparty": "",
+      "evidence": [
+        "第五条 知识产权未明确归属，双方后续另行协商。"
+      ]
+    },
+    {
+      "ruleCode": "R015",
+      "ruleVersion": 1,
+      "level": "red",
+      "title": "争议解决方式未明确，管辖法院待定",
+      "description": "合同中缺乏争议解决条款，未指定仲裁机构、管辖法院或适用法律。若发生争议，将难以快速、高效解决，且可能导致双方在不同法域产生不一致的法律适用。",
+      "suggestion": "建议补充争议解决条款，明确适用法律、管辖法院或仲裁机构，并约定争议解决程序。",
+      "counterparty": "",
+      "evidence": [
+        "第六条 争议解决方式未明确，管辖法院待定。"
+      ]
+    }
+  ],
+  "summary": "合同存在付款、违约金、知识产权及争议解决等关键条款不完善，建议对上述风险进行修改或补充以降低法律与商业风险。"
+}

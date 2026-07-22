@@ -1,0 +1,27 @@
+{
+  "project_ref": "vsfropnfsmnonkotywsx",
+  "created_contract_ids": [
+    "1903b7d5-f924-4f29-9c14-4cc50228cbdf",
+    "ad665653-087f-405b-be48-61189a402bb3",
+    "848b5470-e309-4e96-bedf-dece369d4707",
+    "93e04e03-6754-40bf-b55a-c5d9fff343e7"
+  ],
+  "created_comparison_ids": [
+    "03533a11-1447-4615-bd86-eab5a3747bce",
+    "c02e9941-c901-4081-bd0c-84cd9f18a527"
+  ],
+  "original_storage_paths": [
+    "1903b7d5-f924-4f29-9c14-4cc50228cbdf/0f6a2171-45c2-4631-b53d-aafd85cf52c8_old-contract-v1.docx",
+    "ad665653-087f-405b-be48-61189a402bb3/2cea5d4f-8e81-40f5-9f14-0971916e9544_new-contract-v2.docx",
+    "848b5470-e309-4e96-bedf-dece369d4707/2430615e-7e1d-4d50-b294-a1af28b9e04c_old-contract-v1.pdf",
+    "93e04e03-6754-40bf-b55a-c5d9fff343e7/59758a2b-f768-4f47-b062-28c7206707ce_new-contract-v2.pdf"
+  ],
+  "frozen_storage_paths": [
+    "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/d2391077-e4dd-4a2d-b339-403ee6a91913/old-475545e3683389ad0629596150535bd94c51686af5b17807403b821daa3f8098-old-contract-v1.docx",
+    "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/57ec9dc0-5aec-49a0-b235-f1c4edfbb702/new-da6e1abe3367d3719200140fb5f53a2b0ceef9fbc7b3e6e07452e88fe717214e-new-contract-v2.docx",
+    "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/895b548f-9cc0-4e93-ab3c-42496d5e73b0/old-15b04da032129013c6da3e96c5ec74a505fba5d7b9e1c485a1d2cd23028209b1-old-contract-v1.pdf",
+    "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/c0013a5a-81dc-48ca-b75d-e4c6bb856fb9/new-c43ba315a6e6a7ac02622badbc5f11cd5e50b191dc5bb8d3eb8686b59476f5c5-new-contract-v2.pdf"
+  ],
+  "token_row_id": "85dcf7fa-126b-4f84-8bb9-0b05de9cb06b",
+  "token_value_persisted": false
+}

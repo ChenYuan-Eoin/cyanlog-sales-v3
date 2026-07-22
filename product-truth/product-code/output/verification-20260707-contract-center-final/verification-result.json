@@ -1,0 +1,57 @@
+[
+  {
+    "name": "contracts module label: review",
+    "ok": true,
+    "detail": "首页出现合同审核能力"
+  },
+  {
+    "name": "contracts module label: compare",
+    "ok": true,
+    "detail": "首页出现合同文档对比能力"
+  },
+  {
+    "name": "contracts module label: draft",
+    "ok": true,
+    "detail": "首页出现合同起草能力"
+  },
+  {
+    "name": "contracts version marker",
+    "ok": true,
+    "detail": "任务列表出现 vN 或草案 vN"
+  },
+  {
+    "name": "api contracts loaded",
+    "ok": true,
+    "detail": "contracts=24"
+  },
+  {
+    "name": "detail source preview visible",
+    "ok": true,
+    "detail": "详情页显示源文件预览区"
+  },
+  {
+    "name": "detail review style visible",
+    "ok": true,
+    "detail": "详情页保留审核风格选择"
+  },
+  {
+    "name": "compare result does not show Office file-not-found",
+    "ok": true,
+    "detail": "对比结果页未暴露 Office 外链错误"
+  },
+  {
+    "name": "compare result role labels",
+    "ok": true,
+    "detail": "对比结果页标出新旧/基准回传角色"
+  },
+  {
+    "name": "ipad contracts no horizontal overflow",
+    "ok": true,
+    "detail": "scrollWidth=1024, innerWidth=1024"
+  },
+  {
+    "name": "ipad detail no horizontal overflow",
+    "ok": true,
+    "detail": "scrollWidth=1024, innerWidth=1024"
+  }
+]

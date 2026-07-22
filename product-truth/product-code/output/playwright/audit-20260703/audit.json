@@ -1,0 +1,1498 @@
+{
+  "generatedAt": "2026-07-02T16:12:02.226Z",
+  "baseURL": "https://sales.cyanlog.icu",
+  "favicon": {
+    "status": 200,
+    "contentType": "image/vnd.microsoft.icon",
+    "bytes": 4286,
+    "iconLinks": [
+      {
+        "rel": "shortcut icon",
+        "href": "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png",
+        "sizes": null,
+        "type": null
+      },
+      {
+        "rel": "icon",
+        "href": "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png",
+        "sizes": "32x32",
+        "type": "image/x-icon"
+      },
+      {
+        "rel": "apple-touch-icon",
+        "href": "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png",
+        "sizes": null,
+        "type": null
+      },
+      {
+        "rel": "shortcut icon",
+        "href": "/favicon.ico?v=20260626",
+        "sizes": null,
+        "type": null
+      },
+      {
+        "rel": "icon",
+        "href": "/favicon.ico?v=20260626",
+        "sizes": "32x32",
+        "type": "image/x-icon"
+      },
+      {
+        "rel": "icon",
+        "href": "/favicon.png?v=20260626",
+        "sizes": "32x32",
+        "type": "image/png"
+      },
+      {
+        "rel": "icon",
+        "href": "/favicon.svg?v=20260626",
+        "sizes": null,
+        "type": "image/svg+xml"
+      },
+      {
+        "rel": "apple-touch-icon",
+        "href": "/favicon.png?v=20260626",
+        "sizes": null,
+        "type": null
+      }
+    ]
+  },
+  "contractsApi": {
+    "status": 200,
+    "count": 17,
+    "chosen": {
+      "id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+      "filename": "ones-contract-e2e-risk.docx",
+      "status": "COMPLETED",
+      "contract_no": "CT-20260630-002",
+      "quote_id": null,
+      "party_b_name": "ONES E2E 客户 1782798685151",
+      "created_by": "00030001-0000-0000-0000-000000000000",
+      "created_at": "2026-06-30T05:51:25.993057+00:00",
+      "updated_at": "2026-07-02T15:33:31.535361+00:00"
+    }
+  },
+  "audits": [
+    {
+      "url": "/contracts",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/audit-20260703/contracts-desktop-1440x1000.png",
+      "title": "ONES Sales",
+      "h1": "合同中心",
+      "h2": [
+        "合同审核工作台入口"
+      ],
+      "buttons": [
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "审核",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "继续",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "批注",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "上传源文件并发起审核",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "全部17",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "起草中",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "待审核",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "已完成",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "links": [
+        {
+          "text": "工作台",
+          "href": "https://sales.cyanlog.icu/"
+        },
+        {
+          "text": "报价中心",
+          "href": "https://sales.cyanlog.icu/quotes"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "标书中心",
+          "href": "https://sales.cyanlog.icu/tenders"
+        },
+        {
+          "text": "知识库",
+          "href": "https://sales.cyanlog.icu/knowledge"
+        },
+        {
+          "text": "日程",
+          "href": "https://sales.cyanlog.icu/schedule"
+        },
+        {
+          "text": "配置中心",
+          "href": "https://sales.cyanlog.icu/configs"
+        },
+        {
+          "text": "个人信息",
+          "href": "https://sales.cyanlog.icu/profile"
+        },
+        {
+          "text": "审核",
+          "href": "https://sales.cyanlog.icu/contracts/new"
+        },
+        {
+          "text": "继续",
+          "href": "https://sales.cyanlog.icu/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c"
+        },
+        {
+          "text": "批注",
+          "href": "https://sales.cyanlog.icu/contracts/92958890-0b9f-411c-a283-1c9f7849afbe?panel=evidence"
+        },
+        {
+          "text": "发起审核上传源文件并创建 ReviewRun",
+          "href": "https://sales.cyanlog.icu/contracts/new"
+        },
+        {
+          "text": "继续审核进入最近的进行中审核运行",
+          "href": "https://sales.cyanlog.icu/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c"
+        },
+        {
+          "text": "查看批注版查看最近完成合同的批注版和导出记录",
+          "href": "https://sales.cyanlog.icu/contracts/92958890-0b9f-411c-a283-1c9f7849afbe?panel=evidence"
+        },
+        {
+          "text": "文档比对进入最近完成合同的比对工作台",
+          "href": "https://sales.cyanlog.icu/contracts/92958890-0b9f-411c-a283-1c9f7849afbe/compare"
+        },
+        {
+          "text": "上传源文件并发起审核",
+          "href": "https://sales.cyanlog.icu/contracts/new"
+        },
+        {
+          "text": "_上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx合同审核完成7月3日 00:00",
+          "href": "https://sales.cyanlog.icu/contracts/92958890-0b9f-411c-a283-1c9f7849afbe"
+        },
+        {
+          "text": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx合同审核完成7月2日 23:53",
+          "href": "https://sales.cyanlog.icu/contracts/abb72d16-ed19-445e-aa33-561cec0ab6d8"
+        },
+        {
+          "text": "ones-contract-e2e-risk.docx合同审核完成7月2日 23:33",
+          "href": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8"
+        },
+        {
+          "text": "snapshot-rules-20260702113614.docx合同审核完成7月2日 19:54",
+          "href": "https://sales.cyanlog.icu/contracts/8e1d9430-7218-4663-90f4-a2600669e0fa"
+        },
+        {
+          "text": "ones-long-20260702111318.docx合同审核完成7月2日 19:13",
+          "href": "https://sales.cyanlog.icu/contracts/80c0ca0d-4879-4baa-a3bc-e929fda2b6b2"
+        },
+        {
+          "text": "ones-source-20260702110520.docx合同审核完成7月2日 19:06",
+          "href": "https://sales.cyanlog.icu/contracts/a1169c9f-7b64-4991-a97e-e63a3862aed5"
+        },
+        {
+          "text": "ones-source-20260702110222.docx合同审核完成7月2日 19:03",
+          "href": "https://sales.cyanlog.icu/contracts/681635cb-1592-4875-98c8-7c97dd2e6818"
+        },
+        {
+          "text": "ones-source-20260702105749.docx合同审核完成7月2日 18:58",
+          "href": "https://sales.cyanlog.icu/contracts/2335f2ab-0686-440c-b86b-7fd6d4950844"
+        },
+        {
+          "text": "prod-gemini-review-sample-1782906641409.docx合同审核完成7月2日 15:06",
+          "href": "https://sales.cyanlog.icu/contracts/0ca03c97-8104-4211-a65f-3d76e5f14b8a"
+        },
+        {
+          "text": "合同DRAFT7月2日 09:55",
+          "href": "https://sales.cyanlog.icu/contracts/f381041d-f313-4d40-b4b3-fd474277ed84"
+        },
+        {
+          "text": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx合同审核完成7月1日 18:33",
+          "href": "https://sales.cyanlog.icu/contracts/058ef76f-ad26-49ef-9383-de09749879bd"
+        },
+        {
+          "text": "合同DRAFT7月1日 16:42",
+          "href": "https://sales.cyanlog.icu/contracts/a1cc7ba3-7890-447a-9db8-980daf424faa"
+        },
+        {
+          "text": "_ONES_-_2026.docx合同审核完成6月30日 16:37",
+          "href": "https://sales.cyanlog.icu/contracts/13aca6c2-e902-4458-9e94-6d8db8ae7a09"
+        },
+        {
+          "text": "Hemory_.docx合同审核完成6月30日 16:26",
+          "href": "https://sales.cyanlog.icu/contracts/44301b16-6551-4720-afa5-f1d80b1604de"
+        },
+        {
+          "text": "合同DRAFT6月30日 13:50",
+          "href": "https://sales.cyanlog.icu/contracts/25d3192e-32d1-44c5-9396-179f1a7309ab"
+        },
+        {
+          "text": "_2026_ONES_1_.docx合同审核完成6月25日 16:16",
+          "href": "https://sales.cyanlog.icu/contracts/0286f885-fc49-4a43-9543-798aca2dda16"
+        },
+        {
+          "text": "minimal.pdf合同待审核6月25日 16:16",
+          "href": "https://sales.cyanlog.icu/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c"
+        }
+      ],
+      "bodyText": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同中心 全生命周期管理 审核 继续 批注 发起审核 上传源文件并创建 ReviewRun 继续审核 进入最近的进行中审核运行 查看批注版 查看最近完成合同的批注版和导出记录 文档比对 进入最近完成合同的比对工作台 合同审核工作台入口 新建 ReviewRun，上传合同源文件，绑定已发布规则、SkillBundle 和模型策略，生成风险定位、销售谈判任务与 Word 批注版本。 上传源文件并发起审核 源文件docx / pdf 审核依据规则快照 / Skill 风险定位复核 / 谈判 输出批注版 / 报告 17 全部合同 1 进行中 0 需关注 13 已完成 全部 17 起草中 待审核 已完成 _上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx 合同 审核完成 7月3日 00:00 (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx 合同 审核完成 7月2日 23:53 ones-contract-e2e-risk.docx 合同 审核完成 7月2日 23:33 snapshot-rules-20260702113614.docx 合同 审核完成 7月2日 19:54 ones-long-20260702111318.docx 合同 审核完成 7月2日 19:13 ones-source-20260702110520.docx 合同 审核完成 7月2日 19:06 ones-source-20260702110222.docx 合同 审核完成 7月2日 19:03 ones-source-20260702105749.docx 合同 审核完成 7月2日 18:58 prod-gemini-review-sample-1782906641409.docx 合同 审核完成 7月2日 15:06 合同 DRAFT 7月2日 09:55 (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx 合同 审核完成 7月1日 18:33 合同 DRAFT 7月1日 16:42 _ONES_-_2026.docx 合同 审核完成 6月30日 16:37 Hemory_.docx 合同 审核完成 6月30日 16:26 合同 DRAFT 6月30日 13:50 _2026_ONES_1_.docx 合同 审核完成 6月25日 16:16 minimal.pdf 合同 待审核 6月25日 16:16",
+      "scroll": {
+        "width": 1440,
+        "height": 1000,
+        "docScrollWidth": 1440,
+        "bodyScrollWidth": 1440,
+        "hasHorizontalOverflow": false
+      }
+    },
+    {
+      "url": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/audit-20260703/contract-detail-desktop-1440x1000.png",
+      "title": "ONES Sales",
+      "h1": "ones-contract-e2e-risk.docx",
+      "h2": [],
+      "buttons": [
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "返回",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "重新审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导出批注版",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "摘要",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "对话",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "证据",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "全部4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "红线4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "需谈判0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "通过0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "提示0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "付款节奏红线触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日批注建议：必须修改合同条款R001二已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "IP 归属红线触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让批注建议：必须修改合同条款R011五已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "争议解决红线触发「争议解决」红线：境外仲裁/法院/法律批注建议：必须修改合同条款R015六已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "逾期付款违约金标准偏低且可能不足以覆盖资金占用损失红线合同仅约定逾期付款违约金为日万分之十，违约责任强度偏弱，难以有效约束客户延期付款行为。批注建议：建议提高逾期付款违约金标准，或补充达到一定逾期天数后的暂停服务、暂停交付、解除合同等救济措施。R006四已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导入客户回传件",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "links": [
+        {
+          "text": "工作台",
+          "href": "https://sales.cyanlog.icu/"
+        },
+        {
+          "text": "报价中心",
+          "href": "https://sales.cyanlog.icu/quotes"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "标书中心",
+          "href": "https://sales.cyanlog.icu/tenders"
+        },
+        {
+          "text": "知识库",
+          "href": "https://sales.cyanlog.icu/knowledge"
+        },
+        {
+          "text": "日程",
+          "href": "https://sales.cyanlog.icu/schedule"
+        },
+        {
+          "text": "配置中心",
+          "href": "https://sales.cyanlog.icu/configs"
+        },
+        {
+          "text": "个人信息",
+          "href": "https://sales.cyanlog.icu/profile"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "返回",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "导入客户回传件",
+          "href": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/edit"
+        }
+      ],
+      "bodyText": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同审核 / 审核工作台 ones-contract-e2e-risk.docx 审核完成 ONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。 返回 重新审查 导出批注版 红线风险 4 需谈判风险 0 开放风险 4 批注数量 4 原文与批注意图 以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。 当前版本用于审核定位 v20 · 批注版 v19 · 批注版 v18 · 批注版 v17 · 批注版 批注版 19 付款节奏 红线 原文内容 账期120天 批注建议 必须修改合同条款 风险说明 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 R001 · v3 · 67a2ae46-331a-476e-9621-fe1f3ecce3ff 定位状态：located；evidence_text_exact_match 销售合同 第一条 合同金额：人民币100万元。 第二条 付款条款：乙方验收后120天内付款，账期120天。 第三条 质保条款：质保金20%，质保期为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化、经营困难，客户可单方延期履行。 Word 批注 账期120天 urgent 【红线风险】付款节奏 问题：触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 建议：必须修改合同条款 证据原文：账期120天 规则：R001 v3 RuleSnapshot: 67a2ae46-331a-476e-9621-fe1f3ecce3ff SourceRange: 46-52 RiskFinding: 208eff3c-170c-4576-8c56-d9bbff975814 第五条 知识产权未明确归属，双方后续另行协商。 urgent 【红线风险】IP 归属 问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让 建议：必须修改合同条款 证据原文：第五条 知识产权未明确归属，双方后续另行协商。 规则：R011 v3 RuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2 SourceRange: 109-132 RiskFinding: 5eb41af8-727d-4687-a249-9a05adfd4c01 第六条 争议解决方式未明确，管辖法院待定。 urgent 【红线风险】争议解决 问题：触发「争议解决」红线：境外仲裁/法院/法律 建议：必须修改合同条款 证据原文：第六条 争议解决方式未明确，管辖法院待定。 规则：R015 v3 RuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef SourceRange: 133-154 RiskFinding: e2f946ad-da72-4ce2-bbc4-cb9240183ba6 逾期付款违约金为日万分之十。 urgent 【红线风险】逾期付款违约金标准偏低且可能不足以覆盖资金占用损失 问题：合同仅约定逾期付款违约金为日万分之十，违约责任强度偏弱，难以有效约束客户延期付款行为。 建议：建议提高逾期付款违约金标准，或补充达到一定逾期天数后的暂停服务、暂停交付、解除合同等救济措施。 证据原文：逾期付款违约金为日万分之十。 规则：R006 v3 RuleSnap",
+      "scroll": {
+        "width": 1440,
+        "height": 1000,
+        "docScrollWidth": 1440,
+        "bodyScrollWidth": 1440,
+        "hasHorizontalOverflow": false
+      }
+    },
+    {
+      "type": "contractDetailClicks",
+      "detailButtons": [
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "返回",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "重新审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导出批注版",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "摘要",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "对话",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "证据",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "全部4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "红线4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "需谈判0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "通过0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "提示0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "付款节奏红线触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日批注建议：必须修改合同条款R001二已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "IP 归属红线触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让批注建议：必须修改合同条款R011五已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "争议解决红线触发「争议解决」红线：境外仲裁/法院/法律批注建议：必须修改合同条款R015六已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "逾期付款违约金标准偏低且可能不足以覆盖资金占用损失红线合同仅约定逾期付款违约金为日万分之十，违约责任强度偏弱，难以有效约束客户延期付款行为。批注建议：建议提高逾期付款违约金标准，或补充达到一定逾期天数后的暂停服务、暂停交付、解除合同等救济措施。R006四已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导入客户回传件",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "clicks": [
+        {
+          "label": "导出批注版",
+          "found": true,
+          "disabled": false,
+          "visible": true,
+          "before": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+          "after": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+          "navigated": false,
+          "download": {
+            "suggestedFilename": "ones-contract-e2e-risk.docx-ONES批注版.docx"
+          },
+          "responses": [
+            {
+              "url": "https://sales.cyanlog.icu/api/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/export",
+              "status": 200
+            },
+            {
+              "url": "https://sales.cyanlog.icu/api/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/review",
+              "status": 200
+            }
+          ],
+          "error": null
+        },
+        {
+          "label": "重新审查|继续审核|发起审核",
+          "found": true,
+          "disabled": false,
+          "visible": true,
+          "before": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+          "after": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+          "navigated": false,
+          "download": null,
+          "responses": [],
+          "error": null
+        },
+        {
+          "label": "返回",
+          "found": true,
+          "disabled": false,
+          "visible": true,
+          "before": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+          "after": "https://sales.cyanlog.icu/contracts",
+          "navigated": true,
+          "download": null,
+          "responses": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "url": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/audit-20260703/contract-detail-ipad-landscape-1024x768.png",
+      "title": "ONES Sales",
+      "h1": "ones-contract-e2e-risk.docx",
+      "h2": [],
+      "buttons": [
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "返回",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "重新审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导出批注版",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "摘要",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "对话",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "证据",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "全部4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "红线4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "需谈判0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "通过0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "提示0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "付款节奏红线触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日批注建议：必须修改合同条款R001二已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "IP 归属红线触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让批注建议：必须修改合同条款R011五已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "争议解决红线触发「争议解决」红线：境外仲裁/法院/法律批注建议：必须修改合同条款R015六已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "逾期付款违约金标准偏低且对我方补偿不足红线合同仅约定逾期付款违约金为日万分之十，违约责任偏弱，可能不足以覆盖长账期下的资金占用损失。批注建议：建议提高逾期付款违约金标准，并补充逾期达到一定期限时的暂停服务、加速到期或解除合同权利。R006四已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导入客户回传件",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "links": [
+        {
+          "text": "工作台",
+          "href": "https://sales.cyanlog.icu/"
+        },
+        {
+          "text": "报价中心",
+          "href": "https://sales.cyanlog.icu/quotes"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "标书中心",
+          "href": "https://sales.cyanlog.icu/tenders"
+        },
+        {
+          "text": "知识库",
+          "href": "https://sales.cyanlog.icu/knowledge"
+        },
+        {
+          "text": "日程",
+          "href": "https://sales.cyanlog.icu/schedule"
+        },
+        {
+          "text": "配置中心",
+          "href": "https://sales.cyanlog.icu/configs"
+        },
+        {
+          "text": "个人信息",
+          "href": "https://sales.cyanlog.icu/profile"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "返回",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "导入客户回传件",
+          "href": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/edit"
+        }
+      ],
+      "bodyText": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同审核 / 审核工作台 ones-contract-e2e-risk.docx 审核完成 ONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。 返回 重新审查 导出批注版 红线风险 4 需谈判风险 0 开放风险 4 批注数量 4 原文与批注意图 以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。 当前版本用于审核定位 v21 · 批注版 v20 · 批注版 v19 · 批注版 v18 · 批注版 批注版 20 付款节奏 红线 原文内容 账期120天 批注建议 必须修改合同条款 风险说明 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 R001 · v3 · 67a2ae46-331a-476e-9621-fe1f3ecce3ff 定位状态：located；evidence_text_exact_match 销售合同 第一条 合同金额：人民币100万元。 第二条 付款条款：乙方验收后120天内付款，账期120天。 第三条 质保条款：质保金20%，质保期为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化、经营困难，客户可单方延期履行。 Word 批注 账期120天 urgent 【红线风险】付款节奏 问题：触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 建议：必须修改合同条款 证据原文：账期120天 规则：R001 v3 RuleSnapshot: 67a2ae46-331a-476e-9621-fe1f3ecce3ff SourceRange: 46-52 RiskFinding: bc98824e-c34a-4ef0-8726-6cf5040aa47a 第五条 知识产权未明确归属，双方后续另行协商。 urgent 【红线风险】IP 归属 问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让 建议：必须修改合同条款 证据原文：第五条 知识产权未明确归属，双方后续另行协商。 规则：R011 v3 RuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2 SourceRange: 109-132 RiskFinding: 47872ef4-858c-4085-bc84-6b17f5299e8a 第六条 争议解决方式未明确，管辖法院待定。 urgent 【红线风险】争议解决 问题：触发「争议解决」红线：境外仲裁/法院/法律 建议：必须修改合同条款 证据原文：第六条 争议解决方式未明确，管辖法院待定。 规则：R015 v3 RuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef SourceRange: 133-154 RiskFinding: f9d0f6b8-aadd-4170-97f5-ed46ef2acbb2 逾期付款违约金为日万分之十。 urgent 【红线风险】逾期付款违约金标准偏低且对我方补偿不足 问题：合同仅约定逾期付款违约金为日万分之十，违约责任偏弱，可能不足以覆盖长账期下的资金占用损失。 建议：建议提高逾期付款违约金标准，并补充逾期达到一定期限时的暂停服务、加速到期或解除合同权利。 证据原文：逾期付款违约金为日万分之十。 规则：R006 v3 RuleSnapshot: 1",
+      "scroll": {
+        "width": 1024,
+        "height": 768,
+        "docScrollWidth": 1024,
+        "bodyScrollWidth": 1024,
+        "hasHorizontalOverflow": false
+      }
+    },
+    {
+      "url": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/audit-20260703/contract-detail-ipad-portrait-768x1024.png",
+      "title": "ONES Sales",
+      "h1": "ones-contract-e2e-risk.docx",
+      "h2": [],
+      "buttons": [
+        {
+          "text": "",
+          "disabled": false,
+          "aria": "打开主导航"
+        },
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "返回",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "重新审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导出批注版",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "审查",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "摘要",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "对话",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "证据",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "全部4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "红线4",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "需谈判0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "通过0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "提示0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "付款节奏红线触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日批注建议：必须修改合同条款R001二已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "IP 归属红线触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让批注建议：必须修改合同条款R011五已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "争议解决红线触发「争议解决」红线：境外仲裁/法院/法律批注建议：必须修改合同条款R015六已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "逾期付款违约金标准偏低且对我方补偿不足红线合同仅约定逾期付款违约金为日万分之十，违约责任偏弱，可能不足以覆盖长账期下的资金占用损失。批注建议：建议提高逾期付款违约金标准，并补充逾期达到一定期限时的暂停服务、加速到期或解除合同权利。R006四已绑定原文定位复核反馈待接入open",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "导入客户回传件",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "links": [
+        {
+          "text": "工作台",
+          "href": "https://sales.cyanlog.icu/"
+        },
+        {
+          "text": "报价中心",
+          "href": "https://sales.cyanlog.icu/quotes"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "标书中心",
+          "href": "https://sales.cyanlog.icu/tenders"
+        },
+        {
+          "text": "知识库",
+          "href": "https://sales.cyanlog.icu/knowledge"
+        },
+        {
+          "text": "日程",
+          "href": "https://sales.cyanlog.icu/schedule"
+        },
+        {
+          "text": "配置中心",
+          "href": "https://sales.cyanlog.icu/configs"
+        },
+        {
+          "text": "个人信息",
+          "href": "https://sales.cyanlog.icu/profile"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "返回",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "导入客户回传件",
+          "href": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/edit"
+        }
+      ],
+      "bodyText": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同审核 / 审核工作台 ones-contract-e2e-risk.docx 审核完成 ONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。 返回 重新审查 导出批注版 红线风险 4 需谈判风险 0 开放风险 4 批注数量 4 原文与批注意图 以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。 当前版本用于审核定位 v21 · 批注版 v20 · 批注版 v19 · 批注版 v18 · 批注版 批注版 20 付款节奏 红线 原文内容 账期120天 批注建议 必须修改合同条款 风险说明 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 R001 · v3 · 67a2ae46-331a-476e-9621-fe1f3ecce3ff 定位状态：located；evidence_text_exact_match 销售合同 第一条 合同金额：人民币100万元。 第二条 付款条款：乙方验收后120天内付款，账期120天。 第三条 质保条款：质保金20%，质保期为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化、经营困难，客户可单方延期履行。 Word 批注 账期120天 urgent 【红线风险】付款节奏 问题：触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 建议：必须修改合同条款 证据原文：账期120天 规则：R001 v3 RuleSnapshot: 67a2ae46-331a-476e-9621-fe1f3ecce3ff SourceRange: 46-52 RiskFinding: bc98824e-c34a-4ef0-8726-6cf5040aa47a 第五条 知识产权未明确归属，双方后续另行协商。 urgent 【红线风险】IP 归属 问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让 建议：必须修改合同条款 证据原文：第五条 知识产权未明确归属，双方后续另行协商。 规则：R011 v3 RuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2 SourceRange: 109-132 RiskFinding: 47872ef4-858c-4085-bc84-6b17f5299e8a 第六条 争议解决方式未明确，管辖法院待定。 urgent 【红线风险】争议解决 问题：触发「争议解决」红线：境外仲裁/法院/法律 建议：必须修改合同条款 证据原文：第六条 争议解决方式未明确，管辖法院待定。 规则：R015 v3 RuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef SourceRange: 133-154 RiskFinding: f9d0f6b8-aadd-4170-97f5-ed46ef2acbb2 逾期付款违约金为日万分之十。 urgent 【红线风险】逾期付款违约金标准偏低且对我方补偿不足 问题：合同仅约定逾期付款违约金为日万分之十，违约责任偏弱，可能不足以覆盖长账期下的资金占用损失。 建议：建议提高逾期付款违约金标准，并补充逾期达到一定期限时的暂停服务、加速到期或解除合同权利。 证据原文：逾期付款违约金为日万分之十。 规则：R006 v3 RuleSnapshot: 1",
+      "scroll": {
+        "width": 768,
+        "height": 1024,
+        "docScrollWidth": 768,
+        "bodyScrollWidth": 768,
+        "hasHorizontalOverflow": false
+      }
+    },
+    {
+      "url": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/audit-20260703/compare-desktop-1440x1000.png",
+      "title": "ONES Sales",
+      "h1": "发起文档比对",
+      "h2": [],
+      "buttons": [
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "返回合同",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "上传合同",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "links": [
+        {
+          "text": "工作台",
+          "href": "https://sales.cyanlog.icu/"
+        },
+        {
+          "text": "报价中心",
+          "href": "https://sales.cyanlog.icu/quotes"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "标书中心",
+          "href": "https://sales.cyanlog.icu/tenders"
+        },
+        {
+          "text": "知识库",
+          "href": "https://sales.cyanlog.icu/knowledge"
+        },
+        {
+          "text": "日程",
+          "href": "https://sales.cyanlog.icu/schedule"
+        },
+        {
+          "text": "配置中心",
+          "href": "https://sales.cyanlog.icu/configs"
+        },
+        {
+          "text": "个人信息",
+          "href": "https://sales.cyanlog.icu/profile"
+        },
+        {
+          "text": "返回合同",
+          "href": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8"
+        },
+        {
+          "text": "上传合同",
+          "href": "https://sales.cyanlog.icu/contracts/upload"
+        }
+      ],
+      "bodyText": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 发起文档比对 选择另一份已完成合同作为对比文档。 已排除 12 份非同客户/同报价的已完成合同。请补充同一客户或同一报价下的回传件/候选合同后再比对。 返回合同 上传合同",
+      "scroll": {
+        "width": 1440,
+        "height": 1000,
+        "docScrollWidth": 1440,
+        "bodyScrollWidth": 1440,
+        "hasHorizontalOverflow": false
+      }
+    },
+    {
+      "type": "compareClicks",
+      "compareClicks": [
+        {
+          "label": "返回",
+          "found": true,
+          "disabled": false,
+          "visible": true,
+          "before": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare",
+          "after": "https://sales.cyanlog.icu/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+          "navigated": true,
+          "download": null,
+          "responses": [
+            {
+              "url": "https://sales.cyanlog.icu/api/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/review",
+              "status": 200
+            }
+          ],
+          "error": null
+        }
+      ]
+    },
+    {
+      "url": "/configs?tab=rules",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/audit-20260703/rules-desktop-1440x1000.png",
+      "title": "ONES Sales",
+      "h1": "配置中心",
+      "h2": [
+        "合同审核策略"
+      ],
+      "buttons": [
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "交易配置...围绕报价工作台的价盘、税率和审批配置。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "合同与 AI 规则15+围绕合同审核规则、模型路由和运行时策略的配置集。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "组织与权限...围绕部门、成员、角色能力和作用域分配的组织控制面。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "界面与体验...运行时主题和界面变量集中配置发布。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "合同审核策略15",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "AI 模型配置...",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "新建",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "全部规则集15ALL全部规则资产发布 15就绪 15阻断 15",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "默认规则集0default文档 v- · not_started发布 0就绪 0阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "付款与结算规则集1PAYMENT文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "终止与退款规则集1TERMINATION文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "税务与发票规则集1TAX文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "验收与交付规则集2ACCEPTANCE文档 v1 · ready发布 2就绪 2阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "违约责任规则集1BREACH文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "责任边界规则集2LIABILITY文档 v1 · ready发布 2就绪 2阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "保密义务规则集1CONFIDENTIALITY文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "主体与金额一致性规则集1BUSINESS_INTEGRITY文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "知识产权规则集1IP文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "数据安全规则集1DATA_SECURITY文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "SLA 与服务承诺规则集1SLA文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "续约与退出规则集1RENEWAL文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "争议解决规则集1DISPUTE文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "测试",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R001付款节奏已发布转译就绪启用可正式审核比例类混合付款与结算黄色v4ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R002终止退款已发布转译就绪启用可正式审核条款语义混合终止与退款黄色v4ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R003税率已发布转译就绪启用可正式审核比例类混合税务与发票黄色v4ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R004默示验收期已发布转译就绪启用可正式审核时限类混合验收与交付黄色v4ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R005验收不通过已发布转译就绪启用可正式审核条款语义混合验收与交付黄色v4ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R006违约金已发布转译就绪启用可正式审核比例类混合违约责任黄色v4ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R007间接损失已发布转译就绪启用可正式审核条款语义混合责任边界黄色v4ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R008责任总额上限 Cap已发布转译就绪启用可正式审核比例类混合责任边界黄色v4ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R009保密期已发布转译就绪启用可正式审核时限类混合保密义务黄色v4ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R010主体·收款·金额已发布转译就绪启用可正式审核条款语义混合主体与金额一致性黄色v4ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=大写=附件=报价单；B=旧版模板（建议更新）；红线=主体错/外部账户/金额不一致/含税不等/日期逻辑错",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R011IP 归属已发布转译就绪启用可正式审核条款语义混合知识产权黄色v4ONES skill 条款速查：A=ONES 保留全部 IP + 客户使用许可；B=二次开发归属让步需提价；红线=客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R012数据安全已发布转译就绪启用可正式审核条款语义混合数据安全黄色v4ONES skill 条款速查：A=客户数据归客户 + ONES 受限处理；B=加密/本地化/立即删除可让；红线=AI训练无授权；海外/境外主体/跨境处理涉个信无 DPA（境内客户不因缺DPA单列风险）",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R013SLA已发布转译就绪启用可正式审核枚举类混合SLA 与服务承诺黄色v4ONES skill 条款速查：A=公有云 99.5% + 服务费比例赔偿；B=99.9% 需售后评估架构；红线=按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R014续约已发布转译就绪启用可正式审核条款语义混合续约与退出黄色v4ONES skill 条款速查：A=书面续约、到期自动终止；B=自动续期+≥30日通知；年涨幅≤5%；红线=永久锁价 / 自动续期无退出权",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "links": [
+        {
+          "text": "工作台",
+          "href": "https://sales.cyanlog.icu/"
+        },
+        {
+          "text": "报价中心",
+          "href": "https://sales.cyanlog.icu/quotes"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "标书中心",
+          "href": "https://sales.cyanlog.icu/tenders"
+        },
+        {
+          "text": "知识库",
+          "href": "https://sales.cyanlog.icu/knowledge"
+        },
+        {
+          "text": "日程",
+          "href": "https://sales.cyanlog.icu/schedule"
+        },
+        {
+          "text": "配置中心",
+          "href": "https://sales.cyanlog.icu/configs"
+        },
+        {
+          "text": "个人信息",
+          "href": "https://sales.cyanlog.icu/profile"
+        }
+      ],
+      "bodyText": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 组织级配置工作台 配置中心 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。 生效范围 组织级统一发布 消费端 报价 / 合同 / AI 当前配置集 合同审核策略 配置域 把所有配置先归到稳定的业务域，再进入具体配置集编辑。 交易配置 ... 围绕报价工作台的价盘、税率和审批配置。 合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。 组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。 界面与体验 ... 运行时主题和界面变量集中配置发布。 结构约束 配置中心只拥有配置，不承载业务执行。 报价工作台、合同审核页只读消费已发布配置。 配置项需要有版本、状态和作用范围。 配置中心 / 合同与 AI 规则 合同审核策略 管理合同审核策略规则，供合同审核与本地模型执行。 规则总数 15 启用规则 15 语义规则 15 合同审核策略 15 AI 模型配置 ... 规则集目录 (14) 新建 全部规则集 15 ALL 全部规则资产 发布 15 就绪 15 阻断 15 默认规则集 0 default 文档 v- · not_started 发布 0 就绪 0 阻断 0 付款与结算规则集 1 PAYMENT 文档 v1 · ready 发布 1 就绪 1 阻断 0 终止与退款规则集 1 TERMINATION 文档 v1 · ready 发布 1 就绪 1 阻断 0 税务与发票规则集 1 TAX 文档 v1 · ready 发布 1 就绪 1 阻断 0 验收与交付规则集 2 ACCEPTANCE 文档 v1 · ready 发布 2 就绪 2 阻断 0 违约责任规则集 1 BREACH 文档 v1 · ready 发布 1 就绪 1 阻断 0 责任边界规则集 2 LIABILITY 文档 v1 · ready 发布 2 就绪 2 阻断 0 保密义务规则集 1 CONFIDENTIALITY 文档 v1 · ready 发布 1 就绪 1 阻断 0 主体与金额一致性规则集 1 BUSINESS_INTEGRITY 文档 v1 · ready 发布 1 就绪 1 阻断 0 知识产权规则集 1 IP 文档 v1 · ready 发布 1 就绪 1 阻断 0 数据安全规则集 1 DATA_SECURITY 文档 v1 · ready 发布 1 就绪 1 阻断 0 SLA 与服务承诺规则集 1 SLA 文档 v1 · ready 发布 1 就绪 1 阻断 0 续约与退出规则集 1 RENEWAL 文档 v1 · ready 发布 1 就绪 1 阻断 0 争议解决规则集 1 DISPUTE 文档 v1 · ready 发布 1 就绪 1 阻断 0 全部规则集 (15) 所有规则集的发布、转译和 Skill 输入状态 测试 R001 付款节奏 已发布 转译就绪 启用 可正式审核 比例类 混合 付款与结算 黄色 v4 ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日 A >= 30percent / B >= 15percent / C < 15percent R002 终止退款 已发布 转译就绪 启用 可正式审核 条款语义 混合 终止与退款 黄色 v4 ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息 A contains 0text / B contains 0text",
+      "scroll": {
+        "width": 1440,
+        "height": 1000,
+        "docScrollWidth": 1440,
+        "bodyScrollWidth": 1440,
+        "hasHorizontalOverflow": false
+      }
+    },
+    {
+      "url": "/configs?tab=rules",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/audit-20260703/rules-ipad-portrait-768x1024.png",
+      "title": "ONES Sales",
+      "h1": "配置中心",
+      "h2": [
+        "合同审核策略"
+      ],
+      "buttons": [
+        {
+          "text": "",
+          "disabled": false,
+          "aria": "打开主导航"
+        },
+        {
+          "text": "退出登录",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "交易配置...围绕报价工作台的价盘、税率和审批配置。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "合同与 AI 规则15+围绕合同审核规则、模型路由和运行时策略的配置集。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "组织与权限...围绕部门、成员、角色能力和作用域分配的组织控制面。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "界面与体验...运行时主题和界面变量集中配置发布。",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "合同审核策略15",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "AI 模型配置...",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "新建",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "全部规则集15ALL全部规则资产发布 15就绪 15阻断 15",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "默认规则集0default文档 v- · not_started发布 0就绪 0阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "付款与结算规则集1PAYMENT文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "终止与退款规则集1TERMINATION文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "税务与发票规则集1TAX文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "验收与交付规则集2ACCEPTANCE文档 v1 · ready发布 2就绪 2阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "违约责任规则集1BREACH文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "责任边界规则集2LIABILITY文档 v1 · ready发布 2就绪 2阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "保密义务规则集1CONFIDENTIALITY文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "主体与金额一致性规则集1BUSINESS_INTEGRITY文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "知识产权规则集1IP文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "数据安全规则集1DATA_SECURITY文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "SLA 与服务承诺规则集1SLA文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "续约与退出规则集1RENEWAL文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "争议解决规则集1DISPUTE文档 v1 · ready发布 1就绪 1阻断 0",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "测试",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R001付款节奏已发布转译就绪启用可正式审核比例类混合付款与结算黄色v4ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R002终止退款已发布转译就绪启用可正式审核条款语义混合终止与退款黄色v4ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R003税率已发布转译就绪启用可正式审核比例类混合税务与发票黄色v4ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R004默示验收期已发布转译就绪启用可正式审核时限类混合验收与交付黄色v4ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R005验收不通过已发布转译就绪启用可正式审核条款语义混合验收与交付黄色v4ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R006违约金已发布转译就绪启用可正式审核比例类混合违约责任黄色v4ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R007间接损失已发布转译就绪启用可正式审核条款语义混合责任边界黄色v4ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R008责任总额上限 Cap已发布转译就绪启用可正式审核比例类混合责任边界黄色v4ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R009保密期已发布转译就绪启用可正式审核时限类混合保密义务黄色v4ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R010主体·收款·金额已发布转译就绪启用可正式审核条款语义混合主体与金额一致性黄色v4ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=大写=附件=报价单；B=旧版模板（建议更新）；红线=主体错/外部账户/金额不一致/含税不等/日期逻辑错",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R011IP 归属已发布转译就绪启用可正式审核条款语义混合知识产权黄色v4ONES skill 条款速查：A=ONES 保留全部 IP + 客户使用许可；B=二次开发归属让步需提价；红线=客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R012数据安全已发布转译就绪启用可正式审核条款语义混合数据安全黄色v4ONES skill 条款速查：A=客户数据归客户 + ONES 受限处理；B=加密/本地化/立即删除可让；红线=AI训练无授权；海外/境外主体/跨境处理涉个信无 DPA（境内客户不因缺DPA单列风险）",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R013SLA已发布转译就绪启用可正式审核枚举类混合SLA 与服务承诺黄色v4ONES skill 条款速查：A=公有云 99.5% + 服务费比例赔偿；B=99.9% 需售后评估架构；红线=按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24",
+          "disabled": false,
+          "aria": null
+        },
+        {
+          "text": "R014续约已发布转译就绪启用可正式审核条款语义混合续约与退出黄色v4ONES skill 条款速查：A=书面续约、到期自动终止；B=自动续期+≥30日通知；年涨幅≤5%；红线=永久锁价 / 自动续期无退出权",
+          "disabled": false,
+          "aria": null
+        }
+      ],
+      "links": [
+        {
+          "text": "工作台",
+          "href": "https://sales.cyanlog.icu/"
+        },
+        {
+          "text": "报价中心",
+          "href": "https://sales.cyanlog.icu/quotes"
+        },
+        {
+          "text": "合同审核",
+          "href": "https://sales.cyanlog.icu/contracts"
+        },
+        {
+          "text": "标书中心",
+          "href": "https://sales.cyanlog.icu/tenders"
+        },
+        {
+          "text": "知识库",
+          "href": "https://sales.cyanlog.icu/knowledge"
+        },
+        {
+          "text": "日程",
+          "href": "https://sales.cyanlog.icu/schedule"
+        },
+        {
+          "text": "配置中心",
+          "href": "https://sales.cyanlog.icu/configs"
+        },
+        {
+          "text": "个人信息",
+          "href": "https://sales.cyanlog.icu/profile"
+        }
+      ],
+      "bodyText": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 组织级配置工作台 配置中心 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。 生效范围 组织级统一发布 消费端 报价 / 合同 / AI 当前配置集 合同审核策略 配置域 把所有配置先归到稳定的业务域，再进入具体配置集编辑。 交易配置 ... 围绕报价工作台的价盘、税率和审批配置。 合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。 组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。 界面与体验 ... 运行时主题和界面变量集中配置发布。 结构约束 配置中心只拥有配置，不承载业务执行。 报价工作台、合同审核页只读消费已发布配置。 配置项需要有版本、状态和作用范围。 配置中心 / 合同与 AI 规则 合同审核策略 管理合同审核策略规则，供合同审核与本地模型执行。 规则总数 15 启用规则 15 语义规则 15 合同审核策略 15 AI 模型配置 ... 规则集目录 (14) 新建 全部规则集 15 ALL 全部规则资产 发布 15 就绪 15 阻断 15 默认规则集 0 default 文档 v- · not_started 发布 0 就绪 0 阻断 0 付款与结算规则集 1 PAYMENT 文档 v1 · ready 发布 1 就绪 1 阻断 0 终止与退款规则集 1 TERMINATION 文档 v1 · ready 发布 1 就绪 1 阻断 0 税务与发票规则集 1 TAX 文档 v1 · ready 发布 1 就绪 1 阻断 0 验收与交付规则集 2 ACCEPTANCE 文档 v1 · ready 发布 2 就绪 2 阻断 0 违约责任规则集 1 BREACH 文档 v1 · ready 发布 1 就绪 1 阻断 0 责任边界规则集 2 LIABILITY 文档 v1 · ready 发布 2 就绪 2 阻断 0 保密义务规则集 1 CONFIDENTIALITY 文档 v1 · ready 发布 1 就绪 1 阻断 0 主体与金额一致性规则集 1 BUSINESS_INTEGRITY 文档 v1 · ready 发布 1 就绪 1 阻断 0 知识产权规则集 1 IP 文档 v1 · ready 发布 1 就绪 1 阻断 0 数据安全规则集 1 DATA_SECURITY 文档 v1 · ready 发布 1 就绪 1 阻断 0 SLA 与服务承诺规则集 1 SLA 文档 v1 · ready 发布 1 就绪 1 阻断 0 续约与退出规则集 1 RENEWAL 文档 v1 · ready 发布 1 就绪 1 阻断 0 争议解决规则集 1 DISPUTE 文档 v1 · ready 发布 1 就绪 1 阻断 0 全部规则集 (15) 所有规则集的发布、转译和 Skill 输入状态 测试 R001 付款节奏 已发布 转译就绪 启用 可正式审核 比例类 混合 付款与结算 黄色 v4 ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日 A >= 30percent / B >= 15percent / C < 15percent R002 终止退款 已发布 转译就绪 启用 可正式审核 条款语义 混合 终止与退款 黄色 v4 ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息 A contains 0text / B contains 0text",
+      "scroll": {
+        "width": 768,
+        "height": 1024,
+        "docScrollWidth": 768,
+        "bodyScrollWidth": 768,
+        "hasHorizontalOverflow": false
+      }
+    }
+  ],
+  "errors": []
+}

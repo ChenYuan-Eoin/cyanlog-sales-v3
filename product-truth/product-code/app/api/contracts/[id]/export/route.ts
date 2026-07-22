@@ -5,14 +5,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { generateWordDocument } from '@/lib/export/word-generator'
-import fs from 'fs'
+import { generateAnnotatedPdf } from '@/lib/export/pdf-annotator'
+import { contractSourceFormatFromFilename } from '@/lib/documents/source-format'
+import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
 import { getDefaultOrgId, listAccessibleUserIds } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
+import { z } from 'zod'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
+
+function buildDownloadName(filename: string | null | undefined, extension: 'docx' | 'docm' | 'pdf') {
+  const base = (filename || 'contract').replace(/\.(doc|docx|docm|pdf)$/i, '')
+  return `${base}-ONES批注版.${extension}`
+}
+
+const exportRequestSchema = z.object({
+  export_mode: z.literal('source_annotated').optional(),
+  source_identity: z.object({
+    storage_path: z.string().min(1),
+    source_hash: z.string().regex(/^[0-9a-f]{64}$/),
+    source_text_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  }),
+})
 
 // POST /api/contracts/:id/export - 导出带批注的Word文档
 export async function POST(
@@ -26,6 +46,15 @@ export async function POST(
 
   try {
     const user = await requireAuth(req)
+    const parsedBody = exportRequestSchema.safeParse(await req.json().catch(() => ({})))
+    if (!parsedBody.success) {
+      return errorResponse('导出必须携带页面已加载的完整源文件身份', 400, 'SOURCE_IDENTITY_REQUIRED')
+    }
+    const body = parsedBody.data
+    const exportMode = body.export_mode || 'source_annotated'
+    if (exportMode !== 'source_annotated') {
+      return errorResponse('当前客户交付接口只允许导出源文件批注版', 400, 'UNSUPPORTED_EXPORT_MODE')
+    }
     const orgId = await getDefaultOrgId(user.id)
     const { userIds: accessibleUserIds } = await listAccessibleUserIds(user.id, orgId)
     routeId = await resolveIdParam(params)
@@ -46,6 +75,7 @@ export async function POST(
       .from('contracts')
       .select('*, contract_reviews(*)')
       .eq('id', id)
+      .eq('org_id', orgId)
       .in('created_by', accessibleUserIds)
       .maybeSingle()
 
@@ -62,171 +92,160 @@ export async function POST(
       )
     }
 
-    // 检查是否有审核结果
     const latestReview = contract.contract_reviews?.[0]
-    if (!latestReview || !latestReview.results) {
-      return errorResponse('合同尚未完成审核', 400, 'NO_REVIEW_RESULTS')
+    if (!contract.storage_path) {
+      return errorResponse('合同源文件缺失，不能生成源文件批注版', 422, 'MISSING_SOURCE_FILE')
     }
 
-    // 获取审核结果中的风险项
-    const reviewResults = latestReview.results as {
-      summary?: string
-      risks?: Array<{
-        level: 'red' | 'yellow' | 'green'
-        title: string
-        description: string
-        suggestion: string
-      }>
+    const sourceFormat = contractSourceFormatFromFilename(contract.filename || contract.storage_path)
+    if (sourceFormat === 'doc') {
+      return errorResponse('旧版 DOC 可以保留原件并用于审阅预览；生成 AI 原生批注版前请先另存为 DOCX。系统不会静默转换或重建原文', 422, 'LEGACY_DOC_REQUIRES_DOCX')
+    }
+    if (sourceFormat !== 'docx' && sourceFormat !== 'docm' && sourceFormat !== 'pdf') {
+      return errorResponse('当前源文件不是受支持的 Word/PDF 格式', 422, 'UNSUPPORTED_SOURCE_FORMAT')
     }
 
-    // ===== 硬关单检查：ASK 清单未回应阻断导出 =====
-    const { data: pendingAsks, error: askError } = await supabaseAdmin
-      .from('ask_items')
-      .select('id, ask_code, question_text')
-      .eq('contract_id', id)
-      .eq('status', 'pending')
+    const [annotationResult, decisionResult, identityResult, fileResult] = await Promise.all([
+      supabaseAdmin
+        .from('contract_annotations')
+        .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at, source_anchor, source_storage_path, source_hash, source_text_hash')
+        .eq('contract_id', id)
+        .eq('source_storage_path', contract.storage_path)
+        .not('source_anchor', 'is', null)
+        .order('created_at', { ascending: true }),
+      supabaseAdmin
+        .from('contract_review_decision_drafts')
+        .select('risk_id,source_anchor,customer_comment,revision_text,negotiation_result,resolution_strategy_snapshot,status,workflow_state,source_storage_path,source_hash,source_text_hash,submitted_at')
+        .eq('contract_id', id)
+        .eq('status', 'batch_submitted')
+        .eq('workflow_state', 'REVIEW_PASSED')
+        .order('submitted_at', { ascending: true }),
+      supabaseAdmin
+        .from('contract_source_page_maps')
+        .select('storage_path,source_hash,source_text_hash')
+        .eq('contract_id', id)
+        .eq('storage_path', contract.storage_path)
+        .maybeSingle(),
+      supabaseAdmin.storage.from('contracts').download(contract.storage_path),
+    ])
 
-    if (askError) {
-      console.error('[Export] ASK check error:', askError)
+    if (annotationResult.error) {
+      return errorResponse('读取当前源文件人工批注失败', 500, 'ANNOTATION_LOAD_FAILED')
+    }
+    if (decisionResult.error) {
+      return errorResponse('读取已通过批注决策失败', 500, 'DECISION_LOAD_FAILED')
+    }
+    if (identityResult.error || !identityResult.data?.source_hash || !identityResult.data.source_text_hash) {
+      return errorResponse('当前源文件缺少可审计字节或解析文本哈希，不能安全导出', 409, 'SOURCE_IDENTITY_MISSING')
+    }
+    if (fileResult.error || !fileResult.data) {
+      console.error('Download file error:', fileResult.error)
+      return errorResponse('合同源文件下载失败，不能生成源文件批注版', 502, 'SOURCE_DOWNLOAD_FAILED')
     }
 
-    if (pendingAsks && pendingAsks.length > 0) {
-      return NextResponse.json({
-        error: '合同有未回应的 ASK 问题，请先处理',
-        code: 'PENDING_ASKS_BLOCK',
-        details: {
-          pending_count: pendingAsks.length,
-          items: pendingAsks.map((a) => ({ id: a.id, code: a.ask_code, question: a.question_text })),
-        },
-      }, { status: 422 })
+    const buffer = Buffer.from(await fileResult.data.arrayBuffer())
+    const actualSourceHash = createHash('sha256').update(buffer).digest('hex')
+    const actualSourceTextHash = createHash('sha256').update(contract.parsed_text || '').digest('hex')
+    if (identityResult.data.source_hash !== actualSourceHash) {
+      return errorResponse('当前存储文件与页级身份哈希冲突，已停止导出', 409, 'SOURCE_IDENTITY_CONFLICT')
     }
-    // ===== 硬关单检查结束 =====
+    if (identityResult.data.source_text_hash !== actualSourceTextHash) {
+      return errorResponse('当前解析文本与页级身份哈希冲突，已停止导出', 409, 'SOURCE_TEXT_IDENTITY_CONFLICT')
+    }
+    if (
+      body.source_identity.storage_path !== contract.storage_path
+      || body.source_identity.source_hash !== actualSourceHash
+      || body.source_identity.source_text_hash !== actualSourceTextHash
+    ) {
+      return errorResponse('页面加载后合同源文件已变化，请刷新后重新导出', 409, 'STALE_BROWSER_SOURCE_IDENTITY')
+    }
 
-    // 获取结构化报告字段
-    const riskSummary = (latestReview as unknown as { risk_summary?: {
-      total_clauses: number
-      critical_risks: number
-      high_risks: number
-      medium_risks: number
-      low_risks: number
-      compliance_score: number
-      strategy_code?: string
-    } }).risk_summary
-
-    const complianceCheck = (latestReview as unknown as { compliance_check?: {
-      missing_required_clauses: string[]
-      dangerous_clauses: string[]
-      ambiguous_clauses: string[]
-      unbalanced_clauses: string[]
-      party_a_consistency: string
-      party_b_consistency: string
-      issues: string[]
-    } }).compliance_check
-
-    const effectivenessAnalysis = (latestReview as unknown as { effectiveness_analysis?: string }).effectiveness_analysis
-
-    // 加载合同条款（按 position 排序）
-    const { data: clauses } = await supabaseAdmin
-      .from('contract_clauses')
-      .select('id, clause_number, clause_title, clause_text, risk_level, risk_category, risk_description, legal_basis, suggestion, position')
-      .eq('review_id', latestReview.id)
-      .order('position', { ascending: true })
-
-    // 加载批注
-    const { data: annotations } = await supabaseAdmin
-      .from('contract_annotations')
-      .select('id, start_offset, end_offset, selected_text, comment, category, priority, status, author_id, created_at')
-      .eq('contract_id', id)
-      .order('created_at', { ascending: true })
-
-    // 加载策略名称
-    let strategyName = ''
-    if (riskSummary?.strategy_code) {
-      const { data: strategy } = await supabaseAdmin
-        .from('review_strategies')
-        .select('name')
-        .eq('code', riskSummary.strategy_code)
-        .or('org_id.is.null,org_id.eq.' + orgId)
-        .limit(1)
-        .maybeSingle()
-      strategyName = strategy?.name || riskSummary.strategy_code
+    const annotations = (annotationResult.data || []).filter((annotation) => (
+      annotation.source_storage_path === contract.storage_path
+      && annotation.source_hash === actualSourceHash
+      && annotation.source_text_hash === actualSourceTextHash
+    ))
+    const allPassedDecisions = decisionResult.data || []
+    const decisionDrafts = allPassedDecisions.filter((decision) => (
+      decision.source_storage_path === contract.storage_path
+      && decision.source_hash === actualSourceHash
+      && decision.source_text_hash === actualSourceTextHash
+    ))
+    if (decisionDrafts.length === 0 && annotations.length === 0) {
+      return errorResponse('没有已通过决策或当前源文件的人工批注，不能导出批注版', 409, 'NO_SOURCE_ANNOTATIONS')
     }
 
     const exportData = {
-      summary: reviewResults.summary,
-      risks: reviewResults.risks || [],
-      risk_summary: riskSummary,
-      compliance_check: complianceCheck,
-      effectiveness_analysis: effectivenessAnalysis,
-      clauses: clauses || [],
-      annotations: annotations || [],
-      strategy_name: strategyName,
-      strategy_code: riskSummary?.strategy_code,
+      risks: [],
+      annotations,
+      export_mode: exportMode,
+      decision_drafts: decisionDrafts,
     }
 
-    // 下载原始合同文件
-    const { data: fileData, error: fileError } = await supabaseAdmin.storage
-      .from('contracts')
-      .download(contract.storage_path)
+    const inputPath = path.join(os.tmpdir(), `contract-${id}-${randomUUID()}.${sourceFormat}`)
+    let outputPath: string | undefined
+    fs.writeFileSync(inputPath, buffer, { mode: 0o600 })
+    try {
+      const exportResult = sourceFormat === 'pdf'
+        ? await generateAnnotatedPdf(inputPath, exportData)
+        : await generateWordDocument(inputPath, exportData)
 
-    if (fileError) {
-      console.error('Download file error:', fileError)
-      // Continue without original file - will create new document
-    }
-
-    // Save to temp file if download succeeded
-    let inputPath = ''
-    if (fileData) {
-      const tempInputPath = `/tmp/contract-${id}-input.docx`
-      const buffer = Buffer.from(await fileData.arrayBuffer())
-      fs.writeFileSync(tempInputPath, buffer)
-      inputPath = tempInputPath
-    }
-
-    // Generate Word document with structured report + comments
-    const exportResult = await generateWordDocument(inputPath, exportData)
-
-    // Clean up temp input file
-    if (inputPath && fs.existsSync(inputPath)) {
-      fs.unlinkSync(inputPath)
-    }
-
-    if (!exportResult.success || !exportResult.outputPath) {
-      return errorResponse(
-        exportResult.error || '文档生成失败',
-        500,
-        'EXPORT_FAILED'
-      )
-    }
-
-    // Read the generated file
-    const fileBuffer = fs.readFileSync(exportResult.outputPath)
-
-    // Clean up temp output file
-    fs.unlinkSync(exportResult.outputPath)
-
-    // Return file as download
-    const headers = new Headers()
-    headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-    headers.set(
-      'Content-Disposition',
-      `attachment; filename="contract-${contract.filename}-审核结果.docx"`
-    )
-
-    logRouteDone(
-      {
-        route,
-        requestId,
-        userId: user.id,
-        details: { contractId: id },
-      },
-      startedAt,
-      {
-        reviewId: latestReview.id,
+      outputPath = exportResult.outputPath
+      if (!exportResult.success || !outputPath || !fs.existsSync(outputPath)) {
+        const errorCode = 'errorCode' in exportResult && typeof exportResult.errorCode === 'string'
+          ? exportResult.errorCode
+          : 'EXPORT_FAILED'
+        return errorResponse(
+          exportResult.error || '文档生成失败',
+          500,
+          errorCode
+        )
       }
-    )
+      if (exportResult.unlocated?.length) {
+        return errorResponse(
+          `有 ${exportResult.unlocated.length} 条批注缺少可审计定位，已停止生成客户文件`,
+          409,
+          'ANNOTATION_ANCHOR_UNLOCATED'
+        )
+      }
 
-    return new NextResponse(fileBuffer, { headers })
+      const fileBuffer = fs.readFileSync(outputPath)
+
+      const headers = new Headers()
+      const outputExtension = sourceFormat === 'pdf' ? 'pdf' : sourceFormat
+      headers.set('Content-Type', sourceFormat === 'pdf'
+        ? 'application/pdf'
+        : sourceFormat === 'docm'
+          ? 'application/vnd.ms-word.document.macroEnabled.12'
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+      const downloadName = buildDownloadName(contract.filename, outputExtension)
+      headers.set(
+        'Content-Disposition',
+        `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`
+      )
+
+      logRouteDone(
+        {
+          route,
+          requestId,
+          userId: user.id,
+          details: { contractId: id },
+        },
+        startedAt,
+        {
+          reviewId: latestReview?.id || null,
+          sourceHash: actualSourceHash,
+          anchoredComments: exportResult.anchored,
+          trackedRevisions: 'revisions' in exportResult ? exportResult.revisions : 0,
+          unlocatedComments: exportResult.unlocated?.length || 0,
+        }
+      )
+
+      return new NextResponse(fileBuffer, { headers })
+    } finally {
+      if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath)
+      if (outputPath && fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    }
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

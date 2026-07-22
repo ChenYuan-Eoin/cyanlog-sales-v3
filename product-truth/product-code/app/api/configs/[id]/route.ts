@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth'
 import { configUpdateSchema } from '@/lib/configs/validation'
 import { validateConfigValue } from '@/lib/configs/validation'
 import { mergeStoredAIConfigValue, sanitizeConfigRow } from '@/lib/configs/runtime'
+import { findDuplicateAIProviderInstance } from '@/lib/configs/provider-instance-server'
+import { getAIProviderInstanceId, type AIConfigValue } from '@/lib/configs/types'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -78,7 +80,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     const user = await requireAuth(req)
     const { id } = await params
 
-    const { ok, config } = await verifyConfigAccess(id, user.id)
+    const { ok, orgId, config } = await verifyConfigAccess(id, user.id)
     if (!ok) {
       return errorResponse('配置不存在或无权限', 404, 'NOT_FOUND')
     }
@@ -114,6 +116,24 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       const valueValidation = validateConfigValue(type, nextValue)
       if (!valueValidation.valid) {
         return errorResponse(`配置值验证失败: ${valueValidation.error}`, 400, 'INVALID_VALUE')
+      }
+
+      if (type === 'AI_CONFIG' && orgId) {
+        const aiValue = nextValue as unknown as AIConfigValue
+        if ((aiValue.kind || 'provider') === 'provider') {
+          const instanceId = getAIProviderInstanceId(
+            aiValue,
+            (config as { key: string }).key
+          )
+          const duplicate = await findDuplicateAIProviderInstance(orgId, instanceId, id)
+          if (duplicate) {
+            return errorResponse(
+              `模型实例 ID "${instanceId}" 已被配置 "${duplicate.key}" 使用`,
+              409,
+              'DUPLICATE_PROVIDER_INSTANCE'
+            )
+          }
+        }
       }
     }
 

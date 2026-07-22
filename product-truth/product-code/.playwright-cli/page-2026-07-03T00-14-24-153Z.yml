@@ -1,0 +1,165 @@
+- generic [ref=e1]:
+  - complementary [ref=e30]:
+    - generic [ref=e31]:
+      - generic [ref=e32]: OS
+      - generic [ref=e33]:
+        - generic [ref=e34]: ONES Sales
+        - paragraph [ref=e35]: 智能协作平台
+    - navigation [ref=e36]:
+      - link "工作台" [ref=e37] [cursor=pointer]:
+        - /url: /
+        - img [ref=e38]
+        - generic [ref=e42]: 工作台
+      - link "报价中心" [ref=e43] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e44]
+        - generic [ref=e48]: 报价中心
+      - link "合同审核" [ref=e49] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e50]
+        - generic [ref=e55]: 合同审核
+      - link "标书中心" [ref=e56] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e57]
+        - generic [ref=e61]: 标书中心
+      - link "知识库" [ref=e62] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e63]
+        - generic [ref=e68]: 知识库
+      - link "日程" [ref=e69] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e70]
+        - generic [ref=e76]: 日程
+      - link "配置中心" [ref=e77] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e78]
+        - generic [ref=e82]: 配置中心
+    - generic [ref=e83]:
+      - link "个人信息" [ref=e84] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e85]
+        - generic [ref=e88]: 个人信息
+      - button "退出登录" [ref=e89] [cursor=pointer]:
+        - img [ref=e90]
+        - generic [ref=e93]: 退出登录
+  - main [ref=e2]:
+    - generic [ref=e209]:
+      - generic [ref=e210]:
+        - generic [ref=e211]:
+          - generic [ref=e212]:
+            - img [ref=e213]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=e217]
+          - paragraph [ref=e218]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e219]:
+          - generic [ref=e220]:
+            - generic [ref=e221]: 生效范围
+            - generic [ref=e222]: 组织级统一发布
+          - generic [ref=e223]:
+            - generic [ref=e224]: 消费端
+            - generic [ref=e225]: 报价 / 合同 / AI
+          - generic [ref=e226]:
+            - generic [ref=e227]: 当前配置集
+            - generic [ref=e228]: 界面主题
+      - generic [ref=e229]:
+        - complementary [ref=e230]:
+          - generic [ref=e231]:
+            - generic [ref=e232]:
+              - generic [ref=e233]: 配置域
+              - paragraph [ref=e234]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e235]:
+              - button "交易配置 8+ 围绕报价工作台的价盘、税率和审批配置。" [ref=e1214] [cursor=pointer]:
+                - generic [ref=e237]:
+                  - generic [ref=e238]: 交易配置
+                  - generic [ref=e239]: 8+
+                - paragraph [ref=e240]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 18+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=e1215] [cursor=pointer]:
+                - generic [ref=e242]:
+                  - generic [ref=e243]: 合同与 AI 规则
+                  - generic [ref=e244]: 18+
+                - paragraph [ref=e245]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=e246] [cursor=pointer]:
+                - generic [ref=e247]:
+                  - generic [ref=e248]: 组织与权限
+                  - generic [ref=e249]: ...
+                - paragraph [ref=e250]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 1 运行时主题和界面变量集中配置发布。" [active] [ref=e1216] [cursor=pointer]:
+                - generic [ref=e252]:
+                  - generic [ref=e253]: 界面与体验
+                  - generic [ref=e254]: "1"
+                - paragraph [ref=e255]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e256]:
+              - generic [ref=e257]: 结构约束
+              - list [ref=e258]:
+                - listitem [ref=e259]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e260]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e261]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e262]:
+          - generic [ref=e263]:
+            - generic [ref=e264]:
+              - generic [ref=e265]:
+                - generic [ref=e266]:
+                  - generic [ref=e267]: 配置中心
+                  - generic [ref=e268]: /
+                  - generic [ref=e269]: 界面与体验
+                - generic [ref=e270]:
+                  - img [ref=e1217]
+                  - generic [ref=e274]:
+                    - heading "界面主题" [level=2] [ref=e1220]
+                    - paragraph [ref=e276]: 控制运行时主题变量与视觉发布，确保业务界面一致可控。
+              - generic [ref=e277]:
+                - generic [ref=e1221]:
+                  - generic [ref=e1222]: 主题方案
+                  - generic [ref=e1223]: "1"
+                - generic [ref=e1224]:
+                  - generic [ref=e1225]: 已发布
+                  - generic [ref=e1226]: "1"
+                - generic [ref=e1227]:
+                  - generic [ref=e1228]: 草稿
+                  - generic [ref=e1229]: "0"
+            - button "界面主题 1" [ref=e1230] [cursor=pointer]:
+              - img [ref=e1231]
+              - generic [ref=e1234]: 界面主题
+              - generic [ref=e1235]: "1"
+          - generic [ref=e1236]:
+            - generic [ref=e1237]:
+              - generic [ref=e1238]:
+                - generic [ref=e1239]: 品牌主题 Profile
+                - paragraph [ref=e1240]: 同一组织只允许一个已发布主题作为当前 BrandProfile，favicon、Logo 和浏览器标题都从这里读取。
+              - button "+ 新增主题" [ref=e1241] [cursor=pointer]
+            - generic [ref=e1242]:
+              - generic [ref=e1244]:
+                - generic [ref=e1245]:
+                  - generic [ref=e1246]: 当前生效 BrandProfile
+                  - generic [ref=e1247]: 默认界面主题
+                  - generic [ref=e1248]: ONES Sales · ONES Sales · UI_THEME_DEFAULT
+                - generic [ref=e1249]:
+                  - generic [ref=e1251]: ONES Sales
+                  - generic [ref=e1253]: 浏览器图标
+              - generic [ref=e1256]:
+                - generic [ref=e1257]:
+                  - generic [ref=e1258]:
+                    - generic [ref=e1259]: 默认界面主题
+                    - generic [ref=e1260]: 已发布
+                    - generic [ref=e1261]: 当前生效
+                  - generic [ref=e1262]:
+                    - generic [ref=e1263]: 品牌：ONES Sales
+                    - generic [ref=e1264]: 标题：ONES Sales
+                    - generic [ref=e1265]: 副标题：智能协作平台
+                  - generic [ref=e1266]:
+                    - generic [ref=e1267]: Logo：已配置
+                    - generic [ref=e1268]: Favicon：已配置
+                    - generic [ref=e1269]: 更新：2026/7/2 09:46:46
+                  - generic [ref=e1270]:
+                    - generic [ref=e1273]: Primary
+                    - generic [ref=e1276]: Secondary
+                    - generic [ref=e1279]: Border
+                    - generic [ref=e1282]: Background
+                  - generic [ref=e1283]:
+                    - generic [ref=e1284]: "radius-md: 10px"
+                    - generic [ref=e1285]: "radius-lg: 16px"
+                - generic [ref=e1286]:
+                  - button "编辑" [ref=e1287] [cursor=pointer]
+                  - button "版本" [ref=e1288] [cursor=pointer]
+                  - button "删除" [ref=e1289] [cursor=pointer]
+  - alert [ref=e29]: ONES Sales

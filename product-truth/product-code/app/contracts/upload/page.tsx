@@ -9,18 +9,37 @@ import { error as toastError, success as toastSuccess } from '@/lib/toast'
 import { useChunkUpload } from '@/lib/hooks/useChunkUpload'
 import { UploadProgressBar } from '@/components/upload/UploadProgress'
 import { cn } from '@/lib/utils'
+import { CONTRACT_SOURCE_ACCEPT, contractSourceFormatFromFilename } from '@/lib/documents/source-format'
+import {
+  completeCurrentUpload,
+  createdContractId,
+  planUploadQueueRemoval,
+} from '@/lib/documents/upload-queue'
+import { readUploadErrorMessage } from '@/lib/documents/upload-error'
+import { CONTRACT_UPLOAD_MAX_BYTES } from '@/lib/documents/chunk-upload-protocol'
 
-// ponytail: 文件类型验证用扩展名而非 MIME 类型（更可靠）
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
-
-// 最大文件大小: 500MB
-const MAX_FILE_SIZE = 500 * 1024 * 1024
+async function deleteDraftContract(contractId: string, token: string): Promise<void> {
+  try {
+    await fetch(`/api/contracts/${contractId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+  } catch {
+    // 队列已停止；删除失败时保留可审计草稿，不能用重复请求制造空转。
+  }
+}
 
 export default function ContractUploadPage() {
   const router = useRouter()
   const [files, setFiles] = useState<File[]>([])
   const [currentFileIndex, setCurrentFileIndex] = useState(0)
-  const [contractId, setContractId] = useState<string | null>(null)
+  // 异步上传队列必须读取同步游标，不能依赖 onComplete 创建时捕获的 React state。
+  // 否则第二个文件仍会使用第一个文件的旧闭包，反复创建并上传同一项。
+  const currentFileIndexRef = useRef(0)
+  const contractIdRef = useRef<string | null>(null)
+  const queueActiveRef = useRef(false)
+  const queueRunIdRef = useRef(0)
+  const [queueActive, setQueueActive] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -31,24 +50,48 @@ export default function ContractUploadPage() {
     pauseUpload,
     cancelUpload,
   } = useChunkUpload({
-    chunkSize: 5 * 1024 * 1024, // 5MB 分块
+    chunkSize: 4 * 1024 * 1024, // 留在 Vercel Function 4.5MB 请求体上限内
     concurrency: 3, // 3个并发
     maxRetries: 3,
     onProgress: () => {
       // ponytail: 进度更新时触发重渲染，不直接操作 DOM
     },
-    onComplete: () => {
+    onComplete: (result) => {
+      if (!queueActiveRef.current) return
+      const expectedFile = files[currentFileIndexRef.current]
+      if (
+        !expectedFile
+        || result.contractId !== contractIdRef.current
+        || result.fileName !== expectedFile.name
+      ) {
+        queueActiveRef.current = false
+        setQueueActive(false)
+        setErrorMsg('上传完成身份与当前队列不一致，已停止自动推进')
+        return
+      }
       toastSuccess('上传成功')
+      const completedContractId = contractIdRef.current
+      const queueAdvance = completeCurrentUpload(currentFileIndexRef, files.length)
       // 所有文件上传完成后跳转
-      if (currentFileIndex >= files.length - 1) {
-        router.push(`/contracts/${contractId}/review`)
+      if (queueAdvance.done) {
+        setCurrentFileIndex(currentFileIndexRef.current)
+        queueActiveRef.current = false
+        setQueueActive(false)
+        if (!completedContractId) {
+          setErrorMsg('上传完成但合同ID丢失，请从合同中心重新进入审核任务')
+          return
+        }
+        router.push(`/contracts/${completedContractId}/review`)
       } else {
-        // 继续上传下一个文件
-        setCurrentFileIndex(prev => prev + 1)
-        uploadNextFile(currentFileIndex + 1)
+        // 每个源文件创建独立合同，避免批量上传互相覆盖 storage_path。
+        contractIdRef.current = null
+        setCurrentFileIndex(queueAdvance.nextIndex)
+        void uploadNextFile(queueAdvance.nextIndex, queueRunIdRef.current)
       }
     },
     onError: (error) => {
+      queueActiveRef.current = false
+      setQueueActive(false)
       setErrorMsg(error)
       toastError(error)
     },
@@ -57,14 +100,16 @@ export default function ContractUploadPage() {
   // 验证文件
   const validateFile = useCallback((file: File): string | null => {
     // 检查文件类型
-    const extension = '.' + file.name.split('.').pop()?.toLowerCase()
-    if (!ALLOWED_EXTENSIONS.includes(extension)) {
-      return `不支持的文件类型: ${extension}，请上传 PDF、DOC 或 DOCX 文件`
+    if (!contractSourceFormatFromFilename(file.name)) {
+      return '不支持的文件类型，请上传 PDF、DOC、DOCX 或 DOCM 文件'
     }
 
     // 检查文件大小
-    if (file.size > MAX_FILE_SIZE) {
-      return `文件大小超过 500MB 限制: ${(file.size / 1024 / 1024).toFixed(2)} MB`
+    if (file.size < 1) {
+      return '文件为空，请选择包含内容的合同文件'
+    }
+    if (file.size > CONTRACT_UPLOAD_MAX_BYTES) {
+      return `文件大小超过 50MB 限制: ${(file.size / 1024 / 1024).toFixed(2)} MB`
     }
 
     return null
@@ -144,11 +189,36 @@ export default function ContractUploadPage() {
 
   // 删除文件
   const removeFile = useCallback((index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index))
-    if (index < currentFileIndex) {
-      setCurrentFileIndex(prev => Math.max(0, prev - 1))
+    if (queueActiveRef.current) return
+    const isCurrent = index === currentFileIndexRef.current
+    const currentContractId = isCurrent ? contractIdRef.current : null
+    const token = localStorage.getItem('token')
+    const removal = planUploadQueueRemoval(
+      currentFileIndexRef.current,
+      files.length,
+      index,
+      Boolean(currentContractId),
+    )
+
+    if (isCurrent) {
+      // 当前项可能已经创建了草稿合同；删除后绝不能把下一文件写入该旧合同。
+      contractIdRef.current = null
+      void cancelUpload().then(cancelled => {
+        if (cancelled && currentContractId && token) {
+          return deleteDraftContract(currentContractId, token)
+        }
+      })
     }
-  }, [currentFileIndex])
+    setFiles(prev => prev.filter((_, i) => i !== index))
+    currentFileIndexRef.current = removal.nextIndex
+    setCurrentFileIndex(removal.nextIndex)
+    if (removal.removedStartedTerminal) {
+      // 删除失败队列的末项后，游标必须变成新数组的 terminal 值；回到合同中心，
+      // 不能留下按钮永久显示“全部完成”却无可达下一步的死路。
+      setErrorMsg(null)
+      router.push('/contracts')
+    }
+  }, [cancelUpload, files.length, router])
 
   // 上传单个文件
   const uploadSingleFile = useCallback(async (file: File, cid: string, token: string) => {
@@ -156,9 +226,12 @@ export default function ContractUploadPage() {
   }, [startUpload])
 
   // 创建合同并上传
-  const uploadNextFile = useCallback(async (fileIndex: number) => {
+  const uploadNextFile = useCallback(async (fileIndex: number, queueRunId: number) => {
+    if (!queueActiveRef.current || queueRunId !== queueRunIdRef.current) return
     const token = localStorage.getItem('token')
     if (!token) {
+      queueActiveRef.current = false
+      setQueueActive(false)
       setErrorMsg('请先登录')
       toastError('请先登录')
       return
@@ -167,11 +240,12 @@ export default function ContractUploadPage() {
     const file = files[fileIndex]
     if (!file) return
 
+    currentFileIndexRef.current = fileIndex
     setErrorMsg(null)
 
     try {
       // 如果没有 contractId，先创建合同草稿
-      let cid = contractId
+      let cid = contractIdRef.current
       if (!cid) {
         const createRes = await fetch('/api/contracts', {
           method: 'POST',
@@ -186,34 +260,51 @@ export default function ContractUploadPage() {
         })
 
         if (!createRes.ok) {
-          const err = await createRes.json().catch(() => ({ error: '创建合同草稿失败' }))
-          throw new Error(err.error || '创建合同草稿失败')
+          throw new Error(await readUploadErrorMessage(createRes, '创建合同草稿失败'))
         }
 
         const createData = await createRes.json()
-        cid = createData.data?.contract_id || createData.data?.id
+        cid = createdContractId(createData)
 
         if (!cid) {
           throw new Error('创建合同草稿失败：未返回合同ID')
         }
 
-        setContractId(cid)
+        if (!queueActiveRef.current || queueRunId !== queueRunIdRef.current) {
+          // 用户可能在 POST 尚未返回时取消。响应中的草稿必须主动回收，不能静默遗留。
+          await deleteDraftContract(cid, token)
+          return
+        }
+
+        contractIdRef.current = cid
       }
 
       // 开始分块上传
+      if (!queueActiveRef.current || queueRunId !== queueRunIdRef.current) return
       await uploadSingleFile(file, cid, token)
     } catch (err) {
+      if (queueRunId !== queueRunIdRef.current) return
+      queueActiveRef.current = false
+      setQueueActive(false)
       const errorMessage = err instanceof Error ? err.message : '上传失败'
       setErrorMsg(errorMessage)
       toastError(errorMessage)
     }
-  }, [files, contractId, uploadSingleFile])
+  }, [files, uploadSingleFile])
 
   // 开始上传所有文件
   const handleUpload = useCallback(() => {
-    if (files.length === 0 || uploadState.status === 'uploading') return
-    uploadNextFile(currentFileIndex)
-  }, [files, currentFileIndex, uploadState.status, uploadNextFile])
+    if (
+      files.length === 0
+      || currentFileIndexRef.current >= files.length
+      || queueActiveRef.current
+    ) return
+    queueActiveRef.current = true
+    setQueueActive(true)
+    const queueRunId = ++queueRunIdRef.current
+    currentFileIndexRef.current = currentFileIndex
+    void uploadNextFile(currentFileIndex, queueRunId)
+  }, [files, currentFileIndex, uploadNextFile])
 
   // 暂停/继续
   const handlePause = useCallback(() => {
@@ -222,18 +313,28 @@ export default function ContractUploadPage() {
     } else if (uploadState.status === 'paused') {
       // 继续上传
       const token = localStorage.getItem('token')
-      if (token && contractId && files[currentFileIndex]) {
-        uploadSingleFile(files[currentFileIndex], contractId, token)
+      if (token && contractIdRef.current && files[currentFileIndex]) {
+        uploadSingleFile(files[currentFileIndex], contractIdRef.current, token)
       }
     }
-  }, [uploadState.status, pauseUpload, files, currentFileIndex, contractId, uploadSingleFile])
+  }, [uploadState.status, pauseUpload, files, currentFileIndex, uploadSingleFile])
 
   // 取消上传
   const handleCancel = useCallback(() => {
-    cancelUpload()
+    const currentContractId = contractIdRef.current
+    const token = localStorage.getItem('token')
+    void cancelUpload().then(cancelled => {
+      if (cancelled && currentContractId && token) {
+        return deleteDraftContract(currentContractId, token)
+      }
+    })
+    queueRunIdRef.current++
+    queueActiveRef.current = false
+    setQueueActive(false)
     setFiles([])
     setCurrentFileIndex(0)
-    setContractId(null)
+    currentFileIndexRef.current = 0
+    contractIdRef.current = null
   }, [cancelUpload])
 
   // 格式化文件大小
@@ -247,6 +348,7 @@ export default function ContractUploadPage() {
 
   const isUploading = uploadState.status === 'uploading'
   const isPaused = uploadState.status === 'paused'
+  const isPreparing = queueActive && !isUploading && !isPaused
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -291,7 +393,7 @@ export default function ContractUploadPage() {
               ref={inputRef}
               id="file-input"
               type="file"
-              accept=".doc,.docx,.pdf"
+              accept={CONTRACT_SOURCE_ACCEPT}
               multiple
               className="hidden"
               onChange={handleFileChange}
@@ -302,7 +404,7 @@ export default function ContractUploadPage() {
               点击选择文件或拖拽到此处
             </p>
             <p className="text-xs text-slate-400">
-              支持 PDF、DOC、DOCX 格式，单个文件最大 500MB
+              支持 PDF、DOC、DOCX、DOCM 格式，单个文件最大 50MB
             </p>
           </div>
 
@@ -357,7 +459,7 @@ export default function ContractUploadPage() {
                   )}
 
                   {/* 删除按钮 */}
-                  {!isUploading && index >= currentFileIndex && (
+                  {!queueActive && !isUploading && index >= currentFileIndex && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -375,24 +477,29 @@ export default function ContractUploadPage() {
           {/* Action Buttons */}
           {files.length > 0 && (
             <div className="mt-6 flex items-center justify-end gap-2">
-              {(isUploading || isPaused) && (
+              {(queueActive || isUploading || isPaused) && (
                 <>
-                  <Button
-                    variant="outline"
-                    onClick={handlePause}
-                  >
-                    {isPaused ? (
-                      <>
-                        <PlayIcon className="h-4 w-4 mr-1" />
-                        继续
-                      </>
-                    ) : (
-                      <>
-                        <PauseIcon className="h-4 w-4 mr-1" />
-                        暂停
-                      </>
-                    )}
-                  </Button>
+                  {isPreparing && (
+                    <Button disabled>准备上传...</Button>
+                  )}
+                  {(isUploading || isPaused) && (
+                    <Button
+                      variant="outline"
+                      onClick={handlePause}
+                    >
+                      {isPaused ? (
+                        <>
+                          <PlayIcon className="h-4 w-4 mr-1" />
+                          继续
+                        </>
+                      ) : (
+                        <>
+                          <PauseIcon className="h-4 w-4 mr-1" />
+                          暂停
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     onClick={handleCancel}
@@ -402,12 +509,14 @@ export default function ContractUploadPage() {
                 </>
               )}
 
-              {!isUploading && !isPaused && (
+              {!queueActive && !isUploading && !isPaused && (
                 <Button
                   onClick={handleUpload}
                   disabled={currentFileIndex >= files.length}
                 >
-                  {currentFileIndex >= files.length ? '全部完成' : `开始上传 (${files.length - currentFileIndex}个)`}
+                  {currentFileIndex >= files.length
+                    ? '全部完成'
+                    : `开始上传 (${files.length - currentFileIndex}个)`}
                 </Button>
               )}
             </div>
@@ -416,8 +525,8 @@ export default function ContractUploadPage() {
 
         {/* Upload Tips */}
         <div className="mt-6 text-xs text-slate-500 space-y-1">
-          <p>• 支持大文件分块上传，单个文件最大 500MB</p>
-          <p>• 支持断点续传，上传中断后可继续</p>
+          <p>• 支持分块上传，单个文件最大 50MB</p>
+          <p>• 可暂停当前上传；继续时会复用同一上传会话并重新校验文件摘要</p>
           <p>• 3个分块并发上传，提高传输速度</p>
         </div>
       </div>

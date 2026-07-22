@@ -16,7 +16,7 @@
     },
     {
       "type": "gate",
-      "gate": "G3",
+      "gate": "HG3",
       "description": "修复门 - 补测试"
     }
   ],

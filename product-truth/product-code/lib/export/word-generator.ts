@@ -2,6 +2,7 @@
 // PURPOSE: Word document export wrapper - Node.js calls Python script
 
 import { spawn } from 'child_process'
+import { randomUUID } from 'node:crypto'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
@@ -23,6 +24,10 @@ export interface ExportClause {
   risk_description: string | null
   legal_basis: string | null
   suggestion: string | null
+  suggested_text?: string | null
+  start_offset?: number | null
+  end_offset?: number | null
+  review_status?: string | null
   position: number
 }
 
@@ -37,6 +42,43 @@ export interface ExportAnnotation {
   status: string
   author_id: string | null
   created_at: string
+  source_anchor?: {
+    kind: 'text' | 'region' | 'point'
+    page: number
+    point?: { x: number; y: number }
+    region?: { x: number; y: number; width: number; height: number }
+  } | null
+  source_storage_path?: string | null
+  source_hash?: string | null
+}
+
+export interface ExportRiskCard {
+  id: string
+  level: 'red' | 'yellow' | 'green' | 'white'
+  title: string
+  description?: string | null
+  suggestion?: string | null
+  clause_ref?: string | null
+  status?: string | null
+  position_start?: number | null
+  position_end?: number | null
+}
+
+export interface ExportAskItem {
+  id: string
+  ask_code?: string | null
+  clause_ref?: string | null
+  risk_name?: string | null
+  initial_level?: 'red' | 'yellow' | 'green' | null
+  question_text?: string | null
+  qualified_std?: string | null
+  status?: string | null
+  ask_responses?: Array<{
+    id: string
+    response_text?: string | null
+    responder_name?: string | null
+    responder_role?: string | null
+  }>
 }
 
 export interface ExportData {
@@ -63,18 +105,40 @@ export interface ExportData {
   effectiveness_analysis?: string
   clauses?: ExportClause[]
   annotations?: ExportAnnotation[]
+  risk_cards?: ExportRiskCard[]
+  ask_items?: ExportAskItem[]
   strategy_name?: string
   strategy_code?: string
+  export_mode?: string
+  decision_drafts?: Array<{
+    source_anchor?: {
+      page?: number
+      start?: number
+      end?: number
+      clause_ref?: string | null
+      excerpt?: string | null
+      exact_text?: string | null
+      locator?: 'rendered' | 'provisional'
+    } | null
+    customer_comment?: string | null
+    revision_text?: string | null
+    negotiation_result?: 'customer_agreed' | 'customer_feedback' | 'exception_requested' | null
+    resolution_strategy_snapshot?: Record<string, unknown> | null
+    status?: string
+  }>
 }
 
 export interface WordExportResult {
   success: boolean
   outputPath?: string
   error?: string
+  anchored?: number
+  revisions?: number
+  unlocated?: string[]
 }
 
 /**
- * Generate Word document with structured report + comments using Python script
+ * Generate a source DOCX with native Word comments.
  */
 export async function generateWordDocument(
   inputDocxPath: string,
@@ -83,7 +147,8 @@ export async function generateWordDocument(
   return new Promise((resolve) => {
     // Create temp output path
     const tempDir = os.tmpdir()
-    const outputPath = path.join(tempDir, `contract-export-${Date.now()}.docx`)
+    const outputExtension = inputDocxPath.toLowerCase().endsWith('.docm') ? 'docm' : 'docx'
+    const outputPath = path.join(tempDir, `contract-export-${randomUUID()}.${outputExtension}`)
 
     // Python script path
     const scriptPath = path.join(process.cwd(), 'lib', 'export', 'word-generator.py')
@@ -103,10 +168,17 @@ export async function generateWordDocument(
     // 兼容老接口（仅传 comments 数组）
     const exportData: ExportData = Array.isArray(data)
       ? { risks: data, clauses: [], annotations: [] }
-      : { ...data, clauses: data.clauses || [], annotations: data.annotations || [] }
+      : {
+          ...data,
+          clauses: data.clauses || [],
+          annotations: data.annotations || [],
+          risk_cards: data.risk_cards || [],
+          ask_items: data.ask_items || [],
+          decision_drafts: data.decision_drafts || [],
+        }
 
     // Spawn Python process
-    const pythonProcess = spawn('python3', [
+    const pythonProcess = spawn(process.env.PYTHON_PATH || 'python3', [
       scriptPath,
       actualInputPath,
       outputPath,
@@ -115,6 +187,18 @@ export async function generateWordDocument(
 
     let output = ''
     let errorOutput = ''
+    let settled = false
+    const finish = (result: WordExportResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (!result.success && fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+      resolve(result)
+    }
+    const timeout = setTimeout(() => {
+      pythonProcess.kill('SIGKILL')
+      finish({ success: false, error: 'Word 批注运行时超过 60 秒，已停止' })
+    }, 60_000)
 
     pythonProcess.stdout.on('data', (data) => {
       output += data.toString()
@@ -126,7 +210,7 @@ export async function generateWordDocument(
 
     pythonProcess.on('close', (code) => {
       if (code !== 0) {
-        resolve({
+        finish({
           success: false,
           error: errorOutput || 'Python script failed',
         })
@@ -135,35 +219,30 @@ export async function generateWordDocument(
 
       try {
         const result = JSON.parse(output.trim())
-        if (result.success) {
-          resolve({
+        if (result.success && fs.existsSync(outputPath)) {
+          finish({
             success: true,
             outputPath,
+            anchored: result.anchored,
+            revisions: result.revisions,
+            unlocated: result.unlocated,
           })
         } else {
-          resolve({
+          finish({
             success: false,
-            error: result.error || 'Unknown error',
+            error: result.error || 'Word 批注运行时未生成有效文件',
           })
         }
       } catch {
-        // If output is not valid JSON, check if file was created
-        if (fs.existsSync(outputPath)) {
-          resolve({
-            success: true,
-            outputPath,
-          })
-        } else {
-          resolve({
-            success: false,
-            error: errorOutput || 'Failed to generate document',
-          })
-        }
+        finish({
+          success: false,
+          error: errorOutput || 'Word 批注运行时返回了无效结果',
+        })
       }
     })
 
     pythonProcess.on('error', (error) => {
-      resolve({
+      finish({
         success: false,
         error: error.message,
       })

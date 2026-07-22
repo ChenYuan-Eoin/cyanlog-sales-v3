@@ -1,0 +1,114 @@
+- generic [active] [ref=f38e1]:
+  - button "Toggle menu" [ref=f38e2] [cursor=pointer]
+  - complementary [ref=f38e5]:
+    - generic [ref=f38e6]:
+      - img "ONES Sales" [ref=f38e8]
+      - generic [ref=f38e9]:
+        - generic [ref=f38e10]: ONES Sales
+        - paragraph [ref=f38e11]: 智能协作平台
+    - navigation [ref=f38e12]:
+      - link "工作台" [ref=f38e13] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f38e19] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f38e25] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f38e32] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f38e38] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f38e45] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f38e53] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f38e59]:
+      - link "个人信息" [ref=f38e60] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f38e65] [cursor=pointer]
+  - main [ref=f38e70]:
+    - generic [ref=f38e71]:
+      - generic [ref=f38e74]:
+        - link "返回合同中心" [ref=f38e75] [cursor=pointer]:
+          - /url: /contracts
+        - generic [ref=f38e78]:
+          - heading "ones-long-20260702111318.docx" [level=1] [ref=f38e83]
+          - paragraph [ref=f38e84]: 审查 / 任务跟进 · 已发布规则包 v18
+        - generic "审核风格" [ref=f38e85]:
+          - button "宽松" [ref=f38e86] [cursor=pointer]
+          - button "均衡" [ref=f38e87] [cursor=pointer]
+          - button "严格" [ref=f38e88] [cursor=pointer]
+        - button "导出源文件批注版" [ref=f38e89] [cursor=pointer]
+      - generic [ref=f38e90]:
+        - main "源文件主轴" [ref=f38e91]:
+          - generic [ref=f38e92]:
+            - button "打开风险导航" [ref=f38e93] [cursor=pointer]
+            - generic [ref=f38e94]:
+              - paragraph [ref=f38e95]: 一
+              - paragraph [ref=f38e96]: 第 1 页 · 渲染页级锚点
+            - button "上一风险" [ref=f38e97] [cursor=pointer]
+            - button "下一风险" [ref=f38e98] [cursor=pointer]
+            - generic [ref=f38e99]:
+              - button "缩小" [ref=f38e100] [cursor=pointer]
+              - generic [ref=f38e101]: 100%
+              - button "放大" [ref=f38e102] [cursor=pointer]
+            - button "切换聚光灯" [ref=f38e103] [cursor=pointer]
+          - generic [ref=f38e104]:
+            - generic [ref=f38e105]: 真实渲染页已定位：第 1 页
+            - generic [ref=f38e106]: 一
+          - img "合同真实源文件第 1 页" [ref=f38e194]
+          - generic [ref=f38e111]:
+            - generic [ref=f38e112]: 键盘 J/K 或 ↑/↓ 跳转风险 · S 切换聚光灯
+            - generic [ref=f38e113]: 源 DOCX/PDF · 认证页级懒加载
+        - complementary "当前风险处理轨道" [ref=f38e114]:
+          - generic [ref=f38e115]:
+            - generic [ref=f38e116]:
+              - generic [ref=f38e117]:
+                - generic [ref=f38e118]: 1. 问题与业务影响
+                - generic [ref=f38e119]: 高风险
+              - generic [ref=f38e120]:
+                - checkbox "自动下一条" [ref=f38e121]
+                - text: 自动下一条
+            - heading "付款节奏" [level=2] [ref=f38e122]
+            - paragraph [ref=f38e123]: 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日
+            - paragraph [ref=f38e124]: 业务影响：必须修改合同条款
+          - generic [ref=f38e125]:
+            - generic [ref=f38e126]:
+              - generic [ref=f38e127]:
+                - heading "2. 选择法务策略、谈判话术与底线" [level=3] [ref=f38e128]
+                - button "撤销策略" [ref=f38e129] [cursor=pointer]
+              - generic [ref=f38e133]:
+                - button "首期≥30%，三段式 30/60/10，尾款账期≤30工作日 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。" [ref=f38e134] [cursor=pointer]:
+                  - generic [ref=f38e135]: 首期≥30%，三段式 30/60/10，尾款账期≤30工作日
+                  - paragraph [ref=f38e139]: 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。
+                  - paragraph [ref=f38e140]: 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。
+                - button "首期 15–29% 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。" [ref=f38e141] [cursor=pointer]:
+                  - generic [ref=f38e142]: 首期 15–29%
+                  - paragraph [ref=f38e146]: 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。
+                  - paragraph [ref=f38e147]: 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。
+                - button "首期<15% / 100%验收后付首款 / 账期>30工作日 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。" [ref=f38e148] [cursor=pointer]:
+                  - generic [ref=f38e149]: 首期<15% / 100%验收后付首款 / 账期>30工作日
+                  - paragraph [ref=f38e153]: 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。
+                  - paragraph [ref=f38e154]: 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。
+              - generic [ref=f38e155]:
+                - heading "客户侧批注预览" [level=4] [ref=f38e156]
+                - paragraph [ref=f38e160]: 此条款触发了付款节奏的 Level C 红线，存在较高财务风险。请务必与客户沟通并调整。
+                - paragraph [ref=f38e161]: 仅由原文证据、已发布 Option 与法务模板受控生成；内部反馈不会进入客户侧内容。
+            - generic [ref=f38e162]:
+              - heading "3. 记录谈判结果" [level=3] [ref=f38e163]
+              - generic [ref=f38e164]:
+                - button "客户已同意" [ref=f38e165] [cursor=pointer]
+                - button "客户有反馈" [ref=f38e166] [cursor=pointer]
+                - button "要求特批" [ref=f38e167] [cursor=pointer]
+              - paragraph [ref=f38e168]: 记录客户已接受的法务策略与参数。
+            - generic [ref=f38e169]: 草稿已暂存 · 客户已同意
+            - button [ref=f38e171] [cursor=pointer]
+            - group [ref=f38e177]:
+              - generic "运行证据（辅助审计）" [ref=f38e178] [cursor=pointer]
+          - generic [ref=f38e179]:
+            - paragraph [ref=f38e196]: 源文件批注版已生成。
+            - generic [ref=f38e180]:
+              - button "上一条" [ref=f38e181] [cursor=pointer]
+              - button "4. 暂存策略与谈判结果" [ref=f38e182] [cursor=pointer]
+              - button "下一条" [ref=f38e183] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=f38e189] [cursor=pointer]
+  - alert [ref=f38e193]

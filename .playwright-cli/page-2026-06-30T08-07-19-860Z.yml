@@ -1,0 +1,457 @@
+- generic [ref=e1]:
+  - complementary [ref=e30]:
+    - generic [ref=e31]:
+      - generic [ref=e32]: CY
+      - generic [ref=e33]:
+        - generic [ref=e34]: Cyanlog
+        - paragraph [ref=e35]: 智能销售支撑平台
+    - navigation [ref=e36]:
+      - link "工作台" [ref=e37] [cursor=pointer]:
+        - /url: /
+        - img [ref=e38]
+        - generic [ref=e42]: 工作台
+      - link "报价中心" [ref=e43] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e44]
+        - generic [ref=e48]: 报价中心
+      - link "合同审核" [ref=e49] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e50]
+        - generic [ref=e55]: 合同审核
+      - link "标书中心" [ref=e56] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e57]
+        - generic [ref=e61]: 标书中心
+      - link "知识库" [ref=e62] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e63]
+        - generic [ref=e68]: 知识库
+      - link "日程" [ref=e69] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e70]
+        - generic [ref=e76]: 日程
+      - link "配置中心" [ref=e77] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e78]
+        - generic [ref=e82]: 配置中心
+    - generic [ref=e83]:
+      - link "个人信息" [ref=e84] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e85]
+        - generic [ref=e88]: 个人信息
+      - button "退出登录" [ref=e89] [cursor=pointer]:
+        - img [ref=e90]
+        - generic [ref=e93]: 退出登录
+  - main [ref=e2]:
+    - generic [ref=e209]:
+      - generic [ref=e210]:
+        - generic [ref=e211]:
+          - generic [ref=e212]:
+            - img [ref=e213]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=e217]
+          - paragraph [ref=e218]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e219]:
+          - generic [ref=e220]:
+            - generic [ref=e221]: 生效范围
+            - generic [ref=e222]: 组织级统一发布
+          - generic [ref=e223]:
+            - generic [ref=e224]: 消费端
+            - generic [ref=e225]: 报价 / 合同 / AI
+          - generic [ref=e226]:
+            - generic [ref=e227]: 当前配置集
+            - generic [ref=e228]: 合同审核策略
+      - generic [ref=e229]:
+        - complementary [ref=e230]:
+          - generic [ref=e231]:
+            - generic [ref=e232]:
+              - generic [ref=e233]: 配置域
+              - paragraph [ref=e234]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e235]:
+              - button "交易配置 1+ 围绕报价工作台的价盘、税率和审批配置。" [ref=e236] [cursor=pointer]:
+                - generic [ref=e237]:
+                  - generic [ref=e238]: 交易配置
+                  - generic [ref=e239]: 1+
+                - paragraph [ref=e240]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [active] [ref=e864] [cursor=pointer]:
+                - generic [ref=e242]:
+                  - generic [ref=e243]: 合同与 AI 规则
+                  - generic [ref=e244]: 15+
+                - paragraph [ref=e245]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 18 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=e685] [cursor=pointer]:
+                - generic [ref=e247]:
+                  - generic [ref=e248]: 组织与权限
+                  - generic [ref=e249]: "18"
+                - paragraph [ref=e250]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=e251] [cursor=pointer]:
+                - generic [ref=e252]:
+                  - generic [ref=e253]: 界面与体验
+                  - generic [ref=e254]: ...
+                - paragraph [ref=e255]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e256]:
+              - generic [ref=e257]: 结构约束
+              - list [ref=e258]:
+                - listitem [ref=e259]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e260]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e261]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e262]:
+          - generic [ref=e263]:
+            - generic [ref=e264]:
+              - generic [ref=e265]:
+                - generic [ref=e266]:
+                  - generic [ref=e267]: 配置中心
+                  - generic [ref=e268]: /
+                  - generic [ref=e269]: 合同与 AI 规则
+                - generic [ref=e270]:
+                  - img [ref=e865]
+                  - generic [ref=e274]:
+                    - heading "合同审核策略" [level=2] [ref=e868]
+                    - paragraph [ref=e276]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=e277]:
+                - generic [ref=e869]:
+                  - generic [ref=e870]: 规则总数
+                  - generic [ref=e871]: "15"
+                - generic [ref=e872]:
+                  - generic [ref=e873]: 启用规则
+                  - generic [ref=e874]: "15"
+                - generic [ref=e875]:
+                  - generic [ref=e876]: 语义规则
+                  - generic [ref=e877]: "4"
+            - generic [ref=e287]:
+              - button "合同审核策略 15" [ref=e878] [cursor=pointer]:
+                - img [ref=e879]
+                - generic [ref=e882]: 合同审核策略
+                - generic [ref=e883]: "15"
+              - button "AI 模型配置 ..." [ref=e884] [cursor=pointer]:
+                - img [ref=e885]
+                - generic [ref=e890]: AI 模型配置
+                - generic [ref=e891]: ...
+          - generic [ref=e892]:
+            - generic [ref=e894]:
+              - generic [ref=e895]:
+                - generic [ref=e896]: 合同审核规则 (15)
+                - button "新建" [ref=e897] [cursor=pointer]:
+                  - img
+                  - text: 新建
+              - generic [ref=e899]:
+                - generic [ref=e900]:
+                  - button "R001 首期款比例 生效 比例类 结构化 v1 合同首付款占合同总额的比例，低于25%为红线" [ref=e901] [cursor=pointer]:
+                    - generic [ref=e902]:
+                      - generic [ref=e903]:
+                        - generic [ref=e904]:
+                          - generic [ref=e905]: R001
+                          - generic [ref=e906]: 首期款比例
+                          - generic [ref=e907]: 生效
+                        - generic [ref=e908]:
+                          - generic [ref=e909]: 比例类
+                          - generic [ref=e910]: 结构化
+                          - generic [ref=e911]: v1
+                        - paragraph [ref=e912]: 合同首付款占合同总额的比例，低于25%为红线
+                      - img [ref=e913]
+                  - generic [ref=e915]:
+                    - generic [ref=e916]: A >= 30percent / B < 30percent / C < 25percent
+                    - generic [ref=e917]:
+                      - button "版本管理" [ref=e918] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e919] [cursor=pointer]:
+                        - img
+                - generic [ref=e920]:
+                  - button "R015 变更流程 生效 条款语义 语义 v1 合同变更需书面形式并经双方授权代表签字" [ref=e921] [cursor=pointer]:
+                    - generic [ref=e922]:
+                      - generic [ref=e923]:
+                        - generic [ref=e924]:
+                          - generic [ref=e925]: R015
+                          - generic [ref=e926]: 变更流程
+                          - generic [ref=e927]: 生效
+                        - generic [ref=e928]:
+                          - generic [ref=e929]: 条款语义
+                          - generic [ref=e930]: 语义
+                          - generic [ref=e931]: v1
+                        - paragraph [ref=e932]: 合同变更需书面形式并经双方授权代表签字
+                      - img [ref=e933]
+                  - generic [ref=e935]:
+                    - generic [ref=e936]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=e937]:
+                      - button "版本管理" [ref=e938] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e939] [cursor=pointer]:
+                        - img
+                - generic [ref=e940]:
+                  - button "R009 知识产权归属 生效 条款语义 语义 v1 定制开发成果知识产权归属需明确约定" [ref=e941] [cursor=pointer]:
+                    - generic [ref=e942]:
+                      - generic [ref=e943]:
+                        - generic [ref=e944]:
+                          - generic [ref=e945]: R009
+                          - generic [ref=e946]: 知识产权归属
+                          - generic [ref=e947]: 生效
+                        - generic [ref=e948]:
+                          - generic [ref=e949]: 条款语义
+                          - generic [ref=e950]: 语义
+                          - generic [ref=e951]: v1
+                        - paragraph [ref=e952]: 定制开发成果知识产权归属需明确约定
+                      - img [ref=e953]
+                  - generic [ref=e955]:
+                    - generic [ref=e956]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=e957]:
+                      - button "版本管理" [ref=e958] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e959] [cursor=pointer]:
+                        - img
+                - generic [ref=e960]:
+                  - button "R012 争议解决方式 生效 条款语义 语义 v1 争议解决方式应优先选择己方所在地法院或仲裁" [ref=e961] [cursor=pointer]:
+                    - generic [ref=e962]:
+                      - generic [ref=e963]:
+                        - generic [ref=e964]:
+                          - generic [ref=e965]: R012
+                          - generic [ref=e966]: 争议解决方式
+                          - generic [ref=e967]: 生效
+                        - generic [ref=e968]:
+                          - generic [ref=e969]: 条款语义
+                          - generic [ref=e970]: 语义
+                          - generic [ref=e971]: v1
+                        - paragraph [ref=e972]: 争议解决方式应优先选择己方所在地法院或仲裁
+                      - img [ref=e973]
+                  - generic [ref=e975]:
+                    - generic [ref=e976]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=e977]:
+                      - button "版本管理" [ref=e978] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e979] [cursor=pointer]:
+                        - img
+                - generic [ref=e980]:
+                  - button "R002 付款周期 生效 时限类 结构化 v1 付款账期应在30-90天，超过180天为红线" [ref=e981] [cursor=pointer]:
+                    - generic [ref=e982]:
+                      - generic [ref=e983]:
+                        - generic [ref=e984]:
+                          - generic [ref=e985]: R002
+                          - generic [ref=e986]: 付款周期
+                          - generic [ref=e987]: 生效
+                        - generic [ref=e988]:
+                          - generic [ref=e989]: 时限类
+                          - generic [ref=e990]: 结构化
+                          - generic [ref=e991]: v1
+                        - paragraph [ref=e992]: 付款账期应在30-90天，超过180天为红线
+                      - img [ref=e993]
+                  - generic [ref=e995]:
+                    - generic [ref=e996]: A <= 90day / B > 90day / C > 180day
+                    - generic [ref=e997]:
+                      - button "版本管理" [ref=e998] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e999] [cursor=pointer]:
+                        - img
+                - generic [ref=e1000]:
+                  - button "R013 不可抗力范围 生效 条款语义 语义 v1 不可抗力范围不应包含商业风险" [ref=e1001] [cursor=pointer]:
+                    - generic [ref=e1002]:
+                      - generic [ref=e1003]:
+                        - generic [ref=e1004]:
+                          - generic [ref=e1005]: R013
+                          - generic [ref=e1006]: 不可抗力范围
+                          - generic [ref=e1007]: 生效
+                        - generic [ref=e1008]:
+                          - generic [ref=e1009]: 条款语义
+                          - generic [ref=e1010]: 语义
+                          - generic [ref=e1011]: v1
+                        - paragraph [ref=e1012]: 不可抗力范围不应包含商业风险
+                      - img [ref=e1013]
+                  - generic [ref=e1015]:
+                    - generic [ref=e1016]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=e1017]:
+                      - button "版本管理" [ref=e1018] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1019] [cursor=pointer]:
+                        - img
+                - generic [ref=e1020]:
+                  - button "R005 违约金上限 生效 比例类 结构化 v1 违约金上限应在合同额10%-20%，超过30%为红线" [ref=e1021] [cursor=pointer]:
+                    - generic [ref=e1022]:
+                      - generic [ref=e1023]:
+                        - generic [ref=e1024]:
+                          - generic [ref=e1025]: R005
+                          - generic [ref=e1026]: 违约金上限
+                          - generic [ref=e1027]: 生效
+                        - generic [ref=e1028]:
+                          - generic [ref=e1029]: 比例类
+                          - generic [ref=e1030]: 结构化
+                          - generic [ref=e1031]: v1
+                        - paragraph [ref=e1032]: 违约金上限应在合同额10%-20%，超过30%为红线
+                      - img [ref=e1033]
+                  - generic [ref=e1035]:
+                    - generic [ref=e1036]: A <= 20percent / B > 20percent / C > 30percent
+                    - generic [ref=e1037]:
+                      - button "版本管理" [ref=e1038] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1039] [cursor=pointer]:
+                        - img
+                - generic [ref=e1040]:
+                  - button "R003 质保金比例 生效 比例类 结构化 v1 质保金比例应在5%-10%，超过20%为红线" [ref=e1041] [cursor=pointer]:
+                    - generic [ref=e1042]:
+                      - generic [ref=e1043]:
+                        - generic [ref=e1044]:
+                          - generic [ref=e1045]: R003
+                          - generic [ref=e1046]: 质保金比例
+                          - generic [ref=e1047]: 生效
+                        - generic [ref=e1048]:
+                          - generic [ref=e1049]: 比例类
+                          - generic [ref=e1050]: 结构化
+                          - generic [ref=e1051]: v1
+                        - paragraph [ref=e1052]: 质保金比例应在5%-10%，超过20%为红线
+                      - img [ref=e1053]
+                  - generic [ref=e1055]:
+                    - generic [ref=e1056]: A <= 10percent / B > 10percent / C > 20percent
+                    - generic [ref=e1057]:
+                      - button "版本管理" [ref=e1058] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1059] [cursor=pointer]:
+                        - img
+                - generic [ref=e1060]:
+                  - button "R006 滞纳金比例 生效 比例类 结构化 v1 滞纳金应控制在日万分之五以内，超过千分之一为红线" [ref=e1061] [cursor=pointer]:
+                    - generic [ref=e1062]:
+                      - generic [ref=e1063]:
+                        - generic [ref=e1064]:
+                          - generic [ref=e1065]: R006
+                          - generic [ref=e1066]: 滞纳金比例
+                          - generic [ref=e1067]: 生效
+                        - generic [ref=e1068]:
+                          - generic [ref=e1069]: 比例类
+                          - generic [ref=e1070]: 结构化
+                          - generic [ref=e1071]: v1
+                        - paragraph [ref=e1072]: 滞纳金应控制在日万分之五以内，超过千分之一为红线
+                      - img [ref=e1073]
+                  - generic [ref=e1075]:
+                    - generic [ref=e1076]: A <= 0.05percent / B > 0.05percent / C > 0.1percent
+                    - generic [ref=e1077]:
+                      - button "版本管理" [ref=e1078] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1079] [cursor=pointer]:
+                        - img
+                - generic [ref=e1080]:
+                  - button "R014 合同期限 生效 时限类 结构化 v1 合同期限应在1-3年，超过5年为红线" [ref=e1081] [cursor=pointer]:
+                    - generic [ref=e1082]:
+                      - generic [ref=e1083]:
+                        - generic [ref=e1084]:
+                          - generic [ref=e1085]: R014
+                          - generic [ref=e1086]: 合同期限
+                          - generic [ref=e1087]: 生效
+                        - generic [ref=e1088]:
+                          - generic [ref=e1089]: 时限类
+                          - generic [ref=e1090]: 结构化
+                          - generic [ref=e1091]: v1
+                        - paragraph [ref=e1092]: 合同期限应在1-3年，超过5年为红线
+                      - img [ref=e1093]
+                  - generic [ref=e1095]:
+                    - generic [ref=e1096]: A <= 1095day / B > 1095day / C > 1825day
+                    - generic [ref=e1097]:
+                      - button "版本管理" [ref=e1098] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1099] [cursor=pointer]:
+                        - img
+                - generic [ref=e1100]:
+                  - button "R004 质保期 生效 时限类 结构化 v1 质保期应在1-3年，超过5年为红线" [ref=e1101] [cursor=pointer]:
+                    - generic [ref=e1102]:
+                      - generic [ref=e1103]:
+                        - generic [ref=e1104]:
+                          - generic [ref=e1105]: R004
+                          - generic [ref=e1106]: 质保期
+                          - generic [ref=e1107]: 生效
+                        - generic [ref=e1108]:
+                          - generic [ref=e1109]: 时限类
+                          - generic [ref=e1110]: 结构化
+                          - generic [ref=e1111]: v1
+                        - paragraph [ref=e1112]: 质保期应在1-3年，超过5年为红线
+                      - img [ref=e1113]
+                  - generic [ref=e1115]:
+                    - generic [ref=e1116]: A <= 1095day / B > 1095day / C > 1825day
+                    - generic [ref=e1117]:
+                      - button "版本管理" [ref=e1118] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1119] [cursor=pointer]:
+                        - img
+                - generic [ref=e1120]:
+                  - button "R008 单方解除权 生效 时限类 结构化 v1 单方解除权通知期应在30-90天，少于7天为红线" [ref=e1121] [cursor=pointer]:
+                    - generic [ref=e1122]:
+                      - generic [ref=e1123]:
+                        - generic [ref=e1124]:
+                          - generic [ref=e1125]: R008
+                          - generic [ref=e1126]: 单方解除权
+                          - generic [ref=e1127]: 生效
+                        - generic [ref=e1128]:
+                          - generic [ref=e1129]: 时限类
+                          - generic [ref=e1130]: 结构化
+                          - generic [ref=e1131]: v1
+                        - paragraph [ref=e1132]: 单方解除权通知期应在30-90天，少于7天为红线
+                      - img [ref=e1133]
+                  - generic [ref=e1135]:
+                    - generic [ref=e1136]: A >= 30day / B < 30day / C < 7day
+                    - generic [ref=e1137]:
+                      - button "版本管理" [ref=e1138] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1139] [cursor=pointer]:
+                        - img
+                - generic [ref=e1140]:
+                  - button "R007 自动续约条款 生效 时限类 结构化 v1 自动续约条款需提前30-60天通知，少于15天为红线" [ref=e1141] [cursor=pointer]:
+                    - generic [ref=e1142]:
+                      - generic [ref=e1143]:
+                        - generic [ref=e1144]:
+                          - generic [ref=e1145]: R007
+                          - generic [ref=e1146]: 自动续约条款
+                          - generic [ref=e1147]: 生效
+                        - generic [ref=e1148]:
+                          - generic [ref=e1149]: 时限类
+                          - generic [ref=e1150]: 结构化
+                          - generic [ref=e1151]: v1
+                        - paragraph [ref=e1152]: 自动续约条款需提前30-60天通知，少于15天为红线
+                      - img [ref=e1153]
+                  - generic [ref=e1155]:
+                    - generic [ref=e1156]: A >= 30day / B < 30day / C < 15day
+                    - generic [ref=e1157]:
+                      - button "版本管理" [ref=e1158] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1159] [cursor=pointer]:
+                        - img
+                - generic [ref=e1160]:
+                  - button "R010 保密期限 生效 时限类 结构化 v1 保密期限应在2-5年，超过10年为红线" [ref=e1161] [cursor=pointer]:
+                    - generic [ref=e1162]:
+                      - generic [ref=e1163]:
+                        - generic [ref=e1164]:
+                          - generic [ref=e1165]: R010
+                          - generic [ref=e1166]: 保密期限
+                          - generic [ref=e1167]: 生效
+                        - generic [ref=e1168]:
+                          - generic [ref=e1169]: 时限类
+                          - generic [ref=e1170]: 结构化
+                          - generic [ref=e1171]: v1
+                        - paragraph [ref=e1172]: 保密期限应在2-5年，超过10年为红线
+                      - img [ref=e1173]
+                  - generic [ref=e1175]:
+                    - generic [ref=e1176]: A <= 1825day / B > 1825day / C > 3650day
+                    - generic [ref=e1177]:
+                      - button "版本管理" [ref=e1178] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1179] [cursor=pointer]:
+                        - img
+                - generic [ref=e1180]:
+                  - button "R011 竞业限制 生效 时限类 结构化 v1 竞业限制期限应在6-24个月，超过36个月为红线" [ref=e1181] [cursor=pointer]:
+                    - generic [ref=e1182]:
+                      - generic [ref=e1183]:
+                        - generic [ref=e1184]:
+                          - generic [ref=e1185]: R011
+                          - generic [ref=e1186]: 竞业限制
+                          - generic [ref=e1187]: 生效
+                        - generic [ref=e1188]:
+                          - generic [ref=e1189]: 时限类
+                          - generic [ref=e1190]: 结构化
+                          - generic [ref=e1191]: v1
+                        - paragraph [ref=e1192]: 竞业限制期限应在6-24个月，超过36个月为红线
+                      - img [ref=e1193]
+                  - generic [ref=e1195]:
+                    - generic [ref=e1196]: A <= 720day / B > 720day / C > 1095day
+                    - generic [ref=e1197]:
+                      - button "版本管理" [ref=e1198] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=e1199] [cursor=pointer]:
+                        - img
+            - generic [ref=e1203]:
+              - paragraph [ref=e1204]: 选择左侧规则查看详情，或新建付款比例、账期、条款语义规则。
+              - button "新建规则" [ref=e1205] [cursor=pointer]:
+                - img
+                - text: 新建规则
+  - alert [ref=e29]: Cyanlog Sales

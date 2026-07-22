@@ -1,0 +1,24 @@
+{
+  "sourcePath": "/Users/nsss/Price-v3/product-truth/product-code/output/doc/p0-word-source-comments/source-contract-with-footer.docx",
+  "finalPath": "/Users/nsss/Price-v3/product-truth/product-code/output/doc/p0-word-source-comments/strict-source-comments.docx",
+  "resultMode": "source_comments",
+  "sourceRanges": {
+    "r001": {
+      "start": 14,
+      "end": 25
+    },
+    "r013": {
+      "start": 38,
+      "end": 53
+    }
+  },
+  "hasCommentsXml": true,
+  "authorIsOnesBusinessOps": true,
+  "containsR001": true,
+  "containsR013": true,
+  "hasCommentRangeStart": true,
+  "hasCommentReference": true,
+  "preservesFooter": true,
+  "preservesFooterRelationship": true,
+  "commentsRelationship": true
+}

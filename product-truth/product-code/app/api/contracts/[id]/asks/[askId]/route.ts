@@ -28,7 +28,7 @@ interface AskWithUser {
 }
 
 interface RouteParams {
-  params: Promise<{ id: string; askId: string }> | { id: string; askId: string }
+  params: Promise<{ id: string; askId: string }>
 }
 
 export async function GET(

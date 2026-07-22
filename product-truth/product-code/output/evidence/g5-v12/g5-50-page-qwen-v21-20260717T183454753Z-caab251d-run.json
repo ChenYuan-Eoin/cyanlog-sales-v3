@@ -1,0 +1,374 @@
+{
+  "schema_version": "g5-risk-accuracy-run.v2",
+  "attempt_id": "20260717T183454753Z-caab251d",
+  "generated_at": "2026-07-17T18:41:02.982Z",
+  "incremental_execution_cost": {
+    "usd": 0,
+    "paid_service_invoked": false,
+    "basis": "existing local Qwen runtime plus approved free isolated Supabase Preview"
+  },
+  "preview": {
+    "project_ref": "vsfropnfsmnonkotywsx",
+    "production_touched": false
+  },
+  "fixed_inputs": {
+    "source_sha256": "67079a251c2ab9197bb40881151563cda23e97fa4ba02ba047102d8b549a849d",
+    "source_text_sha256": "83a32d11b911f756cd2fc20c3267f000f7856583810d286c58805143a88a7fb3",
+    "gold_sha256": "a0963fe1a19a785404e90d720c7bf86a68f37b81de3e2d26d34167f41f5a126e",
+    "scorer_sha256": "8e008e800d9369c8361270edef794bc7eb586f88d0bd5edd822bbe87472690bc"
+  },
+  "contract": {
+    "id": "9a5c7790-d47e-4e7b-a102-48773422882c",
+    "source_storage_path": "9a5c7790-d47e-4e7b-a102-48773422882c/0359bd53-adcc-4f85-93bb-64c6170283fa_g5-50-page-10-risk-sample.docx",
+    "source_text_utf16_length": 13620
+  },
+  "frozen_truth": {
+    "bundle_id": "f0c9573f-25d4-4549-9919-e5211de30233",
+    "bundle_version": 21,
+    "model_policy_id": "5f10d78f-fc1a-49c7-b0eb-d75794351531",
+    "rule_set_snapshot_ids": [
+      "2e498c76-e15b-4375-8ccf-630adb680cfd",
+      "ec288f26-7ddf-480e-bc50-ae53da2ea682",
+      "502717c4-d0bc-4c78-ad6b-20ed0b202977",
+      "f8c60eed-540e-4d92-aef4-529393923e74",
+      "a2b5386b-726c-4764-a79d-2d4a6a7a600c",
+      "d13e5cbc-df76-4619-ac35-6f6ed61a97cd",
+      "b97bacef-9ef7-4011-815a-fa58e28c9352",
+      "737f16f5-5286-41fc-92e2-cc6872c26533",
+      "09b02b82-a198-4eb0-bb2a-dd691ef2d360",
+      "a1e63454-ad06-4530-9ffc-e138cd02d15f",
+      "1442bc33-3d79-4a8f-b298-3065a95af74b",
+      "09546083-f5be-4845-95e3-11e133c238b4",
+      "32fefb07-180d-4753-add3-a701c7f30917"
+    ],
+    "rule_snapshot_ids": [
+      "09f85331-be56-4b4b-a87d-1e6cc6ebf9b0",
+      "11e8be11-ba23-4890-9936-6fb96d035fe6",
+      "1fe7783e-fc02-4818-a703-a6a278621125",
+      "28b7943a-6324-48fe-bc23-e5e7cde3aa9a",
+      "83b19c25-448d-4a82-a906-ea3dddacc0c9",
+      "9ab24474-da92-4725-87af-f09541c1430d",
+      "a962eee4-3c7f-4c17-a62e-63beae6629f8",
+      "b03fd487-c774-4e86-bc3a-52f480a5728c",
+      "b7bf2103-c799-4795-88b1-8f2f2cb3d5e8",
+      "c4fd9c22-8741-4d0f-bc2e-13f3fb7604db",
+      "c97a0945-1271-4467-ba39-3382867d5190",
+      "e2ff33a1-7bf4-41d4-bb44-c36e812ea5ab",
+      "ed484adc-7178-45da-bda6-0d2ebbe00d6d",
+      "ef57f70d-ae4d-4019-9bb8-7bdf1af8dd0b",
+      "f0be3d78-449d-4573-aa85-569f757ab4cb"
+    ]
+  },
+  "analyze_http": {
+    "status": "network_error_or_timeout",
+    "error": "fetch failed"
+  },
+  "review": {
+    "id": "34600d3e-9b64-4162-b317-f011daed5d24",
+    "job_id": "0e67d6b6-06cc-45cd-a0d8-4f7b9d843f5a",
+    "status": "COMPLETED",
+    "job_status": "completed",
+    "model_invocation_ids": [
+      "12b555a8-6100-489a-89a2-9905a8eff0b8",
+      "ada2b9bd-4282-421e-92ba-5176580d9939",
+      "9cbc8269-8cef-4a37-aee0-fc1065d655cc",
+      "a88be774-05bc-4417-a2f2-6cfb24088084",
+      "3e9bb64d-2fbd-44b4-96fc-48c9d444fbd7",
+      "bc57b6a2-8615-48b2-9db9-a07a35a24fb3",
+      "a068d362-1d02-4f8c-b1a4-28ab4a332bf0",
+      "9509c70c-dacd-4dcd-8891-48eae961a895",
+      "ac9ee2cc-ec76-4523-907a-0a49f8b95609",
+      "4320b82b-236e-4a6e-a539-8dfc30629281",
+      "4d24f7ca-b145-4e07-82f3-050ab1f59c64"
+    ],
+    "risk_count": 49
+  },
+  "invocations": [
+    {
+      "id": "12b555a8-6100-489a-89a2-9905a8eff0b8",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4341,
+        "output": 933,
+        "total": 5274
+      },
+      "chunk": {
+        "index": 1,
+        "total": 11,
+        "start": 0,
+        "end": 1456,
+        "hash": "1b602c0633b70d92d810bdb96fb15ad79053008aaf9ab7373b85d900c1631068"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "ada2b9bd-4282-421e-92ba-5176580d9939",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4362,
+        "output": 713,
+        "total": 5075
+      },
+      "chunk": {
+        "index": 2,
+        "total": 11,
+        "start": 1256,
+        "end": 2736,
+        "hash": "566b331ac231913007e69cd4102d3ec0fcf0892e6ca3da79e368e23b0906054f"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "9cbc8269-8cef-4a37-aee0-fc1065d655cc",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4289,
+        "output": 953,
+        "total": 5242
+      },
+      "chunk": {
+        "index": 3,
+        "total": 11,
+        "start": 2536,
+        "end": 3896,
+        "hash": "dd16195c9712725bdf3c2157193908f48b2d4836bc646fdeec17cdee443a006e"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "a88be774-05bc-4417-a2f2-6cfb24088084",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4368,
+        "output": 966,
+        "total": 5334
+      },
+      "chunk": {
+        "index": 4,
+        "total": 11,
+        "start": 3696,
+        "end": 5183,
+        "hash": "e829f09c30954fbf670f46098eae03043655d6d263a13b98cd48a9ed8dd8c90e"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "3e9bb64d-2fbd-44b4-96fc-48c9d444fbd7",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4288,
+        "output": 911,
+        "total": 5199
+      },
+      "chunk": {
+        "index": 5,
+        "total": 11,
+        "start": 4983,
+        "end": 6339,
+        "hash": "1c6cd325b9ca51652d0b86acfbf26456bc87cd4946696a2b89abd814056234d3"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "bc57b6a2-8615-48b2-9db9-a07a35a24fb3",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4371,
+        "output": 877,
+        "total": 5248
+      },
+      "chunk": {
+        "index": 6,
+        "total": 11,
+        "start": 6139,
+        "end": 7632,
+        "hash": "b223b7c83750136f66f160ad17a6a9c4f395265bc704361a06e76a5288ab41b4"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "a068d362-1d02-4f8c-b1a4-28ab4a332bf0",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4287,
+        "output": 994,
+        "total": 5281
+      },
+      "chunk": {
+        "index": 7,
+        "total": 11,
+        "start": 7432,
+        "end": 8785,
+        "hash": "c3ec438ae7b6d438c77fe3cd19238a719b0d246734af21eb82984754851cc6b3"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "9509c70c-dacd-4dcd-8891-48eae961a895",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4365,
+        "output": 822,
+        "total": 5187
+      },
+      "chunk": {
+        "index": 8,
+        "total": 11,
+        "start": 8585,
+        "end": 10073,
+        "hash": "a6c8f7ac11829ee31607ed9146a4dfabdba6de0b9e2ff942f0d496f46b73b01c"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "ac9ee2cc-ec76-4523-907a-0a49f8b95609",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4290,
+        "output": 1063,
+        "total": 5353
+      },
+      "chunk": {
+        "index": 9,
+        "total": 11,
+        "start": 9873,
+        "end": 11227,
+        "hash": "d236f9fb5367fd6d77ce5185ada83702d18f33e4159c33df9791bb7bd4cca962"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "4320b82b-236e-4a6e-a539-8dfc30629281",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4370,
+        "output": 915,
+        "total": 5285
+      },
+      "chunk": {
+        "index": 10,
+        "total": 11,
+        "start": 11027,
+        "end": 12515,
+        "hash": "8f97ee5452a7e34c18cc8bad2e742d34c8cab44187a6b955990db061b1d4a57d"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    },
+    {
+      "id": "4d24f7ca-b145-4e07-82f3-050ab1f59c64",
+      "provider": "local-qwen35-9b",
+      "model": "qwen3.5-9b-local",
+      "status": "completed",
+      "degraded": false,
+      "error": null,
+      "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+      "usage": {
+        "input": 4251,
+        "output": 783,
+        "total": 5034
+      },
+      "chunk": {
+        "index": 11,
+        "total": 11,
+        "start": 12315,
+        "end": 13620,
+        "hash": "f5797124cbabc73e9b5b3193662870531240bb32e1d0a9879314419874f0c08c"
+      },
+      "prompt_catalog_version": "compact-v1",
+      "prompt_catalog_sha256": "30f788123507f1f1083ba53cca4d09394959ba443d9e98ce540f4a014e69656d",
+      "prompt_catalog_char_count": 8519
+    }
+  ],
+  "gate": {
+    "passed": false,
+    "issues": [
+      "invalid_binding_count=7",
+      "source_mismatch_count=4",
+      "risk_accuracy_threshold_failed"
+    ],
+    "review_identity_valid": true,
+    "invocation_identity_valid": true,
+    "chunk_metadata_valid": true,
+    "invalid_binding_count": 7,
+    "source_mismatch_count": 4
+  },
+  "predictions_path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g5-v12/g5-50-page-qwen-v21-20260717T183454753Z-caab251d-predictions.json",
+  "score_path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g5-v12/g5-50-page-qwen-v21-20260717T183454753Z-caab251d-score.json",
+  "cleanup": {
+    "auth_token_verified_absent": true,
+    "contract_pending": true,
+    "contract_id": "9a5c7790-d47e-4e7b-a102-48773422882c",
+    "upload_id": "0359bd53-adcc-4f85-93bb-64c6170283fa",
+    "storage_path": "9a5c7790-d47e-4e7b-a102-48773422882c/0359bd53-adcc-4f85-93bb-64c6170283fa_g5-50-page-10-risk-sample.docx"
+  }
+}

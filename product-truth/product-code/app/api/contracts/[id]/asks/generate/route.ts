@@ -17,11 +17,11 @@ interface AskInput {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
-    const contractId = params.id
+    const { id: contractId } = await params
     const { asks } = await req.json() // 来自 AI 扫描结果
 
     // 批量插入 ASK

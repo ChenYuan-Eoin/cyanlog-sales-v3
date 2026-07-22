@@ -1,0 +1,68 @@
+{
+  "schema": "price-v3.g5-word-docm-evidence.v1",
+  "captured_at": "2026-07-16T22:05:36+08:00",
+  "scope": "local_file_gate_only",
+  "generator": "lib/export/word-generator.py",
+  "validator": {
+    "source": {
+      "valid": true,
+      "macro_project_present": true
+    },
+    "output": {
+      "valid": true,
+      "macro_project_present": true
+    },
+    "static_dependencies": {
+      "olefile": "0.47",
+      "oletools": "0.60.2"
+    },
+    "macros_executed": false
+  },
+  "source": {
+    "artifact": "word-source.docm.b64",
+    "decoded_size": 22427,
+    "sha256": "eb9c1953ab5e10d8933da43ad01ce13dcd9cc65d4bcd410269907454cbb430d3"
+  },
+  "output": {
+    "artifact": "word-annotated.docm.b64",
+    "decoded_size": 20311,
+    "sha256": "247228f9f83a9cbd08432688ea5cc1736704eddeb38744c1b20c22f6023541d3",
+    "comments_xml_sha256": "034a71e19c496d117829c974400b38cfcfeb5dfa653e8d32e6292fd9970ea1fe",
+    "anchored": 1,
+    "unlocated": []
+  },
+  "macro_parts": {
+    "word/vbaProject.bin": {
+      "size": 12288,
+      "source_sha256": "e755a950d3d0e24bf0536093195b354ad425564c79b8a6b5e0a8b4507aa1fbda",
+      "output_sha256": "e755a950d3d0e24bf0536093195b354ad425564c79b8a6b5e0a8b4507aa1fbda"
+    },
+    "word/vbaData.xml": {
+      "size": 2870,
+      "source_sha256": "ae69c497993dc463109de956cbf0ea036ae61b7346a1523e68e853a5f6d6974e",
+      "output_sha256": "ae69c497993dc463109de956cbf0ea036ae61b7346a1523e68e853a5f6d6974e"
+    },
+    "word/_rels/vbaProject.bin.rels": {
+      "size": 277,
+      "source_sha256": "c97833e6456aa2bfe9be614f9c3ae41a8ef764b1cc3af92c6a6f273c62309122",
+      "output_sha256": "c97833e6456aa2bfe9be614f9c3ae41a8ef764b1cc3af92c6a6f273c62309122"
+    }
+  },
+  "word_observation": {
+    "application": "Microsoft Word",
+    "version": "16.111",
+    "opened_from_disk": true,
+    "source_anchor_visible": "G5-DOCM-REAL-MACRO-ANCHOR",
+    "comment_threads": "1/1",
+    "comment_text": "G5 v11 完整 OPC 与 MS-OVBA 门禁后的原生批注。",
+    "screenshot_artifact": "word-open.jpeg.b64",
+    "screenshot_decoded_size": 83030,
+    "screenshot_sha256": "d78d961579f352cb57953ad9081241b783d2b262154d140a5bc217ca15b97d3e"
+  },
+  "acceptance_command": "PYTHON_PATH=<python-with-requirements> pnpm test:g5-file",
+  "not_proven": [
+    "remote Storage or database flow",
+    "desktop and iPad SaaS end-to-end flow",
+    "Production runtime packaging"
+  ]
+}

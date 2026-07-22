@@ -1,0 +1,510 @@
+{
+  "status": "passed",
+  "project_ref": "vsfropnfsmnonkotywsx",
+  "production_touched": false,
+  "paid_dependency": false,
+  "browser_events": {
+    "consoleErrors": [
+      {
+        "format": null,
+        "method": null,
+        "status": null,
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+        "line": 0,
+        "column": 0
+      },
+      {
+        "format": null,
+        "method": null,
+        "status": null,
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+        "line": 0,
+        "column": 0
+      },
+      {
+        "format": "docx",
+        "method": null,
+        "status": null,
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+        "line": 0,
+        "column": 0
+      },
+      {
+        "format": "docx",
+        "method": null,
+        "status": null,
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+        "line": 0,
+        "column": 0
+      },
+      {
+        "format": "pdf",
+        "method": null,
+        "status": null,
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+        "line": 0,
+        "column": 0
+      },
+      {
+        "format": "pdf",
+        "method": null,
+        "status": null,
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+        "line": 0,
+        "column": 0
+      }
+    ],
+    "requestFailures": [],
+    "httpFailures": [
+      {
+        "format": null,
+        "method": "GET",
+        "status": 404,
+        "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+        "path": "/_vercel/insights/script.js",
+        "resource_type": "script"
+      },
+      {
+        "format": null,
+        "method": "GET",
+        "status": 404,
+        "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+        "path": "/_vercel/speed-insights/script.js",
+        "resource_type": "script"
+      },
+      {
+        "format": "docx",
+        "method": "GET",
+        "status": 404,
+        "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+        "path": "/_vercel/speed-insights/script.js",
+        "resource_type": "script"
+      },
+      {
+        "format": "docx",
+        "method": "GET",
+        "status": 404,
+        "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+        "path": "/_vercel/insights/script.js",
+        "resource_type": "script"
+      },
+      {
+        "format": "pdf",
+        "method": "GET",
+        "status": 404,
+        "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+        "path": "/_vercel/insights/script.js",
+        "resource_type": "script"
+      },
+      {
+        "format": "pdf",
+        "method": "GET",
+        "status": 404,
+        "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+        "path": "/_vercel/speed-insights/script.js",
+        "resource_type": "script"
+      }
+    ],
+    "apiFailures": []
+  },
+  "browser_health": {
+    "status": "passed",
+    "blocking": {
+      "console": [],
+      "request": [],
+      "http": [],
+      "api": []
+    },
+    "non_blocking": {
+      "console": [
+        {
+          "format": null,
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": null,
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "docx",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "docx",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "pdf",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "pdf",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "line": 0,
+          "column": 0
+        }
+      ],
+      "http": [
+        {
+          "format": null,
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "path": "/_vercel/insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": null,
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "path": "/_vercel/speed-insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "docx",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "path": "/_vercel/speed-insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "docx",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "path": "/_vercel/insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "pdf",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "path": "/_vercel/insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "pdf",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "path": "/_vercel/speed-insights/script.js",
+          "resource_type": "script"
+        }
+      ]
+    },
+    "raw": {
+      "consoleErrors": [
+        {
+          "format": null,
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": null,
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "docx",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "docx",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "pdf",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "line": 0,
+          "column": 0
+        },
+        {
+          "format": "pdf",
+          "method": null,
+          "status": null,
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "line": 0,
+          "column": 0
+        }
+      ],
+      "requestFailures": [],
+      "httpFailures": [
+        {
+          "format": null,
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "path": "/_vercel/insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": null,
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "path": "/_vercel/speed-insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "docx",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "path": "/_vercel/speed-insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "docx",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "path": "/_vercel/insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "pdf",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/insights/script.js",
+          "path": "/_vercel/insights/script.js",
+          "resource_type": "script"
+        },
+        {
+          "format": "pdf",
+          "method": "GET",
+          "status": 404,
+          "url": "http://127.0.0.1:3110/_vercel/speed-insights/script.js",
+          "path": "/_vercel/speed-insights/script.js",
+          "resource_type": "script"
+        }
+      ],
+      "apiFailures": []
+    }
+  },
+  "completed_pairs": [
+    {
+      "kind": "docx",
+      "comparison_id": "03533a11-1447-4615-bd86-eab5a3747bce",
+      "diff_count": 6,
+      "old": {
+        "contract_id": "1903b7d5-f924-4f29-9c14-4cc50228cbdf",
+        "file_sha256": "475545e3683389ad0629596150535bd94c51686af5b17807403b821daa3f8098",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/d2391077-e4dd-4a2d-b339-403ee6a91913/old-475545e3683389ad0629596150535bd94c51686af5b17807403b821daa3f8098-old-contract-v1.docx"
+      },
+      "new": {
+        "contract_id": "ad665653-087f-405b-be48-61189a402bb3",
+        "file_sha256": "da6e1abe3367d3719200140fb5f53a2b0ceef9fbc7b3e6e07452e88fe717214e",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/57ec9dc0-5aec-49a0-b235-f1c4edfbb702/new-da6e1abe3367d3719200140fb5f53a2b0ceef9fbc7b3e6e07452e88fe717214e-new-contract-v2.docx"
+      },
+      "current_contract_mutation_proof": {
+        "old_contract_parsed_text_changed_after_snapshot": true,
+        "comparison_projection_unchanged": true
+      },
+      "browser": {
+        "desktopShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/docx-desktop-1440x1000.png",
+        "ipadShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/docx-ipad-1180x820.png",
+        "reportPath": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/docx-comparison-report.docx",
+        "browser_event_delta": {
+          "consoleErrors": 2,
+          "requestFailures": 0,
+          "httpFailures": 2,
+          "apiFailures": 0
+        }
+      },
+      "report": {
+        "path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/docx-comparison-report.docx",
+        "bytes": 5687,
+        "sha256": "168d8d099ebf6482bdc05da0283cc924e28ecb4925f420f1271ec025d9b17b45",
+        "zipEntries": 11
+      }
+    },
+    {
+      "kind": "pdf",
+      "comparison_id": "c02e9941-c901-4081-bd0c-84cd9f18a527",
+      "diff_count": 4,
+      "old": {
+        "contract_id": "848b5470-e309-4e96-bedf-dece369d4707",
+        "file_sha256": "15b04da032129013c6da3e96c5ec74a505fba5d7b9e1c485a1d2cd23028209b1",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/895b548f-9cc0-4e93-ab3c-42496d5e73b0/old-15b04da032129013c6da3e96c5ec74a505fba5d7b9e1c485a1d2cd23028209b1-old-contract-v1.pdf"
+      },
+      "new": {
+        "contract_id": "93e04e03-6754-40bf-b55a-c5d9fff343e7",
+        "file_sha256": "c43ba315a6e6a7ac02622badbc5f11cd5e50b191dc5bb8d3eb8686b59476f5c5",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/c0013a5a-81dc-48ca-b75d-e4c6bb856fb9/new-c43ba315a6e6a7ac02622badbc5f11cd5e50b191dc5bb8d3eb8686b59476f5c5-new-contract-v2.pdf"
+      },
+      "current_contract_mutation_proof": {
+        "old_contract_parsed_text_changed_after_snapshot": true,
+        "comparison_projection_unchanged": true
+      },
+      "browser": {
+        "desktopShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/pdf-desktop-1440x1000.png",
+        "ipadShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/pdf-ipad-1180x820.png",
+        "reportPath": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/pdf-comparison-report.docx",
+        "browser_event_delta": {
+          "consoleErrors": 2,
+          "requestFailures": 0,
+          "httpFailures": 2,
+          "apiFailures": 0
+        }
+      },
+      "report": {
+        "path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/pdf-comparison-report.docx",
+        "bytes": 5540,
+        "sha256": "a70317a19c50b79c472d6d4b5fe080e668481fb5ba6fa88656750223ceb2af0d",
+        "zipEntries": 11
+      }
+    }
+  ],
+  "cleanup": {
+    "status": "requires_preview_admin",
+    "error": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied to set parameter \\\"session_replication_role\\\"\"}",
+    "manifest": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/preview-browser-cleanup.json"
+  },
+  "auth_token_removed": true,
+  "prior_harness_error": null,
+  "reclassified_from_complete_chain": true,
+  "reclassification_reason": "Only exact local Vercel observability script 404s were non-blocking; all raw events remain attached.",
+  "app_url": "http://127.0.0.1:3110",
+  "viewports": [
+    "1440x1000",
+    "1180x820"
+  ],
+  "pairs": [
+    {
+      "kind": "docx",
+      "comparison_id": "03533a11-1447-4615-bd86-eab5a3747bce",
+      "diff_count": 6,
+      "old": {
+        "contract_id": "1903b7d5-f924-4f29-9c14-4cc50228cbdf",
+        "file_sha256": "475545e3683389ad0629596150535bd94c51686af5b17807403b821daa3f8098",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/d2391077-e4dd-4a2d-b339-403ee6a91913/old-475545e3683389ad0629596150535bd94c51686af5b17807403b821daa3f8098-old-contract-v1.docx"
+      },
+      "new": {
+        "contract_id": "ad665653-087f-405b-be48-61189a402bb3",
+        "file_sha256": "da6e1abe3367d3719200140fb5f53a2b0ceef9fbc7b3e6e07452e88fe717214e",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/57ec9dc0-5aec-49a0-b235-f1c4edfbb702/new-da6e1abe3367d3719200140fb5f53a2b0ceef9fbc7b3e6e07452e88fe717214e-new-contract-v2.docx"
+      },
+      "current_contract_mutation_proof": {
+        "old_contract_parsed_text_changed_after_snapshot": true,
+        "comparison_projection_unchanged": true
+      },
+      "browser": {
+        "desktopShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/docx-desktop-1440x1000.png",
+        "ipadShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/docx-ipad-1180x820.png",
+        "reportPath": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/docx-comparison-report.docx",
+        "browser_event_delta": {
+          "consoleErrors": 2,
+          "requestFailures": 0,
+          "httpFailures": 2,
+          "apiFailures": 0
+        }
+      },
+      "report": {
+        "path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/docx-comparison-report.docx",
+        "bytes": 5687,
+        "sha256": "168d8d099ebf6482bdc05da0283cc924e28ecb4925f420f1271ec025d9b17b45",
+        "zipEntries": 11
+      }
+    },
+    {
+      "kind": "pdf",
+      "comparison_id": "c02e9941-c901-4081-bd0c-84cd9f18a527",
+      "diff_count": 4,
+      "old": {
+        "contract_id": "848b5470-e309-4e96-bedf-dece369d4707",
+        "file_sha256": "15b04da032129013c6da3e96c5ec74a505fba5d7b9e1c485a1d2cd23028209b1",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/895b548f-9cc0-4e93-ab3c-42496d5e73b0/old-15b04da032129013c6da3e96c5ec74a505fba5d7b9e1c485a1d2cd23028209b1-old-contract-v1.pdf"
+      },
+      "new": {
+        "contract_id": "93e04e03-6754-40bf-b55a-c5d9fff343e7",
+        "file_sha256": "c43ba315a6e6a7ac02622badbc5f11cd5e50b191dc5bb8d3eb8686b59476f5c5",
+        "frozen_storage_path": "g6-frozen/a226ed0f-5e6f-445f-82c4-378362b45ab5/c0013a5a-81dc-48ca-b75d-e4c6bb856fb9/new-c43ba315a6e6a7ac02622badbc5f11cd5e50b191dc5bb8d3eb8686b59476f5c5-new-contract-v2.pdf"
+      },
+      "current_contract_mutation_proof": {
+        "old_contract_parsed_text_changed_after_snapshot": true,
+        "comparison_projection_unchanged": true
+      },
+      "browser": {
+        "desktopShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/pdf-desktop-1440x1000.png",
+        "ipadShot": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/g6/pdf-ipad-1180x820.png",
+        "reportPath": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/pdf-comparison-report.docx",
+        "browser_event_delta": {
+          "consoleErrors": 2,
+          "requestFailures": 0,
+          "httpFailures": 2,
+          "apiFailures": 0
+        }
+      },
+      "report": {
+        "path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g6/pdf-comparison-report.docx",
+        "bytes": 5540,
+        "sha256": "a70317a19c50b79c472d6d4b5fe080e668481fb5ba6fa88656750223ceb2af0d",
+        "zipEntries": 11
+      }
+    }
+  ],
+  "browser_driver": {
+    "package": "@playwright/test",
+    "api": "chromium",
+    "single_context": true
+  }
+}

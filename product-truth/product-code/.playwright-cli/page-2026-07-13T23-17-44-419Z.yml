@@ -1,0 +1,205 @@
+- generic [active] [ref=f46e1]:
+  - complementary [ref=f46e2]:
+    - generic [ref=f46e3]:
+      - img "ONES Sales" [ref=f46e5]
+      - generic [ref=f46e6]:
+        - generic [ref=f46e7]: ONES Sales
+        - paragraph [ref=f46e8]: 智能协作平台
+    - navigation [ref=f46e9]:
+      - link "工作台" [ref=f46e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f46e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f46e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f46e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f46e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f46e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f46e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f46e56]:
+      - link "个人信息" [ref=f46e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f46e62] [cursor=pointer]
+  - main [ref=f46e67]:
+    - generic [ref=f46e68]:
+      - generic [ref=f46e81]:
+        - link "返回合同中心" [ref=f46e82] [cursor=pointer]:
+          - /url: /contracts
+        - generic [ref=f46e85]:
+          - heading "g5-50-page-10-risk-sample.docx" [level=1] [ref=f46e89]
+          - generic [ref=f46e90]: 审查 / 任务跟进 · 规则包 v18
+        - generic "审核风格" [ref=f46e91]:
+          - button "宽松" [ref=f46e92] [cursor=pointer]
+          - button "均衡" [ref=f46e93] [cursor=pointer]
+          - button "严格" [ref=f46e94] [cursor=pointer]
+        - button "导出源文件批注版" [ref=f46e95] [cursor=pointer]
+      - generic [ref=f46e96]:
+        - complementary "全局风险导航" [ref=f46e97]:
+          - generic [ref=f46e98]:
+            - generic [ref=f46e99]:
+              - generic [ref=f46e100]: 处理进度（含暂存）
+              - generic [ref=f46e101]: 10/10
+            - generic "页码风险分布轨" [ref=f46e104]:
+              - button "第 10 页 · G5连续处理 10 · R009" [ref=f46e105] [cursor=pointer]
+              - button "第 7 页 · G5连续处理 7 · R013" [ref=f46e106] [cursor=pointer]
+              - button "第 1 页 · G5连续处理 1 · R001" [ref=f46e107] [cursor=pointer]
+              - button "第 4 页 · G5连续处理 4 · R007" [ref=f46e108] [cursor=pointer]
+              - button "第 9 页 · G5连续处理 9 · R015" [ref=f46e109] [cursor=pointer]
+              - button "第 8 页 · G5连续处理 8 · R006" [ref=f46e110] [cursor=pointer]
+              - button "第 6 页 · G5连续处理 6 · R002" [ref=f46e111] [cursor=pointer]
+              - button "第 5 页 · G5连续处理 5 · R011" [ref=f46e112] [cursor=pointer]
+              - button "第 3 页 · G5连续处理 3 · R012" [ref=f46e113] [cursor=pointer]
+              - button "第 2 页 · G5连续处理 2 · R004" [ref=f46e114] [cursor=pointer]
+            - generic [ref=f46e115]:
+              - generic [ref=f46e116]: 第 1 页
+              - generic [ref=f46e117]: 共 50 页
+            - generic [ref=f46e118]:
+              - button "全部" [ref=f46e119] [cursor=pointer]
+              - button "红线" [ref=f46e120] [cursor=pointer]
+              - button "待处理" [ref=f46e121] [cursor=pointer]
+              - button "已暂存" [ref=f46e122] [cursor=pointer]
+          - generic [ref=f46e123]:
+            - button "1 · 第 10 页 需修订 G5连续处理 10 · R009" [ref=f46e124] [cursor=pointer]:
+              - generic [ref=f46e127]:
+                - generic [ref=f46e128]:
+                  - generic [ref=f46e129]: 1 · 第 10 页
+                  - generic [ref=f46e130]: 需修订
+                - paragraph [ref=f46e133]: G5连续处理 10 · R009
+            - button "2 · 第 7 页 需修订 G5连续处理 7 · R013" [ref=f46e134] [cursor=pointer]:
+              - generic [ref=f46e137]:
+                - generic [ref=f46e138]:
+                  - generic [ref=f46e139]: 2 · 第 7 页
+                  - generic [ref=f46e140]: 需修订
+                - paragraph [ref=f46e143]: G5连续处理 7 · R013
+            - button "3 · 第 1 页 需修订 G5连续处理 1 · R001" [ref=f46e144] [cursor=pointer]:
+              - generic [ref=f46e147]:
+                - generic [ref=f46e148]:
+                  - generic [ref=f46e149]: 3 · 第 1 页
+                  - generic [ref=f46e150]: 需修订
+                - paragraph [ref=f46e153]: G5连续处理 1 · R001
+            - button "4 · 第 4 页 已通过 G5连续处理 4 · R007" [ref=f46e154] [cursor=pointer]:
+              - generic [ref=f46e157]:
+                - generic [ref=f46e158]:
+                  - generic [ref=f46e159]: 4 · 第 4 页
+                  - generic [ref=f46e160]: 已通过
+                - paragraph [ref=f46e164]: G5连续处理 4 · R007
+            - button "5 · 第 9 页 需修订 G5连续处理 9 · R015" [ref=f46e165] [cursor=pointer]:
+              - generic [ref=f46e168]:
+                - generic [ref=f46e169]:
+                  - generic [ref=f46e170]: 5 · 第 9 页
+                  - generic [ref=f46e171]: 需修订
+                - paragraph [ref=f46e174]: G5连续处理 9 · R015
+            - button "6 · 第 8 页 需修订 G5连续处理 8 · R006" [ref=f46e175] [cursor=pointer]:
+              - generic [ref=f46e178]:
+                - generic [ref=f46e179]:
+                  - generic [ref=f46e180]: 6 · 第 8 页
+                  - generic [ref=f46e181]: 需修订
+                - paragraph [ref=f46e184]: G5连续处理 8 · R006
+            - button "7 · 第 6 页 已通过 G5连续处理 6 · R002" [ref=f46e185] [cursor=pointer]:
+              - generic [ref=f46e188]:
+                - generic [ref=f46e189]:
+                  - generic [ref=f46e190]: 7 · 第 6 页
+                  - generic [ref=f46e191]: 已通过
+                - paragraph [ref=f46e195]: G5连续处理 6 · R002
+            - button "8 · 第 5 页 已通过 G5连续处理 5 · R011" [ref=f46e196] [cursor=pointer]:
+              - generic [ref=f46e199]:
+                - generic [ref=f46e200]:
+                  - generic [ref=f46e201]: 8 · 第 5 页
+                  - generic [ref=f46e202]: 已通过
+                - paragraph [ref=f46e206]: G5连续处理 5 · R011
+            - button "9 · 第 3 页 需修订 G5连续处理 3 · R012" [ref=f46e207] [cursor=pointer]:
+              - generic [ref=f46e210]:
+                - generic [ref=f46e211]:
+                  - generic [ref=f46e212]: 9 · 第 3 页
+                  - generic [ref=f46e213]: 需修订
+                - paragraph [ref=f46e216]: G5连续处理 3 · R012
+            - button "10 · 第 2 页 需修订 G5连续处理 2 · R004" [ref=f46e217] [cursor=pointer]:
+              - generic [ref=f46e220]:
+                - generic [ref=f46e221]:
+                  - generic [ref=f46e222]: 10 · 第 2 页
+                  - generic [ref=f46e223]: 需修订
+                - paragraph [ref=f46e226]: G5连续处理 2 · R004
+          - generic [ref=f46e227]:
+            - paragraph [ref=f46e228]: 已选 7 · 待办 7 · 冲突 0
+            - button "批量提交并重新审核" [disabled]
+            - paragraph [ref=f46e230]: 提交前检查未处理项和跨条款冲突；通过后才创建新 ReviewRun。
+        - main "源文件主轴" [ref=f46e231]:
+          - generic [ref=f46e232]:
+            - generic [ref=f46e233]:
+              - paragraph [ref=f46e234]: 第10条
+              - paragraph [ref=f46e235]: 第 10 页 · 页已定位、条款需人工定位
+            - button "上一风险" [ref=f46e236] [cursor=pointer]
+            - button "下一风险" [ref=f46e237] [cursor=pointer]
+            - generic [ref=f46e238]:
+              - button "缩小" [ref=f46e239] [cursor=pointer]
+              - generic [ref=f46e240]: 100%
+              - button "放大" [ref=f46e241] [cursor=pointer]
+            - button "切换聚光灯" [ref=f46e242] [cursor=pointer]
+          - generic [ref=f46e243]:
+            - generic [ref=f46e244]: 第 10 页已定位
+            - generic [ref=f46e245]: 当前预览无 bbox/text-layer：条款需人工定位
+          - img "合同真实源文件第 10 页" [ref=f46e248]
+          - generic [ref=f46e249]:
+            - generic [ref=f46e250]: 键盘 J/K 或 ↑/↓ 跳转风险 · S 切换聚光灯
+            - generic [ref=f46e251]: 源 DOCX/PDF · 认证页级懒加载
+        - complementary "当前风险处理轨道" [ref=f46e252]:
+          - generic [ref=f46e253]:
+            - generic [ref=f46e254]:
+              - generic [ref=f46e255]:
+                - generic [ref=f46e256]: 1. 问题与业务影响
+                - generic [ref=f46e257]: 高风险
+              - generic [ref=f46e258]:
+                - checkbox "自动下一条" [ref=f46e259]
+                - text: 自动下一条
+            - heading "G5连续处理 10 · R009" [level=2] [ref=f46e260]
+            - paragraph [ref=f46e261]: 第10页 第10条 风险条款 保密义务：保密期限永久且无合法披露例外。 本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。
+            - paragraph [ref=f46e262]: 业务影响：请依据已发布 R009 策略处理并记录真实谈判结果。
+          - generic [ref=f46e263]:
+            - generic [ref=f46e264]:
+              - generic [ref=f46e265]:
+                - heading "2. 选择法务策略、谈判话术与底线" [level=3] [ref=f46e266]
+                - button "撤销策略" [ref=f46e267] [cursor=pointer]
+              - generic [ref=f46e271]:
+                - button "5年双向（3–7年） 谈判建议：在报价阶段或合同签订前与销售同事沟通，确认保密期条款是否满足客户要求，并在必要时调整对价或寻求法务支持。 谈判底线：任何超过 10 年或单向/永久（非商业秘密）的保密期条款均视为红线，必须由法务确认后方可继续推进。" [ref=f46e272] [cursor=pointer]:
+                  - generic [ref=f46e274]:
+                    - generic [ref=f46e275]: 5年双向（3–7年）
+                    - generic [ref=f46e276]: 谈判建议：在报价阶段或合同签订前与销售同事沟通，确认保密期条款是否满足客户要求，并在必要时调整对价或寻求法务支持。
+                    - generic [ref=f46e277]: 谈判底线：任何超过 10 年或单向/永久（非商业秘密）的保密期条款均视为红线，必须由法务确认后方可继续推进。
+                - button "10年双向 谈判建议：在报价阶段或合同签订前与销售同事沟通，确认保密期条款是否满足客户要求，并在必要时调整对价或寻求法务支持。 谈判底线：任何超过 10 年或单向/永久（非商业秘密）的保密期条款均视为红线，必须由法务确认后方可继续推进。" [ref=f46e278] [cursor=pointer]:
+                  - generic [ref=f46e280]:
+                    - generic [ref=f46e281]: 10年双向
+                    - generic [ref=f46e282]: 谈判建议：在报价阶段或合同签订前与销售同事沟通，确认保密期条款是否满足客户要求，并在必要时调整对价或寻求法务支持。
+                    - generic [ref=f46e283]: 谈判底线：任何超过 10 年或单向/永久（非商业秘密）的保密期条款均视为红线，必须由法务确认后方可继续推进。
+                - button "单向 / 永久（非商业秘密） 谈判建议：在报价阶段或合同签订前与销售同事沟通，确认保密期条款是否满足客户要求，并在必要时调整对价或寻求法务支持。 谈判底线：任何超过 10 年或单向/永久（非商业秘密）的保密期条款均视为红线，必须由法务确认后方可继续推进。" [ref=f46e284] [cursor=pointer]:
+                  - generic [ref=f46e286]:
+                    - generic [ref=f46e287]: 单向 / 永久（非商业秘密）
+                    - generic [ref=f46e288]: 谈判建议：在报价阶段或合同签订前与销售同事沟通，确认保密期条款是否满足客户要求，并在必要时调整对价或寻求法务支持。
+                    - generic [ref=f46e289]: 谈判底线：任何超过 10 年或单向/永久（非商业秘密）的保密期条款均视为红线，必须由法务确认后方可继续推进。
+            - generic [ref=f46e290]:
+              - heading "3. 记录谈判结果" [level=3] [ref=f46e291]
+              - generic [ref=f46e292]:
+                - button "客户已同意" [ref=f46e293] [cursor=pointer]
+                - button "客户有反馈" [ref=f46e294] [cursor=pointer]
+                - button "要求特批" [ref=f46e295] [cursor=pointer]
+              - paragraph [ref=f46e296]: 必须录入客户原始反馈，再选择对应谈判策略。
+            - generic [ref=f46e297]:
+              - text: 客户原始反馈（必填）
+              - textbox "客户原始反馈（必填）" [ref=f46e298]:
+                - /placeholder: 如实记录客户的修改意见、参数或不能接受的原因…
+                - text: 客户要求将保密期限改为三年，并增加依法披露例外。
+            - generic [ref=f46e299]: 草稿已暂存 · 客户有反馈
+            - button [ref=f46e301] [cursor=pointer]
+            - group [ref=f46e307]:
+              - generic "运行证据（辅助审计）" [ref=f46e308] [cursor=pointer]
+          - generic [ref=f46e309]:
+            - paragraph [ref=f46e315]: 正在检查未处理项与跨条款冲突…
+            - generic [ref=f46e310]:
+              - button "上一条" [ref=f46e311] [cursor=pointer]
+              - button "暂存策略与谈判结果" [ref=f46e312] [cursor=pointer]
+              - button "下一条" [ref=f46e313] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=f46e76] [cursor=pointer]
+  - alert [ref=f46e80]

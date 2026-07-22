@@ -1,0 +1,175 @@
+- generic [ref=f15e1]:
+  - complementary [ref=f15e2]:
+    - generic [ref=f15e3]:
+      - img "ONES Sales" [ref=f15e5]
+      - generic [ref=f15e6]:
+        - generic [ref=f15e7]: ONES Sales
+        - paragraph [ref=f15e8]: 智能协作平台
+    - navigation [ref=f15e9]:
+      - link "工作台" [ref=f15e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f15e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f15e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f15e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f15e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f15e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f15e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f15e56]:
+      - link "个人信息" [ref=f15e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f15e62] [cursor=pointer]
+  - main [ref=f15e67]:
+    - generic [ref=f15e412]:
+      - generic [ref=f15e413]:
+        - link "返回合同中心" [ref=f15e414] [cursor=pointer]:
+          - /url: /contracts
+        - generic [ref=f15e417]:
+          - heading "ones-long-20260702111318.docx" [level=1] [ref=f15e422]
+          - paragraph [ref=f15e423]: 审查 / 任务跟进 · 已发布规则包 v18
+        - generic "审核风格" [ref=f15e424]:
+          - button "宽松" [ref=f15e425] [cursor=pointer]
+          - button "均衡" [ref=f15e426] [cursor=pointer]
+          - button "严格" [ref=f15e427] [cursor=pointer]
+        - button "导出源文件批注版" [ref=f15e428] [cursor=pointer]
+      - generic [ref=f15e429]:
+        - complementary "全局风险导航" [ref=f15e430]:
+          - generic [ref=f15e431]:
+            - generic [ref=f15e432]:
+              - generic [ref=f15e433]: 草稿完整进度
+              - generic [ref=f15e434]: 7/7
+            - generic "页码风险分布轨" [ref=f15e437]:
+              - button "第 1 页 · 付款节奏" [ref=f15e438] [cursor=pointer]
+              - button "第 1 页 · 终止退款" [ref=f15e439] [cursor=pointer]
+              - button "第 1 页 · 数据安全" [ref=f15e440] [cursor=pointer]
+              - button "第 1 页 · SLA" [ref=f15e441] [cursor=pointer]
+              - button "第 1 页 · 默示验收周期偏短且自动通过" [ref=f15e442] [cursor=pointer]
+              - button "第 1 页 · 知识产权归属过于单边" [ref=f15e443] [cursor=pointer]
+              - button "第 1 页 · 验收不通过" [ref=f15e444] [cursor=pointer]
+            - generic [ref=f15e445]:
+              - generic [ref=f15e446]: 第 1 页
+              - generic [ref=f15e447]: 共 8 页
+            - generic [ref=f15e448]:
+              - button "全部" [ref=f15e449] [cursor=pointer]
+              - button "红线" [ref=f15e450] [cursor=pointer]
+              - button "待处理" [ref=f15e451] [cursor=pointer]
+              - button "已暂存" [ref=f15e452] [cursor=pointer]
+          - generic [ref=f15e453]:
+            - button "1 · 第 1 页 已复审 付款节奏" [ref=f15e454] [cursor=pointer]:
+              - generic [ref=f15e457]:
+                - generic [ref=f15e458]:
+                  - generic [ref=f15e459]: 1 · 第 1 页
+                  - generic [ref=f15e460]: 已复审
+                - paragraph [ref=f15e464]: 付款节奏
+            - button "2 · 第 1 页 已复审 终止退款" [ref=f15e465] [cursor=pointer]:
+              - generic [ref=f15e468]:
+                - generic [ref=f15e469]:
+                  - generic [ref=f15e470]: 2 · 第 1 页
+                  - generic [ref=f15e471]: 已复审
+                - paragraph [ref=f15e475]: 终止退款
+            - button "3 · 第 1 页 已复审 数据安全" [ref=f15e476] [cursor=pointer]:
+              - generic [ref=f15e479]:
+                - generic [ref=f15e480]:
+                  - generic [ref=f15e481]: 3 · 第 1 页
+                  - generic [ref=f15e482]: 已复审
+                - paragraph [ref=f15e486]: 数据安全
+            - button "4 · 第 1 页 已复审 SLA" [ref=f15e487] [cursor=pointer]:
+              - generic [ref=f15e490]:
+                - generic [ref=f15e491]:
+                  - generic [ref=f15e492]: 4 · 第 1 页
+                  - generic [ref=f15e493]: 已复审
+                - paragraph [ref=f15e497]: SLA
+            - button "5 · 第 1 页 已复审 默示验收周期偏短且自动通过" [ref=f15e498] [cursor=pointer]:
+              - generic [ref=f15e501]:
+                - generic [ref=f15e502]:
+                  - generic [ref=f15e503]: 5 · 第 1 页
+                  - generic [ref=f15e504]: 已复审
+                - paragraph [ref=f15e508]: 默示验收周期偏短且自动通过
+            - button "6 · 第 1 页 已复审 知识产权归属过于单边" [ref=f15e509] [cursor=pointer]:
+              - generic [ref=f15e512]:
+                - generic [ref=f15e513]:
+                  - generic [ref=f15e514]: 6 · 第 1 页
+                  - generic [ref=f15e515]: 已复审
+                - paragraph [ref=f15e519]: 知识产权归属过于单边
+            - button "7 · 第 1 页 已复审 验收不通过" [ref=f15e520] [cursor=pointer]:
+              - generic [ref=f15e523]:
+                - generic [ref=f15e524]:
+                  - generic [ref=f15e525]: 7 · 第 1 页
+                  - generic [ref=f15e526]: 已复审
+                - paragraph [ref=f15e530]: 验收不通过
+          - generic [ref=f15e531]:
+            - paragraph [ref=f15e532]: 已选 1 · 待办 0 · 冲突 0
+            - button "批量提交并重新审核" [ref=f15e533] [cursor=pointer]
+            - paragraph [ref=f15e534]: 提交前检查未处理项和跨条款冲突；通过后才创建新 ReviewRun。
+        - main "源文件主轴" [ref=f15e535]:
+          - generic [ref=f15e536]:
+            - generic [ref=f15e537]:
+              - paragraph [ref=f15e538]: 一
+              - paragraph [ref=f15e539]: 第 1 页 · 渲染页级锚点
+            - button "上一风险" [ref=f15e540] [cursor=pointer]
+            - button "下一风险" [ref=f15e541] [cursor=pointer]
+            - generic [ref=f15e542]:
+              - button "缩小" [ref=f15e543] [cursor=pointer]
+              - generic [ref=f15e544]: 100%
+              - button "放大" [ref=f15e545] [cursor=pointer]
+            - button "切换聚光灯" [ref=f15e546] [cursor=pointer]
+          - generic [ref=f15e547]:
+            - generic [ref=f15e548]: 真实渲染页已定位：第 1 页
+            - generic [ref=f15e549]: 一
+          - img "合同真实源文件第 1 页" [ref=f15e552]
+          - generic [ref=f15e553]:
+            - generic [ref=f15e554]: 键盘 J/K 或 ↑/↓ 跳转风险 · S 切换聚光灯
+            - generic [ref=f15e555]: 源 DOCX/PDF · 认证页级懒加载
+        - complementary "当前风险处理轨道" [ref=f15e556]:
+          - generic [ref=f15e557]:
+            - generic [ref=f15e558]:
+              - generic [ref=f15e559]: 高风险
+              - generic [ref=f15e560]:
+                - checkbox "自动下一条" [ref=f15e561]
+                - text: 自动下一条
+            - heading "付款节奏" [level=2] [ref=f15e562]
+            - paragraph [ref=f15e563]: 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日
+            - paragraph [ref=f15e564]: 业务影响：必须修改合同条款
+          - generic [ref=f15e565]:
+            - generic [ref=f15e566]:
+              - generic [ref=f15e567]:
+                - heading "2. 选择法务策略、谈判话术与底线" [level=3] [ref=f15e568]
+                - button "撤销策略" [ref=f15e612] [cursor=pointer]
+              - generic [ref=f15e569]:
+                - button "首期≥30%，三段式 30/60/10，尾款账期≤30工作日 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。" [ref=f15e570] [cursor=pointer]:
+                  - generic [ref=f15e571]: 首期≥30%，三段式 30/60/10，尾款账期≤30工作日
+                  - paragraph [ref=f15e575]: 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。
+                  - paragraph [ref=f15e576]: 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。
+                - button "首期 15–29% 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。" [ref=f15e577] [cursor=pointer]:
+                  - generic [ref=f15e578]: 首期 15–29%
+                  - paragraph [ref=f15e582]: 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。
+                  - paragraph [ref=f15e583]: 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。
+                - button "首期<15% / 100%验收后付首款 / 账期>30工作日 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。" [ref=f15e584] [cursor=pointer]:
+                  - generic [ref=f15e585]: 首期<15% / 100%验收后付首款 / 账期>30工作日
+                  - paragraph [ref=f15e589]: 谈判建议：销售需与客户沟通，明确付款节奏的合理性，并争取调整至 Level A 或 Level B 标准。如客户坚持，需记录客户明确知晓并接受风险的确认函。
+                  - paragraph [ref=f15e590]: 谈判底线：首期付款不低于合同总金额的 15%，尾款账期不超过 30 个工作日。若无法达到 Level A 标准，则必须达到 Level B 标准（首期 15-29%），并获得客户书面确认。
+              - generic [ref=f15e616]:
+                - heading "客户侧批注预览" [level=4] [ref=f15e617]
+                - paragraph [ref=f15e621]: 此条款触发了付款节奏的 Level C 红线，存在较高财务风险。请务必与客户沟通并调整。
+                - paragraph [ref=f15e622]: 仅由原文证据、已发布 Option 与法务模板受控生成；内部反馈不会进入客户侧内容。
+            - generic [ref=f15e591]:
+              - heading "3. 记录谈判结果" [level=3] [ref=f15e592]
+              - generic [ref=f15e593]:
+                - button "客户已同意" [active] [ref=f15e594] [cursor=pointer]
+                - button "客户有反馈" [ref=f15e595] [cursor=pointer]
+                - button "要求特批" [ref=f15e596] [cursor=pointer]
+              - paragraph [ref=f15e597]: 记录客户已接受的法务策略与参数。
+            - button [ref=f15e600] [cursor=pointer]
+            - group [ref=f15e606]:
+              - generic "运行证据（辅助审计）" [ref=f15e607] [cursor=pointer]
+          - generic [ref=f15e609]:
+            - button "上一条" [ref=f15e610] [cursor=pointer]
+            - button "4. 暂存策略与谈判结果" [ref=f15e623] [cursor=pointer]
+            - button "下一条" [ref=f15e611] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=f15e253] [cursor=pointer]
+  - alert [ref=f15e257]

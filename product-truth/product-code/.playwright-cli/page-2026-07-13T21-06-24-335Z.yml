@@ -1,0 +1,358 @@
+- generic [active] [ref=f1e1]:
+  - complementary [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - img "ONES Sales" [ref=f1e5]
+      - generic [ref=f1e6]:
+        - generic [ref=f1e7]: ONES Sales
+        - paragraph [ref=f1e8]: 智能协作平台
+    - navigation [ref=f1e9]:
+      - link "工作台" [ref=f1e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f1e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f1e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f1e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f1e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f1e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f1e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f1e56]:
+      - link "个人信息" [ref=f1e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f1e62] [cursor=pointer]
+  - main [ref=f1e67]:
+    - generic [ref=f1e69]:
+      - generic [ref=f1e70]:
+        - generic [ref=f1e71]:
+          - generic [ref=f1e72]: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f1e77]
+          - paragraph [ref=f1e78]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f1e79]:
+          - generic [ref=f1e80]:
+            - generic [ref=f1e81]: 生效范围
+            - generic [ref=f1e82]: 组织级统一发布
+          - generic [ref=f1e83]:
+            - generic [ref=f1e84]: 消费端
+            - generic [ref=f1e85]: 报价 / 合同 / AI
+          - generic [ref=f1e86]:
+            - generic [ref=f1e87]: 当前配置集
+            - generic [ref=f1e88]: 合同审核策略
+      - generic [ref=f1e89]:
+        - complementary [ref=f1e90]:
+          - generic [ref=f1e91]:
+            - generic [ref=f1e92]:
+              - generic [ref=f1e93]: 配置域
+              - paragraph [ref=f1e94]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f1e95]:
+              - button "交易配置 0 围绕报价工作台的价盘、税率和审批配置。" [ref=f1e96] [cursor=pointer]:
+                - generic [ref=f1e97]:
+                  - generic [ref=f1e98]: 交易配置
+                  - generic [ref=f1e99]: "0"
+                - paragraph [ref=f1e100]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 15 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f1e101] [cursor=pointer]:
+                - generic [ref=f1e102]:
+                  - generic [ref=f1e103]: 合同与 AI 规则
+                  - generic [ref=f1e104]: "15"
+                - paragraph [ref=f1e105]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 0 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f1e106] [cursor=pointer]:
+                - generic [ref=f1e107]:
+                  - generic [ref=f1e108]: 组织与权限
+                  - generic [ref=f1e109]: "0"
+                - paragraph [ref=f1e110]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 0 运行时主题和界面变量集中配置发布。" [ref=f1e111] [cursor=pointer]:
+                - generic [ref=f1e112]:
+                  - generic [ref=f1e113]: 界面与体验
+                  - generic [ref=f1e114]: "0"
+                - paragraph [ref=f1e115]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f1e116]:
+              - generic [ref=f1e117]: 结构约束
+              - list [ref=f1e118]:
+                - listitem [ref=f1e119]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f1e120]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f1e121]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f1e122]:
+          - generic [ref=f1e123]:
+            - generic [ref=f1e124]:
+              - generic [ref=f1e125]:
+                - generic [ref=f1e126]:
+                  - generic [ref=f1e127]: 配置中心
+                  - generic [ref=f1e128]: /
+                  - generic [ref=f1e129]: 合同与 AI 规则
+                - generic [ref=f1e135]:
+                  - heading "合同审核策略" [level=2] [ref=f1e136]
+                  - paragraph [ref=f1e137]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=f1e138]:
+                - generic [ref=f1e139]:
+                  - generic [ref=f1e140]: 规则集
+                  - generic [ref=f1e141]: "14"
+                - generic [ref=f1e142]:
+                  - generic [ref=f1e143]: 规则资产
+                  - generic [ref=f1e144]: "15"
+                - generic [ref=f1e145]:
+                  - generic [ref=f1e146]: 已发布
+                  - generic [ref=f1e147]: "15"
+            - generic [ref=f1e148]:
+              - button "合同审核策略 15" [ref=f1e149] [cursor=pointer]:
+                - generic [ref=f1e153]: 合同审核策略
+                - generic [ref=f1e154]: "15"
+              - button "AI 模型配置 0" [ref=f1e155] [cursor=pointer]:
+                - generic [ref=f1e161]: AI 模型配置
+                - generic [ref=f1e162]: "0"
+          - generic [ref=f1e165]:
+            - complementary [ref=f1e166]:
+              - generic [ref=f1e167]:
+                - generic [ref=f1e168]:
+                  - generic [ref=f1e169]:
+                    - heading "规则集与规则" [level=3] [ref=f1e170]
+                    - paragraph [ref=f1e171]: 14 个规则集 · 15 条规则
+                  - button "规则集" [ref=f1e172] [cursor=pointer]
+                - textbox "搜索规则集、规则、定位词..." [ref=f1e174]
+              - generic [ref=f1e175]:
+                - generic [ref=f1e176]:
+                  - button "争议解决规则集 1 DISPUTE · v1 · 已发布" [ref=f1e177] [cursor=pointer]:
+                    - generic [ref=f1e183]:
+                      - generic [ref=f1e184]:
+                        - generic [ref=f1e185]: 争议解决规则集
+                        - generic [ref=f1e186]: "1"
+                      - generic [ref=f1e187]: DISPUTE · v1 · 已发布
+                    - generic [ref=f1e188]:
+                      - button "编辑规则集" [ref=f1e189]
+                      - button "归档规则集" [ref=f1e193]
+                  - generic [ref=f1e197]:
+                    - button "R015 争议解决 已发布" [ref=f1e198] [cursor=pointer]:
+                      - generic [ref=f1e202]: R015
+                      - generic [ref=f1e203]: 争议解决
+                      - img "已发布" [ref=f1e204]
+                    - button "在此规则集新增规则" [ref=f1e209] [cursor=pointer]
+                - button "续约与退出规则集 1 RENEWAL · v1 · 已发布" [ref=f1e212] [cursor=pointer]:
+                  - generic [ref=f1e218]:
+                    - generic [ref=f1e219]:
+                      - generic [ref=f1e220]: 续约与退出规则集
+                      - generic [ref=f1e221]: "1"
+                    - generic [ref=f1e222]: RENEWAL · v1 · 已发布
+                  - generic [ref=f1e223]:
+                    - button "编辑规则集" [ref=f1e224]
+                    - button "归档规则集" [ref=f1e228]
+                - button "SLA 与服务承诺规则集 1 SLA · v2 · 待转译" [ref=f1e233] [cursor=pointer]:
+                  - generic [ref=f1e239]:
+                    - generic [ref=f1e240]:
+                      - generic [ref=f1e241]: SLA 与服务承诺规则集
+                      - generic [ref=f1e242]: "1"
+                    - generic [ref=f1e243]: SLA · v2 · 待转译
+                  - generic [ref=f1e244]:
+                    - button "编辑规则集" [ref=f1e245]
+                    - button "归档规则集" [ref=f1e249]
+                - button "数据安全规则集 1 DATA_SECURITY · v1 · 已发布" [ref=f1e254] [cursor=pointer]:
+                  - generic [ref=f1e260]:
+                    - generic [ref=f1e261]:
+                      - generic [ref=f1e262]: 数据安全规则集
+                      - generic [ref=f1e263]: "1"
+                    - generic [ref=f1e264]: DATA_SECURITY · v1 · 已发布
+                  - generic [ref=f1e265]:
+                    - button "编辑规则集" [ref=f1e266]
+                    - button "归档规则集" [ref=f1e270]
+                - button "知识产权规则集 1 IP · v1 · 已发布" [ref=f1e275] [cursor=pointer]:
+                  - generic [ref=f1e281]:
+                    - generic [ref=f1e282]:
+                      - generic [ref=f1e283]: 知识产权规则集
+                      - generic [ref=f1e284]: "1"
+                    - generic [ref=f1e285]: IP · v1 · 已发布
+                  - generic [ref=f1e286]:
+                    - button "编辑规则集" [ref=f1e287]
+                    - button "归档规则集" [ref=f1e291]
+                - button "主体与金额一致性规则集 1 BUSINESS_INTEGRITY · v1 · 已发布" [ref=f1e296] [cursor=pointer]:
+                  - generic [ref=f1e302]:
+                    - generic [ref=f1e303]:
+                      - generic [ref=f1e304]: 主体与金额一致性规则集
+                      - generic [ref=f1e305]: "1"
+                    - generic [ref=f1e306]: BUSINESS_INTEGRITY · v1 · 已发布
+                  - generic [ref=f1e307]:
+                    - button "编辑规则集" [ref=f1e308]
+                    - button "归档规则集" [ref=f1e312]
+                - button "保密义务规则集 1 CONFIDENTIALITY · v1 · 已发布" [ref=f1e317] [cursor=pointer]:
+                  - generic [ref=f1e323]:
+                    - generic [ref=f1e324]:
+                      - generic [ref=f1e325]: 保密义务规则集
+                      - generic [ref=f1e326]: "1"
+                    - generic [ref=f1e327]: CONFIDENTIALITY · v1 · 已发布
+                  - generic [ref=f1e328]:
+                    - button "编辑规则集" [ref=f1e329]
+                    - button "归档规则集" [ref=f1e333]
+                - button "责任边界规则集 2 LIABILITY · v1 · 已发布" [ref=f1e338] [cursor=pointer]:
+                  - generic [ref=f1e344]:
+                    - generic [ref=f1e345]:
+                      - generic [ref=f1e346]: 责任边界规则集
+                      - generic [ref=f1e347]: "2"
+                    - generic [ref=f1e348]: LIABILITY · v1 · 已发布
+                  - generic [ref=f1e349]:
+                    - button "编辑规则集" [ref=f1e350]
+                    - button "归档规则集" [ref=f1e354]
+                - button "违约责任规则集 1 BREACH · v1 · 已发布" [ref=f1e359] [cursor=pointer]:
+                  - generic [ref=f1e365]:
+                    - generic [ref=f1e366]:
+                      - generic [ref=f1e367]: 违约责任规则集
+                      - generic [ref=f1e368]: "1"
+                    - generic [ref=f1e369]: BREACH · v1 · 已发布
+                  - generic [ref=f1e370]:
+                    - button "编辑规则集" [ref=f1e371]
+                    - button "归档规则集" [ref=f1e375]
+                - button "验收与交付规则集 2 ACCEPTANCE · v1 · 已发布" [ref=f1e380] [cursor=pointer]:
+                  - generic [ref=f1e386]:
+                    - generic [ref=f1e387]:
+                      - generic [ref=f1e388]: 验收与交付规则集
+                      - generic [ref=f1e389]: "2"
+                    - generic [ref=f1e390]: ACCEPTANCE · v1 · 已发布
+                  - generic [ref=f1e391]:
+                    - button "编辑规则集" [ref=f1e392]
+                    - button "归档规则集" [ref=f1e396]
+                - button "税务与发票规则集 1 TAX · v1 · 已发布" [ref=f1e401] [cursor=pointer]:
+                  - generic [ref=f1e407]:
+                    - generic [ref=f1e408]:
+                      - generic [ref=f1e409]: 税务与发票规则集
+                      - generic [ref=f1e410]: "1"
+                    - generic [ref=f1e411]: TAX · v1 · 已发布
+                  - generic [ref=f1e412]:
+                    - button "编辑规则集" [ref=f1e413]
+                    - button "归档规则集" [ref=f1e417]
+                - button "终止与退款规则集 1 TERMINATION · v1 · 已发布" [ref=f1e422] [cursor=pointer]:
+                  - generic [ref=f1e428]:
+                    - generic [ref=f1e429]:
+                      - generic [ref=f1e430]: 终止与退款规则集
+                      - generic [ref=f1e431]: "1"
+                    - generic [ref=f1e432]: TERMINATION · v1 · 已发布
+                  - generic [ref=f1e433]:
+                    - button "编辑规则集" [ref=f1e434]
+                    - button "归档规则集" [ref=f1e438]
+                - button "付款与结算规则集 1 PAYMENT · v1 · 已发布" [ref=f1e443] [cursor=pointer]:
+                  - generic [ref=f1e449]:
+                    - generic [ref=f1e450]:
+                      - generic [ref=f1e451]: 付款与结算规则集
+                      - generic [ref=f1e452]: "1"
+                    - generic [ref=f1e453]: PAYMENT · v1 · 已发布
+                  - generic [ref=f1e454]:
+                    - button "编辑规则集" [ref=f1e455]
+                    - button "归档规则集" [ref=f1e459]
+                - button "默认规则集 0 default · v1 · 草稿" [ref=f1e464] [cursor=pointer]:
+                  - generic [ref=f1e470]:
+                    - generic [ref=f1e471]:
+                      - generic [ref=f1e472]: 默认规则集
+                      - generic [ref=f1e473]: "0"
+                    - generic [ref=f1e474]: default · v1 · 草稿
+                  - generic [ref=f1e475]:
+                    - button "编辑规则集" [ref=f1e476]
+                    - button "归档规则集" [ref=f1e480]
+            - main [ref=f1e484]:
+              - generic [ref=f1e485]:
+                - generic [ref=f1e486]:
+                  - generic [ref=f1e487]:
+                    - generic [ref=f1e488]:
+                      - generic [ref=f1e489]: R015
+                      - heading "争议解决" [level=3] [ref=f1e490]
+                      - generic [ref=f1e491]: 已发布
+                      - generic [ref=f1e492]: 结构已确认
+                    - paragraph [ref=f1e493]: 争议解决规则集 · 规则 v4 · 当前正式包 v18
+                  - generic [ref=f1e494]:
+                    - button "归档" [ref=f1e495] [cursor=pointer]
+                    - button "发布规则集" [disabled]
+                    - button "保存草稿" [ref=f1e496] [cursor=pointer]
+                - generic [ref=f1e497]:
+                  - generic [ref=f1e498]: 当前规则已达到结构发布门禁
+                  - generic [ref=f1e500]:
+                    - tablist [ref=f1e501]:
+                      - tab "规则定义" [selected] [ref=f1e502] [cursor=pointer]
+                      - tab "响应与谈判" [ref=f1e503] [cursor=pointer]
+                      - tab "测试" [ref=f1e504] [cursor=pointer]
+                    - tabpanel "规则定义" [ref=f1e505]:
+                      - generic [ref=f1e506]:
+                        - generic [ref=f1e507]:
+                          - generic [ref=f1e508]:
+                            - text: 规则名称
+                            - textbox "规则名称" [ref=f1e509]: 争议解决
+                          - generic [ref=f1e510]:
+                            - text: 规则集
+                            - combobox "规则集" [ref=f1e511] [cursor=pointer]:
+                              - generic: 争议解决规则集
+                        - generic [ref=f1e514]:
+                          - text: 业务解释
+                          - textbox "业务解释" [ref=f1e515]: ONES skill 条款速查：A=深圳 SCIA 仲裁、中国法律；B=北京/上海仲裁；一线城市法院；红线=境外仲裁/法院/法律
+                        - generic [ref=f1e516]:
+                          - generic [ref=f1e517]:
+                            - text: 执行方式
+                            - combobox "执行方式" [ref=f1e518] [cursor=pointer]:
+                              - generic: 字段 + 语义
+                          - generic [ref=f1e521]:
+                            - text: 数据类型
+                            - combobox "数据类型" [ref=f1e522] [cursor=pointer]:
+                              - generic: 文本语义
+                          - generic [ref=f1e525]:
+                            - text: 缺省关注色
+                            - combobox "缺省关注色 仅用于证据不足或未分档时，不覆盖下方 A/B/C 判定。" [ref=f1e526] [cursor=pointer]:
+                              - generic: 需谈判
+                            - generic [ref=f1e529]: 仅用于证据不足或未分档时，不覆盖下方 A/B/C 判定。
+                        - generic [ref=f1e530]:
+                          - generic [ref=f1e531]:
+                            - text: 适用场景
+                            - textbox "适用场景" [ref=f1e532]:
+                              - /placeholder: 客户合同，续约，采购
+                              - text: customer_contract，customer_redline，quote_to_contract，renewal，source_docx_review
+                          - generic [ref=f1e533]:
+                            - text: 条款分类
+                            - textbox "条款分类" [ref=f1e534]:
+                              - /placeholder: payment / ip / sla
+                              - text: dispute
+                          - generic [ref=f1e535]:
+                            - text: 定位词（只负责找条款）
+                            - textbox "定位词（只负责找条款）" [ref=f1e536]:
+                              - /placeholder: 首付款，账期，尾款
+                              - text: 争议解决，仲裁，管辖，法院，法律，境外
+                          - generic [ref=f1e537]:
+                            - text: 判定字段（负责计算）
+                            - textbox "判定字段（负责计算）" [ref=f1e538]:
+                              - /placeholder: advance_ratio
+                              - text: dispute_resolution_clause
+                        - generic [ref=f1e539]:
+                          - text: 模型判定指令
+                          - textbox "模型判定指令" [ref=f1e540]:
+                            - /placeholder: 说明模型需要判断的事实、边界和返回字段；不要在这里写客户侧文案。
+                            - text: 你是 ONES 业务运营合同审核角色，只能依据配置中心发布规则判断「争议解决」。 规则来源：suoyidev/ones-internal-skills/ones-contract-assistant v2.2.2，commit f8b0c27f5c19a499c1563923ca372a2171aaca58。 Level A 可接受：深圳 SCIA 仲裁、中国法律 Level B 偏离可让步：北京/上海仲裁；一线城市法院 红线：境外仲裁/法院/法律 请输出风险等级、命中原文、判断依据、销售谈判建议、Word 批注文案，并保留规则编号与快照引用。
+                      - generic [ref=f1e541]:
+                        - generic [ref=f1e542]:
+                          - heading "红绿灯判定" [level=4] [ref=f1e543]
+                          - paragraph [ref=f1e544]: 档位由引擎命中阈值产生；解释文案不参与判定。
+                        - generic [ref=f1e545]:
+                          - generic [ref=f1e546]: A · 绿色通过
+                          - combobox [ref=f1e547] [cursor=pointer]:
+                            - generic: 包含
+                          - generic [ref=f1e550]:
+                            - spinbutton "阈值" [ref=f1e551]: "0"
+                            - textbox "单位" [ref=f1e552]: text
+                          - textbox "命中后的处理动作" [ref=f1e553]: auto_accept
+                        - generic [ref=f1e554]:
+                          - generic [ref=f1e555]: B · 黄色谈判
+                          - combobox [ref=f1e556] [cursor=pointer]:
+                            - generic: 包含
+                          - generic [ref=f1e559]:
+                            - spinbutton "阈值" [ref=f1e560]: "0"
+                            - textbox "单位" [ref=f1e561]: text
+                          - textbox "命中后的处理动作" [ref=f1e562]: negotiate_with_counterparty
+                        - generic [ref=f1e563]:
+                          - generic [ref=f1e564]: C · 红线阻断
+                          - combobox [ref=f1e565] [cursor=pointer]:
+                            - generic: 包含
+                          - generic [ref=f1e568]:
+                            - spinbutton "阈值" [ref=f1e569]: "0"
+                            - textbox "单位" [ref=f1e570]: text
+                          - textbox "命中后的处理动作" [ref=f1e571]: block_or_escalate
+                      - generic [ref=f1e572]:
+                        - generic [ref=f1e573]: 机器执行摘要（只读）
+                        - paragraph [ref=f1e574]: 先定位“争议解决 / 仲裁 / 管辖 / 法院 / 法律 / 境外”，由字段 dispute_resolution_clause 与模型语义共同判断。 命中后只输出证据、红绿灯档位和对应处理动作；解释文案不参与判定。
+                      - generic [ref=f1e575]:
+                        - checkbox "我已核对执行摘要与业务规则一致 确认后才允许发布；任意规则字段再次修改会自动回到待确认。" [checked] [ref=f1e576]
+                        - generic [ref=f1e577]:
+                          - generic [ref=f1e578]: 我已核对执行摘要与业务规则一致
+                          - generic [ref=f1e579]: 确认后才允许发布；任意规则字段再次修改会自动回到待确认。
+  - alert [ref=f1e580]

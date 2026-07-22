@@ -1,4 +1,27 @@
 // GET /api/contracts - 合同列表（支持分页和搜索）
+type ContractListRow = {
+  id: string
+  [key: string]: unknown
+}
+
+type ContractVersionRow = {
+  contract_id: string
+  version_number: number
+  source: string | null
+  created_at: string | null
+}
+
+type ContractComparisonRow = {
+  id: string
+  contract_id: string
+  baseline_type: string
+  baseline_doc_id: string | null
+  compare_doc_id: string | null
+  status: string
+  created_at: string | null
+  completed_at: string | null
+}
+
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
     const { searchParams } = new URL(req.url)
@@ -34,11 +57,83 @@ export async function GET(req: NextRequest) {
       return errorResponse(createApiError('DB_ERROR', '获取合同列表失败'))
     }
 
+    const rows = (contracts || []) as ContractListRow[]
+    const versionMap = new Map<string, ContractVersionRow[]>()
+    const comparisonMap = new Map<string, ContractComparisonRow>()
+    const contractIds = rows.map((contract) => contract.id).filter(Boolean)
+
+    if (contractIds.length > 0) {
+      const { data: versions, error: versionsError } = await supabaseAdmin
+        .from('contract_versions')
+        .select('contract_id, version_number, source, created_at')
+        .in('contract_id', contractIds)
+        .order('version_number', { ascending: false })
+
+      if (!versionsError && Array.isArray(versions)) {
+        ;(versions as ContractVersionRow[]).forEach((version) => {
+          const list = versionMap.get(version.contract_id) || []
+          list.push(version)
+          versionMap.set(version.contract_id, list)
+        })
+      } else if (versionsError) {
+        await logError({
+          req,
+          source: 'api',
+          userId: user.id,
+          message: versionsError.message,
+          error: versionsError,
+          context: {
+            route: '/api/contracts',
+            orgId,
+            phase: 'get_contract_versions',
+          },
+        })
+      }
+
+      const { data: comparisons, error: comparisonsError } = await supabaseAdmin
+        .from('contract_comparisons')
+        .select('id, contract_id, baseline_type, baseline_doc_id, compare_doc_id, status, created_at, completed_at')
+        .in('contract_id', contractIds)
+        .order('created_at', { ascending: false })
+
+      if (!comparisonsError && Array.isArray(comparisons)) {
+        ;(comparisons as ContractComparisonRow[]).forEach((comparison) => {
+          if (!comparisonMap.has(comparison.contract_id)) {
+            comparisonMap.set(comparison.contract_id, comparison)
+          }
+        })
+      } else if (comparisonsError) {
+        await logError({
+          req,
+          source: 'api',
+          userId: user.id,
+          message: comparisonsError.message,
+          error: comparisonsError,
+          context: {
+            route: '/api/contracts',
+            orgId,
+            phase: 'get_contract_comparisons',
+          },
+        })
+      }
+    }
+
+    const enrichedContracts = rows.map((contract) => {
+      const versions = versionMap.get(contract.id) || []
+      return {
+        ...contract,
+        contract_versions: versions,
+        latest_version: versions[0] ?? null,
+        version_count: versions.length,
+        latest_comparison: comparisonMap.get(contract.id) ?? null,
+      }
+    })
+
     const total = count || 0
     const totalPages = Math.ceil(total / safePageSize)
 
     return successResponse({
-      data: contracts || [],
+      data: enrichedContracts,
       meta: {
         page: safePage,
         pageSize: safePageSize,

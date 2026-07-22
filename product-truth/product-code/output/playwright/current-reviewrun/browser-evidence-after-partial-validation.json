@@ -1,0 +1,26 @@
+[
+  {
+    "name": "desktop",
+    "url": "http://127.0.0.1:3016/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+    "checks": {
+      "completed": true,
+      "model": true,
+      "provider": true,
+      "transport": true,
+      "ruleSnapshot": true,
+      "invocationChain": true
+    }
+  },
+  {
+    "name": "mobile",
+    "url": "http://127.0.0.1:3016/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+    "checks": {
+      "completed": true,
+      "model": true,
+      "provider": true,
+      "transport": true,
+      "ruleSnapshot": true,
+      "invocationChain": true
+    }
+  }
+]

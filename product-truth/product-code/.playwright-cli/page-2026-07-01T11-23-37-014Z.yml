@@ -1,0 +1,226 @@
+- generic [active] [ref=f13e1]:
+  - complementary [ref=f13e2]:
+    - generic [ref=f13e3]:
+      - img "ONES Sales" [ref=f13e5]
+      - generic [ref=f13e6]:
+        - generic [ref=f13e7]: ONES Sales
+        - paragraph [ref=f13e8]: 智能协作平台
+    - navigation [ref=f13e9]:
+      - link "工作台" [ref=f13e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f13e11]
+        - generic [ref=f13e15]: 工作台
+      - link "报价中心" [ref=f13e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f13e17]
+        - generic [ref=f13e21]: 报价中心
+      - link "合同审核" [ref=f13e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f13e23]
+        - generic [ref=f13e28]: 合同审核
+      - link "标书中心" [ref=f13e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f13e30]
+        - generic [ref=f13e34]: 标书中心
+      - link "知识库" [ref=f13e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f13e36]
+        - generic [ref=f13e41]: 知识库
+      - link "日程" [ref=f13e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f13e43]
+        - generic [ref=f13e49]: 日程
+      - link "配置中心" [ref=f13e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f13e51]
+        - generic [ref=f13e55]: 配置中心
+    - generic [ref=f13e56]:
+      - link "个人信息" [ref=f13e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f13e58]
+        - generic [ref=f13e61]: 个人信息
+      - button "退出登录" [ref=f13e62] [cursor=pointer]:
+        - img [ref=f13e63]
+        - generic [ref=f13e66]: 退出登录
+  - main [ref=f13e67]:
+    - generic [ref=f13e69]:
+      - generic [ref=f13e70]:
+        - generic [ref=f13e71]:
+          - generic [ref=f13e72]:
+            - img [ref=f13e73]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f13e77]
+          - paragraph [ref=f13e78]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f13e79]:
+          - generic [ref=f13e80]:
+            - generic [ref=f13e81]: 生效范围
+            - generic [ref=f13e82]: 组织级统一发布
+          - generic [ref=f13e83]:
+            - generic [ref=f13e84]: 消费端
+            - generic [ref=f13e85]: 报价 / 合同 / AI
+          - generic [ref=f13e86]:
+            - generic [ref=f13e87]: 当前配置集
+            - generic [ref=f13e88]: AI 模型配置
+      - generic [ref=f13e89]:
+        - complementary [ref=f13e90]:
+          - generic [ref=f13e91]:
+            - generic [ref=f13e92]:
+              - generic [ref=f13e93]: 配置域
+              - paragraph [ref=f13e94]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f13e95]:
+              - button "交易配置 7+ 围绕报价工作台的价盘、税率和审批配置。" [ref=f13e96] [cursor=pointer]:
+                - generic [ref=f13e97]:
+                  - generic [ref=f13e98]: 交易配置
+                  - generic [ref=f13e99]: 7+
+                - paragraph [ref=f13e100]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 3+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f13e101] [cursor=pointer]:
+                - generic [ref=f13e102]:
+                  - generic [ref=f13e103]: 合同与 AI 规则
+                  - generic [ref=f13e104]: 3+
+                - paragraph [ref=f13e105]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f13e106] [cursor=pointer]:
+                - generic [ref=f13e107]:
+                  - generic [ref=f13e108]: 组织与权限
+                  - generic [ref=f13e109]: ...
+                - paragraph [ref=f13e110]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 1+ 运行时主题和界面变量集中配置发布。" [ref=f13e111] [cursor=pointer]:
+                - generic [ref=f13e112]:
+                  - generic [ref=f13e113]: 界面与体验
+                  - generic [ref=f13e114]: 1+
+                - paragraph [ref=f13e115]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f13e116]:
+              - generic [ref=f13e117]: 结构约束
+              - list [ref=f13e118]:
+                - listitem [ref=f13e119]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f13e120]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f13e121]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f13e122]:
+          - generic [ref=f13e123]:
+            - generic [ref=f13e124]:
+              - generic [ref=f13e125]:
+                - generic [ref=f13e126]:
+                  - generic [ref=f13e127]: 配置中心
+                  - generic [ref=f13e128]: /
+                  - generic [ref=f13e129]: 合同与 AI 规则
+                - generic [ref=f13e130]:
+                  - img [ref=f13e132]
+                  - generic [ref=f13e137]:
+                    - heading "AI 模型配置" [level=2] [ref=f13e138]
+                    - paragraph [ref=f13e139]: 管理本地模型、云端 OpenAI 兼容模型和运行时路由策略。
+              - generic [ref=f13e140]:
+                - generic [ref=f13e141]:
+                  - generic [ref=f13e142]: 模型档位
+                  - generic [ref=f13e143]: "3"
+                - generic [ref=f13e144]:
+                  - generic [ref=f13e145]: 启用模型
+                  - generic [ref=f13e146]: "3"
+                - generic [ref=f13e147]:
+                  - generic [ref=f13e148]: 已发布
+                  - generic [ref=f13e149]: "3"
+            - generic [ref=f13e150]:
+              - button "合同审核策略 ..." [ref=f13e151] [cursor=pointer]:
+                - img [ref=f13e152]
+                - generic [ref=f13e155]: 合同审核策略
+                - generic [ref=f13e156]: ...
+              - button "AI 模型配置 3" [ref=f13e157] [cursor=pointer]:
+                - img [ref=f13e158]
+                - generic [ref=f13e163]: AI 模型配置
+                - generic [ref=f13e164]: "3"
+          - generic [ref=f13e166]:
+            - generic [ref=f13e167]:
+              - generic [ref=f13e168]:
+                - generic [ref=f13e169]: 模型 Provider (3)
+                - button "+ 新增" [ref=f13e170] [cursor=pointer]
+              - generic [ref=f13e172]:
+                - generic [ref=f13e173]:
+                  - generic [ref=f13e174]:
+                    - generic [ref=f13e175]: Level 1 · 本地模型 (LM Studio)
+                    - generic [ref=f13e176]:
+                      - generic [ref=f13e177]: 已发布
+                      - generic [ref=f13e178]: 启用
+                  - generic [ref=f13e179]:
+                    - generic [ref=f13e180]: "画像: 未设置"
+                    - generic [ref=f13e181]: "类型: openai_compatible"
+                    - generic [ref=f13e182]: "模型: local-model"
+                    - generic [ref=f13e183]: "地址: http://localhost:1234/v1"
+                    - generic [ref=f13e184]: "超时: 45s"
+                    - generic [ref=f13e185]: "密钥: 未配置"
+                  - generic [ref=f13e186]:
+                    - button "编辑" [ref=f13e187] [cursor=pointer]
+                    - button "删除" [ref=f13e188] [cursor=pointer]
+                - generic [ref=f13e189]:
+                  - generic [ref=f13e190]:
+                    - generic [ref=f13e191]: Level 2 · 云端模型 (中转)
+                    - generic [ref=f13e192]:
+                      - generic [ref=f13e193]: 已发布
+                      - generic [ref=f13e194]: 启用
+                  - generic [ref=f13e195]:
+                    - generic [ref=f13e196]: "画像: 未设置"
+                    - generic [ref=f13e197]: "类型: openai_compatible"
+                    - generic [ref=f13e198]: "模型: claude-sonnet"
+                    - generic [ref=f13e199]: "地址: https://api.yiyong.ai/v1"
+                    - generic [ref=f13e200]: "超时: 45s"
+                    - generic [ref=f13e201]: "密钥: 未配置"
+                  - generic [ref=f13e202]:
+                    - button "编辑" [ref=f13e203] [cursor=pointer]
+                    - button "删除" [ref=f13e204] [cursor=pointer]
+                - generic [ref=f13e205]:
+                  - generic [ref=f13e206]:
+                    - generic [ref=f13e207]: Level 3 · 规则引擎 (兜底)
+                    - generic [ref=f13e208]:
+                      - generic [ref=f13e209]: 已发布
+                      - generic [ref=f13e210]: 启用
+                  - generic [ref=f13e211]:
+                    - generic [ref=f13e212]: "画像: 未设置"
+                    - generic [ref=f13e213]: "类型: openai_compatible"
+                    - generic [ref=f13e214]: "模型: rule-engine"
+                    - generic [ref=f13e215]: "地址: （内置）"
+                    - generic [ref=f13e216]: "超时: 1s"
+                    - generic [ref=f13e217]: "密钥: 未配置"
+                  - generic [ref=f13e218]:
+                    - button "编辑" [ref=f13e219] [cursor=pointer]
+                    - button "删除" [ref=f13e220] [cursor=pointer]
+            - generic:
+              - generic [ref=f13e222]: 路由与执行策略
+              - generic [ref=f13e223]:
+                - generic [ref=f13e224]:
+                  - generic [ref=f13e225]: 文档规模路由
+                  - generic:
+                    - generic [ref=f13e226]:
+                      - generic [ref=f13e227]: ≤ 15 页
+                      - generic:
+                        - generic: 整体送入本地
+                        - generic: semantic_review
+                      - generic [ref=f13e228]: Level 1
+                    - generic [ref=f13e229]:
+                      - generic [ref=f13e230]: 15 - 40 页
+                      - generic:
+                        - generic: 分段送入本地
+                        - generic: comment_patch_draft
+                      - generic [ref=f13e231]: Level 1
+                    - generic [ref=f13e232]:
+                      - generic [ref=f13e233]: "> 40 页"
+                      - generic:
+                        - generic: 强制云端
+                        - generic: report_summary
+                      - generic [ref=f13e234]: Level 2
+                - generic:
+                  - generic [ref=f13e235]:
+                    - generic: "3"
+                    - generic: 档位
+                  - generic [ref=f13e236]:
+                    - generic: "3"
+                    - generic: 启用
+                  - generic [ref=f13e237]:
+                    - generic: "3"
+                    - generic: 发布
+                - generic [ref=f13e238]:
+                  - generic: 消费边界
+                  - generic:
+                    - paragraph: F012 只决定模型路由、超时、降级和审计。
+                    - paragraph: F009/F006 决定审核规则、输出结构和风险事实。
+                    - paragraph: 正式验收必须看到 semantic_review 的模型调用证据。
+            - generic [ref=f13e239]:
+              - generic [ref=f13e241]: 合同审核运行时策略
+              - generic [ref=f13e243]: 运行时策略加载中
+  - alert [ref=f13e244]

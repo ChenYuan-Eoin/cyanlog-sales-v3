@@ -1,0 +1,1429 @@
+{
+  "baseURL": "http://localhost:3002",
+  "login": {
+    "status": 200,
+    "tokenPresent": true,
+    "authContextReady": true,
+    "body": "{\"user\":{\"id\":\"00030001-0000-0000-0000-000000000000\",\"email\":\"e2e-admin@huarun.com\",\"phone\":null,\"displayName\":\"E2E 测试管理员\"},\"token\":\"ccaf98bd-c73c-43a6-ac73-1a9995f21a48\",\"expiresAt\":\"2026-07-10T01:12:24.476Z\",\"mustChangePassword\":false,\"authContextReady\":true,\"initialDashboard\":{\"spaces\":[{\"id\":\"40000001-0000-0000-0000-000000000000\",\"name\":\"华东销售空间\",\"owner_id\":\"30000010-0000-0000-0000-000000000000\",\"description\":\"面向华东地区销售协同\",\"department_id\":\"20000011-0000-0000-0000-000000000000\",\"pending_milestones\":4,\"active_opportunities\":4},{\"id\":\"40000002-0000-0000-0000-000000000000\",\"name\":\"华北销售空间\",\"owner_id\":\"30000011-0000-0000-0000-000000000000\",\"description\":\"面向华北地区销售协同\",\"department_id\":\"20000012-000"
+  },
+  "apiResults": {
+    "/api/contracts?limit=10": {
+      "status": 200,
+      "text": "{\"success\":true,\"data\":{\"data\":[{\"id\":\"92958890-0b9f-411c-a283-1c9f7849afbe\",\"filename\":\"_上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx\",\"status\":\"COMPLETED\",\"contract_no\":\"CT-20260702-008\",\"quote_id\":null,\"party_b_name\":\"待识别客户\",\"created_by\":\"30000001-0000-0000-0000-000000000000\",\"created_at\":\"2026-07-02T16:00:01.637358+00:00\",\"updated_at\":\"2026-07-02T16:00:28.605528+00:00\"},{\"id\":\"abb72d16-ed19-445e-aa33-561cec0ab6d8\",\"filename\":\"(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx\",\"status\":\"COMPLETED\",\"contract_no\":\"CT-20260702-007\",\"quote_id\":null,\"party_b_name\":\"待识别客户\",\"created_by\":\"30000001-0000-0000-0000-000000000000\",\"created_at\":\"2026-07-02T15:52:41.325717+00:00\",\"updated_at\":\"2026-07-02T15:53:12.577018+00:00\"},{\"id\":\"8e1d9430-7218-4663-90f4-a2600669e0fa\",\"filename\":\"snapshot-rules-20260702113614.docx\",\"status\":\"COMPLETED\",\"contract_no\":\"CT-20260702-006\",\"quote_id\":null,\"party_b_name\":\"快照规则验证-20260702113614\",\"created_by\":\"00030001-0000-0000-0000-000000000000\",\"created_at\":\"2026-07-02T11:36:17.485189+00:00\",\"updated_at\":\"2026-07-02T11:54:10.906004+00:00\"},{\"id\":\"80c0ca0d-4879-4baa-a3bc-e929fda2b6b2\",\"filename\":\"ones-long-20260702111318.docx\",\"status\":\"COMPLETED\",\"contra"
+    },
+    "/api/configs?type=CONTRACT_RULE&limit=50": {
+      "status": 200,
+      "text": "{\"success\":true,\"data\":[],\"meta\":{\"total\":0,\"limit\":50,\"offset\":0,\"hasMore\":false}}"
+    },
+    "/api/configs?type=UI_THEME&status=PUBLISHED&limit=10": {
+      "status": 200,
+      "text": "{\"success\":true,\"data\":[{\"id\":\"8d985ec8-942a-49c4-b0c1-d046d4b59a4c\",\"key\":\"UI_THEME_DEFAULT\",\"name\":\"默认界面主题\",\"value\":{\"card\":\"#ffffff\",\"ring\":\"#60a5fa\",\"input\":\"#ffffff\",\"muted\":\"#f8fafc\",\"border\":\"#dbe4ee\",\"logoUrl\":\"https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/logos/30000001-0000-0000-0000-000000000000_1780998624464.png\",\"popover\":\"#ffffff\",\"primary\":\"#2563eb\",\"radiusLg\":16,\"radiusMd\":10,\"brandName\":\"ONES Sales\",\"secondary\":\"#eff6ff\",\"appearance\":\"system\",\"background\":\"#eef3f8\",\"faviconUrl\":\"https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1780998637791.png\",\"foreground\":\"#0f172a\",\"loginTitle\":\"企业销售支持平台\",\"brandAssets\":{\"symbol\":{\"dark\":\"https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/logos/30000001-0000-0000-0000-000000000000_1781748181667.png\",\"light\":\"https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/logos/30000001-0000-0000-0000-000000000000_1781748179289.png\"},\"favicon\":\"https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-0000000"
+    }
+  },
+  "snapshots": {
+    "contracts-desktop": {
+      "url": "http://localhost:3002/contracts",
+      "title": "ONES Sales",
+      "dataset": {
+        "brandName": "ONES Sales",
+        "logoUrl": "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/logos/30000001-0000-0000-0000-000000000000_1781748164068.png",
+        "productTitle": "ONES Sales"
+      },
+      "faviconLinks": [
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g"
+      ],
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同中心 全生命周期管理 新审核 继续 批注版 比对 发起新审核 新任务 创建新的 ReviewRun 上传源文件 上传源文件后直接创建新的审核运行，并进入风险定位与批注工作台 新建合同版本 继续审核 进行中 回到未完成 ReviewRun 进行中任务 继续未完成的解析、审核或再审核任务，不创建新合同 minimal.pdf 查看批注版 已完成 打开已完成输出 Word 批注产物 查看风险证据、Word 批注意图、批注版和下载记录 ones-contract-e2e-risk.docx 合同版本对比 版本流 旧版 / 新版差异复核 版本流 进入基准合同版本流，选择客户回传版或候选合同做差异复核 ones-contract-e2e-risk.docx 合同审核工作台入口 上传合同源文件，绑定已发布审核规则和模型策略，生成风险定位、销售谈判任务与源文件 Word 批注版本。 上传源文件并发起审核 源文件docx / pdf 审核依据发布规则 / 模型 风险定位复核 / 谈判 输出批注版 / 报告 17 全部合同 1 进行中 0 需关注 13 已完成 全部 17 起草中 待审核 已完成 ones-contract-e2e-risk.docx 合同 审核完成 下一步：查看批注版 7月3日 00:11 进入输出与证据面板，下载源文件 Word 批注版。 _上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx 合同 审核完成 下一步：查看批注版 7月3日 00:00 进入输出与证据面板，下载源文件 Word 批注版。 (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx 合同 审核完成 下一步：查看批注版 7月2日 23:53 进入输出与证据面板，下载源文件 Word 批注版。 snapshot-rules-20260702113614.docx 合同 审核完成 下一步：查看批注版 7月2日 19:54 进入输出与证据面板，下载源文件 Word 批注版。 ones-long-20260702111318.docx 合同 审核完成 下一步：查看批注版 7月2日 19:13 进入输出与证据面板，下载源文件 Word 批注版。 ones-source-20260702110520.docx 合同 审核完成 下一步：查看批注版 7月2日 19:06 进入输出与证据面板，下载源文件 Word 批注版。 ones-source-20260702110222.docx 合同 审核完成 下一步：查看批注版 7月2日 19:03 进入输出与证据面板，下载源文件 Word 批注版。 ones-source-20260702105749.docx 合同 审核完成 下一步：查看批注版 7月2日 18:58 进入输出与证据面板，下载源文件 Word 批注版。 prod-gemini-review-sample-1782906641409.docx 合同 审核完成 下一步：查看批注版 7月2日 15:06 进入输出与证据面板，下载源文件 Word 批注版。 合同 DRAFT 下一步：打开工作台 7月2日 09:55 查看当前合同的版本、审核和输出状态。 (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx 合同 审核完成 下一步：查看批注版 7月1日 18:33 进入输出与证据面板，下载源文件 Word 批注版。 合同 DRAFT 下一步：打开工作台 7月1日 16:42 查看当前合同的版本、审核和输出状态。 _ONES_-_2026.docx 合同 审核完成 下一步：查看批注版 6月30日 16:37 进入输出与证据面板，下载源文件 Word 批注版。 Hemory_.docx 合同 审核完成 下一步：查看批注版 6月30日 16:26 进入输出与证据面板，下载源文件 Word 批注版。 合同 DRAFT 下一步：打开工作台 6月30日 13:50 查看当前合同的版本、审核和输出状态。 _2026_ONES_1_.docx 合同 审核完成 下一步：查看批注版 6月25日 16:16 进入输出与证据面板，下载源文件 Word 批注版。 minimal.pdf 合同 待审核 下一步：发起审核 6月25日 16:16 源文件已登记，下一步启动规则与模型审核。",
+      "buttons": [
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md lg:hidden shadow-lg"
+        },
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors bg-slate-800 text-white"
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1 text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "cls": "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        },
+        {
+          "tag": "a",
+          "text": "新审核",
+          "href": "/contracts/new?from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "新审核",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "继续",
+          "href": "/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c?from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "继续",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "批注版",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence&from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "批注版",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "比对",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare?from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "比对",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "发起新审核新任务创建新的 ReviewRun上传源文件上传源文件后直接创建新的审核运行，并进入风险定位与批注工作台新建合同版本",
+          "href": "/contracts/new?from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "继续审核进行中回到未完成 ReviewRun进行中任务继续未完成的解析、审核或再审核任务，不创建新合同minimal.pdf",
+          "href": "/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c?from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "查看批注版已完成打开已完成输出Word 批注产物查看风险证据、Word 批注意图、批注版和下载记录ones-contract-e2e-risk.docx",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence&from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同版本对比版本流旧版 / 新版差异复核版本流进入基准合同版本流，选择客户回传版或候选合同做差异复核ones-contract-e2e-risk.docx",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare?from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "上传源文件并发起审核",
+          "href": "/contracts/new",
+          "disabled": false,
+          "cls": "shrink-0"
+        },
+        {
+          "tag": "button",
+          "text": "上传源文件并发起审核",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 w-full gap-1.5 md:w-auto"
+        },
+        {
+          "tag": "button",
+          "text": "全部17",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "button",
+          "text": "起草中",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "button",
+          "text": "待审核",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "button",
+          "text": "已完成",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "a",
+          "text": "ones-contract-e2e-risk.docx合同审核完成下一步：查看批注版7月3日 00:11进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "_上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx合同审核完成下一步：查看批注版7月3日 00:00进入输出与证据",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx合同审核完成下一步：查看批注版7月2日 23:53进",
+          "href": "/contracts/abb72d16-ed19-445e-aa33-561cec0ab6d8?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "snapshot-rules-20260702113614.docx合同审核完成下一步：查看批注版7月2日 19:54进入输出与证据面板，下载源文件 Word ",
+          "href": "/contracts/8e1d9430-7218-4663-90f4-a2600669e0fa?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-long-20260702111318.docx合同审核完成下一步：查看批注版7月2日 19:13进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/80c0ca0d-4879-4baa-a3bc-e929fda2b6b2?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-source-20260702110520.docx合同审核完成下一步：查看批注版7月2日 19:06进入输出与证据面板，下载源文件 Word 批注版",
+          "href": "/contracts/a1169c9f-7b64-4991-a97e-e63a3862aed5?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-source-20260702110222.docx合同审核完成下一步：查看批注版7月2日 19:03进入输出与证据面板，下载源文件 Word 批注版",
+          "href": "/contracts/681635cb-1592-4875-98c8-7c97dd2e6818?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-source-20260702105749.docx合同审核完成下一步：查看批注版7月2日 18:58进入输出与证据面板，下载源文件 Word 批注版",
+          "href": "/contracts/2335f2ab-0686-440c-b86b-7fd6d4950844?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "prod-gemini-review-sample-1782906641409.docx合同审核完成下一步：查看批注版7月2日 15:06进入输出与证据面板，下",
+          "href": "/contracts/0ca03c97-8104-4211-a65f-3d76e5f14b8a?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同DRAFT下一步：打开工作台7月2日 09:55查看当前合同的版本、审核和输出状态。",
+          "href": "/contracts/f381041d-f313-4d40-b4b3-fd474277ed84?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx合同审核完成下一步：查看批注版7月1日 18:33进入输出与证据面板，下载源文",
+          "href": "/contracts/058ef76f-ad26-49ef-9383-de09749879bd?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同DRAFT下一步：打开工作台7月1日 16:42查看当前合同的版本、审核和输出状态。",
+          "href": "/contracts/a1cc7ba3-7890-447a-9db8-980daf424faa?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "_ONES_-_2026.docx合同审核完成下一步：查看批注版6月30日 16:37进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/13aca6c2-e902-4458-9e94-6d8db8ae7a09?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "Hemory_.docx合同审核完成下一步：查看批注版6月30日 16:26进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/44301b16-6551-4720-afa5-f1d80b1604de?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同DRAFT下一步：打开工作台6月30日 13:50查看当前合同的版本、审核和输出状态。",
+          "href": "/contracts/25d3192e-32d1-44c5-9396-179f1a7309ab?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "_2026_ONES_1_.docx合同审核完成下一步：查看批注版6月25日 16:16进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/0286f885-fc49-4a43-9543-798aca2dda16?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "minimal.pdf合同待审核下一步：发起审核6月25日 16:16源文件已登记，下一步启动规则与模型审核。",
+          "href": "/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        }
+      ],
+      "overflowX": false,
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+    },
+    "rules-desktop": {
+      "url": "http://localhost:3002/configs?tab=rules",
+      "title": "ONES Sales",
+      "dataset": {
+        "brandName": "ONES Sales",
+        "logoUrl": "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/logos/30000001-0000-0000-0000-000000000000_1781748164068.png",
+        "productTitle": "ONES Sales"
+      },
+      "faviconLinks": [
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g"
+      ],
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 组织级配置工作台 配置中心 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。 生效范围 组织级统一发布 消费端 报价 / 合同 / AI 当前配置集 合同审核策略 配置域 把所有配置先归到稳定的业务域，再进入具体配置集编辑。 交易配置 ... 围绕报价工作台的价盘、税率和审批配置。 合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。 组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。 界面与体验 ... 运行时主题和界面变量集中配置发布。 结构约束 配置中心只拥有配置，不承载业务执行。 报价工作台、合同审核页只读消费已发布配置。 配置项需要有版本、状态和作用范围。 配置中心 / 合同与 AI 规则 合同审核策略 管理合同审核策略规则，供合同审核与本地模型执行。 规则总数 15 启用规则 15 语义规则 15 合同审核策略 15 AI 模型配置 ... 规则资产目录 (14) 新建 总览 全部规则资产与未归类入口 全部规则集 15 ALL 全部规则资产 已发布 15 可执行 15 待处理 0 默认规则集 0 default 声明文档 v- · 未转译 已发布 0 可执行 0 待处理 0 审查逻辑 上下文、主体、验收、SLA 和争议路径 验收与交付规则集 2 ACCEPTANCE 声明文档 v1 · 转译就绪 已发布 2 可执行 2 待处理 0 主体与金额一致性规则集 1 BUSINESS_INTEGRITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 SLA 与服务承诺规则集 1 SLA 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 续约与退出规则集 1 RENEWAL 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 争议解决规则集 1 DISPUTE 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 违约与责任 付款、税务、违约、责任上限和终止退款 付款与结算规则集 1 PAYMENT 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 终止与退款规则集 1 TERMINATION 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 税务与发票规则集 1 TAX 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 违约责任规则集 1 BREACH 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 责任边界规则集 2 LIABILITY 声明文档 v1 · 转译就绪 已发布 2 可执行 2 待处理 0 知识产权与数据 IP 归属、保密、数据安全和客户资料处理 保密义务规则集 1 CONFIDENTIALITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 知识产权规则集 1 IP 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 数据安全规则集 1 DATA_SECURITY 声明文档 v1 · 转译就绪 已发布 1 可执行 1 待处理 0 全部规则集 (15) 所有规则集的发布、转译和审核引擎输入状态 测试 R001 付款节奏 已发布 转译就绪 启用 可正式审核 比例类 混合 付款与结算 黄色 v4 ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日 A 不少于 30% / B 不少于 15% / C 低于 15% R002 终止退款 已发布 转译就绪 启用 可正式审核 条款语义 混合 终止与退款 黄色 v4 ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息 A 包含命中词 / B 包含命中词 / C 包含命中词 R003 税率 已发布 转译就绪 启用 可正式审核 比例类 混合 税务与发票 黄色 v4 ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率 A 包含命中词 / B 包含命中词 / C 包含命中词 R004 默示验收期 已发布 转译就绪 启用 可正式审核 时限类 混合 验收与交付 黄色 v4 ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收 A 不超过 10天 / B 不超过 15天 / C 超过 30天 R005 验收不通过 已发布 转译就绪 启用 可正式审核 条款语义 混合 验收与交付 黄色 v4 ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失 A 包含命中词 / B 包含命中词 / C 包含命中词 R006 违约金 已发布 转译就绪 启用 可正式审核 比例类 混合 违约责任 黄色 v4 ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五 A 不超过 10% / B 不超过 50% / C 超过 100% R007 间接损失 已发布 转译就绪 启用 可正式审核 条款语义 混合 责任边界 黄色 v4 ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿 A 包含命中词 / B 包含命中词 / C 包含命中词 R008 责任总额上限 Cap 已发布 转译就绪 启用 可正式审核 比例类 混合 责任边界 黄色 v4 ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向 A 不超过 50% / B 不超过 100% / C 超过 100% R009 保密期 已发布 转译就绪 启用 可正式审核 时限类 混合 保密义务 黄色 v4 ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密） A 不超过 7年 / B 不超过 10年 / C 超过 10年 R010 主体·收款·金额 已发布 转译就绪 启用 可正式审核 条款语义 混合 主体与金额一致性 黄色 v4 ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=大写=附件=报价单；B=旧版模板（建议更新）；红线=主体错/外部账户/金额不一致/含税不等/日期逻辑错 A 包含命中词 / B 包含命中词 / C 包含命中词 R011 IP 归属 已发布 转译就绪 启用 可正式审核",
+      "buttons": [
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md lg:hidden shadow-lg"
+        },
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors bg-slate-800 text-white"
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1 text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "cls": "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        },
+        {
+          "tag": "button",
+          "text": "交易配置...围绕报价工作台的价盘、税率和审批配置。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
+        },
+        {
+          "tag": "button",
+          "text": "合同与 AI 规则15+围绕合同审核规则、模型路由和运行时策略的配置集。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-slate-900 bg-slate-900 text-white"
+        },
+        {
+          "tag": "button",
+          "text": "组织与权限...围绕部门、成员、角色能力和作用域分配的组织控制面。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
+        },
+        {
+          "tag": "button",
+          "text": "界面与体验...运行时主题和界面变量集中配置发布。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
+        },
+        {
+          "tag": "button",
+          "text": "合同审核策略15",
+          "href": null,
+          "disabled": false,
+          "cls": "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition border-slate-900 bg-slate-900 text-white"
+        },
+        {
+          "tag": "button",
+          "text": "AI 模型配置...",
+          "href": null,
+          "disabled": false,
+          "cls": "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
+        },
+        {
+          "tag": "button",
+          "text": "新建",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/80 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+        },
+        {
+          "tag": "button",
+          "text": "全部规则集15ALL全部规则资产已发布 15可执行 15待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-900 bg-slate-900 text-white"
+        },
+        {
+          "tag": "button",
+          "text": "默认规则集0default声明文档 v- · 未转译已发布 0可执行 0待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "验收与交付规则集2ACCEPTANCE声明文档 v1 · 转译就绪已发布 2可执行 2待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "主体与金额一致性规则集1BUSINESS_INTEGRITY声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "SLA 与服务承诺规则集1SLA声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "续约与退出规则集1RENEWAL声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "争议解决规则集1DISPUTE声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "付款与结算规则集1PAYMENT声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "终止与退款规则集1TERMINATION声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "税务与发票规则集1TAX声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "违约责任规则集1BREACH声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "责任边界规则集2LIABILITY声明文档 v1 · 转译就绪已发布 2可执行 2待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "保密义务规则集1CONFIDENTIALITY声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "知识产权规则集1IP声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "数据安全规则集1DATA_SECURITY声明文档 v1 · 转译就绪已发布 1可执行 1待处理 0",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-lg border p-3 text-left transition border-slate-200 bg-white text-slate-700 hover:border-indigo-200"
+        },
+        {
+          "tag": "button",
+          "text": "测试",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+        },
+        {
+          "tag": "button",
+          "text": "R001付款节奏已发布转译就绪启用可正式审核比例类混合付款与结算黄色v4ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤3",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R002终止退款已发布转译就绪启用可正式审核条款语义混合终止与退款黄色v4ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R003税率已发布转译就绪启用可正式审核比例类混合税务与发票黄色v4ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R004默示验收期已发布转译就绪启用可正式审核时限类混合验收与交付黄色v4ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R005验收不通过已发布转译就绪启用可正式审核条款语义混合验收与交付黄色v4ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R006违约金已发布转译就绪启用可正式审核比例类混合违约责任黄色v4ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R007间接损失已发布转译就绪启用可正式审核条款语义混合责任边界黄色v4ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R008责任总额上限 Cap已发布转译就绪启用可正式审核比例类混合责任边界黄色v4ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R009保密期已发布转译就绪启用可正式审核时限类混合保密义务黄色v4ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R010主体·收款·金额已发布转译就绪启用可正式审核条款语义混合主体与金额一致性黄色v4ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R011IP 归属已发布转译就绪启用可正式审核条款语义混合知识产权黄色v4ONES skill 条款速查：A=ONES 保留全部 IP + 客户使用许可；B=二",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7 text-red-600 hover:text-red-700"
+        },
+        {
+          "tag": "button",
+          "text": "R012数据安全已发布转译就绪启用可正式审核条款语义混合数据安全黄色v4ONES skill 条款速查：A=客户数据归客户 + ONES 受限处理；B=加密/本",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full text-left p-3"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        },
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 h-7 w-7"
+        }
+      ],
+      "overflowX": true,
+      "scrollWidth": 1550,
+      "clientWidth": 1440
+    },
+    "theme-desktop": {
+      "url": "http://localhost:3002/configs?tab=theme",
+      "title": "ONES Sales",
+      "dataset": {
+        "brandName": "ONES Sales",
+        "logoUrl": "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/logos/30000001-0000-0000-0000-000000000000_1781748164068.png",
+        "productTitle": "ONES Sales"
+      },
+      "faviconLinks": [
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g"
+      ],
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 组织级配置工作台 配置中心 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。 生效范围 组织级统一发布 消费端 报价 / 合同 / AI 当前配置集 界面主题 配置域 把所有配置先归到稳定的业务域，再进入具体配置集编辑。 交易配置 7+ 围绕报价工作台的价盘、税率和审批配置。 合同与 AI 规则 3+ 围绕合同审核规则、模型路由和运行时策略的配置集。 组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。 界面与体验 1 运行时主题和界面变量集中配置发布。 结构约束 配置中心只拥有配置，不承载业务执行。 报价工作台、合同审核页只读消费已发布配置。 配置项需要有版本、状态和作用范围。 配置中心 / 界面与体验 界面主题 控制运行时主题变量与视觉发布，确保业务界面一致可控。 主题方案 1 已发布 1 草稿 0 界面主题 1 品牌主题 Profile 同一组织只允许一个已发布主题作为当前 BrandProfile，favicon、Logo 和浏览器标题都从这里读取。 + 新增主题 当前生效 BrandProfile 默认界面主题 ONES Sales · ONES Sales · UI_THEME_DEFAULT ONES Sales 浏览器图标 默认界面主题 已发布 当前生效 品牌：ONES Sales 标题：ONES Sales 副标题：智能协作平台 Logo：已配置 Favicon：已配置 更新：2026/7/2 09:46:46 Primary Secondary Border Background radius-md: 10px radius-lg: 16px 编辑 版本 删除",
+      "buttons": [
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md lg:hidden shadow-lg"
+        },
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors bg-slate-800 text-white"
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1 text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "cls": "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        },
+        {
+          "tag": "button",
+          "text": "交易配置7+围绕报价工作台的价盘、税率和审批配置。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
+        },
+        {
+          "tag": "button",
+          "text": "合同与 AI 规则3+围绕合同审核规则、模型路由和运行时策略的配置集。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
+        },
+        {
+          "tag": "button",
+          "text": "组织与权限...围绕部门、成员、角色能力和作用域分配的组织控制面。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
+        },
+        {
+          "tag": "button",
+          "text": "界面与体验1运行时主题和界面变量集中配置发布。",
+          "href": null,
+          "disabled": false,
+          "cls": "w-full rounded-2xl border px-4 py-4 text-left transition border-slate-900 bg-slate-900 text-white"
+        },
+        {
+          "tag": "button",
+          "text": "界面主题1",
+          "href": null,
+          "disabled": false,
+          "cls": "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition border-slate-900 bg-slate-900 text-white"
+        },
+        {
+          "tag": "button",
+          "text": "+ 新增主题",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 w-full sm:w-auto"
+        },
+        {
+          "tag": "button",
+          "text": "编辑",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 flex-1 lg:flex-none"
+        },
+        {
+          "tag": "button",
+          "text": "版本",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 flex-1 lg:flex-none"
+        },
+        {
+          "tag": "button",
+          "text": "删除",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 flex-1 text-red-600 lg:flex-none"
+        }
+      ],
+      "overflowX": false,
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+    },
+    "contracts-ipad": {
+      "url": "http://localhost:3002/contracts",
+      "title": "ONES Sales",
+      "dataset": {
+        "brandName": "ONES Sales",
+        "logoUrl": "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/logos/30000001-0000-0000-0000-000000000000_1781748164068.png",
+        "productTitle": "ONES Sales"
+      },
+      "faviconLinks": [
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g",
+        "https://wfawwhphfqqwfwrrkogy.supabase.co/storage/v1/object/public/workspace-assets/favicons/30000001-0000-0000-0000-000000000000_1781748187949.png?brand_favicon=hxx05g"
+      ],
+      "text": "ONES Sales 智能协作平台 工作台 报价中心 合同审核 标书中心 知识库 日程 配置中心 个人信息 退出登录 合同中心 全生命周期管理 新审核 继续 批注版 比对 发起新审核 新任务 创建新的 ReviewRun 上传源文件 上传源文件后直接创建新的审核运行，并进入风险定位与批注工作台 新建合同版本 继续审核 进行中 回到未完成 ReviewRun 进行中任务 继续未完成的解析、审核或再审核任务，不创建新合同 minimal.pdf 查看批注版 已完成 打开已完成输出 Word 批注产物 查看风险证据、Word 批注意图、批注版和下载记录 ones-contract-e2e-risk.docx 合同版本对比 版本流 旧版 / 新版差异复核 版本流 进入基准合同版本流，选择客户回传版或候选合同做差异复核 ones-contract-e2e-risk.docx 合同审核工作台入口 上传合同源文件，绑定已发布审核规则和模型策略，生成风险定位、销售谈判任务与源文件 Word 批注版本。 上传源文件并发起审核 源文件docx / pdf 审核依据发布规则 / 模型 风险定位复核 / 谈判 输出批注版 / 报告 17 全部合同 1 进行中 0 需关注 13 已完成 全部 17 起草中 待审核 已完成 ones-contract-e2e-risk.docx 合同 审核完成 下一步：查看批注版 7月3日 00:11 进入输出与证据面板，下载源文件 Word 批注版。 _上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx 合同 审核完成 下一步：查看批注版 7月3日 00:00 进入输出与证据面板，下载源文件 Word 批注版。 (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx 合同 审核完成 下一步：查看批注版 7月2日 23:53 进入输出与证据面板，下载源文件 Word 批注版。 snapshot-rules-20260702113614.docx 合同 审核完成 下一步：查看批注版 7月2日 19:54 进入输出与证据面板，下载源文件 Word 批注版。 ones-long-20260702111318.docx 合同 审核完成 下一步：查看批注版 7月2日 19:13 进入输出与证据面板，下载源文件 Word 批注版。 ones-source-20260702110520.docx 合同 审核完成 下一步：查看批注版 7月2日 19:06 进入输出与证据面板，下载源文件 Word 批注版。 ones-source-20260702110222.docx 合同 审核完成 下一步：查看批注版 7月2日 19:03 进入输出与证据面板，下载源文件 Word 批注版。 ones-source-20260702105749.docx 合同 审核完成 下一步：查看批注版 7月2日 18:58 进入输出与证据面板，下载源文件 Word 批注版。 prod-gemini-review-sample-1782906641409.docx 合同 审核完成 下一步：查看批注版 7月2日 15:06 进入输出与证据面板，下载源文件 Word 批注版。 合同 DRAFT 下一步：打开工作台 7月2日 09:55 查看当前合同的版本、审核和输出状态。 (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx 合同 审核完成 下一步：查看批注版 7月1日 18:33 进入输出与证据面板，下载源文件 Word 批注版。 合同 DRAFT 下一步：打开工作台 7月1日 16:42 查看当前合同的版本、审核和输出状态。 _ONES_-_2026.docx 合同 审核完成 下一步：查看批注版 6月30日 16:37 进入输出与证据面板，下载源文件 Word 批注版。 Hemory_.docx 合同 审核完成 下一步：查看批注版 6月30日 16:26 进入输出与证据面板，下载源文件 Word 批注版。 合同 DRAFT 下一步：打开工作台 6月30日 13:50 查看当前合同的版本、审核和输出状态。 _2026_ONES_1_.docx 合同 审核完成 下一步：查看批注版 6月25日 16:16 进入输出与证据面板，下载源文件 Word 批注版。 minimal.pdf 合同 待审核 下一步：发起审核 6月25日 16:16 源文件已登记，下一步启动规则与模型审核。",
+      "buttons": [
+        {
+          "tag": "button",
+          "text": "",
+          "href": null,
+          "disabled": false,
+          "cls": "fixed top-3 left-3 z-[45] p-2 bg-slate-900 text-white rounded-md lg:hidden shadow-lg"
+        },
+        {
+          "tag": "a",
+          "text": "工作台",
+          "href": "/",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "报价中心",
+          "href": "/quotes",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "合同审核",
+          "href": "/contracts",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors bg-slate-800 text-white"
+        },
+        {
+          "tag": "a",
+          "text": "标书中心",
+          "href": "/tenders",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "知识库",
+          "href": "/knowledge",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "日程",
+          "href": "/schedule",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "配置中心",
+          "href": "/configs",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "a",
+          "text": "个人信息",
+          "href": "/profile",
+          "disabled": false,
+          "cls": "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1 text-slate-400 hover:text-white hover:bg-slate-800"
+        },
+        {
+          "tag": "button",
+          "text": "退出登录",
+          "href": null,
+          "disabled": false,
+          "cls": "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        },
+        {
+          "tag": "a",
+          "text": "新审核",
+          "href": "/contracts/new?from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "新审核",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "继续",
+          "href": "/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c?from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "继续",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "批注版",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence&from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "批注版",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "比对",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare?from=workbench",
+          "disabled": false,
+          "cls": ""
+        },
+        {
+          "tag": "button",
+          "text": "比对",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 gap-1.5"
+        },
+        {
+          "tag": "a",
+          "text": "发起新审核新任务创建新的 ReviewRun上传源文件上传源文件后直接创建新的审核运行，并进入风险定位与批注工作台新建合同版本",
+          "href": "/contracts/new?from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "继续审核进行中回到未完成 ReviewRun进行中任务继续未完成的解析、审核或再审核任务，不创建新合同minimal.pdf",
+          "href": "/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c?from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "查看批注版已完成打开已完成输出Word 批注产物查看风险证据、Word 批注意图、批注版和下载记录ones-contract-e2e-risk.docx",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence&from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同版本对比版本流旧版 / 新版差异复核版本流进入基准合同版本流，选择客户回传版或候选合同做差异复核ones-contract-e2e-risk.docx",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare?from=workbench",
+          "disabled": false,
+          "cls": "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "上传源文件并发起审核",
+          "href": "/contracts/new",
+          "disabled": false,
+          "cls": "shrink-0"
+        },
+        {
+          "tag": "button",
+          "text": "上传源文件并发起审核",
+          "href": null,
+          "disabled": false,
+          "cls": "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 w-full gap-1.5 md:w-auto"
+        },
+        {
+          "tag": "button",
+          "text": "全部17",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "button",
+          "text": "起草中",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "button",
+          "text": "待审核",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "button",
+          "text": "已完成",
+          "href": null,
+          "disabled": false,
+          "cls": "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100 text-xs md:text-sm"
+        },
+        {
+          "tag": "a",
+          "text": "ones-contract-e2e-risk.docx合同审核完成下一步：查看批注版7月3日 00:11进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "_上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx合同审核完成下一步：查看批注版7月3日 00:00进入输出与证据",
+          "href": "/contracts/92958890-0b9f-411c-a283-1c9f7849afbe?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx合同审核完成下一步：查看批注版7月2日 23:53进",
+          "href": "/contracts/abb72d16-ed19-445e-aa33-561cec0ab6d8?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "snapshot-rules-20260702113614.docx合同审核完成下一步：查看批注版7月2日 19:54进入输出与证据面板，下载源文件 Word ",
+          "href": "/contracts/8e1d9430-7218-4663-90f4-a2600669e0fa?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-long-20260702111318.docx合同审核完成下一步：查看批注版7月2日 19:13进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/80c0ca0d-4879-4baa-a3bc-e929fda2b6b2?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-source-20260702110520.docx合同审核完成下一步：查看批注版7月2日 19:06进入输出与证据面板，下载源文件 Word 批注版",
+          "href": "/contracts/a1169c9f-7b64-4991-a97e-e63a3862aed5?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-source-20260702110222.docx合同审核完成下一步：查看批注版7月2日 19:03进入输出与证据面板，下载源文件 Word 批注版",
+          "href": "/contracts/681635cb-1592-4875-98c8-7c97dd2e6818?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "ones-source-20260702105749.docx合同审核完成下一步：查看批注版7月2日 18:58进入输出与证据面板，下载源文件 Word 批注版",
+          "href": "/contracts/2335f2ab-0686-440c-b86b-7fd6d4950844?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "prod-gemini-review-sample-1782906641409.docx合同审核完成下一步：查看批注版7月2日 15:06进入输出与证据面板，下",
+          "href": "/contracts/0ca03c97-8104-4211-a65f-3d76e5f14b8a?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同DRAFT下一步：打开工作台7月2日 09:55查看当前合同的版本、审核和输出状态。",
+          "href": "/contracts/f381041d-f313-4d40-b4b3-fd474277ed84?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx合同审核完成下一步：查看批注版7月1日 18:33进入输出与证据面板，下载源文",
+          "href": "/contracts/058ef76f-ad26-49ef-9383-de09749879bd?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同DRAFT下一步：打开工作台7月1日 16:42查看当前合同的版本、审核和输出状态。",
+          "href": "/contracts/a1cc7ba3-7890-447a-9db8-980daf424faa?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "_ONES_-_2026.docx合同审核完成下一步：查看批注版6月30日 16:37进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/13aca6c2-e902-4458-9e94-6d8db8ae7a09?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "Hemory_.docx合同审核完成下一步：查看批注版6月30日 16:26进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/44301b16-6551-4720-afa5-f1d80b1604de?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "合同DRAFT下一步：打开工作台6月30日 13:50查看当前合同的版本、审核和输出状态。",
+          "href": "/contracts/25d3192e-32d1-44c5-9396-179f1a7309ab?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "_2026_ONES_1_.docx合同审核完成下一步：查看批注版6月25日 16:16进入输出与证据面板，下载源文件 Word 批注版。",
+          "href": "/contracts/0286f885-fc49-4a43-9543-798aca2dda16?panel=evidence&from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        },
+        {
+          "tag": "a",
+          "text": "minimal.pdf合同待审核下一步：发起审核6月25日 16:16源文件已登记，下一步启动规则与模型审核。",
+          "href": "/contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c?from=list",
+          "disabled": false,
+          "cls": "group block rounded-lg transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        }
+      ],
+      "overflowX": false,
+      "scrollWidth": 1024,
+      "clientWidth": 1024
+    }
+  },
+  "artifactDir": "/Users/nsss/Price-v3/product-truth/product-code/output/audit-current"
+}

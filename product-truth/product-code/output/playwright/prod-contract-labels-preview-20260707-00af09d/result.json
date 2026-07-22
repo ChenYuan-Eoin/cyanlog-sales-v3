@@ -1,0 +1,30 @@
+{
+  "base": "https://sales.cyanlog.icu",
+  "labels": {
+    "review": false,
+    "compare": false,
+    "draft": false,
+    "version": false
+  },
+  "failures": [
+    {
+      "url": "https://sales.cyanlog.icu/api/auth/login",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://sales.cyanlog.icu/api/auth/login",
+      "status": 400,
+      "text": "{\"error\":\"Invalid input\",\"code\":\"VALIDATION_ERROR\"}"
+    },
+    {
+      "url": "https://sales.cyanlog.icu/api/auth/login",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "taskSnippets": [],
+  "sampleText": "ONES Sales\n智能协作平台\n访问验证\nONES Sales\n\n从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。\n\n企业工作空间\n企业销售支持平台\n\n企业销售支持平台\n\n企业邮箱\n密码\n进入工作台使用企业 SSO 登录（请联系管理员开通）\n\n仅授权成员可访问机会、报价、合同、审批和协同记录。",
+  "screenshots": [
+    "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/prod-contract-labels-preview-20260707-00af09d/contracts-desktop.png",
+    "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/prod-contract-labels-preview-20260707-00af09d/contracts-ipad.png"
+  ]
+}

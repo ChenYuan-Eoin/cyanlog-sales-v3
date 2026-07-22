@@ -1,0 +1,185 @@
+{
+  "schema_version": "g5-risk-accuracy-score.v3",
+  "benchmark_id": "G5-50PAGE-9RISK-1NEGATIVE-20260718",
+  "counts": {
+    "positive_gold": 45,
+    "explicit_negative_gold": 5,
+    "predictions": 46,
+    "true_positive": 42,
+    "false_positive": 4,
+    "false_negative": 3,
+    "explicit_negative_hits": 3
+  },
+  "metrics": {
+    "precision": 0.913043,
+    "recall": 0.933333,
+    "f1": 0.923077,
+    "anchor_exactness": 1,
+    "severity_accuracy": 0.833333,
+    "explicit_negative_specificity": 0.4
+  },
+  "diagnostics": {
+    "duplicate_count": 0,
+    "unbound_count": 0,
+    "anchor_unresolved_count": 0,
+    "unlocated_count": 0,
+    "unscorable_identity_count": 0,
+    "inferred_page_from_exact_span_count": 46,
+    "false_positives": [
+      {
+        "prediction_index": 5,
+        "identity": "6|R002",
+        "reason": "explicit_no_risk_span"
+      },
+      {
+        "prediction_index": 7,
+        "identity": "7|R007",
+        "reason": "no_positive_gold_match"
+      },
+      {
+        "prediction_index": 17,
+        "identity": "16|R002",
+        "reason": "explicit_no_risk_span"
+      },
+      {
+        "prediction_index": 41,
+        "identity": "46|R002",
+        "reason": "explicit_no_risk_span"
+      }
+    ],
+    "unmatched_positive_ids": [
+      "G5-P07-R013",
+      "G5-P12-R004",
+      "G5-P32-R004"
+    ],
+    "hit_negative_ids": [
+      "G5-P06-R002",
+      "G5-P16-R002",
+      "G5-P46-R002"
+    ],
+    "severity_mismatches": [
+      {
+        "id": "G5-P09-R015",
+        "expected": "yellow",
+        "actual": "red"
+      },
+      {
+        "id": "G5-P22-R004",
+        "expected": "yellow",
+        "actual": "red"
+      },
+      {
+        "id": "G5-P29-R015",
+        "expected": "yellow",
+        "actual": "red"
+      },
+      {
+        "id": "G5-P43-R012",
+        "expected": "red",
+        "actual": "yellow"
+      },
+      {
+        "id": "G5-P44-R007",
+        "expected": "red",
+        "actual": "yellow"
+      },
+      {
+        "id": "G5-P45-R011",
+        "expected": "red",
+        "actual": "yellow"
+      },
+      {
+        "id": "G5-P49-R015",
+        "expected": "yellow",
+        "actual": "red"
+      }
+    ],
+    "invalid_binding_count": 0,
+    "source_mismatch_count": 0,
+    "failed_attempt_count": 0,
+    "skipped_attempt_count": 0
+  },
+  "per_rule": {
+    "R001": {
+      "gold": 5,
+      "matched": 5,
+      "recall": 1,
+      "severity_accuracy": 1
+    },
+    "R004": {
+      "gold": 5,
+      "matched": 3,
+      "recall": 0.6,
+      "severity_accuracy": 0.666667
+    },
+    "R006": {
+      "gold": 5,
+      "matched": 5,
+      "recall": 1,
+      "severity_accuracy": 1
+    },
+    "R007": {
+      "gold": 5,
+      "matched": 5,
+      "recall": 1,
+      "severity_accuracy": 0.8
+    },
+    "R009": {
+      "gold": 5,
+      "matched": 5,
+      "recall": 1,
+      "severity_accuracy": 1
+    },
+    "R011": {
+      "gold": 5,
+      "matched": 5,
+      "recall": 1,
+      "severity_accuracy": 0.8
+    },
+    "R012": {
+      "gold": 5,
+      "matched": 5,
+      "recall": 1,
+      "severity_accuracy": 0.8
+    },
+    "R013": {
+      "gold": 5,
+      "matched": 4,
+      "recall": 0.8,
+      "severity_accuracy": 1
+    },
+    "R015": {
+      "gold": 5,
+      "matched": 5,
+      "recall": 1,
+      "severity_accuracy": 0.4
+    }
+  },
+  "release_acceptance": false,
+  "definitions": {
+    "positive_match": "one-to-one exact page + rule_code; page may be inferred only from exact rule_code + UTF-16 span",
+    "explicit_negative": "published Level A no-risk clause; any risk prediction on its exact UTF-16 span is a false positive even when rule binding is absent or wrong",
+    "severity_accuracy": "exact red/yellow/green match among true-positive risk detections"
+  },
+  "thresholds": {
+    "precision": 0.85,
+    "recall": 0.9,
+    "per_rule_recall": 0.8,
+    "anchor_exactness": 0.95,
+    "severity_accuracy": 0.9,
+    "explicit_negative_specificity": 1,
+    "duplicate_count": 0,
+    "unbound_count": 0,
+    "unlocated_count": 0,
+    "invalid_binding_count": 0,
+    "source_mismatch_count": 0,
+    "failed_attempt_count": 0,
+    "skipped_attempt_count": 0
+  },
+  "per_rule_threshold_passed": false,
+  "threshold_passed": false,
+  "gate_issues": [
+    "risk_accuracy_threshold_failed"
+  ],
+  "interpretation": "internal_synthetic_risk_accuracy_gate_failed"
+}

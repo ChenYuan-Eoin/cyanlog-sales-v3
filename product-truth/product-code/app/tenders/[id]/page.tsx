@@ -8,7 +8,7 @@ import type { TenderKeyInfo } from '@/lib/ocr/tender-parser'
 import TenderWorkflow from '@/components/tender/TenderWorkflow'
 
 interface PageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function TenderDetailPage({ params }: PageProps) {

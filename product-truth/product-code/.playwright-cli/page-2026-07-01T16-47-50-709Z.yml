@@ -1,0 +1,85 @@
+- generic [active] [ref=f5e1]:
+  - complementary [ref=f5e2]:
+    - generic [ref=f5e3]:
+      - img "ONES Sales" [ref=f5e5]
+      - generic [ref=f5e6]:
+        - generic [ref=f5e7]: ONES Sales
+        - paragraph [ref=f5e8]: 智能协作平台
+    - navigation [ref=f5e9]:
+      - link "工作台" [ref=f5e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f5e11]
+        - generic [ref=f5e15]: 工作台
+      - link "报价中心" [ref=f5e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f5e17]
+        - generic [ref=f5e21]: 报价中心
+      - link "合同审核" [ref=f5e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f5e23]
+        - generic [ref=f5e28]: 合同审核
+      - link "标书中心" [ref=f5e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f5e30]
+        - generic [ref=f5e34]: 标书中心
+      - link "知识库" [ref=f5e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f5e36]
+        - generic [ref=f5e41]: 知识库
+      - link "日程" [ref=f5e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f5e43]
+        - generic [ref=f5e49]: 日程
+      - link "配置中心" [ref=f5e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f5e51]
+        - generic [ref=f5e55]: 配置中心
+    - generic [ref=f5e56]:
+      - link "个人信息" [ref=f5e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f5e58]
+        - generic [ref=f5e61]: 个人信息
+      - button "退出登录" [ref=f5e62] [cursor=pointer]:
+        - img [ref=f5e63]
+        - generic [ref=f5e66]: 退出登录
+  - main [ref=f5e67]:
+    - generic [ref=f5e69]:
+      - generic [ref=f5e70]:
+        - generic [ref=f5e71]:
+          - generic [ref=f5e72]: 单合同审核
+          - generic [ref=f5e73]:
+            - heading "发起合同审核" [level=1] [ref=f5e74]
+            - paragraph [ref=f5e75]: 先上传合同源文件形成可审核版本，客户、金额、日期等业务上下文可由 CRM 或文件解析回填。
+        - link "返回合同中心" [ref=f5e76] [cursor=pointer]:
+          - /url: /contracts
+          - button "返回合同中心" [ref=f5e77]
+      - generic [ref=f5e78]:
+        - generic [ref=f5e79]:
+          - generic [ref=f5e80]:
+            - generic [ref=f5e82]: 合同源文件
+            - generic [ref=f5e83]:
+              - button "PDF 拖拽或选择合同文件 支持 PDF、DOCX，最大 50MB 选择文件" [ref=f5e84] [cursor=pointer]:
+                - generic [ref=f5e85]:
+                  - generic [ref=f5e86]: PDF
+                  - generic [ref=f5e87]:
+                    - paragraph [ref=f5e88]: 拖拽或选择合同文件
+                    - paragraph [ref=f5e89]: 支持 PDF、DOCX，最大 50MB
+                  - button "选择文件" [ref=f5e90]
+              - generic [ref=f5e91]:
+                - button "上传源文件并发起审核" [disabled]
+                - button "清除文件" [disabled]
+          - generic [ref=f5e92]:
+            - generic [ref=f5e94]: 审核上下文
+            - generic [ref=f5e95]:
+              - generic [ref=f5e96]:
+                - paragraph [ref=f5e97]: 当前阶段
+                - paragraph [ref=f5e98]: 文件先行，先创建 ContractVersion 与 ReviewRun，再进入合同工作台。
+              - generic [ref=f5e99]:
+                - paragraph [ref=f5e100]: 上下文来源
+                - paragraph [ref=f5e101]: CRM 对接、报价转合同和文件解析会逐步回填客户、金额、日期和联系人。
+              - generic [ref=f5e102]:
+                - paragraph [ref=f5e103]: 审核依据
+                - paragraph [ref=f5e104]: 进入审核后按已发布规则、SkillBundle 和模型策略执行，不依赖临时输入文本。
+        - group [ref=f5e105]:
+          - generic "业务上下文（可选，CRM 或解析未回填时再补充）" [ref=f5e106] [cursor=pointer]
+  - alert [ref=f5e107]

@@ -116,7 +116,11 @@ const aiReviewTool: AgentTool = {
     const text = params.text as string
     if (!text) throw new Error('Missing text parameter')
 
-    const result = await reviewWithFailoverSync(text)
+    const result = await reviewWithFailoverSync(text, {
+      tool: 'contract_review',
+      capability: 'contract_review',
+      phase: 'agent_contract_review',
+    })
     return result
   },
 }

@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "ok": true,
+  "ms": 8050,
+  "profile": "sales_cloud_backup",
+  "model": "gemini-2.5-flash-lite",
+  "endpoint_host": "generativelanguage.googleapis.com",
+  "output_length": 326,
+  "content_type": "application/json",
+  "parsed_json": {
+    "choices": 1,
+    "content_length": 45,
+    "content_preview": "```json\n{\"ok\":true,\"stage\":\"cloud_probe\"}\n```",
+    "usage_present": true
+  },
+  "error_preview": null
+}

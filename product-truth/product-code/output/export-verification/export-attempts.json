@@ -1,0 +1,38 @@
+[
+  {
+    "id": "707be693-bc77-4b46-82e7-e08bd6457b86",
+    "filename": "【修】第三方代投ONES产品原厂授权书-上海鼎茂信息技术有限公司2026.docx",
+    "status": 500,
+    "contentType": "application/json",
+    "body": "{\"error\":\"没有可导出的风险批注\",\"code\":\"EXPORT_FAILED\"}"
+  },
+  {
+    "id": "d0cc9911-e9fc-4e13-adee-6963d45b2177",
+    "filename": "(用印版)2026年ONES研发迭代管理系统授权采购服务合同.docx",
+    "status": 400,
+    "contentType": "application/json",
+    "body": "{\"error\":\"1 条 Word 批注意图疑似跨段或证据过短，不能稳定写入源文件批注。\",\"code\":\"EXPORT_GATE_BLOCKED\"}"
+  },
+  {
+    "id": "72562618-9afa-41c1-ad47-60ad9278fb74",
+    "filename": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx",
+    "status": 400,
+    "contentType": "application/json",
+    "body": "{\"error\":\"1 条 Word 批注意图疑似跨段或证据过短，不能稳定写入源文件批注。\",\"code\":\"EXPORT_GATE_BLOCKED\"}"
+  },
+  {
+    "id": "f8ec027a-5633-4429-8c0b-b69053b1a9ef",
+    "filename": "关联主体合作补充协议（模板）.docx-ONES批注版.docx",
+    "status": 500,
+    "contentType": "application/json",
+    "body": "{\"error\":\"源文件批注失败，未生成报告伪装为批注版：批注「【必须修改】终止退款」未在源文件中找到证据原文：主合同终止的，本补充协议自动终止，除非双方另有约定。\",\"code\":\"EXPORT_FAILED\"}"
+  },
+  {
+    "id": "2edd4da2-24c2-41fb-8950-542d8f768efe",
+    "filename": "关联主体合作补充协议（模板）.docx-ONES批注版.docx",
+    "status": 200,
+    "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "bytes": 21692,
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/export-verification/export-2edd4da2-24c2-41fb-8950-542d8f768efe.docx"
+  }
+]

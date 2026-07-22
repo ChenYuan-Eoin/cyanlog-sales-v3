@@ -1,0 +1,126 @@
+- generic [active] [ref=f5e1]:
+  - button "打开主导航" [ref=f5e2] [cursor=pointer]:
+    - img [ref=f5e3]
+  - complementary [ref=f5e5]:
+    - generic [ref=f5e6]:
+      - img "ONES Sales" [ref=f5e8]
+      - generic [ref=f5e9]:
+        - generic [ref=f5e10]: ONES Sales
+        - paragraph [ref=f5e11]: 智能协作平台
+    - navigation [ref=f5e12]:
+      - link "工作台" [ref=f5e13] [cursor=pointer]:
+        - /url: /
+        - img [ref=f5e14]
+        - generic [ref=f5e18]: 工作台
+      - link "报价中心" [ref=f5e19] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f5e20]
+        - generic [ref=f5e24]: 报价中心
+      - link "合同审核" [ref=f5e25] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f5e26]
+        - generic [ref=f5e31]: 合同审核
+      - link "标书中心" [ref=f5e32] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f5e33]
+        - generic [ref=f5e37]: 标书中心
+      - link "知识库" [ref=f5e38] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f5e39]
+        - generic [ref=f5e44]: 知识库
+      - link "日程" [ref=f5e45] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f5e46]
+        - generic [ref=f5e52]: 日程
+      - link "配置中心" [ref=f5e53] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f5e54]
+        - generic [ref=f5e58]: 配置中心
+    - generic [ref=f5e59]:
+      - link "个人信息" [ref=f5e60] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f5e61]
+        - generic [ref=f5e64]: 个人信息
+      - button "退出登录" [ref=f5e65] [cursor=pointer]:
+        - img [ref=f5e66]
+        - generic [ref=f5e69]: 退出登录
+  - main [ref=f5e70]:
+    - generic [ref=f5e72]:
+      - generic [ref=f5e73]:
+        - generic [ref=f5e74]:
+          - generic [ref=f5e75]:
+            - img [ref=f5e76]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f5e80]
+          - paragraph [ref=f5e81]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f5e82]:
+          - generic [ref=f5e83]:
+            - generic [ref=f5e84]: 生效范围
+            - generic [ref=f5e85]: 组织级统一发布
+          - generic [ref=f5e86]:
+            - generic [ref=f5e87]: 消费端
+            - generic [ref=f5e88]: 报价 / 合同 / AI
+          - generic [ref=f5e89]:
+            - generic [ref=f5e90]: 当前配置集
+            - generic [ref=f5e91]: 界面主题
+      - generic [ref=f5e92]:
+        - complementary [ref=f5e93]:
+          - generic [ref=f5e94]:
+            - generic [ref=f5e95]:
+              - generic [ref=f5e96]: 配置域
+              - paragraph [ref=f5e97]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f5e98]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=f5e99] [cursor=pointer]:
+                - generic [ref=f5e100]:
+                  - generic [ref=f5e101]: 交易配置
+                  - generic [ref=f5e102]: ...
+                - paragraph [ref=f5e103]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 ... 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f5e104] [cursor=pointer]:
+                - generic [ref=f5e105]:
+                  - generic [ref=f5e106]: 合同与 AI 规则
+                  - generic [ref=f5e107]: ...
+                - paragraph [ref=f5e108]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f5e109] [cursor=pointer]:
+                - generic [ref=f5e110]:
+                  - generic [ref=f5e111]: 组织与权限
+                  - generic [ref=f5e112]: ...
+                - paragraph [ref=f5e113]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=f5e114] [cursor=pointer]:
+                - generic [ref=f5e115]:
+                  - generic [ref=f5e116]: 界面与体验
+                  - generic [ref=f5e117]: ...
+                - paragraph [ref=f5e118]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f5e119]:
+              - generic [ref=f5e120]: 结构约束
+              - list [ref=f5e121]:
+                - listitem [ref=f5e122]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f5e123]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f5e124]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f5e125]:
+          - generic [ref=f5e126]:
+            - generic [ref=f5e127]:
+              - generic [ref=f5e128]:
+                - generic [ref=f5e129]:
+                  - generic [ref=f5e130]: 配置中心
+                  - generic [ref=f5e131]: /
+                  - generic [ref=f5e132]: 界面与体验
+                - generic [ref=f5e133]:
+                  - img [ref=f5e135]
+                  - generic [ref=f5e138]:
+                    - heading "界面主题" [level=2] [ref=f5e139]
+                    - paragraph [ref=f5e140]: 控制运行时主题变量与视觉发布，确保业务界面一致可控。
+              - generic [ref=f5e141]:
+                - generic [ref=f5e142]:
+                  - generic [ref=f5e143]: 主题方案
+                  - generic [ref=f5e144]: ...
+                - generic [ref=f5e145]:
+                  - generic [ref=f5e146]: 已发布
+                  - generic [ref=f5e147]: ...
+                - generic [ref=f5e148]:
+                  - generic [ref=f5e149]: 草稿
+                  - generic [ref=f5e150]: ...
+            - button "界面主题 ..." [ref=f5e152] [cursor=pointer]:
+              - img [ref=f5e153]
+              - generic [ref=f5e156]: 界面主题
+              - generic [ref=f5e157]: ...
+  - alert [ref=f5e183]

@@ -1,0 +1,12 @@
+{
+  "status": 500,
+  "elapsedMs": 11194,
+  "headers": {
+    "connection": "keep-alive",
+    "content-type": "application/json",
+    "date": "Thu, 02 Jul 2026 02:52:36 GMT",
+    "keep-alive": "timeout=5",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+  }
+}

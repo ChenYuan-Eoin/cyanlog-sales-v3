@@ -1,0 +1,71 @@
+{
+  "schema_version": "g5-bound-browser.v1",
+  "generated_at": "2026-07-17T16:29:25.199Z",
+  "preview": {
+    "project_ref": "vsfropnfsmnonkotywsx",
+    "production_touched": false
+  },
+  "contract_id": "11165ce4-7b16-4d77-8d72-6a4a90c6d07e",
+  "cost": {
+    "recurring_usd_per_month": 0,
+    "paid_action_taken": false
+  },
+  "results": [
+    {
+      "name": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "url": "http://127.0.0.1:3107/contracts/11165ce4-7b16-4d77-8d72-6a4a90c6d07e/review",
+      "title": "Cyanlog Sales",
+      "source_identity_label_visible": true,
+      "exact_source_visible_in_word_preview": true,
+      "rendered_source": {
+        "exactTextVisible": true,
+        "renderedElementCount": 5,
+        "renderedSectionCount": 1
+      },
+      "passed_state_visible": true,
+      "horizontal_overflow": false,
+      "layout": {
+        "innerWidth": 1440,
+        "documentScrollWidth": 1440,
+        "bodyScrollWidth": 1440
+      },
+      "console_errors": [],
+      "failed_requests": [],
+      "error_responses": [],
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g5-v12/preview-controlled-sla-bound-v21-desktop-20260717.png",
+      "screenshot_sha256": "7fa52acb818a9cfbf795921a913c8d072d4758e3df51612f39b1c169e09f5724"
+    },
+    {
+      "name": "ipad",
+      "viewport": {
+        "width": 1180,
+        "height": 820
+      },
+      "url": "http://127.0.0.1:3107/contracts/11165ce4-7b16-4d77-8d72-6a4a90c6d07e/review",
+      "title": "Cyanlog Sales",
+      "source_identity_label_visible": true,
+      "exact_source_visible_in_word_preview": true,
+      "rendered_source": {
+        "exactTextVisible": true,
+        "renderedElementCount": 5,
+        "renderedSectionCount": 1
+      },
+      "passed_state_visible": true,
+      "horizontal_overflow": false,
+      "layout": {
+        "innerWidth": 1180,
+        "documentScrollWidth": 1180,
+        "bodyScrollWidth": 1180
+      },
+      "console_errors": [],
+      "failed_requests": [],
+      "error_responses": [],
+      "screenshot": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g5-v12/preview-controlled-sla-bound-v21-ipad-20260717.png",
+      "screenshot_sha256": "55b3652b204d703c03054ee82e4ceaabdfdc2b07be7575a1f3540b1b6cab1fed"
+    }
+  ]
+}

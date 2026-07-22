@@ -1,0 +1,30 @@
+- generic [active] [ref=f7e1]:
+  - complementary [ref=f7e2]:
+    - generic [ref=f7e3]:
+      - img "ONES Sales" [ref=f7e5]
+      - generic [ref=f7e6]:
+        - generic [ref=f7e7]: ONES Sales
+        - paragraph [ref=f7e8]: 智能协作平台
+    - navigation [ref=f7e9]:
+      - link "工作台" [ref=f7e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f7e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f7e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f7e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f7e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f7e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f7e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f7e56]:
+      - link "个人信息" [ref=f7e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f7e62] [cursor=pointer]
+  - main [ref=f7e67]:
+    - generic [ref=f7e68]: 加载审核任务…
+  - button "Open Next.js Dev Tools" [ref=f7e76] [cursor=pointer]
+  - alert [ref=f7e80]

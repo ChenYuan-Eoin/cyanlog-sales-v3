@@ -1,0 +1,246 @@
+- generic [active] [ref=f6e1]:
+  - complementary [ref=f6e2]:
+    - generic [ref=f6e3]:
+      - img "ONES Sales" [ref=f6e5]
+      - generic [ref=f6e6]:
+        - generic [ref=f6e7]: ONES Sales
+        - paragraph [ref=f6e8]: 智能协作平台
+    - navigation [ref=f6e9]:
+      - link "工作台" [ref=f6e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f6e11]
+        - generic [ref=f6e15]: 工作台
+      - link "报价中心" [ref=f6e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f6e17]
+        - generic [ref=f6e21]: 报价中心
+      - link "合同审核" [ref=f6e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f6e23]
+        - generic [ref=f6e28]: 合同审核
+      - link "标书中心" [ref=f6e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f6e30]
+        - generic [ref=f6e34]: 标书中心
+      - link "知识库" [ref=f6e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f6e36]
+        - generic [ref=f6e41]: 知识库
+      - link "日程" [ref=f6e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f6e43]
+        - generic [ref=f6e49]: 日程
+      - link "配置中心" [ref=f6e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f6e51]
+        - generic [ref=f6e55]: 配置中心
+    - generic [ref=f6e56]:
+      - link "个人信息" [ref=f6e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f6e58]
+        - generic [ref=f6e61]: 个人信息
+      - button "退出登录" [ref=f6e62] [cursor=pointer]:
+        - img [ref=f6e63]
+        - generic [ref=f6e66]: 退出登录
+  - main [ref=f6e67]:
+    - generic [ref=f6e68]:
+      - generic [ref=f6e72]:
+        - generic [ref=f6e73]:
+          - generic [ref=f6e74]:
+            - link "合同审核" [ref=f6e75] [cursor=pointer]:
+              - /url: /contracts
+            - generic [ref=f6e76]: /
+            - generic [ref=f6e77]: 审核工作台
+          - generic [ref=f6e78]:
+            - heading "prod-gemini-review-sample-1782906641409.docx" [level=1] [ref=f6e79]
+            - generic [ref=f6e80]: 审核降级（需复核）
+          - paragraph [ref=f6e81]: ONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。
+        - generic [ref=f6e82]:
+          - link "返回" [ref=f6e83] [cursor=pointer]:
+            - /url: /contracts
+            - button "返回" [ref=f6e84]:
+              - img
+              - text: 返回
+          - button "重新审查" [disabled]:
+            - img
+            - text: 重新审查
+          - button "导出批注版" [ref=f6e86] [cursor=pointer]:
+            - img
+            - text: 导出批注版
+      - generic [ref=f6e87]:
+        - generic [ref=f6e89]:
+          - generic [ref=f6e90]: 红线风险
+          - generic [ref=f6e91]: "0"
+        - generic [ref=f6e93]:
+          - generic [ref=f6e94]: 需谈判风险
+          - generic [ref=f6e95]: "1"
+        - generic [ref=f6e97]:
+          - generic [ref=f6e98]: 开放风险
+          - generic [ref=f6e99]: "2"
+        - generic [ref=f6e101]:
+          - generic [ref=f6e102]: 批注数量
+          - generic [ref=f6e103]: "1"
+      - generic [ref=f6e105]:
+        - img [ref=f6e106]
+        - generic [ref=f6e108]:
+          - paragraph [ref=f6e109]: 当前审核结果未达到正式验收状态
+          - list [ref=f6e110]:
+            - listitem [ref=f6e111]: SkillBundle eval 状态为 runtime_eval_not_run，不能视为模型质量已验收。
+            - listitem [ref=f6e112]: ReviewRun 状态为 DEGRADED，本次结果不能作为无条件审核完成。
+            - listitem [ref=f6e113]: 审核执行发生降级：rule-engine。
+      - generic [ref=f6e114]:
+        - generic [ref=f6e115]:
+          - generic [ref=f6e116]:
+            - generic [ref=f6e117]:
+              - generic [ref=f6e118]:
+                - generic [ref=f6e119]:
+                  - generic [ref=f6e120]:
+                    - img [ref=f6e121]
+                    - text: 原文与批注意图
+                  - paragraph [ref=f6e124]: 以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。
+                - generic [ref=f6e125]: 当前版本用于审核定位
+              - generic [ref=f6e126]:
+                - generic [ref=f6e127]: v2 · 批注版
+                - generic [ref=f6e128]: v1 · 源文件
+                - generic [ref=f6e129]: 批注版 1
+            - generic [ref=f6e130]:
+              - generic [ref=f6e131]:
+                - generic [ref=f6e132]:
+                  - generic [ref=f6e133]: 默示验收期
+                  - generic [ref=f6e135]: 需谈判
+                - generic [ref=f6e136]:
+                  - generic [ref=f6e137]:
+                    - generic [ref=f6e138]: 原文内容
+                    - paragraph [ref=f6e139]: 3 日内未提出书面异议，视为自动验收
+                  - generic [ref=f6e140]:
+                    - generic [ref=f6e141]: 批注建议
+                    - paragraph [ref=f6e142]: 建议换取：销售需围绕风险项取得对价或客户确认，并记录谈判结果。
+                  - generic [ref=f6e143]:
+                    - generic [ref=f6e144]: 风险说明
+                    - paragraph [ref=f6e145]: 默示验收期偏离建议区间
+                - generic [ref=f6e146]: R004 · v2 · f3953a39-f201-4e09-803b-62228c7f94d8
+                - generic [ref=f6e147]: 定位状态：located；evidence_text_exact_match
+              - generic [ref=f6e150]:
+                - text: 销售云服务采购合同 甲方：ONES Sales 测试公司 乙方：验收客户有限公司 第一条 合同金额：人民币 100000 元。 第二条 付款条款：甲方应在合同签订后 180 日内支付全部款项。 第三条 验收条款：乙方提交成果后，如甲方
+                - mark [ref=f6e151]: 3 日内未提出书面异议，视为自动验收
+                - text: 通过。 第四条 违约责任：任一方违约时，仅退还已收费用，不承担其他赔偿责任。 第五条 争议解决：由乙方所在地人民法院管辖。 本合同用于线上模型调用验收。
+          - generic [ref=f6e152]:
+            - generic [ref=f6e154]:
+              - img [ref=f6e155]
+              - text: Word 批注
+            - generic [ref=f6e159]:
+              - generic [ref=f6e160]:
+                - generic [ref=f6e161]: 3 日内未提出书面异议，视为自动验收
+                - generic [ref=f6e163]: high
+              - paragraph [ref=f6e164]: "【需谈判风险】默示验收期 问题：默示验收期偏离建议区间 建议：建议换取：销售需围绕风险项取得对价或客户确认，并记录谈判结果。 证据原文：3 日内未提出书面异议，视为自动验收 规则：R004 v2 RuleSnapshot: f3953a39-f201-4e09-803b-62228c7f94d8 SourceRange: 121-139 RiskFinding: 31e297c6-ada3-4bd7-aa6a-adb9e7c7bf31"
+        - complementary [ref=f6e165]:
+          - generic [ref=f6e166]:
+            - generic [ref=f6e167]:
+              - generic [ref=f6e168]:
+                - generic [ref=f6e169]: 审核侧栏
+                - generic [ref=f6e170]: DEGRADED
+              - generic [ref=f6e171]:
+                - button "审查" [ref=f6e172] [cursor=pointer]:
+                  - img [ref=f6e173]
+                  - generic [ref=f6e175]: 审查
+                - button "摘要" [ref=f6e176] [cursor=pointer]:
+                  - img [ref=f6e177]
+                  - generic [ref=f6e180]: 摘要
+                - button "对话" [ref=f6e181] [cursor=pointer]:
+                  - img [ref=f6e182]
+                  - generic [ref=f6e184]: 对话
+                - button "证据" [ref=f6e185] [cursor=pointer]:
+                  - img [ref=f6e186]
+                  - generic [ref=f6e189]: 证据
+            - generic [ref=f6e191]:
+              - generic [ref=f6e192]:
+                - generic [ref=f6e193]: 审核运行
+                - generic [ref=f6e194]: DEGRADED
+              - generic [ref=f6e195]:
+                - generic [ref=f6e196]: 证据状态
+                - generic [ref=f6e197]: 已绑定规则快照
+              - generic [ref=f6e198]:
+                - generic [ref=f6e199]: 规则快照
+                - generic [ref=f6e200]: contract_rule_snapshots:bound:15
+              - generic [ref=f6e201]:
+                - generic [ref=f6e202]: 快照数量
+                - generic [ref=f6e203]: "15"
+              - generic [ref=f6e204]:
+                - generic [ref=f6e205]: 技能包
+                - generic [ref=f6e206]: 60be08dc-94e0-4dfa-b281-0bd79f574dbc
+              - generic [ref=f6e207]:
+                - generic [ref=f6e208]: Skill 来源
+                - generic [ref=f6e209]: f8b0c27f5c19a499c1563923ca372a2171aaca58
+              - generic [ref=f6e210]:
+                - generic [ref=f6e211]: 规则完整性
+                - generic [ref=f6e212]: 15/15
+              - generic [ref=f6e213]:
+                - generic [ref=f6e214]: Skill eval
+                - generic [ref=f6e215]: runtime_eval_not_run
+              - generic [ref=f6e216]:
+                - generic [ref=f6e217]: 模型策略
+                - generic [ref=f6e218]: 95aed2fa-1306-4459-9c35-9af4f30052d2
+              - generic [ref=f6e219]:
+                - generic [ref=f6e220]: 模型来源
+                - generic [ref=f6e221]: 已发布模型策略
+              - generic [ref=f6e222]:
+                - generic [ref=f6e223]: 开始时间
+                - generic [ref=f6e224]: 2026/7/2 00:29:57
+              - generic [ref=f6e225]:
+                - generic [ref=f6e226]: 完成时间
+                - generic [ref=f6e227]: 2026/7/2 00:30:22
+              - generic [ref=f6e228]:
+                - generic [ref=f6e229]:
+                  - generic [ref=f6e230]: 最近执行器
+                  - generic [ref=f6e231]: rule-engine
+                - generic [ref=f6e232]:
+                  - generic [ref=f6e233]: 执行状态
+                  - generic [ref=f6e234]: completed
+                - generic [ref=f6e235]:
+                  - generic [ref=f6e236]: 降级
+                  - generic [ref=f6e237]: 是
+              - paragraph [ref=f6e238]: semantic_review_degraded_to_rule_engine
+          - generic [ref=f6e239]:
+            - generic [ref=f6e241]:
+              - generic [ref=f6e242]:
+                - generic [ref=f6e243]:
+                  - img [ref=f6e244]
+                  - text: 版本与产物
+                - paragraph [ref=f6e248]: 客户谈判后的回传文件会形成新的 ContractVersion，不作为发起审核入口。
+              - link "导入客户回传件" [ref=f6e249] [cursor=pointer]:
+                - /url: /contracts/0ca03c97-8104-4211-a65f-3d76e5f14b8a/edit
+                - button "导入客户回传件" [ref=f6e250]:
+                  - img
+                  - text: 导入客户回传件
+            - generic [ref=f6e251]:
+              - generic [ref=f6e252]:
+                - generic [ref=f6e253]: 文件大小
+                - generic [ref=f6e254]: 1.5 KB
+              - generic [ref=f6e255]:
+                - generic [ref=f6e256]: 文件类型
+                - generic [ref=f6e257]: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+              - generic [ref=f6e258]:
+                - generic [ref=f6e259]: 创建时间
+                - generic [ref=f6e260]: 2026/7/1 19:50:43
+              - generic [ref=f6e261]:
+                - generic [ref=f6e262]: 更新时间
+                - generic [ref=f6e263]: 2026/7/2 00:30:23
+              - generic [ref=f6e264]:
+                - paragraph [ref=f6e265]: 版本记录
+                - generic [ref=f6e266]:
+                  - generic [ref=f6e267]:
+                    - generic [ref=f6e268]:
+                      - generic [ref=f6e269]: v2
+                      - generic [ref=f6e270]: 批注版
+                    - paragraph [ref=f6e271]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=f6e272]:
+                    - generic [ref=f6e273]:
+                      - generic [ref=f6e274]: v1
+                      - generic [ref=f6e275]: 源文件
+                    - paragraph [ref=f6e276]: 用户上传合同源文件
+              - generic [ref=f6e277]:
+                - paragraph [ref=f6e278]: 输出文件
+                - generic [ref=f6e280]:
+                  - generic [ref=f6e281]: 批注版 v2
+                  - generic [ref=f6e282]: 2026/7/2 00:31:20
+  - alert [ref=f6e71]

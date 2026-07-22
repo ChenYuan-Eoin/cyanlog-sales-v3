@@ -1,0 +1,34 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "ONES Sales" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: ONES Sales
+            - generic [ref=e10]: 智能协作平台
+        - generic [ref=e11]:
+          - generic [ref=e12]: 访问验证
+          - heading "ONES Sales" [level=1] [ref=e13]
+          - paragraph [ref=e14]: 从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: 企业工作空间
+          - heading "企业协作支撑平台" [level=1] [ref=e41]
+          - paragraph [ref=e42]: 使用企业账号进入工作台首页
+          - generic [ref=e43]:
+            - generic [ref=e44]:
+              - generic [ref=e45]: 企业邮箱
+              - textbox "企业邮箱" [ref=e46]:
+                - /placeholder: name@company.com
+                - text: e2e-admin@huarun.com
+            - generic [ref=e47]:
+              - generic [ref=e48]: 密码
+              - textbox "密码" [ref=e49]:
+                - /placeholder: ••••••••
+                - text: E2ETestPassword123!
+            - button "进入工作台" [ref=e50] [cursor=pointer]
+            - button "使用企业 SSO 登录（请联系管理员开通）" [disabled] [ref=e51]
+        - paragraph [ref=e52]: 仅授权成员可访问机会、报价、合同、审批和协同记录。
+  - button "Open Next.js Dev Tools" [ref=e58] [cursor=pointer]
+  - alert [ref=e62]

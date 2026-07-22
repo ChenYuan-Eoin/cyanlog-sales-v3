@@ -8,12 +8,184 @@
 #   - design_confirmed: 设计已确认，等待开发（冻结设计方案）
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
----
 
-version: "2026-06-09"
-last_updated: "2026-06-11T19:00:00Z"
+version: "2026-07-20.1"
+last_updated: "2026-07-20T17:20:13+08:00"
+
+goal_governance:
+  status: active
+  namespace_version: "2026-07-20.1"
+  portfolio_goals_source: audit_supplement.objective_tree.child_goals
+  portfolio_umbrella_legacy_alias: "audit_supplement.objective_tree.primary_goal.id=G0；已退役，不属于正式可验收 G1-G11"
+  rules:
+    - "G 是不可变的长期产品组合目标；正式可验收编号只使用 G1-G11，不直接作为 execution_queue.active。"
+    - "WP 是可排序、可独立验收的开发工作包；ID 只使用 WP00-WP09，名称与 slug 单独存放。"
+    - "F 是 Feature Packet，IN 是需求输入，DG 是历史批次交付门禁，HG 是 Harness 执行门禁；不得复用为产品目标。"
+    - "WP 完成不等于 G 完成；G 只有在相关 WP 和自身验收证据均有效时才能关闭。"
+    - "完成证据必须绑定 namespace_version、WP、Git SHA、部署/数据库环境及浏览器或真实文件产物。"
+  work_package_crosswalk:
+    WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
+    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: active_reacceptance}
+    WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: next_needs_current_runtime_proof}
+    WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: acceptance_disputed}
+    WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: needs_reacceptance}
+    WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: parked_waiting_external_gold_and_product_reacceptance}
+    WP06: {name: 文档对比, primary_goals: [G6], supporting_goals: [G7, G8, G10], state: completed_preview_candidate_not_production}
+    WP07: {name: 合同起草, primary_goals: [G6], supporting_goals: [G2, G8, G10], state: queued}
+    WP08: {name: 横切体验伞, primary_goals: [G5, G8], state: must_split_before_activation}
+    WP09: {name: 工程与发布验收, primary_goals: [G7, G8, G9, G10, G11], state: queued}
+  legacy_aliases:
+    - "2026-07-10 至 2026-07-18 的执行账本旧 G1-G9，依次解释为 WP01-WP09。"
+    - "F027 0.0.1 的批次卡旧 G0-G7，依次解释为 DG0-DG7。"
+    - "2026-06-30 Harness 历史运行证据中的旧 G0-G5，依次解释为 HG0-HG5；证据原文不改写。"
+    - "历史截图目录、证据文件名和外部运行记录不重命名；由本表提供可审计映射。"
+
+audit_supplement:
+  source: "2026-06-30 用户线上截图与项目整体审查"
+  purpose: >
+    将既有 F0xx 需求清单补成可验收的需求治理索引。
+    本注册表不替代 Feature Packet；它负责说明每个需求当前归属、实现证据、
+    验收缺口和跨域问题映射。
+  registry_rules:
+    - 需求按产品愿景和模块边界归集，不按 Bug 标题机械合并。
+    - 功能状态不能只看是否有代码；必须同时看设计、实现、测试、浏览器验收和线上证据。
+    - 配置中心是控制面，合同/报价/审批等业务模块是执行面，不能互相写穿。
+    - 错误态、权限失败、组织上下文失败不能被前端渲染成真实空数据。
+    - 临时排查文档、截图、trace 和历史资产必须有归档/复用/删除结论，不得成为新的长期 truth。
+  objective_tree:
+    primary_goal:
+      id: G0
+      name: 商业产品第一阶段闭环恢复
+      description: >
+        把 ONES Sales 从功能堆叠和临时修补恢复为可持续迭代的商业产品第一阶段。
+        第一阶段不追求终版大而全，但合同审核、配置中心、组织权限、规则/Skill、
+        数据/API、前端体验、性能发布必须按同一套需求来源、设计约束和验收证据闭环。
+      doc_policy: "文档补全是问题域支撑动作，不作为独立主目标；补文档必须能指导代码、测试、浏览器和线上验收。"
+      merge_policy: "Bug 合并按同一根因、同一对象、同一接口/状态机、同一验收证据判断，不按标题相似度机械合并。"
+    child_goals:
+      G1:
+        name: 需求与问题资产治理
+        problem_domains: [PD01, PD09, PD10]
+        related_reqs: [F027]
+        acceptance: "每个 P0/P1 问题都有 REQ、Bug ID、证据、修复批次、验收标准和收尾结论。"
+      G2:
+        name: 合同审核产品闭环
+        problem_domains: [PD04, PD05, PD07]
+        related_reqs: [F005v2, F005, F007]
+        acceptance: "真实合同能走通上传/解析、ReviewRun、RiskFinding、谈判、Word 批注、报告归档的第一阶段闭环。"
+      G3:
+        name: 审核规则与 Skill 闭环
+        problem_domains: [PD03, PD06]
+        related_reqs: [F006, F009, F012]
+        acceptance: "ReviewRun 绑定 RuleSnapshot、SkillBundle、ModelPolicy，规则变更不影响历史结果。"
+      G4:
+        name: 配置中心数据底座
+        problem_domains: [PD02, PD03, PD08]
+        related_reqs: [F000, F009, F011, F012]
+        acceptance: "生产数据存在时不显示 0；401/403/500/未配置/未发布都有清晰错误态。"
+      G5:
+        name: 组织权限与外部同步
+        problem_domains: [PD02, PD08]
+        related_reqs: [F003, F011]
+        acceptance: "超管、管理员、普通用户视角验收通过；新增/删除/分配后组织页和角色页同步刷新。"
+      G6:
+        name: 合同中心信息架构
+        problem_domains: [PD04, PD05]
+        related_reqs: [F005v2, F005]
+        acceptance: "起草、上传、风险审核、文档比对四个入口在不同合同状态下均有明确页面和阻断提示。"
+      G7:
+        name: API 与数据一致性
+        problem_domains: [PD02, PD03, PD06, PD09]
+        related_reqs: [F003, F005, F009, F011, F012, F027]
+        acceptance: "错误不被吞为空数据；坏请求返回可预期 400；关键 API 有测试和线上样本。"
+      G8:
+        name: 前端体验与响应式
+        problem_domains: [PD04, PD09]
+        related_reqs: [F005v2, F027]
+        acceptance: "真实浏览器覆盖桌面、iPad、手机；无遮挡、横向溢出、不可点击和错误边界。"
+      G9:
+        name: 性能与稳定性
+        problem_domains: [PD09, PD10]
+        related_reqs: [F021, F027]
+        acceptance: "trace、Server-Timing、build size、线上样本能证明主要瓶颈和修复收益。"
+      G10:
+        name: 发布与验收治理
+        problem_domains: [PD09, PD10]
+        related_reqs: [F027]
+        acceptance: "lint、typecheck、test、build、浏览器、移动端、Vercel Ready/Production 证据齐全。"
+      G11:
+        name: 文档与噪音治理
+        problem_domains: [PD01, PD10]
+        related_reqs: [F021, F027]
+        acceptance: "不新增平行噪音；删除前有结论和确认；保留内容能被主文档或 F0xx 引用。"
+  active_problem_domains:
+    PD01:
+      name: 需求治理与追踪断层
+      related_reqs: [F027, F000, F005v2]
+      requirement_gap: "缺少从产品愿景、模块目标、F0xx、代码、测试、线上证据到 Bug 的强绑定。"
+    PD02:
+      name: 身份、组织上下文与假空态
+      related_reqs: [F003, F011, F027]
+      requirement_gap: "生产库存在数据时，前端不得因 401/403/ORG_CONTEXT 失败显示 0 或 seed 提示。"
+    PD03:
+      name: 配置中心控制面失真
+      related_reqs: [F000, F009, F010, F011, F012]
+      requirement_gap: "主题、品牌、规则、角色、组织等配置必须区分真实空、未授权、加载失败和未发布。"
+    PD04:
+      name: 合同中心入口语义混乱
+      related_reqs: [F005v2, F005, F007]
+      requirement_gap: "上传合同、风险审核、文档比对不能退化到同一个页面或同一种空态。"
+    PD05:
+      name: 合同审核商业产品对象未闭环
+      related_reqs: [F005v2, F005, F006, F007, F009, F012]
+      requirement_gap: "ReviewRun、RiskFinding、NegotiationTask、CustomerFeedback、CommentPatch 等对象不能只停留在 UI 文案或合成字段。"
+    PD06:
+      name: 规则、Skill、模型调用链未固化
+      related_reqs: [F006, F009, F012]
+      requirement_gap: "审核依据必须来自配置中心发布规则和 SkillBundle，不得由通用 prompt 或硬编码规则替代。"
+    PD07:
+      name: Word 批注与报告输出未形成验收闭环
+      related_reqs: [F007, F005]
+      requirement_gap: "批注为主、报告为辅必须可下载、可追溯、可降级说明，并绑定同一 RiskFinding。"
+    PD08:
+      name: 外部组织同步边界不清
+      related_reqs: [F011, F003]
+      requirement_gap: "飞书同步必须区分未配置、无权限、上游失败、MVP 仅同步部门等状态。"
+    PD09:
+      name: 真实验收门禁不足
+      related_reqs: [F027]
+      requirement_gap: "完成定义必须包含 build/test/lint、真实浏览器、移动端、线上部署和角色矩阵。"
+    PD10:
+      name: 噪音、外部依赖与非代码产物治理
+      related_reqs: [F027, F021]
+      requirement_gap: "本地依赖、构建产物、output 证据、历史文档必须区分 ignored、tracked、Vercel 上传和可复用资产。"
 
 requirements:
+  # ═══════════════════════════════════════════════════════════════
+  # 报价中心 (Quotes Center)
+  # ═══════════════════════════════════════════════════════════════
+  F000:
+    name: 配置中心共享架构
+    module: 配置中心
+    source: PROJECT-主文档.md#6.0-6.4
+    status: confirmed
+    priority: P0
+    feature_packet: product-truth/feature-packets/F000-config-center-architecture.md
+    code_locations:
+      - app/configs/page.tsx
+      - lib/configs/types.ts
+      - lib/configs/runtime.ts
+    description: >
+      配置中心的共享架构真相，不是独立业务页面。
+      约束 F001/F009/F010/F011/F012 的配置拥有权、版本发布、生效回滚和消费边界，
+      防止配置中心退化为若干无领域边界的 Tab CRUD。
+    audit_supplement:
+      current_gap: "线上截图显示多个配置域被渲染成 0，说明实现仍需按 F000 明确控制面、执行面、错误态和空态边界。"
+      acceptance_requirements:
+        - "配置中心每个能力域必须能说明谁可写、谁消费、发布版本是什么、失败时如何呈现。"
+        - "业务页面只消费已发布配置，不直接修改配置事实。"
+        - "未授权、组织上下文失败、接口错误不得展示为真实空配置。"
+
   # ═══════════════════════════════════════════════════════════════
   # 报价中心 (Quotes Center)
   # ═══════════════════════════════════════════════════════════════
@@ -96,8 +268,27 @@ requirements:
     name: 合同中心 V2 (ONES Contract)
     module: 合同中心
     source: feature-packets/F005v2-contract-center.md
-    status: design_confirmed
+    status: in_progress
     priority: P0
+    active_slice:
+      id: WP06
+      slug: document-compare
+      status: completed_preview_candidate
+      predecessor: WP05
+      predecessor_slug: multiformat-review-cycle
+      predecessor_state: NO-GO / waiting_external_gold
+      next: WP07
+      cost_policy: 持续或按量付费依赖淘汰；仅量化后仍绕不过去的一次性费用进入用户决策
+      source_contract: product-truth/feature-packets/F005v2-contract-center.md#phase-3-g6-文档比对闭环preview-候选验收完成production-由-g9-复验
+      evidence: product-truth/product-code/output/evidence/g6/preview-browser-acceptance.json
+      cleanup_evidence: product-truth/product-code/output/evidence/g6/preview-browser-cleanup-verification.json
+      production_status: read_only_not_deployed
+      acceptance:
+        - 创建时冻结 old/new 两侧组织、源文件身份、文件/文本 SHA、解析文本与页映射
+        - DOCX/DOCM 高还原 OOXML 预览与应用可控 PDF 页图
+        - 60%-180% 缩放、适宽、独立/同步滚动和双侧差异定位
+        - 真实 DOCX 报告包含双侧原文、位置与 SHA
+        - Preview、组织隔离、目标测试、typecheck/build、桌面/iPad 与真实文件验收
     feature_packet: product-truth/feature-packets/F005v2-contract-center.md
     code_locations:
       - app/contracts/page.tsx                    # 首页工作台
@@ -143,7 +334,6 @@ requirements:
       - 用户地图：销售/法务/财务/管理员 4角色旅程 + 状态感知 + 通知矩阵
       - ASK升级：两段式ASK清单 + 3状态机 + 硬关单 + rolling报告
       - 页面结构：详情页布局 + ASK清单标签页 + 报告版本标签页
-    derive_doc: product-truth/feature-packets/F005-derive.md
     design_doc: product-truth/01-business-truth/合同审核.md
     master_doc: product-truth/00-master/PROJECT-主文档.md#5
     design_v2:
@@ -207,23 +397,84 @@ requirements:
       - 12 条核心规则（ONES 15 条款 + 12 条 UI 可见）
 
   F007:
-    name: Word批注生成
+    name: Word/PDF 多格式源文件批注
     module: 合同审核
-    source: 合同审核.md#3
-    status: completed
+    source: "product-truth/feature-packets/F005v2-contract-center.md §1.4"
+    status: in_progress
     priority: P0
     derive_doc: product-truth/feature-packets/F005-derive.md
-    master_doc: product-truth/00-master/PROJECT-主文档.md#5
+    feature_packet: product-truth/feature-packets/F005v2-contract-center.md
+    master_doc: "product-truth/00-master/PROJECT-主文档.md#当前执行目标入口2026-07-16"
     code_locations:
       - app/contracts/[id]/page.tsx
       - app/api/contracts/[id]/export/route.ts
+      - app/api/contracts/[id]/review/decisions/[riskId]/route.ts
+      - app/api/contracts/[id]/review/submit/route.ts
+      - lib/contract-analysis.ts
+      - lib/ai/failover.ts
+      - lib/contracts/review-workbench.ts
+      - lib/contracts/deterministic-review-runtime.ts
+      - lib/contracts/deterministic-review-runtime.test.ts
+      - lib/contracts/deterministic-preview-candidate.ts
+      - lib/contracts/deterministic-preview-candidate.test.ts
+      - lib/contracts/deterministic-adjudication-migration-contract.test.ts
       - lib/export/word-generator.py
       - lib/export/word-generator.ts
+      - lib/export/test_word_generator.py
+      - lib/export/fixtures/apache-poi-SimpleMacro.docm.b64
+      - lib/documents/source-render.ts
+      - lib/documents/source-render.test.ts
+      - lib/documents/source-render-server.ts
+      - lib/documents/browser-word-preview.ts
+      - lib/documents/browser-word-preview.test.ts
+      - app/contracts/[id]/review/BrowserWordPreview.tsx
+      - requirements.txt
+      - output/evidence/g5-v11/manifest.json
+      - output/evidence/g5-v12/manifest.json
+      - output/evidence/g5-v12/score-g5-risk-accuracy-v3.mjs
+      - output/evidence/g5-v12/score-g5-risk-accuracy-v3.test.mjs
+      - output/evidence/g5-v12/g5-facts-v23-terminal-audit-20260718.json
+      - output/evidence/g5-v12/g5-067-whitespace-stage-transaction-probe.sql
+      - output/evidence/g5-v12/g5-real-blind-corpus-inventory-20260718.json
+      - supabase/migrations/20260717041512_reconcile_g5_review_workbench_baseline.sql
+      - supabase/migrations/20260717041801_add_multiformat_source_annotation_anchors.sql
+      - supabase/migrations/20260717070249_g5_harden_contract_storage_buckets.sql
+      - supabase/migrations/20260717071127_reconcile_contract_reviews_updated_at.sql
+      - supabase/migrations/20260717071901_fix_stage_contract_analysis_report_ambiguity.sql
+      - supabase/migrations/20260717162000_add_browser_word_preview_render_mode.sql
+      - supabase/migrations/20260718014000_allow_frozen_chunk_source_anchors.sql
+      - supabase/migrations/20260718023000_optimize_frozen_chunk_anchor_validation.sql
+      - supabase/migrations/20260718052000_complete_contract_review_facts.sql
+      - supabase/migrations/20260718053000_create_deterministic_preview_candidate.sql
+      - supabase/migrations/20260718054000_start_deterministic_preview_candidate.sql
+      - supabase/migrations/20260718055000_fix_deterministic_preview_candidate_policy_record.sql
+      - supabase/migrations/20260718060000_reconcile_word_source_text_projection.sql
+      - supabase/migrations/20260718061000_fix_word_source_text_repair_membership.sql
+      - supabase/migrations/20260718062000_fix_word_source_text_repair_page_range.sql
+      - supabase/migrations/20260718063000_calibrate_deterministic_preview_candidate_runtime.sql
+      - supabase/migrations/20260718064000_fix_preview_runtime_calibration_bundle_clone.sql
+      - supabase/migrations/20260718065000_add_atomic_fact_chunk_checkpoints.sql
+      - supabase/migrations/20260718066000_harden_fact_checkpoint_source_anchors.sql
+      - supabase/migrations/20260718067000_align_fact_transport_normalization.sql
+      - supabase/migrations/20260718068000_align_empty_matched_level_validation.sql
+      - supabase/migrations/20260718069000_fix_empty_matched_level_coalesce.sql
     description: |
-      Word 报告 + 批注导出（详见 F005-derive.md §14）：
-      - 报告版（纯报告）
-      - 批注版（原合同 + 报告内容批注）
-      - ONES 命名格式：合同审核_{订单类型}_{公司全称}_V1_预览表.docx
+      提审批注闭环（当前真相以 F005v2 §1.3/§1.4 与 F099 v2026-07-18.25 为准）：
+      - 支持 DOC/DOCX/DOCM 与文本/扫描 PDF；独立图片不在本期
+      - 统一 text/region/point 锚点；扫描 PDF 的 OCR 失败不阻断人工批注
+      - DOCX/DOCM 直接在浏览器中渲染原 OOXML，尽可能保持页式布局并显示源文件已有修订与批注；服务器不得同步依赖 Office/LibreOffice
+      - DOCX/DOCM 在不可变源文件副本上保留既有修订/批注并新增 Word 原生 AI 批注；DOCM 宏不执行且必须保持
+      - DOC 保留原件但不承诺浏览器高还原预览；进入 AI 原生批注链前要求用户另存为 DOCX，不静默转换
+      - DOCM 必须通过 ZIP 歧义/资源、全量 OPC part/Content-Type/relationship、w:document、真实 OLE 与静态 MS-OVBA 模块解析门禁；检查器不可用时 fail closed
+      - legacy DOC 同格式原型和对象红灯仅作历史决策证据，不在 Production 路由或 WP05 退出条件中
+      - PDF 从源 PDF 副本写入标准 annotation；预览 rendition 不得反向生成交付文件
+      - ReviewRun 冻结唯一规则包和快照；历史决策不得改用当前规则解释
+      - facts_v1 只接收逐字证据和类型化事实；等级、缺失语义、风险物化与 ReviewRun 完成由冻结规则和确定性服务端链裁决
+      - chunk checkpoint 必须原子绑定 invocation、token、source/chunk hash、完整 coverage 和已验证 source anchor；确定性 schema/enum 错误不得进入任务级重试
+      - 受控 canary 只能证明运行证据链；真实合同运行失败或没有独立盲测金标时，不得声明准确率通过或候选可发布
+      - 逐字 source_quote 只有在全文唯一，或由已完成的冻结分块调用以 UTF-16 区间、分块 SHA 与源 SHA 唯一定位时，才可形成精确锚点；未执行冻结快照的规则线索保持 unbound
+      - 单项保存与批量提交首先串行同一 contract/page；启动恢复只认 exact request id
+      - 不依赖 CSPP、WPS WebOffice、OnlyOffice 或实时协同编辑
 
   # ═══════════════════════════════════════════════════════════════
   # 配置中心 (Config Center)

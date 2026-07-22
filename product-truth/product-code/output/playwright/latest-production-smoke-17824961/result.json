@@ -1,0 +1,66 @@
+{
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/latest-production-smoke-17824961",
+  "loginTiming": "parse_payload;dur=0.4, login_rpc;dur=181.7, rpc_total;dur=96.0, rpc_audit_write;dur=0.2, rpc_token_write;dur=1.9, rpc_user_lookup;dur=0.7, rpc_auth_context;dur=2.6, rpc_initial_core;dur=4.6, rpc_ip_rate_limit;dur=0.3, rpc_password_verify;dur=76.5, rpc_input_validation;dur=0.8, rpc_initial_dashboard;dur=6.9, rpc_account_rate_limit;dur=1.0, login_rpc_transport;dur=85.7, cache_prime;dur=0.0, response_json;dur=0.3, auth_context_cookie;dur=0.5, total;dur=183.4",
+  "home": {
+    "url": "https://sales.cyanlog.icu/",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflowX": false,
+    "hasLoginText": false,
+    "hasErrorBoundary": false,
+    "hasDashboardText": true,
+    "hasRoleAccessText": true,
+    "hasAddMemberText": false,
+    "hasContractDetail": false,
+    "textHead": "CY\nCyanlog\n\n智能销售支撑平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n首页\n销售工作台\n\n系统超管，华东销售空间。今天要处理的项目、待办和切换入口都在这里。\n\n⌘K\n系统超管\n超级管理员 · 6月27日星期六\n华东销售空间\n系\n配置中心\n退出\n华东销售空间\n4 个活跃机会 · 4 个硬节点\n华东销售空间\n华北销售空间\n华南销售空间\n活跃机会\n总览\n4\n本空间\n今日硬节点\n0\n0 个",
+    "consoleMessages": [],
+    "pageErrors": []
+  },
+  "roleAccess": {
+    "url": "https://sales.cyanlog.icu/configs?tab=role-access",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflowX": false,
+    "hasLoginText": false,
+    "hasErrorBoundary": false,
+    "hasDashboardText": false,
+    "hasRoleAccessText": true,
+    "hasAddMemberText": true,
+    "hasContractDetail": false,
+    "textHead": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n角色权限\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n0\n\n围绕报价工作台",
+    "consoleMessages": [],
+    "pageErrors": []
+  },
+  "contractDetail": {
+    "url": "https://sales.cyanlog.icu/contracts/44301b16-6551-4720-afa5-f1d80b1604de",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflowX": false,
+    "hasLoginText": false,
+    "hasErrorBoundary": false,
+    "hasDashboardText": false,
+    "hasRoleAccessText": false,
+    "hasAddMemberText": false,
+    "hasContractDetail": true,
+    "textHead": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同审核/详情\nHemory_.docx\n标准合同对照\n返回列表\n基本信息\n编辑\n状态：审核完成\n大小：0.03 MB\n类型：application/vnd.openxmlformats-officedocument.wordprocessingml.document\n上传时间：2026/6/16 11:44:53\n",
+    "consoleMessages": [],
+    "pageErrors": []
+  },
+  "mobileRoleAccess": {
+    "url": "https://sales.cyanlog.icu/configs?tab=role-access",
+    "width": 390,
+    "scrollWidth": 390,
+    "overflowX": false,
+    "hasLoginText": false,
+    "hasErrorBoundary": false,
+    "hasDashboardText": false,
+    "hasRoleAccessText": true,
+    "hasAddMemberText": true,
+    "hasContractDetail": false,
+    "textHead": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n组织级配置工作台\n配置中心\n\n参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。\n\n生效范围\n组织级统一发布\n消费端\n报价 / 合同 / AI\n当前配置集\n角色权限\n配置域\n\n把所有配置先归到稳定的业务域，再进入具体配置集编辑。\n\n交易配置\n0\n\n围绕报价工作台",
+    "consoleMessages": [],
+    "pageErrors": [
+      "Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+    ]
+  }
+}

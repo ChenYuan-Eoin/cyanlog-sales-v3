@@ -1,0 +1,402 @@
+- generic [ref=e1]:
+  - button [ref=e711] [cursor=pointer]:
+    - img [ref=e3]
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - img [ref=e712]
+      - generic [ref=e9]:
+        - generic [ref=e10]: ONES Sales
+        - paragraph [ref=e11]: 智能协作平台
+    - navigation [ref=e12]:
+      - link [ref=e713] [cursor=pointer]:
+        - /url: /
+        - img [ref=e14]
+        - generic [ref=e18]: 工作台
+      - link [ref=e714] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e20]
+        - generic [ref=e24]: 报价中心
+      - link [ref=e715] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e26]
+        - generic [ref=e31]: 合同审核
+      - link [ref=e716] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e33]
+        - generic [ref=e37]: 标书中心
+      - link [ref=e717] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e39]
+        - generic [ref=e44]: 知识库
+      - link [ref=e718] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e46]
+        - generic [ref=e52]: 日程
+      - link [ref=e719] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e54]
+        - generic [ref=e58]: 配置中心
+    - generic [ref=e59]:
+      - link [ref=e720] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e61]
+        - generic [ref=e64]: 个人信息
+      - button [ref=e721] [cursor=pointer]:
+        - img [ref=e66]
+        - generic [ref=e69]: 退出登录
+  - main [ref=e70]:
+    - generic [ref=e72]:
+      - generic [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - img [ref=e76]
+            - text: 组织级配置工作台
+          - heading [level=1] [ref=e722]: 配置中心
+          - paragraph [ref=e81]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+            - generic [ref=e84]: 生效范围
+            - generic [ref=e85]: 组织级统一发布
+          - generic [ref=e86]:
+            - generic [ref=e87]: 消费端
+            - generic [ref=e88]: 报价 / 合同 / AI
+          - generic [ref=e89]:
+            - generic [ref=e90]: 当前配置集
+            - generic [ref=e91]: 角色权限
+      - generic [ref=e92]:
+        - complementary [ref=e93]:
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - generic [ref=e96]: 配置域
+              - paragraph [ref=e97]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e98]:
+              - button [ref=e723] [cursor=pointer]:
+                - generic [ref=e100]:
+                  - generic [ref=e101]: 交易配置
+                  - generic [ref=e102]: ...
+                - paragraph [ref=e103]: 围绕报价工作台的价盘、税率和审批配置。
+              - button [ref=e724] [cursor=pointer]:
+                - generic [ref=e105]:
+                  - generic [ref=e106]: 合同与 AI 规则
+                  - generic [ref=e107]: ...
+                - paragraph [ref=e108]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button [ref=e725] [cursor=pointer]:
+                - generic [ref=e110]:
+                  - generic [ref=e111]: 组织与权限
+                  - generic [ref=e112]: "18"
+                - paragraph [ref=e113]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button [ref=e726] [cursor=pointer]:
+                - generic [ref=e115]:
+                  - generic [ref=e116]: 界面与体验
+                  - generic [ref=e117]: ...
+                - paragraph [ref=e118]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e119]:
+              - generic [ref=e120]: 结构约束
+              - list [ref=e121]:
+                - listitem [ref=e122]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e123]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e124]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e125]:
+          - generic [ref=e126]:
+            - generic [ref=e127]:
+              - generic [ref=e128]:
+                - generic [ref=e129]:
+                  - generic [ref=e130]: 配置中心
+                  - generic [ref=e131]: /
+                  - generic [ref=e132]: 组织与权限
+                - generic [ref=e133]:
+                  - img [ref=e533]
+                  - generic [ref=e139]:
+                    - heading [level=2] [ref=e727]: 角色权限
+                    - paragraph [ref=e141]: 按业务能力维护角色，并通过组织/部门/销售空间分配数据范围。
+              - generic [ref=e142]:
+                - generic [ref=e538]:
+                  - generic [ref=e539]: 角色总数
+                  - generic [ref=e540]: "7"
+                - generic [ref=e541]:
+                  - generic [ref=e542]: 能力分组
+                  - generic [ref=e543]: "5"
+                - generic [ref=e544]:
+                  - generic [ref=e545]: 作用域层级
+                  - generic [ref=e546]: "4"
+            - generic [ref=e152]:
+              - button [ref=e728] [cursor=pointer]:
+                - img [ref=e154]
+                - generic [ref=e158]: 组织架构
+                - generic [ref=e159]: "11"
+              - button [ref=e729] [cursor=pointer]:
+                - img [ref=e161]
+                - generic [ref=e165]: 角色权限
+                - generic [ref=e166]: "7"
+          - generic [ref=e548]:
+            - generic [ref=e550]:
+              - generic [ref=e551]:
+                - heading [level=3] [ref=e730]: 角色列表
+                - paragraph [ref=e553]: 选择角色查看详情
+              - generic [ref=e555]:
+                - img [ref=e556]
+                - textbox [ref=e731]:
+                  - /placeholder: 搜索角色...
+              - generic [ref=e560]:
+                - button [ref=e732] [cursor=pointer]:
+                  - img [ref=e563]
+                  - generic [ref=e565]:
+                    - generic [ref=e566]:
+                      - generic [ref=e567]: 超级管理员
+                      - generic [ref=e568]: 超级管理员
+                    - generic [ref=e569]: SUPER_ADMIN
+                  - generic [ref=e570]:
+                    - generic [ref=e571]: "1"
+                    - img [ref=e572]
+                - button [ref=e733] [cursor=pointer]:
+                  - img [ref=e576]
+                  - generic [ref=e581]:
+                    - generic [ref=e583]: 管理员
+                    - generic [ref=e584]: ADMIN
+                  - generic [ref=e585]:
+                    - generic [ref=e586]: "4"
+                    - img [ref=e587]
+                - button [ref=e734] [cursor=pointer]:
+                  - img [ref=e591]
+                  - generic [ref=e596]:
+                    - generic [ref=e598]: 销售经理
+                    - generic [ref=e599]: SALES_MANAGER
+                  - generic [ref=e600]:
+                    - generic [ref=e601]: "6"
+                    - img [ref=e602]
+                - button [ref=e735] [cursor=pointer]:
+                  - img [ref=e606]
+                  - generic [ref=e611]:
+                    - generic [ref=e613]: 销售
+                    - generic [ref=e614]: SALES
+                  - generic [ref=e615]:
+                    - generic [ref=e616]: "17"
+                    - img [ref=e617]
+                - button [ref=e736] [cursor=pointer]:
+                  - img [ref=e621]
+                  - generic [ref=e626]:
+                    - generic [ref=e628]: 法务
+                    - generic [ref=e629]: LEGAL
+                  - generic [ref=e630]:
+                    - generic [ref=e631]: "2"
+                    - img [ref=e632]
+                - button [ref=e737] [cursor=pointer]:
+                  - img [ref=e636]
+                  - generic [ref=e641]:
+                    - generic [ref=e643]: 财务
+                    - generic [ref=e644]: FINANCE
+                  - generic [ref=e645]:
+                    - generic [ref=e646]: "2"
+                    - img [ref=e647]
+                - button [ref=e738] [cursor=pointer]:
+                  - img [ref=e651]
+                  - generic [ref=e656]:
+                    - generic [ref=e658]: 只读用户
+                    - generic [ref=e659]: READONLY
+                  - generic [ref=e660]:
+                    - generic [ref=e661]: "0"
+                    - img [ref=e662]
+            - generic [ref=e665]:
+              - generic [ref=e668]:
+                - img [ref=e670]
+                - generic [ref=e672]:
+                  - generic [ref=e673]:
+                    - heading [level=2] [ref=e739]: 超级管理员
+                    - generic [ref=e675]: 拥有所有权限
+                  - generic [ref=e676]: SUPER_ADMIN · 1 名成员 · 1 条作用域绑定
+                  - paragraph [ref=e677]: 全平台最高权限
+              - generic [ref=e678]:
+                - tablist [ref=e680]:
+                  - tab [selected] [ref=e740] [cursor=pointer]: 员工分配 (1)
+                  - tab [ref=e741] [cursor=pointer]: 权限设置
+                - tabpanel [ref=e742]:
+                  - generic [ref=e685]:
+                    - generic [ref=e686]:
+                      - heading [level=4] [ref=e743]: 已分配成员 (1)
+                      - button [ref=e744] [cursor=pointer]:
+                        - img
+                        - text: 添加成员
+                    - table [ref=e691]:
+                      - rowgroup [ref=e692]:
+                        - row [ref=e745]:
+                          - columnheader [ref=e746]: 成员
+                          - columnheader [ref=e747]: 部门
+                          - columnheader [ref=e748]: 职位
+                          - columnheader [ref=e749]: 操作
+                      - rowgroup [ref=e698]:
+                        - row [ref=e750]:
+                          - cell [ref=e751]:
+                            - generic [ref=e701]:
+                              - generic [ref=e702]: 系
+                              - generic [ref=e703]:
+                                - generic [ref=e704]: 系统超管
+                                - generic [ref=e705]: superadmin@huarun.com
+                          - cell [ref=e752]:
+                            - generic [ref=e707]: 信息技术部
+                          - cell [ref=e753]: 超级管理员
+                          - cell [ref=e754]:
+                            - button [ref=e755] [cursor=pointer]:
+                              - img
+  - alert [ref=e202]: Cyanlog Sales
+  - dialog "为「超级管理员」添加成员" [ref=e759]:
+    - heading "为「超级管理员」添加成员" [level=2] [ref=e761]:
+      - img [ref=e762]
+      - text: 为「超级管理员」添加成员
+    - generic [ref=e765]:
+      - generic [ref=e766]:
+        - generic [ref=e767]:
+          - img [ref=e768]
+          - textbox "搜索姓名、邮箱、职位..." [active] [ref=e771]
+        - button "全选" [ref=e772] [cursor=pointer]
+      - generic [ref=e774]: 共 24 人可添加
+      - generic [ref=e776]:
+        - generic [ref=e777] [cursor=pointer]:
+          - checkbox "张 张雪丽 99999999@qq.com · 售前组 · 销售" [ref=e778]
+          - generic [ref=e779]: 张
+          - generic [ref=e780]:
+            - generic [ref=e781]: 张雪丽
+            - generic [ref=e782]: 99999999@qq.com · 售前组 · 销售
+        - generic [ref=e783] [cursor=pointer]:
+          - checkbox "E E2E 测试管理员 e2e-admin@huarun.com · 信息技术部 · E2E 管理员" [ref=e784]
+          - generic [ref=e785]: E
+          - generic [ref=e786]:
+            - generic [ref=e787]: E2E 测试管理员
+            - generic [ref=e788]: e2e-admin@huarun.com · 信息技术部 · E2E 管理员
+        - generic [ref=e789] [cursor=pointer]:
+          - checkbox "赵 赵法务 legal02@huarun.com · 法务部 · 法务主管" [ref=e790]
+          - generic [ref=e791]: 赵
+          - generic [ref=e792]:
+            - generic [ref=e793]: 赵法务
+            - generic [ref=e794]: legal02@huarun.com · 法务部 · 法务主管
+        - generic [ref=e795] [cursor=pointer]:
+          - checkbox "李 李华东 east.lead@huarun.com · 华东销售 · 华东销售总监" [ref=e796]
+          - generic [ref=e797]: 李
+          - generic [ref=e798]:
+            - generic [ref=e799]: 李华东
+            - generic [ref=e800]: east.lead@huarun.com · 华东销售 · 华东销售总监
+        - generic [ref=e801] [cursor=pointer]:
+          - checkbox "王 王管理 admin@huarun.com · 信息技术部 · 组织管理员" [ref=e802]
+          - generic [ref=e803]: 王
+          - generic [ref=e804]:
+            - generic [ref=e805]: 王管理
+            - generic [ref=e806]: admin@huarun.com · 信息技术部 · 组织管理员
+        - generic [ref=e807] [cursor=pointer]:
+          - checkbox "钱 钱会计 finance01@huarun.com · 财务部 · 会计" [ref=e808]
+          - generic [ref=e809]: 钱
+          - generic [ref=e810]:
+            - generic [ref=e811]: 钱会计
+            - generic [ref=e812]: finance01@huarun.com · 财务部 · 会计
+        - generic [ref=e813] [cursor=pointer]:
+          - checkbox "陈 陈法务 legal01@huarun.com · 法务部 · 法务专员" [ref=e814]
+          - generic [ref=e815]: 陈
+          - generic [ref=e816]:
+            - generic [ref=e817]: 陈法务
+            - generic [ref=e818]: legal01@huarun.com · 法务部 · 法务专员
+        - generic [ref=e819] [cursor=pointer]:
+          - checkbox "王 王华北 north.lead@huarun.com · 华北销售 · 华北销售总监" [ref=e820]
+          - generic [ref=e821]: 王
+          - generic [ref=e822]:
+            - generic [ref=e823]: 王华北
+            - generic [ref=e824]: north.lead@huarun.com · 华北销售 · 华北销售总监
+        - generic [ref=e825] [cursor=pointer]:
+          - checkbox "杨 杨丽华 yang.lh@huarun.com · 华南销售 · 销售经理" [ref=e826]
+          - generic [ref=e827]: 杨
+          - generic [ref=e828]:
+            - generic [ref=e829]: 杨丽华
+            - generic [ref=e830]: yang.lh@huarun.com · 华南销售 · 销售经理
+        - generic [ref=e831] [cursor=pointer]:
+          - checkbox "何 何健明 he.jm@huarun.com · 华南销售 · 销售代表" [ref=e832]
+          - generic [ref=e833]: 何
+          - generic [ref=e834]:
+            - generic [ref=e835]: 何健明
+            - generic [ref=e836]: he.jm@huarun.com · 华南销售 · 销售代表
+        - generic [ref=e837] [cursor=pointer]:
+          - checkbox "孙 孙出纳 finance02@huarun.com · 财务部 · 出纳" [ref=e838]
+          - generic [ref=e839]: 孙
+          - generic [ref=e840]:
+            - generic [ref=e841]: 孙出纳
+            - generic [ref=e842]: finance02@huarun.com · 财务部 · 出纳
+        - generic [ref=e843] [cursor=pointer]:
+          - checkbox "胡 胡建华 hu.jh@huarun.com · 华北销售 · 销售经理" [ref=e844]
+          - generic [ref=e845]: 胡
+          - generic [ref=e846]:
+            - generic [ref=e847]: 胡建华
+            - generic [ref=e848]: hu.jh@huarun.com · 华北销售 · 销售经理
+        - generic [ref=e849] [cursor=pointer]:
+          - checkbox "张 张一鸣 zhang.ym@huarun.com · 华东·医药行业 · 高级销售代表" [ref=e850]
+          - generic [ref=e851]: 张
+          - generic [ref=e852]:
+            - generic [ref=e853]: 张一鸣
+            - generic [ref=e854]: zhang.ym@huarun.com · 华东·医药行业 · 高级销售代表
+        - generic [ref=e855] [cursor=pointer]:
+          - checkbox "赵 赵美娜 zhao.mn@huarun.com · 华东·互联网行业 · 销售代表" [ref=e856]
+          - generic [ref=e857]: 赵
+          - generic [ref=e858]:
+            - generic [ref=e859]: 赵美娜
+            - generic [ref=e860]: zhao.mn@huarun.com · 华东·互联网行业 · 销售代表
+        - generic [ref=e861] [cursor=pointer]:
+          - checkbox "李 李芳颖 li.fy@huarun.com · 华东·医药行业 · 销售代表" [ref=e862]
+          - generic [ref=e863]: 李
+          - generic [ref=e864]:
+            - generic [ref=e865]: 李芳颖
+            - generic [ref=e866]: li.fy@huarun.com · 华东·医药行业 · 销售代表
+        - generic [ref=e867] [cursor=pointer]:
+          - checkbox "王 王志远 wang.zy@huarun.com · 华东·零售行业 · 销售代表" [ref=e868]
+          - generic [ref=e869]: 王
+          - generic [ref=e870]:
+            - generic [ref=e871]: 王志远
+            - generic [ref=e872]: wang.zy@huarun.com · 华东·零售行业 · 销售代表
+        - generic [ref=e873] [cursor=pointer]:
+          - checkbox "孙 孙丽丽 sun.ll@huarun.com · 华北销售 · 销售代表" [ref=e874]
+          - generic [ref=e875]: 孙
+          - generic [ref=e876]:
+            - generic [ref=e877]: 孙丽丽
+            - generic [ref=e878]: sun.ll@huarun.com · 华北销售 · 销售代表
+        - generic [ref=e879] [cursor=pointer]:
+          - checkbox "高 高小明 gao.xm@huarun.com · 华北销售 · 销售代表" [ref=e880]
+          - generic [ref=e881]: 高
+          - generic [ref=e882]:
+            - generic [ref=e883]: 高小明
+            - generic [ref=e884]: gao.xm@huarun.com · 华北销售 · 销售代表
+        - generic [ref=e885] [cursor=pointer]:
+          - checkbox "陈 陈慧娟 chen.hj@huarun.com · 华东·零售行业 · 销售经理" [ref=e886]
+          - generic [ref=e887]: 陈
+          - generic [ref=e888]:
+            - generic [ref=e889]: 陈慧娟
+            - generic [ref=e890]: chen.hj@huarun.com · 华东·零售行业 · 销售经理
+        - generic [ref=e891] [cursor=pointer]:
+          - checkbox "陈 陈华南 south.lead@huarun.com · 华南销售 · 华南销售总监" [ref=e892]
+          - generic [ref=e893]: 陈
+          - generic [ref=e894]:
+            - generic [ref=e895]: 陈华南
+            - generic [ref=e896]: south.lead@huarun.com · 华南销售 · 华南销售总监
+        - generic [ref=e897] [cursor=pointer]:
+          - checkbox "马 马建飞 ma.jf@huarun.com · 华北销售 · 销售代表" [ref=e898]
+          - generic [ref=e899]: 马
+          - generic [ref=e900]:
+            - generic [ref=e901]: 马建飞
+            - generic [ref=e902]: ma.jf@huarun.com · 华北销售 · 销售代表
+        - generic [ref=e903] [cursor=pointer]:
+          - checkbox "刘 刘建华 liu.jh@huarun.com · 华东·互联网行业 · 销售代表" [ref=e904]
+          - generic [ref=e905]: 刘
+          - generic [ref=e906]:
+            - generic [ref=e907]: 刘建华
+            - generic [ref=e908]: liu.jh@huarun.com · 华东·互联网行业 · 销售代表
+        - generic [ref=e909] [cursor=pointer]:
+          - checkbox "林 林小青 lin.xq@huarun.com · 华南销售 · 销售代表" [ref=e910]
+          - generic [ref=e911]: 林
+          - generic [ref=e912]:
+            - generic [ref=e913]: 林小青
+            - generic [ref=e914]: lin.xq@huarun.com · 华南销售 · 销售代表
+        - generic [ref=e915] [cursor=pointer]:
+          - checkbox "郭 郭永福 guo.yf@huarun.com · 华南销售 · 销售代表" [ref=e916]
+          - generic [ref=e917]: 郭
+          - generic [ref=e918]:
+            - generic [ref=e919]: 郭永福
+            - generic [ref=e920]: guo.yf@huarun.com · 华南销售 · 销售代表
+    - generic [ref=e921]:
+      - button "取消" [ref=e922] [cursor=pointer]
+      - button "添加 0 人到角色" [disabled]
+    - button "Close" [ref=e923] [cursor=pointer]:
+      - img
+      - generic [ref=e924]: Close

@@ -1,0 +1,22 @@
+{
+  "desktop": {
+    "viewport": "desktop",
+    "url": "http://localhost:3016/configs?tab=rules",
+    "hasRuleSetDirectory": true,
+    "hasRuleSetSummary": true,
+    "hasAllRuleSets": true,
+    "hasBlockingSignal": true,
+    "hasSkillInputText": true,
+    "hasRuleList": true
+  },
+  "mobile": {
+    "viewport": "mobile",
+    "url": "http://localhost:3016/configs?tab=rules",
+    "hasRuleSetDirectory": true,
+    "hasRuleSetSummary": true,
+    "hasAllRuleSets": true,
+    "hasBlockingSignal": true,
+    "hasSkillInputText": true,
+    "hasRuleList": true
+  }
+}

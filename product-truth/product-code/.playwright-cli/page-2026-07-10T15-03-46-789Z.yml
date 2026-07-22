@@ -1,0 +1,528 @@
+- generic [ref=f2e1]:
+  - complementary [ref=f2e2]:
+    - generic [ref=f2e6]:
+      - generic [ref=f2e7]: ONES Sales
+      - paragraph [ref=f2e8]: 智能协作平台
+    - navigation [ref=f2e9]:
+      - link [ref=f2e405] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f2e15]: 工作台
+      - link [ref=f2e406] [cursor=pointer]:
+        - /url: /quotes
+        - generic [ref=f2e21]: 报价中心
+      - link [ref=f2e407] [cursor=pointer]:
+        - /url: /contracts
+        - generic [ref=f2e28]: 合同审核
+      - link [ref=f2e408] [cursor=pointer]:
+        - /url: /tenders
+        - generic [ref=f2e34]: 标书中心
+      - link [ref=f2e409] [cursor=pointer]:
+        - /url: /knowledge
+        - generic [ref=f2e41]: 知识库
+      - link [ref=f2e410] [cursor=pointer]:
+        - /url: /schedule
+        - generic [ref=f2e49]: 日程
+      - link [ref=f2e411] [cursor=pointer]:
+        - /url: /configs
+        - generic [ref=f2e55]: 配置中心
+    - generic [ref=f2e56]:
+      - link [ref=f2e412] [cursor=pointer]:
+        - /url: /profile
+        - generic [ref=f2e61]: 个人信息
+      - button [ref=f2e413] [cursor=pointer]:
+        - generic [ref=f2e66]: 退出登录
+  - main [ref=f2e67]:
+    - generic [ref=f2e83]:
+      - generic [ref=f2e84]:
+        - generic [ref=f2e85]:
+          - generic [ref=f2e86]: 组织级配置工作台
+          - heading [level=1] [ref=f2e414]: 配置中心
+          - paragraph [ref=f2e92]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f2e93]:
+          - generic [ref=f2e94]:
+            - generic [ref=f2e95]: 生效范围
+            - generic [ref=f2e96]: 组织级统一发布
+          - generic [ref=f2e97]:
+            - generic [ref=f2e98]: 消费端
+            - generic [ref=f2e99]: 报价 / 合同 / AI
+          - generic [ref=f2e100]:
+            - generic [ref=f2e101]: 当前配置集
+            - generic [ref=f2e102]: AI 模型配置
+      - generic [ref=f2e103]:
+        - complementary [ref=f2e104]:
+          - generic [ref=f2e105]:
+            - generic [ref=f2e106]:
+              - generic [ref=f2e107]: 配置域
+              - paragraph [ref=f2e108]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f2e109]:
+              - button [ref=f2e415] [cursor=pointer]:
+                - generic [ref=f2e111]:
+                  - generic [ref=f2e112]: 交易配置
+                  - generic [ref=f2e113]: "7"
+                - paragraph [ref=f2e114]: 围绕报价工作台的价盘、税率和审批配置。
+              - button [ref=f2e416] [cursor=pointer]:
+                - generic [ref=f2e116]:
+                  - generic [ref=f2e117]: 合同与 AI 规则
+                  - generic [ref=f2e118]: "3"
+                - paragraph [ref=f2e119]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button [ref=f2e417] [cursor=pointer]:
+                - generic [ref=f2e121]:
+                  - generic [ref=f2e122]: 组织与权限
+                  - generic [ref=f2e123]: "0"
+                - paragraph [ref=f2e124]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button [ref=f2e418] [cursor=pointer]:
+                - generic [ref=f2e126]:
+                  - generic [ref=f2e127]: 界面与体验
+                  - generic [ref=f2e128]: "1"
+                - paragraph [ref=f2e129]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f2e130]:
+              - generic [ref=f2e131]: 结构约束
+              - list [ref=f2e132]:
+                - listitem [ref=f2e133]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f2e134]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f2e135]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f2e136]:
+          - generic [ref=f2e137]:
+            - generic [ref=f2e138]:
+              - generic [ref=f2e139]:
+                - generic [ref=f2e140]:
+                  - generic [ref=f2e141]: 配置中心
+                  - generic [ref=f2e142]: /
+                  - generic [ref=f2e143]: 合同与 AI 规则
+                - generic [ref=f2e151]:
+                  - heading [level=2] [ref=f2e419]: AI 模型配置
+                  - paragraph [ref=f2e153]: 管理本地模型、云端 OpenAI 兼容模型和运行时路由策略。
+              - generic [ref=f2e154]:
+                - generic [ref=f2e155]:
+                  - generic [ref=f2e156]: 模型实例
+                  - generic [ref=f2e157]: "3"
+                - generic [ref=f2e158]:
+                  - generic [ref=f2e159]: 可用 Provider
+                  - generic [ref=f2e160]: "3"
+                - generic [ref=f2e161]:
+                  - generic [ref=f2e162]: 已发布策略
+                  - generic [ref=f2e163]: "3"
+            - generic [ref=f2e164]:
+              - button [ref=f2e420] [cursor=pointer]:
+                - generic [ref=f2e169]: 合同审核策略
+                - generic [ref=f2e170]: "0"
+              - button [ref=f2e421] [cursor=pointer]:
+                - generic [ref=f2e177]: AI 模型配置
+                - generic [ref=f2e178]: "3"
+          - generic [ref=f2e180]:
+            - generic [ref=f2e181]:
+              - generic [ref=f2e182]:
+                - generic [ref=f2e183]: 平台 AI 能力底座
+                - paragraph [ref=f2e184]: 模型是 Provider 配置，应用是 Agent/场景绑定，工具只消费已发布策略；L1/L2/L3 只是策略模板，不是底层结构。
+              - button [ref=f2e422] [cursor=pointer]: + 新增 Provider
+            - generic [ref=f2e186]:
+              - generic [ref=f2e187]:
+                - generic [ref=f2e188]:
+                  - generic [ref=f2e189]: Provider 配置（ccswitch）
+                  - generic [ref=f2e196]:
+                    - generic [ref=f2e197]:
+                      - generic [ref=f2e198]: "3"
+                      - generic [ref=f2e199]: Provider
+                    - generic [ref=f2e200]:
+                      - generic [ref=f2e201]: "3"
+                      - generic [ref=f2e202]: 启用
+                    - generic [ref=f2e203]:
+                      - generic [ref=f2e204]: "3"
+                      - generic [ref=f2e205]: 发布
+                  - paragraph [ref=f2e206]: 只回答“怎么连”：供应商、官网、Base URL、API 格式、Token、模型映射和 JSON 扩展。
+                - generic [ref=f2e207]:
+                  - generic [ref=f2e208]: 模型应用（Paseo / Agent）
+                  - generic [ref=f2e221]: 未绑定应用
+                  - paragraph [ref=f2e223]: 只回答“怎么用”：开启哪些计划、Agent 统一 System Prompt、服务哪些业务场景。
+                - generic [ref=f2e224]:
+                  - generic [ref=f2e225]: 工具消费覆盖
+                  - generic [ref=f2e230]:
+                    - generic [ref=f2e231]:
+                      - generic [ref=f2e232]:
+                        - generic [ref=f2e233]: 合同审核
+                        - generic [ref=f2e234]: 缺策略
+                      - generic [ref=f2e235]: 语义审核 / 批注 / 报告
+                    - generic [ref=f2e236]:
+                      - generic [ref=f2e237]:
+                        - generic [ref=f2e238]: 合同对比
+                        - generic [ref=f2e239]: 缺策略
+                      - generic [ref=f2e240]: 长文档 / 差异解释
+                    - generic [ref=f2e241]:
+                      - generic [ref=f2e242]:
+                        - generic [ref=f2e243]: 合同起草
+                        - generic [ref=f2e244]: 缺策略
+                      - generic [ref=f2e245]: 生成 / 改写 / 导出
+                    - generic [ref=f2e246]:
+                      - generic [ref=f2e247]:
+                        - generic [ref=f2e248]: 标书/长文档
+                        - generic [ref=f2e249]: 缺策略
+                      - generic [ref=f2e250]: 长 PDF / 长 DOCX 解析
+                    - generic [ref=f2e251]:
+                      - generic [ref=f2e252]:
+                        - generic [ref=f2e253]: 批注输出
+                        - generic [ref=f2e254]: 缺策略
+                      - generic [ref=f2e255]: Word 批注草案
+                    - generic [ref=f2e256]:
+                      - generic [ref=f2e257]:
+                        - generic [ref=f2e258]: 报告摘要
+                        - generic [ref=f2e259]: 缺策略
+                      - generic [ref=f2e260]: 摘要 / 复核说明
+              - generic [ref=f2e261]:
+                - generic [ref=f2e263]:
+                  - heading [level=3] [ref=f2e423]: 模型 Provider
+                  - paragraph [ref=f2e265]: 供应商、请求地址、API 格式、模型映射和健康状态在这里维护。
+                - generic [ref=f2e266]:
+                  - generic [ref=f2e267]:
+                    - generic [ref=f2e268]:
+                      - generic [ref=f2e269]:
+                        - generic [ref=f2e270]: 本地 gpt-oss-20b
+                        - generic [ref=f2e271]: 本地模型 · AI_LEVEL_1
+                      - generic [ref=f2e272]:
+                        - generic [ref=f2e273]: 已发布
+                        - generic [ref=f2e274]: 可进入运行时
+                        - generic [ref=f2e275]: 启用
+                    - generic [ref=f2e276]:
+                      - generic [ref=f2e277]: "供应商: 未命名"
+                      - generic [ref=f2e278]: "格式: openai_compatible"
+                      - generic [ref=f2e279]: "地址: http://127.0.0.1:1234/v1"
+                      - generic [ref=f2e280]: "请求模型: gpt-oss-20b"
+                      - generic [ref=f2e281]: "超时: 240s · 重试: 1"
+                      - generic [ref=f2e282]: "密钥: 已保存"
+                    - generic [ref=f2e283]:
+                      - generic [ref=f2e284]: 运行入口
+                      - generic [ref=f2e285]: 已发布且具备请求地址与模型映射；是否真实成功以 model_invocations 为准。
+                      - generic [ref=f2e286]: "System Prompt: 未配置"
+                    - generic [ref=f2e287]: 合同语义审核
+                    - generic [ref=f2e290]:
+                      - button [ref=f2e424] [cursor=pointer]: 编辑
+                      - button [ref=f2e425] [cursor=pointer]: 删除
+                  - generic [ref=f2e293]:
+                    - generic [ref=f2e294]:
+                      - generic [ref=f2e295]:
+                        - generic [ref=f2e296]: 云端长文本审核模型
+                        - generic [ref=f2e297]: 云端模型 · AI_LEVEL_2
+                      - generic [ref=f2e298]:
+                        - generic [ref=f2e299]: 已发布
+                        - generic [ref=f2e300]: 可进入运行时
+                        - generic [ref=f2e301]: 启用
+                    - generic [ref=f2e302]:
+                      - generic [ref=f2e303]: "供应商: 未命名"
+                      - generic [ref=f2e304]: "格式: openai_compatible"
+                      - generic [ref=f2e305]: "地址: https://cloud.yiyongai.cn/v1"
+                      - generic [ref=f2e306]: "请求模型: gpt-5.5"
+                      - generic [ref=f2e307]: "超时: 240s · 重试: 1"
+                      - generic [ref=f2e308]: "密钥: 已保存"
+                    - generic [ref=f2e309]:
+                      - generic [ref=f2e310]: 运行入口
+                      - generic [ref=f2e311]: 已发布且具备请求地址与模型映射；是否真实成功以 model_invocations 为准。
+                      - generic [ref=f2e312]: "System Prompt: 未配置"
+                    - generic [ref=f2e313]: 合同语义审核
+                    - generic [ref=f2e316]:
+                      - button [ref=f2e426] [cursor=pointer]: 编辑
+                      - button [ref=f2e427] [cursor=pointer]: 删除
+                  - generic [ref=f2e319]:
+                    - generic [ref=f2e320]:
+                      - generic [ref=f2e321]:
+                        - generic [ref=f2e322]: 规则引擎 (兜底)
+                        - generic [ref=f2e323]: 规则引擎 · AI_LEVEL_3
+                      - generic [ref=f2e324]:
+                        - generic [ref=f2e325]: 已发布
+                        - generic [ref=f2e326]: 规则兜底
+                        - generic [ref=f2e327]: 启用
+                    - generic [ref=f2e328]:
+                      - generic [ref=f2e329]: "供应商: 未命名"
+                      - generic [ref=f2e330]: "格式: builtin"
+                      - generic [ref=f2e331]: "地址: （内置 / 未配置）"
+                      - generic [ref=f2e332]: "请求模型: rule-engine"
+                      - generic [ref=f2e333]: "超时: 1s · 重试: 1"
+                      - generic [ref=f2e334]: "密钥: 未配置"
+                    - generic [ref=f2e335]:
+                      - generic [ref=f2e336]: 运行入口
+                      - generic [ref=f2e337]: 只做确定性校验和证据定位，不能冒充 AI 审核完成。
+                      - generic [ref=f2e338]: "System Prompt: 未配置"
+                    - generic [ref=f2e339]: 合同语义审核
+                    - generic [ref=f2e342]:
+                      - button [ref=f2e428] [cursor=pointer]: 编辑
+                      - button [ref=f2e429] [cursor=pointer]: 删除
+              - generic [ref=f2e345]:
+                - generic [ref=f2e346]:
+                  - generic [ref=f2e347]: 路由与降级策略
+                  - generic [ref=f2e352]:
+                    - generic [ref=f2e353]:
+                      - generic [ref=f2e354]:
+                        - generic [ref=f2e355]: 策略优先级 1 · local_primary
+                        - generic [ref=f2e356]: chunked
+                      - generic [ref=f2e357]:
+                        - generic [ref=f2e358]: "最大页数: 15"
+                        - generic [ref=f2e359]: "超时: 240s"
+                        - generic [ref=f2e360]: "失败降级: 未配置"
+                        - generic [ref=f2e361]: "成本记录: 开启"
+                    - generic [ref=f2e362]:
+                      - generic [ref=f2e363]:
+                        - generic [ref=f2e364]: 策略优先级 2 · sales_cloud_backup
+                        - generic [ref=f2e365]: chunked
+                      - generic [ref=f2e366]:
+                        - generic [ref=f2e367]: "最大页数: 120"
+                        - generic [ref=f2e368]: "超时: 240s"
+                        - generic [ref=f2e369]: "失败降级: 未配置"
+                        - generic [ref=f2e370]: "成本记录: 开启"
+                    - generic [ref=f2e371]:
+                      - generic [ref=f2e372]:
+                        - generic [ref=f2e373]: 策略优先级 3 · rule_engine
+                        - generic [ref=f2e374]: rule
+                      - generic [ref=f2e375]:
+                        - generic [ref=f2e376]: "最大页数: 999"
+                        - generic [ref=f2e377]: "超时: 1s"
+                        - generic [ref=f2e378]: "失败降级: 未配置"
+                        - generic [ref=f2e379]: "成本记录: 开启"
+                - generic [ref=f2e380]:
+                  - generic [ref=f2e381]: 验收证据口径
+                  - generic [ref=f2e385]:
+                    - generic [ref=f2e386]: Provider 配置保存发布后才进入运行时策略。
+                    - generic [ref=f2e391]: 正式审核必须写入 model_invocations，页面只展示调用证据，不用配置快照冒充成功。
+                    - generic [ref=f2e398]: 规则引擎只做确定性兜底，不能标记为 AI 审核完成。
+                    - generic [ref=f2e403]: 后续合同审核、对比、起草都只消费已发布策略；单次审核不再让销售临时选择规则版本。
+  - button "Open Next.js Dev Tools" [ref=f2e78] [cursor=pointer]
+  - alert [ref=f2e82]
+  - dialog [ref=f2e433]:
+    - heading "编辑配置" [level=2] [ref=f2e435]
+    - generic [ref=f2e436]:
+      - generic [ref=f2e437]:
+        - generic [ref=f2e439]:
+          - generic [ref=f2e440]:
+            - generic [ref=f2e441]: 模型配置
+            - paragraph [ref=f2e442]: 对应 ccswitch：供应商、官网、Base URL、API 格式、Token、模型列表与 JSON 参数。
+          - generic [ref=f2e443]:
+            - generic [ref=f2e444]: 模型应用
+            - paragraph [ref=f2e445]: 对应 Paseo/Agent：开启计划、System Prompt、模型可参与的业务能力。
+          - generic [ref=f2e446]:
+            - generic [ref=f2e447]: 工具消费策略
+            - paragraph [ref=f2e448]: 合同审核、对比、起草等工具只消费已发布策略，按路由、超时和降级链执行。
+        - generic [ref=f2e449]:
+          - generic [ref=f2e450]:
+            - generic [ref=f2e451]: 草稿连接测试
+            - paragraph [ref=f2e452]: 只使用当前表单里的 Base URL、模型和 Token，证明连接可达。
+          - generic [ref=f2e453]:
+            - generic [ref=f2e454]: 发布运行策略
+            - paragraph [ref=f2e455]: 保存并发布后进入 AI_CONFIG，网关才会按工具、能力和降级链调度。
+          - generic [ref=f2e456]:
+            - generic [ref=f2e457]: 正式调用证据
+            - paragraph [ref=f2e458]: 只有 ReviewRun 写入 model_invocations，才算合同审核真实调用过模型。
+        - generic [ref=f2e459]:
+          - generic [ref=f2e460]:
+            - generic [ref=f2e461]:
+              - heading "1. 模型配置（Provider / ccswitch）" [level=3] [ref=f2e462]
+              - paragraph [ref=f2e463]: 对应 ccswitch：供应商、请求地址、API 格式、Token 和默认模型。
+            - button "测试连接" [active] [ref=f2e464] [cursor=pointer]
+          - generic [ref=f2e465]:
+            - generic [ref=f2e466]:
+              - text: 配置键 (Key)
+              - 'textbox "如: local_lm_studio" [disabled]': AI_LEVEL_2
+            - generic [ref=f2e467]:
+              - text: 显示名称
+              - 'textbox "如: LM Studio 本地模型" [ref=f2e468]': 云端长文本审核模型
+            - generic [ref=f2e469]:
+              - text: 供应商名称
+              - 'textbox "如: LM Studio / 易用云 / OpenAI" [ref=f2e470]'
+            - generic [ref=f2e471]:
+              - text: 官网链接
+              - textbox "https://..." [ref=f2e472]
+            - generic [ref=f2e473]:
+              - text: Provider 类型
+              - combobox [ref=f2e474]:
+                - option "LM Studio 本地模型"
+                - option "OpenAI-compatible 网关" [selected]
+                - option "OpenAI 官方"
+                - option "Anthropic-compatible"
+                - option "规则引擎兜底"
+                - option "自定义 Provider"
+            - generic [ref=f2e475]:
+              - text: API 格式
+              - combobox [ref=f2e476]:
+                - option "OpenAI Chat Completions" [selected]
+                - option "LM Studio REST API"
+                - option "Anthropic-compatible"
+                - option "Built-in"
+            - generic [ref=f2e477]:
+              - text: 请求地址 Base URL
+              - 'textbox "如: http://127.0.0.1:1234/v1" [ref=f2e478]': https://cloud.yiyongai.cn/v1
+            - generic [ref=f2e479]:
+              - text: API Key / Token
+              - textbox "留空保持现有值" [ref=f2e480]: sk-t***oE6B
+              - paragraph [ref=f2e481]: 安全存储，列表和 API 返回只展示脱敏状态。
+        - generic [ref=f2e482]:
+          - generic [ref=f2e483]:
+            - generic [ref=f2e484]:
+              - heading "2. 模型列表与映射（请求模型）" [level=3] [ref=f2e485]
+              - paragraph [ref=f2e486]: 显示名称给人看，请求模型给网关调用；默认模型会同步到兼容旧运行时的 model 字段。
+            - button "获取模型列表" [ref=f2e487] [cursor=pointer]
+          - generic [ref=f2e488]:
+            - generic [ref=f2e489]:
+              - 'textbox "角色: default" [ref=f2e490]': default
+              - textbox "显示名称" [ref=f2e491]: 默认模型
+              - textbox "实际请求模型" [ref=f2e492]
+              - generic [ref=f2e493]:
+                - checkbox "启用" [checked] [ref=f2e494]
+                - text: 启用
+            - generic [ref=f2e495]:
+              - 'textbox "角色: default" [ref=f2e496]': long_context
+              - textbox "显示名称" [ref=f2e497]: 长文本模型
+              - textbox "实际请求模型" [ref=f2e498]
+              - generic [ref=f2e499]:
+                - checkbox "启用" [ref=f2e500]
+                - text: 启用
+            - generic [ref=f2e501]:
+              - 'textbox "角色: default" [ref=f2e502]': vision
+              - textbox "显示名称" [ref=f2e503]: 视觉模型
+              - textbox "实际请求模型" [ref=f2e504]
+              - generic [ref=f2e505]:
+                - checkbox "启用" [ref=f2e506]
+                - text: 启用
+          - generic [ref=f2e507]: "获取模型列表只验证当前草稿连接；保存并发布后才会进入运行时策略。正式审核证据以 ReviewRun 的 `model_invocations` 为准。"
+        - generic [ref=f2e508]:
+          - generic [ref=f2e509]:
+            - heading "3. 模型应用（Paseo / Agent）" [level=3] [ref=f2e510]
+            - paragraph [ref=f2e511]: 对应 Paseo/Agent 层：哪些业务计划可用、所有 Agent 的 System Prompt。
+          - generic [ref=f2e512]:
+            - checkbox "开启计划 / 允许业务工具消费 关闭时只保存为草稿配置；发布后仍不会进入合同审核、对比、起草或标书解析的路由策略。" [checked] [ref=f2e513]
+            - generic [ref=f2e514]:
+              - generic [ref=f2e515]: 开启计划 / 允许业务工具消费
+              - generic [ref=f2e516]: 关闭时只保存为草稿配置；发布后仍不会进入合同审核、对比、起草或标书解析的路由策略。
+          - generic [ref=f2e517]:
+            - text: 可用能力
+            - generic [ref=f2e518]:
+              - generic [ref=f2e519]:
+                - checkbox "合同语义审核 识别合同风险并输出结构化风险项" [ref=f2e520]
+                - generic [ref=f2e521]:
+                  - generic [ref=f2e522]: 合同语义审核
+                  - generic [ref=f2e523]: 识别合同风险并输出结构化风险项
+              - generic [ref=f2e524]:
+                - checkbox "长文本 处理长 DOCX、长 PDF 和标书解析" [ref=f2e525]
+                - generic [ref=f2e526]:
+                  - generic [ref=f2e527]: 长文本
+                  - generic [ref=f2e528]: 处理长 DOCX、长 PDF 和标书解析
+              - generic [ref=f2e529]:
+                - checkbox "文档解析 抽取章节、条款、页码和证据范围" [ref=f2e530]
+                - generic [ref=f2e531]:
+                  - generic [ref=f2e532]: 文档解析
+                  - generic [ref=f2e533]: 抽取章节、条款、页码和证据范围
+              - generic [ref=f2e534]:
+                - checkbox "规则转译 把规则资产转成可执行 SkillBundle" [ref=f2e535]
+                - generic [ref=f2e536]:
+                  - generic [ref=f2e537]: 规则转译
+                  - generic [ref=f2e538]: 把规则资产转成可执行 SkillBundle
+              - generic [ref=f2e539]:
+                - checkbox "批注草案 生成 Word 原生批注或修订建议文案" [ref=f2e540]
+                - generic [ref=f2e541]:
+                  - generic [ref=f2e542]: 批注草案
+                  - generic [ref=f2e543]: 生成 Word 原生批注或修订建议文案
+              - generic [ref=f2e544]:
+                - checkbox "报告摘要 生成审核结论、复核说明和客户侧说明" [ref=f2e545]
+                - generic [ref=f2e546]:
+                  - generic [ref=f2e547]: 报告摘要
+                  - generic [ref=f2e548]: 生成审核结论、复核说明和客户侧说明
+              - generic [ref=f2e549]:
+                - checkbox "图片/视觉 处理图片、扫描页和视觉证据" [ref=f2e550]
+                - generic [ref=f2e551]:
+                  - generic [ref=f2e552]: 图片/视觉
+                  - generic [ref=f2e553]: 处理图片、扫描页和视觉证据
+              - generic [ref=f2e554]:
+                - checkbox "确定性规则 只做确定性校验，不冒充 AI 审核" [ref=f2e555]
+                - generic [ref=f2e556]:
+                  - generic [ref=f2e557]: 确定性规则
+                  - generic [ref=f2e558]: 只做确定性校验，不冒充 AI 审核
+          - generic [ref=f2e559]:
+            - text: 绑定应用 / 工具
+            - generic [ref=f2e560]:
+              - generic [ref=f2e561]:
+                - checkbox "合同审核 ReviewRun 风险定位、谈判跟进、批注输出" [ref=f2e562]
+                - generic [ref=f2e563]:
+                  - generic [ref=f2e564]: 合同审核
+                  - generic [ref=f2e565]: ReviewRun 风险定位、谈判跟进、批注输出
+              - generic [ref=f2e566]:
+                - checkbox "合同对比 旧/新文件差异解释和风险披露" [ref=f2e567]
+                - generic [ref=f2e568]:
+                  - generic [ref=f2e569]: 合同对比
+                  - generic [ref=f2e570]: 旧/新文件差异解释和风险披露
+              - generic [ref=f2e571]:
+                - checkbox "合同起草 需求生成可编辑合同草稿" [ref=f2e572]
+                - generic [ref=f2e573]:
+                  - generic [ref=f2e574]: 合同起草
+                  - generic [ref=f2e575]: 需求生成可编辑合同草稿
+              - generic [ref=f2e576]:
+                - checkbox "标书/长文档解析 长 PDF/长 DOCX 抽取与归纳" [ref=f2e577]
+                - generic [ref=f2e578]:
+                  - generic [ref=f2e579]: 标书/长文档解析
+                  - generic [ref=f2e580]: 长 PDF/长 DOCX 抽取与归纳
+              - generic [ref=f2e581]:
+                - checkbox "规则转译 配置中心规则转成 SkillBundle" [ref=f2e582]
+                - generic [ref=f2e583]:
+                  - generic [ref=f2e584]: 规则转译
+                  - generic [ref=f2e585]: 配置中心规则转成 SkillBundle
+              - generic [ref=f2e586]:
+                - checkbox "批注输出 把风险项写成 Word 批注或修订建议" [ref=f2e587]
+                - generic [ref=f2e588]:
+                  - generic [ref=f2e589]: 批注输出
+                  - generic [ref=f2e590]: 把风险项写成 Word 批注或修订建议
+              - generic [ref=f2e591]:
+                - checkbox "报告摘要 生成审核报告、复核摘要和导出原因" [ref=f2e592]
+                - generic [ref=f2e593]:
+                  - generic [ref=f2e594]: 报告摘要
+                  - generic [ref=f2e595]: 生成审核报告、复核摘要和导出原因
+              - generic [ref=f2e596]:
+                - checkbox "审核对话 围绕合同风险和证据进行上下文问答" [ref=f2e597]
+                - generic [ref=f2e598]:
+                  - generic [ref=f2e599]: 审核对话
+                  - generic [ref=f2e600]: 围绕合同风险和证据进行上下文问答
+          - generic [ref=f2e601]:
+            - text: System Prompt
+            - textbox "给合同审核、标书解析、规则转译等 Agent 的基础系统提示。" [ref=f2e602]
+        - generic [ref=f2e603]:
+          - generic [ref=f2e604]:
+            - heading "4. 工具消费策略、超时与降级" [level=3] [ref=f2e605]
+            - paragraph [ref=f2e606]: 这里是网关调度策略，不是模型本身，也不是让销售在单次审核里选模型。业务工具只认已发布策略，并记录调用证据。
+          - generic [ref=f2e607]:
+            - generic [ref=f2e608]:
+              - text: 策略优先级（越小越先匹配）
+              - spinbutton [ref=f2e609]: "2"
+            - generic [ref=f2e610]:
+              - text: 运行画像
+              - 'textbox "如: local_primary / cloud_primary / rule_engine" [ref=f2e611]': sales_cloud_backup
+            - generic [ref=f2e612]:
+              - text: 超时 (毫秒)
+              - spinbutton [ref=f2e613]: "240000"
+            - generic [ref=f2e614]:
+              - text: 重试次数
+              - spinbutton [ref=f2e615]: "1"
+            - generic [ref=f2e616]:
+              - text: 最大页数
+              - spinbutton [ref=f2e617]: "120"
+            - generic [ref=f2e618]:
+              - text: 路由策略
+              - combobox [ref=f2e619]:
+                - option "本地优先"
+                - option "质量优先"
+                - option "成本优先"
+                - option "合规优先"
+                - option "整文优先"
+                - option "分块长文档" [selected]
+                - option "规则兜底"
+            - generic [ref=f2e620]:
+              - text: 降级链
+              - textbox "cloud_primary, rule_engine" [ref=f2e621]
+              - paragraph [ref=f2e622]: 按顺序填写 profile/key，调用失败时依次降级。
+          - generic [ref=f2e624]:
+            - checkbox "记录 token / 成本" [checked] [ref=f2e625]
+            - text: 记录 token / 成本
+        - generic [ref=f2e626]:
+          - generic [ref=f2e627]:
+            - heading "5. JSON 扩展配置" [level=3] [ref=f2e628]
+            - paragraph [ref=f2e629]: 用于保留供应商特定参数。当前会保存原文，后续网关可按 API 格式解释。
+          - 'textbox "{\"temperature\":0.2,\"max_tokens\":4096}" [ref=f2e630]': "{ }"
+      - generic [ref=f2e631]:
+        - text: 描述
+        - textbox "配置描述（可选）" [ref=f2e632]: F012 Level 2 production OpenAI-compatible Gemini Flash Lite provider
+    - generic [ref=f2e633]:
+      - button "取消" [ref=f2e634] [cursor=pointer]
+      - button "保存" [ref=f2e635] [cursor=pointer]
+    - button "Close" [ref=f2e636] [cursor=pointer]

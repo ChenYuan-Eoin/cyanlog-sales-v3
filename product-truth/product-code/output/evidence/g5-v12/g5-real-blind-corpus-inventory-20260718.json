@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-18T11:35:00+08:00",
+  "active_goal": "G5-MULTIFORMAT-ANNOTATION",
+  "purpose": "Determine whether a new independently scored real-contract set can be run without reusing model-seen fixtures.",
+  "preview_project_id": "vsfropnfsmnonkotywsx",
+  "preview_inventory": {
+    "retained_contracts": 7,
+    "parsed_contracts": 5,
+    "parsed_contracts_without_recorded_model_invocation": 0,
+    "unseen_but_unparsed_contracts": 2,
+    "formats": {
+      "docx": 2,
+      "docm": 3,
+      "pdf": 2
+    }
+  },
+  "repository_inventory": {
+    "word_or_pdf_files": 45,
+    "unique_sha256_identities": 42,
+    "all_files_under_output_tree": true,
+    "derived_or_annotated_or_export_named": 32,
+    "source_named": 13,
+    "source_named_classification": "controlled, synthetic, previously used, or lacking an independent real-contract gold manifest",
+    "existing_gold_scope": "already-seen 50-page synthetic benchmark"
+  },
+  "eligibility_contract": {
+    "source_identity_not_previously_invoked": true,
+    "parsed_text_or_ocr_projection_frozen_before_run": true,
+    "independent_human_labels_locked_before_model_run": true,
+    "positive_and_explicit_negative_cases": true,
+    "source_sha256_text_sha256_and_anchor_identity_required": true,
+    "model_output_hidden_from_labeler_until_gold_lock": true
+  },
+  "result": {
+    "eligible_contracts_now": 0,
+    "model_run_authorized_by_this_inventory": false,
+    "accuracy_acceptance": "blocked_by_missing_new_source_and_independent_gold",
+    "release_acceptance": false
+  },
+  "minimum_next_intake": {
+    "recommended_contract_count": 3,
+    "roles": [
+      "one ordinary DOCX or DOCM with independently marked positive risks",
+      "one ordinary DOCX or text PDF with explicit no-risk controls",
+      "one text or scanned PDF to exercise page and region anchors"
+    ],
+    "rule_coverage": "cover every release-candidate rule at least once across positive, negative, or explicitly not-applicable labels",
+    "label_owner": "a human reviewer who does not see model predictions before locking the manifest"
+  },
+  "boundaries": {
+    "raw_contract_text_in_this_evidence": false,
+    "new_model_calls": 0,
+    "incremental_cost_usd": 0,
+    "production_written": false,
+    "git_pushed": false,
+    "production_deployed": false
+  }
+}

@@ -1,0 +1,142 @@
+- generic [ref=f15e1]:
+  - complementary [ref=f15e2]:
+    - generic [ref=f15e3]:
+      - img "ONES Sales" [ref=f15e5]
+      - generic [ref=f15e6]:
+        - generic [ref=f15e7]: ONES Sales
+        - paragraph [ref=f15e8]: 智能协作平台
+    - navigation [ref=f15e9]:
+      - link "工作台" [ref=f15e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f15e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f15e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f15e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f15e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f15e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f15e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f15e56]:
+      - link "个人信息" [ref=f15e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f15e62] [cursor=pointer]
+  - main [ref=f15e67]:
+    - generic [ref=f15e68]:
+      - generic [ref=f15e71]:
+        - link "返回合同中心" [ref=f15e72] [cursor=pointer]:
+          - /url: /contracts
+        - generic [ref=f15e75]:
+          - heading "ones-long-20260702111318.docx" [level=1] [ref=f15e80]
+          - paragraph [ref=f15e81]: 审查 / 任务跟进 · 已发布规则包 v18
+        - generic "审核风格" [ref=f15e82]:
+          - button "宽松" [ref=f15e83] [cursor=pointer]
+          - button "均衡" [ref=f15e84] [cursor=pointer]
+          - button "严格" [ref=f15e85] [cursor=pointer]
+        - button "导出源文件批注版" [ref=f15e86] [cursor=pointer]
+      - generic [ref=f15e87]:
+        - complementary "全局风险导航" [ref=f15e88]:
+          - generic [ref=f15e89]:
+            - generic [ref=f15e90]:
+              - generic [ref=f15e91]: 处理进度
+              - generic [ref=f15e92]: 5/7
+            - generic "风险分布轨" [ref=f15e95]
+            - generic [ref=f15e99]:
+              - generic [ref=f15e100]: 高 4
+              - generic [ref=f15e101]: 中 2
+              - generic [ref=f15e102]: 低 1
+          - generic [ref=f15e103]:
+            - button "1 · 第 1 页 付款节奏" [ref=f15e104] [cursor=pointer]:
+              - generic [ref=f15e107]:
+                - generic [ref=f15e108]: 1 · 第 1 页
+                - paragraph [ref=f15e113]: 付款节奏
+            - button "2 · 第 1 页 终止退款" [ref=f15e114] [cursor=pointer]:
+              - generic [ref=f15e117]:
+                - generic [ref=f15e118]: 2 · 第 1 页
+                - paragraph [ref=f15e123]: 终止退款
+            - button "3 · 第 1 页 数据安全" [ref=f15e124] [cursor=pointer]:
+              - generic [ref=f15e127]:
+                - generic [ref=f15e128]: 3 · 第 1 页
+                - paragraph [ref=f15e133]: 数据安全
+            - button "4 · 第 1 页 SLA" [ref=f15e134] [cursor=pointer]:
+              - generic [ref=f15e137]:
+                - generic [ref=f15e138]: 4 · 第 1 页
+                - paragraph [ref=f15e140]: SLA
+            - button "5 · 第 1 页 知识产权归属过于单边" [ref=f15e141] [cursor=pointer]:
+              - generic [ref=f15e144]:
+                - generic [ref=f15e145]: 5 · 第 1 页
+                - paragraph [ref=f15e147]: 知识产权归属过于单边
+            - button "6 · 第 1 页 默示验收周期偏短且自动通过" [active] [ref=f15e148] [cursor=pointer]:
+              - generic [ref=f15e151]:
+                - generic [ref=f15e152]: 6 · 第 1 页
+                - paragraph [ref=f15e154]: 默示验收周期偏短且自动通过
+            - button "7 · 第 1 页 验收不通过" [ref=f15e155] [cursor=pointer]:
+              - generic [ref=f15e158]:
+                - generic [ref=f15e159]: 7 · 第 1 页
+                - paragraph [ref=f15e161]: 验收不通过
+          - generic [ref=f15e162]:
+            - button "批量提交并重新审核" [ref=f15e163] [cursor=pointer]
+            - paragraph [ref=f15e164]: 提交前检查未处理项和跨条款冲突；通过后才创建新 ReviewRun。
+        - main "源文件主轴" [ref=f15e165]:
+          - generic [ref=f15e166]:
+            - generic [ref=f15e167]:
+              - paragraph [ref=f15e168]: 二
+              - paragraph [ref=f15e169]: 第 1 页 · 渲染页级锚点
+            - button "上一风险" [ref=f15e170] [cursor=pointer]
+            - button "下一风险" [ref=f15e171] [cursor=pointer]
+            - generic [ref=f15e172]:
+              - button "缩小" [ref=f15e173] [cursor=pointer]
+              - generic [ref=f15e174]: 100%
+              - button "放大" [ref=f15e175] [cursor=pointer]
+            - button "切换聚光灯" [ref=f15e176] [cursor=pointer]
+          - generic [ref=f15e177]:
+            - generic [ref=f15e178]: 原文锚点高亮 · 第 1 页
+            - paragraph [ref=f15e182]:
+              - mark [ref=f15e183]: 元，首付款为6%，验收合格后支付尾款；账期为90个工作日。 第二条 默示验收：乙方提交交付物后，甲方如30个工作日内未提出书面异议，则视为验收通过。 第三条 知识产权：定制开发成果、源代码、著作权及相关知识产权归甲方所有，乙方仅保留通用组件复用权。 第四条 数据安全：客户数据可用于AI训练，必要时允许跨境传输，且服务终止后可永久保留。 第
+          - iframe [ref=f15e351]:
+            
+          - generic [ref=f15e186]:
+            - generic [ref=f15e187]: 键盘 J/K 或 ↑/↓ 跳转风险 · S 切换聚光灯
+            - generic [ref=f15e188]: 源 DOCX/PDF · 非公开 Office iframe
+        - complementary "当前风险处理轨道" [ref=f15e189]:
+          - generic [ref=f15e190]:
+            - generic [ref=f15e191]:
+              - generic [ref=f15e192]: 中风险
+              - generic [ref=f15e193]:
+                - checkbox "自动下一条" [ref=f15e194]
+                - text: 自动下一条
+            - heading "默示验收周期偏短且自动通过" [level=2] [ref=f15e352]
+            - paragraph [ref=f15e196]: 甲方在30个工作日内未提出书面异议即视为验收通过，验收窗口较短，且默认通过机制可能放大供方交付争议。
+          - generic [ref=f15e197]:
+            - generic [ref=f15e198]:
+              - heading "1. 明确销售处理意图" [level=3] [ref=f15e199]
+              - generic [ref=f15e200]:
+                - button "客户已同意" [ref=f15e201] [cursor=pointer]
+                - button "客户有反馈" [ref=f15e202] [cursor=pointer]
+                - button "要求特批" [ref=f15e203] [cursor=pointer]
+              - paragraph [ref=f15e204]: 记录客户已接受的法务策略与参数。
+            - generic [ref=f15e205]:
+              - heading "2. 选择法务已发布的策略与参数" [level=3] [ref=f15e206]
+              - generic [ref=f15e207]:
+                - button "5工作日含默示（可至7–10） auto_accept 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程" [ref=f15e353] [cursor=pointer]:
+                  - generic [ref=f15e354]: 5工作日含默示（可至7–10）
+                  - paragraph [ref=f15e358]: auto_accept
+                  - paragraph [ref=f15e359]: 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程
+                - button "15工作日（保留默示） negotiate_with_counterparty 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程" [ref=f15e360] [cursor=pointer]:
+                  - generic [ref=f15e361]: 15工作日（保留默示）
+                  - paragraph [ref=f15e365]: negotiate_with_counterparty
+                  - paragraph [ref=f15e366]: 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程
+                - button ">30工作日 / 取消默示验收 block_or_escalate 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程" [ref=f15e367] [cursor=pointer]:
+                  - generic [ref=f15e368]: ">30工作日 / 取消默示验收"
+                  - paragraph [ref=f15e372]: block_or_escalate
+                  - paragraph [ref=f15e373]: 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程
+            - group [ref=f15e237]:
+              - generic "当前风险诊断" [ref=f15e238] [cursor=pointer]
+            - button [ref=f15e240] [cursor=pointer]
+          - group [ref=f15e246]:
+            - generic "运行证据（辅助）" [ref=f15e247] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=f15e253] [cursor=pointer]
+  - alert [ref=f15e257]

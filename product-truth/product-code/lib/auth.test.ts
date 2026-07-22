@@ -12,7 +12,13 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { supabaseAdmin } from '@/lib/supabase'
-import { getAuthUser, requireAuth, AuthError, sanitizeFileName } from './auth'
+import {
+  getAuthUser,
+  requireAuth,
+  AuthDependencyError,
+  AuthError,
+  sanitizeFileName,
+} from './auth'
 
 function makeReq(headers: Record<string, string> = {}, cookies: Record<string, string> = {}): NextRequest {
   const h = new Headers(headers)
@@ -42,7 +48,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { user_id: 'u1', expires_at: null },
             error: null,
           }),
@@ -51,7 +58,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { id: 'u1', email: 'test@test.com' },
             error: null,
           }),
@@ -68,7 +76,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { user_id: 'u2', expires_at: null },
             error: null,
           }),
@@ -76,7 +85,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { id: 'u2' },
             error: null,
           }),
@@ -92,7 +102,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { user_id: 'u3', expires_at: null },
             error: null,
           }),
@@ -100,7 +111,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { id: 'u3' },
             error: null,
           }),
@@ -115,7 +127,8 @@ describe('Auth Module', () => {
       ;(supabaseAdmin.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
+        abortSignal: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
           data: { user_id: 'u1', expires_at: '2020-01-01T00:00:00Z' },
           error: null,
         }),
@@ -129,11 +142,28 @@ describe('Auth Module', () => {
       ;(supabaseAdmin.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+        abortSignal: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       })
 
       const user = await getAuthUser(makeReq({ authorization: 'Bearer invalid' }))
       expect(user).toBeNull()
+    })
+
+    it('身份依赖故障不会伪装成无效 token', async () => {
+      ;(supabaseAdmin.from as any).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        abortSignal: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'fetch failed' },
+        }),
+      })
+
+      await expect(
+        getAuthUser(makeReq({ authorization: 'Bearer still-valid' }))
+      ).rejects.toThrow(AuthDependencyError)
     })
   })
 
@@ -148,7 +178,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { user_id: 'u1', expires_at: null },
             error: null,
           }),
@@ -156,7 +187,8 @@ describe('Auth Module', () => {
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          abortSignal: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { id: 'u1', email: 'a@b.com' },
             error: null,
           }),

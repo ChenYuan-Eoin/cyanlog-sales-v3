@@ -1,0 +1,98 @@
+- generic [active] [ref=f1e1]:
+  - complementary [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - img "ONES Sales" [ref=f1e5]
+      - generic [ref=f1e6]:
+        - generic [ref=f1e7]: ONES Sales
+        - paragraph [ref=f1e8]: 智能协作平台
+    - navigation [ref=f1e9]:
+      - link "工作台" [ref=f1e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f1e11]
+        - generic [ref=f1e15]: 工作台
+      - link "报价中心" [ref=f1e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f1e17]
+        - generic [ref=f1e21]: 报价中心
+      - link "合同审核" [ref=f1e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f1e23]
+        - generic [ref=f1e28]: 合同审核
+      - link "标书中心" [ref=f1e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f1e30]
+        - generic [ref=f1e34]: 标书中心
+      - link "知识库" [ref=f1e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f1e36]
+        - generic [ref=f1e41]: 知识库
+      - link "日程" [ref=f1e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f1e43]
+        - generic [ref=f1e49]: 日程
+      - link "配置中心" [ref=f1e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f1e51]
+        - generic [ref=f1e55]: 配置中心
+    - generic [ref=f1e56]:
+      - link "个人信息" [ref=f1e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f1e58]
+        - generic [ref=f1e61]: 个人信息
+      - button "退出登录" [ref=f1e62] [cursor=pointer]:
+        - img [ref=f1e63]
+        - generic [ref=f1e66]: 退出登录
+  - main [ref=f1e67]:
+    - generic [ref=f1e68]:
+      - generic [ref=f1e69]:
+        - generic [ref=f1e70]:
+          - heading "标书中心" [level=1] [ref=f1e71]
+          - paragraph [ref=f1e72]: 招标文件 OCR 解析、关键信息提取、标书生成
+        - link "+ 上传招标文件" [ref=f1e73] [cursor=pointer]:
+          - /url: /tenders/upload
+          - button "+ 上传招标文件" [ref=f1e74]
+      - generic [ref=f1e75]:
+        - generic [ref=f1e76]:
+          - generic [ref=f1e77]: 总标书数
+          - generic [ref=f1e78]: "1"
+        - generic [ref=f1e79]:
+          - generic [ref=f1e80]: 高置信度
+          - generic [ref=f1e81]: "1"
+        - generic [ref=f1e82]:
+          - generic [ref=f1e83]: 处理中
+          - generic [ref=f1e84]: "0"
+        - generic [ref=f1e85]:
+          - generic [ref=f1e86]: 失败
+          - generic [ref=f1e87]: "0"
+      - table [ref=f1e89]:
+        - rowgroup [ref=f1e90]:
+          - row "标书名称 招标编号 预算 截止日期 置信度 AI 证据 状态 操作" [ref=f1e91]:
+            - columnheader "标书名称" [ref=f1e92]
+            - columnheader "招标编号" [ref=f1e93]
+            - columnheader "预算" [ref=f1e94]
+            - columnheader "截止日期" [ref=f1e95]
+            - columnheader "置信度" [ref=f1e96]
+            - columnheader "AI 证据" [ref=f1e97]
+            - columnheader "状态" [ref=f1e98]
+            - columnheader "操作" [ref=f1e99]
+        - rowgroup [ref=f1e100]:
+          - row "省医疗云平台建设 ZB2026-001 500 万元 2026-08-01 100% AI_LEVEL_2 完成 查看详情" [ref=f1e101]:
+            - cell "省医疗云平台建设" [ref=f1e102]:
+              - link "省医疗云平台建设" [ref=f1e103] [cursor=pointer]:
+                - /url: /tenders/5a36af65-e9e1-4c18-afa2-3ced11d5a96f
+            - cell "ZB2026-001" [ref=f1e104]
+            - cell "500 万元" [ref=f1e105]
+            - cell "2026-08-01" [ref=f1e106]
+            - cell "100%" [ref=f1e107]:
+              - generic [ref=f1e111]: 100%
+            - cell "AI_LEVEL_2" [ref=f1e112]:
+              - generic "AI_LEVEL_2 / gpt-5.5 / openai_compatible_http / no invocation" [ref=f1e113]:
+                - generic [ref=f1e114]: AI_LEVEL_2
+            - cell "完成" [ref=f1e115]:
+              - generic [ref=f1e116]: 完成
+            - cell "查看详情" [ref=f1e117]:
+              - link "查看详情" [ref=f1e118] [cursor=pointer]:
+                - /url: /tenders/5a36af65-e9e1-4c18-afa2-3ced11d5a96f
+  - button "Open Next.js Dev Tools" [ref=f1e124] [cursor=pointer]:
+    - img [ref=f1e125]
+  - alert [ref=f1e128]

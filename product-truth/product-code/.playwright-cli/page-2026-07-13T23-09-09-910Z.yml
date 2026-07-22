@@ -1,0 +1,113 @@
+- generic [active] [ref=f44e1]:
+  - button "Toggle menu" [ref=f44e338] [cursor=pointer]
+  - complementary [ref=f44e2]:
+    - generic [ref=f44e3]:
+      - img "ONES Sales" [ref=f44e5]
+      - generic [ref=f44e6]:
+        - generic [ref=f44e7]: ONES Sales
+        - paragraph [ref=f44e8]: 智能协作平台
+    - navigation [ref=f44e9]:
+      - link "工作台" [ref=f44e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f44e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f44e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f44e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f44e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f44e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f44e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f44e56]:
+      - link "个人信息" [ref=f44e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f44e62] [cursor=pointer]
+  - main [ref=f44e67]:
+    - generic [ref=f44e68]:
+      - generic [ref=f44e81]:
+        - link "返回合同中心" [ref=f44e82] [cursor=pointer]:
+          - /url: /contracts
+        - generic [ref=f44e85]:
+          - heading "g5-50-page-10-risk-sample.docx" [level=1] [ref=f44e89]
+          - generic [ref=f44e90]: 审查 / 任务跟进 · 规则包 v18
+        - generic "审核风格" [ref=f44e91]:
+          - button "宽松" [ref=f44e92] [cursor=pointer]
+          - button "均衡" [ref=f44e93] [cursor=pointer]
+          - button "严格" [ref=f44e94] [cursor=pointer]
+        - button "导出源文件批注版" [ref=f44e95] [cursor=pointer]
+      - generic [ref=f44e96]:
+        - main "源文件主轴" [ref=f44e235]:
+          - generic [ref=f44e236]:
+            - button "打开风险导航" [ref=f44e341] [cursor=pointer]
+            - generic [ref=f44e237]:
+              - paragraph [ref=f44e238]: 第7条
+              - paragraph [ref=f44e239]: 第 7 页 · 页已定位、条款需人工定位
+            - button "上一风险" [ref=f44e240] [cursor=pointer]
+            - button "下一风险" [ref=f44e241] [cursor=pointer]
+            - generic [ref=f44e242]:
+              - button "缩小" [ref=f44e243] [cursor=pointer]
+              - generic [ref=f44e244]: 100%
+              - button "放大" [ref=f44e245] [cursor=pointer]
+            - button "切换聚光灯" [ref=f44e246] [cursor=pointer]
+          - generic [ref=f44e247]:
+            - generic [ref=f44e248]: 第 7 页已定位
+            - generic [ref=f44e249]: 当前预览无 bbox/text-layer：条款需人工定位
+          - img "合同真实源文件第 7 页" [ref=f44e337]
+          - generic [ref=f44e253]:
+            - generic [ref=f44e254]: 键盘 J/K 或 ↑/↓ 跳转风险 · S 切换聚光灯
+            - generic [ref=f44e255]: 源 DOCX/PDF · 认证页级懒加载
+        - complementary "当前风险处理轨道" [ref=f44e256]:
+          - generic [ref=f44e257]:
+            - generic [ref=f44e258]:
+              - generic [ref=f44e259]:
+                - generic [ref=f44e260]: 1. 问题与业务影响
+                - generic [ref=f44e261]: 高风险
+              - generic [ref=f44e262]:
+                - checkbox "自动下一条" [ref=f44e263]
+                - text: 自动下一条
+            - heading "G5连续处理 7 · R013" [level=2] [ref=f44e313]
+            - paragraph [ref=f44e265]: 第7页 第7条 风险条款 服务等级：可用性不足造成的全部营业损失由乙方承担。 本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。
+            - paragraph [ref=f44e266]: 业务影响：请依据已发布 R013 策略处理并记录真实谈判结果。
+          - generic [ref=f44e267]:
+            - generic [ref=f44e268]:
+              - generic [ref=f44e269]:
+                - heading "2. 选择法务策略、谈判话术与底线" [level=3] [ref=f44e270]
+                - button "撤销策略" [ref=f44e314] [cursor=pointer]
+              - generic [ref=f44e271]:
+                - button "公有云 99.5% + 服务费比例赔偿 谈判建议：若级别为 B 或 C，请进行谈判或上报。对于级别 C，必须立即阻止签署并提交风险评估。 谈判底线：任何包含 99.9% 可用性或红线条款的合同均不可在未完成内部评估前签署。" [ref=f44e318] [cursor=pointer]:
+                  - generic [ref=f44e320]:
+                    - generic [ref=f44e321]: 公有云 99.5% + 服务费比例赔偿
+                    - generic [ref=f44e322]: 谈判建议：若级别为 B 或 C，请进行谈判或上报。对于级别 C，必须立即阻止签署并提交风险评估。
+                    - generic [ref=f44e323]: 谈判底线：任何包含 99.9% 可用性或红线条款的合同均不可在未完成内部评估前签署。
+                - button "99.9% 需售后评估架构 谈判建议：若级别为 B 或 C，请进行谈判或上报。对于级别 C，必须立即阻止签署并提交风险评估。 谈判底线：任何包含 99.9% 可用性或红线条款的合同均不可在未完成内部评估前签署。" [ref=f44e324] [cursor=pointer]:
+                  - generic [ref=f44e326]:
+                    - generic [ref=f44e327]: 99.9% 需售后评估架构
+                    - generic [ref=f44e328]: 谈判建议：若级别为 B 或 C，请进行谈判或上报。对于级别 C，必须立即阻止签署并提交风险评估。
+                    - generic [ref=f44e329]: 谈判底线：任何包含 99.9% 可用性或红线条款的合同均不可在未完成内部评估前签署。
+                - button "按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24 谈判建议：若级别为 B 或 C，请进行谈判或上报。对于级别 C，必须立即阻止签署并提交风险评估。 谈判底线：任何包含 99.9% 可用性或红线条款的合同均不可在未完成内部评估前签署。" [ref=f44e330] [cursor=pointer]:
+                  - generic [ref=f44e332]:
+                    - generic [ref=f44e333]: 按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24
+                    - generic [ref=f44e334]: 谈判建议：若级别为 B 或 C，请进行谈判或上报。对于级别 C，必须立即阻止签署并提交风险评估。
+                    - generic [ref=f44e335]: 谈判底线：任何包含 99.9% 可用性或红线条款的合同均不可在未完成内部评估前签署。
+            - generic [ref=f44e290]:
+              - heading "3. 记录谈判结果" [level=3] [ref=f44e291]
+              - generic [ref=f44e292]:
+                - button "客户已同意" [ref=f44e293] [cursor=pointer]
+                - button "客户有反馈" [ref=f44e294] [cursor=pointer]
+                - button "要求特批" [ref=f44e295] [cursor=pointer]
+              - paragraph [ref=f44e296]: 记录客户已接受的法务策略与参数。
+            - generic [ref=f44e297]: 草稿已暂存 · 客户已同意
+            - button [ref=f44e299] [cursor=pointer]
+            - group [ref=f44e305]:
+              - generic "运行证据（辅助审计）" [ref=f44e306] [cursor=pointer]
+          - generic [ref=f44e307]:
+            - paragraph [ref=f44e343]: 源文件批注版已生成。
+            - generic [ref=f44e308]:
+              - button "上一条" [ref=f44e309] [cursor=pointer]
+              - button "暂存策略与谈判结果" [ref=f44e336] [cursor=pointer]
+              - button "下一条" [ref=f44e310] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=f44e76] [cursor=pointer]
+  - alert [ref=f44e80]

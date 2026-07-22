@@ -1,0 +1,8 @@
+[    1266ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:3001/_next/static/css/3f00bc9b13b66e95.css:0
+[    1267ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:3001/_next/static/css/3ad0c75c87b18546.css:0
+[    1305ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:3001/_next/static/chunks/webpack-0e1e1ace3a7dd592.js:0
+[    1305ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:3001/_next/static/chunks/app/login/page-2899a07a2ad31890.js:0
+[    1320ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:3001/_next/static/chunks/app/layout-52b94fc1dc9be3a4.js:0
+[    4361ms] [WARNING] The resource http://localhost:3001/_next/static/media/4473ecc91f70f139-s.p.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3001/login:0
+[    4361ms] [WARNING] The resource http://localhost:3001/_next/static/media/463dafcda517f24f-s.p.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3001/login:0
+[  254418ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:3001/api/auth/login:0

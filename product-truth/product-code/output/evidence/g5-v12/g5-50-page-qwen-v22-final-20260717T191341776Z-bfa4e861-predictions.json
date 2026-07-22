@@ -1,0 +1,469 @@
+{
+  "schema_version": "g5-risk-accuracy-predictions.v2",
+  "benchmark_id": "G5-50PAGE-9RISK-1NEGATIVE-20260718",
+  "attempt_id": "20260717T191341776Z-bfa4e861",
+  "contract_id": "21fd658e-370f-4043-994a-4891248a490f",
+  "review_id": "90c51eea-edab-424d-95a5-488705c90ac9",
+  "predictions": [
+    {
+      "risk_id": "dc21e4da-a077-4982-8cc2-fa3c840a4cd1",
+      "rule_code": "R001",
+      "rule_snapshot_id": "b03fd487-c774-4e86-bc3a-52f480a5728c",
+      "source_quote": "付款节奏：首付款为6%，验收后支付尾款，账期90个工作日。",
+      "source_start": 79,
+      "source_end": 108,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "7099c3f6-608a-4958-9173-1627400a02f1",
+      "rule_code": "R004",
+      "rule_snapshot_id": "e2ff33a1-7bf4-41d4-bb44-c36e812ea5ab",
+      "source_quote": "默示验收：客户15日内未提出书面异议即视为验收通过。",
+      "source_start": 354,
+      "source_end": 380,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "6475a7b7-eea0-4691-b323-8cd42db29960",
+      "rule_code": "R012",
+      "rule_snapshot_id": "c4fd9c22-8741-4d0f-bc2e-13f3fb7604db",
+      "source_quote": "数据安全：客户数据可用于模型训练并可跨境长期留存。",
+      "source_start": 626,
+      "source_end": 651,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "886e82e3-fee0-4943-b9b3-5d35e161b2fe",
+      "rule_code": "R007",
+      "rule_snapshot_id": "ed484adc-7178-45da-bda6-0d2ebbe00d6d",
+      "source_quote": "责任限制：乙方对所有间接损失承担无限责任。",
+      "source_start": 897,
+      "source_end": 918,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "f0d3f93c-9043-4c0b-9559-06b67e78ecab",
+      "rule_code": "R011",
+      "rule_snapshot_id": "9ab24474-da92-4725-87af-f09541c1430d",
+      "source_quote": "知识产权：全部定制成果与通用组件均无条件归甲方。",
+      "source_start": 1164,
+      "source_end": 1188,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "3d26e36d-2313-44af-af7a-b4f9cbf92979",
+      "rule_code": "R002",
+      "rule_snapshot_id": "11e8be11-ba23-4890-9936-6fb96d035fe6",
+      "source_quote": "终止退款：提前解除时未消耗服务费不予退还。",
+      "source_start": 1434,
+      "source_end": 1455,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "6578a518-b628-4b31-b6ff-144f2a29de6b",
+      "rule_code": "R006",
+      "rule_snapshot_id": "b7bf2103-c799-4795-88b1-8f2f2cb3d5e8",
+      "source_quote": "违约责任：乙方每日承担合同金额5%的违约金且无上限。",
+      "source_start": 1972,
+      "source_end": 1998,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "d74c0e25-89fd-4df2-a46a-da904f029506",
+      "rule_code": "R007",
+      "rule_snapshot_id": "ed484adc-7178-45da-bda6-0d2ebbe00d6d",
+      "source_quote": "服务等级：可用性不足造成的全部营业损失由乙方承担。",
+      "source_start": 1701,
+      "source_end": 1726,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "b967f50c-f3a2-4a35-b75f-28d434475aa0",
+      "rule_code": "R009",
+      "rule_snapshot_id": "28b7943a-6324-48fe-bc23-e5e7cde3aa9a",
+      "source_quote": "保密义务：保密期限永久且无合法披露例外。",
+      "source_start": 2510,
+      "source_end": 2530,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "a621661f-c770-458f-ba6d-979829faaeba",
+      "rule_code": "R015",
+      "rule_snapshot_id": "ef57f70d-ae4d-4019-9bb8-7bdf1af8dd0b",
+      "source_quote": "争议解决：由甲方住所地法院专属管辖。",
+      "source_start": 2244,
+      "source_end": 2262,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "b73c754e-61fa-4b68-b5b2-7778fe53e28b",
+      "rule_code": "R001",
+      "rule_snapshot_id": "b03fd487-c774-4e86-bc3a-52f480a5728c",
+      "source_quote": "付款节奏：首付款为6%，验收后支付尾款，账期90个工作日。",
+      "source_start": 2778,
+      "source_end": 2807,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "613dcf62-3371-4959-ab15-016dbd2c90cd",
+      "rule_code": "R012",
+      "rule_snapshot_id": "c4fd9c22-8741-4d0f-bc2e-13f3fb7604db",
+      "source_quote": "数据安全：客户数据可用于模型训练并可跨境长期留存。",
+      "source_start": 3329,
+      "source_end": 3354,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "219551b1-3a67-43cb-a085-e7143b66f8a8",
+      "rule_code": "R007",
+      "rule_snapshot_id": "ed484adc-7178-45da-bda6-0d2ebbe00d6d",
+      "source_quote": "责任限制：乙方对所有间接损失承担无限责任。",
+      "source_start": 3602,
+      "source_end": 3623,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "1b4baa07-277d-41e1-ada0-8fc8bab08eca",
+      "rule_code": "R011",
+      "rule_snapshot_id": "9ab24474-da92-4725-87af-f09541c1430d",
+      "source_quote": "知识产权：全部定制成果与通用组件均无条件归甲方。",
+      "source_start": 3871,
+      "source_end": 3895,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "3b815545-520b-4f61-9d8e-aee72fa295c9",
+      "rule_code": "R013",
+      "rule_snapshot_id": "f0be3d78-449d-4573-aa85-569f757ab4cb",
+      "source_quote": "服务等级：可用性不足造成的全部营业损失由乙方承担。",
+      "source_start": 4412,
+      "source_end": 4437,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "120146c5-7806-49a3-8668-fa5250e60ca7",
+      "rule_code": "R006",
+      "rule_snapshot_id": "b7bf2103-c799-4795-88b1-8f2f2cb3d5e8",
+      "source_quote": "违约责任：乙方每日承担合同金额5%的违约金且无上限。",
+      "source_start": 4685,
+      "source_end": 4711,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "3e4b6c68-023a-497b-86d2-16b7f870a490",
+      "rule_code": "R015",
+      "rule_snapshot_id": "ef57f70d-ae4d-4019-9bb8-7bdf1af8dd0b",
+      "source_quote": "争议解决：由甲方住所地法院专属管辖。",
+      "source_start": 4959,
+      "source_end": 4977,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "8477ba63-d8ad-4b59-a27f-c7702fbddfd4",
+      "rule_code": "R002",
+      "rule_snapshot_id": "11e8be11-ba23-4890-9936-6fb96d035fe6",
+      "source_quote": "终止退款：提前解除时未消耗服务费不予退还。",
+      "source_start": 4143,
+      "source_end": 4164,
+      "level": "green",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "241267d7-2a33-4aee-8e4e-73dbee0e4163",
+      "rule_code": "R009",
+      "rule_snapshot_id": "28b7943a-6324-48fe-bc23-e5e7cde3aa9a",
+      "source_quote": "保密义务：保密期限永久且无合法披露例外。",
+      "source_start": 5225,
+      "source_end": 5245,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "8ca39123-dcd4-4fad-a8a0-1226c58831c1",
+      "rule_code": "R001",
+      "rule_snapshot_id": "b03fd487-c774-4e86-bc3a-52f480a5728c",
+      "source_quote": "付款节奏：首付款为6%，验收后支付尾款，账期90个工作日。",
+      "source_start": 5493,
+      "source_end": 5522,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "ddb1383c-cc25-4e72-8f16-c7a891bc1f26",
+      "rule_code": "R004",
+      "rule_snapshot_id": "e2ff33a1-7bf4-41d4-bb44-c36e812ea5ab",
+      "source_quote": "默示验收：客户15日内未提出书面异议即视为验收通过。",
+      "source_start": 5770,
+      "source_end": 5796,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "848bc143-6825-4749-b465-5d35f2efedd6",
+      "rule_code": "R012",
+      "rule_snapshot_id": "c4fd9c22-8741-4d0f-bc2e-13f3fb7604db",
+      "source_quote": "数据安全：客户数据可用于模型训练并可跨境长期留存。",
+      "source_start": 6044,
+      "source_end": 6069,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "44a944df-19f0-468b-801d-b18d41d19e04",
+      "rule_code": "R007",
+      "rule_snapshot_id": "ed484adc-7178-45da-bda6-0d2ebbe00d6d",
+      "source_quote": "责任限制：乙方对所有间接损失承担无限责任。",
+      "source_start": 6317,
+      "source_end": 6338,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "a964439d-726f-42de-8f0f-e5a9477b998c",
+      "rule_code": "R011",
+      "rule_snapshot_id": "9ab24474-da92-4725-87af-f09541c1430d",
+      "source_quote": "知识产权：全部定制成果与通用组件均无条件归甲方。",
+      "source_start": 6586,
+      "source_end": 6610,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "47ede984-bf80-41be-bfeb-a7c0bf2e9e31",
+      "rule_code": "R013",
+      "rule_snapshot_id": "f0be3d78-449d-4573-aa85-569f757ab4cb",
+      "source_quote": "服务等级：可用性不足造成的全部营业损失由乙方承担。",
+      "source_start": 7127,
+      "source_end": 7152,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "58b42828-04d4-4804-8188-18cd13cdf315",
+      "rule_code": "R006",
+      "rule_snapshot_id": "b7bf2103-c799-4795-88b1-8f2f2cb3d5e8",
+      "source_quote": "违约责任：乙方每日承担合同金额5%的违约金且无上限。",
+      "source_start": 7400,
+      "source_end": 7426,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "bcd8473f-04bd-4a1b-be03-35b61c45158c",
+      "rule_code": "R015",
+      "rule_snapshot_id": "ef57f70d-ae4d-4019-9bb8-7bdf1af8dd0b",
+      "source_quote": "争议解决：由甲方住所地法院专属管辖。",
+      "source_start": 7674,
+      "source_end": 7692,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "33fb01bd-38b1-489a-9dab-b85436387d20",
+      "rule_code": "R009",
+      "rule_snapshot_id": "28b7943a-6324-48fe-bc23-e5e7cde3aa9a",
+      "source_quote": "保密义务：保密期限永久且无合法披露例外。",
+      "source_start": 7940,
+      "source_end": 7960,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "efc1b947-ffb8-405c-81d3-78e9d2d7334c",
+      "rule_code": "R001",
+      "rule_snapshot_id": "b03fd487-c774-4e86-bc3a-52f480a5728c",
+      "source_quote": "付款节奏：首付款为6%，验收后支付尾款，账期90个工作日。",
+      "source_start": 8208,
+      "source_end": 8237,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "8d19c166-f69d-4e8c-bb8b-0d8e75055034",
+      "rule_code": "R012",
+      "rule_snapshot_id": "c4fd9c22-8741-4d0f-bc2e-13f3fb7604db",
+      "source_quote": "数据安全：客户数据可用于模型训练并可跨境长期留存。",
+      "source_start": 8759,
+      "source_end": 8784,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "cdde43d3-f53f-4dae-bf0e-e0bee1570322",
+      "rule_code": "R007",
+      "rule_snapshot_id": "ed484adc-7178-45da-bda6-0d2ebbe00d6d",
+      "source_quote": "责任限制：乙方对所有间接损失承担无限责任。",
+      "source_start": 9032,
+      "source_end": 9053,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "bce3cff7-34e6-4536-82e0-004e42324386",
+      "rule_code": "R011",
+      "rule_snapshot_id": "9ab24474-da92-4725-87af-f09541c1430d",
+      "source_quote": "知识产权：全部定制成果与通用组件均无条件归甲方。",
+      "source_start": 9301,
+      "source_end": 9325,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "7503066d-cf05-4ed0-98ba-b9fbba8a46e1",
+      "rule_code": "R013",
+      "rule_snapshot_id": "f0be3d78-449d-4573-aa85-569f757ab4cb",
+      "source_quote": "服务等级：可用性不足造成的全部营业损失由乙方承担。",
+      "source_start": 9842,
+      "source_end": 9867,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "41329058-e8c3-4a82-bef0-92fb479fa644",
+      "rule_code": "R006",
+      "rule_snapshot_id": "b7bf2103-c799-4795-88b1-8f2f2cb3d5e8",
+      "source_quote": "违约责任：乙方每日承担合同金额5%的违约金且无上限。",
+      "source_start": 10115,
+      "source_end": 10141,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "1bb1ba68-621f-4cdc-9afd-0219e0cc89a3",
+      "rule_code": "R015",
+      "rule_snapshot_id": "ef57f70d-ae4d-4019-9bb8-7bdf1af8dd0b",
+      "source_quote": "争议解决：由甲方住所地法院专属管辖。",
+      "source_start": 10389,
+      "source_end": 10407,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "e28479ba-03b8-4064-97ff-89365c7f812a",
+      "rule_code": "R009",
+      "rule_snapshot_id": "28b7943a-6324-48fe-bc23-e5e7cde3aa9a",
+      "source_quote": "保密义务：保密期限永久且无合法披露例外。",
+      "source_start": 10655,
+      "source_end": 10675,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "d6bd1de1-092d-4743-b0f9-be2a0b257fcc",
+      "rule_code": "R001",
+      "rule_snapshot_id": "b03fd487-c774-4e86-bc3a-52f480a5728c",
+      "source_quote": "付款节奏：首付款为6%，验收后支付尾款，账期90个工作日。",
+      "source_start": 10923,
+      "source_end": 10952,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "a7691dca-f9d0-40f5-96c2-f8fd39462514",
+      "rule_code": "R004",
+      "rule_snapshot_id": "e2ff33a1-7bf4-41d4-bb44-c36e812ea5ab",
+      "source_quote": "默示验收：客户15日内未提出书面异议即视为验收通过。",
+      "source_start": 11200,
+      "source_end": 11226,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "4df1751b-2944-4f8b-be14-bc51277a9031",
+      "rule_code": "R012",
+      "rule_snapshot_id": "c4fd9c22-8741-4d0f-bc2e-13f3fb7604db",
+      "source_quote": "数据安全：客户数据可用于模型训练并可跨境长期留存。",
+      "source_start": 11474,
+      "source_end": 11499,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "3cbac815-5b8b-4e75-a72f-bb4631066454",
+      "rule_code": "R007",
+      "rule_snapshot_id": "ed484adc-7178-45da-bda6-0d2ebbe00d6d",
+      "source_quote": "责任限制：乙方对所有间接损失承担无限责任。",
+      "source_start": 11747,
+      "source_end": 11768,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "97d087e6-6d33-445f-86b0-7d1d6acd84d6",
+      "rule_code": "R011",
+      "rule_snapshot_id": "9ab24474-da92-4725-87af-f09541c1430d",
+      "source_quote": "知识产权：全部定制成果与通用组件均无条件归甲方。",
+      "source_start": 12016,
+      "source_end": 12040,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "6f251420-7221-4b13-ac26-f578c1182c98",
+      "rule_code": "R002",
+      "rule_snapshot_id": "11e8be11-ba23-4890-9936-6fb96d035fe6",
+      "source_quote": "终止退款：提前解除时未消耗服务费不予退还。",
+      "source_start": 12288,
+      "source_end": 12309,
+      "level": "yellow",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "5f7b0d0c-57ae-40c3-a77e-5a952b200c59",
+      "rule_code": "R013",
+      "rule_snapshot_id": "f0be3d78-449d-4573-aa85-569f757ab4cb",
+      "source_quote": "服务等级：可用性不足造成的全部营业损失由乙方承担。",
+      "source_start": 12557,
+      "source_end": 12582,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "dd234d3d-6fa9-4391-b2f0-183d911b84d1",
+      "rule_code": "R006",
+      "rule_snapshot_id": "b7bf2103-c799-4795-88b1-8f2f2cb3d5e8",
+      "source_quote": "违约责任：乙方每日承担合同金额5%的违约金且无上限。",
+      "source_start": 12830,
+      "source_end": 12856,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "dd2db88f-bea3-4a1e-bc86-422dca94a258",
+      "rule_code": "R015",
+      "rule_snapshot_id": "ef57f70d-ae4d-4019-9bb8-7bdf1af8dd0b",
+      "source_quote": "争议解决：由甲方住所地法院专属管辖。",
+      "source_start": 13104,
+      "source_end": 13122,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    },
+    {
+      "risk_id": "5c2ad3d7-0d7a-4059-9d86-b36c4216d41f",
+      "rule_code": "R009",
+      "rule_snapshot_id": "28b7943a-6324-48fe-bc23-e5e7cde3aa9a",
+      "source_quote": "保密义务：保密期限永久且无合法披露例外。",
+      "source_start": 13370,
+      "source_end": 13390,
+      "level": "red",
+      "binding_status": "frozen_rule_snapshot"
+    }
+  ]
+}

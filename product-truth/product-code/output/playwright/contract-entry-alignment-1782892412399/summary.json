@@ -1,0 +1,36 @@
+{
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/contract-entry-alignment-1782892412399",
+  "firstContractHref": "/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+  "checks": {
+    "contractsHasReviewEntry": true,
+    "contractsHasBatchReview": true,
+    "contractsNoBadText": true,
+    "detailNoBadText": true,
+    "detailHasDocumentCanvasText": true,
+    "detailHasSideTabs": true,
+    "detailHasRiskSections": true,
+    "detailHasVersionFlow": true,
+    "mobileContractsNoBadText": true,
+    "mobileContractsNoHorizontalOverflow": true,
+    "mobileDetailNoHorizontalOverflow": true
+  },
+  "scroll": {
+    "contractsDesktop": {
+      "width": 1440,
+      "client": 1440
+    },
+    "detailDesktop": {
+      "width": 1440,
+      "client": 1440
+    },
+    "contractsMobile": {
+      "width": 390,
+      "client": 390
+    },
+    "detailMobile": {
+      "width": 390,
+      "client": 390
+    }
+  },
+  "errors": []
+}

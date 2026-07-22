@@ -1,0 +1,29 @@
+- generic [active] [ref=f6e1]:
+  - complementary [ref=f6e2]:
+    - generic [ref=f6e3]:
+      - img "ONES Sales" [ref=f6e5]
+      - generic [ref=f6e6]:
+        - generic [ref=f6e7]: ONES Sales
+        - paragraph [ref=f6e8]: 智能协作平台
+    - navigation [ref=f6e9]:
+      - link "工作台" [ref=f6e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f6e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f6e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f6e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f6e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f6e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f6e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f6e56]:
+      - link "个人信息" [ref=f6e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f6e62] [cursor=pointer]
+  - main [ref=f6e67]:
+    - paragraph [ref=f6e72]: 加载配置中心...
+  - alert [ref=f6e73]

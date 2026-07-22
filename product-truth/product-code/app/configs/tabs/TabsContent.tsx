@@ -9,7 +9,7 @@ import ThemeTab from './ThemeTab'
 import OrgStructureTab from './OrgStructureTab'
 import RoleAccessTab from './RoleAccessTab'
 import type { ProductRecord, Config, OrgSummaryPayload } from '../types'
-import type { Rule } from '@/types/rules'
+import type { ContractRuleAssetSummary } from '@/types/contract-rule-assets'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
 
@@ -21,14 +21,11 @@ export interface TabsContentProps {
   onNewProduct: () => void
   onEditProduct: (product: ProductRecord) => void
   onDeleteProduct: (id: string) => void
-  // rules
-  rules: Rule[]
-  onNewRule: () => void
-  onEditRule: (rule: Rule) => void
-  onDeleteRule: (id: string) => void
+  // contract rule assets
+  onRuleSummaryChange: (summary: ContractRuleAssetSummary) => void
   // config-based tabs (tax, approval, ai, theme)
   configs: Config[]
-  onNewConfig: (type: Config['type']) => void
+  onNewConfig: (type: Config['type'], aiKind?: 'provider' | 'application' | 'tool_policy') => void
   onEditConfig: (config: Config) => void
   onPublishConfig: (id: string) => void
   onFetchVersions: (id: string) => void
@@ -58,10 +55,7 @@ export default function TabsContent({
   onNewProduct,
   onEditProduct,
   onDeleteProduct,
-  rules,
-  onNewRule,
-  onEditRule,
-  onDeleteRule,
+  onRuleSummaryChange,
   configs,
   onNewConfig,
   onEditConfig,
@@ -136,14 +130,7 @@ export default function TabsContent({
         />
       )
     case 'rules':
-      return (
-        <RuleTab
-          rules={rules}
-          onNew={onNewRule}
-          onEdit={onEditRule}
-          onDelete={onDeleteRule}
-        />
-      )
+      return <RuleTab onSummaryChange={onRuleSummaryChange} />
     case 'tax': {
       const taxConfigs = configs.filter((c) => c.type === 'TAX_RULE')
       return (
@@ -175,7 +162,7 @@ export default function TabsContent({
       return (
         <AIConfigTab
           configs={aiConfigs}
-          onNew={() => onNewConfig('AI_CONFIG')}
+          onNew={(kind) => onNewConfig('AI_CONFIG', kind)}
           onEdit={onEditConfig}
           onPublish={onPublishConfig}
           onDelete={onDeleteConfig}

@@ -1,0 +1,14 @@
+{
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/prod-contract-detail-mobile-1782892979160",
+  "checks": {
+    "noBadText": true,
+    "hasDocumentCanvasText": true,
+    "hasSideTabs": true,
+    "noHorizontalOverflow": true
+  },
+  "scroll": {
+    "width": 390,
+    "client": 390
+  },
+  "errors": []
+}

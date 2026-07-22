@@ -1,0 +1,15 @@
+{
+  "base": "http://127.0.0.1:3000",
+  "labels": {
+    "review": false,
+    "compare": false,
+    "draft": false,
+    "version": false
+  },
+  "compareHref": null,
+  "failures": [],
+  "screenshots": [
+    "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/local-contract-labels-preview-20260707/contracts-desktop.png",
+    "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/local-contract-labels-preview-20260707/contracts-ipad.png"
+  ]
+}

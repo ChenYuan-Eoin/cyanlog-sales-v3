@@ -1,0 +1,154 @@
+- generic [active] [ref=f9e1]:
+  - complementary [ref=f9e2]:
+    - generic [ref=f9e3]:
+      - img "ONES Sales" [ref=f9e5]
+      - generic [ref=f9e6]:
+        - generic [ref=f9e7]: ONES Sales
+        - paragraph [ref=f9e8]: 智能协作平台
+    - navigation [ref=f9e9]:
+      - link "工作台" [ref=f9e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f9e11]
+        - generic [ref=f9e15]: 工作台
+      - link "报价中心" [ref=f9e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f9e17]
+        - generic [ref=f9e21]: 报价中心
+      - link "合同审核" [ref=f9e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f9e23]
+        - generic [ref=f9e28]: 合同审核
+      - link "标书中心" [ref=f9e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f9e30]
+        - generic [ref=f9e34]: 标书中心
+      - link "知识库" [ref=f9e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f9e36]
+        - generic [ref=f9e41]: 知识库
+      - link "日程" [ref=f9e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f9e43]
+        - generic [ref=f9e49]: 日程
+      - link "配置中心" [ref=f9e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f9e51]
+        - generic [ref=f9e55]: 配置中心
+    - generic [ref=f9e56]:
+      - link "个人信息" [ref=f9e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f9e58]
+        - generic [ref=f9e61]: 个人信息
+      - button "退出登录" [ref=f9e62] [cursor=pointer]:
+        - img [ref=f9e63]
+        - generic [ref=f9e66]: 退出登录
+  - main [ref=f9e67]:
+    - generic [ref=f9e516]:
+      - generic [ref=f9e518]:
+        - generic [ref=f9e519]:
+          - generic [ref=f9e520]:
+            - heading "合同中心" [level=1] [ref=f9e521]
+            - paragraph [ref=f9e522]: 全生命周期管理
+          - generic [ref=f9e524]:
+            - img [ref=f9e525]
+            - textbox "搜索合同名称、编号、客户..." [ref=f9e528]
+          - generic [ref=f9e529]:
+            - link "发起" [ref=f9e530] [cursor=pointer]:
+              - /url: /contracts/new?from=workbench
+              - button "发起" [ref=f9e531]:
+                - img
+                - text: 发起
+            - button "继续" [disabled]:
+              - img
+              - text: 继续
+            - button "批注" [disabled]:
+              - img
+              - text: 批注
+        - generic [ref=f9e532]:
+          - link "发起合同审核 新任务 上传源文件后直接进入审核工作台 新建合同版本" [ref=f9e533] [cursor=pointer]:
+            - /url: /contracts/new?from=workbench
+            - generic [ref=f9e534]:
+              - img [ref=f9e536]
+              - generic [ref=f9e539]:
+                - generic [ref=f9e540]:
+                  - paragraph [ref=f9e541]: 发起合同审核
+                  - generic [ref=f9e542]: 新任务
+                - paragraph [ref=f9e543]: 上传源文件后直接进入审核工作台
+                - paragraph [ref=f9e544]: 新建合同版本
+          - generic "暂无进行中审核，可先发起审核" [ref=f9e545]:
+            - generic [ref=f9e546]:
+              - img [ref=f9e548]
+              - generic [ref=f9e551]:
+                - generic [ref=f9e552]:
+                  - paragraph [ref=f9e553]: 继续进行中审核
+                  - generic [ref=f9e554]: 进行中
+                - paragraph [ref=f9e555]: 暂无进行中审核，可先发起审核
+                - paragraph [ref=f9e556]: 没有进行中任务
+          - generic "需先完成一份合同审核" [ref=f9e557]:
+            - generic [ref=f9e558]:
+              - img [ref=f9e560]
+              - generic [ref=f9e562]:
+                - generic [ref=f9e563]:
+                  - paragraph [ref=f9e564]: 查看批注版输出
+                  - generic [ref=f9e565]: 已完成
+                - paragraph [ref=f9e566]: 需先完成一份合同审核
+                - paragraph [ref=f9e567]: 暂无批注版
+          - generic "需先完成一份合同审核" [ref=f9e568]:
+            - generic [ref=f9e569]:
+              - img [ref=f9e571]
+              - generic [ref=f9e576]:
+                - generic [ref=f9e577]:
+                  - paragraph [ref=f9e578]: 文档比对
+                  - generic [ref=f9e579]: 版本流
+                - paragraph [ref=f9e580]: 需先完成一份合同审核
+                - paragraph [ref=f9e581]: 暂无可比对基准
+      - main [ref=f9e582]:
+        - generic [ref=f9e583]:
+          - generic [ref=f9e584]:
+            - generic [ref=f9e585]:
+              - img [ref=f9e587]
+              - generic [ref=f9e590]:
+                - heading "合同审核工作台入口" [level=2] [ref=f9e591]
+                - paragraph [ref=f9e592]: 上传合同源文件，绑定已发布审核规则和模型策略，生成风险定位、销售谈判任务与源文件 Word 批注版本。
+            - link "上传源文件并发起审核" [ref=f9e593] [cursor=pointer]:
+              - /url: /contracts/new
+              - button "上传源文件并发起审核" [ref=f9e594]:
+                - img
+                - text: 上传源文件并发起审核
+          - generic [ref=f9e595]:
+            - generic [ref=f9e596]: 源文件docx / pdf
+            - generic [ref=f9e597]: 审核依据发布规则 / 模型
+            - generic [ref=f9e598]: 风险定位复核 / 谈判
+            - generic [ref=f9e599]: 输出批注版 / 报告
+        - generic [ref=f9e600]:
+          - generic [ref=f9e603]:
+            - img [ref=f9e605]
+            - generic [ref=f9e608]:
+              - paragraph [ref=f9e609]: "0"
+              - paragraph [ref=f9e610]: 全部合同
+          - generic [ref=f9e613]:
+            - img [ref=f9e615]
+            - generic [ref=f9e618]:
+              - paragraph [ref=f9e619]: "0"
+              - paragraph [ref=f9e620]: 进行中
+          - generic [ref=f9e623]:
+            - img [ref=f9e625]
+            - generic [ref=f9e627]:
+              - paragraph [ref=f9e628]: "0"
+              - paragraph [ref=f9e629]: 需关注
+          - generic [ref=f9e632]:
+            - img [ref=f9e634]
+            - generic [ref=f9e636]:
+              - paragraph [ref=f9e637]: "0"
+              - paragraph [ref=f9e638]: 已完成
+        - tablist [ref=f9e641]:
+          - tab "全部 0" [selected] [ref=f9e642] [cursor=pointer]:
+            - text: 全部
+            - generic [ref=f9e643]: "0"
+          - tab "起草中" [ref=f9e644] [cursor=pointer]
+          - tab "待审核" [ref=f9e645] [cursor=pointer]
+          - tab "已完成" [ref=f9e646] [cursor=pointer]
+        - generic [ref=f9e647]:
+          - img [ref=f9e648]
+          - paragraph [ref=f9e650]: 加载合同中...
+  - alert [ref=f9e71]

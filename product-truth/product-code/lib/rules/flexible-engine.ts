@@ -557,6 +557,9 @@ export interface FlexibleAnalysisResults {
     description: string
     suggestion: string
     counterparty?: string
+    rule_id: string
+    rule_code?: string
+    rule_version: number
   }>
   summary: string
   appliedRules: number
@@ -604,6 +607,9 @@ export async function executeFlexibleRulesCompat(
         description: r.description,
         suggestion: r.suggestion || '',
         counterparty: r.levelResult?.counterparty,
+        rule_id: r.ruleId,
+        rule_code: r.ruleCode,
+        rule_version: r.ruleVersion,
       })),
     summary: generateFlexibleSummary(results),
     appliedRules: results.length,

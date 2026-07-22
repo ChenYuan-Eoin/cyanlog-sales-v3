@@ -90,7 +90,13 @@ export async function POST(
       // 使用故障容错链调用 AI
       const result = await reviewWithFailoverSync(
         `用户问题：${parsed.data.content}\n\n合同内容：${contractText.substring(0, 3000)}`,
-        { orgId }
+        {
+          orgId,
+          contractId,
+          tool: 'contract_review',
+          capability: 'contract_chat',
+          phase: 'contract_chat',
+        }
       )
 
       // 生成针对用户问题的回复

@@ -1,0 +1,9 @@
+{
+  "checks": {
+    "aiLevel1": true,
+    "localModel": true,
+    "cloudBackup": true,
+    "ruleEngine": true,
+    "localCliReady": true
+  }
+}

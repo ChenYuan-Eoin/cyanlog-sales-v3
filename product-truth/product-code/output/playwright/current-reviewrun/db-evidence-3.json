@@ -1,0 +1,160 @@
+{
+  "review": {
+    "status": "COMPLETED",
+    "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+    "model_policy_id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+    "provider": "rule-engine+AI_LEVEL_1",
+    "degraded": false,
+    "degradationReasons": []
+  },
+  "invocations": [
+    {
+      "id": "d1636618-fa16-4163-a960-c4312d2e32d7",
+      "phase": "structured_rules",
+      "provider": "rule-engine",
+      "model": "rule-engine",
+      "status": "completed",
+      "degraded": false,
+      "fallback_reason": null,
+      "latency_ms": 329,
+      "error_message": null,
+      "request_meta": {
+        "phase": "structured_contract_review",
+        "review_trigger": "manual_rerun",
+        "model_policy_stage": "structured_rules",
+        "rule_snapshot_count": 15,
+        "output_schema_version": "f006.review.v1"
+      },
+      "response_meta": {
+        "risk_count": 3,
+        "applied_rules": 15,
+        "matched_rules": 3,
+        "skill_eval_status": "passed",
+        "semantic_risk_count": 4,
+        "rule_translation_status": "ready",
+        "semantic_merged_risk_count": 2,
+        "unlocated_commentable_risk_count": 0
+      }
+    },
+    {
+      "id": "823b91a4-a99f-4914-9203-82d5f1c796ab",
+      "phase": "semantic_review",
+      "provider": "AI_LEVEL_1",
+      "model": "gpt-oss-20b",
+      "status": "completed",
+      "degraded": false,
+      "fallback_reason": null,
+      "latency_ms": 33319,
+      "error_message": null,
+      "request_meta": {
+        "phase": "semantic_contract_review",
+        "review_trigger": "manual_rerun",
+        "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+        "skill_rule_count": 15,
+        "model_policy_stage": "semantic_review",
+        "skill_bundle_version": 10,
+        "intended_provider_model": "gpt-oss-20b",
+        "intended_provider_profile": "AI_LEVEL_1"
+      },
+      "response_meta": {
+        "risk_count": 4,
+        "provider_kind": "openai_compatible",
+        "attempt_errors": [],
+        "summary_available": true,
+        "usable_risk_count": 4
+      }
+    }
+  ],
+  "risks": [
+    {
+      "rule_code": "R011",
+      "title": "IP 归属",
+      "level": "red",
+      "snippet": "为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化",
+      "source_range": {
+        "end": 197,
+        "start": 73
+      },
+      "location_status": "located",
+      "position_start": 73,
+      "position_end": 197
+    },
+    {
+      "rule_code": "R015",
+      "title": "争议解决",
+      "level": "red",
+      "snippet": "款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化、经营困难，客户可单方延期履行。",
+      "source_range": {
+        "end": 213,
+        "start": 97
+      },
+      "location_status": "located",
+      "position_start": 97,
+      "position_end": 213
+    },
+    {
+      "rule_code": "R006",
+      "title": "违约金无上限，导致潜在赔偿过高",
+      "level": "red",
+      "snippet": "第四条 违约责任：逾期付款违约金为日万分之十。",
+      "source_range": {
+        "end": 108,
+        "start": 85
+      },
+      "location_status": "located",
+      "position_start": 85,
+      "position_end": 108
+    },
+    {
+      "rule_code": "R001",
+      "title": "付款周期过长且缺乏首期/预付款条款",
+      "level": "yellow",
+      "snippet": "第二条 付款条款：乙方验收后120天内付款，账期120天。",
+      "source_range": {
+        "end": 53,
+        "start": 24
+      },
+      "location_status": "located",
+      "position_start": 24,
+      "position_end": 53
+    }
+  ],
+  "annotations": [
+    {
+      "id": "ddbca714-3107-481f-804f-094ca0b6a06f",
+      "selected_text": "第五条 知识产权未明确归属，双方后续另行协商。",
+      "start_offset": 109,
+      "end_offset": 132,
+      "heading": "【红线风险】IP 归属",
+      "sourceRangeLine": "SourceRange: 109-132",
+      "riskFindingLine": "RiskFinding: 461d98cc-62fd-49e9-94a8-7187743e0929"
+    },
+    {
+      "id": "16455955-3e9d-4165-b608-6e8791d4e05b",
+      "selected_text": "第六条 争议解决方式未明确，管辖法院待定。",
+      "start_offset": 133,
+      "end_offset": 154,
+      "heading": "【红线风险】争议解决",
+      "sourceRangeLine": "SourceRange: 133-154",
+      "riskFindingLine": "RiskFinding: c6958159-7069-4545-83f0-432b5cd889ca"
+    },
+    {
+      "id": "e66bdc15-64f3-48d7-8601-0d4ce1cbd629",
+      "selected_text": "第四条 违约责任：逾期付款违约金为日万分之十。",
+      "start_offset": 85,
+      "end_offset": 108,
+      "heading": "【红线风险】违约金无上限，导致潜在赔偿过高",
+      "sourceRangeLine": "SourceRange: 85-108",
+      "riskFindingLine": "RiskFinding: 9ef3c6a1-0cb5-480d-ae5d-cefcae4aa34a"
+    },
+    {
+      "id": "befde474-050a-4c90-9b49-b1f121a019aa",
+      "selected_text": "第二条 付款条款：乙方验收后120天内付款，账期120天。",
+      "start_offset": 24,
+      "end_offset": 53,
+      "heading": "【需谈判风险】付款周期过长且缺乏首期/预付款条款",
+      "sourceRangeLine": "SourceRange: 24-53",
+      "riskFindingLine": "RiskFinding: d2503695-c884-4e8e-a17a-feabd649f537"
+    }
+  ]
+}

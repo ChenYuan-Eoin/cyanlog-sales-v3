@@ -1,0 +1,61 @@
+- generic [active] [ref=e1]:
+  - complementary [ref=e30]:
+    - generic [ref=e31]:
+      - generic [ref=e32]: CY
+      - generic [ref=e33]:
+        - generic [ref=e34]: Cyanlog
+        - paragraph [ref=e35]: 智能销售支撑平台
+    - navigation [ref=e36]:
+      - link "工作台" [ref=e37] [cursor=pointer]:
+        - /url: /
+        - img [ref=e38]
+        - generic [ref=e42]: 工作台
+      - link "报价中心" [ref=e43] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e44]
+        - generic [ref=e48]: 报价中心
+      - link "合同审核" [ref=e49] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e50]
+        - generic [ref=e55]: 合同审核
+      - link "标书中心" [ref=e56] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e57]
+        - generic [ref=e61]: 标书中心
+      - link "知识库" [ref=e62] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e63]
+        - generic [ref=e68]: 知识库
+      - link "日程" [ref=e69] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e70]
+        - generic [ref=e76]: 日程
+      - link "配置中心" [ref=e77] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e78]
+        - generic [ref=e82]: 配置中心
+    - generic [ref=e83]:
+      - link "个人信息" [ref=e84] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e85]
+        - generic [ref=e88]: 个人信息
+      - button "退出登录" [ref=e89] [cursor=pointer]:
+        - img [ref=e90]
+        - generic [ref=e93]: 退出登录
+  - main [ref=e2]:
+    - generic [ref=e422]:
+      - generic [ref=e423]:
+        - link [ref=e424] [cursor=pointer]:
+          - /url: /contracts
+          - button [ref=e425]:
+            - img
+        - heading "上传合同" [level=1] [ref=e426]
+      - generic [ref=e428] [cursor=pointer]:
+        - img [ref=e429]
+        - paragraph [ref=e432]: 点击选择文件或拖拽到此处
+        - paragraph [ref=e433]: 支持 PDF、DOCX 格式，单个文件最大 500MB
+      - generic [ref=e434]:
+        - paragraph [ref=e435]: • 支持大文件分块上传，单个文件最大 500MB
+        - paragraph [ref=e436]: • 支持断点续传，上传中断后可继续
+        - paragraph [ref=e437]: • 3个分块并发上传，提高传输速度
+  - alert [ref=e29]: Cyanlog Sales

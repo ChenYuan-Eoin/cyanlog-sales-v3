@@ -1,0 +1,12 @@
+{
+  "outDir": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/contract-entry-alignment-extra-1782892486982",
+  "checks": {
+    "uploadHasBatchTitle": true,
+    "uploadExplainsNotCustomerReturn": true,
+    "uploadNoBadText": true,
+    "compareUploadNoBadText": true,
+    "uploadNoOverflow": true,
+    "compareUploadNoOverflow": true
+  },
+  "errors": []
+}

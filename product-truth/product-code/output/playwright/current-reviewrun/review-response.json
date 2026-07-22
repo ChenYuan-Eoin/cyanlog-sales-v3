@@ -1,0 +1,1 @@
+{"jobId":"bd190485-d953-42bd-9fb9-43413bf716b9","reviewId":"62d3734f-9bdd-4f6e-8193-461de558f302","parentReviewId":"4c278a01-27ca-46b1-ada9-5c749e7c348c","triggerEvent":"manual_rerun","status":"DEGRADED","message":"再审核已完成，但存在降级或未绑定项，需要人工复核","degraded":true,"degradationReasons":["source_location_unbound","semantic_review_degraded"]}

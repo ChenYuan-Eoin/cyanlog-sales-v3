@@ -1,0 +1,33 @@
+{
+  "contractSignals": {
+    "url": "http://localhost:3000/contracts",
+    "reviewPills": 40,
+    "comparePills": 18,
+    "draftPills": 0,
+    "moduleLabels": 43,
+    "versionLabels": 58
+  },
+  "ruleSignals": {
+    "url": "http://localhost:3000/configs?tab=rules",
+    "tree": 1,
+    "concepts": 2,
+    "preview": 1,
+    "hiddenMore": 0,
+    "testHit": 1
+  },
+  "draftSignals": {
+    "url": "http://localhost:3000/contracts/draft",
+    "exportDocx": 2,
+    "uploadReview": 1,
+    "workflow": 1,
+    "editableDocx": 3
+  },
+  "ipadContractSignals": {
+    "url": "http://localhost:3000/contracts",
+    "reviewPills": 40,
+    "comparePills": 18,
+    "draftPills": 0
+  },
+  "ipadRuleVisible": 1,
+  "consoleErrors": []
+}

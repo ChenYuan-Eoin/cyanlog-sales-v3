@@ -1,0 +1,161 @@
+- generic [active] [ref=e1]:
+  - button "打开主导航" [ref=e2] [cursor=pointer]:
+    - img [ref=e3]
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: CY
+      - generic [ref=e8]:
+        - generic [ref=e9]: Cyanlog
+        - paragraph [ref=e10]: 智能销售支撑平台
+    - navigation [ref=e11]:
+      - link "工作台" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - img [ref=e13]
+        - generic [ref=e17]: 工作台
+      - link "报价中心" [ref=e18] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e19]
+        - generic [ref=e23]: 报价中心
+      - link "合同审核" [ref=e24] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e25]
+        - generic [ref=e30]: 合同审核
+      - link "标书中心" [ref=e31] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e32]
+        - generic [ref=e36]: 标书中心
+      - link "知识库" [ref=e37] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e38]
+        - generic [ref=e43]: 知识库
+      - link "日程" [ref=e44] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e45]
+        - generic [ref=e51]: 日程
+      - link "配置中心" [ref=e52] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e53]
+        - generic [ref=e57]: 配置中心
+    - generic [ref=e58]:
+      - link "个人信息" [ref=e59] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e60]
+        - generic [ref=e63]: 个人信息
+      - button "退出登录" [ref=e64] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e68]: 退出登录
+  - main [ref=e69]:
+    - generic [ref=e70]:
+      - generic [ref=e73]:
+        - generic [ref=e75]:
+          - img [ref=e76]
+          - textbox "搜索合同..." [ref=e79]
+        - button [ref=e80] [cursor=pointer]:
+          - img
+      - main [ref=e81]:
+        - generic [ref=e82]:
+          - generic [ref=e85]:
+            - img [ref=e87]
+            - generic [ref=e90]:
+              - paragraph [ref=e91]: "6"
+              - paragraph [ref=e92]: 全部合同
+          - generic [ref=e95]:
+            - img [ref=e97]
+            - generic [ref=e100]:
+              - paragraph [ref=e101]: "1"
+              - paragraph [ref=e102]: 进行中
+          - generic [ref=e105]:
+            - img [ref=e107]
+            - generic [ref=e109]:
+              - paragraph [ref=e110]: "0"
+              - paragraph [ref=e111]: 需关注
+          - generic [ref=e114]:
+            - img [ref=e116]
+            - generic [ref=e118]:
+              - paragraph [ref=e119]: "4"
+              - paragraph [ref=e120]: 已完成
+        - tablist [ref=e123]:
+          - tab "全部" [selected] [ref=e124] [cursor=pointer]
+          - tab "起草中" [ref=e125] [cursor=pointer]
+          - tab "待审核" [ref=e126] [cursor=pointer]
+          - tab "已完成" [ref=e127] [cursor=pointer]
+        - generic [ref=e128]:
+          - link "打开合同Hemory_.docx" [ref=e129] [cursor=pointer]:
+            - /url: /contracts/44301b16-6551-4720-afa5-f1d80b1604de
+            - generic [ref=e132]:
+              - img [ref=e134]
+              - generic [ref=e137]:
+                - paragraph [ref=e139]: Hemory_.docx
+                - generic [ref=e140]:
+                  - generic [ref=e141]: 审核完成
+                  - generic [ref=e142]: 6月30日
+              - img [ref=e143]
+          - link "打开合同ones-contract-e2e-risk.docx" [ref=e145] [cursor=pointer]:
+            - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8
+            - generic [ref=e148]:
+              - img [ref=e150]
+              - generic [ref=e153]:
+                - paragraph [ref=e155]: ones-contract-e2e-risk.docx
+                - generic [ref=e156]:
+                  - generic [ref=e157]: 审核完成
+                  - generic [ref=e158]: 6月30日
+              - img [ref=e159]
+          - link "打开合同" [ref=e161] [cursor=pointer]:
+            - /url: /contracts/25d3192e-32d1-44c5-9396-179f1a7309ab
+            - generic [ref=e164]:
+              - img [ref=e166]
+              - generic [ref=e169]:
+                - generic:
+                  - paragraph
+                - generic [ref=e170]:
+                  - generic [ref=e171]: DRAFT
+                  - generic [ref=e172]: 6月30日
+              - img [ref=e173]
+          - link "打开合同_ONES_-_2026.docx" [ref=e175] [cursor=pointer]:
+            - /url: /contracts/13aca6c2-e902-4458-9e94-6d8db8ae7a09
+            - generic [ref=e178]:
+              - img [ref=e180]
+              - generic [ref=e183]:
+                - paragraph [ref=e185]: _ONES_-_2026.docx
+                - generic [ref=e186]:
+                  - generic [ref=e187]: 审核完成
+                  - generic [ref=e188]: 6月25日
+              - img [ref=e189]
+          - link "打开合同_2026_ONES_1_.docx" [ref=e191] [cursor=pointer]:
+            - /url: /contracts/0286f885-fc49-4a43-9543-798aca2dda16
+            - generic [ref=e194]:
+              - img [ref=e196]
+              - generic [ref=e199]:
+                - paragraph [ref=e201]: _2026_ONES_1_.docx
+                - generic [ref=e202]:
+                  - generic [ref=e203]: 审核完成
+                  - generic [ref=e204]: 6月25日
+              - img [ref=e205]
+          - link "打开合同minimal.pdf" [ref=e207] [cursor=pointer]:
+            - /url: /contracts/12cbe7cf-b4ef-493e-93f4-341430f1ec1c
+            - generic [ref=e210]:
+              - img [ref=e212]
+              - generic [ref=e215]:
+                - paragraph [ref=e217]: minimal.pdf
+                - generic [ref=e218]:
+                  - generic [ref=e219]: 待审核
+                  - generic [ref=e220]: 6月25日
+              - img [ref=e221]
+      - generic [ref=e224]:
+        - link "起草" [ref=e225] [cursor=pointer]:
+          - /url: /contracts/draft
+          - img [ref=e227]
+          - generic [ref=e232]: 起草
+        - link "上传" [ref=e233] [cursor=pointer]:
+          - /url: /contracts/new
+          - img [ref=e235]
+          - generic [ref=e238]: 上传
+        - link "审核" [ref=e239] [cursor=pointer]:
+          - /url: /contracts/25d3192e-32d1-44c5-9396-179f1a7309ab
+          - img [ref=e241]
+          - generic [ref=e244]: 审核
+        - link "比对" [ref=e245] [cursor=pointer]:
+          - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare
+          - img [ref=e247]
+          - generic [ref=e252]: 比对
+  - alert [ref=e253]

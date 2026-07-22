@@ -6,6 +6,19 @@ import { reviewWithFailover } from './failover'
 import type { TaskType, RoutingStrategy, RoutingContext } from './strategy'
 import { compositeStrategy } from './strategy'
 
+function mapTaskToTool(taskType: TaskType): { tool: string; capability: string; phase: string } {
+  switch (taskType) {
+    case 'generate':
+      return { tool: 'contract_draft', capability: 'long_text', phase: 'smart_router_generate' }
+    case 'extract':
+      return { tool: 'tender_parse', capability: 'long_text', phase: 'smart_router_extract' }
+    case 'classify':
+      return { tool: 'rule_translation', capability: 'deterministic_rule_scan', phase: 'smart_router_classify' }
+    default:
+      return { tool: 'contract_review', capability: 'contract_review', phase: 'smart_router_semantic' }
+  }
+}
+
 /**
  * 路由请求
  */
@@ -40,9 +53,13 @@ export class SmartRouter {
     routeDecision: string
   }> {
     const provider = await this.strategy.select(request.taskType, request.context)
+    const taskConfig = mapTaskToTool(request.taskType)
 
     // 调整PreferredProvider走降级链
-    const result = await reviewWithFailover(request.text, provider)
+    const result = await reviewWithFailover(request.text, {
+      preferredProvider: provider,
+      ...taskConfig,
+    })
 
     return {
       ...result,

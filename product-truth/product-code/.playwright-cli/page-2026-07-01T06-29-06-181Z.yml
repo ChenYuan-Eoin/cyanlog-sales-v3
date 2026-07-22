@@ -1,0 +1,49 @@
+- generic [active] [ref=f4e1]:
+  - complementary [ref=f4e2]:
+    - generic [ref=f4e3]:
+      - img "ONES Sales" [ref=f4e5]
+      - generic [ref=f4e6]:
+        - generic [ref=f4e7]: ONES Sales
+        - paragraph [ref=f4e8]: 智能协作平台
+    - navigation [ref=f4e9]:
+      - link "工作台" [ref=f4e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f4e11]
+        - generic [ref=f4e15]: 工作台
+      - link "报价中心" [ref=f4e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f4e17]
+        - generic [ref=f4e21]: 报价中心
+      - link "合同审核" [ref=f4e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f4e23]
+        - generic [ref=f4e28]: 合同审核
+      - link "标书中心" [ref=f4e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f4e30]
+        - generic [ref=f4e34]: 标书中心
+      - link "知识库" [ref=f4e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f4e36]
+        - generic [ref=f4e41]: 知识库
+      - link "日程" [ref=f4e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f4e43]
+        - generic [ref=f4e49]: 日程
+      - link "配置中心" [ref=f4e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f4e51]
+        - generic [ref=f4e55]: 配置中心
+    - generic [ref=f4e56]:
+      - link "个人信息" [ref=f4e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f4e58]
+        - generic [ref=f4e61]: 个人信息
+      - button "退出登录" [ref=f4e62] [cursor=pointer]:
+        - img [ref=f4e63]
+        - generic [ref=f4e66]: 退出登录
+  - main [ref=f4e67]:
+    - generic [ref=f4e68]:
+      - img [ref=f4e69]
+      - text: 加载合同审核工作台...
+  - alert [ref=f4e71]

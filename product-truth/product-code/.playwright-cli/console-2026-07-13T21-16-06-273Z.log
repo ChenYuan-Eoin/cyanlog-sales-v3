@@ -1,0 +1,47 @@
+[    4152ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3000/fonts/GeistVF.woff:0
+[    4346ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3000/fonts/GeistMonoVF.woff:0
+[    4524ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3000/_vercel/insights/script.js:0
+[    4524ms] [LOG] [Vercel Web Analytics] Failed to load script from /_vercel/insights/script.js. Be sure to enable Web Analytics for your project and deploy again. See https://vercel.com/docs/analytics/quickstart for more information. @ http://127.0.0.1:3000/_next/static/chunks/app/layout-b1d6ca7c1830a59a.js:0
+[    5201ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3000/_vercel/speed-insights/script.js:0
+[    5201ms] [LOG] [Vercel Speed Insights] Failed to load script from /_vercel/speed-insights/script.js. Please check if any content blockers are enabled and try again. @ http://127.0.0.1:3000/_next/static/chunks/app/layout-b1d6ca7c1830a59a.js:0
+[    8204ms] [WARNING] The resource http://127.0.0.1:3000/fonts/GeistVF.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/configs?tab=rules:0
+[    8204ms] [WARNING] The resource http://127.0.0.1:3000/fonts/GeistMonoVF.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/configs?tab=rules:0
+[16756458ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/contracts?_rsc=YXKfCKde4qpcinXN:0
+[16756464ms] [ERROR] Failed to fetch RSC payload for http://127.0.0.1:3000/contracts. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:52218)
+    at async _ (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:51076)
+    at async Object.o [as task] (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:96517) @ http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:0
+[16757708ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/tenders?_rsc=YXKfCKde4qpcinXN:0
+[16757708ms] [ERROR] Failed to fetch RSC payload for http://127.0.0.1:3000/tenders. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:52218)
+    at async _ (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:51076)
+    at async Object.o [as task] (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:96517) @ http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:0
+[16757726ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/knowledge?_rsc=YXKfCKde4qpcinXN:0
+[16757726ms] [ERROR] Failed to fetch RSC payload for http://127.0.0.1:3000/knowledge. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:52218)
+    at async _ (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:51076)
+    at async Object.o [as task] (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:96517) @ http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:0
+[16757925ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/schedule?_rsc=YXKfCKde4qpcinXN:0
+[16757925ms] [ERROR] Failed to fetch RSC payload for http://127.0.0.1:3000/schedule. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:52218)
+    at async _ (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:51076)
+    at async Object.o [as task] (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:96517) @ http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:0
+[16758034ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/configs?_rsc=YXKfCKde4qpcinXN:0
+[16758034ms] [ERROR] Failed to fetch RSC payload for http://127.0.0.1:3000/configs. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:52218)
+    at async _ (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:51076)
+    at async Object.o [as task] (http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:1:96517) @ http://127.0.0.1:3000/_next/static/chunks/8624-09f0c128fff0203b.js:0
+[16761035ms] [WARNING] The resource http://127.0.0.1:3000/fonts/GeistVF.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/configs?tab=rules:0
+[16761035ms] [WARNING] The resource http://127.0.0.1:3000/fonts/GeistMonoVF.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/configs?tab=rules:0
+[16762845ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/api/admin/org:0
+[16762905ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.svg:0
+[16762918ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.ico:0
+[16762919ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.ico:0
+[16762919ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.ico:0
+[16763630ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/api/contract-policies/rule-sets:0
+[16763683ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.svg:0
+[16763683ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.ico:0
+[16763684ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.ico:0
+[16763684ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/favicon.ico:0
+[16766686ms] [WARNING] The resource http://127.0.0.1:3000/fonts/GeistVF.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/configs?tab=rules:0
+[16766686ms] [WARNING] The resource http://127.0.0.1:3000/fonts/GeistMonoVF.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/configs?tab=rules:0

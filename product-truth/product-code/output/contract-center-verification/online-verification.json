@@ -1,0 +1,30 @@
+{
+  "baseURL": "https://sales.cyanlog.icu",
+  "checks": [
+    "login: api authenticated and client session persisted",
+    "review desktop: 源文件批注",
+    "review desktop: 谈判任务导航",
+    "review desktop: 任务跟进",
+    "review desktop: 重新审核",
+    "review desktop: 导出批注",
+    "compare setup: 文档比对工作台",
+    "compare setup: 上传本地基准件",
+    "compare setup: 上传新文件 / 客户回传版",
+    "compare setup: 严格审计",
+    "compare setup: 标准审计",
+    "baseline upload: 上传本地基准件",
+    "baseline upload: 选择本地基准文件",
+    "baseline upload: 返回比对",
+    "review ipad: 源文件证据预览",
+    "review ipad: 任务跟进",
+    "review ipad: 第二步：谈判口径",
+    "review ipad: 第三步：谈判记录与反馈"
+  ],
+  "screenshots": {
+    "reviewDesktop": "/Users/nsss/Price-v3/product-truth/product-code/output/contract-center-verification/online-review-desktop.png",
+    "compareSetup": "/Users/nsss/Price-v3/product-truth/product-code/output/contract-center-verification/online-compare-setup.png",
+    "baselineUpload": "/Users/nsss/Price-v3/product-truth/product-code/output/contract-center-verification/online-baseline-upload.png",
+    "reviewIpad": "/Users/nsss/Price-v3/product-truth/product-code/output/contract-center-verification/online-review-ipad.png"
+  },
+  "contractId": "2edd4da2-24c2-41fb-8950-542d8f768efe"
+}

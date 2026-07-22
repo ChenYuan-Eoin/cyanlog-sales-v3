@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth(req)
@@ -14,7 +14,7 @@ export async function GET(
       return NextResponse.json({ error: '未登录' }, { status: 401 })
     }
 
-    const contractId = params.id
+    const { id: contractId } = await params
 
     // 查询合同标的明细
     const { data: items, error } = await supabaseAdmin

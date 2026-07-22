@@ -6,9 +6,18 @@ export interface Rule {
   risk_level: 'red' | 'yellow' | 'green'
   enabled: boolean
   config: {
+    category?: string
+    code?: string
+    engine?: string
+    evidence?: string
+    exception?: string
     pattern?: string
     field?: string
     operator?: 'gt' | 'lt' | 'eq' | 'contains'
+    output_template?: string
+    rule_set?: string
+    test_status?: 'passed' | 'failed' | 'untested'
+    trigger_type?: 'keyword' | 'semantic' | 'field' | 'ratio' | 'amount' | 'duration'
     value?: string | number
     prompt?: string
   }

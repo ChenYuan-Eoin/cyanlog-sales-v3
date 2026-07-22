@@ -11,6 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
 import type { Contract, ContractAnalysisJob } from '@/types'
+import {
+  getReviewExecutionPresentation,
+  normalizeReviewCompliance,
+} from '@/lib/contracts/review-display'
 
 // 扩展 Contract 类型，包含业务字段
 interface ContractWithDetails extends Contract {
@@ -48,6 +52,24 @@ const analysisJobStatusMap: Record<string, { label: string; variant: 'default' |
   running: { label: '执行中', variant: 'default' },
   completed: { label: '已完成', variant: 'outline' },
   failed: { label: '已失败', variant: 'destructive' },
+}
+
+const modelProviderOptions = [
+  { value: '', label: '自动策略' },
+  { value: 'local_primary', label: '本地模型（LM Studio）' },
+  { value: 'sales_cloud_backup', label: '云端模型（OpenAI-compatible）' },
+  { value: 'rule_engine', label: '规则引擎兜底（非 AI）' },
+]
+
+function responseDownloadName(response: Response, fallback: string) {
+  const disposition = response.headers.get('content-disposition') || ''
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (!match?.[1]) return fallback
+  try {
+    return decodeURIComponent(match[1].replace(/^"|"$/g, ''))
+  } catch {
+    return fallback
+  }
 }
 
 // ASK 类型
@@ -176,9 +198,40 @@ export default function ContractDetailPage() {
 
     try {
       const token = localStorage.getItem('token')
+      const headers = {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'Content-Type': 'application/json',
+      }
+      const reviewResponse = await fetch(`/api/contracts/${contractId}/review`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        cache: 'no-store',
+      })
+      const reviewPayload = await reviewResponse.json().catch(() => null)
+      const reviewData = reviewPayload?.data as {
+        storage_path?: string | null
+        sourcePageMap?: { source_hash?: string | null; source_text_hash?: string | null }
+      } | undefined
+      if (
+        !reviewResponse.ok
+        || !reviewPayload?.success
+        || !reviewData?.storage_path
+        || !reviewData.sourcePageMap?.source_hash
+        || !reviewData.sourcePageMap.source_text_hash
+      ) {
+        setActionError('当前源文件身份尚未生成，请先进入审核工作台刷新预览')
+        return
+      }
       const res = await fetch(`/api/contracts/${contractId}/export`, {
         method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        headers,
+        body: JSON.stringify({
+          export_mode: 'source_annotated',
+          source_identity: {
+            storage_path: reviewData.storage_path,
+            source_hash: reviewData.sourcePageMap.source_hash,
+            source_text_hash: reviewData.sourcePageMap.source_text_hash,
+          },
+        }),
       })
 
       if (!res.ok) {
@@ -192,7 +245,12 @@ export default function ContractDetailPage() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${contract.filename}-审核结果.docx`
+      const lowerFilename = contract.filename?.toLowerCase() || ''
+      const extension = lowerFilename.endsWith('.pdf') ? 'pdf' : lowerFilename.endsWith('.docm') ? 'docm' : 'docx'
+      a.download = responseDownloadName(
+        res,
+        `${contract.filename?.replace(/\.(doc|docx|docm|pdf)$/i, '') || '合同'}-ONES批注版.${extension}`
+      )
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -205,7 +263,7 @@ export default function ContractDetailPage() {
   }
 
   // 用指定策略重新审核
-  async function handleReAnalyze(strategyCode: string) {
+  async function handleReAnalyze(strategyCode: string, preferredProvider?: string) {
     if (!contract) return
     setAnalyzing(true)
     setActionError('')
@@ -218,7 +276,11 @@ export default function ContractDetailPage() {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ strategy: strategyCode }),
+        body: JSON.stringify({
+          strategy: strategyCode,
+          preferredProvider: preferredProvider || undefined,
+          force: true,
+        }),
       })
 
       const data = await res.json()
@@ -450,6 +512,8 @@ function AnalysisJobCard({
   job: ContractAnalysisJob
   isPolling: boolean
 }) {
+  const executionPresentation = getReviewExecutionPresentation(job.provider)
+
   return (
     <Card className="mb-6">
       <CardHeader>
@@ -460,7 +524,9 @@ function AnalysisJobCard({
           <div>
             <span className="text-slate-500">任务状态：</span>
             <Badge variant={analysisJobStatusMap[job.status]?.variant || 'default'}>
-              {analysisJobStatusMap[job.status]?.label || job.status}
+              {job.status === 'completed'
+                ? executionPresentation.completionLabel
+                : analysisJobStatusMap[job.status]?.label || job.status}
             </Badge>
           </div>
           <div>
@@ -479,7 +545,7 @@ function AnalysisJobCard({
 
         {job.degraded && (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            当前结果来自降级路径，建议人工复核。
+            {executionPresentation.degradedMessage}
           </div>
         )}
 
@@ -514,6 +580,7 @@ function PreviewTableTab({
     results: {
       summary: string
       risks: Risk[]
+      provider?: string
     }
     risk_summary?: {
       total_clauses: number
@@ -538,12 +605,13 @@ function PreviewTableTab({
   } | null | undefined
   exporting: boolean
   handleExport: () => void
-  onReAnalyze: (strategyCode: string) => Promise<void>
+  onReAnalyze: (strategyCode: string, preferredProvider?: string) => Promise<void>
   contractId: string
 }) {
   const [selectedStrategy, setSelectedStrategy] = useState<string>(
     latestReview?.risk_summary?.strategy_code || 'BALANCED'
   )
+  const [selectedProvider, setSelectedProvider] = useState('')
   const [strategies, setStrategies] = useState<Array<{ id: string; code: string; name: string; description: string | null; risk_threshold: number }>>([])
   const [clauses, setClauses] = useState<Array<{
     id: string
@@ -591,7 +659,7 @@ function PreviewTableTab({
   if (contract.status !== 'COMPLETED' || !latestReview?.results) {
     return (
       <div className="text-center py-8">
-        <p className="textlate-500">暂无审核结果</p>
+        <p className="text-slate-500">暂无审核结果</p>
       </div>
     )
   }
@@ -604,21 +672,17 @@ function PreviewTableTab({
     low_risks: 0,
     compliance_score: 0,
   }
-  const compliance = latestReview.compliance_check || {
-    missing_required_clauses: [],
-    dangerous_clauses: [],
-    ambiguous_clauses: [],
-    unbalanced_clauses: [],
-    party_a_consistency: 'unknown',
-    party_b_consistency: 'unknown',
-    issues: [],
-  }
+  const compliance = normalizeReviewCompliance(latestReview.compliance_check)
+  const reviewRisks = Array.isArray(latestReview.results.risks)
+    ? latestReview.results.risks
+    : []
+  const executionPresentation = getReviewExecutionPresentation(latestReview.results.provider)
 
   async function handleStrategyChange(code: string) {
     setSelectedStrategy(code)
     setReAnalyzing(true)
     try {
-      await onReAnalyze(code)
+      await onReAnalyze(code, selectedProvider || undefined)
     } finally {
       setReAnalyzing(false)
     }
@@ -653,7 +717,7 @@ function PreviewTableTab({
       {/* 2. 审核策略选择器 */}
       <Card>
         <CardContent className="py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-sm font-medium text-slate-700 mb-2">审核策略</div>
               <div className="flex gap-2">
@@ -680,9 +744,31 @@ function PreviewTableTab({
                 {strategies.find(s => s.code === selectedStrategy)?.description || '选择不同的审核立场，重新分析合同风险'}
               </p>
             </div>
-            <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm">
-              {exporting ? '导出中...' : '导出 Word（含批注）'}
-            </Button>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex flex-col gap-1 text-xs text-slate-500">
+                复审模型
+                <select
+                  className="h-9 rounded-md border px-2 text-sm text-slate-900"
+                  value={selectedProvider}
+                  onChange={(event) => setSelectedProvider(event.target.value)}
+                >
+                  {modelProviderOptions.map((option) => (
+                    <option key={option.value || 'auto'} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                onClick={() => void handleStrategyChange(selectedStrategy)}
+                disabled={reAnalyzing}
+                variant="outline"
+                size="sm"
+              >
+                {reAnalyzing ? '复审中...' : '按当前设置复审'}
+              </Button>
+              <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm">
+                {exporting ? '导出中...' : '导出源文件批注版'}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -855,17 +941,19 @@ function PreviewTableTab({
       )}
 
       {/* 6. AI 原始风险列表（兼容老数据） */}
-      {latestReview.results.risks.length > 0 && (
+      {reviewRisks.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">AI 风险点（{latestReview.results.risks.length} 项）</CardTitle>
+            <CardTitle className="text-base">
+              {executionPresentation.resultTitle}（{reviewRisks.length} 项）
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="p-4 bg-slate-50 rounded-lg mb-4">
               <p className="text-sm">{latestReview.results.summary}</p>
             </div>
             <div className="space-y-3">
-              {latestReview.results.risks.map((risk, index) => (
+              {reviewRisks.map((risk, index) => (
                 <div
                   key={index}
                   className={`p-4 rounded-lg border ${riskLevelMap[risk.level]?.className || 'bg-slate-50'}`}

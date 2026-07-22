@@ -1,0 +1,9 @@
+{
+  "checks": {
+    "runtimeEvalPassed": true,
+    "noModelEvalNotRunWarning": true,
+    "localModelTransport": true,
+    "semanticCompleted": true,
+    "provider": true
+  }
+}

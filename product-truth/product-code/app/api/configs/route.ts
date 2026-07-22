@@ -7,8 +7,14 @@ export const preferredRegion = 'sin1'
 import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { configCreateSchema, validateConfigValue } from '@/lib/configs/validation'
-import type { ConfigType, ConfigStatus } from '@/lib/configs/types'
+import {
+  getAIProviderInstanceId,
+  type AIConfigValue,
+  type ConfigStatus,
+  type ConfigType,
+} from '@/lib/configs/types'
 import { sanitizeConfigRow } from '@/lib/configs/runtime'
+import { findDuplicateAIProviderInstance } from '@/lib/configs/provider-instance-server'
 import {
   errorResponse,
   paginatedResponse,
@@ -94,6 +100,22 @@ export async function POST(req: NextRequest) {
       return errorResponse(
         createApiError('DUPLICATE_KEY', `配置键 "${validated.data.key}" 已存在`)
       )
+    }
+
+    if (validated.data.type === 'AI_CONFIG') {
+      const aiValue = validated.data.value as unknown as AIConfigValue
+      if ((aiValue.kind || 'provider') === 'provider') {
+        const instanceId = getAIProviderInstanceId(aiValue, validated.data.key)
+        const duplicate = await findDuplicateAIProviderInstance(orgId, instanceId)
+        if (duplicate) {
+          return errorResponse(
+            createApiError(
+              'DUPLICATE_KEY',
+              `模型实例 ID "${instanceId}" 已被配置 "${duplicate.key}" 使用`
+            )
+          )
+        }
+      }
     }
 
     const normalizedValue =

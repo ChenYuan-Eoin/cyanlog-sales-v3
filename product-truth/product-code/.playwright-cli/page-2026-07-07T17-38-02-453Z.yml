@@ -1,0 +1,168 @@
+- generic [active] [ref=f2e1]:
+  - complementary [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - img "ONES Sales" [ref=f2e5]
+      - generic [ref=f2e6]:
+        - generic [ref=f2e7]: ONES Sales
+        - paragraph [ref=f2e8]: 智能协作平台
+    - navigation [ref=f2e9]:
+      - link "工作台" [ref=f2e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f2e11]
+        - generic [ref=f2e15]: 工作台
+      - link "报价中心" [ref=f2e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f2e17]
+        - generic [ref=f2e21]: 报价中心
+      - link "合同审核" [ref=f2e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f2e23]
+        - generic [ref=f2e28]: 合同审核
+      - link "标书中心" [ref=f2e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f2e30]
+        - generic [ref=f2e34]: 标书中心
+      - link "知识库" [ref=f2e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f2e36]
+        - generic [ref=f2e41]: 知识库
+      - link "日程" [ref=f2e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f2e43]
+        - generic [ref=f2e49]: 日程
+      - link "配置中心" [ref=f2e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f2e51]
+        - generic [ref=f2e55]: 配置中心
+    - generic [ref=f2e56]:
+      - link "个人信息" [ref=f2e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f2e58]
+        - generic [ref=f2e61]: 个人信息
+      - button "退出登录" [ref=f2e62] [cursor=pointer]:
+        - img [ref=f2e63]
+        - generic [ref=f2e66]: 退出登录
+  - main [ref=f2e67]:
+    - generic [ref=f2e69]:
+      - generic [ref=f2e70]:
+        - generic [ref=f2e71]:
+          - generic [ref=f2e72]:
+            - link "合同中心" [ref=f2e73] [cursor=pointer]:
+              - /url: /contracts
+            - generic [ref=f2e74]: /
+            - link "审核工作台" [ref=f2e75] [cursor=pointer]:
+              - /url: /contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177?panel=review&from=compare
+            - generic [ref=f2e76]: /
+            - generic [ref=f2e77]: 文档比对
+          - heading "文档比对工作台" [level=1] [ref=f2e78]
+          - paragraph [ref=f2e79]: 主路径是确认旧文件、上传客户回传/新文件、开始比对。版本和候选合同只作为属性辅助，不默认占用文件画布。
+        - generic [ref=f2e80]:
+          - link "返回合同中心" [ref=f2e81] [cursor=pointer]:
+            - /url: /contracts
+            - button "返回合同中心" [ref=f2e82]:
+              - img
+              - text: 返回合同中心
+          - link "返回审核工作台" [ref=f2e83] [cursor=pointer]:
+            - /url: /contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177?panel=review&from=compare
+            - button "返回审核工作台" [ref=f2e84]
+          - button "开始比对" [disabled]:
+            - img
+            - text: 开始比对
+      - generic [ref=f2e85]:
+        - main [ref=f2e86]:
+          - generic [ref=f2e87]:
+            - generic [ref=f2e88]:
+              - generic [ref=f2e89]:
+                - generic [ref=f2e90]:
+                  - img [ref=f2e91]
+                  - heading "基准文件" [level=2] [ref=f2e94]
+                - generic [ref=f2e95]: 可切换
+              - paragraph [ref=f2e96]: 当前合同
+              - generic [ref=f2e97]:
+                - paragraph [ref=f2e98]: 合同编号：未记录
+                - paragraph [ref=f2e99]: 客户：未记录
+                - paragraph [ref=f2e100]: 报价：未绑定
+              - generic [ref=f2e101]:
+                - generic [ref=f2e102] [cursor=pointer]:
+                  - button "上传旧文件" [ref=f2e103]
+                  - img [ref=f2e104]
+                  - text: 上传旧文件
+                - button "系统版本库 / 基准切换" [ref=f2e107] [cursor=pointer]
+            - generic [ref=f2e108]:
+              - generic [ref=f2e109]:
+                - generic [ref=f2e110]:
+                  - img [ref=f2e111]
+                  - heading "回传文件（上传为主）" [level=2] [ref=f2e114]
+                - generic [ref=f2e115]: 待上传
+              - paragraph [ref=f2e116]: 还没有新文件
+              - paragraph [ref=f2e117]: 对比应以实时上传的客户回传版为主。没有明确回传件时，不把历史版本和候选合同摊在文件画布里。
+              - generic [ref=f2e119] [cursor=pointer]:
+                - button "上传新文件" [ref=f2e120]
+                - img [ref=f2e121]
+                - text: 上传新文件
+              - generic [ref=f2e124]:
+                - generic [ref=f2e125]:
+                  - generic [ref=f2e126]: 审计精度
+                  - generic [ref=f2e127]: 等待新文件
+                - generic [ref=f2e128]:
+                  - button "严格审计 更敏感地披露删改、标点、断句和疑似格式造成的实质变化。" [ref=f2e129] [cursor=pointer]:
+                    - generic [ref=f2e130]: 严格审计
+                    - generic [ref=f2e131]: 更敏感地披露删改、标点、断句和疑似格式造成的实质变化。
+                  - button "标准审计 弱化格式噪声，优先关注文字、金额、责任和条款实质变化。" [ref=f2e132] [cursor=pointer]:
+                    - generic [ref=f2e133]: 标准审计
+                    - generic [ref=f2e134]: 弱化格式噪声，优先关注文字、金额、责任和条款实质变化。
+                - button "开始比对" [disabled]:
+                  - img
+                  - text: 开始比对
+          - generic [ref=f2e135]:
+            - generic [ref=f2e136]:
+              - generic [ref=f2e137]:
+                - heading "当前参与比对的文件事实" [level=2] [ref=f2e138]
+                - paragraph [ref=f2e139]: 旧文件和新文件在这里直接呈现。能渲染原件就页级预览，不能渲染就明确降级，不把候选属性伪装成文件画布。
+              - generic [ref=f2e140]:
+                - generic [ref=f2e141]: 旧：当前合同
+                - generic [ref=f2e142]: 新：待上传
+            - generic [ref=f2e143]:
+              - generic [ref=f2e144]:
+                - generic [ref=f2e145]:
+                  - generic [ref=f2e146]:
+                    - generic [ref=f2e147]:
+                      - img [ref=f2e148]
+                      - generic [ref=f2e151]: 旧文件原件预览
+                      - generic [ref=f2e152]: 文本定位降级
+                      - generic [ref=f2e153]: 降级
+                    - paragraph [ref=f2e154]: 旧文件未绑定可访问原件
+                  - generic [ref=f2e155]: 无可访问文件
+                - generic [ref=f2e157]: 当前文件没有可直接渲染的原件地址，页面只能提供条款定位降级，不能冒充 1:1 原文。请打开原件复核；正式导出只在源文件上增加批注层。
+              - generic [ref=f2e158]:
+                - generic [ref=f2e159]:
+                  - img [ref=f2e160]
+                  - text: 等待上传新文件 / 客户回传版
+                - paragraph [ref=f2e163]: 文档比对必须有明确的新文件。主路径是直接上传客户回传版；已有版本只作为高级选择，不能默认占用文件画布。
+                - generic [ref=f2e165] [cursor=pointer]:
+                  - button "上传新文件" [ref=f2e166]
+                  - img [ref=f2e167]
+                  - text: 上传新文件
+          - generic [ref=f2e170]: 当前没有可明确比对的新文件。请上传客户回传版或人工修订版后再开始比对。
+        - generic [ref=f2e172]:
+          - generic [ref=f2e173]:
+            - generic [ref=f2e174]: ✓
+            - generic [ref=f2e175]:
+              - paragraph [ref=f2e176]: 确认旧文件
+              - paragraph [ref=f2e177]: 当前合同
+          - generic [ref=f2e178]:
+            - generic [ref=f2e179]: ·
+            - generic [ref=f2e180]:
+              - paragraph [ref=f2e181]: 上传新文件
+              - paragraph [ref=f2e182]: 等待客户回传版
+          - generic [ref=f2e183]:
+            - generic [ref=f2e184]: ·
+            - generic [ref=f2e185]:
+              - paragraph [ref=f2e186]: 生成差异
+              - paragraph [ref=f2e187]: 删除 / 新增 / 修改 / 风险等级
+          - generic [ref=f2e188]:
+            - generic [ref=f2e189]: ·
+            - generic [ref=f2e190]:
+              - paragraph [ref=f2e191]: 并排复核
+              - paragraph [ref=f2e192]: 左旧右新，差异可跳转
+  - alert [ref=f2e193]

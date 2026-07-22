@@ -1,0 +1,206 @@
+- generic [ref=f48e1]:
+  - complementary [ref=f48e2]:
+    - generic [ref=f48e3]:
+      - img "ONES Sales" [ref=f48e5]
+      - generic [ref=f48e6]:
+        - generic [ref=f48e7]: ONES Sales
+        - paragraph [ref=f48e8]: 智能协作平台
+    - navigation [ref=f48e9]:
+      - link "工作台" [ref=f48e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f48e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f48e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f48e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f48e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f48e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f48e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f48e56]:
+      - link "个人信息" [ref=f48e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f48e62] [cursor=pointer]
+  - main [ref=f48e67]:
+    - generic [ref=f48e68]:
+      - generic [ref=f48e81]:
+        - link "返回合同中心" [ref=f48e82] [cursor=pointer]:
+          - /url: /contracts
+        - generic [ref=f48e85]:
+          - heading "g5-50-page-10-risk-sample.docx" [level=1] [ref=f48e89]
+          - generic [ref=f48e90]: 审查 / 任务跟进 · 规则包 v18
+        - generic "审核风格" [ref=f48e91]:
+          - button "宽松" [ref=f48e92] [cursor=pointer]
+          - button "均衡" [ref=f48e93] [cursor=pointer]
+          - button "严格" [ref=f48e94] [cursor=pointer]
+        - button "导出源文件批注版" [ref=f48e95] [cursor=pointer]
+      - generic [ref=f48e96]:
+        - complementary "全局风险导航" [ref=f48e97]:
+          - generic [ref=f48e98]:
+            - generic [ref=f48e99]:
+              - generic [ref=f48e100]: 处理进度（含暂存）
+              - generic [ref=f48e101]: 10/10
+            - generic "页码风险分布轨" [ref=f48e104]:
+              - button "第 10 页 · G5连续处理 10 · R009" [ref=f48e105] [cursor=pointer]
+              - button "第 7 页 · G5连续处理 7 · R013" [ref=f48e106] [cursor=pointer]
+              - button "第 1 页 · G5连续处理 1 · R001" [ref=f48e107] [cursor=pointer]
+              - button "第 4 页 · G5连续处理 4 · R007" [ref=f48e108] [cursor=pointer]
+              - button "第 9 页 · G5连续处理 9 · R015" [ref=f48e109] [cursor=pointer]
+              - button "第 8 页 · G5连续处理 8 · R006" [ref=f48e110] [cursor=pointer]
+              - button "第 6 页 · G5连续处理 6 · R002" [ref=f48e111] [cursor=pointer]
+              - button "第 5 页 · G5连续处理 5 · R011" [ref=f48e112] [cursor=pointer]
+              - button "第 3 页 · G5连续处理 3 · R012" [ref=f48e113] [cursor=pointer]
+              - button "第 2 页 · G5连续处理 2 · R004" [ref=f48e114] [cursor=pointer]
+            - generic [ref=f48e115]:
+              - generic [ref=f48e116]: 第 1 页
+              - generic [ref=f48e117]: 共 50 页
+            - generic [ref=f48e118]:
+              - button "全部" [ref=f48e119] [cursor=pointer]
+              - button "红线" [ref=f48e120] [cursor=pointer]
+              - button "待处理" [ref=f48e121] [cursor=pointer]
+              - button "已暂存" [ref=f48e122] [cursor=pointer]
+          - generic [ref=f48e123]:
+            - button "1 · 第 10 页 需修订 G5连续处理 10 · R009" [ref=f48e124] [cursor=pointer]:
+              - generic [ref=f48e127]:
+                - generic [ref=f48e128]:
+                  - generic [ref=f48e129]: 1 · 第 10 页
+                  - generic [ref=f48e130]: 需修订
+                - paragraph [ref=f48e133]: G5连续处理 10 · R009
+            - button "2 · 第 7 页 需修订 G5连续处理 7 · R013" [ref=f48e134] [cursor=pointer]:
+              - generic [ref=f48e137]:
+                - generic [ref=f48e138]:
+                  - generic [ref=f48e139]: 2 · 第 7 页
+                  - generic [ref=f48e140]: 需修订
+                - paragraph [ref=f48e143]: G5连续处理 7 · R013
+            - button "3 · 第 1 页 需修订 G5连续处理 1 · R001" [ref=f48e144] [cursor=pointer]:
+              - generic [ref=f48e147]:
+                - generic [ref=f48e148]:
+                  - generic [ref=f48e149]: 3 · 第 1 页
+                  - generic [ref=f48e150]: 需修订
+                - paragraph [ref=f48e153]: G5连续处理 1 · R001
+            - button "4 · 第 4 页 已通过 G5连续处理 4 · R007" [ref=f48e154] [cursor=pointer]:
+              - generic [ref=f48e157]:
+                - generic [ref=f48e158]:
+                  - generic [ref=f48e159]: 4 · 第 4 页
+                  - generic [ref=f48e160]: 已通过
+                - paragraph [ref=f48e164]: G5连续处理 4 · R007
+            - button "5 · 第 9 页 需修订 G5连续处理 9 · R015" [ref=f48e165] [cursor=pointer]:
+              - generic [ref=f48e168]:
+                - generic [ref=f48e169]:
+                  - generic [ref=f48e170]: 5 · 第 9 页
+                  - generic [ref=f48e171]: 需修订
+                - paragraph [ref=f48e174]: G5连续处理 9 · R015
+            - button "6 · 第 8 页 需修订 G5连续处理 8 · R006" [ref=f48e175] [cursor=pointer]:
+              - generic [ref=f48e178]:
+                - generic [ref=f48e179]:
+                  - generic [ref=f48e180]: 6 · 第 8 页
+                  - generic [ref=f48e181]: 需修订
+                - paragraph [ref=f48e184]: G5连续处理 8 · R006
+            - button "7 · 第 6 页 已通过 G5连续处理 6 · R002" [ref=f48e185] [cursor=pointer]:
+              - generic [ref=f48e188]:
+                - generic [ref=f48e189]:
+                  - generic [ref=f48e190]: 7 · 第 6 页
+                  - generic [ref=f48e191]: 已通过
+                - paragraph [ref=f48e195]: G5连续处理 6 · R002
+            - button "8 · 第 5 页 已通过 G5连续处理 5 · R011" [ref=f48e196] [cursor=pointer]:
+              - generic [ref=f48e199]:
+                - generic [ref=f48e200]:
+                  - generic [ref=f48e201]: 8 · 第 5 页
+                  - generic [ref=f48e202]: 已通过
+                - paragraph [ref=f48e206]: G5连续处理 5 · R011
+            - button "9 · 第 3 页 需修订 G5连续处理 3 · R012" [ref=f48e207] [cursor=pointer]:
+              - generic [ref=f48e210]:
+                - generic [ref=f48e211]:
+                  - generic [ref=f48e212]: 9 · 第 3 页
+                  - generic [ref=f48e213]: 需修订
+                - paragraph [ref=f48e216]: G5连续处理 3 · R012
+            - button "10 · 第 2 页 需修订 G5连续处理 2 · R004" [ref=f48e217] [cursor=pointer]:
+              - generic [ref=f48e220]:
+                - generic [ref=f48e221]:
+                  - generic [ref=f48e222]: 10 · 第 2 页
+                  - generic [ref=f48e223]: 需修订
+                - paragraph [ref=f48e226]: G5连续处理 2 · R004
+          - generic [ref=f48e227]:
+            - paragraph [ref=f48e228]: 已选 7 · 待办 7 · 冲突 1
+            - button "批量提交并重新审核" [ref=f48e229] [cursor=pointer]
+            - paragraph [ref=f48e230]: 提交前检查未处理项和跨条款冲突；通过后才创建新 ReviewRun。
+        - main "源文件主轴" [ref=f48e231]:
+          - generic [ref=f48e232]:
+            - generic [ref=f48e233]:
+              - paragraph [ref=f48e234]: 第2条
+              - paragraph [ref=f48e235]: 第 2 页 · 页已定位、条款需人工定位
+            - button "上一风险" [ref=f48e236] [cursor=pointer]
+            - button "下一风险" [ref=f48e237] [cursor=pointer]
+            - generic [ref=f48e238]:
+              - button "缩小" [ref=f48e239] [cursor=pointer]
+              - generic [ref=f48e240]: 100%
+              - button "放大" [ref=f48e241] [cursor=pointer]
+            - button "切换聚光灯" [ref=f48e242] [cursor=pointer]
+          - generic [ref=f48e243]:
+            - generic [ref=f48e244]: 第 2 页已定位
+            - generic [ref=f48e245]: 当前预览无 bbox/text-layer：条款需人工定位
+          - img "合同真实源文件第 2 页" [ref=f48e342]
+          - generic [ref=f48e249]:
+            - generic [ref=f48e250]: 键盘 J/K 或 ↑/↓ 跳转风险 · S 切换聚光灯
+            - generic [ref=f48e251]: 源 DOCX/PDF · 认证页级懒加载
+        - complementary "当前风险处理轨道" [ref=f48e252]:
+          - generic [ref=f48e253]:
+            - generic [ref=f48e254]:
+              - generic [ref=f48e255]:
+                - generic [ref=f48e256]: 1. 问题与业务影响
+                - generic [ref=f48e257]: 中风险
+              - generic [ref=f48e258]:
+                - checkbox "自动下一条" [ref=f48e259]
+                - text: 自动下一条
+            - heading "G5连续处理 2 · R004" [level=2] [ref=f48e343]
+            - paragraph [ref=f48e261]: 第2页 第2条 风险条款 默示验收：客户15日内未提出书面异议即视为验收通过。 本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。本页仅用于验证真实页级渲染、风险锚点、策略草稿、谈判结果和异步复审。
+            - paragraph [ref=f48e262]: 业务影响：请依据已发布 R004 策略处理并记录真实谈判结果。
+          - generic [ref=f48e263]:
+            - generic [ref=f48e264]:
+              - generic [ref=f48e265]:
+                - heading "2. 选择法务策略、谈判话术与底线" [level=3] [ref=f48e266]
+                - button "撤销策略" [ref=f48e267] [cursor=pointer]
+              - generic [ref=f48e271]:
+                - button "5工作日含默示（可至7–10） 谈判建议：与客户沟通确认验收期，必要时调整合同条款 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程" [ref=f48e344] [cursor=pointer]:
+                  - generic [ref=f48e346]:
+                    - generic [ref=f48e347]: 5工作日含默示（可至7–10）
+                    - generic [ref=f48e348]: 谈判建议：与客户沟通确认验收期，必要时调整合同条款
+                    - generic [ref=f48e349]: 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程
+                - button "15工作日（保留默示） 谈判建议：与客户沟通确认验收期，必要时调整合同条款 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程" [ref=f48e350] [cursor=pointer]:
+                  - generic [ref=f48e352]:
+                    - generic [ref=f48e353]: 15工作日（保留默示）
+                    - generic [ref=f48e354]: 谈判建议：与客户沟通确认验收期，必要时调整合同条款
+                    - generic [ref=f48e355]: 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程
+                - button ">30工作日 / 取消默示验收 谈判建议：与客户沟通确认验收期，必要时调整合同条款 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程" [ref=f48e356] [cursor=pointer]:
+                  - generic [ref=f48e358]:
+                    - generic [ref=f48e359]: ">30工作日 / 取消默示验收"
+                    - generic [ref=f48e360]: 谈判建议：与客户沟通确认验收期，必要时调整合同条款
+                    - generic [ref=f48e361]: 谈判底线：若验收期>30工作日，必须取消默示验收并升级审批流程
+            - generic [ref=f48e290]:
+              - heading "3. 记录谈判结果" [level=3] [ref=f48e291]
+              - generic [ref=f48e292]:
+                - button "客户已同意" [ref=f48e293] [cursor=pointer]
+                - button "客户有反馈" [ref=f48e294] [cursor=pointer]
+                - button "要求特批" [ref=f48e295] [cursor=pointer]
+              - paragraph [ref=f48e296]: 记录客户已接受的法务策略与参数。
+            - generic [ref=f48e299]: 草稿已暂存 · 客户已同意
+            - button [ref=f48e301] [cursor=pointer]
+            - group [ref=f48e307]:
+              - generic "运行证据（辅助审计）" [ref=f48e308] [cursor=pointer]
+          - generic [ref=f48e309]:
+            - generic [ref=f48e314]:
+              - paragraph [ref=f48e315]: 提交前冲突检查未通过
+              - generic [ref=f48e317]:
+                - paragraph [ref=f48e318]: 一致性约束 G5_ACCEPTANCE_CONFLICT 在不同条款选择了互斥等级 B / A，请统一处理口径。
+                - generic [ref=f48e319]:
+                  - button "回到风险 3" [ref=f48e320] [cursor=pointer]
+                  - button "回到风险 10" [active] [ref=f48e321] [cursor=pointer]
+            - generic [ref=f48e310]:
+              - button "上一条" [ref=f48e311] [cursor=pointer]
+              - button "暂存策略与谈判结果" [ref=f48e312] [cursor=pointer]
+              - button "下一条" [ref=f48e313] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=f48e76] [cursor=pointer]
+  - alert [ref=f48e80]

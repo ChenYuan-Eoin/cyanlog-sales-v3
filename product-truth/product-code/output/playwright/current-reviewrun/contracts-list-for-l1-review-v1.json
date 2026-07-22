@@ -1,0 +1,128 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "data": [
+        {
+          "id": "f381041d-f313-4d40-b4b3-fd474277ed84",
+          "filename": "",
+          "status": "DRAFT",
+          "contract_no": "CT-20260702-001",
+          "quote_id": null,
+          "party_b_name": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1)",
+          "created_by": "30000001-0000-0000-0000-000000000000",
+          "created_at": "2026-07-02T01:55:55.152526+00:00",
+          "updated_at": "2026-07-02T01:55:55.152526+00:00"
+        },
+        {
+          "id": "0ca03c97-8104-4211-a65f-3d76e5f14b8a",
+          "filename": "prod-gemini-review-sample-1782906641409.docx",
+          "status": "COMPLETED",
+          "contract_no": "CT-20260701-003",
+          "quote_id": null,
+          "party_b_name": "验收客户有限公司",
+          "created_by": "00030001-0000-0000-0000-000000000000",
+          "created_at": "2026-07-01T11:50:43.541569+00:00",
+          "updated_at": "2026-07-01T16:49:19.389945+00:00"
+        },
+        {
+          "id": "058ef76f-ad26-49ef-9383-de09749879bd",
+          "filename": "(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx",
+          "status": "COMPLETED",
+          "contract_no": "CT-20260701-002",
+          "quote_id": null,
+          "party_b_name": "待识别客户",
+          "created_by": "30000001-0000-0000-0000-000000000000",
+          "created_at": "2026-07-01T08:42:34.354815+00:00",
+          "updated_at": "2026-07-01T10:33:39.761097+00:00"
+        },
+        {
+          "id": "a1cc7ba3-7890-447a-9db8-980daf424faa",
+          "filename": "",
+          "status": "DRAFT",
+          "contract_no": "CT-20260701-001",
+          "quote_id": null,
+          "party_b_name": "待识别客户",
+          "created_by": "30000001-0000-0000-0000-000000000000",
+          "created_at": "2026-07-01T08:42:09.905713+00:00",
+          "updated_at": "2026-07-01T08:42:09.905713+00:00"
+        },
+        {
+          "id": "c0319a20-eec1-493f-8ea1-bbd1b408a4f8",
+          "filename": "ones-contract-e2e-risk.docx",
+          "status": "COMPLETED",
+          "contract_no": "CT-20260630-002",
+          "quote_id": null,
+          "party_b_name": "ONES E2E 客户 1782798685151",
+          "created_by": "00030001-0000-0000-0000-000000000000",
+          "created_at": "2026-06-30T05:51:25.993057+00:00",
+          "updated_at": "2026-07-02T04:17:08.534527+00:00"
+        },
+        {
+          "id": "25d3192e-32d1-44c5-9396-179f1a7309ab",
+          "filename": "",
+          "status": "DRAFT",
+          "contract_no": "CT-20260630-001",
+          "quote_id": null,
+          "party_b_name": "ONES E2E 客户 1782798616264",
+          "created_by": "00030001-0000-0000-0000-000000000000",
+          "created_at": "2026-06-30T05:50:17.28905+00:00",
+          "updated_at": "2026-06-30T05:50:17.28905+00:00"
+        },
+        {
+          "id": "44301b16-6551-4720-afa5-f1d80b1604de",
+          "filename": "Hemory_.docx",
+          "status": "COMPLETED",
+          "contract_no": null,
+          "quote_id": null,
+          "party_b_name": "",
+          "created_by": "30000001-0000-0000-0000-000000000000",
+          "created_at": "2026-06-16T03:44:53.773032+00:00",
+          "updated_at": "2026-06-30T08:26:04.153151+00:00"
+        },
+        {
+          "id": "13aca6c2-e902-4458-9e94-6d8db8ae7a09",
+          "filename": "_ONES_-_2026.docx",
+          "status": "COMPLETED",
+          "contract_no": null,
+          "quote_id": null,
+          "party_b_name": "",
+          "created_by": "30000001-0000-0000-0000-000000000000",
+          "created_at": "2026-06-10T10:53:21.255791+00:00",
+          "updated_at": "2026-06-30T08:37:54.895606+00:00"
+        },
+        {
+          "id": "0286f885-fc49-4a43-9543-798aca2dda16",
+          "filename": "_2026_ONES_1_.docx",
+          "status": "COMPLETED",
+          "contract_no": null,
+          "quote_id": null,
+          "party_b_name": "",
+          "created_by": "30000001-0000-0000-0000-000000000000",
+          "created_at": "2026-06-10T09:29:08.839954+00:00",
+          "updated_at": "2026-06-25T08:16:57.130863+00:00"
+        },
+        {
+          "id": "12cbe7cf-b4ef-493e-93f4-341430f1ec1c",
+          "filename": "minimal.pdf",
+          "status": "PENDING",
+          "contract_no": null,
+          "quote_id": null,
+          "party_b_name": "",
+          "created_by": "30000002-0000-0000-0000-000000000000",
+          "created_at": "2026-06-09T08:03:52.420103+00:00",
+          "updated_at": "2026-06-25T08:16:57.130863+00:00"
+        }
+      ],
+      "meta": {
+        "page": 1,
+        "pageSize": 20,
+        "total": 10,
+        "totalPages": 1,
+        "hasNext": false,
+        "hasPrev": false
+      }
+    }
+  }
+}

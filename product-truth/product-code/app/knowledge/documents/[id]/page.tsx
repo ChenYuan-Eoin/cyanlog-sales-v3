@@ -11,7 +11,7 @@ import {
 } from '@/lib/tech-documents/types'
 
 interface PageProps {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function TechDocumentDetailPage({ params }: PageProps) {

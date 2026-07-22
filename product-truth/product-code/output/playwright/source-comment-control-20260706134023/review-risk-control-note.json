@@ -1,0 +1,12 @@
+{
+  "id": "ff2f4b82-e953-4e17-85e2-1ab69fb162ba",
+  "title": "付款节奏",
+  "fix_action": {
+    "control_note": "回款按 3/3/4 分三期，首期验收后 15 个工作日内支付；客户需在回传版中明确比例、账期和验收节点。",
+    "controlled_at": "2026-07-06T05:40:26.490Z",
+    "controlled_by": "00030001-0000-0000-0000-000000000000",
+    "control_source": "manual_review_note",
+    "control_status": "needs_customer_confirmation",
+    "proposed_value": null
+  }
+}

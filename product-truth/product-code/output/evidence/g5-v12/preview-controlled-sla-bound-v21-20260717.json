@@ -1,0 +1,189 @@
+{
+  "schema_version": "g5-bound-review-chain.v2",
+  "generated_at": "2026-07-17T16:10:27.985Z",
+  "cost": {
+    "recurring_usd_per_month": 0,
+    "paid_account_created": false,
+    "paid_action_taken": false
+  },
+  "preview": {
+    "project_ref": "vsfropnfsmnonkotywsx",
+    "production_touched": false
+  },
+  "contract": {
+    "id": "11165ce4-7b16-4d77-8d72-6a4a90c6d07e",
+    "source_storage_path": "11165ce4-7b16-4d77-8d72-6a4a90c6d07e/3d633f4b-fd25-4ba9-a1e9-4e705cb5aab3_controlled-sla-macro.docm",
+    "source_sha256": "5b44c4fd64730f4c1864157bcd3a717f22968740b17db7954bf65283d14d2d6f",
+    "source_text_sha256": "d954528a82af29c08e7a34a29f1b1165e06ce36e3c1066aa4880add069e60333"
+  },
+  "frozen_truth": {
+    "bundle_id": "f0c9573f-25d4-4549-9919-e5211de30233",
+    "bundle_version": 21,
+    "model_policy_id": "5f10d78f-fc1a-49c7-b0eb-d75794351531",
+    "rule_set_snapshot_count": 13,
+    "rule_snapshot_count": 15
+  },
+  "review_chain": [
+    {
+      "review_id": "7aedd51c-1b3d-4b1b-a016-c95cba67cd56",
+      "review_trigger": "direct",
+      "parent_review_id": null,
+      "status": "COMPLETED",
+      "result_risk_count": 1,
+      "summary": "合同 SLA 条款存在红色风险：承诺'7x24 小时’且'不含赔付责任’，直接命中规则 R013 的红线标准（私有部署承诺可用性/7×24 且无赔偿），需立即整改。",
+      "skill_bundle_id": "f0c9573f-25d4-4549-9919-e5211de30233",
+      "rule_version": 21,
+      "model_policy_id": "5f10d78f-fc1a-49c7-b0eb-d75794351531",
+      "model_invocation_ids": [
+        "84ea7569-7299-4b53-bb93-37ed3be3a29f"
+      ],
+      "invocation": {
+        "id": "84ea7569-7299-4b53-bb93-37ed3be3a29f",
+        "provider": "local-qwen35-9b",
+        "model": "qwen3.5-9b-local",
+        "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+        "status": "completed",
+        "degraded": false,
+        "usage": {
+          "input": 6220,
+          "output": 341,
+          "total": 6561
+        }
+      },
+      "risks": [
+        {
+          "id": "91c2d819-3253-4eca-9458-c603ad9d2cce",
+          "rule_code": "R013",
+          "status": "open",
+          "level": "red",
+          "decision_outcome": null,
+          "decision_reason": null
+        }
+      ]
+    },
+    {
+      "review_id": "63b61034-1a03-4ca9-a90c-7049a9c051d0",
+      "review_trigger": "decision_batch",
+      "parent_review_id": "7aedd51c-1b3d-4b1b-a016-c95cba67cd56",
+      "status": "COMPLETED",
+      "result_risk_count": 1,
+      "summary": "合同存在 SLA 条款红线风险：承诺 7x24 但无赔付责任且无可用性口径，违反规则 R013 红线要求。销售决策虽标记 customer_agreed，但条款原文仍保留高风险内容，需强制修订以符合合规底线。",
+      "skill_bundle_id": "f0c9573f-25d4-4549-9919-e5211de30233",
+      "rule_version": 21,
+      "model_policy_id": "5f10d78f-fc1a-49c7-b0eb-d75794351531",
+      "model_invocation_ids": [
+        "98e5b349-08cf-4a94-80dd-32eb7ca18506"
+      ],
+      "invocation": {
+        "id": "98e5b349-08cf-4a94-80dd-32eb7ca18506",
+        "provider": "local-qwen35-9b",
+        "model": "qwen3.5-9b-local",
+        "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+        "status": "completed",
+        "degraded": false,
+        "usage": {
+          "input": 6465,
+          "output": 340,
+          "total": 6805
+        }
+      },
+      "risks": [
+        {
+          "id": "16a67ec3-633f-41df-8e3e-dfbca8dd181f",
+          "rule_code": "R013",
+          "status": "open",
+          "level": "red",
+          "decision_outcome": "needs_revision",
+          "decision_reason": "模型逐风险复审仍发现未解决问题。"
+        }
+      ]
+    },
+    {
+      "review_id": "65f48435-56bb-4f23-9cd7-b0bc76957f65",
+      "review_trigger": "decision_batch",
+      "parent_review_id": "63b61034-1a03-4ca9-a90c-7049a9c051d0",
+      "status": "COMPLETED",
+      "result_risk_count": 0,
+      "summary": "复审确认：针对 SLA 条款（R013）的提交项 item 1 中，客户已同意（customer_agreed）销售决策建议，且受控输出（controlled_output）已明确要求按策略和底线（bottom_line）进行整改，即调整服务级别并明确补偿上限。根据复审语义，原文保留不视为风险未解决，故无未解决风险。",
+      "skill_bundle_id": "f0c9573f-25d4-4549-9919-e5211de30233",
+      "rule_version": 21,
+      "model_policy_id": "5f10d78f-fc1a-49c7-b0eb-d75794351531",
+      "model_invocation_ids": [
+        "1068a0c0-9dca-43e5-8082-efe7f9c0eeaf"
+      ],
+      "invocation": {
+        "id": "1068a0c0-9dca-43e5-8082-efe7f9c0eeaf",
+        "provider": "local-qwen35-9b",
+        "model": "qwen3.5-9b-local",
+        "source_config_id": "2842db31-7b65-4011-bdbe-a9ae5a59a0e3",
+        "status": "completed",
+        "degraded": false,
+        "usage": {
+          "input": 6676,
+          "output": 101,
+          "total": 6777
+        }
+      },
+      "risks": [
+        {
+          "id": "0f5631e8-84ea-4f73-8e5b-ae64d39cb617",
+          "rule_code": "R013",
+          "status": "fixed",
+          "level": "red",
+          "decision_outcome": "resolved",
+          "decision_reason": "已发布策略、客户同意和受控对外内容均经复审确认。"
+        }
+      ]
+    }
+  ],
+  "batches": [
+    {
+      "id": "094b3298-081d-42cd-b337-2701c5dbd4d3",
+      "source_review_id": "7aedd51c-1b3d-4b1b-a016-c95cba67cd56",
+      "new_review_id": "63b61034-1a03-4ca9-a90c-7049a9c051d0",
+      "analysis_job_id": "33a3ab58-5a89-4e71-871f-655a7beb45ad",
+      "status": "completed",
+      "conflict_report": []
+    },
+    {
+      "id": "309a24f2-224a-49fb-a83d-fd94d9d8d80e",
+      "source_review_id": "63b61034-1a03-4ca9-a90c-7049a9c051d0",
+      "new_review_id": "65f48435-56bb-4f23-9cd7-b0bc76957f65",
+      "analysis_job_id": "f9c96518-3cd7-4143-a7fc-87f9f567c71d",
+      "status": "completed",
+      "conflict_report": []
+    }
+  ],
+  "passed_decision": {
+    "draft_id": "c5d98328-9565-47d3-bb91-221a6333a31e",
+    "review_id": "63b61034-1a03-4ca9-a90c-7049a9c051d0",
+    "risk_id": "16a67ec3-633f-41df-8e3e-dfbca8dd181f",
+    "workflow_state": "REVIEW_PASSED",
+    "status": "batch_submitted",
+    "negotiation_result": "customer_agreed",
+    "resolution_strategy_id": "f0be3d78-449d-4573-aa85-569f757ab4cb:B",
+    "customer_comment": "该 SLA 条款包含 7×24 承诺且未约定可验证的可用性口径与责任边界，建议调整为与实际部署和保障能力一致的服务级别，并明确补偿上限。"
+  },
+  "export": {
+    "path": "/Users/nsss/Price-v3/product-truth/product-code/output/evidence/g5-v12/preview-controlled-sla-bound-v21-annotated-20260717.docm",
+    "sha256": "2894808ec8ed479b0354e97e5a60ccadec410197c2f0c90892b25ac8aed83d49",
+    "content_type": "application/vnd.ms-word.document.macroEnabled.12",
+    "native_comment_count": 1,
+    "native_comments": [
+      "该 SLA 条款包含 7×24 承诺且未约定可验证的可用性口径与责任边界，建议调整为与实际部署和保障能力一致的服务级别，并明确补偿上限。"
+    ],
+    "source_vba_part_sha256": {
+      "word/vbaProject.bin": "921bbf317d6bf7c46d4c425977ed22a0c18a364427c387327bc1792f3f43b837",
+      "word/_rels/vbaProject.bin.rels": "c97833e6456aa2bfe9be614f9c3ae41a8ef764b1cc3af92c6a6f273c62309122",
+      "word/vbaData.xml": "6d94c5b23c8b9c9ed4e1c1922e4be3ce620b243f9a9d0a3fb9818d1679743c0f"
+    },
+    "export_vba_part_sha256": {
+      "word/vbaProject.bin": "921bbf317d6bf7c46d4c425977ed22a0c18a364427c387327bc1792f3f43b837",
+      "word/_rels/vbaProject.bin.rels": "c97833e6456aa2bfe9be614f9c3ae41a8ef764b1cc3af92c6a6f273c62309122",
+      "word/vbaData.xml": "6d94c5b23c8b9c9ed4e1c1922e4be3ce620b243f9a9d0a3fb9818d1679743c0f"
+    }
+  },
+  "cleanup_pending": {
+    "contract_id": "11165ce4-7b16-4d77-8d72-6a4a90c6d07e"
+  }
+}

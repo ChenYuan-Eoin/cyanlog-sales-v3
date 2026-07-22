@@ -1,0 +1,33 @@
+- generic [active] [ref=f5e1]:
+  - main [ref=f5e2]:
+    - generic [ref=f5e3]:
+      - generic [ref=f5e4]:
+        - generic [ref=f5e5]:
+          - img "ONES Sales" [ref=f5e7]
+          - generic [ref=f5e8]:
+            - generic [ref=f5e9]: ONES Sales
+            - generic [ref=f5e10]: 智能协作平台
+        - generic [ref=f5e11]:
+          - generic [ref=f5e12]: 访问验证
+          - heading "ONES Sales" [level=1] [ref=f5e13]
+          - paragraph [ref=f5e14]: 从客户接触到合同审批，关键节点、参与人和材料在同一套业务界面里流转。验证通过后进入工作台首页。
+        - generic:
+          - img
+      - generic [ref=f5e15]:
+        - generic [ref=f5e16]:
+          - generic [ref=f5e17]: 企业工作空间
+          - heading "企业销售支持平台" [level=1] [ref=f5e18]
+          - paragraph [ref=f5e19]: 企业销售支持平台
+          - generic [ref=f5e20]:
+            - generic [ref=f5e21]:
+              - generic [ref=f5e22]: 企业邮箱
+              - textbox "企业邮箱" [ref=f5e23]:
+                - /placeholder: name@company.com
+            - generic [ref=f5e24]:
+              - generic [ref=f5e25]: 密码
+              - textbox "密码" [ref=f5e26]:
+                - /placeholder: ••••••••
+            - button "进入工作台" [ref=f5e27] [cursor=pointer]
+            - button "使用企业 SSO 登录（请联系管理员开通）" [disabled] [ref=f5e28]
+        - paragraph [ref=f5e29]: 仅授权成员可访问机会、报价、合同、审批和协同记录。
+  - alert [ref=f5e30]

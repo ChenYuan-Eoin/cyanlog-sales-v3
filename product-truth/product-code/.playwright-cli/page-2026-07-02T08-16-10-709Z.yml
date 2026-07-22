@@ -1,0 +1,774 @@
+- generic [active] [ref=f1e1]:
+  - complementary [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - img "ONES Sales" [ref=f1e240]
+      - generic [ref=f1e5]:
+        - generic [ref=f1e6]: ONES Sales
+        - paragraph [ref=f1e7]: 智能协作平台
+    - navigation [ref=f1e8]:
+      - link "工作台" [ref=f1e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=f1e10]
+        - generic [ref=f1e14]: 工作台
+      - link "报价中心" [ref=f1e15] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f1e16]
+        - generic [ref=f1e20]: 报价中心
+      - link "合同审核" [ref=f1e21] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f1e22]
+        - generic [ref=f1e27]: 合同审核
+      - link "标书中心" [ref=f1e28] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f1e29]
+        - generic [ref=f1e33]: 标书中心
+      - link "知识库" [ref=f1e34] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f1e35]
+        - generic [ref=f1e40]: 知识库
+      - link "日程" [ref=f1e41] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f1e42]
+        - generic [ref=f1e48]: 日程
+      - link "配置中心" [ref=f1e49] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f1e50]
+        - generic [ref=f1e54]: 配置中心
+    - generic [ref=f1e55]:
+      - link "个人信息" [ref=f1e56] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f1e57]
+        - generic [ref=f1e60]: 个人信息
+      - button "退出登录" [ref=f1e61] [cursor=pointer]:
+        - img [ref=f1e62]
+        - generic [ref=f1e65]: 退出登录
+  - main [ref=f1e66]:
+    - generic [ref=f1e68]:
+      - generic [ref=f1e69]:
+        - generic [ref=f1e70]:
+          - generic [ref=f1e71]:
+            - img [ref=f1e72]
+            - text: 组织级配置工作台
+          - heading "配置中心" [level=1] [ref=f1e76]
+          - paragraph [ref=f1e77]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=f1e78]:
+          - generic [ref=f1e79]:
+            - generic [ref=f1e80]: 生效范围
+            - generic [ref=f1e81]: 组织级统一发布
+          - generic [ref=f1e82]:
+            - generic [ref=f1e83]: 消费端
+            - generic [ref=f1e84]: 报价 / 合同 / AI
+          - generic [ref=f1e85]:
+            - generic [ref=f1e86]: 当前配置集
+            - generic [ref=f1e87]: 合同审核策略
+      - generic [ref=f1e88]:
+        - complementary [ref=f1e89]:
+          - generic [ref=f1e90]:
+            - generic [ref=f1e91]:
+              - generic [ref=f1e92]: 配置域
+              - paragraph [ref=f1e93]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=f1e94]:
+              - button "交易配置 ... 围绕报价工作台的价盘、税率和审批配置。" [ref=f1e95] [cursor=pointer]:
+                - generic [ref=f1e96]:
+                  - generic [ref=f1e97]: 交易配置
+                  - generic [ref=f1e98]: ...
+                - paragraph [ref=f1e99]: 围绕报价工作台的价盘、税率和审批配置。
+              - button "合同与 AI 规则 15+ 围绕合同审核规则、模型路由和运行时策略的配置集。" [ref=f1e241] [cursor=pointer]:
+                - generic [ref=f1e101]:
+                  - generic [ref=f1e102]: 合同与 AI 规则
+                  - generic [ref=f1e103]: 15+
+                - paragraph [ref=f1e104]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button "组织与权限 ... 围绕部门、成员、角色能力和作用域分配的组织控制面。" [ref=f1e105] [cursor=pointer]:
+                - generic [ref=f1e106]:
+                  - generic [ref=f1e107]: 组织与权限
+                  - generic [ref=f1e108]: ...
+                - paragraph [ref=f1e109]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button "界面与体验 ... 运行时主题和界面变量集中配置发布。" [ref=f1e110] [cursor=pointer]:
+                - generic [ref=f1e111]:
+                  - generic [ref=f1e112]: 界面与体验
+                  - generic [ref=f1e113]: ...
+                - paragraph [ref=f1e114]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=f1e115]:
+              - generic [ref=f1e116]: 结构约束
+              - list [ref=f1e117]:
+                - listitem [ref=f1e118]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=f1e119]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=f1e120]: 配置项需要有版本、状态和作用范围。
+        - main [ref=f1e121]:
+          - generic [ref=f1e122]:
+            - generic [ref=f1e123]:
+              - generic [ref=f1e124]:
+                - generic [ref=f1e125]:
+                  - generic [ref=f1e126]: 配置中心
+                  - generic [ref=f1e127]: /
+                  - generic [ref=f1e128]: 合同与 AI 规则
+                - generic [ref=f1e129]:
+                  - img [ref=f1e131]
+                  - generic [ref=f1e134]:
+                    - heading "合同审核策略" [level=2] [ref=f1e135]
+                    - paragraph [ref=f1e136]: 管理合同审核策略规则，供合同审核与本地模型执行。
+              - generic [ref=f1e137]:
+                - generic [ref=f1e138]:
+                  - generic [ref=f1e139]: 规则总数
+                  - generic [ref=f1e140]: "15"
+                - generic [ref=f1e141]:
+                  - generic [ref=f1e142]: 启用规则
+                  - generic [ref=f1e143]: "15"
+                - generic [ref=f1e144]:
+                  - generic [ref=f1e145]: 语义规则
+                  - generic [ref=f1e146]: "15"
+            - generic [ref=f1e147]:
+              - button "合同审核策略 15" [ref=f1e242] [cursor=pointer]:
+                - img [ref=f1e149]
+                - generic [ref=f1e152]: 合同审核策略
+                - generic [ref=f1e153]: "15"
+              - button "AI 模型配置 ..." [ref=f1e154] [cursor=pointer]:
+                - img [ref=f1e155]
+                - generic [ref=f1e160]: AI 模型配置
+                - generic [ref=f1e161]: ...
+          - generic [ref=f1e243]:
+            - generic [ref=f1e244]:
+              - generic [ref=f1e245]:
+                - generic [ref=f1e246]: 规则集目录 (13)
+                - button "新建" [ref=f1e247] [cursor=pointer]:
+                  - img
+                  - text: 新建
+              - generic [ref=f1e249]:
+                - button "全部规则集 15 ALL 发布 15 就绪 15 阻断 0" [ref=f1e250] [cursor=pointer]:
+                  - generic [ref=f1e251]:
+                    - img [ref=f1e253]
+                    - generic [ref=f1e258]:
+                      - generic [ref=f1e259]:
+                        - generic [ref=f1e260]: 全部规则集
+                        - generic [ref=f1e261]: "15"
+                      - generic [ref=f1e262]: ALL
+                      - generic [ref=f1e263]:
+                        - generic [ref=f1e264]: 发布 15
+                        - generic [ref=f1e265]: 就绪 15
+                        - generic [ref=f1e266]: 阻断 0
+                - button "付款与结算 1 PAYMENT 发布 1 就绪 1 阻断 0" [ref=f1e267] [cursor=pointer]:
+                  - generic [ref=f1e268]:
+                    - img [ref=f1e270]
+                    - generic [ref=f1e275]:
+                      - generic [ref=f1e276]:
+                        - generic [ref=f1e277]: 付款与结算
+                        - generic [ref=f1e278]: "1"
+                      - generic [ref=f1e279]: PAYMENT
+                      - generic [ref=f1e280]:
+                        - generic [ref=f1e281]: 发布 1
+                        - generic [ref=f1e282]: 就绪 1
+                        - generic [ref=f1e283]: 阻断 0
+                - button "终止与退款 1 TERMINATION 发布 1 就绪 1 阻断 0" [ref=f1e284] [cursor=pointer]:
+                  - generic [ref=f1e285]:
+                    - img [ref=f1e287]
+                    - generic [ref=f1e292]:
+                      - generic [ref=f1e293]:
+                        - generic [ref=f1e294]: 终止与退款
+                        - generic [ref=f1e295]: "1"
+                      - generic [ref=f1e296]: TERMINATION
+                      - generic [ref=f1e297]:
+                        - generic [ref=f1e298]: 发布 1
+                        - generic [ref=f1e299]: 就绪 1
+                        - generic [ref=f1e300]: 阻断 0
+                - button "税务与发票 1 TAX 发布 1 就绪 1 阻断 0" [ref=f1e301] [cursor=pointer]:
+                  - generic [ref=f1e302]:
+                    - img [ref=f1e304]
+                    - generic [ref=f1e309]:
+                      - generic [ref=f1e310]:
+                        - generic [ref=f1e311]: 税务与发票
+                        - generic [ref=f1e312]: "1"
+                      - generic [ref=f1e313]: TAX
+                      - generic [ref=f1e314]:
+                        - generic [ref=f1e315]: 发布 1
+                        - generic [ref=f1e316]: 就绪 1
+                        - generic [ref=f1e317]: 阻断 0
+                - button "验收与交付 2 ACCEPTANCE 发布 2 就绪 2 阻断 0" [ref=f1e318] [cursor=pointer]:
+                  - generic [ref=f1e319]:
+                    - img [ref=f1e321]
+                    - generic [ref=f1e326]:
+                      - generic [ref=f1e327]:
+                        - generic [ref=f1e328]: 验收与交付
+                        - generic [ref=f1e329]: "2"
+                      - generic [ref=f1e330]: ACCEPTANCE
+                      - generic [ref=f1e331]:
+                        - generic [ref=f1e332]: 发布 2
+                        - generic [ref=f1e333]: 就绪 2
+                        - generic [ref=f1e334]: 阻断 0
+                - button "违约责任 1 BREACH 发布 1 就绪 1 阻断 0" [ref=f1e335] [cursor=pointer]:
+                  - generic [ref=f1e336]:
+                    - img [ref=f1e338]
+                    - generic [ref=f1e343]:
+                      - generic [ref=f1e344]:
+                        - generic [ref=f1e345]: 违约责任
+                        - generic [ref=f1e346]: "1"
+                      - generic [ref=f1e347]: BREACH
+                      - generic [ref=f1e348]:
+                        - generic [ref=f1e349]: 发布 1
+                        - generic [ref=f1e350]: 就绪 1
+                        - generic [ref=f1e351]: 阻断 0
+                - button "责任边界 2 LIABILITY 发布 2 就绪 2 阻断 0" [ref=f1e352] [cursor=pointer]:
+                  - generic [ref=f1e353]:
+                    - img [ref=f1e355]
+                    - generic [ref=f1e360]:
+                      - generic [ref=f1e361]:
+                        - generic [ref=f1e362]: 责任边界
+                        - generic [ref=f1e363]: "2"
+                      - generic [ref=f1e364]: LIABILITY
+                      - generic [ref=f1e365]:
+                        - generic [ref=f1e366]: 发布 2
+                        - generic [ref=f1e367]: 就绪 2
+                        - generic [ref=f1e368]: 阻断 0
+                - button "保密义务 1 CONFIDENTIALITY 发布 1 就绪 1 阻断 0" [ref=f1e369] [cursor=pointer]:
+                  - generic [ref=f1e370]:
+                    - img [ref=f1e372]
+                    - generic [ref=f1e377]:
+                      - generic [ref=f1e378]:
+                        - generic [ref=f1e379]: 保密义务
+                        - generic [ref=f1e380]: "1"
+                      - generic [ref=f1e381]: CONFIDENTIALITY
+                      - generic [ref=f1e382]:
+                        - generic [ref=f1e383]: 发布 1
+                        - generic [ref=f1e384]: 就绪 1
+                        - generic [ref=f1e385]: 阻断 0
+                - button "主体与金额一致性 1 BUSINESS_INTEGRITY 发布 1 就绪 1 阻断 0" [ref=f1e386] [cursor=pointer]:
+                  - generic [ref=f1e387]:
+                    - img [ref=f1e389]
+                    - generic [ref=f1e394]:
+                      - generic [ref=f1e395]:
+                        - generic [ref=f1e396]: 主体与金额一致性
+                        - generic [ref=f1e397]: "1"
+                      - generic [ref=f1e398]: BUSINESS_INTEGRITY
+                      - generic [ref=f1e399]:
+                        - generic [ref=f1e400]: 发布 1
+                        - generic [ref=f1e401]: 就绪 1
+                        - generic [ref=f1e402]: 阻断 0
+                - button "知识产权 1 IP 发布 1 就绪 1 阻断 0" [ref=f1e403] [cursor=pointer]:
+                  - generic [ref=f1e404]:
+                    - img [ref=f1e406]
+                    - generic [ref=f1e411]:
+                      - generic [ref=f1e412]:
+                        - generic [ref=f1e413]: 知识产权
+                        - generic [ref=f1e414]: "1"
+                      - generic [ref=f1e415]: IP
+                      - generic [ref=f1e416]:
+                        - generic [ref=f1e417]: 发布 1
+                        - generic [ref=f1e418]: 就绪 1
+                        - generic [ref=f1e419]: 阻断 0
+                - button "数据安全 1 DATA_SECURITY 发布 1 就绪 1 阻断 0" [ref=f1e420] [cursor=pointer]:
+                  - generic [ref=f1e421]:
+                    - img [ref=f1e423]
+                    - generic [ref=f1e428]:
+                      - generic [ref=f1e429]:
+                        - generic [ref=f1e430]: 数据安全
+                        - generic [ref=f1e431]: "1"
+                      - generic [ref=f1e432]: DATA_SECURITY
+                      - generic [ref=f1e433]:
+                        - generic [ref=f1e434]: 发布 1
+                        - generic [ref=f1e435]: 就绪 1
+                        - generic [ref=f1e436]: 阻断 0
+                - button "SLA 与服务承诺 1 SLA 发布 1 就绪 1 阻断 0" [ref=f1e437] [cursor=pointer]:
+                  - generic [ref=f1e438]:
+                    - img [ref=f1e440]
+                    - generic [ref=f1e445]:
+                      - generic [ref=f1e446]:
+                        - generic [ref=f1e447]: SLA 与服务承诺
+                        - generic [ref=f1e448]: "1"
+                      - generic [ref=f1e449]: SLA
+                      - generic [ref=f1e450]:
+                        - generic [ref=f1e451]: 发布 1
+                        - generic [ref=f1e452]: 就绪 1
+                        - generic [ref=f1e453]: 阻断 0
+                - button "续约与退出 1 RENEWAL 发布 1 就绪 1 阻断 0" [ref=f1e454] [cursor=pointer]:
+                  - generic [ref=f1e455]:
+                    - img [ref=f1e457]
+                    - generic [ref=f1e462]:
+                      - generic [ref=f1e463]:
+                        - generic [ref=f1e464]: 续约与退出
+                        - generic [ref=f1e465]: "1"
+                      - generic [ref=f1e466]: RENEWAL
+                      - generic [ref=f1e467]:
+                        - generic [ref=f1e468]: 发布 1
+                        - generic [ref=f1e469]: 就绪 1
+                        - generic [ref=f1e470]: 阻断 0
+                - button "争议解决 1 DISPUTE 发布 1 就绪 1 阻断 0" [ref=f1e471] [cursor=pointer]:
+                  - generic [ref=f1e472]:
+                    - img [ref=f1e474]
+                    - generic [ref=f1e479]:
+                      - generic [ref=f1e480]:
+                        - generic [ref=f1e481]: 争议解决
+                        - generic [ref=f1e482]: "1"
+                      - generic [ref=f1e483]: DISPUTE
+                      - generic [ref=f1e484]:
+                        - generic [ref=f1e485]: 发布 1
+                        - generic [ref=f1e486]: 就绪 1
+                        - generic [ref=f1e487]: 阻断 0
+            - generic [ref=f1e489]:
+              - generic [ref=f1e490]:
+                - generic [ref=f1e491]:
+                  - generic [ref=f1e492]: 全部规则集 (15)
+                  - paragraph [ref=f1e493]: 所有规则集的发布、转译和 Skill 输入状态
+                - button "测试" [ref=f1e494] [cursor=pointer]:
+                  - img
+                  - text: 测试
+              - generic [ref=f1e496]:
+                - generic [ref=f1e497]:
+                  - button "R001 付款节奏 已发布 转译就绪 启用 可正式审核 比例类 混合 付款与结算 黄色 v3 ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日" [ref=f1e498] [cursor=pointer]:
+                    - generic [ref=f1e499]:
+                      - generic [ref=f1e500]:
+                        - generic [ref=f1e501]:
+                          - generic [ref=f1e502]: R001
+                          - generic [ref=f1e503]: 付款节奏
+                          - generic [ref=f1e504]: 已发布
+                          - generic [ref=f1e505]: 转译就绪
+                          - generic [ref=f1e506]: 启用
+                          - generic [ref=f1e507]: 可正式审核
+                        - generic [ref=f1e508]:
+                          - generic [ref=f1e509]: 比例类
+                          - generic [ref=f1e510]: 混合
+                          - generic [ref=f1e511]: 付款与结算
+                          - generic [ref=f1e512]: 黄色
+                          - generic [ref=f1e513]: v3
+                        - paragraph [ref=f1e514]: ONES skill 条款速查：A=首期≥30%，三段式 30/60/10，尾款账期≤30工作日；B=首期 15–29%；红线=首期<15% / 100%验收后付首款 / 账期>30工作日
+                      - img [ref=f1e515]
+                  - generic [ref=f1e517]:
+                    - generic [ref=f1e518]: A >= 30percent / B >= 15percent / C < 15percent
+                    - generic [ref=f1e519]:
+                      - button "AI 转译草稿" [disabled]:
+                        - img
+                      - button "版本管理" [ref=f1e521] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e522] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e523]:
+                  - button "R002 终止退款 已发布 转译就绪 启用 可正式审核 条款语义 混合 终止与退款 黄色 v3 ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息" [ref=f1e524] [cursor=pointer]:
+                    - generic [ref=f1e525]:
+                      - generic [ref=f1e526]:
+                        - generic [ref=f1e527]:
+                          - generic [ref=f1e528]: R002
+                          - generic [ref=f1e529]: 终止退款
+                          - generic [ref=f1e530]: 已发布
+                          - generic [ref=f1e531]: 转译就绪
+                          - generic [ref=f1e532]: 启用
+                          - generic [ref=f1e533]: 可正式审核
+                        - generic [ref=f1e534]:
+                          - generic [ref=f1e535]: 条款语义
+                          - generic [ref=f1e536]: 混合
+                          - generic [ref=f1e537]: 终止与退款
+                          - generic [ref=f1e538]: 黄色
+                          - generic [ref=f1e539]: v3
+                        - paragraph [ref=f1e540]: ONES skill 条款速查：A=不退款；B=仅退未消耗款项、不计息；红线=全额退款 / 计息
+                      - img [ref=f1e541]
+                  - generic [ref=f1e543]:
+                    - generic [ref=f1e544]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e545]:
+                      - button "AI 转译草稿" [ref=f1e546] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e547] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e548] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e549]:
+                  - button "R003 税率 已发布 转译就绪 启用 可正式审核 比例类 混合 税务与发票 黄色 v3 ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率" [ref=f1e550] [cursor=pointer]:
+                    - generic [ref=f1e551]:
+                      - generic [ref=f1e552]:
+                        - generic [ref=f1e553]:
+                          - generic [ref=f1e554]: R003
+                          - generic [ref=f1e555]: 税率
+                          - generic [ref=f1e556]: 已发布
+                          - generic [ref=f1e557]: 转译就绪
+                          - generic [ref=f1e558]: 启用
+                          - generic [ref=f1e559]: 可正式审核
+                        - generic [ref=f1e560]:
+                          - generic [ref=f1e561]: 比例类
+                          - generic [ref=f1e562]: 混合
+                          - generic [ref=f1e563]: 税务与发票
+                          - generic [ref=f1e564]: 黄色
+                          - generic [ref=f1e565]: v3
+                        - paragraph [ref=f1e566]: ONES skill 条款速查：A=软件买断/私有部署授权 13%；SaaS/订阅/服务/维保 6%；混合分项开票；B=—；红线=错套税率 / 统一税率 / 未写税率
+                      - img [ref=f1e567]
+                  - generic [ref=f1e569]:
+                    - generic [ref=f1e570]: A contains 0percent / B contains 0percent / C contains 0percent
+                    - generic [ref=f1e571]:
+                      - button "AI 转译草稿" [ref=f1e572] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e573] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e574] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e575]:
+                  - button "R004 默示验收期 已发布 转译就绪 启用 可正式审核 时限类 混合 验收与交付 黄色 v3 ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收" [ref=f1e576] [cursor=pointer]:
+                    - generic [ref=f1e577]:
+                      - generic [ref=f1e578]:
+                        - generic [ref=f1e579]:
+                          - generic [ref=f1e580]: R004
+                          - generic [ref=f1e581]: 默示验收期
+                          - generic [ref=f1e582]: 已发布
+                          - generic [ref=f1e583]: 转译就绪
+                          - generic [ref=f1e584]: 启用
+                          - generic [ref=f1e585]: 可正式审核
+                        - generic [ref=f1e586]:
+                          - generic [ref=f1e587]: 时限类
+                          - generic [ref=f1e588]: 混合
+                          - generic [ref=f1e589]: 验收与交付
+                          - generic [ref=f1e590]: 黄色
+                          - generic [ref=f1e591]: v3
+                        - paragraph [ref=f1e592]: ONES skill 条款速查：A=5工作日含默示（可至7–10）；B=15工作日（保留默示）；红线=>30工作日 / 取消默示验收
+                      - img [ref=f1e593]
+                  - generic [ref=f1e595]:
+                    - generic [ref=f1e596]: A <= 10day / B <= 15day / C > 30day
+                    - generic [ref=f1e597]:
+                      - button "AI 转译草稿" [ref=f1e598] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e599] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e600] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e601]:
+                  - button "R005 验收不通过 已发布 转译就绪 启用 可正式审核 条款语义 混合 验收与交付 黄色 v3 ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失" [ref=f1e602] [cursor=pointer]:
+                    - generic [ref=f1e603]:
+                      - generic [ref=f1e604]:
+                        - generic [ref=f1e605]:
+                          - generic [ref=f1e606]: R005
+                          - generic [ref=f1e607]: 验收不通过
+                          - generic [ref=f1e608]: 已发布
+                          - generic [ref=f1e609]: 转译就绪
+                          - generic [ref=f1e610]: 启用
+                          - generic [ref=f1e611]: 可正式审核
+                        - generic [ref=f1e612]:
+                          - generic [ref=f1e613]: 条款语义
+                          - generic [ref=f1e614]: 混合
+                          - generic [ref=f1e615]: 验收与交付
+                          - generic [ref=f1e616]: 黄色
+                          - generic [ref=f1e617]: v3
+                        - paragraph [ref=f1e618]: ONES skill 条款速查：A=整改重交；B=2次整改后可解除、限直接损失；红线=直接解除+全额退款 / 赔一切或间接损失
+                      - img [ref=f1e619]
+                  - generic [ref=f1e621]:
+                    - generic [ref=f1e622]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e623]:
+                      - button "AI 转译草稿" [ref=f1e624] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e625] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e626] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e627]:
+                  - button "R006 违约金 已发布 转译就绪 启用 可正式审核 比例类 混合 违约责任 黄色 v3 ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五" [ref=f1e628] [cursor=pointer]:
+                    - generic [ref=f1e629]:
+                      - generic [ref=f1e630]:
+                        - generic [ref=f1e631]:
+                          - generic [ref=f1e632]: R006
+                          - generic [ref=f1e633]: 违约金
+                          - generic [ref=f1e634]: 已发布
+                          - generic [ref=f1e635]: 转译就绪
+                          - generic [ref=f1e636]: 启用
+                          - generic [ref=f1e637]: 可正式审核
+                        - generic [ref=f1e638]:
+                          - generic [ref=f1e639]: 比例类
+                          - generic [ref=f1e640]: 混合
+                          - generic [ref=f1e641]: 违约责任
+                          - generic [ref=f1e642]: 黄色
+                          - generic [ref=f1e643]: v3
+                        - paragraph [ref=f1e644]: ONES skill 条款速查：A=乙方赔偿上限10%、日违约金万分之五；甲方日违约金千分之三；B=赔偿上限≤50%（50–100%需高风险提示）、日万分之五~千分之三；红线=赔偿上限>100% / 日>千分之三 / 违约金+实损累加 / 甲方日<万分之五
+                      - img [ref=f1e645]
+                  - generic [ref=f1e647]:
+                    - generic [ref=f1e648]: A <= 10percent / B <= 50percent / C > 100percent
+                    - generic [ref=f1e649]:
+                      - button "AI 转译草稿" [ref=f1e650] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e651] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e652] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e653]:
+                  - button "R007 间接损失 已发布 转译就绪 启用 可正式审核 条款语义 混合 责任边界 黄色 v3 ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿" [ref=f1e654] [cursor=pointer]:
+                    - generic [ref=f1e655]:
+                      - generic [ref=f1e656]:
+                        - generic [ref=f1e657]:
+                          - generic [ref=f1e658]: R007
+                          - generic [ref=f1e659]: 间接损失
+                          - generic [ref=f1e660]: 已发布
+                          - generic [ref=f1e661]: 转译就绪
+                          - generic [ref=f1e662]: 启用
+                          - generic [ref=f1e663]: 可正式审核
+                        - generic [ref=f1e664]:
+                          - generic [ref=f1e665]: 条款语义
+                          - generic [ref=f1e666]: 混合
+                          - generic [ref=f1e667]: 责任边界
+                          - generic [ref=f1e668]: 黄色
+                          - generic [ref=f1e669]: v3
+                        - paragraph [ref=f1e670]: ONES skill 条款速查：A=明确排除间接/可得利益/商誉/惩罚性；B=未提及（建议补排除条款）；红线=承担一切损失/间接损失/惩罚性赔偿
+                      - img [ref=f1e671]
+                  - generic [ref=f1e673]:
+                    - generic [ref=f1e674]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e675]:
+                      - button "AI 转译草稿" [ref=f1e676] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e677] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e678] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e679]:
+                  - button "R008 责任总额上限 Cap 已发布 转译就绪 启用 可正式审核 比例类 混合 责任边界 黄色 v3 ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向" [ref=f1e680] [cursor=pointer]:
+                    - generic [ref=f1e681]:
+                      - generic [ref=f1e682]:
+                        - generic [ref=f1e683]:
+                          - generic [ref=f1e684]: R008
+                          - generic [ref=f1e685]: 责任总额上限 Cap
+                          - generic [ref=f1e686]: 已发布
+                          - generic [ref=f1e687]: 转译就绪
+                          - generic [ref=f1e688]: 启用
+                          - generic [ref=f1e689]: 可正式审核
+                        - generic [ref=f1e690]:
+                          - generic [ref=f1e691]: 比例类
+                          - generic [ref=f1e692]: 混合
+                          - generic [ref=f1e693]: 责任边界
+                          - generic [ref=f1e694]: 黄色
+                          - generic [ref=f1e695]: v3
+                        - paragraph [ref=f1e696]: ONES skill 条款速查：A=≤50% 双向；B=50–100%；红线=>100% / 无 Cap / 单向
+                      - img [ref=f1e697]
+                  - generic [ref=f1e699]:
+                    - generic [ref=f1e700]: A <= 50percent / B <= 100percent / C > 100percent
+                    - generic [ref=f1e701]:
+                      - button "AI 转译草稿" [ref=f1e702] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e703] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e704] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e705]:
+                  - button "R009 保密期 已发布 转译就绪 启用 可正式审核 时限类 混合 保密义务 黄色 v3 ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）" [ref=f1e706] [cursor=pointer]:
+                    - generic [ref=f1e707]:
+                      - generic [ref=f1e708]:
+                        - generic [ref=f1e709]:
+                          - generic [ref=f1e710]: R009
+                          - generic [ref=f1e711]: 保密期
+                          - generic [ref=f1e712]: 已发布
+                          - generic [ref=f1e713]: 转译就绪
+                          - generic [ref=f1e714]: 启用
+                          - generic [ref=f1e715]: 可正式审核
+                        - generic [ref=f1e716]:
+                          - generic [ref=f1e717]: 时限类
+                          - generic [ref=f1e718]: 混合
+                          - generic [ref=f1e719]: 保密义务
+                          - generic [ref=f1e720]: 黄色
+                          - generic [ref=f1e721]: v3
+                        - paragraph [ref=f1e722]: ONES skill 条款速查：A=5年双向（3–7年）；B=10年双向；红线=单向 / 永久（非商业秘密）
+                      - img [ref=f1e723]
+                  - generic [ref=f1e725]:
+                    - generic [ref=f1e726]: A <= 7year / B <= 10year / C > 10year
+                    - generic [ref=f1e727]:
+                      - button "AI 转译草稿" [ref=f1e728] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e729] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e730] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e731]:
+                  - button "R010 主体·收款·金额 已发布 转译就绪 启用 可正式审核 条款语义 混合 主体与金额一致性 黄色 v3 ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=大写=附件=报价单；B=旧版模板（建议更新）；红线=主体错/外部账户/金额不一致/含税不等/日期逻辑错" [ref=f1e732] [cursor=pointer]:
+                    - generic [ref=f1e733]:
+                      - generic [ref=f1e734]:
+                        - generic [ref=f1e735]:
+                          - generic [ref=f1e736]: R010
+                          - generic [ref=f1e737]: 主体·收款·金额
+                          - generic [ref=f1e738]: 已发布
+                          - generic [ref=f1e739]: 转译就绪
+                          - generic [ref=f1e740]: 启用
+                          - generic [ref=f1e741]: 可正式审核
+                        - generic [ref=f1e742]:
+                          - generic [ref=f1e743]: 条款语义
+                          - generic [ref=f1e744]: 混合
+                          - generic [ref=f1e745]: 主体与金额一致性
+                          - generic [ref=f1e746]: 黄色
+                          - generic [ref=f1e747]: v3
+                        - paragraph [ref=f1e748]: ONES skill 条款速查：A=主体/账户/签字/日期正确，且数字=大写=附件=报价单；B=旧版模板（建议更新）；红线=主体错/外部账户/金额不一致/含税不等/日期逻辑错
+                      - img [ref=f1e749]
+                  - generic [ref=f1e751]:
+                    - generic [ref=f1e752]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e753]:
+                      - button "AI 转译草稿" [ref=f1e754] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e755] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e756] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e757]:
+                  - button "R011 IP 归属 已发布 转译就绪 启用 可正式审核 条款语义 混合 知识产权 黄色 v3 ONES skill 条款速查：A=ONES 保留全部 IP + 客户使用许可；B=二次开发归属让步需提价；红线=客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让" [ref=f1e758] [cursor=pointer]:
+                    - generic [ref=f1e759]:
+                      - generic [ref=f1e760]:
+                        - generic [ref=f1e761]:
+                          - generic [ref=f1e762]: R011
+                          - generic [ref=f1e763]: IP 归属
+                          - generic [ref=f1e764]: 已发布
+                          - generic [ref=f1e765]: 转译就绪
+                          - generic [ref=f1e766]: 启用
+                          - generic [ref=f1e767]: 可正式审核
+                        - generic [ref=f1e768]:
+                          - generic [ref=f1e769]: 条款语义
+                          - generic [ref=f1e770]: 混合
+                          - generic [ref=f1e771]: 知识产权
+                          - generic [ref=f1e772]: 黄色
+                          - generic [ref=f1e773]: v3
+                        - paragraph [ref=f1e774]: ONES skill 条款速查：A=ONES 保留全部 IP + 客户使用许可；B=二次开发归属让步需提价；红线=客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让
+                      - img [ref=f1e775]
+                  - generic [ref=f1e777]:
+                    - generic [ref=f1e778]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e779]:
+                      - button "AI 转译草稿" [ref=f1e780] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e781] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e782] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e783]:
+                  - button "R012 数据安全 已发布 转译就绪 启用 可正式审核 条款语义 混合 数据安全 黄色 v3 ONES skill 条款速查：A=客户数据归客户 + ONES 受限处理；B=加密/本地化/立即删除可让；红线=AI训练无授权；海外/境外主体/跨境处理涉个信无 DPA（境内客户不因缺DPA单列风险）" [ref=f1e784] [cursor=pointer]:
+                    - generic [ref=f1e785]:
+                      - generic [ref=f1e786]:
+                        - generic [ref=f1e787]:
+                          - generic [ref=f1e788]: R012
+                          - generic [ref=f1e789]: 数据安全
+                          - generic [ref=f1e790]: 已发布
+                          - generic [ref=f1e791]: 转译就绪
+                          - generic [ref=f1e792]: 启用
+                          - generic [ref=f1e793]: 可正式审核
+                        - generic [ref=f1e794]:
+                          - generic [ref=f1e795]: 条款语义
+                          - generic [ref=f1e796]: 混合
+                          - generic [ref=f1e797]: 数据安全
+                          - generic [ref=f1e798]: 黄色
+                          - generic [ref=f1e799]: v3
+                        - paragraph [ref=f1e800]: ONES skill 条款速查：A=客户数据归客户 + ONES 受限处理；B=加密/本地化/立即删除可让；红线=AI训练无授权；海外/境外主体/跨境处理涉个信无 DPA（境内客户不因缺DPA单列风险）
+                      - img [ref=f1e801]
+                  - generic [ref=f1e803]:
+                    - generic [ref=f1e804]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e805]:
+                      - button "AI 转译草稿" [ref=f1e806] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e807] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e808] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e809]:
+                  - button "R013 SLA 已发布 转译就绪 启用 可正式审核 枚举类 混合 SLA 与服务承诺 黄色 v3 ONES skill 条款速查：A=公有云 99.5% + 服务费比例赔偿；B=99.9% 需售后评估架构；红线=按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24" [ref=f1e810] [cursor=pointer]:
+                    - generic [ref=f1e811]:
+                      - generic [ref=f1e812]:
+                        - generic [ref=f1e813]:
+                          - generic [ref=f1e814]: R013
+                          - generic [ref=f1e815]: SLA
+                          - generic [ref=f1e816]: 已发布
+                          - generic [ref=f1e817]: 转译就绪
+                          - generic [ref=f1e818]: 启用
+                          - generic [ref=f1e819]: 可正式审核
+                        - generic [ref=f1e820]:
+                          - generic [ref=f1e821]: 枚举类
+                          - generic [ref=f1e822]: 混合
+                          - generic [ref=f1e823]: SLA 与服务承诺
+                          - generic [ref=f1e824]: 黄色
+                          - generic [ref=f1e825]: v3
+                        - paragraph [ref=f1e826]: ONES skill 条款速查：A=公有云 99.5% + 服务费比例赔偿；B=99.9% 需售后评估架构；红线=按合同总额/含营业损失赔偿 / 私有部署承诺可用性 / 7×24
+                      - img [ref=f1e827]
+                  - generic [ref=f1e829]:
+                    - generic [ref=f1e830]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e831]:
+                      - button "AI 转译草稿" [ref=f1e832] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e833] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e834] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e835]:
+                  - button "R014 续约 已发布 转译就绪 启用 可正式审核 条款语义 混合 续约与退出 黄色 v3 ONES skill 条款速查：A=书面续约、到期自动终止；B=自动续期+≥30日通知；年涨幅≤5%；红线=永久锁价 / 自动续期无退出权" [ref=f1e836] [cursor=pointer]:
+                    - generic [ref=f1e837]:
+                      - generic [ref=f1e838]:
+                        - generic [ref=f1e839]:
+                          - generic [ref=f1e840]: R014
+                          - generic [ref=f1e841]: 续约
+                          - generic [ref=f1e842]: 已发布
+                          - generic [ref=f1e843]: 转译就绪
+                          - generic [ref=f1e844]: 启用
+                          - generic [ref=f1e845]: 可正式审核
+                        - generic [ref=f1e846]:
+                          - generic [ref=f1e847]: 条款语义
+                          - generic [ref=f1e848]: 混合
+                          - generic [ref=f1e849]: 续约与退出
+                          - generic [ref=f1e850]: 黄色
+                          - generic [ref=f1e851]: v3
+                        - paragraph [ref=f1e852]: ONES skill 条款速查：A=书面续约、到期自动终止；B=自动续期+≥30日通知；年涨幅≤5%；红线=永久锁价 / 自动续期无退出权
+                      - img [ref=f1e853]
+                  - generic [ref=f1e855]:
+                    - generic [ref=f1e856]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e857]:
+                      - button "AI 转译草稿" [ref=f1e858] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e859] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e860] [cursor=pointer]:
+                        - img
+                - generic [ref=f1e861]:
+                  - button "R015 争议解决 已发布 转译就绪 启用 可正式审核 条款语义 混合 争议解决 黄色 v3 ONES skill 条款速查：A=深圳 SCIA 仲裁、中国法律；B=北京/上海仲裁；一线城市法院；红线=境外仲裁/法院/法律" [ref=f1e862] [cursor=pointer]:
+                    - generic [ref=f1e863]:
+                      - generic [ref=f1e864]:
+                        - generic [ref=f1e865]:
+                          - generic [ref=f1e866]: R015
+                          - generic [ref=f1e867]: 争议解决
+                          - generic [ref=f1e868]: 已发布
+                          - generic [ref=f1e869]: 转译就绪
+                          - generic [ref=f1e870]: 启用
+                          - generic [ref=f1e871]: 可正式审核
+                        - generic [ref=f1e872]:
+                          - generic [ref=f1e873]: 条款语义
+                          - generic [ref=f1e874]: 混合
+                          - generic [ref=f1e875]: 争议解决
+                          - generic [ref=f1e876]: 黄色
+                          - generic [ref=f1e877]: v3
+                        - paragraph [ref=f1e878]: ONES skill 条款速查：A=深圳 SCIA 仲裁、中国法律；B=北京/上海仲裁；一线城市法院；红线=境外仲裁/法院/法律
+                      - img [ref=f1e879]
+                  - generic [ref=f1e881]:
+                    - generic [ref=f1e882]: A contains 0text / B contains 0text / C contains 0text
+                    - generic [ref=f1e883]:
+                      - button "AI 转译草稿" [ref=f1e884] [cursor=pointer]:
+                        - img
+                      - button "版本管理" [ref=f1e885] [cursor=pointer]:
+                        - img
+                      - button "停用规则" [ref=f1e886] [cursor=pointer]:
+                        - img
+            - generic [ref=f1e887]:
+              - generic [ref=f1e889]: 规则集与运行摘要
+              - generic [ref=f1e890]:
+                - generic [ref=f1e891]:
+                  - button "浏览" [ref=f1e892] [cursor=pointer]
+                  - button "设计" [ref=f1e893] [cursor=pointer]
+                  - button "测试" [ref=f1e894] [cursor=pointer]
+                - generic [ref=f1e895]:
+                  - generic [ref=f1e896]:
+                    - generic [ref=f1e897]:
+                      - generic [ref=f1e898]: 当前规则集
+                      - generic [ref=f1e899]: 全部规则集
+                    - generic [ref=f1e900]: 可发布
+                  - generic [ref=f1e901]:
+                    - generic [ref=f1e902]:
+                      - generic [ref=f1e903]: "15"
+                      - generic [ref=f1e904]: 规则
+                    - generic [ref=f1e905]:
+                      - generic [ref=f1e906]: "15"
+                      - generic [ref=f1e907]: 启用
+                    - generic [ref=f1e908]:
+                      - generic [ref=f1e909]: "15"
+                      - generic [ref=f1e910]: 发布
+                    - generic [ref=f1e911]:
+                      - generic [ref=f1e912]: "15"
+                      - generic [ref=f1e913]: 就绪
+                  - generic [ref=f1e914]: 当前规则集规则均满足发布、转译和执行字段要求，可进入 SkillBundle 编译检查。
+                - generic [ref=f1e915]:
+                  - generic [ref=f1e916]: 规则资产
+                  - generic [ref=f1e917]:
+                    - generic [ref=f1e918]:
+                      - generic [ref=f1e919]: "15"
+                      - generic [ref=f1e920]: 总数
+                    - generic [ref=f1e921]:
+                      - generic [ref=f1e922]: "15"
+                      - generic [ref=f1e923]: 启用
+                    - generic [ref=f1e924]:
+                      - generic [ref=f1e925]: "15"
+                      - generic [ref=f1e926]: 发布
+                - generic [ref=f1e927]: 选择规则后显示 Skill 转译摘要
+  - alert [ref=f1e239]

@@ -1,0 +1,34 @@
+{
+  "contractId": "863119df-4e1a-46b5-9780-bedee49065c7",
+  "sourceText": "SLA 承诺为 7x24 小时，不含赔付责任。",
+  "assertions": {
+    "sourceTextExact": true,
+    "sourceLocationLabel": "原文精确定位",
+    "reviewStateLabel": "已通过",
+    "exportActionVisible": true,
+    "documentOverflow": false
+  },
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "preview-controlled-sla-review-desktop-20260717.png",
+      "sha256": "7ccaf0d786ed5f7c47b0507195fede49cb35f14ea108ce88ba8fa804089cca7c"
+    },
+    {
+      "name": "ipad",
+      "width": 1180,
+      "height": 820,
+      "screenshot": "preview-controlled-sla-review-ipad-20260717.png",
+      "sha256": "67b3de93d873e6614d491ed1cd32cbfc2c57b63d3287468f5a3ec340c07c2ce5"
+    }
+  ],
+  "blockingHttpErrors": [],
+  "ignoredLocalTelemetry": [
+    "http://127.0.0.1:3107/_vercel/insights/script.js",
+    "http://127.0.0.1:3107/_vercel/speed-insights/script.js"
+  ],
+  "productionTouched": false,
+  "recurringCostUsd": 0
+}

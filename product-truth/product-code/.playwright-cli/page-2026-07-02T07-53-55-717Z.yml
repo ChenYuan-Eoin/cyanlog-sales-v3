@@ -1,0 +1,51 @@
+- generic [active] [ref=e1]:
+  - complementary [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]: OS
+      - generic [ref=e42]:
+        - generic [ref=e43]: ONES Sales
+        - paragraph [ref=e44]: 智能协作平台
+    - navigation [ref=e45]:
+      - link "工作台" [ref=e46] [cursor=pointer]:
+        - /url: /
+        - img [ref=e47]
+        - generic [ref=e51]: 工作台
+      - link "报价中心" [ref=e52] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e53]
+        - generic [ref=e57]: 报价中心
+      - link "合同审核" [ref=e58] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e59]
+        - generic [ref=e64]: 合同审核
+      - link "标书中心" [ref=e65] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e66]
+        - generic [ref=e70]: 标书中心
+      - link "知识库" [ref=e71] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e72]
+        - generic [ref=e77]: 知识库
+      - link "日程" [ref=e78] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e79]
+        - generic [ref=e85]: 日程
+      - link "配置中心" [ref=e86] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e87]
+        - generic [ref=e91]: 配置中心
+    - generic [ref=e92]:
+      - link "个人信息" [ref=e93] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e94]
+        - generic [ref=e97]: 个人信息
+      - button "退出登录" [ref=e98] [cursor=pointer]:
+        - img [ref=e99]
+        - generic [ref=e102]: 退出登录
+  - main [ref=e2]:
+    - generic [ref=e104]:
+      - img [ref=e105]
+      - paragraph [ref=e107]: 加载中...
+  - button "Open Next.js Dev Tools" [ref=e34] [cursor=pointer]:
+    - img [ref=e35]
+  - alert [ref=e38]

@@ -1,0 +1,153 @@
+- generic [active] [ref=f5e1]:
+  - complementary [ref=f5e2]:
+    - generic [ref=f5e3]:
+      - img "ONES Sales" [ref=f5e5]
+      - generic [ref=f5e6]:
+        - generic [ref=f5e7]: ONES Sales
+        - paragraph [ref=f5e8]: 智能协作平台
+    - navigation [ref=f5e9]:
+      - link "工作台" [ref=f5e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=f5e11]
+        - generic [ref=f5e15]: 工作台
+      - link "报价中心" [ref=f5e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f5e17]
+        - generic [ref=f5e21]: 报价中心
+      - link "合同审核" [ref=f5e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f5e23]
+        - generic [ref=f5e28]: 合同审核
+      - link "标书中心" [ref=f5e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f5e30]
+        - generic [ref=f5e34]: 标书中心
+      - link "知识库" [ref=f5e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f5e36]
+        - generic [ref=f5e41]: 知识库
+      - link "日程" [ref=f5e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f5e43]
+        - generic [ref=f5e49]: 日程
+      - link "配置中心" [ref=f5e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f5e51]
+        - generic [ref=f5e55]: 配置中心
+    - generic [ref=f5e56]:
+      - link "个人信息" [ref=f5e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f5e58]
+        - generic [ref=f5e61]: 个人信息
+      - button "退出登录" [ref=f5e62] [cursor=pointer]:
+        - img [ref=f5e63]
+        - generic [ref=f5e66]: 退出登录
+  - main [ref=f5e67]:
+    - generic [ref=f5e68]:
+      - generic [ref=f5e70]:
+        - generic [ref=f5e71]:
+          - generic [ref=f5e72]:
+            - heading "合同中心" [level=1] [ref=f5e73]
+            - paragraph [ref=f5e74]: 全生命周期管理
+          - generic [ref=f5e76]:
+            - img [ref=f5e77]
+            - textbox "搜索合同名称、编号、客户..." [ref=f5e80]
+          - generic [ref=f5e81]:
+            - link "发起" [ref=f5e82] [cursor=pointer]:
+              - /url: /contracts/new?from=workbench
+              - button "发起" [ref=f5e83]:
+                - img
+                - text: 发起
+            - button "继续" [disabled]:
+              - img
+              - text: 继续
+            - button "批注" [disabled]:
+              - img
+              - text: 批注
+        - generic [ref=f5e84]:
+          - link "发起合同审核 新任务 上传源文件后直接进入审核工作台 新建合同版本" [ref=f5e85] [cursor=pointer]:
+            - /url: /contracts/new?from=workbench
+            - generic [ref=f5e86]:
+              - img [ref=f5e88]
+              - generic [ref=f5e91]:
+                - generic [ref=f5e92]:
+                  - paragraph [ref=f5e93]: 发起合同审核
+                  - generic [ref=f5e94]: 新任务
+                - paragraph [ref=f5e95]: 上传源文件后直接进入审核工作台
+                - paragraph [ref=f5e96]: 新建合同版本
+          - generic "暂无进行中审核，可先发起审核" [ref=f5e97]:
+            - generic [ref=f5e98]:
+              - img [ref=f5e100]
+              - generic [ref=f5e103]:
+                - generic [ref=f5e104]:
+                  - paragraph [ref=f5e105]: 继续进行中审核
+                  - generic [ref=f5e106]: 进行中
+                - paragraph [ref=f5e107]: 暂无进行中审核，可先发起审核
+                - paragraph [ref=f5e108]: 没有进行中任务
+          - generic "需先完成一份合同审核" [ref=f5e109]:
+            - generic [ref=f5e110]:
+              - img [ref=f5e112]
+              - generic [ref=f5e114]:
+                - generic [ref=f5e115]:
+                  - paragraph [ref=f5e116]: 查看批注版输出
+                  - generic [ref=f5e117]: 已完成
+                - paragraph [ref=f5e118]: 需先完成一份合同审核
+                - paragraph [ref=f5e119]: 暂无批注版
+          - generic "需先完成一份合同审核" [ref=f5e120]:
+            - generic [ref=f5e121]:
+              - img [ref=f5e123]
+              - generic [ref=f5e128]:
+                - generic [ref=f5e129]:
+                  - paragraph [ref=f5e130]: 文档比对
+                  - generic [ref=f5e131]: 版本流
+                - paragraph [ref=f5e132]: 需先完成一份合同审核
+                - paragraph [ref=f5e133]: 暂无可比对基准
+      - main [ref=f5e134]:
+        - generic [ref=f5e135]:
+          - generic [ref=f5e136]:
+            - generic [ref=f5e137]:
+              - img [ref=f5e139]
+              - generic [ref=f5e142]:
+                - heading "合同审核工作台入口" [level=2] [ref=f5e143]
+                - paragraph [ref=f5e144]: 上传合同源文件，绑定已发布审核规则和模型策略，生成风险定位、销售谈判任务与源文件 Word 批注版本。
+            - link "上传源文件并发起审核" [ref=f5e145] [cursor=pointer]:
+              - /url: /contracts/new
+              - button "上传源文件并发起审核" [ref=f5e146]:
+                - img
+                - text: 上传源文件并发起审核
+          - generic [ref=f5e147]:
+            - generic [ref=f5e148]: 源文件docx / pdf
+            - generic [ref=f5e149]: 审核依据发布规则 / 模型
+            - generic [ref=f5e150]: 风险定位复核 / 谈判
+            - generic [ref=f5e151]: 输出批注版 / 报告
+        - generic [ref=f5e152]:
+          - generic [ref=f5e155]:
+            - img [ref=f5e157]
+            - generic [ref=f5e160]:
+              - paragraph [ref=f5e161]: "0"
+              - paragraph [ref=f5e162]: 全部合同
+          - generic [ref=f5e165]:
+            - img [ref=f5e167]
+            - generic [ref=f5e170]:
+              - paragraph [ref=f5e171]: "0"
+              - paragraph [ref=f5e172]: 进行中
+          - generic [ref=f5e175]:
+            - img [ref=f5e177]
+            - generic [ref=f5e179]:
+              - paragraph [ref=f5e180]: "0"
+              - paragraph [ref=f5e181]: 需关注
+          - generic [ref=f5e184]:
+            - img [ref=f5e186]
+            - generic [ref=f5e188]:
+              - paragraph [ref=f5e189]: "0"
+              - paragraph [ref=f5e190]: 已完成
+        - tablist [ref=f5e193]:
+          - tab "全部 0" [selected] [ref=f5e194] [cursor=pointer]:
+            - text: 全部
+            - generic [ref=f5e195]: "0"
+          - tab "起草中" [ref=f5e196] [cursor=pointer]
+          - tab "待审核" [ref=f5e197] [cursor=pointer]
+          - tab "已完成" [ref=f5e198] [cursor=pointer]
+        - generic [ref=f5e199]:
+          - img [ref=f5e200]
+          - paragraph [ref=f5e202]: 加载合同中...

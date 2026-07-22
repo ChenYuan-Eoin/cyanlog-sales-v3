@@ -1,0 +1,377 @@
+- generic [ref=e1]:
+  - complementary [ref=e31]:
+    - generic [ref=e32]:
+      - img [ref=e1113]
+      - generic [ref=e35]:
+        - generic [ref=e36]: ONES Sales
+        - paragraph [ref=e37]: 智能协作平台
+    - navigation [ref=e38]:
+      - link [ref=e1114] [cursor=pointer]:
+        - /url: /
+        - img [ref=e40]
+        - generic [ref=e44]: 工作台
+      - link [ref=e1115] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e46]
+        - generic [ref=e50]: 报价中心
+      - link [ref=e1116] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e52]
+        - generic [ref=e57]: 合同审核
+      - link [ref=e1117] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e59]
+        - generic [ref=e63]: 标书中心
+      - link [ref=e1118] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e65]
+        - generic [ref=e70]: 知识库
+      - link [ref=e1119] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e72]
+        - generic [ref=e78]: 日程
+      - link [ref=e1120] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e80]
+        - generic [ref=e84]: 配置中心
+    - generic [ref=e85]:
+      - link [ref=e1121] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e87]
+        - generic [ref=e90]: 个人信息
+      - button [ref=e1122] [cursor=pointer]:
+        - img [ref=e92]
+        - generic [ref=e95]: 退出登录
+  - main [ref=e2]:
+    - generic [ref=e211]:
+      - generic [ref=e212]:
+        - generic [ref=e213]:
+          - generic [ref=e214]:
+            - img [ref=e215]
+            - text: 组织级配置工作台
+          - heading [level=1] [ref=e1123]: 配置中心
+          - paragraph [ref=e220]: 参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
+        - generic [ref=e221]:
+          - generic [ref=e222]:
+            - generic [ref=e223]: 生效范围
+            - generic [ref=e224]: 组织级统一发布
+          - generic [ref=e225]:
+            - generic [ref=e226]: 消费端
+            - generic [ref=e227]: 报价 / 合同 / AI
+          - generic [ref=e228]:
+            - generic [ref=e229]: 当前配置集
+            - generic [ref=e230]: AI 模型配置
+      - generic [ref=e231]:
+        - complementary [ref=e232]:
+          - generic [ref=e233]:
+            - generic [ref=e234]:
+              - generic [ref=e235]: 配置域
+              - paragraph [ref=e236]: 把所有配置先归到稳定的业务域，再进入具体配置集编辑。
+            - generic [ref=e237]:
+              - button [ref=e1124] [cursor=pointer]:
+                - generic [ref=e239]:
+                  - generic [ref=e240]: 交易配置
+                  - generic [ref=e241]: 8+
+                - paragraph [ref=e242]: 围绕报价工作台的价盘、税率和审批配置。
+              - button [ref=e1125] [cursor=pointer]:
+                - generic [ref=e244]:
+                  - generic [ref=e245]: 合同与 AI 规则
+                  - generic [ref=e246]: "18"
+                - paragraph [ref=e247]: 围绕合同审核规则、模型路由和运行时策略的配置集。
+              - button [ref=e1126] [cursor=pointer]:
+                - generic [ref=e249]:
+                  - generic [ref=e250]: 组织与权限
+                  - generic [ref=e251]: ...
+                - paragraph [ref=e252]: 围绕部门、成员、角色能力和作用域分配的组织控制面。
+              - button [ref=e1127] [cursor=pointer]:
+                - generic [ref=e254]:
+                  - generic [ref=e255]: 界面与体验
+                  - generic [ref=e256]: 1+
+                - paragraph [ref=e257]: 运行时主题和界面变量集中配置发布。
+            - generic [ref=e258]:
+              - generic [ref=e259]: 结构约束
+              - list [ref=e260]:
+                - listitem [ref=e261]: 配置中心只拥有配置，不承载业务执行。
+                - listitem [ref=e262]: 报价工作台、合同审核页只读消费已发布配置。
+                - listitem [ref=e263]: 配置项需要有版本、状态和作用范围。
+        - main [ref=e264]:
+          - generic [ref=e265]:
+            - generic [ref=e266]:
+              - generic [ref=e267]:
+                - generic [ref=e268]:
+                  - generic [ref=e269]: 配置中心
+                  - generic [ref=e270]: /
+                  - generic [ref=e271]: 合同与 AI 规则
+                - generic [ref=e272]:
+                  - img [ref=e924]
+                  - generic [ref=e276]:
+                    - heading [level=2] [ref=e1128]: AI 模型配置
+                    - paragraph [ref=e278]: 管理本地模型、云端 OpenAI 兼容模型和运行时路由策略。
+              - generic [ref=e279]:
+                - generic [ref=e930]:
+                  - generic [ref=e931]: 模型档位
+                  - generic [ref=e932]: "3"
+                - generic [ref=e933]:
+                  - generic [ref=e934]: 启用模型
+                  - generic [ref=e935]: "3"
+                - generic [ref=e936]:
+                  - generic [ref=e937]: 已发布
+                  - generic [ref=e938]: "3"
+            - generic [ref=e289]:
+              - button [ref=e1129] [cursor=pointer]:
+                - img [ref=e346]
+                - generic [ref=e349]: 合同审核策略
+                - generic [ref=e350]: "15"
+              - button [ref=e1130] [cursor=pointer]:
+                - img [ref=e352]
+                - generic [ref=e357]: AI 模型配置
+                - generic [ref=e358]: "3"
+          - generic [ref=e940]:
+            - generic [ref=e941]:
+              - generic [ref=e942]:
+                - generic [ref=e943]: 模型 Provider (3)
+                - button [ref=e1131] [cursor=pointer]: + 新增
+              - generic [ref=e946]:
+                - generic [ref=e947]:
+                  - generic [ref=e948]:
+                    - generic [ref=e949]: Level 1 · 本地 gpt-oss-20b
+                    - generic [ref=e950]:
+                      - generic [ref=e951]: 已发布
+                      - generic [ref=e952]: 启用
+                  - generic [ref=e953]:
+                    - generic [ref=e954]: "画像: AI_LEVEL_1"
+                    - generic [ref=e955]: "类型: openai_compatible"
+                    - generic [ref=e956]: "模型: gpt-oss-20b"
+                    - generic [ref=e957]: "地址: http://127.0.0.1:1234/v1"
+                    - generic [ref=e958]: "超时: 120s"
+                    - generic [ref=e959]: "密钥: 未保存 Token"
+                  - generic [ref=e960]:
+                    - button [ref=e1132] [cursor=pointer]: 编辑
+                    - button [ref=e1133] [cursor=pointer]: 删除
+                - generic [ref=e963]:
+                  - generic [ref=e964]:
+                    - generic [ref=e965]: Level 2 · Gemini 云端模型
+                    - generic [ref=e966]:
+                      - generic [ref=e967]: 已发布
+                      - generic [ref=e968]: 启用
+                  - generic [ref=e969]:
+                    - generic [ref=e970]: "画像: sales_cloud_backup"
+                    - generic [ref=e971]: "类型: openai_compatible"
+                    - generic [ref=e972]: "模型: gemini-2.5-flash-lite"
+                    - generic [ref=e973]: "地址: https://generativelanguage.googleapis.com/v1beta/openai/"
+                    - generic [ref=e974]: "超时: 60s"
+                    - generic [ref=e975]: "密钥: 已保存"
+                  - generic [ref=e976]:
+                    - button [ref=e1134] [cursor=pointer]: 编辑
+                    - button [ref=e1135] [cursor=pointer]: 删除
+                - generic [ref=e979]:
+                  - generic [ref=e980]:
+                    - generic [ref=e981]: Level 3 · 规则引擎 (兜底)
+                    - generic [ref=e982]:
+                      - generic [ref=e983]: 已发布
+                      - generic [ref=e984]: 启用
+                  - generic [ref=e985]:
+                    - generic [ref=e986]: "画像: rule_engine"
+                    - generic [ref=e987]: "类型: builtin"
+                    - generic [ref=e988]: "模型: rule-engine"
+                    - generic [ref=e989]: "地址: （内置）"
+                    - generic [ref=e990]: "超时: 1s"
+                    - generic [ref=e991]: "密钥: 无需密钥"
+                  - generic [ref=e992]:
+                    - button [ref=e1136] [cursor=pointer]: 编辑
+                    - button [ref=e1137] [cursor=pointer]: 删除
+            - generic [ref=e995]:
+              - generic [ref=e997]: 路由与执行策略
+              - generic [ref=e998]:
+                - generic [ref=e999]:
+                  - generic [ref=e1000]: L1 / L2 / L3 模型旅程
+                  - generic [ref=e1001]:
+                    - generic [ref=e1002]:
+                      - generic [ref=e1003]: L1
+                      - generic [ref=e1004]:
+                        - generic [ref=e1005]:
+                          - generic [ref=e1006]:
+                            - generic [ref=e1007]: 本地模型优先
+                            - generic [ref=e1008]: 合同正文、规则声明优先在本机处理
+                          - generic [ref=e1009]: 正式调用通过 · gpt-oss-20b
+                        - generic [ref=e1010]:
+                          - generic [ref=e1011]: 阶段：semantic_review / rule_translation
+                          - generic [ref=e1012]: 配置：最近 ReviewRun 通过本机 CLI 通道；HTTP Token 仍未统一
+                    - generic [ref=e1013]:
+                      - generic [ref=e1014]: L2
+                      - generic [ref=e1015]:
+                        - generic [ref=e1016]:
+                          - generic [ref=e1017]:
+                            - generic [ref=e1018]: 云模型增强
+                            - generic [ref=e1019]: 复杂规则、低置信度、长文档仲裁
+                          - generic [ref=e1020]: 最近调用失败 · gemini-2.5-flash-lite
+                        - generic [ref=e1021]:
+                          - generic [ref=e1022]: 阶段：ambiguity_arbitration / low_confidence_review
+                          - generic [ref=e1023]: 配置：最近正式调用失败，请更换 Token/模型网关后再触发 ReviewRun
+                    - generic [ref=e1024]:
+                      - generic [ref=e1025]: L3
+                      - generic [ref=e1026]:
+                        - generic [ref=e1027]:
+                          - generic [ref=e1028]:
+                            - generic [ref=e1029]: 规则引擎兜底
+                            - generic [ref=e1030]: 确定性校验、证据定位和失败可解释
+                          - generic [ref=e1031]: 兜底可用 · rule-engine
+                        - generic [ref=e1032]:
+                          - generic [ref=e1033]: 阶段：deterministic_check / evidence_anchor
+                          - generic [ref=e1034]: 配置：内置规则引擎，无需配置 Token
+                - generic [ref=e1035]:
+                  - generic [ref=e1036]:
+                    - generic [ref=e1037]: 推荐配置方式
+                    - generic [ref=e1038]:
+                      - button [ref=e1138] [cursor=pointer]: 配置 L1
+                      - button [ref=e1139] [cursor=pointer]: 配置 L2
+                  - generic [ref=e1041]:
+                    - paragraph [ref=e1042]: L1 本地：LM Studio 保持运行，Base URL 使用 http://127.0.0.1:1234/v1，模型标识使用 gpt-oss-20b。
+                    - paragraph [ref=e1043]: L2 云端：使用 OpenAI-compatible 网关，填入 Base URL、模型 ID 和 Token；Token 只保存在系统配置中，不展示明文。
+                    - paragraph [ref=e1044]: L3 兜底：规则引擎只做确定性校验，不能冒充 AI 审核完成。
+                - generic [ref=e1045]:
+                  - generic [ref=e1046]:
+                    - generic [ref=e1047]: "3"
+                    - generic [ref=e1048]: 档位
+                  - generic [ref=e1049]:
+                    - generic [ref=e1050]: "3"
+                    - generic [ref=e1051]: 启用
+                  - generic [ref=e1052]:
+                    - generic [ref=e1053]: "3"
+                    - generic [ref=e1054]: 发布
+                - generic [ref=e1055]:
+                  - generic [ref=e1056]: 消费边界
+                  - generic [ref=e1057]:
+                    - paragraph [ref=e1058]: F012 只决定模型路由、超时、降级和审计。
+                    - paragraph [ref=e1059]: F009/F006 决定审核规则、输出结构和风险事实。
+                    - paragraph [ref=e1060]: 正式验收必须看到 semantic_review 的模型调用证据。
+            - generic [ref=e1061]:
+              - generic [ref=e1063]: 合同审核运行时策略
+              - generic [ref=e1064]:
+                - generic [ref=e1066]:
+                  - generic [ref=e1067]:
+                    - generic [ref=e1068]: CONTRACT_REVIEW_DEFAULT
+                    - generic [ref=e1069]: v8 · published · 120s
+                  - generic [ref=e1070]: 当前
+                - generic [ref=e1071]: 模型链存在最近正式调用失败的档位；当前不能按完整 L1/L2/L3 模型链验收。
+                - generic [ref=e1072]: 验收口径：先修复失败模型档位并重新触发 ReviewRun；失败档位不能靠静态配置或旧通过记录验收。
+                - generic [ref=e1073]:
+                  - generic [ref=e1074]: OpenAI-compatible 配置说明
+                  - generic [ref=e1075]:
+                    - paragraph [ref=e1076]: LM Studio：Base URL 使用 http://127.0.0.1:1234/v1；如果开启认证，需要填写 Developer 页生成的 Token。
+                    - paragraph [ref=e1077]:
+                      - text: 云端网关：从
+                      - link [ref=e1140] [cursor=pointer]:
+                        - /url: https://cloud.yiyongai.cn/console/token
+                        - text: cloud.yiyongai.cn/console/token
+                      - text: 获取 Key，按供应商给出的 Base URL 和模型 ID 配置到 L2。
+                    - paragraph [ref=e1079]: CC Switch 适合管理 Codex/Claude/Gemini 等开发工具配置；产品运行时仍以本系统发布的 AI_CONFIG / ModelPolicy 为准。
+                - generic [ref=e1080]:
+                  - generic [ref=e1081]:
+                    - generic [ref=e1082]:
+                      - generic [ref=e1083]: Level 1 · AI_LEVEL_1
+                      - generic [ref=e1084]: primary
+                    - generic [ref=e1085]:
+                      - generic [ref=e1086]: local / openai_compatible / gpt-oss-20b
+                      - generic [ref=e1087]: 正式调用通过 · 最近 semantic_review 正式调用已通过：gpt-oss-20b / lm_studio_cli。
+                      - generic [ref=e1088]: "最近调用：completed · not-degraded · lm_studio_cli · AI_LEVEL_1: local_http_failed: Malformed LM Studio API token provided: not-needed. Ensure you are using a valid token. Learn more at: https://lmstudio.ai/docs/developer/core/authentication."
+                      - generic [ref=e1089]: 120s · 需健康检查 · CLI 通道可用 / HTTP Token 未配置
+                      - generic [ref=e1090]: 地址已配置 · local-production · 本地端点
+                      - generic [ref=e1091]: "阶段: semantic_review, comment_patch_draft, report_summary"
+                  - generic [ref=e1092]:
+                    - generic [ref=e1093]:
+                      - generic [ref=e1094]: Level 2 · sales_cloud_backup
+                      - generic [ref=e1095]: primary
+                    - generic [ref=e1096]:
+                      - generic [ref=e1097]: cloud / openai_compatible / gemini-2.5-flash-lite
+                      - generic [ref=e1098]: "最近调用失败 · 最近 semantic_review 正式调用未通过：AI_LEVEL_2: Failed after 3 attempts. Last error: Too Many Requests"
+                      - generic [ref=e1099]: 处理：请更换可用 Token/模型网关，或等待供应商限流恢复后重新触发 ReviewRun。
+                      - generic [ref=e1100]: "最近调用：degraded · degraded · builtin_rule_engine · AI_LEVEL_2: Failed after 3 attempts. Last error: Too Many Requests"
+                      - generic [ref=e1101]: 60s · 需健康检查 · 密钥已配置
+                      - generic [ref=e1102]: 地址已配置 · local-production
+                      - generic [ref=e1103]: "阶段: semantic_review, comment_patch_draft, report_summary"
+                  - generic [ref=e1104]:
+                    - generic [ref=e1105]:
+                      - generic [ref=e1106]: Level 3 · rule_engine
+                      - generic [ref=e1107]: fallback
+                    - generic [ref=e1108]:
+                      - generic [ref=e1109]: builtin / builtin / rule-engine
+                      - generic [ref=e1110]: 兜底可用 · 内置规则引擎可用，但只代表兜底规则审核。
+                      - generic [ref=e1111]: 1s · 无需健康检查 · 无需密钥
+                      - generic [ref=e1112]: "阶段: structured_rules, rule_fallback"
+  - alert [ref=e30]: ONES Sales
+  - dialog "编辑配置" [ref=e1144]:
+    - heading "编辑配置" [level=2] [ref=e1146]
+    - generic [ref=e1147]:
+      - generic [ref=e1148]:
+        - generic [ref=e1149]:
+          - generic [ref=e1150]: 快速套用
+          - generic [ref=e1151]:
+            - button "L1 本地" [ref=e1152] [cursor=pointer]
+            - button "L2 云端" [ref=e1153] [cursor=pointer]
+            - button "L3 兜底" [ref=e1154] [cursor=pointer]
+        - generic [ref=e1155]:
+          - text: 配置键 (Key)
+          - 'textbox "如: AI_LEVEL_1" [disabled]': AI_LEVEL_1
+        - generic [ref=e1156]:
+          - generic [ref=e1157]:
+            - text: 降级等级
+            - spinbutton [ref=e1158]: "1"
+          - generic [ref=e1159]:
+            - text: 显示名称
+            - textbox [ref=e1160]: 本地 gpt-oss-20b
+        - generic [ref=e1161]:
+          - generic [ref=e1162]:
+            - text: 运行画像
+            - combobox [ref=e1163]:
+              - option "local_primary" [selected]
+              - option "cloud_primary"
+              - option "sales_cloud_backup"
+              - option "rule_engine"
+              - option "custom"
+          - generic [ref=e1164]:
+            - text: Provider 类型
+            - combobox [ref=e1165]:
+              - option "openai_compatible" [selected]
+              - option "builtin"
+        - generic [ref=e1166]:
+          - text: 模型标识
+          - 'textbox "如: gpt-oss-20b" [ref=e1167]': gpt-oss-20b
+        - generic [ref=e1168]:
+          - text: API 地址
+          - 'textbox "如: http://127.0.0.1:1234/v1" [ref=e1169]': http://127.0.0.1:1234/v1
+        - generic [ref=e1170]:
+          - generic [ref=e1171]:
+            - generic [ref=e1172]: API Key / Token
+            - button "测试连接" [ref=e1173] [cursor=pointer]
+          - textbox "LM Studio 开启认证时填写 Developer Token" [ref=e1174]
+          - paragraph [ref=e1175]: 安全存储，API 返回时脱敏显示；已保存的密钥留空不会被清空。
+        - generic [ref=e1176]:
+          - generic [ref=e1177]: 配置口径
+          - generic [ref=e1178]:
+            - paragraph [ref=e1179]: L1 本地模型：启动 LM Studio Local Server，Base URL 使用 http://127.0.0.1:1234/v1，模型标识使用已加载模型的 API Identifier。
+            - paragraph [ref=e1180]: L2 云模型：使用 OpenAI-compatible 网关，复制 Base URL、模型 ID 和 Token 到这里；Token 可从云端控制台获取。
+            - paragraph [ref=e1181]: L3 规则引擎：Provider 类型选择 builtin，模型标识固定 rule-engine，不填写地址和密钥。
+            - paragraph [ref=e1182]:
+              - text: Token 控制台：
+              - link "cloud.yiyongai.cn/console/token" [ref=e1183] [cursor=pointer]:
+                - /url: https://cloud.yiyongai.cn/console/token
+        - generic [ref=e1184]:
+          - generic [ref=e1185]:
+            - text: 超时 (毫秒)
+            - spinbutton [ref=e1186]: "120000"
+          - generic [ref=e1187]:
+            - text: 最大页数
+            - spinbutton [ref=e1188]: "15"
+        - generic [ref=e1189]:
+          - checkbox [checked] [ref=e1190]
+          - generic [ref=e1191]: 启用此模型配置
+      - generic [ref=e1192]:
+        - text: 描述
+        - textbox "配置描述（可选）" [active] [ref=e1193]: 本地 LM Studio 模型配置
+    - generic [ref=e1194]:
+      - button "取消" [ref=e1195] [cursor=pointer]
+      - button "保存" [ref=e1196] [cursor=pointer]
+    - button "Close" [ref=e1197] [cursor=pointer]:
+      - img
+      - generic [ref=e1198]: Close

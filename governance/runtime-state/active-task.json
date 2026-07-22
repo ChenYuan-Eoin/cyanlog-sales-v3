@@ -1,48 +1,546 @@
 {
-  "version": "1.0.0",
-  "schema": "https://schemas.price-v3.internal/active-task",
-  "description": "Price V3 活跃任务状态文件。新线程入口：读取此文件 + 对应 Feature Packet + git status",
-
-  "project": {
-    "name": "Price V3",
+  "version": "2.0.0",
+  "schema": "https://schemas.price-v3.internal/development-scheduler",
+  "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
+  "updated_at": "2026-07-20T17:58:48+08:00",
+  "protected_snapshot": {
+    "captured_at": "2026-07-16T12:27:40+08:00",
+    "branch": "codex/contract-product-line-closure",
+    "head": "0d06694b5c66bf454a42a86777fb36004c879497",
+    "tracked_changed": 76,
+    "untracked_entries": 40,
+    "tracked_diff_stat": "76 files changed, 7532 insertions(+), 1980 deletions(-)",
+    "status_sha256": "6b1272243d5190365a7b0e150f36e1deb93132e8633fb964654719ee0e3a233a",
+    "tracked_binary_diff_sha256": "3c23301f5607076c82ede146e2f94f37902a093a01a8f297da0bfc1d54e32fe2",
+    "untracked_inventory_sha256": "2375ca3ea860801b36f419108822f2ca45d280737424cbd4b6e18b675e7c6bef",
+    "rule": "不得删除、清理、覆盖、stash 或重置该快照中的既有变更；调度层只可修改 active_task.allowed_paths。"
+  },
+  "product_baseline": {
+    "status": "active",
+    "proposal": [
+      "合同起草、合同审核、合同文档对比是三个独立一级产品能力",
+      "AI 配置、真实模型运行与规则资产是平台底座，由产品能力消费",
+      "Word 文件族（DOC/DOCX/DOCM）与 PDF 原文件是文件事实源，网页渲染只负责定位和批注交互，不能冒充交付原件",
+      "提审批注必须覆盖 DOC/DOCX/DOCM、文本 PDF 与扫描 PDF；OCR 只提升自动定位，失败时仍可人工区域或位置批注",
+      "预览与交付分层：DOCX/DOCM 使用浏览器 OOXML 审阅预览并显示经典批注与插入/删除修订；legacy DOC 只保留原件和明确兼容边界；DOCX/DOCM 在源文件副本上增量写入 Word 原生批注，PDF 在源 PDF 副本上写入标准 annotation，预览渲染绝不反向生成交付文件",
+      "品牌与组织是横切能力，外部 CRM/SSO/组织同步是独立集成线",
+      "产品组合目标固定使用 G1-G11；近期实现改用 WP01-WP09 排队，不再复用 G 编号"
+    ],
+    "activated_at": "2026-07-16T14:18:46+08:00",
+    "activation_evidence": "用户明确表示整体方案整合进当前项目目标并继续开发；2026-07-17 进一步明确目标是源文件含既有修订/批注时可高还原预览，导出为源文件副本加 AI 原生批注而非重新渲染，并允许为了成本把 legacy DOC 同格式输出限制在常规 DOCX/DOCM/PDF。"
+  },
+  "goal_namespace": {
+    "version": "2026-07-20.1",
+    "rules": {
+      "G": "不可变的长期产品组合目标，只允许 G1-G11；不直接进入 execution_queue.active",
+      "WP": "可排序、可验收、WIP=1 的开发工作包；一个 WP 可服务多个 G",
+      "F": "Feature Packet / 产品需求合同",
+      "IN": "用户输入与需求调度记录",
+      "DG": "历史或批次级交付门禁，不是产品目标",
+      "HG": "Harness 执行门禁；只管理 AI 工具权限与治理阶段，不是产品目标或产品交付门禁"
+    },
+    "sources": {
+      "portfolio_goals": "product-truth/REQ_REGISTRY.yml#goal_governance",
+      "work_packages": "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "active_queue": "governance/runtime-state/active-task.json",
+      "harness_gates": "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json#gates"
+    },
+    "legacy_alias_rule": "2026-07-10 至 2026-07-18 文档中的旧别名 G1-G9 依次映射为 WP01-WP09；F027 0.0.1 的旧别名 G0-G7 映射为 DG0-DG7；2026-06-30 Harness 历史证据中的旧 G0-G5 映射为 HG0-HG5。历史证据路径、文件名和原文不重命名。"
+  },
+  "work_package_goal_crosswalk": {
+    "WP00": [
+      "G1",
+      "G10",
+      "G11"
+    ],
+    "WP01": [
+      "G4",
+      "G3",
+      "G7"
+    ],
+    "WP02": [
+      "G3",
+      "G7",
+      "G10"
+    ],
+    "WP03": [
+      "G3",
+      "G4",
+      "G7",
+      "G10"
+    ],
+    "WP04": [
+      "G6",
+      "G8"
+    ],
+    "WP05": [
+      "G2",
+      "G3",
+      "G6",
+      "G8",
+      "G10"
+    ],
+    "WP06": [
+      "G6",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP07": [
+      "G6",
+      "G2",
+      "G8",
+      "G10"
+    ],
+    "WP08": [
+      "G5",
+      "G8"
+    ],
+    "WP09": [
+      "G7",
+      "G8",
+      "G9",
+      "G10",
+      "G11"
+    ]
+  },
+  "scheduling_policy": {
+    "wip_limit": 1,
+    "default_new_input_route": "inbox",
+    "mixed_input_rule": "拆成多个关联 Inbox 项，不得合并成一个混合开发任务",
+    "active_switch_rule": "必须先给出影响评估并获得用户明确批准",
+    "technical_execution_authority": "产品方向、目标和安全边界已批准后，范围内可逆的技术选型、工具、Preview 写入、测试、排错和实现步骤由 AI 独立决策，不再逐项请求用户授权",
+    "ask_user_only_for": [
+      "改变产品结果、产品边界或方案方向的取舍",
+      "尚未批准且具有重大业务、法律或持续成本影响的决定",
+      "不可逆或无法安全回滚的外部动作",
+      "证据冲突足以推翻当前产品基线"
+    ],
+    "decision_question_rule": "必须先给推荐结论，再给证据、影响和备选方案；不得让用户依据只存在于 AI 内部上下文的技术细节盲选",
+    "idle_loop_circuit_breaker": "若步骤没有已知长任务进度信号且 60 秒内没有新增证据，立即检查并调整；同一失败路径最多尝试两次，随后必须换方法、缩小范围或记录真实阻断，不得靠重复重试制造进度",
+    "paid_dependency_rule": "持续付费依赖默认淘汰；只有单次、确实绕不过去且影响已量化的费用才进入用户决策，免费或自托管可行路径优先",
+    "interrupt_conditions": [
+      "生产不可用、数据损坏或安全事故",
+      "继续当前任务会造成明显的大规模返工",
+      "新证据证明产品基线或当前方向错误",
+      "用户在看到影响评估后明确批准插队"
+    ]
+  },
+  "active_task": {
+    "id": "WP01",
+    "slug": "ai-platform-foundation",
+    "name": "平台模型接入、模型目录与 AI 应用绑定底座",
+    "kind": "product",
+    "status": "active",
+    "objective": "把 AI 从合同场景和具体模型表单中解耦为全局平台能力：Provider 连接负责账号与端点，模型目录负责可用模型，AI 应用负责能力与路由，业务用点只绑定已发布应用；后续任何业务模块都能接入而不直接写死模型。",
+    "current_step": "以 release 候选代码为事实，先盘点现有 Provider/ModelPolicy/业务阶段混合点，再固定领域对象、迁移兼容边界和管理员主任务，随后按 API、配置 UI、目标测试与浏览器验收实现。",
+    "started_at": "2026-07-20T17:58:48+08:00",
+    "activation_basis": "WP00 已由提交 18dad230bbc12a6cf664e5868cc25d57bbb65fd3 固化唯一 G/WP/F/IN/DG/HG 体系；用户对全局模型层、模型目录、应用模块和业务消费边界的纠正已记录在 IN-20260720-037/039/041/047。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
+    "allowed_paths": [
+      "AGENTS.md",
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "governance/runtime-state/CONTINUE_WORK.md",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "product-truth/REQ_REGISTRY.yml",
+      "product-truth/00-master/PROJECT-主文档.md",
+      "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/feature-packets/F000-config-center-architecture.md",
+      "product-truth/feature-packets/F012-ai-runtime-config.md",
+      "../.codex/worktrees/Price-v3-release-20260720/AGENTS.md",
+      "../.codex/worktrees/Price-v3-release-20260720/governance/runtime-state/active-task.json",
+      "../.codex/worktrees/Price-v3-release-20260720/governance/runtime-state/demand-inbox.jsonl",
+      "../.codex/worktrees/Price-v3-release-20260720/governance/runtime-state/CONTINUE_WORK.md",
+      "../.codex/worktrees/Price-v3-release-20260720/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/REQ_REGISTRY.yml",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/00-master/PROJECT-主文档.md",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/feature-packets/F099-current-goal-ledger.md",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/feature-packets/F000-config-center-architecture.md",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/feature-packets/F012-ai-runtime-config.md",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/product-code/app/configs",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/product-code/app/api/configs",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/product-code/lib/configs",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/product-code/types",
+      "../.codex/worktrees/Price-v3-release-20260720/product-truth/product-code/output/evidence/wp01"
+    ],
+    "non_goals": [
+      "在 WP01 证明真实模型调用、token、ReviewRun 或审核准确率；这些属于 WP02",
+      "在 Provider 或模型目录中配置合同规则、问题分类、运行阶段、Prompt 或规则引擎；这些属于 WP03 或业务模块",
+      "重做合同审核工作台、循环复审、文档对比或合同起草",
+      "引入持续付费模型网关、在线 Office 或需要销售审核的供应商依赖",
+      "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
+    ],
+    "exit_criteria": [
+      "产品与代码使用独立对象表达 ProviderConnection、ModelCatalogEntry、AIApplication、BusinessUsePoint、ApplicationBinding 与 RoutePolicy，职责和关系有唯一来源",
+      "Provider 配置只管理账号、端点、认证与连接状态；可发现或录入同 Provider 下的多个模型，不把具体模型版本冒充 Provider",
+      "AI 应用选择逻辑能力、候选模型与降级路由；业务模块注册用点并绑定已发布应用，不直接绑定具体模型",
+      "配置 UI 按模型接入、模型目录、AI 应用、业务绑定和发布状态组织；不出现合同阶段复选框、规则引擎 Provider 或机器内部策略长文",
+      "既有配置有可回滚的兼容读取或迁移方案；证据冲突、不可逆数据迁移或 Production 写入立即停止",
+      "目标测试、typecheck、build、桌面与 iPad 配置任务验收通过；连接测试只证明草稿参数可达，不冒充 WP02 真实业务运行证据",
+      "F000、F012、REQ、主文档和 F099 同步当前对象边界、证据与未完成项"
+    ]
+  },
+  "execution_queue": {
+    "active": {
+      "id": "WP01",
+      "slug": "ai-platform-foundation",
+      "reason": "WP00 已固化并通过治理/Harness 校验；按批准序列进入全局 AI 平台底座"
+    },
+    "next": {
+      "id": "WP02",
+      "slug": "ai-runtime-truth",
+      "name": "真实模型调用、路由降级与运行证据",
+      "entry_gate": "WP01 的平台对象、配置任务与应用绑定通过验收",
+      "entry_gate_status": "waiting_active_completion"
+    },
+    "ready": [
+      {
+        "id": "WP03",
+        "slug": "rule-collection",
+        "name": "规则集、问题分类、具体规则与规则详情"
+      },
+      {
+        "id": "WP04",
+        "slug": "contract-center-ia",
+        "name": "合同中心入口与任务身份"
+      },
+      {
+        "id": "WP07",
+        "slug": "contract-drafting",
+        "name": "合同起草闭环"
+      },
+      {
+        "id": "WP08",
+        "slug": "experience-umbrella",
+        "name": "品牌、组织与响应式体验",
+        "activation_requirement": "激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包"
+      },
+      {
+        "id": "WP09",
+        "slug": "release-acceptance",
+        "name": "工程、分支、Preview 与 Production 验收"
+      }
+    ],
+    "release_blockers": [
+      {
+        "id": "SECURITY-P0-RLS-PRODUCTION",
+        "reason": "Production 已确认 11 张服务表与两个 SECURITY DEFINER RPC 暴露；两份 Preview 验证候选已就绪，但用户此前要求 Production 继续只读",
+        "required_before": "任何 Production 发布或真实用户文件验收",
+        "action": "在只读边界被明确改变后，仅应用已验证的两份 forward migration 并复跑匿名、service_role、advisor 与合同 API 冒烟"
+      }
+    ],
+    "parked": [
+      {
+        "id": "WP06",
+        "slug": "document-compare",
+        "reason": "免费 Preview 候选已完成并清理；状态仅为 completed_preview_candidate，Production 验收仍归 WP09"
+      },
+      {
+        "id": "WP05",
+        "slug": "multiformat-review-cycle",
+        "reason": "NO-GO / waiting_external_gold，且最新循环复审与工作台验收争议未关闭；只有新源文件与事前独立人工金标到位后按队列恢复"
+      },
+      {
+        "id": "LEGACY-P0-ONLINE-SYNC-RULE-COLLECTION-RESET",
+        "reason": "原任务把发布同步、规则产品和平台 AI 纠偏混成一个 Active；已拆分为 WP01、WP03、WP09，仅保留追溯"
+      },
+      {
+        "id": "DECISION-ONLINE-OFFICE-PARKED",
+        "reason": "CSPP/WPS/OnlyOffice 与在线协同不属于当前批注目标，保留调研记录但不开发"
+      },
+      {
+        "id": "F002-LEGACY-ACTIVE",
+        "reason": "旧 active-task 状态已过期，保留追溯但不执行"
+      }
+    ],
+    "completed": [
+      {
+        "id": "WP00",
+        "slug": "goal-baseline-consolidation",
+        "completed_at": "2026-07-20T17:58:48+08:00",
+        "evidence_commit": "18dad230bbc12a6cf664e5868cc25d57bbb65fd3",
+        "result": "唯一目标命名空间、调度、Harness 与候选真相快照已固化"
+      }
+    ]
+  },
+  "verification": {
+    "wp00_goal_baseline_20260720": {
+      "status": "passed_with_runtime_trust_warning",
+      "namespace": "G1-G11 / WP00-WP09 / F / IN / DG0-DG7 / HG0-HG5",
+      "yaml": "root and release REQ_REGISTRY parse as one YAML document and use audit_supplement.objective_tree.child_goals as the sole G1-G11 definition",
+      "scheduler": "root and release scheduler validate and pressure test passed; queue has one Active",
+      "harness": "release six-gate mapping, selftest, hook dispatch, document governance and runtime validation passed",
+      "remaining_warning": "Codex project hook trust is not confirmed in user-level Codex config; this does not block local WP01 work but prevents claiming project-local hooks are loaded/effective",
+      "git_boundary": "protected root snapshot preserved; Production not deployed or written"
+    },
+    "g6_preview_candidate_20260718": {
+      "status": "passed",
+      "preview_project": "vsfropnfsmnonkotywsx",
+      "cost": "0 USD/month on Free organization; no paid account, branch, provider or recurring dependency created",
+      "database": "070000/071000/072000 applied only to Preview; transactional multi-org membership, forged source/diff, immutability, legacy insert and unreadable-source probes passed with zero post-rollback comparison/diff/source residue",
+      "targeted_tests": "9 files / 55 tests passed",
+      "typecheck": "pnpm exec tsc --noEmit --incremental false passed",
+      "build": "Preview-bound Next.js 14.2.35 build passed with 81/81 pages; existing Sentry/dynamic-route/lint diagnostics remained non-blocking",
+      "real_files": "two DOCX and two text PDF sources passed frozen byte/SHA/text/page-map and post-snapshot drift proof; DOCX produced 6 diffs and PDF produced 4",
+      "browser": "desktop 1440x1000 and iPad 1180x820 passed 60%-180% zoom, fit width, independent/synchronized scrolling, first/last diff jumps and report download; blocking console/request/HTTP/API counts were zero",
+      "reports": "OOXML ZIP and LibreOffice full-page render passed; DOCX-source report SHA-256 168d8d099ebf6482bdc05da0283cc924e28ecb4925f420f1271ec025d9b17b45; PDF-source report SHA-256 a70317a19c50b79c472d6d4b5fe080e668481fb5ba6fa88656750223ceb2af0d",
+      "cleanup": "two comparisons, four contracts, all diff/source rows, one token and eight Storage paths removed; exact and global WP06 counts are zero and three immutability guards remain enabled",
+      "evidence": [
+        "product-truth/product-code/output/evidence/g6/preview-browser-acceptance.json",
+        "product-truth/product-code/output/evidence/g6/preview-browser-cleanup-verification.json",
+        "product-truth/product-code/output/playwright/g6/docx-desktop-1440x1000.png",
+        "product-truth/product-code/output/playwright/g6/docx-ipad-1180x820.png",
+        "product-truth/product-code/output/playwright/g6/pdf-desktop-1440x1000.png",
+        "product-truth/product-code/output/playwright/g6/pdf-ipad-1180x820.png"
+      ],
+      "release_boundary": "Production read-only; no push, PR or deployment"
+    },
+    "scheduler_validate": "passed",
+    "allowed_governance_path": "passed",
+    "blocked_product_code_path": "passed_with_exit_2_before_baseline_activation",
+    "claude_prompt_policy": "passed",
+    "claude_pretool_gate": "allowed governance and blocked product code",
+    "pressure_test": {
+      "status": "passed",
+      "cases": 6,
+      "active_before": "GOV-P0-SCHEDULER",
+      "active_after": "GOV-P0-SCHEDULER",
+      "covered": [
+        "当前实现反馈",
+        "普通 favicon Bug",
+        "Kiro 技术线索",
+        "组织横切需求",
+        "方向推翻证据",
+        "混合输入拆分"
+      ]
+    },
+    "scheduler_exit": "passed_and_user_confirmed_product_baseline",
+    "g5_local_candidate_20260716": {
+      "status": "implemented_but_not_release_accepted",
+      "python_file_tests": "39 passed and 3 real-integration cases skipped through pnpm test:g5-file; explicit macOS local-proof integration then passed 9/9, including SimpleMacro positive/missing-anchor negative and word_with_embeded ObjectPool red gate",
+      "vitest": "63 files / 411 tests passed in the exact current dependency closure; export route and strict local-proof adapter coverage passed",
+      "typescript_semantic_check": "tsc --noEmit passed against the current Next.js 14.2.35 dependency closure; the earlier 422-file semantic pass remains historical supporting evidence",
+      "sql_static_check": "50 dollar-quote delimiters / 22 functions / no duplicate function names; not an execution proof",
+      "prior_full_vitest_before_latest_identity_hardening": "61 files / 385 tests passed",
+      "latest_build": "passed in an isolated closure whose direct versions exactly match the current lock importer: Next.js 14.2.35, 81/81 static pages, exit 0; three existing review-page lint warnings and dynamic-route prerender diagnostics were non-blocking",
+      "dependency_reconstruction": "pnpm 10 was rejected because it recreates the pnpm 9 layout; pnpm 9 plus exact npm tarballs restored the three small-file bottlenecks, 3270/3270 files matched pnpm-store SHA-512, direct importer mismatches=0 and broken symlinks=0",
+      "pdf_reader_gate": "local file-level proof passed: the same image-only scanned PDF output exposed one highlight and two text notes with full Chinese contents in macOS Preview and Safari; Chrome also rendered the highlight and note icons",
+      "pdfium_source_worker_20260717": "free pypdfium2 5.8.0 worker replaced the environment-wide hanging Poppler path; text PDF page images, text extraction and image-only scanned PDF rendering passed 3 Python worker cases and 8 TypeScript source-render cases, followed by typecheck and an 81/81 Next.js build. The real Preview PDF upload-preview-export-reader chain remains open",
+      "auth_dependency_fail_closed_20260717": "authentication dependency failures are bounded to 8 seconds and return 503 instead of invalidating a valid session; missing, expired or unknown tokens still return 401. Direct upload, chunk and merge routes preserve the same 401/503 mapping; clients read both flat and structured error payloads. Authentication catches no longer swallow or repeat business handlers, and the multi-file queue uses a shared synchronous cursor instead of stale React state. Controlled Word upload plus authenticated single- and dual-file browser proofs passed on Preview; duplicate auth reads remain a later bounded performance batch",
+      "upload_protocol_hardening_20260717": "server validates fixed 4MiB chunks, exact safe-integer boundaries, expected chunk count and a 50MiB total ceiling; empty files and path-like names fail before storage work. Merge uses one bounded output buffer, binds uploadId plus whole-file SHA-256, CAS-updates contract source identity, and retains temporary chunks until both immutable object upload and contract-row update succeed. Cancellation and ambiguous CAS outcomes preserve any object that may already be referenced; the old unsafe direct route returns 410 CHUNK_UPLOAD_REQUIRED. Focused Word/upload Vitest passed 7 files / 40 tests. Real browser two-file proof produced exactly two creates, two chunk uploads and two merges across independent contracts, redirected once to the second review, persisted two parsed texts, emitted no console error, and left zero database/formal/chunk residue after cleanup",
+      "local_model_protocol_probe_20260717": "local_direct_only_not_preview_reviewrun_evidence: existing zero-cost Qwen3.5-9B and Gemma-4-E4B weights were called sequentially through the installed llama-server with reasoning disabled. On the same three-clause sample, Qwen returned closed JSON with 120/329/449 tokens in 14.031s and Gemma returned closed JSON with 134/331/465 tokens in 8.624s; both produced three exact source_quote substrings and null rule_code. This remains separate from Preview database evidence",
+      "preview_runtime_fixture_20260717": "isolated Preview vsfropnfsmnonkotywsx contains three PUBLISHED configs, current model policy 5f10d78f-fc1a-49c7-b0eb-d75794351531 and current bundle 17999c37-fb50-408e-a151-dc6e33bb1db7. The bundle is explicitly not_release_eligible, has zero rule/rule-set/document/template snapshots, and both Providers target local-only 127.0.0.1:12345. Qwen and Gemma real probes now have evidence_saved=true, runtime_config_match=true and non-zero tokens; same-source Word ReviewRuns c29bd4e1-5979-41b7-8f89-cde001667fa6 and bcfa78dd-6497-440e-8065-b0c3a3e657e9 completed without degradation and directly link to invocation/job/source identities. This proves the local-executor runtime chain, not hosted local-model reachability, representative accuracy, rules acceptance or Production readiness",
+      "docm_gate": "local supported-shape file gate passed: ZIP resource/ambiguity guards, full Content-Type coverage, case-insensitive Override uniqueness, relationship source/internal-target/metadata integrity, root officeDocument and w:document validation, plus olefile/oletools static MS-OVBA module parsing; fixed Apache and Word-generated samples preserve all three VBA-related package parts, latest output opens in Word with source text plus 1/1 native comment, and evidence is stored under output/evidence/g5-v11",
+      "legacy_doc_gate": "historical research only: SimpleMacro.doc preserved source text, pixel-identical rendered page, 10 Macros streams and one native comment on a trusted fixture; the adapter is no longer a Production route or WP05 exit requirement",
+      "legacy_doc_object_red_gate": "Apache POI word_with_embeded.doc contains four embedded objects and 27 ObjectPool streams; LibreOffice round-trip loses visible PowerPoint and Excel previews, returns DOC_OBJECT_STREAM_CHANGED and publishes no output. This blocks generic DOC support and requires an explicit engine/product decision; reproducible manifest and Base64 artifacts are stored under output/evidence/g5-v12",
+      "remote_db_gate": "isolated Preview vsfropnfsmnonkotywsx passed the explicit WP05 candidate migrations and a single 3.7s transactional rollback chain covering source mismatch, lease fencing, active mutation guards, success/failure idempotency, expiry recovery and UTF-16 offsets; fixture residue is zero. Production lineage drift remains a read-only WP09 release blocker",
+      "remote_storage_gate": "isolated Preview passed private contracts/contract-chunks bucket configuration plus anon/auth deny and service-role upload/download/update/delete evidence; Production Storage remains read-only and is not inferred safe from Preview",
+      "word_review_preview_gate": "2026-07-17 Preview browser proof: direct OOXML rendering shows 2 tracked insertions, 2 deletions and one existing classic comment on desktop and iPad; comment is keyboard-focusable and click-expandable. Word never calls the server page-image or Office conversion path. Incremental export evidence separately preserves original revisions/comments/header/footer",
+      "controlled_word_dual_review_preview_20260717": "contract 6603fd5c-8d6d-4267-9e66-bee8b1e0235f was created and filled through the real chunk API; current OOXML body extraction persisted 53 characters and excluded deleted 120-day/24-month text. Qwen ReviewRun c29bd4e1-5979-41b7-8f89-cde001667fa6 used 328/201/529 tokens in 8856ms and produced one exact SLA risk. Gemma ReviewRun bcfa78dd-6497-440e-8065-b0c3a3e657e9 used 337/1528/1865 tokens in 34710ms and produced three plausible exact-anchored risks. Both are completed, degraded=false, source-hash matched. Desktop 1440x900 and iPad 1180x820 actual review pages passed with no overflow, alert or console error; screenshots are output/evidence/g5-v12/controlled-word-review-*-20260717.png. A later two-file browser queue used contracts 9cd9a50a-4e99-449a-9b5d-a997091beb67 and 428bb5d0-4043-4bd7-b6e7-4a7feacef5ae exactly once each, then cleaned all database and Storage residue",
+      "preview_multiformat_file_matrix_20260717": "real DOCM fd591958..., text PDF 3f3baa5c... and scanned PDF fc88f0cc... passed Preview create/chunk/merge, source/text SHA binding, page maps and desktop/iPad review pages. Outputs: DOCM 24d21a00... with one native comment and all three VBA-part hashes unchanged; text PDF 4051a6de... with 8/8 pages plus one Highlight and one Text annotation; scanned PDF 96bb36f4... with original image-stream hash unchanged plus one Highlight and two Text annotations. macOS Preview displayed complete Chinese annotations; LibreOffice 26.2.4.2 read the DOCM. Current Word GUI remains unverified because the installed app hangs at dyld_start. Python 3.14 lxml import and dev hot reload were isolated as harness/runtime delays; free Python 3.11 production-mode exports were about 1.95s DOCM and 2.05s scan PDF. All Preview database, formal object, chunk and auth-token residue is zero. Evidence: output/evidence/g5-v12/preview-file-matrix-20260717.md",
+      "page_map_source_fence_20260717": "migration 20260717202000_fence_contract_page_map_source.sql is recorded only in isolated Preview. Correct current-source upserts pass; stale storage_path and source_text_hash writes raise SQLSTATE 40001. A concurrent source replacement/stale page-map race completed without deadlock, stale retry was rejected, current upsert passed and fixture residue was zero",
+      "frozen_anchor_performance_20260718": "Preview migration 20260718023000_optimize_frozen_chunk_anchor_validation.sql keeps fail-closed UTF-16 and frozen-source semantics while eliminating repeated whole-source work. 49 helper probes completed 49/49 in 17.612ms; a full 49-risk stage completed in 1483.046ms under a 5s statement timeout and was rolled back; one valid plus one forged hash was rejected atomically with SQLSTATE 23514. Static migration contract tests passed 10/10.",
+      "qwen_synthetic_accuracy_gate_20260718": "The only post-fix Qwen rerun used local qwen3.5-9b-local plus free Preview, cost USD 0, and completed 11/11 non-degraded invocations with 50702 tokens, ReviewRun 90c51eea-edab-424d-95a5-488705c90ac9 and job c296d92b-1bbf-4eb1-8cce-4d291351f50d. V3 scoring produced TP42/FP4/FN3, P=.913043/R=.933333/F1=.923077, anchor=1, severity=.833333 and explicit-negative specificity=.4. Binding, source mismatch, unbound, unlocated, duplicate, failed and skipped counts were all zero, but accuracy gates failed; release acceptance is false. This fixture is now seen and must not be rerun or presented as general legal accuracy. Evidence prefix: output/evidence/g5-v12/g5-50-page-qwen-v22-final-20260717T191341776Z-bfa4e861.",
+      "qwen_final_browser_and_cleanup_20260718": "Authenticated Preview browser showed 46/46 risks at desktop 1440x900 and iPad 1180x820 with no body overflow and no page exception. iPad rendered the real first source page; desktop source marker PAGE-01-ANCHOR-01 did not become visible within the bounded 60s check, so desktop source-reader acceptance remains open. Local optional _vercel telemetry scripts produced two console 404s. Exact cleanup removed six benchmark contracts, six ReviewRuns/jobs/page maps, 57 invocations, 95 risks, six Storage objects and one expired token; post-cleanup counts for all targets, chunks and auth tokens are zero while bundle v21, policy, 15 rule snapshots and 13 rule-set snapshots remain intact.",
+      "source_only_canary_20260718": "Free isolated Preview source-only canary completed at 2026-07-17T20:08:40.838Z with no model call or paid action. Desktop 1440x900 reached ready in 8627ms and iPad 1180x820 in 6028ms; both rendered 50 sections, exposed PAGE-01/PAGE-50 anchors, had no root overflow or unexpected request failure, and cleanup residue was zero. Evidence SHA-256: JSON 451337ae1913954459d2425a33c6c83fed509aa35762f4673f4a33e82b1d765e, desktop PNG cad2e275a4db48c6ae4dc7ac1ed6ec2d03e1fb50bfa5f114a868bbfbae55b5d7, iPad PNG 2b65280898adfd94c4db151216dcd15bc5fc04df2a9a4c8809c5ab15c4e020e9.",
+      "deterministic_adjudication_preview_20260718": "Deterministic adjudicator and migration contract tests passed; explicit Preview migrations 20260718040000_add_deterministic_adjudication_candidate_bundle.sql and 20260718041000_bind_adjudication_trace_to_frozen_review.sql passed candidate/trace execution checks. Test candidate bundle and adjudication trace residue is zero; existing v21 bundle, model policy, 15 rule snapshots and 13 rule-set snapshots remain unchanged. Production was not touched.",
+      "rule_criteria_read_only_audit_20260718": "Read-only audit of all 15 v21 rules found that the current descriptions are translation drafts rather than directly publishable deterministic criteria. Required closure includes typed fact extraction, whitelisted operators, disjoint A/B/C envelopes, explicit unknown handling, R007/R013 conflict specificity and rule-specific gap repair including R004. This audit authorizes no publish and leaves WP05 NO-GO.",
+      "facts_only_runtime_local_20260718": "facts_v1 is explicitly separated from legacy severity output. The local runtime enforces a strict per-rule fact schema, complete observed/not_observed/uncertain coverage for every frozen rule and chunk, frozen source/hash/range checks, complete unique 1..N document merge, overlap deduplication, conflicting-fact fail-closed behavior and server-only deterministic severity/conflict adjudication. A separate provider path requires full ReviewRun/job/bundle/policy/chunk identity, exact invocation id and non-zero token evidence; it has no production ReviewRun caller yet. Six targeted files / 98 tests, tsc --noEmit and an isolated Next.js 14.2.35 build with 81/81 pages passed.",
+      "adjudication_trace_immutability_preview_20260718": "Preview migration 20260718042000_harden_adjudication_trace_immutability.sql is applied. Chunk indices are 1-based, service_role has only SELECT/INSERT, and UPDATE/DELETE are rejected by an immutable trigger. Dynamic schema/ACL checks passed; trace rows remain zero and Production was not touched.",
+      "deterministic_rule_provenance_preview_20260718": "Preview migration 20260718043000_freeze_deterministic_rule_provenance.sql is applied. PostgreSQL now generates the authoritative criteria hash on insert; published rule/rule-set snapshots and bundle content are immutable while the bundle is_current pointer remains movable. A transactional probe proved automatic 64-hex hashing, bad-hash rejection, update/delete rejection, service_role column ACL and allowed pointer movement, then rolled back. Probe residue=0; v21 remains current with compiled_hash 7d492ccea7b67f4363b6ae30ca112ab4, 15 legacy null criteria hashes, 13 rule-set snapshots, zero candidate channels and zero traces. Advisor output added no new 043 blocker; RLS-without-policy INFO is the intentional service-role-only fail-closed posture.",
+      "atomic_facts_staging_preview_20260718": "Preview migrations 20260718044000_add_atomic_facts_review_staging.sql and 20260718045000_add_facts_staging_fk_indexes.sql are applied. The service-role-only RPC atomically validates the running lease, direct ANALYZING ReviewRun, exact preview candidate, frozen source/page-map, complete 1..N invocations, non-zero token evidence, raw-output hashes, chunk ranges, the full chunk-by-rule coverage matrix and deterministic trace provenance. It returns review_completed=false and neither creates risk cards nor changes a bundle channel. Positive+idempotent, wrong lease, zero token, wrong raw hash, incomplete coverage, two-chunk all-not-observed, immutable audit rows, frozen asset deletion and operational invocation deletion probes passed inside rolled-back transactions; fact run/chunk/coverage/trace, candidate and fixture residue are zero. Browser roles have no execution or write grant. Security advisor has no new WARN; the only related INFO is the intentional RLS-without-browser-policy posture.",
+      "facts_staging_index_gate_20260718": "The 045 forward-only migration added covering indexes for adjudication fact_chunk+fact_run, suppressed rule snapshot, and rule coverage fact_chunk+run foreign keys. The Supabase performance advisor now reports zero related unindexed_foreign_keys; unused-index INFO is expected before any retained workload and is not a paid-capacity issue.",
+      "facts_v1_rule_contract_triage_20260718": "The current 15 legacy snapshots are not publishable facts_v1 contracts. R002/R004/R005 and the candidate portion of R013 are closest to machine-contract drafts but still require product-truth approval; R001/R006/R009/R011/R014/R015 lack business decision semantics; R003/R007/R008/R010/R012 depend on whole-document absence or external truth, and R010 cannot be proven from contract text alone. Missing-clause findings must not fabricate a source quote. This is now the primary WP05 blocker before candidate-start, risk materialization/ReviewRun completion and a new blind real-contract set.",
+      "document_evidence_basis_local_20260718": "facts_v1 document coverage now distinguishes source_span_candidates, complete_not_observed_coverage and uncertain_coverage, with candidate IDs and full per-chunk statuses. This is evidence classification only: complete not-observed coverage cannot become a legal missing-clause finding unless the frozen product rule explicitly opts in. Missing-clause findings remain document-level and cannot be exported as native comments until a user selects a real paragraph/range or PDF point. Target runtime tests and tsc passed.",
+      "desktop_browser_gate": "authenticated Preview production-mode browser passed real DOCX source-ticket and review chains at desktop 1440x900 and iPad 1180x820 with no horizontal body overflow. Source ticket and Storage object returned 200, no /source/pages request or document-originated external host occurred, and the controlled dual-review screenshots live under output/evidence/g5-v12",
+      "preview_authorization": "user approved isolated Supabase Preview creation/use and Preview writes on 2026-07-17; Production remains read-only and push/deploy remain prohibited. Hosted Branch creation failed before resource creation because the organization is Free, so the quoted 0.01344 USD/hour is not incurred. A fresh same-region isolated project vsfropnfsmnonkotywsx was created at the platform-quoted cost of 0 USD/month; organization plan remains Free and Production has no added preview branch",
+      "migration_acl_gate": "candidate SQL now revokes EXECUTE from PUBLIC, anon and authenticated for all 22 functions and grants only service_role; live Production read-only proof showed the replaced SECURITY DEFINER claim_contract_analysis_job(text,interval) currently remains executable by anon and authenticated, so the prior PUBLIC-only revoke was unsafe",
+      "migration_reconciliation_candidate": {
+        "baseline": "20260717041512_reconcile_g5_review_workbench_baseline.sql",
+        "g5": "20260717041801_add_multiformat_source_annotation_anchors.sql",
+        "ordering": "baseline reconciliation must run before WP05 source-identity and lease changes",
+        "baseline_scope": "final schema only from historical 20260714000002-00005; no UPDATE/backfill DML; 20260714000001 remains WP07",
+        "lineage_decisions": "20260710000001 reconcile only missing phase index if query evidence requires it; 20260713000001 belongs in controlled seed/backfill after fixtures; 20260713000002 skip because remote 20260713205050 is byte-identical",
+        "g5_content_preservation_sha256": "8d3bbddcec0ff8ebad084b80d97db08bf7e6018139b0eefc21b75864f5c004c5",
+        "local_ledger_after_candidate": "11 local-only and 38 remote-only; the old WP05 path is byte-identically preserved for protected-snapshot compliance while the canonical baseline and later-numbered WP05 candidate remain unapplied",
+        "directory_guard": "historical local-only files remain in their protected dirty paths, so linked db push is still forbidden. Preview must receive only the two explicit candidate SQL files in order; relocating legacy files requires a later evidence-backed decision and must preserve their bytes",
+        "static_contract_test": "lib/contracts/g5-migration-contract.test.ts passed 4/4 through the direct Vitest entrypoint; three earlier pnpm exec attempts produced no output and were explicitly terminated rather than retried again",
+        "execution_proof": "passed on isolated Preview vsfropnfsmnonkotywsx; candidate migrations applied explicitly and dynamic transaction rollback chain passed with zero residue"
+      },
+      "branch_mother_correction": "official Supabase behavior says that when main already has migrations, a new dashboard branch is created from those migrations rather than a full schema dump. Because Production has unregistered schema drift, branch R0 is only a reconstruction substrate; it becomes the unique candidate mother only after an audited R0-to-Production schema reconciliation and matching relevant schema fingerprint",
+      "production_public_schema_fingerprint_20260717": {
+        "algorithm": "ordered canonical JSON payload per catalog class, SHA-256; public app schema only, excluding data and Supabase-managed schemas",
+        "columns": "1054:a3b6a93391631afa7d956bd1c52df34989ebe2d7fe64d017f2a1b01717f6d563",
+        "constraints": "386:493205dd9d4c2c596bf3c67077622af4fdb9b68f6a2305e1036573dc6544a3cb",
+        "functions": "134:42a31ec103055a110d6b92db07409d5ce929b0635a0aded998f7b988b51601f8",
+        "indexes": "327:2488a6e9744b9bdd881ecff938d98d3fcdcf16496513513735beba353039c162",
+        "policies": "79:346acc868ede43cf78f574168e42bbc07afd459b712b38aa471dc20c9deb0cf9",
+        "table_security": "80:cb99fb05e9a2a2329c1a20dca16fb9c07a66be2e29333a7e567d29a85138a9fd",
+        "triggers": "19:56ca7569297234b835c2536b478a3a8f9413a1a6aa6b577fec7c560a98bfe7a7",
+        "usage": "diagnostic full-app drift inventory only; it must not force WP07 or unrelated product schema into WP05. WP05 admission uses the scoped prerequisite fingerprint below"
+      },
+      "g5_prerequisite_schema_fingerprint_20260717": {
+        "tables": [
+          "contracts",
+          "contract_analysis_jobs",
+          "contract_reviews",
+          "contract_risk_cards",
+          "contract_annotations",
+          "contract_review_submission_batches",
+          "contract_review_decision_drafts",
+          "contract_source_page_maps",
+          "contract_skill_bundles",
+          "review_strategies",
+          "contract_rules_v2",
+          "contract_rule_snapshots",
+          "contract_clauses"
+        ],
+        "columns": "276:211f2dcabb183cd4273bb153f4ec77bee618d4456dadab313de583d022b1b5c6",
+        "constraints": "104:b28522f73d39680ddb0e500c6388b4156080faee5edc69f88efcd21dfbdff896",
+        "indexes": "70:c51c94fea09adfa2efe234966a9f7d54d8ae799d6114ad3991f2872c4e4c744b",
+        "policies": "8:b0ee9ac50ff9095e311d2381b861442e439e42c6ebb1bd3752d9a37d429f28c4",
+        "table_security": "13:a1312b8ef7779a24bc7c77fde9048d27ad1726694738c6a819e544135bb906b9",
+        "triggers": "5:c8d60b573098a3b48c21d2eb514cadb081972a683d256d5befde9174aea5e3df",
+        "gate": "R0 differences outside this table set are recorded but cannot enter WP05. Differences inside this set require audited reconciliation or an explicit stop before applying WP05"
+      },
+      "production_rls_incident_20260717": {
+        "severity": "P0 interrupt candidate",
+        "tables": 11,
+        "nonempty_tables": 8,
+        "rows_at_read_only_probe": 1407,
+        "facts": "RLS disabled; anon and authenticated each have SELECT, INSERT, UPDATE and DELETE on all 11; anonymous PostgREST select=id&limit=0 returned HTTP 200 for all 11 without reading response rows",
+        "code_dependency_audit": "all repository references found for these tables use server API routes or server libraries with supabaseAdmin/service_role; no browser-side table access was found",
+        "safe_candidate": "first validate in Preview: revoke table privileges from anon/authenticated and enable RLS fail-closed while retaining service_role; then run targeted APIs/build/browser checks. Production remains read-only until separate explicit approval",
+        "active_switch": "not switched automatically; requires user decision after this impact assessment"
+      },
+      "g5_facts_v23_terminal_audit_20260718": "Controlled DOCM canary 765147ec-7d73-468b-a1b2-15516c4f6985 completed once with one validated checkpoint, 3000 tokens, 15 document outcomes, 13 risk cards and one receipt; it proves runtime/evidence closure only. Real DOCX ReviewRun f0f0225f-2cbe-47c6-917f-e2af5346e839 failed at chunk 8/13 because compensation_basis was outside the frozen enum; one bounded resume retained checkpoints 1..7, repeated the same deterministic error once and then stopped with no fact run, receipt, risk card, replacement ReviewRun or source mutation. Migration 067 makes deterministic validation non-retryable and aligns enum transport, coverage audit, whitespace projection, duplicate quotes and checkpoint invariants. Four files / 103 tests, typecheck and Preview postflight passed; build/browser/native export were not rerun. Runtime failed, blind accuracy was not evaluated, release=false, incremental cost USD 0. Evidence: product-truth/product-code/output/evidence/g5-v12/g5-facts-v23-terminal-audit-20260718.json",
+      "g5_067_069_transaction_probe_20260718": "Preview-only rollback probe cloned one validated real chunk, inserted a whitespace-only source quote difference, and passed checkpoint_contract_review_fact_chunk_v1 through stage_contract_review_facts_v2 while repeated, overlapping and non-whitespace mutations remained rejected. The probe exposed and fixed the prior empty matched_levels FALSE-vs-NULL rejection via forward migrations 068 and 069; 069 corrected 068's invalid pg_catalog qualification without rewriting history. Final residue for probe contract/job/invocation/adjudication is zero; anon v1 and authenticated v2 execution are false, service_role v2 is true. Four files / 103 tests and typecheck passed. No model, Storage, Production or paid call occurred. Script: product-truth/product-code/output/evidence/g5-v12/g5-067-whitespace-stage-transaction-probe.sql",
+      "g5_real_blind_inventory_20260718": "Preview retains seven contracts: five have parsed text but all five have recorded model invocations; two are unseen but unparsed. The repository has 45 Word/PDF files and 42 unique hashes, all under output; 32 are named derived/annotated/export artifacts and the remaining 13 are controlled, synthetic, previously used or lack an independent real-contract gold manifest. Eligible new source + parsed text + unseen + independently labeled contracts = 0, so no additional model run was made. Evidence: product-truth/product-code/output/evidence/g5-v12/g5-real-blind-corpus-inventory-20260718.json",
+      "g5_current_batch_isolated_build_20260718": "Next.js 14.2.35 isolated build excluded .env*, output, prior .next and reused only the existing node_modules closure; compile, type/lint phase and 81/81 pages completed with exit 0. Existing warnings were three review-page lint notices, Sentry dynamic require and expected dynamic API prerender diagnostics. No workspace build artifact, account, paid service or Production write was created.",
+      "release_actions": "no push, PR, Production migration apply, or Production deployment. Explicit candidate and source-fence migrations were applied only to the isolated Preview"
+    },
+    "security_p0_preview_20260717": {
+      "status": "preview_verified_production_held_read_only",
+      "preview_project": "vsfropnfsmnonkotywsx",
+      "cost": "0 USD/month on Free organization; failed Pro Branch quote was never incurred",
+      "r0": "84 shared migration files plus one byte-equivalent final Production migration and one isolated organization fixture; 77 public tables",
+      "tables": "11/11 RLS enabled; PUBLIC/anon/authenticated ACL empty; anonymous Data API 200->401; service_role reads passed",
+      "rpcs": "exec_sql and claim_contract_analysis_job anonymous calls 200->401; service_role real calls passed; target advisor warnings=0",
+      "static_contract": "independent Node assertion passed for 11 tables, two RPCs, zero data DML and bounded timeouts; Vitest launcher produced no output twice and was stopped by the idle-loop circuit breaker",
+      "typecheck_build": "tsc --noEmit passed; Preview-env Next.js 14.2.35 build passed 81/81 pages",
+      "browser": "Preview login and contracts APIs returned 200; desktop 1440x900 and iPad 1180x820 screenshots visually passed with no horizontal overflow",
+      "artifacts": [
+        "product-truth/product-code/supabase/migrations/20260717061643_p0_fail_closed_contract_service_tables.sql",
+        "product-truth/product-code/supabase/migrations/20260717062724_p0_restrict_privileged_contract_rpcs.sql",
+        "product-truth/product-code/lib/contracts/p0-security-migration-contract.test.ts",
+        "product-truth/product-code/output/playwright/p0-preview/desktop-contracts.png",
+        "product-truth/product-code/output/playwright/p0-preview/ipad-contracts.png"
+      ]
+    }
+  },
+  "g5_annotation_decision": {
+    "accepted_sources": [
+      ".doc",
+      ".docx",
+      ".docm",
+      ".pdf"
+    ],
+    "excluded_sources": [
+      "standalone .png",
+      "standalone .jpg",
+      "standalone .jpeg"
+    ],
+    "annotation_anchors": [
+      "text range",
+      "normalized region",
+      "normalized point"
+    ],
+    "pdf_rule": "文本 PDF 直接提取文本；扫描 PDF 先 OCR，OCR 低置信或失败时降级为人工区域/位置批注，不拒绝文件",
+    "macro_rule": "DOCM/DOC 宏永不执行；DOCM 导出必须保持宏相关部件字节级不变；legacy DOC 只做预览，不做源原生批注写回",
+    "delivery": {
+      "docx": "source DOCX plus native Word comments",
+      "docm": "source DOCM plus native Word comments with unchanged macro assets",
+      "doc": "immutable source DOC plus an explicit legacy compatibility boundary; source-native AI comment export requires the user to save as DOCX first",
+      "pdf": "source PDF plus standard PDF annotations"
+    },
+    "online_office_dependency": "none",
+    "preview_delivery_boundary": "browser OOXML/PDF rendering is a review rendition only. LibreOffice is not a SaaS runtime dependency. DOCX/DOCM/PDF delivery always starts from a copy of the immutable source file and adds native annotations; no preview output is used to rebuild a customer deliverable",
+    "legacy_doc_adapter_status": "parked research artifact; not called by the Production export route and not a WP05 exit requirement"
+  },
+  "g6_asset_assessment": {
+    "wave3_compare_viewer": {
+      "commits": [
+        "0c55f0c3",
+        "2772479b"
+      ],
+      "targeted_tests": "4 files / 17 tests passed",
+      "reusable": [
+        "60%-180% 缩放",
+        "适配宽度",
+        "独立/同步滚动",
+        "旧/新角色与双栏布局",
+        "DOCX 浏览器辅助预览的交互片段",
+        "来源快照校验"
+      ],
+      "limitation": "DOCX 使用 docx-preview，只能声明为浏览器高还原辅助预览；PDF iframe 无法满足应用控制缩放、同步滚动和定位，因此不回收"
+    },
+    "r7_cspp_and_rendering": {
+      "commits": [
+        "48017dc5",
+        "33f6fa1d",
+        "3fb73325",
+        "8e438b7a",
+        "c0439c38"
+      ],
+      "targeted_tests": "7 files / 53 tests passed",
+      "reusable": [
+        "双原文件版本身份绑定思路",
+        "iPad 双文件可达证据结构",
+        "页级定位思路"
+      ],
+      "limitation": "CSPP/WOPI、在线 Office 会话和服务端 Office 转换不进入主线；只选择性复用与外部平台无关的身份和定位思想"
+    },
+    "real_file_render_evidence": {
+      "files": [
+        "baseline-f158f669-3a37-442a-8c52-4cf2583fdd70.docx",
+        "compare-8b539ab9-f61d-4ecd-8ab1-d18c25d6b3be.docx"
+      ],
+      "normalized_source_to_pdf_text": "363/363 and 389/389 characters exact",
+      "visual_check": "both rendered pages complete after using opaque JPEG; prior black PNG was transparency display, not content loss",
+      "runtime": "LibreOffice/soffice, pdftotext and pdftoppm present"
+    },
+    "microsoft_external_constraint": {
+      "local_wopi_config": "all required WOPI variables missing",
+      "official_requirement": "CSPP membership, Microsoft test provisioning, Validator and production domain allow-list are required",
+      "official_timing": "test and production environment configuration propagation typically take 4-5 weeks each",
+      "sources": [
+        "https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online/apply-for-cspp-program",
+        "https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online/build-test-ship/testing",
+        "https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online/overview"
+      ]
+    },
+    "remaining_g6_gaps": [],
+    "recommended_route": "completed：免费可审计主线已实现并通过 Preview 候选验收；Production 发布复验移交 WP09，不在 WP06 内继续扩张。",
+    "decision_gate": "closed_and_verified_20260718：WP06 所有退出门禁通过；WP07 只有在生成独立结构化目标后才能接替 Active。"
+  },
+  "workspace": {
     "repo_root": "/Users/nsss/Price-v3",
     "code_root": "product-truth/product-code",
     "truth_root": "product-truth",
-    "active_packet_dir": "product-truth/feature-packets"
+    "registry_path": "product-truth/REQ_REGISTRY.yml",
+    "inbox_path": "governance/runtime-state/demand-inbox.jsonl",
+    "execution_repo_root": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
+    "role": "protected_snapshot_control_mirror"
   },
-
-  "active_task": {
-    "req_id": "F002",
-    "packet_path": "product-truth/feature-packets/F002-quote-maintenance.md",
-    "status": "in_progress",
-    "branch": "feat/f002-quote",
-    "owner": "",
-    "started_at": "2026-06-11T20:00:00Z",
-    "last_updated": "2026-06-11T20:00:00Z"
-  },
-
-  "workspace": {
-    "workspace_root": "/Users/nsss/Price-v3",
-    "truth_root": "/Users/nsss/Price-v3/product-truth",
-    "code_root": "/Users/nsss/Price-v3/product-truth/product-code",
-    "active_packet_root": "/Users/nsss/Price-v3/product-truth/feature-packets",
-    "registry_path": "product-truth/REQ_REGISTRY.yml"
-  },
-
-  "providers": {
-    "identity_provider": null,
-    "crm_provider": null,
-    "workitem_provider": null,
-    "notify_provider": null
-  },
-
   "entry": {
     "continue_work": "继续工作",
     "steps": [
-      "1. 读取此文件获取当前活跃任务",
-      "2. 读取对应的 Feature Packet",
-      "3. 执行 git status 查看当前工作区状态",
-      "4. 根据 Packet 中的状态和待办继续推进"
+      "1. 读取 active-task.json 与 demand-inbox.jsonl",
+      "2. 确认用户输入是 Active 反馈、新需求、问题、技术线索还是中断候选",
+      "3. 默认保持 Active 不变；混合输入拆分后进入 Inbox",
+      "4. 修改文件前运行 scheduler-check 并确认路径属于 allowed_paths",
+      "5. 达到退出门禁后才能请求切换到 Next"
     ]
   }
 }

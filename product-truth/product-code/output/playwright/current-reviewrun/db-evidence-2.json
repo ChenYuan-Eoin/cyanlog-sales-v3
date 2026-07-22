@@ -1,0 +1,164 @@
+{
+  "review": {
+    "id": "9f89dcb2-9be3-4c26-a4f9-e6f798501dc1",
+    "status": "COMPLETED",
+    "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+    "model_policy_id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+    "model_invocation_ids": [
+      "5c6d8830-dfd6-4dcf-9661-f02f2022e091",
+      "c9f28976-6a5b-47d5-b9bd-fe2e70cc6219"
+    ],
+    "rule_snapshot_count": 15,
+    "completed_at": "2026-07-02T02:50:50.151+00:00",
+    "results_degraded": false,
+    "degradation_reasons": [],
+    "provider": "rule-engine+AI_LEVEL_1"
+  },
+  "invocations": [
+    {
+      "id": "5c6d8830-dfd6-4dcf-9661-f02f2022e091",
+      "phase": "structured_rules",
+      "provider": "rule-engine",
+      "model": "rule-engine",
+      "status": "completed",
+      "degraded": false,
+      "fallback_reason": null,
+      "latency_ms": 280,
+      "error_message": null,
+      "model_policy_id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+      "request_meta": {
+        "phase": "structured_contract_review",
+        "review_trigger": "manual_rerun",
+        "model_policy_stage": "structured_rules",
+        "rule_snapshot_count": 15,
+        "output_schema_version": "f006.review.v1"
+      },
+      "response_meta": {
+        "risk_count": 3,
+        "applied_rules": 15,
+        "matched_rules": 3,
+        "skill_eval_status": "passed",
+        "semantic_risk_count": 4,
+        "rule_translation_status": "ready",
+        "semantic_merged_risk_count": 1,
+        "unlocated_commentable_risk_count": 0
+      }
+    },
+    {
+      "id": "c9f28976-6a5b-47d5-b9bd-fe2e70cc6219",
+      "phase": "semantic_review",
+      "provider": "AI_LEVEL_1",
+      "model": "gpt-oss-20b",
+      "status": "completed",
+      "degraded": false,
+      "fallback_reason": null,
+      "latency_ms": 32251,
+      "error_message": null,
+      "model_policy_id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+      "request_meta": {
+        "phase": "semantic_contract_review",
+        "review_trigger": "manual_rerun",
+        "skill_bundle_id": "659fb256-887e-4b2c-8e7c-8a295490b762",
+        "skill_rule_count": 15,
+        "model_policy_stage": "semantic_review",
+        "skill_bundle_version": 10,
+        "intended_provider_model": "gpt-oss-20b",
+        "intended_provider_profile": "AI_LEVEL_1"
+      },
+      "response_meta": {
+        "risk_count": 4,
+        "provider_kind": "openai_compatible",
+        "attempt_errors": [],
+        "summary_available": true,
+        "usable_risk_count": 4
+      }
+    }
+  ],
+  "riskCount": 4,
+  "riskEvidenceChecks": [
+    {
+      "id": "18c8fd02-ba5a-413c-a565-ffe0169bbeef",
+      "rule_code": "R011",
+      "title": "IP 归属",
+      "level": "red",
+      "snippets": [
+        {
+          "length": 124,
+          "exactMatch": true,
+          "sample": "为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更"
+        }
+      ],
+      "source_range": {
+        "end": 197,
+        "start": 73
+      },
+      "position_start": 73,
+      "position_end": 197,
+      "location_status": "located",
+      "location_reason": "evidence_text_exact_match"
+    },
+    {
+      "id": "257084da-de1e-4dfe-9f4f-bd5d7ceaa634",
+      "rule_code": "R015",
+      "title": "争议解决",
+      "level": "red",
+      "snippets": [
+        {
+          "length": 116,
+          "exactMatch": true,
+          "sample": "款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第"
+        }
+      ],
+      "source_range": {
+        "end": 213,
+        "start": 97
+      },
+      "position_start": 97,
+      "position_end": 213,
+      "location_status": "located",
+      "location_reason": "evidence_text_exact_match"
+    },
+    {
+      "id": "5dade544-b294-424a-9fd1-935235d3f970",
+      "rule_code": "R006",
+      "title": "违约金",
+      "level": "yellow",
+      "snippets": [
+        {
+          "length": 13,
+          "exactMatch": true,
+          "sample": "逾期付款违约金为日万分之十"
+        }
+      ],
+      "source_range": {
+        "end": 107,
+        "start": 94
+      },
+      "position_start": 94,
+      "position_end": 107,
+      "location_status": "located",
+      "location_reason": "evidence_text_exact_match"
+    },
+    {
+      "id": "4a1be806-6e68-46df-897e-edc0eb26f7bf",
+      "rule_code": "R001",
+      "title": "付款条款缺乏明确的首期或付款节奏",
+      "level": "red",
+      "snippets": [
+        {
+          "length": 29,
+          "exactMatch": true,
+          "sample": "第二条 付款条款：乙方验收后120天内付款，账期120天。"
+        }
+      ],
+      "source_range": {
+        "end": 53,
+        "start": 24
+      },
+      "position_start": 24,
+      "position_end": 53,
+      "location_status": "located",
+      "location_reason": "evidence_text_exact_match"
+    }
+  ]
+}

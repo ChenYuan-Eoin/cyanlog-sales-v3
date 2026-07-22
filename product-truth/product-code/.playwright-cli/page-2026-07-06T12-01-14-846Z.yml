@@ -1,0 +1,468 @@
+- generic [active] [ref=f1e1]:
+  - button "打开主导航" [ref=f1e2] [cursor=pointer]:
+    - img [ref=f1e3]
+  - complementary [ref=f1e5]:
+    - generic [ref=f1e6]:
+      - img "ONES Sales" [ref=f1e8]
+      - generic [ref=f1e9]:
+        - generic [ref=f1e10]: ONES Sales
+        - paragraph [ref=f1e11]: 智能协作平台
+    - navigation [ref=f1e12]:
+      - link "工作台" [ref=f1e13] [cursor=pointer]:
+        - /url: /
+        - img [ref=f1e14]
+        - generic [ref=f1e18]: 工作台
+      - link "报价中心" [ref=f1e19] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=f1e20]
+        - generic [ref=f1e24]: 报价中心
+      - link "合同审核" [ref=f1e25] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=f1e26]
+        - generic [ref=f1e31]: 合同审核
+      - link "标书中心" [ref=f1e32] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=f1e33]
+        - generic [ref=f1e37]: 标书中心
+      - link "知识库" [ref=f1e38] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=f1e39]
+        - generic [ref=f1e44]: 知识库
+      - link "日程" [ref=f1e45] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=f1e46]
+        - generic [ref=f1e52]: 日程
+      - link "配置中心" [ref=f1e53] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=f1e54]
+        - generic [ref=f1e58]: 配置中心
+    - generic [ref=f1e59]:
+      - link "个人信息" [ref=f1e60] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=f1e61]
+        - generic [ref=f1e64]: 个人信息
+      - button "退出登录" [ref=f1e65] [cursor=pointer]:
+        - img [ref=f1e66]
+        - generic [ref=f1e69]: 退出登录
+  - main [ref=f1e70]:
+    - generic [ref=f1e71]:
+      - generic [ref=f1e74]:
+        - generic [ref=f1e75]:
+          - heading "合同中心" [level=1] [ref=f1e76]
+          - paragraph [ref=f1e77]: 全生命周期管理
+        - generic [ref=f1e79]:
+          - img [ref=f1e80]
+          - textbox "搜索合同名称、编号、客户..." [ref=f1e83]
+        - generic [ref=f1e84]:
+          - link "审核" [ref=f1e85] [cursor=pointer]:
+            - /url: /contracts/new?from=workbench
+            - button "审核" [ref=f1e86]:
+              - img
+              - text: 审核
+          - link "起草" [ref=f1e87] [cursor=pointer]:
+            - /url: /contracts/draft
+            - button "起草" [ref=f1e88]:
+              - img
+              - text: 起草
+      - main [ref=f1e89]:
+        - generic [ref=f1e90]:
+          - generic [ref=f1e91]:
+            - generic [ref=f1e92]:
+              - img [ref=f1e94]
+              - generic [ref=f1e97]:
+                - heading "合同中心" [level=2] [ref=f1e98]
+                - paragraph [ref=f1e99]: 一级入口只保留合同审核、文档对比、AI 起草合同。继续审核、查看批注版和再审核是合同任务内部状态动作，不作为首页功能入口。
+            - link "上传源文件并发起审核" [ref=f1e100] [cursor=pointer]:
+              - /url: /contracts/new
+              - button "上传源文件并发起审核" [ref=f1e101]:
+                - img
+                - text: 上传源文件并发起审核
+          - generic [ref=f1e102]:
+            - link "1 合同审核 入口 源文件审核 动作 上传源文件并创建 ReviewRun 对象 DOCX / PDF 源文件 当前目标 新建合同版本 结果 风险定位、AI 批注、源文件批注版 边界：审核自动消费配置中心已发布规则，不在这里选择规则版本" [ref=f1e103] [cursor=pointer]:
+              - /url: /contracts/new?from=workbench
+              - generic [ref=f1e104]:
+                - generic [ref=f1e105]:
+                  - generic [ref=f1e106]:
+                    - generic [ref=f1e107]: "1"
+                    - generic [ref=f1e108]: 合同审核
+                  - img [ref=f1e109]
+                - generic [ref=f1e112]:
+                  - generic [ref=f1e113]:
+                    - generic [ref=f1e114]: 入口
+                    - generic [ref=f1e115]: 源文件审核
+                  - generic [ref=f1e116]:
+                    - generic [ref=f1e117]: 动作
+                    - generic [ref=f1e118]: 上传源文件并创建 ReviewRun
+                  - generic [ref=f1e119]:
+                    - generic [ref=f1e120]: 对象
+                    - generic [ref=f1e121]: DOCX / PDF 源文件
+                  - generic [ref=f1e122]:
+                    - generic [ref=f1e123]: 当前目标
+                    - generic [ref=f1e124]: 新建合同版本
+                  - generic [ref=f1e125]:
+                    - generic [ref=f1e126]: 结果
+                    - generic [ref=f1e127]: 风险定位、AI 批注、源文件批注版
+                - generic [ref=f1e128]: 边界：审核自动消费配置中心已发布规则，不在这里选择规则版本
+            - link "2 合同文档对比 入口 旧/新文件 动作 选择旧文件和新文件 对象 合同版本流或客户回传件 当前目标 关联主体合作补充协议（模板）.docx-ONES批注版.docx 结果 差异列表、并排高亮、风险变化判断 边界：对比不替代审核；红线或需谈判变化进入再审核" [ref=f1e129] [cursor=pointer]:
+              - /url: /contracts/f8ec027a-5633-4429-8c0b-b69053b1a9ef/compare?from=workbench
+              - generic [ref=f1e130]:
+                - generic [ref=f1e131]:
+                  - generic [ref=f1e132]:
+                    - generic [ref=f1e133]: "2"
+                    - generic [ref=f1e134]: 合同文档对比
+                  - img [ref=f1e135]
+                - generic [ref=f1e140]:
+                  - generic [ref=f1e141]:
+                    - generic [ref=f1e142]: 入口
+                    - generic [ref=f1e143]: 旧/新文件
+                  - generic [ref=f1e144]:
+                    - generic [ref=f1e145]: 动作
+                    - generic [ref=f1e146]: 选择旧文件和新文件
+                  - generic [ref=f1e147]:
+                    - generic [ref=f1e148]: 对象
+                    - generic [ref=f1e149]: 合同版本流或客户回传件
+                  - generic [ref=f1e150]:
+                    - generic [ref=f1e151]: 当前目标
+                    - generic [ref=f1e152]: 关联主体合作补充协议（模板）.docx-ONES批注版.docx
+                  - generic [ref=f1e153]:
+                    - generic [ref=f1e154]: 结果
+                    - generic [ref=f1e155]: 差异列表、并排高亮、风险变化判断
+                - generic [ref=f1e156]: 边界：对比不替代审核；红线或需谈判变化进入再审核
+            - link "3 AI 起草合同 入口 需求起草 动作 输入需求生成合同草稿 对象 客户需求、模板、条款限制 当前目标 等待选择 结果 可编辑合同草稿，可进入审核或对比 边界：起草是独立路径，不等同于上传审核或版本对比" [ref=f1e157] [cursor=pointer]:
+              - /url: /contracts/draft
+              - generic [ref=f1e158]:
+                - generic [ref=f1e159]:
+                  - generic [ref=f1e160]:
+                    - generic [ref=f1e161]: "3"
+                    - generic [ref=f1e162]: AI 起草合同
+                  - img [ref=f1e163]
+                - generic [ref=f1e168]:
+                  - generic [ref=f1e169]:
+                    - generic [ref=f1e170]: 入口
+                    - generic [ref=f1e171]: 需求起草
+                  - generic [ref=f1e172]:
+                    - generic [ref=f1e173]: 动作
+                    - generic [ref=f1e174]: 输入需求生成合同草稿
+                  - generic [ref=f1e175]:
+                    - generic [ref=f1e176]: 对象
+                    - generic [ref=f1e177]: 客户需求、模板、条款限制
+                  - generic [ref=f1e178]:
+                    - generic [ref=f1e179]: 当前目标
+                    - generic [ref=f1e180]: 等待选择
+                  - generic [ref=f1e181]:
+                    - generic [ref=f1e182]: 结果
+                    - generic [ref=f1e183]: 可编辑合同草稿，可进入审核或对比
+                - generic [ref=f1e184]: 边界：起草是独立路径，不等同于上传审核或版本对比
+        - generic [ref=f1e185]:
+          - generic [ref=f1e188]:
+            - img [ref=f1e190]
+            - generic [ref=f1e193]:
+              - paragraph [ref=f1e194]: "20"
+              - paragraph [ref=f1e195]: 全部合同
+          - generic [ref=f1e198]:
+            - img [ref=f1e200]
+            - generic [ref=f1e203]:
+              - paragraph [ref=f1e204]: "0"
+              - paragraph [ref=f1e205]: 进行中
+          - generic [ref=f1e208]:
+            - img [ref=f1e210]
+            - generic [ref=f1e212]:
+              - paragraph [ref=f1e213]: "0"
+              - paragraph [ref=f1e214]: 需关注
+          - generic [ref=f1e217]:
+            - img [ref=f1e219]
+            - generic [ref=f1e221]:
+              - paragraph [ref=f1e222]: "17"
+              - paragraph [ref=f1e223]: 已完成
+        - tablist [ref=f1e226]:
+          - tab "全部 20" [selected] [ref=f1e227] [cursor=pointer]:
+            - text: 全部
+            - generic [ref=f1e228]: "20"
+          - tab "起草中" [ref=f1e229] [cursor=pointer]
+          - tab "待审核" [ref=f1e230] [cursor=pointer]
+          - tab "已完成" [ref=f1e231] [cursor=pointer]
+        - generic [ref=f1e232]:
+          - link "打开合同关联主体合作补充协议（模板）.docx-ONES批注版.docx" [ref=f1e233] [cursor=pointer]:
+            - /url: /contracts/f8ec027a-5633-4429-8c0b-b69053b1a9ef?panel=evidence&from=list
+            - generic [ref=f1e236]:
+              - img [ref=f1e238]
+              - generic [ref=f1e241]:
+                - generic [ref=f1e242]:
+                  - paragraph [ref=f1e243]: 关联主体合作补充协议（模板）.docx-ONES批注版.docx
+                  - generic [ref=f1e244]: 合同
+                - generic [ref=f1e245]:
+                  - generic [ref=f1e246]: 审核完成
+                  - generic [ref=f1e247]: 下一步：查看审核结果
+                  - generic [ref=f1e248]: 7月6日 18:27
+                - paragraph [ref=f1e249]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e250]
+          - link "打开合同关联主体合作补充协议（模板）.docx-ONES批注版.docx" [ref=f1e252] [cursor=pointer]:
+            - /url: /contracts/2edd4da2-24c2-41fb-8950-542d8f768efe?panel=evidence&from=list
+            - generic [ref=f1e255]:
+              - img [ref=f1e257]
+              - generic [ref=f1e260]:
+                - generic [ref=f1e261]:
+                  - paragraph [ref=f1e262]: 关联主体合作补充协议（模板）.docx-ONES批注版.docx
+                  - generic [ref=f1e263]: 合同
+                - generic [ref=f1e264]:
+                  - generic [ref=f1e265]: 审核完成
+                  - generic [ref=f1e266]: 下一步：查看审核结果
+                  - generic [ref=f1e267]: 7月6日 16:28
+                - paragraph [ref=f1e268]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e269]
+          - link "打开合同关联主体合作补充协议（模板）.docx" [ref=f1e271] [cursor=pointer]:
+            - /url: /contracts/9596f8e9-2c58-4b47-972f-60a3b29e26ce?panel=evidence&from=list
+            - generic [ref=f1e274]:
+              - img [ref=f1e276]
+              - generic [ref=f1e279]:
+                - generic [ref=f1e280]:
+                  - paragraph [ref=f1e281]: 关联主体合作补充协议（模板）.docx
+                  - generic [ref=f1e282]: 合同
+                - generic [ref=f1e283]:
+                  - generic [ref=f1e284]: 审核完成
+                  - generic [ref=f1e285]: 下一步：查看审核结果
+                  - generic [ref=f1e286]: 7月6日 16:13
+                - paragraph [ref=f1e287]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e288]
+          - link "打开合同2026年ONES研发迭代管理系统授权采购服务合同V1.docx" [ref=f1e290] [cursor=pointer]:
+            - /url: /contracts/34f7e7f3-876e-436b-a20b-5942ffe4e83b?panel=evidence&from=list
+            - generic [ref=f1e293]:
+              - img [ref=f1e295]
+              - generic [ref=f1e298]:
+                - generic [ref=f1e299]:
+                  - paragraph [ref=f1e300]: 2026年ONES研发迭代管理系统授权采购服务合同V1.docx
+                  - generic [ref=f1e301]: 合同
+                - generic [ref=f1e302]:
+                  - generic [ref=f1e303]: 审核完成
+                  - generic [ref=f1e304]: 下一步：查看审核结果
+                  - generic [ref=f1e305]: 7月6日 13:11
+                - paragraph [ref=f1e306]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e307]
+          - link "打开合同prod-gemini-review-sample-1782906641409.docx" [ref=f1e309] [cursor=pointer]:
+            - /url: /contracts/0ca03c97-8104-4211-a65f-3d76e5f14b8a?panel=evidence&from=list
+            - generic [ref=f1e312]:
+              - img [ref=f1e314]
+              - generic [ref=f1e317]:
+                - generic [ref=f1e318]:
+                  - paragraph [ref=f1e319]: prod-gemini-review-sample-1782906641409.docx
+                  - generic [ref=f1e320]: 合同
+                - generic [ref=f1e321]:
+                  - generic [ref=f1e322]: 审核完成
+                  - generic [ref=f1e323]: 下一步：查看审核结果
+                  - generic [ref=f1e324]: 7月3日 19:00
+                - paragraph [ref=f1e325]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e326]
+          - link "打开合同_上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx" [ref=f1e328] [cursor=pointer]:
+            - /url: /contracts/92958890-0b9f-411c-a283-1c9f7849afbe?panel=evidence&from=list
+            - generic [ref=f1e331]:
+              - img [ref=f1e333]
+              - generic [ref=f1e336]:
+                - generic [ref=f1e337]:
+                  - paragraph [ref=f1e338]: _上证所信息网络有限公司项目管理平台2024年维保服务合同-YK20241029-终稿.docx
+                  - generic [ref=f1e339]: 合同
+                - generic [ref=f1e340]:
+                  - generic [ref=f1e341]: 审核完成
+                  - generic [ref=f1e342]: 下一步：查看审核结果
+                  - generic [ref=f1e343]: 7月3日 18:58
+                - paragraph [ref=f1e344]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e345]
+          - link "打开合同ones-source-20260702110520.docx" [ref=f1e347] [cursor=pointer]:
+            - /url: /contracts/a1169c9f-7b64-4991-a97e-e63a3862aed5?panel=evidence&from=list
+            - generic [ref=f1e350]:
+              - img [ref=f1e352]
+              - generic [ref=f1e355]:
+                - generic [ref=f1e356]:
+                  - paragraph [ref=f1e357]: ones-source-20260702110520.docx
+                  - generic [ref=f1e358]: 合同
+                - generic [ref=f1e359]:
+                  - generic [ref=f1e360]: 审核完成
+                  - generic [ref=f1e361]: 下一步：查看审核结果
+                  - generic [ref=f1e362]: 7月3日 15:55
+                - paragraph [ref=f1e363]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e364]
+          - link "打开合同ones-contract-e2e-risk.docx" [ref=f1e366] [cursor=pointer]:
+            - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence&from=list
+            - generic [ref=f1e369]:
+              - img [ref=f1e371]
+              - generic [ref=f1e374]:
+                - generic [ref=f1e375]:
+                  - paragraph [ref=f1e376]: ones-contract-e2e-risk.docx
+                  - generic [ref=f1e377]: 合同
+                - generic [ref=f1e378]:
+                  - generic [ref=f1e379]: 审核完成
+                  - generic [ref=f1e380]: 下一步：查看审核结果
+                  - generic [ref=f1e381]: 7月3日 00:11
+                - paragraph [ref=f1e382]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e383]
+          - link "打开合同(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx" [ref=f1e385] [cursor=pointer]:
+            - /url: /contracts/abb72d16-ed19-445e-aa33-561cec0ab6d8?panel=evidence&from=list
+            - generic [ref=f1e388]:
+              - img [ref=f1e390]
+              - generic [ref=f1e393]:
+                - generic [ref=f1e394]:
+                  - paragraph [ref=f1e395]: (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx-ONES批注版.docx
+                  - generic [ref=f1e396]: 合同
+                - generic [ref=f1e397]:
+                  - generic [ref=f1e398]: 审核完成
+                  - generic [ref=f1e399]: 下一步：查看审核结果
+                  - generic [ref=f1e400]: 7月2日 23:53
+                - paragraph [ref=f1e401]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e402]
+          - link "打开合同snapshot-rules-20260702113614.docx" [ref=f1e404] [cursor=pointer]:
+            - /url: /contracts/8e1d9430-7218-4663-90f4-a2600669e0fa?panel=evidence&from=list
+            - generic [ref=f1e407]:
+              - img [ref=f1e409]
+              - generic [ref=f1e412]:
+                - generic [ref=f1e413]:
+                  - paragraph [ref=f1e414]: snapshot-rules-20260702113614.docx
+                  - generic [ref=f1e415]: 合同
+                - generic [ref=f1e416]:
+                  - generic [ref=f1e417]: 审核完成
+                  - generic [ref=f1e418]: 下一步：查看审核结果
+                  - generic [ref=f1e419]: 7月2日 19:54
+                - paragraph [ref=f1e420]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e421]
+          - link "打开合同ones-long-20260702111318.docx" [ref=f1e423] [cursor=pointer]:
+            - /url: /contracts/80c0ca0d-4879-4baa-a3bc-e929fda2b6b2?panel=evidence&from=list
+            - generic [ref=f1e426]:
+              - img [ref=f1e428]
+              - generic [ref=f1e431]:
+                - generic [ref=f1e432]:
+                  - paragraph [ref=f1e433]: ones-long-20260702111318.docx
+                  - generic [ref=f1e434]: 合同
+                - generic [ref=f1e435]:
+                  - generic [ref=f1e436]: 审核完成
+                  - generic [ref=f1e437]: 下一步：查看审核结果
+                  - generic [ref=f1e438]: 7月2日 19:13
+                - paragraph [ref=f1e439]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e440]
+          - link "打开合同ones-source-20260702110222.docx" [ref=f1e442] [cursor=pointer]:
+            - /url: /contracts/681635cb-1592-4875-98c8-7c97dd2e6818?panel=evidence&from=list
+            - generic [ref=f1e445]:
+              - img [ref=f1e447]
+              - generic [ref=f1e450]:
+                - generic [ref=f1e451]:
+                  - paragraph [ref=f1e452]: ones-source-20260702110222.docx
+                  - generic [ref=f1e453]: 合同
+                - generic [ref=f1e454]:
+                  - generic [ref=f1e455]: 审核完成
+                  - generic [ref=f1e456]: 下一步：查看审核结果
+                  - generic [ref=f1e457]: 7月2日 19:03
+                - paragraph [ref=f1e458]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e459]
+          - link "打开合同ones-source-20260702105749.docx" [ref=f1e461] [cursor=pointer]:
+            - /url: /contracts/2335f2ab-0686-440c-b86b-7fd6d4950844?panel=evidence&from=list
+            - generic [ref=f1e464]:
+              - img [ref=f1e466]
+              - generic [ref=f1e469]:
+                - generic [ref=f1e470]:
+                  - paragraph [ref=f1e471]: ones-source-20260702105749.docx
+                  - generic [ref=f1e472]: 合同
+                - generic [ref=f1e473]:
+                  - generic [ref=f1e474]: 审核完成
+                  - generic [ref=f1e475]: 下一步：查看审核结果
+                  - generic [ref=f1e476]: 7月2日 18:58
+                - paragraph [ref=f1e477]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e478]
+          - link "打开合同" [ref=f1e480] [cursor=pointer]:
+            - /url: /contracts/f381041d-f313-4d40-b4b3-fd474277ed84?from=list
+            - generic [ref=f1e483]:
+              - img [ref=f1e485]
+              - generic [ref=f1e488]:
+                - generic [ref=f1e489]:
+                  - paragraph
+                  - generic [ref=f1e490]: 合同
+                - generic [ref=f1e491]:
+                  - generic [ref=f1e492]: DRAFT
+                  - generic [ref=f1e493]: 下一步：补充审核源文件
+                  - generic [ref=f1e494]: 7月2日 09:55
+                - paragraph [ref=f1e495]: 先上传合同源文件，再创建 ReviewRun。
+              - img [ref=f1e496]
+          - link "打开合同(用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx" [ref=f1e498] [cursor=pointer]:
+            - /url: /contracts/058ef76f-ad26-49ef-9383-de09749879bd?panel=evidence&from=list
+            - generic [ref=f1e501]:
+              - img [ref=f1e503]
+              - generic [ref=f1e506]:
+                - generic [ref=f1e507]:
+                  - paragraph [ref=f1e508]: (用印审核版)2026年ONES研发迭代管理系统授权采购服务合同 (1).docx
+                  - generic [ref=f1e509]: 合同
+                - generic [ref=f1e510]:
+                  - generic [ref=f1e511]: 审核完成
+                  - generic [ref=f1e512]: 下一步：查看审核结果
+                  - generic [ref=f1e513]: 7月1日 18:33
+                - paragraph [ref=f1e514]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e515]
+          - link "打开合同" [ref=f1e517] [cursor=pointer]:
+            - /url: /contracts/a1cc7ba3-7890-447a-9db8-980daf424faa?from=list
+            - generic [ref=f1e520]:
+              - img [ref=f1e522]
+              - generic [ref=f1e525]:
+                - generic [ref=f1e526]:
+                  - paragraph
+                  - generic [ref=f1e527]: 合同
+                - generic [ref=f1e528]:
+                  - generic [ref=f1e529]: DRAFT
+                  - generic [ref=f1e530]: 下一步：补充审核源文件
+                  - generic [ref=f1e531]: 7月1日 16:42
+                - paragraph [ref=f1e532]: 先上传合同源文件，再创建 ReviewRun。
+              - img [ref=f1e533]
+          - link "打开合同_ONES_-_2026.docx" [ref=f1e535] [cursor=pointer]:
+            - /url: /contracts/13aca6c2-e902-4458-9e94-6d8db8ae7a09?panel=evidence&from=list
+            - generic [ref=f1e538]:
+              - img [ref=f1e540]
+              - generic [ref=f1e543]:
+                - generic [ref=f1e544]:
+                  - paragraph [ref=f1e545]: _ONES_-_2026.docx
+                  - generic [ref=f1e546]: 合同
+                - generic [ref=f1e547]:
+                  - generic [ref=f1e548]: 审核完成
+                  - generic [ref=f1e549]: 下一步：查看审核结果
+                  - generic [ref=f1e550]: 6月30日 16:37
+                - paragraph [ref=f1e551]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e552]
+          - link "打开合同Hemory_.docx" [ref=f1e554] [cursor=pointer]:
+            - /url: /contracts/44301b16-6551-4720-afa5-f1d80b1604de?panel=evidence&from=list
+            - generic [ref=f1e557]:
+              - img [ref=f1e559]
+              - generic [ref=f1e562]:
+                - generic [ref=f1e563]:
+                  - paragraph [ref=f1e564]: Hemory_.docx
+                  - generic [ref=f1e565]: 合同
+                - generic [ref=f1e566]:
+                  - generic [ref=f1e567]: 审核完成
+                  - generic [ref=f1e568]: 下一步：查看审核结果
+                  - generic [ref=f1e569]: 6月30日 16:26
+                - paragraph [ref=f1e570]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e571]
+          - link "打开合同" [ref=f1e573] [cursor=pointer]:
+            - /url: /contracts/25d3192e-32d1-44c5-9396-179f1a7309ab?from=list
+            - generic [ref=f1e576]:
+              - img [ref=f1e578]
+              - generic [ref=f1e581]:
+                - generic [ref=f1e582]:
+                  - paragraph
+                  - generic [ref=f1e583]: 合同
+                - generic [ref=f1e584]:
+                  - generic [ref=f1e585]: DRAFT
+                  - generic [ref=f1e586]: 下一步：补充审核源文件
+                  - generic [ref=f1e587]: 6月30日 13:50
+                - paragraph [ref=f1e588]: 先上传合同源文件，再创建 ReviewRun。
+              - img [ref=f1e589]
+          - link "打开合同_2026_ONES_1_.docx" [ref=f1e591] [cursor=pointer]:
+            - /url: /contracts/0286f885-fc49-4a43-9543-798aca2dda16?panel=evidence&from=list
+            - generic [ref=f1e594]:
+              - img [ref=f1e596]
+              - generic [ref=f1e599]:
+                - generic [ref=f1e600]:
+                  - paragraph [ref=f1e601]: _2026_ONES_1_.docx
+                  - generic [ref=f1e602]: 合同
+                - generic [ref=f1e603]:
+                  - generic [ref=f1e604]: 审核完成
+                  - generic [ref=f1e605]: 下一步：查看审核结果
+                  - generic [ref=f1e606]: 6月25日 16:16
+                - paragraph [ref=f1e607]: 审核已完成，但还不能证明源文件批注版已可导出。
+              - img [ref=f1e608]
+        - generic [ref=f1e610]:
+          - paragraph [ref=f1e611]: 已加载到第 1 / 2 页
+          - button "加载更多" [ref=f1e613] [cursor=pointer]
+  - alert [ref=f1e614]

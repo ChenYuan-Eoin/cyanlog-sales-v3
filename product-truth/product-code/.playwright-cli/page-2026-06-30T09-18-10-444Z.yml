@@ -1,0 +1,47 @@
+- generic [active] [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e3]:
+      - img "ONES Sales" [ref=e5]
+      - generic [ref=e6]:
+        - generic [ref=e7]: ONES Sales
+        - paragraph [ref=e8]: 智能协作平台
+    - navigation [ref=e9]:
+      - link "工作台" [ref=e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=e11]
+        - generic [ref=e15]: 工作台
+      - link "报价中心" [ref=e16] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e17]
+        - generic [ref=e21]: 报价中心
+      - link "合同审核" [ref=e22] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e23]
+        - generic [ref=e28]: 合同审核
+      - link "标书中心" [ref=e29] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e30]
+        - generic [ref=e34]: 标书中心
+      - link "知识库" [ref=e35] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e36]
+        - generic [ref=e41]: 知识库
+      - link "日程" [ref=e42] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e43]
+        - generic [ref=e49]: 日程
+      - link "配置中心" [ref=e50] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e51]
+        - generic [ref=e55]: 配置中心
+    - generic [ref=e56]:
+      - link "个人信息" [ref=e57] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e58]
+        - generic [ref=e61]: 个人信息
+      - button "退出登录" [ref=e62] [cursor=pointer]:
+        - img [ref=e63]
+        - generic [ref=e66]: 退出登录
+  - main [ref=e67]:
+    - generic [ref=e69]: 加载比对结果...
+  - alert [ref=e70]

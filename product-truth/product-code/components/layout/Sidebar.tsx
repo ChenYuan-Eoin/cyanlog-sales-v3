@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect } from 'react'
+import { PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
@@ -30,7 +31,12 @@ const navItems = [
   { name: '配置中心', href: '/configs', icon: SettingsIcon },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean
+  onCollapsedChange: (collapsed: boolean) => void
+}
+
+export function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -86,25 +92,32 @@ export function Sidebar() {
       <aside
         className={cn(
           'fixed left-0 top-0 z-50 flex h-screen flex-col bg-slate-900 text-white',
-          'will-change-transform',
+          'will-change-transform transition-[width,transform] duration-200',
           // Responsive width: full on mobile, w-56 on md, w-64 on lg
-          'w-full sm:w-72 md:w-56 lg:w-64',
+          'w-full sm:w-72 md:w-56',
+          collapsed ? 'lg:w-16' : 'lg:w-64',
           // Transition only on mobile, desktop is always visible
           'lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
-        style={{
-          transition: 'transform 300ms ease-out',
-        }}
       >
-        <div className="flex items-center gap-3 p-6">
+        <div className={cn('flex items-center gap-3 p-6', collapsed && 'lg:justify-center lg:px-3')}>
           <BrandMark size={36} variant="symbol" surface="dark" />
-          <div className="min-w-0">
+          <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
             <div className="truncate text-sm font-semibold text-white">{branding.brandName}</div>
             <p className="truncate text-xs text-slate-300">{branding.productSubtitle || branding.brandName}</p>
           </div>
         </div>
-        <nav className="px-3 py-4 flex-1 overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => onCollapsedChange(!collapsed)}
+          className="mx-3 hidden h-9 items-center justify-center gap-2 rounded-md border border-slate-700 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white lg:flex"
+          aria-label={collapsed ? '展开全局导航' : '收起全局导航'}
+          title={collapsed ? '展开全局导航' : '收起全局导航'}
+        >
+          {collapsed ? <PanelLeftOpenIcon className="size-4" /> : <><PanelLeftCloseIcon className="size-4" /><span>收起导航</span></>}
+        </button>
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
           {navItems.map((item) => {
             const Icon = item.icon
             return (
@@ -112,15 +125,17 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 onClick={handleNavClick}
+                title={collapsed ? item.name : undefined}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
+                  collapsed && 'lg:justify-center lg:px-0',
                   isActive(item.href)
                     ? 'bg-slate-800 text-white'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 )}
               >
                 <Icon size={18} className="opacity-80" />
-                <span>{item.name}</span>
+                <span className={cn(collapsed && 'lg:hidden')}>{item.name}</span>
               </Link>
             )
           })}
@@ -130,15 +145,17 @@ export function Sidebar() {
           <Link
             href="/profile"
             onClick={handleNavClick}
+            title={collapsed ? '个人信息' : undefined}
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors mb-1',
+              collapsed && 'lg:justify-center lg:px-0',
               isActive('/profile')
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             )}
           >
             <UserIcon size={18} className="opacity-80" />
-            <span>个人信息</span>
+            <span className={cn(collapsed && 'lg:hidden')}>个人信息</span>
           </Link>
           <button
             type="button"
@@ -147,10 +164,11 @@ export function Sidebar() {
               setMobileOpen(false)
               router.replace('/login')
             }}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+            title={collapsed ? '退出登录' : undefined}
+            className={cn('flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white', collapsed && 'lg:justify-center lg:px-0')}
           >
             <LogoutIcon size={18} className="opacity-80" />
-            <span>退出登录</span>
+            <span className={cn(collapsed && 'lg:hidden')}>退出登录</span>
           </button>
         </div>
       </aside>

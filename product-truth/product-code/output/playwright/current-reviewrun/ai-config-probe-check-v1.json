@@ -1,0 +1,23 @@
+{
+  "page": {
+    "hasProviderList": true,
+    "hasRuntimePolicy": true,
+    "hasQuickPreset": true,
+    "hasProbeButton": true,
+    "hasProbeResult": true
+  },
+  "api": {
+    "localNoToken": "local_auth_failed",
+    "cloudNoKey": "missing_credential",
+    "builtin": "builtin_ready",
+    "localProbeScope": "http_or_builtin_only",
+    "cloudCredential": "missing"
+  },
+  "assertions": {
+    "localNoTokenIsAuthFailed": true,
+    "cloudNoKeyMissingCredential": true,
+    "builtinReady": true,
+    "uiShowsProbeResult": true
+  },
+  "generatedAt": "2026-07-02T05:08:47.951Z"
+}

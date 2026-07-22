@@ -13,6 +13,14 @@ const RiskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(2000),
   suggestion: z.string().min(1).max(1000),
+  // New providers must return this. Optional keeps old published provider
+  // schemas readable; downstream still refuses to invent an offset when absent.
+  source_quote: z.string().min(4).max(1000).nullable().optional(),
+  rule_code: z.string().min(1).max(100).nullable().optional(),
+  // Direct ReviewRuns expose immutable rule snapshots to the model. Older
+  // providers may omit this field, but downstream treats that result as
+  // unbound and therefore ineligible for customer-facing decisions.
+  rule_snapshot_id: z.string().uuid().nullable().optional(),
 })
 
 export const AIReviewOutputSchema = z.object({

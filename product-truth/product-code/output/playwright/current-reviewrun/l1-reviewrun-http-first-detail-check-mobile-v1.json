@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-07-02T05:33:26.015Z",
+  "tag": "mobile-v1",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "isMobile": true
+  },
+  "url": "http://localhost:3016/contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8?panel=evidence",
+  "apiStatus": 200,
+  "reviewRun": {
+    "id": "b1fb6947-d545-4f4a-ba81-a9df2fa396b9",
+    "status": "COMPLETED",
+    "model_policy": {
+      "id": "7979ee55-10cb-4902-af45-086e3e9753d0",
+      "provider": "AI_LEVEL_1",
+      "source": "model_policies",
+      "model": "gpt-oss-20b",
+      "phase": "semantic_review",
+      "provider_kind": "openai_compatible",
+      "transport": "lm_studio_cli",
+      "latency_ms": 52833,
+      "intended_provider_profile": "AI_LEVEL_1",
+      "intended_provider_model": "gpt-oss-20b",
+      "attempt_error_count": 1,
+      "degraded": false,
+      "status": "completed",
+      "last_error": null,
+      "invocation_id": "09917978-4e2c-4ceb-a558-7f3fd96e2bed",
+      "fallback_reason": null
+    },
+    "model_invocations": [
+      {
+        "id": "71456f68-e391-4f56-b194-e4534fbe3972",
+        "phase": "structured_rules",
+        "provider": "rule-engine",
+        "model": "rule-engine",
+        "status": "completed",
+        "degraded": false,
+        "transport": "builtin_rule_engine",
+        "provider_kind": "builtin",
+        "latency_ms": 272,
+        "dropped_risk_count": null,
+        "validation_warning_count": null,
+        "attempt_error_count": 0,
+        "attempt_errors": [],
+        "fallback_reason": null,
+        "error_message": null,
+        "created_at": "2026-07-02T05:30:43.596003+00:00"
+      },
+      {
+        "id": "09917978-4e2c-4ceb-a558-7f3fd96e2bed",
+        "phase": "semantic_review",
+        "provider": "AI_LEVEL_1",
+        "model": "gpt-oss-20b",
+        "status": "completed",
+        "degraded": false,
+        "transport": "lm_studio_cli",
+        "provider_kind": "openai_compatible",
+        "latency_ms": 52833,
+        "dropped_risk_count": 0,
+        "validation_warning_count": 0,
+        "attempt_error_count": 1,
+        "attempt_errors": [
+          "AI_LEVEL_1: local_http_failed: Malformed LM Studio API token provided: not-needed. Ensure you are using a valid token. Learn more at: https://lmstudio.ai/docs/developer/core/authentication."
+        ],
+        "fallback_reason": null,
+        "error_message": null,
+        "created_at": "2026-07-02T05:30:42.945868+00:00"
+      }
+    ]
+  },
+  "assertions": {
+    "reviewApiOk": true,
+    "reviewRunIsLatestHttpFirst": true,
+    "pageShowsReviewId": true,
+    "pageShowsAttemptErrorCount": true,
+    "pageShowsLocalHttpFailed": true,
+    "apiHasLocalHttpFailed": true,
+    "semanticCompleted": true,
+    "semanticTransportCli": true,
+    "semanticAttemptErrorCount": true
+  },
+  "bodyPreview": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同审核\n/\n审核工作台\nones-contract-e2e-risk.docx\n审核完成\n\nONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。\n\n返回\n重新审查\n导出批注版\n红线风险\n3\n需谈判风险\n0\n开放风险\n3\n批注数量\n3\n原文与批注意图\n\n以合同源文件为主画布，风险定位、批注意图和客户回传版本都围绕当前版本展示。\n\n当前版本用于审核定位\nv17 · 批注版\nv16 · 批注版\nv15 · 批注版\nv14 · 批注版\n批注版 16\nIP 归属\n红线\n原文内容\n\n为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化\n\n批注建议\n\n必须修改合同条款\n\n风险说明\n\n触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让\n\nR011 · v3 · d2575e16-51de-43c5-9b85-32a319d7e2e2\n定位状态：located；evidence_text_exact_match\n销售合同\n第一条 合同金额：人民币100万元。\n第二条 付款条款：乙方验收后120天内付款，账期120天。\n第三条 质保条款：质保金20%，质保期为合同签订后36个月。\n第四条 违约责任：逾期付款违约金为日万分之十。\n第五条 知识产权未明确归属，双方后续另行协商。\n第六条 争议解决方式未明确，管辖法院待定。\n第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。\n第八条 如发生市场变化、经营困难，客户可单方延期履行。\nWord 批注\n第五条 知识产权未明确归属，双方后续另行协商。\nurgent\n\n【红线风险】IP 归属\n问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让\n建议：必须修改合同条款\n证据原文：第五条 知识产权未明确归属，双方后续另行协商。\n规则：R011 v3\nRuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2\nSourceRange: 109-132\nRiskFinding: 7394d12a-f00a-4a5e-adb3-5163604cc872\n\n第六条 争议解决方式未明确，管辖法院待定。\nurgent\n\n【红线风险】争议解决\n问题：触发「争议解决」红线：境外仲裁/法院/法律\n建议：必须修改合同条款\n证据原文：第六条 争议解决方式未明确，管辖法院待定。\n规则：R015 v3\nRuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef\nSourceRange: 133-154\nRiskFinding: ed01c3d5-7300-4c5b-838c-8655c8c8a38d\n\n第四条 违约责任：逾期付款违约金为日万分之十。\nurgent\n\n【红线风险】违约金上限缺失\n问题：合同中逾期付款违约金为日万分之十，未设置赔偿上限或最高金额，可能导致违约方承担无限制的经济损失。\n建议：在合同中增设违约金上限条款，例如“逾期付款违约金每日万分之十，累计不超过合同总额的5%”。\n证据原文：第四条 违约责任：逾期付款违约金为日万分之十。\n规则：R006 v3\nRuleSnapshot: 144594c3-5610-41ff-8771-bb476b6f5197\nSourceRange: 85-108\nRiskFinding: 9fd15ee2-df07-4af0-803f-4526700b3737\n\n审核侧栏\nCOMPLETED\n审查\n摘要\n对话\n证据\n运行状态\nCOMPLETED\n运行编号\nb1fb6947-d545-4f4a-ba81-a9df2fa396b9\n证据状态\n已绑定规则快照\n规则快照\ncontract_rule_snapshots:bound:15\n快照数量\n15\n技能包\n659fb256-887e-4b2c-8e7c-8a295490b762\n规则源\nconfig_center_published_rules\n转译状态\nready\n规则完整性\n15/15\n静态门禁\npassed\n模型质量 eval\nlatest_review_model_invocation_passed\n模型策略\n7979ee55-10cb-4902-af45-086e3e9753d0\n模型来源\n已发布模型策略\n语义模型\ngpt-oss-20b\n调用阶段\nsemantic_review\n调用通道\nLM Studio CLI\n调用耗时\n52.8s\n调用记录\n09917978-4e2c-4ceb-a558-7f3fd96e2bed\n目标 Provider\nAI_LEVEL_1\n目标模型\ngpt-oss-20b\n尝试错误\n1\n开始时间\n2026/7/2 13:29:47\n完成时间\n2026/7/2 13:30:45\n最近执行器\nrule-engine+AI_LEVEL_1\n执行状态\ncompleted\n降级\n否\n\n调用链\n\nstructured_rules\ncompleted\nrule-engine / rule-engine / 规则引擎\n272ms\n71456f68\nsemantic_review\ncompleted\nAI_LEVEL_1 / gpt-oss-20b / LM Studio CLI\n52.8s\n09917978\n尝试错误 1\n\nAI_LEVEL_1: local_http_failed: Malformed LM Studio API token provided: not-needed. Ensure you are using a valid token. Learn more at: https://lmstudio.ai/docs/developer/core/authentication.\n\n版本与产物\n\n客户谈判后的回传文件会形成新的 ContractVersion，不作为发起审核入口。\n\n导入客户回传件\n文件大小\n1.6 KB\n文件类型\napplication/vnd.openxmlformats-officedocument.wordprocessingml.document\n创建时间\n2026/6/30 13:51:25\n更新时间\n2026/7/2 13:30:46\n\n版本记录\n\nv17\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv16\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv15\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv14\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv13\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv12\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv11\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv10\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv9\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv8\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv7\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv6\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv5\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv4\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv3\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv2\n批注版\n\nONES 业务运营基于风险项生成 Word 批注版本\n\nv1\n源文件\n\n用户上传合同源文件\n\n输出文件\n\n批注版 v17\n2026/7/2 13:23:14\n批注版 v16\n2026/7/2 11:59:20\n批注版 v15\n2026/7/2 10:57:50\n批注版 v14\n2026/7/1 15:39:35\n批注版 v13\n2026/7/1 15:27:42\n批注版 v12\n2026/7/1 15:08:37\n批注版 v11\n2026/7/1 14:59:30\n批注版 v10\n2026/7/1 14:53:10\n批注版 v9\n2026/6/30 14:55:47\n批注版 v8\n2026/6/30 14:41:21\n批注版 v7\n2026/6/30 14:27:48\n批注版 v6\n2026/6/30 14:22:50\n批注版 v5\n2026/6/30 14:02:49\n批注版 v4\n2026/6/30 13:58:04\n批注版 v3\n2026/6/30 13:55:52\n批注版 v2\n2026/6/30 13:53:23"
+}

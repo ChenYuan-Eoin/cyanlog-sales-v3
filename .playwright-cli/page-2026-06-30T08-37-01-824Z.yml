@@ -1,0 +1,650 @@
+- generic [active] [ref=e1]:
+  - button "打开主导航" [ref=e2] [cursor=pointer]:
+    - img [ref=e3]
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - img "ONES Sales" [ref=e254]
+      - generic [ref=e8]:
+        - generic [ref=e9]: ONES Sales
+        - paragraph [ref=e10]: 智能协作平台
+    - navigation [ref=e11]:
+      - link "工作台" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - img [ref=e13]
+        - generic [ref=e17]: 工作台
+      - link "报价中心" [ref=e18] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e19]
+        - generic [ref=e23]: 报价中心
+      - link "合同审核" [ref=e24] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e25]
+        - generic [ref=e30]: 合同审核
+      - link "标书中心" [ref=e31] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e32]
+        - generic [ref=e36]: 标书中心
+      - link "知识库" [ref=e37] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e38]
+        - generic [ref=e43]: 知识库
+      - link "日程" [ref=e44] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e45]
+        - generic [ref=e51]: 日程
+      - link "配置中心" [ref=e52] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e53]
+        - generic [ref=e57]: 配置中心
+    - generic [ref=e58]:
+      - link "个人信息" [ref=e59] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e60]
+        - generic [ref=e63]: 个人信息
+      - button "退出登录" [ref=e64] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e68]: 退出登录
+  - main [ref=e69]:
+    - generic [ref=e255]:
+      - complementary [ref=e256]:
+        - generic [ref=e257]:
+          - link "返回合同" [ref=e258] [cursor=pointer]:
+            - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8
+            - button "返回合同" [ref=e259]:
+              - img
+              - text: 返回合同
+          - heading "文档比对" [level=2] [ref=e260]:
+            - img [ref=e261]
+            - text: 文档比对
+          - paragraph [ref=e266]: 检测到 50 处差异
+        - generic [ref=e267]:
+          - generic [ref=e270]: 删除 8
+          - generic [ref=e273]: 新增 42
+          - generic [ref=e276]: 修改 0
+        - generic [ref=e277]:
+          - 'button "删除 #1 对比文档缺少该条款或表述已被删除 需注意" [ref=e278] [cursor=pointer]':
+            - generic [ref=e279]:
+              - generic [ref=e280]: 删除
+              - generic [ref=e281]: "#1"
+            - paragraph [ref=e282]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e285]: 需注意
+          - 'button "删除 #2 对比文档缺少该条款或表述已被删除 高风险" [ref=e286] [cursor=pointer]':
+            - generic [ref=e287]:
+              - generic [ref=e288]: 删除
+              - generic [ref=e289]: "#2"
+            - paragraph [ref=e290]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e293]: 高风险
+          - 'button "删除 #3 对比文档缺少该条款或表述已被删除 高风险" [ref=e294] [cursor=pointer]':
+            - generic [ref=e295]:
+              - generic [ref=e296]: 删除
+              - generic [ref=e297]: "#3"
+            - paragraph [ref=e298]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e301]: 高风险
+          - 'button "删除 #4 对比文档缺少该条款或表述已被删除 高风险" [ref=e302] [cursor=pointer]':
+            - generic [ref=e303]:
+              - generic [ref=e304]: 删除
+              - generic [ref=e305]: "#4"
+            - paragraph [ref=e306]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e309]: 高风险
+          - 'button "删除 #5 对比文档缺少该条款或表述已被删除 高风险" [ref=e310] [cursor=pointer]':
+            - generic [ref=e311]:
+              - generic [ref=e312]: 删除
+              - generic [ref=e313]: "#5"
+            - paragraph [ref=e314]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e317]: 高风险
+          - 'button "删除 #6 对比文档缺少该条款或表述已被删除 高风险" [ref=e318] [cursor=pointer]':
+            - generic [ref=e319]:
+              - generic [ref=e320]: 删除
+              - generic [ref=e321]: "#6"
+            - paragraph [ref=e322]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e325]: 高风险
+          - 'button "删除 #7 对比文档缺少该条款或表述已被删除 需注意" [ref=e326] [cursor=pointer]':
+            - generic [ref=e327]:
+              - generic [ref=e328]: 删除
+              - generic [ref=e329]: "#7"
+            - paragraph [ref=e330]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e333]: 需注意
+          - 'button "删除 #8 对比文档缺少该条款或表述已被删除 需注意" [ref=e334] [cursor=pointer]':
+            - generic [ref=e335]:
+              - generic [ref=e336]: 删除
+              - generic [ref=e337]: "#8"
+            - paragraph [ref=e338]: 对比文档缺少该条款或表述已被删除
+            - generic [ref=e341]: 需注意
+          - 'button "新增 #9 对比文档新增该条款或表述 需注意" [ref=e342] [cursor=pointer]':
+            - generic [ref=e343]:
+              - generic [ref=e344]: 新增
+              - generic [ref=e345]: "#9"
+            - paragraph [ref=e346]: 对比文档新增该条款或表述
+            - generic [ref=e349]: 需注意
+          - 'button "新增 #10 对比文档新增该条款或表述 需注意" [ref=e350] [cursor=pointer]':
+            - generic [ref=e351]:
+              - generic [ref=e352]: 新增
+              - generic [ref=e353]: "#10"
+            - paragraph [ref=e354]: 对比文档新增该条款或表述
+            - generic [ref=e357]: 需注意
+          - 'button "新增 #11 对比文档新增该条款或表述 需注意" [ref=e358] [cursor=pointer]':
+            - generic [ref=e359]:
+              - generic [ref=e360]: 新增
+              - generic [ref=e361]: "#11"
+            - paragraph [ref=e362]: 对比文档新增该条款或表述
+            - generic [ref=e365]: 需注意
+          - 'button "新增 #12 对比文档新增该条款或表述 需注意" [ref=e366] [cursor=pointer]':
+            - generic [ref=e367]:
+              - generic [ref=e368]: 新增
+              - generic [ref=e369]: "#12"
+            - paragraph [ref=e370]: 对比文档新增该条款或表述
+            - generic [ref=e373]: 需注意
+          - 'button "新增 #13 对比文档新增该条款或表述 需注意" [ref=e374] [cursor=pointer]':
+            - generic [ref=e375]:
+              - generic [ref=e376]: 新增
+              - generic [ref=e377]: "#13"
+            - paragraph [ref=e378]: 对比文档新增该条款或表述
+            - generic [ref=e381]: 需注意
+          - 'button "新增 #14 对比文档新增该条款或表述 需注意" [ref=e382] [cursor=pointer]':
+            - generic [ref=e383]:
+              - generic [ref=e384]: 新增
+              - generic [ref=e385]: "#14"
+            - paragraph [ref=e386]: 对比文档新增该条款或表述
+            - generic [ref=e389]: 需注意
+          - 'button "新增 #15 对比文档新增该条款或表述 需注意" [ref=e390] [cursor=pointer]':
+            - generic [ref=e391]:
+              - generic [ref=e392]: 新增
+              - generic [ref=e393]: "#15"
+            - paragraph [ref=e394]: 对比文档新增该条款或表述
+            - generic [ref=e397]: 需注意
+          - 'button "新增 #16 对比文档新增该条款或表述 需注意" [ref=e398] [cursor=pointer]':
+            - generic [ref=e399]:
+              - generic [ref=e400]: 新增
+              - generic [ref=e401]: "#16"
+            - paragraph [ref=e402]: 对比文档新增该条款或表述
+            - generic [ref=e405]: 需注意
+          - 'button "新增 #17 对比文档新增该条款或表述 高风险" [ref=e406] [cursor=pointer]':
+            - generic [ref=e407]:
+              - generic [ref=e408]: 新增
+              - generic [ref=e409]: "#17"
+            - paragraph [ref=e410]: 对比文档新增该条款或表述
+            - generic [ref=e413]: 高风险
+          - 'button "新增 #18 对比文档新增该条款或表述 高风险" [ref=e414] [cursor=pointer]':
+            - generic [ref=e415]:
+              - generic [ref=e416]: 新增
+              - generic [ref=e417]: "#18"
+            - paragraph [ref=e418]: 对比文档新增该条款或表述
+            - generic [ref=e421]: 高风险
+          - 'button "新增 #19 对比文档新增该条款或表述 需注意" [ref=e422] [cursor=pointer]':
+            - generic [ref=e423]:
+              - generic [ref=e424]: 新增
+              - generic [ref=e425]: "#19"
+            - paragraph [ref=e426]: 对比文档新增该条款或表述
+            - generic [ref=e429]: 需注意
+          - 'button "新增 #20 对比文档新增该条款或表述 需注意" [ref=e430] [cursor=pointer]':
+            - generic [ref=e431]:
+              - generic [ref=e432]: 新增
+              - generic [ref=e433]: "#20"
+            - paragraph [ref=e434]: 对比文档新增该条款或表述
+            - generic [ref=e437]: 需注意
+          - 'button "新增 #21 对比文档新增该条款或表述 需注意" [ref=e438] [cursor=pointer]':
+            - generic [ref=e439]:
+              - generic [ref=e440]: 新增
+              - generic [ref=e441]: "#21"
+            - paragraph [ref=e442]: 对比文档新增该条款或表述
+            - generic [ref=e445]: 需注意
+          - 'button "新增 #22 对比文档新增该条款或表述 需注意" [ref=e446] [cursor=pointer]':
+            - generic [ref=e447]:
+              - generic [ref=e448]: 新增
+              - generic [ref=e449]: "#22"
+            - paragraph [ref=e450]: 对比文档新增该条款或表述
+            - generic [ref=e453]: 需注意
+          - 'button "新增 #23 对比文档新增该条款或表述 需注意" [ref=e454] [cursor=pointer]':
+            - generic [ref=e455]:
+              - generic [ref=e456]: 新增
+              - generic [ref=e457]: "#23"
+            - paragraph [ref=e458]: 对比文档新增该条款或表述
+            - generic [ref=e461]: 需注意
+          - 'button "新增 #24 对比文档新增该条款或表述 需注意" [ref=e462] [cursor=pointer]':
+            - generic [ref=e463]:
+              - generic [ref=e464]: 新增
+              - generic [ref=e465]: "#24"
+            - paragraph [ref=e466]: 对比文档新增该条款或表述
+            - generic [ref=e469]: 需注意
+          - 'button "新增 #25 对比文档新增该条款或表述 高风险" [ref=e470] [cursor=pointer]':
+            - generic [ref=e471]:
+              - generic [ref=e472]: 新增
+              - generic [ref=e473]: "#25"
+            - paragraph [ref=e474]: 对比文档新增该条款或表述
+            - generic [ref=e477]: 高风险
+          - 'button "新增 #26 对比文档新增该条款或表述 高风险" [ref=e478] [cursor=pointer]':
+            - generic [ref=e479]:
+              - generic [ref=e480]: 新增
+              - generic [ref=e481]: "#26"
+            - paragraph [ref=e482]: 对比文档新增该条款或表述
+            - generic [ref=e485]: 高风险
+          - 'button "新增 #27 对比文档新增该条款或表述 需注意" [ref=e486] [cursor=pointer]':
+            - generic [ref=e487]:
+              - generic [ref=e488]: 新增
+              - generic [ref=e489]: "#27"
+            - paragraph [ref=e490]: 对比文档新增该条款或表述
+            - generic [ref=e493]: 需注意
+          - 'button "新增 #28 对比文档新增该条款或表述 需注意" [ref=e494] [cursor=pointer]':
+            - generic [ref=e495]:
+              - generic [ref=e496]: 新增
+              - generic [ref=e497]: "#28"
+            - paragraph [ref=e498]: 对比文档新增该条款或表述
+            - generic [ref=e501]: 需注意
+          - 'button "新增 #29 对比文档新增该条款或表述 需注意" [ref=e502] [cursor=pointer]':
+            - generic [ref=e503]:
+              - generic [ref=e504]: 新增
+              - generic [ref=e505]: "#29"
+            - paragraph [ref=e506]: 对比文档新增该条款或表述
+            - generic [ref=e509]: 需注意
+          - 'button "新增 #30 对比文档新增该条款或表述 需注意" [ref=e510] [cursor=pointer]':
+            - generic [ref=e511]:
+              - generic [ref=e512]: 新增
+              - generic [ref=e513]: "#30"
+            - paragraph [ref=e514]: 对比文档新增该条款或表述
+            - generic [ref=e517]: 需注意
+          - 'button "新增 #31 对比文档新增该条款或表述 需注意" [ref=e518] [cursor=pointer]':
+            - generic [ref=e519]:
+              - generic [ref=e520]: 新增
+              - generic [ref=e521]: "#31"
+            - paragraph [ref=e522]: 对比文档新增该条款或表述
+            - generic [ref=e525]: 需注意
+          - 'button "新增 #32 对比文档新增该条款或表述 需注意" [ref=e526] [cursor=pointer]':
+            - generic [ref=e527]:
+              - generic [ref=e528]: 新增
+              - generic [ref=e529]: "#32"
+            - paragraph [ref=e530]: 对比文档新增该条款或表述
+            - generic [ref=e533]: 需注意
+          - 'button "新增 #33 对比文档新增该条款或表述 需注意" [ref=e534] [cursor=pointer]':
+            - generic [ref=e535]:
+              - generic [ref=e536]: 新增
+              - generic [ref=e537]: "#33"
+            - paragraph [ref=e538]: 对比文档新增该条款或表述
+            - generic [ref=e541]: 需注意
+          - 'button "新增 #34 对比文档新增该条款或表述 需注意" [ref=e542] [cursor=pointer]':
+            - generic [ref=e543]:
+              - generic [ref=e544]: 新增
+              - generic [ref=e545]: "#34"
+            - paragraph [ref=e546]: 对比文档新增该条款或表述
+            - generic [ref=e549]: 需注意
+          - 'button "新增 #35 对比文档新增该条款或表述 需注意" [ref=e550] [cursor=pointer]':
+            - generic [ref=e551]:
+              - generic [ref=e552]: 新增
+              - generic [ref=e553]: "#35"
+            - paragraph [ref=e554]: 对比文档新增该条款或表述
+            - generic [ref=e557]: 需注意
+          - 'button "新增 #36 对比文档新增该条款或表述 需注意" [ref=e558] [cursor=pointer]':
+            - generic [ref=e559]:
+              - generic [ref=e560]: 新增
+              - generic [ref=e561]: "#36"
+            - paragraph [ref=e562]: 对比文档新增该条款或表述
+            - generic [ref=e565]: 需注意
+          - 'button "新增 #37 对比文档新增该条款或表述 需注意" [ref=e566] [cursor=pointer]':
+            - generic [ref=e567]:
+              - generic [ref=e568]: 新增
+              - generic [ref=e569]: "#37"
+            - paragraph [ref=e570]: 对比文档新增该条款或表述
+            - generic [ref=e573]: 需注意
+          - 'button "新增 #38 对比文档新增该条款或表述 需注意" [ref=e574] [cursor=pointer]':
+            - generic [ref=e575]:
+              - generic [ref=e576]: 新增
+              - generic [ref=e577]: "#38"
+            - paragraph [ref=e578]: 对比文档新增该条款或表述
+            - generic [ref=e581]: 需注意
+          - 'button "新增 #39 对比文档新增该条款或表述 需注意" [ref=e582] [cursor=pointer]':
+            - generic [ref=e583]:
+              - generic [ref=e584]: 新增
+              - generic [ref=e585]: "#39"
+            - paragraph [ref=e586]: 对比文档新增该条款或表述
+            - generic [ref=e589]: 需注意
+          - 'button "新增 #40 对比文档新增该条款或表述 需注意" [ref=e590] [cursor=pointer]':
+            - generic [ref=e591]:
+              - generic [ref=e592]: 新增
+              - generic [ref=e593]: "#40"
+            - paragraph [ref=e594]: 对比文档新增该条款或表述
+            - generic [ref=e597]: 需注意
+          - 'button "新增 #41 对比文档新增该条款或表述 需注意" [ref=e598] [cursor=pointer]':
+            - generic [ref=e599]:
+              - generic [ref=e600]: 新增
+              - generic [ref=e601]: "#41"
+            - paragraph [ref=e602]: 对比文档新增该条款或表述
+            - generic [ref=e605]: 需注意
+          - 'button "新增 #42 对比文档新增该条款或表述 需注意" [ref=e606] [cursor=pointer]':
+            - generic [ref=e607]:
+              - generic [ref=e608]: 新增
+              - generic [ref=e609]: "#42"
+            - paragraph [ref=e610]: 对比文档新增该条款或表述
+            - generic [ref=e613]: 需注意
+          - 'button "新增 #43 对比文档新增该条款或表述 需注意" [ref=e614] [cursor=pointer]':
+            - generic [ref=e615]:
+              - generic [ref=e616]: 新增
+              - generic [ref=e617]: "#43"
+            - paragraph [ref=e618]: 对比文档新增该条款或表述
+            - generic [ref=e621]: 需注意
+          - 'button "新增 #44 对比文档新增该条款或表述 需注意" [ref=e622] [cursor=pointer]':
+            - generic [ref=e623]:
+              - generic [ref=e624]: 新增
+              - generic [ref=e625]: "#44"
+            - paragraph [ref=e626]: 对比文档新增该条款或表述
+            - generic [ref=e629]: 需注意
+          - 'button "新增 #45 对比文档新增该条款或表述 需注意" [ref=e630] [cursor=pointer]':
+            - generic [ref=e631]:
+              - generic [ref=e632]: 新增
+              - generic [ref=e633]: "#45"
+            - paragraph [ref=e634]: 对比文档新增该条款或表述
+            - generic [ref=e637]: 需注意
+          - 'button "新增 #46 对比文档新增该条款或表述 需注意" [ref=e638] [cursor=pointer]':
+            - generic [ref=e639]:
+              - generic [ref=e640]: 新增
+              - generic [ref=e641]: "#46"
+            - paragraph [ref=e642]: 对比文档新增该条款或表述
+            - generic [ref=e645]: 需注意
+          - 'button "新增 #47 对比文档新增该条款或表述 需注意" [ref=e646] [cursor=pointer]':
+            - generic [ref=e647]:
+              - generic [ref=e648]: 新增
+              - generic [ref=e649]: "#47"
+            - paragraph [ref=e650]: 对比文档新增该条款或表述
+            - generic [ref=e653]: 需注意
+          - 'button "新增 #48 对比文档新增该条款或表述 需注意" [ref=e654] [cursor=pointer]':
+            - generic [ref=e655]:
+              - generic [ref=e656]: 新增
+              - generic [ref=e657]: "#48"
+            - paragraph [ref=e658]: 对比文档新增该条款或表述
+            - generic [ref=e661]: 需注意
+          - 'button "新增 #49 对比文档新增该条款或表述 需注意" [ref=e662] [cursor=pointer]':
+            - generic [ref=e663]:
+              - generic [ref=e664]: 新增
+              - generic [ref=e665]: "#49"
+            - paragraph [ref=e666]: 对比文档新增该条款或表述
+            - generic [ref=e669]: 需注意
+          - 'button "新增 #50 对比文档新增该条款或表述 高风险" [ref=e670] [cursor=pointer]':
+            - generic [ref=e671]:
+              - generic [ref=e672]: 新增
+              - generic [ref=e673]: "#50"
+            - paragraph [ref=e674]: 对比文档新增该条款或表述
+            - generic [ref=e677]: 高风险
+        - generic [ref=e678]:
+          - generic [ref=e679]:
+            - img [ref=e680]
+            - generic [ref=e683]: AI 差异深度解读
+          - paragraph [ref=e684]: 发现 50 处文本差异，其中高风险 10 处、需关注 40 处。
+      - main [ref=e685]:
+        - generic [ref=e686]:
+          - generic [ref=e687]:
+            - heading "版本比对" [level=1] [ref=e688]
+            - generic [ref=e689]: 50 处差异
+          - generic [ref=e690]:
+            - generic [ref=e691]:
+              - button "双栏视图" [ref=e692] [cursor=pointer]
+              - button "合并视图" [ref=e693] [cursor=pointer]
+            - button "导出报告" [ref=e694] [cursor=pointer]:
+              - img
+              - text: 导出报告
+        - generic [ref=e695]:
+          - generic [ref=e698]: 删除内容
+          - generic [ref=e701]: 新增内容
+          - generic [ref=e704]: 移动/修改
+        - generic [ref=e705]:
+          - generic [ref=e706]:
+            - generic [ref=e708]: 基准文档
+            - generic [ref=e711]:
+              - heading "系统服务采购协议" [level=2]
+              - generic:
+                - generic [ref=e713]: 第一条 合同金额：人民币100万元。
+                - generic [ref=e715]: 第二条 付款条款：乙方验收后120天内付款，账期120天。
+                - generic [ref=e717]: 第三条 质保条款：质保金20%，质保期为合同签订后36个月。
+                - generic [ref=e719]: 第四条 违约责任：逾期付款违约金为日万分之十。
+                - generic [ref=e721]: 第五条 知识产权未明确归属，双方后续另行协商。
+                - generic [ref=e723]: 第六条 争议解决方式未明确，管辖法院待定。
+                - generic [ref=e725]: 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。
+                - generic [ref=e727]: 第八条 如发生市场变化、经营困难，客户可单方延期履行。
+                - generic [ref=e728]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e729]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e730]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e731]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e732]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e733]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e734]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e735]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e736]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e737]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e738]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e739]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e740]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e741]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e742]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e743]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e744]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e745]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e746]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e747]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e748]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e749]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e750]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e751]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e752]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e753]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e754]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e755]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e756]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e757]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e758]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e759]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e760]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e761]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e762]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e763]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e764]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e765]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e766]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e767]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e768]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+                - generic [ref=e769]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （无变化）
+          - generic [ref=e770]:
+            - generic [ref=e772]: 对比文档
+            - generic [ref=e774]:
+              - heading "系统服务采购协议" [level=2]
+              - generic:
+                - generic [ref=e775]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e776]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e777]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e778]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e779]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e780]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e781]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e782]:
+                  - generic:
+                    - heading "条款内容" [level=4]
+                    - paragraph: （保持原样）
+                - generic [ref=e784]: Hemory 服务条款
+                - generic [ref=e786]: 生效日期： 2026年6月1日 服务提供方： Beautiful ONES Inc.
+                - generic [ref=e788]: "，250 W El Camino Real #1112, Sunnyvale, CA 94087, USA"
+                - generic [ref=e790]: 请仔细阅读本条款。
+                - generic [ref=e792]: 创建账户，或下载、安装、访问或使用 HEMORY，即表示您同意受本条款约束，包括以引用方式并入的《HEMORY 隐私政策》。
+                - generic [ref=e794]: 本服务条款（"本条款"）是您（"您""用户"）与 Beautiful ONES Inc.
+                - generic [ref=e796]: （"Hemory""我们"）之间具有法律约束力的协议，规范您对 Hemory 移动应用（iOS 与 Android）、Apple Watch 配套应用、Web 控制台及相关软件与服务（合称"本服务"）的访问与使用。
+                - generic [ref=e798]: Hemory 让您在自有设备上采集音频、转写，并将其结构化为可搜索、可回溯的个人记忆图谱。
+                - generic [ref=e800]: 仲裁与集体诉讼弃权提示。
+                - generic [ref=e802]: 除第 22 节另有规定外，争议将通过有约束力的个人仲裁解决，您与 Hemory 各自放弃陪审团审判及参与任何集体或代表性诉讼的权利。
+                - generic [ref=e804]: 您可在 30 天内退出（第 22.
+                - generic [ref=e806]: 您须年满 13 周岁（或您所在法域要求的最低年龄）方可使用本服务。
+                - generic [ref=e808]: 同意本条款即表示您声明：(a) 您已达最低年龄；
+                - generic [ref=e810]: (b) 您此前未被暂停或移出本服务；
+                - generic [ref=e812]: (c) 您的注册与使用符合所有适用法律。
+                - generic [ref=e814]: 本服务不面向儿童。
+                - generic [ref=e816]: 使用大部分功能须注册账户并提供准确信息（如邮箱、显示名及您主要使用本服务的管辖区）。
+                - generic [ref=e818]: 您有责任保管凭证并对账户下的一切活动负责，并须在发现任何未授权使用时及时通知 [ HYPERLINK "mailto:support@hemory.
+                - generic [ref=e820]: net" \h support@hemory.
+                - generic [ref=e822]: 我们可能提供通过第三方身份提供商（如 Apple、Google）登录。
+                - generic [ref=e824]: 本服务提供三项由您掌控的核心能力：(i) 录音、(ii) 转写、(iii) AI 问答。
+                - generic [ref=e826]: 录音 仅由用户发起。
+                - generic [ref=e828]: 当您主动开始录音时，本服务通过您的 iPhone 和／或 Apple Watch 采集音频。
+                - generic [ref=e830]: 音频按本地优先（local-first）设计存储于 Data Plane Unit（"DPU"），以本地文件系统为真相源。
+                - generic [ref=e832]: 转写 由我们的推理服务编排，提供"basic"与"accurate"两档，输出文本与 SRT。
+                - generic [ref=e834]: 您可选择启用说话人标记，该功能使用第 8 节所述的声纹处理。
+                - generic [ref=e836]: AI 问答： 在转写产物之上，我们的 Agent 进行对话切分、摘要与关系抽取，并生成关系图等衍生产物。
+                - generic [ref=e838]: 推理通过经 HTTP 调用外部第三方 LLM 提供商（SaaS 模式）进行，或在自部署场景下由本地推理提供商进行（第 7、12 节）。
+                - generic [ref=e840]: 订阅、计费与取消
+                - generic [ref=e842]: 付费功能以自动续费订阅形式通过 Apple App Store（及在提供时的其他应用商店）销售。
+                - generic [ref=e844]: 计费、续订、退款与取消受相应应用商店条款约束。
+                - generic [ref=e846]: 除非在当前周期结束前至少 24 小时通过您的应用商店账户设置取消，订阅将自动续订。
+                - generic [ref=e848]: 除法律或应用商店政策要求外，费用不予退还。
+                - generic [ref=e850]: 价格可经事先通知后变更。
+                - generic [ref=e852]: 在您遵守本条款的前提下，我们授予您一项有限、非独占、不可转让、不可再许可、可撤销的许可，以在您拥有或控制的设备上安装并使用 Hemory 应用，并为个人用途访问本服务。
+                - generic [ref=e854]: 您不得：(a) 复制、分发或公开展示本服务；
+                - generic [ref=e856]: (b) 修改、逆向工程或试图获取源代码（法律允许者除外）；
+                - generic [ref=e858]: (c) 规避安全或访问控制；
+                - generic [ref=e860]: (d) 转售本服务或为第三方利益提供本服务；
+                - generic [ref=e862]: 或 (e) 利用本服务构建竞争性产品。
+                - generic [ref=e864]: 录音同意与合法使用
+                - generic [ref=e866]: 确保录音合法完全是您的责任。
+          - generic:
+            - generic:
+              - generic: VS
+  - alert [ref=e253]

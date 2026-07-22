@@ -1,0 +1,51 @@
+- generic [active] [ref=f3e1]:
+  - complementary [ref=f3e2]:
+    - generic [ref=f3e3]:
+      - img "ONES Sales" [ref=f3e5]
+      - generic [ref=f3e6]:
+        - generic [ref=f3e7]: ONES Sales
+        - paragraph [ref=f3e8]: 智能协作平台
+    - navigation [ref=f3e9]:
+      - link "工作台" [ref=f3e10] [cursor=pointer]:
+        - /url: /
+      - link "报价中心" [ref=f3e16] [cursor=pointer]:
+        - /url: /quotes
+      - link "合同审核" [ref=f3e22] [cursor=pointer]:
+        - /url: /contracts
+      - link "标书中心" [ref=f3e29] [cursor=pointer]:
+        - /url: /tenders
+      - link "知识库" [ref=f3e35] [cursor=pointer]:
+        - /url: /knowledge
+      - link "日程" [ref=f3e42] [cursor=pointer]:
+        - /url: /schedule
+      - link "配置中心" [ref=f3e50] [cursor=pointer]:
+        - /url: /configs
+    - generic [ref=f3e56]:
+      - link "个人信息" [ref=f3e57] [cursor=pointer]:
+        - /url: /profile
+      - button "退出登录" [ref=f3e62] [cursor=pointer]
+  - main [ref=f3e67]:
+    - main [ref=f3e844]:
+      - generic [ref=f3e845]:
+        - link [ref=f3e846] [cursor=pointer]:
+          - /url: /contracts
+          - button "返回合同中心" [ref=f3e847]
+        - generic [ref=f3e848]:
+          - heading "合同文档对比" [level=1] [ref=f3e855]
+          - paragraph [ref=f3e856]: 先明确旧文件与新文件，再生成绑定真实版本的差异结果。
+      - region "文档角色" [ref=f3e857]:
+        - generic [ref=f3e858]:
+          - generic [ref=f3e860]:
+            - paragraph [ref=f3e861]: 文件角色
+            - heading "旧文件" [level=2] [ref=f3e862]
+          - paragraph [ref=f3e867]: 我方原版、标准模板或上一轮已确认版本
+          - button "选择旧文件" [disabled]
+        - generic [ref=f3e868]:
+          - generic [ref=f3e870]:
+            - paragraph [ref=f3e871]: 文件角色
+            - heading "新文件" [level=2] [ref=f3e872]
+          - paragraph [ref=f3e877]: 客户回传件或本轮需要核对的新版本
+          - button "选择新文件" [disabled]
+      - generic [ref=f3e878]: 请选择两份真实 DOCX/PDF 文件。版本历史只作为文件属性，不会替代上传主路径。
+  - button "Open Next.js Dev Tools" [ref=f3e183] [cursor=pointer]
+  - alert [ref=f3e187]

@@ -1,0 +1,94 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": "b103ff23-0b3e-4250-9c3b-789939224126",
+      "key": "AI_LEVEL_1",
+      "name": "本地 gpt-oss-20b",
+      "value": {
+        "name": "本地 gpt-oss-20b",
+        "level": 1,
+        "model": "gpt-oss-20b",
+        "enabled": true,
+        "profile": "AI_LEVEL_1",
+        "routing": {
+          "strategy": "full",
+          "max_pages": 15
+        },
+        "base_url": "http://127.0.0.1:1234/v1",
+        "timeout_ms": 120000,
+        "provider_kind": "openai_compatible",
+        "runtime_location": "local"
+      },
+      "type": "AI_CONFIG",
+      "status": "PUBLISHED",
+      "version": 4,
+      "description": "本地 LM Studio 模型配置",
+      "org_id": "00000001-0000-0000-0000-000000000000",
+      "created_by": null,
+      "created_at": "2026-06-03T06:00:52.621722+00:00",
+      "updated_at": "2026-07-02T02:47:51.318851+00:00"
+    },
+    {
+      "id": "b1e192ab-7b90-4ad4-a39f-f2ed7b4ab7d2",
+      "key": "AI_LEVEL_2",
+      "name": "Gemini 云端模型",
+      "value": {
+        "name": "Gemini 云端模型",
+        "level": 2,
+        "model": "gemini-2.5-flash-lite",
+        "api_key": "AIza***anTI",
+        "enabled": true,
+        "profile": "sales_cloud_backup",
+        "routing": {
+          "strategy": "chunked",
+          "max_pages": 80
+        },
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "timeout_ms": 60000,
+        "provider_kind": "openai_compatible"
+      },
+      "type": "AI_CONFIG",
+      "status": "PUBLISHED",
+      "version": 3,
+      "description": "F012 Level 2 production OpenAI-compatible Gemini Flash Lite provider",
+      "org_id": "00000001-0000-0000-0000-000000000000",
+      "created_by": null,
+      "created_at": "2026-06-03T06:00:52.621722+00:00",
+      "updated_at": "2026-07-01T12:05:17.351165+00:00"
+    },
+    {
+      "id": "17fc34bc-a57d-4cb8-a749-ee39509fc7d7",
+      "key": "AI_LEVEL_3",
+      "name": "规则引擎 (兜底)",
+      "value": {
+        "name": "规则引擎",
+        "level": 3,
+        "model": "rule-engine",
+        "enabled": true,
+        "profile": "rule_engine",
+        "routing": {
+          "strategy": "rule",
+          "max_pages": 999
+        },
+        "base_url": "",
+        "timeout_ms": 1000,
+        "provider_kind": "builtin"
+      },
+      "type": "AI_CONFIG",
+      "status": "PUBLISHED",
+      "version": 2,
+      "description": "规则引擎兜底配置",
+      "org_id": "00000001-0000-0000-0000-000000000000",
+      "created_by": null,
+      "created_at": "2026-06-03T06:00:52.621722+00:00",
+      "updated_at": "2026-07-02T02:28:54.226518+00:00"
+    }
+  ],
+  "meta": {
+    "total": 3,
+    "limit": 100,
+    "offset": 0,
+    "hasMore": false
+  }
+}

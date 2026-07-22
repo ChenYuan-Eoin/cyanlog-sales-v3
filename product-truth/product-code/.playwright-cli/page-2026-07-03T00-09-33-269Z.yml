@@ -1,0 +1,493 @@
+- generic [active] [ref=e1]:
+  - complementary [ref=e30]:
+    - generic [ref=e31]:
+      - generic [ref=e32]: OS
+      - generic [ref=e33]:
+        - generic [ref=e34]: ONES Sales
+        - paragraph [ref=e35]: 智能协作平台
+    - navigation [ref=e36]:
+      - link "工作台" [ref=e37] [cursor=pointer]:
+        - /url: /
+        - img [ref=e38]
+        - generic [ref=e42]: 工作台
+      - link "报价中心" [ref=e43] [cursor=pointer]:
+        - /url: /quotes
+        - img [ref=e44]
+        - generic [ref=e48]: 报价中心
+      - link "合同审核" [ref=e49] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e50]
+        - generic [ref=e55]: 合同审核
+      - link "标书中心" [ref=e56] [cursor=pointer]:
+        - /url: /tenders
+        - img [ref=e57]
+        - generic [ref=e61]: 标书中心
+      - link "知识库" [ref=e62] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e63]
+        - generic [ref=e68]: 知识库
+      - link "日程" [ref=e69] [cursor=pointer]:
+        - /url: /schedule
+        - img [ref=e70]
+        - generic [ref=e76]: 日程
+      - link "配置中心" [ref=e77] [cursor=pointer]:
+        - /url: /configs
+        - img [ref=e78]
+        - generic [ref=e82]: 配置中心
+    - generic [ref=e83]:
+      - link "个人信息" [ref=e84] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e85]
+        - generic [ref=e88]: 个人信息
+      - button "退出登录" [ref=e89] [cursor=pointer]:
+        - img [ref=e90]
+        - generic [ref=e93]: 退出登录
+  - main [ref=e2]:
+    - generic [ref=e664]:
+      - generic [ref=e667]:
+        - generic [ref=e668]:
+          - generic [ref=e669]:
+            - link "合同审核" [ref=e670] [cursor=pointer]:
+              - /url: /contracts
+            - generic [ref=e671]: /
+            - generic [ref=e672]: 审核工作台
+          - generic [ref=e673]:
+            - heading "ones-contract-e2e-risk.docx" [level=1] [ref=e674]
+            - generic [ref=e675]: 审核完成
+          - paragraph [ref=e676]: ONES 业务运营按后台规则生成风险定位、谈判任务和 Word 批注版本。
+        - generic [ref=e677]:
+          - link "返回合同中心" [ref=e678] [cursor=pointer]:
+            - /url: /contracts
+            - button "返回合同中心" [ref=e679]:
+              - img
+              - text: 返回合同中心
+          - button "重新审查" [ref=e680] [cursor=pointer]:
+            - img
+            - text: 重新审查
+          - link "文档比对" [ref=e681] [cursor=pointer]:
+            - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/compare?from=workbench
+            - button "文档比对" [ref=e682]:
+              - img
+              - text: 文档比对
+          - button "导出批注版" [disabled]:
+            - img
+            - text: 导出批注版
+      - generic [ref=e684]:
+        - generic [ref=e686]:
+          - generic [ref=e687]: 红线风险
+          - generic [ref=e688]: "4"
+        - generic [ref=e690]:
+          - generic [ref=e691]: 需谈判风险
+          - generic [ref=e692]: "0"
+        - generic [ref=e694]:
+          - generic [ref=e695]: 开放风险
+          - generic [ref=e696]: "4"
+        - generic [ref=e698]:
+          - generic [ref=e699]: 批注数量
+          - generic [ref=e700]: "4"
+      - generic [ref=e701]:
+        - generic [ref=e702]:
+          - paragraph [ref=e703]: 当前状态
+          - paragraph [ref=e704]: 可进入批注输出
+        - generic [ref=e705]:
+          - paragraph [ref=e706]: 审核依据
+          - paragraph [ref=e707]: 已绑定规则发布包
+        - generic [ref=e708]:
+          - paragraph [ref=e709]: 批注输出
+          - paragraph [ref=e710]: 源文件批注版可导出
+      - generic [ref=e1115]:
+        - generic [ref=e1116]:
+          - paragraph [ref=e1117]: 源文件批注版已生成
+          - paragraph [ref=e1118]: 已触发浏览器下载；如果没有看到下载，请使用右侧入口重新下载本次生成文件。
+          - paragraph [ref=e1119]: ones-contract-e2e-risk.docx-ONES批注版.docx · 08:09:32
+        - link "重新下载批注版" [ref=e1120] [cursor=pointer]:
+          - /url: blob:http://localhost:3002/fec929b6-a6bd-404a-9d7f-3a5c8139dccf
+      - generic [ref=e711]:
+        - generic [ref=e712]:
+          - generic [ref=e713]:
+            - generic [ref=e714]:
+              - generic [ref=e715]:
+                - generic [ref=e716]:
+                  - generic [ref=e717]:
+                    - img [ref=e718]
+                    - text: 原文与批注意图
+                  - paragraph [ref=e721]: 这里是证据预览与批注意图，不替代源 Word 文件；最终交付必须是源文件原生批注版。
+                - generic [ref=e722]: 当前版本用于审核定位
+              - generic [ref=e723]:
+                - generic [ref=e724]: v22 · 批注版
+                - generic [ref=e725]: v21 · 批注版
+                - generic [ref=e726]: v20 · 批注版
+                - generic [ref=e727]: v19 · 批注版
+                - generic [ref=e728]: 批注版 21
+            - generic [ref=e729]:
+              - generic [ref=e730]:
+                - generic [ref=e731]:
+                  - generic [ref=e732]: 付款节奏
+                  - generic [ref=e734]: 红线
+                - generic [ref=e735]:
+                  - generic [ref=e736]:
+                    - generic [ref=e737]: 原文内容
+                    - paragraph [ref=e738]: 账期120天
+                  - generic [ref=e739]:
+                    - generic [ref=e740]: 批注建议
+                    - paragraph [ref=e741]: 必须修改合同条款
+                  - generic [ref=e742]:
+                    - generic [ref=e743]: 风险说明
+                    - paragraph [ref=e744]: 触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日
+                - generic [ref=e745]: R001 · v3 · 67a2ae46-331a-476e-9621-fe1f3ecce3ff
+                - generic [ref=e746]: 定位状态：located；evidence_text_exact_match
+              - generic [ref=e749]:
+                - text: 销售合同 第一条 合同金额：人民币100万元。 第二条 付款条款：乙方验收后120天内付款，
+                - mark [ref=e750]: 账期120天
+                - text: 。 第三条 质保条款：质保金20%，质保期为合同签订后36个月。 第四条 违约责任：逾期付款违约金为日万分之十。 第五条 知识产权未明确归属，双方后续另行协商。 第六条 争议解决方式未明确，管辖法院待定。 第七条 合同变更可通过电话确认或口头确认，无需书面补充协议。 第八条 如发生市场变化、经营困难，客户可单方延期履行。
+          - generic [ref=e751]:
+            - generic [ref=e753]:
+              - img [ref=e754]
+              - text: Word 批注
+            - generic [ref=e757]:
+              - generic [ref=e758]:
+                - generic [ref=e759]:
+                  - generic [ref=e760]: 账期120天
+                  - generic [ref=e762]: urgent
+                - paragraph [ref=e763]: "【红线风险】付款节奏 问题：触发「付款节奏」红线：首期<15% / 100%验收后付首款 / 账期>30工作日 建议：必须修改合同条款 证据原文：账期120天 规则：R001 v3 RuleSnapshot: 67a2ae46-331a-476e-9621-fe1f3ecce3ff SourceRange: 46-52 RiskFinding: bc98824e-c34a-4ef0-8726-6cf5040aa47a"
+              - generic [ref=e764]:
+                - generic [ref=e765]:
+                  - generic [ref=e766]: 第五条 知识产权未明确归属，双方后续另行协商。
+                  - generic [ref=e768]: urgent
+                - paragraph [ref=e769]: "【红线风险】IP 归属 问题：触发「IP 归属」红线：客户主张 ONES 产品 IP / 交付源代码 / 可二次销售转让 建议：必须修改合同条款 证据原文：第五条 知识产权未明确归属，双方后续另行协商。 规则：R011 v3 RuleSnapshot: d2575e16-51de-43c5-9b85-32a319d7e2e2 SourceRange: 109-132 RiskFinding: 47872ef4-858c-4085-bc84-6b17f5299e8a"
+              - generic [ref=e770]:
+                - generic [ref=e771]:
+                  - generic [ref=e772]: 第六条 争议解决方式未明确，管辖法院待定。
+                  - generic [ref=e774]: urgent
+                - paragraph [ref=e775]: "【红线风险】争议解决 问题：触发「争议解决」红线：境外仲裁/法院/法律 建议：必须修改合同条款 证据原文：第六条 争议解决方式未明确，管辖法院待定。 规则：R015 v3 RuleSnapshot: 782a9ff7-db77-4735-9a6d-50f28b3411ef SourceRange: 133-154 RiskFinding: f9d0f6b8-aadd-4170-97f5-ed46ef2acbb2"
+              - generic [ref=e776]:
+                - generic [ref=e777]:
+                  - generic [ref=e778]: 逾期付款违约金为日万分之十。
+                  - generic [ref=e780]: urgent
+                - paragraph [ref=e781]: "【红线风险】逾期付款违约金标准偏低且对我方补偿不足 问题：合同仅约定逾期付款违约金为日万分之十，违约责任偏弱，可能不足以覆盖长账期下的资金占用损失。 建议：建议提高逾期付款违约金标准，并补充逾期达到一定期限时的暂停服务、加速到期或解除合同权利。 证据原文：逾期付款违约金为日万分之十。 规则：R006 v3 RuleSnapshot: 144594c3-5610-41ff-8771-bb476b6f5197 SourceRange: 94-108 RiskFinding: 59b4d15c-f09b-4b7c-984b-921e00f909d2"
+        - complementary [ref=e782]:
+          - generic [ref=e783]:
+            - generic [ref=e784]:
+              - generic [ref=e785]:
+                - generic [ref=e786]: 审核侧栏
+                - generic [ref=e787]: COMPLETED
+              - generic [ref=e788]:
+                - button "审查" [ref=e789] [cursor=pointer]:
+                  - img [ref=e790]
+                  - generic [ref=e792]: 审查
+                - button "摘要" [ref=e793] [cursor=pointer]:
+                  - img [ref=e794]
+                  - generic [ref=e797]: 摘要
+                - button "对话" [ref=e798] [cursor=pointer]:
+                  - img [ref=e799]
+                  - generic [ref=e801]: 对话
+                - button "证据" [ref=e802] [cursor=pointer]:
+                  - img [ref=e803]
+                  - generic [ref=e806]: 证据
+            - generic [ref=e808]:
+              - generic [ref=e809]:
+                - generic [ref=e810]: 运行状态
+                - generic [ref=e811]: COMPLETED
+              - generic [ref=e812]:
+                - generic [ref=e813]: 运行编号
+                - generic [ref=e814]: 6ec3ec3e-f53e-44f1-829c-f290c9d7e274
+              - generic [ref=e815]:
+                - generic [ref=e816]: 证据状态
+                - generic [ref=e817]: 已绑定规则快照
+              - generic [ref=e818]:
+                - generic [ref=e819]: 规则快照
+                - generic [ref=e820]: contract_rule_snapshots:bound:15
+              - generic [ref=e821]:
+                - generic [ref=e822]: 快照数量
+                - generic [ref=e823]: "15"
+              - generic [ref=e824]:
+                - generic [ref=e825]: 规则发布包
+                - generic [ref=e826]: 568dfd6e-68b4-4140-8298-3d61c186c704
+              - generic [ref=e827]:
+                - generic [ref=e828]: 规则源
+                - generic [ref=e829]: 配置中心发布规则
+              - generic [ref=e830]:
+                - generic [ref=e831]: 转译状态
+                - generic [ref=e832]: 已就绪
+              - generic [ref=e833]:
+                - generic [ref=e834]: 规则完整性
+                - generic [ref=e835]: 15/15
+              - generic [ref=e836]:
+                - generic [ref=e837]: 发布门禁
+                - generic [ref=e838]: 已通过
+              - generic [ref=e839]:
+                - generic [ref=e840]: 模型质量评测
+                - generic [ref=e841]: 最近模型复核已通过
+              - generic [ref=e842]:
+                - generic [ref=e843]: 模型策略
+                - generic [ref=e844]: f66c64f9-f80f-486b-b249-0a4fb14bb070
+              - generic [ref=e845]:
+                - generic [ref=e846]: 模型来源
+                - generic [ref=e847]: 已发布模型策略
+              - generic [ref=e848]:
+                - generic [ref=e849]: 语义模型
+                - generic [ref=e850]: gpt-5.5
+              - generic [ref=e851]:
+                - generic [ref=e852]: 调用阶段
+                - generic [ref=e853]: 语义模型复核
+              - generic [ref=e854]:
+                - generic [ref=e855]: 调用通道
+                - generic [ref=e856]: OpenAI-compatible HTTP
+              - generic [ref=e857]:
+                - generic [ref=e858]: 调用耗时
+                - generic [ref=e859]: 15.1s
+              - generic [ref=e860]:
+                - generic [ref=e861]: 调用记录
+                - generic [ref=e862]: 5adb3d7b-d11d-42be-959d-607a3222a99e
+              - generic [ref=e863]:
+                - generic [ref=e864]: 目标通道
+                - generic [ref=e865]: 本地模型优先
+              - generic [ref=e866]:
+                - generic [ref=e867]: 目标模型
+                - generic [ref=e868]: gpt-oss-20b
+              - generic [ref=e869]:
+                - generic [ref=e870]: 尝试错误
+                - generic [ref=e871]: "1"
+              - generic [ref=e872]:
+                - generic [ref=e873]: 开始时间
+                - generic [ref=e874]: 2026/7/3 00:11:26
+              - generic [ref=e875]:
+                - generic [ref=e876]: 完成时间
+                - generic [ref=e877]: 2026/7/3 00:11:42
+              - generic [ref=e878]:
+                - generic [ref=e879]:
+                  - generic [ref=e880]: 最近执行器
+                  - generic [ref=e881]: 规则引擎 + 云端增强模型
+                - generic [ref=e882]:
+                  - generic [ref=e883]: 执行状态
+                  - generic [ref=e884]: 已完成
+                - generic [ref=e885]:
+                  - generic [ref=e886]: 降级
+                  - generic [ref=e887]: 否
+              - generic [ref=e888]:
+                - paragraph [ref=e889]: 调用链
+                - generic [ref=e890]:
+                  - generic [ref=e891]:
+                    - generic [ref=e892]:
+                      - generic [ref=e893]: 结构化规则扫描
+                      - generic [ref=e894]: 已完成
+                    - generic [ref=e895]: 规则引擎 / rule-engine / 规则引擎
+                    - generic [ref=e896]:
+                      - generic [ref=e897]: 35ms
+                      - generic [ref=e898]: 2e8e5617
+                  - generic [ref=e899]:
+                    - generic [ref=e900]:
+                      - generic [ref=e901]: 语义模型复核
+                      - generic [ref=e902]: 已完成
+                    - generic [ref=e903]: 云端增强模型 / gpt-5.5 / OpenAI-compatible HTTP
+                    - generic [ref=e904]:
+                      - generic [ref=e905]: 15.1s
+                      - generic [ref=e906]: 5adb3d7b
+                      - generic [ref=e907]: 尝试错误 1
+                    - paragraph [ref=e909]: "AI_LEVEL_1: health_check_failed"
+          - generic [ref=e910]:
+            - generic [ref=e912]:
+              - generic [ref=e913]:
+                - generic [ref=e914]:
+                  - img [ref=e915]
+                  - text: 版本与产物
+                - paragraph [ref=e919]: 客户谈判后的回传文件会形成新的合同版本，不作为发起审核入口。
+              - link "导入客户回传件" [ref=e920] [cursor=pointer]:
+                - /url: /contracts/c0319a20-eec1-493f-8ea1-bbd1b408a4f8/edit
+                - button "导入客户回传件" [ref=e921]:
+                  - img
+                  - text: 导入客户回传件
+            - generic [ref=e922]:
+              - generic [ref=e923]:
+                - generic [ref=e924]: 文件大小
+                - generic [ref=e925]: 1.6 KB
+              - generic [ref=e926]:
+                - generic [ref=e927]: 文件类型
+                - generic [ref=e928]: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+              - generic [ref=e929]:
+                - generic [ref=e930]: 创建时间
+                - generic [ref=e931]: 2026/6/30 13:51:25
+              - generic [ref=e932]:
+                - generic [ref=e933]: 更新时间
+                - generic [ref=e934]: 2026/7/3 00:11:42
+              - generic [ref=e935]:
+                - paragraph [ref=e936]: 版本记录
+                - generic [ref=e937]:
+                  - generic [ref=e938]:
+                    - generic [ref=e939]:
+                      - generic [ref=e940]: v22
+                      - generic [ref=e941]: 批注版
+                    - paragraph [ref=e942]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e943]:
+                    - generic [ref=e944]:
+                      - generic [ref=e945]: v21
+                      - generic [ref=e946]: 批注版
+                    - paragraph [ref=e947]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e948]:
+                    - generic [ref=e949]:
+                      - generic [ref=e950]: v20
+                      - generic [ref=e951]: 批注版
+                    - paragraph [ref=e952]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e953]:
+                    - generic [ref=e954]:
+                      - generic [ref=e955]: v19
+                      - generic [ref=e956]: 批注版
+                    - paragraph [ref=e957]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e958]:
+                    - generic [ref=e959]:
+                      - generic [ref=e960]: v18
+                      - generic [ref=e961]: 批注版
+                    - paragraph [ref=e962]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e963]:
+                    - generic [ref=e964]:
+                      - generic [ref=e965]: v17
+                      - generic [ref=e966]: 批注版
+                    - paragraph [ref=e967]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e968]:
+                    - generic [ref=e969]:
+                      - generic [ref=e970]: v16
+                      - generic [ref=e971]: 批注版
+                    - paragraph [ref=e972]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e973]:
+                    - generic [ref=e974]:
+                      - generic [ref=e975]: v15
+                      - generic [ref=e976]: 批注版
+                    - paragraph [ref=e977]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e978]:
+                    - generic [ref=e979]:
+                      - generic [ref=e980]: v14
+                      - generic [ref=e981]: 批注版
+                    - paragraph [ref=e982]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e983]:
+                    - generic [ref=e984]:
+                      - generic [ref=e985]: v13
+                      - generic [ref=e986]: 批注版
+                    - paragraph [ref=e987]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e988]:
+                    - generic [ref=e989]:
+                      - generic [ref=e990]: v12
+                      - generic [ref=e991]: 批注版
+                    - paragraph [ref=e992]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e993]:
+                    - generic [ref=e994]:
+                      - generic [ref=e995]: v11
+                      - generic [ref=e996]: 批注版
+                    - paragraph [ref=e997]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e998]:
+                    - generic [ref=e999]:
+                      - generic [ref=e1000]: v10
+                      - generic [ref=e1001]: 批注版
+                    - paragraph [ref=e1002]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1003]:
+                    - generic [ref=e1004]:
+                      - generic [ref=e1005]: v9
+                      - generic [ref=e1006]: 批注版
+                    - paragraph [ref=e1007]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1008]:
+                    - generic [ref=e1009]:
+                      - generic [ref=e1010]: v8
+                      - generic [ref=e1011]: 批注版
+                    - paragraph [ref=e1012]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1013]:
+                    - generic [ref=e1014]:
+                      - generic [ref=e1015]: v7
+                      - generic [ref=e1016]: 批注版
+                    - paragraph [ref=e1017]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1018]:
+                    - generic [ref=e1019]:
+                      - generic [ref=e1020]: v6
+                      - generic [ref=e1021]: 批注版
+                    - paragraph [ref=e1022]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1023]:
+                    - generic [ref=e1024]:
+                      - generic [ref=e1025]: v5
+                      - generic [ref=e1026]: 批注版
+                    - paragraph [ref=e1027]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1028]:
+                    - generic [ref=e1029]:
+                      - generic [ref=e1030]: v4
+                      - generic [ref=e1031]: 批注版
+                    - paragraph [ref=e1032]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1033]:
+                    - generic [ref=e1034]:
+                      - generic [ref=e1035]: v3
+                      - generic [ref=e1036]: 批注版
+                    - paragraph [ref=e1037]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1038]:
+                    - generic [ref=e1039]:
+                      - generic [ref=e1040]: v2
+                      - generic [ref=e1041]: 批注版
+                    - paragraph [ref=e1042]: ONES 业务运营基于风险项生成 Word 批注版本
+                  - generic [ref=e1043]:
+                    - generic [ref=e1044]:
+                      - generic [ref=e1045]: v1
+                      - generic [ref=e1046]: 源文件
+                    - paragraph [ref=e1047]: 用户上传合同源文件
+              - generic [ref=e1048]:
+                - paragraph [ref=e1049]: 输出文件
+                - generic [ref=e1050]:
+                  - generic [ref=e1051]:
+                    - generic [ref=e1052]: 批注版 v22
+                    - generic [ref=e1053]: 2026/7/3 00:43:15
+                  - generic [ref=e1054]:
+                    - generic [ref=e1055]: 批注版 v21
+                    - generic [ref=e1056]: 2026/7/3 00:11:21
+                  - generic [ref=e1057]:
+                    - generic [ref=e1058]: 批注版 v20
+                    - generic [ref=e1059]: 2026/7/2 23:35:35
+                  - generic [ref=e1060]:
+                    - generic [ref=e1061]: 批注版 v19
+                    - generic [ref=e1062]: 2026/7/2 23:16:07
+                  - generic [ref=e1063]:
+                    - generic [ref=e1064]: 批注版 v18
+                    - generic [ref=e1065]: 2026/7/2 23:11:32
+                  - generic [ref=e1066]:
+                    - generic [ref=e1067]: 批注版 v17
+                    - generic [ref=e1068]: 2026/7/2 13:23:14
+                  - generic [ref=e1069]:
+                    - generic [ref=e1070]: 批注版 v16
+                    - generic [ref=e1071]: 2026/7/2 11:59:20
+                  - generic [ref=e1072]:
+                    - generic [ref=e1073]: 批注版 v15
+                    - generic [ref=e1074]: 2026/7/2 10:57:50
+                  - generic [ref=e1075]:
+                    - generic [ref=e1076]: 批注版 v14
+                    - generic [ref=e1077]: 2026/7/1 15:39:35
+                  - generic [ref=e1078]:
+                    - generic [ref=e1079]: 批注版 v13
+                    - generic [ref=e1080]: 2026/7/1 15:27:42
+                  - generic [ref=e1081]:
+                    - generic [ref=e1082]: 批注版 v12
+                    - generic [ref=e1083]: 2026/7/1 15:08:37
+                  - generic [ref=e1084]:
+                    - generic [ref=e1085]: 批注版 v11
+                    - generic [ref=e1086]: 2026/7/1 14:59:30
+                  - generic [ref=e1087]:
+                    - generic [ref=e1088]: 批注版 v10
+                    - generic [ref=e1089]: 2026/7/1 14:53:10
+                  - generic [ref=e1090]:
+                    - generic [ref=e1091]: 批注版 v9
+                    - generic [ref=e1092]: 2026/6/30 14:55:47
+                  - generic [ref=e1093]:
+                    - generic [ref=e1094]: 批注版 v8
+                    - generic [ref=e1095]: 2026/6/30 14:41:21
+                  - generic [ref=e1096]:
+                    - generic [ref=e1097]: 批注版 v7
+                    - generic [ref=e1098]: 2026/6/30 14:27:48
+                  - generic [ref=e1099]:
+                    - generic [ref=e1100]: 批注版 v6
+                    - generic [ref=e1101]: 2026/6/30 14:22:50
+                  - generic [ref=e1102]:
+                    - generic [ref=e1103]: 批注版 v5
+                    - generic [ref=e1104]: 2026/6/30 14:02:49
+                  - generic [ref=e1105]:
+                    - generic [ref=e1106]: 批注版 v4
+                    - generic [ref=e1107]: 2026/6/30 13:58:04
+                  - generic [ref=e1108]:
+                    - generic [ref=e1109]: 批注版 v3
+                    - generic [ref=e1110]: 2026/6/30 13:55:52
+                  - generic [ref=e1111]:
+                    - generic [ref=e1112]: 批注版 v2
+                    - generic [ref=e1113]: 2026/6/30 13:53:23
+  - alert [ref=e29]: ONES Sales
+  - generic [ref=e1121]: 已生成源文件 Word 批注版，若浏览器未自动下载，可使用页面中的重新下载入口

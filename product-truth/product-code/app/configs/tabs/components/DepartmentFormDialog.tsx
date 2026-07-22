@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, isValidElement } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -88,15 +88,20 @@ export function DepartmentFormDialog({
     [onSubmit, form, onOpenChange]
   )
 
+  const defaultTrigger = (
+    <Button variant="outline" size="sm">
+      <PlusIcon className="h-4 w-4 mr-1" />
+      添加部门
+    </Button>
+  )
+  const resolvedTrigger = trigger === undefined ? defaultTrigger : trigger
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>{trigger ?? (
-        <Button variant="outline" size="sm">
-          <PlusIcon className="h-4 w-4 mr-1" />
-          添加部门
-        </Button>
-      )}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      {isValidElement(resolvedTrigger) ? (
+        <DialogTrigger render={resolvedTrigger} />
+      ) : null}
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BuildingIcon className="h-5 w-5" />
@@ -146,7 +151,10 @@ export function DepartmentFormDialog({
                         <SelectValue placeholder="选择上级部门（可选）" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent
+                      className="max-h-72"
+                      viewportClassName="max-h-64"
+                    >
                       <SelectItem value="null">无（根部门）</SelectItem>
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
@@ -174,7 +182,10 @@ export function DepartmentFormDialog({
                         <SelectValue placeholder="选择部门主管（可选）" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent
+                      className="max-h-72"
+                      viewportClassName="max-h-64"
+                    >
                       <SelectItem value="null">暂无主管</SelectItem>
                       {users.map((user) => (
                         <SelectItem key={user.id} value={user.id}>

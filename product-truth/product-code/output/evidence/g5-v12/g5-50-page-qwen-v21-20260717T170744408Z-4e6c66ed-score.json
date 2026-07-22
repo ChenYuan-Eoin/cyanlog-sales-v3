@@ -1,0 +1,168 @@
+{
+  "schema_version": "g5-risk-accuracy-score.v2",
+  "benchmark_id": "G5-50PAGE-9RISK-1NEGATIVE-20260718",
+  "counts": {
+    "positive_gold": 45,
+    "explicit_negative_gold": 5,
+    "predictions": 0,
+    "true_positive": 0,
+    "false_positive": 0,
+    "false_negative": 45,
+    "explicit_negative_hits": 0
+  },
+  "metrics": {
+    "precision": 0,
+    "recall": 0,
+    "f1": 0,
+    "anchor_exactness": 0,
+    "severity_accuracy": 0,
+    "explicit_negative_specificity": 1
+  },
+  "diagnostics": {
+    "duplicate_count": 0,
+    "unbound_count": 0,
+    "unlocated_count": 0,
+    "inferred_page_from_exact_span_count": 0,
+    "false_positives": [],
+    "unmatched_positive_ids": [
+      "G5-P01-R001",
+      "G5-P02-R004",
+      "G5-P03-R012",
+      "G5-P04-R007",
+      "G5-P05-R011",
+      "G5-P07-R013",
+      "G5-P08-R006",
+      "G5-P09-R015",
+      "G5-P10-R009",
+      "G5-P11-R001",
+      "G5-P12-R004",
+      "G5-P13-R012",
+      "G5-P14-R007",
+      "G5-P15-R011",
+      "G5-P17-R013",
+      "G5-P18-R006",
+      "G5-P19-R015",
+      "G5-P20-R009",
+      "G5-P21-R001",
+      "G5-P22-R004",
+      "G5-P23-R012",
+      "G5-P24-R007",
+      "G5-P25-R011",
+      "G5-P27-R013",
+      "G5-P28-R006",
+      "G5-P29-R015",
+      "G5-P30-R009",
+      "G5-P31-R001",
+      "G5-P32-R004",
+      "G5-P33-R012",
+      "G5-P34-R007",
+      "G5-P35-R011",
+      "G5-P37-R013",
+      "G5-P38-R006",
+      "G5-P39-R015",
+      "G5-P40-R009",
+      "G5-P41-R001",
+      "G5-P42-R004",
+      "G5-P43-R012",
+      "G5-P44-R007",
+      "G5-P45-R011",
+      "G5-P47-R013",
+      "G5-P48-R006",
+      "G5-P49-R015",
+      "G5-P50-R009"
+    ],
+    "hit_negative_ids": [],
+    "severity_mismatches": [],
+    "invalid_binding_count": 0,
+    "source_mismatch_count": 0,
+    "failed_attempt_count": 2,
+    "skipped_attempt_count": 0
+  },
+  "per_rule": {
+    "R001": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R004": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R006": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R007": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R009": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R011": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R012": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R013": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    },
+    "R015": {
+      "gold": 5,
+      "matched": 0,
+      "recall": 0,
+      "severity_accuracy": 0
+    }
+  },
+  "release_acceptance": false,
+  "definitions": {
+    "positive_match": "one-to-one exact page + rule_code; page may be inferred only from exact rule_code + UTF-16 span",
+    "explicit_negative": "published Level A no-risk clause; any risk prediction on its exact identity is a false positive",
+    "severity_accuracy": "exact red/yellow/green match among true-positive risk detections"
+  },
+  "thresholds": {
+    "precision": 0.85,
+    "recall": 0.9,
+    "per_rule_recall": 0.8,
+    "anchor_exactness": 0.95,
+    "severity_accuracy": 0.9,
+    "explicit_negative_specificity": 1,
+    "duplicate_count": 0,
+    "unbound_count": 0,
+    "unlocated_count": 0,
+    "invalid_binding_count": 0,
+    "source_mismatch_count": 0,
+    "failed_attempt_count": 0,
+    "skipped_attempt_count": 0
+  },
+  "per_rule_threshold_passed": false,
+  "threshold_passed": false,
+  "gate_issues": [
+    "review_or_job_frozen_identity_mismatch",
+    "invocation_identity_prompt_or_token_mismatch",
+    "chunk_coverage_or_hash_mismatch",
+    "failed_attempt_count=2",
+    "risk_accuracy_threshold_failed"
+  ],
+  "interpretation": "internal_synthetic_risk_accuracy_gate_failed"
+}

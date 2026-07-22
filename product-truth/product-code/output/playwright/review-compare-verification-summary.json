@@ -1,0 +1,37 @@
+[
+  {
+    "name": "verify-contract-review-real",
+    "url": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177?panel=evidence&from=list",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-contract-review-real.png",
+    "checkResults": {
+      "reviewDefault": false,
+      "styleSelector": false,
+      "sourcePreview": true,
+      "modelEvidence": true,
+      "reviewEntryStrong": false
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n正在打开合同审核工作台\n\n工作台会同时读取合同版本、规则快照、模型调用和批注意图。长合同首次打开可能需要数秒，但每一步都应能解释正在处理什么。\n\nReviewRun 装载中\n1\n读取合同源文件与版本流\n2\n装载最近一次 ReviewRun\n3\n绑定规则发布包与模型调用证据\n4\n整理风险定位、谈判任务和批注意图"
+  },
+  {
+    "name": "verify-contract-compare-real",
+    "url": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177/compare?from=workbench",
+    "file": "/Users/nsss/Price-v3/product-truth/product-code/output/playwright/verify-contract-compare-real.png",
+    "checkResults": {
+      "syncToggle": false,
+      "exportReport": false,
+      "oldNew": true,
+      "zoomOrOriginal": false
+    },
+    "sample": "ONES Sales\n\n智能协作平台\n\n工作台\n报价中心\n合同审核\n标书中心\n知识库\n日程\n配置中心\n个人信息\n退出登录\n合同中心\n/\n审核工作台\n/\n文档比对\n文档比对工作台\n\n主路径是确认旧文件、上传客户回传/新文件、开始比对。版本和候选合同只作为属性辅助，不默认占用文件画布。\n\n返回合同中心\n返回审核工作台\n开始比对\n基准文件\n可切换\n\n当前合同\n\n合同编号：未记录\n\n客户：未记录\n\n报价：未绑定\n\n上传旧文件\n系统版本库 / 基准切换\n回传文件（上传为主）\n待上传\n\n还没有新文件\n\n对比应以实时上传的客户回传版为主。没有明确回传件时，不把历史版本和候选合同摊在文件画布里。\n\n上传新文件\n审计精度\n等待新文件\n严格审计\n更敏感地披露删改、标点、断句和疑似格式造成的实质变化。\n标准审计\n弱化格式噪声，优先关注文字、金额、责任和条款实质变化。\n开始比对\n当前没有可明确比对的新文件。请上传客户回传版或人工修订版后再开始比对。\n✓\n\n确认旧文件\n\n当前合同\n\n·\n\n上传新文件\n\n等待客户回传版\n\n·\n\n生成差异\n\n删除 / 新增 / 修改 / 风险等级\n\n·\n\n并排复核\n\n左旧右新，差异可跳转"
+  },
+  {
+    "name": "verify-compare-export-action",
+    "url": "http://localhost:3000/contracts/d0cc9911-e9fc-4e13-adee-6963d45b2177/compare?from=workbench",
+    "exportResult": {
+      "clicked": false,
+      "downloaded": false,
+      "filename": null
+    },
+    "beforeFiles": 272
+  }
+]

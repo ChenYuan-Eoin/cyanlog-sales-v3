@@ -1,0 +1,28 @@
+{
+  "hasCommentsXml": true,
+  "hasCommentsRelationship": true,
+  "hasCommentsContentType": true,
+  "commentCount": 4,
+  "rangeStartCount": 4,
+  "rangeEndCount": 4,
+  "referenceCount": 4,
+  "authorPresent": true,
+  "selectedSignalChecks": [
+    {
+      "signal": "知识产权未明确归属",
+      "inDocument": true
+    },
+    {
+      "signal": "争议解决方式未明确",
+      "inDocument": true
+    },
+    {
+      "signal": "逾期付款违约金",
+      "inDocument": true
+    },
+    {
+      "signal": "验收后120天内付款",
+      "inDocument": true
+    }
+  ]
+}

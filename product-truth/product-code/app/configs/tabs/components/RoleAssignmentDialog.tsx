@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, isValidElement } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -97,16 +97,19 @@ export function RoleAssignmentDialog({
     }
   }, [onSubmit, selectedRoles, onOpenChange])
 
+  const defaultTrigger = (
+    <Button variant="ghost" size="sm">
+      <ShieldIcon className="h-4 w-4 mr-1" />
+      分配角色
+    </Button>
+  )
+  const resolvedTrigger = trigger === undefined ? defaultTrigger : trigger
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>
-        {trigger ?? (
-          <Button variant="ghost" size="sm">
-            <ShieldIcon className="h-4 w-4 mr-1" />
-            分配角色
-          </Button>
-        )}
-      </DialogTrigger>
+      {isValidElement(resolvedTrigger) ? (
+        <DialogTrigger render={resolvedTrigger} />
+      ) : null}
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
