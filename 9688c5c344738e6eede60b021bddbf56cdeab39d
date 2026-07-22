@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "activeId": "WP09",
+  "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+  "evidence": {
+    "code": {
+      "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+      "checks": {
+        "typecheck": true,
+        "lint": true,
+        "full_tests": true,
+        "target_tests": true,
+        "build": true
+      },
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "07ef474e446c349c2f628955d6b7b02f638159cf1dac01208ee23ad7c84f73c4",
+        "entry_sha256": "edf2a0d9ca5fab6168fad8a6eaa28e457046f710145842248b0b6661c6b5bce2"
+      },
+      "commands": [
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "check-logs/c387a9062b6a6caea5d51c6415da6ddbc59e9e1e/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "check-logs/c387a9062b6a6caea5d51c6415da6ddbc59e9e1e/check-02-lint.log",
+          "log_sha256": "4211513750e49476fa194f1fb79c20663505856f71d027d61c8cb63f7b2eced5"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "check-logs/c387a9062b6a6caea5d51c6415da6ddbc59e9e1e/check-03-test.log",
+          "log_sha256": "15d151374c7ed14450910e3ec4453b3d9a318f5d2a352b7dfff88a7f149085f1"
+        },
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "code-checks/9688c5c344738e6eede60b021bddbf56cdeab39d/target-tests.log",
+          "log_sha256": "138e9583158f51f08a0a96e0dffdfdbdd69c0b0ab39d729aaf81d9ea06dcc9ed"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "code-checks/9688c5c344738e6eede60b021bddbf56cdeab39d/build.log",
+          "log_sha256": "929d073eee6fb1692cb68375506d0e619c52d44ebe6175b50c86c097876dd280"
+        }
+      ]
+    }
+  },
+  "updatedAt": "2026-07-22T04:59:15.890Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-07-22T04:59:15.869Z",
+      "head": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+      "originMain": "ed0f627f920be259a69cc5b8eea534cb5a30dc92",
+      "remoteMain": "ed0f627f920be259a69cc5b8eea534cb5a30dc92",
+      "remoteProduction": "a1ef986846eebefb29ed1cff510ad75fc3f4688f",
+      "defaultBranch": "spacex-hardening",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": null,
+      "remoteAttestationRefOid": null,
+      "remoteSnapshotCheckedAt": "2026-07-22T04:59:13.236Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "b99756f3c796c28d0e42713bae53a17105663b4fdb65f4bd51a8d56cfc8c6cb5",
+  "sealedAt": "2026-07-22T04:59:15.891Z",
+  "attestationDigest": "709f22bc0f3f4e6a129a5de25fec9e051433b4b278a5311dbd4a2e67039f75e7"
+}
