@@ -49,10 +49,282 @@
           "log_sha256": "929d073eee6fb1692cb68375506d0e619c52d44ebe6175b50c86c097876dd280"
         }
       ]
+    },
+    "preview": {
+      "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+      "provider_source_commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+      "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+      "url": "https://cyanlog-sales-v3-mbhhbo58z-eoins-projects-94b17ece.vercel.app",
+      "ready": true,
+      "git_dirty": false,
+      "journeys": {
+        "desktop": true,
+        "ipad": true,
+        "blocking_defect_replay": true
+      },
+      "artifacts": {
+        "desktop": {
+          "artifact_path": "evidence/wp09/desktop.json",
+          "sha256": "71af3970788dcdbd99fefa9effad0cbfdd840c25d627c517e25aa31b81267da0",
+          "payload": {
+            "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+            "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+            "url": "https://cyanlog-sales-v3-mbhhbo58z-eoins-projects-94b17ece.vercel.app/configs?tab=ai",
+            "observed_at": "2026-07-22T05:14:16Z",
+            "viewport": {
+              "width": 1440,
+              "height": 1000
+            },
+            "journey": [
+              "page_scroll",
+              "open_edit_dialog",
+              "modify_field",
+              "request_close",
+              "unsaved_confirm_visible",
+              "continue_edit",
+              "request_close_again",
+              "discard_changes",
+              "reopen_and_save"
+            ],
+            "result": "pass",
+            "overlays_after": 0,
+            "body_scroll_lock_released": true,
+            "app_inert_after": false,
+            "attachments": [
+              {
+                "path": "evidence/wp09/browser/desktop-unsaved-confirm.png",
+                "sha256": "8b1709fcb001bd17124df15324c7f74fe209b3c7d5948a1911f9a1b1f699a046"
+              },
+              {
+                "path": "evidence/wp09/browser/desktop-after-save-settled.png",
+                "sha256": "40a100eb4236298e51ae01271d3aa93ef51ffae66e51e7e8b59e1376e2e47d2f"
+              }
+            ]
+          }
+        },
+        "ipad": {
+          "artifact_path": "evidence/wp09/ipad.json",
+          "sha256": "b1887bd7050d688bfbfdbe2b393235556415898a70ca871690f295a0bc2b17ee",
+          "payload": {
+            "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+            "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+            "url": "https://cyanlog-sales-v3-mbhhbo58z-eoins-projects-94b17ece.vercel.app/configs?tab=ai",
+            "observed_at": "2026-07-22T05:14:16Z",
+            "viewport": {
+              "width": 1180,
+              "height": 820
+            },
+            "modal_scroll": {
+              "scroll_top": 200.5,
+              "scroll_max": 201,
+              "footer_visible": true
+            },
+            "journey": [
+              "page_scroll",
+              "open_edit_dialog",
+              "modal_scroll_to_bottom",
+              "modify_field",
+              "request_close",
+              "unsaved_confirm_visible",
+              "continue_edit",
+              "request_close_again",
+              "discard_changes",
+              "reopen_and_save",
+              "shared_dialog_regression"
+            ],
+            "result": "pass",
+            "overlays_after": 0,
+            "body_scroll_lock_released": true,
+            "app_inert_after": false,
+            "attachments": [
+              {
+                "path": "evidence/wp09/browser/ipad-dialog-bottom.png",
+                "sha256": "9f28b882fc472d1d876d40be4e4cafad614cca3f2cc9f3d6dae390ccdec49561"
+              },
+              {
+                "path": "evidence/wp09/browser/ipad-unsaved-confirm.png",
+                "sha256": "e85668187b9479f7ae64731933a7b888494b7843f4034e5c3106ccb1e7c91307"
+              },
+              {
+                "path": "evidence/wp09/browser/ipad-after-save-settled.png",
+                "sha256": "1bf776c0bdf28ed7afe6d268f6e3751e99ea6afb1c96deec4c23a292b9905ea2"
+              },
+              {
+                "path": "evidence/wp09/browser/ipad-shared-dialog-version-history.png",
+                "sha256": "b5798e0ec7918446a1c2ff31f06b80cdae7d799dc0256718cf004af474d1293c"
+              }
+            ]
+          }
+        },
+        "defect_replay": {
+          "artifact_path": "evidence/wp09/defect-replay.json",
+          "sha256": "f15e85556536c5a4a3ff824725dd5314b9244ffe6540acae17b503a9679c52df",
+          "payload": {
+            "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+            "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+            "url": "https://cyanlog-sales-v3-mbhhbo58z-eoins-projects-94b17ece.vercel.app/configs?tab=ai",
+            "observed_at": "2026-07-22T05:14:16Z",
+            "actions": [
+              "page_scroll",
+              "open_edit_dialog",
+              "modal_scroll_to_bottom",
+              "modify_field",
+              "request_close",
+              "unsaved_confirm_visible",
+              "continue_edit",
+              "request_close_again",
+              "discard_changes",
+              "reopen_and_save",
+              "shared_dialog_regression"
+            ],
+            "result": "pass",
+            "overlays_after": 0,
+            "body_scroll_lock_released": true,
+            "app_inert_after": false,
+            "assertions": {
+              "nested_dialogs_visible": 2,
+              "ipad_modal_scroll_bottom": true,
+              "shared_dialog_open_close": true,
+              "save_persisted_to_preview": true
+            },
+            "attachments": [
+              {
+                "path": "evidence/wp09/browser/desktop-unsaved-confirm.png",
+                "sha256": "8b1709fcb001bd17124df15324c7f74fe209b3c7d5948a1911f9a1b1f699a046"
+              },
+              {
+                "path": "evidence/wp09/browser/ipad-dialog-bottom.png",
+                "sha256": "9f28b882fc472d1d876d40be4e4cafad614cca3f2cc9f3d6dae390ccdec49561"
+              },
+              {
+                "path": "evidence/wp09/browser/ipad-shared-dialog-version-history.png",
+                "sha256": "b5798e0ec7918446a1c2ff31f06b80cdae7d799dc0256718cf004af474d1293c"
+              },
+              {
+                "path": "evidence/wp09/browser/ipad-after-save-settled.png",
+                "sha256": "1bf776c0bdf28ed7afe6d268f6e3751e99ea6afb1c96deec4c23a292b9905ea2"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "runtime": {
+      "provider_probe": {
+        "artifact_path": "evidence/wp09/provider-probe.json",
+        "sha256": "b0d13eb4bb3320f57c4c533da0a88c6953b735aa4b9829f0e822c38805c01592",
+        "payload": {
+          "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+          "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+          "observed_at": "2026-07-22T05:14:16Z",
+          "success": true,
+          "provider": "provider.cloud.gateway",
+          "model": "gpt-5.5",
+          "probe_scope": "draft_provider_connection_check",
+          "runtime_state": "remote_health_ok",
+          "runtime_reason": "云端 Provider /models 连接测试通过。",
+          "credential_checked": "stored",
+          "available_model_count": 12,
+          "available_models_include_selected": true,
+          "attachments": [
+            {
+              "path": "evidence/wp09/browser/provider-probe.png",
+              "sha256": "f396ccd78f96537fe7c5d6f49295dc8a209b49572402abdec946865c1efcad05"
+            }
+          ]
+        }
+      },
+      "review_run": {
+        "artifact_path": "evidence/wp09/review-run.json",
+        "sha256": "0a8936b279aa23b952912879e02fdca05b9bfc6f3c17097e15a78b527b6f0d80",
+        "payload": {
+          "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+          "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+          "observed_at": "2026-07-22T05:14:16Z",
+          "contract_id": "8dffe1fc-d33b-4632-81e9-b5bc2be81692",
+          "review_id": "15e09a40-296c-4560-8d4f-b9456ab384c5",
+          "parent_review_id": "75f943cb-712d-4a51-a519-f82842907076",
+          "job_id": "f45b3806-8660-479a-80f8-be79caf94cf1",
+          "status": "DEGRADED",
+          "started_at": "2026-07-22T05:09:28.635Z",
+          "completed_at": "2026-07-22T05:09:32.579065Z",
+          "degradation_reasons": [
+            "skill_bundle_not_published",
+            "skill_bundle_not_current",
+            "rule_translation_not_ready",
+            "ruleset_document_not_ready",
+            "skill_eval_not_run",
+            "rule_engine_no_rules_applied"
+          ],
+          "interpretation": "真实模型调用已完成；规则发布与 SkillBundle 门未满足，因此业务结果诚实标记为 DEGRADED，不冒充正式审核完成。",
+          "attachments": [
+            {
+              "path": "evidence/wp09/browser/review-run-15e09a40.png",
+              "sha256": "3e643b8a9c25b3ead0370f09cad9cb0441455c5c4ddb4148e423ee81185e437d"
+            }
+          ]
+        }
+      },
+      "model_invocations": {
+        "artifact_path": "evidence/wp09/model-invocations.json",
+        "sha256": "cdf754740394e179edc1f681fc8f31af82ed302302c78f6f0bee5e97bef37b68",
+        "payload": {
+          "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+          "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+          "observed_at": "2026-07-22T05:14:16Z",
+          "review_id": "15e09a40-296c-4560-8d4f-b9456ab384c5",
+          "invocation_ids": [
+            "1011ac80-888b-4179-91d7-c33e71b34917"
+          ],
+          "invocations": [
+            {
+              "id": "1011ac80-888b-4179-91d7-c33e71b34917",
+              "review_id": "15e09a40-296c-4560-8d4f-b9456ab384c5",
+              "provider": "provider.cloud.gateway",
+              "model": "gpt-5.5",
+              "status": "completed",
+              "phase": "contract.review.semantic",
+              "latency_ms": 3068,
+              "total_tokens": 5049,
+              "execution_id": "21a3fe7d-0429-4979-807d-e266dcd87587",
+              "execution_mode": "route",
+              "attempt_no": 1
+            }
+          ],
+          "attachments": [
+            {
+              "path": "evidence/wp09/browser/review-run-15e09a40.png",
+              "sha256": "3e643b8a9c25b3ead0370f09cad9cb0441455c5c4ddb4148e423ee81185e437d"
+            }
+          ]
+        }
+      },
+      "tokens": {
+        "artifact_path": "evidence/wp09/tokens.json",
+        "sha256": "56f03ccfaf744d954f6f5dc050d3e5059b32a54b1a2e7a26a188880405ce6468",
+        "payload": {
+          "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+          "deployment_id": "dpl_7iQgcvg2iMNzuGrEqYw1oJgoMa7A",
+          "observed_at": "2026-07-22T05:14:16Z",
+          "review_id": "15e09a40-296c-4560-8d4f-b9456ab384c5",
+          "input_tokens": 4985,
+          "output_tokens": 64,
+          "total_tokens": 5049,
+          "source_invocation_ids": [
+            "1011ac80-888b-4179-91d7-c33e71b34917"
+          ],
+          "attachments": [
+            {
+              "path": "evidence/wp09/browser/review-run-15e09a40.png",
+              "sha256": "3e643b8a9c25b3ead0370f09cad9cb0441455c5c4ddb4148e423ee81185e437d"
+            }
+          ]
+        }
+      }
     }
   },
-  "updatedAt": "2026-07-22T04:59:15.890Z",
-  "completionState": "code_green",
+  "updatedAt": "2026-07-22T05:17:28.693Z",
+  "completionState": "clean_preview_green",
   "gateSnapshots": {
     "code_green": {
       "stage": "code_green",
@@ -75,12 +347,162 @@
         "worktree": "git status --porcelain=v1 --untracked-files=all",
         "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
       }
+    },
+    "clean_preview_green": {
+      "stage": "clean_preview_green",
+      "checkedAt": "2026-07-22T05:17:28.669Z",
+      "head": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+      "originMain": "ed0f627f920be259a69cc5b8eea534cb5a30dc92",
+      "remoteMain": "ed0f627f920be259a69cc5b8eea534cb5a30dc92",
+      "remoteProduction": "a1ef986846eebefb29ed1cff510ad75fc3f4688f",
+      "defaultBranch": "spacex-hardening",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "0e76518159534bfc1c75dbb52b103fcf1080521c",
+      "remoteAttestationRefOid": "0e76518159534bfc1c75dbb52b103fcf1080521c",
+      "remoteSnapshotCheckedAt": "2026-07-22T05:17:25.780Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "b99756f3c796c28d0e42713bae53a17105663b4fdb65f4bd51a8d56cfc8c6cb5",
-  "sealedAt": "2026-07-22T04:59:15.891Z",
-  "attestationDigest": "709f22bc0f3f4e6a129a5de25fec9e051433b4b278a5311dbd4a2e67039f75e7"
+  "defects": {
+    "IN-20260722-062": {
+      "verified": true,
+      "root_cause": "Dialog 将遮罩、视口滚动和 fixed 内容定位耦合在同一 primitive；长内容与嵌套未保存确认的生命周期不同步，导致尺寸修补后仍出现白色残块。现已拆成 Portal→Backdrop→Viewport→Popup，并用独立 AlertDialog 管理确认。",
+      "reproduction": {
+        "artifact_path": "evidence/wp09/reproduction.json",
+        "sha256": "09065f4e45a35c196894f8a2337cdce482c20efe9c60c22d7d544536ba182261",
+        "payload": {
+          "defect_id": "IN-20260722-062",
+          "observed_at": "2026-07-22T05:14:16Z",
+          "environment": "production-before-fix",
+          "symptom": "AI 配置编辑弹窗滚动到底部后，页面下方出现独立白色矩形；关闭嵌套的未保存确认后还可能遗留视觉遮罩。",
+          "root_cause_evidence": {
+            "dialog_structure_before": "overlay 与 content 同时承担定位和滚动，content 使用 fixed inset 与 translate 居中；嵌套确认复用了同一层 Dialog primitive。",
+            "failure_mechanism": "内容高度超过视口时，fixed content 的定位盒和内部滚动盒发生冲突；嵌套确认关闭顺序又让 backdrop、scroll lock 与 content 生命周期不同步，因此表层调尺寸会反复复现。"
+          },
+          "reproduction_steps": [
+            "打开配置中心 AI 模型配置",
+            "打开编辑弹窗并滚动至底部",
+            "修改字段后请求关闭",
+            "显示未保存确认并继续或放弃",
+            "观察弹窗底部与关闭后的残留遮罩"
+          ],
+          "attachments": [
+            {
+              "path": "evidence/reproduction/user-white-overlay.png",
+              "sha256": "864496a832f92098b47ed33feaf45c201ace41c985776984d8326a664878c712"
+            },
+            {
+              "path": "evidence/reproduction/production-dialog-bottom-prefix.png",
+              "sha256": "2fcc26c3e039b53bf459c864112a07a47eb2931efd9d7d8c01648e78dc13136d"
+            },
+            {
+              "path": "evidence/reproduction/production-unsaved-confirm.png",
+              "sha256": "192d9ceadc587e3d196e98a2d086406135447f7643b26d7ef277e3a4df99a495"
+            }
+          ]
+        }
+      },
+      "regression_artifact_sha256": "f15e85556536c5a4a3ff824725dd5314b9244ffe6540acae17b503a9679c52df",
+      "preview_commit": "9688c5c344738e6eede60b021bddbf56cdeab39d"
+    }
+  },
+  "previousAttestationDigest": "709f22bc0f3f4e6a129a5de25fec9e051433b4b278a5311dbd4a2e67039f75e7",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP09",
+    "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+    "evidence": {
+      "code": {
+        "commit": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+        "checks": {
+          "typecheck": true,
+          "lint": true,
+          "full_tests": true,
+          "target_tests": true,
+          "build": true
+        },
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "07ef474e446c349c2f628955d6b7b02f638159cf1dac01208ee23ad7c84f73c4",
+          "entry_sha256": "edf2a0d9ca5fab6168fad8a6eaa28e457046f710145842248b0b6661c6b5bce2"
+        },
+        "commands": [
+          {
+            "name": "typecheck",
+            "exit_code": 0,
+            "artifact_path": "check-logs/c387a9062b6a6caea5d51c6415da6ddbc59e9e1e/check-01-typecheck.log",
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+          },
+          {
+            "name": "lint",
+            "exit_code": 0,
+            "artifact_path": "check-logs/c387a9062b6a6caea5d51c6415da6ddbc59e9e1e/check-02-lint.log",
+            "log_sha256": "4211513750e49476fa194f1fb79c20663505856f71d027d61c8cb63f7b2eced5"
+          },
+          {
+            "name": "full_tests",
+            "exit_code": 0,
+            "artifact_path": "check-logs/c387a9062b6a6caea5d51c6415da6ddbc59e9e1e/check-03-test.log",
+            "log_sha256": "15d151374c7ed14450910e3ec4453b3d9a318f5d2a352b7dfff88a7f149085f1"
+          },
+          {
+            "name": "target_tests",
+            "exit_code": 0,
+            "artifact_path": "code-checks/9688c5c344738e6eede60b021bddbf56cdeab39d/target-tests.log",
+            "log_sha256": "138e9583158f51f08a0a96e0dffdfdbdd69c0b0ab39d729aaf81d9ea06dcc9ed"
+          },
+          {
+            "name": "build",
+            "exit_code": 0,
+            "artifact_path": "code-checks/9688c5c344738e6eede60b021bddbf56cdeab39d/build.log",
+            "log_sha256": "929d073eee6fb1692cb68375506d0e619c52d44ebe6175b50c86c097876dd280"
+          }
+        ]
+      }
+    },
+    "updatedAt": "2026-07-22T04:59:15.890Z",
+    "completionState": "code_green",
+    "gateSnapshots": {
+      "code_green": {
+        "stage": "code_green",
+        "checkedAt": "2026-07-22T04:59:15.869Z",
+        "head": "9688c5c344738e6eede60b021bddbf56cdeab39d",
+        "originMain": "ed0f627f920be259a69cc5b8eea534cb5a30dc92",
+        "remoteMain": "ed0f627f920be259a69cc5b8eea534cb5a30dc92",
+        "remoteProduction": "a1ef986846eebefb29ed1cff510ad75fc3f4688f",
+        "defaultBranch": "spacex-hardening",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": null,
+        "remoteAttestationRefOid": null,
+        "remoteSnapshotCheckedAt": "2026-07-22T04:59:13.236Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "b99756f3c796c28d0e42713bae53a17105663b4fdb65f4bd51a8d56cfc8c6cb5",
+    "sealedAt": "2026-07-22T04:59:15.891Z",
+    "attestationDigest": "709f22bc0f3f4e6a129a5de25fec9e051433b4b278a5311dbd4a2e67039f75e7"
+  },
+  "revision": 2,
+  "contentDigest": "304c330af2c467cec71b98f73a36fca00596500ec47c40f1e0364f834001c30f",
+  "sealedAt": "2026-07-22T05:17:28.693Z",
+  "attestationDigest": "2444f619f064c150874cd89b19985e045c3d088cf569b106c458e00eb6c9ae02"
 }
