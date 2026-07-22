@@ -235,14 +235,61 @@ function loadDemandInbox(options = {}) {
   return { repoRoot, inboxPath, records, parseErrors };
 }
 
+function realPathOrResolved(value) {
+  try {
+    return fs.realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+function inspectGitWorktreeIsolation(repoRoot) {
+  const expectedTopLevel = realPathOrResolved(repoRoot);
+  const configEntries = runGit(
+    repoRoot,
+    ['config', '--show-origin', '--show-scope', '--get-all', 'core.worktree'],
+    { allowFailure: true }
+  );
+  const environmentOverride = String(process.env.GIT_WORK_TREE || '').trim();
+  const resolvedTopLevelRaw = runGit(
+    repoRoot,
+    ['rev-parse', '--show-toplevel'],
+    { allowFailure: true }
+  );
+  const resolvedTopLevel = resolvedTopLevelRaw ? realPathOrResolved(resolvedTopLevelRaw) : null;
+  const blockers = [];
+
+  if (configEntries) {
+    blockers.push(`Git core.worktree must be unset in every config scope; found ${configEntries.replace(/\r?\n/g, ' | ')}`);
+  }
+  if (environmentOverride) {
+    blockers.push(`GIT_WORK_TREE must be unset; found ${environmentOverride}`);
+  }
+  if (!resolvedTopLevel || resolvedTopLevel !== expectedTopLevel) {
+    blockers.push(`Git top-level mismatch: expected ${expectedTopLevel}, resolved ${resolvedTopLevel || 'missing'}`);
+  }
+
+  return {
+    ok: blockers.length === 0,
+    expectedTopLevel,
+    resolvedTopLevel,
+    configEntries: configEntries || null,
+    environmentOverride: environmentOverride || null,
+    blockers
+  };
+}
+
 function validateSchedulerState(options = {}) {
   const { repoRoot, state } = loadSchedulerState(options);
   const { records: inboxRecords, parseErrors: inboxParseErrors } = loadDemandInbox(options);
   const errors = [];
+  const worktreeIsolation = inspectGitWorktreeIsolation(repoRoot);
   const activeId = state.active_task && state.active_task.id;
   const queuedActiveId = state.execution_queue && state.execution_queue.active && state.execution_queue.active.id;
   const allowedPaths = state.active_task && state.active_task.allowed_paths;
   const deliveryContract = state.active_task && state.active_task.delivery_contract;
+
+  errors.push(...worktreeIsolation.blockers);
 
   if (!activeId) errors.push('active_task.id is required');
   if (!queuedActiveId) errors.push('execution_queue.active.id is required');
@@ -308,6 +355,38 @@ function validateSchedulerState(options = {}) {
   ) {
     errors.push(`active_task.delivery_contract.required_runtime_evidence must include ${canonicalRuntimeEvidence.join(', ')}`);
   }
+  if (deliveryContract?.target_state === 'production_released') {
+    const requiredProductionRuntimeEvidence = deliveryContract.required_production_runtime_evidence;
+    if (
+      !Array.isArray(requiredProductionRuntimeEvidence)
+      || canonicalRuntimeEvidence.some((item) => !requiredProductionRuntimeEvidence.includes(item))
+      || new Set(requiredProductionRuntimeEvidence).size !== requiredProductionRuntimeEvidence.length
+    ) {
+      errors.push(`active_task.delivery_contract.required_production_runtime_evidence must include ${canonicalRuntimeEvidence.join(', ')}`);
+    }
+    const releaseAuthorization = deliveryContract.production_release_authorization;
+    for (const field of ['status', 'micro_fix_approval_id', 'clarification_id', 'micro_fix_scope', 'final_scope']) {
+      if (!String(releaseAuthorization?.[field] || '').trim()) {
+        errors.push(`active_task.delivery_contract.production_release_authorization.${field} is required`);
+      }
+    }
+    if (!['pending_security_gate_and_final_write_approval', 'approved_for_final_release'].includes(releaseAuthorization?.status)) {
+      errors.push('active_task.delivery_contract.production_release_authorization.status is invalid');
+    }
+    if (releaseAuthorization?.status === 'approved_for_final_release' && !String(releaseAuthorization?.final_release_approval_id || '').trim()) {
+      errors.push('active_task.delivery_contract.production_release_authorization.final_release_approval_id is required for final release');
+    }
+    if (deliveryContract.final_acceptance?.browser !== 'trusted_operator_attestation_from_user_existing_chrome_only') {
+      errors.push('active_task.delivery_contract.final_acceptance must distinguish trusted existing-Chrome operator attestation from machine proof');
+    }
+    const databaseMode = deliveryContract.final_acceptance?.production_database_mode;
+    if (!['read_only_pending_security_gate_and_final_approval', 'controlled_write_approved'].includes(databaseMode)) {
+      errors.push('active_task.delivery_contract.final_acceptance.production_database_mode is invalid');
+    }
+    if (releaseAuthorization?.status === 'approved_for_final_release' && databaseMode !== 'controlled_write_approved') {
+      errors.push('final Production release approval requires controlled_write_approved database mode');
+    }
+  }
   for (const dynamicKey of ['evidence', 'release_control', 'releaseControl', 'completionState', 'completion_state', 'defects']) {
     if (deliveryContract && Object.prototype.hasOwnProperty.call(deliveryContract, dynamicKey)) {
       errors.push(`active_task.delivery_contract must not contain dynamic runtime key: ${dynamicKey}`);
@@ -339,6 +418,24 @@ function validateSchedulerState(options = {}) {
   }
   const missingInboxIds = inboxRecords.filter((record) => !record || !record.id).length;
   if (missingInboxIds) errors.push(`demand inbox records missing id: ${missingInboxIds}`);
+  if (deliveryContract?.target_state === 'production_released') {
+    const releaseAuthorization = deliveryContract.production_release_authorization || {};
+    for (const field of ['micro_fix_approval_id', 'clarification_id', 'final_release_approval_id']) {
+      const id = releaseAuthorization[field];
+      if (id && !inboxIds.includes(id)) {
+        errors.push(`Production release authorization ${field} is missing from demand inbox: ${id}`);
+      }
+    }
+    if (releaseAuthorization.status === 'approved_for_final_release') {
+      const finalRecord = inboxRecords.find((record) => record?.id === releaseAuthorization.final_release_approval_id);
+      if (finalRecord?.type !== 'final_production_release_authorization') errors.push('final Production authorization inbox record type is invalid');
+      if (finalRecord?.state !== 'approved') errors.push('final Production authorization inbox record state is not approved');
+      if (finalRecord?.source !== 'user_explicit') errors.push('final Production authorization inbox record is not user explicit');
+      if (finalRecord?.scope !== releaseAuthorization.final_scope) errors.push('final Production authorization inbox record scope mismatch');
+      if (finalRecord?.production_write_authorized !== true) errors.push('final Production authorization inbox record does not allow controlled writes');
+      if (finalRecord?.authorized_commit_binding !== 'delivery_attestation_current_head') errors.push('final Production authorization inbox record has no exact-HEAD attestation binding');
+    }
+  }
 
   try {
     const settingsPath = path.join(repoRoot, HARNESS_SETTINGS_RELATIVE_PATH);
@@ -636,6 +733,22 @@ function isSelftestVercelInjection(repoRoot, injected) {
   }
 }
 
+function resolveVercelDeploymentCommit(deployment) {
+  const candidates = [
+    ['gitSource.sha', deployment?.gitSource?.sha],
+    ['meta.githubCommitSha', deployment?.meta?.githubCommitSha],
+    ['meta.gitCommitSha', deployment?.meta?.gitCommitSha]
+  ]
+    .filter(([, value]) => /^[0-9a-f]{40,64}$/i.test(String(value || '')))
+    .map(([source, value]) => ({ source, value: String(value).toLowerCase() }));
+  const values = [...new Set(candidates.map((candidate) => candidate.value))];
+  return {
+    sha: values.length === 1 ? values[0] : null,
+    candidates,
+    conflict: values.length > 1
+  };
+}
+
 function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
   const checkedAt = new Date().toISOString();
   const artifactPrefix = `vercel-production-verifier/${options.stage || 'gate'}/${checkedAt.replace(/[^0-9A-Za-z]/g, '-')}-${process.pid}`;
@@ -689,6 +802,7 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
   const project = projectResponse.parsed;
   const domain = domainResponse.parsed;
   const deployment = deploymentResponse.parsed;
+  const deploymentCommit = resolveVercelDeploymentCommit(deployment);
   const liveDeploymentId = project?.targets?.production?.id;
   endpoints.deployment = `/v13/deployments/${liveDeploymentId}?${query}`;
   const raw = {
@@ -724,7 +838,8 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
       readyState: deployment?.readyState || null,
       readySubstate: deployment?.readySubstate || null,
       status: deployment?.status || null,
-      gitCommitSha: deployment?.meta?.gitCommitSha || null
+      gitCommitSha: deploymentCommit.sha,
+      gitCommitSources: deploymentCommit.candidates.map((candidate) => candidate.source)
     },
     remoteProduction: remoteProduction || null,
     raw
@@ -749,7 +864,9 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
   if (deployment?.readySubstate !== 'PROMOTED') blockers.push('live Vercel Production deployment is not PROMOTED');
   if (!Array.isArray(deployment?.alias) || !deployment.alias.includes(VERCEL_PRODUCTION_CONTRACT.domain)) blockers.push('live Vercel Production deployment does not own the product domain alias');
   if (!/^[0-9a-f]{40,64}$/i.test(String(remoteProduction || ''))) blockers.push('remote production OID is missing or invalid');
-  if (deployment?.meta?.gitCommitSha !== remoteProduction) blockers.push('live Vercel Production source SHA does not equal remote production OID');
+  if (!deploymentCommit.candidates.length) blockers.push('live Vercel Production source SHA is missing');
+  if (deploymentCommit.conflict) blockers.push('live Vercel Production exposes conflicting source SHAs');
+  if (deploymentCommit.sha !== String(remoteProduction || '').toLowerCase()) blockers.push('live Vercel Production source SHA does not equal remote production OID');
 
   return { ok: blockers.length === 0, blockers, snapshot };
 }
@@ -1024,6 +1141,150 @@ function evidenceEnvelopeValid(envelope, repoRoot) {
   return true;
 }
 
+function isExactProductionUrl(value) {
+  try {
+    const parsed = new URL(String(value || ''));
+    return parsed.protocol === 'https:'
+      && parsed.hostname === VERCEL_PRODUCTION_CONTRACT.domain
+      && parsed.port === ''
+      && parsed.username === ''
+      && parsed.password === '';
+  } catch {
+    return false;
+  }
+}
+
+function hasForbiddenProductionEvidencePath(value) {
+  const normalized = normalizeRelative(String(value || '')).toLowerCase();
+  return normalized === 'output/playwright'
+    || normalized.startsWith('output/playwright/')
+    || normalized.includes('/output/playwright/');
+}
+
+function evidenceEnvelopeUnderPrefix(envelope, prefix) {
+  const normalizedPrefix = `${normalizeRelative(prefix).toLowerCase()}/`;
+  const paths = [
+    envelope?.artifact_path,
+    ...((envelope?.payload?.attachments || []).map((attachment) => attachment?.path))
+  ].filter(Boolean).map((value) => normalizeRelative(String(value)).toLowerCase());
+  return paths.length > 0 && paths.every((value) => value.startsWith(normalizedPrefix));
+}
+
+function productionBrowserOperatorAttestationBlockers(envelope, repoRoot, expected) {
+  const blockers = [];
+  if (!evidenceEnvelopeValid(envelope, repoRoot)) {
+    return ['Production existing-Chrome operator attestation envelope is missing or invalid'];
+  }
+
+  const payload = envelope.payload || {};
+  if (!isExactProductionUrl(payload.url)) {
+    blockers.push(`Production browser acceptance must use https://${VERCEL_PRODUCTION_CONTRACT.domain}`);
+  }
+  if (payload.environment !== 'production') blockers.push('Production browser operator attestation environment is not production');
+  if (payload.attestation_type !== 'trusted_operator_browser') blockers.push('Production browser evidence is not explicitly marked as a trusted operator attestation');
+  if (payload.trust_boundary !== 'operator_attestation_not_machine_proof') blockers.push('Production browser attestation does not declare its human-session trust boundary');
+  if (payload.attestation_method !== 'codex_chrome_control_existing_session') blockers.push('Production browser attestation method is not the existing Chrome control path');
+  if (!String(payload.attested_by || '').trim()) blockers.push('Production browser operator attestation has no attester identity');
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(String(payload.attested_at || ''))) blockers.push('Production browser operator attestation timestamp is missing');
+  if (!String(payload.existing_tab_id || '').trim()) blockers.push('Production browser operator attestation has no existing tab identity');
+  if (payload.browser_context !== 'existing_user_chrome') blockers.push('Production browser operator attestation did not reuse the existing user Chrome session');
+  if (payload.new_browser_contexts !== 0) blockers.push('Production browser operator attestation reports a new browser context');
+  if (payload.new_tabs !== 0) blockers.push('Production browser operator attestation reports a new browser tab');
+  if (payload.result !== 'pass') blockers.push('Production browser operator attestation did not pass');
+  if (payload.commit !== expected.commit) blockers.push('Production browser operator attestation commit does not equal candidate HEAD');
+  if (payload.deployment_id !== expected.deploymentId) blockers.push('Production browser operator attestation deployment does not equal live Production');
+  if (!Array.isArray(payload.attachments) || payload.attachments.length === 0) blockers.push('Production browser operator attestation has no bound visual or trace attachment');
+  if (hasForbiddenProductionEvidencePath(envelope.artifact_path)) {
+    blockers.push('output/playwright cannot be used as final Production browser evidence');
+  }
+  for (const attachment of payload.attachments || []) {
+    if (hasForbiddenProductionEvidencePath(attachment?.path)) {
+      blockers.push('output/playwright cannot be used as final Production browser evidence');
+    }
+  }
+  if (hasForbiddenProductionEvidencePath(payload.source_artifact)) {
+    blockers.push('output/playwright cannot be used as final Production browser evidence');
+  }
+  return blockers;
+}
+
+function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, expected) {
+  const blockers = [];
+  const section = evidence.production_runtime || {};
+  const securityGate = section.security_gate;
+  const runtimeVerifier = section.verifier;
+  if (!evidenceEnvelopeValid(securityGate, repoRoot) || !evidenceEnvelopeUnderPrefix(securityGate, 'production-runtime-verifier')) {
+    blockers.push('Production security gate has no valid controlled-verifier envelope');
+  } else {
+    const payload = securityGate.payload || {};
+    if (payload.source !== 'live_production_database_verifier') blockers.push('Production security gate source is not the live database verifier');
+    if (payload.gate_id !== 'SECURITY-P0-RLS-PRODUCTION' || payload.status !== 'passed') blockers.push('Production runtime evidence has not passed SECURITY-P0-RLS-PRODUCTION');
+    if (payload.commit !== expected.commit || payload.deployment_id !== expected.deploymentId) blockers.push('Production security gate is not bound to released commit/deployment');
+    if (!isExactProductionUrl(payload.origin)) blockers.push('Production security gate origin mismatch');
+    if (!String(payload.production_project_ref || '').trim()) blockers.push('Production security gate project ref is missing');
+    const requiredChecks = ['catalog', 'rls', 'acl', 'rpc', 'advisor', 'anon', 'service_role'];
+    if (requiredChecks.some((name) => payload.checks?.[name] !== 'pass')) blockers.push('Production security gate raw checks are incomplete');
+    if (!Array.isArray(payload.attachments) || payload.attachments.length < requiredChecks.length) blockers.push('Production security gate lacks raw database/API probe attachments');
+  }
+  if (!evidenceEnvelopeValid(runtimeVerifier, repoRoot) || !evidenceEnvelopeUnderPrefix(runtimeVerifier, 'production-runtime-verifier')) {
+    blockers.push('Production runtime has no valid controlled-verifier envelope');
+  } else {
+    const payload = runtimeVerifier.payload || {};
+    if (payload.source !== 'live_production_runtime_verifier') blockers.push('Production runtime verifier source is invalid');
+    if (payload.commit !== expected.commit || payload.deployment_id !== expected.deploymentId) blockers.push('Production runtime verifier is not bound to released commit/deployment');
+    if (!isExactProductionUrl(payload.origin)) blockers.push('Production runtime verifier origin mismatch');
+    if (!Array.isArray(payload.attachments) || payload.attachments.length < 4) blockers.push('Production runtime verifier lacks raw provider/ReviewRun/invocation/token attachments');
+  }
+  for (const item of requiredItems) {
+    const envelope = section[item];
+    if (!evidenceEnvelopeValid(envelope, repoRoot) || !evidenceEnvelopeUnderPrefix(envelope, 'production-runtime-verifier')) {
+      blockers.push(`Production runtime evidence envelope missing or invalid: ${item}`);
+      continue;
+    }
+    const payload = envelope.payload || {};
+    if (payload.commit !== expected.commit) blockers.push(`Production runtime evidence commit mismatch: ${item}`);
+    if (payload.deployment_id !== expected.deploymentId) blockers.push(`Production runtime evidence deployment mismatch: ${item}`);
+    if (payload.environment !== 'production') blockers.push(`Production runtime evidence environment mismatch: ${item}`);
+    if (!isExactProductionUrl(payload.origin || payload.url)) blockers.push(`Production runtime evidence origin mismatch: ${item}`);
+    if (!['production_api', 'production_database'].includes(payload.source)) blockers.push(`Production runtime evidence source mismatch: ${item}`);
+    if (!Array.isArray(payload.attachments) || payload.attachments.length === 0) blockers.push(`Production runtime evidence has no raw response attachment: ${item}`);
+  }
+
+  const reviewId = section.review_run?.payload?.review_id;
+  if (!/^[0-9a-f-]{36}$/.test(String(reviewId || ''))) blockers.push('Production runtime ReviewRun ID is missing');
+  if (!['COMPLETED', 'DEGRADED'].includes(String(section.review_run?.payload?.status || ''))) blockers.push('Production runtime ReviewRun is not completed');
+  if (section.provider_probe?.payload?.success !== true) blockers.push('Production provider probe did not succeed');
+  if (!String(section.provider_probe?.payload?.provider || '').trim()) blockers.push('Production provider probe identity is missing');
+  if (!String(section.provider_probe?.payload?.model || '').trim()) blockers.push('Production provider probe model is missing');
+
+  const invocationIds = section.model_invocations?.payload?.invocation_ids;
+  if (!Array.isArray(invocationIds) || invocationIds.length === 0 || new Set(invocationIds).size !== invocationIds.length) {
+    blockers.push('Production model_invocations evidence is empty or duplicated');
+  }
+  if (section.model_invocations?.payload?.review_id !== reviewId) blockers.push('Production model_invocations are not bound to ReviewRun');
+  if (!(section.tokens?.payload?.total_tokens > 0)) blockers.push('Production token evidence is missing');
+  if (section.tokens?.payload?.review_id !== reviewId) blockers.push('Production token evidence is not bound to ReviewRun');
+  if (runtimeVerifier?.payload?.review_id !== reviewId) blockers.push('Production runtime verifier is not bound to ReviewRun');
+  if (runtimeVerifier?.payload?.total_tokens !== section.tokens?.payload?.total_tokens) blockers.push('Production runtime verifier token total mismatch');
+
+  const invocations = section.model_invocations?.payload?.invocations;
+  if (!Array.isArray(invocations) || invocations.length === 0) {
+    blockers.push('Production model_invocations evidence has no invocation details');
+  } else {
+    const detailedIds = invocations.map((item) => item?.id);
+    if (detailedIds.some((id) => !String(id || '').trim()) || new Set(detailedIds).size !== detailedIds.length) blockers.push('Production model_invocations detail IDs are missing or duplicated');
+    if (JSON.stringify([...new Set(invocationIds || [])].sort()) !== JSON.stringify([...new Set(detailedIds)].sort())) blockers.push('Production model_invocations IDs do not match invocation details');
+    if (JSON.stringify([...(runtimeVerifier?.payload?.invocation_ids || [])].sort()) !== JSON.stringify([...new Set(detailedIds)].sort())) blockers.push('Production runtime verifier invocation IDs mismatch');
+    if (invocations.some((item) => item?.review_id !== reviewId)) blockers.push('Production model_invocations details are not all bound to ReviewRun');
+    if (invocations.some((item) => !String(item?.provider || '').trim() || !String(item?.model || '').trim())) blockers.push('Production model_invocations details are missing provider or model identity');
+    if (invocations.some((item) => !['completed', 'failed'].includes(item?.status))) blockers.push('Production model_invocations details have an invalid status');
+    if (invocations.some((item) => !Number.isInteger(item?.total_tokens) || item.total_tokens < 0)) blockers.push('Production model_invocations details have invalid token totals');
+    const detailedTokenTotal = invocations.reduce((sum, item) => sum + (item?.total_tokens || 0), 0);
+    if (detailedTokenTotal !== section.tokens?.payload?.total_tokens) blockers.push('Production token evidence does not equal model_invocations detail total');
+  }
+  return blockers;
+}
+
 function getBehaviorLogPath(repoRoot) {
   return path.join(path.dirname(getDeliveryRuntimePath(repoRoot)), 'behavior-log.jsonl');
 }
@@ -1152,12 +1413,13 @@ function loadBehaviorLogProof(repoRoot, head) {
   };
 }
 
-function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, repoRoot = '') {
+function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '') {
   const configured = new Set(state.active_task?.delivery_contract?.blocking_acceptance_defects || []);
   if (!configured.size) return [];
+  const productionTarget = state.active_task?.delivery_contract?.target_state === 'production_released';
   const resolved = new Set();
   for (const [id, proof] of Object.entries(runtimeDefects)) {
-    if (
+    const previewVerified = (
       configured.has(id)
       && proof?.verified === true
       && typeof proof.root_cause === 'string'
@@ -1166,7 +1428,15 @@ function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previe
       && evidenceEnvelopeValid(previewArtifacts.defect_replay, repoRoot)
       && proof.regression_artifact_sha256 === previewArtifacts.defect_replay.sha256
       && proof.preview_commit === head
-    ) {
+    );
+    const productionVerified = !productionTarget || (
+      proof?.production_verified === true
+      && evidenceEnvelopeValid(productionArtifacts.browser_acceptance, repoRoot)
+      && JSON.stringify(productionArtifacts.browser_acceptance?.payload?.actions) === JSON.stringify(REQUIRED_DEFECT_REPLAY_ACTIONS)
+      && proof.production_regression_artifact_sha256 === productionArtifacts.browser_acceptance.sha256
+      && proof.production_commit === head
+    );
+    if (previewVerified && productionVerified) {
       resolved.add(id);
     }
   }
@@ -1175,7 +1445,7 @@ function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previe
 
 function getDeliveryStatus(options = {}) {
   const { repoRoot, state } = loadSchedulerState(options);
-  const { parseErrors } = loadDemandInbox({ repoRoot });
+  const { records: inboxRecords, parseErrors } = loadDemandInbox({ repoRoot });
   const scheduler = validateSchedulerState({ repoRoot });
   const {
     statePath: harnessStatePath,
@@ -1197,7 +1467,10 @@ function getDeliveryStatus(options = {}) {
   const originMainIsAncestor = originMainFresh
     ? runGit(repoRoot, ['merge-base', '--is-ancestor', originMain, head], { allowFailure: true }) !== null
     : false;
-  const worktreeStatus = runGit(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
+  const worktreeIsolation = inspectGitWorktreeIsolation(repoRoot);
+  const worktreeStatus = !worktreeIsolation.ok
+    ? null
+    : runGit(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
   const note = loadDeliveryNote(repoRoot, head, state.active_task?.id);
   const { runtimePath, data: runtime } = loadDeliveryRuntime({ repoRoot });
   const runtimeStateIndex = DELIVERY_STATES.indexOf(runtime.completionState || 'executing');
@@ -1223,6 +1496,8 @@ function getDeliveryStatus(options = {}) {
   );
   const evidence = attestation.evidence || {};
   const releaseControl = attestation.releaseControl || {};
+  const finalReleaseApprovalId = state.active_task?.delivery_contract?.production_release_authorization?.final_release_approval_id;
+  const productionReleaseAuthorizationRecord = inboxRecords.find((record) => record?.id === finalReleaseApprovalId) || null;
   let completionState = attestation.completionState || 'executing';
   if (deliveryStateAtLeast(completionState, 'code_green') && evidence.code?.commit !== head) {
     completionState = 'executing';
@@ -1241,6 +1516,10 @@ function getDeliveryStatus(options = {}) {
     allowedStates: state.active_task?.delivery_contract?.allowed_states || [],
     requiredCodeChecks: state.active_task?.delivery_contract?.required_code_checks || [],
     requiredRuntimeEvidence: state.active_task?.delivery_contract?.required_runtime_evidence || [],
+    requiredProductionRuntimeEvidence: state.active_task?.delivery_contract?.required_production_runtime_evidence || [],
+    productionReleaseAuthorization: state.active_task?.delivery_contract?.production_release_authorization || null,
+    productionReleaseAuthorizationRecord,
+    productionDatabaseMode: state.active_task?.delivery_contract?.final_acceptance?.production_database_mode || null,
     sameReleaseCommitRequired: state.active_task?.delivery_contract?.same_release_commit_required === true,
     completionState,
     scheduler,
@@ -1258,8 +1537,10 @@ function getDeliveryStatus(options = {}) {
       remoteProduction,
       defaultBranch,
       originMainFresh,
-      clean: worktreeStatus.length === 0,
-      dirtyEntries: worktreeStatus ? worktreeStatus.split(/\r?\n/).length : 0,
+      worktreeIsolation,
+      commonCoreWorktree: worktreeIsolation.configEntries,
+      clean: worktreeIsolation.ok ? worktreeStatus.length === 0 : false,
+      dirtyEntries: worktreeIsolation.ok ? (worktreeStatus ? worktreeStatus.split(/\r?\n/).length : 0) : null,
       originMainIsAncestor,
       mainIntegrated: Boolean(remoteMain && remoteMain === head)
     },
@@ -1284,6 +1565,7 @@ function getDeliveryStatus(options = {}) {
         : {},
       head,
       evidence.preview?.artifacts || {},
+      evidence.production || {},
       repoRoot
     )
   };
@@ -1297,6 +1579,11 @@ function checkDeliveryStage(stage, options = {}) {
   const repoRoot = options.repoRoot || status.repoRoot;
   const blockers = [];
   const evidence = status.evidence;
+  const productionTerminal = stage === 'production_released';
+
+  if (status.git.worktreeIsolation && !status.git.worktreeIsolation.ok) {
+    blockers.push(...status.git.worktreeIsolation.blockers);
+  }
 
   if (!status.allowedStates.includes(stage)) blockers.push(`delivery stage is not allowed by Active contract: ${stage}`);
   if (
@@ -1417,7 +1704,7 @@ function checkDeliveryStage(stage, options = {}) {
       if (detailedTokenTotal !== evidence.runtime?.tokens?.payload?.total_tokens) blockers.push('token evidence does not equal model_invocations detail total');
     }
   }
-  if (deliveryStateAtLeast(stage, 'integration_ready')) {
+  if (deliveryStateAtLeast(stage, 'integration_ready') && !productionTerminal) {
     const liveVercel = verifyVercelProductionState(repoRoot, status.git.remoteProduction, {
       stage,
       testOnlyVercelApiResponses: options.testOnlyVercelApiResponses
@@ -1470,7 +1757,7 @@ function checkDeliveryStage(stage, options = {}) {
       }
     }
   }
-  if (deliveryStateAtLeast(stage, 'main_integrated')) {
+  if (deliveryStateAtLeast(stage, 'main_integrated') && !productionTerminal) {
     if (!status.git.mainIntegrated) blockers.push('origin/main does not equal candidate HEAD');
     if (status.git.defaultBranch !== 'main') blockers.push(`GitHub default branch is ${status.git.defaultBranch || 'unknown'}, expected main`);
     if (!status.releaseControl.production_commit_after) blockers.push('Production commit after main integration is missing');
@@ -1487,16 +1774,101 @@ function checkDeliveryStage(stage, options = {}) {
       }
     }
   }
-  if (deliveryStateAtLeast(stage, 'production_released')) {
-    blockers.push('Production release is outside this candidate gate and requires a separate user-approved release contract');
+  if (productionTerminal) {
+    const liveVercel = verifyVercelProductionState(repoRoot, status.git.remoteProduction, {
+      stage,
+      testOnlyVercelApiResponses: options.testOnlyVercelApiResponses
+    });
+    status.vercelProduction = liveVercel.snapshot;
+    blockers.push(...liveVercel.blockers);
+
+    if (status.blockingDefects.length) blockers.push(`blocking defects unresolved: ${status.blockingDefects.join(', ')}`);
+    if (!status.git.mainIntegrated) blockers.push('origin/main does not equal released candidate HEAD');
+    if (status.git.defaultBranch !== 'main') blockers.push(`GitHub default branch is ${status.git.defaultBranch || 'unknown'}, expected main`);
+    if (status.git.remoteProduction !== status.git.head) blockers.push('origin/production does not equal released candidate HEAD');
+    if (status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release and write authorization is still pending');
+    if (status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database mode has not changed from read-only pending to controlled_write_approved');
+    const approvalRecord = status.productionReleaseAuthorizationRecord;
+    if (approvalRecord?.type !== 'final_production_release_authorization') blockers.push('Final Production authorization record type is invalid');
+    if (approvalRecord?.state !== 'approved') blockers.push('Final Production authorization record is not approved');
+    if (approvalRecord?.source !== 'user_explicit') blockers.push('Final Production authorization is not sourced from an explicit user decision');
+    if (approvalRecord?.scope !== status.productionReleaseAuthorization?.final_scope) blockers.push('Final Production authorization record scope does not match the Active contract');
+    if (approvalRecord?.production_write_authorized !== true) blockers.push('Final Production authorization does not explicitly allow the controlled Production write');
+    if (approvalRecord?.authorized_commit_binding !== 'delivery_attestation_current_head') blockers.push('Final Production authorization does not require exact-HEAD delivery attestation binding');
+    if (status.releaseControl.production_release_approval_id !== status.productionReleaseAuthorization?.final_release_approval_id) blockers.push('Production release approval ID does not match the Active final-release contract');
+    if (status.releaseControl.production_release_clarification_id !== status.productionReleaseAuthorization?.clarification_id) blockers.push('Production release clarification ID does not match the Active contract');
+    if (status.releaseControl.production_release_scope !== status.productionReleaseAuthorization?.final_scope) blockers.push('Production release scope does not match the Active final-release contract');
+    if (status.releaseControl.production_release_commit_authorized !== status.git.head) blockers.push('Production release authorization record is not bound to candidate HEAD');
+    if (!['vercel_git_production_branch', 'vercel_cli_exact_sha'].includes(status.releaseControl.production_release_method)) blockers.push('Production release method is missing or unsupported');
+    if (!/^\d{4}-\d{2}-\d{2}T/.test(String(status.releaseControl.production_released_at || ''))) blockers.push('Production released_at timestamp is missing');
+    if (status.releaseControl.production_branch !== VERCEL_PRODUCTION_CONTRACT.productionBranch) blockers.push('Production Branch isolation is not recorded as production');
+    if (status.releaseControl.vercel_project_id !== VERCEL_PRODUCTION_CONTRACT.projectId) blockers.push('released Vercel project ID does not match the Production contract');
+    if (status.releaseControl.production_commit_released !== status.git.head) blockers.push('recorded released Production commit does not equal candidate HEAD');
+    if (status.releaseControl.production_deployment_id_released !== liveVercel.snapshot?.deployment?.id) blockers.push('recorded released Production deployment does not equal live Production');
+    if (status.releaseControl.production_domain_released !== VERCEL_PRODUCTION_CONTRACT.domain) blockers.push('recorded released Production domain does not match the product domain');
+    if (evidence.production?.commit !== status.git.head) blockers.push('Production evidence commit does not equal candidate HEAD');
+    if (evidence.production?.deployment_id !== liveVercel.snapshot?.deployment?.id) blockers.push('Production evidence deployment does not equal live Production');
+    if (evidence.production?.domain !== VERCEL_PRODUCTION_CONTRACT.domain) blockers.push('Production evidence domain does not match the product domain');
+    blockers.push(...productionRuntimeEvidenceBlockers(
+      evidence,
+      status.requiredProductionRuntimeEvidence,
+      repoRoot,
+      {
+        commit: status.git.head,
+        deploymentId: liveVercel.snapshot?.deployment?.id
+      }
+    ));
+    blockers.push(...productionBrowserOperatorAttestationBlockers(
+      evidence.production?.browser_acceptance,
+      repoRoot,
+      {
+        commit: status.git.head,
+        deploymentId: liveVercel.snapshot?.deployment?.id
+      }
+    ));
+
+    if (!options.skipSealCheck && !deliveryStateAtLeast(status.sealedCompletionState, stage)) {
+      blockers.push(`Git note attestation has not been sealed for ${stage}`);
+    }
+    if (!options.skipSealCheck && !status.attestationPublished) {
+      blockers.push(`Git note attestation has not been pushed to ${DELIVERY_ATTESTATION_REF}`);
+    }
+    if (!options.skipSealCheck) {
+      const snapshot = status.gateSnapshots?.production_released;
+      if (
+        !snapshot
+        || snapshot.stage !== 'production_released'
+        || snapshot.head !== status.git.head
+        || snapshot.remoteProduction !== status.git.head
+        || snapshot.vercelProduction?.deployment?.id !== evidence.production?.deployment_id
+        || snapshot.vercelProduction?.deployment?.gitCommitSha !== status.git.head
+        || snapshot.vercelProduction?.domain?.name !== VERCEL_PRODUCTION_CONTRACT.domain
+      ) {
+        blockers.push('Production-released machine snapshot is incomplete or not bound to the released SHA/domain');
+      }
+      if (
+        !snapshot?.vercelProduction
+        || !isSha256(snapshot.vercelProduction.raw?.project?.sha256)
+        || !isSha256(snapshot.vercelProduction.raw?.domain?.sha256)
+        || !isSha256(snapshot.vercelProduction.raw?.deployment?.sha256)
+      ) {
+        blockers.push('Production-released machine snapshot has no hashed live Vercel evidence');
+      }
+    }
   }
 
   return { ok: blockers.length === 0, stage, blockers, status };
 }
 
 function recordDeliveryEvidence(section, payload, options = {}) {
-  const allowedSections = new Set(['code', 'preview', 'runtime', 'release_control']);
+  const allowedSections = new Set(['code', 'preview', 'runtime', 'production_runtime', 'production', 'release_control']);
   if (allowedSections.has(section)) {
+    if (
+      section === 'production_runtime'
+      && !(options.testOnlyControlledProductionRuntime === true && loadRegistry(options.repoRoot).registry.version === 'selftest')
+    ) {
+      throw new Error('production_runtime can only be written by the controlled live Production verifier; generic delivery-record JSON is forbidden');
+    }
     const { data } = loadDeliveryMutableBase(options);
     if (section === 'release_control') {
       return writeDeliveryRuntime({
@@ -1687,7 +2059,7 @@ function runSchedulerCli(args) {
     const section = args[1];
     const rawPayload = args.slice(2).join(' ');
     if (!section || !rawPayload) {
-      process.stderr.write('delivery-record requires <code|preview|runtime|release_control|defect.IN-id> <json>\n');
+      process.stderr.write('delivery-record requires <code|preview|runtime|production|release_control|defect.IN-id> <json>; production_runtime is reserved for the controlled live verifier\n');
       return 2;
     }
     try {
@@ -1777,6 +2149,7 @@ module.exports = {
   getDeliveryStatus,
   loadDeliveryRuntime,
   recordDeliveryEvidence,
+  resolveVercelDeploymentCommit,
   sealDeliveryAttestation,
   transitionDeliveryState,
   checkDeliveryStage,

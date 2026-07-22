@@ -37,17 +37,18 @@
 
 - `G` 只定义业务结果，`WP` 只承载一个可演示的用户任务；预计超过一个工作日、跨两个独立业务域或含两个可独立验收结果时，必须拆批。
 - 每个缺陷先建立复现胶囊：候选 SHA、部署 URL、viewport、初始状态、操作、期望、实际、截图或 DOM/API 证据。没有复现证据不得直接按截图表象改 CSS 或代码。
-- 固定顺序为：`复现 → 根因 → 最小实现 → 目标回归 → 同 SHA Preview 真实用户路径 → main 收敛`。任一步失败都回到最近有事实证据的步骤，不得继续堆补丁。
+- 用户可见的 Production 缺陷固定顺序为：`sales.cyanlog.icu 线上复现 → 根因 → 最小实现 → 目标回归 → 精确 SHA 的 Production 部署证据 → 用户现有 Chrome 在 sales.cyanlog.icu 重放 → main 包含已发布提交`。Preview 只可作为风险隔离或诊断中间层，不能替代 Production 部署与线上验收；不得为了验收新建本地浏览器、标签页或浏览器上下文。
 - 60 秒没有新增事实证据时必须换验证手段；同一路径失败两次必须记录阻断或改变方法，禁止无证据循环。
-- 测试分层：微修复只跑目标测试与精确浏览器路径；WP 关闭前跑受影响套件、typecheck、build；主干集成前再跑全量测试、lint、typecheck、build 和安全/文件门禁。禁止在同一 hook 中重复执行同一套全量检查。
+- 测试分层：微修复先跑目标测试；WP 关闭前跑受影响套件、typecheck、build；主干集成前再跑全量测试、lint、typecheck、build 和安全/文件门禁。用户可见 Production 结果只能由用户现有 Chrome 在 `https://sales.cyanlog.icu` 的真实路径证明；本地或 Preview 浏览器结果只能记录为诊断证据。禁止在同一 hook 中重复执行同一套全量检查。
 - Validator、hook 和反馈收集器不得修改 tracked 文件。运行日志必须写入 `git rev-parse --git-path codex-runtime` 对应的 worktree 独立目录。
 - Harness 的目标合同、阶段和证据同样属于运行态，默认写入每个 worktree 的 `codex-runtime/harness`；`active-task.json` 只保留静态目标状态、分支策略、必需检查和阻断项，不得写入当前 HEAD、Preview deployment 或动态完成状态。
 - Active WP 最多允许 3 个阻断当前验收的微修复胶囊；普通 Bug 和新需求仍进 Inbox。微修复不得借机扩大产品范围。
-- 交付状态只能依次为 `executing → code_green → clean_preview_green → integration_ready → main_integrated`；`production_released` 是独立且需批准的下一状态。不得再用笼统的 “completed” 同时代表代码、Preview、main 和 Production。
+- 交付状态只能依次为 `executing → code_green → clean_preview_green → integration_ready → main_integrated → production_released`；`clean_preview_green` 仅表示隔离候选通过，`main_integrated` 仅表示代码收敛，只有 `production_released` 才允许表达用户可见线上已经更新。不得再用笼统的 “completed” 同时代表代码、Preview、main 和 Production。
 - 代码、Preview、发布隔离和缺陷复验先用 `delivery-record` 写入 worktree 独立运行证据，再用 `delivery-transition <state>` 按顺序推进；主干收敛前用 `delivery-seal` 将证据绑定到当前 SHA 的 `refs/notes/price-v3-delivery`，并推送该 note ref。Git note 不改变 HEAD，也不得包含秘密。
 - 每次状态推进后运行：
 
   `node governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js delivery-check <state>`
 
-- `clean_preview_green` 必须绑定一个已提交且干净的 SHA，并执行真实操作链；页面能打开、静态层数为零或历史 Preview 通过不能替代本次用户路径。
-- `integration_ready` 必须满足：当前 SHA 的 Preview 已重放阻断路径且 Git note/runtime attestation 将缺陷标记为 verified、`origin/main` 仍是候选祖先、Vercel Production Branch 已与 `main` 解耦。仅有 Inbox `resolves` 文本不能关闭缺陷。`main_integrated` 后必须重新 fetch，确认 `origin/main == candidate SHA` 且 Production 部署未变化。
+- `clean_preview_green` 必须绑定一个已提交且干净的 SHA，并执行真实操作链；它只是发布前证据，页面能打开、静态层数为零或历史 Preview 通过不能替代本次用户路径，更不能宣称 Production 已修复。
+- `integration_ready` 必须满足：当前 SHA 的隔离候选已重放阻断路径且 Git note/runtime attestation 将缺陷标记为 verified、`origin/main` 仍是候选祖先、Vercel Production Branch 已与 `main` 解耦。仅有 Inbox `resolves` 文本不能关闭缺陷。`main_integrated` 后必须重新 fetch 并确认 `origin/main` 已包含候选；不得把 push 当作部署。
+- `production_released` 必须同时绑定远端 `production` 分支精确 SHA、Vercel READY/PROMOTED Production deployment、`https://sales.cyanlog.icu` 域名指向、Production 环境的真实运行证据，以及用户现有 Chrome 的同路径受信操作员验收。Git、Vercel 和域名属于机器证据；现有 Chrome 只能作为操作员证明，Harness 只能校验声明结构与防篡改绑定，不能伪称机器证明了人类会话。`localhost`、Preview URL、`*.vercel.app` 与 `output/playwright` 均不能作为最终 Production 浏览器证据，Preview 的 Provider probe、ReviewRun、model_invocations 或 token 也不能证明 Production 模型链。Production 数据写入、迁移与安全门禁独立判断，不得因 code-only 发布自动获得授权。

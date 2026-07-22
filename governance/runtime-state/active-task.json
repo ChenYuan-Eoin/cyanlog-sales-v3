@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-22T01:23:24+08:00",
+  "updated_at": "2026-07-22T17:08:50+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -133,8 +133,8 @@
     "name": "AI 托管路由、业务可读配置与发布候选验收",
     "kind": "product",
     "status": "active",
-    "objective": "把已经存在的六对象 AI 平台能力变成业务人员能理解、托管环境能真实执行且审计事实不失真的发布候选：配置页面先表达可供业务模块选择的模型能力、接入状态和降级路径，再分别呈现管理员配置路由、本机可执行路由与托管实际路由；托管环境必须排除仅本机可达的 Provider，并从第一个真实可执行云模型开始计次，不得把环境排除伪造成失败降级。最终以同一 release commit 的隔离 Preview、真实 Provider probe、真实业务 ReviewRun、model_invocations 与 token 证据验收。",
-    "current_step": "先修正 runtime plan 的环境投影与不可漂移审计契约：保留发布配置顺序，新增本环境实际可执行顺序，托管环境排除 local Provider 后连续重编号；随后把配置页面改成业务能力、业务模块与实际执行路径三层可读表达，并在隔离 Preview 完成一次云模型和业务 ReviewRun 端到端验收。",
+    "objective": "把已经存在的六对象 AI 平台能力变成业务人员能理解、托管环境能真实执行且审计事实不失真的 Production 发布候选：配置页面先表达可供业务模块选择的模型能力、接入状态和降级路径，再分别呈现管理员配置路由、本机可执行路由与托管实际路由；托管环境必须排除仅本机可达的 Provider，并从第一个真实可执行云模型开始计次，不得把环境排除伪造成失败降级。本地与隔离 Preview 只用于诊断和发布前证据；最终必须以同一 release commit 的 Production Provider probe、Production 业务 ReviewRun、model_invocations、token、Vercel Production 机器事实和用户现有 Chrome 访问 https://sales.cyanlog.icu 的受信操作员验收共同关闭。Preview 运行证据不得冒充 Production 模型链。",
+    "current_step": "D-WP09-001 已以生产锚点上的最小可回滚 UI hotfix完成 Vercel Production 部署，并由用户现有 Chrome 只读验证长弹窗滚动与取消、短弹窗取消；保存成功后的清理路径因 Production 数据库只读尚未验收，因此该缺陷保持部分验证且不代表 WP09 完成。当前先把 36 个混合迁移重构为可回滚兼容波次并关闭 P0 RLS，之后才允许受控 Production ReviewRun 写入与最终模型链验收；在此之前只可发布经兼容审查的 code-only 微修复，不得宣称生产模型已跑通。",
     "started_at": "2026-07-22T01:23:24+08:00",
     "activation_basis": "用户明确要求继续解决模型未拆出、线上不能运行和配置只对机器可读的问题；WP04 已由提交 a987f85d5701a38a13a245e0ebc5484cadecb3ab 固化，并在同一隔离 Preview 通过合同列表真实入口、默认审查、桌面/iPad 长 DOCX 风险定位后内部滚动与精确临时数据清理。现有源码审计进一步证明托管环境会在首个 local Provider 处立即失败，根本不会进入已配置云模型，因此该纠正属于 WP09 发布真实性门。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
@@ -184,23 +184,42 @@
       "product-truth/product-code/package.json",
       "product-truth/product-code/pnpm-lock.yaml",
       "product-truth/product-code/next.config.mjs",
-      "product-truth/product-code/output/evidence/wp09",
-      "product-truth/product-code/output/playwright/wp09"
+      "product-truth/product-code/output/evidence/wp09"
     ],
     "delivery_contract": {
-      "target_state": "main_integrated",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
         "code_green",
         "clean_preview_green",
         "integration_ready",
-        "main_integrated"
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
       "production_release_separate": true,
       "attestation_ref": "refs/notes/price-v3-delivery",
       "same_release_commit_required": true,
+      "final_acceptance": {
+        "origin": "https://sales.cyanlog.icu",
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "new_local_browser_or_context_prohibited": true,
+        "new_tab_prohibited": true,
+        "local_and_preview_role": "diagnostic_only_not_completion",
+        "release_truth_rule": "代码提交或 push、Vercel 部署、Production 域名可用和目标用户路径验收是四个独立事实，缺一不得宣称 Production 完成",
+        "trust_boundary": "Vercel API、Git SHA 与域名是机器证据；现有 Chrome 路径是受信操作员证明，只能验证声明完整和未篡改，不能伪称为机器可证明的人类会话",
+        "production_database_mode": "read_only_pending_security_gate_and_final_approval"
+      },
+      "production_release_authorization": {
+        "status": "pending_security_gate_and_final_write_approval",
+        "micro_fix_approval_id": "IN-20260720-045",
+        "clarification_id": "IN-20260722-064",
+        "final_release_approval_id": null,
+        "micro_fix_scope": "vetted_code_only_application_candidate",
+        "final_scope": "Production Provider probe、ReviewRun、model_invocations 与 token 的受控写入和完整 WP09 发布",
+        "excludes_until_final_approval": "Production 数据写入、迁移和完整 WP09 production_released"
+      },
       "required_code_checks": [
         "target_tests",
         "full_tests",
@@ -214,6 +233,19 @@
         "model_invocations",
         "tokens"
       ],
+      "required_production_evidence": [
+        "exact_production_commit",
+        "vercel_deployment_ready_and_promoted",
+        "sales.cyanlog.icu_alias",
+        "controlled_production_security_and_runtime_verifier",
+        "trusted_existing_chrome_operator_attestation"
+      ],
+      "required_production_runtime_evidence": [
+        "provider_probe",
+        "review_run",
+        "model_invocations",
+        "tokens"
+      ],
       "micro_fix_lane": {
         "limit": 3,
         "entry": "只接收阻断当前验收、可独立复现且不改变产品方向的缺陷",
@@ -222,26 +254,30 @@
           "根因证据",
           "最小实现",
           "目标回归",
-          "同一提交 Preview 用户路径",
-          "主干收敛"
+          "精确提交部署到 Production",
+          "用户现有 Chrome 在 sales.cyanlog.icu 的只读目标路径",
+          "主干回收且 Production 提交保持可追溯"
         ]
       },
       "blocking_acceptance_defects": [
         "IN-20260722-062"
-      ]
+      ],
+      "micro_fix_release_rule": "可回滚且不写 Production 数据库的 code-only UI hotfix 可独立发布并线上复验；受信操作员只读验收只能关闭实际重放的子路径，未重放的保存/写入路径继续阻断，且不得扩大为整个 WP09 已 production_released"
     },
     "non_goals": [
       "修改 R001-R015 等租户业务规则数据、审核准确率口径或独立金标",
       "修改合同中心、审核工作台、文档对比、起草或循环复审产品流程",
       "注册新的付费账号、引入持续付费 Provider 或用开发工具代理冒充产品运行网关",
-      "写 Production 数据库、部署 Production、覆盖或清理根 dirty 快照"
+      "在 SECURITY-P0-RLS-PRODUCTION 关闭和最终写入批准前写 Production 数据库或执行迁移；把本地、Preview 或代码 push 冒充 Production 完成；覆盖或清理根 dirty 快照"
     ],
     "exit_criteria": [
       "同一发布 RoutePolicy 在本机保留 local 到 cloud 顺序；在托管环境排除 local 后从 cloud 的 candidatePosition 0 / attempt 1 执行，且不生成虚假的 local invocation 或 fallback 状态；托管全 local 时失败关闭",
       "运行计划快照同时保留 configured route 与 effective route，历史快照兼容；审核证据验证 effective 是 configured 的有序子序列并与真实 invocation 顺序一致",
       "配置页面用业务人员可读的对象与动作显示模型接入、可用模型、业务模块选择和降级结果，同时明确本机与托管实际执行差异，不把内部表名、环境变量或机器策略当作主任务",
-      "隔离 Preview 由一个 release commit 构建；真实云 Provider probe 和至少一个真实业务用点形成 ReviewRun、model_invocations、token 与运行计划证据，并清楚区分配置成功、连接成功和业务运行成功",
-      "目标/全量测试、lint、typecheck、build、桌面与 iPad 浏览器验收通过；Production 数据库继续只读且不部署，push 失败必须如实记录而不得冒充线上已更新"
+      "隔离 Preview 只作为同一 release commit 的发布前诊断；Preview 的 Provider probe、ReviewRun、model_invocations、token 不得用于证明 Production 模型链已运行",
+      "P0 RLS 和兼容迁移门禁关闭后，最终 Production 候选在受控真实业务用点形成绑定同一 Production commit/deployment 的 Provider probe、ReviewRun、model_invocations、token 与运行计划证据；Production 数据库保持只读期间该条件明确未完成",
+      "目标/全量测试、lint、typecheck、build 通过；最终候选的精确提交已由 Vercel READY/PROMOTED 到 sales.cyanlog.icu，并在用户现有 Chrome 完成目标用户路径受信操作员验收，不得创建新的本地浏览器、标签页或上下文，也不得用 localhost/Preview 代替",
+      "代码提交或 push 不等于部署，部署不等于线上验收；任何一步失败都必须如实记录，不得冒充用户可见线上已更新"
     ]
   },
   "execution_queue": {
@@ -254,7 +290,7 @@
       "id": "WP07",
       "slug": "contract-drafting",
       "name": "合同起草闭环",
-      "entry_gate": "WP09 完成托管环境路由投影、业务可读 AI 配置和单一 release commit 的 Preview 运行验收",
+      "entry_gate": "WP09 完成托管环境路由投影、业务可读 AI 配置、单一 release commit 的运行证据和 sales.cyanlog.icu Production 用户路径验收",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
@@ -268,9 +304,9 @@
     "release_blockers": [
       {
         "id": "SECURITY-P0-RLS-PRODUCTION",
-        "reason": "Production 已确认 11 张服务表与两个 SECURITY DEFINER RPC 暴露；两份 Preview 验证候选已就绪，但用户此前要求 Production 继续只读",
-        "required_before": "任何 Production 发布或真实用户文件验收",
-        "action": "在只读边界被明确改变后，仅应用已验证的两份 forward migration 并复跑匿名、service_role、advisor 与合同 API 冒烟"
+        "reason": "Production 已确认 11 张服务表与两个 SECURITY DEFINER RPC 暴露，因此数据库继续只读；该门禁不阻断不写数据、可回滚且已完成兼容性审查的 code-only UI hotfix",
+        "required_before": "任何 Production 数据写入、迁移或依赖新数据库结构的真实业务验收",
+        "action": "先把 36 个混合迁移拆为 expand、可审计回填、切换、contract/security 和业务数据退役批次；只有只读边界被明确改变后才执行 Preview 已验证的 forward migration，并复跑匿名、service_role、advisor 与合同 API 冒烟"
       }
     ],
     "parked": [

@@ -240,6 +240,7 @@ function makeGoalContract(goalText, options = {}) {
     },
     sovereignty: {
       originalGoalHash: hashText(goalText),
+      currentGoalHash: hashText(goalText),
       revisionPolicy: 'user-approved-only',
       agentMayRedefineGoal: false
     },
@@ -322,9 +323,18 @@ function ensureContractDefaults(contract) {
   contract.researchPlan.userAnswers = contract.researchPlan.userAnswers || [];
   contract.sovereignty = contract.sovereignty || {
     originalGoalHash: hashText(contract.sourceGoal),
+    currentGoalHash: hashText(contract.sourceGoal),
     revisionPolicy: 'user-approved-only',
     agentMayRedefineGoal: false
   };
+  contract.revisions = contract.revisions || [];
+  contract.revisions.forEach((revision, index) => {
+    if (!revision.newObjectiveHash) {
+      revision.newObjectiveHash = contract.revisions[index + 1]?.previousObjectiveHash || hashText(contract.sourceGoal);
+    }
+  });
+  contract.sovereignty.currentGoalHash = contract.sovereignty.currentGoalHash
+    || (contract.revisions.length ? contract.revisions[contract.revisions.length - 1].newObjectiveHash : contract.sovereignty.originalGoalHash);
   contract.evidence = contract.evidence || { required: [], collected: [] };
   contract.evidence.required = contract.evidence.required?.length ? contract.evidence.required : [
     'changed files summary',
@@ -591,6 +601,94 @@ function startGoal(repoRoot, goalText, options = {}) {
   return { state, contract };
 }
 
+function reviseContract(repoRoot, goalText, options = {}) {
+  const contract = loadContract(repoRoot);
+  if (!contract) throw new Error('goal contract is required');
+  const reason = String(options.reason || '').trim();
+  const authority = String(options.authority || '').trim();
+  const revisedBy = String(options.by || '').trim();
+  if (!reason) throw new Error('goal revision reason is required');
+  if (!authority) throw new Error('goal revision authority is required');
+  if (!revisedBy) throw new Error('goal revision actor is required');
+
+  const now = nowIso();
+  contract.revisions = contract.revisions || [];
+  contract.revisions.push({
+    at: now,
+    by: revisedBy,
+    authority,
+    reason,
+    previousObjective: contract.objective,
+    previousObjectiveHash: hashText(contract.objective),
+    previousSuccessCriteria: [...(contract.successCriteria || [])],
+    previousNonGoals: [...(contract.nonGoals || [])],
+    previousCheckpoints: (contract.checkpoints || []).map((checkpoint) => ({ ...checkpoint })),
+    previousStatus: contract.status
+  });
+
+  if (String(goalText || '').trim()) {
+    contract.objective = String(goalText).trim();
+    contract.sourceGoal = contract.objective;
+  }
+  for (const [optionKey, contractKey] of [
+    ['success', 'successCriteria'],
+    ['nonGoals', 'nonGoals']
+  ]) {
+    if (options[optionKey] !== undefined) contract[contractKey] = parseCsv(options[optionKey]);
+  }
+  if (options.scopes !== undefined) contract.boundaries.allowedScopes = parseCsv(options.scopes);
+  if (options.forbiddenScopes !== undefined) contract.boundaries.forbiddenScopes = parseCsv(options.forbiddenScopes);
+  if (options.researchable !== undefined) contract.researchPlan.researchable = parseCsv(options.researchable);
+  if (options.askUser !== undefined) contract.researchPlan.askUser = parseCsv(options.askUser);
+  const latestRevision = contract.revisions[contract.revisions.length - 1];
+  latestRevision.newObjectiveHash = hashText(contract.sourceGoal);
+  contract.sovereignty.currentGoalHash = latestRevision.newObjectiveHash;
+  contract.checkpoints = (contract.checkpoints || []).map((checkpoint) => ({
+    ...checkpoint,
+    status: 'pending',
+    detail: `reset by goal revision: ${reason}`,
+    updatedAt: now
+  }));
+
+  contract.status = 'draft';
+  delete contract.approvedAt;
+  delete contract.approvedBy;
+  contract.phase = contract.phase || { history: [] };
+  contract.phase.current = 'contract_review';
+  contract.phase.gate = PHASE_TO_GATE.contract_review;
+  contract.phase.history = contract.phase.history || [];
+  contract.phase.history.push({
+    at: now,
+    phase: 'contract_review',
+    gate: PHASE_TO_GATE.contract_review,
+    reason: `goal revised: ${reason}`,
+    authority
+  });
+  saveContract(repoRoot, contract);
+
+  const state = loadState(repoRoot);
+  state.mode = 'enforcing';
+  state.status = 'enforcing';
+  state.phase = 'contract_review';
+  state.activeGates = [PHASE_TO_GATE.contract_review];
+  state.activeHooks = ['UserPromptSubmit', 'PreToolUse', 'Stop'];
+  state.longTask = {
+    enabled: true,
+    contractPath: path.relative(repoRoot, paths(repoRoot).contractPath)
+  };
+  state.currentGoal = {
+    id: contract.id,
+    workPackageId: contract.workPackageId || null,
+    objective: contract.objective,
+    contractPath: path.relative(repoRoot, paths(repoRoot).contractPath),
+    status: contract.status,
+    autonomy: contract.autonomyBudget?.level || 'A0'
+  };
+  state.lastActivity = now;
+  saveState(repoRoot, state);
+  return contract;
+}
+
 function approveContract(repoRoot, options = {}) {
   const contract = loadContract(repoRoot);
   if (!contract) {
@@ -609,6 +707,11 @@ function approveContract(repoRoot, options = {}) {
   contract.status = 'approved';
   contract.approvedAt = nowIso();
   contract.approvedBy = options.by || 'user';
+  const latestRevision = contract.revisions?.[contract.revisions.length - 1];
+  if (latestRevision && !latestRevision.approvedAt) {
+    latestRevision.approvedAt = contract.approvedAt;
+    latestRevision.approvedBy = contract.approvedBy;
+  }
   saveContract(repoRoot, contract);
   const state = loadState(repoRoot);
   if (state.currentGoal) {
@@ -1278,20 +1381,30 @@ function completionAudit(repoRoot) {
   const sovereigntyErrors = [];
   if (!contract.sovereignty?.originalGoalHash) {
     sovereigntyErrors.push('sovereignty.originalGoalHash is missing');
-  } else if (hashText(contract.sourceGoal) !== contract.sovereignty.originalGoalHash) {
-    sovereigntyErrors.push('sourceGoal hash changed after intake');
+  }
+  const revisions = contract.revisions || [];
+  if (!revisions.length) {
+    if (hashText(contract.sourceGoal) !== contract.sovereignty.originalGoalHash) sovereigntyErrors.push('sourceGoal hash changed after intake');
+  } else {
+    if (revisions[0]?.previousObjectiveHash !== contract.sovereignty.originalGoalHash) sovereigntyErrors.push('goal revision chain does not start at originalGoalHash');
+    revisions.forEach((revision, index) => {
+      if (!String(revision.authority || '').trim() || !String(revision.by || '').trim()) sovereigntyErrors.push(`goal revision ${index + 1} has no user authority or actor`);
+      if (!String(revision.approvedBy || '').trim() || !revision.approvedAt) sovereigntyErrors.push(`goal revision ${index + 1} was not re-approved`);
+      if (index > 0 && revision.previousObjectiveHash !== revisions[index - 1].newObjectiveHash) sovereigntyErrors.push(`goal revision chain breaks at revision ${index + 1}`);
+    });
+    const lastRevision = revisions[revisions.length - 1];
+    if (lastRevision?.newObjectiveHash !== hashText(contract.sourceGoal)) sovereigntyErrors.push('current sourceGoal does not match the latest approved revision');
+    if (contract.sovereignty?.currentGoalHash !== lastRevision?.newObjectiveHash) sovereigntyErrors.push('sovereignty.currentGoalHash does not match the latest revision');
   }
   if (contract.sovereignty?.agentMayRedefineGoal !== false) {
     sovereigntyErrors.push('agentMayRedefineGoal must be false');
   }
-  if (contract.sourceGoal && contract.objective && contract.sourceGoal !== contract.objective && !(contract.revisions || []).some((item) => item.approvedBy === 'user')) {
-    sovereigntyErrors.push('objective differs from sourceGoal without user-approved revision');
-  }
+  if (contract.sourceGoal && contract.objective && contract.sourceGoal !== contract.objective) sovereigntyErrors.push('objective differs from sourceGoal');
   rows.push(auditRow(
     'goal_sovereignty',
     'Goal sovereignty',
     sovereigntyErrors.length ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
-    sovereigntyErrors.length ? sovereigntyErrors.join('; ') : 'source goal preserved; agent cannot redefine goal'
+    sovereigntyErrors.length ? sovereigntyErrors.join('; ') : 'goal chain preserves the original hash and all revisions are user-authorized and re-approved'
   ));
 
   const readinessBlockers = evaluateIntakeReadiness(contract).filter((item) => item.level === 'block');
@@ -1467,6 +1580,7 @@ module.exports = {
   readJson,
   recordEvidence,
   repoRootFromRegistry,
+  reviseContract,
   runtimeValidation,
   saveContract,
   saveState,

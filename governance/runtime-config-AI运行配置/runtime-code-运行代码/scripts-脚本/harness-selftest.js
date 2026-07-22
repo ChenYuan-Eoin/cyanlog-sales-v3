@@ -14,6 +14,7 @@ const {
   checkDeliveryStage,
   getDeliveryStatus,
   recordDeliveryEvidence,
+  resolveVercelDeploymentCommit,
   sealDeliveryAttestation,
   transitionDeliveryState,
   validateSchedulerState
@@ -84,18 +85,18 @@ function writeRuntimeArtifact(repoRoot, relativePath, contents) {
   };
 }
 
-function evidenceEnvelope(repoRoot, name, payload, attachments = []) {
+function evidenceEnvelope(repoRoot, name, payload, attachments = [], artifactRoot = 'artifacts') {
   const materializedAttachments = attachments.map((attachment, index) => (
     writeRuntimeArtifact(
       repoRoot,
-      `artifacts/${name}-${index + 1}-${attachment.filename}`,
+      `${artifactRoot}/${name}-${index + 1}-${attachment.filename}`,
       attachment.contents
     )
   ));
   const materializedPayload = materializedAttachments.length
     ? { ...payload, attachments: materializedAttachments }
     : payload;
-  const artifactPath = `artifacts/${name}.json`;
+  const artifactPath = `${artifactRoot}/${name}.json`;
   const artifact = writeRuntimeArtifact(
     repoRoot,
     artifactPath,
@@ -258,13 +259,14 @@ function makeSchedulerFixture(repoRoot) {
       started_at: '2000-01-01T00:00:00.000Z',
       allowed_paths: ['governance/runtime-config-AI运行配置'],
       delivery_contract: {
-        target_state: 'main_integrated',
+        target_state: 'production_released',
         allowed_states: [
           'executing',
           'code_green',
           'clean_preview_green',
           'integration_ready',
-          'main_integrated'
+          'main_integrated',
+          'production_released'
         ],
         integration_branch: 'main',
         production_branch: 'production',
@@ -273,6 +275,19 @@ function makeSchedulerFixture(repoRoot) {
         same_release_commit_required: true,
         required_code_checks: ['target_tests', 'full_tests', 'lint', 'typecheck', 'build'],
         required_runtime_evidence: ['provider_probe', 'review_run', 'model_invocations', 'tokens'],
+        required_production_runtime_evidence: ['provider_probe', 'review_run', 'model_invocations', 'tokens'],
+        production_release_authorization: {
+          status: 'approved_for_final_release',
+          micro_fix_approval_id: 'IN-SELFTEST-MICROFIX-APPROVAL',
+          clarification_id: 'IN-SELFTEST-CLARIFICATION',
+          final_release_approval_id: 'IN-SELFTEST-FINAL-APPROVAL',
+          micro_fix_scope: 'vetted_code_only_application_candidate',
+          final_scope: 'selftest controlled Production runtime and release'
+        },
+        final_acceptance: {
+          browser: 'trusted_operator_attestation_from_user_existing_chrome_only',
+          production_database_mode: 'controlled_write_approved'
+        },
         blocking_acceptance_defects: []
       }
     },
@@ -286,7 +301,19 @@ function makeSchedulerFixture(repoRoot) {
   });
   const inboxPath = path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl');
   fs.mkdirSync(path.dirname(inboxPath), { recursive: true });
-  fs.writeFileSync(inboxPath, '');
+  fs.writeFileSync(inboxPath, [
+    JSON.stringify({ id: 'IN-SELFTEST-MICROFIX-APPROVAL', type: 'release_authorization' }),
+    JSON.stringify({
+      id: 'IN-SELFTEST-FINAL-APPROVAL',
+      type: 'final_production_release_authorization',
+      state: 'approved',
+      source: 'user_explicit',
+      scope: 'selftest controlled Production runtime and release',
+      production_write_authorized: true,
+      authorized_commit_binding: 'delivery_attestation_current_head'
+    }),
+    JSON.stringify({ id: 'IN-SELFTEST-CLARIFICATION', type: 'release_clarification' })
+  ].join('\n') + '\n');
 }
 
 function makeTestVercelApiResponses(productionCommit) {
@@ -317,7 +344,8 @@ function makeTestVercelApiResponses(productionCommit) {
       readyState: 'READY',
       readySubstate: 'PROMOTED',
       status: 'READY',
-      meta: { gitCommitSha: productionCommit },
+      gitSource: { type: 'github', ref: 'production', sha: productionCommit },
+      meta: { githubCommitSha: productionCommit },
       alias: [VERCEL_PRODUCTION_CONTRACT.domain]
     }
   };
@@ -487,13 +515,23 @@ function runDeliverySelftest(repoRoot) {
     assert.ok(wrongBranchGate.blockers.some((blocker) => blocker.includes('productionBranch')));
 
     const wrongShaResponses = makeTestVercelApiResponses(productionHead);
-    wrongShaResponses.deployment.meta.gitCommitSha = 'f'.repeat(40);
+    wrongShaResponses.deployment.gitSource.sha = 'f'.repeat(40);
+    wrongShaResponses.deployment.meta.githubCommitSha = 'f'.repeat(40);
     const wrongShaGate = transitionDeliveryState('integration_ready', {
       repoRoot,
       testOnlyVercelApiResponses: wrongShaResponses
     });
     assert.strictEqual(wrongShaGate.ok, false);
     assert.ok(wrongShaGate.blockers.some((blocker) => blocker.includes('source SHA')));
+
+    const conflictingShaResponses = makeTestVercelApiResponses(productionHead);
+    conflictingShaResponses.deployment.meta.gitCommitSha = 'e'.repeat(40);
+    const conflictingShaGate = transitionDeliveryState('integration_ready', {
+      repoRoot,
+      testOnlyVercelApiResponses: conflictingShaResponses
+    });
+    assert.strictEqual(conflictingShaGate.ok, false);
+    assert.ok(conflictingShaGate.blockers.some((blocker) => blocker.includes('conflicting source SHAs')));
 
     const vercelGateOptions = {
       repoRoot,
@@ -517,7 +555,9 @@ function runDeliverySelftest(repoRoot) {
     assert.strictEqual(sealDeliveryAttestation(vercelGateOptions).unchanged, false);
     runGit(repoRoot, ['push', '--quiet', 'origin', DELIVERY_ATTESTATION_REF]);
     assert.strictEqual(checkDeliveryStage('main_integrated', vercelGateOptions).ok, true);
-    assert.strictEqual(transitionDeliveryState('production_released', vercelGateOptions).ok, false);
+    const beforeProductionPush = transitionDeliveryState('production_released', vercelGateOptions);
+    assert.strictEqual(beforeProductionPush.ok, false);
+    assert.ok(beforeProductionPush.blockers.some((blocker) => blocker.includes('origin/production')));
 
     const runtimePath = getDeliveryStatus({ repoRoot }).evidenceStore;
     fs.unlinkSync(runtimePath);
@@ -536,6 +576,138 @@ function runDeliverySelftest(repoRoot) {
     runGit(repoRoot, ['push', '--quiet', 'origin', DELIVERY_ATTESTATION_REF]);
     assert.strictEqual(checkDeliveryStage('main_integrated', vercelGateOptions).ok, true);
 
+    runGit(repoRoot, ['push', '--quiet', 'origin', 'HEAD:production']);
+    recordDeliveryEvidence('release_control', {
+      production_commit_released: head,
+      production_deployment_id_released: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
+      production_domain_released: VERCEL_PRODUCTION_CONTRACT.domain,
+      production_release_approval_id: 'IN-SELFTEST-FINAL-APPROVAL',
+      production_release_clarification_id: 'IN-SELFTEST-CLARIFICATION',
+      production_release_scope: 'selftest controlled Production runtime and release',
+      production_release_commit_authorized: head,
+      production_release_method: 'vercel_git_production_branch',
+      production_released_at: new Date().toISOString()
+    }, { repoRoot });
+    const productionGateOptions = {
+      repoRoot,
+      testOnlyVercelApiResponses: makeTestVercelApiResponses(head)
+    };
+    const previewRuntimeCannotCloseProduction = transitionDeliveryState('production_released', productionGateOptions);
+    assert.strictEqual(previewRuntimeCannotCloseProduction.ok, false);
+    assert.ok(previewRuntimeCannotCloseProduction.blockers.some((blocker) => blocker.includes('Production runtime evidence')));
+
+    const productionOrigin = `https://${VERCEL_PRODUCTION_CONTRACT.domain}`;
+    const productionRuntimeBase = {
+      commit: head,
+      deployment_id: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
+      environment: 'production',
+      origin: productionOrigin
+    };
+    const verifierRoot = 'production-runtime-verifier';
+    const rawAttachment = (filename) => ({ filename, contents: Buffer.from(`selftest raw ${filename}\n`) });
+    assert.throws(
+      () => recordDeliveryEvidence('production_runtime', {}, { repoRoot }),
+      /controlled live Production verifier/
+    );
+    recordDeliveryEvidence('production_runtime', {
+      security_gate: evidenceEnvelope(repoRoot, 'production-security-gate', {
+        ...productionRuntimeBase,
+        source: 'live_production_database_verifier',
+        gate_id: 'SECURITY-P0-RLS-PRODUCTION',
+        status: 'passed',
+        production_project_ref: 'selftest-production-project',
+        checks: {
+          catalog: 'pass',
+          rls: 'pass',
+          acl: 'pass',
+          rpc: 'pass',
+          advisor: 'pass',
+          anon: 'pass',
+          service_role: 'pass'
+        }
+      }, ['catalog', 'rls', 'acl', 'rpc', 'advisor', 'anon', 'service-role'].map((name) => rawAttachment(`${name}.json`)), verifierRoot),
+      verifier: evidenceEnvelope(repoRoot, 'production-runtime-verifier', {
+        ...productionRuntimeBase,
+        source: 'live_production_runtime_verifier',
+        review_id: reviewId,
+        invocation_ids: ['production-invocation-selftest'],
+        total_tokens: 42
+      }, ['provider', 'review-run', 'model-invocations', 'tokens'].map((name) => rawAttachment(`${name}.json`)), verifierRoot),
+      provider_probe: evidenceEnvelope(repoRoot, 'production-provider-probe', { ...productionRuntimeBase, source: 'production_api', success: true, provider: 'selftest', model: 'selftest-model' }, [rawAttachment('provider-response.json')], verifierRoot),
+      review_run: evidenceEnvelope(repoRoot, 'production-review-run', { ...productionRuntimeBase, source: 'production_database', review_id: reviewId, status: 'COMPLETED' }, [rawAttachment('review-run-row.json')], verifierRoot),
+      model_invocations: evidenceEnvelope(repoRoot, 'production-model-invocations', {
+        ...productionRuntimeBase,
+        source: 'production_database',
+        review_id: reviewId,
+        invocation_ids: ['production-invocation-selftest'],
+        invocations: [{
+          id: 'production-invocation-selftest',
+          review_id: reviewId,
+          provider: 'selftest',
+          model: 'selftest-model',
+          status: 'completed',
+          total_tokens: 42
+        }]
+      }, [rawAttachment('model-invocation-rows.json')], verifierRoot),
+      tokens: evidenceEnvelope(repoRoot, 'production-tokens', { ...productionRuntimeBase, source: 'production_database', review_id: reviewId, total_tokens: 42 }, [rawAttachment('token-aggregate.json')], verifierRoot)
+    }, { repoRoot, testOnlyControlledProductionRuntime: true });
+    const browserBase = {
+      environment: 'production',
+      attestation_type: 'trusted_operator_browser',
+      trust_boundary: 'operator_attestation_not_machine_proof',
+      attestation_method: 'codex_chrome_control_existing_session',
+      attested_by: 'harness-selftest-operator',
+      attested_at: new Date().toISOString(),
+      existing_tab_id: 'selftest-existing-tab',
+      browser_context: 'existing_user_chrome',
+      new_browser_contexts: 0,
+      new_tabs: 0,
+      result: 'pass',
+      commit: head,
+      deployment_id: SELFTEST_PRODUCTION_DEPLOYMENT_ID
+    };
+    const forbiddenProductionBrowserCases = [
+      { url: 'http://127.0.0.1:3000/configs?tab=ai', blocker: 'sales.cyanlog.icu' },
+      { url: 'https://preview.example.invalid/configs?tab=ai', blocker: 'sales.cyanlog.icu' },
+      { url: 'https://cyanlog-sales-v3-git-main.example.vercel.app/configs?tab=ai', blocker: 'sales.cyanlog.icu' },
+      {
+        url: `https://${VERCEL_PRODUCTION_CONTRACT.domain}/configs?tab=ai`,
+        source_artifact: 'product-truth/product-code/output/playwright/wp09/acceptance.json',
+        blocker: 'output/playwright'
+      },
+      { url: `https://${VERCEL_PRODUCTION_CONTRACT.domain}/configs?tab=ai`, new_tabs: 1, blocker: 'new browser tab' }
+    ];
+    for (const [index, testCase] of forbiddenProductionBrowserCases.entries()) {
+      const { blocker, ...payload } = testCase;
+      recordDeliveryEvidence('production', {
+        commit: head,
+        deployment_id: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
+        domain: VERCEL_PRODUCTION_CONTRACT.domain,
+        browser_acceptance: evidenceEnvelope(repoRoot, `production-browser-forbidden-${index}`, {
+          ...browserBase,
+          ...payload
+        })
+      }, { repoRoot });
+      const rejected = transitionDeliveryState('production_released', productionGateOptions);
+      assert.strictEqual(rejected.ok, false);
+      assert.ok(rejected.blockers.some((message) => message.includes(blocker)));
+    }
+
+    const productionBrowserAcceptance = evidenceEnvelope(repoRoot, 'production-browser', {
+      ...browserBase,
+      url: `https://${VERCEL_PRODUCTION_CONTRACT.domain}/configs?tab=ai`
+    }, [{ filename: 'production-acceptance.png', contents: Buffer.from('selftest existing Chrome screenshot') }]);
+    recordDeliveryEvidence('production', {
+      commit: head,
+      deployment_id: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
+      domain: VERCEL_PRODUCTION_CONTRACT.domain,
+      browser_acceptance: productionBrowserAcceptance
+    }, { repoRoot });
+    assert.strictEqual(transitionDeliveryState('production_released', productionGateOptions).ok, true);
+    assert.strictEqual(sealDeliveryAttestation(productionGateOptions).unchanged, false);
+    runGit(repoRoot, ['push', '--quiet', 'origin', DELIVERY_ATTESTATION_REF]);
+    assert.strictEqual(checkDeliveryStage('production_released', productionGateOptions).ok, true);
+
     const note = JSON.parse(runGit(repoRoot, ['notes', '--ref=price-v3-delivery', 'show', 'HEAD']));
     note.previousAttestationDigest = '0'.repeat(64);
     const tamperedPath = path.join(remoteRoot, 'tampered-note.json');
@@ -551,6 +723,27 @@ function runSelftest(repoRoot) {
   runGit(repoRoot, ['init', '--quiet']);
   makeSettings(repoRoot);
   makeSchedulerFixture(repoRoot);
+
+  const deploymentSha = 'a'.repeat(40);
+  assert.deepStrictEqual(
+    resolveVercelDeploymentCommit({ gitSource: { sha: deploymentSha } }).sha,
+    deploymentSha
+  );
+  assert.deepStrictEqual(
+    resolveVercelDeploymentCommit({ meta: { githubCommitSha: deploymentSha } }).sha,
+    deploymentSha
+  );
+  assert.deepStrictEqual(
+    resolveVercelDeploymentCommit({ meta: { gitCommitSha: deploymentSha } }).sha,
+    deploymentSha
+  );
+  assert.strictEqual(
+    resolveVercelDeploymentCommit({
+      gitSource: { sha: deploymentSha },
+      meta: { githubCommitSha: 'b'.repeat(40) }
+    }).conflict,
+    true
+  );
 
   const started = core.startGoal(repoRoot, 'Build a safe long-task harness', {
     level: 'A0',
@@ -577,6 +770,19 @@ function runSelftest(repoRoot) {
   assert.ok(approved.autonomyBudget.allowed.includes('run local verification commands'));
   assert.ok(approved.autonomyBudget.allowed.includes('edit scoped workspace files after contract approval'));
 
+  const revised = core.reviseContract(repoRoot, 'Build a safe long-task harness with revised delivery truth', {
+    reason: 'selftest user corrected the terminal state',
+    authority: 'IN-SELFTEST-CLARIFICATION',
+    by: 'selftest',
+    success: 'revised goal is explicit,previous evidence remains auditable'
+  });
+  assert.strictEqual(revised.status, 'draft');
+  assert.strictEqual(revised.revisions.length, 1);
+  assert.strictEqual(core.loadState(repoRoot).activeGates[0], 'HG2');
+  const reapproved = core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
+  assert.strictEqual(reapproved.status, 'approved');
+  assert.strictEqual(reapproved.objective, revised.objective);
+
   assert.throws(() => core.setPhase(repoRoot, 'execute'), /allowedScopes/);
 
   const scopedContract = core.loadContract(repoRoot);
@@ -599,6 +805,36 @@ function runSelftest(repoRoot) {
 
   const schedulerValid = validateSchedulerState({ repoRoot });
   assert.deepStrictEqual(schedulerValid.errors, []);
+
+  const redirectedWorktreePath = path.join(repoRoot, 'redirected-worktree');
+  fs.mkdirSync(redirectedWorktreePath, { recursive: true });
+  runGit(repoRoot, ['config', '--local', 'core.worktree', redirectedWorktreePath]);
+  const redirectedWorktree = validateSchedulerState({ repoRoot });
+  assert.strictEqual(redirectedWorktree.ok, false);
+  assert.ok(redirectedWorktree.errors.some((error) => error.includes('core.worktree must be unset')));
+  runGit(repoRoot, ['config', '--local', '--unset-all', 'core.worktree']);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+
+  runGit(repoRoot, ['config', 'extensions.worktreeConfig', 'true']);
+  runGit(repoRoot, ['config', '--worktree', 'core.worktree', redirectedWorktreePath]);
+  const scopedWorktreeRedirect = validateSchedulerState({ repoRoot });
+  assert.strictEqual(scopedWorktreeRedirect.ok, false);
+  assert.ok(scopedWorktreeRedirect.errors.some((error) => error.includes('core.worktree must be unset')));
+  runGit(repoRoot, ['config', '--worktree', '--unset-all', 'core.worktree']);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+
+  const previousGitWorkTree = process.env.GIT_WORK_TREE;
+  process.env.GIT_WORK_TREE = redirectedWorktreePath;
+  try {
+    const environmentWorktreeRedirect = validateSchedulerState({ repoRoot });
+    assert.strictEqual(environmentWorktreeRedirect.ok, false);
+    assert.ok(environmentWorktreeRedirect.errors.some((error) => error.includes('GIT_WORK_TREE must be unset')));
+    assert.ok(environmentWorktreeRedirect.errors.some((error) => error.includes('Git top-level mismatch')));
+  } finally {
+    if (previousGitWorkTree === undefined) delete process.env.GIT_WORK_TREE;
+    else process.env.GIT_WORK_TREE = previousGitWorkTree;
+  }
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
 
   const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
   const dynamicInjection = JSON.parse(fs.readFileSync(schedulerPath, 'utf8'));

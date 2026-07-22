@@ -11,6 +11,7 @@ const {
   paths,
   recordEvidence,
   repoRootFromRegistry,
+  reviseContract,
   setPhase,
   startGoal,
   updateCheckpoint,
@@ -102,6 +103,7 @@ function usage() {
   console.error([
     'Usage:',
     '  harness-goal.js start --wp WP00 [--level A0|A1|A2|A3] [--success csv] [--scope csv] <goal>',
+    '  harness-goal.js revise --reason text --authority IN-id --by name [--success csv] [--scope csv] <goal>',
     '  harness-goal.js approve [--level A1|A2|A3] [--by name]',
     '  harness-goal.js phase <intake|research|contract_review|execute|verify|approval|blocked|complete>',
     '  harness-goal.js checkpoint --name text --status pending|pass|blocked [--detail text]',
@@ -147,6 +149,24 @@ function main() {
       });
       console.log(`Goal contract approved: ${contract.id}`);
       console.log(`Autonomy=${contract.autonomyBudget.level}`);
+      return;
+    }
+
+    if (command === 'revise') {
+      const goalText = rest.join(' ');
+      const contract = reviseContract(repoRoot, goalText, {
+        reason: options.reason,
+        authority: options.authority,
+        by: options.by,
+        success: options.success,
+        scopes: options.scope || options.scopes,
+        forbiddenScopes: options.forbiddenScope || options.forbiddenScopes,
+        nonGoals: options.nonGoals,
+        researchable: options.researchable,
+        askUser: options.askUser
+      });
+      console.log(`Goal contract revised: ${contract.id}`);
+      console.log(`Status=${contract.status} phase=${contract.phase.current}`);
       return;
     }
 
