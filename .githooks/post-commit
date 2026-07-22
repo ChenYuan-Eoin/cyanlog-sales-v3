@@ -7,6 +7,16 @@ set +e  # 错误不阻断
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 cd "$GIT_ROOT"
 
+# 把刚创建的 commit 绑定到同一 index tree 的 pre-commit 证据。
+# post-commit 不阻断已完成的提交；记录失败会明确告警，交付门禁随后会拒绝
+# 缺少 aiBehavior.checked=true 的提交，不能把静默失败冒充为已验证。
+AUDIT_SCRIPT="$GIT_ROOT/governance/ai-behavior-准则/audit/log-commit.mjs"
+if [ -f "$AUDIT_SCRIPT" ]; then
+    node "$AUDIT_SCRIPT" HEAD || echo "⚠️  post-commit 审计记录失败；当前提交不能进入 code_green"
+else
+    echo "⚠️  post-commit 审计脚本缺失；当前提交不能进入 code_green"
+fi
+
 # 检查是否是 REQ 变更
 if git diff --name-only HEAD~1 HEAD | grep -q "REQ_REGISTRY.yml"; then
     echo ""

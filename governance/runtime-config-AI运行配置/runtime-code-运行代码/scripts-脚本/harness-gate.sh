@@ -5,7 +5,13 @@
 set -euo pipefail
 
 WORKSPACE_ROOT="${PRICE_V3_WORKSPACE_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
-STATE_FILE="$WORKSPACE_ROOT/governance/runtime-state/harness-state.json"
+CORE_FILE="$WORKSPACE_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js"
+STATE_FILE="$(node - "$WORKSPACE_ROOT" "$CORE_FILE" <<'NODE'
+const [repoRoot, corePath] = process.argv.slice(2);
+const core = require(corePath);
+process.stdout.write(core.paths(repoRoot).statePath);
+NODE
+)"
 SETTINGS_FILE="$WORKSPACE_ROOT/governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json"
 
 ACTION="${1:-status}"
@@ -26,6 +32,8 @@ const settings = fs.existsSync(settingsPath)
 console.log(`Mode: ${state.mode || '-'}`);
 console.log(`Phase: ${state.phase || '-'}`);
 console.log(`Active Gates: ${(state.activeGates || []).join(' ') || '-'}`);
+console.log(`Work Package: ${state.currentGoal?.workPackageId || '-'}`);
+console.log(`Runtime State: ${statePath}`);
 console.log(`Available Gates: ${Object.keys(settings.gates || {}).join(' ') || '-'}`);
 NODE
 }

@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 const REGISTRY_RELATIVE_PATH = 'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json';
@@ -20,6 +21,37 @@ const HARNESS_GATE_PHASES = {
   HG4: 'verify',
   HG5: 'approval'
 };
+const DELIVERY_STATES = [
+  'executing',
+  'code_green',
+  'clean_preview_green',
+  'integration_ready',
+  'main_integrated',
+  'production_released'
+];
+const DELIVERY_RUNTIME_FILE = 'delivery-evidence.json';
+const DELIVERY_ATTESTATION_REF = 'refs/notes/price-v3-delivery';
+const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
+  teamId: 'team_xayPRcgRTNOgdPdNf7bOV017',
+  projectId: 'prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF',
+  projectName: 'cyanlog-sales-v3',
+  rootDirectory: 'product-truth/product-code',
+  domain: 'sales.cyanlog.icu',
+  productionBranch: 'production'
+});
+const REQUIRED_DEFECT_REPLAY_ACTIONS = Object.freeze([
+  'page_scroll',
+  'open_edit_dialog',
+  'modal_scroll_to_bottom',
+  'modify_field',
+  'request_close',
+  'unsaved_confirm_visible',
+  'continue_edit',
+  'request_close_again',
+  'discard_changes',
+  'reopen_and_save',
+  'shared_dialog_regression'
+]);
 
 function normalizeRelative(value) {
   return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
@@ -139,7 +171,7 @@ function pathExists(targetPath) {
 function printStatus() {
   const { repoRoot, registryPath } = loadRegistry();
   const { config } = getHarnessRuntime({ repoRoot });
-  const statePath = path.join(repoRoot, HARNESS_STATE_RELATIVE_PATH);
+  const { statePath } = resolveHarnessRuntimePaths(repoRoot);
   const settingsPath = config.settings ? path.join(repoRoot, config.settings) : null;
 
   console.log('Harness registry status');
@@ -210,6 +242,7 @@ function validateSchedulerState(options = {}) {
   const activeId = state.active_task && state.active_task.id;
   const queuedActiveId = state.execution_queue && state.execution_queue.active && state.execution_queue.active.id;
   const allowedPaths = state.active_task && state.active_task.allowed_paths;
+  const deliveryContract = state.active_task && state.active_task.delivery_contract;
 
   if (!activeId) errors.push('active_task.id is required');
   if (!queuedActiveId) errors.push('execution_queue.active.id is required');
@@ -225,6 +258,60 @@ function validateSchedulerState(options = {}) {
   }
   if (!Array.isArray(allowedPaths) || allowedPaths.length === 0) {
     errors.push('active_task.allowed_paths must contain at least one path');
+  }
+  if (!deliveryContract || !DELIVERY_STATES.includes(deliveryContract.target_state)) {
+    errors.push(`active_task.delivery_contract.target_state must be one of ${DELIVERY_STATES.join(', ')}`);
+  }
+  if (
+    deliveryContract
+    && (
+      !Array.isArray(deliveryContract.allowed_states)
+      || deliveryContract.allowed_states.length !== DELIVERY_STATES.indexOf(deliveryContract.target_state) + 1
+      || deliveryContract.allowed_states.some((item, index) => item !== DELIVERY_STATES[index])
+    )
+  ) {
+    errors.push('active_task.delivery_contract.allowed_states must be the canonical prefix through target_state');
+  }
+  if (deliveryContract && deliveryContract.integration_branch !== 'main') {
+    errors.push('active_task.delivery_contract.integration_branch must be main');
+  }
+  if (deliveryContract && deliveryContract.production_release_separate !== true) {
+    errors.push('active_task.delivery_contract.production_release_separate must be true');
+  }
+  if (deliveryContract && deliveryContract.same_release_commit_required !== true) {
+    errors.push('active_task.delivery_contract.same_release_commit_required must be true');
+  }
+  if (deliveryContract && deliveryContract.attestation_ref !== DELIVERY_ATTESTATION_REF) {
+    errors.push(`active_task.delivery_contract.attestation_ref must be ${DELIVERY_ATTESTATION_REF}`);
+  }
+  const requiredCodeChecks = deliveryContract?.required_code_checks;
+  const canonicalCodeChecks = ['target_tests', 'full_tests', 'lint', 'typecheck', 'build'];
+  if (
+    deliveryContract
+    && (
+      !Array.isArray(requiredCodeChecks)
+      || canonicalCodeChecks.some((check) => !requiredCodeChecks.includes(check))
+      || new Set(requiredCodeChecks).size !== requiredCodeChecks.length
+    )
+  ) {
+    errors.push(`active_task.delivery_contract.required_code_checks must include ${canonicalCodeChecks.join(', ')}`);
+  }
+  const requiredRuntimeEvidence = deliveryContract?.required_runtime_evidence;
+  const canonicalRuntimeEvidence = ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
+  if (
+    deliveryContract
+    && (
+      !Array.isArray(requiredRuntimeEvidence)
+      || canonicalRuntimeEvidence.some((item) => !requiredRuntimeEvidence.includes(item))
+      || new Set(requiredRuntimeEvidence).size !== requiredRuntimeEvidence.length
+    )
+  ) {
+    errors.push(`active_task.delivery_contract.required_runtime_evidence must include ${canonicalRuntimeEvidence.join(', ')}`);
+  }
+  for (const dynamicKey of ['evidence', 'release_control', 'releaseControl', 'completionState', 'completion_state', 'defects']) {
+    if (deliveryContract && Object.prototype.hasOwnProperty.call(deliveryContract, dynamicKey)) {
+      errors.push(`active_task.delivery_contract must not contain dynamic runtime key: ${dynamicKey}`);
+    }
   }
 
   const queueIds = [];
@@ -280,9 +367,14 @@ function validateSchedulerState(options = {}) {
   }
 
   try {
-    const harnessStatePath = path.join(repoRoot, HARNESS_STATE_RELATIVE_PATH);
+    const {
+      statePath: harnessStatePath,
+      contractPath: harnessContractPath
+    } = resolveHarnessRuntimePaths(repoRoot);
+    let harnessState = null;
+    let harnessContract = null;
     if (fs.existsSync(harnessStatePath)) {
-      const harnessState = JSON.parse(fs.readFileSync(harnessStatePath, 'utf8'));
+      harnessState = JSON.parse(fs.readFileSync(harnessStatePath, 'utf8'));
       const activeGates = harnessState.activeGates || [];
       const invalidActiveGates = activeGates.filter(
         (id) => !REQUIRED_HARNESS_GATE_IDS.includes(id)
@@ -292,6 +384,55 @@ function validateSchedulerState(options = {}) {
       }
       if (activeGates.length > 1) {
         errors.push(`Harness state may activate at most one gate: ${activeGates.join(', ')}`);
+      }
+      if (state.active_task?.status === 'active') {
+        if (harnessState.mode !== 'enforcing') {
+          errors.push(`active work package requires enforcing Harness, got ${harnessState.mode || 'missing'}`);
+        }
+        if (harnessState.currentGoal?.workPackageId !== activeId) {
+          errors.push(`Harness work package mismatch: expected ${activeId}, got ${harnessState.currentGoal?.workPackageId || 'missing'}`);
+        }
+        if (activeGates.length !== 1) {
+          errors.push('active work package requires exactly one active Harness gate');
+        }
+      }
+    } else if (state.active_task?.status === 'active') {
+      errors.push('active work package requires a worktree-local Harness state');
+    }
+    if (state.active_task?.status === 'active') {
+      if (!fs.existsSync(harnessContractPath)) {
+        errors.push('active work package requires a worktree-local Harness goal contract');
+      } else {
+        harnessContract = JSON.parse(fs.readFileSync(harnessContractPath, 'utf8'));
+        if (harnessContract.workPackageId !== activeId) {
+          errors.push(`Harness contract work package mismatch: expected ${activeId}, got ${harnessContract.workPackageId || 'missing'}`);
+        }
+        if (!['approved', 'active'].includes(harnessContract.status)) {
+          errors.push(`Harness goal contract must be approved, got ${harnessContract.status || 'missing'}`);
+        }
+      }
+    }
+    if (state.active_task?.status === 'active' && harnessState && harnessContract) {
+      const activeGate = harnessState.activeGates?.[0] || null;
+      const expectedPhase = activeGate ? HARNESS_GATE_PHASES[activeGate] : null;
+      if (harnessState.currentGoal?.id !== harnessContract.id) {
+        errors.push(`Harness goal mismatch: state ${harnessState.currentGoal?.id || 'missing'}, contract ${harnessContract.id || 'missing'}`);
+      }
+      if (harnessState.phase !== harnessContract.phase?.current) {
+        errors.push(`Harness phase mismatch: state ${harnessState.phase || 'missing'}, contract ${harnessContract.phase?.current || 'missing'}`);
+      }
+      if (activeGate !== harnessContract.phase?.gate) {
+        errors.push(`Harness gate mismatch: state ${activeGate || 'missing'}, contract ${harnessContract.phase?.gate || 'missing'}`);
+      }
+      if (expectedPhase && harnessState.phase !== expectedPhase) {
+        errors.push(`Harness canonical gate/phase mismatch: ${activeGate} requires ${expectedPhase}, got ${harnessState.phase || 'missing'}`);
+      }
+      const activeStartedAt = Date.parse(state.active_task.started_at || '');
+      const contractCreatedAt = Date.parse(harnessContract.createdAt || '');
+      if (!Number.isFinite(activeStartedAt) || !Number.isFinite(contractCreatedAt)) {
+        errors.push('Harness and Active start timestamps must be valid ISO dates');
+      } else if (contractCreatedAt < activeStartedAt) {
+        errors.push(`Harness goal predates Active work package: ${harnessContract.createdAt} < ${state.active_task.started_at}`);
       }
     }
   } catch (error) {
@@ -308,6 +449,1129 @@ function validateSchedulerState(options = {}) {
     activeId,
     baselineStatus,
     errors
+  };
+}
+
+function runGit(repoRoot, args, options = {}) {
+  const result = spawnSync('git', args, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    ...(options.timeoutMs ? { timeout: options.timeoutMs, killSignal: 'SIGTERM' } : {})
+  });
+  if (options.allowFailure && result.status !== 0) {
+    return null;
+  }
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || `git ${args.join(' ')} failed`).trim());
+  }
+  return (result.stdout || '').trim();
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonicalize(value[key])])
+  );
+}
+
+function sha256Canonical(value) {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(canonicalize(value)), 'utf8')
+    .digest('hex');
+}
+
+function deliveryContentDigest(value) {
+  const payload = { ...(value || {}) };
+  delete payload.attestationDigest;
+  delete payload.contentDigest;
+  delete payload.previousAttestationDigest;
+  delete payload.previousAttestation;
+  delete payload.revision;
+  delete payload.sealedAt;
+  delete payload.updatedAt;
+  return sha256Canonical(payload);
+}
+
+function sealedAttestationDigest(value) {
+  const payload = { ...(value || {}) };
+  delete payload.attestationDigest;
+  return sha256Canonical(payload);
+}
+
+function readRemoteSnapshot(repoRoot) {
+  const checkedAt = new Date().toISOString();
+  const raw = runGit(repoRoot, [
+    'ls-remote',
+    '--symref',
+    'origin',
+    'HEAD',
+    'refs/heads/main',
+    'refs/heads/production',
+    DELIVERY_ATTESTATION_REF
+  ], { allowFailure: true, timeoutMs: 15000 });
+  const snapshot = {
+    checkedAt,
+    available: Boolean(raw),
+    defaultBranch: null,
+    main: null,
+    production: null,
+    attestation: null
+  };
+  if (!raw) return snapshot;
+
+  for (const line of raw.split(/\r?\n/)) {
+    const symref = line.match(/^ref:\s+refs\/heads\/([^\s]+)\s+HEAD$/);
+    if (symref) {
+      snapshot.defaultBranch = symref[1];
+      continue;
+    }
+    const match = line.match(/^([0-9a-f]{40,64})\s+(.+)$/i);
+    if (!match) continue;
+    const [, oid, ref] = match;
+    if (ref === 'refs/heads/main') snapshot.main = oid;
+    if (ref === 'refs/heads/production') snapshot.production = oid;
+    if (ref === DELIVERY_ATTESTATION_REF) snapshot.attestation = oid;
+  }
+  return snapshot;
+}
+
+function resolveHarnessRuntimePaths(repoRoot) {
+  const runtimeDir = process.env.PRICE_V3_HARNESS_RUNTIME_DIR
+    ? path.resolve(process.env.PRICE_V3_HARNESS_RUNTIME_DIR)
+    : runGit(repoRoot, [
+        'rev-parse',
+        '--path-format=absolute',
+        '--git-path',
+        'codex-runtime/harness'
+      ]);
+  const runtime = {
+    statePath: path.join(runtimeDir, 'harness-state.json'),
+    contractPath: path.join(runtimeDir, 'goal-contract.json'),
+    evidenceLedgerPath: path.join(runtimeDir, 'evidence-ledger.jsonl')
+  };
+  return {
+    runtimeDir,
+    statePath: runtime.statePath,
+    contractPath: runtime.contractPath,
+    evidenceLedgerPath: runtime.evidenceLedgerPath
+  };
+}
+
+function deliveryStateAtLeast(actual, expected) {
+  return DELIVERY_STATES.indexOf(actual) >= DELIVERY_STATES.indexOf(expected);
+}
+
+function getDeliveryRuntimePath(repoRoot) {
+  const runtimeDir = runGit(repoRoot, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-path',
+    'codex-runtime'
+  ]);
+  return path.join(runtimeDir, DELIVERY_RUNTIME_FILE);
+}
+
+function writePrivateRuntimeJson(repoRoot, relativePath, rawJson) {
+  const runtimeRoot = path.dirname(getDeliveryRuntimePath(repoRoot));
+  const targetPath = path.join(runtimeRoot, relativePath);
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(targetPath, rawJson, { mode: 0o600 });
+  fs.chmodSync(targetPath, 0o600);
+  return {
+    artifact_path: normalizeRelative(path.relative(runtimeRoot, targetPath)),
+    sha256: crypto.createHash('sha256').update(rawJson, 'utf8').digest('hex')
+  };
+}
+
+function runVercelApi(repoRoot, endpoint) {
+  const productCodeRoot = path.join(repoRoot, VERCEL_PRODUCTION_CONTRACT.rootDirectory);
+  const result = spawnSync('pnpm', [
+    'exec',
+    'vercel',
+    'api',
+    endpoint,
+    '--raw',
+    '--non-interactive',
+    '--no-color'
+  ], {
+    cwd: productCodeRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 30000,
+    killSignal: 'SIGTERM',
+    maxBuffer: 25 * 1024 * 1024,
+    env: { ...process.env, NO_COLOR: '1' }
+  });
+  if (result.error || result.status !== 0) {
+    const detail = String(result.error?.message || result.stderr || result.stdout || 'unknown Vercel CLI failure')
+      .trim()
+      .slice(0, 500);
+    throw new Error(`Vercel API GET failed for ${endpoint}: ${detail}`);
+  }
+  const raw = String(result.stdout || '').trim();
+  if (!raw) throw new Error(`Vercel API GET returned an empty response for ${endpoint}`);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Vercel API GET returned invalid JSON for ${endpoint}: ${error.message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Vercel API GET returned a non-object response for ${endpoint}`);
+  }
+  return { raw: `${raw}\n`, parsed };
+}
+
+function isSelftestVercelInjection(repoRoot, injected) {
+  if (!injected || injected.__test_only !== true) return false;
+  try {
+    return loadRegistry(repoRoot).registry.version === 'selftest';
+  } catch {
+    return false;
+  }
+}
+
+function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
+  const checkedAt = new Date().toISOString();
+  const artifactPrefix = `vercel-production-verifier/${options.stage || 'gate'}/${checkedAt.replace(/[^0-9A-Za-z]/g, '-')}-${process.pid}`;
+  const query = `teamId=${encodeURIComponent(VERCEL_PRODUCTION_CONTRACT.teamId)}`;
+  const endpoints = {
+    project: `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}?${query}`,
+    domain: `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}/domains/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`,
+    deployment: null
+  };
+  const blockers = [];
+  let projectResponse;
+  let domainResponse;
+  let deploymentResponse;
+  let source = 'live-vercel-api';
+
+  try {
+    const injected = options.testOnlyVercelApiResponses;
+    if (injected) {
+      if (!isSelftestVercelInjection(repoRoot, injected)) {
+        throw new Error('test-only Vercel verifier injection is forbidden outside a selftest registry');
+      }
+      source = 'selftest-injected';
+      projectResponse = { raw: `${JSON.stringify(injected.project)}\n`, parsed: injected.project };
+      domainResponse = { raw: `${JSON.stringify(injected.domain)}\n`, parsed: injected.domain };
+      deploymentResponse = { raw: `${JSON.stringify(injected.deployment)}\n`, parsed: injected.deployment };
+    } else {
+      projectResponse = runVercelApi(repoRoot, endpoints.project);
+      domainResponse = runVercelApi(repoRoot, endpoints.domain);
+      const liveDeploymentId = projectResponse.parsed?.targets?.production?.id;
+      if (!/^dpl_[A-Za-z0-9]+$/.test(String(liveDeploymentId || ''))) {
+        throw new Error('Vercel project has no valid targets.production deployment ID');
+      }
+      endpoints.deployment = `/v13/deployments/${liveDeploymentId}?${query}`;
+      deploymentResponse = runVercelApi(repoRoot, endpoints.deployment);
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      blockers: [`live Vercel Production verification failed closed: ${error.message}`],
+      snapshot: {
+        version: 1,
+        source,
+        checkedAt,
+        contract: VERCEL_PRODUCTION_CONTRACT,
+        endpoints,
+        raw: {}
+      }
+    };
+  }
+
+  const project = projectResponse.parsed;
+  const domain = domainResponse.parsed;
+  const deployment = deploymentResponse.parsed;
+  const liveDeploymentId = project?.targets?.production?.id;
+  endpoints.deployment = `/v13/deployments/${liveDeploymentId}?${query}`;
+  const raw = {
+    project: writePrivateRuntimeJson(repoRoot, `${artifactPrefix}-project.json`, projectResponse.raw),
+    domain: writePrivateRuntimeJson(repoRoot, `${artifactPrefix}-domain.json`, domainResponse.raw),
+    deployment: writePrivateRuntimeJson(repoRoot, `${artifactPrefix}-deployment.json`, deploymentResponse.raw)
+  };
+  const snapshot = {
+    version: 1,
+    source,
+    checkedAt,
+    contract: VERCEL_PRODUCTION_CONTRACT,
+    endpoints,
+    project: {
+      id: project?.id || null,
+      name: project?.name || null,
+      teamId: project?.accountId || null,
+      rootDirectory: project?.rootDirectory || null,
+      productionBranch: project?.link?.productionBranch || null,
+      productionDeploymentId: liveDeploymentId || null
+    },
+    domain: {
+      name: domain?.name || null,
+      projectId: domain?.projectId || null,
+      verified: domain?.verified === true
+    },
+    deployment: {
+      id: deployment?.id || null,
+      name: deployment?.name || null,
+      projectId: deployment?.project?.id || null,
+      teamId: deployment?.team?.id || null,
+      target: deployment?.target || null,
+      readyState: deployment?.readyState || null,
+      readySubstate: deployment?.readySubstate || null,
+      status: deployment?.status || null,
+      gitCommitSha: deployment?.meta?.gitCommitSha || null
+    },
+    remoteProduction: remoteProduction || null,
+    raw
+  };
+
+  if (project?.id !== VERCEL_PRODUCTION_CONTRACT.projectId) blockers.push('live Vercel project ID mismatch');
+  if (project?.name !== VERCEL_PRODUCTION_CONTRACT.projectName) blockers.push('live Vercel project name mismatch');
+  if (project?.accountId !== VERCEL_PRODUCTION_CONTRACT.teamId) blockers.push('live Vercel project team mismatch');
+  if (project?.rootDirectory !== VERCEL_PRODUCTION_CONTRACT.rootDirectory) blockers.push('live Vercel project rootDirectory mismatch');
+  if (project?.link?.productionBranch !== VERCEL_PRODUCTION_CONTRACT.productionBranch) blockers.push('live Vercel productionBranch is not production');
+  if (!/^dpl_[A-Za-z0-9]+$/.test(String(liveDeploymentId || ''))) blockers.push('live Vercel Production deployment ID is invalid');
+  if (domain?.name !== VERCEL_PRODUCTION_CONTRACT.domain) blockers.push('live Vercel project domain name mismatch');
+  if (domain?.projectId !== VERCEL_PRODUCTION_CONTRACT.projectId) blockers.push('live Vercel project domain is attached to a different project');
+  if (domain?.verified !== true) blockers.push('live Vercel project domain is not verified');
+  if (deployment?.id !== liveDeploymentId) blockers.push('live Vercel project/deployment IDs do not agree');
+  if (deployment?.project?.id !== VERCEL_PRODUCTION_CONTRACT.projectId) blockers.push('live Vercel deployment project ID mismatch');
+  if (deployment?.project?.name !== VERCEL_PRODUCTION_CONTRACT.projectName) blockers.push('live Vercel deployment project name mismatch');
+  if (deployment?.team?.id !== VERCEL_PRODUCTION_CONTRACT.teamId) blockers.push('live Vercel deployment team mismatch');
+  if (deployment?.name !== VERCEL_PRODUCTION_CONTRACT.projectName) blockers.push('live Vercel deployment name mismatch');
+  if (deployment?.target !== 'production') blockers.push('live Vercel deployment target is not production');
+  if (deployment?.readyState !== 'READY' || deployment?.status !== 'READY') blockers.push('live Vercel Production deployment is not READY');
+  if (deployment?.readySubstate !== 'PROMOTED') blockers.push('live Vercel Production deployment is not PROMOTED');
+  if (!Array.isArray(deployment?.alias) || !deployment.alias.includes(VERCEL_PRODUCTION_CONTRACT.domain)) blockers.push('live Vercel Production deployment does not own the product domain alias');
+  if (!/^[0-9a-f]{40,64}$/i.test(String(remoteProduction || ''))) blockers.push('remote production OID is missing or invalid');
+  if (deployment?.meta?.gitCommitSha !== remoteProduction) blockers.push('live Vercel Production source SHA does not equal remote production OID');
+
+  return { ok: blockers.length === 0, blockers, snapshot };
+}
+
+function loadDeliveryRuntime(options = {}) {
+  const { repoRoot, state } = loadSchedulerState(options);
+  const runtimePath = getDeliveryRuntimePath(repoRoot);
+  if (!fs.existsSync(runtimePath)) {
+    return { runtimePath, data: {} };
+  }
+
+  try {
+    const data = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+    if (data.activeId !== state.active_task?.id) {
+      return { runtimePath, data: {} };
+    }
+    const head = runGit(repoRoot, ['rev-parse', 'HEAD']);
+    if (data.commit !== head) {
+      return { runtimePath, data: {} };
+    }
+    return { runtimePath, data };
+  } catch (error) {
+    throw new Error(`delivery runtime evidence is invalid: ${error.message}`);
+  }
+}
+
+function runtimePayloadFromNote(note) {
+  const payload = { ...(note || {}) };
+  for (const key of [
+    'attestationDigest',
+    'contentDigest',
+    'previousAttestationDigest',
+    'previousAttestation',
+    'revision',
+    'sealedAt'
+  ]) {
+    delete payload[key];
+  }
+  return payload;
+}
+
+function loadDeliveryMutableBase(options = {}) {
+  const { repoRoot, state } = loadSchedulerState(options);
+  const head = options.head || runGit(repoRoot, ['rev-parse', 'HEAD']);
+  const runtimeResult = loadDeliveryRuntime({ repoRoot });
+  const note = options.note || loadDeliveryNote(repoRoot, head, state.active_task?.id);
+  const runtimeIndex = DELIVERY_STATES.indexOf(runtimeResult.data.completionState || 'executing');
+  const noteIndex = DELIVERY_STATES.indexOf(note.completionState || 'executing');
+  if (note.commit && (!runtimeResult.data.commit || noteIndex > runtimeIndex)) {
+    return {
+      runtimePath: runtimeResult.runtimePath,
+      data: runtimePayloadFromNote(note),
+      source: 'note',
+      note
+    };
+  }
+  return { ...runtimeResult, source: 'runtime', note };
+}
+
+function writeDeliveryRuntime(update, options = {}) {
+  const { repoRoot, state } = loadSchedulerState(options);
+  const base = options.baseData
+    ? { runtimePath: getDeliveryRuntimePath(repoRoot), data: options.baseData }
+    : loadDeliveryMutableBase({ ...options, repoRoot });
+  const { runtimePath, data } = base;
+  const next = {
+    ...data,
+    version: 1,
+    activeId: state.active_task?.id || null,
+    commit: runGit(repoRoot, ['rev-parse', 'HEAD']),
+    ...update,
+    updatedAt: new Date().toISOString()
+  };
+  fs.mkdirSync(path.dirname(runtimePath), { recursive: true });
+  const temporaryPath = `${runtimePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(temporaryPath, runtimePath);
+  return { runtimePath, data: next };
+}
+
+function loadDeliveryNote(repoRoot, head, activeId) {
+  const raw = runGit(repoRoot, [
+    'notes',
+    '--ref=price-v3-delivery',
+    'show',
+    head
+  ], { allowFailure: true });
+  if (!raw) return {};
+  try {
+    const note = JSON.parse(raw);
+    if (note.activeId !== activeId || note.commit !== head) return {};
+    let cursor = note;
+    let depth = 0;
+    while (cursor) {
+      depth += 1;
+      if (depth > DELIVERY_STATES.length + 5) throw new Error('attestation revision chain is unexpectedly deep');
+      if (!cursor.attestationDigest || !cursor.contentDigest) {
+        throw new Error('attestationDigest/contentDigest is missing');
+      }
+      const actualContentDigest = deliveryContentDigest(cursor);
+      if (actualContentDigest !== cursor.contentDigest) {
+        throw new Error(`content digest mismatch: expected ${cursor.contentDigest}, got ${actualContentDigest}`);
+      }
+      const actualAttestationDigest = sealedAttestationDigest(cursor);
+      if (actualAttestationDigest !== cursor.attestationDigest) {
+        throw new Error(`attestation digest mismatch: expected ${cursor.attestationDigest}, got ${actualAttestationDigest}`);
+      }
+      if (
+        cursor.previousAttestation
+        && cursor.previousAttestationDigest !== cursor.previousAttestation.attestationDigest
+      ) {
+        throw new Error('previous attestation pointer mismatch');
+      }
+      cursor = cursor.previousAttestation || null;
+    }
+    return note;
+  } catch (error) {
+    throw new Error(`delivery Git note is invalid: ${error.message}`);
+  }
+}
+
+function sealDeliveryAttestation(options = {}) {
+  const { repoRoot, state } = loadSchedulerState(options);
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']);
+  const existing = loadDeliveryNote(repoRoot, head, state.active_task?.id);
+  let { runtimePath, data } = loadDeliveryMutableBase({ repoRoot, head, note: existing });
+  if (data.activeId !== state.active_task?.id || data.commit !== head) {
+    throw new Error('current HEAD has no matching delivery runtime evidence');
+  }
+  const stage = data.completionState || 'executing';
+  const status = options.status || getDeliveryStatus(options);
+  const check = checkDeliveryStage(stage, {
+    ...options,
+    status,
+    skipSealCheck: true
+  });
+  if (!check.ok) {
+    throw new Error(`delivery evidence cannot be sealed: ${check.blockers.join('; ')}`);
+  }
+  const currentContentDigest = deliveryContentDigest(data);
+  if (existing.contentDigest === currentContentDigest) {
+    return {
+      commit: head,
+      ref: DELIVERY_ATTESTATION_REF,
+      runtimePath,
+      digest: existing.attestationDigest,
+      contentDigest: currentContentDigest,
+      unchanged: true
+    };
+  }
+  if (existing.attestationDigest) {
+    const existingIndex = DELIVERY_STATES.indexOf(existing.completionState || 'executing');
+    const nextIndex = DELIVERY_STATES.indexOf(stage);
+    if (nextIndex < existingIndex) {
+      throw new Error(`sealed attestation cannot move backwards: ${existing.completionState} -> ${stage}`);
+    }
+  }
+  const gateSnapshot = {
+    stage,
+    checkedAt: new Date().toISOString(),
+    head: check.status.git.head,
+    originMain: check.status.git.originMain,
+    remoteMain: check.status.git.remoteMain,
+    remoteProduction: check.status.git.remoteProduction,
+    defaultBranch: check.status.git.defaultBranch,
+    originMainFresh: check.status.git.originMainFresh,
+    originMainIsAncestor: check.status.git.originMainIsAncestor,
+    mainIntegrated: check.status.git.mainIntegrated,
+    localAttestationRefOid: check.status.localAttestationRefOid,
+    remoteAttestationRefOid: check.status.remoteAttestationRefOid,
+    remoteSnapshotCheckedAt: check.status.remoteSnapshot?.checkedAt || null,
+    vercelProduction: check.status.vercelProduction || null,
+    verifier: {
+      remoteRefs: 'git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery',
+      ancestor: 'git merge-base --is-ancestor origin/main HEAD',
+      worktree: 'git status --porcelain=v1 --untracked-files=all',
+      vercelProduction: 'pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color'
+    }
+  };
+  const runtimeUpdate = writeDeliveryRuntime({
+    gateSnapshots: {
+      ...(data.gateSnapshots || {}),
+      [stage]: gateSnapshot
+    }
+  }, { repoRoot, baseData: data });
+  runtimePath = runtimeUpdate.runtimePath;
+  data = runtimeUpdate.data;
+  const contentDigest = deliveryContentDigest(data);
+  const sealed = {
+    ...data,
+    previousAttestationDigest: existing.attestationDigest || null,
+    previousAttestation: existing.attestationDigest ? existing : null,
+    revision: (existing.revision || 0) + 1,
+    contentDigest,
+    sealedAt: new Date().toISOString()
+  };
+  sealed.attestationDigest = sealedAttestationDigest(sealed);
+  const noteInputPath = `${runtimePath}.${process.pid}.note`;
+  fs.writeFileSync(noteInputPath, `${JSON.stringify(sealed, null, 2)}\n`, { mode: 0o600 });
+  const noteArgs = [
+    'notes',
+    '--ref=price-v3-delivery',
+    'add',
+    ...(existing.attestationDigest ? ['-f'] : []),
+    '-F',
+    noteInputPath,
+    head
+  ];
+  const result = spawnSync('git', noteArgs, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  fs.unlinkSync(noteInputPath);
+  if (result.status !== 0) {
+    throw new Error((result.stderr || 'failed to seal delivery Git note').trim());
+  }
+  return {
+    commit: head,
+    ref: DELIVERY_ATTESTATION_REF,
+    runtimePath,
+    digest: sealed.attestationDigest,
+    contentDigest,
+    unchanged: false
+  };
+}
+
+function isSha256(value) {
+  return /^[0-9a-f]{64}$/.test(String(value || ''));
+}
+
+function resolveEvidenceArtifactPath(repoRoot, filePath) {
+  if (!filePath || typeof filePath !== 'string') return null;
+  const runtimeRoot = path.dirname(getDeliveryRuntimePath(repoRoot));
+  const resolved = path.resolve(path.isAbsolute(filePath) ? filePath : path.join(runtimeRoot, filePath));
+  const relative = path.relative(runtimeRoot, resolved);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  return resolved;
+}
+
+function artifactFileMatches(repoRoot, filePath, expectedSha256) {
+  const resolved = resolveEvidenceArtifactPath(repoRoot, filePath);
+  if (!resolved || !isSha256(expectedSha256) || !fs.existsSync(resolved)) return false;
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile() || stat.size <= 0 || stat.size > 25 * 1024 * 1024) return false;
+  const actual = crypto.createHash('sha256').update(fs.readFileSync(resolved)).digest('hex');
+  return actual === expectedSha256;
+}
+
+function evidenceEnvelopeValid(envelope, repoRoot) {
+  if (
+    !envelope
+    || typeof envelope !== 'object'
+    || !envelope.payload
+    || typeof envelope.payload !== 'object'
+    || !artifactFileMatches(repoRoot, envelope.artifact_path, envelope.sha256)
+  ) {
+    return false;
+  }
+  const resolved = resolveEvidenceArtifactPath(repoRoot, envelope.artifact_path);
+  if (!resolved || path.extname(resolved).toLowerCase() !== '.json') return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  } catch {
+    return false;
+  }
+  if (JSON.stringify(canonicalize(parsed)) !== JSON.stringify(canonicalize(envelope.payload))) return false;
+  for (const attachment of parsed.attachments || []) {
+    if (!artifactFileMatches(repoRoot, attachment.path, attachment.sha256)) return false;
+  }
+  return true;
+}
+
+function getBehaviorLogPath(repoRoot) {
+  return path.join(path.dirname(getDeliveryRuntimePath(repoRoot)), 'behavior-log.jsonl');
+}
+
+function behaviorCheckArtifactsValid(repoRoot, entry, commitTree, firstParent) {
+  const binding = entry?.aiBehavior?.evidenceBinding;
+  const artifacts = binding?.checkArtifacts;
+  const harnessScriptsRelativeDir = 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本';
+  const expected = new Map([
+    ['harness-selftest', { filename: '00-harness-selftest.log', command: ['npm', '--prefix', harnessScriptsRelativeDir, 'test'] }],
+    ...Array.from({ length: 10 }, (_, index) => {
+      const number = String(index + 1).padStart(2, '0');
+      const slugs = ['typecheck', 'lint', 'test', 'nav', 'git', 'feedback-loop', 'healthcheck', 'error-handling', 'business-loop', 'ci-cd-loop'];
+      const name = `check-${number}-${slugs[index]}`;
+      return [name, {
+        filename: `${name}.log`,
+        command: ['bash', path.join(repoRoot, 'governance/ai-behavior-准则/checks', `${name}.sh`)]
+      }];
+    })
+  ]);
+  const preCommitBaseMatches = binding?.baseCommit === firstParent || (
+    /^[0-9a-f]{40,64}$/i.test(binding?.baseCommit || '')
+    && (runGit(repoRoot, ['show', '--no-patch', '--format=%P', binding.baseCommit], { allowFailure: true }) || '')
+      .split(' ')
+      .filter(Boolean)[0] === firstParent
+  );
+  if (
+    !Array.isArray(artifacts)
+    || artifacts.length !== expected.size
+    || !preCommitBaseMatches
+    || binding.trackedWorkingTreeMatchesIndex !== true
+    || binding.indexTreeStable !== true
+    || binding.extraInputsStable !== true
+    || binding.environmentFingerprint?.untrackedFileCount !== 0
+    || binding.environmentFingerprint?.ignoredCheckInputCount !== 0
+    || !isSha256(binding.environmentFingerprint?.extraInputSnapshotSha256)
+  ) {
+    return false;
+  }
+
+  const runtimeRoot = path.dirname(getDeliveryRuntimePath(repoRoot));
+  const expectedDirectory = path.resolve(runtimeRoot, 'check-logs', commitTree);
+  const seenNames = new Set();
+  const seenPaths = new Set();
+  for (const artifact of artifacts) {
+    const contract = expected.get(artifact?.name);
+    const resolved = resolveEvidenceArtifactPath(repoRoot, artifact?.artifact_path);
+    if (
+      !contract
+      || !resolved
+      || path.dirname(resolved) !== expectedDirectory
+      || path.basename(resolved) !== contract.filename
+      || seenNames.has(artifact.name)
+      || seenPaths.has(resolved)
+      || artifact.exit_code !== 0
+      || artifact.timeout !== false
+      || !Array.isArray(artifact.command)
+      || artifact.command.length !== contract.command.length
+      || artifact.command.some((part, index) => part !== contract.command[index])
+      || !isSha256(artifact.sha256)
+      || !fs.existsSync(resolved)
+    ) {
+      return false;
+    }
+    const stat = fs.lstatSync(resolved);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size > 25 * 1024 * 1024) return false;
+    if (fileSha256(resolved) !== artifact.sha256) return false;
+    seenNames.add(artifact.name);
+    seenPaths.add(resolved);
+  }
+  return [...expected.keys()].every((name) => seenNames.has(name));
+}
+
+function fileSha256(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function loadBehaviorLogProof(repoRoot, head) {
+  const logPath = getBehaviorLogPath(repoRoot);
+  if (!fs.existsSync(logPath)) {
+    return { ok: false, blocker: 'current worktree behavior log is missing' };
+  }
+  const stat = fs.statSync(logPath);
+  if (!stat.isFile() || stat.size <= 0 || stat.size > 25 * 1024 * 1024) {
+    return { ok: false, blocker: 'current worktree behavior log is empty or oversized' };
+  }
+
+  const entries = [];
+  for (const [index, line] of fs.readFileSync(logPath, 'utf8').split(/\r?\n/).entries()) {
+    if (!line.trim()) continue;
+    try {
+      entries.push(JSON.parse(line));
+    } catch {
+      return { ok: false, blocker: `current worktree behavior log has invalid JSON at line ${index + 1}` };
+    }
+  }
+
+  const commitTree = runGit(repoRoot, ['show', '--no-patch', '--format=%T', head]);
+  const firstParent = runGit(repoRoot, ['show', '--no-patch', '--format=%P', head])
+    .split(' ')
+    .filter(Boolean)[0] || 'unborn';
+  const entry = [...entries].reverse().find((item) => (
+    item?.trigger === 'post-commit'
+    && item?.commit === head
+    && item?.commitTree === commitTree
+    && item?.aiBehavior?.checked === true
+    && item?.aiBehavior?.evidenceBinding?.trigger === 'pre-commit'
+    && item?.aiBehavior?.evidenceBinding?.indexTree === commitTree
+    && item?.aiBehavior?.evidenceBinding?.controlPreflight === 'harness-selftest'
+    && item?.aiBehavior?.evidenceBinding?.requiredChecks === 10
+    && item?.aiBehavior?.evidenceBinding?.executedChecks === 10
+    && item?.aiBehavior?.evidenceBinding?.passed === 10
+    && item?.aiBehavior?.evidenceBinding?.failed === 0
+    && behaviorCheckArtifactsValid(repoRoot, item, commitTree, firstParent)
+  ));
+  if (!entry) {
+    return { ok: false, blocker: 'behavior log has no verified post-commit record for current HEAD' };
+  }
+
+  return {
+    ok: true,
+    artifactPath: 'behavior-log.jsonl',
+    sha256: fileSha256(logPath),
+    entrySha256: sha256Canonical(entry),
+    entry
+  };
+}
+
+function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, repoRoot = '') {
+  const configured = new Set(state.active_task?.delivery_contract?.blocking_acceptance_defects || []);
+  if (!configured.size) return [];
+  const resolved = new Set();
+  for (const [id, proof] of Object.entries(runtimeDefects)) {
+    if (
+      configured.has(id)
+      && proof?.verified === true
+      && typeof proof.root_cause === 'string'
+      && proof.root_cause.trim().length >= 20
+      && evidenceEnvelopeValid(proof.reproduction, repoRoot)
+      && evidenceEnvelopeValid(previewArtifacts.defect_replay, repoRoot)
+      && proof.regression_artifact_sha256 === previewArtifacts.defect_replay.sha256
+      && proof.preview_commit === head
+    ) {
+      resolved.add(id);
+    }
+  }
+  return [...configured].filter((id) => !resolved.has(id));
+}
+
+function getDeliveryStatus(options = {}) {
+  const { repoRoot, state } = loadSchedulerState(options);
+  const { parseErrors } = loadDemandInbox({ repoRoot });
+  const scheduler = validateSchedulerState({ repoRoot });
+  const {
+    statePath: harnessStatePath,
+    contractPath: goalContractPath
+  } = resolveHarnessRuntimePaths(repoRoot);
+  const harnessState = fs.existsSync(harnessStatePath)
+    ? JSON.parse(fs.readFileSync(harnessStatePath, 'utf8'))
+    : null;
+  const goalContract = fs.existsSync(goalContractPath)
+    ? JSON.parse(fs.readFileSync(goalContractPath, 'utf8'))
+    : null;
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']);
+  const originMain = runGit(repoRoot, ['rev-parse', 'refs/remotes/origin/main'], { allowFailure: true });
+  const remoteSnapshot = options.remoteSnapshot || readRemoteSnapshot(repoRoot);
+  const remoteMain = remoteSnapshot.main;
+  const remoteProduction = remoteSnapshot.production;
+  const defaultBranch = remoteSnapshot.defaultBranch;
+  const originMainFresh = Boolean(originMain && remoteMain && originMain === remoteMain);
+  const originMainIsAncestor = originMainFresh
+    ? runGit(repoRoot, ['merge-base', '--is-ancestor', originMain, head], { allowFailure: true }) !== null
+    : false;
+  const worktreeStatus = runGit(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
+  const note = loadDeliveryNote(repoRoot, head, state.active_task?.id);
+  const { runtimePath, data: runtime } = loadDeliveryRuntime({ repoRoot });
+  const runtimeStateIndex = DELIVERY_STATES.indexOf(runtime.completionState || 'executing');
+  const noteStateIndex = DELIVERY_STATES.indexOf(note.completionState || 'executing');
+  const attestation = runtime.commit && (!note.commit || runtimeStateIndex >= noteStateIndex)
+    ? runtime
+    : note;
+  const currentContentDigest = attestation.commit
+    ? deliveryContentDigest(attestation)
+    : null;
+  const attestationSealed = Boolean(
+    note.contentDigest
+    && currentContentDigest
+    && note.contentDigest === currentContentDigest
+  );
+  const localAttestationRefOid = runGit(repoRoot, ['rev-parse', DELIVERY_ATTESTATION_REF], { allowFailure: true });
+  const remoteAttestationRefOid = remoteSnapshot.attestation;
+  const attestationPublished = Boolean(
+    attestationSealed
+    && localAttestationRefOid
+    && remoteAttestationRefOid
+    && localAttestationRefOid === remoteAttestationRefOid
+  );
+  const evidence = attestation.evidence || {};
+  const releaseControl = attestation.releaseControl || {};
+  let completionState = attestation.completionState || 'executing';
+  if (deliveryStateAtLeast(completionState, 'code_green') && evidence.code?.commit !== head) {
+    completionState = 'executing';
+  } else if (
+    deliveryStateAtLeast(completionState, 'clean_preview_green')
+    && evidence.preview?.commit !== head
+  ) {
+    completionState = 'code_green';
+  }
+
+  return {
+    ok: scheduler.ok && parseErrors.length === 0,
+    repoRoot,
+    activeId: state.active_task?.id || null,
+    targetState: state.active_task?.delivery_contract?.target_state || null,
+    allowedStates: state.active_task?.delivery_contract?.allowed_states || [],
+    requiredCodeChecks: state.active_task?.delivery_contract?.required_code_checks || [],
+    requiredRuntimeEvidence: state.active_task?.delivery_contract?.required_runtime_evidence || [],
+    sameReleaseCommitRequired: state.active_task?.delivery_contract?.same_release_commit_required === true,
+    completionState,
+    scheduler,
+    harness: {
+      mode: harnessState?.mode || null,
+      phase: harnessState?.phase || null,
+      activeGate: harnessState?.activeGates?.[0] || null,
+      workPackageId: harnessState?.currentGoal?.workPackageId || goalContract?.workPackageId || null,
+      goalStatus: goalContract?.status || null
+    },
+    git: {
+      head,
+      originMain,
+      remoteMain,
+      remoteProduction,
+      defaultBranch,
+      originMainFresh,
+      clean: worktreeStatus.length === 0,
+      dirtyEntries: worktreeStatus ? worktreeStatus.split(/\r?\n/).length : 0,
+      originMainIsAncestor,
+      mainIntegrated: Boolean(remoteMain && remoteMain === head)
+    },
+    evidence,
+    evidenceStore: runtimePath,
+    attestationRef: DELIVERY_ATTESTATION_REF,
+    attestationDigest: attestationSealed ? note.attestationDigest : null,
+    contentDigest: currentContentDigest,
+    attestationSealed,
+    attestationPublished,
+    localAttestationRefOid,
+    remoteAttestationRefOid,
+    remoteSnapshot,
+    sealedCompletionState: attestationSealed ? note.completionState || null : null,
+    releaseControl,
+    gateSnapshots: attestation.gateSnapshots || {},
+    vercelProduction: attestation.gateSnapshots?.[completionState]?.vercelProduction || null,
+    blockingDefects: unresolvedBlockingDefects(
+      state,
+      evidence.preview?.journeys?.blocking_defect_replay === true
+        ? (attestation.defects || {})
+        : {},
+      head,
+      evidence.preview?.artifacts || {},
+      repoRoot
+    )
+  };
+}
+
+function checkDeliveryStage(stage, options = {}) {
+  if (!DELIVERY_STATES.includes(stage)) {
+    return { ok: false, stage, blockers: [`unknown delivery stage: ${stage}`] };
+  }
+  const status = options.status || getDeliveryStatus(options);
+  const repoRoot = options.repoRoot || status.repoRoot;
+  const blockers = [];
+  const evidence = status.evidence;
+
+  if (!status.allowedStates.includes(stage)) blockers.push(`delivery stage is not allowed by Active contract: ${stage}`);
+  if (
+    DELIVERY_STATES.indexOf(stage) > DELIVERY_STATES.indexOf(status.targetState)
+  ) {
+    blockers.push(`delivery stage ${stage} exceeds approved target ${status.targetState || 'missing'}`);
+  }
+
+  if (!status.scheduler.ok) blockers.push(...status.scheduler.errors);
+  if (status.harness.mode !== 'enforcing') blockers.push('Harness is not enforcing');
+  if (status.harness.workPackageId !== status.activeId) blockers.push('Harness is not bound to Active WP');
+  if (!status.harness.activeGate) blockers.push('Harness has no active gate');
+  if (!options.skipStateCheck && !deliveryStateAtLeast(status.completionState, stage)) {
+    blockers.push(`completion_state ${status.completionState} has not reached ${stage}`);
+  }
+
+  if (deliveryStateAtLeast(stage, 'code_green')) {
+    if (status.harness.phase !== 'verify' || status.harness.activeGate !== 'HG4') {
+      blockers.push(`delivery verification requires Harness verify/HG4, got ${status.harness.phase || 'missing'}/${status.harness.activeGate || 'missing'}`);
+    }
+    if (!status.git.clean) blockers.push(`worktree is dirty (${status.git.dirtyEntries} entries)`);
+    if (evidence.code?.commit !== status.git.head) blockers.push('code evidence commit does not equal HEAD');
+    const behaviorProof = loadBehaviorLogProof(repoRoot, status.git.head);
+    if (!behaviorProof.ok) {
+      blockers.push(behaviorProof.blocker);
+    } else {
+      const recordedBehavior = evidence.code?.behavior_log;
+      const recordedPath = resolveEvidenceArtifactPath(repoRoot, recordedBehavior?.artifact_path);
+      if (
+        !recordedBehavior
+        || recordedPath !== getBehaviorLogPath(repoRoot)
+        || recordedBehavior.sha256 !== behaviorProof.sha256
+        || recordedBehavior.entry_sha256 !== behaviorProof.entrySha256
+      ) {
+        blockers.push('code evidence is not bound to the verified current-HEAD behavior log');
+      }
+    }
+    for (const check of status.requiredCodeChecks) {
+      if (evidence.code?.checks?.[check] !== true) blockers.push(`code check missing: ${check}`);
+    }
+    const commandEvidence = Array.isArray(evidence.code?.commands) ? evidence.code.commands : [];
+    for (const name of status.requiredCodeChecks) {
+      const command = commandEvidence.find((item) => item?.name === name);
+      if (
+        !command
+        || command.exit_code !== 0
+        || !artifactFileMatches(repoRoot, command.artifact_path, command.log_sha256)
+      ) {
+        blockers.push(`code command artifact missing or invalid: ${name}`);
+      }
+    }
+  }
+  if (deliveryStateAtLeast(stage, 'clean_preview_green')) {
+    if (evidence.preview?.commit !== status.git.head) blockers.push('Preview commit does not equal HEAD');
+    if (evidence.preview?.provider_source_commit !== status.git.head) blockers.push('Preview provider source commit does not equal HEAD');
+    if (!/^dpl_[A-Za-z0-9]+$/.test(String(evidence.preview?.deployment_id || ''))) blockers.push('Preview deployment ID is missing');
+    if (!/^https:\/\//.test(String(evidence.preview?.url || ''))) blockers.push('Preview URL is missing');
+    if (evidence.preview?.ready !== true) blockers.push('Preview is not READY');
+    if (evidence.preview?.git_dirty !== false) blockers.push('Preview was built from dirty source');
+    for (const journey of ['desktop', 'ipad', 'blocking_defect_replay']) {
+      if (evidence.preview?.journeys?.[journey] !== true) blockers.push(`Preview journey missing: ${journey}`);
+    }
+    for (const artifact of ['desktop', 'ipad', 'defect_replay']) {
+      if (!evidenceEnvelopeValid(evidence.preview?.artifacts?.[artifact], repoRoot)) blockers.push(`Preview evidence envelope missing or invalid: ${artifact}`);
+    }
+    if ((evidence.preview?.artifacts?.desktop?.payload?.viewport?.width || 0) < 1200) blockers.push('desktop Preview evidence has no desktop viewport');
+    const ipadWidth = evidence.preview?.artifacts?.ipad?.payload?.viewport?.width || 0;
+    if (ipadWidth < 768 || ipadWidth > 1366) blockers.push('iPad Preview evidence has no tablet viewport');
+    const defectReplayPayload = evidence.preview?.artifacts?.defect_replay?.payload;
+    if (defectReplayPayload?.commit !== status.git.head) blockers.push('defect replay payload commit does not equal HEAD');
+    if (defectReplayPayload?.deployment_id !== evidence.preview?.deployment_id) blockers.push('defect replay payload deployment does not equal Preview deployment');
+    if (!/^https:\/\//.test(String(defectReplayPayload?.url || ''))) blockers.push('defect replay payload has no HTTPS URL');
+    if (JSON.stringify(defectReplayPayload?.actions) !== JSON.stringify(REQUIRED_DEFECT_REPLAY_ACTIONS)) blockers.push('defect replay payload does not contain the complete ordered action sequence');
+    if (defectReplayPayload?.result !== 'pass') blockers.push('defect replay did not pass');
+    if (defectReplayPayload?.overlays_after !== 0) blockers.push('defect replay left overlays behind');
+    if (defectReplayPayload?.body_scroll_lock_released !== true) blockers.push('defect replay did not release body scroll lock');
+    if (defectReplayPayload?.app_inert_after !== false) blockers.push('defect replay left the application inert');
+    for (const item of status.requiredRuntimeEvidence) {
+      const envelope = evidence.runtime?.[item];
+      if (!evidenceEnvelopeValid(envelope, repoRoot)) {
+        blockers.push(`runtime evidence envelope missing or invalid: ${item}`);
+      } else {
+        if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
+        if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
+      }
+    }
+    const runtimeReviewId = evidence.runtime?.review_run?.payload?.review_id;
+    if (!/^[0-9a-f-]{36}$/.test(String(runtimeReviewId || ''))) blockers.push('runtime ReviewRun ID is missing');
+    if (!['COMPLETED', 'DEGRADED'].includes(String(evidence.runtime?.review_run?.payload?.status || ''))) blockers.push('runtime ReviewRun is not completed');
+    if (evidence.runtime?.provider_probe?.payload?.success !== true) blockers.push('provider probe did not succeed');
+    if (!String(evidence.runtime?.provider_probe?.payload?.provider || '').trim()) blockers.push('provider probe identity is missing');
+    if (!String(evidence.runtime?.provider_probe?.payload?.model || '').trim()) blockers.push('provider probe model is missing');
+    const invocationIds = evidence.runtime?.model_invocations?.payload?.invocation_ids;
+    if (!Array.isArray(invocationIds) || invocationIds.length === 0 || new Set(invocationIds).size !== invocationIds.length) blockers.push('model_invocations evidence is empty or duplicated');
+    if (evidence.runtime?.model_invocations?.payload?.review_id !== runtimeReviewId) blockers.push('model_invocations are not bound to ReviewRun');
+    if (!(evidence.runtime?.tokens?.payload?.total_tokens > 0)) blockers.push('token evidence is missing');
+    if (evidence.runtime?.tokens?.payload?.review_id !== runtimeReviewId) blockers.push('token evidence is not bound to ReviewRun');
+    const invocations = evidence.runtime?.model_invocations?.payload?.invocations;
+    if (!Array.isArray(invocations) || invocations.length === 0) {
+      blockers.push('model_invocations evidence has no invocation details');
+    } else {
+      const detailedIds = invocations.map((item) => item?.id);
+      if (detailedIds.some((id) => !String(id || '').trim()) || new Set(detailedIds).size !== detailedIds.length) blockers.push('model_invocations detail IDs are missing or duplicated');
+      const recordedIds = [...new Set(invocationIds || [])].sort();
+      const normalizedDetailedIds = [...new Set(detailedIds)].sort();
+      if (JSON.stringify(recordedIds) !== JSON.stringify(normalizedDetailedIds)) blockers.push('model_invocations IDs do not match invocation details');
+      if (invocations.some((item) => item?.review_id !== runtimeReviewId)) blockers.push('model_invocations details are not all bound to ReviewRun');
+      if (invocations.some((item) => !String(item?.provider || '').trim() || !String(item?.model || '').trim())) blockers.push('model_invocations details are missing provider or model identity');
+      if (invocations.some((item) => !['completed', 'failed'].includes(item?.status))) blockers.push('model_invocations details have an invalid status');
+      if (invocations.some((item) => !Number.isInteger(item?.total_tokens) || item.total_tokens < 0)) blockers.push('model_invocations details have invalid token totals');
+      const completedProbeInvocation = invocations.find((item) => (
+        item.status === 'completed'
+        && item.provider === evidence.runtime?.provider_probe?.payload?.provider
+        && item.model === evidence.runtime?.provider_probe?.payload?.model
+      ));
+      if (!completedProbeInvocation) blockers.push('provider probe does not match a completed model invocation');
+      const detailedTokenTotal = invocations.reduce((sum, item) => sum + (Number.isInteger(item?.total_tokens) ? item.total_tokens : 0), 0);
+      if (detailedTokenTotal !== evidence.runtime?.tokens?.payload?.total_tokens) blockers.push('token evidence does not equal model_invocations detail total');
+    }
+  }
+  if (deliveryStateAtLeast(stage, 'integration_ready')) {
+    const liveVercel = verifyVercelProductionState(repoRoot, status.git.remoteProduction, {
+      stage,
+      testOnlyVercelApiResponses: options.testOnlyVercelApiResponses
+    });
+    status.vercelProduction = liveVercel.snapshot;
+    blockers.push(...liveVercel.blockers);
+    if (status.blockingDefects.length) blockers.push(`blocking defects unresolved: ${status.blockingDefects.join(', ')}`);
+    if (!status.git.originMainFresh) blockers.push('origin/main is stale; fetch origin before integration');
+    if (!status.git.originMainIsAncestor) blockers.push('origin/main is not an ancestor of candidate HEAD');
+    if (status.releaseControl.production_branch !== 'production') blockers.push('Production Branch isolation is not recorded as production');
+    if (!/^prj_[A-Za-z0-9]+$/.test(String(status.releaseControl.vercel_project_id || ''))) blockers.push('Vercel project ID is missing');
+    if (!evidenceEnvelopeValid(status.releaseControl.production_branch_evidence, repoRoot)) blockers.push('Vercel Production Branch evidence is missing or invalid');
+    if (status.releaseControl.production_branch_evidence?.payload?.branch !== 'production') blockers.push('Vercel Production Branch evidence does not show production');
+    if (status.releaseControl.production_branch_evidence?.payload?.project_id !== status.releaseControl.vercel_project_id) blockers.push('Vercel Production Branch evidence project mismatch');
+    if (!Number.isFinite(Date.parse(status.releaseControl.production_branch_evidence?.payload?.observed_at || ''))) blockers.push('Vercel Production Branch evidence timestamp is invalid');
+    if (!status.git.remoteProduction) blockers.push('remote production branch is missing');
+    if (!status.releaseControl.production_commit_before) blockers.push('Production commit before integration is missing');
+    if (status.releaseControl.production_commit_before !== status.git.remoteProduction) blockers.push('Production branch OID does not equal recorded pre-integration anchor');
+    if (!/^dpl_[A-Za-z0-9]+$/.test(String(status.releaseControl.production_deployment_id_before || ''))) blockers.push('Production deployment ID before integration is missing');
+    if (liveVercel.snapshot?.project?.id !== status.releaseControl.vercel_project_id) blockers.push('live Vercel project does not equal recorded release-control project');
+    if (liveVercel.snapshot?.deployment?.id !== status.releaseControl.production_deployment_id_before) blockers.push('live Vercel Production deployment does not equal recorded pre-integration deployment');
+    if (liveVercel.snapshot?.deployment?.gitCommitSha !== status.releaseControl.production_commit_before) blockers.push('live Vercel Production source does not equal recorded pre-integration source');
+    if (
+      !options.skipSealCheck
+      && !deliveryStateAtLeast(status.sealedCompletionState, stage)
+    ) {
+      blockers.push(`Git note attestation has not been sealed for ${stage}`);
+    }
+    if (!options.skipSealCheck && !status.attestationPublished) {
+      blockers.push(`Git note attestation has not been pushed to ${DELIVERY_ATTESTATION_REF}`);
+    }
+    if (!options.skipSealCheck) {
+      const snapshot = status.gateSnapshots?.[stage];
+      if (!snapshot || snapshot.stage !== stage || snapshot.head !== status.git.head) {
+        blockers.push(`machine gate snapshot is missing for ${stage}`);
+      } else if (
+        snapshot.originMain !== snapshot.remoteMain
+        || snapshot.originMainFresh !== true
+        || snapshot.originMainIsAncestor !== true
+      ) {
+        blockers.push(`machine gate snapshot did not prove fresh ancestor state for ${stage}`);
+      }
+      if (
+        !snapshot?.vercelProduction
+        || !isSha256(snapshot.vercelProduction.raw?.project?.sha256)
+        || !isSha256(snapshot.vercelProduction.raw?.domain?.sha256)
+        || !isSha256(snapshot.vercelProduction.raw?.deployment?.sha256)
+      ) {
+        blockers.push(`machine gate snapshot has no hashed live Vercel evidence for ${stage}`);
+      }
+    }
+  }
+  if (deliveryStateAtLeast(stage, 'main_integrated')) {
+    if (!status.git.mainIntegrated) blockers.push('origin/main does not equal candidate HEAD');
+    if (status.git.defaultBranch !== 'main') blockers.push(`GitHub default branch is ${status.git.defaultBranch || 'unknown'}, expected main`);
+    if (!status.releaseControl.production_commit_after) blockers.push('Production commit after main integration is missing');
+    if (!/^dpl_[A-Za-z0-9]+$/.test(String(status.releaseControl.production_deployment_id_after || ''))) blockers.push('Production deployment ID after main integration is missing');
+    if (status.releaseControl.production_commit_before !== status.releaseControl.production_commit_after) blockers.push('Production source anchor changed during main integration');
+    if (status.releaseControl.production_deployment_id_before !== status.releaseControl.production_deployment_id_after) blockers.push('Production deployment changed during main integration');
+    if (status.releaseControl.production_commit_after !== status.git.remoteProduction) blockers.push('remote production branch changed during main integration');
+    if (status.vercelProduction?.deployment?.id !== status.releaseControl.production_deployment_id_after) blockers.push('live Vercel Production deployment does not equal recorded post-integration deployment');
+    if (status.vercelProduction?.deployment?.gitCommitSha !== status.releaseControl.production_commit_after) blockers.push('live Vercel Production source does not equal recorded post-integration source');
+    if (!options.skipSealCheck) {
+      const snapshot = status.gateSnapshots?.main_integrated;
+      if (!snapshot || snapshot.remoteMain !== status.git.head || snapshot.mainIntegrated !== true || snapshot.defaultBranch !== 'main') {
+        blockers.push('main-integrated machine snapshot is incomplete');
+      }
+    }
+  }
+  if (deliveryStateAtLeast(stage, 'production_released')) {
+    blockers.push('Production release is outside this candidate gate and requires a separate user-approved release contract');
+  }
+
+  return { ok: blockers.length === 0, stage, blockers, status };
+}
+
+function recordDeliveryEvidence(section, payload, options = {}) {
+  const allowedSections = new Set(['code', 'preview', 'runtime', 'release_control']);
+  if (allowedSections.has(section)) {
+    const { data } = loadDeliveryMutableBase(options);
+    if (section === 'release_control') {
+      return writeDeliveryRuntime({
+        releaseControl: { ...(data.releaseControl || {}), ...payload }
+      }, { ...options, baseData: data });
+    }
+    return writeDeliveryRuntime({
+      evidence: {
+        ...(data.evidence || {}),
+        [section]: { ...(data.evidence?.[section] || {}), ...payload }
+      }
+    }, { ...options, baseData: data });
+  }
+
+  if (section.startsWith('defect.')) {
+    const defectId = section.slice('defect.'.length);
+    if (!/^IN-\d{8}-\d+$/.test(defectId)) {
+      throw new Error(`invalid defect id: ${defectId}`);
+    }
+    const { data } = loadDeliveryMutableBase(options);
+    return writeDeliveryRuntime({
+      defects: {
+        ...(data.defects || {}),
+        [defectId]: { ...(data.defects?.[defectId] || {}), ...payload }
+      }
+    }, { ...options, baseData: data });
+  }
+
+  throw new Error(`unknown delivery evidence section: ${section}`);
+}
+
+function transitionDeliveryState(stage, options = {}) {
+  if (!DELIVERY_STATES.includes(stage)) {
+    return { ok: false, stage, blockers: [`unknown delivery stage: ${stage}`] };
+  }
+  const status = getDeliveryStatus(options);
+  const currentIndex = DELIVERY_STATES.indexOf(status.completionState);
+  const nextIndex = DELIVERY_STATES.indexOf(stage);
+  if (nextIndex < currentIndex) {
+    return {
+      ok: false,
+      stage,
+      blockers: [`delivery transition cannot move backwards: ${status.completionState} -> ${stage}`]
+    };
+  }
+  if (nextIndex > currentIndex + 1) {
+    return {
+      ok: false,
+      stage,
+      blockers: [`delivery transition cannot skip states: ${status.completionState} -> ${stage}`]
+    };
+  }
+  if (nextIndex === currentIndex) {
+    const check = checkDeliveryStage(stage, { ...options, status });
+    if (!check.ok) return check;
+    return { ok: true, unchanged: true, stage, status: check.status };
+  }
+  const check = checkDeliveryStage(stage, {
+    ...options,
+    status,
+    skipStateCheck: true,
+    skipSealCheck: true
+  });
+  if (!check.ok) return check;
+  const { data } = loadDeliveryMutableBase(options);
+  const result = writeDeliveryRuntime(
+    { completionState: stage },
+    { ...options, baseData: data }
+  );
+  return {
+    ok: true,
+    unchanged: false,
+    stage,
+    runtimePath: result.runtimePath,
+    status: getDeliveryStatus({ ...options, remoteSnapshot: status.remoteSnapshot })
   };
 }
 
@@ -407,6 +1671,54 @@ function runSchedulerCli(args) {
     return result.ok ? 0 : 2;
   }
 
+  if (command === 'delivery-status') {
+    process.stdout.write(`${JSON.stringify(getDeliveryStatus(), null, 2)}\n`);
+    return 0;
+  }
+
+  if (command === 'delivery-check') {
+    const stage = args[1] || 'executing';
+    const result = checkDeliveryStage(stage);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return result.ok ? 0 : 2;
+  }
+
+  if (command === 'delivery-record') {
+    const section = args[1];
+    const rawPayload = args.slice(2).join(' ');
+    if (!section || !rawPayload) {
+      process.stderr.write('delivery-record requires <code|preview|runtime|release_control|defect.IN-id> <json>\n');
+      return 2;
+    }
+    try {
+      const payload = JSON.parse(rawPayload);
+      const result = recordDeliveryEvidence(section, payload);
+      process.stdout.write(`${JSON.stringify({ ok: true, section, ...result }, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      process.stderr.write(`delivery-record failed: ${error.message}\n`);
+      return 2;
+    }
+  }
+
+  if (command === 'delivery-transition') {
+    const stage = args[1] || '';
+    const result = transitionDeliveryState(stage);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return result.ok ? 0 : 2;
+  }
+
+  if (command === 'delivery-seal') {
+    try {
+      const result = sealDeliveryAttestation();
+      process.stdout.write(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      process.stderr.write(`delivery-seal failed: ${error.message}\n`);
+      return 2;
+    }
+  }
+
   process.stderr.write(`unknown project-registry command: ${command}\n`);
   return 2;
 }
@@ -445,6 +1757,11 @@ module.exports = {
   REGISTRY_RELATIVE_PATH,
   REQUIRED_HARNESS_GATE_IDS,
   WORK_PACKAGE_ID_PATTERN,
+  DELIVERY_STATES,
+  DELIVERY_RUNTIME_FILE,
+  DELIVERY_ATTESTATION_REF,
+  REQUIRED_DEFECT_REPLAY_ACTIONS,
+  VERCEL_PRODUCTION_CONTRACT,
   findRepoRoot,
   getDocumentEntry,
   getHarnessRuntime,
@@ -457,6 +1774,12 @@ module.exports = {
   printStatus,
   isSchedulerPathAllowed,
   loadSchedulerState,
+  getDeliveryStatus,
+  loadDeliveryRuntime,
+  recordDeliveryEvidence,
+  sealDeliveryAttestation,
+  transitionDeliveryState,
+  checkDeliveryStage,
   routeDemand,
   resolveEnabledDocumentPath,
   resolveDocumentPath,

@@ -7,7 +7,10 @@ const {
   getHarnessRuntime,
   loadRegistry
 } = require('./project-registry');
-const { runtimeValidation } = require('./harness-core');
+const {
+  paths: harnessPaths,
+  runtimeValidation
+} = require('./harness-core');
 
 const checks = [];
 
@@ -305,11 +308,11 @@ function main() {
     }
   }
 
-  const statePath = path.join(repoRoot, 'governance/runtime-state/harness-state.json');
+  const statePath = harnessPaths(repoRoot).statePath;
   let state = null;
   try {
     state = readJson(statePath);
-    pass('harness state JSON parses');
+    pass('harness state JSON parses', statePath);
   } catch (error) {
     fail('harness state JSON parses', error.message);
   }

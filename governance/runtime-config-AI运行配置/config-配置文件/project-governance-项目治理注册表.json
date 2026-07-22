@@ -49,6 +49,15 @@
       "description": "当前工作包与安全边界的人类可读续跑入口"
     },
     {
+      "id": "branch-consolidation-audit-20260722",
+      "path": "governance/runtime-state/branch-consolidation-audit-20260722.md",
+      "kind": "file",
+      "required": false,
+      "maintained": false,
+      "enabled": true,
+      "description": "2026-07-22 当前候选、历史脏工作树与主干收敛的只读审计快照"
+    },
+    {
       "id": "skills-catalog",
       "path": "governance/SKILLS-CATALOG.md",
       "kind": "file",

@@ -1,8 +1,15 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -13,7 +20,6 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { CloseIcon } from '@/components/icons'
 import { getAIConfigKind, isAIPlatformAssetKind } from '@/lib/configs/ai-config-kind'
-import { confirmAction } from '@/lib/toast'
 import type { Config, EditableConfig } from '../types'
 
 function DialogChunkFallback() {
@@ -97,39 +103,35 @@ export default function ConfigEditDialog({
   const aiKind = configType === 'AI_CONFIG' ? getAIConfigKind(config.value) : null
   const isReadOnlyAIAsset = configType === 'AI_CONFIG' && !isAIPlatformAssetKind(aiKind)
   const initialConfigSnapshotRef = useRef(configSnapshot(config))
-  const closeConfirmationInFlightRef = useRef(false)
+  const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false)
   const hasUnsavedChanges = configSnapshot(config) !== initialConfigSnapshotRef.current
 
-  const requestOpenChange = async (nextOpen: boolean) => {
+  useEffect(() => {
+    if (!open || (!hasUnsavedChanges && !saving)) return
+
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [hasUnsavedChanges, open, saving])
+
+  const requestOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
       onOpenChange(true)
       return
     }
-    if (saving || closeConfirmationInFlightRef.current) return
+    if (saving) return
     if (!hasUnsavedChanges) {
       onOpenChange(false)
       return
     }
-
-    closeConfirmationInFlightRef.current = true
-    try {
-      const shouldClose = await confirmAction(
-        '当前修改尚未保存。关闭后这些修改会丢失，是否继续？',
-        {
-          title: '放弃未保存修改',
-          confirmText: '放弃修改',
-          cancelText: '继续编辑',
-          danger: true,
-        },
-      )
-      if (shouldClose) onOpenChange(false)
-    } finally {
-      closeConfirmationInFlightRef.current = false
-    }
+    setDiscardConfirmationOpen(true)
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => void requestOpenChange(nextOpen)}>
+    <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent
         showCloseButton={false}
         aria-busy={saving}
@@ -145,7 +147,7 @@ export default function ConfigEditDialog({
             aria-label="关闭编辑窗口"
             className="absolute right-3 top-1/2 min-h-11 min-w-11 -translate-y-1/2"
             disabled={saving}
-            onClick={() => void requestOpenChange(false)}
+            onClick={() => requestOpenChange(false)}
           >
             <CloseIcon size={18} />
           </Button>
@@ -195,7 +197,7 @@ export default function ConfigEditDialog({
         </div>
 
         <DialogFooter className="mx-0 mb-0 shrink-0 border-t border-slate-200 bg-white px-6 py-4">
-          <Button type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => void requestOpenChange(false)}>
+          <Button type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => requestOpenChange(false)}>
             {isReadOnlyAIAsset ? '关闭' : '取消'}
           </Button>
           {!isReadOnlyAIAsset && (
@@ -205,6 +207,37 @@ export default function ConfigEditDialog({
           )}
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog
+        open={discardConfirmationOpen}
+        onOpenChange={setDiscardConfirmationOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogTitle>放弃未保存修改</AlertDialogTitle>
+          <AlertDialogDescription>
+            当前修改尚未保存。关闭后这些修改会丢失，是否继续？
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDiscardConfirmationOpen(false)}
+            >
+              继续编辑
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                setDiscardConfirmationOpen(false)
+                onOpenChange(false)
+              }}
+            >
+              放弃修改
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

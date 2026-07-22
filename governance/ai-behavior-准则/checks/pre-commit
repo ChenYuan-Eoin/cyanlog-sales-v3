@@ -7,7 +7,7 @@
 #   默认（CI/非交互）: 严格阻断
 #   STRICT=1: 严格阻断（CI 推荐）
 #   SOFT=1: 软失败（仅警告，不阻断）
-#   SKIP_CHECKS=1: 完全跳过（紧急情况）
+#   SKIP_CHECKS=1: 跳过 10 项检查（不会跳过 index 一致性与 Harness selftest）
 #
 # 通过 git commit --no-verify 永远跳过
 
@@ -16,9 +16,11 @@ set -e
 # 关键：所有 check 脚本都使用相对路径（如 product-truth/product-code/...）
 # 必须先 cd 到 git 根目录，否则路径解析失败
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
-if [ -n "$GIT_ROOT" ]; then
-    cd "$GIT_ROOT"
+if [ -z "$GIT_ROOT" ]; then
+    echo "❌ pre-commit 必须在 Git 工作树中运行"
+    exit 1
 fi
+cd "$GIT_ROOT"
 
 # 兼容 core.hooksPath 设置与直接调用两种方式
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,20 +34,24 @@ else
     PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
 fi
 
-# 跳过机制
-if [ "${SKIP_CHECKS:-0}" = "1" ]; then
-    echo "⚠️  SKIP_CHECKS=1，跳过所有 AI 行为检查"
-    exit 0
-fi
-
 # ANSI 颜色
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# 这些脚本在 working tree 上执行。若 tracked working tree 与 index 不一致，
+# 检查输入就不是即将提交的 tracked 内容，任何 staged-tree 结论都会失真。
+# 这是证据完整性门禁，SOFT/SKIP_CHECKS 均不能绕过；--no-verify 仍是 Git 的显式逃生口。
+if ! git diff --quiet --; then
+    echo -e "${RED}❌ tracked working tree 与 index 不一致，拒绝运行失真的提交检查。${NC}"
+    echo "   请先暂存全部拟提交的 tracked 修改，或还原不属于本提交的未暂存修改。"
+    echo "   诊断: git diff --name-only"
+    exit 1
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🔒 AI 行为硬约束检查 (10项)"
+echo "🔒 AI 行为硬约束检查 (Harness 控制预检 + 固定 10 项)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -68,51 +74,576 @@ echo ""
 
 FAILED=0
 PASSED=0
+EXECUTED=0
 FAILURE_DETAILS=()
+CONTROL_EXECUTED=0
+CONTROL_PASSED=0
+CONTROL_FAILED=0
+CONTROL_STATUS="not-run"
+FIXED_CHECKS_SKIPPED=false
+TRACKED_MATCHES_INDEX=true
+INDEX_TREE_STABLE=true
+EXTRA_INPUTS_STABLE=true
 
-# 运行所有 check 脚本
-for check in "$CHECKS_DIR"/check-*.sh; do
-    if [ -f "$check" ]; then
-        name=$(basename "$check" .sh | sed 's/check-[0-9]*-//' | tr '-' ' ')
-        echo "▶️  运行: $name..."
+REQUIRED_CHECKS=(
+    "check-01-typecheck.sh"
+    "check-02-lint.sh"
+    "check-03-test.sh"
+    "check-04-nav.sh"
+    "check-05-git.sh"
+    "check-06-feedback-loop.sh"
+    "check-07-healthcheck.sh"
+    "check-08-error-handling.sh"
+    "check-09-business-loop.sh"
+    "check-10-ci-cd-loop.sh"
+)
 
-        if bash "$check" 2>&1; then
-            PASSED=$((PASSED + 1))
-            echo -e "${GREEN}   ✅ 通过${NC}"
-        else
-            FAILED=$((FAILED + 1))
-            FAILURE_DETAILS+=("$name")
-            echo -e "${RED}   ❌ 失败${NC}"
-        fi
-        echo ""
+CHECK_TIMEOUT_SECONDS="${CHECK_TIMEOUT_SECONDS:-900}"
+HARNESS_SELFTEST_TIMEOUT_SECONDS="${HARNESS_SELFTEST_TIMEOUT_SECONDS:-120}"
+case "$CHECK_TIMEOUT_SECONDS:$HARNESS_SELFTEST_TIMEOUT_SECONDS" in
+    *[!0-9:]*|0:*|*:0|:*)
+        echo -e "${RED}❌ CHECK_TIMEOUT_SECONDS 与 HARNESS_SELFTEST_TIMEOUT_SECONDS 必须是正整数。${NC}"
+        exit 1
+        ;;
+esac
+case "$CHECK_TIMEOUT_SECONDS" in
+    ''|*[!0-9]*|0)
+        echo -e "${RED}❌ CHECK_TIMEOUT_SECONDS 必须是正整数，当前值: ${CHECK_TIMEOUT_SECONDS}${NC}"
+        exit 1
+        ;;
+esac
+
+if ! command -v node >/dev/null 2>&1; then
+    echo -e "${RED}❌ 固定检查的超时守护需要项目运行时 Node.js。${NC}"
+    exit 1
+fi
+if ! command -v npm >/dev/null 2>&1; then
+    echo -e "${RED}❌ Harness selftest 需要项目运行时 npm。${NC}"
+    exit 1
+fi
+
+# 任何未跟踪文件都不属于将提交的 tree；会被构建或治理检查读取的 ignored
+# 输入也必须显式排除。扫描在检查前后各执行一次，避免检查中途生成新输入。
+collect_extra_inputs_json() {
+    node <<'NODE'
+const { spawnSync } = require('node:child_process');
+
+function gitPaths(args) {
+  const result = spawnSync('git', args, {
+    cwd: process.cwd(),
+    encoding: 'buffer',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    process.stderr.write((result.stderr || Buffer.from('git input scan failed')).toString('utf8'));
+    process.exit(result.status || 1);
+  }
+  return result.stdout.toString('utf8').split('\0').filter(Boolean);
+}
+
+const untracked = gitPaths(['ls-files', '--others', '--exclude-standard', '-z']);
+const ignoredCheckInputs = gitPaths([
+  'ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--',
+  '.github',
+  'governance',
+  'product-truth/REQ_REGISTRY.yml',
+  'product-truth/product-code/app',
+  'product-truth/product-code/components',
+  'product-truth/product-code/lib',
+  'product-truth/product-code/types',
+  'product-truth/product-code/scripts',
+  'product-truth/product-code/middleware.ts',
+  'product-truth/product-code/instrumentation.ts',
+  'product-truth/product-code/next.config.mjs',
+  'product-truth/product-code/package.json',
+  'product-truth/product-code/pnpm-lock.yaml',
+  'product-truth/product-code/.env*',
+  'product-truth/product-code/.npmrc',
+  '.npmrc',
+]);
+const entries = [
+  ...untracked.map((file) => ({ kind: 'untracked', path: file })),
+  ...ignoredCheckInputs.map((file) => ({ kind: 'ignored_check_input', path: file })),
+].sort((left, right) => `${left.kind}:${left.path}`.localeCompare(`${right.kind}:${right.path}`));
+process.stdout.write(JSON.stringify(entries));
+NODE
+}
+
+EXTRA_INPUTS_BEFORE_JSON=$(collect_extra_inputs_json)
+EXTRA_INPUT_COUNT=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).length))' "$EXTRA_INPUTS_BEFORE_JSON")
+if [ "$EXTRA_INPUT_COUNT" -ne 0 ]; then
+    echo -e "${RED}❌ commit tree 之外仍有可影响检查的输入，严格阻断:${NC}"
+    node -e 'for (const item of JSON.parse(process.argv[1])) console.log(`   - ${item.kind}: ${item.path}`)' "$EXTRA_INPUTS_BEFORE_JSON"
+    exit 1
+fi
+EXTRA_INPUT_SNAPSHOT_SHA256=$(node -e 'const c=require("node:crypto");process.stdout.write(c.createHash("sha256").update(process.argv[1]).digest("hex"))' "$EXTRA_INPUTS_BEFORE_JSON")
+
+MISSING_CHECKS=()
+for check_file in "${REQUIRED_CHECKS[@]}"; do
+    check="$CHECKS_DIR/$check_file"
+    if [ ! -f "$check" ] || [ ! -r "$check" ]; then
+        MISSING_CHECKS+=("$check_file")
     fi
 done
 
-# 记录审计日志
-AUDIT_DIR="$PROJECT_ROOT/governance/ai-behavior-准则/audit"
-mkdir -p "$AUDIT_DIR"
+if [ "${#MISSING_CHECKS[@]}" -ne 0 ]; then
+    echo -e "${RED}❌ 固定 10 项检查清单不完整，严格阻断:${NC}"
+    for check_file in "${MISSING_CHECKS[@]}"; do
+        echo "   - 缺失必需检查: $check_file"
+    done
+    exit 1
+fi
 
-COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "pre-commit")
-TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LOG_ENTRY="{\"timestamp\":\"$TIMESTAMP\",\"commit\":\"$COMMIT_HASH\",\"passed\":$PASSED,\"failed\":$FAILED,\"mode\":\"$MODE\",\"trigger\":\"pre-commit\"}"
+# macOS 默认没有 GNU timeout。用项目已有的 Node.js 启动独立进程组，
+# 超时先 TERM、1 秒后 KILL，并以 124 明确表示超时。
+run_command_with_timeout() {
+    local timeout_seconds="$1"
+    local artifact_path="$2"
+    local artifact_relative_path="$3"
+    local check_name="$4"
+    shift 4
 
-echo "$LOG_ENTRY" >> "$AUDIT_DIR/behavior-log.jsonl"
+    node - "$timeout_seconds" "$artifact_path" "$artifact_relative_path" "$check_name" "$@" <<'NODE'
+const { spawn } = require('node:child_process');
+const { createHash } = require('node:crypto');
+const {
+  closeSync,
+  createWriteStream,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} = require('node:fs');
+const { dirname } = require('node:path');
+
+const [
+  timeoutRaw,
+  artifactPath,
+  artifactRelativePath,
+  checkName,
+  command,
+  ...args
+] = process.argv.slice(2);
+const timeoutSeconds = Number(timeoutRaw);
+const commandLabel = [command, ...args].join(' ');
+const artifactTempPath = `${artifactPath}.tmp-${process.pid}-${Date.now()}`;
+const metadataPath = `${artifactPath}.meta.json`;
+const metadataTempPath = `${metadataPath}.tmp-${process.pid}-${Date.now()}`;
+
+mkdirSync(dirname(artifactPath), { recursive: true });
+const artifactStream = createWriteStream(artifactTempPath, {
+  flags: 'wx',
+  mode: 0o600,
+});
+const child = spawn(command, args, {
+  detached: true,
+  stdio: ['inherit', 'pipe', 'pipe'],
+});
+
+let timedOut = false;
+let killTimer;
+let forceFinalizeTimer;
+let interruptedExitCode = null;
+let finalized = false;
+
+function mirror(chunk, destination) {
+  destination.write(chunk);
+  artifactStream.write(chunk);
+}
+
+child.stdout.on('data', (chunk) => mirror(chunk, process.stdout));
+child.stderr.on('data', (chunk) => mirror(chunk, process.stderr));
+
+function writeRunnerError(message) {
+  process.stderr.write(message);
+  artifactStream.write(message);
+}
+
+function signalGroup(signal) {
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // Child may already have exited.
+    }
+  }
+}
+
+function groupStillExists() {
+  try {
+    process.kill(-child.pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+artifactStream.once('error', (error) => {
+  signalGroup('SIGKILL');
+  try { unlinkSync(artifactTempPath); } catch {}
+  process.stderr.write(`无法写入检查日志 ${artifactPath}: ${error.message}\n`);
+  process.exit(1);
+});
+
+const timeout = setTimeout(() => {
+  timedOut = true;
+  writeRunnerError(`⏱️  检查超过 ${timeoutSeconds}s，终止: ${commandLabel}\n`);
+  signalGroup('SIGTERM');
+  killTimer = setTimeout(() => {
+    signalGroup('SIGKILL');
+    forceFinalizeTimer = setTimeout(() => finalizeArtifact(124), 1000);
+  }, 1000);
+}, timeoutSeconds * 1000);
+
+const signalExitCodes = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 };
+for (const signal of Object.keys(signalExitCodes)) {
+  process.on(signal, () => {
+    if (interruptedExitCode !== null) return;
+    interruptedExitCode = signalExitCodes[signal];
+    writeRunnerError(`检查守护收到 ${signal}，终止进程组: ${commandLabel}\n`);
+    signalGroup(signal);
+    setTimeout(() => {
+      signalGroup('SIGKILL');
+      finalizeArtifact(interruptedExitCode);
+    }, 1000);
+  });
+}
+
+function fsyncFile(filePath) {
+  const fd = openSync(filePath, 'r');
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function finalizeArtifact(exitCode) {
+  if (finalized) return;
+  finalized = true;
+  clearTimeout(timeout);
+  if (killTimer) clearTimeout(killTimer);
+  if (forceFinalizeTimer) clearTimeout(forceFinalizeTimer);
+
+  artifactStream.end(() => {
+    try {
+      fsyncFile(artifactTempPath);
+      renameSync(artifactTempPath, artifactPath);
+      const sha256 = createHash('sha256').update(readFileSync(artifactPath)).digest('hex');
+      const metadata = {
+        name: checkName,
+        command: [command, ...args],
+        artifact_path: artifactRelativePath,
+        sha256,
+        exit_code: exitCode,
+        timeout: timedOut,
+      };
+      writeFileSync(metadataTempPath, `${JSON.stringify(metadata)}\n`, { mode: 0o600 });
+      fsyncFile(metadataTempPath);
+      renameSync(metadataTempPath, metadataPath);
+      process.exit(exitCode);
+    } catch (error) {
+      try { unlinkSync(artifactTempPath); } catch {}
+      try { unlinkSync(metadataTempPath); } catch {}
+      process.stderr.write(`无法原子保存检查日志 ${artifactPath}: ${error.message}\n`);
+      process.exit(1);
+    }
+  });
+}
+
+child.once('error', (error) => {
+  writeRunnerError(`无法启动检查 ${commandLabel}: ${error.message}\n`);
+  finalizeArtifact(1);
+});
+
+child.once('close', (code) => {
+  if (interruptedExitCode !== null) {
+    finalizeArtifact(interruptedExitCode);
+    return;
+  }
+  if (timedOut) {
+    if (!groupStillExists()) {
+      finalizeArtifact(124);
+    }
+    return;
+  }
+  finalizeArtifact(Number.isInteger(code) ? code : 1);
+});
+NODE
+}
+
+# pre-commit 只能证明 index tree 与检查时 working tree 的关系，不能提前声称最终 commit。
+# 证据写入当前 worktree 独立 Git runtime，不制造 tracked dirty。
+RUNTIME_DIR="${PRICE_V3_RUNTIME_DIR:-$(git rev-parse --path-format=absolute --git-path codex-runtime)}"
+AUDIT_LOG="${PRICE_V3_BEHAVIOR_LOG_PATH:-$RUNTIME_DIR/behavior-log.jsonl}"
+mkdir -p "$(dirname "$AUDIT_LOG")"
+
+BASE_COMMIT=$(git rev-parse --verify HEAD 2>/dev/null || echo "unborn")
+if ! INDEX_TREE=$(git write-tree 2>/dev/null); then
+    echo -e "${RED}❌ 无法解析当前 index tree，严格阻断。${NC}"
+    exit 1
+fi
+CHECK_LOG_RELATIVE_DIR="check-logs/$INDEX_TREE"
+CHECK_LOG_DIR="$RUNTIME_DIR/$CHECK_LOG_RELATIVE_DIR"
+node - "$RUNTIME_DIR/check-logs" "$CHECK_LOG_DIR" <<'NODE'
+const { mkdirSync, rmSync } = require('node:fs');
+const { resolve, sep } = require('node:path');
+
+const root = resolve(process.argv[2]);
+const runDirectory = resolve(process.argv[3]);
+if (!runDirectory.startsWith(`${root}${sep}`)) {
+  throw new Error(`拒绝清理 check-logs 根目录之外的路径: ${runDirectory}`);
+}
+rmSync(runDirectory, { recursive: true, force: true });
+mkdirSync(runDirectory, { recursive: true });
+NODE
+RESULT_METADATA_PATHS=()
+UNTRACKED_COUNT=$(git ls-files --others --exclude-standard -z | node -e '
+let count = 0;
+process.stdin.on("data", (chunk) => {
+  for (const byte of chunk) if (byte === 0) count += 1;
+});
+process.stdin.on("end", () => process.stdout.write(String(count)));
+')
+ENVIRONMENT_FINGERPRINT=$(node - "$EXTRA_INPUT_SNAPSHOT_SHA256" <<'NODE'
+const { execFileSync } = require("node:child_process");
+const version = (command, args) => {
+  try { return execFileSync(command, args, { encoding: "utf8" }).trim(); } catch { return "unavailable"; }
+};
+const selectedNames = ["CI", "NODE_ENV", "VERCEL_ENV", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+process.stdout.write(JSON.stringify({
+  node: process.version,
+  pnpm: version("pnpm", ["--version"]),
+  git: version("git", ["--version"]),
+  variablesPresent: selectedNames.filter((name) => Object.prototype.hasOwnProperty.call(process.env, name)),
+  extraInputSnapshotSha256: process.argv[2],
+  untrackedFileCount: 0,
+  ignoredCheckInputCount: 0,
+}));
+NODE
+)
+
+verify_checked_input() {
+    TRACKED_MATCHES_INDEX=true
+    INDEX_TREE_STABLE=true
+    EXTRA_INPUTS_STABLE=true
+
+    if ! git diff --quiet --; then
+        TRACKED_MATCHES_INDEX=false
+    fi
+
+    current_index_tree=$(git write-tree 2>/dev/null || echo "unavailable")
+    if [ "$current_index_tree" != "$INDEX_TREE" ]; then
+        INDEX_TREE_STABLE=false
+    fi
+
+    extra_inputs_after_json=$(collect_extra_inputs_json)
+    if [ "$extra_inputs_after_json" != "$EXTRA_INPUTS_BEFORE_JSON" ]; then
+        EXTRA_INPUTS_STABLE=false
+    fi
+}
+
+write_audit_entry() {
+    local outcome="$1"
+    local timestamp
+    local log_entry
+
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    log_entry=$(node - \
+        "$timestamp" "$BASE_COMMIT" "$INDEX_TREE" "$UNTRACKED_COUNT" \
+        "$PASSED" "$FAILED" "$EXECUTED" "$MODE" "$CHECK_TIMEOUT_SECONDS" \
+        "$CONTROL_EXECUTED" "$CONTROL_PASSED" "$CONTROL_FAILED" "$CONTROL_STATUS" \
+        "$HARNESS_SELFTEST_TIMEOUT_SECONDS" "$FIXED_CHECKS_SKIPPED" \
+        "$TRACKED_MATCHES_INDEX" "$INDEX_TREE_STABLE" "$EXTRA_INPUTS_STABLE" "$outcome" "$ENVIRONMENT_FINGERPRINT" \
+        "${RESULT_METADATA_PATHS[@]}" <<'NODE'
+const { readFileSync } = require('node:fs');
+const allArguments = process.argv.slice(2);
+const [
+  timestamp,
+  baseCommit,
+  indexTree,
+  untrackedFileCount,
+  passed,
+  failed,
+  executed,
+  mode,
+  timeoutSeconds,
+  controlExecuted,
+  controlPassed,
+  controlFailed,
+  controlStatus,
+  controlTimeoutSeconds,
+  fixedChecksSkipped,
+  trackedMatchesIndex,
+  indexTreeStable,
+  extraInputsStable,
+  outcome,
+  environmentFingerprint,
+] = allArguments.slice(0, 20);
+const metadataPaths = allArguments.slice(20);
+const checkArtifacts = metadataPaths.map((metadataPath) => (
+  JSON.parse(readFileSync(metadataPath, 'utf8'))
+));
+const controlArtifact = checkArtifacts.find((artifact) => artifact.name === 'harness-selftest') || null;
+
+process.stdout.write(JSON.stringify({
+  timestamp,
+  baseCommit,
+  indexTree,
+  checkedInput: 'working-tree-checked-against-index',
+  trackedWorkingTreeMatchesIndex: trackedMatchesIndex === 'true',
+  indexTreeStable: indexTreeStable === 'true',
+  extraInputsStable: extraInputsStable === 'true',
+  untrackedFileCount: Number(untrackedFileCount),
+  environmentFingerprint: JSON.parse(environmentFingerprint),
+  controlPreflight: {
+    name: 'harness-selftest',
+    command: ['npm', '--prefix', 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本', 'test'],
+    required: true,
+    executed: Number(controlExecuted),
+    passed: Number(controlPassed),
+    failed: Number(controlFailed),
+    status: controlStatus,
+    timeoutSeconds: Number(controlTimeoutSeconds),
+    artifact_path: controlArtifact?.artifact_path || null,
+    sha256: controlArtifact?.sha256 || null,
+    exit_code: controlArtifact?.exit_code ?? null,
+    timeout: controlArtifact?.timeout ?? null,
+  },
+  requiredChecks: 10,
+  executedChecks: Number(executed),
+  passed: Number(passed),
+  failed: Number(failed),
+  fixedChecksSkipped: fixedChecksSkipped === 'true',
+  perCheckTimeoutSeconds: Number(timeoutSeconds),
+  checkArtifacts,
+  outcome,
+  overallPassed: outcome === 'passed',
+  mode,
+  trigger: 'pre-commit',
+}));
+NODE
+)
+
+    printf '%s\n' "$log_entry" >> "$AUDIT_LOG"
+}
+
+HARNESS_SCRIPTS_RELATIVE_DIR="governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本"
+HARNESS_SCRIPTS_DIR="$PROJECT_ROOT/$HARNESS_SCRIPTS_RELATIVE_DIR"
+if [ ! -f "$HARNESS_SCRIPTS_DIR/package.json" ]; then
+    echo -e "${RED}❌ Harness selftest package 缺失: $HARNESS_SCRIPTS_DIR/package.json${NC}"
+    exit 1
+fi
+
+echo "▶️  控制预检: harness selftest (timeout=${HARNESS_SELFTEST_TIMEOUT_SECONDS}s)..."
+CONTROL_EXECUTED=1
+CONTROL_ARTIFACT_RELATIVE_PATH="$CHECK_LOG_RELATIVE_DIR/00-harness-selftest.log"
+CONTROL_ARTIFACT_PATH="$RUNTIME_DIR/$CONTROL_ARTIFACT_RELATIVE_PATH"
+RESULT_METADATA_PATHS+=("$CONTROL_ARTIFACT_PATH.meta.json")
+if run_command_with_timeout \
+    "$HARNESS_SELFTEST_TIMEOUT_SECONDS" \
+    "$CONTROL_ARTIFACT_PATH" \
+    "$CONTROL_ARTIFACT_RELATIVE_PATH" \
+    "harness-selftest" \
+    npm --prefix "$HARNESS_SCRIPTS_RELATIVE_DIR" test; then
+    CONTROL_PASSED=1
+    CONTROL_STATUS="passed"
+    echo -e "${GREEN}   ✅ Harness selftest 通过${NC}"
+else
+    control_status=$?
+    CONTROL_FAILED=1
+    if [ "$control_status" -eq 124 ]; then
+        CONTROL_STATUS="timeout"
+        echo -e "${RED}   ❌ Harness selftest 超时${NC}"
+    else
+        CONTROL_STATUS="failed"
+        echo -e "${RED}   ❌ Harness selftest 失败 (exit=$control_status)${NC}"
+    fi
+    verify_checked_input
+    write_audit_entry "control_preflight_failed"
+    echo -e "${RED}🚫 Harness 控制预检失败，无法使用 SOFT 或 SKIP_CHECKS 绕过。${NC}"
+    exit 1
+fi
+echo ""
+
+# SKIP_CHECKS 只跳过固定业务检查；Harness 与证据输入完整性仍强制执行。
+if [ "${SKIP_CHECKS:-0}" = "1" ]; then
+    FIXED_CHECKS_SKIPPED=true
+    verify_checked_input
+    if [ "$TRACKED_MATCHES_INDEX" != true ] || [ "$INDEX_TREE_STABLE" != true ] || [ "$EXTRA_INPUTS_STABLE" != true ]; then
+        write_audit_entry "checked_input_mutated"
+        echo -e "${RED}❌ Harness selftest 改变了 tracked working tree 或 index，严格阻断。${NC}"
+        exit 1
+    fi
+    write_audit_entry "fixed_checks_skipped"
+    echo "⚠️  SKIP_CHECKS=1，Harness selftest 已通过；跳过固定 10 项检查"
+    exit 0
+fi
+
+# 只运行经过审计的固定清单；额外的 check-*.sh 不会被隐式加入提交门禁。
+for check_file in "${REQUIRED_CHECKS[@]}"; do
+    check="$CHECKS_DIR/$check_file"
+    check_id="${check_file%.sh}"
+    name=$(basename "$check" .sh | sed 's/check-[0-9]*-//' | tr '-' ' ')
+    artifact_relative_path="$CHECK_LOG_RELATIVE_DIR/$check_id.log"
+    artifact_path="$RUNTIME_DIR/$artifact_relative_path"
+    RESULT_METADATA_PATHS+=("$artifact_path.meta.json")
+
+    echo "▶️  运行: $name (timeout=${CHECK_TIMEOUT_SECONDS}s)..."
+    if run_command_with_timeout \
+        "$CHECK_TIMEOUT_SECONDS" \
+        "$artifact_path" \
+        "$artifact_relative_path" \
+        "$check_id" \
+        bash "$check"; then
+        EXECUTED=$((EXECUTED + 1))
+        PASSED=$((PASSED + 1))
+        echo -e "${GREEN}   ✅ 通过${NC}"
+    else
+        check_status=$?
+        EXECUTED=$((EXECUTED + 1))
+        FAILED=$((FAILED + 1))
+        if [ "$check_status" -eq 124 ]; then
+            FAILURE_DETAILS+=("$name (timeout ${CHECK_TIMEOUT_SECONDS}s)")
+            echo -e "${RED}   ❌ 超时${NC}"
+        else
+            FAILURE_DETAILS+=("$name")
+            echo -e "${RED}   ❌ 失败 (exit=$check_status)${NC}"
+        fi
+    fi
+    echo ""
+done
+
+verify_checked_input
+if [ "$TRACKED_MATCHES_INDEX" != true ] || [ "$INDEX_TREE_STABLE" != true ] || [ "$EXTRA_INPUTS_STABLE" != true ]; then
+    write_audit_entry "checked_input_mutated"
+    echo -e "${RED}❌ 检查过程改变了 tracked working tree 或 index，审计输入已失效，严格阻断。${NC}"
+    echo "   trackedWorkingTreeMatchesIndex=$TRACKED_MATCHES_INDEX"
+    echo "   indexTreeStable=$INDEX_TREE_STABLE"
+    echo "   extraInputsStable=$EXTRA_INPUTS_STABLE"
+    exit 1
+fi
+
+if [ "$FAILED" -eq 0 ]; then
+    write_audit_entry "passed"
+else
+    write_audit_entry "fixed_checks_failed"
+fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${GREEN}✅ 通过: $PASSED${NC}  ${RED}❌ 失败: $FAILED${NC}"
+echo "执行: $EXECUTED / 必需: ${#REQUIRED_CHECKS[@]} / 单项超时: ${CHECK_TIMEOUT_SECONDS}s"
+echo "控制预检: $CONTROL_STATUS / 超时: ${HARNESS_SELFTEST_TIMEOUT_SECONDS}s"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # 决策
 if [ $FAILED -eq 0 ]; then
     echo -e "${GREEN}🎉 所有检查通过${NC}"
-
-    # ONES 模式：收集反馈供 AI 参考
-    if [ -f "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" ]; then
-        echo ""
-        echo "📊 正在收集反馈数据..."
-        node "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" 2>/dev/null || true
-    fi
-
     exit 0
 fi
 
@@ -122,13 +653,6 @@ echo -e "${RED}❌ 失败的检查项:${NC}"
 for f in "${FAILURE_DETAILS[@]}"; do
     echo "   - $f"
 done
-echo ""
-
-# ONES 模式：失败时自动触发 feedback
-echo "📊 正在收集失败反馈..."
-if [ -f "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" ]; then
-    node "$PROJECT_ROOT/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js" 2>/dev/null || true
-fi
 echo ""
 
 case "$MODE" in
@@ -142,7 +666,7 @@ case "$MODE" in
         echo "跳过方法："
         echo "  • git commit --no-verify    （跳过 hook）"
         echo "  • SOFT=1 git commit        （软失败模式）"
-        echo "  • SKIP_CHECKS=1 git commit （完全跳过）"
+        echo "  • SKIP_CHECKS=1 git commit （仅跳过固定 10 项，Harness 仍执行）"
         exit 1
         ;;
     interactive)

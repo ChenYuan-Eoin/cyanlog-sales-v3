@@ -16,7 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const showSidebar = !usesPublicLayout(pathname)
 
   return (
-    <>
+    <div data-slot="app-root" className="isolate min-h-screen">
       {showSidebar ? <Sidebar /> : null}
       <main className={cn(
         'min-h-screen bg-background',
@@ -27,6 +27,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}>
         {children}
       </main>
-    </>
+    </div>
   )
 }

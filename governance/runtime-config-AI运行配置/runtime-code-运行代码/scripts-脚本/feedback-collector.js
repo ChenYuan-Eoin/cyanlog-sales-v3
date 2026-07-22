@@ -6,15 +6,26 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 
 const WORKSPACE_ROOT = process.env.PRICE_V3_WORKSPACE_ROOT ||
   path.resolve(__dirname, '../../../..');
 
-const FEEDBACK_PATH = path.join(
-  WORKSPACE_ROOT,
-  'governance/runtime-state/feedback.json'
-);
+function resolveRuntimeDir() {
+  if (process.env.PRICE_V3_RUNTIME_DIR) return process.env.PRICE_V3_RUNTIME_DIR;
+  return execFileSync(
+    'git',
+    ['rev-parse', '--path-format=absolute', '--git-path', 'codex-runtime'],
+    { cwd: WORKSPACE_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+  ).trim();
+}
+
+const FEEDBACK_PATH = process.env.PRICE_V3_FEEDBACK_PATH ||
+  path.join(resolveRuntimeDir(), 'feedback.json');
+
+function stripAnsi(value) {
+  return String(value || '').replace(/\u001b\[[0-9;]*m/g, '');
+}
 
 function collectTypecheckFeedback() {
   console.log('📦 收集 TypeScript 类型检查反馈...');
@@ -70,22 +81,32 @@ function collectTestFeedback() {
       timeout: 120000
     });
 
-    const passedMatch = output.match(/(\d+) passed/);
-    const failedMatch = output.match(/(\d+) failed/);
+    const normalized = stripAnsi(output);
+    const testFilesPassedMatch = normalized.match(/Test Files\s+(\d+)\s+passed/);
+    const testFilesFailedMatch = normalized.match(/Test Files\s+(\d+)\s+failed/);
+    const passedMatch = normalized.match(/Tests\s+(\d+)\s+passed/);
+    const failedMatch = normalized.match(/Tests\s+(\d+)\s+failed/);
 
     return {
       success: !failedMatch || parseInt(failedMatch[1]) === 0,
       passed: passedMatch ? parseInt(passedMatch[1]) : 0,
       failed: failedMatch ? parseInt(failedMatch[1]) : 0,
+      testFilesPassed: testFilesPassedMatch ? parseInt(testFilesPassedMatch[1]) : 0,
+      testFilesFailed: testFilesFailedMatch ? parseInt(testFilesFailedMatch[1]) : 0,
       message: '测试执行完成'
     };
   } catch (e) {
-    const output = e.stdout || e.stderr || '';
-    const failedMatch = output.match(/(\d+) failed/);
+    const output = stripAnsi(e.stdout || e.stderr || '');
+    const passedMatch = output.match(/Tests\s+(\d+)\s+passed/);
+    const failedMatch = output.match(/Tests\s+(\d+)\s+failed/);
+    const testFilesPassedMatch = output.match(/Test Files\s+(\d+)\s+passed/);
+    const testFilesFailedMatch = output.match(/Test Files\s+(\d+)\s+failed/);
     return {
       success: false,
-      passed: 0,
+      passed: passedMatch ? parseInt(passedMatch[1]) : 0,
       failed: failedMatch ? parseInt(failedMatch[1]) : 1,
+      testFilesPassed: testFilesPassedMatch ? parseInt(testFilesPassedMatch[1]) : 0,
+      testFilesFailed: testFilesFailedMatch ? parseInt(testFilesFailedMatch[1]) : 1,
       message: '测试失败',
       details: output.split('\n').filter(l => l.includes('FAIL') || l.includes('Error')).slice(0, 5)
     };
@@ -98,7 +119,10 @@ function saveFeedback(feedback) {
     ...feedback
   };
 
-  fs.writeFileSync(FEEDBACK_PATH, JSON.stringify(fullFeedback, null, 2));
+  fs.mkdirSync(path.dirname(FEEDBACK_PATH), { recursive: true });
+  const temporaryPath = `${FEEDBACK_PATH}.tmp-${process.pid}`;
+  fs.writeFileSync(temporaryPath, `${JSON.stringify(fullFeedback, null, 2)}\n`);
+  fs.renameSync(temporaryPath, FEEDBACK_PATH);
   console.log(`\n✅ 反馈已保存到: ${FEEDBACK_PATH}`);
 }
 

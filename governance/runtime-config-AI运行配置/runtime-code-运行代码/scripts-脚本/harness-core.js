@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { spawnSync } = require('child_process');
 const { loadRegistry } = require('./project-registry');
 
 const PHASE_TO_GATE = {
@@ -103,15 +104,37 @@ function repoRootFromRegistry() {
   return loadRegistry().repoRoot;
 }
 
+function harnessRuntimeDir(repoRoot) {
+  if (process.env.PRICE_V3_HARNESS_RUNTIME_DIR) {
+    return path.resolve(process.env.PRICE_V3_HARNESS_RUNTIME_DIR);
+  }
+  const result = spawnSync('git', [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-path',
+    'codex-runtime/harness'
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  if (result.status !== 0) {
+    throw new Error((result.stderr || 'cannot resolve Harness runtime directory').trim());
+  }
+  return result.stdout.trim();
+}
+
 function paths(repoRoot = repoRootFromRegistry()) {
+  const runtimeDir = harnessRuntimeDir(repoRoot);
   return {
     repoRoot,
+    runtimeDir,
     settingsPath: path.join(repoRoot, 'governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json'),
     registryPath: path.join(repoRoot, 'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json'),
     documentRulesPath: path.join(repoRoot, 'docs-governance/maintenance-config-维护配置/config-配置文件/document-maintenance-rules-文档维护规则.json'),
-    statePath: path.join(repoRoot, 'governance/runtime-state/harness-state.json'),
-    contractPath: path.join(repoRoot, 'governance/runtime-state/goal-contract.json'),
-    evidenceLedgerPath: path.join(repoRoot, 'governance/runtime-state/evidence-ledger.jsonl')
+    statePath: path.join(runtimeDir, 'harness-state.json'),
+    contractPath: path.join(runtimeDir, 'goal-contract.json'),
+    evidenceLedgerPath: path.join(runtimeDir, 'evidence-ledger.jsonl')
   };
 }
 
@@ -124,7 +147,9 @@ function readJson(filePath, fallback = null) {
 
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  const temporaryPath = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(temporaryPath, filePath);
 }
 
 function appendJsonl(filePath, value) {
@@ -189,6 +214,7 @@ function makeGoalContract(goalText, options = {}) {
   return {
     version: '1.0',
     id: `goal-${now.replace(/[-:.TZ]/g, '').slice(0, 14)}`,
+    workPackageId: options.workPackageId || null,
     status: 'draft',
     createdAt: now,
     updatedAt: now,
@@ -358,6 +384,9 @@ function validateContract(contract) {
   }
   if (!contract.successCriteria || !contract.successCriteria.length) {
     errors.push('successCriteria are required');
+  }
+  if (contract.workPackageId && !/^WP\d{2}$/.test(contract.workPackageId)) {
+    errors.push(`workPackageId must be WP00-WP99: ${contract.workPackageId}`);
   }
   try {
     normalizeAutonomyLevel(contract.autonomyBudget?.level);
@@ -531,6 +560,7 @@ function setPhase(repoRoot, phase, reason = 'manual phase switch', options = {})
   };
   state.currentGoal = contract && gate ? {
     id: contract.id,
+    workPackageId: contract.workPackageId || null,
     objective: contract.objective,
     contractPath: path.relative(repoRoot, paths(repoRoot).contractPath),
     status: contract.status,
@@ -711,6 +741,19 @@ function normalizeRepoRelative(repoRoot, filePath) {
   return path.relative(repoRoot, absolute).replace(/\\/g, '/');
 }
 
+function isHarnessRuntimeStatePath(repoRoot, filePath) {
+  if (!filePath) {
+    return false;
+  }
+  const absolute = path.resolve(path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath));
+  const runtimePaths = paths(repoRoot);
+  return [
+    runtimePaths.statePath,
+    runtimePaths.contractPath,
+    runtimePaths.evidenceLedgerPath
+  ].some((runtimePath) => path.resolve(runtimePath) === absolute);
+}
+
 function normalizedScopes(contract) {
   return (contract?.boundaries?.allowedScopes || [])
     .map((scope) => String(scope || '').replace(/\/+$/, ''))
@@ -781,7 +824,11 @@ function commandTargetObject(command) {
 }
 
 function actionTargetObject(repoRoot, payload, command) {
-  const rel = normalizeRepoRelative(repoRoot, payloadFilePath(payload));
+  const filePath = payloadFilePath(payload);
+  if (isHarnessRuntimeStatePath(repoRoot, filePath)) {
+    return 'harness-runtime-state';
+  }
+  const rel = normalizeRepoRelative(repoRoot, filePath);
   if (rel) {
     if ([
       'governance/runtime-state/harness-state.json',
@@ -928,7 +975,11 @@ function documentEditRisk(repoRoot, payload, category) {
 }
 
 function controlPlaneEditRisk(repoRoot, contract, payload) {
-  const rel = normalizeRepoRelative(repoRoot, payloadFilePath(payload));
+  const filePath = payloadFilePath(payload);
+  if (isHarnessRuntimeStatePath(repoRoot, filePath)) {
+    return `direct edit to Harness runtime state is forbidden: ${filePath}`;
+  }
+  const rel = normalizeRepoRelative(repoRoot, filePath);
   if (!rel) {
     return '';
   }

@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest'
 const source = readFileSync(resolve(process.cwd(), 'app/configs/dialogs/AIEditForm.tsx'), 'utf8')
 const dialogSource = readFileSync(resolve(process.cwd(), 'app/configs/dialogs/ConfigEditDialog.tsx'), 'utf8')
 const clientSource = readFileSync(resolve(process.cwd(), 'app/configs/ConfigsClient.tsx'), 'utf8')
+const sharedDialogSource = readFileSync(resolve(process.cwd(), 'components/ui/dialog.tsx'), 'utf8')
+const alertDialogSource = readFileSync(resolve(process.cwd(), 'components/ui/alert-dialog.tsx'), 'utf8')
+const appShellSource = readFileSync(resolve(process.cwd(), 'components/layout/AppShell.tsx'), 'utf8')
 
 describe('AI platform editor source contract', () => {
   it('separates the model service editor from the available-model editor', () => {
@@ -87,11 +90,31 @@ describe('AI platform editor source contract', () => {
   })
 
   it('confirms every close path when the form has unsaved changes', () => {
-    expect(dialogSource).toContain("import { confirmAction } from '@/lib/toast'")
+    expect(dialogSource).not.toContain("import { confirmAction } from '@/lib/toast'")
     expect(dialogSource).toContain('initialConfigSnapshotRef')
     expect(dialogSource).toContain('hasUnsavedChanges')
+    expect(dialogSource).toContain('discardConfirmationOpen')
+    expect(dialogSource).toContain('<AlertDialog')
     expect(dialogSource).toContain('放弃未保存修改')
-    expect(dialogSource).toContain('onOpenChange={(nextOpen) => void requestOpenChange(nextOpen)}')
-    expect(dialogSource).toContain('onClick={() => void requestOpenChange(false)}')
+    expect(dialogSource).toContain('onOpenChange={requestOpenChange}')
+    expect(dialogSource).toContain('setDiscardConfirmationOpen(false)')
+    expect(dialogSource).toContain('onOpenChange(false)')
+    expect(dialogSource).toContain("window.addEventListener('beforeunload', warnBeforeUnload)")
+    expect(dialogSource).toContain("window.removeEventListener('beforeunload', warnBeforeUnload)")
+    expect(dialogSource).toContain('(!hasUnsavedChanges && !saving)')
+    expect(alertDialogSource).toContain('@base-ui/react/alert-dialog')
+  })
+
+  it('uses one isolated application root and a viewport-owned modal stack', () => {
+    expect(appShellSource).toContain('data-slot="app-root"')
+    expect(appShellSource).toContain('className="isolate min-h-screen"')
+    expect(sharedDialogSource).toContain('<DialogViewport>')
+    expect(sharedDialogSource).toContain('data-slot="dialog-viewport"')
+    expect(sharedDialogSource).toContain('max-h-[calc(100dvh-2rem)]')
+    expect(sharedDialogSource).toContain('w-full max-w-sm')
+    expect(sharedDialogSource).not.toContain('sm:max-w-sm')
+    expect(sharedDialogSource).toContain('overscroll-contain')
+    expect(sharedDialogSource).not.toContain('supports-backdrop-filter:backdrop-blur')
+    expect(sharedDialogSource).not.toContain('fixed top-1/2 left-1/2')
   })
 })

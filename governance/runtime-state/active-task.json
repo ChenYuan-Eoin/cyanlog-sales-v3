@@ -140,9 +140,20 @@
     "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
     "allowed_paths": [
       "AGENTS.md",
+      ".githooks/post-commit",
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
+      "governance/runtime-state/branch-consolidation-audit-20260722.md",
       "governance/runtime-state/CONTINUE_WORK.md",
+      "governance/ai-behavior-准则/checks/pre-commit",
+      "governance/ai-behavior-准则/checks/check-05-git.sh",
+      "governance/ai-behavior-准则/audit/log-commit.mjs",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-gate.sh",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-doctor.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json",
       "product-truth/REQ_REGISTRY.yml",
@@ -156,6 +167,9 @@
       "product-truth/03-design-truth/examples/F022-ai-fallback.md",
       "product-truth/04-implementation-truth/F022-ai-fallback.md",
       "product-truth/product-code/app/configs",
+      "product-truth/product-code/components/layout/AppShell.tsx",
+      "product-truth/product-code/components/ui/dialog.tsx",
+      "product-truth/product-code/components/ui/alert-dialog.tsx",
       "product-truth/product-code/app/api/configs",
       "product-truth/product-code/app/api/contracts/[id]/review",
       "product-truth/product-code/app/tech-architecture/page.tsx",
@@ -173,6 +187,49 @@
       "product-truth/product-code/output/evidence/wp09",
       "product-truth/product-code/output/playwright/wp09"
     ],
+    "delivery_contract": {
+      "target_state": "main_integrated",
+      "allowed_states": [
+        "executing",
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "same_release_commit_required": true,
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "provider_probe",
+        "review_run",
+        "model_invocations",
+        "tokens"
+      ],
+      "micro_fix_lane": {
+        "limit": 3,
+        "entry": "只接收阻断当前验收、可独立复现且不改变产品方向的缺陷",
+        "required_loop": [
+          "复现胶囊",
+          "根因证据",
+          "最小实现",
+          "目标回归",
+          "同一提交 Preview 用户路径",
+          "主干收敛"
+        ]
+      },
+      "blocking_acceptance_defects": [
+        "IN-20260722-062"
+      ]
+    },
     "non_goals": [
       "修改 R001-R015 等租户业务规则数据、审核准确率口径或独立金标",
       "修改合同中心、审核工作台、文档对比、起草或循环复审产品流程",

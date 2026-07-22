@@ -32,3 +32,22 @@
 - 持续付费依赖默认放弃；只有单次、确实绕不过去且影响已量化的费用才进入用户决策，不得把付费基础设施当作默认技术前提。
 
 产品需求真相仍由 `product-truth/REQ_REGISTRY.yml` 与对应 Feature Packet 管理；本文件只管理 AI 如何读取和执行队列。
+
+## 强制交付闭环
+
+- `G` 只定义业务结果，`WP` 只承载一个可演示的用户任务；预计超过一个工作日、跨两个独立业务域或含两个可独立验收结果时，必须拆批。
+- 每个缺陷先建立复现胶囊：候选 SHA、部署 URL、viewport、初始状态、操作、期望、实际、截图或 DOM/API 证据。没有复现证据不得直接按截图表象改 CSS 或代码。
+- 固定顺序为：`复现 → 根因 → 最小实现 → 目标回归 → 同 SHA Preview 真实用户路径 → main 收敛`。任一步失败都回到最近有事实证据的步骤，不得继续堆补丁。
+- 60 秒没有新增事实证据时必须换验证手段；同一路径失败两次必须记录阻断或改变方法，禁止无证据循环。
+- 测试分层：微修复只跑目标测试与精确浏览器路径；WP 关闭前跑受影响套件、typecheck、build；主干集成前再跑全量测试、lint、typecheck、build 和安全/文件门禁。禁止在同一 hook 中重复执行同一套全量检查。
+- Validator、hook 和反馈收集器不得修改 tracked 文件。运行日志必须写入 `git rev-parse --git-path codex-runtime` 对应的 worktree 独立目录。
+- Harness 的目标合同、阶段和证据同样属于运行态，默认写入每个 worktree 的 `codex-runtime/harness`；`active-task.json` 只保留静态目标状态、分支策略、必需检查和阻断项，不得写入当前 HEAD、Preview deployment 或动态完成状态。
+- Active WP 最多允许 3 个阻断当前验收的微修复胶囊；普通 Bug 和新需求仍进 Inbox。微修复不得借机扩大产品范围。
+- 交付状态只能依次为 `executing → code_green → clean_preview_green → integration_ready → main_integrated`；`production_released` 是独立且需批准的下一状态。不得再用笼统的 “completed” 同时代表代码、Preview、main 和 Production。
+- 代码、Preview、发布隔离和缺陷复验先用 `delivery-record` 写入 worktree 独立运行证据，再用 `delivery-transition <state>` 按顺序推进；主干收敛前用 `delivery-seal` 将证据绑定到当前 SHA 的 `refs/notes/price-v3-delivery`，并推送该 note ref。Git note 不改变 HEAD，也不得包含秘密。
+- 每次状态推进后运行：
+
+  `node governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js delivery-check <state>`
+
+- `clean_preview_green` 必须绑定一个已提交且干净的 SHA，并执行真实操作链；页面能打开、静态层数为零或历史 Preview 通过不能替代本次用户路径。
+- `integration_ready` 必须满足：当前 SHA 的 Preview 已重放阻断路径且 Git note/runtime attestation 将缺陷标记为 verified、`origin/main` 仍是候选祖先、Vercel Production Branch 已与 `main` 解耦。仅有 Inbox `resolves` 文本不能关闭缺陷。`main_integrated` 后必须重新 fetch，确认 `origin/main == candidate SHA` 且 Production 部署未变化。
