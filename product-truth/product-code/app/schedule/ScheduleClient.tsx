@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AGENDA_TYPE_LABEL,
   type AgendaItem,
@@ -18,24 +18,19 @@ import {
   WD,
   type TreeNode,
 } from '@/lib/agenda/schedule-tree'
-import { readBrowserCacheEntry, scopedCacheKey } from '@/lib/browser-cache'
-import {
-  AGENDA_UPCOMING_CACHE_KEY,
-  CORE_PAGE_BACKGROUND_REFRESH_MS,
-  CORE_PAGE_VISIBLE_CACHE_TTL_MS,
-  loadAgendaUpcomingForCache,
-  type AgendaUpcomingCachePayload,
-} from '@/lib/core-page-warmup'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   AlertCircle,
   CalendarDays,
+  CalendarPlus,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Circle,
   Clock,
+  Copy,
+  ExternalLink,
   Flag,
   GanttChart,
   Kanban,
@@ -105,6 +100,7 @@ export function ScheduleClient() {
   const [search, setSearch] = useState('')
   const [quickOpen, setQuickOpen] = useState(false)
   const [calendarMode, setCalendarMode] = useState<'week' | 'month'>('month')
+  const [subscribeOpen, setSubscribeOpen] = useState(false)
 
   const loadItems = useCallback(async (isMounted: () => boolean = () => true) => {
     const token = window.localStorage.getItem('token')
@@ -112,22 +108,17 @@ export function ScheduleClient() {
       if (isMounted()) setState('ready')
       return
     }
-    const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
-    const cachedEntry = readBrowserCacheEntry<AgendaUpcomingCachePayload>(cacheKey)
-    const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
-    const cached = cacheAgeMs <= CORE_PAGE_VISIBLE_CACHE_TTL_MS ? cachedEntry?.value : null
-    if (cached) {
-      setItems(cached.items)
-      setState('ready')
-      if (cacheAgeMs < CORE_PAGE_BACKGROUND_REFRESH_MS) return
-    } else {
-      setState('loading')
-    }
+    setState('loading')
     setError('')
     try {
-      const payload = await loadAgendaUpcomingForCache(token)
+      const res = await fetch('/api/agenda', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const payload = (await res.json()) as { data?: AgendaItem[] }
       if (!isMounted()) return
-      setItems(payload?.items || [])
+      setItems(payload?.data || [])
       setState('ready')
     } catch {
       if (!isMounted()) return
@@ -227,6 +218,27 @@ export function ScheduleClient() {
     }
   }, [])
 
+  const updateItem = useCallback(async (id: string, patch: Partial<AgendaItem>) => {
+    const token = window.localStorage.getItem('token')
+    try {
+      const res = await fetch(`/api/agenda?id=${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(patch),
+      })
+      if (!res.ok) return
+      const body = (await res.json()) as { data?: AgendaItem }
+      if (body.data) {
+        setItems((prev) => prev.map((i) => (i.id === id ? (body.data as AgendaItem) : i)))
+      }
+    } catch {
+      // 更新失败保持原状态
+    }
+  }, [])
+
   const cycleError =
     critical && 'cycle' in critical ? (critical as { cycle: string[] }).cycle : null
 
@@ -323,6 +335,10 @@ export function ScheduleClient() {
               依赖成环：{cycleError.join(' → ')}
             </span>
           )}
+          <Button type="button" size="sm" variant="outline" onClick={() => setSubscribeOpen((v) => !v)}>
+            <CalendarPlus size={14} className="mr-1" />
+            订阅
+          </Button>
           <Button type="button" size="sm" onClick={() => setQuickOpen((v) => !v)}>
             <Plus size={14} className="mr-1" />
             新建
@@ -344,6 +360,7 @@ export function ScheduleClient() {
           }}
         />
       )}
+      {subscribeOpen && <SubscribePanel onClose={() => setSubscribeOpen(false)} />}
 
       {state === 'loading' ? (
         <Card>
@@ -386,6 +403,7 @@ export function ScheduleClient() {
               collapsed={collapsed}
               onToggle={toggleCollapse}
               critical={critical && !cycleError && 'criticalIds' in critical ? critical : null}
+              onUpdate={updateItem}
             />
           )}
           {view === 'calendar' && <CalendarView items={filtered} mode={calendarMode} />}
@@ -476,16 +494,69 @@ function TimelineView({
   collapsed,
   onToggle,
   critical,
+  onUpdate,
 }: {
   rows: TreeNode[]
   windowDays: number[]
   collapsed: Set<string>
   onToggle: (id: string) => void
   critical: ReturnType<typeof computeCriticalPath> | null
+  onUpdate: (id: string, patch: Partial<AgendaItem>) => void
 }) {
   const colPct = 100 / windowDays.length
   const today = startOfDay(new Date().toISOString())
   const todayIdx = windowDays.indexOf(today)
+  const ganttRef = useRef<HTMLDivElement | null>(null)
+  const [drag, setDrag] = useState<{
+    mode: 'move' | 'left' | 'right'
+    itemId: string
+    startX: number
+    delta: number
+    origStart: number
+    origEnd: number
+    startTimeOffset: number
+    endTimeOffset: number
+  } | null>(null)
+
+  const dayWidthPx = () => (ganttRef.current ? ganttRef.current.clientWidth / windowDays.length : 40)
+
+  function beginDrag(e: React.PointerEvent, item: AgendaItem, mode: 'move' | 'left' | 'right') {
+    e.preventDefault()
+    e.stopPropagation()
+    const [s, en] = daySpan(item)
+    const startTimeOffset = new Date(item.start_at).getTime() - s
+    const endTimeOffset = item.end_at ? new Date(item.end_at).getTime() - en : startTimeOffset
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    setDrag({ mode, itemId: item.id, startX: e.clientX, delta: 0, origStart: s, origEnd: en, startTimeOffset, endTimeOffset })
+  }
+
+  function onDragMove(e: React.PointerEvent) {
+    if (!drag) return
+    const delta = Math.round((e.clientX - drag.startX) / dayWidthPx())
+    if (delta !== drag.delta) setDrag({ ...drag, delta })
+  }
+
+  function endDrag() {
+    if (!drag) return
+    const { mode, itemId, delta, origStart, origEnd, startTimeOffset, endTimeOffset } = drag
+    setDrag(null)
+    if (delta === 0) return
+    let s = origStart
+    let en = origEnd
+    if (mode === 'move') {
+      s = origStart + delta * DAY_MS
+      en = origEnd + delta * DAY_MS
+    } else if (mode === 'left') {
+      s = Math.min(origEnd - DAY_MS, origStart + delta * DAY_MS)
+    } else {
+      en = Math.max(origStart + DAY_MS, origEnd + delta * DAY_MS)
+    }
+    onUpdate(itemId, {
+      start_at: new Date(s + startTimeOffset).toISOString(),
+      end_at: new Date(en + endTimeOffset).toISOString(),
+    })
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: BORDER }}>
       <div className="min-w-[980px]">
@@ -558,10 +629,25 @@ function TimelineView({
           )}
           {rows.map((node) => {
             const item = node.item
-            const [startMs, endMs] = daySpan(item)
+            const [baseStart, baseEnd] = daySpan(item)
+            const isCritical = critical?.criticalIds.has(item.id) ?? false
+            const isDragging = drag?.itemId === item.id
+            let startMs = baseStart
+            let endMs = baseEnd
+            if (isDragging && drag) {
+              if (drag.mode === 'move') {
+                startMs = drag.origStart + drag.delta * DAY_MS
+                endMs = drag.origEnd + drag.delta * DAY_MS
+              } else if (drag.mode === 'left') {
+                startMs = Math.min(drag.origEnd - DAY_MS, drag.origStart + drag.delta * DAY_MS)
+                endMs = drag.origEnd
+              } else {
+                startMs = drag.origStart
+                endMs = Math.max(drag.origStart + DAY_MS, drag.origEnd + drag.delta * DAY_MS)
+              }
+            }
             const left = ((startMs - windowDays[0]) / DAY_MS) * colPct
             const width = Math.max(1.5, ((endMs - startMs) / DAY_MS + 1) * colPct)
-            const isCritical = critical?.criticalIds.has(item.id) ?? false
             return (
               <div
                 key={item.id}
@@ -603,9 +689,16 @@ function TimelineView({
                     <StatusBadge status={item.status} />
                   </div>
                 </div>
-                <div className="relative h-[38px] flex-1">
+                <div
+                  className="relative h-[38px] flex-1"
+                  ref={ganttRef}
+                  onPointerMove={onDragMove}
+                  onPointerUp={endDrag}
+                >
                   <div
-                    className="absolute top-[11px] h-[15px] rounded-[4px] transition-all"
+                    className={`absolute top-[11px] h-[15px] rounded-[4px] transition-all ${
+                      isDragging ? 'z-10 ring-2 ring-[#93C5FD]' : ''
+                    }`}
                     style={{
                       left: `${left}%`,
                       width: `${width}%`,
@@ -615,7 +708,9 @@ function TimelineView({
                       boxShadow: isCritical
                         ? '0 1px 3px rgba(229,72,77,.35)'
                         : '0 1px 3px rgba(35,131,226,.25)',
+                      cursor: drag ? 'grabbing' : 'grab',
                     }}
+                    onPointerDown={(e) => beginDrag(e, item, 'move')}
                     title={`${item.title} · ${fmt(item.start_at)} → ${fmt(item.end_at)}`}
                   >
                     {width > 10 && (
@@ -623,6 +718,16 @@ function TimelineView({
                         {item.title}
                       </span>
                     )}
+                    <span
+                      className="absolute bottom-0 left-0 top-0 w-1.5 cursor-col-resize rounded-l-[4px] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/50"
+                      onPointerDown={(e) => beginDrag(e, item, 'left')}
+                      title="拖动调整开始日期"
+                    />
+                    <span
+                      className="absolute bottom-0 right-0 top-0 w-1.5 cursor-col-resize rounded-r-[4px] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/50"
+                      onPointerDown={(e) => beginDrag(e, item, 'right')}
+                      title="拖动调整截止日期"
+                    />
                   </div>
                 </div>
               </div>
@@ -1114,6 +1219,118 @@ function QuickCreate({
           </span>
         )}
       </div>
+    </div>
+  )
+}
+
+function SubscribePanel({ onClose }: { onClose: () => void }) {
+  const [token, setToken] = useState('')
+  const [url, setUrl] = useState('')
+  const [webcalUrl, setWebcalUrl] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    const token = window.localStorage.getItem('token')
+    ;(async () => {
+      try {
+        const res = await fetch('/api/agenda/ical/token', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        const body = (await res.json()) as {
+          data?: { token: string; url: string; webcalUrl: string }
+          error?: { message?: string }
+        }
+        if (!res.ok || !body.data) {
+          setError(body.error?.message || '订阅链接获取失败')
+          return
+        }
+        if (!mounted) return
+        setToken(body.data.token)
+        setUrl(body.data.url)
+        setWebcalUrl(body.data.webcalUrl)
+      } catch {
+        if (mounted) setError('网络错误')
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setError('复制失败，请手动复制链接')
+    }
+  }
+
+  return (
+    <div
+      className="mb-3 rounded-lg border bg-white p-4"
+      style={{ borderColor: BORDER, boxShadow: '0 4px 16px rgba(15,15,15,.08)' }}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium" style={{ color: INK }}>
+          <CalendarPlus size={16} style={{ color: ACCENT }} />
+          日历订阅（iCal）
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer rounded p-1 text-xs transition-colors hover:bg-[#F1F1EF]"
+          style={{ color: INK_3 }}
+        >
+          关闭
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="py-6 text-center text-sm" style={{ color: INK_2 }}>
+          生成订阅链接中…
+        </div>
+      ) : error ? (
+        <div className="flex items-center gap-1.5 text-sm" style={{ color: DANGER }}>
+          <AlertCircle size={14} />
+          {error}
+        </div>
+      ) : (
+        <>
+          <p className="mb-2 text-[13px]" style={{ color: INK_2 }}>
+            把下面的链接添加到苹果/谷歌日历，即可自动同步日程与提醒。链接含私密订阅令牌，请勿外泄。
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={url}
+              onFocus={(e) => e.currentTarget.select()}
+              className="h-8 flex-1 truncate rounded-md border bg-white px-2.5 text-xs"
+              style={{ borderColor: BORDER, color: INK_2 }}
+            />
+            <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>
+              <Copy size={13} className="mr-1" />
+              {copied ? '已复制' : '复制'}
+            </Button>
+            <a href={webcalUrl}>
+              <Button type="button" size="sm">
+                <ExternalLink size={13} className="mr-1" />
+                在日历中打开
+              </Button>
+            </a>
+          </div>
+          <p className="mt-2 text-[11px]" style={{ color: INK_3 }}>
+            Apple 日历：设置 → 日历 → 添加订阅日历；Google 日历：设置 → 从网址添加日历。
+            {token && ` 令牌：${token.slice(0, 8)}…`}
+          </p>
+        </>
+      )}
     </div>
   )
 }
