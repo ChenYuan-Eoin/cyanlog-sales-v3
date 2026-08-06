@@ -61,7 +61,7 @@ function makeReminderInsertChain() {
 describe('POST /api/agenda validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(requireAuth as any).mockResolvedValue({ id: 'user-1' })
+    ;(requireAuth as any).mockResolvedValue({ id: 'user-1', org_id: 'org-1' })
   })
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
@@ -106,5 +106,13 @@ describe('POST /api/agenda validation', () => {
     expect(supabaseAdmin.from).toHaveBeenCalledWith('agenda_items')
     expect(supabaseAdmin.from).toHaveBeenCalledWith('reminder_rules')
     expect(supabaseAdmin.from).toHaveBeenCalledWith('reminders')
+    expect(agendaChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        org_id: 'org-1',
+        user_id: 'user-1',
+        start_time: '2026-06-27T02:00:00.000Z',
+        agenda_date: '2026-06-27',
+      })
+    )
   })
 })

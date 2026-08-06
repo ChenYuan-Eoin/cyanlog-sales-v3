@@ -102,12 +102,19 @@ export async function POST(req: NextRequest) {
 
     const input = result.data
     const { depends_on: dependencyIds, ...insertFields } = input
+    if (!user.org_id) {
+      return errorResponse(createApiError('VALIDATION_ERROR', '缺少组织上下文，无法创建日程'))
+    }
     const { data, error } = await supabaseAdmin
       .from('agenda_items')
       .insert({
         ...insertFields,
         status: 'PENDING',
         all_day: input.all_day || false,
+        org_id: user.org_id,
+        user_id: user.id,
+        start_time: input.start_at,
+        agenda_date: input.start_at.slice(0, 10),
         assignee_id: user.id,
         created_by: user.id,
       })
