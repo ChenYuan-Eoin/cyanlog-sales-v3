@@ -15,6 +15,8 @@ export interface AgendaItem {
   all_day: boolean
   status: AgendaStatus
   priority: AgendaPriority
+  parent_id?: string | null
+  depends_on?: string[] | null
   related_type?: string | null
   related_id?: string | null
   assignee_id?: string | null
