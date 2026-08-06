@@ -57,7 +57,15 @@ describe('GET /api/agenda/upcoming', () => {
 
   it('只返回当前用户相关日程', async () => {
     const query = makeQuery({ data: [{ id: 'a-1', title: 'Demo' }], error: null })
-    ;(supabaseAdmin.from as any).mockReturnValue(query)
+    ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+      if (table === 'agenda_dependencies') {
+        const depsChain: any = {}
+        depsChain.select = vi.fn().mockReturnValue(depsChain)
+        depsChain.in = vi.fn().mockResolvedValue({ data: [], error: null })
+        return depsChain
+      }
+      return query
+    })
 
     const res = await GET(makeRequest('https://example.test/api/agenda/upcoming?limit=20'))
     const body = await res.json()
@@ -66,6 +74,7 @@ describe('GET /api/agenda/upcoming', () => {
     expect(body.success).toBe(true)
     expect(body.data).toHaveLength(1)
     expect(supabaseAdmin.from).toHaveBeenCalledWith('agenda_items')
+    expect(supabaseAdmin.from).toHaveBeenCalledWith('agenda_dependencies')
     expect(query.or).toHaveBeenCalledWith('user_id.eq.u-1,assignee_id.eq.u-1,created_by.eq.u-1')
     expect(query.limit).toHaveBeenCalledWith(20)
   })
