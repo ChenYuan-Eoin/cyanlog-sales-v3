@@ -10,3 +10,7 @@ output/
 .playwright-mcp/
 *.tsbuildinfo
 supabase/.temp/
+
+# 工作区交付物与本地备份（不入库、不参与 hook 输入扫描）
+.tmp/
+product-truth/.next-next15-backup/

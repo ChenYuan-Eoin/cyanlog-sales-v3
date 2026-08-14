@@ -1,15 +1,15 @@
 // REQ: F027-F036
-// PURPOSE: 配置中心通用域 API（列表/创建）——签名与仓库 Next 14 环境一致（同步 params）
+// PURPOSE: 配置中心通用域 API（列表/创建）——签名与仓库 Next 15 环境一致（async params）
 import { NextRequest } from 'next/server'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import { errorResponse, paginatedResponse, createdResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { assertDomain, listDomain, createDomainItem, validateDomainPayload, ConfigCenterError } from '@/lib/config-center/server'
 
-export async function GET(req: NextRequest, { params }: { params: { domain: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ domain: string }> }) {
   return withAuthAndOrg(req, async (_user, orgId) => {
     try {
-      const domain = assertDomain(params.domain)
+      const domain = assertDomain((await params).domain)
       const { searchParams } = new URL(req.url)
       const status = searchParams.get('status') || undefined
       const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
@@ -25,10 +25,10 @@ export async function GET(req: NextRequest, { params }: { params: { domain: stri
   })
 }
 
-export async function POST(req: NextRequest, { params }: { params: { domain: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ domain: string }> }) {
   return withAuthAndOrg(req, async (user, orgId) => {
     try {
-      const domain = assertDomain(params.domain)
+      const domain = assertDomain((await params).domain)
       const body = await req.json()
       const payload = validateDomainPayload(domain, body)
       const item = await createDomainItem(domain, orgId, user.id, payload)

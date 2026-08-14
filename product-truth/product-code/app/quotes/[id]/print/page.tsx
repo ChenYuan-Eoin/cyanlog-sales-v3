@@ -2,7 +2,7 @@
 
 // REQ: F029/F030
 // PURPOSE: 标准报价单打印页（只读导出数据，内部字段已脱敏；水印+有效期）
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 
 interface ExportItem {
   name?: string | null
@@ -34,12 +34,13 @@ interface ExportData {
   generated_at: string
 }
 
-export default function QuotePrintPage({ params }: { params: { id: string } }) {
+export default function QuotePrintPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const [data, setData] = useState<ExportData | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch(`/api/quotes/${params.id}/export`)
+    fetch(`/api/quotes/${id}/export`)
       .then((r) => r.json())
       .then((json) => {
         if (!json.success) {
@@ -49,7 +50,7 @@ export default function QuotePrintPage({ params }: { params: { id: string } }) {
         setData(json.data)
       })
       .catch(() => setError('加载失败'))
-  }, [params.id])
+  }, [id])
 
   if (error) {
     return <div className="p-8 text-sm text-destructive">{error}</div>

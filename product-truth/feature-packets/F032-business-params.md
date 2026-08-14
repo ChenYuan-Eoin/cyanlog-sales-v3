@@ -26,7 +26,7 @@
 - **校验**：key 唯一（org 内）；敏感参数 is_secret 脱敏。
 - **原则**：默认值=现行业务值，**改数不改代码**；走五触点（types/validation/runtime/API/UI）。
 - **V3 落点**：`business_params` + versions，或 config_type 加 `BIZ_PARAM`（复用现状 configs/config_versions 机制）。
-- **消费**：门槛（5万/8万/10）、维保（20%+2%）、高可用（20%）、赠送（5/3/1+5000）、分级（60万/30万/5万）、分期（30/60/10）、税率（13/6）、有效期（15）、保护日（2021-02-01）、汇率源/时点（待定）——这些数字的消费方（报价/审批/维保/赠送/税率/收款/汇率）统一读已发布参数，**改参数不重启生效**。
+- **消费**：门槛（5万/8万/10）、维保（20%+2%）、高可用（20%）、赠送（5/3/1+5000）、分级（60万/30万/5万）、分期（30/60/10）、税率（13/6）、有效期（15）、保护日（2021-02-01）、汇率源（BOC 官方牌价，已接入）/时点（创建报价时抓取，缓存 15 分钟，口径=中行折算价）——这些数字的消费方（报价/审批/维保/赠送/税率/收款/汇率）统一读已发布参数，**改参数不重启生效**。
 - **种子清单仅作附录**（主设计 O4 列示，key/单位/生效时间待 PM 定稿）。
 
 ### 2.2 待确认问题
@@ -253,6 +253,13 @@ drafting → pm_review → tech_review → test_review → coding → code_revie
 
 ---
 
+## 已实现代码位置
+
+- `product-truth/product-code/lib/quote/fx-rate.ts`：BOC 牌价抓取/解析/缓存/取值
+- `product-truth/product-code/app/api/quotes/route.ts`：POST 创建报价时按 FX_SOURCE=BOC 自动带 exchange_rate
+- `product-truth/product-code/lib/config-center/runtime.ts`：getPublishedParamString（业务参数读取）
+- `product-truth/product-code/lib/quote/fx-rate.test.ts`：解析/抓取/缓存/失败回退测试
+
 ## 附录：默认种子（仅作附录，不进正文）
 
 主设计 O4 列示的种子清单（原文引用，key/单位/类别/生效时间待 PM 定稿后回填本附录）：
@@ -266,6 +273,8 @@ drafting → pm_review → tech_review → test_review → coding → code_revie
 - 税率：13 / 6
 - 有效期：15（天）
 - 保护日：2021-02-01
-- 汇率源 / 时点：待定
+- 汇率源：BOC（中国银行官方牌价页 https://www.boc.cn/sourcedb/whpj/，无公开开发者实时 API，官网为权威免费源）
+- 汇率时点：创建报价时抓取，内存缓存 15 分钟；失败不阻断报价、不伪造数据
+- 汇率口径：中行折算价（每 100 外币兑人民币，1 USD = 折算价/100 CNY）
 
 说明：种子不进正文，仅作附录；评审通过后在 `03-design-truth/` 固化。

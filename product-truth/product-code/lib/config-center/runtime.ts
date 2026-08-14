@@ -51,6 +51,23 @@ export async function getPublishedByDomain(
   return (data || null) as ConfigCenterRow | null
 }
 
+/** 参数速读：取某业务参数已发布 value（string） */
+export async function getPublishedParamString(orgId: string, paramKey: string): Promise<string | null> {
+  const row = await getPublishedByDomain('business-params', orgId, { param_key: paramKey })
+  if (!row) {
+    return null
+  }
+  const value = (row as { value?: unknown }).value
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value && typeof value === 'object') {
+    const v = (value as Record<string, unknown>).value
+    return typeof v === 'string' ? v : null
+  }
+  return null
+}
+
 /** 参数速读：取某业务参数已发布 value（number） */
 export async function getPublishedParamNumber(orgId: string, paramKey: string): Promise<number | null> {
   const row = await getPublishedByDomain('business-params', orgId, { param_key: paramKey })

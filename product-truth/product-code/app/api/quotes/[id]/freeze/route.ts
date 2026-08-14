@@ -8,11 +8,11 @@ import { getDefaultOrgId } from '@/lib/scoped-access'
 import { errorResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireAuth(req)
     const orgId = await getDefaultOrgId(user.id)
-    const { id } = params
+    const { id } = await params
 
     const { data: quote } = await supabaseAdmin
       .from('quotes')

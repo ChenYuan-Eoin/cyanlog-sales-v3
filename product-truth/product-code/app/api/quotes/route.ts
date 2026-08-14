@@ -8,6 +8,8 @@ import { paginationSchema, quoteSchema } from '@/lib/validation'
 import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft, calculateQuoteDraftOnes } from '@/lib/pricing/service'
+import { getQuoteFxRate } from '@/lib/quote/fx-rate'
+import { getPublishedParamString } from '@/lib/config-center/runtime'
 import {
   errorResponse,
   paginatedResponse,
@@ -113,6 +115,19 @@ export async function POST(req: NextRequest) {
     }
     const quoteId = uuidv4()
 
+    // F032：汇率源按业务参数 FX_SOURCE 配置（默认/未发布=BOC）；中行官方牌价接入，
+    // 失败不阻断报价创建、不伪造数据（exchange_rate 留空由字段字典口径继续按输入处理）。
+    let exchangeRate: number | null = null
+    try {
+      const fxSource = await getPublishedParamString(orgId, 'FX_SOURCE').catch(() => null)
+      if (fxSource === null || fxSource === 'BOC') {
+        const fx = await getQuoteFxRate('美元', 'middle')
+        exchangeRate = fx ? fx.ratePerUnit : null
+      }
+    } catch (fxError) {
+      console.error('[F032] BOC exchange rate resolution failed:', fxError)
+    }
+
     const quotePayload = {
       id: quoteId,
       org_id: orgId,
@@ -128,6 +143,8 @@ export async function POST(req: NextRequest) {
       notes,
       status: 'DRAFT',
       valid_until,
+      currency: 'CNY',
+      exchange_rate: exchangeRate,
       created_by: user.id,
     }
 
