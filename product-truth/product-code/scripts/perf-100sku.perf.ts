@@ -46,9 +46,19 @@ test('100 行 SKU 预览刷新 <500ms', async ({ page, request }) => {
   const count = await selects.count()
   console.log('[DIAG] final selects:', count)
   expect(count).toBeGreaterThanOrEqual(100)
-  const optValue = await selects.nth(0).locator('option').nth(1).getAttribute('value')
+  // 选真实有价产品（矩阵价盘产品的 base_price=0，选它会永远小计 ¥0）
+  const productsRes = await request.get('http://localhost:3100/api/products?status=active', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const productsJson = await productsRes.json()
+  const products = (Array.isArray(productsJson) ? productsJson : (productsJson?.data ?? [])) as Array<Record<string, unknown>>
+  const priced = products.find((item) => Number(item?.base_price) > 0)
+  if (!priced) {
+    throw new Error('未找到有 base_price 的产品，无法执行性能门')
+  }
+  const optValue = String(priced.id)
   for (let i = 0; i < 100; i += 1) {
-    await selects.nth(i).selectOption(String(optValue))
+    await selects.nth(i).selectOption(optValue)
   }
   await page.waitForTimeout(1200)
 
