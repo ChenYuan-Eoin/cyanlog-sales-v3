@@ -1,24 +1,29 @@
-node_modules
-.next
-out
-build
-coverage
+# 嵌套目录也生效（Vercel CLI 上传按仓库根计算）
+**/node_modules
+**/.next
+**/out
+**/build
+**/coverage
 
 .git
 .vercel
-.env
-.env.*
-!.env.example
-*.tsbuildinfo
-.DS_Store
-*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/*.tsbuildinfo
+**/.DS_Store
+**/*.log
 
-.playwright-cli
-.playwright-mcp
-playwright-report
-test-results
-output
-*.trace
-*.trace.zip
-*.har
-*.webm
+**/.playwright-cli
+**/.playwright-mcp
+**/playwright-report
+**/test-results
+**/output
+**/*.trace
+**/*.trace.zip
+**/*.har
+**/*.webm
+
+# 工作区交付物与本地备份
+.tmp
+**/.next-next15-backup
