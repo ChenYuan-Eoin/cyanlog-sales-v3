@@ -50,6 +50,7 @@ const files = [
   '20260814000001_quote_domain_config_tables.sql',
   '20260814000002_quote_version_snapshot.sql',
   '20260814000003_seed_quote_domain_config.sql',
+  '20260814000004_add_fx_rate_type_param.sql',
 ]
 for (const file of files) {
   const sql = readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', file), 'utf-8')

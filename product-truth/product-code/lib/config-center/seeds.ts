@@ -29,6 +29,7 @@ export const BUSINESS_PARAM_SEEDS = [
   { param_key: 'QUOTE_VALID_DAYS', name: '报价有效期', value: 15, data_type: 'number', unit: '天', category: 'quote' },
   { param_key: 'LEGACY_PROTECT_DATE', name: '老客户保护日', value: '2021-02-01', data_type: 'date', category: 'quote' },
   { param_key: 'FX_SOURCE', name: '汇率源', value: 'BOC', data_type: 'string', category: 'quote' },
+  { param_key: 'FX_RATE_TYPE', name: '汇率口径', value: 'middle', data_type: 'string', category: 'quote' },
 ]
 
 export const FIELD_DICTIONARY_SEEDS = [

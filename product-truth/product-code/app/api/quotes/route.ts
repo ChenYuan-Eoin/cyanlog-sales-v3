@@ -8,7 +8,7 @@ import { paginationSchema, quoteSchema } from '@/lib/validation'
 import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft, calculateQuoteDraftOnes } from '@/lib/pricing/service'
-import { getQuoteFxRate } from '@/lib/quote/fx-rate'
+import { getQuoteFxRate, parseBocRateType } from '@/lib/quote/fx-rate'
 import { getPublishedParamString } from '@/lib/config-center/runtime'
 import {
   errorResponse,
@@ -121,7 +121,8 @@ export async function POST(req: NextRequest) {
     try {
       const fxSource = await getPublishedParamString(orgId, 'FX_SOURCE').catch(() => null)
       if (fxSource === null || fxSource === 'BOC') {
-        const fx = await getQuoteFxRate('美元', 'middle')
+        const fxRateType = parseBocRateType(await getPublishedParamString(orgId, 'FX_RATE_TYPE').catch(() => null))
+        const fx = await getQuoteFxRate('美元', fxRateType)
         exchangeRate = fx ? fx.ratePerUnit : null
       }
     } catch (fxError) {

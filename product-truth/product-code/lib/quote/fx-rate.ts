@@ -16,6 +16,10 @@ export interface BocRate {
   publishedAt: string | null // 发布时间 yyyy/MM/dd HH:mm:ss
 }
 
+export function parseBocRateType(value: string | null | undefined): BocRateType {
+  return value === 'spotSell' || value === 'spotBuy' || value === 'cashSell' || value === 'cashBuy' ? value : 'middle'
+}
+
 export const BOC_RATES_URL = 'https://www.boc.cn/sourcedb/whpj/'
 export const BOC_CACHE_TTL_MS = 15 * 60 * 1000
 export const BOC_FETCH_TIMEOUT_MS = 10_000

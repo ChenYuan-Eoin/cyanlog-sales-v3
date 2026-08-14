@@ -3,6 +3,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   parseBocRatesHtml,
+  parseBocRateType,
   fetchBocRates,
   getBocRatesCached,
   getQuoteFxRate,
@@ -57,6 +58,19 @@ function mockFetchOnce(html: string, ok = true, status = 200): ReturnType<typeof
 
 beforeEach(() => {
   resetBocRatesCacheForTest()
+})
+
+describe('parseBocRateType', () => {
+  it('合法口径透传，非法/空默认 middle', () => {
+    expect(parseBocRateType('spotSell')).toBe('spotSell')
+    expect(parseBocRateType('spotBuy')).toBe('spotBuy')
+    expect(parseBocRateType('cashSell')).toBe('cashSell')
+    expect(parseBocRateType('cashBuy')).toBe('cashBuy')
+    expect(parseBocRateType('middle')).toBe('middle')
+    expect(parseBocRateType('whatever')).toBe('middle')
+    expect(parseBocRateType(null)).toBe('middle')
+    expect(parseBocRateType(undefined)).toBe('middle')
+  })
 })
 
 describe('parseBocRatesHtml', () => {

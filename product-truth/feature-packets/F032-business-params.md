@@ -255,7 +255,7 @@ drafting → pm_review → tech_review → test_review → coding → code_revie
 
 ## 已实现代码位置
 
-- `product-truth/product-code/lib/quote/fx-rate.ts`：BOC 牌价抓取/解析/缓存/取值
+- `product-truth/product-code/lib/quote/fx-rate.ts`：BOC 牌价抓取/解析/缓存/取值（含 `parseBocRateType` 口径解析）
 - `product-truth/product-code/app/api/quotes/route.ts`：POST 创建报价时按 FX_SOURCE=BOC 自动带 exchange_rate
 - `product-truth/product-code/lib/config-center/runtime.ts`：getPublishedParamString（业务参数读取）
 - `product-truth/product-code/lib/quote/fx-rate.test.ts`：解析/抓取/缓存/失败回退测试
@@ -275,6 +275,6 @@ drafting → pm_review → tech_review → test_review → coding → code_revie
 - 保护日：2021-02-01
 - 汇率源：BOC（中国银行官方牌价页 https://www.boc.cn/sourcedb/whpj/，无公开开发者实时 API，官网为权威免费源）
 - 汇率时点：创建报价时抓取，内存缓存 15 分钟；失败不阻断报价、不伪造数据
-- 汇率口径：中行折算价（每 100 外币兑人民币，1 USD = 折算价/100 CNY）
+- 汇率口径：业务参数 `FX_RATE_TYPE` 可配（默认 `middle`=中行折算价，可选 `spotSell`=现汇卖出价 / `spotBuy`=现汇买入价 / `cashSell` / `cashBuy`）；每 100 外币兑人民币，1 USD = 口径价/100 CNY
 
 说明：种子不进正文，仅作附录；评审通过后在 `03-design-truth/` 固化。
