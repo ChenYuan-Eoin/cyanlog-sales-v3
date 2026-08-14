@@ -44,6 +44,13 @@ const RoleAccessTab = dynamic(() => import('./RoleAccessTab'), {
   ),
 })
 
+const ConfigCenterTab = dynamic(() => import('./ConfigCenterTab'), {
+  loading: () => <CardSkeleton />,
+})
+const PriceMatrixImportTab = dynamic(() => import('./PriceMatrixImportTab'), {
+  loading: () => <CardSkeleton />,
+})
+
 export interface TabsContentProps {
   activeTab: string
   loading?: boolean
@@ -298,6 +305,26 @@ export default function TabsContent({
           onRefresh={onRefreshOrg}
         />
       )
+    case 'business-params':
+      return <ConfigCenterTab domain="business-params" title="业务参数" description="所有业务数字以参数维护，默认值=现行业务值。" />
+    case 'product-versions':
+      return <ConfigCenterTab domain="product-versions" title="版本能力矩阵" description="版本×部署×授权×能力标签。" />
+    case 'price-matrix':
+      return <ConfigCenterTab domain="price-matrix" title="多维价盘" description="产品×版本×部署×授权×期限×区间；累计+边际两口径。" />
+    case 'price-matrix-import':
+      return <PriceMatrixImportTab />
+    case 'approval-chains':
+      return <ConfigCenterTab domain="approval-chains" title="审批链" description="串行/并行、收口方式、节点指派角色/组织/关系。" />
+    case 'approval-rules':
+      return <ConfigCenterTab domain="approval-rules" title="审批规则" description="场景×条件→审批链；多条命中按优先级取最严。" />
+    case 'field-dictionary':
+      return <ConfigCenterTab domain="field-dictionary" title="字段字典" description="字段即规则；内部字段永不输出。" />
+    case 'output-templates':
+      return <ConfigCenterTab domain="output-templates" title="输出模板" description="标准/客户模板与匹配规则。" />
+    case 'clause-mappings':
+      return <ConfigCenterTab domain="clause-mappings" title="条款映射" description="方案属性→条款/协议。" />
+    case 'numbering-rules':
+      return <ConfigCenterTab domain="numbering-rules" title="单号规则" description="编号模板，唯一可回溯。" />
     default:
       return null
   }

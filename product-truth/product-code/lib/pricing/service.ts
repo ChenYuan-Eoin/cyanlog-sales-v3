@@ -8,6 +8,7 @@ import {
   type PriceBookProduct,
   type ProductPriceTier,
 } from '@/lib/pricing/engine'
+import { calculateQuote } from '@/lib/pricing/quote-calculator'
 
 type ProductStatus = 'active' | 'inactive' | 'discontinued'
 
@@ -180,5 +181,120 @@ export async function calculateQuoteDraft(
   return {
     items: calculatedItems,
     ...totals,
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// F028/F034 ONES 结构化报价计算（server 权威口径）
+// 输入：产品 + 版本/部署/授权/期限 + 账号数 → 读已发布多维价盘 → 累计计价
+// 与客户端预览共用 lib/pricing/quote-calculator（M4 单一引擎）
+// ────────────────────────────────────────────────────────────────
+export interface OnesQuoteItem extends RequestedQuoteItem {
+  version_code?: string
+  deployment?: string
+  auth_mode?: string
+  term_months?: number | null
+}
+
+export async function calculateQuoteDraftOnes(
+  orgId: string,
+  items: OnesQuoteItem[],
+  discountRate: number
+): Promise<CalculatedQuoteDraft> {
+  const productIds = items.map((i) => i.product_id).filter((v): v is string => !!v)
+  const products = await loadProductsForOrg(orgId, productIds)
+  const productById = new Map(products.map((p) => [p.id, p]))
+
+  const [softwareTaxRate, serviceTaxRate] = [0.13, 0.06]
+  try {
+    const taxRules = await getPublishedTaxRate(orgId)
+    if (taxRules) {
+      // 单税率配置时软件/服务同用该税率（migration 后按大类参数取）
+    }
+  } catch {
+    // 税率读取失败不阻断，用默认 13/6
+  }
+
+  // 读已发布多维价盘（每行 = 一档）
+  const matrixFilter: Record<string, unknown> = { org_id: orgId, status: 'PUBLISHED' }
+  const { data: matrixRows, error: matrixError } = await supabaseAdmin
+    .from('price_matrix')
+    .select('*')
+    .match(matrixFilter)
+  if (matrixError) {
+    throw matrixError
+  }
+
+  const lines = items.map((item) => {
+    const product = item.product_id ? productById.get(item.product_id) : undefined
+    const tiers = (matrixRows || [])
+      .filter(
+        (r) =>
+          r.product_id === item.product_id &&
+          r.version_code === item.version_code &&
+          r.deployment === item.deployment &&
+          r.auth_mode === item.auth_mode &&
+          (item.term_months == null ? r.term_months == null : r.term_months === item.term_months)
+      )
+      .map((r) => ({ qty_from: r.qty_from, qty_to: r.qty_to, unit_price: r.unit_price, list_price: r.list_price }))
+
+    return {
+      productId: item.product_id ?? '',
+      productCode: product?.code ?? item.name ?? '',
+      category: 'BASE' as const,
+      follows: [] as string[],
+      versionCode: item.version_code ?? '',
+      deployment: item.deployment ?? '',
+      authMode: item.auth_mode ?? '',
+      termMonths: item.term_months ?? null,
+      quantity: item.quantity,
+      tiers,
+      priceOverride: item.product_type === 'custom' ? item.unit_price : undefined,
+    }
+  })
+
+  const calculated = calculateQuote({
+    lines,
+    discountRate,
+    softwareTaxRate,
+    serviceTaxRate,
+    currency: 'CNY',
+  })
+
+  if (!calculated.ok) {
+    const messages = [
+      ...calculated.issues.map((i) => i.message),
+      ...(calculated.noPrice ? ['存在 10,000+ 无价档，需人工评审'] : []),
+    ]
+    throw new Error(`报价组合不合法：${messages.join('；')}`)
+  }
+
+  const itemsOut: CalculatedQuoteItem[] = calculated.lines.map((line) => {
+    const product = productById.get(line.productCode)
+    return {
+      product_id: product?.id ?? null,
+      product_type: 'sku',
+      product_code: line.productCode,
+      name: product?.name ?? line.productCode,
+      specification: product?.specification ?? null,
+      unit: product?.unit ?? null,
+      quantity: line.quantity,
+      unit_price: line.unitPrice ?? 0,
+      discount: 0,
+      line_total: line.subtotal ?? 0,
+      sort_order: line.lineNo - 1,
+      pricing_source: line.source === 'manual' ? 'manual' : line.source === 'base' ? 'base' : 'tier',
+      tier_range: null,
+    }
+  })
+
+  return {
+    items: itemsOut,
+    subtotal: calculated.subtotal,
+    discountRate,
+    discountAmount: calculated.discountAmount,
+    taxRate: calculated.taxAmount === 0 ? 0 : (calculated.softwareTaxAmount + calculated.serviceTaxAmount) / Math.max(calculated.subtotal - calculated.discountAmount, 1),
+    taxAmount: calculated.taxAmount,
+    totalAmount: calculated.grandTotal,
   }
 }

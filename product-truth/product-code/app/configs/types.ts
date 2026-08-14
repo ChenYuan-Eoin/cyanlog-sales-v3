@@ -646,5 +646,9 @@ export interface PermissionCatalogGroup {
   items: PermissionCatalogItem[]
 }
 
-export type ConfigTabId = 'price-list' | 'rules' | 'tax' | 'approval' | 'ai' | 'theme' | 'org-structure' | 'role-access'
-export type ConfigSectionId = 'trading' | 'contract-rules' | 'ai-platform' | 'org-access' | 'experience'
+export type ConfigTabId =
+  | 'price-list' | 'rules' | 'tax' | 'approval' | 'ai' | 'theme' | 'org-structure' | 'role-access'
+  | 'business-params' | 'field-dictionary' | 'numbering-rules'
+  | 'product-versions' | 'price-matrix' | 'price-matrix-import'
+  | 'approval-chains' | 'approval-rules' | 'clause-mappings' | 'output-templates'
+export type ConfigSectionId = 'trading' | 'contract-rules' | 'contract-ai' | 'ai-platform' | 'org-access' | 'experience' | 'quote-output'

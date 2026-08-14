@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { createApprovalWorkflow, loadPublishedApprovalConfig } from '@/lib/approval/workflow'
 import { requireAuth } from '@/lib/auth'
 import { contractIdSchema, dateTimeStringSchema } from '@/lib/validation'
 import { z } from 'zod'
@@ -370,6 +371,24 @@ export async function PUT(
     }
 
     invalidateQuoteDetailResponseCache(id)
+
+    // F033：DRAFT/REJECTED → PENDING_APPROVAL 时，按已发布审批规则创建审批链（失败不阻断状态流转）
+    if (updateData.status === 'PENDING_APPROVAL' && existingQuote.status !== 'PENDING_APPROVAL') {
+      try {
+        const approvalConfig = await loadPublishedApprovalConfig(orgId)
+        if (approvalConfig && approvalConfig.rules.length > 0) {
+          await createApprovalWorkflow(id, Number((existingQuote as { discount_rate?: number }).discount_rate || 0), {
+            scene: 'QUOTE_DISCOUNT',
+            rules: approvalConfig.rules,
+            chains: approvalConfig.chains,
+            nodesByChain: approvalConfig.nodesByChain,
+          })
+        }
+      } catch (approvalError) {
+        console.error('[F033] createApprovalWorkflow failed:', approvalError)
+      }
+    }
+
     return NextResponse.json(normalizeQuote({
       ...existingQuote,
       ...updateData,

@@ -102,6 +102,66 @@ const CONFIG_TABS: Record<ConfigTabId, {
     section: 'experience',
     icon: PaletteIcon,
   },
+  'business-params': {
+    label: '业务参数',
+    description: '所有业务数字（门槛/维保/高可用/赠送/税率/有效期等）以参数维护，默认值=现行业务值，改数不改代码。',
+    section: 'trading',
+    icon: SettingsIcon,
+  },
+  'product-versions': {
+    label: '版本能力矩阵',
+    description: '版本×部署×授权×能力标签，选品防呆与算价维度的结构数据。',
+    section: 'trading',
+    icon: PackageIcon,
+  },
+  'price-matrix': {
+    label: '多维价盘',
+    description: '产品×版本×部署×授权×期限×区间；累计刊例价+区间单账号价两口径。',
+    section: 'trading',
+    icon: PackageIcon,
+  },
+  'price-matrix-import': {
+    label: '价盘导入',
+    description: '批量导入价盘行并做数学一致性校验（累计=上档累计+边际×档差），0 失败后落库。',
+    section: 'trading',
+    icon: PackageIcon,
+  },
+  'approval-chains': {
+    label: '审批链',
+    description: '审批链（串行/并行、收口方式、节点指派角色/组织/关系），不绑人名。',
+    section: 'trading',
+    icon: ShieldCheckIcon,
+  },
+  'approval-rules': {
+    label: '审批规则',
+    description: '场景×条件（阈值比较器）→ 审批链；多条命中按优先级取最严。',
+    section: 'trading',
+    icon: ShieldCheckIcon,
+  },
+  'field-dictionary': {
+    label: '字段字典',
+    description: '报价字段即规则：来源/转换/输出分类/是否对外；内部字段永不进输出流。',
+    section: 'quote-output',
+    icon: FileTextIcon,
+  },
+  'output-templates': {
+    label: '输出模板',
+    description: '标准/客户模板管理，模板↔方案属性匹配。',
+    section: 'quote-output',
+    icon: FileTextIcon,
+  },
+  'clause-mappings': {
+    label: '条款映射',
+    description: '方案属性→条款/协议；无对应时输出提示，不静默。',
+    section: 'quote-output',
+    icon: FileTextIcon,
+  },
+  'numbering-rules': {
+    label: '单号规则',
+    description: '编号模板（前缀/日期/流水），唯一可回溯；复用现有 generate_quote_number。',
+    section: 'quote-output',
+    icon: KeyRoundIcon,
+  },
 }
 
 const CONFIG_SECTIONS: Array<{
@@ -114,7 +174,7 @@ const CONFIG_SECTIONS: Array<{
     id: 'trading',
     label: '交易配置',
     description: '围绕报价工作台的价盘、税率和审批配置。',
-    tabs: ['price-list', 'tax', 'approval'],
+    tabs: ['price-list', 'price-matrix', 'price-matrix-import', 'product-versions', 'business-params', 'approval-chains', 'approval-rules', 'tax', 'approval'],
   },
   {
     id: 'contract-rules',
@@ -127,6 +187,12 @@ const CONFIG_SECTIONS: Array<{
     label: 'AI 平台',
     description: '管理全局模型能力与业务功能选择，不从属于合同模块。',
     tabs: ['ai'],
+  },
+  {
+    id: 'quote-output',
+    label: '报价输出',
+    description: '报价单输出规则：字段字典、模板、条款映射与单号。',
+    tabs: ['field-dictionary', 'output-templates', 'clause-mappings', 'numbering-rules'],
   },
   {
     id: 'org-access',
@@ -807,7 +873,7 @@ export default function ConfigsClient({
   const sectionTabs = sectionMeta.tabs
   const activeTabLoading = loading && !loadedTabs.has(activeTab)
 
-  const moduleCounts = useMemo(() => ({
+  const moduleCounts = useMemo<Record<ConfigTabId, number>>(() => ({
     'price-list': products.length,
     rules: rules.length,
     tax: getConfigsByType('TAX_RULE').length,
@@ -816,6 +882,16 @@ export default function ConfigsClient({
     theme: getConfigsByType('UI_THEME').length,
     'org-structure': orgSummary?.departments.length ?? 0,
     'role-access': roles.length,
+    'business-params': 0,
+    'product-versions': 0,
+    'price-matrix': 0,
+    'price-matrix-import': 0,
+    'approval-chains': 0,
+    'approval-rules': 0,
+    'field-dictionary': 0,
+    'output-templates': 0,
+    'clause-mappings': 0,
+    'numbering-rules': 0,
   }), [getConfigsByType, orgSummary?.departments.length, products, rules, roles])
 
   const formatModuleCount = useCallback((tabId: ConfigTabId) => {

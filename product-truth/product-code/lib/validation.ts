@@ -83,6 +83,19 @@ export const quoteSchema = z.object({
     unit_price: z.number().nonnegative().optional(),
     discount: z.number().nonnegative().optional().default(0),
     sort_order: z.number().int().min(0).optional(),
+    // F028/F034 ONES 结构化字段（可选；migration 落库后生效）
+    version_code: z.string().max(20).optional(),
+    deployment: z.enum(['PUBLIC_CLOUD', 'PRIVATE', 'HA']).optional(),
+    auth_mode: z.enum(['SUB_YEAR', 'SUB_3YEAR', 'ONETIME']).optional(),
+    term_months: z.number().int().positive().nullable().optional(),
+    list_price: z.number().nonnegative().optional(),
+    is_gift: z.boolean().optional().default(false),
+    gift_original_amount: z.number().nonnegative().optional(),
+    tax_rate: z.number().nonnegative().optional(),
+    tax_amount: z.number().nonnegative().optional(),
+    maintenance_months: z.number().int().nonnegative().optional(),
+    version_from: z.string().max(20).optional(),
+    version_to: z.string().max(20).optional(),
   }).superRefine((item, ctx) => {
     if (item.product_type === 'sku' && !item.product_id) {
       ctx.addIssue({

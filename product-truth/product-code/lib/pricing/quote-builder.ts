@@ -1,0 +1,282 @@
+// REQ: F027/F028/F034/F035
+// PURPOSE: 报价构建纯逻辑（选品组合校验 + 累计计价 + 分税 + 赠送 + 中文大写）
+// 纯函数，不依赖 DB；阶段 1 标准报价闭环的核心计算层
+import { resolveCumulativeTierPrice, type CumulativeTier } from './cumulative'
+
+// ---------- 选品组合校验 ----------
+export type ProductCategory = 'BASE' | 'FOLLOW_PRODUCT' | 'FOLLOW_APP' | 'FOLLOW_ECO'
+
+export interface QuoteLineInput {
+  productId: string
+  productCode: string
+  category: ProductCategory
+  follows: string[]          // 跟随对象 product_code 列表
+  versionCode: string
+  deployment: string         // PUBLIC_CLOUD/PRIVATE/HA
+  authMode: string           // SUB_YEAR/SUB_3YEAR/ONETIME
+  termMonths: number | null
+  quantity: number
+  isGift?: boolean
+  tiers?: CumulativeTier[]
+  priceOverride?: number     // 服务/二开自定义价（可选）
+}
+
+export interface CombinationIssue {
+  code: string
+  message: string
+  line?: number
+}
+
+/**
+ * 选品组合校验：
+ *  1) 跟随类必须有基座（follows 命中）
+ *  2) 搭售一致性：BASE+FOLLOW_PRODUCT+FOLLOW_APP ≥2 款时版本/部署/授权一致
+ *  3) FOLLOW_ECO（WPS/X-mind）账号数必须等于其基座 Wiki 账号数
+ *  4) 10,000+ 不自动出价（由计价层返回 no_price，此处提示）
+ */
+export function validateProductCombination(items: QuoteLineInput[], baseQuantities: Record<string, number> = {}): CombinationIssue[] {
+  const issues: CombinationIssue[] = []
+  const core = items.filter((it) => it.category !== 'FOLLOW_ECO')
+
+  items.forEach((item, index) => {
+    // 1) 跟随校验
+    if (item.category !== 'BASE' && item.follows.length === 0) {
+      issues.push({ code: 'FOLLOW_REQUIRED', message: `${item.productCode} 必须跟随基座产品`, line: index + 1 })
+    }
+    if (item.category !== 'BASE') {
+      const hasBase = items.some((it) => it.category === 'BASE' && item.follows.includes(it.productCode))
+      if (!hasBase) {
+        issues.push({ code: 'BASE_MISSING', message: `${item.productCode} 缺少基座产品（跟随 ${item.follows.join('/')}）`, line: index + 1 })
+      }
+    }
+    // 3) 生态应用账号数 = 基座 Wiki 账号数
+    if (item.category === 'FOLLOW_ECO') {
+      const wiki = items.find((it) => it.category === 'BASE' && it.productCode === 'WIKI')
+      const wikiQty = wiki ? wiki.quantity : baseQuantities['WIKI']
+      if (wikiQty !== undefined && wikiQty !== item.quantity) {
+        issues.push({
+          code: 'ECO_QTY_MISMATCH',
+          message: `${item.productCode} 账号数(${item.quantity})必须等于 ONES Wiki 账号数(${wikiQty})`,
+          line: index + 1,
+        })
+      }
+    }
+  })
+
+  // 2) 搭售一致性（≥2 款核心组合）
+  if (core.length >= 2) {
+    const first = core[0]
+    for (let i = 1; i < core.length; i += 1) {
+      const cur = core[i]
+      if (cur.versionCode !== first.versionCode) {
+        issues.push({ code: 'VERSION_MISMATCH', message: `${cur.productCode} 版本(${cur.versionCode})与 ${first.productCode}(${first.versionCode})不一致`, line: i + 1 })
+      }
+      if (cur.deployment !== first.deployment) {
+        issues.push({ code: 'DEPLOY_MISMATCH', message: `${cur.productCode} 部署(${cur.deployment})与 ${first.productCode}(${first.deployment})不一致`, line: i + 1 })
+      }
+      if (cur.authMode !== first.authMode) {
+        issues.push({ code: 'AUTH_MISMATCH', message: `${cur.productCode} 授权(${cur.authMode})与 ${first.productCode}(${first.authMode})不一致`, line: i + 1 })
+      }
+    }
+  }
+
+  return issues
+}
+
+// ---------- 报价行与汇总 ----------
+export interface QuoteLineResult {
+  lineNo: number
+  productCode: string
+  name?: string
+  quantity: number
+  unitPrice: number | null
+  listPrice: number | null
+  subtotal: number | null
+  isGift: boolean
+  giftOriginalAmount: number | null
+  taxRate: number | null
+  taxAmount: number | null
+  source: 'cumulative' | 'no_price' | 'manual' | 'base'
+  noPrice: boolean
+}
+
+export interface QuoteTotalInput {
+  lines: QuoteLineResult[]
+  discountRate: number   // 0-1
+  softwareTaxRate: number
+  serviceTaxRate: number
+}
+
+export interface QuoteTotalResult {
+  subtotal: number
+  discountAmount: number
+  taxable: number
+  softwareTaxAmount: number
+  serviceTaxAmount: number
+  taxAmount: number
+  grandTotal: number
+  totalInWords: string
+}
+
+const SOFTWARE_CODES = new Set(['PROJECT', 'WIKI', 'COPILOT', 'DESK', 'WPS', 'XMIND'])
+const SERVICE_PREFIX = 'SVC'
+
+export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineResult {
+  const priceOverride = item.priceOverride
+  const manual = priceOverride !== undefined
+  if (manual) {
+    const subtotal = priceOverride * item.quantity
+    return {
+      lineNo: index + 1,
+      productCode: item.productCode,
+      quantity: item.quantity,
+      unitPrice: priceOverride,
+      listPrice: null,
+      subtotal,
+      isGift: !!item.isGift,
+      giftOriginalAmount: item.isGift ? subtotal : null,
+      taxRate: item.productCode.startsWith(SERVICE_PREFIX) ? null : null, // 由汇总按类别取
+      taxAmount: null,
+      source: 'manual',
+      noPrice: false,
+    }
+  }
+
+  const resolved = resolveCumulativeTierPrice(item.tiers || [], item.quantity)
+  const line: QuoteLineResult = {
+    lineNo: index + 1,
+    productCode: item.productCode,
+    quantity: item.quantity,
+    unitPrice: resolved.unitPrice,
+    listPrice: resolved.total,
+    subtotal: resolved.total,
+    isGift: !!item.isGift,
+    giftOriginalAmount: item.isGift && resolved.total !== null ? resolved.total : null,
+    taxRate: null,
+    taxAmount: null,
+    source: resolved.source,
+    noPrice: resolved.exceedsMax,
+  }
+  return line
+}
+
+export function computeQuoteTotals(input: QuoteTotalInput): QuoteTotalResult {
+  const nonGift = input.lines.filter((l) => !l.isGift && l.subtotal !== null)
+  const subtotal = nonGift.reduce((sum, l) => sum + (l.subtotal ?? 0), 0)
+  const discountAmount = subtotal * input.discountRate
+  const taxable = subtotal - discountAmount
+
+  let softwareTaxAmount = 0
+  let serviceTaxAmount = 0
+  for (const line of nonGift) {
+    if (line.subtotal === null) continue
+    const lineNet = line.subtotal * (1 - input.discountRate)
+    if (SOFTWARE_CODES.has(line.productCode)) {
+      softwareTaxAmount += lineNet * input.softwareTaxRate
+    } else {
+      serviceTaxAmount += lineNet * input.serviceTaxRate
+    }
+  }
+  const round = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100
+  softwareTaxAmount = round(softwareTaxAmount)
+  serviceTaxAmount = round(serviceTaxAmount)
+  const taxAmount = round(softwareTaxAmount + serviceTaxAmount)
+  const grandTotal = round(taxable + taxAmount)
+
+  return {
+    subtotal: round(subtotal),
+    discountAmount: round(discountAmount),
+    taxable: round(taxable),
+    softwareTaxAmount,
+    serviceTaxAmount,
+    taxAmount,
+    grandTotal,
+    totalInWords: numberToChineseUpper(grandTotal),
+  }
+}
+
+// ---------- 中文大写金额 ----------
+const UPPER_DIGITS = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
+const UPPER_UNITS = ['', '拾', '佰', '仟']
+const UPPER_GROUPS = ['', '万', '亿', '兆']
+
+function groupToChinese(n: number): string {
+  if (n === 0) return '零'
+  let result = ''
+  let zeroPending = false
+  let unitIndex = 0
+  while (n > 0) {
+    const digit = n % 10
+    if (digit === 0) {
+      if (result !== '' && !zeroPending) {
+        result = '零' + result
+        zeroPending = true
+      }
+    } else {
+      result = UPPER_DIGITS[digit] + UPPER_UNITS[unitIndex] + result
+      zeroPending = false
+    }
+    n = Math.floor(n / 10)
+    unitIndex += 1
+  }
+  return result
+}
+
+export function numberToChineseUpper(value: number): string {
+  if (!Number.isFinite(value) || value < 0) {
+    return ''
+  }
+  const amount = Math.round((value + Number.EPSILON) * 100)
+  const integerPart = Math.floor(amount / 100)
+  const jiao = Math.floor((amount % 100) / 10)
+  const fen = amount % 10
+
+  if (integerPart === 0 && jiao === 0 && fen === 0) {
+    return '零元整'
+  }
+
+  let integerText = ''
+  if (integerPart > 0) {
+    const groups: number[] = []
+    let x = integerPart
+    while (x > 0) {
+      groups.push(x % 10000)
+      x = Math.floor(x / 10000)
+    }
+    let result = ''
+    let gapZero = false
+    for (let i = groups.length - 1; i >= 0; i -= 1) {
+      const g = groups[i]
+      if (g === 0) {
+        if (result !== '') {
+          gapZero = true
+        }
+        continue
+      }
+      let text = groupToChinese(g) + UPPER_GROUPS[i]
+      if (gapZero) {
+        text = '零' + text
+        gapZero = false
+      } else if (result !== '' && g < 1000) {
+        text = '零' + text
+      }
+      result += text
+    }
+    integerText = result + '元'
+  }
+
+  let decimalText = ''
+  if (jiao === 0 && fen === 0) {
+    decimalText = '整'
+  } else {
+    if (jiao > 0) {
+      decimalText += UPPER_DIGITS[jiao] + '角'
+    } else if (fen > 0 && integerPart > 0) {
+      decimalText += '零'
+    }
+    if (fen > 0) {
+      decimalText += UPPER_DIGITS[fen] + '分'
+    }
+  }
+  return integerText + decimalText
+}

@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { paginationSchema, quoteSchema } from '@/lib/validation'
 import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
 import { isSchemaDriftError } from '@/lib/db-compat'
-import { calculateQuoteDraft } from '@/lib/pricing/service'
+import { calculateQuoteDraft, calculateQuoteDraftOnes } from '@/lib/pricing/service'
 import {
   errorResponse,
   paginatedResponse,
@@ -99,7 +99,18 @@ export async function POST(req: NextRequest) {
 
     const quoteNo = quoteNoResult
 
-    const pricedDraft = await calculateQuoteDraft(orgId, items, discount_rate)
+    const hasOnesFields = items.some((item) => item.version_code || item.deployment || item.auth_mode)
+    let pricedDraft
+    if (hasOnesFields) {
+      try {
+        pricedDraft = await calculateQuoteDraftOnes(orgId, items, discount_rate)
+      } catch (onesError) {
+        console.error('[F028] calculateQuoteDraftOnes failed, fallback legacy:', onesError)
+        pricedDraft = await calculateQuoteDraft(orgId, items, discount_rate)
+      }
+    } else {
+      pricedDraft = await calculateQuoteDraft(orgId, items, discount_rate)
+    }
     const quoteId = uuidv4()
 
     const quotePayload = {
@@ -153,23 +164,39 @@ export async function POST(req: NextRequest) {
       return errorResponse(createApiError('DB_ERROR', '创建报价失败'))
     }
 
-    const quoteItemPayloads = pricedDraft.items.map((item) => ({
-      id: uuidv4(),
-      quote_id: quoteId,
-      product_id: item.product_id,
-      product_type: item.product_type,
-      product_code: item.product_code,
-      name: item.name,
-      specification: item.specification,
-      unit: item.unit,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      discount: item.discount,
-      line_total: item.line_total,
-      sort_order: item.sort_order,
-      pricing_source: item.pricing_source,
-      tier_range: item.tier_range,
-    }))
+    const quoteItemPayloads = pricedDraft.items.map((item, index) => {
+      const requested = items[index] || {}
+      return {
+        id: uuidv4(),
+        quote_id: quoteId,
+        product_id: item.product_id,
+        product_type: item.product_type,
+        product_code: item.product_code,
+        name: item.name,
+        specification: item.specification,
+        unit: item.unit,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount: item.discount,
+        line_total: item.line_total,
+        sort_order: item.sort_order,
+        pricing_source: item.pricing_source,
+        tier_range: item.tier_range,
+        // F028/F034 结构化源字段（migration 后落库；未迁移时 schema-drift 回退 legacy）
+        version_code: requested.version_code ?? null,
+        deployment: requested.deployment ?? null,
+        auth_mode: requested.auth_mode ?? null,
+        term_months: requested.term_months ?? null,
+        list_price: requested.list_price ?? null,
+        is_gift: requested.is_gift ?? false,
+        gift_original_amount: requested.gift_original_amount ?? null,
+        tax_rate: requested.tax_rate ?? null,
+        tax_amount: requested.tax_amount ?? null,
+        maintenance_months: requested.maintenance_months ?? null,
+        version_from: requested.version_from ?? null,
+        version_to: requested.version_to ?? null,
+      }
+    })
 
     let itemInsertResult = await supabaseAdmin.from('quote_items').insert(quoteItemPayloads)
 
