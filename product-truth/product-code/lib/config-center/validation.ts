@@ -1,4 +1,4 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 报价域配置对象 zod 校验（每个域一个 schema）
 import { z } from 'zod'
 import { INTERNAL_FIELD_KEYS } from './types'

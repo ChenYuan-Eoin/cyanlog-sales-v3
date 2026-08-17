@@ -1,4 +1,4 @@
-// REQ: F027/F028/F035
+// REQ: F037/F038/F045
 // PURPOSE: 报价构建纯逻辑测试（组合校验/分税/赠送/中文大写）
 import { describe, expect, it } from 'vitest'
 import {
@@ -32,7 +32,7 @@ function line(partial: Partial<QuoteLineInput> & { productCode: string }): Quote
   }
 }
 
-describe('validateProductCombination（F027 搭售/跟随/生态账号数）', () => {
+describe('validateProductCombination（F037 搭售/跟随/生态账号数）', () => {
   it('跟随产品缺少基座 → 报错', () => {
     const issues = validateProductCombination([
       line({ productCode: 'COPILOT', category: 'FOLLOW_PRODUCT', follows: ['PROJECT'] }),
@@ -65,7 +65,7 @@ describe('validateProductCombination（F027 搭售/跟随/生态账号数）', (
   })
 })
 
-describe('computeQuoteTotals（F035 分税/赠送/大写）', () => {
+describe('computeQuoteTotals（F045 分税/赠送/大写）', () => {
   function makeLine(partial: Partial<QuoteLineResult>): QuoteLineResult {
     return {
       lineNo: 1,
@@ -127,7 +127,7 @@ describe('computeQuoteTotals（F035 分税/赠送/大写）', () => {
   })
 })
 
-describe('numberToChineseUpper（F035 中文大写）', () => {
+describe('numberToChineseUpper（F045 中文大写）', () => {
   it('整数', () => {
     expect(numberToChineseUpper(12345)).toBe('壹万贰仟叁佰肆拾伍元整')
   })
@@ -142,7 +142,7 @@ describe('numberToChineseUpper（F035 中文大写）', () => {
   })
 })
 
-describe('buildQuoteLine（F028 累计计价）', () => {
+describe('buildQuoteLine（F038 累计计价）', () => {
   it('档边界 = 档累计刊例价', () => {
     const item = line({ productCode: 'PROJECT', quantity: 15 })
     const result = buildQuoteLine(item, 0)

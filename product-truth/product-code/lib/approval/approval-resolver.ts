@@ -1,4 +1,4 @@
-// REQ: F033
+// REQ: F043
 // PURPOSE: 审批规则解析（纯函数，替换 lib/approval/workflow.ts 的硬编码 5/10/100）
 // 原则：规则/链/节点/角色全配置化；节点只引用角色/组织/关系，禁止人名
 import type { ApprovalRuleValue, ApprovalChainValue, ApprovalNodeValue } from '@/lib/config-center/validation'

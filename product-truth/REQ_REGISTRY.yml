@@ -9,8 +9,8 @@
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
 
-version: "2026-07-22.1"
-last_updated: "2026-07-22T01:23:24+08:00"
+version: "2026-08-17.1"
+last_updated: "2026-08-17T16:30:00+08:00"
 
 goal_governance:
   status: active
@@ -792,3 +792,131 @@ requirements:
     priority: P3
     code_locations: []
     description: 预留REQ号
+
+  F037:
+    name: 产品目录与版本能力矩阵
+    module: 配置中心
+    source: 材料①R1-R6 + 报价需求清单-机制版 P1-P6
+    status: draft
+    priority: P0
+    feature_packet: product-truth/feature-packets/F037-product-catalog-version-matrix.md
+    code_locations:
+      - lib/config-center/validation.ts
+      - lib/config-center/server.ts
+      - app/api/config-center/product-versions/route.ts
+      - supabase/migrations/20260814000001_quote_domain_config_tables.sql
+    description: 产品目录（类别/跟随/可单卖/可售版本）+ 版本×部署×授权×能力矩阵；选品防呆消费
+
+  F038:
+    name: 多维价盘
+    module: 配置中心
+    source: 材料①T + 报价需求清单-机制版 C1-C3
+    status: draft
+    priority: P0
+    feature_packet: product-truth/feature-packets/F038-price-matrix.md
+    code_locations:
+      - lib/config-center/price-import.ts
+      - lib/config-center/price-import.test.ts
+      - app/api/config-center/price-matrix/import/route.ts
+      - supabase/migrations/20260814000001_quote_domain_config_tables.sql
+    description: 产品×版本×部署×授权×期限×区间；累计刊例价+区间单账号价两口径；Excel 导入校验；10,000+ 兜底
+
+  F039:
+    name: 字段字典与输出白名单
+    module: 配置中心
+    source: 材料④ + 报价需求清单-机制版 O1/O10/O11
+    status: draft
+    priority: P0
+    feature_packet: product-truth/feature-packets/F039-field-dictionary.md
+    code_locations:
+      - lib/config-center/validation.ts
+      - lib/config-center/server.ts
+      - app/api/config-center/field-dictionary/route.ts
+      - supabase/migrations/20260814000001_quote_domain_config_tables.sql
+    description: 字段即规则；来源/转换/输出分类/是否对外；隐藏字段白名单派生，内部字段永不输出
+
+  F040:
+    name: 输出模板与条款映射
+    module: 报价中心
+    source: 材料④ + 报价需求清单-机制版 O2-O4/O7
+    status: draft
+    priority: P1
+    feature_packet: product-truth/feature-packets/F040-output-templates-clause-mapping.md
+    code_locations:
+      - lib/config-center/validation.ts
+      - app/api/config-center/output-templates/route.ts
+      - app/api/config-center/clause-mappings/route.ts
+      - supabase/migrations/20260814000001_quote_domain_config_tables.sql
+    description: 标准/客户模板管理；模板↔方案属性匹配；条款映射注入；导出白名单改造
+
+  F041:
+    name: 单号规则
+    module: 配置中心
+    source: 原型 u69/u124/u152/u172
+    status: draft
+    priority: P1
+    feature_packet: product-truth/feature-packets/F041-numbering-rules.md
+    code_locations:
+      - lib/config-center/validation.ts
+      - app/api/config-center/numbering-rules/route.ts
+      - app/api/config-center/brand-assets/route.ts
+      - supabase/migrations/20260814000001_quote_domain_config_tables.sql
+    description: 编号模板可配置（前缀/日期/流水），复用 generate_quote_number；品牌不在本域范围（V3 现有界面主题已覆盖）
+
+  F042:
+    name: 业务参数
+    module: 配置中心
+    source: 用户原则（系统只做机制，数据可配）
+    status: draft
+    priority: P0
+    feature_packet: product-truth/feature-packets/F042-business-params.md
+    code_locations:
+      - lib/config-center/validation.ts
+      - lib/config-center/runtime.ts
+      - app/api/config-center/business-params/route.ts
+      - supabase/migrations/20260814000001_quote_domain_config_tables.sql
+    description: 所有业务数字为参数（门槛/维保/高可用/赠送/分期/税率/有效期/保护日/汇率源），默认值=现行业务值
+
+  F043:
+    name: 审批规则化
+    module: 报价中心
+    source: 报价需求清单-机制版 A1-A5；审计：F004 空壳
+    status: draft
+    priority: P0
+    feature_packet: product-truth/feature-packets/F043-approval-configurable.md
+    code_locations:
+      - lib/config-center/validation.ts
+      - app/api/config-center/approval-chains/route.ts
+      - app/api/config-center/approval-rules/route.ts
+      - supabase/migrations/20260814000001_quote_domain_config_tables.sql
+    description: 审批规则/链/节点/角色全配置化；DRAFT→PENDING_APPROVAL 接线；/api/approvals；角色/组织/关系解析；重提跳过；打印脱敏
+
+  F044:
+    name: 报价版本化与中间快照
+    module: 报价中心
+    source: 目标模式架构原则（报价=合同源数据；快照=中间交付物）
+    status: draft
+    priority: P0
+    feature_packet: product-truth/feature-packets/F044-quote-version-snapshot.md
+    code_locations: []
+    description: 结构化报价版本（header+items 全字段，不可变，可对比，下游可推导）；中间快照与版本逐位一致（导出锁定/历史核对/防伪，非终点）
+
+  F045:
+    name: 高级科目（维保/转版本/汇率/赠送/大写/分税）
+    module: 报价中心
+    source: 材料①R12-R15 + 原型 u92/u114/u160/u172/u176
+    status: draft
+    priority: P1
+    feature_packet: product-truth/feature-packets/F045-advanced-subjects.md
+    code_locations: []
+    description: 维保（费率/多套递增/基数口径/累计金额/与增购互斥）、转版本（三时点折残值/税率对应）、币种汇率、赠送（划线/标记/不计总价）、中文大写、分税按大类
+
+  F046:
+    name: 非标模板语义映射
+    module: 报价中心
+    source: 材料④（语义比对机制）
+    status: draft
+    priority: P1
+    feature_packet: product-truth/feature-packets/F046-nonstandard-template-semantic.md
+    code_locations: []
+    description: 客户模板扫描→语义对齐→变量填充→低置信人工确认→数字一致性校验

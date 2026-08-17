@@ -1,13 +1,13 @@
-# Feature Packet: F031-单号规则
+# Feature Packet: F041-单号规则
 
 ## 1. Meta
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F031 |
+| **REQ ID** | F041 |
 | **Name** | 单号规则 |
 | **Module** | 配置中心 |
-| **Branch** | `feature/F031-numbering` |
+| **Branch** | `feature/F041-numbering` |
 | **Owner** | (人类负责人) |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -86,6 +86,6 @@ DRAFT ──publish──▶ PUBLISHED ──archived──▶ ARCHIVED
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F031 | 待更新 | 单号规则 |
+| `REQ_REGISTRY.yml` F041 | 待更新 | 单号规则 |
 | `03-design-truth/` | 待更新 | — |
 | `04-implementation-truth/` | 待创建 | — |

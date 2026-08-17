@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       try {
         pricedDraft = await calculateQuoteDraftOnes(orgId, items, discount_rate)
       } catch (onesError) {
-        console.error('[F028] calculateQuoteDraftOnes failed, fallback legacy:', onesError)
+        console.error('[F038] calculateQuoteDraftOnes failed, fallback legacy:', onesError)
         pricedDraft = await calculateQuoteDraft(orgId, items, discount_rate)
       }
     } else {
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     }
     const quoteId = uuidv4()
 
-    // F032：汇率源按业务参数 FX_SOURCE 配置（默认/未发布=BOC）；中行官方牌价接入，
+    // F042：汇率源按业务参数 FX_SOURCE 配置（默认/未发布=BOC）；中行官方牌价接入，
     // 失败不阻断报价创建、不伪造数据（exchange_rate 留空由字段字典口径继续按输入处理）。
     let exchangeRate: number | null = null
     try {
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
         exchangeRate = fx ? fx.ratePerUnit : null
       }
     } catch (fxError) {
-      console.error('[F032] BOC exchange rate resolution failed:', fxError)
+      console.error('[F042] BOC exchange rate resolution failed:', fxError)
     }
 
     const quotePayload = {
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
         sort_order: item.sort_order,
         pricing_source: item.pricing_source,
         tier_range: item.tier_range,
-        // F028/F034 结构化源字段（migration 后落库；未迁移时 schema-drift 回退 legacy）
+        // F038/F044 结构化源字段（migration 后落库；未迁移时 schema-drift 回退 legacy）
         version_code: requested.version_code ?? null,
         deployment: requested.deployment ?? null,
         auth_mode: requested.auth_mode ?? null,

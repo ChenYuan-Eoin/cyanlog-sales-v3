@@ -1,4 +1,4 @@
-// REQ: F027/F028/F035
+// REQ: F037/F038/F045
 // PURPOSE: 报价计算器整链测试（选品→算价→分税→大写）
 import { describe, expect, it } from 'vitest'
 import { calculateQuote } from './quote-calculator'

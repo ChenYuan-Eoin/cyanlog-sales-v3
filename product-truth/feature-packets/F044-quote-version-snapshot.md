@@ -1,13 +1,13 @@
-# Feature Packet: F034-报价版本化与中间快照
+# Feature Packet: F044-报价版本化与中间快照
 
 ## 1. Meta
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F034 |
+| **REQ ID** | F044 |
 | **Name** | 报价版本化与中间快照 |
 | **Module** | 报价中心 |
-| **Branch** | `feature/F034-quote-version-snapshot` |
+| **Branch** | `feature/F044-quote-version-snapshot` |
 | **Owner** | TBD（待指派） |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -35,7 +35,7 @@
 - [ ] `quote_snapshots` 保留策略/清理（多版本 × 多快照的存储膨胀）。
 - [ ] checksum 序列化规范：decimal 精度、JSON key 排序、时间戳时区——需定唯一 canonical 序列化（否则「逐位一致」无法稳定断言）。
 - [ ] 导出/打印是否强制走快照渲染锁定（阶段 1 建议强制，需确认回退路径）。
-- [ ] 与相邻包依赖：版本复制依赖 F033（审批通过触发）、F027/F028（版本/部署/授权/期限字段）、F035（币种/税/赠送/维保字段）——版本机制是否在相关结构化字段落库前先冻结字段子集？
+- [ ] 与相邻包依赖：版本复制依赖 F043（审批通过触发）、F037/F038（版本/部署/授权/期限字段）、F045（币种/税/赠送/维保字段）——版本机制是否在相关结构化字段落库前先冻结字段子集？
 
 ### 2.3 本轮边界
 
@@ -60,7 +60,7 @@
 
 | 接口 | 方法 | 说明 |
 |---|---|---|
-| `POST /api/quotes/[id]/versions` | POST | 冻结/生成新版本（内部由 F033 审批通过回调调用，或手动冻结）：事务内取号 → 复制结构化 header+items → 生成快照 → 返回 `{ version_no, checksum }`；成功后 `quotes.version_no` 指向新版本 |
+| `POST /api/quotes/[id]/versions` | POST | 冻结/生成新版本（内部由 F043 审批通过回调调用，或手动冻结）：事务内取号 → 复制结构化 header+items → 生成快照 → 返回 `{ version_no, checksum }`；成功后 `quotes.version_no` 指向新版本 |
 | `GET /api/quotes/[id]/versions` | GET | 版本列表（version_no、frozen_at、frozen_by、checksum、状态） |
 | `GET /api/quotes/[id]/versions/[versionNo]` | GET | 结构化版本详情（header + items，字段完整可查询） |
 | `GET /api/quotes/[id]/versions/[versionNo]/diff?target=<v>` | GET | 同报价两版本逐字段对比（行级增删改 + 字段级差异） |
@@ -133,7 +133,7 @@ CREATE INDEX idx_quote_snapshots_quote ON quote_snapshots(quote_id, version_no D
 ### 3.3 状态机
 
 ```
-报价工作副本：DRAFT ──审批通过(F033)──▶ APPROVED ──▶ 冻结生成 V1（version_no=1 + 快照）
+报价工作副本：DRAFT ──审批通过(F043)──▶ APPROVED ──▶ 冻结生成 V1（version_no=1 + 快照）
              V1 后继续修改：APPROVED ──编辑──▶ DRAFT(V2 工作副本) ──审批通过──▶ APPROVED ──▶ 冻结 V2
 
 版本对象：V1 frozen（只读）→ V2 frozen（只读）→ …  同一 quote 多版本并存、可对比
@@ -150,7 +150,7 @@ CREATE INDEX idx_quote_snapshots_quote ON quote_snapshots(quote_id, version_no D
 | 并发冻结取号冲突 | `UNIQUE(quote_id, version_no)` + RPC 单事务取号；冲突重试一次 |
 | 版本/快照存储膨胀 | 2.2 确认保留策略；快照可按策略归档，版本表为最小保留真相 |
 | 导出读活表而非快照导致漂移 | 导出强制 `quote_snapshots` 渲染锁定；缺快照/checksum 不一致返回 409 |
-| 结构化字段依赖未落库（F027/F028/F035） | 冻结前字段完整性校验；依赖包未到位时先冻结现有字段子集并标记 pending 字段（待确认） |
+| 结构化字段依赖未落库（F037/F038/F045） | 冻结前字段完整性校验；依赖包未到位时先冻结现有字段子集并标记 pending 字段（待确认） |
 
 ---
 
@@ -191,7 +191,7 @@ CREATE INDEX idx_quote_snapshots_quote ON quote_snapshots(quote_id, version_no D
 
 ### 6.1 涉及文件
 ```
-(开发后回填，每行加 REQ:F034 标记)
+(开发后回填，每行加 REQ:F044 标记)
 ```
 
 ### 6.2 关键决策
@@ -228,7 +228,7 @@ CREATE INDEX idx_quote_snapshots_quote ON quote_snapshots(quote_id, version_no D
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F034 | 待更新 | |
+| `REQ_REGISTRY.yml` F044 | 待更新 | |
 | `03-design-truth/` | 待更新 | |
 | `04-implementation-truth/` | 待创建 | |
 

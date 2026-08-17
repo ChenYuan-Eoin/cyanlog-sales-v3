@@ -1,4 +1,4 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 配置中心通用域 CRUD（server 侧；与 lib/api/common 解耦，直接抛错由路由捕获）
 import { supabaseAdmin } from '@/lib/supabase'
 import { DOMAIN_REGISTRY, type ConfigDomain } from './types'

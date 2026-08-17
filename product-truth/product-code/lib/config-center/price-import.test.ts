@@ -1,4 +1,4 @@
-// REQ: F028
+// REQ: F038
 // PURPOSE: 多维价盘导入校验测试（含 Project 234 行价盘数学一致性证据）
 import { describe, expect, it } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'

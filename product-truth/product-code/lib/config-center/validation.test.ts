@@ -1,9 +1,9 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 配置对象 zod 校验测试
 import { describe, expect, it } from 'vitest'
 import { fieldDictionarySchema, priceMatrixRowSchema, productCatalogAttributesSchema, businessParamSchema, productVersionSchema, approvalRuleSchema } from './validation'
 
-describe('字段字典（F029）', () => {
+describe('字段字典（F039）', () => {
   it('接受合法对外字段', () => {
     const r = fieldDictionarySchema.safeParse({
       field_key: 'grand_total',
@@ -42,7 +42,7 @@ describe('字段字典（F029）', () => {
   })
 })
 
-describe('产品目录属性（F027）', () => {
+describe('产品目录属性（F037）', () => {
   it('跟随类必须声明跟随对象', () => {
     const r = productCatalogAttributesSchema.safeParse({
       category: 'FOLLOW_PRODUCT',
@@ -63,7 +63,7 @@ describe('产品目录属性（F027）', () => {
   })
 })
 
-describe('多维价盘（F028）', () => {
+describe('多维价盘（F038）', () => {
   it('接受合法档位', () => {
     const r = priceMatrixRowSchema.safeParse({
       product_id: '00000000-0000-4000-8000-000000000001',
@@ -94,7 +94,7 @@ describe('多维价盘（F028）', () => {
   })
 })
 
-describe('版本能力矩阵（F027）', () => {
+describe('版本能力矩阵（F037）', () => {
   it('企业版支持高可用/信创/买断', () => {
     const r = productVersionSchema.safeParse({
       version_code: 'ENT_V6',
@@ -107,7 +107,7 @@ describe('版本能力矩阵（F027）', () => {
   })
 })
 
-describe('业务参数（F032）', () => {
+describe('业务参数（F042）', () => {
   it('参数 key 必须大写字母+下划线', () => {
     expect(businessParamSchema.safeParse({ param_key: 'PRIVATE_MIN_SUB', name: '私有部署订阅起售', value: 50000, category: 'pricing' }).success).toBe(true)
     expect(businessParamSchema.safeParse({ param_key: 'private_min', name: 'x', value: 1, category: 'pricing' }).success).toBe(false)
@@ -115,7 +115,7 @@ describe('业务参数（F032）', () => {
 })
 
 
-describe('审批规则（F033）', () => {
+describe('审批规则（F043）', () => {
   it('条件为比较器组合，链必须存在', () => {
     const r = approvalRuleSchema.safeParse({
       code: 'R1',

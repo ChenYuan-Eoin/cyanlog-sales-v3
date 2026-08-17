@@ -1,4 +1,4 @@
-// REQ: F027/F028/F034/F035
+// REQ: F037/F038/F044/F045
 // PURPOSE: 报价构建纯逻辑（选品组合校验 + 累计计价 + 分税 + 赠送 + 中文大写）
 // 纯函数，不依赖 DB；阶段 1 标准报价闭环的核心计算层
 import { resolveCumulativeTierPrice, type CumulativeTier } from './cumulative'

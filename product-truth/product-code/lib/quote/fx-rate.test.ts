@@ -1,4 +1,4 @@
-// REQ: F032（FX_SOURCE=BOC）
+// REQ: F042（FX_SOURCE=BOC）
 // PURPOSE: 中行官方牌价抓取/解析/缓存测试（网络测试用 mock，CI 离线可跑）
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {

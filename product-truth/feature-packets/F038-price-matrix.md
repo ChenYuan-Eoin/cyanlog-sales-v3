@@ -1,4 +1,4 @@
-# Feature Packet: F028-多维价盘
+# Feature Packet: F038-多维价盘
 
 > 阶段 0 设计交付物（只写文档，不写代码）。依据：主设计 `/.tmp/F0-报价域-配置对象与结构化字段设计.md` O3 + §三 价盘导入与校验；现状 `product-truth/feature-packets/F000-config-center-architecture.md`、`F001-price-list.md` 及 `product-truth/product-code` 现有实现（`lib/pricing/engine.ts`、`lib/pricing/service.ts`、`app/api/product-price-tiers`、`supabase/migrations/20260608000001_org_pricing_and_quote_items.sql`）。
 
@@ -6,10 +6,10 @@
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F028 |
+| **REQ ID** | F038 |
 | **Name** | 多维价盘 |
 | **Module** | 配置中心 / 报价域（唯一算价来源） |
-| **Branch** | `feature/F028-price-matrix` |
+| **Branch** | `feature/F038-price-matrix` |
 | **Owner** | （待定） |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -36,16 +36,16 @@
 - [ ] 10,000+ 档是否所有维度组合统一无价？是否需要显式导入，还是系统自动补一档「无价」？
 - [ ] dump 中浮点尾差（如 923199.999999999、568.000000000005）导入时按分四舍五入归一，容差 0.01，确认？
 - [ ] 高可用/信创=企业版×1.2 校验开关默认开/关；信创是否仅「企业版×私有部署」可配（dump L3 提示「仅企业版私有部署支持信创」）？
-- [ ] currency 本期是否仅支持 CNY？多币种汇率源/时点由 F035 参数提供，F028 是否只做币种字段预留？
+- [ ] currency 本期是否仅支持 CNY？多币种汇率源/时点由 F045 参数提供，F038 是否只做币种字段预留？
 - [ ] engine 扩维签名：`resolveProductUnitPrice` 增加 context 参数属破坏性变更，是否保留缺省 context 走二维的兼容重载？
 - [ ] price_matrix 与 product_price_tiers 并存期：二维特例映射到多维的默认 version/deployment/auth_mode/term_months 取值规则？
 - [ ] 导入事务粒度：整批失败回滚 vs 部分成功（主设计「失败拒绝发布」倾向整批校验+拒绝发布）？
-- [ ] 配置对象 API 前缀统一问题（同 F027：主设计目标 `/api/config-center/<domain>` vs 现状 `/api/configs` 模式）。
+- [ ] 配置对象 API 前缀统一问题（同 F037：主设计目标 `/api/config-center/<domain>` vs 现状 `/api/configs` 模式）。
 
 ### 2.3 本轮边界
 
 - **做**：O3 全部——price_matrix 对象（五触点）、四维+区间、两口径、Excel 导入与逐行数学校验、`engine.resolveProductUnitPrice` 扩维（含累计模式）、10,000+ 兜底、product_price_tiers 二维兼容层、PriceListTab 多维升级；默认种子（234 行）仅作附录。
-- **不做**：产品目录/版本矩阵（F027，本包依赖其已发布维度与维度字典）；业务参数（F032，1.2 校验开关与汇率参数属其消费面）；报价版本化/快照（F034）；历史报价重算（禁止，F001 §5 快照规则）；产品/版本/授权主数据的新增（F027）。
+- **不做**：产品目录/版本矩阵（F037，本包依赖其已发布维度与维度字典）；业务参数（F042，1.2 校验开关与汇率参数属其消费面）；报价版本化/快照（F044）；历史报价重算（禁止，F001 §5 快照规则）；产品/版本/授权主数据的新增（F037）。
 
 ---
 
@@ -108,9 +108,9 @@ resolveCumulativeListPrice(product, quantity, context?: PriceContext): PriceReso
 CREATE TABLE price_matrix (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  version_code TEXT NOT NULL,              -- STD/PRO/ENT/XINCHUANG（F027 维度）
-  deployment TEXT NOT NULL,                -- PUBLIC_CLOUD/PRIVATE/HA（F027 维度）
-  auth_mode TEXT NOT NULL,                 -- SUB_YEAR/SUB_3YEAR/ONETIME（F027 维度）
+  version_code TEXT NOT NULL,              -- STD/PRO/ENT/XINCHUANG（F037 维度）
+  deployment TEXT NOT NULL,                -- PUBLIC_CLOUD/PRIVATE/HA（F037 维度）
+  auth_mode TEXT NOT NULL,                 -- SUB_YEAR/SUB_3YEAR/ONETIME（F037 维度）
   term_months INT NOT NULL,                -- 12/36；买断=永久（主设计 O2/O3）
   currency CHAR(3) NOT NULL DEFAULT 'CNY',
   qty_from INT NOT NULL,
@@ -150,7 +150,7 @@ CREATE TABLE price_matrix_versions (
 
 1. 档位区间合法：qty_from≥1、qty_to>qty_from、不重叠、无上限档最后
 2. 累计=上档累计+本档 unit_price×档差（容差 0.01）
-3. 高可用/信创 = 企业版×1.2（可配校验开关，开关来自 F032 业务参数或本对象配置位——见 2.2）
+3. 高可用/信创 = 企业版×1.2（可配校验开关，开关来自 F042 业务参数或本对象配置位——见 2.2）
 4. 10,000+ 档无价（list_price/unit_price 空 →「请联系我们」）
 5. 失败拒绝发布，返回逐行错误
 
@@ -220,7 +220,7 @@ Excel 导入/单行编辑 ──[validate 通过]──> DRAFT ──[publish]�
 
 ### 6.1 涉及文件
 ```
-(开发后回填，每行加 REQ:F028 标记)
+(开发后回填，每行加 REQ:F038 标记)
 ```
 
 ### 6.2 关键决策
@@ -257,7 +257,7 @@ Excel 导入/单行编辑 ──[validate 通过]──> DRAFT ──[publish]�
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F028 | 待更新 | |
+| `REQ_REGISTRY.yml` F038 | 待更新 | |
 | `03-design-truth/` | 待更新 | |
 | `04-implementation-truth/` | 待创建 | |
 

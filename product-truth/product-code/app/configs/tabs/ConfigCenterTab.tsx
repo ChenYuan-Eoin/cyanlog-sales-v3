@@ -1,6 +1,6 @@
 'use client'
 
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 配置中心通用域 Tab（列表/新建/编辑/发布/版本/回滚/删除），字段由 domain-specs 驱动
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'

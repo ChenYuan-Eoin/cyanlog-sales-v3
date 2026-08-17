@@ -1,4 +1,4 @@
-// REQ: F034
+// REQ: F044
 // PURPOSE: 报价冻结 → 生成结构化版本 + 中间快照（freeze_quote RPC）
 // 未迁移库返回 409 MIGRATION_REQUIRED，不破坏现有流程
 import { NextRequest, NextResponse } from 'next/server'

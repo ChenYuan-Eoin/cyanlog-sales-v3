@@ -1,4 +1,4 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 配置中心 10 个报价域的表单字段规格（驱动通用 ConfigCenterTab）
 export interface FieldSpec {
   key: string

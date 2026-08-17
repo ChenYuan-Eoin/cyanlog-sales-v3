@@ -1,4 +1,4 @@
-// REQ: F033
+// REQ: F043
 // PURPOSE: 审批规则解析测试（阈值命中/优先级/禁人名）
 import { describe, expect, it } from 'vitest'
 import {

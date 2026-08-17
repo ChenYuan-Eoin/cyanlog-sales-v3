@@ -1,4 +1,4 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 报价域出厂种子数据（配置数据，非需求；业务可改）
 // 这些种子会先通过 zod 校验测试，再在 DB 应用阶段随 migration/seed 落库
 export const PRODUCT_VERSION_SEEDS = [

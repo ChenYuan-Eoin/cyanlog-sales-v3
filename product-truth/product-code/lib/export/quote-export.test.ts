@@ -1,4 +1,4 @@
-// REQ: F029/F030
+// REQ: F039/F040
 // PURPOSE: 标准单导出脱敏测试（内部字段零泄漏硬门）
 import { describe, expect, it } from 'vitest'
 import { buildQuoteExportData } from './quote-export'

@@ -1,13 +1,13 @@
-# Feature Packet: F029-字段字典与输出白名单
+# Feature Packet: F039-字段字典与输出白名单
 
 ## 1. Meta
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F029 |
+| **REQ ID** | F039 |
 | **Name** | 字段字典与输出白名单 |
 | **Module** | 报价域 / 配置中心（输出规则能力域） |
-| **Branch** | `feature/F029-field-dictionary` |
+| **Branch** | `feature/F039-field-dictionary` |
 | **Owner** | TBD（待指派） |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -22,18 +22,18 @@
 
 - 建立 **O6 字段字典（field_dictionary）**：每个字段记录 `field_key / business_name / source / transform_rule / output_classification / is_external / data_type / options / default_value / remark`，字段唯一键 `field_key`（系统内部唯一变量名，客户模板怎么变，变量名不变）。
 - **隐藏字段白名单派生**：白名单不是人工再维护一张表，而是从已发布字段字典**派生**——`is_external=false` 的字段永不进入输出流；只有 `is_external=true` 的已发布字段才进入导出/打印渲染。
-- **物理隔离**：内部字段（成本/底价/毛利/审批人/审批意见）只存在于逻辑运算层；所有导出入口（标准单 F030、非标模板 F036、打印）必须经过 `field-whitelist` 过滤后才允许进入渲染引擎。
+- **物理隔离**：内部字段（成本/底价/毛利/审批人/审批意见）只存在于逻辑运算层；所有导出入口（标准单 F040、非标模板 F046、打印）必须经过 `field-whitelist` 过滤后才允许进入渲染引擎。
 - 默认出厂 **31 个字段**只作为种子与核对基线（附录 B），不替代业务定稿。
 
-来源：主设计 O6 + F029 包划分；V3 现状审计（配置中心泛型 `configs/config_versions` 无字段目录；`contract_template_params` 提供 per-org 参数表模式可复用；报价当前无导出）；需求材料字段字典六类与五种转换规则、Whitelist Filter 物理隔离协议。
+来源：主设计 O6 + F039 包划分；V3 现状审计（配置中心泛型 `configs/config_versions` 无字段目录；`contract_template_params` 提供 per-org 参数表模式可复用；报价当前无导出）；需求材料字段字典六类与五种转换规则、Whitelist Filter 物理隔离协议。
 
 ### 2.2 待确认问题
 
 - [ ] `output_classification` 枚举口径：主设计 O6 为 5 值（header/software/financial/clause/internal），需求材料为 6 类（报价单头/软件明细/价格汇总/财务摘要/条款承诺/内部隐藏）——是否把「价格汇总」并入 `financial`（推荐，用 options/子类区分），还是扩为 6 值？需 PM 定稿。
 - [ ] 31 个默认字段的精确清单：隐藏安全类为 5 还是 6（是否含 `rebate_commission` 返点/竞对价）。本包附录按「隐藏 6 个共 31」列出（与主设计「隐藏 5+」兼容），待业务定稿。
 - [ ] 字段字典与现有 `contract_template_params` 的关系：并存（本表=报价侧字段/白名单真相，`contract_template_params`=合同侧模板参数）还是统一迁移？推荐并存、不迁移存量数据。
-- [ ] 历史版本导出用哪个白名单：导出时点的已发布白名单（写入 F034 快照）还是最新发布版？推荐导出时点，保证「历史版本不随配置漂移」。
-- [ ] 自定义字段的消费边界：`direct/formula` 首批只支持引用现有计算函数；`semantic/capture` 仅服务非标映射（F036）。是否开放可配置 formula 表达式，需 Dev 技术评审。
+- [ ] 历史版本导出用哪个白名单：导出时点的已发布白名单（写入 F044 快照）还是最新发布版？推荐导出时点，保证「历史版本不随配置漂移」。
+- [ ] 自定义字段的消费边界：`direct/formula` 首批只支持引用现有计算函数；`semantic/capture` 仅服务非标映射（F046）。是否开放可配置 formula 表达式，需 Dev 技术评审。
 - [ ] 白名单变更对在途草稿的提示：字段被停用/改隐藏后，草稿报价是否提示字段缺失？（推荐：导出时提示并阻断，草稿不强制）
 
 ### 2.3 本轮边界
@@ -41,13 +41,13 @@
 - **做**：
   - O6 `field_dictionary` 配置对象进入配置中心五触点（`lib/configs/types.ts → validation.ts → runtime.ts → app/api/config-center/field-dictionaries → app/configs` 新 Tab）。
   - 白名单派生机制（已发布 + `is_external=true`）与消费面 API。
-  - `lib/export/field-whitelist.ts` 白名单投影模块（供 F030/F036 与打印共用）。
+  - `lib/export/field-whitelist.ts` 白名单投影模块（供 F040/F046 与打印共用）。
   - 31 个默认字段种子（附录 B，作为出厂基线）。
-  - 发布校验：字段被 F030 模板变量引用时不可停用为隐藏/删除（与 F030 联动）。
+  - 发布校验：字段被 F040 模板变量引用时不可停用为隐藏/删除（与 F040 联动）。
 - **不做**：
-  - 报价结构化字段落库与版本化（F034 前置，本包只定义字段语义）。
-  - 标准/客户模板与条款注入（F030）。
-  - 非标模板语义映射（F036）。
+  - 报价结构化字段落库与版本化（F044 前置，本包只定义字段语义）。
+  - 标准/客户模板与条款注入（F040）。
+  - 非标模板语义映射（F046）。
   - 修改报价算价/审批代码逻辑（除导出边界接白名单外，行为不变）。
   - 迁移/合并 `contract_template_params`（合同侧，后置决策）。
 
@@ -75,7 +75,7 @@
 | 接口/模块 | 说明 |
 |---|---|
 | `lib/export/field-whitelist.ts` | `getOutputWhitelist(orgId)` 运行时读取（服务端），返回白名单字段数组；`projectToWhitelist(payload, whitelist)` 对任意报价 DTO 做白名单投影，内部字段物理剔除 |
-| `POST /api/quotes/[id]/export`（F030 落地） | 渲染入参 = 白名单投影后的 DTO；`word-generator` 只接受白名单 JSON |
+| `POST /api/quotes/[id]/export`（F040 落地） | 渲染入参 = 白名单投影后的 DTO；`word-generator` 只接受白名单 JSON |
 
 **错误码约定**：400 枚举非法/数据格式错误；409 `field_key` 重复或字段被模板引用不可停用/删除；404 字段不存在；422 发布校验失败（含被引用字段降级为隐藏）。
 
@@ -119,7 +119,7 @@ field_dictionary_versions (
 
 **白名单派生（唯一真相）**：白名单 = `SELECT field_key, business_name, data_type, transform_rule, output_classification, options FROM field_dictionaries WHERE org_id=$1 AND status='PUBLISHED' AND is_external=true ORDER BY sort_order`。任何导出/打印路径不得手工维护第二份字段清单。
 
-**物理隔离约定**：`output_classification='internal'` 与 `is_external=false` 双保险——内部字段只存在于逻辑运算层（算价/审批），在进入渲染引擎前由 `projectToWhitelist` 物理剔除；`word-generator`（F030 改造）与 F036 非标渲染共用同一白名单，禁止绕过。
+**物理隔离约定**：`output_classification='internal'` 与 `is_external=false` 双保险——内部字段只存在于逻辑运算层（算价/审批），在进入渲染引擎前由 `projectToWhitelist` 物理剔除；`word-generator`（F040 改造）与 F046 非标渲染共用同一白名单，禁止绕过。
 
 ### 3.3 状态机
 
@@ -131,8 +131,8 @@ field_dictionary_versions (
 消费面：只读 PUBLISHED；whitelist 每次按当前发布态派生
 ```
 
-- 发布校验链：`field_key` 唯一 → 枚举合法 → 默认值类型匹配 `data_type` → 被 `output_templates.variables` 引用的字段不允许 `is_external=false` 或删除（F030 联动）。
-- 回滚不回退引用关系；被回滚版本引用的模板需重新校验（F030 发布时再做）。
+- 发布校验链：`field_key` 唯一 → 枚举合法 → 默认值类型匹配 `data_type` → 被 `output_templates.variables` 引用的字段不允许 `is_external=false` 或删除（F040 联动）。
+- 回滚不回退引用关系；被回滚版本引用的模板需重新校验（F040 发布时再做）。
 
 ### 3.4 风险与降级
 
@@ -140,7 +140,7 @@ field_dictionary_versions (
 |------|------|
 | 字段字典与代码字段漂移（新增代码字段未入字典） | 导出边界白名单投影强制：未在白名单的字段直接被剔除；E2E 断言导出件不含任何未登记键；新增计算字段流程=先入字典再发布 |
 | 隐藏字段被误标对外 | `is_external` 默认 false（白名单是正列表）；导出链路单元/接口测试包含红队用例（构造 internal_* 值断言不出现）；人工验收 grep 导出文件 |
-| 白名单变更影响历史导出 | 导出使用发布时点白名单并随 F034 快照固化；本包先约定语义，快照锁定在 F034 落地 |
+| 白名单变更影响历史导出 | 导出使用发布时点白名单并随 F044 快照固化；本包先约定语义，快照锁定在 F044 落地 |
 | 配置中心不可用导致导出失败 | 降级使用最近一次已发布白名单缓存（沿用 `getPublishedUITheme` 的缓存+超时降级模式），并在导出审计记录降级标记 |
 | 31 个默认字段与业务实际不符 | 种子仅作基线，发布前由 PM/业务核对；附录 B 标注待定项 |
 
@@ -172,7 +172,7 @@ field_dictionary_versions (
 | 单元测试 | schema/校验：`field_key` 唯一、source/transform_rule/output_classification/data_type 枚举、默认值类型；白名单派生函数；`projectToWhitelist` 物理剔除 | 枚举与唯一性校验全通过；`is_external=false` 字段在任意输入下永不出现于白名单/投影结果；对 31 个默认字段断言：31 个全部合法、隐藏类 `is_external=false` |
 | 接口测试 | 字段 CRUD + versions/publish/rollback + `/whitelist` | 发布后无需重启即生效；`/whitelist` 仅返回已发布且 `is_external=true`；DRAFT/ARCHIVED 对消费面不可见；被模板引用的字段发布为隐藏返回 422 |
 | E2E | 配置中心字段字典 Tab 增改/发布 → 构造含 `internal_cost/min_price/margin_rate/approver/approval_opinion` 的报价 → 标准导出 Word → 解包检查 | 导出文件（docx 解包后的 document.xml 与元数据）不含任何隐藏字段键/值——**打印/导出内部信息零泄漏**硬门通过 |
-| 人工验收 | 31 个默认字段核对；改字段名/输出分类后导出对照 | 与附录 B 基线 100% 一致（除待定项标注）；字段改动发布后新导出即生效、历史导出不受影响（配合 F034 快照） |
+| 人工验收 | 31 个默认字段核对；改字段名/输出分类后导出对照 | 与附录 B 基线 100% 一致（除待定项标注）；字段改动发布后新导出即生效、历史导出不受影响（配合 F044 快照） |
 
 ---
 
@@ -180,7 +180,7 @@ field_dictionary_versions (
 
 ### 6.1 涉及文件
 ```
-(开发后回填，每行加 REQ:F029 标记)
+(开发后回填，每行加 REQ:F039 标记)
 ```
 
 ### 6.2 关键决策
@@ -217,7 +217,7 @@ field_dictionary_versions (
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F029 | 待更新 | |
+| `REQ_REGISTRY.yml` F039 | 待更新 | |
 | `03-design-truth/` | 待更新 | |
 | `04-implementation-truth/` | 待创建 | |
 

@@ -1,4 +1,4 @@
-// REQ: F034
+// REQ: F044
 // PURPOSE: 冻结版本 payload 构建测试（结构化可读 = 合同源数据）
 import { describe, expect, it } from 'vitest'
 import { buildQuoteVersionPayload, checksumOfVersion } from './version-builder'
@@ -29,7 +29,7 @@ const ITEMS = [
   },
 ]
 
-describe('buildQuoteVersionPayload（F034 结构化源数据）', () => {
+describe('buildQuoteVersionPayload（F044 结构化源数据）', () => {
   it('header+items 全字段结构化可读，价格/数量/版本/部署/授权/期限齐全', () => {
     const payload = buildQuoteVersionPayload(QUOTE, ITEMS, 1)
     expect(payload.version_no).toBe(1)

@@ -1,4 +1,4 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 配置中心通用域 API（发布）——Next 15 async params
 import { NextRequest } from 'next/server'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'

@@ -1,6 +1,6 @@
 'use client'
 
-// REQ: F027/F028/F034/F035
+// REQ: F037/F038/F044/F045
 // PURPOSE: ONES 结构化报价编辑器（选品→版本/部署/授权/期限→组合校验→实时算价→提交）
 // 与现有 /quotes/new 并行；服务端未迁移时提交走 legacy 回退
 import { useEffect, useMemo, useState } from 'react'

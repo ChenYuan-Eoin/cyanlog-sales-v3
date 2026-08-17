@@ -83,7 +83,7 @@ export const quoteSchema = z.object({
     unit_price: z.number().nonnegative().optional(),
     discount: z.number().nonnegative().optional().default(0),
     sort_order: z.number().int().min(0).optional(),
-    // F028/F034 ONES 结构化字段（可选；migration 落库后生效）
+    // F038/F044 ONES 结构化字段（可选；migration 落库后生效）
     version_code: z.string().max(20).optional(),
     deployment: z.enum(['PUBLIC_CLOUD', 'PRIVATE', 'HA']).optional(),
     auth_mode: z.enum(['SUB_YEAR', 'SUB_3YEAR', 'ONETIME']).optional(),

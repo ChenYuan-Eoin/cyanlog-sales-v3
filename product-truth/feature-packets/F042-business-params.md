@@ -1,4 +1,4 @@
-# Feature Packet: F032-业务参数
+# Feature Packet: F042-业务参数
 
 > 阶段 0 设计交付物（只写文档，不写代码）。依据：主设计 `/.tmp/F0-报价域-配置对象与结构化字段设计.md` O4；现状 `product-truth/feature-packets/F000-config-center-architecture.md`、`F010-quote-rule-config.md` 及 `product-truth/product-code` 现有实现（`lib/configs/types.ts`、`lib/configs/validation.ts`、`lib/configs/runtime.ts`、`app/api/configs`、`supabase/migrations/20260603000001_add_configs_tables.sql`）。
 
@@ -6,10 +6,10 @@
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F032 |
+| **REQ ID** | F042 |
 | **Name** | 业务参数 |
 | **Module** | 配置中心 / 报价域（业务数字配置） |
-| **Branch** | `feature/F032-business-params` |
+| **Branch** | `feature/F042-business-params` |
 | **Owner** | （待定） |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -43,7 +43,7 @@
 ### 2.3 本轮边界
 
 - **做**：O4 业务参数对象（五触点）；参数消费（运行时读取 PUBLISHED 且 effective_from≤now）；is_secret 脱敏；改数不改代码；不重启生效；种子清单仅附录。
-- **不做**：审批规则化（F033，本包只提供 approval 类参数与消费读取）；税率配置改造（F010 TAX_RULE 现状不动，仅定义消费一致性）；汇率计算（F035）；多维价盘（F028）；产品目录/版本矩阵（F027）。
+- **不做**：审批规则化（F043，本包只提供 approval 类参数与消费读取）；税率配置改造（F010 TAX_RULE 现状不动，仅定义消费一致性）；汇率计算（F045）；多维价盘（F038）；产品目录/版本矩阵（F037）。
 
 ---
 
@@ -116,16 +116,16 @@ CREATE TABLE business_params_versions (     -- 镜像现状 config_versions 模�
 
 | 类别 | 种子（附录 B） | 消费方 | 现状依据 |
 |------|----------------|--------|----------|
-| pricing | 门槛 5万/8万/10 | 折扣/分级展示与触发（F010/F033） | 现状 configs APPROVAL_RULE 阈值语义（F011 ApprovalThreshold） |
-| approval | 分级 60万/30万/5万 | F033 审批规则化触发阈值 | 主设计 O5 默认口径（待业务定稿 G1） |
-| maintenance | 维保 20%+2% | 买断维保金额（F035 高级科目） | 主设计 §二 quote_items ★ maintenance_months |
-| gift | 赠送 5/3/1+5000 | 赠送数量与金额（F035） | 主设计 §二 quote_items ★ is_gift/gift_original_amount |
-| payment | 分期 30/60/10 | 收款计划（F035/合同） | 主设计 O4 种子 |
+| pricing | 门槛 5万/8万/10 | 折扣/分级展示与触发（F010/F043） | 现状 configs APPROVAL_RULE 阈值语义（F011 ApprovalThreshold） |
+| approval | 分级 60万/30万/5万 | F043 审批规则化触发阈值 | 主设计 O5 默认口径（待业务定稿 G1） |
+| maintenance | 维保 20%+2% | 买断维保金额（F045 高级科目） | 主设计 §二 quote_items ★ maintenance_months |
+| gift | 赠送 5/3/1+5000 | 赠送数量与金额（F045） | 主设计 §二 quote_items ★ is_gift/gift_original_amount |
+| payment | 分期 30/60/10 | 收款计划（F045/合同） | 主设计 O4 种子 |
 | tax | 税率 13/6 | `getPublishedTaxRate`（现状已读 TAX_RULE） | `lib/configs/runtime.ts` + 20260603000001 迁移 |
 | quote | 有效期 15 | quotes.valid_until 默认（报价创建） | 现状 `app/quotes/new/page.tsx`（硬编码待替换） |
 | customer | 保护日 2021-02-01 | 客户保护期逻辑 | 主设计 O4 种子 |
-| (pricing) | 高可用 20% | F028 价盘 1.2 校验开关/高可用参数 | 主设计 §三.3 |
-| (quote) | 汇率源/时点（待定） | F035 汇率计算 | 主设计 §二 quotes ★ fx_source/fx_date |
+| (pricing) | 高可用 20% | F038 价盘 1.2 校验开关/高可用参数 | 主设计 §三.3 |
+| (quote) | 汇率源/时点（待定） | F045 汇率计算 | 主设计 §二 quotes ★ fx_source/fx_date |
 
 ### 3.3 状态机
 
@@ -187,7 +187,7 @@ effective_from：PUBLISHED 且 effective_from<=now 才被消费端读取（定�
 
 ### 6.1 涉及文件
 ```
-(开发后回填，每行加 REQ:F032 标记)
+(开发后回填，每行加 REQ:F042 标记)
 ```
 
 ### 6.2 关键决策
@@ -224,7 +224,7 @@ effective_from：PUBLISHED 且 effective_from<=now 才被消费端读取（定�
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F032 | 待更新 | |
+| `REQ_REGISTRY.yml` F042 | 待更新 | |
 | `03-design-truth/` | 待更新 | |
 | `04-implementation-truth/` | 待创建 | |
 

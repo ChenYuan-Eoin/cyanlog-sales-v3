@@ -1,4 +1,4 @@
-# Feature Packet: F027-产品目录与版本能力矩阵
+# Feature Packet: F037-产品目录与版本能力矩阵
 
 > 阶段 0 设计交付物（只写文档，不写代码）。依据：主设计 `/.tmp/F0-报价域-配置对象与结构化字段设计.md` O1+O2；现状 `product-truth/feature-packets/F000-config-center-architecture.md`、`F001-price-list.md`、`F010-quote-rule-config.md`、`F011-org-permission-config.md` 及 `product-truth/product-code` 现有实现。
 
@@ -6,10 +6,10 @@
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F027 |
+| **REQ ID** | F037 |
 | **Name** | 产品目录与版本能力矩阵 |
 | **Module** | 配置中心 / 报价域（可售对象与能力矩阵） |
-| **Branch** | `feature/F027-product-catalog-version-matrix` |
+| **Branch** | `feature/F037-product-catalog-version-matrix` |
 | **Owner** | （待定） |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -25,13 +25,13 @@
 - **O1 产品目录（product_catalog）**：报价可售对象，决定跟随/搭售/可售版本；字段含 id、code、name、category（BASE/FOLLOW_PRODUCT/FOLLOW_APP/FOLLOW_ECO）、standalone、follows[]、version_codes[]、account_constraint(jsonb)、status、org_id；校验要求 FOLLOW 系列必须 standalone=false 且 follows 非空、基座 standalone=true；默认种子 6 个产品（仅附录）。
 - **O2 版本能力矩阵（version_capability_matrix）**：版本×部署×授权×能力的允许矩阵，字段含 version_code、deployment、auth_mode、capabilities[](ha/xinchuang/onetime/migration)、term_options[](12/36/永久)、mutex(jsonb)；矩阵即结构，改动走配置发布；默认种子标准/专业/企业/信创矩阵（仅附录）。
 - **V3 落点**：products 加 attributes JSONB（含 category/standalone/follows/version_codes）或新建 product_catalog 旁挂表；新增 product_versions + 维度字典；配置中心新 Tab「产品目录」；PriceListTab 升级展示版本维度。
-- **选品/防呆消费**：报价选品只展示已发布在售产品与可售版本；非法组合（部署×授权×能力×期限互斥）前端拦截 + 服务端二次校验；跟随类产品仅随基座出现；输出 F028 算价所需维度（version_code/deployment/auth_mode/term_months）。
+- **选品/防呆消费**：报价选品只展示已发布在售产品与可售版本；非法组合（部署×授权×能力×期限互斥）前端拦截 + 服务端二次校验；跟随类产品仅随基座出现；输出 F038 算价所需维度（version_code/deployment/auth_mode/term_months）。
 
 ### 2.2 待确认问题
 
 - [ ] 主设计附录 A（6 个产品种子 + 标准/专业/企业/信创矩阵种子）当前未随主设计文件落地，需 PM 补齐后回填本包附录 A。
 - [ ] O1 V3 落点二选一：products.attributes JSONB vs 旁挂强类型 product_catalog 表。本包推荐旁挂强类型表（F000 §5.1），待评审确认。
-- [ ] O2 维度字典（deployment/auth_mode/term_options/capabilities）的枚举值与 F028 price_matrix 共用，是否由 F027 先建、F028 引用？
+- [ ] O2 维度字典（deployment/auth_mode/term_options/capabilities）的枚举值与 F038 price_matrix 共用，是否由 F037 先建、F038 引用？
 - [ ] capabilities 与 mutex(jsonb) 的具体互斥规则（如「信创×公有云」「一次性×SaaS」）需业务定稿。
 - [ ] account_constraint(jsonb) 的表达式语法（如 min/max 账号数、按版本约束）待定。
 - [ ] 配置对象 API 前缀：主设计目标为 `app/api/config-center/<domain>`，现状为 `app/api/configs`（含 [id]/versions/publish/rollback）。本期是否统一迁移前缀，还是先按现状模式新建 domain API？
@@ -41,7 +41,7 @@
 ### 2.3 本轮边界
 
 - **做**：O1 产品目录、O2 版本能力矩阵两个配置对象（五触点）；products/product_versions V3 落点；配置中心「产品目录」Tab 与 PriceListTab 版本维度升级；报价选品/防呆消费（前端过滤 + 服务端校验）；默认种子仅作附录。
-- **不做**：多维价盘与 Excel 导入（F028）；业务参数（F032）；审批规则化（F033）；报价版本化与中间快照（F034）；税率/折扣矩阵改造（F010 现状不动）；报价结构化字段落库（阶段 1，随 F034/F035）。
+- **不做**：多维价盘与 Excel 导入（F038）；业务参数（F042）；审批规则化（F043）；报价版本化与中间快照（F044）；税率/折扣矩阵改造（F010 现状不动）；报价结构化字段落库（阶段 1，随 F044/F045）。
 
 ---
 
@@ -137,7 +137,7 @@ products 1─n product_versions（版本×部署×授权×能力×期限）
 quotes/quote_items 选品快照（version_code/deployment/auth_mode/term_months）
       │
       ▼
-price_matrix（F028）以 product_id+version_code+deployment+auth_mode+term_months 为定价 key
+price_matrix（F038）以 product_id+version_code+deployment+auth_mode+term_months 为定价 key
 ```
 
 ### 3.3 状态机
@@ -178,7 +178,7 @@ active ──[停售]──> inactive ──[启售]──> active
 
 - `product-truth/03-design-truth/README.md`（设计真相边界：只定义主题/组件原语，不定义业务页面）
 - `product-truth/product-code/app/configs/page.tsx` + `app/configs/ConfigsClient.tsx`（配置中心入口与信息架构，F000 §4）
-- `product-truth/product-code/app/configs/tabs/PriceListTab.tsx`（现有价盘 Tab 形态，F027 升级参照）
+- `product-truth/product-code/app/configs/tabs/PriceListTab.tsx`（现有价盘 Tab 形态，F037 升级参照）
 - F011 §10.2-10.4 行内操作/状态流转（产品目录行操作可复用「编辑/更多」模式）
 
 ### 4.2 组件
@@ -200,7 +200,7 @@ active ──[停售]──> inactive ──[启售]──> active
 | 单元测试 | `lib/configs/validation.ts` 产品目录/版本矩阵 schema；`runtime.ts` 已发布读取；选品组合校验函数 | FOLLOW 系列 standalone=false 且 follows 非空、BASE standalone=true 的校验全覆盖；非法矩阵组合返回明确错误；runtime 只返回 PUBLISHED 且按 org 过滤 |
 | 接口测试 | `/api/config-center/product-catalog`、`version-capability-matrix`（或现状 `/api/configs` 模式）CRUD + versions/publish/rollback | 草稿不可被消费端读到；发布后立即可读（不重启服务）；回滚到上一版本生效；跨 org 不可见；错误码符合 3.1 表 |
 | E2E | 配置中心「产品目录」Tab + 报价新页选品 | 管理员可维护产品目录与版本矩阵并发布；报价页只出现已发布在售产品与合法组合；非法组合被拦截（前端 + 服务端各验证一次）；跟随类产品仅随基座出现 |
-| 人工验收 | 默认种子（附录 A）与选品防呆 | 附录 A 种子导入后，报价可完成一次含版本/部署/授权/期限的选择并进入 F028 定价链路；矩阵改动发布后 30s 内新报价反映（服务不重启） |
+| 人工验收 | 默认种子（附录 A）与选品防呆 | 附录 A 种子导入后，报价可完成一次含版本/部署/授权/期限的选择并进入 F038 定价链路；矩阵改动发布后 30s 内新报价反映（服务不重启） |
 
 ---
 
@@ -208,7 +208,7 @@ active ──[停售]──> inactive ──[启售]──> active
 
 ### 6.1 涉及文件
 ```
-(开发后回填，每行加 REQ:F027 标记)
+(开发后回填，每行加 REQ:F037 标记)
 ```
 
 ### 6.2 关键决策
@@ -245,7 +245,7 @@ active ──[停售]──> inactive ──[启售]──> active
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F027 | 待更新 | |
+| `REQ_REGISTRY.yml` F037 | 待更新 | |
 | `03-design-truth/` | 待更新 | |
 | `04-implementation-truth/` | 待创建 | |
 

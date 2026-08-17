@@ -1,4 +1,4 @@
-// REQ: F034
+// REQ: F044
 // PURPOSE: 报价版本/快照 checksum 测试（逐位一致硬门）
 import { describe, expect, it } from 'vitest'
 import { canonicalJson, quoteVersionChecksum, snapshotMatchesVersion } from './version-checksum'

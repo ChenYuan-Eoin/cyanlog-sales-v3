@@ -1,4 +1,4 @@
-// REQ: F034
+// REQ: F044
 // PURPOSE: 冻结报价版本 payload 构建（结构化 header+items = 合同源数据）
 import { quoteVersionChecksum } from './version-checksum'
 

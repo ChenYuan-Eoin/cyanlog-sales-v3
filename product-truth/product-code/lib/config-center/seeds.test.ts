@@ -1,4 +1,4 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 出厂种子数据必须通过对应 zod 校验；隐藏字段永不对外
 import { describe, expect, it } from 'vitest'
 import { ALL_SEEDS } from './seeds'

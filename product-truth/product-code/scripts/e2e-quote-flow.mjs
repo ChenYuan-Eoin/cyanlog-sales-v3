@@ -41,7 +41,7 @@ if (!quote?.id) { console.log(JSON.stringify(createJson).slice(0, 400)); process
 const qid = quote.id
 E('金额口径（折扣 40% 后合计）', Number(quote.total_amount) === 10170, `total=${quote.total_amount}`)
 
-// 2.1 F032：FX_SOURCE=BOC 时创建报价自动带中行牌价（1 USD = 中行折算价/100 CNY）
+// 2.1 F042：FX_SOURCE=BOC 时创建报价自动带中行牌价（1 USD = 中行折算价/100 CNY）
 const { data: fxRow } = await sb.from('quotes').select('currency, exchange_rate').eq('id', qid).single()
 E('BOC 汇率自动带出（FX_SOURCE=BOC）', fxRow?.currency === 'CNY' && typeof fxRow?.exchange_rate === 'number' && fxRow.exchange_rate > 0, `rate=${fxRow?.exchange_rate}`)
 

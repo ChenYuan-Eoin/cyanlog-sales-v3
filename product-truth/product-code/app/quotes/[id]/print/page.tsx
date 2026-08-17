@@ -1,6 +1,6 @@
 'use client'
 
-// REQ: F029/F030
+// REQ: F039/F040
 // PURPOSE: 标准报价单打印页（只读导出数据，内部字段已脱敏；水印+有效期）
 import { useEffect, useState, use } from 'react'
 

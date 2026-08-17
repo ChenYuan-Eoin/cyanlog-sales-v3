@@ -1,4 +1,4 @@
-// REQ: F029/F030/F034
+// REQ: F039/F040/F044
 // PURPOSE: 标准报价单导出数据构建（白名单脱敏 + 有效性 + 水印信息）
 // 原则：内部字段永不进入输出流；导出只读冻结版本，禁止读实时可变数据
 import { pickWhitelisted } from './field-whitelist'

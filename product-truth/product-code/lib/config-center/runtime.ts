@@ -1,4 +1,4 @@
-// REQ: F027-F036
+// REQ: F037-F046
 // PURPOSE: 配置中心运行时读取（业务面只读消费已发布配置）
 import { supabaseAdmin } from '@/lib/supabase'
 import { DOMAIN_REGISTRY, type ConfigDomain, type ConfigStatus } from './types'

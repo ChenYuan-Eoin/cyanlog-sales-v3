@@ -1,4 +1,4 @@
-// REQ: F028
+// REQ: F038
 // PURPOSE: 多维价盘导入预览（只校验不落库；阶段 0 硬门：234 行 0 失败）
 import { NextRequest } from 'next/server'
 import { withAuthAndOrg } from '@/lib/api/auth-wrapper'

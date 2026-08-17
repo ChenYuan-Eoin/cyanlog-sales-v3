@@ -1,6 +1,6 @@
-// REQ: F004/F033
+// REQ: F004/F043
 // PURPOSE: Approval workflow engine
-// F033：审批规则/链/节点全配置化——传入已发布配置时按规则解析，否则回退原三级默认（兼容旧调用）
+// F043：审批规则/链/节点全配置化——传入已发布配置时按规则解析，否则回退原三级默认（兼容旧调用）
 import { supabaseAdmin } from '@/lib/supabase'
 import {
   resolveApprovalRule,
@@ -34,7 +34,7 @@ export interface ApprovalWorkflowOptions {
   nodesByChain?: Record<string, ApprovalNodeValue[]>
 }
 
-// Default approval configuration（仅作无配置时的兜底，F033 后应被已发布规则取代）
+// Default approval configuration（仅作无配置时的兜底，F043 后应被已发布规则取代）
 const defaultConfigs: ApprovalConfig[] = [
   { level: 1, maxDiscount: 5, approverRole: '销售经理' },
   { level: 2, maxDiscount: 10, approverRole: '区域总监' },
@@ -73,13 +73,13 @@ export function resolveApprovalForQuote(
   const path = resolveApprovalPath(options.chains || [], options.nodesByChain || {}, rule)
   const problems = assertNoPersonNames(path.nodes)
   if (problems.length > 0) {
-    console.error('[F033] 审批节点包含人名，拒绝使用：', problems)
+    console.error('[F043] 审批节点包含人名，拒绝使用：', problems)
     return { ruleCode: null, levels: [] }
   }
   return { ruleCode: path.matchedBy, levels: buildApprovalLevels(path.nodes) }
 }
 
-// Determine approval level based on discount rate（兼容旧调用；F033 建议传 options）
+// Determine approval level based on discount rate（兼容旧调用；F043 建议传 options）
 export function getApprovalLevel(discountRate: number, options?: ApprovalWorkflowOptions): number {
   const resolved = resolveApprovalForQuote(discountRate, options)
   if (resolved.levels.length > 0) {
@@ -220,7 +220,7 @@ export async function getApprovalHistory(quoteId: string): Promise<ApprovalRecor
 }
 
 // ────────────────────────────────────────────────────────────────
-// F033 配置读取：从配置中心加载已发布审批规则/链/节点
+// F043 配置读取：从配置中心加载已发布审批规则/链/节点
 // ────────────────────────────────────────────────────────────────
 export interface PublishedApprovalConfig {
   rules: ApprovalRuleValue[]

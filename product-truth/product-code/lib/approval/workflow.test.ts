@@ -1,4 +1,4 @@
-// REQ: F033
+// REQ: F043
 // PURPOSE: 审批工作流配置化接线测试（规则命中→级别行；无配置回退原三级）
 import { describe, expect, it } from 'vitest'
 import { resolveApprovalForQuote, buildApprovalLevels, getApprovalLevel } from './workflow'
@@ -17,7 +17,7 @@ const NODES: Record<string, ApprovalNodeValue[]> = {
   CHAIN_SPECIAL: [{ ord: 1, assignee_type: 'role', assignee_value: 'ROLE_SPECIAL', condition: {}, skip_on_unchanged: true, escalation: {} }],
 }
 
-describe('resolveApprovalForQuote（F033）', () => {
+describe('resolveApprovalForQuote（F043）', () => {
   it('折扣 0.4（40%）→ 特批链 1 级，角色 ROLE_SPECIAL', () => {
     const r = resolveApprovalForQuote(0.4, { rules: RULES, chains: CHAINS, nodesByChain: NODES })
     expect(r.ruleCode).toBe('R_LT50')

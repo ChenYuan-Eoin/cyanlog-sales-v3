@@ -1,4 +1,4 @@
-// REQ: F029/F030
+// REQ: F039/F040
 // PURPOSE: 标准报价单导出数据（白名单脱敏，内部字段零泄漏）
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'

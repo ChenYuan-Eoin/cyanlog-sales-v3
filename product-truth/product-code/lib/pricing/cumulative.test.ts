@@ -1,4 +1,4 @@
-// REQ: F028/F034
+// REQ: F038/F044
 // PURPOSE: 累计阶梯计价（ONES 口径）测试 + Project 价盘档边界证据
 import { describe, expect, it } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'

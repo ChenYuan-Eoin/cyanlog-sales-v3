@@ -372,7 +372,7 @@ export async function PUT(
 
     invalidateQuoteDetailResponseCache(id)
 
-    // F033：DRAFT/REJECTED → PENDING_APPROVAL 时，按已发布审批规则创建审批链（失败不阻断状态流转）
+    // F043：DRAFT/REJECTED → PENDING_APPROVAL 时，按已发布审批规则创建审批链（失败不阻断状态流转）
     if (updateData.status === 'PENDING_APPROVAL' && existingQuote.status !== 'PENDING_APPROVAL') {
       try {
         const approvalConfig = await loadPublishedApprovalConfig(orgId)
@@ -385,7 +385,7 @@ export async function PUT(
           })
         }
       } catch (approvalError) {
-        console.error('[F033] createApprovalWorkflow failed:', approvalError)
+        console.error('[F043] createApprovalWorkflow failed:', approvalError)
       }
     }
 

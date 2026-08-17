@@ -1,4 +1,4 @@
-// REQ: F032（业务参数 FX_SOURCE=BOC）
+// REQ: F042（业务参数 FX_SOURCE=BOC）
 // PURPOSE: 中行官方外汇牌价接入。中国银行无公开开发者实时汇率 API，
 // 官方权威免费源为牌价页 https://www.boc.cn/sourcedb/whpj/（HTML 表格）。
 // 本模块服务端抓取 + 内存缓存 + 超时；失败返回 null，绝不伪造数据。
@@ -147,7 +147,7 @@ export async function getQuoteFxRate(
       source: 'BOC',
     }
   } catch (error) {
-    console.error('[F032] getQuoteFxRate failed:', error)
+    console.error('[F042] getQuoteFxRate failed:', error)
     return null
   }
 }

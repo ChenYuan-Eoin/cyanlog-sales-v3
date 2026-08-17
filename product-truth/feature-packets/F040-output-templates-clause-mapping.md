@@ -1,13 +1,13 @@
-# Feature Packet: F030-输出模板与条款映射
+# Feature Packet: F040-输出模板与条款映射
 
 ## 1. Meta
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F030 |
+| **REQ ID** | F040 |
 | **Name** | 输出模板与条款映射 |
 | **Module** | 报价域 / 配置中心（输出规则能力域） |
-| **Branch** | `feature/F030-output-templates-clause-mapping` |
+| **Branch** | `feature/F040-output-templates-clause-mapping` |
 | **Owner** | TBD（待指派） |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -24,7 +24,7 @@
 - **O8 条款映射（clause_mappings）**：方案属性组合 → 条款/协议（订阅→SaaS 服务协议；买断→私有化部署授权协议+年度维保标准）；无对应条款时输出提示，**不静默**；为未来合同条款生成（F037）留好映射对象。
 - **标准单输出**：按匹配模板 + 白名单变量渲染标准报价单（Word/PDF）；导出链完成 **word-generator 白名单改造**，根治「原始 docx 原样透传、无白名单」的现状风险。
 
-来源：主设计 O7/O8 + F030 包划分（「O7+O8 + 标准单输出」）；V3 现状审计（`knowledge_pages type='template'` 已有模板文件字段与 `/api/knowledge/templates`；`contract_template_params.applicable_scenario` 已含 general/saas_buyout/saas_subscription/deployment；`lib/export/word-generator.py` 原始 docx 透传、无白名单；报价当前无导出）。
+来源：主设计 O7/O8 + F040 包划分（「O7+O8 + 标准单输出」）；V3 现状审计（`knowledge_pages type='template'` 已有模板文件字段与 `/api/knowledge/templates`；`contract_template_params.applicable_scenario` 已含 general/saas_buyout/saas_subscription/deployment；`lib/export/word-generator.py` 原始 docx 透传、无白名单；报价当前无导出）。
 
 ### 2.2 待确认问题
 
@@ -43,9 +43,9 @@
   - 模板↔方案属性匹配（`match_rule` 解析、冲突校验）。
   - 条款映射注入（required/可选、缺失提示）。
   - 标准报价单导出链路（`app/api/quotes/[id]/export/standard`）+ **word-generator 白名单改造点**。
-  - 发布校验与 F029 白名单、F034 快照（阶段 1 渲染锁定）衔接。
+  - 发布校验与 F039 白名单、F044 快照（阶段 1 渲染锁定）衔接。
 - **不做**：
-  - 非标模板语义映射（F036：扫描/语义对齐/人工确认）。
+  - 非标模板语义映射（F046：扫描/语义对齐/人工确认）。
   - 合同条款生成（F037 后置；本包只建 clause_mappings 对象与报价输出注入）。
   - 报价 Excel 导出（待确认）。
   - 修改合同审核导出（F007 现有评论导出保持兼容，仅共享白名单组件）。
@@ -73,11 +73,11 @@
 
 | 接口 | 方法 | 说明 |
 |---|---|---|
-| `POST /api/quotes/[id]/export/standard` | POST | 解析已冻结版本/快照（F034）→ 按方案属性 resolve 模板 → 白名单投影（F029）→ 条款注入 → 渲染 Word/PDF → 返回文件 |
+| `POST /api/quotes/[id]/export/standard` | POST | 解析已冻结版本/快照（F044）→ 按方案属性 resolve 模板 → 白名单投影（F039）→ 条款注入 → 渲染 Word/PDF → 返回文件 |
 | `GET /api/config-center/output-templates/resolve?quote_id=...` | GET | 返回命中的已发布模板与 variables（供前端预览） |
 | `GET /api/config-center/clause-mappings/resolve?quote_id=...` | GET | 返回注入条款列表 + 缺失的 required 条款提示（不静默） |
 
-**错误码约定**：400 match_rule 非法/变量不存在；409 模板 code 重复或 match_rule 与已发布模板冲突；422 发布校验失败（引用隐藏字段/required 条款缺失/文件不可下载）；409 导出时快照缺失或不一致（F034 联动）。
+**错误码约定**：400 match_rule 非法/变量不存在；409 模板 code 重复或 match_rule 与已发布模板冲突；422 发布校验失败（引用隐藏字段/required 条款缺失/文件不可下载）；409 导出时快照缺失或不一致（F044 联动）。
 
 ### 3.2 数据模型
 
@@ -131,7 +131,7 @@ clause_mapping_versions (id UUID PK, mapping_id UUID FK, version INT, value JSON
                   ▲                              │
                   └──────────rollback────────────┘
 
-导出：解析快照(F034) → resolve 模板（唯一命中） → 白名单投影(F029) → 条款注入 → 渲染 → 返回文件
+导出：解析快照(F044) → resolve 模板（唯一命中） → 白名单投影(F039) → 条款注入 → 渲染 → 返回文件
       任一步失败：明确错误（缺失 required 条款 → 提示；快照不一致 → 409），不输出不完整单
 ```
 
@@ -140,14 +140,14 @@ clause_mapping_versions (id UUID PK, mapping_id UUID FK, version INT, value JSON
 | 风险 | 应对 |
 |------|------|
 | 模板匹配冲突（多模板命中同一方案） | 发布期 `validate` 检测 match_rule 重叠并拒绝；渲染期按明细度降序取首个命中，两次命中兜底报错 |
-| 模板变量引用隐藏/不存在字段 | 发布校验 `variables ⊆ 已发布白名单`；已发布后字段被停用 → 该模板重新发布校验（F029 联动） |
+| 模板变量引用隐藏/不存在字段 | 发布校验 `variables ⊆ 已发布白名单`；已发布后字段被停用 → 该模板重新发布校验（F039 联动） |
 | required 条款缺失被静默 | 配置期 `validate` 对 required 必须有匹配；渲染期缺失返回 422 + 明确提示 |
 | word-generator 原始 docx 透传导致内部字段泄漏 | 见下方「word-generator 白名单改造点」；只接受白名单投影 DTO，未知键报错 |
 | 模板文件损坏/缺失 | 发布时校验文件可下载（knowledge_pages 状态 active）；渲染失败返回错误，不输出空白单 |
 | 合同审核导出（F007）回归 | 改造点做成可选白名单参数，F007 路径不传白名单时保持原行为；E2E 覆盖 F007 导出 |
 
 **word-generator 白名单改造点（本包核心安全改动）**
-1. **新增独立入口**：报价导出走新 `app/api/quotes/[id]/export/standard`，不复用合同审核导出；输入 = `lib/export/field-whitelist.ts`（F029）投影后的 DTO JSON。
+1. **新增独立入口**：报价导出走新 `app/api/quotes/[id]/export/standard`，不复用合同审核导出；输入 = `lib/export/field-whitelist.ts`（F039）投影后的 DTO JSON。
 2. **生成器侧白名单校验**：`word-generator.py` 的 `generate_document` 增加白名单参数（可选，报价导出必传）：仅接受声明字段键；出现未声明键（尤其 `internal_*`/隐藏字段）→ 返回错误并写审计日志，**不静默丢弃、不原样透传**。
 3. **模板渲染而非透传**：标准单用模板文件 + 变量填充（`{{field_key}}` 或坐标），禁止把报价源数据整包 JSON 传入生成器。
 4. **后置扫描**：输出 docx 生成后做后置断言（解包检查隐藏字段键/值），作为硬门测试；F007 合同评论导出不传白名单时保持现状兼容。
@@ -171,7 +171,7 @@ clause_mapping_versions (id UUID PK, mapping_id UUID FK, version INT, value JSON
 - 禁止静默缺条款（required 缺失必须报错/提示）
 - 禁止在报价页修改模板/条款配置（F000：业务页面只能消费配置）
 - 禁止把模板对象压进泛型 `configs` 表（F000 5.2）
-- 禁止非标语义映射逻辑混入本包（F036 独立）
+- 禁止非标语义映射逻辑混入本包（F046 独立）
 
 ---
 
@@ -181,7 +181,7 @@ clause_mapping_versions (id UUID PK, mapping_id UUID FK, version INT, value JSON
 |------|------|---------|
 | 单元测试 | schema/校验（variables⊆白名单、match_rule 重叠检测、required 缺失检测）；白名单投影；word-generator 白名单拒绝未知键 | 引用隐藏字段/不存在字段发布返回 422；重叠规则发布拒绝；required 无匹配返回校验错误；生成器收到未声明键返回错误且不产出文件 |
 | 接口测试 | output-templates/clause-mappings CRUD + versions/publish/rollback；resolve 接口；`POST /api/quotes/[id]/export/standard` | 订阅方案命中 SaaS 模板、买断方案命中私有化+维保条款；resolve 唯一命中；required 缺失返回 422 与提示；发布后无需重启生效 |
-| E2E | 标准报价单导出全链路：冻结快照(F034)→匹配模板→白名单投影→条款注入→Word 导出→解包检查 | 导出件条款与模板匹配正确；**打印/导出内部信息（成本/底价/毛利/审批人/审批意见）零泄漏**；无对应条款时界面提示而非静默；F007 合同审核导出回归通过 |
+| E2E | 标准报价单导出全链路：冻结快照(F044)→匹配模板→白名单投影→条款注入→Word 导出→解包检查 | 导出件条款与模板匹配正确；**打印/导出内部信息（成本/底价/毛利/审批人/审批意见）零泄漏**；无对应条款时界面提示而非静默；F007 合同审核导出回归通过 |
 | 人工验收 | 真实报价单对照标准单；模板/条款配置改动后导出 | 人工核对导出内容与方案属性一致；模板/条款发布新版本后新导出即生效；隐藏字段由接口断言+人工抽查双重确认 |
 
 ---
@@ -190,7 +190,7 @@ clause_mapping_versions (id UUID PK, mapping_id UUID FK, version INT, value JSON
 
 ### 6.1 涉及文件
 ```
-(开发后回填，每行加 REQ:F030 标记)
+(开发后回填，每行加 REQ:F040 标记)
 ```
 
 ### 6.2 关键决策
@@ -227,7 +227,7 @@ clause_mapping_versions (id UUID PK, mapping_id UUID FK, version INT, value JSON
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F030 | 待更新 | |
+| `REQ_REGISTRY.yml` F040 | 待更新 | |
 | `03-design-truth/` | 待更新 | |
 | `04-implementation-truth/` | 待创建 | |
 

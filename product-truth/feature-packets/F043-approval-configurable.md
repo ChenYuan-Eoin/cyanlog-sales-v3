@@ -1,13 +1,13 @@
-# Feature Packet: F033-审批规则化
+# Feature Packet: F043-审批规则化
 
 ## 1. Meta
 
 | 字段 | 值 |
 |------|-----|
-| **REQ ID** | F033 |
+| **REQ ID** | F043 |
 | **Name** | 审批规则化 |
 | **Module** | 报价中心 / 配置中心（审批能力域） |
-| **Branch** | `feature/F033-approval-configurable` |
+| **Branch** | `feature/F043-approval-configurable` |
 | **Owner** | TBD（待指派） |
 | **Created** | 2026-08-14 |
 | **Status** | `drafting` |
@@ -141,7 +141,7 @@ ALTER TABLE approvals
 ### 3.3 状态机
 
 ```
-quotes: DRAFT ──submit(命中规则)──▶ PENDING_APPROVAL ──全部通过──▶ APPROVED（触发 F034 冻结/版本生成）
+quotes: DRAFT ──submit(命中规则)──▶ PENDING_APPROVAL ──全部通过──▶ APPROVED（触发 F044 冻结/版本生成）
               ▲                          │
               │ reject(驳回)             │ approve(还有下一节点)
               └──────── REJECTED ◀───────┘
@@ -199,7 +199,7 @@ approvals 记录：pending → approved / rejected（单节点终态；waiting �
 
 ### 6.1 涉及文件
 ```
-(开发后回填，每行加 REQ:F033 标记)
+(开发后回填，每行加 REQ:F043 标记)
 ```
 
 ### 6.2 关键决策
@@ -236,7 +236,7 @@ approvals 记录：pending → approved / rejected（单节点终态；waiting �
 
 | 目标 | 状态 | 更新点 |
 |------|------|--------|
-| `REQ_REGISTRY.yml` F033 | 待更新 | |
+| `REQ_REGISTRY.yml` F043 | 待更新 | |
 | `03-design-truth/` | 待更新 | |
 | `04-implementation-truth/` | 待创建 | |
 

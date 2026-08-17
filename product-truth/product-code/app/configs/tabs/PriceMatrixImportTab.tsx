@@ -1,6 +1,6 @@
 'use client'
 
-// REQ: F028
+// REQ: F038
 // PURPOSE: 多维价盘导入（校验预览 → 落库 DRAFT）；阶段 0 硬门：234 行 0 失败
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
