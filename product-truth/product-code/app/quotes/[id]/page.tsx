@@ -13,6 +13,7 @@ import {
   QUOTE_DETAIL_VISIBLE_CACHE_TTL_MS,
   quoteDetailCacheKey,
 } from '@/lib/core-page-warmup'
+import ReviewPanel from './ReviewPanel'
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   DRAFT: { label: '草稿', variant: 'secondary' },
@@ -33,6 +34,7 @@ export default function QuoteDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [reviewTick, setReviewTick] = useState(0)
 
   const quoteId = params.id as string
 
@@ -103,7 +105,10 @@ export default function QuoteDetailPage() {
 
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error || '操作失败')
+        setError(data.error?.message || data.error || '操作失败')
+        if (data.error?.code === 'REVIEW_BLOCKED') {
+          setReviewTick((t) => t + 1)
+        }
         setUpdating(false)
         return
       }
@@ -239,6 +244,8 @@ export default function QuoteDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      <ReviewPanel key={reviewTick} quoteId={quoteId} />
 
       <Card>
         <CardHeader>

@@ -78,7 +78,7 @@ await page.screenshot({ path: `${OUT}/new-ones.png`, fullPage: false })
 // 5. 保存报价
 await page.fill('input[placeholder=""]', '').catch(() => {})
 const customerInput = page.locator('input').nth(0)
-await customerInput.fill('浏览器验收客户')
+await customerInput.fill('深圳市云启数字科技有限公司')
 await page.click('button:has-text("保存报价草稿")')
 await page.waitForURL(/\/quotes\/[0-9a-f-]{36}$/, { timeout: 20000 })
 const quoteId = page.url().split('/').pop()

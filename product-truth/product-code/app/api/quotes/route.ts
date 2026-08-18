@@ -8,6 +8,7 @@ import { paginationSchema, quoteSchema } from '@/lib/validation'
 import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft, calculateQuoteDraftOnes } from '@/lib/pricing/service'
+import { numberToChineseUpper } from '@/lib/pricing/quote-builder'
 import { getQuoteFxRate, parseBocRateType } from '@/lib/quote/fx-rate'
 import { getPublishedParamString } from '@/lib/config-center/runtime'
 import {
@@ -23,6 +24,12 @@ import {
   buildLegacyQuoteItemInsertPayload,
   normalizeQuote,
 } from './quote-compat'
+
+function addMonths(date: Date, months: number): string {
+  const d = new Date(date)
+  d.setMonth(d.getMonth() + months)
+  return d.toISOString()
+}
 
 export const preferredRegion = 'sin1'
 
@@ -89,7 +96,7 @@ export async function POST(req: NextRequest) {
     }
 
     const orgId = await getDefaultOrgId(user.id)
-    const { customer_name, customer_contact, valid_until, notes, discount_rate, items } = result.data
+    const { customer_name, customer_contact, valid_until, notes, discount_rate, discount_reason, quote_kind, change_reason, items } = result.data
 
     // 生成报价单号
     const { data: quoteNoResult, error: seqError } = await supabaseAdmin.rpc('generate_quote_number')
@@ -146,6 +153,11 @@ export async function POST(req: NextRequest) {
       valid_until,
       currency: 'CNY',
       exchange_rate: exchangeRate,
+      tax_inclusive: false,
+      amount_in_words: numberToChineseUpper(pricedDraft.totalAmount),
+      quote_kind: quote_kind ?? 'STANDARD',
+      discount_reason: discount_reason ?? null,
+      change_reason: change_reason ?? null,
       created_by: user.id,
     }
 
@@ -187,9 +199,9 @@ export async function POST(req: NextRequest) {
       return {
         id: uuidv4(),
         quote_id: quoteId,
-        product_id: item.product_id,
+        product_id: item.product_id ?? requested.product_id ?? null,
         product_type: item.product_type,
-        product_code: item.product_code,
+        product_code: item.product_code ?? null,
         name: item.name,
         specification: item.specification,
         unit: item.unit,
@@ -208,11 +220,16 @@ export async function POST(req: NextRequest) {
         list_price: requested.list_price ?? null,
         is_gift: requested.is_gift ?? false,
         gift_original_amount: requested.gift_original_amount ?? null,
-        tax_rate: requested.tax_rate ?? null,
+        tax_rate: requested.tax_rate ?? (requested.line_type === 'product' || !requested.line_type ? pricedDraft.taxRate : null),
         tax_amount: requested.tax_amount ?? null,
         maintenance_months: requested.maintenance_months ?? null,
         version_from: requested.version_from ?? null,
         version_to: requested.version_to ?? null,
+        line_type: requested.line_type ?? 'product',
+        discount_reason: requested.discount_reason ?? null,
+        line_note: requested.line_note ?? null,
+        subscription_start: requested.subscription_start ?? (requested.auth_mode?.startsWith('SUB_') ? new Date().toISOString().slice(0, 10) : null),
+        subscription_end: requested.subscription_end ?? (requested.auth_mode?.startsWith('SUB_') ? addMonths(new Date(), requested.term_months ?? 12).slice(0, 10) : null),
       }
     })
 

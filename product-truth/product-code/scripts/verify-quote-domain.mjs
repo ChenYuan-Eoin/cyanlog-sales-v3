@@ -112,7 +112,7 @@ E('审批种子存在且节点无人名', rules.length >= 2 && chains.length >= 
 
 // ---- 6. E2E：建结构化报价 → 冻结 → 版本/快照 ----
 const { data: quoteIns, error: qErr } = await sb.from('quotes').insert({
-  org_id: orgId, quote_no: `QT-E2E-${Date.now()}`, customer_name: 'E2E 验收客户', customer_contact: '', currency: 'CNY',
+  org_id: orgId, quote_no: `QT-E2E-${Date.now()}`, customer_name: '深圳市云启数字科技有限公司', customer_contact: '', currency: 'CNY',
   discount_rate: 0, subtotal: 15000, discount_amount: 0, tax_rate: 0.13, tax_amount: 1950, total_amount: 16950,
   amount_in_words: '壹万陆仟玖佰伍拾元整', status: 'APPROVED', notes: 'e2e verify', valid_until: new Date(Date.now() + 15 * 86400000).toISOString(),
 }).select('id, quote_no').single()
@@ -130,7 +130,7 @@ if (!qErr && quoteIns) {
     const { data: version } = await sb.from('quote_versions').select('*').eq('id', fid).single()
     const { data: vitems } = await sb.from('quote_version_items').select('*').eq('version_id', fid)
     const { data: snap } = await sb.from('quote_snapshots').select('*').eq('quote_id', quoteIns.id).eq('version_no', version.version_no).single()
-    const headerOk = version.header.customer_name === 'E2E 验收客户' && version.header.total_amount === 16950
+    const headerOk = version.header.customer_name === '深圳市云启数字科技有限公司' && version.header.total_amount === 16950
     const itemOk = vitems.length === 1 && vitems[0].version_code === 'ENT_V6' && vitems[0].deployment === 'PUBLIC_CLOUD' && vitems[0].auth_mode === 'SUB_YEAR' && vitems[0].term_months === 12 && vitems[0].list_price === 15000
     const snapOk = snap && JSON.stringify(snap.snapshot.header) === JSON.stringify(version.header) && snap.snapshot.items.length === vitems.length
     E('结构化版本可读（合同源数据：价格/数量/版本/部署/授权/期限）', headerOk && itemOk)

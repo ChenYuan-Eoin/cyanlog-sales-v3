@@ -1,0 +1,321 @@
+// REQ: F047（报价审核自动化）
+// PURPOSE: 把人工审核 Checklist 变成自动核验：提交审批时逐项检查，
+// BLOCK 项不满足 → 暂缓审批；WARN 项 → 审核视图提醒。
+import { numberToChineseUpper, validateProductCombination, type QuoteLineInput } from '@/lib/pricing/quote-builder'
+
+export type ReviewLevel = 'block' | 'warn' | 'pass'
+
+export interface ReviewCheck {
+  code: string
+  label: string
+  level: ReviewLevel
+  ok: boolean
+  message?: string
+  line?: number
+}
+
+export interface QuoteReviewItemInput {
+  id?: string
+  product_id?: string | null
+  product_code?: string | null
+  name?: string | null
+  version_code?: string | null
+  deployment?: string | null
+  auth_mode?: string | null
+  term_months?: number | null
+  quantity?: number | null
+  unit_price?: number | null
+  list_price?: number | null
+  discount?: number | null
+  line_total?: number | null
+  line_type?: string | null
+  discount_reason?: string | null
+  line_note?: string | null
+  subscription_start?: string | null
+  subscription_end?: string | null
+  is_gift?: boolean | null
+  gift_original_amount?: number | null
+  maintenance_months?: number | null
+  version_from?: string | null
+  version_to?: string | null
+  tax_rate?: number | null
+  attributes?: Record<string, unknown> | null
+}
+
+export interface QuoteReviewInput {
+  quote: {
+    customer_name?: string | null
+    currency?: string | null
+    tax_inclusive?: boolean | null
+    valid_until?: string | null
+    discount_rate?: number | null
+    discount_reason?: string | null
+    quote_kind?: string | null
+    change_reason?: string | null
+    status?: string | null
+    notes?: string | null
+    subtotal?: number | null
+    discount_amount?: number | null
+    tax_amount?: number | null
+    total_amount?: number | null
+    amount_in_words?: string | null
+    attributes?: Record<string, unknown> | null
+  }
+  items: QuoteReviewItemInput[]
+  versions?: Array<{ version_code: string; deployments?: string[]; auth_modes?: string[]; status?: string }>
+  products?: Record<string, { code: string; attributes?: { category?: string; follows?: string[]; version_codes?: string[] } }>
+}
+
+export interface QuoteReviewResult {
+  status: 'PASS' | 'WARN' | 'BLOCK'
+  checks: ReviewCheck[]
+  blocked: ReviewCheck[]
+  warnings: ReviewCheck[]
+}
+
+const LINE_TYPES = new Set(['product', 'service', 'dev', 'maintenance', 'gift', 'other'])
+const PLACEHOLDER_NAMES = ['测试', '验收', 'E2E', 'demo', 'Demo', 'TEST', '客户1', '客户2', '张三', '无', 'test']
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+
+export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteReviewResult {
+  const { quote, items = [], versions = [], products = {} } = input
+  const checks: ReviewCheck[] = []
+  const push = (check: ReviewCheck) => checks.push(check)
+  const pct = (value?: number | null) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+
+  // R01 抬头真实
+  const name = (quote.customer_name || '').trim()
+  const nameBad = name.length === 0 || PLACEHOLDER_NAMES.some((w) => name.includes(w))
+  push({ code: 'HEADER_REAL', label: '报价抬头真实（工商名称）', level: 'block', ok: !nameBad, message: nameBad ? (name ? `抬头含占位/测试词：${name}` : '抬头为空') : name })
+
+  // R02 行完整性
+  items.forEach((item, i) => {
+    const missing: string[] = []
+    if (!item.product_id) missing.push('产品')
+    if (!item.version_code) missing.push('版本')
+    if (!item.deployment) missing.push('部署')
+    if (!item.auth_mode) missing.push('授权')
+    if (missing.length > 0) {
+      push({ code: 'LINE_COMPLETE', label: `第${i + 1}行 产品/版本/部署/授权明确`, level: 'block', ok: false, message: `缺少：${missing.join('/')}`, line: i + 1 })
+    } else {
+      push({ code: 'LINE_COMPLETE', label: `第${i + 1}行 产品/版本/部署/授权明确`, level: 'block', ok: true, line: i + 1 })
+    }
+  })
+
+  // R03 币种
+  push({ code: 'CURRENCY', label: '币种明确', level: 'block', ok: !!quote.currency, message: quote.currency ? `币种 ${quote.currency}` : '缺少币种' })
+
+  // R04 税价口径
+  push({ code: 'TAX_BASIS', label: '含税/不含税口径明确', level: 'block', ok: quote.tax_inclusive !== null && quote.tax_inclusive !== undefined, message: quote.tax_inclusive === true ? '含税口径' : '不含税口径' })
+
+  // R05 计算一致（行/小计/总额）
+  let calcOk = true
+  let subtotal = 0
+  items.forEach((item, i) => {
+    const qty = pct(item.quantity)
+    const unit = pct(item.unit_price)
+    const lineTotal = pct(item.line_total)
+    if (round2(qty * unit) !== round2(lineTotal)) {
+      calcOk = false
+      push({ code: 'CALC_ACCURATE', label: `第${i + 1}行 数量×单价=小计`, level: 'block', ok: false, message: `${qty}×${unit}=${round2(qty * unit)}，实际小计 ${lineTotal}`, line: i + 1 })
+    }
+    subtotal += lineTotal
+  })
+  if (round2(subtotal) !== round2(pct(quote.subtotal))) {
+    calcOk = false
+    push({ code: 'CALC_ACCURATE', label: '产品小计汇总', level: 'block', ok: false, message: `行小计之和 ${round2(subtotal)} ≠ 报价小计 ${pct(quote.subtotal)}` })
+  }
+  const expectedTotal = round2(pct(quote.subtotal) - pct(quote.discount_amount) + pct(quote.tax_amount))
+  if (round2(pct(quote.total_amount)) !== expectedTotal) {
+    calcOk = false
+    push({ code: 'CALC_ACCURATE', label: '报价总额计算关系', level: 'block', ok: false, message: `小计-折扣+税=${expectedTotal}，实际总额 ${pct(quote.total_amount)}` })
+  }
+  if (calcOk) {
+    push({ code: 'CALC_ACCURATE', label: '分项/小计/总额计算准确', level: 'block', ok: true })
+  }
+
+  // R06 大写金额一致
+  const total = pct(quote.total_amount)
+  const upper = quote.amount_in_words
+  if (upper) {
+    const expectedUpper = numberToChineseUpper(total)
+    push({ code: 'AMOUNT_IN_WORDS', label: '金额大写正确', level: 'block', ok: expectedUpper === upper, message: expectedUpper === upper ? upper : `大写 ${upper} 与金额 ${total} 不符（应为 ${expectedUpper}）` })
+  } else {
+    push({ code: 'AMOUNT_IN_WORDS', label: '金额大写已生成', level: 'warn', ok: false, message: '尚未生成大写金额' })
+  }
+
+  // R07 可售版本 + 部署/授权范围
+  const versionMap = new Map(versions.map((v) => [v.version_code, v]))
+  items.forEach((item, i) => {
+    if (!item.version_code) return
+    const ver = versionMap.get(item.version_code)
+    if (!ver || (ver.status && ver.status !== 'PUBLISHED')) {
+      push({ code: 'VERSION_SELLABLE', label: `第${i + 1}行 版本可售`, level: 'block', ok: false, message: `版本 ${item.version_code} 不在可售目录`, line: i + 1 })
+      return
+    }
+    const depOk = !item.deployment || !ver.deployments || ver.deployments.length === 0 || ver.deployments.includes(item.deployment)
+    const authOk = !item.auth_mode || !ver.auth_modes || ver.auth_modes.length === 0 || ver.auth_modes.includes(item.auth_mode)
+    push({
+      code: 'VERSION_SELLABLE', label: `第${i + 1}行 版本可售（${item.version_code}）`, level: 'block',
+      ok: depOk && authOk,
+      message: depOk && authOk ? undefined : `版本 ${item.version_code} 不允许 部署=${item.deployment} 授权=${item.auth_mode}`,
+      line: i + 1,
+    })
+  })
+
+  // R08 分项边界 + 税率
+  items.forEach((item, i) => {
+    const lt = item.line_type || 'product'
+    const typeOk = LINE_TYPES.has(lt)
+    const taxOk = item.tax_rate !== null && item.tax_rate !== undefined
+    push({
+      code: 'LINE_TYPE_BOUNDARY', label: `第${i + 1}行 分项边界与税率`, level: 'block',
+      ok: typeOk && taxOk,
+      message: !typeOk ? `行类型 ${lt} 非法` : !taxOk ? `行 ${lt} 缺少税率` : lt,
+      line: i + 1,
+    })
+  })
+
+  // R09 私有化必须维保
+  const hasPrivate = items.some((it) => it.deployment === 'PRIVATE')
+  if (hasPrivate) {
+    const hasMaintLine = items.some((it) => it.line_type === 'maintenance')
+    const hasMaintMonths = items.some((it) => it.deployment === 'PRIVATE' && pct(it.maintenance_months) > 0)
+    push({ code: 'PRIVATE_MAINT', label: '私有化新签必须明确维保安排', level: 'block', ok: hasMaintLine || hasMaintMonths, message: hasMaintLine || hasMaintMonths ? '已含维保' : '私有化部署缺少维保行/维保月数' })
+  }
+
+  // R10 订阅明确起止日期
+  const hasSub = items.some((it) => (it.auth_mode || '').startsWith('SUB_'))
+  if (hasSub) {
+    const bad = items.filter((it) => (it.auth_mode || '').startsWith('SUB_') && (!it.subscription_start || !it.subscription_end))
+    push({ code: 'SUBSCRIBE_DATE', label: '订阅制必须明确起止日期', level: 'block', ok: bad.length === 0, message: bad.length ? `有 ${bad.length} 行订阅缺少起止日期` : '订阅起止日期已填' })
+  }
+
+  // R11 折扣原因（报价级或行级）
+  const hasDiscount = pct(quote.discount_rate) > 0 || items.some((it) => pct(it.discount) > 0 || (pct(it.list_price) > 0 && pct(it.line_total) < pct(it.list_price)))
+  if (hasDiscount) {
+    const qReason = (quote.discount_reason || '').trim()
+    const lineMissing = items
+      .map((it, i) => ({ it, i }))
+      .filter(({ it }) => (pct(it.discount) > 0 || (pct(it.list_price) > 0 && pct(it.line_total) < pct(it.list_price))) && !(it.discount_reason || '').trim())
+    const needQuoteReason = pct(quote.discount_rate) > 0 && !qReason
+    push({
+      code: 'DISCOUNT_REASON', label: '折扣必须说明原因（为什么这样报价）', level: 'block',
+      ok: !needQuoteReason && lineMissing.length === 0,
+      message: qReason ? `报价折扣原因：${qReason}` : needQuoteReason ? '报价级折扣缺少原因' : lineMissing.length ? `第 ${lineMissing.map(({ i }) => i + 1).join(',')} 行有折扣但缺原因` : '折扣原因已填',
+    })
+  }
+
+  // R12 搭售/售卖规则（组合校验）
+  const comboInputs: QuoteLineInput[] = items
+    .map((item, i) => {
+      const prod = item.product_id ? products[item.product_id] : undefined
+      const attrs = prod?.attributes
+      return {
+        productId: item.product_id || `line-${i}`,
+        productCode: item.product_code || prod?.code || item.name || `P${i}`,
+        category: (attrs?.category as QuoteLineInput['category']) || 'BASE',
+        follows: attrs?.follows || [],
+        versionCode: item.version_code || '',
+        deployment: item.deployment || '',
+        authMode: item.auth_mode || '',
+        termMonths: item.term_months ?? null,
+        quantity: pct(item.quantity),
+        isGift: !!item.is_gift,
+      }
+    })
+  if (comboInputs.length > 0) {
+    const issues = validateProductCombination(comboInputs)
+    push({
+      code: 'COMBINATION_RULE', label: '符合售卖规则（搭售/跟随/版本部署一致）', level: 'block',
+      ok: issues.length === 0,
+      message: issues.length ? issues.map((x) => x.message).join('；') : '组合校验通过',
+    })
+  }
+
+  // R13 折扣治理（按行小计 vs 行刊例价：行小计低于刊例价 50% → 超底价；低于 80% → 大额折扣需审批）
+  const deepDiscounts = items
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => pct(it.list_price) > 0 && pct(it.line_total) > 0 && pct(it.line_total) < pct(it.list_price) * 0.5)
+  const heavyDiscounts = items
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => pct(it.list_price) > 0 && pct(it.line_total) > 0 && pct(it.line_total) < pct(it.list_price) * 0.8)
+  if (deepDiscounts.length) {
+    push({ code: 'DISCOUNT_GOVERNANCE', label: '成交价不得低于底价', level: 'block', ok: false, message: `第 ${deepDiscounts.map(({ i }) => i + 1).join(',')} 行小计低于刊例价 50%，需底价审批` })
+  } else if (heavyDiscounts.length) {
+    push({ code: 'DISCOUNT_GOVERNANCE', label: '大额折扣需审批确认', level: 'warn', ok: false, message: `第 ${heavyDiscounts.map(({ i }) => i + 1).join(',')} 行小计低于刊例价 80%，审批视图需展示原价/成交价` })
+  } else {
+    push({ code: 'DISCOUNT_GOVERNANCE', label: '折扣在原价/底价范围内', level: 'block', ok: true })
+  }
+
+  // R14 有效期
+  const rawValidUntil = quote.valid_until || ''
+  const validUntil = rawValidUntil ? new Date(rawValidUntil.includes('T') ? rawValidUntil : `${rawValidUntil}T23:59:59`) : null
+  const expired = !validUntil || Number.isNaN(validUntil.getTime()) || validUntil < now
+  push({ code: 'VALID_UNTIL', label: '报价在有效期内', level: 'block', ok: !expired, message: expired ? (quote.valid_until ? `有效期 ${quote.valid_until} 已过期或缺失` : '缺少有效期') : `有效期至 ${quote.valid_until}` })
+
+  // R15 场景规则组
+  const kind = (quote.quote_kind || 'STANDARD').toUpperCase()
+  checks.push(...sceneRules(kind, quote, items, pct))
+
+  const blocked = checks.filter((c) => !c.ok && c.level === 'block')
+  const warnings = checks.filter((c) => !c.ok && c.level === 'warn')
+  const status: QuoteReviewResult['status'] = blocked.length ? 'BLOCK' : warnings.length ? 'WARN' : 'PASS'
+  return { status, checks, blocked, warnings }
+}
+
+function sceneRules(
+  kind: string,
+  quote: QuoteReviewInput['quote'],
+  items: QuoteReviewItemInput[],
+  pct: (v?: number | null) => number
+): ReviewCheck[] {
+  const out: ReviewCheck[] = []
+  const needText = (code: string, label: string, value: string | undefined | null): ReviewCheck => ({
+    code, label, level: 'block' as const, ok: !!value?.trim(), message: value?.trim() ? value.trim() : `${label}：必填缺失`,
+  })
+  switch (kind) {
+    case 'RENEW':
+      out.push(needText('SCENE_RENEW', '续费须说明续费基数（原合同产品/版本/数量/维保比例）', quote.change_reason || quote.notes))
+      break
+    case 'ADDON':
+      out.push(needText('SCENE_ADDON', '增购须说明与既有产品/合同的关系', quote.change_reason || items.map((i) => i.line_note || '').join('')))
+      break
+    case 'UPGRADE': {
+      const hasVer = items.some((it) => (it.version_from || '').trim() || (it.version_to || '').trim())
+      out.push({ code: 'SCENE_UPGRADE', label: '升级须明确原版本/新版本', level: 'block', ok: hasVer, message: hasVer ? '升级版本已填' : '升级缺少 version_from/version_to' })
+      break
+    }
+    case 'DEV': {
+      const missingIdx = items.map((it, i) => (it.line_type === 'dev' && !(it.line_note || '').trim() ? i + 1 : -1)).filter((i) => i > 0)
+      out.push({ code: 'SCENE_DEV', label: '二开须说明内容/工作量/交付成果/验收/边界', level: 'block', ok: missingIdx.length === 0, message: missingIdx.length ? `第 ${missingIdx.join(',')} 行二开缺说明` : '二开说明已填' })
+      break
+    }
+    case 'SERVICE': {
+      const svc = items.filter((it) => it.line_type === 'service' && !(it.line_note || '').trim())
+      out.push({ code: 'SCENE_SERVICE', label: '实施服务须说明模块/人天/单价/交付范围/期限', level: 'block', ok: svc.length === 0, message: svc.length ? '存在实施服务行缺少说明' : '实施说明已填' })
+      break
+    }
+    case 'GIFT': {
+      const bad = items.filter((it) => it.is_gift && (!pct(it.gift_original_amount) || !(it.line_note || '').trim()))
+      out.push({ code: 'SCENE_GIFT', label: '赠送须有标准价值与赠送原因', level: 'block', ok: bad.length === 0, message: bad.length ? '赠送行缺少标准价值或赠送原因' : '赠送信息已填' })
+      break
+    }
+    case 'SPECIAL_DISCOUNT':
+      out.push(needText('SCENE_SPECIAL_DISCOUNT', '特殊折扣须说明原因与审批依据', quote.discount_reason))
+      break
+    case 'INSTALLMENT': {
+      const plan = quote.attributes?.payment_plan as Array<{ ratio?: number; amount?: number }> | undefined
+      const sum = Array.isArray(plan) ? plan.reduce((s, p) => s + (p.ratio ?? 0), 0) : 0
+      out.push({ code: 'SCENE_INSTALLMENT', label: '分期须明确每期金额/比例且合计 100%', level: 'block', ok: Array.isArray(plan) && Math.abs(sum - 100) < 0.01, message: Array.isArray(plan) ? `分期比例合计 ${sum}%` : '缺少分期计划' })
+      break
+    }
+    case 'CHANGE':
+      out.push(needText('SCENE_CHANGE', '报价变更须说明变更原因', quote.change_reason))
+      break
+    default:
+      break
+  }
+  return out
+}

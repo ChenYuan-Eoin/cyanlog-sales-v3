@@ -65,6 +65,7 @@ export default function NewOnesQuotePage() {
   const [matrix, setMatrix] = useState<PriceMatrixRow[]>([])
   const [lines, setLines] = useState<LineState[]>([emptyLine()])
   const [discountRate, setDiscountRate] = useState(0)
+  const [discountReason, setDiscountReason] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [customerContact, setCustomerContact] = useState('')
   const [validUntil, setValidUntil] = useState('')
@@ -171,6 +172,8 @@ export default function NewOnesQuotePage() {
           valid_until: validUntil,
           notes: '',
           discount_rate: discountRate,
+          discount_reason: discountRate > 0 ? discountReason : undefined,
+          quote_kind: 'STANDARD',
           items,
         }),
       })
@@ -200,6 +203,9 @@ export default function NewOnesQuotePage() {
         <div><label className="text-sm text-muted-foreground">联系人</label><Input value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} /></div>
         <div><label className="text-sm text-muted-foreground">有效期至</label><Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></div>
         <div><label className="text-sm text-muted-foreground">整单折扣（%）</label><Input type="number" min={0} max={100} value={discountRate * 100} onChange={(e) => setDiscountRate(Number(e.target.value || 0) / 100)} /></div>
+        {discountRate > 0 && (
+          <div className="sm:col-span-2"><label className="text-sm text-muted-foreground">折扣原因（为什么这样报价，必填）</label><Input value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} placeholder="如：老客户年度续约优惠、竞争性项目" /></div>
+        )}
       </div>
 
       <div className="space-y-3">

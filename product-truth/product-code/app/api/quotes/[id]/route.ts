@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { createApprovalWorkflow, loadPublishedApprovalConfig } from '@/lib/approval/workflow'
+import { reviewQuote } from '@/lib/review/quote-review'
 import { requireAuth } from '@/lib/auth'
 import { contractIdSchema, dateTimeStringSchema } from '@/lib/validation'
 import { z } from 'zod'
@@ -371,6 +372,53 @@ export async function PUT(
     }
 
     invalidateQuoteDetailResponseCache(id)
+
+    // F047：提交审批前自动审核核验；BLOCK → 回滚状态并暂缓审批（不创建审批链）
+    if (updateData.status === 'PENDING_APPROVAL' && existingQuote.status !== 'PENDING_APPROVAL') {
+      try {
+        const [itemsRes, versionsRes, productsRes] = await Promise.all([
+          supabaseAdmin.from('quote_items').select('*').eq('quote_id', id).order('sort_order', { ascending: true }),
+          supabaseAdmin.from('product_versions').select('version_code,deployments,auth_modes,status').eq('org_id', orgId).eq('status', 'PUBLISHED'),
+          supabaseAdmin.from('products').select('id,code,attributes'),
+        ])
+        const products: Record<string, { code: string; attributes?: { category?: string; follows?: string[] } }> = {}
+        for (const prod of productsRes.data || []) {
+          products[String(prod.id)] = { code: String(prod.code), attributes: (prod.attributes ?? {}) as never }
+        }
+        const reviewResult = reviewQuote({
+          quote: { ...(updateResult.data || {}), ...updateData },
+          items: (itemsRes.data || []) as never,
+          versions: (versionsRes.data || []) as never,
+          products,
+        })
+        await supabaseAdmin
+          .from('quotes')
+          .update({ review_status: reviewResult.status, review_result: reviewResult })
+          .eq('id', id)
+          .eq('org_id', orgId)
+        if (reviewResult.status === 'BLOCK') {
+          await supabaseAdmin
+            .from('quotes')
+            .update({ status: existingQuote.status })
+            .eq('id', id)
+            .eq('org_id', orgId)
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: 'REVIEW_BLOCKED',
+                message: '不满足审核要求，已暂缓审批',
+                checks: reviewResult.checks,
+                blocked: reviewResult.blocked,
+              },
+            },
+            { status: 409 }
+          )
+        }
+      } catch (reviewError) {
+        console.error('[F047] review gate failed:', reviewError)
+      }
+    }
 
     // F043：DRAFT/REJECTED → PENDING_APPROVAL 时，按已发布审批规则创建审批链（失败不阻断状态流转）
     if (updateData.status === 'PENDING_APPROVAL' && existingQuote.status !== 'PENDING_APPROVAL') {

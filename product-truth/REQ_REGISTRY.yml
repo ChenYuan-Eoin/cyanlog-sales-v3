@@ -920,3 +920,17 @@ requirements:
     feature_packet: product-truth/feature-packets/F046-nonstandard-template-semantic.md
     code_locations: []
     description: 客户模板扫描→语义对齐→变量填充→低置信人工确认→数字一致性校验
+
+  F047:
+    name: 报价审核自动化工作流
+    module: 报价中心
+    source: 用户审核要求（信息核对 10 项 / 13 类审核场景 / 不满足暂缓审批）
+    status: in_progress
+    priority: P0
+    feature_packet: product-truth/feature-packets/F047-quote-review-automation.md
+    code_locations:
+      - lib/review/quote-review.ts
+      - app/api/quotes/[id]/review/route.ts
+      - app/api/quotes/[id]/route.ts
+      - supabase/migrations/20260818000005_quote_review_automation.sql
+    description: 把人工审核 Checklist 变成自动核验：提交审批自动逐项检查，BLOCK 项不满足→暂缓审批；审核视图逐项展示。

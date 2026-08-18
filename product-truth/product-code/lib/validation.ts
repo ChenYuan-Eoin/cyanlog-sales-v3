@@ -75,6 +75,9 @@ export const quoteSchema = z.object({
   valid_until: dateTimeStringSchema.optional(),
   notes: z.string().max(2000).optional(),
   discount_rate: z.number().min(0).max(100).optional().default(0),
+  discount_reason: z.string().max(500).optional(),
+  quote_kind: z.string().max(30).optional(),
+  change_reason: z.string().max(1000).optional(),
   items: z.array(z.object({
     product_type: z.enum(['sku', 'custom']).default('sku'),
     product_id: uuidSchema.optional(),
@@ -96,6 +99,11 @@ export const quoteSchema = z.object({
     maintenance_months: z.number().int().nonnegative().optional(),
     version_from: z.string().max(20).optional(),
     version_to: z.string().max(20).optional(),
+    line_type: z.enum(['product', 'service', 'dev', 'maintenance', 'gift', 'other']).optional(),
+    discount_reason: z.string().max(500).optional(),
+    line_note: z.string().max(2000).optional(),
+    subscription_start: dateTimeStringSchema.optional(),
+    subscription_end: dateTimeStringSchema.optional(),
   }).superRefine((item, ctx) => {
     if (item.product_type === 'sku' && !item.product_id) {
       ctx.addIssue({

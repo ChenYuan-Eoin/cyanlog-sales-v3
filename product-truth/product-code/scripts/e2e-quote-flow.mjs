@@ -30,7 +30,7 @@ const { data: proj } = await sb.from('products').select('id').eq('code', 'PROJEC
 const createRes = await fetch(`${BASE}/api/quotes`, {
   method: 'POST', headers,
   body: JSON.stringify({
-    customer_name: '真库验收客户', customer_contact: '张三', valid_until: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10), notes: 'e2e real flow', discount_rate: 0.4,
+    customer_name: '深圳市云启数字科技有限公司', customer_contact: '张三', valid_until: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10), notes: 'e2e real flow', discount_rate: 0.4, discount_reason: '年度大客户采购优惠', quote_kind: 'STANDARD',
     items: [{ product_type: 'sku', product_id: proj.id, quantity: 10, unit_price: 1500, discount: 0, sort_order: 0, version_code: 'ENT_V6', deployment: 'PUBLIC_CLOUD', auth_mode: 'SUB_YEAR', term_months: 12, list_price: 15000 }],
   }),
 })
