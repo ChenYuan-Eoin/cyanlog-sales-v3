@@ -108,6 +108,7 @@ export const quoteSchema = z.object({
     cost_price: z.number().nonnegative().optional(),
     floor_price: z.number().nonnegative().optional(),
     region: z.string().max(10).optional(),
+    discount_rate: z.number().min(0).max(1).optional(),
   }).superRefine((item, ctx) => {
     if (item.product_type === 'sku' && !item.product_id) {
       ctx.addIssue({

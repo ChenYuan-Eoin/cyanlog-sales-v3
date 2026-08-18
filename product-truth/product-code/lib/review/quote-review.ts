@@ -136,9 +136,12 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
     const qty = pct(item.quantity)
     const unit = pct(item.unit_price)
     const lineTotal = pct(item.line_total)
-    if (round2(qty * unit) !== round2(lineTotal)) {
+    const lineDiscount = pct(item.discount)
+    // F050：行折扣后 数量×单价-行折扣=小计
+    const expected = round2(qty * unit - lineDiscount)
+    if (round2(lineTotal) !== expected) {
       calcOk = false
-      push({ code: 'CALC_ACCURATE', label: `第${i + 1}行 数量×单价=小计`, level: 'block', ok: false, message: `${qty}×${unit}=${round2(qty * unit)}，实际小计 ${lineTotal}`, line: i + 1 })
+      push({ code: 'CALC_ACCURATE', label: `第${i + 1}行 数量×单价-行折扣=小计`, level: 'block', ok: false, message: `${qty}×${unit}${lineDiscount > 0 ? `-行折扣${lineDiscount}` : ''}=${expected}，实际小计 ${lineTotal}`, line: i + 1 })
     }
     subtotal += lineTotal
   })

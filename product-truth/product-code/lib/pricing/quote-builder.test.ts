@@ -65,6 +65,30 @@ describe('validateProductCombination（F037 搭售/跟随/生态账号数）', (
   })
 })
 
+describe('F050 行级折扣', () => {
+  it('buildQuoteLine 行折扣 20% → 小计折后、折扣金额正确', () => {
+    const line = buildQuoteLine({
+      productId: 'p1', productCode: 'PROJECT', category: 'BASE', follows: [], versionCode: 'ENT_V6',
+      deployment: 'PUBLIC_CLOUD', authMode: 'SUB_YEAR', termMonths: 12, quantity: 10, discountRate: 0.2,
+      tiers: [{ qty_from: 1, qty_to: null, unit_price: 1500, list_price: 15000 }],
+    }, 0)
+    expect(line.subtotal).toBe(12000)
+    expect(line.discountAmount).toBe(3000)
+  })
+
+  it('computeQuoteTotals 行折扣 + 整单折扣复合', () => {
+    const lines: QuoteLineResult[] = [{
+      lineNo: 1, productCode: 'PROJECT', quantity: 10, unitPrice: 1500, listPrice: 15000, subtotal: 12000,
+      discountAmount: 3000, isGift: false, giftOriginalAmount: null, taxRate: 0.13, taxAmount: 0,
+      source: 'cumulative', noPrice: false, costPrice: 800, floorPrice: 600, lineCost: 8000, marginRate: 0.4667,
+    }]
+    const t = computeQuoteTotals({ lines, discountRate: 0.1, softwareTaxRate: 0.13, serviceTaxRate: 0.06 })
+    expect(t.subtotal).toBe(12000)
+    expect(t.discountAmount).toBe(1200)
+    expect(t.taxable).toBe(10800)
+  })
+})
+
 describe('F048 内部毛利计算', () => {
   it('buildQuoteLine 带成本 → 行毛利正确', () => {
     const line = buildQuoteLine({

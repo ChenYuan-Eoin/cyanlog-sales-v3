@@ -194,6 +194,7 @@ export interface OnesQuoteItem extends RequestedQuoteItem {
   deployment?: string
   auth_mode?: string
   term_months?: number | null
+  discount_rate?: number
 }
 
 export async function calculateQuoteDraftOnes(
@@ -265,6 +266,7 @@ export async function calculateQuoteDraftOnes(
       quantity: item.quantity,
       tiers,
       priceOverride: item.product_type === 'custom' ? item.unit_price : undefined,
+      discountRate: item.discount_rate,
     }
   })
 
@@ -295,7 +297,7 @@ export async function calculateQuoteDraftOnes(
       unit: product?.unit ?? null,
       quantity: line.quantity,
       unit_price: line.unitPrice ?? 0,
-      discount: 0,
+      discount: line.discountAmount ?? 0,
       line_total: line.subtotal ?? 0,
       sort_order: line.lineNo - 1,
       pricing_source: line.source === 'manual' ? 'manual' : line.source === 'base' ? 'base' : 'tier',

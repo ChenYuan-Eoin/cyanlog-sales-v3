@@ -50,13 +50,14 @@ interface LineState {
   term_months: string
   quantity: number
   is_gift: boolean
+  discount_rate: number
 }
 
 const DEPLOY_LABEL: Record<string, string> = { PUBLIC_CLOUD: '公有云', PRIVATE: '私有部署', HA: '高可用' }
 const AUTH_LABEL: Record<string, string> = { SUB_YEAR: '按年订阅', SUB_3YEAR: '三年订阅', ONETIME: '一次性授权' }
 
 function emptyLine(): LineState {
-  return { product_id: '', version_code: '', deployment: '', auth_mode: '', term_months: '12', quantity: 10, is_gift: false }
+  return { product_id: '', version_code: '', deployment: '', auth_mode: '', term_months: '12', quantity: 10, is_gift: false, discount_rate: 0 }
 }
 
 export default function NewOnesQuotePage() {
@@ -156,6 +157,7 @@ export default function NewOnesQuotePage() {
         termMonths: line.term_months === '' ? null : Number(line.term_months),
         quantity: line.quantity,
         isGift: line.is_gift,
+        discountRate: line.discount_rate || undefined,
         tiers,
       }
     })
@@ -187,6 +189,7 @@ export default function NewOnesQuotePage() {
           deployment: src.deployment || undefined,
           auth_mode: src.auth_mode || undefined,
           term_months: src.term_months === '' ? null : Number(src.term_months),
+          discount_rate: src.discount_rate || undefined,
           list_price: line.listPrice ?? undefined,
           is_gift: line.isGift,
           gift_original_amount: line.giftOriginalAmount ?? undefined,
@@ -284,6 +287,9 @@ export default function NewOnesQuotePage() {
                 {(version?.auth_modes || []).map((a) => <option key={a} value={a}>{AUTH_LABEL[a] || a}</option>)}
               </select>
               <Input type="number" min={1} value={line.quantity} onChange={(e) => updateLine(index, { quantity: Math.max(1, Number(e.target.value || 1)) })} />
+              <select className="h-9 rounded-md border bg-background px-2 text-sm" value={Math.round(line.discount_rate * 100)} onChange={(e) => updateLine(index, { discount_rate: Number(e.target.value || 0) / 100 })}>
+                {discountTiers.map((t) => <option key={t} value={t}>{t === 0 ? '行折扣 0%' : `行折扣 ${t}%${t > discountMax ? '（需审批）' : ''}`}</option>)}
+              </select>
               <label className="flex items-center gap-1 text-sm">
                 <input type="checkbox" checked={line.is_gift} onChange={(e) => updateLine(index, { is_gift: e.target.checked })} /> 赠送
               </label>

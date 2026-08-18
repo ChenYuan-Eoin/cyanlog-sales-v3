@@ -21,6 +21,7 @@ export interface QuoteLineInput {
   priceOverride?: number     // 服务/二开自定义价（可选）
   costPrice?: number         // F048 内部：产品成本单价（服务端从产品目录带入）
   floorPrice?: number        // F048 内部：产品底价（服务端从产品目录带入）
+  discountRate?: number      // F050 行级折扣比例（0-1，可选；行折扣后再打整单折扣）
 }
 
 export interface CombinationIssue {
@@ -105,6 +106,7 @@ export interface QuoteLineResult {
   floorPrice: number | null
   lineCost: number | null
   marginRate: number | null
+  discountAmount?: number    // F050 行级折扣金额（折后 subtotal 已扣除）
 }
 
 export interface QuoteTotalInput {
@@ -135,7 +137,9 @@ export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineRe
   const priceOverride = item.priceOverride
   const manual = priceOverride !== undefined
   if (manual) {
-    const subtotal = priceOverride * item.quantity
+    const gross = priceOverride * item.quantity
+    const discountAmount = item.discountRate ? Math.round(gross * item.discountRate * 100) / 100 : 0
+    const subtotal = Math.round((gross - discountAmount) * 100) / 100
     return {
       lineNo: index + 1,
       productCode: item.productCode,
@@ -143,6 +147,7 @@ export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineRe
       unitPrice: priceOverride,
       listPrice: null,
       subtotal,
+      discountAmount: discountAmount > 0 ? discountAmount : undefined,
       isGift: !!item.isGift,
       giftOriginalAmount: item.isGift ? subtotal : null,
       taxRate: item.productCode.startsWith(SERVICE_PREFIX) ? null : null, // 由汇总按类别取
@@ -157,13 +162,17 @@ export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineRe
   }
 
   const resolved = resolveCumulativeTierPrice(item.tiers || [], item.quantity)
+  const gross = resolved.total !== null ? resolved.total : 0
+  const discountAmount = item.discountRate && gross > 0 ? Math.round(gross * item.discountRate * 100) / 100 : 0
+  const subtotal = resolved.total !== null ? Math.round((gross - discountAmount) * 100) / 100 : null
   const line: QuoteLineResult = {
     lineNo: index + 1,
     productCode: item.productCode,
     quantity: item.quantity,
     unitPrice: resolved.unitPrice,
     listPrice: resolved.total,
-    subtotal: resolved.total,
+    subtotal,
+    discountAmount: discountAmount > 0 ? discountAmount : undefined,
     isGift: !!item.isGift,
     giftOriginalAmount: item.isGift && resolved.total !== null ? resolved.total : null,
     taxRate: null,
