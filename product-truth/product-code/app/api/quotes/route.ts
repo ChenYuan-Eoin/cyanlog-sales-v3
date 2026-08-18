@@ -10,7 +10,7 @@ import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft, calculateQuoteDraftOnes } from '@/lib/pricing/service'
 import { numberToChineseUpper } from '@/lib/pricing/quote-builder'
 import { getQuoteFxRate, parseBocRateType } from '@/lib/quote/fx-rate'
-import { getPublishedParamString } from '@/lib/config-center/runtime'
+import { getPublishedParamString, getRegionTaxRates } from '@/lib/config-center/runtime'
 import {
   errorResponse,
   paginatedResponse,
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     }
 
     const orgId = await getDefaultOrgId(user.id)
-    const { customer_name, customer_contact, valid_until, notes, discount_rate, discount_reason, quote_kind, change_reason, items } = result.data
+    const { customer_name, customer_contact, valid_until, notes, discount_rate, discount_reason, quote_kind, change_reason, region: regionRaw, items } = result.data
 
     // 生成报价单号
     const { data: quoteNoResult, error: seqError } = await supabaseAdmin.rpc('generate_quote_number')
@@ -108,11 +108,19 @@ export async function POST(req: NextRequest) {
 
     const quoteNo = quoteNoResult
 
+    // F049：区域（默认 CN）+ 区域税率
+    const region = (regionRaw || 'CN').toUpperCase().slice(0, 10)
+    const regionTax = await getRegionTaxRates(orgId, region).catch(() => null)
+
     const hasOnesFields = items.some((item) => item.version_code || item.deployment || item.auth_mode)
     let pricedDraft
     if (hasOnesFields) {
       try {
-        pricedDraft = await calculateQuoteDraftOnes(orgId, items, discount_rate)
+        pricedDraft = await calculateQuoteDraftOnes(orgId, items, discount_rate, {
+          region,
+          softwareTaxRate: regionTax?.softwareRate,
+          serviceTaxRate: regionTax?.serviceRate,
+        })
       } catch (onesError) {
         console.error('[F038] calculateQuoteDraftOnes failed, fallback legacy:', onesError)
         pricedDraft = await calculateQuoteDraft(orgId, items, discount_rate)
@@ -172,6 +180,7 @@ export async function POST(req: NextRequest) {
       total_cost: totalCost,
       margin_rate: quoteMarginRate,
       quote_kind: quote_kind ?? 'STANDARD',
+      region,
       discount_reason: discount_reason ?? null,
       change_reason: change_reason ?? null,
       created_by: user.id,
@@ -246,6 +255,7 @@ export async function POST(req: NextRequest) {
         line_note: requested.line_note ?? null,
         subscription_start: requested.subscription_start ?? (requested.auth_mode?.startsWith('SUB_') ? new Date().toISOString().slice(0, 10) : null),
         subscription_end: requested.subscription_end ?? (requested.auth_mode?.startsWith('SUB_') ? addMonths(new Date(), requested.term_months ?? 12).slice(0, 10) : null),
+        region: requested.region ?? region,
         cost_price: productCostMap.get(String(item.product_id || requested.product_id))?.cost ?? Number(requested.cost_price || 0),
         floor_price: productCostMap.get(String(item.product_id || requested.product_id))?.floor ?? Number(requested.floor_price || 0),
         line_cost: (() => { const c = productCostMap.get(String(item.product_id || requested.product_id))?.cost ?? Number(requested.cost_price || 0); return c > 0 ? Math.round(c * item.quantity * 100) / 100 : 0 })(),

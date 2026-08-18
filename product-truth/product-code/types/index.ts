@@ -23,6 +23,7 @@ export interface Quote {
   total_amount: number
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED'
   valid_until: string | null
+  region?: string | null
   notes?: string | null
   created_by: string | null
   created_at: string

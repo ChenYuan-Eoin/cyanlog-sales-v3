@@ -43,6 +43,7 @@ export interface QuoteReviewItemInput {
   floor_price?: number | null
   line_cost?: number | null
   margin_rate?: number | null
+  region?: string | null
   attributes?: Record<string, unknown> | null
 }
 
@@ -65,6 +66,7 @@ export interface QuoteReviewInput {
     amount_in_words?: string | null
     total_cost?: number | null
     margin_rate?: number | null
+    region?: string | null
     attributes?: Record<string, unknown> | null
   }
   items: QuoteReviewItemInput[]
@@ -111,6 +113,17 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
 
   // R03 币种
   push({ code: 'CURRENCY', label: '币种明确', level: 'block', ok: !!quote.currency, message: quote.currency ? `币种 ${quote.currency}` : '缺少币种' })
+
+  // R03b 区域一致（F049）
+  const quoteRegion = (quote.region || 'CN').toUpperCase()
+  const regionMismatch = items
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => it.region && it.region.toUpperCase() !== quoteRegion)
+  push({
+    code: 'REGION_CONSISTENCY', label: '报价区域与分项区域一致', level: 'block',
+    ok: regionMismatch.length === 0,
+    message: regionMismatch.length ? `第 ${regionMismatch.map(({ i }) => i + 1).join(',')} 行区域与报价区域(${quoteRegion})不一致` : `报价区域 ${quoteRegion}`,
+  })
 
   // R04 税价口径
   push({ code: 'TAX_BASIS', label: '含税/不含税口径明确', level: 'block', ok: quote.tax_inclusive !== null && quote.tax_inclusive !== undefined, message: quote.tax_inclusive === true ? '含税口径' : '不含税口径' })

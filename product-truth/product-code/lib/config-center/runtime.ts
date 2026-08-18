@@ -68,6 +68,36 @@ export async function getPublishedParamString(orgId: string, paramKey: string): 
   return null
 }
 
+/** 区域税率：按 region 取已发布税率（无配置回退 CN，再回退默认 13/6） */
+export interface RegionTaxRates {
+  region: string
+  softwareRate: number
+  serviceRate: number
+  taxInclusive: boolean
+  currency: string
+}
+
+export async function getRegionTaxRates(orgId: string, region = 'CN'): Promise<RegionTaxRates> {
+  const fallback: RegionTaxRates = { region, softwareRate: 0.13, serviceRate: 0.06, taxInclusive: false, currency: 'CNY' }
+  for (const r of [region, 'CN']) {
+    try {
+      const row = await getPublishedByDomain('regional-tax-rates', orgId, { region: r })
+      if (row) {
+        return {
+          region: r,
+          softwareRate: Number((row as { software_rate?: unknown }).software_rate ?? 0.13),
+          serviceRate: Number((row as { service_rate?: unknown }).service_rate ?? 0.06),
+          taxInclusive: Boolean((row as { tax_inclusive?: unknown }).tax_inclusive ?? false),
+          currency: String((row as { currency?: unknown }).currency ?? 'CNY'),
+        }
+      }
+    } catch (error) {
+      console.error(`[F049] getRegionTaxRates(${r}) failed:`, error)
+    }
+  }
+  return fallback
+}
+
 /** 参数速读：取某业务参数已发布 value（number） */
 export async function getPublishedParamNumber(orgId: string, paramKey: string): Promise<number | null> {
   const row = await getPublishedByDomain('business-params', orgId, { param_key: paramKey })

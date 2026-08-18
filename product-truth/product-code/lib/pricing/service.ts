@@ -199,30 +199,45 @@ export interface OnesQuoteItem extends RequestedQuoteItem {
 export async function calculateQuoteDraftOnes(
   orgId: string,
   items: OnesQuoteItem[],
-  discountRate: number
+  discountRate: number,
+  options: { region?: string; softwareTaxRate?: number; serviceTaxRate?: number } = {}
 ): Promise<CalculatedQuoteDraft> {
   const productIds = items.map((i) => i.product_id).filter((v): v is string => !!v)
   const products = await loadProductsForOrg(orgId, productIds)
   const productById = new Map(products.map((p) => [p.id, p]))
 
-  const [softwareTaxRate, serviceTaxRate] = [0.13, 0.06]
-  try {
-    const taxRules = await getPublishedTaxRate(orgId)
-    if (taxRules) {
-      // 单税率配置时软件/服务同用该税率（migration 后按大类参数取）
-    }
-  } catch {
-    // 税率读取失败不阻断，用默认 13/6
-  }
+  // F049：区域税率（默认 CN 13/6；调用方可传已解析税率）
+  const softwareTaxRate = options.softwareTaxRate ?? 0.13
+  const serviceTaxRate = options.serviceTaxRate ?? 0.06
+  const region = options.region ?? 'CN'
 
-  // 读已发布多维价盘（每行 = 一档）
-  const matrixFilter: Record<string, unknown> = { org_id: orgId, status: 'PUBLISHED' }
-  const { data: matrixRows, error: matrixError } = await supabaseAdmin
-    .from('price_matrix')
-    .select('*')
-    .match(matrixFilter)
-  if (matrixError) {
-    throw matrixError
+  // 读已发布多维价盘（每行 = 一档；按区域过滤，指定区域无价回退 CN）
+  interface MatrixRow {
+    product_id: string
+    version_code: string
+    deployment: string
+    auth_mode: string
+    term_months: number | null
+    qty_from: number
+    qty_to: number | null
+    unit_price: number | null
+    list_price: number | null
+  }
+  let matrixRows: MatrixRow[] = []
+  for (const r of [region, 'CN']) {
+    const { data, error } = await supabaseAdmin
+      .from('price_matrix')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('status', 'PUBLISHED')
+      .eq('region', r)
+    if (error) {
+      throw error
+    }
+    if (data && data.length > 0) {
+      matrixRows = (data || []) as MatrixRow[]
+      break
+    }
   }
 
   const lines = items.map((item) => {

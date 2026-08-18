@@ -948,3 +948,17 @@ requirements:
       - app/api/quotes/route.ts
       - supabase/migrations/20260818000006_internal_price_margin.sql
     description: 成本/底价/毛利作为内部字段：配置中心维护、报价引擎计算、毛利底线审批（低于成本硬阻断/低于底线需审批）、客户输出零泄漏。
+
+  F049:
+    name: 海外/区域能力（价盘 region + 区域税率 + 多币种）
+    module: 配置中心/报价中心
+    source: 用户要求 + CPQ 市面形态
+    status: in_progress
+    priority: P0
+    feature_packet: product-truth/feature-packets/F049-region-tax-matrix.md
+    code_locations:
+      - lib/pricing/service.ts
+      - lib/config-center/runtime.ts
+      - app/api/quotes/route.ts
+      - supabase/migrations/20260818000007_region_tax_matrix.sql
+    description: 价盘/报价增加 region 维度，按地区税率矩阵替代固定 13/6，区域一致性自动核验；多币种与汇率打通；海外业务数据由配置中心维护，不伪造。

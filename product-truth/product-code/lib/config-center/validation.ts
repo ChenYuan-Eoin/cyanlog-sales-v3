@@ -4,6 +4,16 @@ import { z } from 'zod'
 import { INTERNAL_FIELD_KEYS } from './types'
 
 // ---------- O4 业务参数 ----------
+// ---------- F049 区域税率 ----------
+export const regionalTaxRateSchema = z.object({
+  region: z.string().min(1).max(10),
+  software_rate: z.number().min(0).max(1),
+  service_rate: z.number().min(0).max(1),
+  tax_inclusive: z.boolean().default(false),
+  currency: z.string().min(3).max(3).default('CNY'),
+  status: z.string().default('PUBLISHED'),
+})
+
 export const businessParamSchema = z.object({
   param_key: z.string().min(1).max(100).regex(/^[A-Z][A-Z0-9_]*$/, '参数 key 格式：大写字母+下划线，如 PRIVATE_MIN_SUB'),
   name: z.string().min(1).max(200),
@@ -190,6 +200,7 @@ export type ProductCatalogAttributes = z.infer<typeof productCatalogAttributesSc
 /** 域 → schema 注册表 */
 export const DOMAIN_SCHEMAS = {
   'business-params': businessParamSchema,
+  'regional-tax-rates': regionalTaxRateSchema,
   'field-dictionary': fieldDictionarySchema,
   'numbering-rules': numberingRuleSchema,
   'product-versions': productVersionSchema,

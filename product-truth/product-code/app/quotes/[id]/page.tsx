@@ -216,6 +216,10 @@ export default function QuoteDetailPage() {
               <span className="text-slate-500">有效期：</span>
               <span>{quote.valid_until ? new Date(quote.valid_until).toLocaleDateString('zh-CN') : '—'}</span>
             </div>
+            <div>
+              <span className="text-slate-500">区域：</span>
+              <span>{quote.region || 'CN'}</span>
+            </div>
           </div>
 
           {quote.notes && (

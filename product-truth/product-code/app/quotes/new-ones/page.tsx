@@ -66,6 +66,10 @@ export default function NewOnesQuotePage() {
   const [lines, setLines] = useState<LineState[]>([emptyLine()])
   const [discountRate, setDiscountRate] = useState(0)
   const [discountReason, setDiscountReason] = useState('')
+  const [region, setRegion] = useState('CN')
+  const [regions, setRegions] = useState<Array<{ region: string; softwareRate: number; serviceRate: number; currency: string }>>([])
+  const [softwareTaxRate, setSoftwareTaxRate] = useState(0.13)
+  const [serviceTaxRate, setServiceTaxRate] = useState(0.06)
   const [customerName, setCustomerName] = useState('')
   const [customerContact, setCustomerContact] = useState('')
   const [validUntil, setValidUntil] = useState('')
@@ -76,12 +80,22 @@ export default function NewOnesQuotePage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [productsRes, versionsRes, matrixRes] = await Promise.all([
+        const [productsRes, versionsRes, matrixRes, regionRes] = await Promise.all([
           fetch('/api/products?status=active'),
           fetch('/api/config-center/product-versions?status=PUBLISHED&limit=100'),
           fetch('/api/config-center/price-matrix?status=PUBLISHED&limit=5000'),
+          fetch('/api/config-center/regional-tax-rates?status=PUBLISHED&limit=100'),
         ])
-        const [pj, vj, mj] = await Promise.all([productsRes.json(), versionsRes.json(), matrixRes.json()])
+        const [pj, vj, mj, rj] = await Promise.all([productsRes.json(), versionsRes.json(), matrixRes.json(), regionRes.json()])
+        const regionRows = (rj.data || []) as Array<{ region: string; software_rate?: number; service_rate?: number; currency?: string }>
+        if (regionRows.length > 0) {
+          const list = regionRows.map((r) => ({ region: r.region, softwareRate: Number(r.software_rate ?? 0.13), serviceRate: Number(r.service_rate ?? 0.06), currency: r.currency || 'CNY' }))
+          setRegions(list)
+          const cur = list.find((r) => r.region === 'CN') || list[0]
+          setRegion(cur.region)
+          setSoftwareTaxRate(cur.softwareRate)
+          setServiceTaxRate(cur.serviceRate)
+        }
         setProducts((pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), attributes: (p.attributes ?? null) as ProductOption['attributes'] })))
         setVersions((vj.data || []).map((v: Record<string, unknown>) => ({ version_code: String(v.version_code), name: String(v.name), deployments: (v.deployments || []) as string[], auth_modes: (v.auth_modes || []) as string[], capabilities: (v.capabilities || {}) as Record<string, boolean> })))
         setMatrix((mj.data || []) as PriceMatrixRow[])
@@ -130,8 +144,8 @@ export default function NewOnesQuotePage() {
         tiers,
       }
     })
-    return calculateQuote({ lines: inputs, discountRate, softwareTaxRate: 0.13, serviceTaxRate: 0.06, currency: 'CNY' })
-  }, [lines, products, matrix, discountRate])
+    return calculateQuote({ lines: inputs, discountRate, softwareTaxRate, serviceTaxRate, currency: 'CNY' })
+  }, [lines, products, matrix, discountRate, softwareTaxRate, serviceTaxRate])
 
   async function submit() {
     if (!customerName.trim()) {
@@ -174,6 +188,7 @@ export default function NewOnesQuotePage() {
           discount_rate: discountRate,
           discount_reason: discountRate > 0 ? discountReason : undefined,
           quote_kind: 'STANDARD',
+          region,
           items,
         }),
       })
@@ -203,6 +218,19 @@ export default function NewOnesQuotePage() {
         <div><label className="text-sm text-muted-foreground">联系人</label><Input value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} /></div>
         <div><label className="text-sm text-muted-foreground">有效期至</label><Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></div>
         <div><label className="text-sm text-muted-foreground">整单折扣（%）</label><Input type="number" min={0} max={100} value={discountRate * 100} onChange={(e) => setDiscountRate(Number(e.target.value || 0) / 100)} /></div>
+        <div>
+          <label className="text-sm text-muted-foreground">销售区域</label>
+          <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={region} onChange={(e) => {
+            const r = e.target.value
+            setRegion(r)
+            const cfg = regions.find((x) => x.region === r)
+            if (cfg) { setSoftwareTaxRate(cfg.softwareRate); setServiceTaxRate(cfg.serviceRate) }
+          }}>
+            {(regions.length > 0 ? regions : [{ region: 'CN', softwareRate: 0.13, serviceRate: 0.06, currency: 'CNY' }]).map((r) => (
+              <option key={r.region} value={r.region}>{r.region}（软件税 {(r.softwareRate * 100).toFixed(0)}% / 服务税 {(r.serviceRate * 100).toFixed(0)}%）</option>
+            ))}
+          </select>
+        </div>
         {discountRate > 0 && (
           <div className="sm:col-span-2"><label className="text-sm text-muted-foreground">折扣原因（为什么这样报价，必填）</label><Input value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} placeholder="如：老客户年度续约优惠、竞争性项目" /></div>
         )}

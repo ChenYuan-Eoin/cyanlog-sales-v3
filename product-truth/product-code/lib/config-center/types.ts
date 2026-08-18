@@ -12,6 +12,7 @@ export type ConfigDomain =
   | 'approval-rules'
   | 'clause-mappings'
   | 'output-templates'
+  | 'regional-tax-rates'
 
 export type ConfigStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 
@@ -38,6 +39,7 @@ export const DOMAIN_REGISTRY: Record<ConfigDomain, DomainDefinition> = {
   'approval-rules': { domain: 'approval-rules', table: 'approval_rules', label: '审批规则', section: '交易配置' },
   'clause-mappings': { domain: 'clause-mappings', table: 'clause_mappings', label: '条款映射', section: '报价输出' },
   'output-templates': { domain: 'output-templates', table: 'output_templates', versionTable: 'output_template_versions', label: '输出模板', section: '报价输出' },
+  'regional-tax-rates': { domain: 'regional-tax-rates', table: 'regional_tax_rates', label: '区域税率', section: '交易配置' },
 }
 
 export function isConfigDomain(value: string): value is ConfigDomain {

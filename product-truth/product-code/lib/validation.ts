@@ -78,6 +78,7 @@ export const quoteSchema = z.object({
   discount_reason: z.string().max(500).optional(),
   quote_kind: z.string().max(30).optional(),
   change_reason: z.string().max(1000).optional(),
+  region: z.string().max(10).optional(),
   items: z.array(z.object({
     product_type: z.enum(['sku', 'custom']).default('sku'),
     product_id: uuidSchema.optional(),
@@ -106,6 +107,7 @@ export const quoteSchema = z.object({
     subscription_end: dateTimeStringSchema.optional(),
     cost_price: z.number().nonnegative().optional(),
     floor_price: z.number().nonnegative().optional(),
+    region: z.string().max(10).optional(),
   }).superRefine((item, ctx) => {
     if (item.product_type === 'sku' && !item.product_id) {
       ctx.addIssue({

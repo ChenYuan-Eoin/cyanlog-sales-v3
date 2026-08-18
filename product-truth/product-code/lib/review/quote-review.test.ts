@@ -25,6 +25,7 @@ function base(): QuoteReviewInput {
       amount_in_words: '壹万陆仟玖佰伍拾元整',
       total_cost: 8000,
       margin_rate: 0.4667,
+      region: 'CN',
     },
     items: [
       {
@@ -47,6 +48,7 @@ function base(): QuoteReviewInput {
         version_to: null,
         cost_price: 800,
         line_cost: 8000,
+        region: 'CN',
       },
     ],
     versions: VERSIONS,
@@ -149,6 +151,12 @@ describe('reviewQuote 基础', () => {
     q.quote.subtotal = 11000; q.quote.tax_amount = 1430; q.quote.total_amount = 12430; q.quote.amount_in_words = '壹万贰仟肆佰叁拾元整'
     const r = reviewQuote(q, NOW)
     expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
+  })
+
+  it('分项区域与报价区域不一致 → BLOCK REGION_CONSISTENCY', () => {
+    const q = base(); q.items[0].region = 'US'
+    const r = reviewQuote(q, NOW)
+    expect(r.blocked.map((c) => c.code)).toContain('REGION_CONSISTENCY')
   })
 
   it('缺成本数据 → WARN MARGIN_FLOOR', () => {
