@@ -1001,3 +1001,17 @@ requirements:
       - app/quotes/new-ones/page.tsx
       - scripts/browser-verify.mjs
     description: new-ones 三步引导向导（选品配置→数量折扣→确认提交），逐级联动+分步校验+实时算价。
+
+  F053:
+    name: AI 审核助手
+    module: 报价中心
+    source: 用户要求 + 调研
+    status: in_progress
+    priority: P1
+    feature_packet: product-truth/feature-packets/F053-ai-review-assistant.md
+    code_locations:
+      - lib/review/ai-review.ts
+      - app/api/quotes/[id]/review/route.ts
+      - app/quotes/[id]/ReviewPanel.tsx
+      - lib/configs/ai-platform-registry.ts
+    description: 基于自动审核核验结果调用平台 AI 生成审核意见/风险/建议；失败回退不伪造；AI_CONFIG 发布后生效。

@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId, getOrgRoleCodes, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 import { getPublishedParamNumber } from '@/lib/config-center/runtime'
+import { generateQuoteReviewAiSummary } from '@/lib/review/ai-review'
 import { reviewQuote, type QuoteReviewResult } from '@/lib/review/quote-review'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
@@ -55,7 +56,12 @@ export async function GET(req: NextRequest, { params }: AsyncRouteParams) {
     const orgId = await getDefaultOrgId(user.id)
     const data = await loadReviewData(id, orgId, user.id)
     if (!data) return errorResponse('报价不存在', 404, 'NOT_FOUND')
-    return NextResponse.json({ success: true, data: data.result })
+    const wantAi = new URL(req.url).searchParams.get('ai') === '1'
+    if (!wantAi) {
+      return NextResponse.json({ success: true, data: data.result })
+    }
+    const aiOutput = await generateQuoteReviewAiSummary({ orgId, review: data.result, quote: data.quote })
+    return NextResponse.json({ success: true, data: data.result, aiSummary: aiOutput })
   } catch (error) {
     console.error('[F047] review GET failed:', error)
     return errorResponse('审核核验失败', 500, 'REVIEW_ERROR')

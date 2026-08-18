@@ -41,6 +41,13 @@ export const BUSINESS_USE_POINT_REGISTRY: BusinessUsePointDefinition[] = [
     required_capabilities: ['text_generation', 'long_context', 'structured_output'],
   },
   {
+    asset_id: 'quote.review.assistant',
+    module_id: 'quote',
+    display_name: '报价审核助手',
+    description: '基于自动审核核验结果生成报价审核意见与修正建议。',
+    required_capabilities: ['text_generation', 'structured_output'],
+  },
+  {
     asset_id: 'generic.ai.analyze',
     module_id: 'shared_ai',
     display_name: '通用 AI 分析（兼容入口）',
