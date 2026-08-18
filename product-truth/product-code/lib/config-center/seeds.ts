@@ -30,6 +30,8 @@ export const BUSINESS_PARAM_SEEDS = [
   { param_key: 'LEGACY_PROTECT_DATE', name: '老客户保护日', value: '2021-02-01', data_type: 'date', category: 'quote' },
   { param_key: 'FX_SOURCE', name: '汇率源', value: 'BOC', data_type: 'string', category: 'quote' },
   { param_key: 'FX_RATE_TYPE', name: '汇率口径', value: 'middle', data_type: 'string', category: 'quote' },
+  { param_key: 'DISCOUNT_TIERS', name: '折扣档位(%)', value: [0, 5, 10, 15, 20, 25, 30, 40], data_type: 'json', category: 'pricing' },
+  { param_key: 'DISCOUNT_MAX', name: '常规折扣上限(%)', value: 40, data_type: 'number', unit: '%', category: 'pricing' },
 ]
 
 export const FIELD_DICTIONARY_SEEDS = [

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
+import { getPublishedParamNumber } from '@/lib/config-center/runtime'
 import { reviewQuote, type QuoteReviewResult } from '@/lib/review/quote-review'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 
@@ -27,11 +28,13 @@ async function loadReviewData(quoteId: string, orgId: string) {
   for (const p of productsRes.data || []) {
     products[String(p.id)] = { code: String(p.code), attributes: (p.attributes ?? {}) as never }
   }
+  const discountMax = await getPublishedParamNumber(orgId, 'DISCOUNT_MAX').catch(() => null)
   const result = reviewQuote({
     quote,
     items: (itemsRes.data || []).map((it: Record<string, unknown>) => ({ ...it })),
     versions: (versionsRes.data || []) as never,
     products,
+    discountMaxPercent: discountMax !== null && discountMax !== undefined ? discountMax : undefined,
   })
   return { quote, result }
 }

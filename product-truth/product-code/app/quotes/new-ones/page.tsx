@@ -69,6 +69,8 @@ export default function NewOnesQuotePage() {
   const [region, setRegion] = useState('CN')
   const [regions, setRegions] = useState<Array<{ region: string; softwareRate: number; serviceRate: number; currency: string }>>([])
   const [softwareTaxRate, setSoftwareTaxRate] = useState(0.13)
+  const [discountTiers, setDiscountTiers] = useState<number[]>([0, 5, 10, 15, 20, 25, 30, 40])
+  const [discountMax, setDiscountMax] = useState(40)
   const [serviceTaxRate, setServiceTaxRate] = useState(0.06)
   const [customerName, setCustomerName] = useState('')
   const [customerContact, setCustomerContact] = useState('')
@@ -87,6 +89,8 @@ export default function NewOnesQuotePage() {
           fetch('/api/config-center/regional-tax-rates?status=PUBLISHED&limit=100'),
         ])
         const [pj, vj, mj, rj] = await Promise.all([productsRes.json(), versionsRes.json(), matrixRes.json(), regionRes.json()])
+        const businessRes = await fetch('/api/config-center/business-params?status=PUBLISHED&limit=100')
+        const bj = await businessRes.json()
         const regionRows = (rj.data || []) as Array<{ region: string; software_rate?: number; service_rate?: number; currency?: string }>
         if (regionRows.length > 0) {
           const list = regionRows.map((r) => ({ region: r.region, softwareRate: Number(r.software_rate ?? 0.13), serviceRate: Number(r.service_rate ?? 0.06), currency: r.currency || 'CNY' }))
@@ -95,6 +99,17 @@ export default function NewOnesQuotePage() {
           setRegion(cur.region)
           setSoftwareTaxRate(cur.softwareRate)
           setServiceTaxRate(cur.serviceRate)
+        }
+        const paramRows = (bj.data || []) as Array<{ param_key: string; value?: unknown }>
+        const tiersRow = paramRows.find((x) => x.param_key === 'DISCOUNT_TIERS')
+        const maxRow = paramRows.find((x) => x.param_key === 'DISCOUNT_MAX')
+        if (tiersRow && Array.isArray(tiersRow.value)) {
+          setDiscountTiers((tiersRow.value as unknown[]).filter((v): v is number => typeof v === 'number'))
+        }
+        if (maxRow) {
+          const mv = maxRow.value
+          const num = typeof mv === 'number' ? mv : typeof mv === 'string' ? Number(mv) : NaN
+          if (!Number.isNaN(num)) setDiscountMax(num)
         }
         setProducts((pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), attributes: (p.attributes ?? null) as ProductOption['attributes'] })))
         setVersions((vj.data || []).map((v: Record<string, unknown>) => ({ version_code: String(v.version_code), name: String(v.name), deployments: (v.deployments || []) as string[], auth_modes: (v.auth_modes || []) as string[], capabilities: (v.capabilities || {}) as Record<string, boolean> })))
@@ -217,7 +232,17 @@ export default function NewOnesQuotePage() {
         <div><label className="text-sm text-muted-foreground">客户名称</label><Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
         <div><label className="text-sm text-muted-foreground">联系人</label><Input value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} /></div>
         <div><label className="text-sm text-muted-foreground">有效期至</label><Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></div>
-        <div><label className="text-sm text-muted-foreground">整单折扣（%）</label><Input type="number" min={0} max={100} value={discountRate * 100} onChange={(e) => setDiscountRate(Number(e.target.value || 0) / 100)} /></div>
+        <div>
+          <label className="text-sm text-muted-foreground">整单折扣档位</label>
+          <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={Math.round(discountRate * 100)} onChange={(e) => setDiscountRate(Number(e.target.value || 0) / 100)}>
+            {discountTiers.map((t) => (
+              <option key={t} value={t}>{t}%{t > discountMax ? '（需审批）' : t === discountMax ? '（上限）' : ''}</option>
+            ))}
+          </select>
+          {discountRate * 100 > discountMax && (
+            <p className="mt-1 text-xs text-amber-600">超过常规折扣上限 {discountMax}%，提交后需审批确认</p>
+          )}
+        </div>
         <div>
           <label className="text-sm text-muted-foreground">销售区域</label>
           <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={region} onChange={(e) => {

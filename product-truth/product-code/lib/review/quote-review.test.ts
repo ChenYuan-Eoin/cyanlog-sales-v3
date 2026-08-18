@@ -153,6 +153,22 @@ describe('reviewQuote 基础', () => {
     expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
   })
 
+  it('折扣超过常规上限 40% → WARN DISCOUNT_POLICY', () => {
+    const q = base(); q.quote.discount_rate = 0.45; q.quote.discount_reason = '战略客户特批'
+    q.quote.discount_amount = 6750; q.quote.tax_amount = 1132.5; q.quote.total_amount = 9382.5; q.quote.amount_in_words = '玖仟叁佰捌拾贰元伍角整'
+    q.quote.total_cost = 8000; q.quote.margin_rate = 0.03
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_POLICY')
+  })
+
+  it('折扣在常规上限内 → DISCOUNT_POLICY 通过', () => {
+    const q = base(); q.quote.discount_rate = 0.2; q.quote.discount_reason = '老客户优惠'
+    q.quote.discount_amount = 3000; q.quote.tax_amount = 1560; q.quote.total_amount = 13560; q.quote.amount_in_words = '壹万叁仟伍佰陆拾元整'
+    q.quote.total_cost = 8000; q.quote.margin_rate = (12000 - 8000) / 12000
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).not.toContain('DISCOUNT_POLICY')
+  })
+
   it('分项区域与报价区域不一致 → BLOCK REGION_CONSISTENCY', () => {
     const q = base(); q.items[0].region = 'US'
     const r = reviewQuote(q, NOW)

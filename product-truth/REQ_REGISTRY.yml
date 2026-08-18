@@ -962,3 +962,16 @@ requirements:
       - app/api/quotes/route.ts
       - supabase/migrations/20260818000007_region_tax_matrix.sql
     description: 价盘/报价增加 region 维度，按地区税率矩阵替代固定 13/6，区域一致性自动核验；多币种与汇率打通；海外业务数据由配置中心维护，不伪造。
+
+  F050:
+    name: 折扣治理交互（档位 + 常规上限）
+    module: 报价中心
+    source: 用户要求 + CPQ 市面形态
+    status: in_progress
+    priority: P0
+    feature_packet: product-truth/feature-packets/F050-discount-tiers-policy.md
+    code_locations:
+      - app/quotes/new-ones/page.tsx
+      - lib/review/quote-review.ts
+      - supabase/migrations/20260818000008_discount_policy_params.sql
+    description: 折扣档位下拉替代裸输入，常规上限可配；超过上限自动提示需审批（核验 WARN + 审批链路由），低于成本硬阻断。

@@ -48,6 +48,7 @@ export interface QuoteReviewItemInput {
 }
 
 export interface QuoteReviewInput {
+  discountMaxPercent?: number
   quote: {
     customer_name?: string | null
     currency?: string | null
@@ -225,6 +226,22 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
       message: qReason ? `报价折扣原因：${qReason}` : needQuoteReason ? '报价级折扣缺少原因' : lineMissing.length ? `第 ${lineMissing.map(({ i }) => i + 1).join(',')} 行有折扣但缺原因` : '折扣原因已填',
     })
   }
+
+  // R11b 折扣上限（F050）：超过常规上限需审批（审批链已按折扣路由）
+  const discountMaxPercent = input.discountMaxPercent ?? 40
+  const quoteDiscountPct = pct(quote.discount_rate) * 100
+  const lineDiscountPct = items
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => pct(it.discount) > 0)
+    .map(({ it, i }) => ({ pct: pct(it.discount) / Math.max(pct(it.quantity) * pct(it.unit_price), 1) * 100, i }))
+  const overMax = quoteDiscountPct > discountMaxPercent || lineDiscountPct.some((x) => x.pct > discountMaxPercent)
+  push({
+    code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${discountMaxPercent}%）`, level: 'warn',
+    ok: !overMax,
+    message: overMax
+      ? (quoteDiscountPct > discountMaxPercent ? `整单折扣 ${quoteDiscountPct.toFixed(1)}% 超过常规上限 ${discountMaxPercent}%，需审批确认` : `存在行折扣超过常规上限 ${discountMaxPercent}%，需审批确认`)
+      : `折扣在常规上限 ${discountMaxPercent}% 内`,
+  })
 
   // R12 搭售/售卖规则（组合校验）
   const comboInputs: QuoteLineInput[] = items
