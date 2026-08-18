@@ -25,6 +25,13 @@ V3 AI runtime 采用六对象资产模型（business_use_point → application_b
 
 发布后 `GET /api/quotes/:id/review?ai=1` 自动返回 AI 审核意见；未发布时保持现有失败回退（不伪造）。
 
+## 激活状态（2026-08-18 实测）
+- ✅ 六对象 AI_CONFIG 已发布（quote.review.assistant 全链路：provider_connection/model_catalog_entry/ai_application/business_use_point/application_binding/route_policy）
+- ✅ 平台表补齐：ai_runtime_plan_snapshots + model_invocations execution 系列（WP02 迁移族）
+- ✅ 链路真实执行到模型调用（plan 编译→快照→候选尝试→执行证据落库）
+- ❌ 云端推理被拒：cloud.yiyongai.cn 账户额度 $0（insufficient_user_quota）——**付费决策，需业务侧充值或换通道**；充值后无需改代码自动生效
+- 失败回退保持：未激活时如实提示，不伪造
+
 ## 后续 AI 能力
 - 对话建单（自然语言 → 结构化报价行）
 - 智能折扣建议（需历史成交数据）
