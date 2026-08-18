@@ -153,6 +153,22 @@ describe('reviewQuote 基础', () => {
     expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
   })
 
+  it('角色策略：折扣超过角色上限 → WARN，超过硬顶 → BLOCK', () => {
+    // 超角色上限 20%（WARN）
+    const q = base(); q.quote.discount_rate = 0.25; q.quote.discount_reason = '总监特批'
+    q.quote.discount_amount = 3750; q.quote.tax_amount = 1462.5; q.quote.total_amount = 12712.5; q.quote.amount_in_words = '壹万贰仟柒佰壹拾贰元伍角整'
+    q.quote.total_cost = 8000; q.quote.margin_rate = (11250 - 8000) / 11250
+    const r1 = reviewQuote({ ...q, userRoleCodes: ['SALES'], discountPolicies: { SALES: { maxDiscount: 0.2, hardCap: null } } }, NOW)
+    expect(r1.warnings.map((c) => c.code)).toContain('DISCOUNT_POLICY')
+    expect(r1.blocked.map((c) => c.code)).not.toContain('DISCOUNT_POLICY')
+    // 超硬顶 30%（BLOCK）
+    const q2 = base(); q2.quote.discount_rate = 0.35; q2.quote.discount_reason = '特批'
+    q2.quote.discount_amount = 5250; q2.quote.tax_amount = 1267.5; q2.quote.total_amount = 11017.5; q2.quote.amount_in_words = '壹万壹仟零壹拾柒元伍角整'
+    q2.quote.total_cost = 8000; q2.quote.margin_rate = (9750 - 8000) / 9750
+    const r2 = reviewQuote({ ...q2, userRoleCodes: ['SALES'], discountPolicies: { SALES: { maxDiscount: 0.2, hardCap: 0.3 } } }, NOW)
+    expect(r2.blocked.map((c) => c.code)).toContain('DISCOUNT_POLICY')
+  })
+
   it('折扣超过常规上限 40% → WARN DISCOUNT_POLICY', () => {
     const q = base(); q.quote.discount_rate = 0.45; q.quote.discount_reason = '战略客户特批'
     q.quote.discount_amount = 6750; q.quote.tax_amount = 1132.5; q.quote.total_amount = 9382.5; q.quote.amount_in_words = '玖仟叁佰捌拾贰元伍角整'

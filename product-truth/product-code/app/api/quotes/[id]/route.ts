@@ -8,7 +8,7 @@ import { reviewQuote } from '@/lib/review/quote-review'
 import { requireAuth } from '@/lib/auth'
 import { contractIdSchema, dateTimeStringSchema } from '@/lib/validation'
 import { z } from 'zod'
-import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
+import { canManageOrg, getDefaultOrgId, getOrgRoleCodes, getUserScopedRoleAssignments, listAccessibleUserIds } from '@/lib/scoped-access'
 import { getPublishedParamNumber } from '@/lib/config-center/runtime'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { loadProductsForOrg } from '@/lib/pricing/service'
@@ -387,12 +387,21 @@ export async function PUT(
           products[String(prod.id)] = { code: String(prod.code), attributes: (prod.attributes ?? {}) as never }
         }
         const discountMax = await getPublishedParamNumber(orgId, 'DISCOUNT_MAX').catch(() => null)
+        const roleAssignments = await getUserScopedRoleAssignments(user.id).catch(() => [])
+        const roleCodes = getOrgRoleCodes(roleAssignments, orgId)
+        const policyRes = await supabaseAdmin.from('discount_policies').select('*').eq('org_id', orgId).eq('status', 'PUBLISHED')
+        const policies: Record<string, { maxDiscount: number; hardCap: number | null }> = {}
+        for (const pol of policyRes.data || []) {
+          policies[String(pol.role_code)] = { maxDiscount: Number(pol.max_discount ?? 0), hardCap: pol.hard_cap != null ? Number(pol.hard_cap) : null }
+        }
         const reviewResult = reviewQuote({
           quote: { ...(updateResult.data || {}), ...updateData },
           items: (itemsRes.data || []) as never,
           versions: (versionsRes.data || []) as never,
           products,
           discountMaxPercent: discountMax !== null && discountMax !== undefined ? discountMax : undefined,
+          userRoleCodes: roleCodes,
+          discountPolicies: policies,
         })
         await supabaseAdmin
           .from('quotes')

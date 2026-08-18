@@ -975,3 +975,17 @@ requirements:
       - lib/review/quote-review.ts
       - supabase/migrations/20260818000008_discount_policy_params.sql
     description: 折扣档位下拉替代裸输入，常规上限可配；超过上限自动提示需审批（核验 WARN + 审批链路由），低于成本硬阻断。
+
+  F051:
+    name: 每角色折扣上限
+    module: 配置中心/报价中心
+    source: 用户要求 + CPQ 市面形态
+    status: in_progress
+    priority: P0
+    feature_packet: product-truth/feature-packets/F051-discount-policy-by-role.md
+    code_locations:
+      - lib/review/quote-review.ts
+      - app/api/quotes/[id]/review/route.ts
+      - app/api/quotes/[id]/route.ts
+      - supabase/migrations/20260818000009_discount_policy_roles.sql
+    description: 按用户角色折扣上限（超上限需审批，超硬顶阻断），无配置回退全局上限；角色数值由配置中心维护。

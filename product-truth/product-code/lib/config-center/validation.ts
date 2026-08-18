@@ -14,6 +14,14 @@ export const regionalTaxRateSchema = z.object({
   status: z.string().default('PUBLISHED'),
 })
 
+// ---------- F051 每角色折扣上限 ----------
+export const discountPolicySchema = z.object({
+  role_code: z.string().min(1).max(50),
+  max_discount: z.number().min(0).max(1),
+  hard_cap: z.number().min(0).max(1).nullable().optional(),
+  status: z.string().default('PUBLISHED'),
+})
+
 export const businessParamSchema = z.object({
   param_key: z.string().min(1).max(100).regex(/^[A-Z][A-Z0-9_]*$/, '参数 key 格式：大写字母+下划线，如 PRIVATE_MIN_SUB'),
   name: z.string().min(1).max(200),
@@ -201,6 +209,7 @@ export type ProductCatalogAttributes = z.infer<typeof productCatalogAttributesSc
 export const DOMAIN_SCHEMAS = {
   'business-params': businessParamSchema,
   'regional-tax-rates': regionalTaxRateSchema,
+  'discount-policy': discountPolicySchema,
   'field-dictionary': fieldDictionarySchema,
   'numbering-rules': numberingRuleSchema,
   'product-versions': productVersionSchema,

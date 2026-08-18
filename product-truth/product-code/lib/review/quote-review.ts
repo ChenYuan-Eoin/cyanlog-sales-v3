@@ -49,6 +49,8 @@ export interface QuoteReviewItemInput {
 
 export interface QuoteReviewInput {
   discountMaxPercent?: number
+  userRoleCodes?: string[]
+  discountPolicies?: Record<string, { maxDiscount: number; hardCap: number | null }>
   quote: {
     customer_name?: string | null
     currency?: string | null
@@ -230,21 +232,29 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
     })
   }
 
-  // R11b 折扣上限（F050）：超过常规上限需审批（审批链已按折扣路由）
-  const discountMaxPercent = input.discountMaxPercent ?? 40
+  // R11b 折扣上限（F050/F051）：超过常规上限需审批；超过角色硬顶阻断
+  const globalMaxPercent = input.discountMaxPercent ?? 40
+  const rolePolicy = (input.userRoleCodes || [])
+    .map((code) => input.discountPolicies?.[code])
+    .find((p) => !!p && p.maxDiscount > 0)
+  const maxPercent = rolePolicy ? rolePolicy.maxDiscount * 100 : globalMaxPercent
+  const hardCapPercent = rolePolicy?.hardCap != null ? rolePolicy.hardCap * 100 : null
   const quoteDiscountPct = pct(quote.discount_rate) * 100
   const lineDiscountPct = items
     .map((it, i) => ({ it, i }))
     .filter(({ it }) => pct(it.discount) > 0)
     .map(({ it, i }) => ({ pct: pct(it.discount) / Math.max(pct(it.quantity) * pct(it.unit_price), 1) * 100, i }))
-  const overMax = quoteDiscountPct > discountMaxPercent || lineDiscountPct.some((x) => x.pct > discountMaxPercent)
-  push({
-    code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${discountMaxPercent}%）`, level: 'warn',
-    ok: !overMax,
-    message: overMax
-      ? (quoteDiscountPct > discountMaxPercent ? `整单折扣 ${quoteDiscountPct.toFixed(1)}% 超过常规上限 ${discountMaxPercent}%，需审批确认` : `存在行折扣超过常规上限 ${discountMaxPercent}%，需审批确认`)
-      : `折扣在常规上限 ${discountMaxPercent}% 内`,
-  })
+  const maxLinePct = Math.max(0, ...lineDiscountPct.map((x) => x.pct))
+  const maxAppliedPct = Math.max(quoteDiscountPct, maxLinePct)
+  const overHard = hardCapPercent != null && maxAppliedPct > hardCapPercent
+  const overMax = maxAppliedPct > maxPercent
+  if (overHard) {
+    push({ code: 'DISCOUNT_POLICY', label: `折扣不超过角色硬顶（${hardCapPercent}%）`, level: 'block', ok: false, message: `折扣 ${maxAppliedPct.toFixed(1)}% 超过硬顶 ${hardCapPercent}%，阻断` })
+  } else if (overMax) {
+    push({ code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${maxPercent}%）`, level: 'warn', ok: false, message: `折扣 ${maxAppliedPct.toFixed(1)}% 超过常规上限 ${maxPercent}%，需审批确认` })
+  } else {
+    push({ code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${maxPercent}%）`, level: 'block', ok: true, message: `折扣在常规上限 ${maxPercent}% 内` })
+  }
 
   // R12 搭售/售卖规则（组合校验）
   const comboInputs: QuoteLineInput[] = items

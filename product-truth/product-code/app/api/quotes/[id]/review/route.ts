@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import { getDefaultOrgId, getOrgRoleCodes, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 import { getPublishedParamNumber } from '@/lib/config-center/runtime'
 import { reviewQuote, type QuoteReviewResult } from '@/lib/review/quote-review'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
@@ -12,7 +12,7 @@ function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ success: false, error: { code: code || 'ERROR', message } }, { status })
 }
 
-async function loadReviewData(quoteId: string, orgId: string) {
+async function loadReviewData(quoteId: string, orgId: string, userId: string) {
   const [quoteRes, itemsRes, versionsRes, productsRes] = await Promise.all([
     supabaseAdmin.from('quotes').select('*').eq('id', quoteId).eq('org_id', orgId).maybeSingle(),
     supabaseAdmin.from('quote_items').select('*').eq('quote_id', quoteId).order('sort_order', { ascending: true }),
@@ -29,12 +29,21 @@ async function loadReviewData(quoteId: string, orgId: string) {
     products[String(p.id)] = { code: String(p.code), attributes: (p.attributes ?? {}) as never }
   }
   const discountMax = await getPublishedParamNumber(orgId, 'DISCOUNT_MAX').catch(() => null)
+  const assignments = await getUserScopedRoleAssignments(userId).catch(() => [])
+  const roleCodes = getOrgRoleCodes(assignments, orgId)
+  const policyRes = await supabaseAdmin.from('discount_policies').select('*').eq('org_id', orgId).eq('status', 'PUBLISHED')
+  const policies: Record<string, { maxDiscount: number; hardCap: number | null }> = {}
+  for (const pol of policyRes.data || []) {
+    policies[String(pol.role_code)] = { maxDiscount: Number(pol.max_discount ?? 0), hardCap: pol.hard_cap != null ? Number(pol.hard_cap) : null }
+  }
   const result = reviewQuote({
     quote,
     items: (itemsRes.data || []).map((it: Record<string, unknown>) => ({ ...it })),
     versions: (versionsRes.data || []) as never,
     products,
     discountMaxPercent: discountMax !== null && discountMax !== undefined ? discountMax : undefined,
+    userRoleCodes: roleCodes,
+    discountPolicies: policies,
   })
   return { quote, result }
 }
@@ -44,7 +53,7 @@ export async function GET(req: NextRequest, { params }: AsyncRouteParams) {
     const user = await requireAuth(req)
     const id = await resolveIdParam(params)
     const orgId = await getDefaultOrgId(user.id)
-    const data = await loadReviewData(id, orgId)
+    const data = await loadReviewData(id, orgId, user.id)
     if (!data) return errorResponse('报价不存在', 404, 'NOT_FOUND')
     return NextResponse.json({ success: true, data: data.result })
   } catch (error) {
@@ -58,7 +67,7 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
     const user = await requireAuth(req)
     const id = await resolveIdParam(params)
     const orgId = await getDefaultOrgId(user.id)
-    const data = await loadReviewData(id, orgId)
+    const data = await loadReviewData(id, orgId, user.id)
     if (!data) return errorResponse('报价不存在', 404, 'NOT_FOUND')
     const result: QuoteReviewResult = data.result
     const { error } = await supabaseAdmin
