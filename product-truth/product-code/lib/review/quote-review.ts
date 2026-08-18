@@ -39,6 +39,10 @@ export interface QuoteReviewItemInput {
   version_from?: string | null
   version_to?: string | null
   tax_rate?: number | null
+  cost_price?: number | null
+  floor_price?: number | null
+  line_cost?: number | null
+  margin_rate?: number | null
   attributes?: Record<string, unknown> | null
 }
 
@@ -59,6 +63,8 @@ export interface QuoteReviewInput {
     tax_amount?: number | null
     total_amount?: number | null
     amount_in_words?: string | null
+    total_cost?: number | null
+    margin_rate?: number | null
     attributes?: Record<string, unknown> | null
   }
   items: QuoteReviewItemInput[]
@@ -247,6 +253,20 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
     push({ code: 'DISCOUNT_GOVERNANCE', label: '大额折扣需审批确认', level: 'warn', ok: false, message: `第 ${heavyDiscounts.map(({ i }) => i + 1).join(',')} 行小计低于刊例价 80%，审批视图需展示原价/成交价` })
   } else {
     push({ code: 'DISCOUNT_GOVERNANCE', label: '折扣在原价/底价范围内', level: 'block', ok: true })
+  }
+
+  // R13b 毛利底线（F048）：缺成本→提醒；低于成本→硬阻断；低于毛利底线→需审批
+  const totalCost = pct(quote.total_cost)
+  const quoteMargin = quote.margin_rate !== null && quote.margin_rate !== undefined ? Number(quote.margin_rate) : null
+  const itemHasCost = items.some((it) => pct(it.cost_price) > 0 || pct(it.line_cost) > 0)
+  if (totalCost <= 0 && !itemHasCost) {
+    push({ code: 'MARGIN_FLOOR', label: '毛利可核验（成本/底价已维护）', level: 'warn', ok: false, message: '缺少成本数据，无法核验毛利，请在配置中心维护产品成本价' })
+  } else if (quoteMargin !== null && quoteMargin < 0) {
+    push({ code: 'MARGIN_FLOOR', label: '成交价不得低于成本（毛利底线）', level: 'block', ok: false, message: `整单毛利率 ${(quoteMargin * 100).toFixed(1)}%，低于成本，硬阻断` })
+  } else if (quoteMargin !== null && quoteMargin < 0.3) {
+    push({ code: 'MARGIN_FLOOR', label: '毛利率不低于底线（默认 30%）', level: 'warn', ok: false, message: `整单毛利率 ${(quoteMargin * 100).toFixed(1)}%，低于毛利底线，需审批确认` })
+  } else {
+    push({ code: 'MARGIN_FLOOR', label: '毛利在底线以上', level: 'block', ok: true, message: quoteMargin !== null ? `整单毛利率 ${(quoteMargin * 100).toFixed(1)}%` : '毛利核验通过' })
   }
 
   // R14 有效期

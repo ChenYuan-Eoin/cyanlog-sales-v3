@@ -262,6 +262,9 @@ describe('POST /api/quotes', () => {
           data: null,
           error: { message: 'insert failed', code: 'PGRST_ERROR' },
         }),
+        in: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       }
       return chain
     })

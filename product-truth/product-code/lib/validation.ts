@@ -104,6 +104,8 @@ export const quoteSchema = z.object({
     line_note: z.string().max(2000).optional(),
     subscription_start: dateTimeStringSchema.optional(),
     subscription_end: dateTimeStringSchema.optional(),
+    cost_price: z.number().nonnegative().optional(),
+    floor_price: z.number().nonnegative().optional(),
   }).superRefine((item, ctx) => {
     if (item.product_type === 'sku' && !item.product_id) {
       ctx.addIssue({

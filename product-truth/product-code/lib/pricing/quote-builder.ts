@@ -19,6 +19,8 @@ export interface QuoteLineInput {
   isGift?: boolean
   tiers?: CumulativeTier[]
   priceOverride?: number     // 服务/二开自定义价（可选）
+  costPrice?: number         // F048 内部：产品成本单价（服务端从产品目录带入）
+  floorPrice?: number        // F048 内部：产品底价（服务端从产品目录带入）
 }
 
 export interface CombinationIssue {
@@ -98,6 +100,11 @@ export interface QuoteLineResult {
   taxAmount: number | null
   source: 'cumulative' | 'no_price' | 'manual' | 'base'
   noPrice: boolean
+  // F048 内部价与毛利（内部字段，客户输出永不出现）
+  costPrice: number | null
+  floorPrice: number | null
+  lineCost: number | null
+  marginRate: number | null
 }
 
 export interface QuoteTotalInput {
@@ -116,6 +123,9 @@ export interface QuoteTotalResult {
   taxAmount: number
   grandTotal: number
   totalInWords: string
+  // F048 内部毛利
+  totalCost: number
+  marginRate: number | null
 }
 
 const SOFTWARE_CODES = new Set(['PROJECT', 'WIKI', 'COPILOT', 'DESK', 'WPS', 'XMIND'])
@@ -139,6 +149,10 @@ export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineRe
       taxAmount: null,
       source: 'manual',
       noPrice: false,
+      costPrice: item.costPrice ?? null,
+      floorPrice: item.floorPrice ?? null,
+      lineCost: item.costPrice !== undefined && item.costPrice > 0 ? Math.round(item.costPrice * item.quantity * 100) / 100 : null,
+      marginRate: item.costPrice !== undefined && item.costPrice > 0 && priceOverride > 0 ? (priceOverride - item.costPrice) / priceOverride : null,
     }
   }
 
@@ -156,6 +170,10 @@ export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineRe
     taxAmount: null,
     source: resolved.source,
     noPrice: resolved.exceedsMax,
+    costPrice: item.costPrice ?? null,
+    floorPrice: item.floorPrice ?? null,
+    lineCost: item.costPrice !== undefined && item.costPrice > 0 ? Math.round(item.costPrice * item.quantity * 100) / 100 : null,
+    marginRate: item.costPrice !== undefined && item.costPrice > 0 && resolved.unitPrice !== null && resolved.unitPrice > 0 ? (resolved.unitPrice - item.costPrice) / resolved.unitPrice : null,
   }
   return line
 }
@@ -183,6 +201,9 @@ export function computeQuoteTotals(input: QuoteTotalInput): QuoteTotalResult {
   const taxAmount = round(softwareTaxAmount + serviceTaxAmount)
   const grandTotal = round(taxable + taxAmount)
 
+  const totalCost = round(input.lines.reduce((sum, l) => sum + (l.lineCost ?? 0), 0))
+  const marginRate = totalCost > 0 && taxable > 0 ? round((taxable - totalCost) / taxable * 10000) / 10000 : null
+
   return {
     subtotal: round(subtotal),
     discountAmount: round(discountAmount),
@@ -192,6 +213,8 @@ export function computeQuoteTotals(input: QuoteTotalInput): QuoteTotalResult {
     taxAmount,
     grandTotal,
     totalInWords: numberToChineseUpper(grandTotal),
+    totalCost,
+    marginRate,
   }
 }
 

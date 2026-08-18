@@ -23,6 +23,8 @@ function base(): QuoteReviewInput {
       tax_amount: 1950,
       total_amount: 16950,
       amount_in_words: '壹万陆仟玖佰伍拾元整',
+      total_cost: 8000,
+      margin_rate: 0.4667,
     },
     items: [
       {
@@ -43,6 +45,8 @@ function base(): QuoteReviewInput {
         subscription_end: '2027-08-17',
         version_from: null,
         version_to: null,
+        cost_price: 800,
+        line_cost: 8000,
       },
     ],
     versions: VERSIONS,
@@ -145,6 +149,24 @@ describe('reviewQuote 基础', () => {
     q.quote.subtotal = 11000; q.quote.tax_amount = 1430; q.quote.total_amount = 12430; q.quote.amount_in_words = '壹万贰仟肆佰叁拾元整'
     const r = reviewQuote(q, NOW)
     expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
+  })
+
+  it('缺成本数据 → WARN MARGIN_FLOOR', () => {
+    const q = base(); q.quote.total_cost = 0; q.quote.margin_rate = null; q.items[0].cost_price = 0; q.items[0].line_cost = 0
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('MARGIN_FLOOR')
+  })
+
+  it('毛利率低于成本 → BLOCK MARGIN_FLOOR', () => {
+    const q = base(); q.quote.total_cost = 18000; q.quote.margin_rate = -0.1
+    const r = reviewQuote(q, NOW)
+    expect(r.blocked.map((c) => c.code)).toContain('MARGIN_FLOOR')
+  })
+
+  it('毛利率低于底线 30% → WARN MARGIN_FLOOR', () => {
+    const q = base(); q.quote.total_cost = 12000; q.quote.margin_rate = 0.2
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('MARGIN_FLOOR')
   })
 
   it('有效期过期 → BLOCK VALID_UNTIL', () => {

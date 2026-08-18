@@ -122,6 +122,20 @@ export async function POST(req: NextRequest) {
     }
     const quoteId = uuidv4()
 
+    // F048：从产品目录带出成本/底价（内部字段，客户输出永不出现）
+    const productCostRes = await supabaseAdmin.from('products').select('id,cost_price,min_price').in('id', items.map((i) => i.product_id).filter(Boolean))
+    const productCostMap = new Map<string, { cost: number; floor: number }>()
+    for (const prod of productCostRes.data || []) {
+      productCostMap.set(String(prod.id), { cost: Number(prod.cost_price || 0), floor: Number(prod.min_price || 0) })
+    }
+    const totalCost = pricedDraft.items.reduce((sum, item, index) => {
+      const requested = items[index] || {}
+      const cost = productCostMap.get(String(item.product_id || requested.product_id))?.cost ?? Number(requested.cost_price || 0)
+      return sum + cost * item.quantity
+    }, 0)
+    const netRevenue = pricedDraft.subtotal - pricedDraft.discountAmount
+    const quoteMarginRate = totalCost > 0 && netRevenue > 0 ? Math.round((netRevenue - totalCost) / netRevenue * 10000) / 10000 : null
+
     // F042：汇率源按业务参数 FX_SOURCE 配置（默认/未发布=BOC）；中行官方牌价接入，
     // 失败不阻断报价创建、不伪造数据（exchange_rate 留空由字段字典口径继续按输入处理）。
     let exchangeRate: number | null = null
@@ -155,6 +169,8 @@ export async function POST(req: NextRequest) {
       exchange_rate: exchangeRate,
       tax_inclusive: false,
       amount_in_words: numberToChineseUpper(pricedDraft.totalAmount),
+      total_cost: totalCost,
+      margin_rate: quoteMarginRate,
       quote_kind: quote_kind ?? 'STANDARD',
       discount_reason: discount_reason ?? null,
       change_reason: change_reason ?? null,
@@ -230,6 +246,10 @@ export async function POST(req: NextRequest) {
         line_note: requested.line_note ?? null,
         subscription_start: requested.subscription_start ?? (requested.auth_mode?.startsWith('SUB_') ? new Date().toISOString().slice(0, 10) : null),
         subscription_end: requested.subscription_end ?? (requested.auth_mode?.startsWith('SUB_') ? addMonths(new Date(), requested.term_months ?? 12).slice(0, 10) : null),
+        cost_price: productCostMap.get(String(item.product_id || requested.product_id))?.cost ?? Number(requested.cost_price || 0),
+        floor_price: productCostMap.get(String(item.product_id || requested.product_id))?.floor ?? Number(requested.floor_price || 0),
+        line_cost: (() => { const c = productCostMap.get(String(item.product_id || requested.product_id))?.cost ?? Number(requested.cost_price || 0); return c > 0 ? Math.round(c * item.quantity * 100) / 100 : 0 })(),
+        margin_rate: item.unit_price > 0 ? (() => { const c = productCostMap.get(String(item.product_id || requested.product_id))?.cost ?? Number(requested.cost_price || 0); return c > 0 ? Math.round((item.unit_price - c) / item.unit_price * 10000) / 10000 : null })() : null,
       }
     })
 

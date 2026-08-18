@@ -65,6 +65,29 @@ describe('validateProductCombination（F037 搭售/跟随/生态账号数）', (
   })
 })
 
+describe('F048 内部毛利计算', () => {
+  it('buildQuoteLine 带成本 → 行毛利正确', () => {
+    const line = buildQuoteLine({
+      productId: 'p1', productCode: 'PROJECT', category: 'BASE', follows: [], versionCode: 'ENT_V6',
+      deployment: 'PUBLIC_CLOUD', authMode: 'SUB_YEAR', termMonths: 12, quantity: 10, costPrice: 800,
+      tiers: [{ qty_from: 1, qty_to: null, unit_price: 1500, list_price: 15000 }],
+    }, 0)
+    expect(line.marginRate).toBeCloseTo((1500 - 800) / 1500, 4)
+    expect(line.lineCost).toBe(8000)
+  })
+
+  it('computeQuoteTotals 汇总整单毛利', () => {
+    const lines: QuoteLineResult[] = [{
+      lineNo: 1, productCode: 'PROJECT', quantity: 10, unitPrice: 1500, listPrice: 15000, subtotal: 15000,
+      isGift: false, giftOriginalAmount: null, taxRate: 0.13, taxAmount: 0, source: 'cumulative', noPrice: false,
+      costPrice: 800, floorPrice: 600, lineCost: 8000, marginRate: (1500 - 800) / 1500,
+    }]
+    const t = computeQuoteTotals({ lines, discountRate: 0.1, softwareTaxRate: 0.13, serviceTaxRate: 0.06 })
+    expect(t.totalCost).toBe(8000)
+    expect(t.marginRate).toBeCloseTo((13500 - 8000) / 13500, 4)
+  })
+})
+
 describe('computeQuoteTotals（F045 分税/赠送/大写）', () => {
   function makeLine(partial: Partial<QuoteLineResult>): QuoteLineResult {
     return {
@@ -80,6 +103,10 @@ describe('computeQuoteTotals（F045 分税/赠送/大写）', () => {
       taxAmount: null,
       source: 'cumulative',
       noPrice: false,
+      costPrice: null,
+      floorPrice: null,
+      lineCost: null,
+      marginRate: null,
       ...partial,
     }
   }

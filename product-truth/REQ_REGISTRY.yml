@@ -934,3 +934,17 @@ requirements:
       - app/api/quotes/[id]/route.ts
       - supabase/migrations/20260818000005_quote_review_automation.sql
     description: 把人工审核 Checklist 变成自动核验：提交审批自动逐项检查，BLOCK 项不满足→暂缓审批；审核视图逐项展示。
+
+  F048:
+    name: 内部价与毛利治理（隐藏字段）
+    module: 配置中心/报价中心
+    source: 用户要求 + CPQ 市面形态
+    status: in_progress
+    priority: P0
+    feature_packet: product-truth/feature-packets/F048-internal-price-margin.md
+    code_locations:
+      - lib/pricing/quote-builder.ts
+      - lib/review/quote-review.ts
+      - app/api/quotes/route.ts
+      - supabase/migrations/20260818000006_internal_price_margin.sql
+    description: 成本/底价/毛利作为内部字段：配置中心维护、报价引擎计算、毛利底线审批（低于成本硬阻断/低于底线需审批）、客户输出零泄漏。

@@ -52,4 +52,8 @@ export const INTERNAL_FIELD_KEYS = [
   'approver',
   'approval_opinion',
   'rebate_commission',
+  'cost_price',
+  'floor_price',
+  'line_cost',
+  'total_cost',
 ] as const
