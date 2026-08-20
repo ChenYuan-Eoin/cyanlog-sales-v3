@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "activeId": "WP10",
+  "commit": "118d05c80893095c3f754ae9b027f858bf2808ec",
+  "evidence": {
+    "code": {
+      "summary": "WP10 阶段0-4 代码完成（HEAD 118d05c8）",
+      "commit": "118d05c80893095c3f754ae9b027f858bf2808ec",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/target_tests.log",
+          "log_sha256": "fbeda6eae00c26d2e5327219fcd34818bc9ea5e48741c0224abfc7f4f0d3bb91"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/full_tests.log",
+          "log_sha256": "7bfba40131e43214beba9ad30b2dceb7e74e642dec3e930b48477a4d0c2f0813"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/lint.log",
+          "log_sha256": "4e18ed3093442ba4ddfb9484263bb211ee92d37b311ac572154891c7211a298f"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/typecheck.log",
+          "log_sha256": "5753ca8e1019d8b396f750e82fdf896f28fdf711953a918698640e6235a512bf"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/build.log",
+          "log_sha256": "61e1948413d9a5e43cbc7b687584f1d37785f17aba8a7993f8de60b176d3f985"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "e5e02c15731724432834dd6337d46c1f15a2a908a090fd34153f1a8897697b6a",
+        "entry_sha256": "d61148c84a01e2df9cb97e1a8b6e263942dfe0ed605035cc3f66167c51482576"
+      },
+      "commits": [
+        "ef94aac2",
+        "6612fa21",
+        "7bc52b74",
+        "c536f3df",
+        "15533293",
+        "7f5e8d4d",
+        "0ed0e834",
+        "118d05c8"
+      ],
+      "notes": "e2e 建单-审批-冻结-派生链通过；生产库测试数据待确认清理"
+    }
+  },
+  "updatedAt": "2026-08-20T12:21:09.668Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-08-20T12:21:09.646Z",
+      "head": "118d05c80893095c3f754ae9b027f858bf2808ec",
+      "originMain": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "remoteMain": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "remoteProduction": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "3901dcf9a9522a85f556b9f78e6fa08db2d0d004",
+      "remoteAttestationRefOid": "3901dcf9a9522a85f556b9f78e6fa08db2d0d004",
+      "remoteSnapshotCheckedAt": "2026-08-20T12:21:07.630Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "44f6ff4587d47659d842c4c7477008f31344c6cee4b9cb392a55b28024606fb1",
+  "sealedAt": "2026-08-20T12:21:09.669Z",
+  "attestationDigest": "cf833d03ae1414aef1747a4fddfe29c83bb862997d50470c2d3da97df7f07ebb"
+}
