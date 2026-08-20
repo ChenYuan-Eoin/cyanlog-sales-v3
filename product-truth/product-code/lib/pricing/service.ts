@@ -9,6 +9,7 @@ import {
   type ProductPriceTier,
 } from '@/lib/pricing/engine'
 import { calculateQuote } from '@/lib/pricing/quote-calculator'
+import type { QuoteLineInput } from '@/lib/pricing/quote-builder'
 
 type ProductStatus = 'active' | 'inactive' | 'discontinued'
 
@@ -207,9 +208,13 @@ export async function calculateQuoteDraftOnes(
   const products = await loadProductsForOrg(orgId, productIds)
   const productById = new Map(products.map((p) => [p.id, p]))
 
-  // F049：区域税率（默认 CN 13/6；调用方可传已解析税率）
-  const softwareTaxRate = options.softwareTaxRate ?? 0.13
-  const serviceTaxRate = options.serviceTaxRate ?? 0.06
+  // F049：区域税率必须由调用方解析后传入（配置中心 regional_tax_rates 是唯一源）
+  // 不设代码默认值：缺失即报错，防止海外/多税率场景静默用错税率
+  if (options.softwareTaxRate == null || options.serviceTaxRate == null) {
+    throw new Error('缺少区域税率配置（softwareTaxRate/serviceTaxRate），请在配置中心维护 regional_tax_rates 后重试')
+  }
+  const softwareTaxRate = options.softwareTaxRate
+  const serviceTaxRate = options.serviceTaxRate
   const region = options.region ?? 'CN'
 
   // 读已发布多维价盘（每行 = 一档；按区域过滤，指定区域无价回退 CN）
@@ -241,8 +246,20 @@ export async function calculateQuoteDraftOnes(
     }
   }
 
+  // 从产品目录 attributes 转义业务语义（不再按产品名/代码写死）：
+  // attributes: { category, follows, quantityLinkedTo, taxCategory, version_codes }
+  const attrsOf = (product: PriceBookProduct | undefined): Record<string, unknown> => {
+    const raw = (product as { attributes?: unknown } | undefined)?.attributes
+    return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  }
+  const parseCategory = (v: unknown): QuoteLineInput['category'] =>
+    v === 'FOLLOW_PRODUCT' || v === 'FOLLOW_APP' || v === 'FOLLOW_ECO' ? v : 'BASE'
+  const parseStrArray = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  const parseStr = (v: unknown): string | undefined => typeof v === 'string' && v ? v : undefined
+
   const lines = items.map((item) => {
     const product = item.product_id ? productById.get(item.product_id) : undefined
+    const attrs = attrsOf(product)
     const tiers = (matrixRows || [])
       .filter(
         (r) =>
@@ -257,8 +274,10 @@ export async function calculateQuoteDraftOnes(
     return {
       productId: item.product_id ?? '',
       productCode: product?.code ?? item.name ?? '',
-      category: 'BASE' as const,
-      follows: [] as string[],
+      category: parseCategory(attrs.category),
+      follows: parseStrArray(attrs.follows),
+      quantityLinkedTo: parseStr(attrs.quantityLinkedTo),
+      taxCategory: attrs.taxCategory === 'service' ? ('service' as const) : ('software' as const),
       versionCode: item.version_code ?? '',
       deployment: item.deployment ?? '',
       authMode: item.auth_mode ?? '',
@@ -286,8 +305,9 @@ export async function calculateQuoteDraftOnes(
     throw new Error(`报价组合不合法：${messages.join('；')}`)
   }
 
+  const productByCode = new Map(products.map((p) => [p.code, p]))
   const itemsOut: CalculatedQuoteItem[] = calculated.lines.map((line) => {
-    const product = productById.get(line.productCode)
+    const product = productByCode.get(line.productCode)
     return {
       product_id: product?.id ?? null,
       product_type: 'sku',

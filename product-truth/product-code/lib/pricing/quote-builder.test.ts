@@ -48,10 +48,10 @@ describe('validateProductCombination（F037 搭售/跟随/生态账号数）', (
     expect(issues.some((i) => i.code === 'VERSION_MISMATCH')).toBe(true)
   })
 
-  it('WPS 账号数 ≠ Wiki 账号数 → 报错（原型反复出 bug 的规则）', () => {
+  it('生态应用账号数 ≠ 声明的基座账号数 → 报错（quantityLinkedTo 机制，非产品名写死）', () => {
     const issues = validateProductCombination([
       line({ productCode: 'WIKI', quantity: 50 }),
-      line({ productCode: 'WPS', category: 'FOLLOW_ECO', follows: ['WIKI'], quantity: 10 }),
+      line({ productCode: 'WPS', category: 'FOLLOW_ECO', follows: ['WIKI'], quantityLinkedTo: 'WIKI', quantity: 10 }),
     ])
     expect(issues.some((i) => i.code === 'ECO_QTY_MISMATCH')).toBe(true)
   })
@@ -80,7 +80,7 @@ describe('F050 行级折扣', () => {
     const lines: QuoteLineResult[] = [{
       lineNo: 1, productCode: 'PROJECT', quantity: 10, unitPrice: 1500, listPrice: 15000, subtotal: 12000,
       discountAmount: 3000, isGift: false, giftOriginalAmount: null, taxRate: 0.13, taxAmount: 0,
-      source: 'cumulative', noPrice: false, costPrice: 800, floorPrice: 600, lineCost: 8000, marginRate: 0.4667,
+      source: 'cumulative', noPrice: false, taxCategory: 'software', costPrice: 800, floorPrice: 600, lineCost: 8000, marginRate: 0.4667,
     }]
     const t = computeQuoteTotals({ lines, discountRate: 0.1, softwareTaxRate: 0.13, serviceTaxRate: 0.06 })
     expect(t.subtotal).toBe(12000)
@@ -104,7 +104,7 @@ describe('F048 内部毛利计算', () => {
     const lines: QuoteLineResult[] = [{
       lineNo: 1, productCode: 'PROJECT', quantity: 10, unitPrice: 1500, listPrice: 15000, subtotal: 15000,
       isGift: false, giftOriginalAmount: null, taxRate: 0.13, taxAmount: 0, source: 'cumulative', noPrice: false,
-      costPrice: 800, floorPrice: 600, lineCost: 8000, marginRate: (1500 - 800) / 1500,
+      taxCategory: 'software', costPrice: 800, floorPrice: 600, lineCost: 8000, marginRate: (1500 - 800) / 1500,
     }]
     const t = computeQuoteTotals({ lines, discountRate: 0.1, softwareTaxRate: 0.13, serviceTaxRate: 0.06 })
     expect(t.totalCost).toBe(8000)
@@ -127,6 +127,7 @@ describe('computeQuoteTotals（F045 分税/赠送/大写）', () => {
       taxAmount: null,
       source: 'cumulative',
       noPrice: false,
+      taxCategory: 'software',
       costPrice: null,
       floorPrice: null,
       lineCost: null,
@@ -139,7 +140,7 @@ describe('computeQuoteTotals（F045 分税/赠送/大写）', () => {
     const totals = computeQuoteTotals({
       lines: [
         makeLine({ lineNo: 1, productCode: 'PROJECT', subtotal: 10000 }),
-        makeLine({ lineNo: 2, productCode: 'SVC_IMPLEMENT', subtotal: 2000 }),
+        makeLine({ lineNo: 2, productCode: 'SVC_IMPLEMENT', subtotal: 2000, taxCategory: 'service' }),
       ],
       discountRate: 0.1,
       softwareTaxRate: 0.13,

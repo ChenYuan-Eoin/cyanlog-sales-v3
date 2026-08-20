@@ -27,11 +27,15 @@ export const BUSINESS_PARAM_SEEDS = [
   { param_key: 'TAX_SOFTWARE', name: '软件税率', value: 0.13, data_type: 'number', category: 'tax' },
   { param_key: 'TAX_SERVICE', name: '服务税率', value: 0.06, data_type: 'number', category: 'tax' },
   { param_key: 'QUOTE_VALID_DAYS', name: '报价有效期', value: 15, data_type: 'number', unit: '天', category: 'quote' },
+  { param_key: 'DEFAULT_QTY', name: '向导默认数量', value: 10, data_type: 'number', unit: '账号', category: 'quote' },
   { param_key: 'LEGACY_PROTECT_DATE', name: '老客户保护日', value: '2021-02-01', data_type: 'date', category: 'quote' },
   { param_key: 'FX_SOURCE', name: '汇率源', value: 'BOC', data_type: 'string', category: 'quote' },
   { param_key: 'FX_RATE_TYPE', name: '汇率口径', value: 'middle', data_type: 'string', category: 'quote' },
   { param_key: 'DISCOUNT_TIERS', name: '折扣档位(%)', value: [0, 5, 10, 15, 20, 25, 30, 40], data_type: 'json', category: 'pricing' },
   { param_key: 'DISCOUNT_MAX', name: '常规折扣上限(%)', value: 40, data_type: 'number', unit: '%', category: 'pricing' },
+  { param_key: 'DISCOUNT_DEEP_RATIO', name: '超底价阈值（成交价/刊例价）', value: 0.5, data_type: 'number', category: 'pricing' },
+  { param_key: 'DISCOUNT_HEAVY_RATIO', name: '大额折扣阈值（成交价/刊例价）', value: 0.8, data_type: 'number', category: 'pricing' },
+  { param_key: 'MARGIN_FLOOR_RATIO', name: '毛利底线', value: 0.3, data_type: 'number', category: 'pricing' },
 ]
 
 export const FIELD_DICTIONARY_SEEDS = [

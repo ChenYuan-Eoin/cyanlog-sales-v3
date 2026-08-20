@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-07-22T17:08:50+08:00",
+  "updated_at": "2026-08-20T18:24:54+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,98 +128,64 @@
     ]
   },
   "active_task": {
-    "id": "WP09",
-    "slug": "release-acceptance",
-    "name": "AI 托管路由、业务可读配置与发布候选验收",
+    "id": "WP10",
+    "slug": "quote-domain-complete-migration",
+    "name": "报价域完整形态与换机可迁移基座",
     "kind": "product",
     "status": "active",
-    "objective": "把已经存在的六对象 AI 平台能力变成业务人员能理解、托管环境能真实执行且审计事实不失真的 Production 发布候选：配置页面先表达可供业务模块选择的模型能力、接入状态和降级路径，再分别呈现管理员配置路由、本机可执行路由与托管实际路由；托管环境必须排除仅本机可达的 Provider，并从第一个真实可执行云模型开始计次，不得把环境排除伪造成失败降级。本地与隔离 Preview 只用于诊断和发布前证据；最终必须以同一 release commit 的 Production Provider probe、Production 业务 ReviewRun、model_invocations、token、Vercel Production 机器事实和用户现有 Chrome 访问 https://sales.cyanlog.icu 的受信操作员验收共同关闭。Preview 运行证据不得冒充 Production 模型链。",
-    "current_step": "D-WP09-001 已以生产锚点上的最小可回滚 UI hotfix完成 Vercel Production 部署，并由用户现有 Chrome 只读验证长弹窗滚动与取消、短弹窗取消；保存成功后的清理路径因 Production 数据库只读尚未验收，因此该缺陷保持部分验证且不代表 WP09 完成。当前先把 36 个混合迁移重构为可回滚兼容波次并关闭 P0 RLS，之后才允许受控 Production ReviewRun 写入与最终模型链验收；在此之前只可发布经兼容审查的 code-only 微修复，不得宣称生产模型已跑通。",
-    "started_at": "2026-07-22T01:23:24+08:00",
-    "activation_basis": "用户明确要求继续解决模型未拆出、线上不能运行和配置只对机器可读的问题；WP04 已由提交 a987f85d5701a38a13a245e0ebc5484cadecb3ab 固化，并在同一隔离 Preview 通过合同列表真实入口、默认审查、桌面/iPad 长 DOCX 风险定位后内部滚动与精确临时数据清理。现有源码审计进一步证明托管环境会在首个 local Provider 处立即失败，根本不会进入已配置云模型，因此该纠正属于 WP09 发布真实性门。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
+    "objective": "完成 V3 报价域完整形态落地 + 项目换机可迁移基座，交付可验收闭环。报价域：商机接入（报价挂 CRM 商机，历史报价复制/继承历史价/调整/重算/留痕/重审批）；配置通用化（产品线隔离，ONES 为第一套种子数据，产品/版本/部署/授权/期限/价盘/税率/搭售规则/模板全部配置化，消除税目按产品码、生态账号数 WIKI 写死、价盘导入默认 PROJECT 等硬编码）；算价引擎唯一；核验与审批全自动化；可交互报价页；版本冻结=结构化版本+快照+变更留痕；合同/标书/订单/续费/增购/升级从版本派生字段逐位一致。迁移基座：删 node_modules 软链、锁文件重装（pnpm@9.15.9, node 24）、固化 setup-new-machine.mjs、密钥清单入密码管理器、迁移演练一次。",
+    "current_step": "阶段0：环境审计与治理登记完成（IN-20260820-001），正在固化换机脚本并重装依赖",
+    "started_at": "2026-08-20T18:24:54+08:00",
+    "activation_basis": "用户审阅完整形态、迁移方案与目标文本后复制激活（codex_internal_context 提供 objective）；IN-20260820-001 登记",
+    "execution_workspace": "/Users/nsss/Price-v3",
     "allowed_paths": [
       "AGENTS.md",
-      ".githooks/post-commit",
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "governance/runtime-state/branch-consolidation-audit-20260722.md",
-      "governance/runtime-state/CONTINUE_WORK.md",
-      "governance/ai-behavior-准则/checks/pre-commit",
-      "governance/ai-behavior-准则/checks/check-05-git.sh",
-      "governance/ai-behavior-准则/audit/log-commit.mjs",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/feedback-collector.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-gate.sh",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-doctor.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json",
+      "governance/runtime-state/harness-state.json",
+      "governance/runtime-state/goal-contract.json",
       "product-truth/REQ_REGISTRY.yml",
-      "product-truth/00-master/PROJECT-主文档.md",
-      "product-truth/02-technical-truth/技术架构.md",
-      "product-truth/02-technical-truth/FREEZE-SPEC.md",
-      "product-truth/02-technical-truth/architecture-decisions/ADR-001-ai-failover-chain.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F012-ai-runtime-config.md",
-      "product-truth/feature-packets/F022-ai-fallback.md",
-      "product-truth/03-design-truth/examples/F022-ai-fallback.md",
-      "product-truth/04-implementation-truth/F022-ai-fallback.md",
-      "product-truth/product-code/app/configs",
-      "product-truth/product-code/components/layout/AppShell.tsx",
-      "product-truth/product-code/components/ui/dialog.tsx",
-      "product-truth/product-code/components/ui/alert-dialog.tsx",
-      "product-truth/product-code/app/api/configs",
-      "product-truth/product-code/app/api/contracts/[id]/review",
-      "product-truth/product-code/app/tech-architecture/page.tsx",
-      "product-truth/product-code/lib/ai",
-      "product-truth/product-code/lib/configs",
-      "product-truth/product-code/lib/contracts/review-evidence.ts",
-      "product-truth/product-code/lib/contracts/review-evidence.test.ts",
-      "product-truth/product-code/lib/contracts/review-workbench-state.ts",
-      "product-truth/product-code/lib/contracts/review-workbench-state.test.ts",
-      "product-truth/product-code/lib/contract-analysis.ts",
-      "product-truth/product-code/lib/contract-analysis.test.ts",
+      "product-truth/feature-packets/F037-product-catalog-version-matrix.md",
+      "product-truth/feature-packets/F038-price-matrix.md",
+      "product-truth/feature-packets/F039-field-dictionary.md",
+      "product-truth/feature-packets/F040-output-templates-clause-mapping.md",
+      "product-truth/feature-packets/F041-numbering-rules.md",
+      "product-truth/feature-packets/F042-business-params.md",
+      "product-truth/feature-packets/F043-approval-configurable.md",
+      "product-truth/feature-packets/F044-quote-version-snapshot.md",
+      "product-truth/feature-packets/F045-advanced-subjects.md",
+      "product-truth/feature-packets/F046-nonstandard-template-semantic.md",
+      "product-truth/feature-packets/F047-quote-review-automation.md",
+      "product-truth/feature-packets/F048-internal-price-margin.md",
+      "product-truth/feature-packets/F049-region-tax-matrix.md",
+      "product-truth/feature-packets/F050-discount-governance.md",
+      "product-truth/feature-packets/F051-discount-role-caps.md",
+      "product-truth/feature-packets/F052-guided-quote-wizard.md",
+      "product-truth/feature-packets/F053-ai-review-assistant.md",
+      "product-truth/product-code/app/api/quotes",
+      "product-truth/product-code/app/quotes",
+      "product-truth/product-code/lib/pricing",
+      "product-truth/product-code/lib/review",
+      "product-truth/product-code/lib/quote",
+      "product-truth/product-code/lib/export",
+      "product-truth/product-code/lib/config-center",
+      "product-truth/product-code/scripts",
+      "product-truth/product-code/supabase/migrations",
       "product-truth/product-code/package.json",
       "product-truth/product-code/pnpm-lock.yaml",
-      "product-truth/product-code/next.config.mjs",
-      "product-truth/product-code/output/evidence/wp09"
+      "product-truth/product-code/.env.example"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "executing",
       "allowed_states": [
-        "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "executing"
       ],
       "integration_branch": "main",
       "production_branch": "production",
       "production_release_separate": true,
-      "attestation_ref": "refs/notes/price-v3-delivery",
       "same_release_commit_required": true,
-      "final_acceptance": {
-        "origin": "https://sales.cyanlog.icu",
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "new_local_browser_or_context_prohibited": true,
-        "new_tab_prohibited": true,
-        "local_and_preview_role": "diagnostic_only_not_completion",
-        "release_truth_rule": "代码提交或 push、Vercel 部署、Production 域名可用和目标用户路径验收是四个独立事实，缺一不得宣称 Production 完成",
-        "trust_boundary": "Vercel API、Git SHA 与域名是机器证据；现有 Chrome 路径是受信操作员证明，只能验证声明完整和未篡改，不能伪称为机器可证明的人类会话",
-        "production_database_mode": "read_only_pending_security_gate_and_final_approval"
-      },
-      "production_release_authorization": {
-        "status": "pending_security_gate_and_final_write_approval",
-        "micro_fix_approval_id": "IN-20260720-045",
-        "clarification_id": "IN-20260722-064",
-        "final_release_approval_id": null,
-        "micro_fix_scope": "vetted_code_only_application_candidate",
-        "final_scope": "Production Provider probe、ReviewRun、model_invocations 与 token 的受控写入和完整 WP09 发布",
-        "excludes_until_final_approval": "Production 数据写入、迁移和完整 WP09 production_released"
-      },
+      "attestation_ref": "refs/notes/price-v3-delivery",
       "required_code_checks": [
         "target_tests",
         "full_tests",
@@ -233,58 +199,14 @@
         "model_invocations",
         "tokens"
       ],
-      "required_production_evidence": [
-        "exact_production_commit",
-        "vercel_deployment_ready_and_promoted",
-        "sales.cyanlog.icu_alias",
-        "controlled_production_security_and_runtime_verifier",
-        "trusted_existing_chrome_operator_attestation"
-      ],
-      "required_production_runtime_evidence": [
-        "provider_probe",
-        "review_run",
-        "model_invocations",
-        "tokens"
-      ],
-      "micro_fix_lane": {
-        "limit": 3,
-        "entry": "只接收阻断当前验收、可独立复现且不改变产品方向的缺陷",
-        "required_loop": [
-          "复现胶囊",
-          "根因证据",
-          "最小实现",
-          "目标回归",
-          "精确提交部署到 Production",
-          "用户现有 Chrome 在 sales.cyanlog.icu 的只读目标路径",
-          "主干回收且 Production 提交保持可追溯"
-        ]
-      },
-      "blocking_acceptance_defects": [
-        "IN-20260722-062"
-      ],
-      "micro_fix_release_rule": "可回滚且不写 Production 数据库的 code-only UI hotfix 可独立发布并线上复验；受信操作员只读验收只能关闭实际重放的子路径，未重放的保存/写入路径继续阻断，且不得扩大为整个 WP09 已 production_released"
-    },
-    "non_goals": [
-      "修改 R001-R015 等租户业务规则数据、审核准确率口径或独立金标",
-      "修改合同中心、审核工作台、文档对比、起草或循环复审产品流程",
-      "注册新的付费账号、引入持续付费 Provider 或用开发工具代理冒充产品运行网关",
-      "在 SECURITY-P0-RLS-PRODUCTION 关闭和最终写入批准前写 Production 数据库或执行迁移；把本地、Preview 或代码 push 冒充 Production 完成；覆盖或清理根 dirty 快照"
-    ],
-    "exit_criteria": [
-      "同一发布 RoutePolicy 在本机保留 local 到 cloud 顺序；在托管环境排除 local 后从 cloud 的 candidatePosition 0 / attempt 1 执行，且不生成虚假的 local invocation 或 fallback 状态；托管全 local 时失败关闭",
-      "运行计划快照同时保留 configured route 与 effective route，历史快照兼容；审核证据验证 effective 是 configured 的有序子序列并与真实 invocation 顺序一致",
-      "配置页面用业务人员可读的对象与动作显示模型接入、可用模型、业务模块选择和降级结果，同时明确本机与托管实际执行差异，不把内部表名、环境变量或机器策略当作主任务",
-      "隔离 Preview 只作为同一 release commit 的发布前诊断；Preview 的 Provider probe、ReviewRun、model_invocations、token 不得用于证明 Production 模型链已运行",
-      "P0 RLS 和兼容迁移门禁关闭后，最终 Production 候选在受控真实业务用点形成绑定同一 Production commit/deployment 的 Provider probe、ReviewRun、model_invocations、token 与运行计划证据；Production 数据库保持只读期间该条件明确未完成",
-      "目标/全量测试、lint、typecheck、build 通过；最终候选的精确提交已由 Vercel READY/PROMOTED 到 sales.cyanlog.icu，并在用户现有 Chrome 完成目标用户路径受信操作员验收，不得创建新的本地浏览器、标签页或上下文，也不得用 localhost/Preview 代替",
-      "代码提交或 push 不等于部署，部署不等于线上验收；任何一步失败都必须如实记录，不得冒充用户可见线上已更新"
-    ]
+      "note": "阶段0-4 以代码与本地验证证据推进；阶段5 线上验收需用户现有 Chrome + Production 证据，遵守既有发布门禁；AI 云端额度充值属用户决策项"
+    }
   },
   "execution_queue": {
     "active": {
-      "id": "WP09",
-      "slug": "release-acceptance",
-      "reason": "WP04 已由 a987f85d 和同一隔离 Preview 的桌面/iPad 真实列表入口、默认审查与 DOCX 内部滚动证据关闭；当前用户主线要求修复托管路由短路并把模型能力配置改为业务可读、真实可运行的发布候选"
+      "id": "WP10",
+      "slug": "quote-domain-complete-migration",
+      "reason": "用户已审阅并激活『报价域完整形态 + 换机可迁移基座』目标文本（IN-20260820-001）：商机接入→报价配置/算价/核验/审批/输出→版本冻结→合同/标书派生；配置通用化消除硬编码；换机基座脚本与演练。"
     },
     "next": {
       "id": "WP07",
@@ -310,6 +232,11 @@
       }
     ],
     "parked": [
+      {
+        "id": "WP09",
+        "slug": "release-acceptance",
+        "reason": "用户主线已切换至报价域 WP10（IN-20260820-001 激活）；WP09 的保存成功路径与 P0 RLS 发布门禁未完成，保留追溯，不视为 completed"
+      },
       {
         "id": "WP06",
         "slug": "document-compare",
@@ -711,7 +638,7 @@
     "decision_gate": "closed_and_verified_20260718：WP06 所有退出门禁通过；WP07 只有在生成独立结构化目标后才能接替 Active。"
   },
   "workspace": {
-    "repo_root": "/Users/nsss/.codex/worktrees/Price-v3-release-20260720",
+    "repo_root": "/Users/nsss/Price-v3",
     "code_root": "product-truth/product-code",
     "truth_root": "product-truth",
     "registry_path": "product-truth/REQ_REGISTRY.yml",

@@ -22,6 +22,8 @@ export interface QuoteLineInput {
   costPrice?: number         // F048 内部：产品成本单价（服务端从产品目录带入）
   floorPrice?: number        // F048 内部：产品底价（服务端从产品目录带入）
   discountRate?: number      // F050 行级折扣比例（0-1，可选；行折扣后再打整单折扣）
+  taxCategory?: 'software' | 'service'  // 税目类别（由产品目录/行类型映射提供；缺省 software）
+  quantityLinkedTo?: string  // 生态/跟随产品账号数必须等于的基座 product_code（由产品属性提供）
 }
 
 export interface CombinationIssue {
@@ -52,14 +54,15 @@ export function validateProductCombination(items: QuoteLineInput[], baseQuantiti
         issues.push({ code: 'BASE_MISSING', message: `${item.productCode} 缺少基座产品（跟随 ${item.follows.join('/')}）`, line: index + 1 })
       }
     }
-    // 3) 生态应用账号数 = 基座 Wiki 账号数
-    if (item.category === 'FOLLOW_ECO') {
-      const wiki = items.find((it) => it.category === 'BASE' && it.productCode === 'WIKI')
-      const wikiQty = wiki ? wiki.quantity : baseQuantities['WIKI']
-      if (wikiQty !== undefined && wikiQty !== item.quantity) {
+    // 3) 账号数联动：quantityLinkedTo 声明的基座 product_code（如生态应用账号数=基座账号数）
+    //    机制不依赖具体产品名；未声明联动则不校验（由产品属性配置决定）
+    if (item.quantityLinkedTo) {
+      const base = items.find((it) => it.category === 'BASE' && it.productCode === item.quantityLinkedTo)
+      const baseQty = base ? base.quantity : baseQuantities[item.quantityLinkedTo]
+      if (baseQty !== undefined && baseQty !== item.quantity) {
         issues.push({
           code: 'ECO_QTY_MISMATCH',
-          message: `${item.productCode} 账号数(${item.quantity})必须等于 ONES Wiki 账号数(${wikiQty})`,
+          message: `${item.productCode} 账号数(${item.quantity})必须等于 ${item.quantityLinkedTo} 账号数(${baseQty})`,
           line: index + 1,
         })
       }
@@ -101,6 +104,7 @@ export interface QuoteLineResult {
   taxAmount: number | null
   source: 'cumulative' | 'no_price' | 'manual' | 'base'
   noPrice: boolean
+  taxCategory: 'software' | 'service'   // 税目类别（来自输入，不再按产品码判断）
   // F048 内部价与毛利（内部字段，客户输出永不出现）
   costPrice: number | null
   floorPrice: number | null
@@ -130,9 +134,6 @@ export interface QuoteTotalResult {
   marginRate: number | null
 }
 
-const SOFTWARE_CODES = new Set(['PROJECT', 'WIKI', 'COPILOT', 'DESK', 'WPS', 'XMIND'])
-const SERVICE_PREFIX = 'SVC'
-
 export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineResult {
   const priceOverride = item.priceOverride
   const manual = priceOverride !== undefined
@@ -150,10 +151,11 @@ export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineRe
       discountAmount: discountAmount > 0 ? discountAmount : undefined,
       isGift: !!item.isGift,
       giftOriginalAmount: item.isGift ? subtotal : null,
-      taxRate: item.productCode.startsWith(SERVICE_PREFIX) ? null : null, // 由汇总按类别取
+      taxRate: null, // 由汇总按 taxCategory 取
       taxAmount: null,
       source: 'manual',
       noPrice: false,
+      taxCategory: item.taxCategory ?? 'software',
       costPrice: item.costPrice ?? null,
       floorPrice: item.floorPrice ?? null,
       lineCost: item.costPrice !== undefined && item.costPrice > 0 ? Math.round(item.costPrice * item.quantity * 100) / 100 : null,
@@ -179,6 +181,7 @@ export function buildQuoteLine(item: QuoteLineInput, index: number): QuoteLineRe
     taxAmount: null,
     source: resolved.source,
     noPrice: resolved.exceedsMax,
+    taxCategory: item.taxCategory ?? 'software',
     costPrice: item.costPrice ?? null,
     floorPrice: item.floorPrice ?? null,
     lineCost: item.costPrice !== undefined && item.costPrice > 0 ? Math.round(item.costPrice * item.quantity * 100) / 100 : null,
@@ -198,7 +201,7 @@ export function computeQuoteTotals(input: QuoteTotalInput): QuoteTotalResult {
   for (const line of nonGift) {
     if (line.subtotal === null) continue
     const lineNet = line.subtotal * (1 - input.discountRate)
-    if (SOFTWARE_CODES.has(line.productCode)) {
+    if ((line.taxCategory ?? 'software') === 'software') {
       softwareTaxAmount += lineNet * input.softwareTaxRate
     } else {
       serviceTaxAmount += lineNet * input.serviceTaxRate

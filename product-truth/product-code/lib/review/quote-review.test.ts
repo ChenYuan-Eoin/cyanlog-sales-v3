@@ -53,10 +53,44 @@ function base(): QuoteReviewInput {
     ],
     versions: VERSIONS,
     products: { p1: { code: 'PROJECT', attributes: { category: 'BASE', follows: [] } } },
+    discountMaxPercent: 40,
+    deepDiscountRatio: 0.5,
+    heavyDiscountRatio: 0.8,
+    marginFloorRatio: 0.3,
   }
 }
 
 
+
+describe('reviewQuote 阈值配置化（WP10 H6/H7）', () => {
+  it('未配置折扣上限 → WARN DISCOUNT_POLICY（不再默认 40%）', () => {
+    const q = base(); delete q.discountMaxPercent
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_POLICY')
+    expect(r.blocked.map((c) => c.code)).not.toContain('DISCOUNT_POLICY')
+  })
+
+  it('未配置底价/大额折扣阈值 → WARN DISCOUNT_GOVERNANCE（不再默认 50/80）', () => {
+    const q = base(); delete q.deepDiscountRatio; delete q.heavyDiscountRatio
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
+  })
+
+  it('未配置毛利底线 → WARN MARGIN_FLOOR（不再默认 30%）', () => {
+    const q = base(); delete q.marginFloorRatio
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('MARGIN_FLOOR')
+  })
+
+  it('自定义阈值生效：deepRatio=0.9 → 低价行 BLOCK', () => {
+    const q = base(); q.deepDiscountRatio = 0.9; q.heavyDiscountRatio = 0.95
+    q.items[0].unit_price = 1300; q.items[0].line_total = 13000
+    q.items[0].discount_reason = '特批底价'
+    q.quote.discount_rate = 0; q.quote.subtotal = 13000; q.quote.tax_amount = 1690; q.quote.total_amount = 14690; q.quote.amount_in_words = '壹万肆仟陆佰玖拾元整'
+    const r = reviewQuote(q, NOW)
+    expect(r.blocked.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
+  })
+})
 
 describe('reviewQuote 基础', () => {
   it('完整合规报价 → PASS', () => {

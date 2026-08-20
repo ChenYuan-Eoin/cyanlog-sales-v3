@@ -49,10 +49,32 @@ describe('validatePriceRows', () => {
   })
 })
 
+describe('parsePriceTableDump 产品线参数化（WP10 H4/H5）', () => {
+  it('不传 productCode → 抛错（不再默认 PROJECT）', () => {
+    expect(() => parsePriceTableDump('A1=x | B1=y', '')).toThrow(/productCode/)
+    expect(() => parsePriceTableDump('A1=x | B1=y', '   ')).toThrow(/productCode/)
+  })
+
+  it('自定义布局：其他产品线用不同版本列', () => {
+    const text = [
+      'A1=私有部署 | B1=按年订阅版 | C1=10 | D1=1 - 10 | E1=12 | P1=10000 | Q1=1000',
+    ].join('\n')
+    const rows = parsePriceTableDump(text, 'CUSTOM_PRODUCT', {
+      deployMap: { 私有部署: 'PRIVATE' },
+      authMap: { 按年订阅版: 'SUB_YEAR' },
+      versions: [['CUST_V1', 'P', 'Q']],
+    })
+    expect(rows.length).toBe(1)
+    expect(rows[0].product_code).toBe('CUSTOM_PRODUCT')
+    expect(rows[0].version_code).toBe('CUST_V1')
+    expect(rows[0].deployment).toBe('PRIVATE')
+  })
+})
+
 describe('Project 价盘 234 行数学一致性（阶段 0 硬门证据）', () => {
   it.skipIf(!existsSync(DUMP_PATH))('解析 dump 并全量校验累计关系 0 失败', () => {
     const text = readFileSync(DUMP_PATH, 'utf-8')
-    const rows = parsePriceTableDump(text)
+    const rows = parsePriceTableDump(text, 'PROJECT')
     expect(rows.length).toBeGreaterThan(500)
     const result = validatePriceRows(rows)
     // 打印证据

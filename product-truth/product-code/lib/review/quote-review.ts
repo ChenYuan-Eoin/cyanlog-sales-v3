@@ -49,6 +49,10 @@ export interface QuoteReviewItemInput {
 
 export interface QuoteReviewInput {
   discountMaxPercent?: number
+  /** F048/F051 阈值参数：由业务参数解析传入，缺失时输出 WARN 而非默认值 */
+  deepDiscountRatio?: number   // 成交价低于刊例价此比例 → 超底价审批（业务参数 DISCOUNT_DEEP_RATIO，默认 0.5 由配置中心提供）
+  heavyDiscountRatio?: number  // 低于此比例 → 大额折扣审批（DISCOUNT_HEAVY_RATIO，默认 0.8）
+  marginFloorRatio?: number    // 毛利率底线（MARGIN_FLOOR_RATIO，默认 0.3）
   userRoleCodes?: string[]
   discountPolicies?: Record<string, { maxDiscount: number; hardCap: number | null }>
   quote: {
@@ -74,7 +78,7 @@ export interface QuoteReviewInput {
   }
   items: QuoteReviewItemInput[]
   versions?: Array<{ version_code: string; deployments?: string[]; auth_modes?: string[]; status?: string }>
-  products?: Record<string, { code: string; attributes?: { category?: string; follows?: string[]; version_codes?: string[] } }>
+  products?: Record<string, { code: string; attributes?: { category?: string; follows?: string[]; version_codes?: string[]; quantityLinkedTo?: string; taxCategory?: string } }>
 }
 
 export interface QuoteReviewResult {
@@ -233,11 +237,10 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
   }
 
   // R11b 折扣上限（F050/F051）：超过常规上限需审批；超过角色硬顶阻断
-  const globalMaxPercent = input.discountMaxPercent ?? 40
+  // 阈值必须由业务参数解析传入；未配置时不默认 40%，输出 WARN 提示
   const rolePolicy = (input.userRoleCodes || [])
     .map((code) => input.discountPolicies?.[code])
     .find((p) => !!p && p.maxDiscount > 0)
-  const maxPercent = rolePolicy ? rolePolicy.maxDiscount * 100 : globalMaxPercent
   const hardCapPercent = rolePolicy?.hardCap != null ? rolePolicy.hardCap * 100 : null
   const quoteDiscountPct = pct(quote.discount_rate) * 100
   const lineDiscountPct = items
@@ -247,13 +250,18 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
   const maxLinePct = Math.max(0, ...lineDiscountPct.map((x) => x.pct))
   const maxAppliedPct = Math.max(quoteDiscountPct, maxLinePct)
   const overHard = hardCapPercent != null && maxAppliedPct > hardCapPercent
-  const overMax = maxAppliedPct > maxPercent
-  if (overHard) {
-    push({ code: 'DISCOUNT_POLICY', label: `折扣不超过角色硬顶（${hardCapPercent}%）`, level: 'block', ok: false, message: `折扣 ${maxAppliedPct.toFixed(1)}% 超过硬顶 ${hardCapPercent}%，阻断` })
-  } else if (overMax) {
-    push({ code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${maxPercent}%）`, level: 'warn', ok: false, message: `折扣 ${maxAppliedPct.toFixed(1)}% 超过常规上限 ${maxPercent}%，需审批确认` })
+  if (input.discountMaxPercent == null && !rolePolicy) {
+    push({ code: 'DISCOUNT_POLICY', label: '折扣上限已配置（DISCOUNT_MAX/角色折扣策略）', level: 'warn', ok: false, message: '未配置常规折扣上限或角色折扣策略，无法核验折扣权限' })
   } else {
-    push({ code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${maxPercent}%）`, level: 'block', ok: true, message: `折扣在常规上限 ${maxPercent}% 内` })
+    const maxPercent = rolePolicy ? rolePolicy.maxDiscount * 100 : input.discountMaxPercent!
+    const overMax = maxAppliedPct > maxPercent
+    if (overHard) {
+      push({ code: 'DISCOUNT_POLICY', label: `折扣不超过角色硬顶（${hardCapPercent}%）`, level: 'block', ok: false, message: `折扣 ${maxAppliedPct.toFixed(1)}% 超过硬顶 ${hardCapPercent}%，阻断` })
+    } else if (overMax) {
+      push({ code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${maxPercent}%）`, level: 'warn', ok: false, message: `折扣 ${maxAppliedPct.toFixed(1)}% 超过常规上限 ${maxPercent}%，需审批确认` })
+    } else {
+      push({ code: 'DISCOUNT_POLICY', label: `折扣不超过常规上限（${maxPercent}%）`, level: 'block', ok: true, message: `折扣在常规上限 ${maxPercent}% 内` })
+    }
   }
 
   // R12 搭售/售卖规则（组合校验）
@@ -266,6 +274,8 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
         productCode: item.product_code || prod?.code || item.name || `P${i}`,
         category: (attrs?.category as QuoteLineInput['category']) || 'BASE',
         follows: attrs?.follows || [],
+        quantityLinkedTo: typeof attrs?.quantityLinkedTo === 'string' ? attrs.quantityLinkedTo : undefined,
+        taxCategory: attrs?.taxCategory === 'service' ? 'service' : 'software',
         versionCode: item.version_code || '',
         deployment: item.deployment || '',
         authMode: item.auth_mode || '',
@@ -283,17 +293,23 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
     })
   }
 
-  // R13 折扣治理（按行小计 vs 行刊例价：行小计低于刊例价 50% → 超底价；低于 80% → 大额折扣需审批）
+  // R13 折扣治理（阈值来自业务参数，缺失时 WARN 提示配置缺失）
+  const deepRatio = input.deepDiscountRatio ?? 0.5
+  const heavyRatio = input.heavyDiscountRatio ?? 0.8
+  const deepConfigured = input.deepDiscountRatio != null
+  const heavyConfigured = input.heavyDiscountRatio != null
   const deepDiscounts = items
     .map((it, i) => ({ it, i }))
-    .filter(({ it }) => pct(it.list_price) > 0 && pct(it.line_total) > 0 && pct(it.line_total) < pct(it.list_price) * 0.5)
+    .filter(({ it }) => pct(it.list_price) > 0 && pct(it.line_total) > 0 && pct(it.line_total) < pct(it.list_price) * deepRatio)
   const heavyDiscounts = items
     .map((it, i) => ({ it, i }))
-    .filter(({ it }) => pct(it.list_price) > 0 && pct(it.line_total) > 0 && pct(it.line_total) < pct(it.list_price) * 0.8)
+    .filter(({ it }) => pct(it.list_price) > 0 && pct(it.line_total) > 0 && pct(it.line_total) < pct(it.list_price) * heavyRatio)
   if (deepDiscounts.length) {
-    push({ code: 'DISCOUNT_GOVERNANCE', label: '成交价不得低于底价', level: 'block', ok: false, message: `第 ${deepDiscounts.map(({ i }) => i + 1).join(',')} 行小计低于刊例价 50%，需底价审批` })
+    push({ code: 'DISCOUNT_GOVERNANCE', label: '成交价不得低于底价', level: 'block', ok: false, message: `第 ${deepDiscounts.map(({ i }) => i + 1).join(',')} 行小计低于刊例价 ${(deepRatio * 100).toFixed(0)}%，需底价审批` })
   } else if (heavyDiscounts.length) {
-    push({ code: 'DISCOUNT_GOVERNANCE', label: '大额折扣需审批确认', level: 'warn', ok: false, message: `第 ${heavyDiscounts.map(({ i }) => i + 1).join(',')} 行小计低于刊例价 80%，审批视图需展示原价/成交价` })
+    push({ code: 'DISCOUNT_GOVERNANCE', label: '大额折扣需审批确认', level: 'warn', ok: false, message: `第 ${heavyDiscounts.map(({ i }) => i + 1).join(',')} 行小计低于刊例价 ${(heavyRatio * 100).toFixed(0)}%，审批视图需展示原价/成交价` })
+  } else if (!deepConfigured || !heavyConfigured) {
+    push({ code: 'DISCOUNT_GOVERNANCE', label: '底价/大额折扣阈值已配置（DISCOUNT_DEEP/HEAVY_RATIO）', level: 'warn', ok: false, message: '未配置底价/大额折扣阈值，折扣治理按默认 50%/80% 提示' })
   } else {
     push({ code: 'DISCOUNT_GOVERNANCE', label: '折扣在原价/底价范围内', level: 'block', ok: true })
   }
@@ -306,8 +322,10 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
     push({ code: 'MARGIN_FLOOR', label: '毛利可核验（成本/底价已维护）', level: 'warn', ok: false, message: '缺少成本数据，无法核验毛利，请在配置中心维护产品成本价' })
   } else if (quoteMargin !== null && quoteMargin < 0) {
     push({ code: 'MARGIN_FLOOR', label: '成交价不得低于成本（毛利底线）', level: 'block', ok: false, message: `整单毛利率 ${(quoteMargin * 100).toFixed(1)}%，低于成本，硬阻断` })
-  } else if (quoteMargin !== null && quoteMargin < 0.3) {
-    push({ code: 'MARGIN_FLOOR', label: '毛利率不低于底线（默认 30%）', level: 'warn', ok: false, message: `整单毛利率 ${(quoteMargin * 100).toFixed(1)}%，低于毛利底线，需审批确认` })
+  } else if (quoteMargin !== null && input.marginFloorRatio != null && quoteMargin < input.marginFloorRatio) {
+    push({ code: 'MARGIN_FLOOR', label: `毛利率不低于底线（${(input.marginFloorRatio * 100).toFixed(0)}%）`, level: 'warn', ok: false, message: `整单毛利率 ${(quoteMargin * 100).toFixed(1)}%，低于毛利底线 ${(input.marginFloorRatio * 100).toFixed(0)}%，需审批确认` })
+  } else if (quoteMargin !== null && input.marginFloorRatio == null) {
+    push({ code: 'MARGIN_FLOOR', label: '毛利底线已配置（MARGIN_FLOOR_RATIO）', level: 'warn', ok: false, message: `未配置毛利底线，当前毛利率 ${(quoteMargin * 100).toFixed(1)}% 无法按底线核验` })
   } else {
     push({ code: 'MARGIN_FLOOR', label: '毛利在底线以上', level: 'block', ok: true, message: quoteMargin !== null ? `整单毛利率 ${(quoteMargin * 100).toFixed(1)}%` : '毛利核验通过' })
   }

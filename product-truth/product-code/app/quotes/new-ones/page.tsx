@@ -57,15 +57,15 @@ interface LineState {
 const DEPLOY_LABEL: Record<string, string> = { PUBLIC_CLOUD: '公有云', PRIVATE: '私有部署', HA: '高可用' }
 const AUTH_LABEL: Record<string, string> = { SUB_YEAR: '按年订阅', SUB_3YEAR: '三年订阅', ONETIME: '一次性授权' }
 
-function emptyLine(): LineState {
-  return { product_id: '', version_code: '', deployment: '', auth_mode: '', term_months: '12', quantity: 10, is_gift: false, discount_rate: 0 }
+function emptyLine(defaultQty: number | null): LineState {
+  return { product_id: '', version_code: '', deployment: '', auth_mode: '', term_months: '12', quantity: defaultQty ?? 0, is_gift: false, discount_rate: 0 }
 }
 
 export default function NewOnesQuotePage() {
   const [products, setProducts] = useState<ProductOption[]>([])
   const [versions, setVersions] = useState<ProductVersion[]>([])
   const [matrix, setMatrix] = useState<PriceMatrixRow[]>([])
-  const [lines, setLines] = useState<LineState[]>([emptyLine()])
+  const [lines, setLines] = useState<LineState[]>([emptyLine(null)])
   const [discountRate, setDiscountRate] = useState(0)
   const [discountReason, setDiscountReason] = useState('')
   const [region, setRegion] = useState('CN')
@@ -73,6 +73,7 @@ export default function NewOnesQuotePage() {
   const [softwareTaxRate, setSoftwareTaxRate] = useState(0.13)
   const [discountTiers, setDiscountTiers] = useState<number[]>([0, 5, 10, 15, 20, 25, 30, 40])
   const [discountMax, setDiscountMax] = useState(40)
+  const [defaultQty, setDefaultQty] = useState<number | null>(null)
   const [serviceTaxRate, setServiceTaxRate] = useState(0.06)
   const [customerName, setCustomerName] = useState('')
   const [customerContact, setCustomerContact] = useState('')
@@ -106,6 +107,14 @@ export default function NewOnesQuotePage() {
         const paramRows = (bj.data || []) as Array<{ param_key: string; value?: unknown }>
         const tiersRow = paramRows.find((x) => x.param_key === 'DISCOUNT_TIERS')
         const maxRow = paramRows.find((x) => x.param_key === 'DISCOUNT_MAX')
+        const qtyRow = paramRows.find((x) => x.param_key === 'DEFAULT_QTY')
+        const validRow = paramRows.find((x) => x.param_key === 'QUOTE_VALID_DAYS')
+        if (qtyRow) {
+          const qv = qtyRow.value
+          const qn = typeof qv === 'number' ? qv : typeof qv === 'string' ? Number(qv) : NaN
+          if (!Number.isNaN(qn) && qn > 0) setDefaultQty(qn)
+        }
+        void validRow
         if (tiersRow && Array.isArray(tiersRow.value)) {
           setDiscountTiers((tiersRow.value as unknown[]).filter((v): v is number => typeof v === 'number'))
         }
@@ -117,11 +126,18 @@ export default function NewOnesQuotePage() {
         setProducts((pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), attributes: (p.attributes ?? null) as ProductOption['attributes'] })))
         setVersions((vj.data || []).map((v: Record<string, unknown>) => ({ version_code: String(v.version_code), name: String(v.name), deployments: (v.deployments || []) as string[], auth_modes: (v.auth_modes || []) as string[], term_options: (v.term_options || [12]) as number[], capabilities: (v.capabilities || {}) as Record<string, boolean> })))
         setMatrix((mj.data || []) as PriceMatrixRow[])
-        setValidUntil(() => {
+        // 有效期默认值：仅当业务参数 QUOTE_VALID_DAYS 已配置时预填；无配置留空由用户填写
+        const vdNum = (() => {
+          if (!validRow) return null
+          const vv = validRow.value
+          const n = typeof vv === 'number' ? vv : typeof vv === 'string' ? Number(vv) : NaN
+          return !Number.isNaN(n) && n > 0 ? n : null
+        })()
+        if (vdNum != null) {
           const d = new Date()
-          d.setDate(d.getDate() + 15)
-          return d.toISOString().slice(0, 10)
-        })
+          d.setDate(d.getDate() + vdNum)
+          setValidUntil(d.toISOString().slice(0, 10))
+        }
       } catch (e) {
         setError('加载配置失败：' + (e instanceof Error ? e.message : String(e)))
       } finally {
@@ -312,7 +328,7 @@ export default function NewOnesQuotePage() {
                 </div>
               )
             })}
-            <Button variant="outline" size="sm" onClick={() => setLines([...lines, emptyLine()])}>+ 添加产品</Button>
+            <Button variant="outline" size="sm" onClick={() => setLines([...lines, emptyLine(defaultQty)])}>+ 添加产品</Button>
           </div>
         </div>
       )}
