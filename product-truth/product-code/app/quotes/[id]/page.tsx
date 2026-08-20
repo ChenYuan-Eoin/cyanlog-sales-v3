@@ -38,6 +38,7 @@ export default function QuoteDetailPage() {
   const [cloneError, setCloneError] = useState('')
   const [freezing, setFreezing] = useState(false)
   const [deriving, setDeriving] = useState(false)
+  const [derivingKind, setDerivingKind] = useState('')
   const [actionError, setActionError] = useState('')
   const [reviewTick, setReviewTick] = useState(0)
 
@@ -141,29 +142,56 @@ export default function QuoteDetailPage() {
   }
 
   async function deriveContract() {
+    await deriveDownstream('contract')
+  }
+
+  async function deriveDownstream(kind: string) {
     if (!quote) return
+    setDerivingKind(kind)
     setDeriving(true)
     setActionError('')
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/quotes/${quote.id}/derive-contract`, {
+      let body: Record<string, unknown> | undefined
+      if (kind === 'seal') {
+        const reason = window.prompt('请填写盖章申请原因：', '报价已批准，申请盖章')
+        if (reason === null) return
+        if (!reason.trim()) {
+          setActionError('盖章申请必须填写原因')
+          return
+        }
+        body = { reason: reason.trim() }
+      }
+      const res = await fetch(`/api/quotes/${quote.id}/derive-${kind}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token || ''}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token || ''}` },
+        body: JSON.stringify(body || {}),
       })
       const json = await res.json()
       if (!res.ok || !json.success) {
-        setActionError(json.error?.message || '生成合同失败')
+        setActionError(json.error?.message || `生成${kindLabel(kind)}失败`)
         return
       }
       setActionError('')
-      if (json.data?.draft_id) {
+      const id = json.data?.id
+      if (kind === 'contract' && json.data?.draft_id) {
         window.location.href = `/contracts/drafts/${json.data.draft_id}`
+        return
+      }
+      if (id) {
+        window.alert(`已生成${kindLabel(kind)}：${id.slice(0, 8)}…`)
+        await fetchQuote({ allowCache: false })
       }
     } catch {
-      setActionError('生成合同失败：网络错误')
+      setActionError(`生成${kindLabel(kind)}失败：网络错误`)
     } finally {
       setDeriving(false)
+      setDerivingKind('')
     }
+  }
+
+  function kindLabel(kind: string): string {
+    return { contract: '合同草稿', order: '销售订单草稿', seal: '盖章申请', tender: '标书数据包' }[kind] || kind
   }
 
   async function updateStatus(newStatus: string) {
@@ -352,7 +380,16 @@ export default function QuoteDetailPage() {
               </Button>
             )}
             <Button onClick={deriveContract} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
-              {deriving ? '生成中...' : '生成合同草稿'}
+              {deriving && derivingKind === 'contract' ? '生成中...' : '生成合同草稿'}
+            </Button>
+            <Button onClick={() => deriveDownstream('order')} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving && derivingKind === 'order' ? '生成中...' : '销售订单'}
+            </Button>
+            <Button onClick={() => deriveDownstream('seal')} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving && derivingKind === 'seal' ? '生成中...' : '盖章申请'}
+            </Button>
+            <Button onClick={() => deriveDownstream('tender')} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving && derivingKind === 'tender' ? '生成中...' : '标书数据包'}
             </Button>
             {actionError && <span className="text-sm text-red-600 self-center">{actionError}</span>}
           </div>
