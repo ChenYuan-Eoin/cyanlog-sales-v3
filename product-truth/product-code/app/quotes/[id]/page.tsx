@@ -34,6 +34,8 @@ export default function QuoteDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [cloning, setCloning] = useState(false)
+  const [cloneError, setCloneError] = useState('')
   const [reviewTick, setReviewTick] = useState(0)
 
   const quoteId = params.id as string
@@ -85,6 +87,29 @@ export default function QuoteDetailPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function cloneQuote() {
+    if (!quote) return
+    setCloning(true)
+    setCloneError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/quotes/${quote.id}/clone`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token || ''}` },
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setCloneError(json.error?.message || '复制失败')
+        return
+      }
+      window.location.href = `/quotes/${json.data.id}`
+    } catch {
+      setCloneError('复制失败：网络错误')
+    } finally {
+      setCloning(false)
     }
   }
 
@@ -220,6 +245,22 @@ export default function QuoteDetailPage() {
               <span className="text-slate-500">区域：</span>
               <span>{quote.region || 'CN'}</span>
             </div>
+            {quote.opportunity_id && (
+              <div>
+                <span className="text-slate-500">商机：</span>
+                <Link href={`/opportunities/${quote.opportunity_id}`} className="text-blue-600 hover:underline">
+                  查看商机
+                </Link>
+              </div>
+            )}
+            {quote.source_quote_id && (
+              <div>
+                <span className="text-slate-500">来源：</span>
+                <Link href={`/quotes/${quote.source_quote_id}`} className="text-blue-600 hover:underline">
+                  复制自历史报价
+                </Link>
+              </div>
+            )}
           </div>
 
           {quote.notes && (
@@ -230,6 +271,10 @@ export default function QuoteDetailPage() {
 
           {/* Action Buttons */}
           <div className="mt-6 pt-4 border-t flex gap-4">
+            <Button onClick={cloneQuote} disabled={cloning || !quote.id} variant="outline">
+              {cloning ? '复制中...' : '复制为草稿'}
+            </Button>
+            {cloneError && <span className="text-sm text-red-600 self-center">{cloneError}</span>}
             {canSubmit && (
               <Button onClick={() => updateStatus('PENDING_APPROVAL')} disabled={updating}>
                 {updating ? '提交中...' : '提交审批'}

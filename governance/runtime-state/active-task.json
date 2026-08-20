@@ -174,7 +174,9 @@
       "product-truth/product-code/supabase/migrations",
       "product-truth/product-code/package.json",
       "product-truth/product-code/pnpm-lock.yaml",
-      "product-truth/product-code/.env.example"
+      "product-truth/product-code/.env.example",
+      "product-truth/product-code/lib/validation.ts",
+      "product-truth/product-code/lib/config-center/runtime.ts"
     ],
     "delivery_contract": {
       "target_state": "executing",

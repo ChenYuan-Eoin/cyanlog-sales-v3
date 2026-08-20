@@ -25,6 +25,8 @@ export interface Quote {
   valid_until: string | null
   region?: string | null
   notes?: string | null
+  opportunity_id?: string | null   // WP10 阶段2：挂接 CRM 商机
+  source_quote_id?: string | null  // WP10 阶段2：复制来源留痕
   created_by: string | null
   created_at: string
   updated_at: string

@@ -96,7 +96,34 @@ export async function POST(req: NextRequest) {
     }
 
     const orgId = await getDefaultOrgId(user.id)
-    const { customer_name, customer_contact, valid_until, notes, discount_rate, discount_reason, quote_kind, change_reason, region: regionRaw, items } = result.data
+    const { customer_name, customer_contact, valid_until, notes, discount_rate, discount_reason, quote_kind, change_reason, region: regionRaw, items, opportunity_id: opportunityId } = result.data
+
+    // WP10 阶段2：商机接入——若挂商机，从商机带出客户上下文（客户工商名/联系人/区域）
+    // 商机是业务事实源，报价只读；显式传入的 customer_name 优先
+    let resolvedCustomerName = customer_name
+    let resolvedContact = customer_contact
+    let resolvedRegion = (regionRaw || '').toUpperCase().slice(0, 10)
+    if (opportunityId) {
+      try {
+        const { data: opp } = await supabaseAdmin
+          .from('opportunities')
+          .select('id, name, customer:customers(name, contact_name, region)')
+          .eq('id', opportunityId)
+          .eq('org_id', orgId)
+          .maybeSingle()
+        if (opp) {
+          const customer = Array.isArray(opp.customer) ? opp.customer[0] : opp.customer
+          if (!resolvedCustomerName && customer?.name) resolvedCustomerName = customer.name
+          if (!resolvedContact && customer?.contact_name) resolvedContact = customer.contact_name
+          if (!resolvedRegion && customer?.region) resolvedRegion = String(customer.region).toUpperCase().slice(0, 10)
+        }
+      } catch (oppError) {
+        console.error('[WP10] opportunity context load failed:', oppError)
+      }
+    }
+    const customerName = resolvedCustomerName || customer_name
+    const customerContact = resolvedContact ?? customer_contact
+    const region = resolvedRegion || (regionRaw || 'CN').toUpperCase().slice(0, 10)
 
     // 生成报价单号
     const { data: quoteNoResult, error: seqError } = await supabaseAdmin.rpc('generate_quote_number')
@@ -108,8 +135,7 @@ export async function POST(req: NextRequest) {
 
     const quoteNo = quoteNoResult
 
-    // F049：区域（默认 CN）+ 区域税率
-    const region = (regionRaw || 'CN').toUpperCase().slice(0, 10)
+    // F049：区域（默认 CN，商机已解析）+ 区域税率
     const regionTax = await getRegionTaxRates(orgId, region).catch(() => null)
 
     const hasOnesFields = items.some((item) => item.version_code || item.deployment || item.auth_mode)
@@ -162,8 +188,9 @@ export async function POST(req: NextRequest) {
       id: quoteId,
       org_id: orgId,
       quote_no: quoteNo,
-      customer_name,
-      customer_contact,
+      customer_name: customerName,
+      customer_contact: customerContact,
+      opportunity_id: opportunityId ?? null,
       subtotal: pricedDraft.subtotal,
       discount_rate: pricedDraft.discountRate,
       discount_amount: pricedDraft.discountAmount,
@@ -199,8 +226,8 @@ export async function POST(req: NextRequest) {
           buildLegacyQuoteInsertPayload({
             id: quoteId,
             quote_no: quoteNo,
-            customer_name,
-            customer_contact,
+            customer_name: customerName,
+            customer_contact: customerContact,
             subtotal: pricedDraft.subtotal,
             discount_amount: pricedDraft.discountAmount,
             tax_amount: pricedDraft.taxAmount,
