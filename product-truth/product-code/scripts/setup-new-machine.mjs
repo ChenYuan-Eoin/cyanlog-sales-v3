@@ -6,7 +6,8 @@
 //  - node_modules 若是软链（历史 worktree 残留）必须先 unlink 再重装，防止跨机断链
 //  - 使用项目锁定的 pnpm@9.15.9（packageManager 字段），避免 pnpm 10 悄悄改写 lock
 // 用法：
-//   node scripts/setup-new-machine.mjs [--skip-install] [--skip-build] [--skip-test]
+//   node scripts/setup-new-machine.mjs [--skip-install] [--skip-build] [--skip-test] [--skip-remote]
+//   --skip-remote：离线/演练场景跳过 Vercel link 与 env pull（env 缺失仅提示不失败）
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -27,6 +28,7 @@ const args = new Set(process.argv.slice(2))
 const SKIP_INSTALL = args.has('--skip-install')
 const SKIP_BUILD = args.has('--skip-build')
 const SKIP_TEST = args.has('--skip-test')
+const SKIP_REMOTE = args.has('--skip-remote')
 
 let failures = 0
 const step = (name, fn) => {
@@ -175,6 +177,10 @@ step('3/8 依赖安装（--frozen-lockfile）', () => {
 
 // ---------- 4. Vercel 关联 ----------
 step('4/8 Vercel 项目关联', () => {
+  if (SKIP_REMOTE) {
+    warn('跳过 Vercel 关联（--skip-remote 演练/离线模式）')
+    return
+  }
   const vercelDir = path.join(codeRoot, '.vercel')
   const projectJson = path.join(vercelDir, 'project.json')
   if (fs.existsSync(projectJson)) {
@@ -189,20 +195,29 @@ step('4/8 Vercel 项目关联', () => {
 // ---------- 5. 拉取环境变量 ----------
 step('5/8 环境变量', () => {
   const vercelDir = path.join(codeRoot, '.vercel')
-  if (fs.existsSync(path.join(vercelDir, '.env.development.local'))) {
-    ok('.vercel/.env.development.local 已存在')
-  } else {
-    if (fs.existsSync(path.join(vercelDir, 'project.json'))) {
-      run('pnpm', ['exec', 'vercel', 'env', 'pull', '.vercel/.env.development.local', '--environment=development', '--yes'])
-      ok('已从 Vercel 拉取 .vercel/.env.development.local')
+  const hasVercelEnv = fs.existsSync(path.join(vercelDir, '.env.development.local'))
+  const hasLocalEnv = fs.existsSync(path.join(codeRoot, '.env.local'))
+  if (SKIP_REMOTE) {
+    if (hasLocalEnv) {
+      ok('.env.local 已存在（演练模式使用）')
     } else {
-      warn('缺少 .vercel/project.json，无法自动拉取 env')
-      failures += 1
+      warn('.env.local 缺失：演练模式跳过 Vercel 拉取，env:check 将按缺失处理')
     }
+    if (hasVercelEnv) ok('.vercel/.env.development.local 已存在')
+    else warn('.vercel/.env.development.local 缺失（演练模式）')
+    return
+  }
+  if (hasVercelEnv) {
+    ok('.vercel/.env.development.local 已存在')
+  } else if (fs.existsSync(path.join(vercelDir, 'project.json'))) {
+    run('pnpm', ['exec', 'vercel', 'env', 'pull', '.vercel/.env.development.local', '--environment=development', '--yes'])
+    ok('已从 Vercel 拉取 .vercel/.env.development.local')
+  } else {
+    warn('缺少 .vercel/project.json，无法自动拉取 env')
+    failures += 1
   }
 
-  const localEnv = path.join(codeRoot, '.env.local')
-  if (fs.existsSync(localEnv)) {
+  if (hasLocalEnv) {
     ok('.env.local 已存在')
   } else {
     const requiredLocal = ['AI_GATEWAY_URL', 'AI_GATEWAY_API_KEY', 'AI_MODEL']
