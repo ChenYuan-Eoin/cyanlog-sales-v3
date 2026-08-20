@@ -77,6 +77,8 @@ export default function NewOnesQuotePage() {
   const [serviceTaxRate, setServiceTaxRate] = useState(0.06)
   const [customerName, setCustomerName] = useState('')
   const [customerContact, setCustomerContact] = useState('')
+  const [opportunities, setOpportunities] = useState<Array<{ id: string; name: string; customer_name?: string | null; customer_region?: string | null; amount?: number | null }>>([])
+  const [opportunityId, setOpportunityId] = useState('')
   const [validUntil, setValidUntil] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -86,13 +88,14 @@ export default function NewOnesQuotePage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [productsRes, versionsRes, matrixRes, regionRes] = await Promise.all([
+        const [productsRes, versionsRes, matrixRes, regionRes, oppRes] = await Promise.all([
           fetch('/api/products?status=active'),
           fetch('/api/config-center/product-versions?status=PUBLISHED&limit=100'),
           fetch('/api/config-center/price-matrix?status=PUBLISHED&limit=5000'),
           fetch('/api/config-center/regional-tax-rates?status=PUBLISHED&limit=100'),
+          fetch('/api/opportunities'),
         ])
-        const [pj, vj, mj, rj] = await Promise.all([productsRes.json(), versionsRes.json(), matrixRes.json(), regionRes.json()])
+        const [pj, vj, mj, rj, oj] = await Promise.all([productsRes.json(), versionsRes.json(), matrixRes.json(), regionRes.json(), oppRes.json()])
         const businessRes = await fetch('/api/config-center/business-params?status=PUBLISHED&limit=100')
         const bj = await businessRes.json()
         const regionRows = (rj.data || []) as Array<{ region: string; software_rate?: number; service_rate?: number; currency?: string }>
@@ -126,6 +129,7 @@ export default function NewOnesQuotePage() {
         setProducts((pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), attributes: (p.attributes ?? null) as ProductOption['attributes'] })))
         setVersions((vj.data || []).map((v: Record<string, unknown>) => ({ version_code: String(v.version_code), name: String(v.name), deployments: (v.deployments || []) as string[], auth_modes: (v.auth_modes || []) as string[], term_options: (v.term_options || [12]) as number[], capabilities: (v.capabilities || {}) as Record<string, boolean> })))
         setMatrix((mj.data || []) as PriceMatrixRow[])
+        setOpportunities((oj.data || []) as typeof opportunities)
         // 有效期默认值：仅当业务参数 QUOTE_VALID_DAYS 已配置时预填；无配置留空由用户填写
         const vdNum = (() => {
           if (!validRow) return null
@@ -146,6 +150,19 @@ export default function NewOnesQuotePage() {
     }
     void bootstrap()
   }, [])
+
+  function applyOpportunity(id: string) {
+    setOpportunityId(id)
+    const opp = opportunities.find((o) => o.id === id)
+    if (!opp) return
+    if (opp.customer_name) setCustomerName(opp.customer_name)
+    if (opp.customer_region) {
+      const regionCode = String(opp.customer_region).toUpperCase().slice(0, 10)
+      setRegion(regionCode)
+      const cfg = regions.find((x) => x.region === regionCode)
+      if (cfg) { setSoftwareTaxRate(cfg.softwareRate); setServiceTaxRate(cfg.serviceRate) }
+    }
+  }
 
   function updateLine(index: number, next: Partial<LineState>) {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...next } : line)))
@@ -219,6 +236,7 @@ export default function NewOnesQuotePage() {
         body: JSON.stringify({
           customer_name: customerName,
           customer_contact: customerContact,
+          opportunity_id: opportunityId || undefined,
           valid_until: validUntil,
           notes: '',
           discount_rate: discountRate,
@@ -279,6 +297,15 @@ export default function NewOnesQuotePage() {
       {step === 1 && (
         <div className="space-y-4">
           <div className="grid gap-3 rounded border p-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="text-sm text-muted-foreground">关联商机（可选，自动带出客户/区域）</label>
+              <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={opportunityId} onChange={(e) => applyOpportunity(e.target.value)}>
+                <option value="">不关联商机（手工填写）</option>
+                {opportunities.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}{o.customer_name ? ` · ${o.customer_name}` : ''}</option>
+                ))}
+              </select>
+            </div>
             <div><label className="text-sm text-muted-foreground">客户名称</label><Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
             <div><label className="text-sm text-muted-foreground">联系人</label><Input value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} /></div>
             <div><label className="text-sm text-muted-foreground">有效期至</label><Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></div>
