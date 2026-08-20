@@ -179,9 +179,10 @@
       "product-truth/product-code/lib/config-center/runtime.ts"
     ],
     "delivery_contract": {
-      "target_state": "executing",
+      "target_state": "code_green",
       "allowed_states": [
-        "executing"
+        "executing",
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
