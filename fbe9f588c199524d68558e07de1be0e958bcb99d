@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "activeId": "WP10",
+  "commit": "fbe9f588c199524d68558e07de1be0e958bcb99d",
+  "evidence": {
+    "code": {
+      "summary": "WP10 报价域完整形态 + 产品线隔离落地（HEAD fbe9f588）",
+      "commit": "fbe9f588c199524d68558e07de1be0e958bcb99d",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/target_tests.log",
+          "log_sha256": "c031398fc3f2533318a305f69b3a1a75a43e44614cb0b5ed0e75474e791f31d2"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/full_tests.log",
+          "log_sha256": "8a6ab2e607f51e74d1e1f09d0512f692e43ffc128714dc99fee6b95df521dcde"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/lint.log",
+          "log_sha256": "4e18ed3093442ba4ddfb9484263bb211ee92d37b311ac572154891c7211a298f"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/typecheck.log",
+          "log_sha256": "5753ca8e1019d8b396f750e82fdf896f28fdf711953a918698640e6235a512bf"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/build.log",
+          "log_sha256": "61e1948413d9a5e43cbc7b687584f1d37785f17aba8a7993f8de60b176d3f985"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "1e7b87eac2537de7ab19e83bd58dabe408026be326a5a7b1ed22bc3533f3db4b",
+        "entry_sha256": "a404514ae4bd427981316f0f4bbd562ecd365ca9986fae062571d8c12b8415db"
+      },
+      "commits": [
+        "ef94aac2",
+        "6612fa21",
+        "7bc52b74",
+        "c536f3df",
+        "15533293",
+        "7f5e8d4d",
+        "0ed0e834",
+        "118d05c8",
+        "cc8e43a2",
+        "86a87edf",
+        "1e516ed7",
+        "e6d20dab",
+        "9efa6c83",
+        "fbe9f588"
+      ],
+      "notes": "产品线隔离落地（products.product_line + API 过滤 + 向导选择器）；14 提交；1915 passed/5 skipped；生产库测试数据待确认清理"
+    }
+  },
+  "updatedAt": "2026-08-20T12:50:54.057Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-08-20T12:50:54.034Z",
+      "head": "fbe9f588c199524d68558e07de1be0e958bcb99d",
+      "originMain": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "remoteMain": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "remoteProduction": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "6c4c0aa032e9e586d10d997bc54ff6ed4227e4c7",
+      "remoteAttestationRefOid": "6c4c0aa032e9e586d10d997bc54ff6ed4227e4c7",
+      "remoteSnapshotCheckedAt": "2026-08-20T12:50:51.891Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "3749022811bf8ba9ea3c6fec22ca2d7b831353ccdc303bc9bba7b4dbb495baf4",
+  "sealedAt": "2026-08-20T12:50:54.058Z",
+  "attestationDigest": "094fa63bb6b4c45ade66ae9ad7565aa1f2de7a1a237ca5bc7303b97109f155f2"
+}
