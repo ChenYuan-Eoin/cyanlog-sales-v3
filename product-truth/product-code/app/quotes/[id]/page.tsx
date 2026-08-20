@@ -36,6 +36,9 @@ export default function QuoteDetailPage() {
   const [updating, setUpdating] = useState(false)
   const [cloning, setCloning] = useState(false)
   const [cloneError, setCloneError] = useState('')
+  const [freezing, setFreezing] = useState(false)
+  const [deriving, setDeriving] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [reviewTick, setReviewTick] = useState(0)
 
   const quoteId = params.id as string
@@ -110,6 +113,56 @@ export default function QuoteDetailPage() {
       setCloneError('复制失败：网络错误')
     } finally {
       setCloning(false)
+    }
+  }
+
+  async function freezeQuote() {
+    if (!quote) return
+    setFreezing(true)
+    setActionError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/quotes/${quote.id}/freeze`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token || ''}` },
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setActionError(json.error?.message || '冻结失败')
+        return
+      }
+      setActionError('')
+      await fetchQuote({ allowCache: false })
+    } catch {
+      setActionError('冻结失败：网络错误')
+    } finally {
+      setFreezing(false)
+    }
+  }
+
+  async function deriveContract() {
+    if (!quote) return
+    setDeriving(true)
+    setActionError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/quotes/${quote.id}/derive-contract`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token || ''}` },
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setActionError(json.error?.message || '生成合同失败')
+        return
+      }
+      setActionError('')
+      if (json.data?.draft_id) {
+        window.location.href = `/contracts/drafts/${json.data.draft_id}`
+      }
+    } catch {
+      setActionError('生成合同失败：网络错误')
+    } finally {
+      setDeriving(false)
     }
   }
 
@@ -293,6 +346,15 @@ export default function QuoteDetailPage() {
                 {updating ? '审批中...' : '审批驳回'}
               </Button>
             )}
+            {quote.status === 'APPROVED' && (
+              <Button onClick={freezeQuote} disabled={freezing || updating} variant="outline">
+                {freezing ? '冻结中...' : '冻结版本'}
+              </Button>
+            )}
+            <Button onClick={deriveContract} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving ? '生成中...' : '生成合同草稿'}
+            </Button>
+            {actionError && <span className="text-sm text-red-600 self-center">{actionError}</span>}
           </div>
         </CardContent>
       </Card>
