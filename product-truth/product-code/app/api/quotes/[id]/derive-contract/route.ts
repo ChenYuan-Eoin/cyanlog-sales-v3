@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 import { resolveIdParam, type AsyncRouteParams } from '@/lib/route-params'
 import { v4 as uuidv4 } from 'uuid'
+import { deriveContractFromVersion, assertVersionMatchesQuote } from '@/lib/quote/contract-derive'
+import { buildQuoteVersionPayload } from '@/lib/quote/version-builder'
 
 function errorResponse(message: string, status: number, code?: string) {
   return NextResponse.json({ success: false, error: { code: code || 'ERROR', message } }, { status })
@@ -55,42 +57,30 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
 
     const header = (version.header ?? {}) as Record<string, unknown>
 
-    // 3) 字段逐位一致性校验：版本金额与报价当前金额必须一致（防漂移）
+    // 3) 字段逐位一致性校验：版本金额与报价当前金额必须一致（防漂移，纯函数契约）
     const versionTotal = Number(header.total_amount ?? 0)
     const quoteTotal = Number(quote.total_amount ?? 0)
-    if (Math.abs(versionTotal - quoteTotal) > 0.01) {
-      return errorResponse(
-        `版本金额与报价不一致（版本 ${versionTotal} vs 报价 ${quoteTotal}），拒绝派生，请先重新冻结`,
-        409,
-        'VERSION_DRIFT'
-      )
+    const drift = assertVersionMatchesQuote(versionTotal, quoteTotal)
+    if (drift) {
+      return errorResponse(`${drift}，拒绝派生，请先重新冻结`, 409, 'VERSION_DRIFT')
     }
 
-    // 4) 派生合同草稿（结构化数据 → contract_drafts）
+    // 4) 派生合同草稿（结构化数据 → contract_drafts，纯函数保证逐位一致）
     const draftId = uuidv4()
-    const lineItems = (items || []).map((it: Record<string, unknown>) => ({
-      product_code: it.product_code,
-      name: it.name,
-      version_code: it.version_code,
-      deployment: it.deployment,
-      auth_mode: it.auth_mode,
-      term_months: it.term_months,
-      quantity: it.quantity,
-      unit_price: it.unit_price,
-      list_price: it.list_price,
-      line_total: it.line_total,
-      tax_rate: it.tax_rate,
-      is_gift: it.is_gift,
-    }))
-    const businessParams = {
+    const versionPayload = buildQuoteVersionPayload(
+      { ...quote, ...header },
+      (items || []).map((it: Record<string, unknown>) => ({ ...it })),
+      version.version_no
+    )
+    const derived = deriveContractFromVersion({
       quote_no: quote.quote_no,
-      currency: header.currency ?? quote.currency ?? 'CNY',
-      discount_rate: header.discount_rate ?? 0,
-      discount_amount: header.discount_amount ?? 0,
-      tax_summary: header.tax_summary ?? null,
-      valid_until: header.valid_until ?? null,
-      version_no: version.version_no,
-      line_items: lineItems,
+      customer_name: quote.customer_name,
+      customer_contact: quote.customer_contact ?? null,
+      currency: (header.currency as string) ?? quote.currency ?? 'CNY',
+      version: versionPayload,
+    })
+    const businessParams = {
+      ...derived.business_params,
       derived_from_version_id: version.id,
     }
 
@@ -100,11 +90,11 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
         id: draftId,
         org_id: orgId,
         created_by: user.id,
-        title: `${quote.customer_name} 采购合同（源自报价 ${quote.quote_no}）`,
-        party_b_name: quote.customer_name,
-        party_b_contact: quote.customer_contact ?? null,
-        contract_amount: versionTotal,
-        tax_amount: Number(header.tax_amount ?? 0),
+        title: derived.title,
+        party_b_name: derived.party_b_name,
+        party_b_contact: derived.party_b_contact,
+        contract_amount: derived.contract_amount,
+        tax_amount: derived.tax_amount,
         quote_id: id,
         business_params: businessParams,
         status: 'draft',
