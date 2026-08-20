@@ -387,10 +387,11 @@ export async function PUT(
           products[String(prod.id)] = { code: String(prod.code), attributes: (prod.attributes ?? {}) as never }
         }
         const discountMax = await getPublishedParamNumber(orgId, 'DISCOUNT_MAX').catch(() => null)
-        const [deepRatio, heavyRatio, marginFloor] = await Promise.all([
+        const [deepRatio, heavyRatio, marginFloor, maintRate] = await Promise.all([
           getPublishedParamNumber(orgId, 'DISCOUNT_DEEP_RATIO').catch(() => null),
           getPublishedParamNumber(orgId, 'DISCOUNT_HEAVY_RATIO').catch(() => null),
           getPublishedParamNumber(orgId, 'MARGIN_FLOOR_RATIO').catch(() => null),
+          getPublishedParamNumber(orgId, 'MAINT_RATE').catch(() => null),
         ])
         const roleAssignments = await getUserScopedRoleAssignments(user.id).catch(() => [])
         const roleCodes = getOrgRoleCodes(roleAssignments, orgId)
@@ -408,6 +409,7 @@ export async function PUT(
           deepDiscountRatio: deepRatio !== null && deepRatio !== undefined ? Number(deepRatio) : undefined,
           heavyDiscountRatio: heavyRatio !== null && heavyRatio !== undefined ? Number(heavyRatio) : undefined,
           marginFloorRatio: marginFloor !== null && marginFloor !== undefined ? Number(marginFloor) : undefined,
+          maintenanceRate: maintRate !== null && maintRate !== undefined ? Number(maintRate) : undefined,
           userRoleCodes: roleCodes,
           discountPolicies: policies,
         })

@@ -53,6 +53,7 @@ export interface QuoteReviewInput {
   deepDiscountRatio?: number   // 成交价低于刊例价此比例 → 超底价审批（业务参数 DISCOUNT_DEEP_RATIO，默认 0.5 由配置中心提供）
   heavyDiscountRatio?: number  // 低于此比例 → 大额折扣审批（DISCOUNT_HEAVY_RATIO，默认 0.8）
   marginFloorRatio?: number    // 毛利率底线（MARGIN_FLOOR_RATIO，默认 0.3）
+  maintenanceRate?: number     // 维保费率（MAINT_RATE，默认 0.2）
   userRoleCodes?: string[]
   discountPolicies?: Record<string, { maxDiscount: number; hardCap: number | null }>
   quote: {
@@ -212,6 +213,20 @@ export function reviewQuote(input: QuoteReviewInput, now = new Date()): QuoteRev
     const hasMaintLine = items.some((it) => it.line_type === 'maintenance')
     const hasMaintMonths = items.some((it) => it.deployment === 'PRIVATE' && pct(it.maintenance_months) > 0)
     push({ code: 'PRIVATE_MAINT', label: '私有化新签必须明确维保安排', level: 'block', ok: hasMaintLine || hasMaintMonths, message: hasMaintLine || hasMaintMonths ? '已含维保' : '私有化部署缺少维保行/维保月数' })
+    // R09b 维保金额合理性：维保行金额 ≈ 软件小计 × 维保费率（口径一致；容差 ±15%）
+    if (hasMaintLine) {
+      const softwareSubtotal = items
+        .filter((it) => (it.line_type === 'product' || !it.line_type) && !it.is_gift)
+        .reduce((sum, it) => sum + pct(it.line_total), 0)
+      const maintTotal = items
+        .filter((it) => it.line_type === 'maintenance')
+        .reduce((sum, it) => sum + pct(it.line_total), 0)
+      const maintRate = input.maintenanceRate ?? 0.2
+      const expected = softwareSubtotal * maintRate
+      if (expected > 0 && (maintTotal < expected * 0.85 || maintTotal > expected * 1.15)) {
+        push({ code: 'MAINT_AMOUNT', label: '维保金额与软件小计×费率一致', level: 'warn', ok: false, message: `维保金额 ${maintTotal} 与预期 ${Math.round(expected)}（软件 ${softwareSubtotal} × ${(maintRate * 100).toFixed(0)}%）偏差超 15%` })
+      }
+    }
   }
 
   // R10 订阅明确起止日期

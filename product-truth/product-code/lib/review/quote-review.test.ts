@@ -155,6 +155,30 @@ describe('reviewQuote 基础', () => {
     expect(r.blocked.map((c) => c.code)).not.toContain('PRIVATE_MAINT')
   })
 
+  it('维保金额 ≈ 软件小计×费率 → 通过 MAINT_AMOUNT', () => {
+    const q = base()
+    q.items[0].deployment = 'PRIVATE'; q.items[0].maintenance_months = 12
+    q.items = [
+      ...q.items,
+      { product_id: 'm1', product_code: 'SVC_MAINT', name: '维保服务', line_type: 'maintenance', quantity: 1, unit_price: 3000, list_price: 3000, line_total: 3000, tax_rate: 0.06, region: 'CN' },
+    ]
+    q.quote.subtotal = 18000; q.quote.tax_amount = 2340; q.quote.total_amount = 20340; q.quote.amount_in_words = '贰万零叁佰肆拾元整'
+    const r = reviewQuote({ ...q, maintenanceRate: 0.2 }, NOW)
+    expect(r.warnings.map((c) => c.code)).not.toContain('MAINT_AMOUNT')
+  })
+
+  it('维保金额偏差超 15% → WARN MAINT_AMOUNT', () => {
+    const q = base()
+    q.items[0].deployment = 'PRIVATE'; q.items[0].maintenance_months = 12
+    q.items = [
+      ...q.items,
+      { product_id: 'm1', product_code: 'SVC_MAINT', name: '维保服务', line_type: 'maintenance', quantity: 1, unit_price: 10000, list_price: 10000, line_total: 10000, tax_rate: 0.06, region: 'CN' },
+    ]
+    q.quote.subtotal = 25000; q.quote.tax_amount = 3250; q.quote.total_amount = 28250; q.quote.amount_in_words = '贰万捌仟贰佰伍拾元整'
+    const r = reviewQuote({ ...q, maintenanceRate: 0.2 }, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('MAINT_AMOUNT')
+  })
+
   it('订阅缺起止日期 → BLOCK SUBSCRIBE_DATE', () => {
     const q = base(); q.items[0].subscription_start = null; q.items[0].subscription_end = null
     const r = reviewQuote(q, NOW)
