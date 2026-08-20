@@ -274,6 +274,9 @@ export default function QuoteDetailPage() {
             <Button onClick={cloneQuote} disabled={cloning || !quote.id} variant="outline">
               {cloning ? '复制中...' : '复制为草稿'}
             </Button>
+            <Link href={`/quotes/${quoteId}/view`} prefetch={false}>
+              <Button variant="outline">客户视图</Button>
+            </Link>
             {cloneError && <span className="text-sm text-red-600 self-center">{cloneError}</span>}
             {canSubmit && (
               <Button onClick={() => updateStatus('PENDING_APPROVAL')} disabled={updating}>
