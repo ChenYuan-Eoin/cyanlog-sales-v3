@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
       subtotal: 0,
       discount_rate: 0,
       discount_amount: 0,
-      tax_rate: null,
+      tax_rate: 0,
       tax_amount: 0,
       total_amount: 0,
       notes: `复制自 ${sourceQuote.quote_no}${sourceQuote.notes ? `；${sourceQuote.notes}` : ''}`,
@@ -82,8 +82,15 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
       updated_at: now,
     }
 
-    const { error: insertErr } = await supabaseAdmin.from('quotes').insert(clonedHeader)
-    if (insertErr && !isSchemaDriftError(insertErr)) {
+    let insertErr = null
+    let inserted = await supabaseAdmin.from('quotes').insert(clonedHeader)
+    if (inserted.error && isSchemaDriftError(inserted.error)) {
+      // 迁移未应用时剥离新列重试（保留 org_id 等必需字段）
+      const { opportunity_id: _o, source_quote_id: _s, ...compat } = clonedHeader
+      inserted = await supabaseAdmin.from('quotes').insert(compat)
+    }
+    insertErr = inserted.error
+    if (insertErr) {
       console.error('Clone quote insert failed:', insertErr)
       return errorResponse('复制报价失败', 500, 'DB_ERROR')
     }

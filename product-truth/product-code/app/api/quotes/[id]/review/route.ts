@@ -25,7 +25,7 @@ async function loadReviewData(quoteId: string, orgId: string, userId: string) {
   }
   const quote = quoteRes.data
   if (!quote) return null
-  const products: Record<string, { code: string; attributes?: { category?: string; follows?: string[] } }> = {}
+  const products: Record<string, { code: string; attributes?: { category?: string; follows?: string[]; quantityLinkedTo?: string; taxCategory?: string } }> = {}
   for (const p of productsRes.data || []) {
     products[String(p.id)] = { code: String(p.code), attributes: (p.attributes ?? {}) as never }
   }

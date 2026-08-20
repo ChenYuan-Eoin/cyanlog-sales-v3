@@ -220,6 +220,16 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (quoteInsertResult.error && isSchemaDriftError(quoteInsertResult.error)) {
+      // 迁移未应用时剥离新增列重试（保留 org_id 等必需字段），避免走 legacy 丢失 org_id
+      const { opportunity_id: _opp, ...compatPayload } = quotePayload
+      quoteInsertResult = await supabaseAdmin
+        .from('quotes')
+        .insert(compatPayload)
+        .select()
+        .single()
+    }
+
+    if (quoteInsertResult.error && isSchemaDriftError(quoteInsertResult.error)) {
       quoteInsertResult = await supabaseAdmin
         .from('quotes')
         .insert(

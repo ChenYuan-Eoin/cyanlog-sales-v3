@@ -382,7 +382,7 @@ export async function PUT(
           supabaseAdmin.from('product_versions').select('version_code,deployments,auth_modes,status').eq('org_id', orgId).eq('status', 'PUBLISHED'),
           supabaseAdmin.from('products').select('id,code,attributes'),
         ])
-        const products: Record<string, { code: string; attributes?: { category?: string; follows?: string[] } }> = {}
+        const products: Record<string, { code: string; attributes?: { category?: string; follows?: string[]; quantityLinkedTo?: string; taxCategory?: string } }> = {}
         for (const prod of productsRes.data || []) {
           products[String(prod.id)] = { code: String(prod.code), attributes: (prod.attributes ?? {}) as never }
         }
