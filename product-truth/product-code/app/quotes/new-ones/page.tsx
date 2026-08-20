@@ -14,6 +14,7 @@ interface ProductOption {
   id: string
   code: string
   name: string
+  product_line?: string | null
   attributes?: {
     category?: 'BASE' | 'FOLLOW_PRODUCT' | 'FOLLOW_APP' | 'FOLLOW_ECO'
     follows?: string[]
@@ -62,6 +63,8 @@ function emptyLine(defaultQty: number | null): LineState {
 }
 
 export default function NewOnesQuotePage() {
+  const [productLine, setProductLine] = useState('ONES')
+  const [productLines, setProductLines] = useState<string[]>(['ONES'])
   const [products, setProducts] = useState<ProductOption[]>([])
   const [versions, setVersions] = useState<ProductVersion[]>([])
   const [matrix, setMatrix] = useState<PriceMatrixRow[]>([])
@@ -89,7 +92,7 @@ export default function NewOnesQuotePage() {
     async function bootstrap() {
       try {
         const [productsRes, versionsRes, matrixRes, regionRes, oppRes] = await Promise.all([
-          fetch('/api/products?status=active'),
+          fetch(`/api/products?status=active&product_line=${encodeURIComponent(productLine)}`),
           fetch('/api/config-center/product-versions?status=PUBLISHED&limit=100'),
           fetch('/api/config-center/price-matrix?status=PUBLISHED&limit=5000'),
           fetch('/api/config-center/regional-tax-rates?status=PUBLISHED&limit=100'),
@@ -126,7 +129,11 @@ export default function NewOnesQuotePage() {
           const num = typeof mv === 'number' ? mv : typeof mv === 'string' ? Number(mv) : NaN
           if (!Number.isNaN(num)) setDiscountMax(num)
         }
-        setProducts((pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), attributes: (p.attributes ?? null) as ProductOption['attributes'] })))
+        const mappedProducts = (pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), product_line: (p.product_line as string | undefined) ?? 'ONES', attributes: (p.attributes ?? null) as ProductOption['attributes'] }))
+        setProducts(mappedProducts)
+        const lines = new Set<string>(['ONES'])
+        for (const p of mappedProducts) if (p.product_line) lines.add(p.product_line)
+        setProductLines(Array.from(lines))
         setVersions((vj.data || []).map((v: Record<string, unknown>) => ({ version_code: String(v.version_code), name: String(v.name), deployments: (v.deployments || []) as string[], auth_modes: (v.auth_modes || []) as string[], term_options: (v.term_options || [12]) as number[], capabilities: (v.capabilities || {}) as Record<string, boolean> })))
         setMatrix((mj.data || []) as PriceMatrixRow[])
         setOpportunities((oj.data || []) as typeof opportunities)
@@ -149,7 +156,7 @@ export default function NewOnesQuotePage() {
       }
     }
     void bootstrap()
-  }, [])
+  }, [productLine])
 
   function applyOpportunity(id: string) {
     setOpportunityId(id)
@@ -333,6 +340,13 @@ export default function NewOnesQuotePage() {
           </div>
 
           <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <label className="text-muted-foreground">产品线</label>
+              <select className="h-9 rounded-md border bg-background px-2 text-sm" value={productLine} onChange={(e) => { setProductLine(e.target.value); setLines([emptyLine(defaultQty)]) }}>
+                {productLines.map((pl) => <option key={pl} value={pl}>{pl}</option>)}
+              </select>
+              <span className="text-xs text-muted-foreground">切换产品线仅影响可选产品（配置数据隔离，代码零改动）</span>
+            </div>
             <p className="text-sm font-medium">产品配置（每行：产品 → 版本 → 部署 → 授权 → 期限）</p>
             {lines.map((line, index) => {
               const product = products.find((p) => p.id === line.product_id)

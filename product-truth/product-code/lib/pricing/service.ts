@@ -16,6 +16,7 @@ type ProductStatus = 'active' | 'inactive' | 'discontinued'
 type ProductRow = PriceBookProduct & {
   status: ProductStatus
   category_id?: string | null
+  product_line?: string | null       // WP10 阶段1：产品线隔离（ONES 默认）
   product_price_tiers?: ProductPriceTier[] | null
 }
 
@@ -92,6 +93,7 @@ export async function loadProductsForOrg(orgId: string, productIds?: string[]): 
     }
     resolvedData = (legacyResult.data || []).map((row) => ({
       ...row,
+      product_line: (row as { product_line?: string | null }).product_line ?? 'ONES',
       product_price_tiers: [],
       tier_pricing_enabled: false,
     }))
