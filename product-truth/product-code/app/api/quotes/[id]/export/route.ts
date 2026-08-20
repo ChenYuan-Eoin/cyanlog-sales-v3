@@ -31,6 +31,34 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .eq('quote_id', id)
       .order('sort_order')
 
+    // WP10 阶段1：命中的标准输出模板（配置数据，非硬编码布局）
+    let templates: Array<Record<string, unknown>> | null = null
+    try {
+      const tplRes = await supabaseAdmin
+        .from('output_templates')
+        .select('code, name, doc_type, scene, match_rule, variables')
+        .eq('org_id', orgId)
+        .eq('status', 'PUBLISHED')
+        .eq('doc_type', 'standard')
+        .eq('scene', 'quote')
+        .limit(20)
+      templates = (tplRes.data ?? null) as Array<Record<string, unknown>> | null
+    } catch {
+      templates = null
+    }
+    const matchedTemplate = (() => {
+      const rows = (templates ?? []) as Array<{ code: string; name: string; match_rule?: Record<string, unknown>; variables?: unknown }>
+      const auth = (quote as Record<string, unknown>).auth_mode ?? null
+      const deploy = (quote as Record<string, unknown>).deployment ?? null
+      if (!rows.length) return null
+      const exact = rows.find((t) => {
+        const rule = (t.match_rule ?? {}) as Record<string, string>
+        return (!rule.v_type || rule.v_type === (auth === 'ONETIME' ? 'perpetual' : 'subscription'))
+          && (!rule.deploy || rule.deploy === deploy)
+      })
+      return exact ?? rows[0]
+    })()
+
     const result = buildQuoteExportData({
       quoteNo: quote.quote_no,
       customerName: quote.customer_name,
@@ -47,7 +75,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       items: (items ?? []) as Array<Record<string, unknown>>,
     })
 
-    return NextResponse.json({ success: true, data: result.data })
+    const payload = {
+      ...result.data,
+      template: matchedTemplate
+        ? { code: matchedTemplate.code, name: matchedTemplate.name, variables: matchedTemplate.variables ?? [] }
+        : null,
+    }
+    return NextResponse.json({ success: true, data: payload })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'
     if (authError) {

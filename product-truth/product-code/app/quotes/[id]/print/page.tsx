@@ -32,6 +32,7 @@ interface ExportData {
   items: ExportItem[]
   watermark: string
   generated_at: string
+  template?: { code: string; name: string; variables?: string[] } | null
 }
 
 export default function QuotePrintPage({ params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +67,10 @@ export default function QuotePrintPage({ params }: { params: Promise<{ id: strin
       <div className="flex items-start justify-between border-b pb-4">
         <div>
           <h1 className="text-xl font-semibold">深圳复临科技有限公司报价单</h1>
-          <div className="mt-1 text-sm text-slate-500">报价单号：{data.quote_no}</div>
+          <div className="mt-1 text-sm text-slate-500">
+            报价单号：{data.quote_no}
+            {data.template && <span className="ml-2 text-xs">模板：{data.template.name}（{data.template.code}）</span>}
+          </div>
         </div>
         <div className="text-right text-sm text-slate-500">
           <div>客户：{data.customer_name}</div>
