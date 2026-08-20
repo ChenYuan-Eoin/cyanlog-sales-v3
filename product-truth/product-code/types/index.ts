@@ -26,6 +26,7 @@ export interface Quote {
   region?: string | null
   notes?: string | null
   opportunity_id?: string | null   // WP10 阶段2：挂接 CRM 商机
+  opportunity_context?: { opportunity_name?: string | null; owner_name?: string | null; stage?: string | null; channel?: string | null; tags?: string[]; customer_industry?: string | null; customer_tier?: string | null; order_type_hint?: string | null } | null  // WP10 阶段2：商机上下文快照
   source_quote_id?: string | null  // WP10 阶段2：复制来源留痕
   created_by: string | null
   created_at: string

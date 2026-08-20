@@ -31,6 +31,9 @@ export async function GET(req: NextRequest) {
         status,
         stage,
         expected_close_date,
+        source,
+        tags,
+        owner:users(display_name),
         customer:customers(name, region)
       `)
       .eq('org_id', orgId)
@@ -51,6 +54,8 @@ export async function GET(req: NextRequest) {
     const rows = (data || []).map((row: Record<string, unknown>) => {
       const customer = Array.isArray(row.customer) ? row.customer[0] : row.customer
       const c = (customer ?? {}) as { name?: string | null; region?: string | null }
+      const owner = Array.isArray(row.owner) ? row.owner[0] : row.owner
+      const o = (owner ?? {}) as { display_name?: string | null }
       return {
         id: row.id,
         name: row.name,
@@ -59,6 +64,9 @@ export async function GET(req: NextRequest) {
         status: row.status,
         stage: row.stage,
         expected_close_date: row.expected_close_date,
+        source: row.source ?? null,
+        tags: row.tags ?? [],
+        owner_name: o.display_name ?? null,
         customer_name: c.name ?? null,
         customer_region: c.region ?? null,
       }

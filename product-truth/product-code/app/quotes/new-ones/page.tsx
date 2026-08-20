@@ -77,7 +77,7 @@ export default function NewOnesQuotePage() {
   const [serviceTaxRate, setServiceTaxRate] = useState(0.06)
   const [customerName, setCustomerName] = useState('')
   const [customerContact, setCustomerContact] = useState('')
-  const [opportunities, setOpportunities] = useState<Array<{ id: string; name: string; customer_name?: string | null; customer_region?: string | null; amount?: number | null }>>([])
+  const [opportunities, setOpportunities] = useState<Array<{ id: string; name: string; customer_name?: string | null; customer_region?: string | null; amount?: number | null; owner_name?: string | null; channel?: string | null; stage?: string | null }>>([])
   const [opportunityId, setOpportunityId] = useState('')
   const [validUntil, setValidUntil] = useState('')
   const [loading, setLoading] = useState(true)
@@ -302,10 +302,18 @@ export default function NewOnesQuotePage() {
               <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={opportunityId} onChange={(e) => applyOpportunity(e.target.value)}>
                 <option value="">不关联商机（手工填写）</option>
                 {opportunities.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name}{o.customer_name ? ` · ${o.customer_name}` : ''}</option>
+                  <option key={o.id} value={o.id}>{o.name}{o.customer_name ? ` · ${o.customer_name}` : ''}{o.owner_name ? ` · 负责人:${o.owner_name}` : ''}{o.channel ? ` · ${o.channel}` : ''}</option>
                 ))}
               </select>
             </div>
+            {opportunityId && (() => {
+              const opp = opportunities.find((o) => o.id === opportunityId)
+              return opp ? (
+                <div className="sm:col-span-2 rounded border bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  商机：{opp.name} · 负责人 {opp.owner_name || '—'} · 阶段 {opp.stage || '—'} · 渠道 {opp.channel || '—'}
+                </div>
+              ) : null
+            })()}
             <div><label className="text-sm text-muted-foreground">客户名称</label><Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
             <div><label className="text-sm text-muted-foreground">联系人</label><Input value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} /></div>
             <div><label className="text-sm text-muted-foreground">有效期至</label><Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></div>

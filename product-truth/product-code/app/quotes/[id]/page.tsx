@@ -330,9 +330,18 @@ export default function QuoteDetailPage() {
               <div>
                 <span className="text-slate-500">商机：</span>
                 <Link href={`/opportunities/${quote.opportunity_id}`} className="text-blue-600 hover:underline">
-                  查看商机
+                  {quote.opportunity_context?.opportunity_name || '查看商机'}
                 </Link>
               </div>
+            )}
+            {quote.opportunity_context?.owner_name && (
+              <div><span className="text-slate-500">商机负责人：</span><span>{quote.opportunity_context.owner_name}</span></div>
+            )}
+            {quote.opportunity_context?.channel && (
+              <div><span className="text-slate-500">渠道：</span><span>{quote.opportunity_context.channel}</span></div>
+            )}
+            {quote.opportunity_context?.stage && (
+              <div><span className="text-slate-500">商机阶段：</span><span>{quote.opportunity_context.stage}</span></div>
             )}
             {quote.source_quote_id && (
               <div>

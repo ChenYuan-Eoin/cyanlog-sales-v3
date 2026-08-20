@@ -9,6 +9,7 @@ import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccess
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft, calculateQuoteDraftOnes } from '@/lib/pricing/service'
 import { numberToChineseUpper } from '@/lib/pricing/quote-builder'
+import { buildOpportunityContext } from '@/lib/quote/opportunity-context'
 import { getQuoteFxRate, parseBocRateType } from '@/lib/quote/fx-rate'
 import { getPublishedParamString, getRegionTaxRates } from '@/lib/config-center/runtime'
 import {
@@ -103,19 +104,31 @@ export async function POST(req: NextRequest) {
     let resolvedCustomerName = customer_name
     let resolvedContact = customer_contact
     let resolvedRegion = (regionRaw || '').toUpperCase().slice(0, 10)
+    let opportunityContext: ReturnType<typeof buildOpportunityContext> | null = null
     if (opportunityId) {
       try {
         const { data: opp } = await supabaseAdmin
           .from('opportunities')
-          .select('id, name, customer:customers(name, contact_name, region)')
+          .select('id, name, stage, source, tags, owner:users(display_name), customer:customers(name, contact_name, region, industry, tier)')
           .eq('id', opportunityId)
           .eq('org_id', orgId)
           .maybeSingle()
         if (opp) {
           const customer = Array.isArray(opp.customer) ? opp.customer[0] : opp.customer
+          const owner = Array.isArray(opp.owner) ? opp.owner[0] : opp.owner
           if (!resolvedCustomerName && customer?.name) resolvedCustomerName = customer.name
           if (!resolvedContact && customer?.contact_name) resolvedContact = customer.contact_name
           if (!resolvedRegion && customer?.region) resolvedRegion = String(customer.region).toUpperCase().slice(0, 10)
+          // 商机上下文快照：负责人/订单类型/市场/渠道/部署需求（结构化落库，纯函数）
+          opportunityContext = buildOpportunityContext({
+            opportunity_name: opp.name ?? null,
+            owner_name: (owner as { display_name?: string | null } | undefined)?.display_name ?? null,
+            stage: opp.stage ?? null,
+            source: opp.source ?? null,
+            tags: opp.tags,
+            customer_industry: customer?.industry ?? null,
+            customer_tier: customer?.tier ?? null,
+          })
         }
       } catch (oppError) {
         console.error('[WP10] opportunity context load failed:', oppError)
@@ -191,6 +204,7 @@ export async function POST(req: NextRequest) {
       customer_name: customerName,
       customer_contact: customerContact,
       opportunity_id: opportunityId ?? null,
+      opportunity_context: opportunityContext,
       subtotal: pricedDraft.subtotal,
       discount_rate: pricedDraft.discountRate,
       discount_amount: pricedDraft.discountAmount,
@@ -221,7 +235,7 @@ export async function POST(req: NextRequest) {
 
     if (quoteInsertResult.error && isSchemaDriftError(quoteInsertResult.error)) {
       // 迁移未应用时剥离新增列重试（保留 org_id 等必需字段），避免走 legacy 丢失 org_id
-      const { opportunity_id: _opp, ...compatPayload } = quotePayload
+      const { opportunity_id: _opp, opportunity_context: _octx, ...compatPayload } = quotePayload
       quoteInsertResult = await supabaseAdmin
         .from('quotes')
         .insert(compatPayload)
