@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "activeId": "WP10",
+  "commit": "e6d20dabd52e7ea3782da1c49313f0b99eedd09e",
+  "evidence": {
+    "code": {
+      "summary": "WP10 报价域完整形态 阶段0-7 完成 + 商机上下文补全（HEAD e6d20dab）",
+      "commit": "e6d20dabd52e7ea3782da1c49313f0b99eedd09e",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/target_tests.log",
+          "log_sha256": "c031398fc3f2533318a305f69b3a1a75a43e44614cb0b5ed0e75474e791f31d2"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/full_tests.log",
+          "log_sha256": "8a6ab2e607f51e74d1e1f09d0512f692e43ffc128714dc99fee6b95df521dcde"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/lint.log",
+          "log_sha256": "4e18ed3093442ba4ddfb9484263bb211ee92d37b311ac572154891c7211a298f"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/typecheck.log",
+          "log_sha256": "5753ca8e1019d8b396f750e82fdf896f28fdf711953a918698640e6235a512bf"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "wp10-code-checks/build.log",
+          "log_sha256": "61e1948413d9a5e43cbc7b687584f1d37785f17aba8a7993f8de60b176d3f985"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "36e7fe7e0c99967dd1dc415d751c231472ea4018b5d3845c6ca6cbe5f04b1a32",
+        "entry_sha256": "d5714774bdb263b5b2623a5bf48329db93e0740d358b2bf98f089bcd5bf821ac"
+      },
+      "commits": [
+        "ef94aac2",
+        "6612fa21",
+        "7bc52b74",
+        "c536f3df",
+        "15533293",
+        "7f5e8d4d",
+        "0ed0e834",
+        "118d05c8",
+        "cc8e43a2",
+        "86a87edf",
+        "1e516ed7",
+        "e6d20dab"
+      ],
+      "notes": "商机上下文（负责人/渠道/阶段/订单类型提示）补全；12 提交；全量 1904 passed/5 skipped；生产库测试数据待确认清理"
+    }
+  },
+  "updatedAt": "2026-08-20T12:42:57.670Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-08-20T12:42:57.648Z",
+      "head": "e6d20dabd52e7ea3782da1c49313f0b99eedd09e",
+      "originMain": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "remoteMain": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "remoteProduction": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "ad1a2929d0c88fc10a39bdd1306cdacd81a49e4e",
+      "remoteAttestationRefOid": "ad1a2929d0c88fc10a39bdd1306cdacd81a49e4e",
+      "remoteSnapshotCheckedAt": "2026-08-20T12:42:55.424Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "05203033d31aef785665f86455d517528d816cf411b0d803c58cf128da3d5bda",
+  "sealedAt": "2026-08-20T12:42:57.671Z",
+  "attestationDigest": "2ed7b4393d6457c122462f994a86c14d4d30bad4aa56c4107c6a5565320388ea"
+}
