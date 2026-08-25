@@ -303,11 +303,11 @@ describe('POST /api/quotes', () => {
               ? {
                 data: null,
                 error: {
-                  code: 'PGRST204',
-                  message: "Could not find the 'discount_rate' column of 'quotes' in the schema cache",
+                  code: '42703',
+                  message: "Could not find the 'opportunity_id' column of 'quotes' in the schema cache",
                 },
               }
-              : { data: { id: 'q-legacy' }, error: null }
+              : { data: { id: 'q-compat' }, error: null }
           )),
           delete: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
@@ -349,8 +349,13 @@ describe('POST /api/quotes', () => {
     const res = await POST(req)
     expect(res.status).toBe(201)
     expect(quoteInsertPayloads).toHaveLength(2)
+    // 第一次 modern insert：携带新列
     expect(quoteInsertPayloads[0].discount_rate).toBe(0)
-    expect(quoteInsertPayloads[1].discount_rate).toBeUndefined()
+    expect(quoteInsertPayloads[0].opportunity_id).toBeNull()  // 请求未挂商机
+    // 第二次 compat retry：剥离新列重试，保留 org_id 与 discount_rate（不丢字段）
+    expect(quoteInsertPayloads[1].discount_rate).toBe(0)
+    expect(quoteInsertPayloads[1].org_id).toBe('org-1')
+    expect(quoteInsertPayloads[1].opportunity_id).toBeUndefined()  // compat 剥离新列
     expect(quoteItemInsertPayloads).toHaveLength(2)
     expect(quoteItemInsertPayloads[0][0].product_id).toBe(PRODUCT_ID)
     expect(quoteItemInsertPayloads[1][0].product_id).toBeUndefined()

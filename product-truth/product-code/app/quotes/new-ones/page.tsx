@@ -14,6 +14,7 @@ interface ProductOption {
   id: string
   code: string
   name: string
+  product_line?: string | null
   attributes?: {
     category?: 'BASE' | 'FOLLOW_PRODUCT' | 'FOLLOW_APP' | 'FOLLOW_ECO'
     follows?: string[]
@@ -57,15 +58,17 @@ interface LineState {
 const DEPLOY_LABEL: Record<string, string> = { PUBLIC_CLOUD: '公有云', PRIVATE: '私有部署', HA: '高可用' }
 const AUTH_LABEL: Record<string, string> = { SUB_YEAR: '按年订阅', SUB_3YEAR: '三年订阅', ONETIME: '一次性授权' }
 
-function emptyLine(): LineState {
-  return { product_id: '', version_code: '', deployment: '', auth_mode: '', term_months: '12', quantity: 10, is_gift: false, discount_rate: 0 }
+function emptyLine(defaultQty: number | null): LineState {
+  return { product_id: '', version_code: '', deployment: '', auth_mode: '', term_months: '12', quantity: defaultQty ?? 0, is_gift: false, discount_rate: 0 }
 }
 
 export default function NewOnesQuotePage() {
+  const [productLine, setProductLine] = useState('ONES')
+  const [productLines, setProductLines] = useState<string[]>(['ONES'])
   const [products, setProducts] = useState<ProductOption[]>([])
   const [versions, setVersions] = useState<ProductVersion[]>([])
   const [matrix, setMatrix] = useState<PriceMatrixRow[]>([])
-  const [lines, setLines] = useState<LineState[]>([emptyLine()])
+  const [lines, setLines] = useState<LineState[]>([emptyLine(null)])
   const [discountRate, setDiscountRate] = useState(0)
   const [discountReason, setDiscountReason] = useState('')
   const [region, setRegion] = useState('CN')
@@ -73,9 +76,12 @@ export default function NewOnesQuotePage() {
   const [softwareTaxRate, setSoftwareTaxRate] = useState(0.13)
   const [discountTiers, setDiscountTiers] = useState<number[]>([0, 5, 10, 15, 20, 25, 30, 40])
   const [discountMax, setDiscountMax] = useState(40)
+  const [defaultQty, setDefaultQty] = useState<number | null>(null)
   const [serviceTaxRate, setServiceTaxRate] = useState(0.06)
   const [customerName, setCustomerName] = useState('')
   const [customerContact, setCustomerContact] = useState('')
+  const [opportunities, setOpportunities] = useState<Array<{ id: string; name: string; customer_name?: string | null; customer_region?: string | null; amount?: number | null; owner_name?: string | null; channel?: string | null; stage?: string | null }>>([])
+  const [opportunityId, setOpportunityId] = useState('')
   const [validUntil, setValidUntil] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -85,13 +91,14 @@ export default function NewOnesQuotePage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [productsRes, versionsRes, matrixRes, regionRes] = await Promise.all([
-          fetch('/api/products?status=active'),
+        const [productsRes, versionsRes, matrixRes, regionRes, oppRes] = await Promise.all([
+          fetch(`/api/products?status=active&product_line=${encodeURIComponent(productLine)}`),
           fetch('/api/config-center/product-versions?status=PUBLISHED&limit=100'),
           fetch('/api/config-center/price-matrix?status=PUBLISHED&limit=5000'),
           fetch('/api/config-center/regional-tax-rates?status=PUBLISHED&limit=100'),
+          fetch('/api/opportunities'),
         ])
-        const [pj, vj, mj, rj] = await Promise.all([productsRes.json(), versionsRes.json(), matrixRes.json(), regionRes.json()])
+        const [pj, vj, mj, rj, oj] = await Promise.all([productsRes.json(), versionsRes.json(), matrixRes.json(), regionRes.json(), oppRes.json()])
         const businessRes = await fetch('/api/config-center/business-params?status=PUBLISHED&limit=100')
         const bj = await businessRes.json()
         const regionRows = (rj.data || []) as Array<{ region: string; software_rate?: number; service_rate?: number; currency?: string }>
@@ -106,6 +113,14 @@ export default function NewOnesQuotePage() {
         const paramRows = (bj.data || []) as Array<{ param_key: string; value?: unknown }>
         const tiersRow = paramRows.find((x) => x.param_key === 'DISCOUNT_TIERS')
         const maxRow = paramRows.find((x) => x.param_key === 'DISCOUNT_MAX')
+        const qtyRow = paramRows.find((x) => x.param_key === 'DEFAULT_QTY')
+        const validRow = paramRows.find((x) => x.param_key === 'QUOTE_VALID_DAYS')
+        if (qtyRow) {
+          const qv = qtyRow.value
+          const qn = typeof qv === 'number' ? qv : typeof qv === 'string' ? Number(qv) : NaN
+          if (!Number.isNaN(qn) && qn > 0) setDefaultQty(qn)
+        }
+        void validRow
         if (tiersRow && Array.isArray(tiersRow.value)) {
           setDiscountTiers((tiersRow.value as unknown[]).filter((v): v is number => typeof v === 'number'))
         }
@@ -114,14 +129,26 @@ export default function NewOnesQuotePage() {
           const num = typeof mv === 'number' ? mv : typeof mv === 'string' ? Number(mv) : NaN
           if (!Number.isNaN(num)) setDiscountMax(num)
         }
-        setProducts((pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), attributes: (p.attributes ?? null) as ProductOption['attributes'] })))
+        const mappedProducts = (pj.data || []).map((p: Record<string, unknown>) => ({ id: String(p.id), code: String(p.code), name: String(p.name), product_line: (p.product_line as string | undefined) ?? 'ONES', attributes: (p.attributes ?? null) as ProductOption['attributes'] }))
+        setProducts(mappedProducts)
+        const lines = new Set<string>(['ONES'])
+        for (const p of mappedProducts) if (p.product_line) lines.add(p.product_line)
+        setProductLines(Array.from(lines))
         setVersions((vj.data || []).map((v: Record<string, unknown>) => ({ version_code: String(v.version_code), name: String(v.name), deployments: (v.deployments || []) as string[], auth_modes: (v.auth_modes || []) as string[], term_options: (v.term_options || [12]) as number[], capabilities: (v.capabilities || {}) as Record<string, boolean> })))
         setMatrix((mj.data || []) as PriceMatrixRow[])
-        setValidUntil(() => {
+        setOpportunities((oj.data || []) as typeof opportunities)
+        // 有效期默认值：仅当业务参数 QUOTE_VALID_DAYS 已配置时预填；无配置留空由用户填写
+        const vdNum = (() => {
+          if (!validRow) return null
+          const vv = validRow.value
+          const n = typeof vv === 'number' ? vv : typeof vv === 'string' ? Number(vv) : NaN
+          return !Number.isNaN(n) && n > 0 ? n : null
+        })()
+        if (vdNum != null) {
           const d = new Date()
-          d.setDate(d.getDate() + 15)
-          return d.toISOString().slice(0, 10)
-        })
+          d.setDate(d.getDate() + vdNum)
+          setValidUntil(d.toISOString().slice(0, 10))
+        }
       } catch (e) {
         setError('加载配置失败：' + (e instanceof Error ? e.message : String(e)))
       } finally {
@@ -129,7 +156,20 @@ export default function NewOnesQuotePage() {
       }
     }
     void bootstrap()
-  }, [])
+  }, [productLine])
+
+  function applyOpportunity(id: string) {
+    setOpportunityId(id)
+    const opp = opportunities.find((o) => o.id === id)
+    if (!opp) return
+    if (opp.customer_name) setCustomerName(opp.customer_name)
+    if (opp.customer_region) {
+      const regionCode = String(opp.customer_region).toUpperCase().slice(0, 10)
+      setRegion(regionCode)
+      const cfg = regions.find((x) => x.region === regionCode)
+      if (cfg) { setSoftwareTaxRate(cfg.softwareRate); setServiceTaxRate(cfg.serviceRate) }
+    }
+  }
 
   function updateLine(index: number, next: Partial<LineState>) {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...next } : line)))
@@ -203,6 +243,7 @@ export default function NewOnesQuotePage() {
         body: JSON.stringify({
           customer_name: customerName,
           customer_contact: customerContact,
+          opportunity_id: opportunityId || undefined,
           valid_until: validUntil,
           notes: '',
           discount_rate: discountRate,
@@ -263,6 +304,23 @@ export default function NewOnesQuotePage() {
       {step === 1 && (
         <div className="space-y-4">
           <div className="grid gap-3 rounded border p-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="text-sm text-muted-foreground">关联商机（可选，自动带出客户/区域）</label>
+              <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={opportunityId} onChange={(e) => applyOpportunity(e.target.value)}>
+                <option value="">不关联商机（手工填写）</option>
+                {opportunities.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}{o.customer_name ? ` · ${o.customer_name}` : ''}{o.owner_name ? ` · 负责人:${o.owner_name}` : ''}{o.channel ? ` · ${o.channel}` : ''}</option>
+                ))}
+              </select>
+            </div>
+            {opportunityId && (() => {
+              const opp = opportunities.find((o) => o.id === opportunityId)
+              return opp ? (
+                <div className="sm:col-span-2 rounded border bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  商机：{opp.name} · 负责人 {opp.owner_name || '—'} · 阶段 {opp.stage || '—'} · 渠道 {opp.channel || '—'}
+                </div>
+              ) : null
+            })()}
             <div><label className="text-sm text-muted-foreground">客户名称</label><Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
             <div><label className="text-sm text-muted-foreground">联系人</label><Input value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} /></div>
             <div><label className="text-sm text-muted-foreground">有效期至</label><Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></div>
@@ -282,6 +340,13 @@ export default function NewOnesQuotePage() {
           </div>
 
           <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <label className="text-muted-foreground">产品线</label>
+              <select className="h-9 rounded-md border bg-background px-2 text-sm" value={productLine} onChange={(e) => { setProductLine(e.target.value); setLines([emptyLine(defaultQty)]) }}>
+                {productLines.map((pl) => <option key={pl} value={pl}>{pl}</option>)}
+              </select>
+              <span className="text-xs text-muted-foreground">切换产品线仅影响可选产品（配置数据隔离，代码零改动）</span>
+            </div>
             <p className="text-sm font-medium">产品配置（每行：产品 → 版本 → 部署 → 授权 → 期限）</p>
             {lines.map((line, index) => {
               const product = products.find((p) => p.id === line.product_id)
@@ -312,7 +377,7 @@ export default function NewOnesQuotePage() {
                 </div>
               )
             })}
-            <Button variant="outline" size="sm" onClick={() => setLines([...lines, emptyLine()])}>+ 添加产品</Button>
+            <Button variant="outline" size="sm" onClick={() => setLines([...lines, emptyLine(defaultQty)])}>+ 添加产品</Button>
           </div>
         </div>
       )}

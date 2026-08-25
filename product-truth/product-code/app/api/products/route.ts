@@ -40,6 +40,7 @@ const productSchema = z.object({
   min_price: z.number().nonnegative().optional().default(0),
   tier_pricing_enabled: z.boolean().optional().default(false),
   status: z.enum(['active', 'inactive', 'discontinued']).default('active'),
+  product_line: z.string().max(50).optional().default('ONES'),   // WP10 阶段1：产品线隔离
   tiers: z.array(tierSchema).optional().default([]),
 })
 
@@ -76,6 +77,7 @@ export async function GET(req: NextRequest) {
     const categoryId = searchParams.get('category_id')
     const status = searchParams.get('status')
     const search = searchParams.get('search')
+    const productLine = searchParams.get('product_line')
     const summary = searchParams.get('summary') === '1'
     // 分页参数，默认 50 条，最大 100 条
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
@@ -104,6 +106,10 @@ export async function GET(req: NextRequest) {
       query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
     }
 
+    if (productLine) {
+      query = query.eq('product_line', productLine)
+    }
+
     const queryResult = await query as {
       data: Array<Record<string, unknown>> | null
       error: unknown
@@ -128,6 +134,9 @@ export async function GET(req: NextRequest) {
       }
       if (search) {
         legacyQuery = legacyQuery.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
+      }
+      if (productLine) {
+        legacyQuery = legacyQuery.eq('product_line', productLine)
       }
 
       const legacyResult = await legacyQuery as {
@@ -216,6 +225,7 @@ export async function POST(req: NextRequest) {
         min_price: validated.data.min_price,
         tier_pricing_enabled: validated.data.tier_pricing_enabled || normalizedTiers.length > 0,
         status: validated.data.status,
+        product_line: validated.data.product_line,
         created_by: user.id,
       })
       .select()
@@ -239,6 +249,7 @@ export async function POST(req: NextRequest) {
           cost_price: validated.data.cost_price,
           min_price: validated.data.min_price,
           status: validated.data.status,
+          product_line: validated.data.product_line,
           created_by: user.id,
         })
         .select()

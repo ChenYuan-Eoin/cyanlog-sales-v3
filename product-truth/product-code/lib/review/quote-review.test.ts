@@ -53,10 +53,44 @@ function base(): QuoteReviewInput {
     ],
     versions: VERSIONS,
     products: { p1: { code: 'PROJECT', attributes: { category: 'BASE', follows: [] } } },
+    discountMaxPercent: 40,
+    deepDiscountRatio: 0.5,
+    heavyDiscountRatio: 0.8,
+    marginFloorRatio: 0.3,
   }
 }
 
 
+
+describe('reviewQuote 阈值配置化（WP10 H6/H7）', () => {
+  it('未配置折扣上限 → WARN DISCOUNT_POLICY（不再默认 40%）', () => {
+    const q = base(); delete q.discountMaxPercent
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_POLICY')
+    expect(r.blocked.map((c) => c.code)).not.toContain('DISCOUNT_POLICY')
+  })
+
+  it('未配置底价/大额折扣阈值 → WARN DISCOUNT_GOVERNANCE（不再默认 50/80）', () => {
+    const q = base(); delete q.deepDiscountRatio; delete q.heavyDiscountRatio
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
+  })
+
+  it('未配置毛利底线 → WARN MARGIN_FLOOR（不再默认 30%）', () => {
+    const q = base(); delete q.marginFloorRatio
+    const r = reviewQuote(q, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('MARGIN_FLOOR')
+  })
+
+  it('自定义阈值生效：deepRatio=0.9 → 低价行 BLOCK', () => {
+    const q = base(); q.deepDiscountRatio = 0.9; q.heavyDiscountRatio = 0.95
+    q.items[0].unit_price = 1300; q.items[0].line_total = 13000
+    q.items[0].discount_reason = '特批底价'
+    q.quote.discount_rate = 0; q.quote.subtotal = 13000; q.quote.tax_amount = 1690; q.quote.total_amount = 14690; q.quote.amount_in_words = '壹万肆仟陆佰玖拾元整'
+    const r = reviewQuote(q, NOW)
+    expect(r.blocked.map((c) => c.code)).toContain('DISCOUNT_GOVERNANCE')
+  })
+})
 
 describe('reviewQuote 基础', () => {
   it('完整合规报价 → PASS', () => {
@@ -119,6 +153,30 @@ describe('reviewQuote 基础', () => {
     const q = base(); q.items[0].deployment = 'PRIVATE'; q.items[0].maintenance_months = 12
     const r = reviewQuote(q, NOW)
     expect(r.blocked.map((c) => c.code)).not.toContain('PRIVATE_MAINT')
+  })
+
+  it('维保金额 ≈ 软件小计×费率 → 通过 MAINT_AMOUNT', () => {
+    const q = base()
+    q.items[0].deployment = 'PRIVATE'; q.items[0].maintenance_months = 12
+    q.items = [
+      ...q.items,
+      { product_id: 'm1', product_code: 'SVC_MAINT', name: '维保服务', line_type: 'maintenance', quantity: 1, unit_price: 3000, list_price: 3000, line_total: 3000, tax_rate: 0.06, region: 'CN' },
+    ]
+    q.quote.subtotal = 18000; q.quote.tax_amount = 2340; q.quote.total_amount = 20340; q.quote.amount_in_words = '贰万零叁佰肆拾元整'
+    const r = reviewQuote({ ...q, maintenanceRate: 0.2 }, NOW)
+    expect(r.warnings.map((c) => c.code)).not.toContain('MAINT_AMOUNT')
+  })
+
+  it('维保金额偏差超 15% → WARN MAINT_AMOUNT', () => {
+    const q = base()
+    q.items[0].deployment = 'PRIVATE'; q.items[0].maintenance_months = 12
+    q.items = [
+      ...q.items,
+      { product_id: 'm1', product_code: 'SVC_MAINT', name: '维保服务', line_type: 'maintenance', quantity: 1, unit_price: 10000, list_price: 10000, line_total: 10000, tax_rate: 0.06, region: 'CN' },
+    ]
+    q.quote.subtotal = 25000; q.quote.tax_amount = 3250; q.quote.total_amount = 28250; q.quote.amount_in_words = '贰万捌仟贰佰伍拾元整'
+    const r = reviewQuote({ ...q, maintenanceRate: 0.2 }, NOW)
+    expect(r.warnings.map((c) => c.code)).toContain('MAINT_AMOUNT')
   })
 
   it('订阅缺起止日期 → BLOCK SUBSCRIBE_DATE', () => {

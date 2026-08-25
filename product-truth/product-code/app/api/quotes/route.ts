@@ -9,6 +9,7 @@ import { canManageOrg, getDefaultOrgId, getUserScopedRoleAssignments, listAccess
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { calculateQuoteDraft, calculateQuoteDraftOnes } from '@/lib/pricing/service'
 import { numberToChineseUpper } from '@/lib/pricing/quote-builder'
+import { buildOpportunityContext } from '@/lib/quote/opportunity-context'
 import { getQuoteFxRate, parseBocRateType } from '@/lib/quote/fx-rate'
 import { getPublishedParamString, getRegionTaxRates } from '@/lib/config-center/runtime'
 import {
@@ -96,7 +97,46 @@ export async function POST(req: NextRequest) {
     }
 
     const orgId = await getDefaultOrgId(user.id)
-    const { customer_name, customer_contact, valid_until, notes, discount_rate, discount_reason, quote_kind, change_reason, region: regionRaw, items } = result.data
+    const { customer_name, customer_contact, valid_until, notes, discount_rate, discount_reason, quote_kind, change_reason, region: regionRaw, items, opportunity_id: opportunityId } = result.data
+
+    // WP10 阶段2：商机接入——若挂商机，从商机带出客户上下文（客户工商名/联系人/区域）
+    // 商机是业务事实源，报价只读；显式传入的 customer_name 优先
+    let resolvedCustomerName = customer_name
+    let resolvedContact = customer_contact
+    let resolvedRegion = (regionRaw || '').toUpperCase().slice(0, 10)
+    let opportunityContext: ReturnType<typeof buildOpportunityContext> | null = null
+    if (opportunityId) {
+      try {
+        const { data: opp } = await supabaseAdmin
+          .from('opportunities')
+          .select('id, name, stage, source, tags, owner:users(display_name), customer:customers(name, contact_name, region, industry, tier)')
+          .eq('id', opportunityId)
+          .eq('org_id', orgId)
+          .maybeSingle()
+        if (opp) {
+          const customer = Array.isArray(opp.customer) ? opp.customer[0] : opp.customer
+          const owner = Array.isArray(opp.owner) ? opp.owner[0] : opp.owner
+          if (!resolvedCustomerName && customer?.name) resolvedCustomerName = customer.name
+          if (!resolvedContact && customer?.contact_name) resolvedContact = customer.contact_name
+          if (!resolvedRegion && customer?.region) resolvedRegion = String(customer.region).toUpperCase().slice(0, 10)
+          // 商机上下文快照：负责人/订单类型/市场/渠道/部署需求（结构化落库，纯函数）
+          opportunityContext = buildOpportunityContext({
+            opportunity_name: opp.name ?? null,
+            owner_name: (owner as { display_name?: string | null } | undefined)?.display_name ?? null,
+            stage: opp.stage ?? null,
+            source: opp.source ?? null,
+            tags: opp.tags,
+            customer_industry: customer?.industry ?? null,
+            customer_tier: customer?.tier ?? null,
+          })
+        }
+      } catch (oppError) {
+        console.error('[WP10] opportunity context load failed:', oppError)
+      }
+    }
+    const customerName = resolvedCustomerName || customer_name
+    const customerContact = resolvedContact ?? customer_contact
+    const region = resolvedRegion || (regionRaw || 'CN').toUpperCase().slice(0, 10)
 
     // 生成报价单号
     const { data: quoteNoResult, error: seqError } = await supabaseAdmin.rpc('generate_quote_number')
@@ -108,8 +148,7 @@ export async function POST(req: NextRequest) {
 
     const quoteNo = quoteNoResult
 
-    // F049：区域（默认 CN）+ 区域税率
-    const region = (regionRaw || 'CN').toUpperCase().slice(0, 10)
+    // F049：区域（默认 CN，商机已解析）+ 区域税率
     const regionTax = await getRegionTaxRates(orgId, region).catch(() => null)
 
     const hasOnesFields = items.some((item) => item.version_code || item.deployment || item.auth_mode)
@@ -162,8 +201,10 @@ export async function POST(req: NextRequest) {
       id: quoteId,
       org_id: orgId,
       quote_no: quoteNo,
-      customer_name,
-      customer_contact,
+      customer_name: customerName,
+      customer_contact: customerContact,
+      opportunity_id: opportunityId ?? null,
+      opportunity_context: opportunityContext,
       subtotal: pricedDraft.subtotal,
       discount_rate: pricedDraft.discountRate,
       discount_amount: pricedDraft.discountAmount,
@@ -193,14 +234,24 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (quoteInsertResult.error && isSchemaDriftError(quoteInsertResult.error)) {
+      // 迁移未应用时剥离新增列重试（保留 org_id 等必需字段），避免走 legacy 丢失 org_id
+      const { opportunity_id: _opp, opportunity_context: _octx, ...compatPayload } = quotePayload
+      quoteInsertResult = await supabaseAdmin
+        .from('quotes')
+        .insert(compatPayload)
+        .select()
+        .single()
+    }
+
+    if (quoteInsertResult.error && isSchemaDriftError(quoteInsertResult.error)) {
       quoteInsertResult = await supabaseAdmin
         .from('quotes')
         .insert(
           buildLegacyQuoteInsertPayload({
             id: quoteId,
             quote_no: quoteNo,
-            customer_name,
-            customer_contact,
+            customer_name: customerName,
+            customer_contact: customerContact,
             subtotal: pricedDraft.subtotal,
             discount_amount: pricedDraft.discountAmount,
             tax_amount: pricedDraft.taxAmount,

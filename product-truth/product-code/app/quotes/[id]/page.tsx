@@ -34,6 +34,12 @@ export default function QuoteDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [cloning, setCloning] = useState(false)
+  const [cloneError, setCloneError] = useState('')
+  const [freezing, setFreezing] = useState(false)
+  const [deriving, setDeriving] = useState(false)
+  const [derivingKind, setDerivingKind] = useState('')
+  const [actionError, setActionError] = useState('')
   const [reviewTick, setReviewTick] = useState(0)
 
   const quoteId = params.id as string
@@ -86,6 +92,106 @@ export default function QuoteDetailPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function cloneQuote() {
+    if (!quote) return
+    setCloning(true)
+    setCloneError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/quotes/${quote.id}/clone`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token || ''}` },
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setCloneError(json.error?.message || '复制失败')
+        return
+      }
+      window.location.href = `/quotes/${json.data.id}`
+    } catch {
+      setCloneError('复制失败：网络错误')
+    } finally {
+      setCloning(false)
+    }
+  }
+
+  async function freezeQuote() {
+    if (!quote) return
+    setFreezing(true)
+    setActionError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/quotes/${quote.id}/freeze`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token || ''}` },
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setActionError(json.error?.message || '冻结失败')
+        return
+      }
+      setActionError('')
+      await fetchQuote({ allowCache: false })
+    } catch {
+      setActionError('冻结失败：网络错误')
+    } finally {
+      setFreezing(false)
+    }
+  }
+
+  async function deriveContract() {
+    await deriveDownstream('contract')
+  }
+
+  async function deriveDownstream(kind: string) {
+    if (!quote) return
+    setDerivingKind(kind)
+    setDeriving(true)
+    setActionError('')
+    try {
+      const token = localStorage.getItem('token')
+      let body: Record<string, unknown> | undefined
+      if (kind === 'seal') {
+        const reason = window.prompt('请填写盖章申请原因：', '报价已批准，申请盖章')
+        if (reason === null) return
+        if (!reason.trim()) {
+          setActionError('盖章申请必须填写原因')
+          return
+        }
+        body = { reason: reason.trim() }
+      }
+      const res = await fetch(`/api/quotes/${quote.id}/derive-${kind}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token || ''}` },
+        body: JSON.stringify(body || {}),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setActionError(json.error?.message || `生成${kindLabel(kind)}失败`)
+        return
+      }
+      setActionError('')
+      const id = json.data?.id
+      if (kind === 'contract' && json.data?.draft_id) {
+        window.location.href = `/contracts/drafts/${json.data.draft_id}`
+        return
+      }
+      if (id) {
+        window.alert(`已生成${kindLabel(kind)}：${id.slice(0, 8)}…`)
+        await fetchQuote({ allowCache: false })
+      }
+    } catch {
+      setActionError(`生成${kindLabel(kind)}失败：网络错误`)
+    } finally {
+      setDeriving(false)
+      setDerivingKind('')
+    }
+  }
+
+  function kindLabel(kind: string): string {
+    return { contract: '合同草稿', order: '销售订单草稿', seal: '盖章申请', tender: '标书数据包' }[kind] || kind
   }
 
   async function updateStatus(newStatus: string) {
@@ -220,6 +326,31 @@ export default function QuoteDetailPage() {
               <span className="text-slate-500">区域：</span>
               <span>{quote.region || 'CN'}</span>
             </div>
+            {quote.opportunity_id && (
+              <div>
+                <span className="text-slate-500">商机：</span>
+                <Link href={`/opportunities/${quote.opportunity_id}`} className="text-blue-600 hover:underline">
+                  {quote.opportunity_context?.opportunity_name || '查看商机'}
+                </Link>
+              </div>
+            )}
+            {quote.opportunity_context?.owner_name && (
+              <div><span className="text-slate-500">商机负责人：</span><span>{quote.opportunity_context.owner_name}</span></div>
+            )}
+            {quote.opportunity_context?.channel && (
+              <div><span className="text-slate-500">渠道：</span><span>{quote.opportunity_context.channel}</span></div>
+            )}
+            {quote.opportunity_context?.stage && (
+              <div><span className="text-slate-500">商机阶段：</span><span>{quote.opportunity_context.stage}</span></div>
+            )}
+            {quote.source_quote_id && (
+              <div>
+                <span className="text-slate-500">来源：</span>
+                <Link href={`/quotes/${quote.source_quote_id}`} className="text-blue-600 hover:underline">
+                  复制自历史报价
+                </Link>
+              </div>
+            )}
           </div>
 
           {quote.notes && (
@@ -230,6 +361,13 @@ export default function QuoteDetailPage() {
 
           {/* Action Buttons */}
           <div className="mt-6 pt-4 border-t flex gap-4">
+            <Button onClick={cloneQuote} disabled={cloning || !quote.id} variant="outline">
+              {cloning ? '复制中...' : '复制为草稿'}
+            </Button>
+            <Link href={`/quotes/${quoteId}/view`} prefetch={false}>
+              <Button variant="outline">客户视图</Button>
+            </Link>
+            {cloneError && <span className="text-sm text-red-600 self-center">{cloneError}</span>}
             {canSubmit && (
               <Button onClick={() => updateStatus('PENDING_APPROVAL')} disabled={updating}>
                 {updating ? '提交中...' : '提交审批'}
@@ -245,6 +383,24 @@ export default function QuoteDetailPage() {
                 {updating ? '审批中...' : '审批驳回'}
               </Button>
             )}
+            {quote.status === 'APPROVED' && (
+              <Button onClick={freezeQuote} disabled={freezing || updating} variant="outline">
+                {freezing ? '冻结中...' : '冻结版本'}
+              </Button>
+            )}
+            <Button onClick={deriveContract} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving && derivingKind === 'contract' ? '生成中...' : '生成合同草稿'}
+            </Button>
+            <Button onClick={() => deriveDownstream('order')} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving && derivingKind === 'order' ? '生成中...' : '销售订单'}
+            </Button>
+            <Button onClick={() => deriveDownstream('seal')} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving && derivingKind === 'seal' ? '生成中...' : '盖章申请'}
+            </Button>
+            <Button onClick={() => deriveDownstream('tender')} disabled={deriving || quote.status !== 'APPROVED'} variant="outline">
+              {deriving && derivingKind === 'tender' ? '生成中...' : '标书数据包'}
+            </Button>
+            {actionError && <span className="text-sm text-red-600 self-center">{actionError}</span>}
           </div>
         </CardContent>
       </Card>

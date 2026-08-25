@@ -7,7 +7,7 @@ import { resolveCumulativeTierPrice, type CumulativeTier } from './cumulative'
 import { parsePriceTableDump } from '@/lib/config-center/price-import'
 
 function entCloudRows(): CumulativeTier[] {
-  return parsePriceTableDump(readFileSync(resolve(__dirname, '../config-center/__fixtures__/price-table-dump.txt'), 'utf-8'))
+  return parsePriceTableDump(readFileSync(resolve(__dirname, '../config-center/__fixtures__/price-table-dump.txt'), 'utf-8'), 'PROJECT')
     .filter((r) => r.version_code === 'ENT_V6' && r.deployment === 'PUBLIC_CLOUD' && r.auth_mode === 'SUB_YEAR' && r.term_months === 12)
     .map((r) => ({ qty_from: r.qty_from, qty_to: r.qty_to, unit_price: r.unit_price, list_price: r.list_price }))
 }

@@ -72,6 +72,7 @@ export const changePasswordSchema = z.object({
 export const quoteSchema = z.object({
   customer_name: z.string().min(1).max(255),
   customer_contact: z.string().max(255).optional(),
+  opportunity_id: uuidSchema.optional(),   // WP10 阶段2：报价挂接 CRM 商机
   valid_until: dateTimeStringSchema.optional(),
   notes: z.string().max(2000).optional(),
   discount_rate: z.number().min(0).max(100).optional().default(0),

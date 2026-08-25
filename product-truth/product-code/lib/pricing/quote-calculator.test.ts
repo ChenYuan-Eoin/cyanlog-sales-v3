@@ -41,7 +41,7 @@ describe('calculateQuote 整链', () => {
       ...base,
       lines: [
         { productId: 'w1', productCode: 'WIKI', category: 'BASE' as const, follows: [], versionCode: 'ENT_V6', deployment: 'PUBLIC_CLOUD', authMode: 'SUB_YEAR', termMonths: 12, quantity: 50, tiers: ENT_CLOUD_TIERS },
-        { productId: 'x1', productCode: 'WPS', category: 'FOLLOW_ECO' as const, follows: ['WIKI'], versionCode: 'ENT_V6', deployment: 'PUBLIC_CLOUD', authMode: 'SUB_YEAR', termMonths: 12, quantity: 10, tiers: ENT_CLOUD_TIERS },
+        { productId: 'x1', productCode: 'WPS', category: 'FOLLOW_ECO' as const, follows: ['WIKI'], quantityLinkedTo: 'WIKI', versionCode: 'ENT_V6', deployment: 'PUBLIC_CLOUD', authMode: 'SUB_YEAR', termMonths: 12, quantity: 10, tiers: ENT_CLOUD_TIERS },
       ],
     })
     expect(r.ok).toBe(false)

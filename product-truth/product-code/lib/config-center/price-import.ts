@@ -121,13 +121,39 @@ export function validatePriceRows(rows: PriceImportRow[]): PriceImportResult {
   return { ok: issues.length === 0, checked, issues }
 }
 
-/** 解析 Project 价盘 dump（.tmp/price-table-dump.txt 格式：A45=私有部署 | B45=按年订阅版 | C45=10 ...） */
-export function parsePriceTableDump(text: string, productCode = 'PROJECT'): PriceImportRow[] {
+/** ONES Project 价盘 dump 默认布局（A45=私有部署 | B45=按年订阅版 | C45=10 ...） */
+export interface PriceTableDumpLayout {
+  /** 部署列映射：中文名 → deployment code */
+  deployMap: Record<string, string>
+  /** 授权列映射：中文名 → auth_mode code */
+  authMap: Record<string, string>
+  /** 版本列对：版本 code → [累计价列, 区间单价列] */
+  versions: Array<[string, string, string]>
+}
+
+export const ONES_PROJECT_DUMP_LAYOUT: PriceTableDumpLayout = {
+  deployMap: { 公有云: 'PUBLIC_CLOUD', 私有部署: 'PRIVATE', 高可用部署: 'HA' },
+  authMap: { 按年订阅版: 'SUB_YEAR', 三年订阅版: 'SUB_3YEAR', 一次性授权版: 'ONETIME' },
+  versions: [
+    ['STD_V6', 'F', 'G'],
+    ['PRO_V6', 'H', 'I'],
+    ['ENT_V6', 'J', 'K'],
+    ['XINCHUANG_V6', 'L', 'M'],
+  ],
+}
+
+/**
+ * 解析价盘 dump（.tmp/price-table-dump.txt 格式）。
+ * productCode 必传——解析器不默认绑定任何产品线（换产品线由调用方指定）。
+ * layout 可选，默认 ONES Project 布局；其他产品线可传自定义列映射。
+ */
+export function parsePriceTableDump(text: string, productCode: string, layout: PriceTableDumpLayout = ONES_PROJECT_DUMP_LAYOUT): PriceImportRow[] {
+  if (!productCode || !productCode.trim()) {
+    throw new Error('parsePriceTableDump 必须传入 productCode（产品线价盘不再默认绑定 PROJECT）')
+  }
   const rows: PriceImportRow[] = []
   const re = /^\s*([A-Z]+)\d*=(.+)$/
   // 块上下文：A/B/E 只在每块首行出现，后续行继承（直到下一个块首行）
-  const DEPLOY_MAP: Record<string, string> = { 公有云: 'PUBLIC_CLOUD', 私有部署: 'PRIVATE', 高可用部署: 'HA' }
-  const AUTH_MAP: Record<string, string> = { 按年订阅版: 'SUB_YEAR', 三年订阅版: 'SUB_3YEAR', 一次性授权版: 'ONETIME' }
   let deployment = 'PUBLIC_CLOUD'
   let authMode = 'SUB_YEAR'
   let termMonths: number | null = 12
@@ -144,10 +170,10 @@ export function parsePriceTableDump(text: string, productCode = 'PROJECT'): Pric
       }
     }
     if (cells.A) {
-      deployment = DEPLOY_MAP[cells.A] || cells.A
+      deployment = layout.deployMap[cells.A] || cells.A
     }
     if (cells.B) {
-      authMode = AUTH_MAP[cells.B] || cells.B
+      authMode = layout.authMap[cells.B] || cells.B
       termMonths = authMode === 'ONETIME' ? null : cells.E === '36' ? 36 : 12
     }
     if (cells.E) {
@@ -180,14 +206,7 @@ export function parsePriceTableDump(text: string, productCode = 'PROJECT'): Pric
       const n = Number(v.replace(/,/g, ''))
       return Number.isFinite(n) ? n : null
     }
-    // 版本列对：F/G 标准、H/I 专业、J/K 企业、L/M 信创
-    const versions: Array<[string, string, string]> = [
-      ['STD_V6', 'F', 'G'],
-      ['PRO_V6', 'H', 'I'],
-      ['ENT_V6', 'J', 'K'],
-      ['XINCHUANG_V6', 'L', 'M'],
-    ]
-    for (const [versionCode, listCol, unitCol] of versions) {
+    for (const [versionCode, listCol, unitCol] of layout.versions) {
       const listPrice = toNum(cells[listCol])
       const unitPrice = toNum(cells[unitCol])
       if (listPrice === null && unitPrice === null) {

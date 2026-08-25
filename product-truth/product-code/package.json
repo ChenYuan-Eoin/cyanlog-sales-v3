@@ -14,7 +14,9 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install",
     "db:seed": "node scripts/seed-via-api.mjs",
-    "env:check": "node scripts/check-env.mjs"
+    "env:check": "node scripts/check-env.mjs",
+    "setup:new-machine": "node scripts/setup-new-machine.mjs",
+    "setup:new-machine:skip": "node scripts/setup-new-machine.mjs --skip-test --skip-build"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.67",
