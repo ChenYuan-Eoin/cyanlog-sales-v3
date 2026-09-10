@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
       // 订单号生成失败不阻断（可后续补号）
     }
 
-    const result = await deriveOrder({ ...ctx.source, order_no: orderNo ?? undefined })
+    const result = await deriveOrder({ ...ctx.source, actor_id: user.id, order_no: orderNo ?? undefined })
     return NextResponse.json({
       success: true,
       data: { ...result, order_no: orderNo, message: '已从冻结版本派生销售订单草稿' },

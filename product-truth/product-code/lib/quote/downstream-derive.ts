@@ -23,9 +23,9 @@ export interface DeriveSource {
   }
 }
 
-export interface DeriveOrderInput extends DeriveSource { order_no?: string }
-export interface DeriveSealInput extends DeriveSource { reason?: string }
-export interface DeriveTenderInput extends DeriveSource { title?: string }
+export interface DeriveOrderInput extends DeriveSource { actor_id: string; order_no?: string }
+export interface DeriveSealInput extends DeriveSource { actor_id: string; reason?: string }
+export interface DeriveTenderInput extends DeriveSource { actor_id: string; title?: string }
 
 /** 从版本构建下游业务参数（含明细行，逐位一致） */
 export function buildDownstreamParams(source: DeriveSource): Record<string, unknown> {
@@ -55,23 +55,27 @@ export function buildDownstreamParams(source: DeriveSource): Record<string, unkn
   }
 }
 
-function isDownstreamTableMissing(error: unknown): boolean {
-  return isSchemaDriftError(error) || String((error as { message?: string })?.message || '').includes('relation "quote_derivations" does not exist')
-}
-
-async function recordDerivation(input: DeriveSource, type: DerivationType, targetId: string): Promise<void> {
-  const { error } = await supabaseAdmin.from('quote_derivations').insert({
-    org_id: input.org_id,
-    quote_id: input.quote_id,
-    version_id: input.version.id,
-    derivation_type: type,
-    target_id: targetId,
-    created_by: null,
+async function persistDerivation(
+  input: DeriveSource & { actor_id: string },
+  type: DerivationType,
+  target: Record<string, unknown>,
+): Promise<void> {
+  if (!input.actor_id) throw new Error('DERIVE_ACTOR_REQUIRED')
+  const { data, error } = await supabaseAdmin.rpc('persist_quote_derivation_v1', {
+    p_org_id: input.org_id,
+    p_actor_id: input.actor_id,
+    p_quote_id: input.quote_id,
+    p_version_id: input.version.id,
+    p_type: type,
+    p_target: target,
   })
   if (error) {
-    // 留痕失败不阻断派生（目标已生成）；仅记录
-    console.error(`[WP10] record derivation failed (${type}):`, error)
+    if (isSchemaDriftError(error) || error.code === 'PGRST202') {
+      throw new Error('DERIVE_TABLES_MISSING: 报价派生数据库结构尚未就绪，请联系管理员完成迁移')
+    }
+    throw error
   }
+  if (data !== target.id) throw new Error('DERIVE_RECEIPT_MISMATCH')
 }
 
 /** 派生销售订单草稿 */
@@ -79,10 +83,10 @@ export async function deriveOrder(input: DeriveOrderInput): Promise<{ id: string
   const id = uuidv4()
   const header = input.version.header
   const params = buildDownstreamParams(input)
-  const { error } = await supabaseAdmin.from('order_drafts').insert({
+  await persistDerivation(input, 'order', {
     id,
     org_id: input.org_id,
-    created_by: null,
+    created_by: input.actor_id,
     quote_id: input.quote_id,
     source_version_id: input.version.id,
     order_no: input.order_no ?? null,
@@ -95,13 +99,6 @@ export async function deriveOrder(input: DeriveOrderInput): Promise<{ id: string
     business_params: params,
     status: 'draft',
   })
-  if (error) {
-    if (isDownstreamTableMissing(error)) {
-      throw new Error('DERIVE_TABLES_MISSING: 数据库尚未应用报价下游派生迁移，请先执行 migration 20260820000002')
-    }
-    throw error
-  }
-  await recordDerivation(input, 'order', id)
   return { id, type: 'order' }
 }
 
@@ -110,10 +107,10 @@ export async function deriveSeal(input: DeriveSealInput): Promise<{ id: string; 
   const id = uuidv4()
   const header = input.version.header
   const params = buildDownstreamParams(input)
-  const { error } = await supabaseAdmin.from('seal_requests').insert({
+  await persistDerivation(input, 'seal', {
     id,
     org_id: input.org_id,
-    created_by: null,
+    created_by: input.actor_id,
     quote_id: input.quote_id,
     source_version_id: input.version.id,
     reason: input.reason ?? null,
@@ -122,13 +119,6 @@ export async function deriveSeal(input: DeriveSealInput): Promise<{ id: string; 
     business_params: params,
     status: 'pending',
   })
-  if (error) {
-    if (isDownstreamTableMissing(error)) {
-      throw new Error('DERIVE_TABLES_MISSING: 数据库尚未应用报价下游派生迁移，请先执行 migration 20260820000002')
-    }
-    throw error
-  }
-  await recordDerivation(input, 'seal', id)
   return { id, type: 'seal' }
 }
 
@@ -136,22 +126,15 @@ export async function deriveSeal(input: DeriveSealInput): Promise<{ id: string; 
 export async function deriveTender(input: DeriveTenderInput): Promise<{ id: string; type: DerivationType }> {
   const id = uuidv4()
   const params = buildDownstreamParams(input)
-  const { error } = await supabaseAdmin.from('tender_quote_packages').insert({
+  await persistDerivation(input, 'tender', {
     id,
     org_id: input.org_id,
-    created_by: null,
+    created_by: input.actor_id,
     quote_id: input.quote_id,
     source_version_id: input.version.id,
     title: input.title ?? `${input.customer_name} 标书数据包（源自报价 ${input.quote_no}）`,
     package_data: { ...params, customer_name: input.customer_name, customer_contact: input.customer_contact },
     status: 'draft',
   })
-  if (error) {
-    if (isDownstreamTableMissing(error)) {
-      throw new Error('DERIVE_TABLES_MISSING: 数据库尚未应用报价下游派生迁移，请先执行 migration 20260820000002')
-    }
-    throw error
-  }
-  await recordDerivation(input, 'tender', id)
   return { id, type: 'tender' }
 }

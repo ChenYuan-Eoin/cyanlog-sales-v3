@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
     const body = await req.json().catch(() => ({}))
     const title = typeof body?.title === 'string' && body.title.trim() ? body.title.trim() : undefined
 
-    const result = await deriveTender({ ...ctx.source, title })
+    const result = await deriveTender({ ...ctx.source, actor_id: user.id, title })
     return NextResponse.json({ success: true, data: { ...result, message: '已从冻结版本派生标书数据包' } })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'

@@ -176,7 +176,11 @@
       "product-truth/product-code/pnpm-lock.yaml",
       "product-truth/product-code/.env.example",
       "product-truth/product-code/lib/validation.ts",
-      "product-truth/product-code/lib/config-center/runtime.ts"
+      "product-truth/product-code/lib/config-center/runtime.ts",
+      "product-truth/product-code/node_modules",
+      "product-truth/product-code/.next",
+      "product-truth/product-code/next-env.d.ts",
+      "product-truth/product-code/tsconfig.tsbuildinfo"
     ],
     "delivery_contract": {
       "target_state": "code_green",
