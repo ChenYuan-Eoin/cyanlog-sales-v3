@@ -1,3 +1,4 @@
+import { assertDatabaseEnvironment } from './database-environment'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 function createLazyClient(factory: () => SupabaseClient): SupabaseClient {
@@ -24,6 +25,7 @@ function createBrowserSupabaseClient(): SupabaseClient {
     throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is required')
   }
 
+  assertDatabaseEnvironment({ databaseUrl: supabaseUrl, vercel: process.env.VERCEL, vercelEnv: process.env.VERCEL_ENV, browserHostname: typeof window === 'undefined' ? undefined : window.location.hostname })
   return createClient(supabaseUrl, supabaseAnonKey)
 }
 
@@ -39,6 +41,7 @@ function createServerSupabaseClient(): SupabaseClient {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is required')
   }
 
+  assertDatabaseEnvironment({ databaseUrl: supabaseUrl, vercel: process.env.VERCEL, vercelEnv: process.env.VERCEL_ENV })
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,

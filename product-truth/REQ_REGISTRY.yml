@@ -19,7 +19,7 @@ goal_governance:
   portfolio_umbrella_legacy_alias: "audit_supplement.objective_tree.primary_goal.id=G0；已退役，不属于正式可验收 G1-G11"
   rules:
     - "G 是不可变的长期产品组合目标；正式可验收编号只使用 G1-G11，不直接作为 execution_queue.active。"
-    - "WP 是可排序、可独立验收的开发工作包；ID 只使用 WP00-WP09，名称与 slug 单独存放。"
+    - "WP 是可排序、可独立验收的开发工作包；ID 只使用 WP00-WP99，名称与 slug 单独存放。"
     - "F 是 Feature Packet，IN 是需求输入，DG 是历史批次交付门禁，HG 是 Harness 执行门禁；不得复用为产品目标。"
     - "WP 完成不等于 G 完成；G 只有在相关 WP 和自身验收证据均有效时才能关闭。"
     - "完成证据必须绑定 namespace_version、WP、Git SHA、部署/数据库环境及浏览器或真实文件产物。"
@@ -33,7 +33,8 @@ goal_governance:
     WP06: {name: 文档对比, primary_goals: [G6], supporting_goals: [G7, G8, G10], state: completed_preview_candidate_not_production}
     WP07: {name: 合同起草, primary_goals: [G6], supporting_goals: [G2, G8, G10], state: queued}
     WP08: {name: 横切体验伞, primary_goals: [G5, G8], state: must_split_before_activation}
-    WP09: {name: 工程与发布验收, primary_goals: [G7, G8, G9, G10, G11], state: active_hosted_ai_runtime_and_release_candidate}
+    WP09: {name: 工程与发布验收, primary_goals: [G7, G8, G9, G10, G11], state: parked_waiting_wp10}
+    WP10: {name: 报价域完整形态与换机可迁移基座, state: active, authoritative_queue: governance/runtime-state/active-task.json}
   legacy_aliases:
     - "2026-07-10 至 2026-07-18 的执行账本旧 G1-G9，依次解释为 WP01-WP09。"
     - "F027 0.0.1 的批次卡旧 G0-G7，依次解释为 DG0-DG7。"
@@ -543,7 +544,8 @@ requirements:
     name: AI模型能力与业务使用边界
     module: 全局AI平台（配置中心）
     source: PROJECT-主文档.md#6.2.3
-    status: wp01_wp02_completed_wp09_hosted_runtime_active
+    status: in_progress
+    implementation_note: wp01_wp02_completed_wp09_hosted_runtime_active
     priority: P1
     feature_packet: product-truth/feature-packets/F012-ai-runtime-config.md
     code_locations:

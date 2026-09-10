@@ -2,13 +2,13 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, develop, spacex-hardening]
+    branches: [main, develop, spacex-hardening, production, 'codex/**']
   pull_request:
     branches: [main, develop, spacex-hardening]
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '9'
+  NODE_VERSION: '24'
+  PNPM_VERSION: '9.15.9'
 
 # Vercel 部署所需的权限
 permissions:
@@ -23,9 +23,6 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    env:
-      DIRECT_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +38,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Check tracked environment files
+        run: node scripts/check-sensitive-tracked.mjs
 
       - name: Lint
         run: pnpm lint
@@ -67,7 +67,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Run tests
         run: pnpm test:run
@@ -76,11 +76,11 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [lint, test]
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: vars.PREVIEW_E2E_ENABLED == 'true' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.PREVIEW_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PREVIEW_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PREVIEW_SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -96,13 +96,16 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
       - name: Build application
         run: pnpm build
+
+      - name: Verify isolated database target
+        run: node scripts/check-preview-target.mjs
 
       - name: Setup E2E test user
         run: node scripts/setup-e2e-user.mjs
@@ -123,10 +126,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: [lint, test]
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -142,13 +141,13 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
   security-audit:
-    name: Security Audit (Report)
+    name: Security Audit (Blocking)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,5 +157,10 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Audit dependencies
-        run: pnpm audit --audit-level=high || true
+        run: pnpm audit --audit-level=high

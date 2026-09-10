@@ -1,205 +1,24 @@
----
-# Project Manifest: cyanlog-sales-v3
-# 用途: 项目状态自解释协议，机器可读，AI/开发者第一入口
-# 更新规则: 每次迭代开始时更新 focus，每次状态变更时更新 stats
-# 读取优先级: 最高（先于 REQ_REGISTRY.yml）
----
-
+# Navigation manifest only. Does not override product truth or the execution queue.
 project:
   name: cyanlog-sales-v3
-  display_name: 销售管理系统
-  version: "2026-06-11"
-  updated_at: "2026-06-11T20:00:00Z"
-
-# ═══════════════════════════════════════════════════════════════
-# 研发状态（精简版）
-# ═══════════════════════════════════════════════════════════════
-
-# 正在编码
-now:
-  req: F001
-  name: 价盘与阶梯价
-  packet: product-truth/feature-packets/F001-price-list.md
-
-# 已完成
-done: [F003, F004, F007, F008]
-
-# 待实现
-todo:
-  - req: F005
-    name: 合同审核 (F005-derive)
-    status: design_in_progress
-    packet: product-truth/feature-packets/F005-derive.md
-
-# ═══════════════════════════════════════════════════════════════
-# 当前重心（详细版）
-# ═══════════════════════════════════════════════════════════════
+  display_name: ONES Sales
+  manifest_version: '2026-09-10'
+code_root: product-truth/product-code
+runtime:
+  node: '24'
+  package_manager: pnpm@9.15.9
+  local_command: sh product-truth/product-code/scripts/local.sh dev --hostname 127.0.0.1 --port 3000
+sources:
+  product_requirements: product-truth/REQ_REGISTRY.yml
+  feature_packets: product-truth/feature-packets
+  execution_queue: governance/runtime-state/active-task.json
+  demand_inbox: governance/runtime-state/demand-inbox.jsonl
+  rules: AGENTS.md
+  runtime_evidence: git rev-parse --git-path codex-runtime
 focus:
-  # 当前唯一主目标，所有开发资源优先投入
-  primary:
-    req_id: F001
-    name: 价盘与阶梯价
-    module: 配置中心
-    status: in_progress
-    why: |
-      价盘是报价中心的基础依赖，必须先完成强类型建模。
-      完成后 F002 报价编制才能消费价格数据。
-
-  # 当前次要目标（如果有）
-  secondary: []
-
-  # 被阻塞的目标（等待外部依赖或设计确认）
-  blocked:
-    - req_id: F005
-      name: 合同审核（完整设计）
-      blocked_by: ASK-v2 设计确认
-    - req_id: F006
-      name: 合同规则引擎
-      blocked_by: F005 依赖
-    - req_id: F013-V3
-      name: 标书中心 V3
-      blocked_by: OpenBidKit 差距补齐确认
-
-# ═══════════════════════════════════════════════════════════════
-# 技术栈约束（强制遵循）
-# ═══════════════════════════════════════════════════════════════
-constraints:
-  # 参考 ADR-006
-  database:
-    type: postgresql
-    provider: supabase
-    jsonb: required
-
-  # 参考 ADR-008: 严禁使用 ORM
-  data_access:
-    orm: prohibited
-    sdk: supabase-js
-    type_generation: "supabase gen types typescript"
-
-  # 参考 ADR-001
-  ai_failover:
-    chain: [local, cloud, rule-engine, manual-fallback]
-    local_timeout_ms: 45000
-    cloud_timeout_ms: 15000
-
-  # 参考 ADR-004
-  auth:
-    type: supabase-auth
-    rbac: required
-    data_scope: org_id
-
-  # 运行根唯一性（P1 已完成）
-  code_root: product-truth/product-code
-  deprecated_roots: []  # ✅ P1 已清理
-
-# ═══════════════════════════════════════════════════════════════
-# 需求统计（自动计算，人工校验）
-# ═══════════════════════════════════════════════════════════════
-req_stats:
-  total: 28
-  by_status:
-    draft: 7
-    confirmed: 10
-    in_progress: 4
-    design_confirmed: 4      # ✅ 已在状态机中合法化
-    completed: 7
-
-  by_priority:
-    P0: 9
-    P1: 10
-    P2: 9
-
-# ═══════════════════════════════════════════════════════════════
-# 健康度报告（实时）
-# ═══════════════════════════════════════════════════════════════
-health:
-  score: 45/100
-  grade: F
-  blockers:
-    - id: OBSERVABILITY-MISSING
-      desc: 无可观测性（Sentry/PostHog/APM）
-      severity: medium
-
-  warnings:
-    - id: CONFIG-DRIFT
-      desc: 配置中心实现违反 F000 三层架构
-      severity: medium
-    - id: REQ-STATUS-DRIFT
-      desc: REQ_REGISTRY 出现未登记状态值
-      severity: low
-
-  # P1 已修复问题
-  resolved:
-    - id: CI-BROKEN
-      desc: CI 配置文件为 .bak，无法自动构建
-      resolved_at: "2026-06-11"
-    - id: PRISMA-DRIFT
-      desc: ADR-008 禁止 ORM，但 Prisma 仍在依赖中
-      resolved_at: "2026-06-11"
-    - id: RUNROOT-NOT-UNIQUE
-      desc: 仓库根遗留代码与 product-code 并存
-      resolved_at: "2026-06-11"
-
-# ═══════════════════════════════════════════════════════════════
-# 关键入口（Quick Links）
-# ═══════════════════════════════════════════════════════════════
-entry_points:
-  dev:
-    - name: 报价创建
-      path: /quotes/new
-      req: F002
-    - name: 配置中心
-      path: /configs
-      req: F001,F009-F012
-
-  api:
-    - name: 健康检查
-      path: /api/health
-    - name: Flight Ready
-      path: /api/health/flight-ready
-
-  docs:
-    - name: 需求注册表
-      path: product-truth/REQ_REGISTRY.yml
-    - name: 功能包
-      path: product-truth/feature-packets/
-    - name: ADR 索引
-      path: product-truth/02-technical-truth/architecture-decisions/INDEX.md
-
-# ═══════════════════════════════════════════════════════════════
-# 自解释检查清单（Self-Explanation Checklist）
-# ═══════════════════════════════════════════════════════════════
-self_explanation:
-  # [ ] 新成员5分钟运行项目
-  new_member_quickstart: false
-  reason: "运行根不唯一，仓库根遗留文件干扰"
-
-  # [ ] AI 自动推断函数用途
-  ai_context_aware: false
-  reason: "缺少 .context 文件，模块脾气未记录"
-
-  # [ ] 项目进度自动汇总
-  auto_status: false
-  reason: "STATUS.md 需要人工/半自动生成"
-
-  # [ ] 架构演进有迹可循
-  architecture_traceable: true
-  reason: "ADR 存在但分散，manifest 提供统一入口"
-
-  # [ ] 噪音极低
-  low_noise: false
-  reason: "主文档 580KB，过期文档干扰"
-
-# ═══════════════════════════════════════════════════════════════
-# 下一步（Next Steps）
-# ═══════════════════════════════════════════════════════════════
-next_steps:
-  immediate:
-    - 完成 F001 价盘与阶梯价实现
-    - 统一运行根为 product-truth/product-code
-  this_week:
-    - 恢复 CI（从 .bak 恢复并验证）
-    - 移除 Prisma 依赖（执行 ADR-008）
-  this_month:
-    - 建立自动 STATUS.md 更新机制
-    - 为关键模块创建 .context 文件
+  work_package: WP10
+  name: 报价域完整形态与换机可迁移基座
+boundaries:
+  production_data_changes: separate_review_and_approval
+  local_database: isolated_only
+  completion: use_environment_and_exact_commit_evidence

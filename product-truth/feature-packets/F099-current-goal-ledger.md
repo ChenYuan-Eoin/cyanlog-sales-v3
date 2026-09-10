@@ -1,7 +1,7 @@
 # F099-当前开发工作包账本
 
 **Status**: active_work_package_ledger
-**Updated**: 2026-07-22
+**Updated**: 2026-09-10（当前队列指针；下文阶段证据保留历史日期）
 **Ledger Version**: v2026-07-22.01
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
@@ -11,12 +11,14 @@
 ## 0. 编号合同
 
 - `G1-G11` 是不可变长期产品组合目标，不进入 Active。
-- `WP00-WP09` 是可排序、可独立验收的开发工作包；ID 永远只存短编号，名称和 slug 单独存放。
+- `WP00-WP99` 是可排序、可独立验收的开发工作包；ID 永远只存短编号，名称和 slug 单独存放。
 - `F` 是 Feature Packet，`IN` 是需求输入，`DG` 是历史交付门禁，`HG0-HG5` 是 Harness 执行门禁。
 - WP 完成不等于 G 完成；证据必须绑定目标版本、WP、Git SHA、环境及浏览器或真实文件产物。
 - 2026-07-10 至 2026-07-18 的执行账本旧别名 `G1-G9` 依次映射为 `WP01-WP09`；F027 旧 `G0-G7` 依次映射为 `DG0-DG7`；Harness 历史证据旧 `G0-G5` 依次映射为 `HG0-HG5`。历史原文、路径和文件名不改。
 
 ## 1. 当前工作包
+
+当前唯一 Active 是 WP10（报价域完整形态与换机可迁移基座）；WP09 已暂停。最新执行与发布证据看 worktree 的 codex-runtime。下表和后续详细叙述中，7月已完成阶段为历史证据，不能外推到当前 Production。
 
 | WP | Slug | 主要 G | 当前状态 | 边界 |
 |---|---|---|---|---|
@@ -29,9 +31,10 @@
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
 | WP07 | contract-drafting | G6；支撑 G2/G8/G10 | queued | 可编辑草稿、版本、DOCX 导出、转审核/对比 |
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
-| WP09 | release-acceptance | G7/G8/G9/G10/G11 | **Active** / hosted_ai_runtime_and_release_candidate | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
+| WP09 | release-acceptance | G7/G8/G9/G10/G11 | parked / waiting_wp10 | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
+| WP10 | quote-domain-complete-migration | 当前Active以调度源为准 | active | 报价域完整形态、换机与发布收口；不代表Production已验收 |
 
-执行顺序当前为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（已完成） -> WP09（Active） -> WP07`。WP09 本批只处理托管环境 AI 路由、业务可读配置和同一 release commit 的 Preview 验收；规则业务数据、合同工作台、准确率和循环复审不混入。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回独立工作包，不再作为 Active。
+2026-07-22 历史执行顺序为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（已完成） -> WP09（Active） -> WP07`。WP09 本批只处理托管环境 AI 路由、业务可读配置和同一 release commit 的 Preview 验收；规则业务数据、合同工作台、准确率和循环复审不混入。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回独立工作包，不再作为 Active。
 
 ## 2. 候选边界
 
@@ -98,7 +101,7 @@ Production 数据库继续只读；WP01-WP05 的上述候选均未部署 Product
 - 隔离 Preview `dpl_2P11eFtwxutsQXMUoU8R46XdDGUx` 的真实合同列表链接不再强制 `panel=evidence`；桌面 1440×1000 与 iPad 1180×820 均默认进入“审查”。
 - 选中第 45 页风险后，DOCX 内部正文 `scrollTop` 可继续变化，`window.scrollY` 保持不动；临时风险与短期认证 token 均按精确 ID 清理为 0。Production 未写入或部署。
 
-## 8. WP09 当前批次（2026-07-22）
+## 8. WP09 历史批次（2026-07-22，现暂停）
 
 - 产品链不变：平台层管理 Provider、模型目录、可复用 AI 应用和路由；业务模块只选择已发布应用；合同规则集与问题分类仍由 F009 管理。
 - 页面主任务必须让业务人员依次看懂“接入了什么模型能力 → 哪些产品功能在使用 → 管理员配置的主备顺序 → 当前环境实际会执行什么”，内部表名、环境变量和机器编码只能作为次级审计信息。
