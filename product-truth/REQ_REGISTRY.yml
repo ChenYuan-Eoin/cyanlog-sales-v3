@@ -1015,3 +1015,25 @@ requirements:
       - app/quotes/[id]/ReviewPanel.tsx
       - lib/configs/ai-platform-registry.ts
     description: 基于自动审核核验结果调用平台 AI 生成审核意见/风险/建议；失败回退不伪造；AI_CONFIG 发布后生效。
+
+  F054:
+    name: 个人一屏查寄
+    module: 自助下单
+    source: IN-20260911-002 / IN-20260911-006
+    status: in_progress
+    priority: P1
+    feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
+    code_locations:
+      - app/shipping
+      - app/api/shipping
+      - lib/shipping
+    description: 左查运单，右粘贴地址确认寄件；最近寄件及持久化防重；仅配置名单开放，预留后续订单策略。
+
+# Maintained PRD index
+sf_self_service_order_prd:
+  id: F054
+  status: in_progress
+  source: IN-20260911-002
+  branch: codex/sf-self-service-order
+  work_package: WP11
+  feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md

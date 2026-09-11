@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { Package } from 'lucide-react'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 import { logoutClientSession } from '@/lib/session-client'
@@ -35,6 +36,13 @@ export function Sidebar() {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const branding = useBranding()
+  const [shippingAllowed, setShippingAllowed] = useState(false)
+  useEffect(() => {
+    let live = true
+    fetch('/api/shipping/settings', { cache: 'no-store' }).then(r => { if (live) setShippingAllowed(r.ok) }).catch(() => { if (live) setShippingAllowed(false) })
+    return () => { live = false }
+  }, [pathname])
+  const visibleNavItems = shippingAllowed ? [...navItems.slice(0, 2), { name: '自助下单', href: '/shipping', icon: Package }, ...navItems.slice(2)] : navItems
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -104,7 +112,7 @@ export function Sidebar() {
           <p className="truncate px-4 text-xs text-slate-300">{branding.productSubtitle || branding.brandName}</p>
         </div>
         <nav className="px-3 py-4 flex-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon
             return (
               <Link

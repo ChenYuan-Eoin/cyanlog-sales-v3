@@ -1,3 +1,4 @@
+import { assertDatabaseEnvironment } from '@/lib/database-environment'
 // 认证与权限中间件 — Next.js Edge Runtime
 // REQ: F003 自主可控 + RBAC
 //
@@ -34,7 +35,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 
-const PUBLIC_PATHS = ['/login', '/register']
+const PUBLIC_PATHS = ['/login', '/register', '/shipping']
 const PRIMARY_HOST = 'sales.cyanlog.icu'
 const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }> = {
   'quote.cyanlog.icu': { rootPath: '/quotes', preservePath: true },
@@ -125,6 +126,7 @@ function createMiddlewareSupabaseClient() {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for auth middleware')
   }
 
+  assertDatabaseEnvironment({ databaseUrl: supabaseUrl, vercel: process.env.VERCEL, vercelEnv: process.env.VERCEL_ENV })
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,

@@ -2,13 +2,13 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, develop, spacex-hardening]
+    branches: [main, production, develop, spacex-hardening, "codex/wp11-production"]
   pull_request:
-    branches: [main, develop, spacex-hardening]
+    branches: [main, production, develop, spacex-hardening, "codex/wp11-production"]
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '9'
+  NODE_VERSION: '24'
+  PNPM_VERSION: '9.15.9'
 
 # Vercel 部署所需的权限
 permissions:
