@@ -39,6 +39,8 @@ const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
   domain: 'sales.cyanlog.icu',
   productionBranch: 'production'
 });
+const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_request', 'shipping_tracking', 'shipping_access']);
+const SHIPPING_REPLAY_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'confirm_submission', 'query_tracking', 'reload_recent', 'verify_access']);
 const REQUIRED_DEFECT_REPLAY_ACTIONS = Object.freeze([
   'page_scroll',
   'open_edit_dialog',
@@ -279,6 +281,32 @@ function inspectGitWorktreeIsolation(repoRoot) {
   };
 }
 
+function runtimeProfileOf(state) {
+  return state.active_task?.delivery_contract?.runtime_profile || 'ai';
+}
+function requiredReplayActions(state) {
+  return runtimeProfileOf(state) === 'shipping' ? SHIPPING_REPLAY_ACTIONS : REQUIRED_DEFECT_REPLAY_ACTIONS;
+}
+function shippingRuntimeEvidenceBlockers(section, environment) {
+  const blockers = [];
+  const provider = section.shipping_provider?.payload || {};
+  const request = section.shipping_request?.payload || {};
+  const tracking = section.shipping_tracking?.payload || {};
+  const access = section.shipping_access?.payload || {};
+  const expectedEndpoint = environment === 'production'
+    ? 'https://sfapi.sf-express.com/std/service'
+    : 'https://sfapi-sbox.sf-express.com/std/service';
+  if (provider.provider !== 'sf-express' || provider.success !== true || provider.endpoint !== expectedEndpoint || provider.sf_environment !== environment) blockers.push('Shipping provider proof is not a successful call to the required SF environment');
+  if (!/^PV3[a-f0-9]{28}$/.test(String(request.request_id || '')) || request.status !== 'accepted' || !/^(?:SF)?[0-9]{10,15}$/.test(String(request.waybill || ''))) blockers.push('Shipping request proof has no accepted request and waybill');
+  if (!/^[0-9a-f-]{36}$/i.test(String(request.created_by || ''))) blockers.push('Shipping request proof has no authenticated owner');
+  if (provider.order_id !== request.request_id) blockers.push('Shipping provider proof is not bound to the same request');
+  if (tracking.success !== true || tracking.waybill !== request.waybill || !Number.isInteger(tracking.event_count) || tracking.event_count < 0) blockers.push('Shipping tracking proof is missing or refers to a different waybill');
+  for (const check of ['anonymous_orders_denied', 'anonymous_contacts_denied', 'owner_can_read', 'public_page_accessible', 'same_key_single_request']) {
+    if (access[check] !== true) blockers.push(`Shipping access or idempotency proof missing: ${check}`);
+  }
+  return blockers;
+}
+
 function validateSchedulerState(options = {}) {
   const { repoRoot, state } = loadSchedulerState(options);
   const { records: inboxRecords, parseErrors: inboxParseErrors } = loadDemandInbox(options);
@@ -344,7 +372,10 @@ function validateSchedulerState(options = {}) {
     errors.push(`active_task.delivery_contract.required_code_checks must include ${canonicalCodeChecks.join(', ')}`);
   }
   const requiredRuntimeEvidence = deliveryContract?.required_runtime_evidence;
-  const canonicalRuntimeEvidence = ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
+  const profile = runtimeProfileOf(state);
+  if (!['ai', 'shipping'].includes(profile)) errors.push('Unknown runtime evidence profile');
+  if (profile === 'shipping' && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
+  const canonicalRuntimeEvidence = profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
     deliveryContract
     && (
@@ -1250,6 +1281,10 @@ function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, ex
     if (!Array.isArray(payload.attachments) || payload.attachments.length === 0) blockers.push(`Production runtime evidence has no raw response attachment: ${item}`);
   }
 
+  if (requiredItems.includes('shipping_request')) {
+    blockers.push(...shippingRuntimeEvidenceBlockers(section, 'production'));
+    return blockers;
+  }
   const reviewId = section.review_run?.payload?.review_id;
   if (!/^[0-9a-f-]{36}$/.test(String(reviewId || ''))) blockers.push('Production runtime ReviewRun ID is missing');
   if (!['COMPLETED', 'DEGRADED'].includes(String(section.review_run?.payload?.status || ''))) blockers.push('Production runtime ReviewRun is not completed');
@@ -1432,7 +1467,7 @@ function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previe
     const productionVerified = !productionTarget || (
       proof?.production_verified === true
       && evidenceEnvelopeValid(productionArtifacts.browser_acceptance, repoRoot)
-      && JSON.stringify(productionArtifacts.browser_acceptance?.payload?.actions) === JSON.stringify(REQUIRED_DEFECT_REPLAY_ACTIONS)
+      && JSON.stringify(productionArtifacts.browser_acceptance?.payload?.actions) === JSON.stringify(requiredReplayActions(state))
       && proof.production_regression_artifact_sha256 === productionArtifacts.browser_acceptance.sha256
       && proof.production_commit === head
     );
@@ -1515,6 +1550,8 @@ function getDeliveryStatus(options = {}) {
     targetState: state.active_task?.delivery_contract?.target_state || null,
     allowedStates: state.active_task?.delivery_contract?.allowed_states || [],
     requiredCodeChecks: state.active_task?.delivery_contract?.required_code_checks || [],
+    runtimeProfile: runtimeProfileOf(state),
+    requiredReplayActions: requiredReplayActions(state),
     requiredRuntimeEvidence: state.active_task?.delivery_contract?.required_runtime_evidence || [],
     requiredProductionRuntimeEvidence: state.active_task?.delivery_contract?.required_production_runtime_evidence || [],
     productionReleaseAuthorization: state.active_task?.delivery_contract?.production_release_authorization || null,
@@ -1656,7 +1693,7 @@ function checkDeliveryStage(stage, options = {}) {
     if (defectReplayPayload?.commit !== status.git.head) blockers.push('defect replay payload commit does not equal HEAD');
     if (defectReplayPayload?.deployment_id !== evidence.preview?.deployment_id) blockers.push('defect replay payload deployment does not equal Preview deployment');
     if (!/^https:\/\//.test(String(defectReplayPayload?.url || ''))) blockers.push('defect replay payload has no HTTPS URL');
-    if (JSON.stringify(defectReplayPayload?.actions) !== JSON.stringify(REQUIRED_DEFECT_REPLAY_ACTIONS)) blockers.push('defect replay payload does not contain the complete ordered action sequence');
+    if (JSON.stringify(defectReplayPayload?.actions) !== JSON.stringify(status.requiredReplayActions)) blockers.push('defect replay payload does not contain the complete ordered action sequence');
     if (defectReplayPayload?.result !== 'pass') blockers.push('defect replay did not pass');
     if (defectReplayPayload?.overlays_after !== 0) blockers.push('defect replay left overlays behind');
     if (defectReplayPayload?.body_scroll_lock_released !== true) blockers.push('defect replay did not release body scroll lock');
@@ -1670,6 +1707,9 @@ function checkDeliveryStage(stage, options = {}) {
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
       }
     }
+    if (status.runtimeProfile === 'shipping') {
+      blockers.push(...shippingRuntimeEvidenceBlockers(evidence.runtime || {}, 'sandbox'));
+    } else {
     const runtimeReviewId = evidence.runtime?.review_run?.payload?.review_id;
     if (!/^[0-9a-f-]{36}$/.test(String(runtimeReviewId || ''))) blockers.push('runtime ReviewRun ID is missing');
     if (!['COMPLETED', 'DEGRADED'].includes(String(evidence.runtime?.review_run?.payload?.status || ''))) blockers.push('runtime ReviewRun is not completed');
@@ -1702,6 +1742,7 @@ function checkDeliveryStage(stage, options = {}) {
       if (!completedProbeInvocation) blockers.push('provider probe does not match a completed model invocation');
       const detailedTokenTotal = invocations.reduce((sum, item) => sum + (Number.isInteger(item?.total_tokens) ? item.total_tokens : 0), 0);
       if (detailedTokenTotal !== evidence.runtime?.tokens?.payload?.total_tokens) blockers.push('token evidence does not equal model_invocations detail total');
+    }
     }
   }
   if (deliveryStateAtLeast(stage, 'integration_ready') && !productionTerminal) {
@@ -2133,6 +2174,9 @@ module.exports = {
   DELIVERY_RUNTIME_FILE,
   DELIVERY_ATTESTATION_REF,
   REQUIRED_DEFECT_REPLAY_ACTIONS,
+  SHIPPING_RUNTIME_ITEMS,
+  SHIPPING_REPLAY_ACTIONS,
+  shippingRuntimeEvidenceBlockers,
   VERCEL_PRODUCTION_CONTRACT,
   findRepoRoot,
   getDocumentEntry,
