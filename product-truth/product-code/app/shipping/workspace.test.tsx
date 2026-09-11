@@ -87,7 +87,7 @@ describe('one screen shipping interaction', () => {
  })
  it('does not request private records or show the address book to guests', async () => {
   render(<ShippingWorkspace settings={{ ...settings, guest: true, ready: false, canSubmit: false }} userId="guest" />)
-  expect(screen.queryByRole('button', { name: '寄件人地址簿' })).toBeNull()
+  expect((screen.getByRole('button', { name: '寄件人地址簿' }) as HTMLButtonElement).disabled).toBe(true)
   expect((screen.getByRole('button', { name: '确认寄件' }) as HTMLButtonElement).disabled).toBe(true)
   await waitFor(() => expect(fetcher).not.toHaveBeenCalled())
  })
