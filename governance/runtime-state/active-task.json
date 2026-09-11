@@ -168,7 +168,8 @@
       "product-truth/product-code/scripts/local.mjs",
       "product-truth/product-code/supabase/migrations/20260910000001_close_contract_service_access.sql",
       ".github/workflows/ci.yml",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "product-truth/product-code/components/layout/AppShell.tsx"
     ],
     "delivery_contract": {
       "target_state": "production_released",
