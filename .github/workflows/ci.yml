@@ -41,7 +41,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm lint
@@ -67,7 +67,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Run tests
         run: pnpm test:run
@@ -76,11 +76,11 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [lint, test]
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && vars.RUN_ISOLATED_E2E == 'true'
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.ISOLATED_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.ISOLATED_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ISOLATED_SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -96,13 +96,16 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
       - name: Build application
         run: pnpm build
+
+      - name: Verify isolated E2E target
+        run: node -e "if(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname!=='vsfropnfsmnonkotywsx.supabase.co')process.exit(1)"
 
       - name: Setup E2E test user
         run: node scripts/setup-e2e-user.mjs
@@ -124,9 +127,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, test]
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.ISOLATED_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.ISOLATED_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ISOLATED_SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -142,7 +145,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build

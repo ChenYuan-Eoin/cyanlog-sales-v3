@@ -53,6 +53,22 @@ describe('one screen shipping interaction', () => {
   await waitFor(() => expect(bodies.length).toBe(2))
   expect(bodies[0].key).toBe(bodies[1].key)
  })
+ it('does not unlock the current uncertain request while reconciling another request', async () => {
+  const input={sender:contact,recipient:contact,cargo:'文件',weight:1,serviceId:2,remark:'',source:'manual'}
+  sessionStorage.setItem('shipping-request:test-user:sandbox',JSON.stringify({key:'43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0',input}))
+  const current={id:'current',status:'unknown',waybill:null,created_at:'2026-09-11T01:00:00Z',environment:'sandbox'}
+  const other={...current,id:'other'}
+  let reconciled=false
+  fetcher.mockImplementation(async (_url:string,init?:RequestInit)=>{
+   if(init?.method==='POST'){reconciled=true;return new Response(JSON.stringify({...other,status:'accepted',waybill:'SF1234567890123'}),{status:200})}
+   if(reconciled)return new Promise(()=>{})
+   return new Response(JSON.stringify({records:[other,current],current}),{status:200})
+  })
+  render(<ShippingWorkspace settings={settings} userId="test-user" />)
+  const buttons=await screen.findAllByRole('button',{name:'确认结果'});expect(buttons.length).toBe(2)
+  fireEvent.click(buttons[0]);await waitFor(()=>expect(reconciled).toBe(true))
+  expect(screen.queryByRole('button',{name:'再寄一票'})).toBeNull()
+ })
  it('autofills the last successful shipment on a new visit', () => {
   const last = { sender: { ...contact, name: '上次寄件人' }, recipient: { ...contact, name: '上次收件人' }, cargo: '合同', weight: 2, serviceId: 2, remark: '上门联系', source: 'manual' as const }
   render(<ShippingWorkspace settings={{ ...settings, lastShipment: last }} userId="test-user" />)

@@ -63,7 +63,7 @@ export default function ShippingWorkspace({ settings, userId }: { settings: Ship
   }
   async function reconcile(r: ShippingRecord) {
     setReconcileId(r.id); setRecentError('')
-    try { const updated = await api<ShippingRecord>(`/api/shipping/orders/${r.id}/reconcile`, {}); setRecord(updated); await refresh() }
+    try { await api<ShippingRecord>(`/api/shipping/orders/${r.id}/reconcile`, {}); await refresh() }
     catch (e) { setRecentError((e as Error).message) }
     finally { setReconcileId('') }
   }
