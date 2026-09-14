@@ -7,7 +7,7 @@ const ORIGIN = 'https://sales.cyanlog.icu';
 const TABLES = ['contract_ai_chats','contract_comparisons','contract_items','contract_signatures','contract_risk_cards','contract_template_params','contract_rule_snapshots','contract_risk_card_fixes','contract_rules_v2','contract_drafts','contract_comparison_diffs','shipping_requests','shipping_contacts','shipping_outbound_imports'];
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 
-async function verify({ commit, deploymentId, runtime, operator, tables, token, sfPartner, sfCheckWord, ownerId, waybill }) {
+async function verify({ commit, deploymentId, runtime, operator, token, sfPartner, sfCheckWord, ownerId, waybill }) {
   if (!/^[0-9a-f]{40}$/.test(commit) || !/^dpl_/.test(deploymentId)) throw Error('Exact production commit and deployment required');
   if (!/^[0-9a-f-]{36}$/.test(ownerId) || !/^SF[0-9]{10,15}$/.test(waybill)) throw Error('Owner and known personal waybill required');
   if (!token || !sfPartner || !sfCheckWord) throw Error('Missing read-only verifier credentials');
@@ -21,7 +21,7 @@ async function verify({ commit, deploymentId, runtime, operator, tables, token, 
   function save(name,data){const f=path.join(out,name+'.json');fs.writeFileSync(f,JSON.stringify(data),{mode:0o600});const item={path:path.relative(runtime,f),sha256:hash(fs.readFileSync(f))};raw.push(item);return item;}
   async function getJson(url,options={}){const r=await fetch(url,{...options,signal:AbortSignal.timeout(20000)});const d=await r.json();if(!r.ok)throw Error('Read-only verifier request failed: '+r.status);return d;}
   async function query(sql){return getJson(`https://api.supabase.com/v1/projects/${PROJECT}/database/query`,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({query:sql})});}
-  const names=tables || TABLES;
+  const names=TABLES;
   if (!names.every(t=>/^[a-z_]+$/.test(t)) || !['shipping_contacts','shipping_requests','shipping_outbound_imports'].every(t=>names.includes(t))) throw Error('Invalid scoped security catalog');
   const sqlNames=names.map(t=>"'"+t+"'").join(',');
   const catalog=await query(`select c.relname,c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in (${sqlNames})`);
@@ -51,7 +51,7 @@ async function verify({ commit, deploymentId, runtime, operator, tables, token, 
   const attach=[...raw,{path:operator.artifact_path,sha256:operator.sha256}];
   function envelope(name,payload){const full={...originEvidence,...payload,attachments:attach};const f=path.join(out,name+'.json');fs.writeFileSync(f,JSON.stringify(full),{mode:0o600});return{artifact_path:path.relative(runtime,f),sha256:hash(fs.readFileSync(f)),payload:full};}
   return {
-    security_gate:envelope('security-gate',{source:'live_production_database_verifier',gate_id:'SECURITY-P0-RLS-PRODUCTION',status:'passed',production_project_ref:PROJECT,checks:Object.fromEntries(['catalog','rls','acl','rpc','advisor','anon','service_role'].map(x=>[x,true]))}),
+    security_gate:envelope('security-gate',{source:'live_production_database_verifier',gate_id:'SECURITY-P0-RLS-PRODUCTION',status:'passed',production_project_ref:PROJECT,checks:Object.fromEntries(['catalog','rls','acl','rpc','advisor','anon','service_role'].map(x=>[x,'pass']))}),
     verifier:envelope('verifier',{source:'live_production_runtime_verifier',operator_observations_are_attested:true}),
     shipping_workspace:envelope('workspace',{source:'production_database',page_accessible:true,address_book_usable:ui.address_book_usable,form_editable:ui.form_editable,payment_choices:ui.payment_choices,production_submission_disabled:ui.production_submission_disabled,outbound_count:records.length}),
     shipping_tracking:envelope('tracking',{source:'production_api',success:true,waybill,event_count:route.routes.length,endpoint:'https://sfapi.sf-express.com/std/service'}),
