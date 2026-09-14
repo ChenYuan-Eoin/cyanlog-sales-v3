@@ -22,12 +22,18 @@ export async function sfCall(serviceCode: string, message: unknown): Promise<unk
   const timestamp = Date.now().toString(), msgData = JSON.stringify(message)
   const body = new URLSearchParams({ partnerID: config.partner, requestID: randomUUID(), serviceCode, timestamp, msgData, msgDigest: sfDigest(msgData, timestamp, config.checkWord) })
   const url = config.environment === 'sandbox' ? 'https://sfapi-sbox.sf-express.com/std/service' : 'https://sfapi.sf-express.com/std/service'
+  const started = Date.now()
+  let upstreamStatus: number | undefined
   try {
     const response = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error' })
+    upstreamStatus = response.status
     if (!response.ok) throw new Error('upstream status')
     return decodeSfResponse(await response.json())
   } catch (error) {
     if (error instanceof ShippingError) throw error
+    // Only transport metadata: never log request bodies, credentials or customer details.
+    const failure = error as { name?: string; cause?: { code?: string } }
+    console.error('shipping.sf.transport', { serviceCode, environment: config.environment, upstreamStatus, elapsedMs: Date.now() - started, errorType: failure?.name, networkCode: /^[A-Z0-9_]+$/.test(failure?.cause?.code || '') ? failure.cause?.code : undefined })
     throw new ShippingError(502, '顺丰响应超时或格式异常，请查询原请求结果，勿重复寄件。')
   }
 }
