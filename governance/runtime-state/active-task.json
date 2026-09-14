@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-08-20T18:24:54+08:00",
+  "updated_at": "2026-09-11T04:22:43.873265+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,61 +128,58 @@
     ]
   },
   "active_task": {
-    "id": "WP10",
-    "slug": "quote-domain-complete-migration",
-    "name": "报价域完整形态与换机可迁移基座",
+    "id": "WP11",
+    "slug": "personal-shipping-workspace",
+    "name": "个人一屏查寄",
     "kind": "product",
     "status": "active",
-    "objective": "完成 V3 报价域完整形态落地 + 项目换机可迁移基座，交付可验收闭环。报价域：商机接入（报价挂 CRM 商机，历史报价复制/继承历史价/调整/重算/留痕/重审批）；配置通用化（产品线隔离，ONES 为第一套种子数据，产品/版本/部署/授权/期限/价盘/税率/搭售规则/模板全部配置化，消除税目按产品码、生态账号数 WIKI 写死、价盘导入默认 PROJECT 等硬编码）；算价引擎唯一；核验与审批全自动化；可交互报价页；版本冻结=结构化版本+快照+变更留痕；合同/标书/订单/续费/增购/升级从版本派生字段逐位一致。迁移基座：删 node_modules 软链、锁文件重装（pnpm@9.15.9, node 24）、固化 setup-new-machine.mjs、密钥清单入密码管理器、迁移演练一次。",
-    "current_step": "阶段0：环境审计与治理登记完成（IN-20260820-001），正在固化换机脚本并重装依赖",
-    "started_at": "2026-08-20T18:24:54+08:00",
-    "activation_basis": "用户审阅完整形态、迁移方案与目标文本后复制激活（codex_internal_context 提供 objective）；IN-20260820-001 登记",
-    "execution_workspace": "/Users/nsss/Price-v3",
+    "objective": "用户生产验收：左侧下单、右侧查看；地址簿与上次信息自动填充；匿名页面可访问，匿名实际寄件授权方式待确认；只发布本任务必需功能及安全修复。",
+    "started_at": "2026-09-11T07:05:26.409843+00:00",
+    "activation_basis": "用户在评估WP10暂停影响及个人范围后明确要求：打个目标，开发。IN-20260911-006",
+    "execution_workspace": "/Users/nsss/.local/share/price-v3-wp11-production",
     "allowed_paths": [
-      "AGENTS.md",
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "governance/runtime-state/harness-state.json",
-      "governance/runtime-state/goal-contract.json",
       "product-truth/REQ_REGISTRY.yml",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F037-product-catalog-version-matrix.md",
-      "product-truth/feature-packets/F038-price-matrix.md",
-      "product-truth/feature-packets/F039-field-dictionary.md",
-      "product-truth/feature-packets/F040-output-templates-clause-mapping.md",
-      "product-truth/feature-packets/F041-numbering-rules.md",
-      "product-truth/feature-packets/F042-business-params.md",
-      "product-truth/feature-packets/F043-approval-configurable.md",
-      "product-truth/feature-packets/F044-quote-version-snapshot.md",
-      "product-truth/feature-packets/F045-advanced-subjects.md",
-      "product-truth/feature-packets/F046-nonstandard-template-semantic.md",
-      "product-truth/feature-packets/F047-quote-review-automation.md",
-      "product-truth/feature-packets/F048-internal-price-margin.md",
-      "product-truth/feature-packets/F049-region-tax-matrix.md",
-      "product-truth/feature-packets/F050-discount-governance.md",
-      "product-truth/feature-packets/F051-discount-role-caps.md",
-      "product-truth/feature-packets/F052-guided-quote-wizard.md",
-      "product-truth/feature-packets/F053-ai-review-assistant.md",
-      "product-truth/product-code/app/api/quotes",
-      "product-truth/product-code/app/quotes",
-      "product-truth/product-code/lib/pricing",
-      "product-truth/product-code/lib/review",
-      "product-truth/product-code/lib/quote",
-      "product-truth/product-code/lib/export",
-      "product-truth/product-code/lib/config-center",
-      "product-truth/product-code/scripts",
-      "product-truth/product-code/supabase/migrations",
+      "product-truth/product-code/app/shipping",
+      "product-truth/product-code/app/api/shipping",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/components/layout/Sidebar.tsx",
+      "product-truth/product-code/supabase/migrations/20260911000001_shipping_requests.sql",
+      "product-truth/product-code/scripts/SHIPPING-SETUP.md",
+      "product-truth/product-code/.env.example",
+      "product-truth/product-code/node_modules",
+      "product-truth/product-code/.next",
+      "product-truth/product-code/next-env.d.ts",
+      "product-truth/product-code/tsconfig.tsbuildinfo",
+      "product-truth/product-code/vitest.config.ts",
+      "product-truth/product-code/supabase/migrations/20260911000002_secure_comparison_diffs.sql",
+      "product-truth/product-code/supabase/migrations/20260911000003_shipping_contacts_defaults.sql",
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/middleware.ts",
       "product-truth/product-code/package.json",
       "product-truth/product-code/pnpm-lock.yaml",
-      "product-truth/product-code/.env.example",
-      "product-truth/product-code/lib/validation.ts",
-      "product-truth/product-code/lib/config-center/runtime.ts"
+      "product-truth/product-code/lib/database-environment.ts",
+      "product-truth/product-code/lib/database-environment.test.ts",
+      "product-truth/product-code/lib/supabase.ts",
+      "product-truth/product-code/scripts/local.sh",
+      "product-truth/product-code/scripts/local.mjs",
+      "product-truth/product-code/supabase/migrations/20260910000001_close_contract_service_access.sql",
+      ".github/workflows/ci.yml",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "product-truth/product-code/components/layout/AppShell.tsx"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -197,19 +194,54 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "provider_probe",
-        "review_run",
-        "model_invocations",
-        "tokens"
+        "shipping_provider",
+        "shipping_request",
+        "shipping_tracking",
+        "shipping_access"
       ],
-      "note": "阶段0-4 以代码与本地验证证据推进；阶段5 线上验收需用户现有 Chrome + Production 证据，遵守既有发布门禁；AI 云端额度充值属用户决策项"
-    }
+      "note": "用户已批准具体生产数据变更并完成安全迁移。当前候选仍需完成发布与用户现有Chrome验收；顺丰正式绑定和匿名付费策略未就绪，不开放无约束匿名寄件。",
+      "production_database_mode": "controlled_write_approved",
+      "runtime_profile": "shipping",
+      "required_production_runtime_evidence": [
+        "shipping_provider",
+        "shipping_request",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "final_acceptance": {
+        "origin": "https://sales.cyanlog.icu",
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "new_local_browser_or_context_prohibited": true,
+        "new_tab_prohibited": true,
+        "local_and_preview_role": "diagnostic_only_not_completion",
+        "release_truth_rule": "代码提交或 push、Vercel 部署、Production 域名可用和目标用户路径验收是四个独立事实，缺一不得宣称 Production 完成",
+        "trust_boundary": "Vercel API、Git SHA 与域名是机器证据；现有 Chrome 路径是受信操作员证明，只能验证声明完整和未篡改，不能伪称为机器可证明的人类会话",
+        "production_database_mode": "controlled_write_approved"
+      },
+      "required_production_evidence": [
+        "exact_production_commit",
+        "vercel_deployment_ready_and_promoted",
+        "sales.cyanlog.icu_alias",
+        "controlled_production_security_and_runtime_verifier",
+        "trusted_existing_chrome_operator_attestation"
+      ],
+      "production_release_authorization": {
+        "status": "approved_for_final_release",
+        "micro_fix_approval_id": "IN-20260911-009",
+        "clarification_id": "IN-20260911-008",
+        "final_release_approval_id": "IN-20260911-015",
+        "micro_fix_scope": "vetted_shipping_application_candidate",
+        "final_scope": "WP11一屏寄件生产发布与已批准安全/地址簿迁移；本人界面确认真实寄件，AI不提交真实测试寄件；匿名页面仅开放填写，匿名付费策略未批准",
+        "excludes_until_final_approval": "AI发起真实付费测试寄件；无约束匿名月结发单"
+      }
+    },
+    "feature_id": "F054"
   },
   "execution_queue": {
     "active": {
-      "id": "WP10",
-      "slug": "quote-domain-complete-migration",
-      "reason": "用户已审阅并激活『报价域完整形态 + 换机可迁移基座』目标文本（IN-20260820-001）：商机接入→报价配置/算价/核验/审批/输出→版本冻结→合同/标书派生；配置通用化消除硬编码；换机基座脚本与演练。"
+      "id": "WP11",
+      "slug": "personal-shipping-workspace",
+      "reason": "用户批准F054 v0.4开发"
     },
     "next": {
       "id": "WP07",
@@ -226,15 +258,13 @@
         "activation_requirement": "激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包"
       }
     ],
-    "release_blockers": [
-      {
-        "id": "SECURITY-P0-RLS-PRODUCTION",
-        "reason": "Production 已确认 11 张服务表与两个 SECURITY DEFINER RPC 暴露，因此数据库继续只读；该门禁不阻断不写数据、可回滚且已完成兼容性审查的 code-only UI hotfix",
-        "required_before": "任何 Production 数据写入、迁移或依赖新数据库结构的真实业务验收",
-        "action": "先把 36 个混合迁移拆为 expand、可审计回填、切换、contract/security 和业务数据退役批次；只有只读边界被明确改变后才执行 Preview 已验证的 forward migration，并复跑匿名、service_role、advisor 与合同 API 冒烟"
-      }
-    ],
+    "release_blockers": [],
     "parked": [
+      {
+        "id": "WP10",
+        "slug": "quote-domain-complete-migration",
+        "reason": "用户批准个人一屏查寄优先开发；WP10状态与dirty保留，完成后恢复排期。"
+      },
       {
         "id": "WP09",
         "slug": "release-acceptance",
@@ -658,5 +688,103 @@
       "4. 修改文件前运行 scheduler-check 并确认路径属于 allowed_paths",
       "5. 达到退出门禁后才能请求切换到 Next"
     ]
+  },
+  "suspended_tasks": {
+    "WP10": {
+      "id": "WP10",
+      "slug": "quote-domain-complete-migration",
+      "name": "报价域完整形态与换机可迁移基座",
+      "kind": "product",
+      "status": "active",
+      "objective": "完成 V3 报价域完整形态落地 + 项目换机可迁移基座，交付可验收闭环。报价域：商机接入（报价挂 CRM 商机，历史报价复制/继承历史价/调整/重算/留痕/重审批）；配置通用化（产品线隔离，ONES 为第一套种子数据，产品/版本/部署/授权/期限/价盘/税率/搭售规则/模板全部配置化，消除税目按产品码、生态账号数 WIKI 写死、价盘导入默认 PROJECT 等硬编码）；算价引擎唯一；核验与审批全自动化；可交互报价页；版本冻结=结构化版本+快照+变更留痕；合同/标书/订单/续费/增购/升级从版本派生字段逐位一致。迁移基座：删 node_modules 软链、锁文件重装（pnpm@9.15.9, node 24）、固化 setup-new-machine.mjs、密钥清单入密码管理器、迁移演练一次。",
+      "started_at": "2026-08-20T18:24:54+08:00",
+      "activation_basis": "用户审阅完整形态、迁移方案与目标文本后复制激活（codex_internal_context 提供 objective）；IN-20260820-001 登记",
+      "execution_workspace": "/Users/nsss/Documents/ChatGPT/Price-v3",
+      "allowed_paths": [
+        "AGENTS.md",
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "governance/runtime-state/harness-state.json",
+        "governance/runtime-state/goal-contract.json",
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/feature-packets/F037-product-catalog-version-matrix.md",
+        "product-truth/feature-packets/F038-price-matrix.md",
+        "product-truth/feature-packets/F039-field-dictionary.md",
+        "product-truth/feature-packets/F040-output-templates-clause-mapping.md",
+        "product-truth/feature-packets/F041-numbering-rules.md",
+        "product-truth/feature-packets/F042-business-params.md",
+        "product-truth/feature-packets/F043-approval-configurable.md",
+        "product-truth/feature-packets/F044-quote-version-snapshot.md",
+        "product-truth/feature-packets/F045-advanced-subjects.md",
+        "product-truth/feature-packets/F046-nonstandard-template-semantic.md",
+        "product-truth/feature-packets/F047-quote-review-automation.md",
+        "product-truth/feature-packets/F048-internal-price-margin.md",
+        "product-truth/feature-packets/F049-region-tax-matrix.md",
+        "product-truth/feature-packets/F050-discount-governance.md",
+        "product-truth/feature-packets/F051-discount-role-caps.md",
+        "product-truth/feature-packets/F052-guided-quote-wizard.md",
+        "product-truth/feature-packets/F053-ai-review-assistant.md",
+        "product-truth/product-code/app/api/quotes",
+        "product-truth/product-code/app/quotes",
+        "product-truth/product-code/lib/pricing",
+        "product-truth/product-code/lib/review",
+        "product-truth/product-code/lib/quote",
+        "product-truth/product-code/lib/export",
+        "product-truth/product-code/lib/config-center",
+        "product-truth/product-code/scripts",
+        "product-truth/product-code/supabase/migrations",
+        "product-truth/product-code/package.json",
+        "product-truth/product-code/pnpm-lock.yaml",
+        "product-truth/product-code/.env.example",
+        "product-truth/product-code/lib/validation.ts",
+        "product-truth/product-code/lib/config-center/runtime.ts",
+        "product-truth/product-code/node_modules",
+        "product-truth/product-code/.next",
+        "product-truth/product-code/next-env.d.ts",
+        "product-truth/product-code/tsconfig.tsbuildinfo",
+        ".github/workflows/ci.yml",
+        ".github/workflows/skills.yml",
+        ".gitignore",
+        ".env.local",
+        ".vercel/.env.production.local",
+        "product-truth/product-code/.env.local",
+        "product-truth/product-code/.vercel/.env.development.local",
+        ".opencode",
+        "governance/ai-behavior-准则/checks",
+        "product-truth/product-code/lib/database-environment.ts",
+        "product-truth/product-code/lib/database-environment.test.ts",
+        "product-truth/product-code/lib/supabase.ts",
+        "product-truth/product-code/middleware.ts",
+        "README.md",
+        "manifest.yaml"
+      ],
+      "delivery_contract": {
+        "target_state": "code_green",
+        "allowed_states": [
+          "executing",
+          "code_green"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "provider_probe",
+          "review_run",
+          "model_invocations",
+          "tokens"
+        ],
+        "note": "阶段0-4 以代码与本地验证证据推进；阶段5 线上验收需用户现有 Chrome + Production 证据，遵守既有发布门禁；AI 云端额度充值属用户决策项"
+      }
+    }
   }
 }

@@ -20,6 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {showSidebar ? <Sidebar /> : null}
       <main className={cn(
         'min-h-screen bg-background',
+        pathname === '/shipping' && 'lg:h-dvh lg:overflow-hidden',
         showSidebar
           ? 'pt-14 pb-4 px-4 md:pt-16 md:pb-6 md:px-6 xl:pt-0 xl:pb-0 xl:px-0'
           : 'p-0',
