@@ -133,7 +133,7 @@
     "name": "个人一屏查寄",
     "kind": "product",
     "status": "active",
-    "objective": "用户生产验收：左侧下单、右侧查看；地址簿与上次信息自动填充；匿名页面可访问，匿名实际寄件授权方式待确认；只发布本任务必需功能及安全修复。",
+    "objective": "本轮两个验收点：生产下单页面可填写并使用本人地址簿；显示本人已寄出单号及真实物流。真实付费下单、追加公司授权和验证码绑定继续暂停。",
     "started_at": "2026-09-11T07:05:26.409843+00:00",
     "activation_basis": "用户在评估WP10暂停影响及个人范围后明确要求：打个目标，开发。IN-20260911-006",
     "execution_workspace": "/Users/nsss/.local/share/price-v3-wp11-production",
@@ -169,7 +169,9 @@
       "product-truth/product-code/supabase/migrations/20260910000001_close_contract_service_access.sql",
       ".github/workflows/ci.yml",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "product-truth/product-code/components/layout/AppShell.tsx"
+      "product-truth/product-code/components/layout/AppShell.tsx",
+      "product-truth/product-code/supabase/migrations/20260914000001_shipping_outbound_imports.sql",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -194,17 +196,15 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_provider",
-        "shipping_request",
+        "shipping_workspace",
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "用户已批准具体生产数据变更并完成安全迁移。当前候选仍需完成发布与用户现有Chrome验收；顺丰正式绑定和匿名付费策略未就绪，不开放无约束匿名寄件。",
+      "note": "用户最新目标为生产下单页面与本人寄出物流；不以真实付费订单或额外月结授权作为本轮发布前提。保留原部署、数据安全和现有Chrome验收证据，正式提交继续关闭。",
       "production_database_mode": "controlled_write_approved",
-      "runtime_profile": "shipping",
+      "runtime_profile": "shipping_workspace",
       "required_production_runtime_evidence": [
-        "shipping_provider",
-        "shipping_request",
+        "shipping_workspace",
         "shipping_tracking",
         "shipping_access"
       ],

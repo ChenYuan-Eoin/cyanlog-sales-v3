@@ -4,10 +4,13 @@ import { trackingSchema } from '@/lib/shipping/validation'
 import { querySfTracking } from '@/lib/shipping/sf-client'
 import { shippingConfig, ShippingError } from '@/lib/shipping/config'
 import { ownsShippingWaybill } from '@/lib/shipping/store'
+import { importedOutboundSuffix } from '@/lib/shipping/outbound'
 export const runtime = 'nodejs'
 export async function POST(req: NextRequest) { return shippingHandler(req, async user => {
   const input = trackingSchema.parse(await shippingJson(req))
-  const owned = await ownsShippingWaybill(user.id, shippingConfig().connectionKey, input.waybill)
-  if (!owned && !input.phoneSuffix) throw new ShippingError(400, '非本人寄件记录需填写收寄手机号后四位后查询。')
-  return querySfTracking(input.waybill, input.phoneSuffix)
+  const config = shippingConfig()
+  const owned = await ownsShippingWaybill(user.id, config.connectionKey, input.waybill)
+  const importedSuffix = !owned && config.environment === 'production' ? await importedOutboundSuffix(user.id, input.waybill) : null
+  if (!owned && !importedSuffix) throw new ShippingError(403, '当前仅支持查询本人已记录的寄出运单。')
+  return querySfTracking(input.waybill, importedSuffix || input.phoneSuffix)
 }) }

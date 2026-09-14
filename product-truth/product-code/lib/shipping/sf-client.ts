@@ -32,7 +32,10 @@ export async function sfCall(serviceCode: string, message: unknown): Promise<unk
   }
 }
 export function buildSfOrder(orderId: string, input: ShippingInput, monthlyCard: string) {
-  return { orderId, language: 'zh-CN', monthlyCard, payMethod: 1, expressTypeId: input.serviceId, parcelQty: 1, totalWeight: input.weight, isDocall: 1, remark: input.remark,
+  // Missing payment is only for recovery of legacy monthly-payment snapshots.
+  const payment = input.payment || 'sender_monthly'
+  if (payment === 'sender_monthly' && !monthlyCard) throw new ShippingError(400, '月结付款尚未配置，请选择现结或到付。', 'validation')
+  return { orderId, language: 'zh-CN', ...(payment === 'sender_monthly' ? { monthlyCard } : {}), payMethod: payment === 'recipient' ? 2 : 1, expressTypeId: input.serviceId, parcelQty: 1, totalWeight: input.weight, isDocall: 1, remark: input.remark,
     cargoDetails: [{ name: input.cargo, count: 1, unit: '件', weight: input.weight }],
     contactInfoList: [input.sender, input.recipient].map((c, i) => ({ contactType: i + 1, contact: c.name, tel: c.phone, country: 'CN', province: c.province, city: c.city, county: c.county, address: c.address })) }
 }
