@@ -40,4 +40,10 @@ export const shippingStore: ShippingStore = {
     return data as StoredShipping[]
   },
 }
+export async function ownsShippingWaybill(userId: string, connection: string, waybill: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from('shipping_requests').select('id')
+    .eq('created_by', userId).eq('connection_key', connection).eq('waybill', waybill).eq('status', 'accepted').limit(1).maybeSingle()
+  if (error) throw new ShippingError(503, '暂未能核对运单归属，请填写收寄手机号后四位后查询。')
+  return Boolean(data)
+}
 export function publicRecord(r: ShippingRecord): ShippingRecord { return { id: r.id, status: r.status, waybill: r.waybill, created_at: r.created_at, environment: r.environment } }

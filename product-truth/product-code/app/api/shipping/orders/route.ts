@@ -6,8 +6,16 @@ import { submitShipping, checkShippingPolicy, shippingRequestId } from '@/lib/sh
 import { createSfOrder } from '@/lib/shipping/sf-client'
 import { z } from 'zod'
 import { createSchema } from '@/lib/shipping/validation'
+import { listImportedOutbound } from '@/lib/shipping/outbound'
 export const runtime = 'nodejs'
-export async function GET(req: NextRequest) { return shippingHandler(req, async user => { const connection = shippingConfig().connectionKey; const key = req.nextUrl.searchParams.get('key'); const current = key ? await shippingStore.get(shippingRequestId(user.id, z.string().uuid().parse(key)), user.id, connection) : null; return { records: (await shippingStore.recent(user.id, connection)).map(publicRecord), current: current ? publicRecord(current) : null } }) }
+export async function GET(req: NextRequest) { return shippingHandler(req, async user => {
+  const config = shippingConfig(), connection = config.connectionKey
+  const key = req.nextUrl.searchParams.get('key')
+  const current = key ? await shippingStore.get(shippingRequestId(user.id, z.string().uuid().parse(key)), user.id, connection) : null
+  const records = (await shippingStore.recent(user.id, connection)).map(publicRecord)
+  const imported = config.environment === 'production' ? await listImportedOutbound(user.id) : []
+  return { records, imported, current: current ? publicRecord(current) : null }
+}) }
 export async function POST(req: NextRequest) {
   return shippingHandler(req, async user => {
     let submission: z.infer<typeof createSchema>
@@ -16,6 +24,7 @@ export async function POST(req: NextRequest) {
       submission = createSchema.parse(await shippingJson(req))
       c = requireShippingConnection(true)
       checkShippingPolicy(submission.input, c.services)
+      if ((!submission.input.payment || submission.input.payment === 'sender_monthly') && !c.monthly) throw new ShippingError(400, '月结付款尚未配置，请选择现结或到付。')
     } catch (error) {
       const status = error instanceof ShippingError ? error.status : error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 503
       const message = error instanceof ShippingError ? error.message : '请核对必填字段、电话、重量和快递服务。'

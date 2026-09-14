@@ -22,17 +22,26 @@ export async function sfCall(serviceCode: string, message: unknown): Promise<unk
   const timestamp = Date.now().toString(), msgData = JSON.stringify(message)
   const body = new URLSearchParams({ partnerID: config.partner, requestID: randomUUID(), serviceCode, timestamp, msgData, msgDigest: sfDigest(msgData, timestamp, config.checkWord) })
   const url = config.environment === 'sandbox' ? 'https://sfapi-sbox.sf-express.com/std/service' : 'https://sfapi.sf-express.com/std/service'
+  const started = Date.now()
+  let upstreamStatus: number | undefined
   try {
     const response = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error' })
+    upstreamStatus = response.status
     if (!response.ok) throw new Error('upstream status')
     return decodeSfResponse(await response.json())
   } catch (error) {
     if (error instanceof ShippingError) throw error
+    // Only transport metadata: never log request bodies, credentials or customer details.
+    const failure = error as { name?: string; cause?: { code?: string } }
+    console.error('shipping.sf.transport', { serviceCode, environment: config.environment, upstreamStatus, elapsedMs: Date.now() - started, errorType: failure?.name, networkCode: /^[A-Z0-9_]+$/.test(failure?.cause?.code || '') ? failure.cause?.code : undefined })
     throw new ShippingError(502, '顺丰响应超时或格式异常，请查询原请求结果，勿重复寄件。')
   }
 }
 export function buildSfOrder(orderId: string, input: ShippingInput, monthlyCard: string) {
-  return { orderId, language: 'zh-CN', monthlyCard, payMethod: 1, expressTypeId: input.serviceId, parcelQty: 1, totalWeight: input.weight, isDocall: 1, remark: input.remark,
+  // Missing payment is only for recovery of legacy monthly-payment snapshots.
+  const payment = input.payment || 'sender_monthly'
+  if (payment === 'sender_monthly' && !monthlyCard) throw new ShippingError(400, '月结付款尚未配置，请选择现结或到付。', 'validation')
+  return { orderId, language: 'zh-CN', ...(payment === 'sender_monthly' ? { monthlyCard } : {}), payMethod: payment === 'recipient' ? 2 : 1, expressTypeId: input.serviceId, parcelQty: 1, totalWeight: input.weight, isDocall: 1, remark: input.remark,
     cargoDetails: [{ name: input.cargo, count: 1, unit: '件', weight: input.weight }],
     contactInfoList: [input.sender, input.recipient].map((c, i) => ({ contactType: i + 1, contact: c.name, tel: c.phone, country: 'CN', province: c.province, city: c.city, county: c.county, address: c.address })) }
 }
