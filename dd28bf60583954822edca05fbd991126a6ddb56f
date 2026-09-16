@@ -238,8 +238,8 @@
       }
     }
   },
-  "updatedAt": "2026-09-16T02:01:12.016Z",
-  "completionState": "integration_ready",
+  "updatedAt": "2026-09-16T02:03:55.660Z",
+  "completionState": "main_integrated",
   "releaseControl": {
     "production_branch": "production",
     "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
@@ -253,7 +253,9 @@
       }
     },
     "production_commit_before": "669e067f39900a2371a7e5db64db5c445b25927d",
-    "production_deployment_id_before": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS"
+    "production_deployment_id_before": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS",
+    "production_commit_after": "669e067f39900a2371a7e5db64db5c445b25927d",
+    "production_deployment_id_after": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS"
   },
   "gateSnapshots": {
     "integration_ready": {
@@ -337,12 +339,441 @@
         "worktree": "git status --porcelain=v1 --untracked-files=all",
         "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
       }
+    },
+    "main_integrated": {
+      "stage": "main_integrated",
+      "checkedAt": "2026-09-16T02:03:55.634Z",
+      "head": "dd28bf60583954822edca05fbd991126a6ddb56f",
+      "originMain": "8775818d9afd04119b7201d70fe18f7f6763ae67",
+      "remoteMain": "8775818d9afd04119b7201d70fe18f7f6763ae67",
+      "remoteProduction": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": false,
+      "mainIntegrated": true,
+      "localAttestationRefOid": "d2b3773324d7248d09b38b93068390bfbb9f2113",
+      "remoteAttestationRefOid": "d2b3773324d7248d09b38b93068390bfbb9f2113",
+      "remoteSnapshotCheckedAt": "2026-09-16T02:03:43.310Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-09-16T02:03:45.531Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_5AzvXEXxYumvSc27uDH7gePKbWXS?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "deployment": {
+          "id": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "669e067f39900a2371a7e5db64db5c445b25927d",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "669e067f39900a2371a7e5db64db5c445b25927d",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/main_integrated/2026-09-16T02-03-45-531Z-51473-project.json",
+            "sha256": "7139fcf907dd418697b6d71a61de9d117318289d1843cc7a821810b2dd57d36b"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/main_integrated/2026-09-16T02-03-45-531Z-51473-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/main_integrated/2026-09-16T02-03-45-531Z-51473-deployment.json",
+            "sha256": "cd1c23b82609b70a1bf0253406d16c1790bc10d9bc8f638d4c4c82f878ee82b5"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "e122b0526fc34b7e13ffdbbe247c20b481ad049e6f2ddbe29214f0950a393746",
-  "sealedAt": "2026-09-16T02:01:12.017Z",
-  "attestationDigest": "d7baf0440293873dcc4189dbaeb5338885948f841981248ab9c0ce33f09006f9"
+  "previousAttestationDigest": "d7baf0440293873dcc4189dbaeb5338885948f841981248ab9c0ce33f09006f9",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP11",
+    "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+    "evidence": {
+      "code": {
+        "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "typecheck": true,
+          "lint": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "target_tests",
+            "exit_code": 0,
+            "artifact_path": "check-logs/27f951799db1cfc785af932a1d84822bac5eedc4/check-03-test.log",
+            "log_sha256": "5cf9eca6dc7350bb525d3d70f3c57b05735270236dca4fe6481cdfe4d8859bc7"
+          },
+          {
+            "name": "full_tests",
+            "exit_code": 0,
+            "artifact_path": "check-logs/27f951799db1cfc785af932a1d84822bac5eedc4/check-03-test.log",
+            "log_sha256": "5cf9eca6dc7350bb525d3d70f3c57b05735270236dca4fe6481cdfe4d8859bc7"
+          },
+          {
+            "name": "typecheck",
+            "exit_code": 0,
+            "artifact_path": "check-logs/27f951799db1cfc785af932a1d84822bac5eedc4/check-01-typecheck.log",
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+          },
+          {
+            "name": "lint",
+            "exit_code": 0,
+            "artifact_path": "check-logs/27f951799db1cfc785af932a1d84822bac5eedc4/check-02-lint.log",
+            "log_sha256": "ae643a9c8934ff794cf0213a270e83240cea60e944cef869773635072498ed5f"
+          },
+          {
+            "name": "build",
+            "exit_code": 0,
+            "artifact_path": "shipping-release/build-transport-diagnostics.log",
+            "log_sha256": "9218654f70a594039363394d72798e676c4d62f8409b1ec4c3f979cb2f411aa7"
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "b5a9040b1e18bf4031533d1537a4e90794c4f563eafe3c0a61ebc34c746dd516",
+          "entry_sha256": "15f37508c6c530356062dcb5d96145fdea18fd42c669a0c2d84f3502347bc8a6"
+        }
+      },
+      "preview": {
+        "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+        "deployment_id": "dpl_ENjrbEfbH5qQMCyEmqxh5fagCFuG",
+        "url": "https://cyanlog-sales-v3-pkuxgdqcz-eoins-projects-94b17ece.vercel.app",
+        "provider_source_commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+        "ready": true,
+        "git_dirty": false,
+        "journeys": {
+          "desktop": true,
+          "ipad": true,
+          "blocking_defect_replay": true
+        },
+        "artifacts": {
+          "desktop": {
+            "artifact_path": "shipping-release/workspace-release/desktop-final.json",
+            "sha256": "e9748afece90fdecb57037a283d96e707046fdfb07e632f05aadd4fca6a64fef",
+            "payload": {
+              "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+              "deployment_id": "dpl_ENjrbEfbH5qQMCyEmqxh5fagCFuG",
+              "url": "https://cyanlog-sales-v3-pkuxgdqcz-eoins-projects-94b17ece.vercel.app",
+              "app_inert_after": false,
+              "body_scroll_lock_released": true,
+              "orderLeft": 268,
+              "overlays_after": 0,
+              "scrollWidth": 1920,
+              "trackingLeft": 1089,
+              "viewport": {
+                "height": 929,
+                "width": 1920
+              },
+              "attachments": [
+                {
+                  "path": "shipping-release/workspace-release/candidate-tracking-sep16.txt",
+                  "sha256": "1f5193e45566f624dea6370f2a995d13321daa98cf031f4a3854a6fa4f299d0a"
+                }
+              ]
+            }
+          },
+          "ipad": {
+            "artifact_path": "shipping-release/workspace-release/tablet-final.json",
+            "sha256": "1df9fa2a1f48b0273fc3de38ca3738038001707a0b009c16f2801d1a7827428b",
+            "payload": {
+              "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+              "deployment_id": "dpl_ENjrbEfbH5qQMCyEmqxh5fagCFuG",
+              "url": "https://cyanlog-sales-v3-pkuxgdqcz-eoins-projects-94b17ece.vercel.app",
+              "app_inert_after": false,
+              "body_scroll_lock_released": true,
+              "orderLeft": 50.5,
+              "overlays_after": 0,
+              "scrollWidth": 1024,
+              "trackingLeft": 521,
+              "viewport": {
+                "height": 768,
+                "width": 1024
+              },
+              "attachments": [
+                {
+                  "path": "shipping-release/workspace-release/candidate-layout-sep16.json",
+                  "sha256": "dbce1dfe6653e351caaac8d2d078203ea32d7563aae6835e8b0c4a96a6f14f0d"
+                }
+              ]
+            }
+          },
+          "defect_replay": {
+            "artifact_path": "shipping-release/workspace-release/replay-final.json",
+            "sha256": "20fd009afe8f7ff839158296c4427aca3dc1ee67cbd0998f7c983660e7b86761",
+            "payload": {
+              "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+              "deployment_id": "dpl_ENjrbEfbH5qQMCyEmqxh5fagCFuG",
+              "url": "https://cyanlog-sales-v3-pkuxgdqcz-eoins-projects-94b17ece.vercel.app",
+              "app_inert_after": false,
+              "body_scroll_lock_released": true,
+              "orderLeft": 268,
+              "overlays_after": 0,
+              "scrollWidth": 1920,
+              "trackingLeft": 1089,
+              "viewport": {
+                "height": 929,
+                "width": 1920
+              },
+              "actions": [
+                "paste_address",
+                "select_sender",
+                "select_payment",
+                "query_tracking",
+                "reload_recent",
+                "verify_access"
+              ],
+              "result": "pass",
+              "attachments": [
+                {
+                  "path": "shipping-release/workspace-release/candidate-tracking-sep16.txt",
+                  "sha256": "1f5193e45566f624dea6370f2a995d13321daa98cf031f4a3854a6fa4f299d0a"
+                },
+                {
+                  "path": "shipping-release/workspace-release/candidate-access-sep16.txt",
+                  "sha256": "ef20f28aa755b8c8700bfbf1c77ed1f81bc63a8400b1807e8afe40f887f4848e"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "runtime": {
+        "shipping_workspace": {
+          "artifact_path": "shipping-release/workspace-release/workspace-final.json",
+          "sha256": "2287c71bb44aaba6e646348ef6a875dd0042abc541e08335d83ae19b080e184a",
+          "payload": {
+            "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+            "deployment_id": "dpl_ENjrbEfbH5qQMCyEmqxh5fagCFuG",
+            "url": "https://cyanlog-sales-v3-pkuxgdqcz-eoins-projects-94b17ece.vercel.app",
+            "page_accessible": true,
+            "address_book_usable": true,
+            "form_editable": true,
+            "payment_choices": [
+              "sender_cash",
+              "recipient",
+              "sender_monthly"
+            ],
+            "outbound_count": 8,
+            "attachments": [
+              {
+                "path": "shipping-release/workspace-release/contacts.json",
+                "sha256": "77c79cebb1fba0f1c15356310926fe35392e2d685531082a74d9998ad79ed96b"
+              },
+              {
+                "path": "shipping-release/workspace-release/orders.json",
+                "sha256": "30a850fa75a9a8ae82ed75044acaf4dedc0c529759d8f3a12e7889cf6f39f2b6"
+              },
+              {
+                "path": "shipping-release/workspace-release/candidate-tracking-sep16.txt",
+                "sha256": "1f5193e45566f624dea6370f2a995d13321daa98cf031f4a3854a6fa4f299d0a"
+              }
+            ]
+          }
+        },
+        "shipping_tracking": {
+          "artifact_path": "shipping-release/workspace-release/tracking-final.json",
+          "sha256": "cdc897c303a4884dc33d73739afe3c76a6dc863450a6ac70039f4ca6e8ca7e3e",
+          "payload": {
+            "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+            "deployment_id": "dpl_ENjrbEfbH5qQMCyEmqxh5fagCFuG",
+            "url": "https://cyanlog-sales-v3-pkuxgdqcz-eoins-projects-94b17ece.vercel.app",
+            "success": true,
+            "waybill": "SF7444706544053",
+            "event_count": 15,
+            "endpoint": "https://sfapi-sbox.sf-express.com/std/service",
+            "attachments": [
+              {
+                "path": "shipping-release/workspace-release/tracking.json",
+                "sha256": "c594a3a9a349e5cee2dddd2ed229051e5d971f52420f17d9e1ea86784c11bb8f"
+              }
+            ]
+          }
+        },
+        "shipping_access": {
+          "artifact_path": "shipping-release/workspace-release/access-final.json",
+          "sha256": "d21581aa8321293cda49af53fdb26d9f2997c0907d2967640e9854b8f716de6b",
+          "payload": {
+            "commit": "dd28bf60583954822edca05fbd991126a6ddb56f",
+            "deployment_id": "dpl_ENjrbEfbH5qQMCyEmqxh5fagCFuG",
+            "url": "https://cyanlog-sales-v3-pkuxgdqcz-eoins-projects-94b17ece.vercel.app",
+            "anonymous_orders_denied": true,
+            "anonymous_contacts_denied": true,
+            "owner_can_read": true,
+            "foreign_waybill_denied": true,
+            "attachments": [
+              {
+                "path": "shipping-release/workspace-release/guest-orders.json",
+                "sha256": "4128bb9e65b6c43751a52812b74f4d79abb247129d4138f16b65849ff94f7c37"
+              },
+              {
+                "path": "shipping-release/workspace-release/guest-contacts.json",
+                "sha256": "4128bb9e65b6c43751a52812b74f4d79abb247129d4138f16b65849ff94f7c37"
+              },
+              {
+                "path": "shipping-release/workspace-release/foreign.json",
+                "sha256": "1f9ecc0e90c52dd81d3403d49bd7dce89881c081253cc602e18c7d51de48d36e"
+              },
+              {
+                "path": "shipping-release/workspace-release/orders.json",
+                "sha256": "30a850fa75a9a8ae82ed75044acaf4dedc0c529759d8f3a12e7889cf6f39f2b6"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "updatedAt": "2026-09-16T02:01:12.016Z",
+    "completionState": "integration_ready",
+    "releaseControl": {
+      "production_branch": "production",
+      "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+      "production_branch_evidence": {
+        "artifact_path": "shipping-release/workspace-release/production-branch.json",
+        "sha256": "47b3486a7547fe381ceaee79f58fbaac9db25d10ed54e238708a1662b1f1f5fc",
+        "payload": {
+          "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "branch": "production",
+          "observed_at": "2026-09-14T06:29:23.971Z"
+        }
+      },
+      "production_commit_before": "669e067f39900a2371a7e5db64db5c445b25927d",
+      "production_deployment_id_before": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS"
+    },
+    "gateSnapshots": {
+      "integration_ready": {
+        "stage": "integration_ready",
+        "checkedAt": "2026-09-16T02:01:11.987Z",
+        "head": "dd28bf60583954822edca05fbd991126a6ddb56f",
+        "originMain": "59c7195994ed0431ab0627a9090444b951caba5e",
+        "remoteMain": "59c7195994ed0431ab0627a9090444b951caba5e",
+        "remoteProduction": "669e067f39900a2371a7e5db64db5c445b25927d",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "37827ede93251d1c4aa8ba9bf38ec85b26d41761",
+        "remoteAttestationRefOid": "37827ede93251d1c4aa8ba9bf38ec85b26d41761",
+        "remoteSnapshotCheckedAt": "2026-09-16T02:01:04.653Z",
+        "vercelProduction": {
+          "version": 1,
+          "source": "live-vercel-api",
+          "checkedAt": "2026-09-16T02:01:07.498Z",
+          "contract": {
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "projectName": "cyanlog-sales-v3",
+            "rootDirectory": "product-truth/product-code",
+            "domain": "sales.cyanlog.icu",
+            "productionBranch": "production"
+          },
+          "endpoints": {
+            "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "deployment": "/v13/deployments/dpl_5AzvXEXxYumvSc27uDH7gePKbWXS?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+          },
+          "project": {
+            "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "name": "cyanlog-sales-v3",
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "rootDirectory": "product-truth/product-code",
+            "productionBranch": "production",
+            "productionDeploymentId": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS"
+          },
+          "domain": {
+            "name": "sales.cyanlog.icu",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "verified": true
+          },
+          "deployment": {
+            "id": "dpl_5AzvXEXxYumvSc27uDH7gePKbWXS",
+            "name": "cyanlog-sales-v3",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "target": "production",
+            "readyState": "READY",
+            "readySubstate": "PROMOTED",
+            "status": "READY",
+            "gitCommitSha": "669e067f39900a2371a7e5db64db5c445b25927d",
+            "gitCommitSources": [
+              "gitSource.sha",
+              "meta.githubCommitSha"
+            ]
+          },
+          "remoteProduction": "669e067f39900a2371a7e5db64db5c445b25927d",
+          "raw": {
+            "project": {
+              "artifact_path": "vercel-production-verifier/integration_ready/2026-09-16T02-01-07-498Z-49262-project.json",
+              "sha256": "3021ba36f3aac7cca673fc3958912e7a4c09b0c76982639b3b08589eb8ed169d"
+            },
+            "domain": {
+              "artifact_path": "vercel-production-verifier/integration_ready/2026-09-16T02-01-07-498Z-49262-domain.json",
+              "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+            },
+            "deployment": {
+              "artifact_path": "vercel-production-verifier/integration_ready/2026-09-16T02-01-07-498Z-49262-deployment.json",
+              "sha256": "cd1c23b82609b70a1bf0253406d16c1790bc10d9bc8f638d4c4c82f878ee82b5"
+            }
+          }
+        },
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "e122b0526fc34b7e13ffdbbe247c20b481ad049e6f2ddbe29214f0950a393746",
+    "sealedAt": "2026-09-16T02:01:12.017Z",
+    "attestationDigest": "d7baf0440293873dcc4189dbaeb5338885948f841981248ab9c0ce33f09006f9"
+  },
+  "revision": 2,
+  "contentDigest": "3484905c04795e010d6f595b8cd65d4f2168f06a3552cc39f4180df3a6bd1482",
+  "sealedAt": "2026-09-16T02:03:55.661Z",
+  "attestationDigest": "a9b69da63631920eb325070c2a285006fb95bf340174228afdbad56b22888169"
 }
