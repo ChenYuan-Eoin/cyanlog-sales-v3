@@ -1,6 +1,6 @@
 "use client"
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Package, Search, ClipboardPaste, ArrowUpRight, Copy, Loader2, CheckCircle2, CircleAlert, RefreshCw } from 'lucide-react'
+import { Package, Search, ClipboardPaste, ArrowUpRight, Copy, Loader2, CheckCircle2, CircleAlert, RefreshCw, ArrowLeft } from 'lucide-react'
 import { parseAddress } from '@/lib/shipping/address'
 import { emptyContact, type Contact, type ImportedOutbound, type ShippingInput, type ShippingPayment, type ShippingRecord, type ShippingSettings, type TrackingResult } from '@/lib/shipping/types'
 import { shippingInputSchema } from '@/lib/shipping/validation'
@@ -24,6 +24,10 @@ export default function ShippingWorkspace({ settings, userId }: { settings: Ship
   const [rawAddress, setRawAddress] = useState(''), [parseNote, setParseNote] = useState('')
   const [cargo, setCargo] = useState(settings.lastShipment?.cargo || '文件'), [weight, setWeight] = useState(String(settings.lastShipment?.weight || 1)), [serviceId, setServiceId] = useState(String(settings.services.some(x => x.id === settings.lastShipment?.serviceId) ? settings.lastShipment?.serviceId : settings.services[0]?.id || '')), [remark, setRemark] = useState(settings.lastShipment?.remark || '')
   const [waybill, setWaybill] = useState(''), [phoneSuffix, setPhoneSuffix] = useState(''), [tracking, setTracking] = useState<TrackingResult | null>(null), [queryBusy, setQueryBusy] = useState(false), [queryError, setQueryError] = useState('')
+  const [showTracking, setShowTracking] = useState(false)
+  const trackingBody = useRef<HTMLDivElement>(null)
+  const listScroll = useRef(0)
+  useEffect(() => { if (trackingBody.current) trackingBody.current.scrollTop = showTracking ? 0 : listScroll.current }, [showTracking])
   const [records, setRecords] = useState<ShippingRecord[]>([]), [recentError, setRecentError] = useState(''), [recentLoading, setRecentLoading] = useState(true)
   const [imported, setImported] = useState<ImportedOutbound[]>([])
   const [record, setRecord] = useState<ShippingRecord | null>(null), [sendBusy, setSendBusy] = useState(false), [sendError, setSendError] = useState(''), [confirmation, setConfirmation] = useState<ShippingInput | null>(null)
@@ -35,10 +39,16 @@ export default function ShippingWorkspace({ settings, userId }: { settings: Ship
   useEffect(() => { if (settings.guest) { setRecentLoading(false); return } void refresh() }, [refresh, settings.guest])
   async function query(number = waybill) {
     const seq = ++querySequence.current
-    setQueryBusy(true); setQueryError(''); setTracking(null)
+    if (!showTracking) listScroll.current = trackingBody.current?.scrollTop || 0
+    setShowTracking(true); setQueryBusy(true); setQueryError(''); setTracking(null)
+    if (trackingBody.current) trackingBody.current.scrollTop = 0
     try { const result = await api<TrackingResult>('/api/shipping/tracking', { waybill: number.trim(), ...(phoneSuffix ? { phoneSuffix } : {}) }); if (seq === querySequence.current) setTracking(result) }
     catch (e) { if (seq === querySequence.current) setQueryError((e as Error).message) }
     finally { if (seq === querySequence.current) setQueryBusy(false) }
+  }
+  function backToList() {
+    ++querySequence.current // A late response must not reopen a detail the user has left.
+    setShowTracking(false); setQueryBusy(false); setQueryError(''); setTracking(null)
   }
   function prepare(e: FormEvent) {
     e.preventDefault(); setSendError('')
@@ -96,14 +106,17 @@ export default function ShippingWorkspace({ settings, userId }: { settings: Ship
         {sendError && <p role="alert" className={styles.error}>{sendError}</p>}
         {confirmation && <div className={styles.confirmBox} role="region" aria-label="确认寄件"><h3>请确认本次寄件</h3><p>寄：{confirmation.sender.name} · {confirmation.sender.phone}<br />{confirmation.sender.province}{confirmation.sender.city}{confirmation.sender.county}{confirmation.sender.address}</p><p>收：{confirmation.recipient.name} · {confirmation.recipient.phone}<br />{confirmation.recipient.province}{confirmation.recipient.city}{confirmation.recipient.county}{confirmation.recipient.address}</p><p>{confirmation.cargo} · {confirmation.weight} kg · {settings.services.find(s => s.id === confirmation.serviceId)?.name} · {paymentLabels[confirmation.payment || 'sender_monthly']}{confirmation.payment === 'sender_monthly' || !confirmation.payment ? ` · 月结尾号 ${settings.monthlyTail || '待配置'}` : ''}</p><small>确认后将收寄信息发送给顺丰，发起取件请求。</small><div className={styles.confirmButtons}><button type="button" className={styles.secondary} disabled={sendBusy || retryLocked} onClick={() => setConfirmation(null)}>返回修改</button><button type="button" className={styles.primary} disabled={sendBusy} onClick={() => void submit()}>{sendBusy ? '提交中…' : retryLocked ? '重试原请求（不会另建单）' : settings.environment === 'sandbox' ? '确认沙盒下单' : '确认下单'}</button></div></div>}
       </div><footer className={styles.submitFooter}><div><strong>{paymentLabels[payment]}</strong><small>{payment === 'sender_monthly' ? settings.monthlyTail ? `尾号 ${settings.monthlyTail}` : '月结待配置' : payment === 'recipient' ? '收件客户支付运费' : '寄件人支付运费'}</small></div><button form="shipping-form" type="submit" className={styles.primary} disabled={!settings.canSubmit || locked || !!confirmation}>确认寄件<ArrowUpRight size={17} /></button></footer></section>
-      <section className={styles.panel} aria-label="运单查询"><div className={styles.panelTitle}><h2><Search size={20} />运单查询</h2><span>查件</span></div><div className={styles.panelBody}>
-        <form className={styles.queryForm} onSubmit={e => { e.preventDefault(); void query() }}><div className={styles.queryRow}><input aria-label="运单号" placeholder="请输入顺丰运单号" value={waybill} maxLength={18} onChange={e => setWaybill(e.target.value)} required /><button className={styles.primary} disabled={queryBusy || !settings.ready}>{queryBusy ? <Loader2 className={styles.spin} size={16} /> : '查询'}</button></div><label className={styles.phoneHint}>手机后四位<input aria-label="手机后四位" placeholder="需要验证时填写" inputMode="numeric" maxLength={4} value={phoneSuffix} onChange={e => setPhoneSuffix(e.target.value.replace(/\D/g, ''))} /><span>收件或寄件任一方</span></label></form>
+      <section className={styles.panel} aria-label="运单查询"><div className={styles.panelTitle}><h2><Search size={20} />运单查询</h2><span>{showTracking ? '物流详情' : '查件'}</span></div>{showTracking && <div className={styles.panelTitle}><button type="button" className={styles.textButton} onClick={backToList}><ArrowLeft size={16} />返回寄件列表</button><span role="status">{queryBusy ? '正在查询物流…' : ''}</span></div>}<div className={styles.panelBody} ref={trackingBody}>
+        <form className={styles.queryForm} onSubmit={e => { e.preventDefault(); void query() }}><div className={styles.queryRow}><input aria-label="运单号" placeholder="请输入顺丰运单号" value={waybill} maxLength={18} onChange={e => setWaybill(e.target.value)} required /><button className={styles.primary} disabled={queryBusy || !settings.ready}>{queryBusy ? <><Loader2 className={styles.spin} size={16} />查询中…</> : '查询'}</button></div><label className={styles.phoneHint}>手机后四位<input aria-label="手机后四位" placeholder="需要验证时填写" inputMode="numeric" maxLength={4} value={phoneSuffix} onChange={e => setPhoneSuffix(e.target.value.replace(/\D/g, ''))} /><span>收件或寄件任一方</span></label></form>
         {queryError && <p className={styles.error} role="alert">{queryError}</p>}
-        {tracking ? <article className={styles.trackResult}><div className={styles.resultHeading}><div><small>顺丰运单</small><strong>{tracking.waybill}</strong></div><button className={styles.iconButton} aria-label="复制查询单号" onClick={() => void copy(tracking.waybill)}><Copy size={16} /></button></div>{tracking.events.length ? <ol className={styles.timeline}>{tracking.events.map((event, i) => <li key={`${event.time}-${i}`}><span className={styles.timelineDot} /><time>{event.time}</time><p>{event.description}</p>{event.location && <small>{event.location}</small>}</li>)}</ol> : <div className={styles.empty}><Package size={42} /><h3>暂无物流轨迹</h3><p>运单可能尚未揽收，稍后可再次查询。</p></div>}<p className={styles.updated}>查询于 {new Date(tracking.queriedAt).toLocaleTimeString('zh-CN')}</p></article> : !queryError && <div className={styles.empty}><Package size={48} strokeWidth={1.2} /><h3>查一下，快件到哪里了</h3><p>输入运单号，或从下方最近寄件中选择。</p></div>}
+        {showTracking && queryBusy && <p role="status" className={styles.subtle}>正在获取 {waybill} 的最新物流，请稍候…</p>}
+        {showTracking && tracking ? <article className={styles.trackResult}><div className={styles.resultHeading}><div><small>顺丰运单</small><strong>{tracking.waybill}</strong></div><button className={styles.iconButton} aria-label="复制查询单号" onClick={() => void copy(tracking.waybill)}><Copy size={16} /></button></div>{tracking.events.length ? <ol className={styles.timeline}>{tracking.events.map((event, i) => <li key={`${event.time}-${i}`}><span className={styles.timelineDot} /><time>{event.time}</time><p>{event.description}</p>{event.location && <small>{event.location}</small>}</li>)}</ol> : <div className={styles.empty}><Package size={42} /><h3>暂无物流轨迹</h3><p>运单可能尚未揽收，稍后可再次查询。</p></div>}<p className={styles.updated}>查询于 {new Date(tracking.queriedAt).toLocaleTimeString('zh-CN')}</p></article> : !showTracking && <div className={styles.empty}><Package size={48} strokeWidth={1.2} /><h3>查一下，快件到哪里了</h3><p>输入运单号，或从下方最近寄件中选择。</p></div>}
+        {!showTracking && <>
         <div className={styles.recentHeading}><h3>我寄的 <small>{imported.length ? `含 ${imported.length} 票历史记录` : '最近 10 票'}</small></h3><button className={styles.textButton} onClick={() => void refresh()} disabled={recentLoading || settings.guest}><RefreshCw size={14} />刷新</button></div>
         {imported.length > 0 && <section aria-label="本人历史寄件"><p className={styles.subtle}>从本人顺丰账号导入，列表状态为导入时快照；点击“查轨迹”获取最新物流。</p>{imported.map(r => <div className={styles.recentRow} key={r.id}><div><strong>{r.waybill}</strong><small>{r.source_time} · {r.source_status}</small></div><div className={styles.addressActions}><button type="button" className={styles.textButton} aria-label={`复制 ${r.waybill}`} onClick={() => void copy(r.waybill)}>复制</button><button type="button" className={styles.textButton} onClick={() => { setWaybill(r.waybill); void query(r.waybill) }}>查轨迹<ArrowUpRight size={14} /></button></div></div>)}</section>}
         {recentError && <p role="alert" className={styles.error}>{recentError}</p>}
         {recentLoading && !records.length ? <p className={styles.subtle}>正在读取寄件记录…</p> : !records.length && !recentError && !imported.length ? <p className={styles.subtle}>{settings.guest ? '私人寄件记录仅向获授权的账号显示。' : '还没有寄件记录，下单后会显示在这里。'}</p> : records.map(r => <div className={styles.recentRow} key={r.id}><div><strong>{r.waybill || '运单号待确认'}</strong><small>{new Date(r.created_at).toLocaleString('zh-CN')} · {r.status === 'accepted' ? '已受理' : '结果待确认'}</small></div>{r.waybill ? <button className={styles.textButton} onClick={() => { setWaybill(r.waybill!); void query(r.waybill!) }}>查轨迹<ArrowUpRight size={14} /></button> : <button className={styles.textButton} disabled={!!reconcileId} onClick={() => void reconcile(r)}>{reconcileId === r.id ? '确认中…' : '确认结果'}</button>}</div>)}
+        </>}
       </div></section>
     </div>{copied && <div role="status" className={styles.copyNotice}>{copied.startsWith('复制') ? copied : '单号已复制'}</div>}
   </div>
