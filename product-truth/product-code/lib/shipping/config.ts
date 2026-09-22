@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { AuthUser } from '@/lib/auth'
 import { emptyContact, type ShippingSettings } from './types'
-export class ShippingError extends Error { constructor(public status: number, message: string, public requestStage?: 'validation') { super(message) } }
+export class ShippingError extends Error { constructor(public status: number, message: string, public requestStage?: 'validation' | 'provider_rejected') { super(message) } }
 export function allowedShippingUser(user: Pick<AuthUser, 'id'>, env: Record<string, string | undefined> = process.env): boolean {
   return (env.SHIPPING_ALLOWED_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean).includes(user.id)
 }
@@ -13,13 +13,12 @@ export function shippingConfig(env: Record<string, string | undefined> = process
   try { services = servicesSchema.parse(JSON.parse(env.SF_SERVICES_JSON || '[]')) } catch { /* disabled until valid */ }
   const partner = env.SF_PARTNER_ID || '', checkWord = env.SF_CHECK_WORD || '', monthly = (environment === 'sandbox' ? env.SF_SANDBOX_MONTHLY_CARD : env.SF_MONTHLY_CARD) || ''
   const ready = Boolean(partner && checkWord && services.length)
-  // Production monthly billing stays hard-disabled until a payer-per-order approval
-  // contract is implemented and verified. An environment flag alone must never
-  // turn a reusable monthly-card credential into direct billing authority.
-  const canSubmit = ready && environment === 'sandbox'
+  // Production is additionally gated by an explicit deployment setting. Routes
+  // must still enforce F054 confirmation policy before calling the adapter.
+  const canSubmit = ready && (environment === 'sandbox' || env.SF_PRODUCTION_ORDER_ENABLED === 'true')
   const sender = emptyContact()
   try { const data = JSON.parse(env.SHIPPING_SENDER_JSON || '{}'); for (const key of Object.keys(sender) as (keyof typeof sender)[]) if (typeof data[key] === 'string') sender[key] = data[key].slice(0, 200) } catch { /* manual entry */ }
-  const publicSettings: ShippingSettings = { environment, ready, canSubmit, reason: !ready ? '顺丰接口尚未接通，可先整理地址。' : !canSubmit ? '可填写寄件信息并查询本人运单；真实下单尚未接通。' : '', services, sender, monthlyTail: monthly.slice(-4) }
+  const publicSettings: ShippingSettings = { environment, ready, canSubmit, reason: !ready ? '顺丰接口尚未接通，可先整理地址。' : !canSubmit ? '寄件登记可用；Production真实发单尚未启用。' : '', services, sender, monthlyTail: monthly.slice(-4) }
   return { environment, partner, checkWord, monthly, services, publicSettings, connectionKey: createHash('sha256').update([environment, partner, monthly].join(':')).digest('hex') }
 }
 export function requireShippingConnection(submit = false) {

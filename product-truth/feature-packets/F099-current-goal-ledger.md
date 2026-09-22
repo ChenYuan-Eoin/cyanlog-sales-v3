@@ -1,8 +1,8 @@
 # F099-当前开发工作包账本
 
 **Status**: active_work_package_ledger
-**Updated**: 2026-07-22
-**Ledger Version**: v2026-07-22.01
+**Updated**: 2026-09-22
+**Ledger Version**: v2026-09-22.01
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
 
@@ -11,7 +11,7 @@
 ## 0. 编号合同
 
 - `G1-G11` 是不可变长期产品组合目标，不进入 Active。
-- `WP00-WP09` 是可排序、可独立验收的开发工作包；ID 永远只存短编号，名称和 slug 单独存放。
+- `WP00-WP99` 是可排序、可独立验收的开发工作包；ID 永远只存短编号，名称和 slug 单独存放。
 - `F` 是 Feature Packet，`IN` 是需求输入，`DG` 是历史交付门禁，`HG0-HG5` 是 Harness 执行门禁。
 - WP 完成不等于 G 完成；证据必须绑定目标版本、WP、Git SHA、环境及浏览器或真实文件产物。
 - 2026-07-10 至 2026-07-18 的执行账本旧别名 `G1-G9` 依次映射为 `WP01-WP09`；F027 旧 `G0-G7` 依次映射为 `DG0-DG7`；Harness 历史证据旧 `G0-G5` 依次映射为 `HG0-HG5`。历史原文、路径和文件名不改。
@@ -29,9 +29,10 @@
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
 | WP07 | contract-drafting | G6；支撑 G2/G8/G10 | queued | 可编辑草稿、版本、DOCX 导出、转审核/对比 |
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
-| WP09 | release-acceptance | G7/G8/G9/G10/G11 | **Active** / hosted_ai_runtime_and_release_candidate | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
+| WP09 | release-acceptance | G7/G8/G9/G10/G11 | parked_waiting_wp11 | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
+| WP11 | shipping-collaboration | 无——独立工具域 | **Active** / PRD v1.0 review_ready | 系统内匿名寄件、寄件处理台、按销售/客户查询收寄件与物流跟踪；预留CRM/企微Bot契约 |
 
-执行顺序当前为 `WP00（已完成） -> WP01（已完成） -> WP02（已完成） -> WP03（已完成） -> WP05 交互纠偏（已完成） -> WP04（已完成） -> WP09（Active） -> WP07`。WP09 本批只处理托管环境 AI 路由、业务可读配置和同一 release commit 的 Preview 验收；规则业务数据、合同工作台、准确率和循环复审不混入。旧混合任务 `P0-ONLINE-SYNC-RULE-COLLECTION-RESET` 已拆回独立工作包，不再作为 Active。
+当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP11`。WP09与WP10保留其既有状态和证据，待WP11关闭后再恢复排序；旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
 
 ## 2. 候选边界
 

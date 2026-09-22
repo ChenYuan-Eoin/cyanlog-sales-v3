@@ -292,14 +292,21 @@ function requiredReplayActions(state) {
 }
 function shippingWorkspaceEvidenceBlockers(section, environment) {
   const errors = [], workspace = section.shipping_workspace?.payload || {}, tracking = section.shipping_tracking?.payload || {}, access = section.shipping_access?.payload || {};
-  if (workspace.page_accessible !== true || workspace.address_book_usable !== true || workspace.form_editable !== true) errors.push('Shipping workspace page, address book or form proof is missing');
-  if (!['sender_cash', 'recipient', 'sender_monthly'].every(x => workspace.payment_choices?.includes(x))) errors.push('Per-shipment payment choices are not verified');
-  if (environment === 'production' && workspace.production_submission_disabled !== true) errors.push('Production submission must remain disabled for this workspace-only release');
-  if (!Number.isInteger(workspace.outbound_count) || workspace.outbound_count < 1) errors.push('No owner outbound records were verified');
+  if (workspace.contract_version === 'f054-v1') {
+    for (const key of ['page_accessible','anonymous_form_submittable','receipt_recoverable','owner_direct_available','review_queue_available']) if (workspace[key] !== true) errors.push(`Shipping collaboration workspace proof missing: ${key}`);
+    for (const filter of ['sales','customer','contact','status']) if (!workspace.ledger_filters?.includes(filter)) errors.push(`Shipping ledger filter proof missing: ${filter}`);
+    if (environment === 'production' && workspace.production_submission_enabled !== true) errors.push('Production submission is not enabled behind the confirmed-order policy');
+    for (const key of ['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced']) if (access[key] !== true) errors.push(`Shipping collaboration access proof missing: ${key}`);
+  } else {
+    if (workspace.page_accessible !== true || workspace.address_book_usable !== true || workspace.form_editable !== true) errors.push('Shipping workspace page, address book or form proof is missing');
+    if (!['sender_cash', 'recipient', 'sender_monthly'].every(x => workspace.payment_choices?.includes(x))) errors.push('Per-shipment payment choices are not verified');
+    if (environment === 'production' && workspace.production_submission_disabled !== true) errors.push('Production submission must remain disabled for this workspace-only release');
+    if (!Number.isInteger(workspace.outbound_count) || workspace.outbound_count < 1) errors.push('No owner outbound records were verified');
+    for (const key of ['anonymous_orders_denied', 'anonymous_contacts_denied', 'owner_can_read', 'foreign_waybill_denied']) if (access[key] !== true) errors.push(`Shipping workspace access proof missing: ${key}`);
+  }
   if (tracking.success !== true || !/^(?:SF)?[0-9]{10,15}$/.test(String(tracking.waybill || '')) || !Number.isInteger(tracking.event_count) || tracking.event_count < 1) errors.push('Live outbound tracking proof is missing');
   const endpoint = environment === 'production' ? 'https://sfapi.sf-express.com/std/service' : 'https://sfapi-sbox.sf-express.com/std/service';
   if (tracking.endpoint !== endpoint) errors.push('Tracking endpoint does not match the required environment');
-  for (const key of ['anonymous_orders_denied', 'anonymous_contacts_denied', 'owner_can_read', 'foreign_waybill_denied']) if (access[key] !== true) errors.push(`Shipping workspace access proof missing: ${key}`);
   return errors;
 }
 function shippingRuntimeEvidenceBlockers(section, environment) {

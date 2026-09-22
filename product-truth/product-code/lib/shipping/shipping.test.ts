@@ -1,13 +1,15 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest'
 import { parseAddress } from './address'
-import { shippingInputSchema, trackingSchema } from './validation'
-import { allowedShippingUser, shippingConfig } from './config'
+import { anonymousShipmentSchema, shippingInputSchema, trackingSchema } from './validation'
+import { allowedShippingUser, shippingConfig, ShippingError } from './config'
 import { sfDigest, decodeSfResponse, buildSfOrder, extractOrder, extractTracking } from './sf-client'
 import { checkShippingPolicy, submitShipping } from './service'
 import type { ShippingStore, StoredShipping } from './store'
 import type { ShippingInput } from './types'
 import { createHash } from 'node:crypto'
+import { resolveBusinessContext, signShipmentContext, verifyShipmentContext } from './context'
+import { nextShippingReviewAt } from './collaboration'
 const contact = { name: '测试联系人', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '测试街道1号测试楼' }
 const input: ShippingInput = { sender: contact, recipient: contact, cargo: '文件', weight: 1, remark: '', serviceId: 2, source: 'manual' }
 const key = '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0'
@@ -27,13 +29,23 @@ describe('boundary validation', () => {
   it('rejects unimplemented order source and forged metadata', () => { expect(shippingInputSchema.safeParse({ ...input, source: 'order' }).success).toBe(false); expect(shippingInputSchema.safeParse({ ...input, created_by: 'other' }).success).toBe(false) })
   it('only accepts one tracking number and a valid phone suffix', () => { expect(trackingSchema.safeParse({ waybill: 'SF1234567890123', phoneSuffix: '1234' }).success).toBe(true); expect(trackingSchema.safeParse({ waybill: 'SF1234567890123,SF9876543210123' }).success).toBe(false); expect(trackingSchema.safeParse({ waybill: 'SF1234567890123', phoneSuffix: '1' }).success).toBe(false) })
   it('requires explicit allowlisting; no default admin bypass', () => { expect(allowedShippingUser({ id: 'a' }, {})).toBe(false); expect(allowedShippingUser({ id: 'a' }, { SHIPPING_ALLOWED_USER_IDS: 'b, a' })).toBe(true); expect(allowedShippingUser({ id: 'aa' }, { SHIPPING_ALLOWED_USER_IDS: 'a' })).toBe(false) })
-  it('hard-disables production billing even when the legacy write flag is set', () => { expect(shippingConfig({}).publicSettings.canSubmit).toBe(false); const env = { SF_ENVIRONMENT: 'production', SF_PARTNER_ID: 'p', SF_CHECK_WORD: 's', SF_MONTHLY_CARD: 'test1234', SF_SERVICES_JSON: '[{"id":2,"name":"已授权测试服务"}]', SF_PRODUCTION_ORDER_ENABLED: 'true' }; expect(shippingConfig(env).publicSettings).toMatchObject({ ready: true, canSubmit: false, monthlyTail: '1234', reason: '可填写寄件信息并查询本人运单；真实下单尚未接通。' }); expect(JSON.stringify(shippingConfig(env).publicSettings)).not.toContain('test1234') })
+  it('requires an explicit production deployment gate in addition to connection readiness', () => { expect(shippingConfig({}).publicSettings.canSubmit).toBe(false); const env = { SF_ENVIRONMENT: 'production', SF_PARTNER_ID: 'p', SF_CHECK_WORD: 's', SF_MONTHLY_CARD: 'test1234', SF_SERVICES_JSON: '[{"id":2,"name":"已授权测试服务"}]' }; expect(shippingConfig(env).publicSettings).toMatchObject({ ready: true, canSubmit: false, monthlyTail: '1234' }); expect(shippingConfig({ ...env, SF_PRODUCTION_ORDER_ENABLED: 'true' }).publicSettings.canSubmit).toBe(true); expect(JSON.stringify(shippingConfig(env).publicSettings)).not.toContain('test1234') })
   it('separates sandbox monthly configuration from the real account', () => { const env = { SF_MONTHLY_CARD: 'real5616', SF_SANDBOX_MONTHLY_CARD: 'sandbox4567' }; expect(shippingConfig(env).monthly).toBe('sandbox4567'); expect(shippingConfig({ ...env, SF_ENVIRONMENT: 'production' }).monthly).toBe('real5616'); expect(shippingConfig({ SF_MONTHLY_CARD: 'real5616' }).monthly).toBe('') })
   it('blocks nonconfigured products', () => expect(() => checkShippingPolicy(input, [{ id: 1 }])).toThrow())
+  it('accepts anonymous shipment input without trusting relation ids', () => { expect(anonymousShipmentSchema.safeParse({ key, input, rawInput: '测试地址' }).success).toBe(true); expect(anonymousShipmentSchema.safeParse({ key, input, salesRef: 'forged' }).success).toBe(false) })
+})
+describe('anonymous shipment context', () => {
+  const contextKey = ['SHIPPING', 'CONTEXT', 'SECRET'].join('_')
+  const env = { [contextKey]: 'x'.repeat(32) }
+  it('round-trips signed sales and customer context', () => { const value = { salesRef: 'sales-1', customerRef: 'customer-1', exp: Math.floor(Date.now() / 1000) + 60 }; expect(verifyShipmentContext(signShipmentContext(value, env), env)).toEqual(value) })
+  it('rejects tampered and expired context', () => { const value = { salesRef: 'sales-1', exp: Math.floor(Date.now() / 1000) - 1 }, token = signShipmentContext(value, env); expect(verifyShipmentContext(token, env)).toBeNull(); expect(verifyShipmentContext(token + 'x', env)).toBeNull() })
+  it('resolves configured business codes without exposing the directory', () => expect(resolveBusinessContext('ABCD', { SHIPPING_BUSINESS_CONTEXTS_JSON: '{"ABCD":{"salesRef":"sales-1","customerRef":"customer-1"}}' })).toEqual({ salesRef: 'sales-1', customerRef: 'customer-1' }))
+  it('uses explicit Shanghai 11:00 and 17:00 review cutoffs', () => { expect(nextShippingReviewAt(new Date('2026-09-22T01:00:00Z'))).toBe('2026-09-22T03:00:00.000Z'); expect(nextShippingReviewAt(new Date('2026-09-22T04:00:00Z'))).toBe('2026-09-22T09:00:00.000Z'); expect(nextShippingReviewAt(new Date('2026-09-22T10:00:00Z'))).toBe('2026-09-23T03:00:00.000Z') })
 })
 describe('SF protocol', () => {
   it('signs UTF8 form-encoded message, not hex MD5', () => { const msg = '空 格+~!'; const encoded = '%E7%A9%BA+%E6%A0%BC%2B%7E%21123secret'; expect(sfDigest(msg, '123', 'secret')).toBe(createHash('md5').update(encoded).digest('base64')) })
   it('requires gateway AND business success', () => { expect(() => decodeSfResponse({ apiResultCode: 'bad', apiResultData: '{"success":true}' })).toThrow(); expect(() => decodeSfResponse({ apiResultCode: 'A1000', apiResultData: '{"success":false}' })).toThrow(); expect(decodeSfResponse({ apiResultCode: 'A1000', apiResultData: '{"success":true,"msgData":{"ok":1}}' })).toEqual({ ok: 1 }) })
+  it('marks an explicit SF business rejection as definitive', () => { try { decodeSfResponse({ apiResultCode: 'A1000', apiResultData: '{"success":false,"errorCode":"6150"}' }); throw new Error('expected rejection') } catch (error) { expect(error).toMatchObject({ status: 422, requestStage: 'provider_rejected' }) } })
   it('keeps supplied monthly account out of user input', () => { const order = buildSfOrder('id', input, 'test-account'); expect(order.monthlyCard).toBe('test-account'); expect(order.contactInfoList.map(c => c.contactType)).toEqual([1, 2]); expect(order.payMethod).toBe(1) })
   it('checks returned order identity and prefers primary waybill', () => { expect(() => extractOrder({ orderId: 'other' }, 'id')).toThrow(); expect(extractOrder({ orderId: 'id', waybillNoInfoList: [{ waybillType: 2, waybillNo: 'child' }, { waybillType: 1, waybillNo: 'parent' }] }, 'id')).toBe('parent') })
   it('never presents a different waybill trajectory', () => expect(() => extractTracking({ routeResps: [{ mailNo: 'other', routes: [{ acceptTime: '2026-01-01', remark: 'picked' }] }] }, 'wanted')).toThrow())
@@ -43,6 +55,7 @@ describe('durable request lifecycle', () => {
   const base = { userId: 'user1', key, input, connection: 'sandbox-p1', environment: 'sandbox' as const }
   it('concurrent duplicate requests send once', async () => { const store = memoryStore(); const send = vi.fn(async () => 'SF1234567890123'); const rows = await Promise.all(Array.from({ length: 8 }, () => submitShipping({ ...base, store, send }))); expect(send).toHaveBeenCalledTimes(1); expect(new Set(rows.map(r => r.id)).size).toBe(1) })
   it('timeout stays unknown; retry never sends a second time', async () => { const store = memoryStore(), send = vi.fn(async () => { throw new Error('timeout') }); const first = await submitShipping({ ...base, store, send }); const second = await submitShipping({ ...base, store, send }); expect(first.status).toBe('unknown'); expect(second.id).toBe(first.id); expect(send).toHaveBeenCalledTimes(1) })
+  it('surfaces a definitive provider rejection instead of pretending it may reconcile', async () => { const store = memoryStore(), send = vi.fn(async () => { throw new ShippingError(422, 'rejected', 'provider_rejected') }); await expect(submitShipping({ ...base, store, send })).rejects.toMatchObject({ requestStage: 'provider_rejected' }); expect(send).toHaveBeenCalledTimes(1) })
   it('fails before external side effect when reservation fails', async () => { const store = memoryStore(), send = vi.fn(); store.reserve = async () => { throw new Error('DB unavailable') }; await expect(submitShipping({ ...base, store, send })).rejects.toThrow(); expect(send).not.toHaveBeenCalled() })
   it('save failure after upstream acceptance cannot resubmit', async () => { const store = memoryStore(), send = vi.fn(async () => 'SF1234567890123'); store.finish = async () => { throw new Error('write lost') }; await expect(submitShipping({ ...base, store, send })).rejects.toThrow(); expect((await submitShipping({ ...base, store, send })).status).toBe('pending'); expect(send).toHaveBeenCalledTimes(1) })
   it('same key cannot silently change payload', async () => { const store = memoryStore(), send = vi.fn(async () => 'SF1234567890123'); await submitShipping({ ...base, store, send }); await expect(submitShipping({ ...base, input: { ...input, weight: 2 }, store, send })).rejects.toThrow('发生变化'); expect(send).toHaveBeenCalledTimes(1) })

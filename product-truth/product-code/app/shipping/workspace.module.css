@@ -9,6 +9,8 @@
 .notice{display:flex;align-items:flex-start;gap:8px;background:#fff8e9;color:#8b6724;border:1px solid #f5e7c7;border-radius:6px;padding:11px 14px;margin-bottom:15px;font-size:12px;line-height:1.6}
 .notice svg{flex-shrink:0;margin-top:1px}
 .panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;flex:1;height:auto;min-height:0}
+.singlePanel{grid-template-columns:minmax(0,900px);justify-content:center}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;flex-shrink:0}.tabs button{border:1px solid #dfe3e8;background:#fff;color:#626a74;border-radius:6px;padding:9px 14px;font-size:12px}.tabs .activeTab{background:#24272c;color:#fff;border-color:#24272c}.ledgerPanel{width:min(1100px,100%);justify-self:center}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 150px auto;gap:8px;margin-bottom:16px}.ledgerList{display:grid;gap:10px}.ledgerRow{display:grid;grid-template-columns:1.1fr 1fr 1.4fr auto;align-items:center;gap:16px;border:1px solid #e9ebef;border-radius:7px;padding:14px}.ledgerRow strong{display:block;font-size:12px}.ledgerRow small,.ledgerRow span{display:block;font-size:10px;color:#858b94;margin-top:5px}.ledgerActions{display:flex;align-items:center;justify-content:flex-end;gap:8px}.ledgerActions .primary,.ledgerActions .secondary{padding:8px 12px}
 .panel{background:white;border:1px solid var(--sf-border);border-radius:9px;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .panelTitle{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--sf-border);padding:18px 20px;flex-shrink:0}
 .panelTitle h2{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;margin:0}
@@ -85,6 +87,7 @@
 }
 @media(max-width:1023px){.workspace{padding:12px;height:auto;min-height:auto;display:block;overflow:visible}
 .panels{height:auto;min-height:0;grid-template-columns:1fr}
+.filters{grid-template-columns:1fr 1fr}.ledgerRow{grid-template-columns:1fr}.ledgerActions{justify-content:flex-start}
 .panelBody{max-height:none;overflow:visible}
 .header h1{font-size:22px}
 .account{font-size:10px}

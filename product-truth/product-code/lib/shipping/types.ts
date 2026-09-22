@@ -8,4 +8,19 @@ export type RouteEvent = { time: string; location: string; description: string }
 export type TrackingResult = { waybill: string; events: RouteEvent[]; queriedAt: string }
 export type SavedShippingContact = { id: string; label: string; contact: Contact }
 export type ShippingSettings = { guest?: boolean; lastShipment?: ShippingInput; defaultsWarning?: string; environment: 'sandbox' | 'production'; ready: boolean; reason: string; services: { id: number; name: string }[]; monthlyTail: string; sender: Contact; canSubmit: boolean }
+export type ShipmentOrderStatus = 'accepted' | 'awaiting_confirmation' | 'returned' | 'confirmed' | 'ordering' | 'order_unknown' | 'waybill_created' | 'in_transit' | 'delivered' | 'cancelled' | 'order_failed'
+export type ShipmentRelation = { salesRef: string | null; customerRef: string | null; assignmentStatus: 'assigned' | 'unassigned' }
+export type ShipmentOrder = {
+  id: string
+  orderNo: string
+  intakeSource: 'anonymous_web' | 'owner_web' | 'crm' | 'wechat_bot'
+  confirmationPolicy: 'direct' | 'scheduled_review'
+  status: ShipmentOrderStatus
+  relation: ShipmentRelation
+  input: ShippingInput
+  waybill: string | null
+  nextReviewAt: string | null
+  createdAt: string
+}
+export type ShipmentReceipt = Pick<ShipmentOrder, 'orderNo' | 'status' | 'waybill' | 'nextReviewAt' | 'createdAt'>
 export const emptyContact = (): Contact => ({ name: '', phone: '', province: '', city: '', county: '', address: '' })

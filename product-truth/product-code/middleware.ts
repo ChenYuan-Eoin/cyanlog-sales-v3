@@ -79,7 +79,7 @@ type MiddlewareAuthContext = {
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p)) return true
   if (pathname.startsWith('/api/')) {
-    return PUBLIC_API_PATHS.has(pathname)
+    return PUBLIC_API_PATHS.has(pathname) || pathname.startsWith('/api/shipping/public/')
   }
   return pathname.startsWith('/_next/')
     || pathname.startsWith('/favicon')

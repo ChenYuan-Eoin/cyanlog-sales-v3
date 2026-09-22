@@ -1,10 +1,11 @@
 // REQ: CRON-001
 // PURPOSE: Vercel Cron 定时任务入口
-// Schedule: 每天 10:00 执行
+// Schedule: 每天北京时间 11:00、17:00 执行
 
 import { NextRequest, NextResponse } from 'next/server'
 import { processQueuedContractAnalysisJobs } from '@/lib/contract-analysis'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { createDueShipmentReviewReminders } from '@/lib/shipping/collaboration'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -120,6 +121,15 @@ async function runCronTasks(): Promise<Array<{ task: string; status: string; dur
     })
   } catch {
     tasks.push({ task: 'process_contract_analysis_jobs', status: 'failed' })
+  }
+
+  // 6. 汇总到点的业务寄件单，仅生成站内核对提醒，不自动下单
+  const shippingStart = Date.now()
+  try {
+    const result = await createDueShipmentReviewReminders()
+    tasks.push({ task: `shipping_review_reminders:${result.orders}:${result.reminders}`, status: 'completed', duration: Date.now() - shippingStart })
+  } catch {
+    tasks.push({ task: 'shipping_review_reminders', status: 'failed', duration: Date.now() - shippingStart })
   }
 
   return tasks

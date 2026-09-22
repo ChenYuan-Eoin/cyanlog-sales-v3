@@ -18,6 +18,12 @@ export async function submitShipping(args: { userId: string; key: string; input:
   if (!reservation.inserted) return reservation.record
   let waybill: string | null
   try { waybill = await send(id, input) }
-  catch { return store.finish(id, userId, 'unknown', null) }
+  catch (error) {
+    if (error instanceof ShippingError && error.requestStage === 'provider_rejected') {
+      await store.finish(id, userId, 'unknown', null)
+      throw error
+    }
+    return store.finish(id, userId, 'unknown', null)
+  }
   return store.finish(id, userId, 'accepted', waybill)
 }

@@ -15,9 +15,11 @@ describe('one screen shipping interaction', () => {
   fireEvent.click(screen.getByRole('button', { name: '识别并填写' }))
   expect((screen.getByLabelText('收件人姓名') as HTMLInputElement).value).toBe('张三')
   fetcher.mockImplementation(async () => new Response(JSON.stringify({ error: '顺丰暂时不可用' }), { status: 502 }))
+  fireEvent.click(screen.getByRole('button', { name: '物流跟踪' }))
   fireEvent.change(screen.getByLabelText('运单号'), { target: { value: 'SF1234567890123' } })
   fireEvent.click(screen.getByRole('button', { name: '查询' }))
   await screen.findByText('顺丰暂时不可用')
+  fireEvent.click(screen.getByRole('button', { name: '本人寄件' }))
   expect((screen.getByLabelText('收件人详细地址') as HTMLInputElement).value).toBe('科技路1号')
  })
  it('uses the same request after a lost response, including after reload', async () => {
@@ -65,6 +67,7 @@ describe('one screen shipping interaction', () => {
    return new Response(JSON.stringify({records:[other,current],current}),{status:200})
   })
   render(<ShippingWorkspace settings={settings} userId="test-user" />)
+  fireEvent.click(screen.getByRole('button', { name: '物流跟踪' }))
   const buttons=await screen.findAllByRole('button',{name:'确认结果'});expect(buttons.length).toBe(2)
   fireEvent.click(buttons[0]);await waitFor(()=>expect(reconciled).toBe(true))
   expect(screen.queryByRole('button',{name:'再寄一票'})).toBeNull()
@@ -88,13 +91,21 @@ describe('one screen shipping interaction', () => {
  it('does not request private records or show the address book to guests', async () => {
   render(<ShippingWorkspace settings={{ ...settings, guest: true, ready: false, canSubmit: false }} userId="guest" />)
   expect((screen.getByRole('button', { name: '寄件人地址簿' }) as HTMLButtonElement).disabled).toBe(true)
-  expect((screen.getByRole('button', { name: '确认寄件' }) as HTMLButtonElement).disabled).toBe(true)
+  expect((screen.getByRole('button', { name: '提交寄件登记' }) as HTMLButtonElement).disabled).toBe(false)
   await waitFor(() => expect(fetcher).not.toHaveBeenCalled())
  })
- it('renders ordering before tracking in DOM and keyboard order', () => {
+ it('submits an anonymous monthly shipment and shows a safe receipt', async () => {
+  fetcher.mockImplementation(async (url: string, init?: RequestInit) => new Response(JSON.stringify(url.endsWith('/public/orders') && init?.method === 'POST' ? { orderNo: 'SO-20260922-ABC12345', status: 'awaiting_confirmation', waybill: null, nextReviewAt: '2026-09-22T09:00:00.000Z', createdAt: '2026-09-22T08:00:00.000Z', receiptToken: 'a'.repeat(43) } : { records: [] }), { status: 202 }))
+  render(<ShippingWorkspace settings={{ ...settings, guest: true, canSubmit: false }} userId="guest" />)
+  fireEvent.change(screen.getByLabelText('粘贴收件信息'), { target: { value: '张三 13800000000 广东省深圳市南山区科技路1号' } }); fireEvent.click(screen.getByRole('button', { name: '识别并填写' }))
+  fireEvent.click(screen.getByRole('button', { name: '提交寄件登记' })); fireEvent.click(screen.getByRole('button', { name: '确认提交' }))
+  expect(await screen.findByText('下单成功 · 平台已受理')).toBeTruthy(); expect(await screen.findByText(/SO-20260922-ABC12345/)).toBeTruthy()
+  const call = fetcher.mock.calls.find(([url]) => String(url).endsWith('/api/shipping/public/orders')); expect(JSON.parse(String(call?.[1]?.body)).input.payment).toBe('sender_monthly')
+ })
+ it('separates direct ordering and tracking into explicit work views', () => {
   render(<ShippingWorkspace settings={settings} userId="test-user" />)
-  const order=screen.getByRole('region',{name:'寄件下单'}),tracking=screen.getByRole('region',{name:'运单查询'})
-  expect(Boolean(order.compareDocumentPosition(tracking) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true)
+  expect(screen.getByRole('region',{name:'本人寄件'})).toBeTruthy();expect(screen.queryByRole('region',{name:'运单查询'})).toBeNull()
+  fireEvent.click(screen.getByRole('button',{name:'物流跟踪'}));expect(screen.getByRole('region',{name:'运单查询'})).toBeTruthy();expect(screen.queryByRole('region',{name:'本人寄件'})).toBeNull()
  })
  it('cannot submit without a real connection while address parsing remains usable', async () => {
   render(<ShippingWorkspace settings={{ ...settings, ready: false, canSubmit: false, reason: '接口未接通' }} userId="test-user" />)

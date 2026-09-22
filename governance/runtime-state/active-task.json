@@ -129,11 +129,11 @@
   },
   "active_task": {
     "id": "WP11",
-    "slug": "personal-shipping-workspace",
-    "name": "个人一屏查寄",
+    "slug": "shipping-collaboration",
+    "name": "寄件协同",
     "kind": "product",
     "status": "active",
-    "objective": "本轮两个验收点：生产下单页面可填写并使用本人地址簿；显示本人已寄出单号及真实物流。真实付费下单、追加公司授权和验证码绑定继续暂停。",
+    "objective": "F054 v1.0 M0：先在现有系统内完成匿名寄件登记、用户履约处理和收寄件台账。匿名提交创建寄件单并绑定销售/客户上下文或进入待分配；用户本人直下，业务寄件单定时待核对；确认后经承运商Adapter真实下单，运单进入物流跟踪；用户可按销售、客户及收寄件人查询。CRM和企微Bot后续通过Adapter接入。",
     "started_at": "2026-09-11T07:05:26.409843+00:00",
     "activation_basis": "用户在评估WP10暂停影响及个人范围后明确要求：打个目标，开发。IN-20260911-006",
     "execution_workspace": "/Users/nsss/.local/share/price-v3-wp11-production",
@@ -171,6 +171,9 @@
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "product-truth/product-code/components/layout/AppShell.tsx",
       "product-truth/product-code/supabase/migrations/20260914000001_shipping_outbound_imports.sql",
+      "product-truth/product-code/supabase/migrations/20260922000001_shipping_collaboration_m0.sql",
+      "product-truth/product-code/app/api/cron/route.ts",
+      "product-truth/product-code/vercel.json",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js"
     ],
     "delivery_contract": {
@@ -200,7 +203,7 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "用户最新目标为生产下单页面与本人寄出物流；不以真实付费订单或额外月结授权作为本轮发布前提。保留原部署、数据安全和现有Chrome验收证据，正式提交继续关闭。",
+      "note": "PRD v1.0以系统内匿名访问为M0核心。隔离候选已完成完整主链并达到code_green。用户2026-09-22明确要求推送线上供验收，授权同一SHA依序推进Preview、main、production及本批前向迁移；AI不得代替用户创建真实付费运单，最终仍需用户现有Chrome验收。",
       "production_database_mode": "controlled_write_approved",
       "runtime_profile": "shipping_workspace",
       "required_production_runtime_evidence": [
@@ -229,10 +232,10 @@
         "status": "approved_for_final_release",
         "micro_fix_approval_id": "IN-20260911-009",
         "clarification_id": "IN-20260911-008",
-        "final_release_approval_id": "IN-20260911-015",
+        "final_release_approval_id": "IN-20260922-010",
         "micro_fix_scope": "vetted_shipping_application_candidate",
-        "final_scope": "WP11一屏寄件生产发布与已批准安全/地址簿迁移；本人界面确认真实寄件，AI不提交真实测试寄件；匿名页面仅开放填写，匿名付费策略未批准",
-        "excludes_until_final_approval": "AI发起真实付费测试寄件；无约束匿名月结发单"
+        "final_scope": "F054 v1.0寄件协同M0同一SHA上线：匿名寄件登记、安全回执、关系分配、本人直下、业务核对、收寄件台账、顺丰下单/查回、运单和物流跟踪，以及20260922000001前向迁移",
+        "excludes_until_final_approval": "AI发起真实付费测试寄件；CRM和企微Bot等M1能力"
       }
     },
     "feature_id": "F054"
@@ -240,8 +243,8 @@
   "execution_queue": {
     "active": {
       "id": "WP11",
-      "slug": "personal-shipping-workspace",
-      "reason": "用户批准F054 v0.4开发"
+      "slug": "shipping-collaboration",
+      "reason": "用户明确F054 v1.0先在系统内运行：匿名寄件、后台履约、按销售/客户查询收寄件为M0；CRM与企微Bot后续接入"
     },
     "next": {
       "id": "WP07",
