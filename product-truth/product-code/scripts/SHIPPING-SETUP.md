@@ -30,7 +30,7 @@
 
 Vercel Production目前仍保留`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON`；`SF_SANDBOX_MONTHLY_CARD`、`SF_PRODUCTION_ORDER_ENABLED`、`SHIPPING_SENDER_JSON`当前缺失。当前隔离候选代码不再读取这些变量。由于Production仍运行旧发布版本，**新代码通过正式发布前不要删除仍存在的旧变量**；部署新代码且完成真实验收后，再单独清理它们。Production数据库尚无本轮两条新迁移的应用证据；未部署、未写远端数据库、未做真实付费下单。
 
-Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。本地候选SHA为`9bed7ad1a1a715dca853bed6b8697f56d5ee56be`，尚未push、合入`production`分支或部署。
+Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。候选尚未push、合入`production`分支或部署；发布审阅应以`delivery-check`绑定的当前精确SHA为准，不能沿用早期候选SHA。
 
 ## 真实寄件验收准备（用户执行）
 
