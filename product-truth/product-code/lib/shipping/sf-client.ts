@@ -37,6 +37,39 @@ export async function sfCall(serviceCode: string, message: unknown): Promise<unk
     throw new ShippingError(502, '顺丰响应超时或格式异常，请查询原请求结果，勿重复寄件。')
   }
 }
+
+/**
+ * Performs a signed, read-only sandbox order-result query with a synthetic ID.
+ * This checks transport/signature acceptance without creating a shipment.
+ * It does not prove that create, tracking, or cancellation permissions are enabled.
+ */
+export async function probeSfSandbox(partnerId: string, checkWord: string) {
+  const serviceCode = 'EXP_RECE_SEARCH_ORDER_RESP'
+  const timestamp = Date.now().toString()
+  const msgData = JSON.stringify({ orderId: randomUUID(), language: 'zh-CN', searchType: '1' })
+  const body = new URLSearchParams({ partnerID: partnerId, requestID: randomUUID(), serviceCode, timestamp, msgData, msgDigest: sfDigest(msgData, timestamp, checkWord) })
+  let response: Response
+  try {
+    response = await fetch('https://sfapi-sbox.sf-express.com/std/service', {
+      method: 'POST', body,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error'
+    })
+  } catch {
+    return { connected: false, message: '无法连接顺丰沙盒，请检查网络和机器凭据。' }
+  }
+  if (!response.ok) return { connected: false, message: '顺丰沙盒未接受连接请求，请检查服务端响应和机器凭据。' }
+  let raw: unknown
+  try { raw = await response.json() } catch { return { connected: false, message: '顺丰沙盒返回无法识别的响应。' } }
+  let outer: z.infer<typeof envelope>
+  try { outer = envelope.parse(raw) } catch { return { connected: false, message: '顺丰沙盒返回无法识别的响应。' } }
+  if (outer.apiResultCode !== 'A1000') return { connected: false, message: '顺丰沙盒拒绝了签名请求，请核对PartnerID和CheckWord。' }
+  // A successful envelope may contain a business-level “order not found” result
+  // because this probe deliberately uses a one-time synthetic order ID.
+  try { business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData) }
+  catch { return { connected: false, message: '顺丰沙盒返回无法识别的响应。' } }
+  return { connected: true, message: '顺丰沙盒已接受只读签名请求；此结果不代表下单、轨迹或取消权限已开通。' }
+}
 export function buildSfOrder(orderId: string, input: ShippingInput, monthlyCard: string) {
   // Missing payment is only for recovery of legacy monthly-payment snapshots.
   const payment = input.payment || 'sender_monthly'

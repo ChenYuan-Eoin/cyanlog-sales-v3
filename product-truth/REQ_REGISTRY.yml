@@ -1022,9 +1022,9 @@ requirements:
 
   F054:
     name: 自助收寄
-    module: 三栏操作台、销售寄件提报与物流跟踪
-    source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005
-    status: wp14_active
+    module: 三栏操作台、销售寄件提报、多快递连接、月结账号与物流跟踪
+    source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011
+    status: wp15_active
     priority: P1
     feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
     code_locations:
@@ -1032,13 +1032,14 @@ requirements:
       - app/sales-portal
       - app/api/shipping
       - lib/shipping
-    description: 侧边导航仅一个“自助收寄”入口；操作员在同页三栏完成批量操作、待办台账、单据详情和物流跟踪；销售从独立免登录页面填写客户、收件信息与特殊需求，提交后进入待确认池。无面单打印。
+      - supabase/migrations
+    description: 单一“自助收寄”入口和三栏工作台；销售独立提报；配置管理员在页内管理顺丰服务端机器连接、多个月结账号与默认寄件资料，普通用户只使用脱敏授权账号；动态下单、查件、轨迹和未揽收取消均在ONES完成，运行时不登录承运商网站，不使用第三方聚合平台或手机认证。无面单打印。
 
 # Maintained PRD index
 sf_self_service_order_prd:
   id: F054
-  status: wp14_active
-  source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005
+  status: wp15_active
+  source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011
   branch: codex/shipping-collaboration-console
-  work_package: WP14
+  work_package: WP15
   feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md

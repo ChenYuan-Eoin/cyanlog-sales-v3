@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-09-23T03:40:00+00:00",
+  "updated_at": "2026-09-23T07:45:13.667Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,14 +128,14 @@
     ]
   },
   "active_task": {
-    "id": "WP14",
-    "slug": "shipping-provider-closure",
-    "name": "顺丰取消、轨迹与收件来源收口",
+    "id": "WP15",
+    "slug": "shipping-carrier-configuration",
+    "name": "快递平台连接与寄件配置",
     "kind": "product",
     "status": "active",
-    "objective": "F054 v1.1 WP14：在既有顺丰Adapter上增加未揽收订单取消与身份校验；右栏提供临时运单号/手机号后四位查询入口；轨迹未返回快递员姓名、工号或电话时明确显示未提供而非Mock；收件台账仅展示有明确来源的记录，不按月结号枚举公司全量运单。",
-    "started_at": "2026-09-23T04:06:00.000Z",
-    "activation_basis": "用户批准WP12→WP13→WP14结构化顺序；WP13由提交b7194f85达到code_green后按Next门自动进入。IN-20260923-005 / IN-20260923-007",
+    "objective": "F054 WP15：为自助收寄建立顺丰机器连接、多个月结账号和默认寄件人信息的服务端配置能力。提供配置抽屉、加密凭据保存、脱敏账号管理及不创建运单的沙盒连通性检查；不切换动态下单消费（归WP16）。",
+    "started_at": "2026-09-23T07:45:13.667Z",
+    "activation_basis": "用户在2026-09-23明确给出完整实施目标：配置抽屉、顺丰机器凭据、多个脱敏月结账号、默认寄件人资料及沙盒连接检查；本目标按WP15配置、WP16动态下单、WP17生产准备拆分。本授权不包含远端数据库写入、push、PR、Production部署或真实付费寄件。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -144,27 +144,12 @@
       "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
       "product-truth/product-code/app/shipping",
-      "product-truth/product-code/app/sales-portal",
       "product-truth/product-code/app/api/shipping",
       "product-truth/product-code/lib/shipping",
-      "product-truth/product-code/components/layout/Sidebar.tsx",
+      "product-truth/product-code/components/ui",
       "product-truth/product-code/scripts/SHIPPING-SETUP.md",
       "product-truth/product-code/.env.example",
-      "product-truth/product-code/node_modules",
-      "product-truth/product-code/.next",
-      "product-truth/product-code/next-env.d.ts",
-      "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/vitest.config.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/lib/database-environment.ts",
-      "product-truth/product-code/lib/database-environment.test.ts",
-      "product-truth/product-code/lib/supabase.ts",
-      "product-truth/product-code/scripts/local.sh",
-      "product-truth/product-code/scripts/local.mjs",
-      "product-truth/product-code/components/layout/AppShell.tsx",
-      "product-truth/product-code/components/ui",
-      "product-truth/product-code/supabase/migrations/20260922000001_shipping_collaboration_m0.sql"
+      "product-truth/product-code/supabase/migrations"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -189,25 +174,37 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "WP14只交付代码与本地验证；取消接口实际可用性仍取决于顺丰应用权限，不推送、不部署Production、不修改远端数据库、不发起真实付费寄件。",
+      "note": "WP15仅交付本地配置代码与验证；不执行远端数据库写入、push、PR、Production部署或真实付费寄件。顺丰连接能力需账号沙盒凭据和接口权限验证。",
       "runtime_profile": "shipping_workspace"
     },
     "feature_id": "F054"
   },
   "execution_queue": {
     "active": {
-      "id": "WP14",
-      "slug": "shipping-provider-closure",
-      "reason": "WP13已达到code_green；按用户批准的结构化顺序收口未揽收取消、备用查询和真实轨迹字段边界"
+      "id": "WP15",
+      "slug": "shipping-carrier-configuration",
+      "reason": "用户明确要求继续实现平台配置抽屉、加密顺丰机器凭据、多月结账号和默认寄件资料；按配置与动态消费拆分验收。；已依据用户2026-09-23新目标转入WP15，上一包WP14依据精确SHA 32a2c4fa code_green证据收口。"
     },
     "next": {
-      "id": "WP10",
-      "slug": "quote-domain-complete-migration",
-      "name": "报价域完整形态与换机可迁移基座",
-      "entry_gate": "WP14达到code_green；任何Production发布仍需独立授权",
+      "id": "WP16",
+      "slug": "shipping-dynamic-order-consumption",
+      "name": "多平台动态下单与批量消费",
+      "entry_gate": "WP15达到code_green；所选有效月结账号与寄件人资料已在本地配置层验证",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
+      {
+        "id": "WP17",
+        "slug": "shipping-production-readiness",
+        "name": "生产环境清单与真实寄件验收准备",
+        "activation_requirement": "WP16 code_green；Production写入、部署和真实付费寄件均需独立授权"
+      },
+      {
+        "id": "WP10",
+        "slug": "quote-domain-complete-migration",
+        "name": "报价域完整形态与换机可迁移基座",
+        "activation_requirement": "F054 WP15-WP17目标完成或用户重新排序"
+      },
       {
         "id": "WP08",
         "slug": "experience-umbrella",
@@ -246,6 +243,13 @@
       }
     ],
     "completed": [
+      {
+        "id": "WP14",
+        "slug": "shipping-provider-closure",
+        "completed_at": "2026-09-23T07:45:13.667Z",
+        "evidence_commit": "32a2c4faf545a5ed8f3df799009cc2911a2fb364",
+        "result": "delivery-check code_green在当前精确SHA上通过，含目标测试、全量测试、lint、typecheck、build证据；未push或部署Production。"
+      },
       {
         "id": "WP13",
         "slug": "batch-shipping-execution",

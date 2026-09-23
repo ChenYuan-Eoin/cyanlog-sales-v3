@@ -17,6 +17,17 @@ describe('self-service shipping workbench', () => {
     expect(screen.getByRole('region', { name: '单据详情与物流轨迹' })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: '寄件协同功能' })).toBeNull()
   })
+  it('opens the in-page configuration drawer only for connection managers', async () => {
+    fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url === '/api/shipping/settings' ? { configuration: { connections: [], billingAccounts: [], sender: null } } : { records: [] }), { status: 200 }))
+    render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true }}/>)
+    fireEvent.click(screen.getByRole('button', { name: '寄件配置' }))
+    expect(await screen.findByRole('dialog', { name: '寄件配置' })).toBeTruthy()
+  })
+  it('renders a configuration-only view for managers without daily shipping permission', () => {
+    render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true, canOperate: false }}/>)
+    expect(screen.getByText('你有寄件连接管理权限')).toBeTruthy()
+    expect(screen.queryByRole('region', { name: '收寄件台账与待办' })).toBeNull()
+  })
   it('loads five example rows and fixes the invalid phone inline', () => {
     render(<ShippingWorkbench settings={settings}/>)
     fireEvent.click(screen.getByRole('button', { name: '导入示例数据' }))

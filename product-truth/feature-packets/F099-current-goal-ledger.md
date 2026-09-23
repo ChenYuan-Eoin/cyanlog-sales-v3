@@ -33,9 +33,12 @@
 | WP11 | shipping-collaboration | 无——独立工具域 | parked_reuse_baseline | 匿名提报、安全回执、关系台账、顺丰沙盒及安全存储作为复用基线 |
 | WP12 | self-service-shipping-workbench | 无——独立工具域 | code_green / `7fb4f2d4` | 单一“自助收寄”导航、操作员三栏同屏、销售精简提报、特殊需求和无打印范围 |
 | WP13 | batch-shipping-execution | 无——独立工具域 | code_green / `b7194f85` | Excel/CSV与文本导入、行内纠错、批次幂等执行和部分失败恢复 |
-| WP14 | shipping-provider-closure | 无——独立工具域 | **Active** | 按实际接口权限收口取消、轨迹字段及收件来源 |
+| WP14 | shipping-provider-closure | 无——独立工具域 | code_green / `32a2c4fa` | 取消、轨迹字段与收件来源边界 |
+| WP15 | shipping-carrier-configuration | 无——独立工具域 | **Active** | 加密顺丰机器连接、多月结账号、默认寄件人资料与沙盒只读连接检查 |
+| WP16 | shipping-dynamic-order-consumption | 无——独立工具域 | Next | 批量/确认下单从数据库动态读取有效连接、月结账号及寄件人 |
+| WP17 | shipping-production-readiness | 无——独立工具域 | Ready | 生产环境变量清单、能力权限检查及真实寄件验收准备 |
 
-当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP14`。WP11及其dirty/运行证据保留；WP12、WP13已达到code_green，WP14关闭后恢复WP10。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
+当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP15`。WP11及其dirty/运行证据保留；WP12-WP14已达到code_green。F054的新用户目标按WP15-WP17依次推进，WP10保留为后续工作包，不得触碰根工作区受保护dirty状态。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
 
 ## 2. 候选边界
 
