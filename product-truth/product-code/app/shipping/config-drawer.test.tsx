@@ -15,7 +15,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('shipping configuration drawer', () => {
   it('shows server-only credentials and masked account controls without exposing stored values', async () => {
     fetcher.mockResolvedValue(new Response(JSON.stringify({ configuration: {
-      connections: [{ id: 'conn-1', carrier: 'sf', environment: 'sandbox', partnerIdTail: '8391', status: 'configured', capabilities: { order: 'not_tested', query: 'not_tested', tracking: 'not_tested', cancel: 'not_tested' }, lastTestedAt: null }],
+      connections: [{ id: 'conn-1', carrier: 'sf', environment: 'sandbox', partnerIdTail: '8391', status: 'configured', services: [], capabilities: { order: 'not_tested', query: 'not_tested', tracking: 'not_tested', cancel: 'not_tested' }, lastTestedAt: null }],
       billingAccounts: [{ id: 'acct-1', connectionId: 'conn-1', environment: 'sandbox', displayName: '企业月结', tail: '5616', status: 'active', isDefault: true }], sender: null
     } }), { status: 200 }))
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)

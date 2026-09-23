@@ -1,8 +1,9 @@
 // REQ: F054. SF standard API protocol. Verify account-specific permissions in sandbox before release.
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { requireShippingConnection, ShippingError } from './config'
+import { ShippingError } from './config'
 import type { ShippingInput, TrackingResult } from './types'
+import type { ShippingRuntimeConfig } from './runtime-config'
 export function sfDigest(message: string, timestamp: string, checkWord: string) {
   // Java URLEncoder / PHP urlencode compatible UTF-8 form encoding, then raw MD5 + Base64.
   const encoded = new URLSearchParams({ v: message + timestamp + checkWord }).toString().slice(2)
@@ -17,10 +18,9 @@ export function decodeSfResponse(raw: unknown): unknown {
   if (data.success !== true && data.success !== 'true') throw new ShippingError(422, `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
   return data.msgData
 }
-export async function sfCall(serviceCode: string, message: unknown): Promise<unknown> {
-  const config = requireShippingConnection(serviceCode === 'EXP_RECE_CREATE_ORDER')
+export async function sfCall(serviceCode: string, message: unknown, config: Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>): Promise<unknown> {
   const timestamp = Date.now().toString(), msgData = JSON.stringify(message)
-  const body = new URLSearchParams({ partnerID: config.partner, requestID: randomUUID(), serviceCode, timestamp, msgData, msgDigest: sfDigest(msgData, timestamp, config.checkWord) })
+  const body = new URLSearchParams({ partnerID: config.partnerId, requestID: randomUUID(), serviceCode, timestamp, msgData, msgDigest: sfDigest(msgData, timestamp, config.checkWord) })
   const url = config.environment === 'sandbox' ? 'https://sfapi-sbox.sf-express.com/std/service' : 'https://sfapi.sf-express.com/std/service'
   const started = Date.now()
   let upstreamStatus: number | undefined
@@ -71,6 +71,7 @@ export async function probeSfSandbox(partnerId: string, checkWord: string) {
   return { connected: true, message: '顺丰沙盒已接受只读签名请求；此结果不代表下单、轨迹或取消权限已开通。' }
 }
 export function buildSfOrder(orderId: string, input: ShippingInput, monthlyCard: string) {
+  if (!input.serviceId) throw new ShippingError(400, '请先选择已授权的承运商服务产品。', 'validation')
   // Missing payment is only for recovery of legacy monthly-payment snapshots.
   const payment = input.payment || 'sender_monthly'
   if (payment === 'sender_monthly' && !monthlyCard) throw new ShippingError(400, '月结付款尚未配置，请选择现结或到付。', 'validation')
@@ -84,11 +85,11 @@ export function extractOrder(raw: unknown, expectedId: string) {
   if (data.orderId !== expectedId) throw new ShippingError(502, '顺丰返回的请求编号不一致，结果待确认。')
   return data.waybillNoInfoList?.find(x => x.waybillType === 1)?.waybillNo || data.waybillNoInfoList?.[0]?.waybillNo || null
 }
-export async function createSfOrder(id: string, input: ShippingInput) {
-  return extractOrder(await sfCall('EXP_RECE_CREATE_ORDER', buildSfOrder(id, input, requireShippingConnection(true).monthly)), id)
+export async function createSfOrder(id: string, input: ShippingInput, config: ShippingRuntimeConfig) {
+  return extractOrder(await sfCall('EXP_RECE_CREATE_ORDER', buildSfOrder(id, input, config.billingAccount), config), id)
 }
-export async function lookupSfOrder(id: string) {
-  return extractOrder(await sfCall('EXP_RECE_SEARCH_ORDER_RESP', { orderId: id, language: 'zh-CN', searchType: '1' }), id)
+export async function lookupSfOrder(id: string, config: ShippingRuntimeConfig) {
+  return extractOrder(await sfCall('EXP_RECE_SEARCH_ORDER_RESP', { orderId: id, language: 'zh-CN', searchType: '1' }, config), id)
 }
 const cancelResult = z.object({ orderId: z.string() })
 export function extractCancellation(raw: unknown, expectedId: string) {
@@ -96,8 +97,8 @@ export function extractCancellation(raw: unknown, expectedId: string) {
   if (data.orderId !== expectedId) throw new ShippingError(502, '顺丰返回的取消订单编号不一致，请人工核对。')
   return true
 }
-export async function cancelSfOrder(orderId: string) {
-  return extractCancellation(await sfCall('EXP_RECE_UPDATE_ORDER', { orderId, dealType: 2, language: 'zh-CN' }), orderId)
+export async function cancelSfOrder(orderId: string, config: ShippingRuntimeConfig) {
+  return extractCancellation(await sfCall('EXP_RECE_UPDATE_ORDER', { orderId, dealType: 2, language: 'zh-CN' }, config), orderId)
 }
 const routeData = z.object({ routeResps: z.array(z.object({ mailNo: z.string().nullable().optional(), routes: z.array(z.object({ acceptTime: z.string(), acceptAddress: z.string().nullish(), remark: z.string() })) })) })
 export function extractTracking(raw: unknown, waybill: string): TrackingResult {
@@ -106,6 +107,6 @@ export function extractTracking(raw: unknown, waybill: string): TrackingResult {
   if (!match && data.routeResps.some(r => r.routes.length)) throw new ShippingError(502, '顺丰返回的运单号不一致。')
   return { waybill, queriedAt: new Date().toISOString(), events: (match?.routes || []).map(r => ({ time: r.acceptTime, location: r.acceptAddress || '', description: r.remark })).sort((a, b) => b.time.localeCompare(a.time)) }
 }
-export async function querySfTracking(waybill: string, phoneSuffix?: string) {
-  return extractTracking(await sfCall('EXP_RECE_SEARCH_ROUTES', { language: '0', trackingType: '1', trackingNumber: [waybill], methodType: '1', ...(phoneSuffix ? { checkPhoneNo: phoneSuffix } : {}) }), waybill)
+export async function querySfTracking(waybill: string, phoneSuffix: string | undefined, config: ShippingRuntimeConfig) {
+  return extractTracking(await sfCall('EXP_RECE_SEARCH_ROUTES', { language: '0', trackingType: '1', trackingNumber: [waybill], methodType: '1', ...(phoneSuffix ? { checkPhoneNo: phoneSuffix } : {}) }, config), waybill)
 }

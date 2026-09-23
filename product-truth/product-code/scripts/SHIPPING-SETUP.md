@@ -1,25 +1,28 @@
-# F054 个人一屏查寄接入
+# F054 自助收寄接入与运行配置
 
-路径 `/shipping`，仅服务端访问名单内用户可用。页面访问和每个API均验证现有登录状态。所有发单经统一策略校验，再持久化幂等请求，再调用顺丰；业务订单来源当前明确拒绝。
+`/shipping`仅从组织数据库读取顺丰连接、多月结账号、授权服务和默认寄件人。顺丰机器凭据、月结卡号、服务产品及寄件人资料均不通过环境变量或浏览器传输。销售/匿名提报只提交收件业务字段和通用时效偏好，承运商选择仅发生在ONES履约流程。
 
-## 私有环境配置
+## 服务端环境变量
 
-写入当前 worktree 的 `git rev-parse --git-path codex-runtime` 下的 `local-development.env`（本地），发布环境则写入对应服务端环境变量。不得放入 tracked 文件。
+写入本地私有环境文件或部署平台服务端环境配置；不要写入tracked文件或公开前缀。
 
-- `SHIPPING_ALLOWED_USER_IDS`：逗号分隔的系统用户 UUID。空值不开放；无管理员隐式绕过。
-- `SF_ENVIRONMENT`：`sandbox` / `production`，默认沙盒。
-- `SF_PARTNER_ID`、`SF_CHECK_WORD`：对应环境的开放平台顾客编码及校验码；个人网页登录不替代API授权。
-- `SF_MONTHLY_CARD`：生产月结号；用户提供的值仅存私有配置，上线前需绑定到该应用。
-- `SF_SANDBOX_MONTHLY_CARD`：沙盒测试月结号。2026-09-11应用详情页明确统一使用 `7551234567`，禁止在沙盒套用真实月结号。
-- `SF_SERVICES_JSON`：账号已授权服务列表，如 `[{"id":2,"name":"顺丰标快"}]`，必须与当前账号文档和沙盒核实，不依靠示例推断权限。
-- `SHIPPING_SENDER_JSON`：可选寄件默认值，键为name/phone/province/city/county/address；空值由本人填写。
-- 生产月结下单不能通过环境变量直接开启。当前版本硬性关闭生产提交；只有实现并验证“付款者逐单审核”后，才能在代码与测试中新增生产放行条件。
+- `SHIPPING_CREDENTIALS_ENCRYPTION_KEY`：64位十六进制、32随机字节，用作AES-256-GCM应用层凭据加密主密钥，并派生月结卡号指纹密钥。可用 `openssl rand -hex 32` 生成；不能记录到日志。轮换前需先重加密已存凭据和账号号。
+- `SHIPPING_ALLOWED_USER_IDS`：当前寄件操作访问引导名单，逗号分隔ONES用户UUID；不包含承运商配置。
+- `SHIPPING_CONTEXT_SECRET`：匿名业务上下文链接签名密钥，至少32字符。
+- `SHIPPING_RECEIPT_SECRET`：匿名回执令牌HMAC密钥，至少32字符。
+- `SHIPPING_ANONYMOUS_LIMIT`：可选匿名提报限流值，默认20。
+- `SHIPPING_BUSINESS_CONTEXTS_JSON`：可选业务代码关系映射，不含承运商配置。
 
-## 数据库
+以下旧配置已退出运行时代码：`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SANDBOX_MONTHLY_CARD`、`SF_SERVICES_JSON`、`SHIPPING_SENDER_JSON`、`SF_PRODUCTION_ORDER_ENABLED`。均在`/shipping`配置抽屉或服务端订单策略中管理。
 
-仅在经批准的隔离库应用 `supabase/migrations/20260911000001_shipping_requests.sql`。寄件请求保存经过校验的表单快照，以恢复上次成功下单信息；shipping_contacts保存本人常用地址。两者禁止匿名和普通数据库角色直连，最近寄件接口不返回完整快照。客户端数据库角色无权限，由服务端API读写。
+## 前向迁移
 
-发布时此迁移与既有生产安全门禁单独判断；不得因为本地页面通过直接执行生产SQL。回滚优先关闭功能访问/发单，保留寄件记录供对账，不删除已发送请求。
+按顺序应用此前未应用的F054迁移，再应用：
+
+- `20260923074619_shipping_carrier_configuration.sql`：组织级连接、加密月结账号、默认寄件人，RLS开启并撤销`anon`/`authenticated`直接访问。
+- `20260923081415_shipping_order_configuration_snapshot.sql`：连接授权服务矩阵及寄件订单的非机密连接/账号/寄件人快照。
+
+只在本地或隔离数据库验证迁移；Production迁移、部署和真实付费寄件仍需独立授权。WP15的应用代码门禁通过，但本机未安装Docker/PostgreSQL，以上两条新迁移尚未在本地数据库应用或SQL lint验证。不要将其描述为数据库运行验证通过。
 
 ## 接口核验
 
@@ -36,7 +39,7 @@
 
 生产或真实付费寄件需独立授权；下单、接口沙盒、代码通过、线上发布是不同结果。
 
-## 当前本机验证
+## 历史WP11候选证据（非当前运行态证明）
 
 - 独立工作树运行证据位于 `codex-runtime/shipping`，不放入tracked文件。
 - 本地构建服务：`http://localhost:3011/shipping`，使用隔离数据库及专用测试账号。
@@ -57,8 +60,8 @@
 
 追加迁移 `20260911000003_shipping_contacts_defaults.sql` 提供私有地址簿和上次成功下单快照。匿名页面仅提供填写界面；匿名付费寄件策略尚待用户明确。
 
-## 月结逐单审核（2026-09-14）
+## 月结逐单审核的当前安全边界（IN-20260914-002）
 
-用户明确：月结付款者需要看到并审核每一票，不允许开发者应用绑定月结号后直接记账。当前下单报文使用寄方付月结，顺丰公开文档没有提供逐单审批标识；因此生产提交在代码层硬关闭，即使设置旧的`SF_PRODUCTION_ORDER_ENABLED=true`也不会生效。
+用户明确：月结付款者需要看到并审核每一票，不允许开发者应用绑定月结号后直接记账。顺丰公开文档没有提供可证明逐单审批的通用标志；Production下单能力必须在企业审批策略和顺丰接口权限分别得到证据后由WP17收口。已删除旧环境开关，不能靠环境变量放开生产提交。
 
 顺丰官方提供有效期默认300秒的月结码及供收派员输入的动态码，但标准下单接口没有接收该动态码的字段。后续只允许两种接法：顺丰书面确认`payMethod=3`能触发原有付款者逐单审核；或在ONES建立独立付款者审批，审批通过的冻结快照才能调用顺丰。未验证前只开放地址簿、智能填写和查询。

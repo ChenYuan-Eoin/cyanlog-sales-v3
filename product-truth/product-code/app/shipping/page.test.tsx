@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m=vi.hoisted(()=>({token:vi.fn(),user:vi.fn(),redirect:vi.fn()}))
 vi.mock('@/lib/server-auth',()=>({getServerAuthToken:m.token}))
 vi.mock('@/lib/auth',()=>({getAuthUserByToken:m.user}))
+vi.mock('@/lib/shipping/runtime-config',()=>({getUserShippingSettings:async()=>({orgId:'org-1',settings:{environment:'sandbox',ready:false,reason:'',services:[],monthlyTail:'',sender:{name:'',phone:'',province:'',city:'',county:'',address:''},canSubmit:false}})}))
+vi.mock('@/lib/shipping/connection-authorization',()=>({requireShippingConnectionManager:async()=>{throw new Error('not a manager')}}))
 vi.mock('next/navigation',()=>({redirect:m.redirect}))
 import ShippingPage from './page'
 beforeEach(()=>{m.token.mockReset();m.user.mockReset();m.redirect.mockReset();m.redirect.mockImplementation((path:string)=>{throw new Error(`redirect:${path}`)});vi.stubEnv('SHIPPING_ALLOWED_USER_IDS','owner')})

@@ -36,5 +36,6 @@ export async function shippingManagerHandler(req: NextRequest, action: (user: Au
 export async function shippingJson(req: NextRequest) {
   const raw = await req.text()
   if (raw.length > 10000) throw new ShippingError(413, '寄件信息过长。')
+  if (!raw.trim()) return {}
   return JSON.parse(raw)
 }

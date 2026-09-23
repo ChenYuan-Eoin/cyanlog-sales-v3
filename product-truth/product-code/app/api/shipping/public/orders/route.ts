@@ -2,10 +2,11 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { shippingJson } from '@/lib/shipping/http'
-import { shippingConfig, ShippingError } from '@/lib/shipping/config'
-import { anonymousShipmentSchema, contactSchema } from '@/lib/shipping/validation'
+import { ShippingError } from '@/lib/shipping/config'
+import { anonymousShipmentSchema } from '@/lib/shipping/validation'
 import { createAnonymousShipment, publicShipmentReceipt } from '@/lib/shipping/collaboration'
 import { enforceAnonymousShippingRate } from '@/lib/shipping/rate-limit'
+import { getPublicDefaultSender } from '@/lib/shipping/runtime-config'
 
 export const runtime = 'nodejs'
 
@@ -15,9 +16,7 @@ export async function POST(req: NextRequest) {
     if (origin && origin !== req.nextUrl.origin) throw new ShippingError(403, '请求来源不受信任。')
     await enforceAnonymousShippingRate(req)
     const submission = anonymousShipmentSchema.parse(await shippingJson(req))
-    const configuredSender = contactSchema.safeParse(shippingConfig().publicSettings.sender)
-    const sender = submission.input.sender || (configuredSender.success ? configuredSender.data : null)
-    if (!sender) throw new ShippingError(503, '公司默认寄件地址尚未配置，请联系前台。')
+    const sender = await getPublicDefaultSender()
     const result = await createAnonymousShipment({ ...submission, input: { ...submission.input, sender } })
     return NextResponse.json({ ...publicShipmentReceipt(result.order), receiptToken: result.receiptToken }, { status: 202, headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

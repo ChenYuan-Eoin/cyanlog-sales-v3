@@ -5,12 +5,14 @@ import { ShippingError } from './config'
 import type { Contact } from './types'
 
 const credentialSchema = z.object({ partnerId: z.string().trim().min(1).max(64), checkWord: z.string().trim().min(1).max(256), environment: z.enum(['sandbox', 'production']) }).strict()
+const serviceSchema = z.array(z.object({ id: z.number().int().positive(), name: z.string().trim().min(1).max(40), preference: z.enum(['standard', 'urgent']).default('standard') }).strict()).max(20).default([])
+const connectionSchema = z.object({ partnerId: z.string().trim().min(1).max(64), checkWord: z.string().trim().min(1).max(256), environment: z.enum(['sandbox', 'production']), services: serviceSchema }).strict()
 const accountSchema = z.object({ accountNumber: z.string().trim().regex(/^[0-9]{4,32}$/), displayName: z.string().trim().min(1).max(80), environment: z.enum(['sandbox', 'production']).default('sandbox'), isDefault: z.boolean().optional() }).strict()
 const senderSchema = z.object({ displayName: z.string().trim().min(1).max(80), contact: z.object({ name: z.string().trim().min(1).max(80), phone: z.string().trim().min(6).max(32), province: z.string().trim().min(1).max(80), city: z.string().trim().min(1).max(80), county: z.string().trim().min(1).max(80), address: z.string().trim().min(1).max(240) }).strict() }).strict()
 
 export type CarrierEnvironment = 'sandbox' | 'production'
 export type ShippingConfiguration = {
-  connections: Array<{ id: string; carrier: 'sf'; environment: CarrierEnvironment; partnerIdTail: string; status: string; capabilities: { order: string; query: string; tracking: string; cancel: string }; lastTestedAt: string | null }>
+  connections: Array<{ id: string; carrier: 'sf'; environment: CarrierEnvironment; partnerIdTail: string; status: string; services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }>; capabilities: { order: string; query: string; tracking: string; cancel: string }; lastTestedAt: string | null }>
   billingAccounts: Array<{ id: string; connectionId: string; environment: CarrierEnvironment; displayName: string; tail: string; status: 'active' | 'inactive'; isDefault: boolean }>
   sender: (Contact & { displayName: string }) | null
 }
@@ -52,24 +54,25 @@ function databaseError() { return new ShippingError(503, '寄件配置保存失�
 
 export async function loadShippingConfiguration(orgId: string): Promise<ShippingConfiguration> {
   const [connections, accounts, sender] = await Promise.all([
-    supabaseAdmin.from('shipping_carrier_connections').select('id,carrier_key,environment,partner_id_tail,connection_status,order_capability,query_capability,tracking_capability,cancel_capability,last_tested_at').eq('org_id', orgId).order('created_at', { ascending: true }),
+    supabaseAdmin.from('shipping_carrier_connections').select('id,carrier_key,environment,partner_id_tail,connection_status,authorized_services,order_capability,query_capability,tracking_capability,cancel_capability,last_tested_at').eq('org_id', orgId).order('created_at', { ascending: true }),
     supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,display_name,account_tail,status,is_default').eq('org_id', orgId).order('created_at', { ascending: true }),
     supabaseAdmin.from('shipping_sender_profiles').select('display_name,name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle()
   ])
   if (connections.error || accounts.error || sender.error) throw databaseError()
   return {
-    connections: (connections.data || []).map((row) => ({ id: row.id, carrier: 'sf', environment: row.environment, partnerIdTail: row.partner_id_tail, status: row.connection_status, capabilities: { order: row.order_capability, query: row.query_capability, tracking: row.tracking_capability, cancel: row.cancel_capability }, lastTestedAt: row.last_tested_at })),
+    connections: (connections.data || []).map((row) => ({ id: row.id, carrier: 'sf', environment: row.environment, partnerIdTail: row.partner_id_tail, status: row.connection_status, services: serviceSchema.parse(row.authorized_services || []), capabilities: { order: row.order_capability, query: row.query_capability, tracking: row.tracking_capability, cancel: row.cancel_capability }, lastTestedAt: row.last_tested_at })),
     billingAccounts: (accounts.data || []).map((row) => ({ id: row.id, connectionId: row.connection_id, environment: (connections.data || []).find(connection => connection.id === row.connection_id)?.environment === 'production' ? 'production' : 'sandbox', displayName: row.display_name, tail: row.account_tail, status: row.status, isDefault: row.is_default })),
     sender: sender.data ? { displayName: sender.data.display_name, name: sender.data.name, phone: sender.data.phone, province: sender.data.province, city: sender.data.city, county: sender.data.county, address: sender.data.address } : null
   }
 }
 
 export async function saveCarrierCredentials(orgId: string, userId: string, input: unknown) {
-  const parsed = credentialSchema.parse(input)
+  const parsed = connectionSchema.parse(input)
   const credentials = JSON.stringify({ partnerId: parsed.partnerId, checkWord: parsed.checkWord })
   const { data, error } = await supabaseAdmin.from('shipping_carrier_connections').upsert({
     org_id: orgId, carrier_key: 'sf', environment: parsed.environment,
     credentials_ciphertext: encryptShippingSecret(credentials), partner_id_tail: parsed.partnerId.slice(-4),
+    authorized_services: parsed.services,
     connection_status: 'configured', order_capability: 'not_tested', query_capability: 'not_tested', tracking_capability: 'not_tested', cancel_capability: 'not_tested',
     last_tested_at: null, created_by: userId, updated_by: userId
   }, { onConflict: 'org_id,carrier_key,environment' }).select('id').single()

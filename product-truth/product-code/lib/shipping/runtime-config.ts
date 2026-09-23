@@ -1,0 +1,131 @@
+import { createHash } from 'node:crypto'
+import { z } from 'zod'
+import { supabaseAdmin } from '@/lib/supabase'
+import { getDefaultOrgId } from '@/lib/scoped-access'
+import { ShippingError } from './config'
+import { decryptShippingSecret } from './connections'
+import type { Contact, ShippingSettings } from './types'
+
+const servicesSchema = z.array(z.object({ id: z.number().int().positive(), name: z.string().min(1).max(40), preference: z.enum(['standard', 'urgent']).default('standard') })).max(20)
+const credentialsSchema = z.object({ partnerId: z.string().min(1), checkWord: z.string().min(1) }).strict()
+
+export type ShippingRuntimeConfig = {
+  orgId: string
+  connectionId: string
+  environment: 'sandbox' | 'production'
+  partnerId: string
+  checkWord: string
+  services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }>
+  billingAccountId: string
+  billingAccount: string
+  billingAccountTail: string
+  senderProfileId: string
+  sender: Contact
+  connectionKey: string
+  snapshot: Record<string, unknown>
+}
+
+export function selectAuthorizedShippingService(services: ShippingRuntimeConfig['services'], preference?: 'standard' | 'urgent', serviceId?: number) {
+  const selected = serviceId ? services.find(service => service.id === serviceId) : preference ? services.find(service => service.preference === preference) : services[0]
+  if (!selected) throw new ShippingError(409, serviceId ? '所选服务未在当前月结账号中授权。' : '当前连接未配置与该寄件偏好匹配的服务。')
+  return selected
+}
+
+export async function loadShippingSettings(orgId: string): Promise<ShippingSettings> {
+  const { data: connectionRows, error: connectionError } = await supabaseAdmin.from('shipping_carrier_connections')
+    .select('id,environment,connection_status,authorized_services,order_capability,partner_id_tail')
+    .eq('org_id', orgId).eq('carrier_key', 'sf').neq('connection_status', 'disabled').order('environment', { ascending: true })
+  if (connectionError) throw new ShippingError(503, '寄件连接读取失败。')
+  const { data: accountRows, error: accountError } = await supabaseAdmin.from('shipping_billing_accounts')
+    .select('id,connection_id,display_name,account_tail,status,is_default').eq('org_id', orgId).eq('status', 'active').order('created_at', { ascending: true })
+  if (accountError) throw new ShippingError(503, '月结账号读取失败。')
+  const { data: sender, error: senderError } = await supabaseAdmin.from('shipping_sender_profiles')
+    .select('display_name,name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle()
+  if (senderError) throw new ShippingError(503, '默认寄件人资料读取失败。')
+
+  const connections = connectionRows || []
+  const accounts = accountRows || []
+  const preferred = connections.find(row => row.environment === 'sandbox' && row.connection_status === 'connected')
+    || connections.find(row => row.environment === 'production' && row.connection_status === 'connected')
+    || connections.find(row => row.environment === 'sandbox')
+    || connections[0]
+  const matchingAccounts = preferred ? accounts.filter(row => row.connection_id === preferred.id) : []
+  const defaultAccount = matchingAccounts.find(row => row.is_default) || matchingAccounts[0]
+  const services = preferred ? servicesSchema.safeParse(preferred.authorized_services || []) : null
+  const normalizedServices = services?.success ? services.data : []
+  const contact = sender ? { name: sender.name, phone: sender.phone, province: sender.province, city: sender.city, county: sender.county, address: sender.address } : { name: '', phone: '', province: '', city: '', county: '', address: '' }
+  const connected = preferred?.connection_status === 'connected'
+  const senderReady = Boolean(sender && sender.name && sender.phone && sender.address)
+  const monthlyReady = Boolean(defaultAccount)
+  const productionAuthorized = preferred?.environment !== 'production' || preferred?.order_capability === 'verified'
+  const ready = Boolean(connected && senderReady && normalizedServices.length)
+  const canSubmit = ready && monthlyReady && productionAuthorized
+  const publicSettings: ShippingSettings = {
+    environment: preferred?.environment || 'sandbox', ready, canSubmit,
+    reason: !preferred ? '尚未配置快递平台连接。' : !connected ? '快递连接尚未通过沙盒连通检查。' : !senderReady ? '尚未配置公司默认寄件人。' : !monthlyReady ? '尚未绑定活动月结账号。' : !normalizedServices.length ? '尚未配置已授权服务产品。' : !productionAuthorized ? 'Production下单能力尚未通过独立验证。' : '',
+    services: normalizedServices, sender: contact, monthlyTail: defaultAccount?.account_tail || '', connectionId: preferred?.id || '', defaultBillingAccountId: defaultAccount?.id || '',
+    carrierConnections: connections.map(row => ({ id: row.id, carrier: 'sf', environment: row.environment, status: row.connection_status, orderCapability: row.order_capability, services: servicesSchema.safeParse(row.authorized_services || []).success ? servicesSchema.parse(row.authorized_services || []) : [] })),
+    billingAccounts: accounts.map(row => ({ id: row.id, connectionId: row.connection_id, displayName: row.display_name, tail: row.account_tail, environment: connections.find(item => item.id === row.connection_id)?.environment || 'sandbox', isDefault: row.is_default, status: row.status }))
+  }
+  return publicSettings
+}
+
+export async function getUserShippingSettings(userId: string) {
+  const orgId = await getDefaultOrgId(userId)
+  if (!orgId) throw new ShippingError(403, '当前账号没有可用的组织寄件配置。')
+  return { orgId, settings: await loadShippingSettings(orgId) }
+}
+
+export async function resolvePublicShippingOrgId() {
+  const { data, error } = await supabaseAdmin.from('shipping_sender_profiles').select('org_id').eq('is_default', true).limit(2)
+  if (error) throw new ShippingError(503, '公司默认寄件配置暂不可用。')
+  const orgIds = [...new Set((data || []).map(row => row.org_id))]
+  if (orgIds.length !== 1) throw new ShippingError(503, orgIds.length ? '公开寄件入口需要明确绑定一个公司组织。' : '公司默认寄件地址尚未配置，请联系管理员。')
+  return orgIds[0] as string
+}
+
+export async function getPublicDefaultSender(): Promise<Contact> {
+  const orgId = await resolvePublicShippingOrgId()
+  const { data, error } = await supabaseAdmin.from('shipping_sender_profiles')
+    .select('name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle()
+  if (error || !data) throw new ShippingError(503, '公司默认寄件地址尚未配置，请联系管理员。')
+  return data as Contact
+}
+
+export async function getShippingRuntimeConfig(args: { orgId: string; billingAccountId?: string; connectionId?: string; requireOrderCapability?: boolean; allowHistorical?: boolean }): Promise<ShippingRuntimeConfig> {
+  let accountQuery = supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,account_ciphertext,account_tail,status').eq('org_id', args.orgId)
+  if (!args.allowHistorical) accountQuery = accountQuery.eq('status', 'active')
+  if (args.billingAccountId) accountQuery = accountQuery.eq('id', args.billingAccountId)
+  else accountQuery = accountQuery.eq('is_default', true)
+  const { data: account, error: accountError } = await accountQuery.maybeSingle()
+  if (accountError) throw new ShippingError(503, '月结账号读取失败。')
+  if (!account) throw new ShippingError(409, args.billingAccountId ? '所选月结账号不存在或已停用。' : '请先设置一个活动的默认月结账号。')
+  if (args.connectionId && account.connection_id !== args.connectionId) throw new ShippingError(409, '所选月结账号与快递连接不匹配。')
+
+  const { data: connection, error: connectionError } = await supabaseAdmin.from('shipping_carrier_connections')
+    .select('id,environment,credentials_ciphertext,connection_status,authorized_services,order_capability,partner_id_tail')
+    .eq('org_id', args.orgId).eq('id', account.connection_id).eq('carrier_key', 'sf').maybeSingle()
+  if (connectionError) throw new ShippingError(503, '快递连接读取失败。')
+  if (!connection || (!args.allowHistorical && connection.connection_status !== 'connected')) throw new ShippingError(409, '所选快递连接尚未通过沙盒连通检查。')
+  if (connection.environment === 'production' && args.requireOrderCapability !== false && connection.order_capability !== 'verified') throw new ShippingError(409, 'Production下单能力尚未通过独立验证。')
+  const { data: sender, error: senderError } = await supabaseAdmin.from('shipping_sender_profiles')
+    .select('id,name,phone,province,city,county,address').eq('org_id', args.orgId).eq('is_default', true).maybeSingle()
+  if (senderError || !sender) throw new ShippingError(409, '请先保存公司默认寄件人信息。')
+
+  let credentials: z.infer<typeof credentialsSchema>
+  let billingAccount: string
+  try {
+    credentials = credentialsSchema.parse(JSON.parse(decryptShippingSecret(connection.credentials_ciphertext)))
+    billingAccount = decryptShippingSecret(account.account_ciphertext)
+  } catch (error) {
+    if (error instanceof ShippingError) throw error
+    throw new ShippingError(503, '寄件连接凭据无法读取，请由配置管理员重新保存。')
+  }
+  const services = servicesSchema.safeParse(connection.authorized_services || [])
+  if (!services.success || services.data.length === 0) throw new ShippingError(409, '该连接尚未配置已授权服务产品。')
+  const environment = connection.environment as 'sandbox' | 'production'
+  const connectionKey = createHash('sha256').update([args.orgId, connection.id, account.id, environment].join(':')).digest('hex')
+  const senderContact: Contact = { name: sender.name, phone: sender.phone, province: sender.province, city: sender.city, county: sender.county, address: sender.address }
+  const snapshot = { carrier: 'sf', connectionId: connection.id, environment, billingAccountId: account.id, billingAccountTail: account.account_tail, senderProfileId: sender.id, services: services.data }
+  return { orgId: args.orgId, connectionId: connection.id, environment, ...credentials, services: services.data, billingAccountId: account.id, billingAccount, billingAccountTail: account.account_tail, senderProfileId: sender.id, sender: senderContact, connectionKey, snapshot }
+}

@@ -2,13 +2,13 @@
 export type Contact = { name: string; phone: string; province: string; city: string; county: string; address: string }
 export type ShippingPayment = 'sender_cash' | 'recipient' | 'sender_monthly'
 export type ShippingSubmitter = { name: string; phone: string; team: string }
-export type ShippingInput = { sender: Contact; recipient: Contact; cargo: string; weight: number; serviceId: number; remark: string; source: 'manual'; payment?: ShippingPayment; customerName?: string; submittedBy?: ShippingSubmitter; specialRequirements?: string; pickupWindow?: string }
+export type ShippingInput = { sender: Contact; recipient: Contact; cargo: string; weight: number; serviceId?: number; serviceName?: string; servicePreference?: 'standard' | 'urgent'; remark: string; source: 'manual'; payment?: ShippingPayment; customerName?: string; submittedBy?: ShippingSubmitter; specialRequirements?: string; pickupWindow?: string }
 export type ShippingRecord = { id: string; status: 'pending' | 'accepted' | 'unknown'; waybill: string | null; created_at: string; environment: 'sandbox' | 'production' }
 export type ImportedOutbound = { id: string; waybill: string; source_time: string; source_status: string; imported_at: string }
 export type RouteEvent = { time: string; location: string; description: string }
 export type TrackingResult = { waybill: string; events: RouteEvent[]; queriedAt: string; courier?: { name?: string; employeeId?: string; phone?: string } }
 export type SavedShippingContact = { id: string; label: string; contact: Contact }
-export type ShippingSettings = { guest?: boolean; canOperate?: boolean; canManageConnections?: boolean; lastShipment?: ShippingInput; defaultsWarning?: string; environment: 'sandbox' | 'production'; ready: boolean; reason: string; services: { id: number; name: string }[]; monthlyTail: string; sender: Contact; canSubmit: boolean }
+export type ShippingSettings = { guest?: boolean; canOperate?: boolean; canManageConnections?: boolean; lastShipment?: ShippingInput; defaultsWarning?: string; environment: 'sandbox' | 'production'; ready: boolean; reason: string; services: Array<{ id: number; name: string; preference?: 'standard' | 'urgent' }>; monthlyTail: string; sender: Contact; canSubmit: boolean; connectionId?: string; defaultBillingAccountId?: string; carrierConnections?: Array<{ id: string; carrier: 'sf'; environment: 'sandbox' | 'production'; status: string; orderCapability: string; services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }> }>; billingAccounts?: Array<{ id: string; connectionId: string; displayName: string; tail: string; environment: 'sandbox' | 'production'; isDefault: boolean; status: 'active' | 'inactive' }> }
 export type ShipmentOrderStatus = 'accepted' | 'awaiting_confirmation' | 'returned' | 'confirmed' | 'ordering' | 'order_unknown' | 'waybill_created' | 'in_transit' | 'delivered' | 'cancelled' | 'order_failed'
 export type ShipmentRelation = { salesRef: string | null; customerRef: string | null; assignmentStatus: 'assigned' | 'unassigned' }
 export type ShipmentOrder = {

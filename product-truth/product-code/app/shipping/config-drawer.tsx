@@ -20,6 +20,10 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox')
   const [partnerId, setPartnerId] = useState('')
   const [checkWord, setCheckWord] = useState('')
+  const [authorizedServices, setAuthorizedServices] = useState<Array<{ id: number; name: string; preference: 'standard' | 'urgent' }>>([])
+  const [newServiceId, setNewServiceId] = useState('')
+  const [newServiceName, setNewServiceName] = useState('')
+  const [newServicePreference, setNewServicePreference] = useState<'standard' | 'urgent'>('standard')
   const [accountNumber, setAccountNumber] = useState('')
   const [accountName, setAccountName] = useState('公司月结账号')
   const [accountEnvironment, setAccountEnvironment] = useState<'sandbox' | 'production'>('sandbox')
@@ -42,6 +46,10 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
   }
 
   useEffect(() => { if (open) { setMessage(''); void refresh().catch(error => setMessage((error as Error).message)) } }, [open])
+  useEffect(() => {
+    const saved = configuration.connections.find(item => item.carrier === 'sf' && item.environment === environment)
+    setAuthorizedServices(saved?.services || [])
+  }, [environment, configuration.connections])
 
   async function mutate(label: string, action: string, values: Record<string, unknown> = {}) {
     setBusy(label); setMessage('')
@@ -56,8 +64,17 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
   async function saveConnection() {
     if (!partnerId.trim() || !checkWord.trim()) { setMessage('请填写PartnerID和CheckWord。'); return }
     setProbeMessage(''); setProbePassed(false)
-    const saved = await mutate('connection', 'save_connection', { environment, partnerId, checkWord })
+    const saved = await mutate('connection', 'save_connection', { environment, partnerId, checkWord, services: authorizedServices })
     if (saved) { setPartnerId(''); setCheckWord('') }
+  }
+
+  function addService() {
+    const id = Number(newServiceId)
+    const name = newServiceName.trim()
+    if (!Number.isInteger(id) || id < 1 || !name) { setMessage('请输入有效的顺丰服务编号和名称。'); return }
+    if (authorizedServices.some(service => service.id === id)) { setMessage('该服务编号已在列表中。'); return }
+    setAuthorizedServices(current => [...current, { id, name, preference: newServicePreference }])
+    setNewServiceId(''); setNewServiceName(''); setMessage('')
   }
 
   async function testConnection() {
@@ -92,6 +109,9 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
           {connection && <div className={styles.capabilities} aria-label="顺丰能力验证状态">{([['order', '下单'], ['query', '订单查询'], ['tracking', '轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection.capabilities[key] === 'verified' ? '已验证' : connection.capabilities[key] === 'unavailable' ? '不可用' : '未验证'}</b></div>)}</div>}
           <label>PartnerID<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder={connection ? '重新输入以轮换凭据' : '顺丰分配的PartnerID'}/></label>
           <label>CheckWord<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder="只用于签名，不会再次显示"/></label>
+          <div className={styles.serviceHeading}><strong>已授权服务产品</strong><span>需与顺丰应用权限一致</span></div>
+          <div className={styles.services}>{authorizedServices.map(service => <div key={service.id}><span>{service.name} · {service.id} · {service.preference === 'standard' ? '标准' : '加急'}</span><button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>)}</div>
+          <div className={styles.serviceInputs}><label>服务编号<input inputMode="numeric" value={newServiceId} onChange={event => setNewServiceId(event.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="顺丰服务产品ID"/></label><label>服务名称<input value={newServiceName} onChange={event => setNewServiceName(event.target.value)} placeholder="例如已开通产品"/></label><label>服务偏好<select value={newServicePreference} onChange={event => setNewServicePreference(event.target.value as typeof newServicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select></label><button className={styles.secondary} onClick={addService}><Plus size={14}/>添加</button></div>
           <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || !configuration.connections.some(item => item.environment === 'sandbox')} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : '测试沙盒连接'}</button></div>
           {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
         </section>

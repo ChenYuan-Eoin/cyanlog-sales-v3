@@ -4,7 +4,7 @@ import { ShippingError } from './config'
 import { resolveBusinessContext, verifyShipmentContext } from './context'
 import type { ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, ShippingInput } from './types'
 
-const select = 'id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,next_review_at,created_at,shipping_waybills(waybill_no)'
+const select = 'id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot,shipping_waybills(waybill_no)'
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 type ShipmentRow = {
   id: string
@@ -19,6 +19,13 @@ type ShipmentRow = {
   payload_hash: string
   next_review_at: string | null
   created_at: string
+  org_id?: string | null
+  carrier_connection_id?: string | null
+  billing_account_id?: string | null
+  sender_profile_id?: string | null
+  connection_environment?: 'sandbox' | 'production' | null
+  billing_account_tail?: string | null
+  shipping_config_snapshot?: Record<string, unknown> | null
   shipping_waybills?: { waybill_no: string }[] | { waybill_no: string } | null
 }
 function receiptFor(key: string, env: Record<string, string | undefined> = process.env) {
@@ -64,10 +71,12 @@ export async function createAnonymousShipment(args: { key: string; rawInput?: st
   return { order, receiptToken }
 }
 
-export async function createOwnerShipment(args: { userId: string; key: string; input: ShippingInput }) {
+export async function createOwnerShipment(args: { userId: string; key: string; input: ShippingInput; snapshot: { orgId: string; connectionId: string; billingAccountId: string; senderProfileId: string; environment: 'sandbox' | 'production'; billingAccountTail: string; serviceId: number; serviceName: string } }) {
   const receiptToken = receiptFor(args.key)
-  const payloadHash = hash(JSON.stringify(args.input))
-  const row = { order_no: orderNo(), created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'direct', status: 'accepted', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: null }
+  const { snapshot } = args
+  const shippingConfigSnapshot = { carrier: 'sf', connectionId: snapshot.connectionId, environment: snapshot.environment, billingAccountId: snapshot.billingAccountId, billingAccountTail: snapshot.billingAccountTail, senderProfileId: snapshot.senderProfileId, serviceId: snapshot.serviceId, serviceName: snapshot.serviceName }
+  const payloadHash = hash(JSON.stringify({ input: args.input, shippingConfigSnapshot }))
+  const row = { order_no: orderNo(), org_id: snapshot.orgId, carrier_connection_id: snapshot.connectionId, billing_account_id: snapshot.billingAccountId, sender_profile_id: snapshot.senderProfileId, connection_environment: snapshot.environment, billing_account_tail: snapshot.billingAccountTail, shipping_config_snapshot: shippingConfigSnapshot, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'direct', status: 'accepted', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: null }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
   if (result.error?.code === '23505') result = await supabaseAdmin.from('shipping_orders').select(select).eq('intake_source', 'owner_web').eq('idempotency_key', args.key).single()
   if (result.error || !result.data) throw new ShippingError(503, '本人寄件单暂未保存，请稍后重试。')
@@ -118,4 +127,15 @@ export async function createDueShipmentReviewReminders(now = new Date(), env: Re
     throw new ShippingError(503, '寄件核对提醒生成失败。')
   }
   return { orders: orders.length, reminders: users.length }
+}
+
+export async function getOwnedShipmentProviderSnapshot(userId: string, waybill: string) {
+  const { data: waybillRow, error: waybillError } = await supabaseAdmin.from('shipping_waybills').select('shipping_order_id').eq('carrier_key', 'sf').eq('waybill_no', waybill).maybeSingle()
+  if (waybillError) throw new ShippingError(503, '运单归属核对暂不可用。')
+  if (!waybillRow) return null
+  const { data, error } = await supabaseAdmin.from('shipping_orders')
+    .select('org_id,carrier_connection_id,billing_account_id')
+    .eq('id', waybillRow.shipping_order_id).eq('created_by', userId).maybeSingle()
+  if (error) throw new ShippingError(503, '运单配置快照读取失败。')
+  return data || null
 }

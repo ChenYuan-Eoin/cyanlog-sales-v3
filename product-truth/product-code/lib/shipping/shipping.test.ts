@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { parseAddress } from './address'
 import { anonymousShipmentSchema, shippingInputSchema, trackingSchema } from './validation'
-import { allowedShippingUser, shippingConfig, ShippingError } from './config'
+import { allowedShippingUser, ShippingError } from './config'
 import { sfDigest, decodeSfResponse, buildSfOrder, extractCancellation, extractOrder, extractTracking } from './sf-client'
 import { checkShippingPolicy, submitShipping } from './service'
 import type { ShippingStore, StoredShipping } from './store'
@@ -29,10 +29,21 @@ describe('boundary validation', () => {
   it('rejects unimplemented order source and forged metadata', () => { expect(shippingInputSchema.safeParse({ ...input, source: 'order' }).success).toBe(false); expect(shippingInputSchema.safeParse({ ...input, created_by: 'other' }).success).toBe(false) })
   it('only accepts one tracking number and a valid phone suffix', () => { expect(trackingSchema.safeParse({ waybill: 'SF1234567890123', phoneSuffix: '1234' }).success).toBe(true); expect(trackingSchema.safeParse({ waybill: 'SF1234567890123,SF9876543210123' }).success).toBe(false); expect(trackingSchema.safeParse({ waybill: 'SF1234567890123', phoneSuffix: '1' }).success).toBe(false) })
   it('requires explicit allowlisting; no default admin bypass', () => { expect(allowedShippingUser({ id: 'a' }, {})).toBe(false); expect(allowedShippingUser({ id: 'a' }, { SHIPPING_ALLOWED_USER_IDS: 'b, a' })).toBe(true); expect(allowedShippingUser({ id: 'aa' }, { SHIPPING_ALLOWED_USER_IDS: 'a' })).toBe(false) })
-  it('requires an explicit production deployment gate in addition to connection readiness', () => { expect(shippingConfig({}).publicSettings.canSubmit).toBe(false); const env = { SF_ENVIRONMENT: 'production', SF_PARTNER_ID: 'p', SF_CHECK_WORD: 's', SF_MONTHLY_CARD: 'test1234', SF_SERVICES_JSON: '[{"id":2,"name":"已授权测试服务"}]' }; expect(shippingConfig(env).publicSettings).toMatchObject({ ready: true, canSubmit: false, monthlyTail: '1234' }); expect(shippingConfig({ ...env, SF_PRODUCTION_ORDER_ENABLED: 'true' }).publicSettings.canSubmit).toBe(true); expect(JSON.stringify(shippingConfig(env).publicSettings)).not.toContain('test1234') })
-  it('separates sandbox monthly configuration from the real account', () => { const env = { SF_MONTHLY_CARD: 'real5616', SF_SANDBOX_MONTHLY_CARD: 'sandbox4567' }; expect(shippingConfig(env).monthly).toBe('sandbox4567'); expect(shippingConfig({ ...env, SF_ENVIRONMENT: 'production' }).monthly).toBe('real5616'); expect(shippingConfig({ SF_MONTHLY_CARD: 'real5616' }).monthly).toBe('') })
+  it('keeps external intake provider-independent and accepts a neutral delivery preference', () => {
+    const externalInput = { ...input }
+    delete externalInput.serviceId
+    const parsed = anonymousShipmentSchema.parse({ key, input: { ...externalInput, servicePreference: 'urgent', customerName: '星河科技', submittedBy: { name: '张三', phone: '13800000000', team: '华南销售部' } } })
+    expect(parsed.input.servicePreference).toBe('urgent')
+    expect(parsed.input).not.toHaveProperty('serviceId')
+  })
   it('blocks nonconfigured products', () => expect(() => checkShippingPolicy(input, [{ id: 1 }])).toThrow())
-  it('accepts sales intake fields without trusting relation ids', () => { const salesInput = { ...input, customerName: '星河科技', submittedBy: { name: '张三', phone: '13800000000', team: '华南销售部' }, specialRequirements: '样品易碎' }; expect(anonymousShipmentSchema.safeParse({ key, input: salesInput, rawInput: '测试地址' }).success).toBe(true); expect(anonymousShipmentSchema.safeParse({ key, input: salesInput, salesRef: 'forged' }).success).toBe(false) })
+  it('accepts provider-independent sales preferences without trusting relation IDs', () => {
+    const salesInput = { ...input }
+    delete salesInput.serviceId
+    const valid = { ...salesInput, servicePreference: 'standard', customerName: '星河科技', submittedBy: { name: '张三', phone: '13800000000', team: '华南销售部' }, specialRequirements: '样品易碎' }
+    expect(anonymousShipmentSchema.safeParse({ key, input: valid, rawInput: '测试地址' }).success).toBe(true)
+    expect(anonymousShipmentSchema.safeParse({ key, input: valid, salesRef: 'forged' }).success).toBe(false)
+  })
 })
 describe('anonymous shipment context', () => {
   const contextKey = ['SHIPPING', 'CONTEXT', 'SECRET'].join('_')
