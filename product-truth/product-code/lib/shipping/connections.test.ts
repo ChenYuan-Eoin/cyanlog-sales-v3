@@ -16,7 +16,9 @@ describe('encrypted carrier configuration secrets', () => {
   it('rejects modified ciphertext and refuses a missing or malformed key', () => {
     vi.stubEnv('SHIPPING_CREDENTIALS_ENCRYPTION_KEY', '22'.repeat(32))
     const ciphertext = encryptShippingSecret('secret-value')
-    expect(() => decryptShippingSecret(`${ciphertext.slice(0, -1)}x`)).toThrow('无法解密')
+    const [version, iv, tag, encryptedData] = ciphertext.split('.')
+    const modifiedTag = `${tag[0] === 'A' ? 'B' : 'A'}${tag.slice(1)}`
+    expect(() => decryptShippingSecret(`${version}.${iv}.${modifiedTag}.${encryptedData}`)).toThrow('无法解密')
     vi.stubEnv('SHIPPING_CREDENTIALS_ENCRYPTION_KEY', '')
     expect(() => encryptShippingSecret('secret-value')).toThrow('加密密钥尚未配置')
   })
