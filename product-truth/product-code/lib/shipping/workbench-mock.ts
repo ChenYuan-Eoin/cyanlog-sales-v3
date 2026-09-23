@@ -15,7 +15,7 @@ export const mockShipmentOrders: ShipmentOrder[] = [
   id: String(id), orderNo: String(orderNo), intakeSource: 'anonymous_web' as const, confirmationPolicy: 'scheduled_review' as const,
   status: status as ShipmentOrder['status'], relation: { salesRef: String(salesRef), customerRef: String(customerName), assignmentStatus: 'assigned' as const },
   input: { sender, recipient: { name: String(name), phone: String(phone), province: city === '上海市' || city === '北京市' ? String(city) : city === '杭州市' ? '浙江省' : city === '成都市' ? '四川省' : '广东省', city: String(city), county: String(county), address: String(address) }, cargo: index % 2 ? '样品' : '文件/合同', weight: index % 2 ? 2 : 1, serviceId: index % 3 === 0 ? 1 : 2, remark: '', source: 'manual' as const, payment: 'sender_monthly' as const, customerName: String(customerName), submittedBy: { name: String(salesRef).replace('销售-', ''), phone: `1380000000${index}`, team: index % 2 ? '华南销售部' : '大客户部' }, specialRequirements: String(specialRequirements) },
-  waybill: waybill ? String(waybill) : null, nextReviewAt: status === 'awaiting_confirmation' ? '2026-09-23T09:00:00.000Z' : null, createdAt: new Date(Date.UTC(2026, 8, 23 - index, 1 + index, 20)).toISOString(),
+  waybill: waybill ? String(waybill) : null, nextReviewAt: status === 'awaiting_confirmation' ? '2026-09-23T09:00:00.000Z' : null, createdAt: new Date(Date.UTC(2026, 8, 23 - index, 1 + index, 20)).toISOString(), direction: index === 3 ? 'inbound' as const : 'outbound' as const,
 }))
 
 export const mockTracking: TrackingResult = {

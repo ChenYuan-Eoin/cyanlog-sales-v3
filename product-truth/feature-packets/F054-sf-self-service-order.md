@@ -1,9 +1,9 @@
 # F054 自助收寄 PRD v1.1
 
 - 更新：2026-09-23
-- 当前工作包：WP13（WP12已code_green，WP14后续排队）
+- 当前工作包：WP14（WP12、WP13已code_green）
 - PRD状态：`confirmed / implementation_active`
-- 当前交付状态：`WP12 code_green / WP13 executing / production_not_updated`
+- 当前交付状态：`WP12 code_green / WP13 code_green / WP14 executing / production_not_updated`
 - WP12唯一验收对象：单一“自助收寄”导航下的三栏操作员工作台，以及独立销售提报端的客户、收件人、城市与特殊需求协同闭环。
 
 ## 当前结构化目标
@@ -22,7 +22,7 @@
 
 ### WP14：顺丰能力收口（Ready）
 
-基于账号实际权限补齐取消、轨迹可用字段和收件来源；无法由接口提供的快递员信息不得用Mock冒充。
+基于账号实际权限补齐未揽收取消、备用运单查询和轨迹可用字段；无法由接口提供的快递员信息不得用Mock冒充。公司全部收到件没有可信自动来源，当前只允许按明确运单号和必要的手机号后四位查询，不得按月结账号枚举或伪造台账。
 
 ### 明确不做
 

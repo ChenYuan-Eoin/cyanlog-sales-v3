@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { parseAddress } from './address'
 import { anonymousShipmentSchema, shippingInputSchema, trackingSchema } from './validation'
 import { allowedShippingUser, shippingConfig, ShippingError } from './config'
-import { sfDigest, decodeSfResponse, buildSfOrder, extractOrder, extractTracking } from './sf-client'
+import { sfDigest, decodeSfResponse, buildSfOrder, extractCancellation, extractOrder, extractTracking } from './sf-client'
 import { checkShippingPolicy, submitShipping } from './service'
 import type { ShippingStore, StoredShipping } from './store'
 import type { ShippingInput } from './types'
@@ -48,6 +48,7 @@ describe('SF protocol', () => {
   it('marks an explicit SF business rejection as definitive', () => { try { decodeSfResponse({ apiResultCode: 'A1000', apiResultData: '{"success":false,"errorCode":"6150"}' }); throw new Error('expected rejection') } catch (error) { expect(error).toMatchObject({ status: 422, requestStage: 'provider_rejected' }) } })
   it('keeps supplied monthly account out of user input', () => { const order = buildSfOrder('id', input, 'test-account'); expect(order.monthlyCard).toBe('test-account'); expect(order.contactInfoList.map(c => c.contactType)).toEqual([1, 2]); expect(order.payMethod).toBe(1) })
   it('checks returned order identity and prefers primary waybill', () => { expect(() => extractOrder({ orderId: 'other' }, 'id')).toThrow(); expect(extractOrder({ orderId: 'id', waybillNoInfoList: [{ waybillType: 2, waybillNo: 'child' }, { waybillType: 1, waybillNo: 'parent' }] }, 'id')).toBe('parent') })
+  it('accepts cancellation only when the provider echoes the same order id', () => { expect(extractCancellation({ orderId: 'id' }, 'id')).toBe(true); expect(() => extractCancellation({ orderId: 'other' }, 'id')).toThrow('编号不一致') })
   it('never presents a different waybill trajectory', () => expect(() => extractTracking({ routeResps: [{ mailNo: 'other', routes: [{ acceptTime: '2026-01-01', remark: 'picked' }] }] }, 'wanted')).toThrow())
   it('shows empty and reverse chronological actual routes', () => { expect(extractTracking({ routeResps: [] }, 'wanted').events).toEqual([]); expect(extractTracking({ routeResps: [{ mailNo: 'wanted', routes: [{ acceptTime: '2026-01-01', remark: 'old' }, { acceptTime: '2026-01-02', remark: 'new' }] }] }, 'wanted').events[0].description).toBe('new') })
 })

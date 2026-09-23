@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireShippingConnection, ShippingError } from './config'
 import { checkShippingPolicy, submitShipping } from './service'
 import { shippingStore } from './store'
-import { createSfOrder, lookupSfOrder } from './sf-client'
+import { cancelSfOrder, createSfOrder, lookupSfOrder } from './sf-client'
 import type { ShippingInput } from './types'
 
 type ProcessRow = {
@@ -75,4 +75,19 @@ export async function reconcileShipmentOrder(id: string) {
   const { error } = await supabaseAdmin.from('shipping_orders').update({ status: 'waybill_created', updated_at: new Date().toISOString() }).eq('id', id).eq('status', 'order_unknown')
   if (error) throw new ShippingError(503, '查回运单后寄件单更新失败。')
   return { id, status: 'waybill_created' as const, waybill }
+}
+
+export async function cancelShipmentOrder(id: string, userId: string) {
+  const row = await loadForAction(id)
+  if (row.status === 'cancelled') return { id, status: 'cancelled' as const }
+  if (row.provider_key !== 'sf') throw new ShippingError(400, '当前承运商尚未配置取消Adapter。')
+  if (row.status !== 'waybill_created' || !row.provider_order_id) throw new ShippingError(409, '只有未揽收且已生成运单的订单可以取消。')
+  await cancelSfOrder(row.provider_order_id)
+  const now = new Date().toISOString()
+  const { data, error } = await supabaseAdmin.from('shipping_orders').update({ status: 'cancelled', confirmed_by: userId, updated_at: now }).eq('id', id).eq('status', 'waybill_created').select('id').maybeSingle()
+  if (error) throw new ShippingError(503, '顺丰已受理取消，但本地状态保存失败，请勿重复操作。')
+  if (!data) throw new ShippingError(409, '寄件单状态已变化，请刷新后核对。')
+  const { error: waybillError } = await supabaseAdmin.from('shipping_waybills').update({ latest_status: 'cancelled', updated_at: now }).eq('shipping_order_id', id)
+  if (waybillError) throw new ShippingError(503, '顺丰已取消运单，但物流状态保存失败，请刷新核对。')
+  return { id, status: 'cancelled' as const }
 }

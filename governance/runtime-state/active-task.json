@@ -128,14 +128,14 @@
     ]
   },
   "active_task": {
-    "id": "WP13",
-    "slug": "batch-shipping-execution",
-    "name": "批量寄件导入纠错与执行",
+    "id": "WP14",
+    "slug": "shipping-provider-closure",
+    "name": "顺丰取消、轨迹与收件来源收口",
     "kind": "product",
     "status": "active",
-    "objective": "F054 v1.1 WP13：把WP12左栏从演示数据升级为真实CSV/XLSX与多行文本导入；逐行解析姓名、电话、地址和物品并允许就地修正；使用统一寄件人、顺丰服务、物品和预约参数；只对校验通过的行按稳定幂等键逐票调用既有下单入口，部分失败不重发成功票且异常行继续保留。无面单打印，Production付费下单继续受既有硬开关保护。",
-    "started_at": "2026-09-23T03:59:55.700Z",
-    "activation_basis": "用户批准WP12→WP13→WP14结构化顺序；WP12由提交7fb4f2d4达到code_green后按Next门自动进入。IN-20260923-005 / IN-20260923-006",
+    "objective": "F054 v1.1 WP14：在既有顺丰Adapter上增加未揽收订单取消与身份校验；右栏提供临时运单号/手机号后四位查询入口；轨迹未返回快递员姓名、工号或电话时明确显示未提供而非Mock；收件台账仅展示有明确来源的记录，不按月结号枚举公司全量运单。",
+    "started_at": "2026-09-23T04:06:00.000Z",
+    "activation_basis": "用户批准WP12→WP13→WP14结构化顺序；WP13由提交b7194f85达到code_green后按Next门自动进入。IN-20260923-005 / IN-20260923-007",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -189,22 +189,22 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "WP13只交付代码与本地可验证批量路径；不推送、不部署Production、不修改远端数据库、不发起真实付费寄件。",
+      "note": "WP14只交付代码与本地验证；取消接口实际可用性仍取决于顺丰应用权限，不推送、不部署Production、不修改远端数据库、不发起真实付费寄件。",
       "runtime_profile": "shipping_workspace"
     },
     "feature_id": "F054"
   },
   "execution_queue": {
     "active": {
-      "id": "WP13",
-      "slug": "batch-shipping-execution",
-      "reason": "WP12已达到code_green；按用户批准的结构化顺序继续真实文件导入、纠错和批次执行"
-    },
-    "next": {
       "id": "WP14",
       "slug": "shipping-provider-closure",
-      "name": "顺丰取消、轨迹与收件来源收口",
-      "entry_gate": "WP13批量下单幂等与错误恢复通过，且外部接口权限预检完成",
+      "reason": "WP13已达到code_green；按用户批准的结构化顺序收口未揽收取消、备用查询和真实轨迹字段边界"
+    },
+    "next": {
+      "id": "WP10",
+      "slug": "quote-domain-complete-migration",
+      "name": "报价域完整形态与换机可迁移基座",
+      "entry_gate": "WP14达到code_green；任何Production发布仍需独立授权",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
@@ -221,11 +221,6 @@
         "id": "WP11",
         "slug": "shipping-collaboration",
         "reason": "既有匿名提报、台账、顺丰沙盒与安全存储作为WP12复用基线；旧双栏/Tab产品形态由新确认方案取代"
-      },
-      {
-        "id": "WP10",
-        "slug": "quote-domain-complete-migration",
-        "reason": "用户批准个人一屏查寄优先开发；WP10状态与dirty保留，完成后恢复排期。"
       },
       {
         "id": "WP09",
@@ -251,6 +246,13 @@
       }
     ],
     "completed": [
+      {
+        "id": "WP13",
+        "slug": "batch-shipping-execution",
+        "completed_at": "2026-09-23T04:05:48+00:00",
+        "evidence_commit": "b7194f859b6f9e3cb2bea8435c8b6b47e2bfba62",
+        "result": "CSV/XLSX/文本解析、逐行纠错、统一参数、稳定幂等批次执行和部分失败恢复达到code_green；Production未更新"
+      },
       {
         "id": "WP12",
         "slug": "self-service-shipping-workbench",

@@ -32,10 +32,10 @@
 | WP09 | release-acceptance | G7/G8/G9/G10/G11 | parked_waiting_shipping_sequence | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
 | WP11 | shipping-collaboration | 无——独立工具域 | parked_reuse_baseline | 匿名提报、安全回执、关系台账、顺丰沙盒及安全存储作为复用基线 |
 | WP12 | self-service-shipping-workbench | 无——独立工具域 | code_green / `7fb4f2d4` | 单一“自助收寄”导航、操作员三栏同屏、销售精简提报、特殊需求和无打印范围 |
-| WP13 | batch-shipping-execution | 无——独立工具域 | **Active** | Excel/CSV与文本导入、行内纠错、批次幂等执行和部分失败恢复 |
-| WP14 | shipping-provider-closure | 无——独立工具域 | ready_after_wp13 | 按实际接口权限收口取消、轨迹字段及收件来源 |
+| WP13 | batch-shipping-execution | 无——独立工具域 | code_green / `b7194f85` | Excel/CSV与文本导入、行内纠错、批次幂等执行和部分失败恢复 |
+| WP14 | shipping-provider-closure | 无——独立工具域 | **Active** | 按实际接口权限收口取消、轨迹字段及收件来源 |
 
-当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP13`。WP10、WP11及其dirty/运行证据均保留；WP12已达到code_green，WP13关闭后按WP14推进，再恢复其他队列。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
+当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP14`。WP11及其dirty/运行证据保留；WP12、WP13已达到code_green，WP14关闭后恢复WP10。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
 
 ## 2. 候选边界
 

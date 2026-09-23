@@ -32,6 +32,21 @@ describe('self-service shipping workbench', () => {
     fireEvent.click(screen.getAllByText('星河科技')[0])
     await waitFor(() => expect(screen.getAllByText(/样品易碎，请轻拿轻放/).length).toBeGreaterThan(0))
   })
+  it('filters explicit inbound records and exposes the manual tracking fallback', () => {
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(screen.getByRole('button', { name: '收到件' }))
+    expect(screen.getAllByText('金蝶软件').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('华东建筑设计院')).toHaveLength(1)
+    expect(screen.getByLabelText('备用查询运单号')).toBeTruthy()
+    expect(screen.getByText('当前轨迹未提供快递员姓名、工号或电话')).toBeTruthy()
+  })
+  it('only offers cancellation for a generated but uncollected waybill', async () => {
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(screen.getAllByText('远景能源')[0])
+    fireEvent.click(screen.getByRole('button', { name: '取消运单' }))
+    expect(await screen.findByText('已模拟取消未揽收运单。')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+  })
   it('does not resend successful rows when a partial batch is retried', async () => {
     const sent: Array<{ key: string }> = []; let failedOnce = false
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {

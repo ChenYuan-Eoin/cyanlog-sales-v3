@@ -57,6 +57,15 @@ export async function createSfOrder(id: string, input: ShippingInput) {
 export async function lookupSfOrder(id: string) {
   return extractOrder(await sfCall('EXP_RECE_SEARCH_ORDER_RESP', { orderId: id, language: 'zh-CN', searchType: '1' }), id)
 }
+const cancelResult = z.object({ orderId: z.string() })
+export function extractCancellation(raw: unknown, expectedId: string) {
+  const data = cancelResult.parse(raw)
+  if (data.orderId !== expectedId) throw new ShippingError(502, '顺丰返回的取消订单编号不一致，请人工核对。')
+  return true
+}
+export async function cancelSfOrder(orderId: string) {
+  return extractCancellation(await sfCall('EXP_RECE_UPDATE_ORDER', { orderId, dealType: 2, language: 'zh-CN' }), orderId)
+}
 const routeData = z.object({ routeResps: z.array(z.object({ mailNo: z.string().nullable().optional(), routes: z.array(z.object({ acceptTime: z.string(), acceptAddress: z.string().nullish(), remark: z.string() })) })) })
 export function extractTracking(raw: unknown, waybill: string): TrackingResult {
   const data = routeData.parse(raw)
