@@ -30,7 +30,7 @@
 
 Vercel Production仍保留旧版本变量`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON`；`SF_SANDBOX_MONTHLY_CARD`、`SF_PRODUCTION_ORDER_ENABLED`、`SHIPPING_SENDER_JSON`缺失。当前候选代码不再读取上述固定承运商配置。Production仍运行旧发布版本，**新代码正式部署且验收前不要删除仍存在的旧变量**；稳定后再单独清理。
 
-`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`、`SHIPPING_CONTEXT_SECRET`已添加到Vercel Production，设置操作只返回变量名，未读回值。添加环境变量不会改变当前已经部署的旧版本，需等新版本部署后才生效。
+`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`、`SHIPPING_CONTEXT_SECRET`已添加到Vercel Production，设置操作只返回变量名，未读回值。加密主密钥同时保存在本机device-only macOS Keychain（service `com.cyanlog.PriceV3.shipping-production-credentials-encryption-key`、account `PriceV3`）与Vercel Sensitive变量中；其余两项存于Vercel Sensitive变量。当前配置表为空，尚无依赖此密钥的数据库密文。更换电脑时须通过原机Keychain安全转存此主密钥；不要打印到终端日志、仓库或聊天。添加环境变量不会改变当前已经部署的旧版本，需等新版本部署后才生效。
 
 Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。候选尚未push、合入`production`分支或部署；发布审阅应以`delivery-check`绑定的当前精确SHA为准，不能沿用早期候选SHA。
 
