@@ -1,4 +1,5 @@
 import type { ShipmentOrder, TrackingResult } from './types'
+import type { BatchDraftRow } from './import-parser'
 
 const sender = { name: 'ONES 深圳前台', phone: '0755-86521234', province: '广东省', city: '深圳市', county: '南山区', address: '科技园科苑路15号' }
 
@@ -27,11 +28,10 @@ export const mockTracking: TrackingResult = {
   ],
 }
 
-export type BatchDraftRow = { id: number; recipient: string; phone: string; address: string; cargo: string }
 export const mockBatchRows: BatchDraftRow[] = [
-  { id: 1, recipient: '林晓雨', phone: '13800138011', address: '广东省深圳市南山区粤海街道科苑路8号', cargo: '合同' },
-  { id: 2, recipient: '高文博', phone: '13900139012', address: '上海市浦东新区张江镇祖冲之路887号', cargo: '样品' },
-  { id: 3, recipient: '董洁', phone: '1360013601', address: '北京市朝阳区望京街道阜通东大街6号', cargo: '发票' },
-  { id: 4, recipient: '沈嘉宁', phone: '13500135014', address: '浙江省杭州市余杭区仓前街道文一西路969号', cargo: '合同' },
-  { id: 5, recipient: '余海峰', phone: '13700137015', address: '四川省成都市武侯区天府大道北段1480号', cargo: '礼品' },
+  { id: 1, key: '10000000-0000-4000-8000-000000000001', recipient: '林晓雨', phone: '13800138011', address: '广东省深圳市南山区粤海街道科苑路8号', cargo: '合同' },
+  { id: 2, key: '10000000-0000-4000-8000-000000000002', recipient: '高文博', phone: '13900139012', address: '上海市浦东新区张江镇祖冲之路887号', cargo: '样品' },
+  { id: 3, key: '10000000-0000-4000-8000-000000000003', recipient: '董洁', phone: '1360013601', address: '北京市朝阳区望京街道阜通东大街6号', cargo: '发票' },
+  { id: 4, key: '10000000-0000-4000-8000-000000000004', recipient: '沈嘉宁', phone: '13500135014', address: '浙江省杭州市余杭区仓前街道文一西路969号', cargo: '合同' },
+  { id: 5, key: '10000000-0000-4000-8000-000000000005', recipient: '余海峰', phone: '13700137015', address: '四川省成都市武侯区天府大道北段1480号', cargo: '礼品' },
 ]

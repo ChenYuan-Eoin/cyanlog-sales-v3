@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, Truck, UploadCloud } from 'lucide-react'
 import type { ShipmentOrder, ShipmentOrderStatus, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
-import { mockBatchRows, mockShipmentOrders, mockTracking, type BatchDraftRow } from '@/lib/shipping/workbench-mock'
+import { batchRowErrors, buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
+import { parseAddress } from '@/lib/shipping/address'
+import { mockBatchRows, mockShipmentOrders, mockTracking } from '@/lib/shipping/workbench-mock'
 import styles from './workbench.module.css'
 
 const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待确认', returned: '已驳回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
@@ -26,6 +28,10 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
   const [batch, setBatch] = useState<BatchDraftRow[]>([])
   const [entryMode, setEntryMode] = useState<'file' | 'text'>('file')
   const [bulkText, setBulkText] = useState('')
+  const [batchBusy, setBatchBusy] = useState(false)
+  const [serviceId, setServiceId] = useState(String(settings.services[0]?.id || 2))
+  const [uniformCargo, setUniformCargo] = useState('文件/合同')
+  const [pickupWindow, setPickupWindow] = useState('今天 17:00 统一揽收')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | ShipmentOrderStatus>('all')
   const [type, setType] = useState<'all' | 'outbound' | 'inbound'>('all')
@@ -45,17 +51,46 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
     const haystack = [order.orderNo, order.waybill, order.relation.salesRef, customerOf(order), order.input.recipient.name, cityOf(order)].join(' ').toLowerCase()
     return haystack.includes(search.trim().toLowerCase())
   }), [orders, search, status])
-  const validCount = batch.filter(row => /^1[3-9]\d{9}$/.test(row.phone) && row.address.length >= 8).length
-  const invalidCount = batch.length - validCount
+  const validCount = batch.filter(row => batchRowErrors(row).length === 0 && row.result !== 'success').length
+  const successCount = batch.filter(row => row.result === 'success').length
+  const invalidCount = batch.filter(row => batchRowErrors(row).length > 0).length
 
   function updateBatch(id: number, field: keyof Omit<BatchDraftRow, 'id'>, value: string) { setBatch(rows => rows.map(row => row.id === id ? { ...row, [field]: value } : row)) }
   function parseBulk() {
     const rows = bulkText.split(/\n+/).map(line => line.trim()).filter(Boolean).map((line, index) => {
       const phone = line.match(/1[3-9]\d{9}/)?.[0] || ''
       const parts = line.replace(phone, '').split(/[，,\s]+/).filter(Boolean)
-      return { id: index + 1, recipient: parts.shift() || '', phone, address: parts.join(' '), cargo: '文件/合同' }
+      return { id: index + 1, key: crypto.randomUUID(), recipient: parts.shift() || '', phone, address: parts.join(' '), cargo: uniformCargo }
     })
     setBatch(rows)
+  }
+  async function importFile(file?: File) {
+    if (!file) return
+    setMessage('')
+    try { setBatch(await parseShippingFile(file)) } catch (error) { setMessage((error as Error).message) }
+  }
+  async function downloadTemplate() {
+    const blob = await buildShippingTemplate(), url = URL.createObjectURL(blob), link = document.createElement('a')
+    link.href = url; link.download = '顺丰标准导入模板.xlsx'; link.click(); URL.revokeObjectURL(url)
+  }
+  async function executeBatch() {
+    if (!settings.canSubmit) { setMessage('当前环境未开放下单；可继续完成导入和纠错。'); return }
+    const candidates = batch.filter(row => batchRowErrors(row).length === 0 && row.result !== 'success')
+    if (!candidates.length) return
+    setBatchBusy(true); setMessage('')
+    let succeeded = 0
+    for (const row of candidates) {
+      setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'pending', error: undefined } : item))
+      const recipient = parseAddress(`${row.recipient} ${row.phone} ${row.address}`).contact
+      try {
+        const receipt = await json<{ waybill: string | null }>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, confirmed: true, input: { sender: settings.sender, recipient, cargo: uniformCargo, weight: 1, serviceId: Number(serviceId), remark: '', source: 'manual', payment: 'sender_monthly', pickupWindow } }) })
+        succeeded += 1
+        setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'success', waybill: receipt.waybill || undefined, error: undefined } : item))
+      } catch (error) {
+        setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'failed', error: (error as Error).message } : item))
+      }
+    }
+    setBatchBusy(false); setMessage(`本次完成 ${succeeded} 票；失败和异常行已保留，可修正后使用原请求继续。`)
   }
   async function act(order: ShipmentOrder, action: 'confirm' | 'return') {
     const reason = action === 'return' ? window.prompt('请输入驳回原因')?.trim() : undefined
@@ -87,12 +122,12 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
         <div className={styles.columnHeader}><div><span className={styles.step}>01</span><h2>批量寄件</h2></div><small>导入 · 纠错 · 下单</small></div>
         <div className={styles.scrollBody}>
           <div className={styles.segmented}><button className={entryMode === 'file' ? styles.active : ''} onClick={() => setEntryMode('file')}>文件导入</button><button className={entryMode === 'text' ? styles.active : ''} onClick={() => setEntryMode('text')}>文本解析</button></div>
-          {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>拖入 Excel 或 CSV</strong><span>支持顺丰标准模板</span><div><button onClick={() => setBatch(mockBatchRows)} className={styles.linkButton}>导入示例数据</button><button className={styles.linkButton}>下载标准模板.xlsx</button></div></div> : <div className={styles.textParser}><textarea aria-label="多行地址文本" rows={5} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'每行一票，例如：\n张三 13800138000 上海市浦东新区张江路88号'}/><button className={styles.secondaryButton} onClick={parseBulk}>解析为寄件行</button></div>}
+          {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><div><button onClick={() => setBatch(mockBatchRows.map(row => ({ ...row })))} className={styles.linkButton}>导入示例数据</button><button className={styles.linkButton} onClick={() => void downloadTemplate()}>下载标准模板.xlsx</button></div></div> : <div className={styles.textParser}><textarea aria-label="多行地址文本" rows={5} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'每行一票，例如：\n张三 13800138000 上海市浦东新区张江路88号'}/><button className={styles.secondaryButton} onClick={parseBulk}>解析为寄件行</button></div>}
           <div className={styles.sectionTitle}><h3>导入预览</h3><span>{batch.length ? `${batch.length} 票` : '尚未导入'}</span></div>
-          <div className={styles.batchList}>{batch.map(row => { const valid = /^1[3-9]\d{9}$/.test(row.phone) && row.address.length >= 8; return <article key={row.id} className={`${styles.batchRow} ${!valid ? styles.invalidRow : ''}`}><div className={styles.rowTop}><b>#{String(row.id).padStart(2, '0')}</b>{valid ? <span className={styles.good}><CheckCircle2 size={12}/>正常</span> : <span className={styles.bad}><AlertTriangle size={12}/>需修正</span>}</div><div className={styles.inlineGrid}><input aria-label={`第${row.id}行收件人`} value={row.recipient} onChange={event => updateBatch(row.id, 'recipient', event.target.value)}/><input aria-label={`第${row.id}行联系电话`} value={row.phone} onChange={event => updateBatch(row.id, 'phone', event.target.value)}/></div><input aria-label={`第${row.id}行收件地址`} value={row.address} onChange={event => updateBatch(row.id, 'address', event.target.value)}/>{!valid && <small>手机号需为11位，地址需包含省市区及门牌信息</small>}</article>})}</div>
-          <div className={styles.bulkSettings}><h3>统一参数</h3><label>寄件人<select><option>ONES 深圳总部前台</option><option>ONES 上海办公室</option></select></label><div className={styles.inlineGrid}><label>顺丰服务<select><option>顺丰标快</option><option>顺丰特快</option></select></label><label>物品属性<select><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div><label>预约上门<select><option>今天 17:00 统一揽收</option><option>明天 10:00 统一揽收</option></select></label></div>
+          <div className={styles.batchList}>{batch.map(row => { const errors = batchRowErrors(row), valid = errors.length === 0; return <article key={row.id} className={`${styles.batchRow} ${!valid || row.result === 'failed' ? styles.invalidRow : ''}`}><div className={styles.rowTop}><b>#{String(row.id).padStart(2, '0')}</b>{row.result === 'success' ? <span className={styles.good}><CheckCircle2 size={12}/>{row.waybill || '已下单'}</span> : row.result === 'pending' ? <span className={styles.good}>提交中</span> : valid ? <span className={styles.good}><CheckCircle2 size={12}/>正常</span> : <span className={styles.bad}><AlertTriangle size={12}/>需修正</span>}</div><div className={styles.inlineGrid}><input aria-label={`第${row.id}行收件人`} disabled={batchBusy || row.result === 'success'} value={row.recipient} onChange={event => updateBatch(row.id, 'recipient', event.target.value)}/><input aria-label={`第${row.id}行联系电话`} disabled={batchBusy || row.result === 'success'} value={row.phone} onChange={event => updateBatch(row.id, 'phone', event.target.value)}/></div><input aria-label={`第${row.id}行收件地址`} disabled={batchBusy || row.result === 'success'} value={row.address} onChange={event => updateBatch(row.id, 'address', event.target.value)}/>{errors.length > 0 && <small>{errors.join('；')}</small>}{row.error && <small>{row.error}</small>}</article>})}</div>
+          <div className={styles.bulkSettings}><h3>统一参数</h3><label>寄件人<select disabled><option>{settings.sender.name || '公司默认寄件地址'}</option></select></label><div className={styles.inlineGrid}><label>顺丰服务<select value={serviceId} onChange={event => setServiceId(event.target.value)}>{settings.services.length ? settings.services.map(service => <option key={service.id} value={service.id}>{service.name}</option>) : <><option value="2">顺丰标快</option><option value="1">顺丰特快</option></>}</select></label><label>物品属性<select value={uniformCargo} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div><label>预约上门<select value={pickupWindow} onChange={event => setPickupWindow(event.target.value)}><option>今天 17:00 统一揽收</option><option>明天 10:00 统一揽收</option></select></label></div>
         </div>
-        <footer className={styles.stickyFooter}><div><strong>{validCount} 票有效</strong><small>{invalidCount} 票异常</small></div><button disabled={!validCount} onClick={() => { setMessage(`已模拟提交 ${validCount} 票，异常项继续保留。`); setBatch(rows => rows.filter(row => !/^1[3-9]\d{9}$/.test(row.phone) || row.address.length < 8)) }}><Truck size={15}/>批量确认下单（{validCount}票）</button></footer>
+        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待下单</strong><small>{successCount ? `${successCount} 票成功 · ` : ''}{invalidCount} 票异常</small></div><button disabled={!validCount || batchBusy || !settings.canSubmit} onClick={() => void executeBatch()}><Truck size={15}/>{batchBusy ? '批量处理中…' : `批量确认下单（${validCount}票）`}</button></footer>
       </section>
 
       <section className={styles.column} aria-label="收寄件台账与待办">

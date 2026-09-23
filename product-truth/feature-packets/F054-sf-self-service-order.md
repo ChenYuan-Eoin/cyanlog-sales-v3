@@ -1,9 +1,9 @@
 # F054 自助收寄 PRD v1.1
 
 - 更新：2026-09-23
-- 当前工作包：WP12（后续WP13、WP14顺序排队）
+- 当前工作包：WP13（WP12已code_green，WP14后续排队）
 - PRD状态：`confirmed / implementation_active`
-- 当前交付状态：`executing / production_not_updated`
+- 当前交付状态：`WP12 code_green / WP13 executing / production_not_updated`
 - WP12唯一验收对象：单一“自助收寄”导航下的三栏操作员工作台，以及独立销售提报端的客户、收件人、城市与特殊需求协同闭环。
 
 ## 当前结构化目标

@@ -128,14 +128,14 @@
     ]
   },
   "active_task": {
-    "id": "WP12",
-    "slug": "self-service-shipping-workbench",
-    "name": "自助收寄三栏协同台",
+    "id": "WP13",
+    "slug": "batch-shipping-execution",
+    "name": "批量寄件导入纠错与执行",
     "kind": "product",
     "status": "active",
-    "objective": "F054 v1.1 WP12：把既有匿名提报、待核对、台账和顺丰沙盒能力重构为一个可演示的用户任务。侧边导航仅保留一个“自助收寄”入口；登录操作员在同一页面使用批量操作、台账待办、单据详情与物流轨迹三栏；销售通过独立免登录提报页填写客户、收件信息及特殊需求，提交后进入待确认池；移除旧Tab与面单打印，不执行真实付费寄件。",
-    "started_at": "2026-09-23T03:40:00+00:00",
-    "activation_basis": "用户审阅影响评估并明确表示可以开始开发，要求目标清晰且结构化。IN-20260923-005",
+    "objective": "F054 v1.1 WP13：把WP12左栏从演示数据升级为真实CSV/XLSX与多行文本导入；逐行解析姓名、电话、地址和物品并允许就地修正；使用统一寄件人、顺丰服务、物品和预约参数；只对校验通过的行按稳定幂等键逐票调用既有下单入口，部分失败不重发成功票且异常行继续保留。无面单打印，Production付费下单继续受既有硬开关保护。",
+    "started_at": "2026-09-23T03:59:55.700Z",
+    "activation_basis": "用户批准WP12→WP13→WP14结构化顺序；WP12由提交7fb4f2d4达到code_green后按Next门自动进入。IN-20260923-005 / IN-20260923-006",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -189,31 +189,25 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "WP12只交付代码与本地可验证交互；不推送、不部署Production、不修改远端数据库、不发起真实付费寄件。",
+      "note": "WP13只交付代码与本地可验证批量路径；不推送、不部署Production、不修改远端数据库、不发起真实付费寄件。",
       "runtime_profile": "shipping_workspace"
     },
     "feature_id": "F054"
   },
   "execution_queue": {
     "active": {
-      "id": "WP12",
-      "slug": "self-service-shipping-workbench",
-      "reason": "用户确认单一自助收寄导航、三栏工作台、销售精简匿名提报与特殊需求，并明确要求开始开发"
-    },
-    "next": {
       "id": "WP13",
       "slug": "batch-shipping-execution",
-      "name": "批量寄件导入纠错与执行",
-      "entry_gate": "WP12三栏工作台、销售提报端与共享订单模型通过code_green",
+      "reason": "WP12已达到code_green；按用户批准的结构化顺序继续真实文件导入、纠错和批次执行"
+    },
+    "next": {
+      "id": "WP14",
+      "slug": "shipping-provider-closure",
+      "name": "顺丰取消、轨迹与收件来源收口",
+      "entry_gate": "WP13批量下单幂等与错误恢复通过，且外部接口权限预检完成",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
-      {
-        "id": "WP14",
-        "slug": "shipping-provider-closure",
-        "name": "顺丰取消、轨迹与收件来源收口",
-        "activation_requirement": "WP13批量下单幂等与错误恢复通过，且外部接口权限预检完成"
-      },
       {
         "id": "WP08",
         "slug": "experience-umbrella",
@@ -257,6 +251,13 @@
       }
     ],
     "completed": [
+      {
+        "id": "WP12",
+        "slug": "self-service-shipping-workbench",
+        "completed_at": "2026-09-23T03:58:42+00:00",
+        "evidence_commit": "7fb4f2d4e3dabaefd1b9f871c09f70f1a4fed15b",
+        "result": "单一自助收寄导航、登录操作员三栏同屏、独立销售提报页、客户/收件人/城市待办摘要、特殊需求和无打印范围达到code_green；Production未更新"
+      },
       {
         "id": "WP00",
         "slug": "goal-baseline-consolidation",

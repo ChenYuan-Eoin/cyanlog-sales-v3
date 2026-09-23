@@ -35,8 +35,8 @@ goal_governance:
     WP08: {name: 横切体验伞, primary_goals: [G5, G8], state: must_split_before_activation}
     WP09: {name: 工程与发布验收, primary_goals: [G7, G8, G9, G10, G11], state: parked_waiting_shipping_sequence}
     WP11: {name: 寄件协同底座, primary_goals: [], state: parked_reuse_baseline, note: "匿名提报、安全回执、关系台账、顺丰沙盒及安全存储作为后续工作包复用基线"}
-    WP12: {name: 自助收寄三栏协同台, primary_goals: [], state: active, note: "单一导航入口、操作员三栏同屏与销售精简提报端"}
-    WP13: {name: 批量寄件导入纠错与执行, primary_goals: [], state: queued, note: "真实Excel/CSV导入、批次纠错、幂等下单与部分失败恢复"}
+    WP12: {name: 自助收寄三栏协同台, primary_goals: [], state: code_green_commit_7fb4f2d4, note: "单一导航入口、操作员三栏同屏与销售精简提报端"}
+    WP13: {name: 批量寄件导入纠错与执行, primary_goals: [], state: active, note: "真实Excel/CSV导入、批次纠错、幂等下单与部分失败恢复"}
     WP14: {name: 顺丰能力收口, primary_goals: [], state: ready_after_wp13, note: "取消、轨迹字段和收件来源按实际接口权限收口"}
   legacy_aliases:
     - "2026-07-10 至 2026-07-18 的执行账本旧 G1-G9，依次解释为 WP01-WP09。"
@@ -1024,7 +1024,7 @@ requirements:
     name: 自助收寄
     module: 三栏操作台、销售寄件提报与物流跟踪
     source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005
-    status: wp12_active
+    status: wp13_active
     priority: P1
     feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
     code_locations:
@@ -1037,8 +1037,8 @@ requirements:
 # Maintained PRD index
 sf_self_service_order_prd:
   id: F054
-  status: wp12_active
+  status: wp13_active
   source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005
   branch: codex/shipping-collaboration-console
-  work_package: WP12
+  work_package: WP13
   feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
