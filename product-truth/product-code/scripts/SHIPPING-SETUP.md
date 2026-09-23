@@ -15,7 +15,7 @@
 
 以下旧配置已退出运行时代码：`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SANDBOX_MONTHLY_CARD`、`SF_SERVICES_JSON`、`SHIPPING_SENDER_JSON`、`SF_PRODUCTION_ORDER_ENABLED`。均在`/shipping`配置抽屉或服务端订单策略中管理。
 
-## Vercel Production变量核对（2026-09-23，只读名称检查）
+## Vercel Production变量核对（2026-09-23；只核对名称，未读取值）
 
 只读取变量名称和环境范围，没有读取变量值。
 
@@ -23,34 +23,44 @@
 |---|---|---|
 | Supabase应用运行时 | `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY` | 已配置 |
 | 寄件访问引导 | `SHIPPING_ALLOWED_USER_IDS` | 已配置 |
-| 新寄件配置加密 | `SHIPPING_CREDENTIALS_ENCRYPTION_KEY` | 缺失；必须补充64位hex/32字节随机密钥 |
-| 匿名回执 | `SHIPPING_RECEIPT_SECRET` | 缺失；必须补充至少32字符随机密钥 |
-| 签名寄件上下文 | `SHIPPING_CONTEXT_SECRET` | 缺失；仅当使用销售上下文签名链接时必需 |
+| 新寄件配置加密 | `SHIPPING_CREDENTIALS_ENCRYPTION_KEY` | 已配置为Vercel Sensitive变量；本机随机生成，未读取值 |
+| 匿名回执 | `SHIPPING_RECEIPT_SECRET` | 已配置为Vercel Sensitive变量；本机随机生成，未读取值 |
+| 签名寄件上下文 | `SHIPPING_CONTEXT_SECRET` | 已配置为Vercel Sensitive变量；本机随机生成，未读取值 |
 | 匿名限流 | `SHIPPING_ANONYMOUS_LIMIT` | 可选；代码默认20 |
 
-Vercel Production目前仍保留`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON`；`SF_SANDBOX_MONTHLY_CARD`、`SF_PRODUCTION_ORDER_ENABLED`、`SHIPPING_SENDER_JSON`当前缺失。当前隔离候选代码不再读取这些变量。由于Production仍运行旧发布版本，**新代码通过正式发布前不要删除仍存在的旧变量**；部署新代码且完成真实验收后，再单独清理它们。Production数据库尚无本轮两条新迁移的应用证据；未部署、未写远端数据库、未做真实付费下单。
+Vercel Production仍保留旧版本变量`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON`；`SF_SANDBOX_MONTHLY_CARD`、`SF_PRODUCTION_ORDER_ENABLED`、`SHIPPING_SENDER_JSON`缺失。当前候选代码不再读取上述固定承运商配置。Production仍运行旧发布版本，**新代码正式部署且验收前不要删除仍存在的旧变量**；稳定后再单独清理。
+
+`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`、`SHIPPING_CONTEXT_SECRET`已添加到Vercel Production，设置操作只返回变量名，未读回值。添加环境变量不会改变当前已经部署的旧版本，需等新版本部署后才生效。
 
 Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。候选尚未push、合入`production`分支或部署；发布审阅应以`delivery-check`绑定的当前精确SHA为准，不能沿用早期候选SHA。
 
 ## 真实寄件验收准备（用户执行）
 
-1. 在Vercel Production配置`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`和`SHIPPING_RECEIPT_SECRET`；若使用已签名的销售上下文链接，再配置`SHIPPING_CONTEXT_SECRET`。用密码管理器保存生成的密钥；不要把密钥发到聊天或日志。
-2. 先在隔离数据库应用所有待迁移，包括`20260923074619`和`20260923081415`；检查RLS与`anon`/`authenticated`权限后，才能申请Production迁移授权。
+1. 三个服务端密钥已配置为Vercel Sensitive变量；仅Vercel保存密钥值，不要将其复制到仓库、聊天或日志。将来轮换加密主密钥前先重加密数据库中的所有凭据和月结卡号。
+2. 已在隔离Supabase项目按序应用`20260922000001`、`20260923074619`、`20260923081415`，并验证配置表/订单表RLS、拒绝`anon`/`authenticated`直接访问、`service_role`权限和快照列/索引。隔离库仅含测试数据。Production仍未应用这些迁移。
 3. 配置管理员在ONES寄件抽屉录入顺丰机器凭据、各环境月结号、真实已授权服务产品和公司默认寄件人。沙盒只读测试通过后，分别核验订单、查回、轨迹和未揽收取消能力；连接通过不自动开启Production下单。
 4. 月结账号主体按顺丰要求完成一次性应用授权/账号绑定；普通ONES寄件人无需获得顺丰管理员身份。
 5. 部署并通过用户现有Chrome验收后，用户指定一票真实寄件，核对金额和收件信息并亲自确认下单。揽收前由用户核验一键取消及ONES/顺丰状态一致。
 6. 新版本稳定后，单独删除Vercel中不再使用的旧`SF_*`配置；不要在旧代码仍服务Production时先删变量。
 
-AI未读取任何环境变量值、未执行数据库迁移或顺丰调用、未创建真实运单、未部署Production。当前缺少数据库迁移实测、真实沙盒凭据和接口能力证明，故系统还不能宣称Production直接可用。
+截至本次核对，AI未读取Vercel环境变量值、未读取或导出Production联系人内容、未对Production数据库执行DDL、未调用顺丰、未创建真实运单、未部署Production。Production现有表计数只读元数据为`shipping_contacts=631`、`shipping_outbound_imports=10`、`shipping_requests=0`；Production缺少`shipping_orders`等基础协同表。
 
 ## 前向迁移
 
-按顺序应用此前未应用的F054迁移，再应用：
+按顺序应用截至Production迁移历史之后缺失的F054迁移：
+
+- `20260922000001_shipping_collaboration_m0.sql`：基础`shipping_orders`、`shipping_waybills`、`shipping_tracking_events`、限流表与受限服务端限流函数。
 
 - `20260923074619_shipping_carrier_configuration.sql`：组织级连接、加密月结账号、默认寄件人，RLS开启并撤销`anon`/`authenticated`直接访问。
 - `20260923081415_shipping_order_configuration_snapshot.sql`：连接授权服务矩阵及寄件订单的非机密连接/账号/寄件人快照。
 
-只在本地或隔离数据库验证迁移；Production迁移、部署和真实付费寄件仍需独立授权。WP15的应用代码门禁通过，但本机未安装Docker/PostgreSQL，以上两条新迁移尚未在本地数据库应用或SQL lint验证。不要将其描述为数据库运行验证通过。
+### Production数据库恢复点门禁
+
+2026-09-23 Supabase只读备份查询返回`backups=[]`、`pitr_enabled=false`；控制台显示当前为Free套餐且不包含托管备份。数据库约32.6 MB。不得升级Pro或启用持续付费PITR作为默认方案。Supabase官方建议Free项目定期导出逻辑备份；本机有原生`pg_dump`，而Supabase CLI容器化`db dump`需要Docker。
+
+Production DDL前先用Session Pooler通过`pg_dump --schema=public --format=custom --no-owner --no-acl`导出公共应用schema和数据，使用本地AES-256-GCM脚本加密后存入该worktree私有`codex-runtime/shipping-production-backup`。数据库密码与备份口令只在本机隐藏终端提示输入，不进入工具日志或聊天；口令由操作者保存到密码管理器。脚本验证GCM认证标签、`pg_restore --list`归档可读性、快照大小与SHA-256。当前脚本已准备，但尚无可验证快照；完成快照前不得在Production应用迁移。
+
+三条迁移均为加法迁移。失败时停止后续步骤、保留SQL错误与migration history，不手工DROP半成品对象；先在隔离库复现并准备前向修复。不要导出Production联系人到Agent工作区中的明文文件。Production迁移和发布依据IN-20260923-014授权，但必须满足恢复点门禁。
 
 ### Supabase Data API 权限核对
 
@@ -66,7 +76,7 @@ AI未读取任何环境变量值、未执行数据库迁移或顺丰调用、未
 4. **新版本已写入连接或订单快照**：禁止通过DROP表/列回滚。先停止新下单入口并保留加密密钥；若需恢复数据，按数据库负责人批准的备份/PITR流程执行，并明确其会丢弃恢复点之后的写入。否则保留schema，通过后续前向修复恢复服务。
 5. **重新发布**：修复后用新的精确SHA重新执行代码门禁与隔离库迁移验证，再另行审阅Production变量差异和发布步骤。仅在新版本稳定并完成真实验收后，才单独清理旧`SF_*`变量。
 
-本方案不代表当前数据库备份/PITR已验证，也不构成Production迁移、部署或数据恢复授权；当前没有可确认的Production恢复点证据。
+本方案不代表当前Production备份已建立或完成恢复演练；当前没有可确认的Production恢复点。Production迁移必须等到加密逻辑快照通过归档验证后再执行。
 
 ## 接口核验
 
