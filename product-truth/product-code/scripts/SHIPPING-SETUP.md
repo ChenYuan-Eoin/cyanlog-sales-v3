@@ -52,6 +52,10 @@ AI未读取任何环境变量值、未执行数据库迁移或顺丰调用、未
 
 只在本地或隔离数据库验证迁移；Production迁移、部署和真实付费寄件仍需独立授权。WP15的应用代码门禁通过，但本机未安装Docker/PostgreSQL，以上两条新迁移尚未在本地数据库应用或SQL lint验证。不要将其描述为数据库运行验证通过。
 
+### Supabase Data API 权限核对
+
+应用通过`supabase-js`的PostgREST Data API访问这些`public`表。迁移对三张配置表显式授予`service_role`所需CRUD权限，同时启用RLS并撤销`PUBLIC`、`anon`、`authenticated`权限；不要为了修复PostgREST拒绝而向客户端角色开放这些机密配置表。Supabase已宣布：新项目自2026-05-30起默认不再自动暴露新表，现有项目于2026-10-30开始执行；新表必须在迁移中显式GRANT。发布前需在隔离数据库确认应用服务端访问成功，并验证`anon`/`authenticated`仍被拒绝。[Supabase changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)；[Securing your API](https://supabase.com/docs/guides/api/securing-your-api)。
+
 ## 发布回滚方案（Production授权前审阅）
 
 本批迁移采用新增表/列/索引的前向兼容方式；回滚以恢复旧应用版本为主，不自动删库或删除迁移对象。Production执行前仍需由用户审阅并批准：
