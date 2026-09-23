@@ -1,9 +1,16 @@
 import { z } from 'zod'
 const text = (max: number) => z.string().trim().min(1, '请填写完整信息').max(max)
 export const contactSchema = z.object({ name: text(60), phone: text(30).regex(/^(?:1[3-9]\d{9}|0\d{2,3}[- ]?\d{7,8}(?:[- ]\d{1,6})?)$/, '请填写国内手机号或带区号的座机'), province: text(30), city: text(30), county: text(30), address: text(200).min(5, '请补充街道和门牌号') }).strict()
-export const shippingInputSchema = z.object({ sender: contactSchema, recipient: contactSchema, cargo: text(60), weight: z.number().finite().positive().max(20), serviceId: z.number().int().positive(), remark: z.string().trim().max(100), source: z.literal('manual'), payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).optional() }).strict()
+const shippingSubmitterSchema = z.object({ name: text(60), phone: text(30).regex(/^1[3-9]\d{9}$/, '请填写提报人手机号'), team: text(80) }).strict()
+export const shippingInputSchema = z.object({ sender: contactSchema, recipient: contactSchema, cargo: text(60), weight: z.number().finite().positive().max(20), serviceId: z.number().int().positive(), remark: z.string().trim().max(100), source: z.literal('manual'), payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).optional(), customerName: z.string().trim().max(120).optional(), submittedBy: shippingSubmitterSchema.optional(), specialRequirements: z.string().trim().max(500).optional() }).strict()
 export const createSchema = z.object({ key: z.string().uuid(), input: shippingInputSchema, confirmed: z.literal(true) }).strict()
-const anonymousShippingInputSchema = shippingInputSchema.extend({ payment: z.literal('sender_monthly').optional() })
+const anonymousShippingInputSchema = shippingInputSchema.extend({
+  sender: contactSchema.optional(),
+  payment: z.literal('sender_monthly').optional(),
+  customerName: text(120),
+  submittedBy: shippingSubmitterSchema,
+  specialRequirements: z.string().trim().max(500).optional(),
+})
 export const anonymousShipmentSchema = z.object({
   key: z.string().uuid(),
   rawInput: z.string().trim().max(2000).optional(),

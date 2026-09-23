@@ -55,7 +55,7 @@ export async function createAnonymousShipment(args: { key: string; rawInput?: st
   const relation = signed || resolveBusinessContext(args.businessCode)
   const receiptToken = receiptFor(args.key)
   const payloadHash = hash(JSON.stringify(args.input))
-  const row = { order_no: orderNo(), created_by: null, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || null, customer_ref: relation?.customerRef || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
+  const row = { order_no: orderNo(), created_by: null, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || args.input.submittedBy?.name || null, customer_ref: relation?.customerRef || args.input.customerName || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
   if (result.error?.code === '23505') result = await supabaseAdmin.from('shipping_orders').select(select).eq('intake_source', 'anonymous_web').eq('idempotency_key', args.key).single()
   if (result.error || !result.data) throw new ShippingError(503, '寄件单暂未保存，请稍后重试。')

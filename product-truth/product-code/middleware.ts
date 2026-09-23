@@ -35,7 +35,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 
-const PUBLIC_PATHS = ['/login', '/register', '/shipping']
+const PUBLIC_PATHS = ['/login', '/register', '/sales-portal']
 const PRIMARY_HOST = 'sales.cyanlog.icu'
 const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }> = {
   'quote.cyanlog.icu': { rootPath: '/quotes', preservePath: true },

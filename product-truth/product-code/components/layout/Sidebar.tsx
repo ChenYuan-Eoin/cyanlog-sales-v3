@@ -42,7 +42,7 @@ export function Sidebar() {
     fetch('/api/shipping/settings', { cache: 'no-store' }).then(r => { if (live) setShippingAllowed(r.ok) }).catch(() => { if (live) setShippingAllowed(false) })
     return () => { live = false }
   }, [pathname])
-  const visibleNavItems = shippingAllowed ? [...navItems.slice(0, 2), { name: '自助下单', href: '/shipping', icon: Package }, ...navItems.slice(2)] : navItems
+  const visibleNavItems = shippingAllowed ? [...navItems.slice(0, 2), { name: '自助收寄', href: '/shipping', icon: Package }, ...navItems.slice(2)] : navItems
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'

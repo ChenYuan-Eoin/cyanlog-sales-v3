@@ -136,6 +136,14 @@ describe('middleware host routing', () => {
 })
 
 describe('middleware public API routing', () => {
+  it('keeps the sales portal public while protecting the operator workbench', async () => {
+    const portal = await middleware(makeRequest('https://sales.cyanlog.icu/sales-portal', { host: 'sales.cyanlog.icu' }))
+    const workbench = await middleware(makeRequest('https://sales.cyanlog.icu/shipping', { host: 'sales.cyanlog.icu' }))
+    expect(portal.status).toBe(200)
+    expect(workbench.status).toBe(307)
+    expect(workbench.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+  })
+
   it('serves runtime brand assets without requiring an authenticated session', async () => {
     const brandAsset = await middleware(
       makeRequest('https://sales.cyanlog.icu/brand/ones-symbol-square.svg', { host: 'sales.cyanlog.icu' }),

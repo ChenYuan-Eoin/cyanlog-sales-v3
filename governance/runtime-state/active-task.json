@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-09-11T04:22:43.873265+00:00",
+  "updated_at": "2026-09-23T03:40:00+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,15 +128,15 @@
     ]
   },
   "active_task": {
-    "id": "WP11",
-    "slug": "shipping-collaboration",
-    "name": "寄件协同",
+    "id": "WP12",
+    "slug": "self-service-shipping-workbench",
+    "name": "自助收寄三栏协同台",
     "kind": "product",
     "status": "active",
-    "objective": "F054 v1.0 M0：先在现有系统内完成匿名寄件登记、用户履约处理和收寄件台账。匿名提交创建寄件单并绑定销售/客户上下文或进入待分配；用户本人直下，业务寄件单定时待核对；确认后经承运商Adapter真实下单，运单进入物流跟踪；用户可按销售、客户及收寄件人查询。CRM和企微Bot后续通过Adapter接入。",
-    "started_at": "2026-09-11T07:05:26.409843+00:00",
-    "activation_basis": "用户在评估WP10暂停影响及个人范围后明确要求：打个目标，开发。IN-20260911-006",
-    "execution_workspace": "/Users/nsss/.local/share/price-v3-wp11-production",
+    "objective": "F054 v1.1 WP12：把既有匿名提报、待核对、台账和顺丰沙盒能力重构为一个可演示的用户任务。侧边导航仅保留一个“自助收寄”入口；登录操作员在同一页面使用批量操作、台账待办、单据详情与物流轨迹三栏；销售通过独立免登录提报页填写客户、收件信息及特殊需求，提交后进入待确认池；移除旧Tab与面单打印，不执行真实付费寄件。",
+    "started_at": "2026-09-23T03:40:00+00:00",
+    "activation_basis": "用户审阅影响评估并明确表示可以开始开发，要求目标清晰且结构化。IN-20260923-005",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
@@ -144,10 +144,10 @@
       "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
       "product-truth/product-code/app/shipping",
+      "product-truth/product-code/app/sales-portal",
       "product-truth/product-code/app/api/shipping",
       "product-truth/product-code/lib/shipping",
       "product-truth/product-code/components/layout/Sidebar.tsx",
-      "product-truth/product-code/supabase/migrations/20260911000001_shipping_requests.sql",
       "product-truth/product-code/scripts/SHIPPING-SETUP.md",
       "product-truth/product-code/.env.example",
       "product-truth/product-code/node_modules",
@@ -155,36 +155,22 @@
       "product-truth/product-code/next-env.d.ts",
       "product-truth/product-code/tsconfig.tsbuildinfo",
       "product-truth/product-code/vitest.config.ts",
-      "product-truth/product-code/supabase/migrations/20260911000002_secure_comparison_diffs.sql",
-      "product-truth/product-code/supabase/migrations/20260911000003_shipping_contacts_defaults.sql",
       "product-truth/product-code/middleware.test.ts",
       "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/package.json",
-      "product-truth/product-code/pnpm-lock.yaml",
       "product-truth/product-code/lib/database-environment.ts",
       "product-truth/product-code/lib/database-environment.test.ts",
       "product-truth/product-code/lib/supabase.ts",
       "product-truth/product-code/scripts/local.sh",
       "product-truth/product-code/scripts/local.mjs",
-      "product-truth/product-code/supabase/migrations/20260910000001_close_contract_service_access.sql",
-      ".github/workflows/ci.yml",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "product-truth/product-code/components/layout/AppShell.tsx",
-      "product-truth/product-code/supabase/migrations/20260914000001_shipping_outbound_imports.sql",
-      "product-truth/product-code/supabase/migrations/20260922000001_shipping_collaboration_m0.sql",
-      "product-truth/product-code/app/api/cron/route.ts",
-      "product-truth/product-code/vercel.json",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js"
+      "product-truth/product-code/components/ui",
+      "product-truth/product-code/supabase/migrations/20260922000001_shipping_collaboration_m0.sql"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -203,57 +189,31 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "PRD v1.0以系统内匿名访问为M0核心。隔离候选已完成完整主链并达到code_green。用户2026-09-22明确要求推送线上供验收，授权同一SHA依序推进Preview、main、production及本批前向迁移；AI不得代替用户创建真实付费运单，最终仍需用户现有Chrome验收。",
-      "production_database_mode": "controlled_write_approved",
-      "runtime_profile": "shipping_workspace",
-      "required_production_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
-      ],
-      "final_acceptance": {
-        "origin": "https://sales.cyanlog.icu",
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "new_local_browser_or_context_prohibited": true,
-        "new_tab_prohibited": true,
-        "local_and_preview_role": "diagnostic_only_not_completion",
-        "release_truth_rule": "代码提交或 push、Vercel 部署、Production 域名可用和目标用户路径验收是四个独立事实，缺一不得宣称 Production 完成",
-        "trust_boundary": "Vercel API、Git SHA 与域名是机器证据；现有 Chrome 路径是受信操作员证明，只能验证声明完整和未篡改，不能伪称为机器可证明的人类会话",
-        "production_database_mode": "controlled_write_approved"
-      },
-      "required_production_evidence": [
-        "exact_production_commit",
-        "vercel_deployment_ready_and_promoted",
-        "sales.cyanlog.icu_alias",
-        "controlled_production_security_and_runtime_verifier",
-        "trusted_existing_chrome_operator_attestation"
-      ],
-      "production_release_authorization": {
-        "status": "approved_for_final_release",
-        "micro_fix_approval_id": "IN-20260911-009",
-        "clarification_id": "IN-20260911-008",
-        "final_release_approval_id": "IN-20260922-010",
-        "micro_fix_scope": "vetted_shipping_application_candidate",
-        "final_scope": "F054 v1.0寄件协同M0同一SHA上线：匿名寄件登记、安全回执、关系分配、本人直下、业务核对、收寄件台账、顺丰下单/查回、运单和物流跟踪，以及20260922000001前向迁移",
-        "excludes_until_final_approval": "AI发起真实付费测试寄件；CRM和企微Bot等M1能力"
-      }
+      "note": "WP12只交付代码与本地可验证交互；不推送、不部署Production、不修改远端数据库、不发起真实付费寄件。",
+      "runtime_profile": "shipping_workspace"
     },
     "feature_id": "F054"
   },
   "execution_queue": {
     "active": {
-      "id": "WP11",
-      "slug": "shipping-collaboration",
-      "reason": "用户明确F054 v1.0先在系统内运行：匿名寄件、后台履约、按销售/客户查询收寄件为M0；CRM与企微Bot后续接入"
+      "id": "WP12",
+      "slug": "self-service-shipping-workbench",
+      "reason": "用户确认单一自助收寄导航、三栏工作台、销售精简匿名提报与特殊需求，并明确要求开始开发"
     },
     "next": {
-      "id": "WP07",
-      "slug": "contract-drafting",
-      "name": "合同起草闭环",
-      "entry_gate": "WP09 完成托管环境路由投影、业务可读 AI 配置、单一 release commit 的运行证据和 sales.cyanlog.icu Production 用户路径验收",
+      "id": "WP13",
+      "slug": "batch-shipping-execution",
+      "name": "批量寄件导入纠错与执行",
+      "entry_gate": "WP12三栏工作台、销售提报端与共享订单模型通过code_green",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
+      {
+        "id": "WP14",
+        "slug": "shipping-provider-closure",
+        "name": "顺丰取消、轨迹与收件来源收口",
+        "activation_requirement": "WP13批量下单幂等与错误恢复通过，且外部接口权限预检完成"
+      },
       {
         "id": "WP08",
         "slug": "experience-umbrella",
@@ -263,6 +223,11 @@
     ],
     "release_blockers": [],
     "parked": [
+      {
+        "id": "WP11",
+        "slug": "shipping-collaboration",
+        "reason": "既有匿名提报、台账、顺丰沙盒与安全存储作为WP12复用基线；旧双栏/Tab产品形态由新确认方案取代"
+      },
       {
         "id": "WP10",
         "slug": "quote-domain-complete-migration",

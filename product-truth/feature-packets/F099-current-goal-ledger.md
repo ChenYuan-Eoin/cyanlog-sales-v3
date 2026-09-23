@@ -1,8 +1,8 @@
 # F099-当前开发工作包账本
 
 **Status**: active_work_package_ledger
-**Updated**: 2026-09-22
-**Ledger Version**: v2026-09-22.01
+**Updated**: 2026-09-23
+**Ledger Version**: v2026-09-23.01
 **Portfolio Goal Source**: `product-truth/REQ_REGISTRY.yml#goal_governance`
 **Active Queue Source**: `governance/runtime-state/active-task.json`
 
@@ -29,10 +29,13 @@
 | WP06 | document-compare | G6；支撑 G7/G8/G10 | completed_preview_candidate_not_production | 历史 Preview 候选状态保留；当前候选与 Production 仍需 WP09 绑定复验 |
 | WP07 | contract-drafting | G6；支撑 G2/G8/G10 | queued | 可编辑草稿、版本、DOCX 导出、转审核/对比 |
 | WP08 | experience-umbrella | G5/G8 | must_split_before_activation | 激活前拆为品牌主题、组织交互、响应式 Shell |
-| WP09 | release-acceptance | G7/G8/G9/G10/G11 | parked_waiting_wp11 | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
-| WP11 | shipping-collaboration | 无——独立工具域 | **Active** / PRD v1.0 review_ready | 系统内匿名寄件、寄件处理台、按销售/客户查询收寄件与物流跟踪；预留CRM/企微Bot契约 |
+| WP09 | release-acceptance | G7/G8/G9/G10/G11 | parked_waiting_shipping_sequence | 托管路由投影、业务可读 AI 配置、唯一候选与 Preview 验收；Production 仍受门禁 |
+| WP11 | shipping-collaboration | 无——独立工具域 | parked_reuse_baseline | 匿名提报、安全回执、关系台账、顺丰沙盒及安全存储作为复用基线 |
+| WP12 | self-service-shipping-workbench | 无——独立工具域 | **Active** | 单一“自助收寄”导航、操作员三栏同屏、销售精简提报、特殊需求和无打印范围 |
+| WP13 | batch-shipping-execution | 无——独立工具域 | queued | Excel/CSV与文本导入、行内纠错、批次幂等执行和部分失败恢复 |
+| WP14 | shipping-provider-closure | 无——独立工具域 | ready_after_wp13 | 按实际接口权限收口取消、轨迹字段及收件来源 |
 
-当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP11`。WP09与WP10保留其既有状态和证据，待WP11关闭后再恢复排序；旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
+当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP12`。WP10、WP11及其dirty/运行证据均保留；WP12关闭后按WP13、WP14顺序推进，再恢复其他队列。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
 
 ## 2. 候选边界
 

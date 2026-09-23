@@ -1,7 +1,8 @@
 // REQ: F054 — shared UI contract; no provider secrets.
 export type Contact = { name: string; phone: string; province: string; city: string; county: string; address: string }
 export type ShippingPayment = 'sender_cash' | 'recipient' | 'sender_monthly'
-export type ShippingInput = { sender: Contact; recipient: Contact; cargo: string; weight: number; serviceId: number; remark: string; source: 'manual'; payment?: ShippingPayment }
+export type ShippingSubmitter = { name: string; phone: string; team: string }
+export type ShippingInput = { sender: Contact; recipient: Contact; cargo: string; weight: number; serviceId: number; remark: string; source: 'manual'; payment?: ShippingPayment; customerName?: string; submittedBy?: ShippingSubmitter; specialRequirements?: string }
 export type ShippingRecord = { id: string; status: 'pending' | 'accepted' | 'unknown'; waybill: string | null; created_at: string; environment: 'sandbox' | 'production' }
 export type ImportedOutbound = { id: string; waybill: string; source_time: string; source_status: string; imported_at: string }
 export type RouteEvent = { time: string; location: string; description: string }
