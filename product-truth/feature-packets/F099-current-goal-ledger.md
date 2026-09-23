@@ -35,10 +35,11 @@
 | WP13 | batch-shipping-execution | 无——独立工具域 | code_green / `b7194f85` | Excel/CSV与文本导入、行内纠错、批次幂等执行和部分失败恢复 |
 | WP14 | shipping-provider-closure | 无——独立工具域 | code_green / `32a2c4fa` | 取消、轨迹字段与收件来源边界 |
 | WP15 | shipping-carrier-configuration | 无——独立工具域 | code_green / `d68b28d0` | 加密顺丰机器连接、多月结账号、默认寄件人资料与沙盒只读连接检查 |
-| WP16 | shipping-dynamic-order-consumption | 无——独立工具域 | **Active** | 批量/确认下单从数据库动态读取有效连接、月结账号及寄件人 |
-| WP17 | shipping-production-readiness | 无——独立工具域 | Next | 生产环境变量清单、能力权限检查及真实寄件验收准备 |
+| WP16 | shipping-dynamic-order-consumption | 无——独立工具域 | code_green / `6b736e65` | 批量/确认下单从数据库动态读取有效连接、月结账号及寄件人 |
+| WP17 | shipping-production-readiness | 无——独立工具域 | **Active** | 生产环境变量清单、能力权限检查及真实寄件验收准备 |
+| WP18 | shipping-production-release-and-acceptance | 无——独立工具域 | Waiting authorization | Production前向迁移/环境配置/精确SHA发布与用户指定真实寄件验收 |
 
-当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP16`。WP11及其dirty/运行证据保留；WP12-WP15已达到code_green。F054的新用户目标按WP16-WP17依次推进，WP10保留为后续工作包，不得触碰根工作区受保护dirty状态。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
+当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP17`。WP11及其dirty/运行证据保留；WP12-WP16已达到code_green。F054生产变量与真实寄件验收准备归WP17；Production部署/数据库写入/真实付费寄件仍需独立授权。WP18只在用户审阅具体SHA、变量差异和回滚步骤后明确授权；WP10保留为更后续工作包，不得触碰根工作区受保护dirty状态。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
 
 ## 2. 候选边界
 

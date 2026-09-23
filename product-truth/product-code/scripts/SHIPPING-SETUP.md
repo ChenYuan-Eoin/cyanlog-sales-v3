@@ -15,6 +15,32 @@
 
 以下旧配置已退出运行时代码：`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SANDBOX_MONTHLY_CARD`、`SF_SERVICES_JSON`、`SHIPPING_SENDER_JSON`、`SF_PRODUCTION_ORDER_ENABLED`。均在`/shipping`配置抽屉或服务端订单策略中管理。
 
+## Vercel Production变量核对（2026-09-23，只读名称检查）
+
+只读取变量名称和环境范围，没有读取变量值。
+
+| 类别 | 变量 | 当前Production状态 |
+|---|---|---|
+| Supabase应用运行时 | `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY` | 已配置 |
+| 寄件访问引导 | `SHIPPING_ALLOWED_USER_IDS` | 已配置 |
+| 新寄件配置加密 | `SHIPPING_CREDENTIALS_ENCRYPTION_KEY` | 缺失；必须补充64位hex/32字节随机密钥 |
+| 匿名回执 | `SHIPPING_RECEIPT_SECRET` | 缺失；必须补充至少32字符随机密钥 |
+| 签名寄件上下文 | `SHIPPING_CONTEXT_SECRET` | 缺失；仅当使用销售上下文签名链接时必需 |
+| 匿名限流 | `SHIPPING_ANONYMOUS_LIMIT` | 可选；代码默认20 |
+
+Vercel Production目前仍保留`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON`；`SF_SANDBOX_MONTHLY_CARD`、`SF_PRODUCTION_ORDER_ENABLED`、`SHIPPING_SENDER_JSON`当前缺失。当前隔离候选代码不再读取这些变量。由于Production仍运行旧发布版本，**新代码通过正式发布前不要删除仍存在的旧变量**；部署新代码且完成真实验收后，再单独清理它们。Production数据库尚无本轮两条新迁移的应用证据；未部署、未写远端数据库、未做真实付费下单。
+
+## 真实寄件验收准备（用户执行）
+
+1. 在Vercel Production配置`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`和`SHIPPING_RECEIPT_SECRET`；若使用已签名的销售上下文链接，再配置`SHIPPING_CONTEXT_SECRET`。用密码管理器保存生成的密钥；不要把密钥发到聊天或日志。
+2. 先在隔离数据库应用所有待迁移，包括`20260923074619`和`20260923081415`；检查RLS与`anon`/`authenticated`权限后，才能申请Production迁移授权。
+3. 配置管理员在ONES寄件抽屉录入顺丰机器凭据、各环境月结号、真实已授权服务产品和公司默认寄件人。沙盒只读测试通过后，分别核验订单、查回、轨迹和未揽收取消能力；连接通过不自动开启Production下单。
+4. 月结账号主体按顺丰要求完成一次性应用授权/账号绑定；普通ONES寄件人无需获得顺丰管理员身份。
+5. 部署并通过用户现有Chrome验收后，用户指定一票真实寄件，核对金额和收件信息并亲自确认下单。揽收前由用户核验一键取消及ONES/顺丰状态一致。
+6. 新版本稳定后，单独删除Vercel中不再使用的旧`SF_*`配置；不要在旧代码仍服务Production时先删变量。
+
+AI未读取任何环境变量值、未执行数据库迁移或顺丰调用、未创建真实运单、未部署Production。当前缺少数据库迁移实测、真实沙盒凭据和接口能力证明，故系统还不能宣称Production直接可用。
+
 ## 前向迁移
 
 按顺序应用此前未应用的F054迁移，再应用：

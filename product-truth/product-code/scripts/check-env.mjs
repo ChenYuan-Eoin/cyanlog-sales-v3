@@ -22,6 +22,14 @@ const optionalGroups = [
     name: 'cloud-fallback',
     keys: ['AI_GATEWAY_URL', 'AI_MODEL'],
   },
+  {
+    name: 'shipping-runtime',
+    keys: ['SHIPPING_ALLOWED_USER_IDS', 'SHIPPING_CREDENTIALS_ENCRYPTION_KEY', 'SHIPPING_RECEIPT_SECRET'],
+  },
+  {
+    name: 'shipping-signed-intake',
+    keys: ['SHIPPING_CONTEXT_SECRET'],
+  },
 ]
 
 function parseEnvFile(filePath) {

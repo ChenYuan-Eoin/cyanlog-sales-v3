@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-09-23T08:12:23.217Z",
+  "updated_at": "2026-09-23T08:54:52.059Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,14 +128,14 @@
     ]
   },
   "active_task": {
-    "id": "WP16",
-    "slug": "shipping-dynamic-order-consumption",
-    "name": "多平台动态下单与批量消费",
+    "id": "WP17",
+    "slug": "shipping-production-readiness",
+    "name": "生产配置与真实寄件验收准备",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP16：彻底移除固定SF环境变量对运行时寄件配置的控制。/shipping左栏批量寄件与中栏确认下单必须服务端读取当前组织有效CarrierConnection、活动BillingAccount及SenderProfile；关联幂等身份和历史配置快照；取消、查回、轨迹均使用原订单连接。销售/匿名提报API保持承运商无关，未来可由企微机器人Webhook复用。",
-    "started_at": "2026-09-23T08:12:23.217Z",
-    "activation_basis": "WP15精确提交d68b28d07f5726b61ca0a3ddcfdc01ee8b7c33da通过delivery-check code_green；用户原始目标明确要求数据库动态账号和寄件人、保持未揽收取消与轨迹、提报契约独立。",
+    "objective": "F054 WP17：输出当前代码生产运行所需环境变量清单、数据库迁移和顺丰一次性开户/权限前置条件；逐项列明连接、下单、查件、轨迹、未揽收取消能力验证证据；准备用户指定真实寄件的操作验收步骤。不得把配置存在或沙盒只读连通误报为Production可用。",
+    "started_at": "2026-09-23T08:48:03.496Z",
+    "activation_basis": "WP16精确提交6b736e6551833b2332523c36266ef86ad49d1fe1通过delivery-check code_green；用户原始目标明确要求生产环境变量清单与准备真实寄件验证。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -143,26 +143,10 @@
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/product-code/app/shipping",
-      "product-truth/product-code/app/sales-portal",
-      "product-truth/product-code/app/api/shipping",
-      "product-truth/product-code/lib/shipping",
-      "product-truth/product-code/components/ui",
-      "product-truth/product-code/scripts/SHIPPING-SETUP.md",
       "product-truth/product-code/.env.example",
-      "product-truth/product-code/supabase/migrations",
-      "product-truth/product-code/node_modules",
-      "product-truth/product-code/.next",
-      "product-truth/product-code/next-env.d.ts",
-      "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/vitest.config.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/lib/database-environment.ts",
-      "product-truth/product-code/lib/database-environment.test.ts",
-      "product-truth/product-code/lib/supabase.ts",
-      "product-truth/product-code/scripts/local.sh",
-      "product-truth/product-code/scripts/local.mjs"
+      "product-truth/product-code/scripts/SHIPPING-SETUP.md",
+      "README.md",
+      "product-truth/product-code/scripts/check-env.mjs"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -187,30 +171,30 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "WP16只完成代码与本地验证。订单应绑定所用连接和月结账号快照；超时优先查回且禁止重复发单；只允许取消未揽收运单。外部提报不得接收承运商凭据/账号。Production部署、远端数据库写入及真实付费寄件仍须独立授权。",
+      "note": "WP17仅整理本地运行配置与真实寄件验收准备，完成环境/权限清单和代码门禁；不push、不部署、不写远端数据库、不创建真实付费运单。Production可用状态需精确部署与用户现有Chrome验收另行授权。",
       "runtime_profile": "shipping_workspace"
     },
     "feature_id": "F054"
   },
   "execution_queue": {
     "active": {
-      "id": "WP16",
-      "slug": "shipping-dynamic-order-consumption",
-      "reason": "WP15达到code_green；按用户原始目标将批量寄件与中栏确认下单切换为读取数据库有效连接、账号、寄件人，并保留原连接查回/取消/轨迹。"
-    },
-    "next": {
       "id": "WP17",
       "slug": "shipping-production-readiness",
-      "name": "生产配置与真实寄件验收准备",
-      "entry_gate": "WP16达到code_green；所有固定SF环境变量运行时引用已移除",
-      "entry_gate_status": "waiting_active_completion"
+      "reason": "WP16达到code_green；按用户目标整理生产配置变量、顺丰能力权限及用户主导的真实寄件验证准备。"
+    },
+    "next": {
+      "id": "WP18",
+      "slug": "shipping-production-release-and-acceptance",
+      "name": "Production发布与真实寄件验收",
+      "entry_gate": "WP17 code_green；用户审阅精确SHA、环境变量差异与回滚方案后，明确授权Production前向迁移/配置和部署；真实订单由用户指定并确认",
+      "entry_gate_status": "waiting_user_release_authorization"
     },
     "ready": [
       {
         "id": "WP10",
         "slug": "quote-domain-complete-migration",
         "name": "报价域完整形态与换机可迁移基座",
-        "activation_requirement": "F054 WP15-WP17目标完成或用户重新排序"
+        "activation_requirement": "F054 WP18完成或用户重新排序"
       },
       {
         "id": "WP08",
@@ -250,6 +234,13 @@
       }
     ],
     "completed": [
+      {
+        "id": "WP16",
+        "slug": "shipping-dynamic-order-consumption",
+        "completed_at": "2026-09-23T08:48:03.496Z",
+        "evidence_commit": "6b736e6551833b2332523c36266ef86ad49d1fe1",
+        "result": "运行时SF固定环境变量依赖已从应用代码和示例环境中移除；批量/确认下单读取组织级有效连接、月结账号、授权服务和默认寄件人；销售提报使用标准/加急偏好；查询、取消、轨迹基于订单连接/账号快照。目标91测试、全量2039通过/5跳过、lint/typecheck/build及10项提交门禁通过，delivery-check code_green通过。迁移未应用本地数据库，无供应商实连。"
+      },
       {
         "id": "WP15",
         "slug": "shipping-carrier-configuration",

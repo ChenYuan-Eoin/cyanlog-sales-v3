@@ -10,7 +10,7 @@
 #   - 代码中的 REQ 标记必须与之一致
 
 version: "2026-09-23.1"
-last_updated: "2026-09-23T11:40:00+08:00"
+last_updated: "2026-09-23T16:53:50+08:00"
 
 goal_governance:
   status: active
@@ -1024,7 +1024,7 @@ requirements:
     name: 自助收寄
     module: 三栏操作台、销售寄件提报、多快递连接、月结账号与物流跟踪
     source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011
-    status: wp16_active
+    status: wp17_active
     priority: P1
     feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
     code_locations:
@@ -1038,8 +1038,8 @@ requirements:
 # Maintained PRD index
 sf_self_service_order_prd:
   id: F054
-    status: wp16_active
-  source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011
+  status: wp17_active
+  source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011 / IN-20260923-013
   branch: codex/shipping-collaboration-console
-  work_package: WP16
+  work_package: WP17
   feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md

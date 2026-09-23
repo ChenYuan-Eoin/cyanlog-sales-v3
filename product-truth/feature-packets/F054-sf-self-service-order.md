@@ -1,9 +1,9 @@
 # F054 自助收寄 PRD v1.2
 
 - 更新：2026-09-23
-- 当前工作包：WP16（WP12-WP15已code_green）
+- 当前工作包：WP17（WP12-WP16已code_green）
 - PRD状态：`confirmed / implementation_active`
-- 当前交付状态：`WP12-WP15 code_green / WP16 executing / production_not_updated`
+- 当前交付状态：`WP12-WP16 code_green / WP17 executing / production_not_updated`
 - WP12唯一验收对象：单一“自助收寄”导航下的三栏操作员工作台，以及独立销售提报端的客户、收件人、城市与特殊需求协同闭环。
 
 ## 当前用户目标（2026-09-23）
@@ -19,18 +19,26 @@
 - “测试沙盒连接”使用只读签名查询，不创建真实或沙盒运单。连通成功不能冒充下单、轨迹或取消能力已经验证；四项能力单独显示状态。
 - WP15在`d68b28d0`达到code_green；因本机没有Docker/PostgreSQL，其两条新迁移尚未应用或SQL lint，亦未执行真实顺丰沙盒探测。
 
-### WP16：动态下单消费（Active）
+### WP16：动态下单消费（code_green：`6b736e65`）
 
 - 批量寄件及中栏确认下单读取组织下有效连接、活动月结账号和默认寄件人；逐票业务提报仍不携带平台凭据或月结账号。
 - 幂等身份绑定原连接、环境和月结账号；停用账号禁止新单，历史订单保留创建时的连接快照。
 - 保留结果不明先查回的下单行为、未揽收前取消和轨迹查询；取消继续使用`EXP_RECE_UPDATE_ORDER`。
 - 移除`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、月结卡、服务JSON、寄件人JSON及Production开关对运行时业务配置的控制。
 
-### WP17：生产配置与寄件验收准备（Ready）
+### WP17：生产配置与寄件验收准备（Active）
 
 - 输出生产环境变量清单，提供安全配置、迁移、顺丰连接和能力核验步骤。
+- 2026-09-23只读核对Vercel Production变量名称：Supabase三个基础变量与`SHIPPING_ALLOWED_USER_IDS`已存在；`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`、条件使用的`SHIPPING_CONTEXT_SECRET`缺失。旧`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON`仍在当前Production，但新代码不再读取；待新版本部署后再清理。
 - 逐项确认下单、查件、轨迹、取消接口权限和所需月结账号授权；不以沙盒探测替代业务能力验证。
 - 生产数据库写入、Production部署及真实付费寄件仍需用户分别授权；AI不创建真实付费运单，最终由用户指定并确认真实寄件。
+
+### WP18：Production发布与真实寄件验收（Waiting authorization）
+
+- 只有用户审阅本分支精确SHA、生产变量差异、迁移清单与回滚方案并明确授权后，才可写Production数据库、配置Production变量和部署。
+- 发布后由用户现有Chrome在正式站点完成实际路径验收；Production环境不以Preview或本地结果代替。
+- 真实付费寄件必须由用户指定具体订单并亲自确认；揽收前用户核验一键取消和ONES/顺丰状态一致。
+- 完成前不得宣称生产可用；沙盒连通、配置存在或代码通过都不是实际承运商订单能力证据。
 
 销售、操作员和配置管理员运行时均不扫码、不接收短信验证码、不维护顺丰网页会话、不使用Cookie或OAuth用户授权。月结账号主体/既有管理员可以一次性完成供应商侧开户和应用授权，普通ONES寄件用户不需要成为月结管理员。
 
