@@ -54,4 +54,14 @@ describe('SF sandbox OAuth2 connectivity probe', () => {
     expect(result.connected).toBe(true)
     expect(result.message).toContain('业务接口权限仍需分别核验')
   })
+
+  it('rejects a token the standard service endpoint does not accept', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ apiResultCode: 'A1000', accessToken: 'v'.repeat(48), expiresIn: 7200 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ apiResultCode: 'A1011' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await probeSfSandbox('partner-token-rejected', 'credential-fixture')
+    expect(result.connected).toBe(false)
+    expect(result.message).toContain('令牌未被标准接口接受')
+  })
 })

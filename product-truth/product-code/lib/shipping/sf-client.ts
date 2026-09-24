@@ -112,6 +112,9 @@ export async function probeSfSandbox(partnerId: string, checkWord: string) {
       catch { return { connected: false, message: '顺丰沙盒OAuth2已认证，但只读API返回无法识别的响应；未创建运单。' } }
       return { connected: true, message: '顺丰沙盒OAuth2认证及只读API连通通过；未创建运单，也不代表下单、轨迹或取消权限已开通。' }
     }
+    if (outer.apiResultCode === 'A1011') {
+      return { connected: false, message: '顺丰OAuth2令牌未被标准接口接受；请检查应用鉴权配置。未创建运单。' }
+    }
     // Token success is distinct from API permissions. An API-level denial still
     // establishes credential connectivity; individual capabilities stay unverified.
     return { connected: true, message: '顺丰沙盒OAuth2认证通过；只读查询接口未受理，业务接口权限仍需分别核验。未创建运单。' }

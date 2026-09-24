@@ -133,7 +133,7 @@
     "name": "Production发布与真实寄件验收",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP18：按序验证并发布缺失的基础协同迁移20260922000001及连接/快照迁移20260923074619、20260923081415；确认Production可恢复备份点和回滚方案；配置服务端加密/回执密钥与获准的顺丰机器凭据；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收真实Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。",
+    "objective": "F054 WP18：核验Production与隔离Preview按序具备基础协同迁移20260922000001及连接/快照迁移20260923074619、20260923081415与RLS/权限；只在确有缺失且满足恢复门禁时应用添加性迁移；配置服务端加密/回执密钥与顺丰OAuth2机器凭据；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收真实Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。",
     "started_at": "2026-09-23T09:34:46.080Z",
     "activation_basis": "WP17 SHA 0282568d742cb07985591aad093157bc26c3cb96达到code_green并通过Harness审计；用户通过IN-20260923-014明确授权WP18必要Production迁移、服务端配置与发布。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
@@ -187,7 +187,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "IN-20260923-014授权必要Production写入和精确SHA发布。经只读审计确认生产缺少20260922000001基础表迁移，已将其纳入同一additive链；必须先在隔离环境按序应用20260922000001、20260923074619、20260923081415并验证RLS/权限。当前无Production备份/PITR恢复点，确认可恢复点前不得迁移。不得DROP/TRUNCATE或将Production联系人数据导出到Agent工作区。真实下单前由用户核对收件信息和费用；未通过现有Chrome受信验收不得标记production_released。",
+      "note": "IN-20260923-014授权必要Production写入和精确SHA发布。2026-09-24 Supabase迁移清单已确认Production与隔离Preview均按序存在20260922000001、20260923074619、20260923081415；只读Postgres核验确认7张寄件表均启用RLS，anon/authenticated没有SELECT权限且service_role具备所需CRUD权限，故当前不再需要执行或重放DDL。Production没有托管备份/PITR恢复点；未经单独核验恢复策略不得再做Production DDL或破坏性数据操作。不得DROP/TRUNCATE或将Production联系人数据导出到Agent工作区。真实下单前由用户核对收件信息和费用；未通过现有Chrome受信验收不得标记production_released。",
       "production_database_mode": "controlled_write_approved",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -234,8 +234,9 @@
       }
     ],
     "release_blockers": [
-      "Production has no available physical backup and PITR is disabled; establish and verify a recoverable point before DDL.",
-      "Production migration history stops at 20260914000001; apply F054 migration chain 20260922000001, 20260923074619, 20260923081415 after isolated verification."
+      "本次SHA的OAuth2令牌获取及EXP_RECE_SEARCH_ORDER_RESP只读沙盒调用尚待原Preview分支实际重放。",
+      "尚未配置并核验Production OAuth2机器凭据、已商务授权expressTypeId和真实默认寄件人；正式下单保持关闭。",
+      "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [
       {
