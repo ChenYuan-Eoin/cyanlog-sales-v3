@@ -234,8 +234,8 @@
       }
     ],
     "release_blockers": [
-      "本次SHA的OAuth2令牌获取及EXP_RECE_SEARCH_ORDER_RESP只读沙盒调用尚待原Preview分支实际重放。",
-      "尚未配置并核验Production OAuth2机器凭据、已商务授权expressTypeId和真实默认寄件人；正式下单保持关闭。",
+      "Production OAuth2机器凭据、已商务授权expressTypeId及真实默认寄件人尚未保存与核验；正式下单保持关闭。",
+      "沙盒OAuth2与EXP_RECE_SEARCH_ORDER_RESP只读探测已通过；仍需使用已授权产品分别验证下单、结果查回、轨迹与未揽收取消。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [
