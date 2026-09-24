@@ -43,40 +43,40 @@ Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqC
 5. 部署并通过用户现有Chrome验收后，用户指定一票真实寄件，核对金额和收件信息并亲自确认下单。揽收前由用户核验一键取消及ONES/顺丰状态一致。
 6. 新版本稳定后，单独删除Vercel中不再使用的旧`SF_*`配置；不要在旧代码仍服务Production时先删变量。
 
-截至本次核对，AI未读取Vercel环境变量值、未读取或导出Production联系人内容、未对Production数据库执行DDL、未调用顺丰、未创建真实运单、未部署Production。Production现有表计数只读元数据为`shipping_contacts=631`、`shipping_outbound_imports=10`、`shipping_requests=0`；Production缺少`shipping_orders`等基础协同表。
+截至2026-09-24核对：未读取Vercel环境变量值、未读取或导出Production联系人内容、未调用顺丰、未创建真实运单、未部署Production。已通过已授权的Supabase管理接口应用下列三条增量迁移；RLS与权限已核验。Production行数仍为`shipping_contacts=631`、`shipping_outbound_imports=10`、`shipping_requests=0`，新建寄件表均为0行。当前线上应用仍是旧部署。
 
 ## 前向迁移
 
-按顺序应用截至Production迁移历史之后缺失的F054迁移：
+F054迁移链已按顺序应用于隔离Preview与Production；两边迁移账本版本已与仓库文件名对齐：
 
 - `20260922000001_shipping_collaboration_m0.sql`：基础`shipping_orders`、`shipping_waybills`、`shipping_tracking_events`、限流表与受限服务端限流函数。
 
 - `20260923074619_shipping_carrier_configuration.sql`：组织级连接、加密月结账号、默认寄件人，RLS开启并撤销`anon`/`authenticated`直接访问。
 - `20260923081415_shipping_order_configuration_snapshot.sql`：连接授权服务矩阵及寄件订单的非机密连接/账号/寄件人快照。
 
-### Production数据库恢复点门禁
+### Production数据库恢复与回滚边界
 
-2026-09-23 Supabase只读备份查询返回`backups=[]`、`pitr_enabled=false`；控制台显示当前为Free套餐且不包含托管备份。数据库约32.6 MB。不得升级Pro或启用持续付费PITR作为默认方案。Supabase官方建议Free项目定期导出逻辑备份；本机有原生`pg_dump`，而Supabase CLI容器化`db dump`需要Docker。
+Production项目为Supabase Free计划，当前没有托管备份或PITR。**不得用`pg_dump --schema=public`作为“只备份结构”的命令**：该命令会包含表数据，可能导出联系人信息；本次没有创建数据备份，也没有导出联系人。不要运行旧的私有全库备份脚本。
 
-Production DDL前先用Session Pooler通过`pg_dump --schema=public --format=custom --no-owner --no-acl`导出公共应用schema和数据，使用本地AES-256-GCM脚本加密后存入该worktree私有`codex-runtime/shipping-production-backup`。数据库密码与备份口令只在本机隐藏终端提示输入，不进入工具日志或聊天；口令由操作者保存到密码管理器。脚本验证GCM认证标签、`pg_restore --list`归档可读性、快照大小与SHA-256。当前脚本已准备，但尚无可验证快照；完成快照前不得在Production应用迁移。
+本批迁移只新增表、列、索引、RLS和权限，没有删除或更新现有业务行；应用发布前新表保持为空。迁移异常时通过Supabase元数据检查已落地对象并前向修复，不假设自动回滚。应用发布后若代码回归，回退应用版本并保留新增schema与已写入行；禁止DROP/TRUNCATE。以上是本批增量迁移的代码回滚策略，**不等于完整数据备份或PITR**。
 
-三条迁移均为加法迁移。失败时停止后续步骤、保留SQL错误与migration history，不手工DROP半成品对象；先在隔离库复现并准备前向修复。不要导出Production联系人到Agent工作区中的明文文件。Production迁移和发布依据IN-20260923-014授权，但必须满足恢复点门禁。
+迁移前基线和迁移后验证记录在当前worktree的`codex-runtime/delivery-evidence.json`：包括迁移历史、目标表列/RLS状态、目标表行数和访问权限结果，不含业务行数据。迁移版本为`20260922000001`、`20260923074619`、`20260923081415`；Production与隔离Preview均已对齐到仓库版本。
 
 ### Supabase Data API 权限核对
 
-应用通过`supabase-js`的PostgREST Data API访问这些`public`表。迁移对三张配置表显式授予`service_role`所需CRUD权限，同时启用RLS并撤销`PUBLIC`、`anon`、`authenticated`权限；不要为了修复PostgREST拒绝而向客户端角色开放这些机密配置表。Supabase已宣布：新项目自2026-05-30起默认不再自动暴露新表，现有项目于2026-10-30开始执行；新表必须在迁移中显式GRANT。发布前需在隔离数据库确认应用服务端访问成功，并验证`anon`/`authenticated`仍被拒绝。[Supabase changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)；[Securing your API](https://supabase.com/docs/guides/api/securing-your-api)。
+应用通过`supabase-js`的PostgREST Data API访问这些`public`表。迁移对配置表显式授予`service_role`所需CRUD权限，同时启用RLS并撤销`PUBLIC`、`anon`、`authenticated`权限。Production验证确认客户端角色不能直接读取寄件订单或执行限流函数，而`service_role`具备所需权限；不要为了修复拒绝而向客户端角色开放机密配置表。[Supabase changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)；[Securing your API](https://supabase.com/docs/guides/api/securing-your-api)。
 
-## 发布回滚方案（Production授权前审阅）
+## 发布回滚方案（当前执行状态）
 
-本批迁移采用新增表/列/索引的前向兼容方式；回滚以恢复旧应用版本为主，不自动删库或删除迁移对象。Production执行前仍需由用户审阅并批准：
+本批迁移采用新增表/列/索引的前向兼容方式；回滚以恢复旧应用版本为主，不自动删库或删除迁移对象。Production迁移已应用，但候选代码还没有进入main或Production：
 
-1. **部署前留存基线**：记录当前READY deployment、Production分支SHA、Production变量名称与环境范围；由数据库负责人确认可恢复的备份/时间点恢复能力，并记录恢复点。未确认可恢复点，不开始Production迁移。
-2. **迁移失败或新版本未启动**：停止后续迁移/部署，保留数据库错误和迁移状态；不要手工删除半成品表、列或migration history。先在隔离库复现并准备修复迁移，再经审阅决定是否继续。
+1. **部署前留存基线**：Production旧READY deployment为`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，其SHA为`dd28bf60583954822edca05fbd991126a6ddb56f`；迁移前后schema基线见worktree私有delivery evidence。当前没有完整数据备份或PITR。
+2. **迁移失败或新版本未启动**：Production旧应用继续运行；检查迁移历史和已创建对象，保留错误与migration history，前向修复。不要手工删除部分落地的表、列或migration history。
 3. **应用发布后发现代码回归**：将Vercel恢复到部署前记录的READY deployment/精确SHA；保留新增数据库对象、`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`和`SHIPPING_RECEIPT_SECRET`，同时暂时保留旧版本仍需的`SF_*`变量。由于schema是加法迁移，旧版本不应依赖新列；回退后不得删除新配置或迁移对象。
 4. **新版本已写入连接或订单快照**：禁止通过DROP表/列回滚。先停止新下单入口并保留加密密钥；若需恢复数据，按数据库负责人批准的备份/PITR流程执行，并明确其会丢弃恢复点之后的写入。否则保留schema，通过后续前向修复恢复服务。
 5. **重新发布**：修复后用新的精确SHA重新执行代码门禁与隔离库迁移验证，再另行审阅Production变量差异和发布步骤。仅在新版本稳定并完成真实验收后，才单独清理旧`SF_*`变量。
 
-本方案不代表当前Production备份已建立或完成恢复演练；当前没有可确认的Production恢复点。Production迁移必须等到加密逻辑快照通过归档验证后再执行。
+本方案不代表Production已有完整数据备份或恢复演练。任何需要恢复Production业务行数据的变更，必须另行建立经授权的恢复方案；不得借本次迁移导出联系人数据。
 
 ## 接口核验
 
@@ -110,7 +110,7 @@ Production DDL前先用Session Pooler通过`pg_dump --schema=public --format=cus
 
 用户明确所有验收在 `https://sales.cyanlog.icu` 的现有Chrome会话进行。localhost、隔离数据库、顺丰沙盒仅是开发证据，不向用户作为验收交付。
 
-本轮已准备以Production精确SHA为基线的最小26文件补丁，不混入报价域其他91文件差异；补丁可应用性已验证，尚未完成该最小候选的独立构建或发布。生产缺少shipping_requests，既有匿名表/RPC风险仍存在；具体生产SQL先经批准再执行。完整方案及哈希见当前worktree私有 `codex-runtime/shipping-release`。
+本轮候选SHA为`d40a1fa8f67289e73521ddc4c79589704e97f9a9`，本地代码门禁为`code_green`。Production数据库迁移已完成，候选尚未合入main、发布到Production或通过现有Chrome验收；新的候选Preview还缺隔离Supabase服务角色密钥和获准操作员名单。Production完整运行验证尚未完成。
 
 追加迁移 `20260911000003_shipping_contacts_defaults.sql` 提供私有地址簿和上次成功下单快照。匿名页面仅提供填写界面；匿名付费寄件策略尚待用户明确。
 
