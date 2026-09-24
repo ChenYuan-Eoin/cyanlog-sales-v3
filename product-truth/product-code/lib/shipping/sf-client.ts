@@ -70,8 +70,8 @@ export function decodeSfResponse(raw: unknown): unknown {
   if (data.success !== true && data.success !== 'true') throw new ShippingError(422, `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
   return data.msgData
 }
-export async function sfCall(serviceCode: string, message: unknown, config: Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>): Promise<unknown> {
-  const timestamp = Date.now().toString(), msgData = JSON.stringify(message), accessToken = await getSfAccessToken(config)
+async function postSfService(serviceCode: string, message: unknown, config: SfAuthConfig, accessToken: string): Promise<unknown> {
+  const timestamp = Date.now().toString(), msgData = JSON.stringify(message)
   const body = new URLSearchParams({ partnerID: config.partnerId, requestID: randomUUID(), serviceCode, timestamp, accessToken, msgData })
   const url = `${sfBaseUrl(config.environment)}/std/service`
   const started = Date.now()
@@ -80,7 +80,7 @@ export async function sfCall(serviceCode: string, message: unknown, config: Pick
     const response = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error' })
     upstreamStatus = response.status
     if (!response.ok) throw new Error('upstream status')
-    return decodeSfResponse(await response.json())
+    return await response.json()
   } catch (error) {
     if (error instanceof ShippingError) throw error
     // Only transport metadata: never log request bodies, credentials or customer details.
@@ -90,17 +90,34 @@ export async function sfCall(serviceCode: string, message: unknown, config: Pick
   }
 }
 
+export async function sfCall(serviceCode: string, message: unknown, config: Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>): Promise<unknown> {
+  const accessToken = await getSfAccessToken(config)
+  return decodeSfResponse(await postSfService(serviceCode, message, config, accessToken))
+}
+
 /**
  * Checks sandbox OAuth2 credentials only. It never creates a shipment and does not
  * prove that create, tracking, or cancellation permissions are enabled.
  */
 export async function probeSfSandbox(partnerId: string, checkWord: string) {
+  const config: SfAuthConfig = { environment: 'sandbox', partnerId, checkWord }
   try {
-    await getSfAccessToken({ environment: 'sandbox', partnerId, checkWord })
-    return { connected: true, message: '顺丰沙盒OAuth2认证通过；未创建运单，也不代表下单、轨迹或取消权限已开通。' }
+    const accessToken = await getSfAccessToken(config)
+    const raw = await postSfService('EXP_RECE_SEARCH_ORDER_RESP', { orderId: randomUUID(), language: 'zh-CN', searchType: '1' }, config, accessToken)
+    let outer: z.infer<typeof envelope>
+    try { outer = envelope.parse(raw) }
+    catch { return { connected: false, message: '顺丰沙盒OAuth2已认证，但只读API返回无法识别的响应；未创建运单。' } }
+    if (outer.apiResultCode === 'A1000') {
+      try { business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData) }
+      catch { return { connected: false, message: '顺丰沙盒OAuth2已认证，但只读API返回无法识别的响应；未创建运单。' } }
+      return { connected: true, message: '顺丰沙盒OAuth2认证及只读API连通通过；未创建运单，也不代表下单、轨迹或取消权限已开通。' }
+    }
+    // Token success is distinct from API permissions. An API-level denial still
+    // establishes credential connectivity; individual capabilities stay unverified.
+    return { connected: true, message: '顺丰沙盒OAuth2认证通过；只读查询接口未受理，业务接口权限仍需分别核验。未创建运单。' }
   } catch (error) {
-    if (error instanceof ShippingError) return { connected: false, message: error.message }
-    return { connected: false, message: '顺丰沙盒OAuth2认证失败，请检查网络和机器凭据。' }
+    if (error instanceof ShippingError && error.message.includes('OAuth2认证')) return { connected: false, message: error.message }
+    return { connected: false, message: '顺丰沙盒OAuth2/只读API连通失败；未创建运单。' }
   }
 }
 export function buildSfOrder(orderId: string, input: ShippingInput, monthlyCard: string) {
