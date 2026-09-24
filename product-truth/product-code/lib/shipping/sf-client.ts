@@ -71,7 +71,10 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
 }
 export function decodeSfResponse(raw: unknown): unknown {
   const outer = envelope.parse(raw)
-  if (outer.apiResultCode !== 'A1000') throw new ShippingError(502, '顺丰接口未受理请求，请检查账号权限后再查询结果。')
+  if (outer.apiResultCode !== 'A1000') {
+    const code = /^[A-Z0-9_]{1,20}$/.test(outer.apiResultCode) ? outer.apiResultCode : 'unknown'
+    throw new ShippingError(502, `顺丰接口未受理请求（${code}），请检查账号权限。`, 'provider_rejected')
+  }
   const data = business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData)
   if (data.success !== true && data.success !== 'true') throw new ShippingError(422, `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
   return data.msgData
