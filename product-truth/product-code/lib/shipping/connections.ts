@@ -5,8 +5,10 @@ import { ShippingError } from './config'
 import type { Contact } from './types'
 
 const credentialSchema = z.object({ partnerId: z.string().trim().min(1).max(64), checkWord: z.string().trim().min(1).max(256), environment: z.enum(['sandbox', 'production']) }).strict()
-const serviceSchema = z.array(z.object({ id: z.number().int().positive(), name: z.string().trim().min(1).max(40), preference: z.enum(['standard', 'urgent']).default('standard') }).strict()).max(20).default([])
+const serviceItemsSchema = z.array(z.object({ id: z.number().int().positive(), name: z.string().trim().min(1).max(40), preference: z.enum(['standard', 'urgent']).default('standard') }).strict()).max(20)
+const serviceSchema = serviceItemsSchema.default([])
 const connectionSchema = z.object({ partnerId: z.string().trim().min(1).max(64), checkWord: z.string().trim().min(1).max(256), environment: z.enum(['sandbox', 'production']), services: serviceSchema }).strict()
+const servicesUpdateSchema = z.object({ environment: z.enum(['sandbox', 'production']), services: serviceItemsSchema.min(1) }).strict()
 const accountSchema = z.object({ accountNumber: z.string().trim().regex(/^[0-9]{4,32}$/), displayName: z.string().trim().min(1).max(80), environment: z.enum(['sandbox', 'production']).default('sandbox'), isDefault: z.boolean().optional() }).strict()
 const senderSchema = z.object({ displayName: z.string().trim().min(1).max(80), contact: z.object({ name: z.string().trim().min(1).max(80), phone: z.string().trim().min(6).max(32), province: z.string().trim().min(1).max(80), city: z.string().trim().min(1).max(80), county: z.string().trim().min(1).max(80), address: z.string().trim().min(1).max(240) }).strict() }).strict()
 
@@ -77,6 +79,22 @@ export async function saveCarrierCredentials(orgId: string, userId: string, inpu
     last_tested_at: null, created_by: userId, updated_by: userId
   }, { onConflict: 'org_id,carrier_key,environment' }).select('id').single()
   if (error || !data) throw databaseError()
+  return loadShippingConfiguration(orgId)
+}
+
+export async function saveAuthorizedServices(orgId: string, userId: string, input: unknown) {
+  const parsed = servicesUpdateSchema.parse(input)
+  const { data: connection, error: lookupError } = await supabaseAdmin.from('shipping_carrier_connections')
+    .select('id').eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', parsed.environment).maybeSingle()
+  if (lookupError) throw databaseError()
+  if (!connection) throw new ShippingError(409, `请先保存顺丰${parsed.environment === 'sandbox' ? '沙盒' : '生产'}连接资料。`)
+  const { error } = await supabaseAdmin.from('shipping_carrier_connections').update({
+    authorized_services: parsed.services,
+    order_capability: 'not_tested',
+    updated_by: userId,
+    updated_at: new Date().toISOString()
+  }).eq('org_id', orgId).eq('id', connection.id)
+  if (error) throw databaseError()
   return loadShippingConfiguration(orgId)
 }
 

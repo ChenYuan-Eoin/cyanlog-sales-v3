@@ -64,6 +64,36 @@ describe('self-service shipping workbench', () => {
     await waitFor(() => expect(screen.getAllByText(/样品易碎，请轻拿轻放/).length).toBeGreaterThan(0))
   })
 
+  it('requires right-pane per-ticket review before the first unverified Production order', async () => {
+    useLedger(fixtureOrders)
+    const productionSettings: ShippingSettings = {
+      ...settings,
+      environment: 'production',
+      connectionId: 'production-connection',
+      defaultBillingAccountId: 'production-account',
+      canSubmit: true,
+      services: [{ id: 1, name: 'Production 标快', preference: 'standard' }],
+      carrierConnections: [{ id: 'production-connection', carrier: 'sf', environment: 'production', status: 'connected', orderCapability: 'not_tested', services: [{ id: 1, name: 'Production 标快', preference: 'standard' }] }],
+      billingAccounts: [{ id: 'production-account', connectionId: 'production-connection', environment: 'production', displayName: 'Production 月结', tail: '4321', isDefault: true, status: 'active' }]
+    }
+    render(<ShippingWorkbench settings={productionSettings}/>)
+    await screen.findAllByText('华东建筑设计院')
+    fireEvent.click(screen.getByRole('button', { name: '文本解析' }))
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '李四 13800000000 上海市浦东新区张江路88号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    expect(screen.getByRole('button', { name: '批量确认下单（1票）' })).toHaveProperty('disabled', true)
+
+    fireEvent.click(screen.getAllByRole('button', { name: '确认下单' })[0])
+
+    expect(await screen.findByRole('group', { name: '首票Production订单复核' })).toBeTruthy()
+    expect(screen.getAllByText(/张江路88号/).length).toBeGreaterThan(1)
+    expect(screen.getAllByText(/Production 月结 · 尾号 4321/).length).toBeGreaterThan(1)
+    expect(fetcher.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: '确认首票Production下单' }))
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/shipping/ledger/order-1/confirm', expect.objectContaining({ method: 'POST' })))
+  })
+
   it('filters explicit inbound records and exposes the manual tracking fallback', async () => {
     useLedger(fixtureOrders)
     render(<ShippingWorkbench settings={settings}/>)

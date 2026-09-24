@@ -21,7 +21,7 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 另有下载页提供的`SF-CSIM-EXPRESS-SDK-NODE.JS-V1.0`示例使用 XML、`verifyCode`和旧`bsp-oisp/sfexpressService`地址，与本项目采用的`/std/service` JSON 协议不同；不要运行该示例的`npm start`，其默认报文是下单操作。`expressTypeId`必须来自顺丰已授权服务产品清单，不得猜测或使用未经确认的默认码。
 
-沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。Production配置另提供只读Production连接检查，同样只获取OAuth2令牌并发起未知订单号的查询，不创建运单；它验证凭据和只读查询连通，不会把下单权限伪标为已验证。Production首次真实下单仍需操作员在页面核对资料及费用后确认；收到顺丰成功响应后，系统才把该连接的下单能力记为已验证。下单、轨迹、取消能力分别在相应接口成功后记录。
+沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。Production配置另提供只读Production连接检查，同样只获取OAuth2令牌并发起未知订单号的查询，不创建运单；它验证凭据和只读查询连通，不会把下单权限伪标为已验证。现有连接的授权服务矩阵可单独保存，不需要重新输入或轮换PartnerID/CheckWord；服务矩阵变更会重新要求操作员验证首票Production下单。首票前会在右栏显示完整寄收地址、服务及月结账号复核，并禁用批量下单；确认首票真实订单仍需操作员核对资料与费用。收到顺丰成功响应后，系统才把该连接的下单能力记为已验证。下单、轨迹、取消能力分别在相应接口成功后记录。
 
 ## Vercel环境变量核对（2026-09-24；只核对名称、类型和环境/分支范围，未读取值）
 
@@ -40,9 +40,9 @@ Production仍运行旧发布SHA `dd28bf60583954822edca05fbd991126a6ddb56f`。不
 
 `SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`、`SHIPPING_CONTEXT_SECRET`的Production值没有被读取。Production寄件配置表当前为空，因此尚无依赖该主密钥的生产凭据密文。更换电脑时必须通过安全渠道转存现有Production加密密钥；不要打印到终端日志、仓库或聊天。添加/修复环境变量不会改变已部署的旧版本，需要新部署后才生效。
 
-分支验证结论：保持`codex/wp11-main-integration`的Preview设置不变；新候选分支目前无法解密Preview连接配置，管理员页面显示“寄件凭据无法解密”。Production和Preview环境变量均未更改。候选代码已部署到原Preview分支，但当前现有Chrome操作员会话没有连接管理权限，故本轮没有在该会话发起顺丰请求。
+分支验证结论：保持`codex/wp11-main-integration`的Preview设置不变。候选分支`codex/shipping-collaboration-console`使用另一条加密键，管理员页面曾报告“寄件凭据无法解密”；没有复制或轮换密钥。原Preview分支曾在Vercel `sin1`出现一次OAuth2连接超时，随后只读重测成功。Vercel Preview部署`dpl_2pPc9DQyMpZxSKV3iYsMBhVFYD7h`、SHA `201726731b916c14b578416100f71ce5ba8a2b00`经现有管理员Chrome实测，OAuth2令牌获取与`EXP_RECE_SEARCH_ORDER_RESP`只读查询通过，Supabase记录`query_capability=verified`、`order_capability/tracking_capability/cancel_capability=not_tested`；未创建运单。此Preview SHA尚未包含工作树中新增的Production只读连接检查与首笔下单能力状态修复。Production和Preview环境变量均未更改。
 
-Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。候选SHA `0002b8786c7668d88ab22b6e603d984a592b37b6` 已推送并部署到原Preview分支`codex/wp11-main-integration`，Preview READY；尚未合入`main`/`production`或部署Production。域名在Vercel显示Valid Configuration，但本机DNS递归查询对`sales.cyanlog.icu`返回SERVFAIL；用Vercel目标IP绕过DNS的只读HTTP探测返回200。Production用户验收仍须在现有Chrome真实域名完成，当前尚未完成。
+Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。Preview SHA `201726731b916c14b578416100f71ce5ba8a2b00`已推送到原Preview分支并READY；尚未合入`main`/`production`或部署Production。域名在Vercel显示Valid Configuration，但本机DNS递归查询对`sales.cyanlog.icu`返回SERVFAIL；用Vercel目标IP绕过DNS的只读HTTP探测返回200。Production用户验收仍须在现有Chrome真实域名完成，当前尚未完成。
 
 ## 真实寄件验收准备（用户执行）
 
@@ -53,7 +53,7 @@ Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqC
 5. 部署并通过用户现有Chrome验收后，用户指定一票真实寄件，核对金额和收件信息并亲自确认下单。揽收前由用户核验一键取消及ONES/顺丰状态一致。
 6. 新版本稳定后，单独删除Vercel中不再使用的旧`SF_*`配置；不要在旧代码仍服务Production时先删变量。
 
-截至2026-09-24核对：未读取Vercel环境变量值、未读取或导出Production联系人内容、未创建真实运单、未部署Production。已通过已授权的Supabase管理接口应用下列三条增量迁移；RLS与权限已核验。Production配置表计数为连接0、月结账号0、寄件人0；Preview有连接1（状态failed）、默认可用月结账号1、默认寄件人1。Preview行中没有读取姓名、电话、地址、账号或凭据内容。Production当前仍运行旧部署。
+截至2026-09-24核对：未读取Vercel环境变量值、未读取或导出Production联系人内容、未创建真实运单、未部署Production。已通过已授权的Supabase管理接口应用下列三条增量迁移；RLS与权限已核验。Production配置表计数为连接0、月结账号0、寄件人0；Preview有连接1（状态connected、只读查询已验证；下单/轨迹/取消未验证）、默认可用月结账号1、默认寄件人1。Preview行中没有读取姓名、电话、地址、账号或凭据内容。Production当前仍运行旧部署。
 
 ## 前向迁移
 

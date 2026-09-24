@@ -51,6 +51,25 @@ describe('shipping configuration drawer', () => {
     expect(JSON.parse(String(request.body))).toEqual({ action: 'test_production_connection' })
   })
 
+  it('updates authorized services without asking for saved machine credentials again', async () => {
+    const connection = { id: 'sandbox-1', carrier: 'sf', environment: 'sandbox', partnerIdTail: '8391', status: 'connected', services: [], capabilities: { order: 'not_tested', query: 'verified', tracking: 'not_tested', cancel: 'not_tested' }, lastTestedAt: null }
+    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify({ configuration: { connections: [{ ...connection, services: [{ id: 2, name: '顺丰标快', preference: 'standard' }] }], billingAccounts: [], sender: null } }), { status: 200 })
+      return new Response(JSON.stringify({ configuration: { connections: [connection], billingAccounts: [], sender: null } }), { status: 200 })
+    })
+    render(<ShippingConfigDrawer open onClose={() => undefined}/>)
+    fireEvent.change(await screen.findByLabelText('服务编号'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('服务名称'), { target: { value: '顺丰标快' } })
+    fireEvent.click(screen.getByRole('button', { name: '添加' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存授权服务' }))
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+    const [, request] = fetcher.mock.calls[1] as [string, RequestInit]
+    expect(JSON.parse(String(request.body))).toEqual({ action: 'save_authorized_services', environment: 'sandbox', services: [{ id: 2, name: '顺丰标快', preference: 'standard' }] })
+    expect(screen.getByLabelText('PartnerID')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('CheckWord')).toHaveProperty('value', '')
+  })
+
   it('saves connection credentials only through the server route and clears the secret field', async () => {
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'POST') return new Response(JSON.stringify({ configuration: { connections: [], billingAccounts: [], sender: null } }), { status: 200 })

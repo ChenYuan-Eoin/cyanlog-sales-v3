@@ -6,6 +6,7 @@ import {
   loadShippingConfiguration,
   saveBillingAccount,
   saveCarrierCredentials,
+  saveAuthorizedServices,
   saveDefaultSender,
   updateBillingAccount,
   getConnectionProbeCredentials,
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
     const { action, ...input } = body
     switch (action) {
       case 'save_connection': return { configuration: await saveCarrierCredentials(orgId, user.id, input) }
+      case 'save_authorized_services': return { configuration: await saveAuthorizedServices(orgId, user.id, input) }
       case 'add_billing_account': return { configuration: await saveBillingAccount(orgId, user.id, input) }
       case 'set_default_account': return { configuration: await updateBillingAccount(orgId, user.id, String(input.accountId || ''), 'default') }
       case 'deactivate_account': return { configuration: await updateBillingAccount(orgId, user.id, String(input.accountId || ''), 'deactivate') }

@@ -68,6 +68,12 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
     if (saved) { setPartnerId(''); setCheckWord('') }
   }
 
+  async function saveAuthorizedServices() {
+    if (!connection) { setMessage('请先保存当前环境的顺丰连接。'); return }
+    if (!authorizedServices.length) { setMessage('请至少添加一项顺丰已授权服务产品。'); return }
+    await mutate('services', 'save_authorized_services', { environment, services: authorizedServices })
+  }
+
   function addService() {
     const id = Number(newServiceId)
     const name = newServiceName.trim()
@@ -114,7 +120,7 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
           <div className={styles.serviceHeading}><strong>已授权服务产品</strong><span>需与顺丰应用权限一致</span></div>
           <div className={styles.services}>{authorizedServices.map(service => <div key={service.id}><span>{service.name} · {service.id} · {service.preference === 'standard' ? '标准' : '加急'}</span><button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>)}</div>
           <div className={styles.serviceInputs}><label>服务编号<input inputMode="numeric" value={newServiceId} onChange={event => setNewServiceId(event.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="顺丰服务产品ID"/></label><label>服务名称<input value={newServiceName} onChange={event => setNewServiceName(event.target.value)} placeholder="例如已开通产品"/></label><label>服务偏好<select value={newServicePreference} onChange={event => setNewServicePreference(event.target.value as typeof newServicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select></label><button className={styles.secondary} onClick={addService}><Plus size={14}/>添加</button></div>
-          <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || (environment === 'sandbox' ? !hasSandboxConnection : !connection)} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button></div>
+          <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || !connection || !authorizedServices.length} onClick={() => void saveAuthorizedServices()}>{busy === 'services' ? '保存服务中…' : '保存授权服务'}</button><button className={styles.secondary} disabled={!!busy || (environment === 'sandbox' ? !hasSandboxConnection : !connection)} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button></div>
           {environment === 'sandbox' && !hasSandboxConnection && <p className={styles.hint}>请先保存沙盒连接，再运行只读连通性测试。</p>}
           {environment === 'production' && <p className={styles.hint}>生产连接测试只调用只读订单查询，不创建运单，也不证明生产下单权限。首票实际寄件仍需操作员逐票核对资料与费用后确认。</p>}
           {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
