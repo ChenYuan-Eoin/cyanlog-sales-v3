@@ -103,7 +103,7 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
       <div className={styles.content}>
         <section className={styles.section}>
           <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>顺丰机器连接</h3></div><span>{connection ? `尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>
-          <p className={styles.hint}>PartnerID与CheckWord经服务端加密保存；服务端为每次标准接口请求生成签名。人员不需要登录顺丰。</p>
+          <p className={styles.hint}>PartnerID与CheckWord经服务端加密保存；服务端按顺丰Node.js OAuth2方式获取并短期缓存令牌。人员不需要登录顺丰。</p>
           <label>运行环境<select value={environment} onChange={event => setEnvironment(event.target.value as typeof environment)}><option value="sandbox">沙盒</option><option value="production">生产</option></select></label>
           {connection && <div className={styles.savedState}>已保存 · {connection.status === 'connected' ? '沙盒连接通过' : connection.status === 'failed' ? '最近连接检查失败' : '待连接检查'} · 查询能力 {connection.capabilities.query === 'verified' ? '已验证' : '未验证'}</div>}
           {connection && <div className={styles.capabilities} aria-label="顺丰能力验证状态">{([['order', '下单'], ['query', '订单查询'], ['tracking', '轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection.capabilities[key] === 'verified' ? '已验证' : connection.capabilities[key] === 'unavailable' ? '不可用' : '未验证'}</b></div>)}</div>}
@@ -135,7 +135,7 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
           <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>
         </section>
         {message && <p className={styles.message} role="status">{message}</p>}
-        <p className={styles.footerNote}>连接检查通过顺丰沙盒只读接口验证签名，不创建运单，也不代表下单、轨迹、取消权限已开通。</p>
+        <p className={styles.footerNote}>连接检查使用顺丰沙盒OAuth2和只读接口，不创建运单，也不代表下单、轨迹、取消权限已开通。</p>
       </div>
     </aside>
   </div>

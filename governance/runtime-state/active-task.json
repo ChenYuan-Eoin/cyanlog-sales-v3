@@ -133,7 +133,7 @@
     "name": "Production发布与真实寄件验收",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP18：核验Production与隔离Preview按序具备基础协同迁移20260922000001及连接/快照迁移20260923074619、20260923081415与RLS/权限；只在确有缺失且满足恢复门禁时应用添加性迁移；配置服务端加密/回执密钥与顺丰PartnerID/CheckWord标准接口签名凭据；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收真实Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。",
+    "objective": "F054 WP18：核验Production与隔离Preview已有基础协同、连接/快照迁移与RLS/权限；不重复应用迁移；使用Node.js OAuth2验证顺丰机器凭据并核实Production配置、商务授权服务和默认寄件人；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。",
     "started_at": "2026-09-23T09:34:46.080Z",
     "activation_basis": "WP17 SHA 0282568d742cb07985591aad093157bc26c3cb96达到code_green并通过Harness审计；用户通过IN-20260923-014明确授权WP18必要Production迁移、服务端配置与发布。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
@@ -234,8 +234,8 @@
       }
     ],
     "release_blockers": [
-      "Production PartnerID/CheckWord标准签名凭据、已商务授权expressTypeId及真实默认寄件人尚未保存与核验；正式下单保持关闭。",
-      "当前标准签名版本已在稳定Preview执行两次EXP_RECE_SEARCH_ORDER_RESP只读探测，但Vercel运行时均遇到UND_ERR_CONNECT_TIMEOUT且没有顺丰HTTP响应；本机能连接同一沙盒网关，故凭据/签名是否被接受仍未知。需先查明并解决Preview运行区到顺丰的出站连通，再取得一次成功只读响应；随后仍须用已授权产品分别验证下单、结果查回、轨迹与未揽收取消。",
+      "Production PartnerID/CheckWord OAuth2凭据、已商务授权expressTypeId及真实默认寄件人尚未保存与核验；正式下单保持关闭。",
+      "稳定Preview曾完成OAuth2令牌获取和EXP_RECE_SEARCH_ORDER_RESP只读往返；当前候选SHA需按Node.js OAuth2实现重放一次只读检查。随后仍须用已授权产品分别验证订单创建、结果查回、轨迹与未揽收取消。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [

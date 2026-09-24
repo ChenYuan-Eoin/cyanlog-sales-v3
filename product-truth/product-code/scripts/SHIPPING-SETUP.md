@@ -17,13 +17,11 @@
 
 ## 顺丰标准接口鉴权
 
-服务端直接调用顺丰标准 JSON API，不需要网页登录或获取 OAuth2 令牌。沙盒地址为`https://sfapi-sbox.sf-express.com/std/service`，生产地址为`https://sfapi.sf-express.com/std/service`。每次表单 POST 发送`partnerID`、`requestID`、`serviceCode`、`timestamp`、`msgDigest`和`msgData`。
-
-`msgDigest`按顺丰标准 API SDK 示例计算：对`urlencode(msgData + timestamp + CheckWord)`做 MD5（二进制摘要），再 Base64 编码。签名和报文使用同一份紧凑 JSON 字符串；CheckWord仅用于服务端签名，绝不回传浏览器或写日志。正式依据：[顺丰统一接入平台对接规范](https://qiao.sf-express.com/doc/download/%E4%B8%B0%E6%A1%A5%E5%B9%B3%E5%8F%B0%E6%96%B0API%E6%8E%A5%E5%8F%A3%E8%A7%84%E8%8C%83.pdf)、[顺丰 CSIM 标准 API SDK 指南](https://qiao.sf-express.com/doc/download/laas/sdk/%E4%B8%B0%E6%A1%A5SF-CSIM-EXPRESS-SDK%E6%8C%87%E5%8D%97.pdf)。
+Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工扫码。沙盒令牌地址为`https://sfapi-sbox.sf-express.com/oauth2/accessToken`，生产令牌地址为`https://bspgw.sf-express.com/oauth2/accessToken`；沙盒标准接口地址为`https://sfapi-sbox.sf-express.com/std/service`，生产标准接口地址为`https://sfapi.sf-express.com/std/service`。服务端用表单字段`partnerID`、`secret`和`grantType=password`获取令牌，在进程内缓存并于过期前刷新；标准接口表单发送`partnerID`、`requestID`、`serviceCode`、`timestamp`、`accessToken`和`msgData`。OAuth2模式不得同时发送`msgDigest`。CheckWord与令牌仅存在服务端，绝不回传浏览器或写日志。依据：顺丰提供的Node.js OAuth2接入说明及[顺丰统一接入平台对接规范](https://qiao.sf-express.com/doc/download/%E4%B8%B0%E6%A1%A5%E5%B9%B3%E5%8F%B0%E6%96%B0API%E6%8E%A5%E5%8F%A3%E8%A7%84%E8%8C%83.pdf)。
 
 另有下载页提供的`SF-CSIM-EXPRESS-SDK-NODE.JS-V1.0`示例使用 XML、`verifyCode`和旧`bsp-oisp/sfexpressService`地址，与本项目采用的`/std/service` JSON 协议不同；不要运行该示例的`npm start`，其默认报文是下单操作。`expressTypeId`必须来自顺丰已授权服务产品清单，不得猜测或使用未经确认的默认码。
 
-沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。连接通过不代表顺丰已授予下单、订单查询、轨迹或取消权限；这些业务能力仍需分别验证。
+沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。连接通过不代表顺丰已授予下单、订单查询、轨迹或取消权限；这些业务能力仍需分别验证。稳定Preview已通过OAuth2令牌获取和只读沙盒往返；候选SHA仍须重放此检查。
 
 ## Vercel Production变量核对（2026-09-23；只核对名称，未读取值）
 
