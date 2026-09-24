@@ -26,17 +26,30 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
 
   const request = (async () => {
     const body = new URLSearchParams({ partnerID: config.partnerId, secret: config.checkWord, grantType: 'password' })
+    const startedAt = Date.now()
+    const tokenUrl = `${sfBaseUrl(config.environment)}/oauth2/accessToken`
     let response: Response
     try {
-      response = await fetch(`${sfBaseUrl(config.environment)}/oauth2/accessToken`, {
+      response = await fetch(tokenUrl, {
         method: 'POST', body,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
         signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error'
       })
-    } catch {
+    } catch (error) {
+      const failure = error as { name?: string; cause?: { code?: string } }
+      const networkCode = failure?.cause?.code
+      console.error('shipping.sf.oauth_transport', {
+        environment: config.environment,
+        elapsedMs: Date.now() - startedAt,
+        errorType: failure?.name,
+        networkCode: /^[A-Z0-9_]+$/.test(networkCode || '') ? networkCode : undefined
+      })
       throw new ShippingError(502, '无法连接顺丰OAuth2认证服务，请稍后重试。')
     }
-    if (!response.ok) throw new ShippingError(502, '顺丰OAuth2认证服务暂不可用，请稍后重试。')
+    if (!response.ok) {
+      console.error('shipping.sf.oauth_http', { environment: config.environment, upstreamStatus: response.status, elapsedMs: Date.now() - startedAt })
+      throw new ShippingError(502, '顺丰OAuth2认证服务暂不可用，请稍后重试。')
+    }
     let parsed: z.infer<typeof tokenResponse>
     try { parsed = tokenResponse.parse(await response.json()) }
     catch { throw new ShippingError(502, '顺丰OAuth2认证服务返回无法识别的响应。') }

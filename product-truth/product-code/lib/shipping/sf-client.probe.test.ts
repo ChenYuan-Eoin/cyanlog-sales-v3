@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { probeSfSandbox } from './sf-client'
 
 describe('SF sandbox OAuth2 connectivity probe', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
   it('requests a server-side token without creating an order or sending a digest', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ apiResultCode: 'A1000', accessToken: 's'.repeat(48), expiresIn: 7200 }), { status: 200 }))
@@ -28,7 +28,10 @@ describe('SF sandbox OAuth2 connectivity probe', () => {
     expect(authFailure.message).toContain('认证失败')
     expect(authFailure.message).not.toContain('private upstream details')
 
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network secret details')))
-    expect(await probeSfSandbox('partner-network-unique', 'secret-checkword')).toEqual({ connected: false, message: '无法连接顺丰OAuth2认证服务，请稍后重试。' })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fixture transport failure')))
+    expect(await probeSfSandbox('p'.repeat(14), 'c'.repeat(32))).toEqual({ connected: false, message: '无法连接顺丰OAuth2认证服务，请稍后重试。' })
+    expect(JSON.stringify(log.mock.calls)).not.toContain('fixture transport failure')
+    expect(JSON.stringify(log.mock.calls)).not.toContain('c'.repeat(32))
   })
 })
