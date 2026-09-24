@@ -1,4 +1,6 @@
 import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import { AuthError, requireAuth } from '@/lib/auth'
 import { shippingManagerHandler, shippingJson } from '@/lib/shipping/http'
 import {
   loadShippingConfiguration,
@@ -10,13 +12,29 @@ import {
   recordSandboxProbe
 } from '@/lib/shipping/connections'
 import { probeSfSandbox } from '@/lib/shipping/sf-client'
-import { ShippingError } from '@/lib/shipping/config'
+import { allowedShippingUser, ShippingError } from '@/lib/shipping/config'
+import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
-  return shippingManagerHandler(req, async (_user, orgId) => {
-    return { configuration: await loadShippingConfiguration(orgId) }
-  })
+  try {
+    const user = await requireAuth(req)
+    try {
+      const orgId = await requireShippingConnectionManager(user.id)
+      return NextResponse.json({ configuration: await loadShippingConfiguration(orgId) }, { headers: { 'Cache-Control': 'no-store' } })
+    } catch (error) {
+      // The sidebar uses this route as a navigation gate. An operator may see
+      // the /shipping entry without receiving any connection/account/sender settings.
+      if (error instanceof ShippingError && error.status === 403 && allowedShippingUser(user)) {
+        return NextResponse.json({ navigationAvailable: true }, { headers: { 'Cache-Control': 'no-store' } })
+      }
+      throw error
+    }
+  } catch (error) {
+    const status = error instanceof AuthError ? 401 : error instanceof ShippingError ? error.status : 500
+    const message = error instanceof AuthError ? '请先登录。' : error instanceof ShippingError ? error.message : '寄件配置读取失败。'
+    return NextResponse.json({ error: message }, { status, headers: { 'Cache-Control': 'no-store' } })
+  }
 }
 
 export async function POST(req: NextRequest) {
