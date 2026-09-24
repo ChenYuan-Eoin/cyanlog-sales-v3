@@ -22,10 +22,23 @@ describe('self-service shipping workbench', () => {
     expect(screen.getByRole('region', { name: '批量寄件操作台' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '收寄件台账与待办' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '单据详情与物流轨迹' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '销售寄件提报' }).getAttribute('href')).toBe('/sales-portal')
     expect(await screen.findByText('暂无收寄记录')).toBeTruthy()
+    expect(screen.getByRole('form', { name: '物流轨迹查询' })).toBeTruthy()
+    expect(screen.getByLabelText('备用查询运单号')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '导入示例数据' })).toBeNull()
     expect(screen.queryByText('SF1234567890123')).toBeNull()
     expect(screen.queryByRole('navigation', { name: '寄件协同功能' })).toBeNull()
+  })
+
+  it('shows a standalone tracking result when the ledger has no selected order', async () => {
+    fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url === '/api/shipping/tracking' ? { waybill: 'SF1234567890', queriedAt: '2026-09-24T00:00:00.000Z', events: [{ time: '2026-09-24 08:00:00', location: '深圳', description: '已揽收' }] } : { records: [] }), { status: 200 }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('备用查询运单号'), { target: { value: 'sf1234567890' } })
+    fireEvent.click(screen.getByRole('button', { name: '查询轨迹' }))
+    expect(await screen.findByText('顺丰运单 SF1234567890')).toBeTruthy()
+    expect(await screen.findByText('已揽收')).toBeTruthy()
   })
 
   it('opens the in-page configuration drawer only for connection managers', async () => {

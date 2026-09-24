@@ -140,7 +140,7 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
   return <main className={styles.shell}>
     <header className={styles.topbar}>
       <div><p>物流协同 / SHIPPING OPS</p><h1>自助收寄</h1></div>
-      <div className={styles.topbarActions}>{settings.canManageConnections && <button className={styles.configButton} onClick={() => setConfigOpen(true)}><Settings size={14}/>寄件配置</button>}<div className={styles.connection}><span />{selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div></div>
+      <div className={styles.topbarActions}><a className={styles.configButton} href="/sales-portal">销售寄件提报</a>{settings.canManageConnections && <button className={styles.configButton} onClick={() => setConfigOpen(true)}><Settings size={14}/>寄件配置</button>}<div className={styles.connection}><span />{selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div></div>
     </header>
     {message && <div className={styles.toast} role="status">{message}</div>}
     <div className={styles.columns}>
@@ -164,6 +164,11 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
 
       <section className={styles.column} aria-label="单据详情与物流轨迹">
         <div className={styles.columnHeader}><div><span className={styles.step}>03</span><h2>单据全景</h2></div><small>业务详情 · 物流轨迹</small></div>
+        <form className={styles.manualTrack} aria-label="物流轨迹查询" onSubmit={event => { event.preventDefault(); void refreshTracking(manualWaybill) }}>
+          <input aria-label="备用查询运单号" value={manualWaybill} onChange={event => setManualWaybill(event.target.value.toUpperCase())} placeholder="输入顺丰运单号查询" />
+          <input aria-label="查询手机号后四位" value={phoneSuffix} onChange={event => setPhoneSuffix(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="手机后四位" />
+          <button type="submit" disabled={!manualWaybill}><Search size={14}/>查询轨迹</button>
+        </form>
         {selected ? (
           <div className={styles.detailStack}>
             <section className={styles.detailPane}>
@@ -190,11 +195,6 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
               </div>
             </section>
             <section className={styles.trackingPane}>
-              <form className={styles.manualTrack} onSubmit={event => { event.preventDefault(); void refreshTracking(manualWaybill) }}>
-                <input aria-label="备用查询运单号" value={manualWaybill} onChange={event => setManualWaybill(event.target.value.toUpperCase())} placeholder="临时查询其他顺丰运单"/>
-                <input aria-label="查询手机号后四位" value={phoneSuffix} onChange={event => setPhoneSuffix(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="手机后四位"/>
-                <button disabled={!manualWaybill}><Search size={14}/>查询</button>
-              </form>
               <div className={styles.trackTop}>
                 <div>
                   <small>最新物流状态</small>
@@ -211,7 +211,12 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
             </section>
           </div>
         ) : (
-          <div className={styles.noTracking}><PackageCheck size={32}/><strong>暂无收寄记录</strong><p>本人或业务提报的真实单据会显示在这里。</p></div>
+          <div className={`${styles.noTracking} ${styles.emptyTracking}`}>
+            <PackageCheck size={32}/>
+            <strong>{tracking ? `顺丰运单 ${tracking.waybill}` : '暂无收寄记录'}</strong>
+            <p>{tracking ? '物流轨迹查询结果' : '可直接输入顺丰运单号查询；本人或业务提报的真实单据也会显示在这里。'}</p>
+            {tracking && (tracking.events.length ? <ol className={styles.timeline}>{tracking.events.map((event, index) => <li key={`${event.time}-${index}`}><i/><time>{event.time}</time><p>{event.description}</p><small>{event.location}</small></li>)}</ol> : <p>暂无物流轨迹，运单可能尚未揽收。</p>)}
+          </div>
         )}
       </section>
     </div>
