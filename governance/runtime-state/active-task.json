@@ -133,7 +133,7 @@
     "name": "Production发布与真实寄件验收",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP18：核验Production与隔离Preview按序具备基础协同迁移20260922000001及连接/快照迁移20260923074619、20260923081415与RLS/权限；只在确有缺失且满足恢复门禁时应用添加性迁移；配置服务端加密/回执密钥与顺丰OAuth2机器凭据；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收真实Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。",
+    "objective": "F054 WP18：核验Production与隔离Preview按序具备基础协同迁移20260922000001及连接/快照迁移20260923074619、20260923081415与RLS/权限；只在确有缺失且满足恢复门禁时应用添加性迁移；配置服务端加密/回执密钥与顺丰PartnerID/CheckWord标准接口签名凭据；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收真实Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。",
     "started_at": "2026-09-23T09:34:46.080Z",
     "activation_basis": "WP17 SHA 0282568d742cb07985591aad093157bc26c3cb96达到code_green并通过Harness审计；用户通过IN-20260923-014明确授权WP18必要Production迁移、服务端配置与发布。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
@@ -234,8 +234,8 @@
       }
     ],
     "release_blockers": [
-      "Production OAuth2机器凭据、已商务授权expressTypeId及真实默认寄件人尚未保存与核验；正式下单保持关闭。",
-      "沙盒OAuth2与EXP_RECE_SEARCH_ORDER_RESP只读探测已通过；仍需使用已授权产品分别验证下单、结果查回、轨迹与未揽收取消。",
+      "Production PartnerID/CheckWord标准签名凭据、已商务授权expressTypeId及真实默认寄件人尚未保存与核验；正式下单保持关闭。",
+      "旧沙盒OAuth2与EXP_RECE_SEARCH_ORDER_RESP探测不能验证当前标准签名实现；须用当前代码重新运行只读沙盒连接检查，再使用已授权产品分别验证下单、结果查回、轨迹与未揽收取消。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [

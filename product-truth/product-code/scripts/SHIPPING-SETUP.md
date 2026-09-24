@@ -15,13 +15,15 @@
 
 以下旧配置已退出运行时代码：`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SANDBOX_MONTHLY_CARD`、`SF_SERVICES_JSON`、`SHIPPING_SENDER_JSON`、`SF_PRODUCTION_ORDER_ENABLED`。均在`/shipping`配置抽屉或服务端订单策略中管理。
 
-## 顺丰Node.js鉴权
+## 顺丰标准接口鉴权
 
-本项目为Node.js服务端，按顺丰鉴权说明使用OAuth2：沙盒向`https://sfapi-sbox.sf-express.com/oauth2/accessToken`、生产向`https://bspgw.sf-express.com/oauth2/accessToken`提交表单参数`partnerID`、`secret`（CheckWord）和`grantType=password`。取得的`accessToken`由服务端按有效期缓存，并在到期前自动重新获取；运行人员不登录顺丰，也不需每日维护令牌。
+服务端直接调用顺丰标准 JSON API，不需要网页登录或获取 OAuth2 令牌。沙盒地址为`https://sfapi-sbox.sf-express.com/std/service`，生产地址为`https://sfapi.sf-express.com/std/service`。每次表单 POST 发送`partnerID`、`requestID`、`serviceCode`、`timestamp`、`msgDigest`和`msgData`。
 
-后续标准接口请求仍POST到对应环境的`/std/service`，公共参数使用`partnerID`、`requestID`、`serviceCode`、`timestamp`、`accessToken`和`msgData`。OAuth2请求不得同时发送`msgDigest`。访问令牌只保存在服务端进程内存，不回传浏览器、不写数据库、不记录日志。顺丰文档的标准MD5数字签名说明标注为适用Java，非Java建议OAuth2；即使数字签名探测成功，也不作为Node.js接入符合推荐规范的依据。
+`msgDigest`按顺丰标准 API SDK 示例计算：对`urlencode(msgData + timestamp + CheckWord)`做 MD5（二进制摘要），再 Base64 编码。签名和报文使用同一份紧凑 JSON 字符串；CheckWord仅用于服务端签名，绝不回传浏览器或写日志。正式依据：[顺丰统一接入平台对接规范](https://qiao.sf-express.com/doc/download/%E4%B8%B0%E6%A1%A5%E5%B9%B3%E5%8F%B0%E6%96%B0API%E6%8E%A5%E5%8F%A3%E8%A7%84%E8%8C%83.pdf)、[顺丰 CSIM 标准 API SDK 指南](https://qiao.sf-express.com/doc/download/laas/sdk/%E4%B8%B0%E6%A1%A5SF-CSIM-EXPRESS-SDK%E6%8C%87%E5%8D%97.pdf)。
 
-OAuth2获取令牌成功只代表机器凭据已认证，不代表顺丰已授予下单、订单查询、轨迹或取消权限。这些业务能力仍需分别验证。`expressTypeId`必须来自已授权服务产品清单，不得猜测或使用未经确认的默认码。
+另有下载页提供的`SF-CSIM-EXPRESS-SDK-NODE.JS-V1.0`示例使用 XML、`verifyCode`和旧`bsp-oisp/sfexpressService`地址，与本项目采用的`/std/service` JSON 协议不同；不要运行该示例的`npm start`，其默认报文是下单操作。`expressTypeId`必须来自顺丰已授权服务产品清单，不得猜测或使用未经确认的默认码。
+
+沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。连接通过不代表顺丰已授予下单、订单查询、轨迹或取消权限；这些业务能力仍需分别验证。
 
 ## Vercel Production变量核对（2026-09-23；只核对名称，未读取值）
 
