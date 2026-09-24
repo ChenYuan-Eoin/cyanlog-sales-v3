@@ -146,6 +146,82 @@ export async function saveDefaultSender(orgId: string, userId: string, input: un
   return loadShippingConfiguration(orgId)
 }
 
+export function hasLegacyShippingConfiguration(environment: CarrierEnvironment, configuration: ShippingConfiguration, env: Record<string, string | undefined> = process.env) {
+  const connection = configuration.connections.find((item) => item.carrier === 'sf' && item.environment === environment)
+  const monthlyCard = environment === 'production' ? env.SF_MONTHLY_CARD : env.SF_SANDBOX_MONTHLY_CARD
+  const hasAccount = connection && configuration.billingAccounts.some((account) => account.connectionId === connection.id && account.status === 'active')
+  return Boolean(
+    (!connection && env.SF_PARTNER_ID && env.SF_CHECK_WORD)
+    || (connection && !connection.services.length && env.SF_SERVICES_JSON)
+    || (connection && monthlyCard && !hasAccount)
+    || (!configuration.sender && env.SHIPPING_SENDER_JSON),
+  )
+}
+
+export async function importLegacyShippingConfiguration(orgId: string, userId: string, environment: CarrierEnvironment, env: Record<string, string | undefined> = process.env) {
+  const imported: string[] = []
+  const needsAttention: string[] = []
+  let configuration = await loadShippingConfiguration(orgId)
+  let connection = configuration.connections.find((item) => item.carrier === 'sf' && item.environment === environment)
+
+  let services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }> = []
+  if (env.SF_SERVICES_JSON) {
+    let rawServices: unknown
+    try { rawServices = JSON.parse(env.SF_SERVICES_JSON) } catch { needsAttention.push('SF_SERVICES_JSON格式无效') }
+    const parsedServices = serviceItemsSchema.safeParse(rawServices)
+    if (parsedServices.success) services = parsedServices.data
+    else if (!needsAttention.length) needsAttention.push('SF_SERVICES_JSON格式无效')
+  }
+  if (!services.length && (!connection || !connection.services.length) && !env.SF_SERVICES_JSON) {
+    needsAttention.push('未找到旧服务产品清单；请从顺丰授权服务产品清单维护服务编号。')
+  }
+
+  if (!connection && env.SF_PARTNER_ID && env.SF_CHECK_WORD) {
+    configuration = await saveCarrierCredentials(orgId, userId, { environment, partnerId: env.SF_PARTNER_ID, checkWord: env.SF_CHECK_WORD, services })
+    connection = configuration.connections.find((item) => item.carrier === 'sf' && item.environment === environment)
+    imported.push(services.length ? '顺丰机器连接与授权服务（凭据服务端加密）' : '顺丰机器连接（凭据服务端加密）')
+  } else if (!connection) {
+    needsAttention.push(env.SF_PARTNER_ID || env.SF_CHECK_WORD ? 'SF_PARTNER_ID与SF_CHECK_WORD需同时存在' : '旧配置中没有顺丰机器凭据')
+  } else if (connection && !connection.services.length && services.length) {
+    configuration = await saveAuthorizedServices(orgId, userId, { environment, services })
+    connection = configuration.connections.find((item) => item.carrier === 'sf' && item.environment === environment)
+    imported.push('已授权服务产品')
+  }
+
+  const legacyMonthlyCard = environment === 'production' ? env.SF_MONTHLY_CARD : env.SF_SANDBOX_MONTHLY_CARD
+  const accounts = configuration.billingAccounts.filter((item) => item.environment === environment && item.status === 'active')
+  if (connection && legacyMonthlyCard && accounts.length === 0) {
+    configuration = await saveBillingAccount(orgId, userId, {
+      accountNumber: legacyMonthlyCard,
+      displayName: environment === 'production' ? '公司月结账号' : '沙盒测试月结账号',
+      environment,
+      isDefault: true,
+    })
+    imported.push('月结账号（加密并脱敏）')
+  }
+  if (connection && !legacyMonthlyCard && accounts.length === 0) needsAttention.push('未找到旧月结账号；请在配置中心录入该环境的月结卡号。')
+
+  if (!configuration.sender && env.SHIPPING_SENDER_JSON) {
+    let rawSender: unknown
+    try { rawSender = JSON.parse(env.SHIPPING_SENDER_JSON) } catch { needsAttention.push('SHIPPING_SENDER_JSON格式无效') }
+    if (rawSender && typeof rawSender === 'object' && !Array.isArray(rawSender)) {
+      const value = rawSender as Record<string, unknown>
+      const sender = senderSchema.safeParse({
+        displayName: typeof value.displayName === 'string' ? value.displayName : '公司默认寄件人',
+        contact: { name: value.name, phone: value.phone, province: value.province, city: value.city, county: value.county, address: value.address },
+      })
+      if (sender.success) {
+        configuration = await saveDefaultSender(orgId, userId, sender.data)
+        imported.push('公司默认寄件人')
+      } else needsAttention.push('SHIPPING_SENDER_JSON缺少有效的寄件人姓名、电话或地址')
+    }
+  } else if (!configuration.sender) {
+    needsAttention.push('未找到旧公司寄件人资料；请在配置中心录入默认寄件人。')
+  }
+
+  return { configuration, imported, needsAttention }
+}
+
 export async function getConnectionProbeCredentials(orgId: string, environment: CarrierEnvironment) {
   const { data, error } = await supabaseAdmin.from('shipping_carrier_connections').select('id,credentials_ciphertext').eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', environment).maybeSingle()
   if (error) throw databaseError()

@@ -4,6 +4,8 @@ import { AuthError, requireAuth } from '@/lib/auth'
 import { shippingManagerHandler, shippingJson } from '@/lib/shipping/http'
 import {
   loadShippingConfiguration,
+  hasLegacyShippingConfiguration,
+  importLegacyShippingConfiguration,
   saveBillingAccount,
   saveCarrierCredentials,
   saveAuthorizedServices,
@@ -13,8 +15,9 @@ import {
   recordConnectionProbe
 } from '@/lib/shipping/connections'
 import { probeSfConnection } from '@/lib/shipping/sf-client'
-import { allowedShippingUser, ShippingError } from '@/lib/shipping/config'
+import { ShippingError } from '@/lib/shipping/config'
 import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
+import { requireShippingOperator, loadShippingOperatorAccess, saveShippingOperatorAccess, importLegacyShippingOperatorAccess } from '@/lib/shipping/operator-access'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
@@ -22,11 +25,20 @@ export async function GET(req: NextRequest) {
     const user = await requireAuth(req)
     try {
       const orgId = await requireShippingConnectionManager(user.id)
-      return NextResponse.json({ configuration: await loadShippingConfiguration(orgId) }, { headers: { 'Cache-Control': 'no-store' } })
+      const [configuration, operatorAccess] = await Promise.all([loadShippingConfiguration(orgId), loadShippingOperatorAccess(orgId)])
+      return NextResponse.json({
+        configuration,
+        operatorAccess,
+        legacyConfigurationAvailable: {
+          sandbox: hasLegacyShippingConfiguration('sandbox', configuration),
+          production: hasLegacyShippingConfiguration('production', configuration),
+        },
+      }, { headers: { 'Cache-Control': 'no-store' } })
     } catch (error) {
       // The sidebar uses this route as a navigation gate. An operator may see
       // the /shipping entry without receiving any connection/account/sender settings.
-      if (error instanceof ShippingError && error.status === 403 && allowedShippingUser(user)) {
+      if (error instanceof ShippingError && error.status === 403) {
+        await requireShippingOperator(user.id)
         return NextResponse.json({ navigationAvailable: true }, { headers: { 'Cache-Control': 'no-store' } })
       }
       throw error
@@ -49,6 +61,25 @@ export async function POST(req: NextRequest) {
       case 'set_default_account': return { configuration: await updateBillingAccount(orgId, user.id, String(input.accountId || ''), 'default') }
       case 'deactivate_account': return { configuration: await updateBillingAccount(orgId, user.id, String(input.accountId || ''), 'deactivate') }
       case 'save_sender': return { configuration: await saveDefaultSender(orgId, user.id, input) }
+      case 'import_legacy_configuration': {
+        const environment = input.environment
+        if (environment !== 'sandbox' && environment !== 'production') throw new ShippingError(400, '请选择要迁入的顺丰运行环境。')
+        const result = await importLegacyShippingConfiguration(orgId, user.id, environment)
+        return {
+          ...result,
+          operatorAccess: await loadShippingOperatorAccess(orgId),
+          legacyConfigurationAvailable: {
+            sandbox: hasLegacyShippingConfiguration('sandbox', result.configuration),
+            production: hasLegacyShippingConfiguration('production', result.configuration),
+          },
+        }
+      }
+      case 'save_operator_access': return { operatorAccess: await saveShippingOperatorAccess(orgId, user.id, input.userIds) }
+      case 'import_legacy_operator_access': {
+        const result = await importLegacyShippingOperatorAccess(orgId, user.id)
+        const { importedCount, ...operatorAccess } = result
+        return { importedCount, operatorAccess }
+      }
       case 'test_sandbox_connection':
       case 'test_production_connection': {
         const environment = action === 'test_sandbox_connection' ? 'sandbox' : 'production'

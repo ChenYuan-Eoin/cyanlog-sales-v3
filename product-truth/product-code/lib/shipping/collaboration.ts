@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { resolveBusinessContext, verifyShipmentContext } from './context'
+import { listShippingOperatorRecipients } from './operator-access'
 import type { ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, ShippingInput } from './types'
 
 const select = 'id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot,shipping_waybills(waybill_no)'
@@ -110,23 +111,21 @@ export async function assignShipmentRelation(id: string, salesRef: string, custo
   return map(data as ShipmentRow)
 }
 
-export async function createDueShipmentReviewReminders(now = new Date(), env: Record<string, string | undefined> = process.env) {
-  const ownerIds = (env.SHIPPING_ALLOWED_USER_IDS || '').split(',').map(value => value.trim()).filter(Boolean)
-  if (!ownerIds.length) return { orders: 0, reminders: 0 }
+export async function createDueShipmentReviewReminders(now = new Date()) {
+  const recipients = await listShippingOperatorRecipients()
+  if (!recipients.length) return { orders: 0, reminders: 0 }
   const notifiedAt = now.toISOString()
   const { data: orders, error } = await supabaseAdmin.from('shipping_orders').update({ review_notified_at: notifiedAt, updated_at: notifiedAt }).eq('status', 'awaiting_confirmation').lte('next_review_at', notifiedAt).is('review_notified_at', null).select('id,order_no')
   if (error) throw new ShippingError(503, '待核对寄件单汇总失败。')
   if (!orders?.length) return { orders: 0, reminders: 0 }
-  const { data: users, error: usersError } = await supabaseAdmin.from('users').select('id,org_id').in('id', ownerIds).eq('status', 'active')
-  if (usersError || !users?.length) throw new ShippingError(503, '寄件核对人配置无效。')
   const title = `有 ${orders.length} 个寄件单待核对`
   const description = `寄件单：${orders.slice(0, 5).map(order => order.order_no).join('、')}${orders.length > 5 ? ' 等' : ''}`
-  const { error: reminderError } = await supabaseAdmin.from('reminders').insert(users.map(user => ({ org_id: user.org_id, user_id: user.id, type: 'APPROVAL', title, description, link_type: 'SHIPPING', priority: 'HIGH', due_at: notifiedAt })))
+  const { error: reminderError } = await supabaseAdmin.from('reminders').insert(recipients.map(recipient => ({ org_id: recipient.orgId, user_id: recipient.userId, type: 'APPROVAL', title, description, link_type: 'SHIPPING', priority: 'HIGH', due_at: notifiedAt })))
   if (reminderError) {
     await supabaseAdmin.from('shipping_orders').update({ review_notified_at: null }).in('id', orders.map(order => order.id)).eq('review_notified_at', notifiedAt)
     throw new ShippingError(503, '寄件核对提醒生成失败。')
   }
-  return { orders: orders.length, reminders: users.length }
+  return { orders: orders.length, reminders: recipients.length }
 }
 
 export async function getOwnedShipmentProviderSnapshot(userId: string, waybill: string) {

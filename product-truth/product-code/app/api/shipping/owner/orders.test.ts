@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 const mocks = vi.hoisted(() => ({ create: vi.fn(), settings: vi.fn(), runtime: vi.fn(), chooseService: vi.fn(), confirm: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ requireAuth: async () => ({ id: 'operator-1' }), AuthError: class extends Error {} }))
 vi.mock('@/lib/shipping/runtime-config', () => ({ getUserShippingSettings: mocks.settings, getShippingRuntimeConfig: mocks.runtime, selectAuthorizedShippingService: mocks.chooseService }))
+vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: async () => 'org-1' }))
 vi.mock('@/lib/shipping/collaboration', () => ({ createOwnerShipment: mocks.create, publicShipmentReceipt: (order: unknown) => order }))
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: mocks.confirm }))
 import { POST } from './orders/route'
@@ -14,7 +15,6 @@ const runtime = { orgId: 'org-1', connectionId: '23a0b4bb-cf88-4593-9fc9-85b3a9d
 const body = { key: '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0', confirmed: true, connectionId: runtime.connectionId, billingAccountId: runtime.billingAccountId, input: { sender: suppliedSender, recipient: suppliedSender, cargo: '文件', weight: 1, serviceId: 2, remark: '', source: 'manual', payment: 'sender_monthly' } }
 
 beforeEach(() => {
-  vi.stubEnv('SHIPPING_ALLOWED_USER_IDS', 'operator-1')
   mocks.create.mockReset().mockResolvedValue({ id: 'order-1', status: 'accepted' })
   mocks.settings.mockReset().mockResolvedValue({ orgId: 'org-1', settings: { defaultBillingAccountId: 'account-1' } })
   mocks.runtime.mockReset().mockResolvedValue(runtime)

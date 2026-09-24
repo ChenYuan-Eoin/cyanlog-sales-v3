@@ -13,7 +13,20 @@ async function request<T>(init?: RequestInit): Promise<T> {
   return data as T
 }
 
-type ConfigurationReply = { configuration?: ShippingConfiguration; navigationAvailable?: boolean }
+type ConfigurationReply = {
+  configuration?: ShippingConfiguration
+  navigationAvailable?: boolean
+  operatorAccess?: OperatorAccess
+  legacyConfigurationAvailable?: Record<'sandbox' | 'production', boolean>
+  imported?: string[]
+  needsAttention?: string[]
+  importedCount?: number
+}
+type OperatorAccess = {
+  operators: Array<{ id: string; name: string; enabled: boolean; canOperate: boolean; grantSource: 'database' | 'legacy' | 'none' }>
+  legacyImportAvailable: boolean
+  legacyImportCompleted: boolean
+}
 
 export default function ShippingConfigDrawer({ open = true, onClose, embedded = false }: { open?: boolean; onClose?: () => void; embedded?: boolean }) {
   const [configuration, setConfiguration] = useState<ShippingConfiguration>({ connections: [], billingAccounts: [], sender: null })
@@ -35,6 +48,12 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [probeMessage, setProbeMessage] = useState('')
   const [probePassed, setProbePassed] = useState(false)
   const [accessState, setAccessState] = useState<'checking' | 'ready' | 'unavailable'>('checking')
+  const [operatorAccess, setOperatorAccess] = useState<OperatorAccess | null>(null)
+  const [operatorDraft, setOperatorDraft] = useState<string[]>([])
+  const [operatorBusy, setOperatorBusy] = useState(false)
+  const [operatorMessage, setOperatorMessage] = useState('')
+  const [legacyConfigurationAvailable, setLegacyConfigurationAvailable] = useState<Record<'sandbox' | 'production', boolean>>({ sandbox: false, production: false })
+  const [legacyMigrationReport, setLegacyMigrationReport] = useState<{ imported: string[]; needsAttention: string[] } | null>(null)
 
   async function refresh() {
     const data = await request<ConfigurationReply>()
@@ -46,6 +65,15 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       return
     }
     setConfiguration(data.configuration)
+    if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
+    if (data.operatorAccess) {
+      setOperatorAccess(data.operatorAccess)
+      setOperatorDraft(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
+    }
+    if (data.operatorAccess) {
+      setOperatorAccess(data.operatorAccess)
+      setOperatorDraft(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
+    }
     const savedSender = data.configuration.sender
     if (savedSender) {
       setSenderName(savedSender.displayName)
@@ -64,11 +92,17 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     setBusy(label); setMessage('')
     try {
       const data = await request<ConfigurationReply>({ method: 'POST', body: JSON.stringify({ action, ...values }) })
-      if (!data.configuration) throw new Error('配置更新成功，但服务器未返回最新配置。请刷新后检查。')
-      setConfiguration(data.configuration)
+      if (data.configuration) setConfiguration(data.configuration)
+      if (data.operatorAccess) {
+        setOperatorAccess(data.operatorAccess)
+        setOperatorDraft(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
+      }
+      if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
+      if (data.imported || data.needsAttention) setLegacyMigrationReport({ imported: data.imported || [], needsAttention: data.needsAttention || [] })
+      if (!data.configuration && !data.operatorAccess) throw new Error('配置更新成功，但服务器未返回最新配置。请刷新后检查。')
       setMessage('配置已保存。')
-      return true
-    } catch (error) { setMessage((error as Error).message); return false } finally { setBusy('') }
+      return data
+    } catch (error) { setMessage((error as Error).message); return null } finally { setBusy('') }
   }
 
   async function saveConnection() {
@@ -102,6 +136,11 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     } catch (error) { setProbeMessage((error as Error).message) } finally { setBusy('') }
   }
 
+  async function importLegacyConfiguration() {
+    setLegacyMigrationReport(null)
+    await mutate('legacy-import', 'import_legacy_configuration', { environment })
+  }
+
   async function saveAccount() {
     if (!accountNumber.trim()) { setMessage('请输入月结卡号。'); return }
     const saved = await mutate('account', 'add_billing_account', { accountNumber, displayName: accountName, environment: accountEnvironment, isDefault: accountDefault })
@@ -110,6 +149,25 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
 
   async function saveSenderProfile() {
     await mutate('sender', 'save_sender', { displayName: senderName, contact: sender })
+  }
+
+  async function saveOperatorAccess() {
+    if (!operatorAccess || operatorAccess.legacyImportAvailable) return
+    setOperatorBusy(true); setOperatorMessage('')
+    try {
+      const response = await mutate('operators', 'save_operator_access', { userIds: operatorDraft })
+      if (!response?.operatorAccess) return
+      setOperatorMessage('寄件操作权限已保存。')
+    } finally { setOperatorBusy(false) }
+  }
+
+  async function importLegacyOperatorAccess() {
+    setOperatorBusy(true); setOperatorMessage('')
+    try {
+      const response = await mutate('operators', 'import_legacy_operator_access')
+      if (!response?.operatorAccess) return
+      setOperatorMessage(`已将当前环境中原有的 ${response.importedCount || 0} 个寄件授权迁入组织权限。`)
+    } finally { setOperatorBusy(false) }
   }
 
   if (!open && !embedded) return null
@@ -141,6 +199,8 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <div className={styles.services}>{authorizedServices.map(service => <div key={service.id}><span>{service.name} · {service.id} · {service.preference === 'standard' ? '标准' : '加急'}</span><button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>)}</div>
           <div className={styles.serviceInputs}><label>服务编号<input inputMode="numeric" value={newServiceId} onChange={event => setNewServiceId(event.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="顺丰服务产品ID"/></label><label>服务名称<input value={newServiceName} onChange={event => setNewServiceName(event.target.value)} placeholder="例如已开通产品"/></label><label>服务偏好<select value={newServicePreference} onChange={event => setNewServicePreference(event.target.value as typeof newServicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select></label><button className={styles.secondary} onClick={addService}><Plus size={14}/>添加</button></div>
           <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || !connection || !authorizedServices.length} onClick={() => void saveAuthorizedServices()}>{busy === 'services' ? '保存服务中…' : '保存授权服务'}</button><button className={styles.secondary} disabled={!!busy || (environment === 'sandbox' ? !hasSandboxConnection : !connection)} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button></div>
+          {legacyConfigurationAvailable[environment] && <div className={styles.legacyImport}><p>检测到此环境仍有旧版服务器配置。迁入会将缺少的连接、服务、月结账号或寄件人资料存入数据库；凭据和月结卡号由服务端加密，日常下单改读数据库。</p><button className={styles.secondary} disabled={!!busy} onClick={() => void importLegacyConfiguration()}>{busy === 'legacy-import' ? '迁入中…' : `迁入旧${environment === 'sandbox' ? '沙盒' : '生产'}配置`}</button></div>}
+          {legacyMigrationReport && <div className={styles.message} role="status">{legacyMigrationReport.imported.length ? `已迁入：${legacyMigrationReport.imported.join('、')}。` : '没有发现可迁入的新配置。'}{legacyMigrationReport.needsAttention.length > 0 && <small>需管理员复核：{legacyMigrationReport.needsAttention.join('；')}</small>}</div>}
           {environment === 'sandbox' && !hasSandboxConnection && <p className={styles.hint}>请先保存沙盒连接，再运行只读连通性测试。</p>}
           {environment === 'production' && <p className={styles.hint}>生产连接测试只调用只读订单查询，不创建运单，也不证明生产下单权限。首票实际寄件仍需操作员逐票核对资料与费用后确认。</p>}
           {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
@@ -163,6 +223,25 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <div className={styles.threeColumns}><label>省<input value={sender.province} onChange={event => setSender(value => ({ ...value, province: event.target.value }))}/></label><label>市<input value={sender.city} onChange={event => setSender(value => ({ ...value, city: event.target.value }))}/></label><label>区县<input value={sender.county} onChange={event => setSender(value => ({ ...value, county: event.target.value }))}/></label></div>
           <label>详细地址<input value={sender.address} onChange={event => setSender(value => ({ ...value, address: event.target.value }))}/></label>
           <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>
+        </section>
+        <section className={styles.section}>
+          <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>组织寄件人员</h3></div><span>按组织授权</span></div>
+          <p className={styles.hint}>只授予ONES自助收寄操作权限，不授予连接、月结账号或账单管理权限。人员限当前组织且账号已启用。</p>
+          {operatorAccess?.legacyImportAvailable && <div className={styles.message}>
+            <p>当前环境仍有旧的临时寄件名单。先将原有授权迁到组织权限表，迁移会保留当前名单，不增加其他人员。</p>
+            <button className={styles.secondary} disabled={operatorBusy} onClick={() => void importLegacyOperatorAccess()}>{operatorBusy ? '迁移中…' : '迁移当前寄件名单'}</button>
+          </div>}
+          <div className={styles.operatorList}>
+            {(operatorAccess?.operators || []).map(operator => <label key={operator.id} className={styles.operatorRow}>
+              <input type="checkbox" checked={operatorDraft.includes(operator.id)} disabled={!operator.enabled || operatorBusy || !!operatorAccess?.legacyImportAvailable} onChange={event => setOperatorDraft(current => event.target.checked ? [...new Set([...current, operator.id])] : current.filter(id => id !== operator.id))}/>
+              <span>{operator.name}</span>
+              {!operator.enabled && <small>账号未启用</small>}
+              {operator.grantSource === 'legacy' && <small>待迁移</small>}
+            </label>)}
+            {!operatorAccess?.operators.length && <p className={styles.hint}>当前组织没有可授权的启用账号。</p>}
+          </div>
+          <div className={styles.actions}><button className={styles.secondary} disabled={!operatorAccess || operatorAccess.legacyImportAvailable || operatorBusy} onClick={() => void saveOperatorAccess()}>{operatorBusy ? '保存中…' : '保存寄件人员权限'}</button></div>
+          {operatorMessage && <p className={styles.probe} role="status">{operatorMessage}</p>}
         </section>
         {message && <p className={styles.message} role="status">{message}</p>}
         <p className={styles.footerNote}>连接检查使用所选环境的OAuth2与只读订单查询，不创建运单；轨迹、取消等能力仍需分别验证。</p>

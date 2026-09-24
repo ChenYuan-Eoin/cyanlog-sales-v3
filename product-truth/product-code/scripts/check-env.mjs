@@ -24,11 +24,15 @@ const optionalGroups = [
   },
   {
     name: 'shipping-runtime',
-    keys: ['SHIPPING_ALLOWED_USER_IDS', 'SHIPPING_CREDENTIALS_ENCRYPTION_KEY', 'SHIPPING_RECEIPT_SECRET'],
+    keys: ['SHIPPING_CREDENTIALS_ENCRYPTION_KEY', 'SHIPPING_RECEIPT_SECRET'],
   },
   {
     name: 'shipping-signed-intake',
     keys: ['SHIPPING_CONTEXT_SECRET'],
+  },
+  {
+    name: 'shipping-legacy-access-migration-only',
+    keys: ['SHIPPING_ALLOWED_USER_IDS'],
   },
 ]
 

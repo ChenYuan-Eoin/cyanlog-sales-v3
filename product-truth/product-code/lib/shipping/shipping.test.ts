@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { parseAddress } from './address'
 import { anonymousShipmentSchema, shippingInputSchema, trackingSchema } from './validation'
-import { allowedShippingUser, ShippingError } from './config'
+import { ShippingError } from './config'
 import { decodeSfResponse, buildSfOrder, extractCancellation, extractOrder, extractTracking } from './sf-client'
 import { checkShippingPolicy, submitShipping } from './service'
 import type { ShippingStore, StoredShipping } from './store'
@@ -27,7 +27,6 @@ describe('boundary validation', () => {
   it.each([0, -1, Infinity, NaN, 21])('rejects unsafe weight %s', weight => expect(shippingInputSchema.safeParse({ ...input, weight }).success).toBe(false))
   it('rejects unimplemented order source and forged metadata', () => { expect(shippingInputSchema.safeParse({ ...input, source: 'order' }).success).toBe(false); expect(shippingInputSchema.safeParse({ ...input, created_by: 'other' }).success).toBe(false) })
   it('only accepts one tracking number and a valid phone suffix', () => { expect(trackingSchema.safeParse({ waybill: 'SF1234567890123', phoneSuffix: '1234' }).success).toBe(true); expect(trackingSchema.safeParse({ waybill: 'SF1234567890123,SF9876543210123' }).success).toBe(false); expect(trackingSchema.safeParse({ waybill: 'SF1234567890123', phoneSuffix: '1' }).success).toBe(false) })
-  it('requires explicit allowlisting; no default admin bypass', () => { expect(allowedShippingUser({ id: 'a' }, {})).toBe(false); expect(allowedShippingUser({ id: 'a' }, { SHIPPING_ALLOWED_USER_IDS: 'b, a' })).toBe(true); expect(allowedShippingUser({ id: 'aa' }, { SHIPPING_ALLOWED_USER_IDS: 'a' })).toBe(false) })
   it('keeps external intake provider-independent and accepts a neutral delivery preference', () => {
     const externalInput = { ...input }
     delete externalInput.serviceId

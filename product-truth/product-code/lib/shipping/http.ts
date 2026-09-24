@@ -1,13 +1,14 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireAuth, AuthError, type AuthUser } from '@/lib/auth'
-import { allowedShippingUser, ShippingError } from './config'
+import { ShippingError } from './config'
 import { requireShippingConnectionManager } from './connection-authorization'
+import { requireShippingOperator } from './operator-access'
 import { ZodError } from 'zod'
 export async function shippingHandler(req: NextRequest, action: (user: AuthUser) => Promise<unknown>) {
   try {
     const user = await requireAuth(req)
-    if (!allowedShippingUser(user)) throw new ShippingError(403, '自助下单尚未向此账号开放。')
+    await requireShippingOperator(user.id)
     if (req.method !== 'GET') {
       const origin = req.headers.get('origin')
       if (origin && origin !== req.nextUrl.origin) throw new ShippingError(403, '请求来源不受信任。')
