@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectAuthorizedShippingService } from './runtime-config'
+import { productionOrderCapabilityAllowsAttempt, selectAuthorizedShippingService } from './runtime-config'
 
 const services = [
   { id: 2, name: '标准标快', preference: 'standard' as const },
@@ -22,5 +22,19 @@ describe('authorized carrier service selection', () => {
 
   it('rejects a service ID that is not authorized for the selected account', () => {
     expect(() => selectAuthorizedShippingService(services, 'standard', 99)).toThrow('所选服务未在当前月结账号中授权')
+  })
+})
+
+describe('Production first-order capability gate', () => {
+  it('allows an operator-confirmed first attempt while capability is untested', () => {
+    expect(productionOrderCapabilityAllowsAttempt('not_tested')).toBe(true)
+  })
+
+  it('allows subsequent attempts after a successful live order', () => {
+    expect(productionOrderCapabilityAllowsAttempt('verified')).toBe(true)
+  })
+
+  it('blocks attempts only when the capability is explicitly unavailable', () => {
+    expect(productionOrderCapabilityAllowsAttempt('unavailable')).toBe(false)
   })
 })

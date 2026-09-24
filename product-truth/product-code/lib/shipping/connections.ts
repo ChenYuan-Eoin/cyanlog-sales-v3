@@ -128,19 +128,27 @@ export async function saveDefaultSender(orgId: string, userId: string, input: un
   return loadShippingConfiguration(orgId)
 }
 
-export async function getSandboxProbeCredentials(orgId: string) {
-  const { data, error } = await supabaseAdmin.from('shipping_carrier_connections').select('id,credentials_ciphertext,connection_status').eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', 'sandbox').maybeSingle()
+export async function getConnectionProbeCredentials(orgId: string, environment: CarrierEnvironment) {
+  const { data, error } = await supabaseAdmin.from('shipping_carrier_connections').select('id,credentials_ciphertext').eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', environment).maybeSingle()
   if (error) throw databaseError()
-  if (!data) throw new ShippingError(409, '请先保存顺丰沙盒连接资料。')
+  if (!data) throw new ShippingError(409, `请先保存顺丰${environment === 'sandbox' ? '沙盒' : '生产'}连接资料。`)
   const credentials = credentialSchema.pick({ partnerId: true, checkWord: true }).parse(JSON.parse(decryptShippingSecret(data.credentials_ciphertext)))
   return { id: data.id as string, ...credentials }
 }
 
-export async function recordSandboxProbe(orgId: string, connectionId: string, connected: boolean) {
+export async function recordConnectionProbe(orgId: string, connectionId: string, result: { connected: boolean; queryVerified: boolean }) {
   const now = new Date().toISOString()
-  const { error } = await supabaseAdmin.from('shipping_carrier_connections').update({ connection_status: connected ? 'connected' : 'failed', last_tested_at: now, updated_at: now }).eq('org_id', orgId).eq('id', connectionId)
+  const { error } = await supabaseAdmin.from('shipping_carrier_connections').update({ connection_status: result.connected ? 'connected' : 'failed', ...(result.queryVerified ? { query_capability: 'verified' } : {}), last_tested_at: now, updated_at: now }).eq('org_id', orgId).eq('id', connectionId)
   if (error) throw databaseError()
   return loadShippingConfiguration(orgId)
+}
+
+export async function recordShippingCapability(orgId: string, connectionId: string, capability: 'order' | 'query' | 'tracking' | 'cancel') {
+  const column = { order: 'order_capability', query: 'query_capability', tracking: 'tracking_capability', cancel: 'cancel_capability' }[capability]
+  const { error } = await supabaseAdmin.from('shipping_carrier_connections').update({ [column]: 'verified', updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('id', connectionId)
+  // Capability evidence is advisory metadata. A failure to record it must never
+  // turn a successfully created/cancelled shipment into an ambiguous outcome.
+  return !error
 }
 
 export type { Contact }

@@ -21,7 +21,7 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 另有下载页提供的`SF-CSIM-EXPRESS-SDK-NODE.JS-V1.0`示例使用 XML、`verifyCode`和旧`bsp-oisp/sfexpressService`地址，与本项目采用的`/std/service` JSON 协议不同；不要运行该示例的`npm start`，其默认报文是下单操作。`expressTypeId`必须来自顺丰已授权服务产品清单，不得猜测或使用未经确认的默认码。
 
-沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。连接通过不代表顺丰已授予下单、订单查询、轨迹或取消权限；这些业务能力仍需分别验证。稳定Preview已通过OAuth2令牌获取和只读沙盒往返；候选SHA仍须重放此检查。
+沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。Production配置另提供只读Production连接检查，同样只获取OAuth2令牌并发起未知订单号的查询，不创建运单；它验证凭据和只读查询连通，不会把下单权限伪标为已验证。Production首次真实下单仍需操作员在页面核对资料及费用后确认；收到顺丰成功响应后，系统才把该连接的下单能力记为已验证。下单、轨迹、取消能力分别在相应接口成功后记录。
 
 ## Vercel环境变量核对（2026-09-24；只核对名称、类型和环境/分支范围，未读取值）
 

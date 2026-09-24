@@ -112,31 +112,42 @@ export async function sfCall(serviceCode: string, message: unknown, config: Pick
  * Checks sandbox OAuth2 credentials using a read-only standard API call. It never creates a shipment and does not
  * prove that create, tracking, or cancellation permissions are enabled.
  */
-export async function probeSfSandbox(partnerId: string, checkWord: string) {
-  const config: SfAuthConfig = { environment: 'sandbox', partnerId, checkWord }
+export async function probeSfConnection(environment: SfAuthConfig['environment'], partnerId: string, checkWord: string) {
+  const config: SfAuthConfig = { environment, partnerId, checkWord }
+  const environmentName = environment === 'sandbox' ? '沙盒' : '生产'
   try {
     const accessToken = await getSfAccessToken(config)
     const raw = await postSfService('EXP_RECE_SEARCH_ORDER_RESP', { orderId: randomUUID(), language: 'zh-CN', searchType: '1' }, config, accessToken)
     let outer: z.infer<typeof envelope>
     try { outer = envelope.parse(raw) }
-    catch { return { connected: false, message: '顺丰沙盒OAuth2已认证，但只读API返回无法识别的响应；未创建运单。' } }
+    catch { return { connected: false, queryVerified: false, message: `顺丰${environmentName}OAuth2已认证，但只读API返回无法识别的响应；未创建运单。` } }
     if (outer.apiResultCode === 'A1000') {
       try { business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData) }
-      catch { return { connected: false, message: '顺丰沙盒OAuth2已认证，但只读API返回无法识别的响应；未创建运单。' } }
-      return { connected: true, message: '顺丰沙盒OAuth2认证及只读API连通通过；未创建运单，也不代表下单、轨迹或取消权限已开通。' }
+      catch { return { connected: false, queryVerified: false, message: `顺丰${environmentName}OAuth2已认证，但只读API返回无法识别的响应；未创建运单。` } }
+      const productionNote = environment === 'production' ? '生产下单能力仍需由操作员核对每票收寄资料与费用后实测。' : '不代表下单、轨迹或取消权限已开通。'
+      return { connected: true, queryVerified: true, message: `顺丰${environmentName}OAuth2认证及只读API连通通过；未创建运单。${productionNote}` }
     }
-    if (outer.apiResultCode === 'A1011') return { connected: false, message: '顺丰OAuth2令牌未被标准接口接受；请检查应用鉴权配置。未创建运单。' }
-    return { connected: true, message: '顺丰沙盒OAuth2认证通过；只读查询接口未受理，业务接口权限仍需分别核验。未创建运单。' }
+    if (outer.apiResultCode === 'A1011') return { connected: false, queryVerified: false, message: `顺丰${environmentName}OAuth2令牌未被标准接口接受；请检查应用鉴权配置。未创建运单。` }
+    return { connected: true, queryVerified: false, message: `顺丰${environmentName}OAuth2认证通过；只读查询接口未受理，其他业务接口权限仍需分别核验。未创建运单。` }
   } catch (error) {
     if (error instanceof ShippingError && error.requestStage === 'provider_unreachable') {
-      return { connected: false, message: `${error.message} 凭据尚未验证，也未创建运单。` }
+      return { connected: false, queryVerified: false, message: `${error.message} 凭据尚未验证，也未创建运单。` }
     }
     if (error instanceof ShippingError && (error.requestStage === 'provider_http_error' || error.requestStage === 'provider_invalid_response')) {
-      return { connected: false, message: `${error.message} 也未创建运单。` }
+      return { connected: false, queryVerified: false, message: `${error.message} 也未创建运单。` }
     }
-    if (error instanceof ShippingError && error.requestStage === 'provider_rejected') return { connected: false, message: `${error.message} 未创建运单。` }
-    return { connected: false, message: '顺丰沙盒标准接口连通失败；未创建运单。' }
+    if (error instanceof ShippingError && error.requestStage === 'provider_rejected') return { connected: false, queryVerified: false, message: `${error.message} 未创建运单。` }
+    return { connected: false, queryVerified: false, message: `顺丰${environmentName}标准接口连通失败；未创建运单。` }
   }
+}
+
+export async function probeSfSandbox(partnerId: string, checkWord: string) {
+  const { connected, message } = await probeSfConnection('sandbox', partnerId, checkWord)
+  return { connected, message }
+}
+
+export function probeSfProduction(partnerId: string, checkWord: string) {
+  return probeSfConnection('production', partnerId, checkWord)
 }
 export function buildSfOrder(orderId: string, input: ShippingInput, monthlyCard: string) {
   if (!input.serviceId) throw new ShippingError(400, '请先选择已授权的承运商服务产品。', 'validation')

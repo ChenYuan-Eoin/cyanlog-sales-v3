@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { probeSfSandbox } from './sf-client'
+import { probeSfProduction, probeSfSandbox } from './sf-client'
 
 describe('SF sandbox OAuth2 connectivity probe', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
@@ -66,5 +66,34 @@ describe('SF sandbox OAuth2 connectivity probe', () => {
     expect(result.message).toContain('未创建运单')
     expect(result.message).not.toContain('private gateway detail')
     expect(JSON.stringify(log.mock.calls)).not.toContain('private-checkword')
+  })
+})
+
+describe('SF Production read-only connectivity probe', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('checks Production OAuth2 and the read-only order-query API without creating an order', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ apiResultCode: 'A1000', accessToken: 'test-placeholder-production-token', expiresIn: 7200 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ apiResultCode: 'A1000', apiResultData: JSON.stringify({ success: false, errorCode: 'ORDER_NOT_FOUND' }) }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await probeSfProduction('production-partner', 'production-check-word-fixture')
+
+    expect(result).toMatchObject({ connected: true, queryVerified: true })
+    expect(result.message).toContain('顺丰生产OAuth2认证及只读API连通通过')
+    expect(result.message).toContain('未创建运单')
+    expect(result.message).toContain('下单能力仍需')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [tokenUrl, tokenInit] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(tokenUrl).toBe('https://bspgw.sf-express.com/oauth2/accessToken')
+    expect(new URLSearchParams(String(tokenInit.body)).get('secret')).toBe('production-check-word-fixture')
+    const [serviceUrl, serviceInit] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(serviceUrl).toBe('https://sfapi.sf-express.com/std/service')
+    const body = new URLSearchParams(String(serviceInit.body))
+    expect(body.get('serviceCode')).toBe('EXP_RECE_SEARCH_ORDER_RESP')
+    expect(body.get('accessToken')).toBe('test-placeholder-production-token')
+    expect(body.has('msgDigest')).toBe(false)
+    expect(body.get('msgData')).toMatch(/"searchType":"1"/)
   })
 })

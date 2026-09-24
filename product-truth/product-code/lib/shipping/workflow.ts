@@ -5,6 +5,7 @@ import { checkShippingPolicy, submitShipping } from './service'
 import { shippingStore } from './store'
 import { cancelSfOrder, createSfOrder, lookupSfOrder } from './sf-client'
 import { getShippingRuntimeConfig, selectAuthorizedShippingService } from './runtime-config'
+import { recordShippingCapability } from './connections'
 import type { ShippingInput } from './types'
 
 type ProcessRow = {
@@ -86,6 +87,8 @@ export async function confirmAndSubmitShipment(id: string, userId: string, selec
     if (waybillError) throw new ShippingError(503, '顺丰已受理，但运单保存失败；请勿重复下单。')
     const { error: orderError } = await supabaseAdmin.from('shipping_orders').update({ status: 'waybill_created', provider_order_id: provider.id, updated_at: new Date().toISOString() }).eq('id', id)
     if (orderError) throw new ShippingError(503, '运单已生成，但寄件单状态保存失败。')
+    try { await recordShippingCapability(orgId, connection.connectionId, 'order') }
+    catch { console.error('shipping.capability.record_failed', { capability: 'order' }) }
     return { id, status: 'waybill_created' as const, waybill: provider.waybill }
   } catch (error) {
     await supabaseAdmin.from('shipping_orders').update({ status: error instanceof ShippingError && error.requestStage === 'provider_rejected' ? 'order_failed' : 'order_unknown', updated_at: new Date().toISOString() }).eq('id', id)
@@ -102,11 +105,15 @@ export async function reconcileShipmentOrder(id: string) {
   if (row.status !== 'order_unknown' || !row.provider_order_id || !row.org_id || !row.carrier_connection_id || !row.billing_account_id) throw new ShippingError(409, '当前寄件单没有可查回的配置快照。')
   const connection = await getShippingRuntimeConfig({ orgId: row.org_id, billingAccountId: row.billing_account_id, connectionId: row.carrier_connection_id, allowHistorical: true, requireOrderCapability: false })
   const waybill = await lookupSfOrder(row.provider_order_id, connection)
+  try { await recordShippingCapability(row.org_id, connection.connectionId, 'query') }
+  catch { console.error('shipping.capability.record_failed', { capability: 'query' }) }
   if (!waybill) return { id, status: 'order_unknown' as const, waybill: null }
   const { error: waybillError } = await supabaseAdmin.from('shipping_waybills').upsert({ shipping_order_id: id, carrier_key: 'sf', waybill_no: waybill, provider_order_id: row.provider_order_id, latest_status: 'waybill_created', updated_at: new Date().toISOString() }, { onConflict: 'shipping_order_id' })
   if (waybillError) throw new ShippingError(503, '查回运单后保存失败，请勿重新下单。')
   const { error } = await supabaseAdmin.from('shipping_orders').update({ status: 'waybill_created', updated_at: new Date().toISOString() }).eq('id', id).eq('status', 'order_unknown')
   if (error) throw new ShippingError(503, '查回运单后寄件单更新失败。')
+  try { await recordShippingCapability(row.org_id, connection.connectionId, 'order') }
+  catch { console.error('shipping.capability.record_failed', { capability: 'order' }) }
   return { id, status: 'waybill_created' as const, waybill }
 }
 
@@ -124,5 +131,7 @@ export async function cancelShipmentOrder(id: string, userId: string) {
   if (!data) throw new ShippingError(409, '寄件单状态已变化，请刷新后核对。')
   const { error: waybillError } = await supabaseAdmin.from('shipping_waybills').update({ latest_status: 'cancelled', updated_at: now }).eq('shipping_order_id', id)
   if (waybillError) throw new ShippingError(503, '顺丰已取消运单，但物流状态保存失败，请刷新核对。')
+  try { await recordShippingCapability(row.org_id, connection.connectionId, 'cancel') }
+  catch { console.error('shipping.capability.record_failed', { capability: 'cancel' }) }
   return { id, status: 'cancelled' as const }
 }

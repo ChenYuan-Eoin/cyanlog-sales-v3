@@ -31,6 +31,13 @@ export function selectAuthorizedShippingService(services: ShippingRuntimeConfig[
   return selected
 }
 
+export function productionOrderCapabilityAllowsAttempt(capability: string | null | undefined) {
+  // The first real Production order is the only safe way to verify create-order
+  // permission. The operator's final per-order confirmation is the gate; only a
+  // capability explicitly marked unavailable should hard-block later attempts.
+  return capability !== 'unavailable'
+}
+
 export async function loadShippingSettings(orgId: string): Promise<ShippingSettings> {
   const { data: connectionRows, error: connectionError } = await supabaseAdmin.from('shipping_carrier_connections')
     .select('id,environment,connection_status,authorized_services,order_capability,partner_id_tail')
@@ -57,12 +64,12 @@ export async function loadShippingSettings(orgId: string): Promise<ShippingSetti
   const connected = preferred?.connection_status === 'connected'
   const senderReady = Boolean(sender && sender.name && sender.phone && sender.address)
   const monthlyReady = Boolean(defaultAccount)
-  const productionAuthorized = preferred?.environment !== 'production' || preferred?.order_capability === 'verified'
+  const productionAuthorized = preferred?.environment !== 'production' || productionOrderCapabilityAllowsAttempt(preferred?.order_capability)
   const ready = Boolean(connected && senderReady && normalizedServices.length)
   const canSubmit = ready && monthlyReady && productionAuthorized
   const publicSettings: ShippingSettings = {
     environment: preferred?.environment || 'sandbox', ready, canSubmit,
-    reason: !preferred ? '尚未配置快递平台连接。' : !connected ? '快递连接尚未通过沙盒连通检查。' : !senderReady ? '尚未配置公司默认寄件人。' : !monthlyReady ? '尚未绑定活动月结账号。' : !normalizedServices.length ? '尚未配置已授权服务产品。' : !productionAuthorized ? 'Production下单能力尚未通过独立验证。' : '',
+    reason: !preferred ? '尚未配置快递平台连接。' : !connected ? '快递连接尚未通过当前环境只读连通检查。' : !senderReady ? '尚未配置公司默认寄件人。' : !monthlyReady ? '尚未绑定活动月结账号。' : !normalizedServices.length ? '尚未配置已授权服务产品。' : !productionAuthorized ? 'Production下单能力标记为不可用，请联系配置管理员复核。' : '',
     services: normalizedServices, sender: contact, monthlyTail: defaultAccount?.account_tail || '', connectionId: preferred?.id || '', defaultBillingAccountId: defaultAccount?.id || '',
     carrierConnections: connections.map(row => ({ id: row.id, carrier: 'sf', environment: row.environment, status: row.connection_status, orderCapability: row.order_capability, services: servicesSchema.safeParse(row.authorized_services || []).success ? servicesSchema.parse(row.authorized_services || []) : [] })),
     billingAccounts: accounts.map(row => ({ id: row.id, connectionId: row.connection_id, displayName: row.display_name, tail: row.account_tail, environment: connections.find(item => item.id === row.connection_id)?.environment || 'sandbox', isDefault: row.is_default, status: row.status }))
@@ -107,7 +114,7 @@ export async function getShippingRuntimeConfig(args: { orgId: string; billingAcc
     .eq('org_id', args.orgId).eq('id', account.connection_id).eq('carrier_key', 'sf').maybeSingle()
   if (connectionError) throw new ShippingError(503, '快递连接读取失败。')
   if (!connection || (!args.allowHistorical && connection.connection_status !== 'connected')) throw new ShippingError(409, '所选快递连接尚未通过沙盒连通检查。')
-  if (connection.environment === 'production' && args.requireOrderCapability !== false && connection.order_capability !== 'verified') throw new ShippingError(409, 'Production下单能力尚未通过独立验证。')
+  if (connection.environment === 'production' && args.requireOrderCapability !== false && !productionOrderCapabilityAllowsAttempt(connection.order_capability)) throw new ShippingError(409, 'Production下单能力标记为不可用，请联系配置管理员复核。')
   const { data: sender, error: senderError } = await supabaseAdmin.from('shipping_sender_profiles')
     .select('id,name,phone,province,city,county,address').eq('org_id', args.orgId).eq('is_default', true).maybeSingle()
   if (senderError || !sender) throw new ShippingError(409, '请先保存公司默认寄件人信息。')

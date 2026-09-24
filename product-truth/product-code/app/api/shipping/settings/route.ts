@@ -8,10 +8,10 @@ import {
   saveCarrierCredentials,
   saveDefaultSender,
   updateBillingAccount,
-  getSandboxProbeCredentials,
-  recordSandboxProbe
+  getConnectionProbeCredentials,
+  recordConnectionProbe
 } from '@/lib/shipping/connections'
-import { probeSfSandbox } from '@/lib/shipping/sf-client'
+import { probeSfConnection } from '@/lib/shipping/sf-client'
 import { allowedShippingUser, ShippingError } from '@/lib/shipping/config'
 import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
 export const runtime = 'nodejs'
@@ -47,10 +47,12 @@ export async function POST(req: NextRequest) {
       case 'set_default_account': return { configuration: await updateBillingAccount(orgId, user.id, String(input.accountId || ''), 'default') }
       case 'deactivate_account': return { configuration: await updateBillingAccount(orgId, user.id, String(input.accountId || ''), 'deactivate') }
       case 'save_sender': return { configuration: await saveDefaultSender(orgId, user.id, input) }
-      case 'test_sandbox_connection': {
-        const credentials = await getSandboxProbeCredentials(orgId)
-        const result = await probeSfSandbox(credentials.partnerId, credentials.checkWord)
-        const configuration = await recordSandboxProbe(orgId, credentials.id, result.connected)
+      case 'test_sandbox_connection':
+      case 'test_production_connection': {
+        const environment = action === 'test_sandbox_connection' ? 'sandbox' : 'production'
+        const credentials = await getConnectionProbeCredentials(orgId, environment)
+        const result = await probeSfConnection(environment, credentials.partnerId, credentials.checkWord)
+        const configuration = await recordConnectionProbe(orgId, credentials.id, result)
         return { configuration, probe: result }
       }
       default: throw new ShippingError(400, '不支持的寄件配置操作。')

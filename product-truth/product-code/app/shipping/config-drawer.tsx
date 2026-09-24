@@ -78,9 +78,10 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
   }
 
   async function testConnection() {
-    setBusy('probe'); setProbeMessage('正在请求顺丰沙盒…'); setProbePassed(false); setMessage('')
+    const selectedEnvironment = environment
+    setBusy('probe'); setProbeMessage(`正在请求顺丰${selectedEnvironment === 'sandbox' ? '沙盒' : '生产'}只读接口…`); setProbePassed(false); setMessage('')
     try {
-      const response = await request<{ configuration: ShippingConfiguration; probe: { connected: boolean; message: string } }>({ method: 'POST', body: JSON.stringify({ action: 'test_sandbox_connection' }) })
+      const response = await request<{ configuration: ShippingConfiguration; probe: { connected: boolean; queryVerified: boolean; message: string } }>({ method: 'POST', body: JSON.stringify({ action: selectedEnvironment === 'sandbox' ? 'test_sandbox_connection' : 'test_production_connection' }) })
       setConfiguration(response.configuration); setProbeMessage(response.probe.message); setProbePassed(response.probe.connected)
     } catch (error) { setProbeMessage((error as Error).message) } finally { setBusy('') }
   }
@@ -106,16 +107,16 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
           <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>顺丰机器连接</h3></div><span>{connection ? `尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>
           <p className={styles.hint}>PartnerID与CheckWord经服务端加密保存；服务端按顺丰Node.js OAuth2方式获取并短期缓存令牌。人员不需要登录顺丰。</p>
           <label>运行环境<select value={environment} onChange={event => setEnvironment(event.target.value as typeof environment)}><option value="sandbox">沙盒</option><option value="production">生产</option></select></label>
-          {connection && <div className={styles.savedState}>已保存 · {connection.status === 'connected' ? '沙盒连接通过' : connection.status === 'failed' ? '最近连接检查失败' : '待连接检查'} · 查询能力 {connection.capabilities.query === 'verified' ? '已验证' : '未验证'}</div>}
+          {connection && <div className={styles.savedState}>已保存 · {connection.status === 'connected' ? `${connection.environment === 'sandbox' ? '沙盒' : '生产'}连接通过` : connection.status === 'failed' ? '最近连接检查失败' : '待连接检查'} · 只读查询能力 {connection.capabilities.query === 'verified' ? '已验证' : '未验证'}</div>}
           {connection && <div className={styles.capabilities} aria-label="顺丰能力验证状态">{([['order', '下单'], ['query', '订单查询'], ['tracking', '轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection.capabilities[key] === 'verified' ? '已验证' : connection.capabilities[key] === 'unavailable' ? '不可用' : '未验证'}</b></div>)}</div>}
           <label>PartnerID<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder={connection ? '重新输入以轮换凭据' : '顺丰分配的PartnerID'}/></label>
           <label>CheckWord<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder="只用于服务端认证，不会再次显示"/></label>
           <div className={styles.serviceHeading}><strong>已授权服务产品</strong><span>需与顺丰应用权限一致</span></div>
           <div className={styles.services}>{authorizedServices.map(service => <div key={service.id}><span>{service.name} · {service.id} · {service.preference === 'standard' ? '标准' : '加急'}</span><button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>)}</div>
           <div className={styles.serviceInputs}><label>服务编号<input inputMode="numeric" value={newServiceId} onChange={event => setNewServiceId(event.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="顺丰服务产品ID"/></label><label>服务名称<input value={newServiceName} onChange={event => setNewServiceName(event.target.value)} placeholder="例如已开通产品"/></label><label>服务偏好<select value={newServicePreference} onChange={event => setNewServicePreference(event.target.value as typeof newServicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select></label><button className={styles.secondary} onClick={addService}><Plus size={14}/>添加</button></div>
-          <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || environment !== 'sandbox' || !hasSandboxConnection} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : '测试沙盒连接'}</button></div>
-          {environment === 'production' && <p className={styles.hint}>当前编辑的是生产凭据；连接测试只验证已保存的沙盒凭据，切换到沙盒环境后可测试。</p>}
+          <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || (environment === 'sandbox' ? !hasSandboxConnection : !connection)} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button></div>
           {environment === 'sandbox' && !hasSandboxConnection && <p className={styles.hint}>请先保存沙盒连接，再运行只读连通性测试。</p>}
+          {environment === 'production' && <p className={styles.hint}>生产连接测试只调用只读订单查询，不创建运单，也不证明生产下单权限。首票实际寄件仍需操作员逐票核对资料与费用后确认。</p>}
           {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
         </section>
 
@@ -138,7 +139,7 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
           <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>
         </section>
         {message && <p className={styles.message} role="status">{message}</p>}
-        <p className={styles.footerNote}>连接检查使用顺丰沙盒OAuth2和只读接口，不创建运单，也不代表下单、轨迹、取消权限已开通。</p>
+        <p className={styles.footerNote}>连接检查使用所选环境的OAuth2与只读订单查询，不创建运单；轨迹、取消等能力仍需分别验证。</p>
       </div>
     </aside>
   </div>

@@ -25,22 +25,30 @@ describe('shipping configuration drawer', () => {
     expect(screen.getByText(/尾号 8391/)).toBeTruthy()
   })
 
-  it('does not offer a sandbox probe while editing production credentials', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({ configuration: {
+  it('runs a read-only test for the selected environment and keeps Production order capability separate', async () => {
+    const configuration = {
       connections: [
         { id: 'sandbox-1', carrier: 'sf', environment: 'sandbox', partnerIdTail: '8391', status: 'configured', services: [], capabilities: { order: 'not_tested', query: 'not_tested', tracking: 'not_tested', cancel: 'not_tested' }, lastTestedAt: null },
         { id: 'production-1', carrier: 'sf', environment: 'production', partnerIdTail: '2468', status: 'configured', services: [], capabilities: { order: 'not_tested', query: 'not_tested', tracking: 'not_tested', cancel: 'not_tested' }, lastTestedAt: null }
       ], billingAccounts: [], sender: null
-    } }), { status: 200 }))
+    }
+    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify({ configuration, probe: { connected: true, queryVerified: true, message: '顺丰生产OAuth2认证及只读API连通通过；未创建运单。生产下单能力仍需由操作员核对每票收寄资料与费用后实测。' } }), { status: 200 })
+      return new Response(JSON.stringify({ configuration }), { status: 200 })
+    })
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
-    const probe = await screen.findByRole('button', { name: '测试沙盒连接' })
-    expect(probe).toHaveProperty('disabled', false)
+    expect(await screen.findByRole('button', { name: '测试沙盒连接' })).toHaveProperty('disabled', false)
 
     fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'production' } })
 
-    expect(probe).toHaveProperty('disabled', true)
-    expect(screen.getByText('当前编辑的是生产凭据；连接测试只验证已保存的沙盒凭据，切换到沙盒环境后可测试。')).toBeTruthy()
-    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: '测试沙盒连接' })).toBeNull()
+    const productionProbe = screen.getByRole('button', { name: '测试生产连接（只读）' })
+    expect(productionProbe).toHaveProperty('disabled', false)
+    expect(screen.getByText('生产连接测试只调用只读订单查询，不创建运单，也不证明生产下单权限。首票实际寄件仍需操作员逐票核对资料与费用后确认。')).toBeTruthy()
+    fireEvent.click(productionProbe)
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+    const [, request] = fetcher.mock.calls[1] as [string, RequestInit]
+    expect(JSON.parse(String(request.body))).toEqual({ action: 'test_production_connection' })
   })
 
   it('saves connection credentials only through the server route and clears the secret field', async () => {

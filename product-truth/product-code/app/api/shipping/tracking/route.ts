@@ -6,6 +6,7 @@ import { ShippingError } from '@/lib/shipping/config'
 import { getOwnedShippingWaybill } from '@/lib/shipping/store'
 import { importedOutboundSuffix } from '@/lib/shipping/outbound'
 import { recordTrackingResult } from '@/lib/shipping/tracking-store'
+import { recordShippingCapability } from '@/lib/shipping/connections'
 import { getOwnedShipmentProviderSnapshot } from '@/lib/shipping/collaboration'
 import { getShippingRuntimeConfig, getUserShippingSettings } from '@/lib/shipping/runtime-config'
 export const runtime = 'nodejs'
@@ -32,5 +33,7 @@ export async function POST(req: NextRequest) { return shippingHandler(req, async
   }
   const result = await querySfTracking(input.waybill, importedSuffix || input.phoneSuffix, config)
   await recordTrackingResult(result)
+  try { await recordShippingCapability(config.orgId, config.connectionId, 'tracking') }
+  catch { console.error('shipping.capability.record_failed', { capability: 'tracking' }) }
   return result
 }) }

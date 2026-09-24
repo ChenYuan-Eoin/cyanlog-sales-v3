@@ -64,8 +64,9 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
   const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.status === 'active')
   const selectedAccount = availableAccounts.find(account => account.id === billingAccountId)
   const canSubmitCurrent = settings.carrierConnections?.length
-    ? Boolean(selectedConnection?.status === 'connected' && availableAccounts.some(account => account.id === billingAccountId) && selectedServices.some(service => String(service.id) === serviceId) && settings.sender.name && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability === 'verified'))
+    ? Boolean(selectedConnection?.status === 'connected' && availableAccounts.some(account => account.id === billingAccountId) && selectedServices.some(service => String(service.id) === serviceId) && settings.sender.name && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
     : settings.canSubmit
+  const productionOrderUnverified = selectedConnection?.environment === 'production' && selectedConnection.orderCapability === 'not_tested'
 
   function updateBatch(id: number, field: keyof Omit<BatchDraftRow, 'id'>, value: string) { setBatch(rows => rows.map(row => row.id === id ? { ...row, [field]: value } : row)) }
   function changeConnection(nextId: string) {
@@ -143,6 +144,7 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
       <div className={styles.topbarActions}><a className={styles.configButton} href="/sales-portal">销售寄件提报</a>{settings.canManageConnections && <button className={styles.configButton} onClick={() => setConfigOpen(true)}><Settings size={14}/>寄件配置</button>}<div className={styles.connection}><span />{selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div></div>
     </header>
     {message && <div className={styles.toast} role="status">{message}</div>}
+    {productionOrderUnverified && <div className={styles.notice} role="status">Production只读连接已通过，但下单权限尚未实测。首次Production下单会真实提交给顺丰；请先核对右侧单据资料与月结结算信息，再逐票确认。</div>}
     <div className={styles.columns}>
       <section className={styles.column} aria-label="批量寄件操作台">
         <div className={styles.columnHeader}><div><span className={styles.step}>01</span><h2>批量寄件</h2></div><small>导入 · 纠错 · 下单</small></div>
