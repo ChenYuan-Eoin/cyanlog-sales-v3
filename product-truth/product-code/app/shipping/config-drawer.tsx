@@ -13,7 +13,7 @@ async function request<T>(init?: RequestInit): Promise<T> {
   return data as T
 }
 
-type ConfigurationReply = { configuration: ShippingConfiguration }
+type ConfigurationReply = { configuration?: ShippingConfiguration; navigationAvailable?: boolean }
 
 export default function ShippingConfigDrawer({ open = true, onClose, embedded = false }: { open?: boolean; onClose?: () => void; embedded?: boolean }) {
   const [configuration, setConfiguration] = useState<ShippingConfiguration>({ connections: [], billingAccounts: [], sender: null })
@@ -34,18 +34,27 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [message, setMessage] = useState('')
   const [probeMessage, setProbeMessage] = useState('')
   const [probePassed, setProbePassed] = useState(false)
+  const [accessState, setAccessState] = useState<'checking' | 'ready' | 'unavailable'>('checking')
 
   async function refresh() {
     const data = await request<ConfigurationReply>()
+    if (!data.configuration) {
+      setAccessState('unavailable')
+      setMessage(data.navigationAvailable
+        ? '当前账号可以办理寄件，但没有寄件配置管理权限。'
+        : '寄件配置暂不可用，请检查账号权限后重试。')
+      return
+    }
     setConfiguration(data.configuration)
     const savedSender = data.configuration.sender
     if (savedSender) {
       setSenderName(savedSender.displayName)
       setSender({ name: savedSender.name, phone: savedSender.phone, province: savedSender.province, city: savedSender.city, county: savedSender.county, address: savedSender.address })
     }
+    setAccessState('ready')
   }
 
-  useEffect(() => { if (open || embedded) { setMessage(''); void refresh().catch(error => setMessage((error as Error).message)) } }, [open, embedded])
+  useEffect(() => { if (open || embedded) { setAccessState('checking'); setMessage(''); void refresh().catch(error => { setAccessState('unavailable'); setMessage((error as Error).message) }) } }, [open, embedded])
   useEffect(() => {
     const saved = configuration.connections.find(item => item.carrier === 'sf' && item.environment === environment)
     setAuthorizedServices(saved?.services || [])
@@ -55,6 +64,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     setBusy(label); setMessage('')
     try {
       const data = await request<ConfigurationReply>({ method: 'POST', body: JSON.stringify({ action, ...values }) })
+      if (!data.configuration) throw new Error('配置更新成功，但服务器未返回最新配置。请刷新后检查。')
       setConfiguration(data.configuration)
       setMessage('配置已保存。')
       return true
@@ -103,6 +113,16 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   if (!open && !embedded) return null
+  if (accessState !== 'ready') {
+    const content = accessState === 'checking' ? '正在检查寄件配置权限…' : message || '寄件配置暂不可用。'
+    return <section className={embedded ? styles.accessState : styles.backdrop} role={embedded ? 'region' : 'dialog'} aria-labelledby="shipping-config-access-title">
+      <div className={embedded ? styles.accessCard : styles.accessDialog}>
+        <h2 id="shipping-config-access-title">{accessState === 'checking' ? '正在检查权限' : '寄件配置不可用'}</h2>
+        <p role="status">{content}</p>
+        {accessState === 'unavailable' && <a href="/shipping">返回自助收寄工作台</a>}
+      </div>
+    </section>
+  }
   const connection = configuration.connections.find(item => item.carrier === 'sf' && item.environment === environment)
   const hasSandboxConnection = configuration.connections.some(item => item.carrier === 'sf' && item.environment === 'sandbox')
   return <div className={embedded ? styles.embedded : styles.backdrop} role={embedded ? 'region' : 'presentation'} onMouseDown={event => { if (!embedded && event.target === event.currentTarget) onClose?.() }}>

@@ -13,6 +13,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('shipping configuration drawer', () => {
+  it('shows a clear permission message instead of an editable blank form to operators', async () => {
+    fetcher.mockResolvedValue(new Response(JSON.stringify({ navigationAvailable: true }), { status: 200 }))
+    render(<ShippingConfigDrawer embedded />)
+    expect(await screen.findByText('当前账号可以办理寄件，但没有寄件配置管理权限。')).toBeTruthy()
+    expect(screen.queryByLabelText('PartnerID')).toBeNull()
+    expect(screen.getByRole('link', { name: '返回自助收寄工作台' }).getAttribute('href')).toBe('/shipping')
+  })
+
   it('renders inline in Config Center without opening a modal or adding a screen overlay', async () => {
     render(<ShippingConfigDrawer embedded />)
     expect(await screen.findByRole('region', { name: '顺丰连接与寄件资料' })).toBeTruthy()
