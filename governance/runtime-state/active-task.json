@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-09-24T09:15:30.160Z",
+  "updated_at": "2026-09-24T18:03:40+08:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -234,8 +234,9 @@
       }
     ],
     "release_blockers": [
-      "Production PartnerID/CheckWord OAuth2凭据、已商务授权expressTypeId及真实默认寄件人尚未保存与核验；正式下单保持关闭。",
-      "稳定Preview曾完成OAuth2令牌获取和EXP_RECE_SEARCH_ORDER_RESP只读往返；当前候选SHA需按Node.js OAuth2实现重放一次只读检查。随后仍须用已授权产品分别验证订单创建、结果查回、轨迹与未揽收取消。",
+      "Production的shipping_carrier_connections、shipping_billing_accounts、shipping_sender_profiles均为0行。Vercel Production变量仅可见旧SF_CHECK_WORD、SF_MONTHLY_CARD、SF_SERVICES_JSON及三项SHIPPING_* Secret；未见SF_PARTNER_ID，服务端数据库未保存Production机器连接、商务授权expressTypeId或寄件人资料，因此生产下单不可用。",
+      "Preview隔离数据库有1条沙盒连接（状态failed）、1个默认月结账号和1个默认寄件人。稳定Preview历史SHA ad28be3曾完成OAuth2只读往返；当前SHA 0002b878已在保留原环境的Preview分支部署READY，但现有操作员会话没有连接管理权限，未能重放探测。候选分支的加密键为另一条Config变量且页面报告解密失败；不得复制、替换原分支密钥。还需在匹配的授权管理会话中确认当前只读沙盒连接及服务产品后，分别验证下单、结果查回、轨迹与未揽收取消。",
+      "Vercel将sales.cyanlog.icu标记为Valid Configuration并绑定旧Production READY部署；本机DNS对其返回SERVFAIL，现有Chrome无法解析域名，尽管绕过DNS的只读HTTP探测返回200。须恢复本机/网络DNS解析后才能按Production门禁验收。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [

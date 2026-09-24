@@ -97,6 +97,7 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
 
   if (!open) return null
   const connection = configuration.connections.find(item => item.carrier === 'sf' && item.environment === environment)
+  const hasSandboxConnection = configuration.connections.some(item => item.carrier === 'sf' && item.environment === 'sandbox')
   return <div className={styles.backdrop} role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <aside className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="shipping-config-title">
       <header className={styles.header}><div><p>SHIPPING SETTINGS</p><h2 id="shipping-config-title">寄件配置</h2></div><button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button></header>
@@ -112,7 +113,9 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
           <div className={styles.serviceHeading}><strong>已授权服务产品</strong><span>需与顺丰应用权限一致</span></div>
           <div className={styles.services}>{authorizedServices.map(service => <div key={service.id}><span>{service.name} · {service.id} · {service.preference === 'standard' ? '标准' : '加急'}</span><button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>)}</div>
           <div className={styles.serviceInputs}><label>服务编号<input inputMode="numeric" value={newServiceId} onChange={event => setNewServiceId(event.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="顺丰服务产品ID"/></label><label>服务名称<input value={newServiceName} onChange={event => setNewServiceName(event.target.value)} placeholder="例如已开通产品"/></label><label>服务偏好<select value={newServicePreference} onChange={event => setNewServicePreference(event.target.value as typeof newServicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select></label><button className={styles.secondary} onClick={addService}><Plus size={14}/>添加</button></div>
-          <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || !configuration.connections.some(item => item.environment === 'sandbox')} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : '测试沙盒连接'}</button></div>
+          <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button><button className={styles.secondary} disabled={!!busy || environment !== 'sandbox' || !hasSandboxConnection} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : '测试沙盒连接'}</button></div>
+          {environment === 'production' && <p className={styles.hint}>当前编辑的是生产凭据；连接测试只验证已保存的沙盒凭据，切换到沙盒环境后可测试。</p>}
+          {environment === 'sandbox' && !hasSandboxConnection && <p className={styles.hint}>请先保存沙盒连接，再运行只读连通性测试。</p>}
           {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
         </section>
 

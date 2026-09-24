@@ -23,35 +23,37 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 沙盒“测试连接”只调用只读`EXP_RECE_SEARCH_ORDER_RESP`，不会创建运单。连接通过不代表顺丰已授予下单、订单查询、轨迹或取消权限；这些业务能力仍需分别验证。稳定Preview已通过OAuth2令牌获取和只读沙盒往返；候选SHA仍须重放此检查。
 
-## Vercel Production变量核对（2026-09-23；只核对名称，未读取值）
+## Vercel环境变量核对（2026-09-24；只核对名称、类型和环境/分支范围，未读取值）
 
-只读取变量名称和环境范围，没有读取变量值。
+只读检查Vercel项目Environment Variables页面；没有读取变量值，也没有修改、复制或轮换任何变量。
 
-| 类别 | 变量 | 当前Production状态 |
+| 类别 | 变量 | 当前可见状态 |
 |---|---|---|
-| Supabase应用运行时 | `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY` | 已配置 |
-| 寄件访问引导 | `SHIPPING_ALLOWED_USER_IDS` | 已配置 |
-| 新寄件配置加密 | `SHIPPING_CREDENTIALS_ENCRYPTION_KEY` | 已配置为Vercel Sensitive变量；本机随机生成，未读取值 |
-| 匿名回执 | `SHIPPING_RECEIPT_SECRET` | 已配置为Vercel Sensitive变量；本机随机生成，未读取值 |
-| 签名寄件上下文 | `SHIPPING_CONTEXT_SECRET` | 已配置为Vercel Sensitive变量；本机随机生成，未读取值 |
-| 匿名限流 | `SHIPPING_ANONYMOUS_LIMIT` | 可选；代码默认20 |
+| 应用层凭据加密 | `SHIPPING_CREDENTIALS_ENCRYPTION_KEY` | Production Secret已存在；另有Preview Secret仅绑定`codex/wp11-main-integration`。候选分支`codex/shipping-collaboration-console`另有不同的Config类型变量并标记Needs Attention；不可假设它与原密钥相同 |
+| 匿名回执/上下文 | `SHIPPING_RECEIPT_SECRET`、`SHIPPING_CONTEXT_SECRET` | Production Secret存在；Preview存在于旧分支和候选分支，但候选分支条目为Config类型并标记Needs Attention |
+| 旧版顺丰配置 | `SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON` | Production仍存在为Config类型；新代码不读取，稳定发布后再清理 |
+| 旧版/Preview寄件配置 | `SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_ENVIRONMENT`、`SF_SANDBOX_MONTHLY_CARD`、`SF_SERVICES_JSON`、`SF_PRODUCTION_ORDER_ENABLED` | 仅看到Preview条目绑定`codex/wp11-main-integration`；没有复制到候选分支 |
+| Supabase与运营员范围 | `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`SHIPPING_ALLOWED_USER_IDS` | 仅看到Preview条目绑定`codex/wp11-main-integration`或候选分支；当前项目变量列表未显示Production条目，需在任何Production发布前核对应用实际运行配置 |
+| 匿名限流/组织映射 | `SHIPPING_ANONYMOUS_LIMIT`、`SHIPPING_BUSINESS_CONTEXTS_JSON` | 仅看到Preview旧分支条目；代码可使用默认限流/数据库组织映射 |
 
-Vercel Production仍保留旧版本变量`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SERVICES_JSON`；`SF_SANDBOX_MONTHLY_CARD`、`SF_PRODUCTION_ORDER_ENABLED`、`SHIPPING_SENDER_JSON`缺失。当前候选代码不再读取上述固定承运商配置。Production仍运行旧发布版本，**新代码正式部署且验收前不要删除仍存在的旧变量**；稳定后再单独清理。
+Production仍运行旧发布SHA `dd28bf60583954822edca05fbd991126a6ddb56f`。不要在新代码正式部署且验收前删除仍存在的旧变量；稳定后再单独清理。`SF_PARTNER_ID`不是本次Vercel页面可见的Production变量，Production寄件机器连接也尚未录入数据库。
 
-`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`、`SHIPPING_CONTEXT_SECRET`已添加到Vercel Production，设置操作只返回变量名，未读回值。加密主密钥同时保存在本机device-only macOS Keychain（service `com.cyanlog.PriceV3.shipping-production-credentials-encryption-key`、account `PriceV3`）与Vercel Sensitive变量中；其余两项存于Vercel Sensitive变量。当前配置表为空，尚无依赖此密钥的数据库密文。更换电脑时须通过原机Keychain安全转存此主密钥；不要打印到终端日志、仓库或聊天。添加环境变量不会改变当前已经部署的旧版本，需等新版本部署后才生效。
+`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`、`SHIPPING_CONTEXT_SECRET`的Production值没有被读取。Production寄件配置表当前为空，因此尚无依赖该主密钥的生产凭据密文。更换电脑时必须通过安全渠道转存现有Production加密密钥；不要打印到终端日志、仓库或聊天。添加/修复环境变量不会改变已部署的旧版本，需要新部署后才生效。
 
-Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。候选尚未push、合入`production`分支或部署；发布审阅应以`delivery-check`绑定的当前精确SHA为准，不能沿用早期候选SHA。
+分支验证结论：保持`codex/wp11-main-integration`的Preview设置不变；新候选分支目前无法解密Preview连接配置，管理员页面显示“寄件凭据无法解密”。Production和Preview环境变量均未更改。候选代码已部署到原Preview分支，但当前现有Chrome操作员会话没有连接管理权限，故本轮没有在该会话发起顺丰请求。
+
+Vercel当前Production deployment只读核对为`READY`：`dpl_5AZWcqM5hnvQMKoqCA8mQybuWoBi`，来源SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，别名含`sales.cyanlog.icu`。候选SHA `0002b8786c7668d88ab22b6e603d984a592b37b6` 已推送并部署到原Preview分支`codex/wp11-main-integration`，Preview READY；尚未合入`main`/`production`或部署Production。域名在Vercel显示Valid Configuration，但本机DNS递归查询对`sales.cyanlog.icu`返回SERVFAIL；用Vercel目标IP绕过DNS的只读HTTP探测返回200。Production用户验收仍须在现有Chrome真实域名完成，当前尚未完成。
 
 ## 真实寄件验收准备（用户执行）
 
 1. 三个服务端密钥已配置为Vercel Sensitive变量；仅Vercel保存密钥值，不要将其复制到仓库、聊天或日志。将来轮换加密主密钥前先重加密数据库中的所有凭据和月结卡号。
-2. 已在隔离Supabase项目按序应用`20260922000001`、`20260923074619`、`20260923081415`，并验证配置表/订单表RLS、拒绝`anon`/`authenticated`直接访问、`service_role`权限和快照列/索引。隔离库仅含测试数据。Production仍未应用这些迁移。
+2. Production与隔离Supabase项目均已按序应用`20260922000001`、`20260923074619`、`20260923081415`，并验证配置表/订单表RLS、拒绝`anon`/`authenticated`直接访问、`service_role`权限和快照列/索引。Production配置表仍为空；这表示当前没有生产承运商连接、月结账号或寄件人资料。
 3. 配置管理员在ONES寄件抽屉录入顺丰机器凭据、各环境月结号、真实已授权服务产品和公司默认寄件人。沙盒只读测试通过后，分别核验订单、查回、轨迹和未揽收取消能力；连接通过不自动开启Production下单。
 4. 月结账号主体按顺丰要求完成一次性应用授权/账号绑定；普通ONES寄件人无需获得顺丰管理员身份。
 5. 部署并通过用户现有Chrome验收后，用户指定一票真实寄件，核对金额和收件信息并亲自确认下单。揽收前由用户核验一键取消及ONES/顺丰状态一致。
 6. 新版本稳定后，单独删除Vercel中不再使用的旧`SF_*`配置；不要在旧代码仍服务Production时先删变量。
 
-截至2026-09-24核对：未读取Vercel环境变量值、未读取或导出Production联系人内容、未调用顺丰、未创建真实运单、未部署Production。已通过已授权的Supabase管理接口应用下列三条增量迁移；RLS与权限已核验。Production行数仍为`shipping_contacts=631`、`shipping_outbound_imports=10`、`shipping_requests=0`，新建寄件表均为0行。当前线上应用仍是旧部署。
+截至2026-09-24核对：未读取Vercel环境变量值、未读取或导出Production联系人内容、未创建真实运单、未部署Production。已通过已授权的Supabase管理接口应用下列三条增量迁移；RLS与权限已核验。Production配置表计数为连接0、月结账号0、寄件人0；Preview有连接1（状态failed）、默认可用月结账号1、默认寄件人1。Preview行中没有读取姓名、电话、地址、账号或凭据内容。Production当前仍运行旧部署。
 
 ## 前向迁移
 
@@ -93,7 +95,7 @@ Production项目为Supabase Free计划，当前没有托管备份或PITR。**不
 - https://qiao.sf-express.com/doc/download/SF-CSIM-EXPRESS-SDK-PHP指南-V2.1.1.pdf
 - https://open.sf-express.com/
 
-适配器使用标准API的创建订单、按订单号查询结果、轨迹查询。参考PDF为历史协议；必须在当前已授权应用里验证服务码、业务字段、签名、响应结构及真实权限后才能发布。下单返回orderId必须与本地一致，轨迹必须与请求运单一致。无法识别的响应失败关闭。
+适配器使用标准API的创建订单、按订单号查询结果、轨迹查询。Node.js接口按OAuth2机器凭据接入；必须在当前已授权应用里验证服务码、业务字段、响应结构及下单/查询/轨迹/取消真实权限后才能发布。下单返回orderId必须与本地一致，轨迹必须与请求运单一致。无法识别的响应失败关闭。
 
 ## 验收
 
