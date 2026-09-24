@@ -45,7 +45,7 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
   useEffect(() => {
     void json<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50').then(result => {
       if (result.records.length) { setOrders(result.records); setSelectedId(result.records[0].id) }
-    }).catch(() => undefined)
+    }).catch(error => setMessage(`收寄件台账读取失败：${(error as Error).message}`))
   }, [])
 
   const selected = orders.find(order => order.id === selectedId) || orders[0]
@@ -99,6 +99,7 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
     if (!candidates.length) return
     setBatchBusy(true); setMessage('')
     let succeeded = 0
+    const successfulWaybills: string[] = []
     for (const row of candidates) {
       setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'pending', error: undefined } : item))
       const parsedRecipientAddress = parseAddress(row.address).contact
@@ -106,12 +107,22 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
       try {
         const receipt = await json<{ waybill: string | null }>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, confirmed: true, connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, input: { sender: settings.sender, recipient, cargo: uniformCargo, weight: 1, serviceId: Number(serviceId), remark: '', source: 'manual', payment: 'sender_monthly', pickupWindow } }) })
         succeeded += 1
+        if (receipt.waybill) successfulWaybills.push(receipt.waybill)
         setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'success', waybill: receipt.waybill || undefined, error: undefined } : item))
       } catch (error) {
         setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'failed', error: (error as Error).message } : item))
       }
     }
-    setBatchBusy(false); setMessage(`本次完成 ${succeeded} 票；失败和异常行已保留，可修正后使用原请求继续。`)
+    let ledgerRefreshError = ''
+    if (succeeded) {
+      try {
+        const ledger = await json<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+        setOrders(ledger.records)
+        const newOrder = ledger.records.find(order => order.waybill && successfulWaybills.includes(order.waybill))
+        if (newOrder) setSelectedId(newOrder.id)
+      } catch (error) { ledgerRefreshError = `台账刷新失败：${(error as Error).message}` }
+    }
+    setBatchBusy(false); setMessage(`本次完成 ${succeeded} 票；失败和异常行已保留，可修正后使用原请求继续。${ledgerRefreshError ? ` ${ledgerRefreshError}` : ''}`)
   }
   async function act(order: ShipmentOrder, action: 'confirm' | 'return', productionReviewed = false) {
     if (action === 'confirm' && productionOrderUnverified && !productionReviewed) {

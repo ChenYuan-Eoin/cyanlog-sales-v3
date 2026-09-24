@@ -116,6 +116,27 @@ describe('self-service shipping workbench', () => {
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
   })
 
+  it('reloads and selects a newly created order in the ledger after batch success', async () => {
+    let ledgerLoads = 0
+    const createdOrder: ShipmentOrder = { ...fixtureOrders[0], id: 'new-sandbox-order', status: 'waybill_created', waybill: 'SF12345678901234' }
+    fetcher.mockImplementation(async (url: string) => {
+      if (url === '/api/shipping/ledger?limit=50') {
+        ledgerLoads += 1
+        return new Response(JSON.stringify({ records: ledgerLoads === 1 ? [] : [createdOrder] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ waybill: createdOrder.waybill }), { status: 200 })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.click(screen.getByRole('button', { name: '文本解析' }))
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '沙盒测试收件人 13800000000 广东省深圳市南山区科技园测试路88号A座' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    expect(await screen.findByText(/本次完成 1 票/)).toBeTruthy()
+    expect(screen.getAllByText('SF12345678901234').length).toBeGreaterThanOrEqual(2)
+    expect(ledgerLoads).toBe(2)
+  })
+
   it('does not resend successful rows when a real batch request partially fails', async () => {
     const sent: Array<{ key: string }> = []
     const sentBodies: unknown[] = []
