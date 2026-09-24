@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-09-23T09:42:17.737Z",
+  "updated_at": "2026-09-24T09:15:30.160Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,7 +235,7 @@
     ],
     "release_blockers": [
       "Production PartnerID/CheckWord标准签名凭据、已商务授权expressTypeId及真实默认寄件人尚未保存与核验；正式下单保持关闭。",
-      "旧沙盒OAuth2与EXP_RECE_SEARCH_ORDER_RESP探测不能验证当前标准签名实现；须用当前代码重新运行只读沙盒连接检查，再使用已授权产品分别验证下单、结果查回、轨迹与未揽收取消。",
+      "当前标准签名版本已在稳定Preview执行两次EXP_RECE_SEARCH_ORDER_RESP只读探测，但Vercel运行时均遇到UND_ERR_CONNECT_TIMEOUT且没有顺丰HTTP响应；本机能连接同一沙盒网关，故凭据/签名是否被接受仍未知。需先查明并解决Preview运行区到顺丰的出站连通，再取得一次成功只读响应；随后仍须用已授权产品分别验证下单、结果查回、轨迹与未揽收取消。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [

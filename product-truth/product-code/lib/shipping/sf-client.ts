@@ -35,18 +35,25 @@ async function postSfService(serviceCode: string, message: unknown, config: SfAu
   const body = new URLSearchParams({ partnerID: config.partnerId, requestID: randomUUID(), serviceCode, timestamp, msgDigest: createSfMessageDigest(msgData, timestamp, config.checkWord), msgData })
   const url = `${sfBaseUrl(config.environment)}/std/service`
   const started = Date.now()
-  let upstreamStatus: number | undefined
+  let response: Response
   try {
-    const response = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error' })
-    upstreamStatus = response.status
-    if (!response.ok) throw new Error('upstream status')
-    return await response.json()
+    response = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error' })
   } catch (error) {
-    if (error instanceof ShippingError) throw error
     // Only transport metadata: never log request bodies, credentials or customer details.
     const failure = error as { name?: string; cause?: { code?: string } }
-    console.error('shipping.sf.transport', { serviceCode, environment: config.environment, upstreamStatus, elapsedMs: Date.now() - started, errorType: failure?.name, networkCode: /^[A-Z0-9_]+$/.test(failure?.cause?.code || '') ? failure.cause?.code : undefined })
-    throw new ShippingError(502, '顺丰响应超时或格式异常，请查询原请求结果，勿重复寄件。')
+    console.error('shipping.sf.transport', { serviceCode, environment: config.environment, upstreamStatus: undefined, elapsedMs: Date.now() - started, errorType: failure?.name, networkCode: /^[A-Z0-9_]+$/.test(failure?.cause?.code || '') ? failure.cause?.code : undefined })
+    const timedOut = failure?.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' || failure?.name === 'TimeoutError' || failure?.name === 'AbortError'
+    throw new ShippingError(502, timedOut ? '顺丰网关连接超时，未收到顺丰响应。' : '无法连接顺丰网关，未收到顺丰响应。', 'provider_unreachable')
+  }
+  const upstreamStatus = response.status
+  if (!response.ok) {
+    console.error('shipping.sf.http', { serviceCode, environment: config.environment, upstreamStatus, elapsedMs: Date.now() - started })
+    throw new ShippingError(502, `顺丰标准接口返回HTTP错误（${response.status}），连接未验证。`, 'provider_http_error')
+  }
+  try { return await response.json() }
+  catch {
+    console.error('shipping.sf.invalid_response', { serviceCode, environment: config.environment, upstreamStatus, elapsedMs: Date.now() - started })
+    throw new ShippingError(502, '顺丰标准接口返回无法识别的响应，连接未验证。', 'provider_invalid_response')
   }
 }
 
@@ -71,7 +78,13 @@ export async function probeSfSandbox(partnerId: string, checkWord: string) {
       return { connected: true, message: '顺丰沙盒标准接口签名及只读查询连通通过；未创建运单，也不代表下单、轨迹或取消权限已开通。' }
     }
     return { connected: false, message: '顺丰沙盒未接受签名或未开放只读查询接口；请核对机器凭据与应用授权。未创建运单。' }
-  } catch {
+  } catch (error) {
+    if (error instanceof ShippingError && error.requestStage === 'provider_unreachable') {
+      return { connected: false, message: `${error.message} 凭据/签名尚未验证，也未创建运单。` }
+    }
+    if (error instanceof ShippingError && (error.requestStage === 'provider_http_error' || error.requestStage === 'provider_invalid_response')) {
+      return { connected: false, message: `${error.message} 也未创建运单。` }
+    }
     return { connected: false, message: '顺丰沙盒标准接口连通失败；未创建运单。' }
   }
 }

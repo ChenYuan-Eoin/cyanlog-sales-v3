@@ -40,9 +40,22 @@ describe('SF sandbox signed connectivity probe', () => {
 
   it('reports transport failure without exposing provider details or credentials', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fixture transport failure')))
-    expect(await probeSfSandbox('p'.repeat(14), 'c'.repeat(32))).toEqual({ connected: false, message: '顺丰沙盒标准接口连通失败；未创建运单。' })
+    const timeout = Object.assign(new Error('fixture transport failure'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } })
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(timeout))
+    expect(await probeSfSandbox('p'.repeat(14), 'c'.repeat(32))).toEqual({ connected: false, message: '顺丰网关连接超时，未收到顺丰响应。 凭据/签名尚未验证，也未创建运单。' })
     expect(JSON.stringify(log.mock.calls)).not.toContain('fixture transport failure')
     expect(JSON.stringify(log.mock.calls)).not.toContain('c'.repeat(32))
+    expect(JSON.stringify(log.mock.calls)).toContain('UND_ERR_CONNECT_TIMEOUT')
+  })
+
+  it('distinguishes an HTTP response from a network timeout without returning upstream details', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private gateway detail', { status: 503 })))
+    const result = await probeSfSandbox('partner-http-unique', 'private-checkword')
+    expect(result.connected).toBe(false)
+    expect(result.message).toContain('HTTP错误（503）')
+    expect(result.message).toContain('未创建运单')
+    expect(result.message).not.toContain('private gateway detail')
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private-checkword')
   })
 })
