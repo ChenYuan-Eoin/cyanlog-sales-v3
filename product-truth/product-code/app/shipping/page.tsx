@@ -13,7 +13,10 @@ export default async function ShippingPage() {
   const canOperate = allowedShippingUser(user)
   let canManageConnections = false
   try { await requireShippingConnectionManager(user.id); canManageConnections = true } catch { /* ordinary operators may use the workbench without connection controls */ }
-  if (!canOperate && !canManageConnections) redirect('/?denied=shipping:operate')
+  if (!canOperate) {
+    if (canManageConnections) redirect('/configs?tab=shipping')
+    redirect('/?denied=shipping:operate')
+  }
   const { settings } = await getUserShippingSettings(user.id)
   return <ShippingWorkbench settings={{ ...settings, canOperate, canManageConnections }} />
 }

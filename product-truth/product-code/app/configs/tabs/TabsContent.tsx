@@ -7,6 +7,7 @@ import type { ContractPolicyRule } from '@/types/rules'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
+import ShippingConfigDrawer from '@/app/shipping/config-drawer'
 
 const PriceListTab = dynamic(() => import('./PriceListTab'), {
   loading: () => <CardSkeleton />,
@@ -204,6 +205,8 @@ export default function TabsContent({
   }
 
   switch (activeTab) {
+    case 'shipping':
+      return <ShippingConfigDrawer embedded />
     case 'price-list':
       return (
         <PriceListTab

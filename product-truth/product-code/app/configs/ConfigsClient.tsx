@@ -162,6 +162,12 @@ const CONFIG_TABS: Record<ConfigTabId, {
     section: 'quote-output',
     icon: KeyRoundIcon,
   },
+  shipping: {
+    label: '寄件连接与账号',
+    description: '管理顺丰机器连接、授权服务、月结账号和公司默认寄件人；自助收寄仅承载业务操作。',
+    section: 'shipping',
+    icon: PackageIcon,
+  },
 }
 
 const CONFIG_SECTIONS: Array<{
@@ -205,6 +211,12 @@ const CONFIG_SECTIONS: Array<{
     label: '界面与体验',
     description: '运行时主题和界面变量集中配置发布。',
     tabs: ['theme'],
+  },
+  {
+    id: 'shipping',
+    label: '寄件配置',
+    description: '集中管理承运商连接与履约默认资料；寄件工作台只消费有效配置。',
+    tabs: ['shipping'],
   },
 ]
 
@@ -723,6 +735,11 @@ export default function ConfigsClient({
           break
         }
 
+        case 'shipping': {
+          didLoad = true
+          break
+        }
+
         case 'org-structure': {
           // 只加载 org
           const orgData = await loadInflightTabValue<OrgSummaryPayload>(cacheKey, async () => {
@@ -892,6 +909,7 @@ export default function ConfigsClient({
     'output-templates': 0,
     'clause-mappings': 0,
     'numbering-rules': 0,
+    shipping: 0,
   }), [getConfigsByType, orgSummary?.departments.length, products, rules, roles])
 
   const formatModuleCount = useCallback((tabId: ConfigTabId) => {

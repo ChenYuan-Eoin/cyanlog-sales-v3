@@ -15,7 +15,7 @@ async function request<T>(init?: RequestInit): Promise<T> {
 
 type ConfigurationReply = { configuration: ShippingConfiguration }
 
-export default function ShippingConfigDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function ShippingConfigDrawer({ open = true, onClose, embedded = false }: { open?: boolean; onClose?: () => void; embedded?: boolean }) {
   const [configuration, setConfiguration] = useState<ShippingConfiguration>({ connections: [], billingAccounts: [], sender: null })
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox')
   const [partnerId, setPartnerId] = useState('')
@@ -45,7 +45,7 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
     }
   }
 
-  useEffect(() => { if (open) { setMessage(''); void refresh().catch(error => setMessage((error as Error).message)) } }, [open])
+  useEffect(() => { if (open || embedded) { setMessage(''); void refresh().catch(error => setMessage((error as Error).message)) } }, [open, embedded])
   useEffect(() => {
     const saved = configuration.connections.find(item => item.carrier === 'sf' && item.environment === environment)
     setAuthorizedServices(saved?.services || [])
@@ -102,12 +102,12 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
     await mutate('sender', 'save_sender', { displayName: senderName, contact: sender })
   }
 
-  if (!open) return null
+  if (!open && !embedded) return null
   const connection = configuration.connections.find(item => item.carrier === 'sf' && item.environment === environment)
   const hasSandboxConnection = configuration.connections.some(item => item.carrier === 'sf' && item.environment === 'sandbox')
-  return <div className={styles.backdrop} role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-    <aside className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="shipping-config-title">
-      <header className={styles.header}><div><p>SHIPPING SETTINGS</p><h2 id="shipping-config-title">寄件配置</h2></div><button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button></header>
+  return <div className={embedded ? styles.embedded : styles.backdrop} role={embedded ? 'region' : 'presentation'} onMouseDown={event => { if (!embedded && event.target === event.currentTarget) onClose?.() }}>
+    <aside className={styles.drawer} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-labelledby="shipping-config-title">
+      <header className={styles.header}><div><p>SHIPPING SETTINGS</p><h2 id="shipping-config-title">顺丰连接与寄件资料</h2></div>{!embedded && <button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button>}</header>
       <div className={styles.content}>
         <section className={styles.section}>
           <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>顺丰机器连接</h3></div><span>{connection ? `尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>

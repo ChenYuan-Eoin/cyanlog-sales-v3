@@ -133,7 +133,7 @@
     "name": "Production发布与真实寄件验收",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP18：核验Production与隔离Preview已有基础协同、连接/快照迁移与RLS/权限；不重复应用迁移；使用Node.js OAuth2验证顺丰机器凭据并核实Production配置、商务授权服务和默认寄件人；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。",
+    "objective": "F054 WP18：核验Production与隔离Preview已有基础协同、连接/快照迁移与RLS/权限；不重复应用迁移；使用Node.js OAuth2验证顺丰机器凭据并核实Production配置、商务授权服务和默认寄件人；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。 用户 2026-09-24 明确要求：寄件配置迁入现有配置中心，/shipping 恢复纯业务三栏；分别核验配置管理员与获授权操作员权限，禁止设置遮罩覆盖业务工作台。",
     "started_at": "2026-09-23T09:34:46.080Z",
     "activation_basis": "WP17 SHA 0282568d742cb07985591aad093157bc26c3cb96达到code_green并通过Harness审计；用户通过IN-20260923-014明确授权WP18必要Production迁移、服务端配置与发布。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
@@ -146,7 +146,9 @@
       "product-truth/product-code/supabase/migrations",
       "product-truth/product-code/lib/shipping",
       "product-truth/product-code/app/shipping",
-      "product-truth/product-code/app/api/shipping"
+      "product-truth/product-code/app/api/shipping",
+      "product-truth/product-code/app/configs",
+      "product-truth/product-code/lib/config-center"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -216,7 +218,7 @@
     "active": {
       "id": "WP18",
       "slug": "shipping-production-release-and-acceptance",
-      "reason": "WP17 code_green and Harness audit passed; IN-20260923-014 explicitly authorizes necessary Production release work."
+      "reason": "WP17 code_green and Harness audit passed; IN-20260923-014 explicitly authorizes necessary Production release work. 用户明确批准寄件配置中心化与业务/配置分离，扩展当前WP18验收范围。"
     },
     "next": {
       "id": "WP10",

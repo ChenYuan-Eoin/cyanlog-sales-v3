@@ -41,17 +41,12 @@ describe('self-service shipping workbench', () => {
     expect(await screen.findByText('已揽收')).toBeTruthy()
   })
 
-  it('opens the in-page configuration drawer only for connection managers', async () => {
-    fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url === '/api/shipping/settings' ? { configuration: { connections: [], billingAccounts: [], sender: null } } : { records: [] }), { status: 200 }))
+  it('keeps configuration controls out of the business workbench', async () => {
     render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true }}/>)
-    fireEvent.click(screen.getByRole('button', { name: '寄件配置' }))
-    expect(await screen.findByRole('dialog', { name: '寄件配置' })).toBeTruthy()
-  })
-
-  it('renders a configuration-only view for managers without daily shipping permission', () => {
-    render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true, canOperate: false }}/>)
-    expect(screen.getByText('你有寄件连接管理权限')).toBeTruthy()
-    expect(screen.queryByRole('region', { name: '收寄件台账与待办' })).toBeNull()
+    expect(await screen.findByText('暂无收寄记录')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '寄件配置' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: '寄件配置' })).toBeNull()
+    expect(screen.getByRole('region', { name: '批量寄件操作台' })).toBeTruthy()
   })
 
   it('shows database-backed orders in the ledger and links their real details', async () => {

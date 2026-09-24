@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, Settings, Truck, UploadCloud } from 'lucide-react'
+import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, Truck, UploadCloud } from 'lucide-react'
 import type { ShipmentOrder, ShipmentOrderStatus, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
 import { batchRowErrors, buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
 import { parseAddress } from '@/lib/shipping/address'
-import ShippingConfigDrawer from './config-drawer'
 import styles from './workbench.module.css'
 
 const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待确认', returned: '已驳回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
@@ -41,7 +40,6 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
   const [phoneSuffix, setPhoneSuffix] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState('')
-  const [configOpen, setConfigOpen] = useState(false)
   const [pendingProductionReviewId, setPendingProductionReviewId] = useState('')
 
   useEffect(() => {
@@ -139,16 +137,10 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
     try { await json(`/api/shipping/ledger/${selected.id}/cancel`, { method: 'POST', body: '{}' }); setOrders(items => items.map(item => item.id === selected.id ? { ...item, status: 'cancelled' } : item)); setMessage('顺丰运单已取消。') } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
   }
 
-  if (settings.canOperate === false) return <main className={styles.shell}>
-    <header className={styles.topbar}><div><p>LOGISTICS ADMINISTRATION</p><h1>寄件配置</h1></div><div className={styles.topbarActions}><button className={styles.configButton} onClick={() => setConfigOpen(true)}><Settings size={14}/>打开寄件配置</button></div></header>
-    <section className={styles.configOnly}><Settings size={26}/><h2>你有寄件连接管理权限</h2><p>账号未获授权办理日常寄件。你可以在这里维护快递连接、月结账号与默认寄件资料。</p><button onClick={() => setConfigOpen(true)}>管理寄件配置</button></section>
-    <ShippingConfigDrawer open={configOpen} onClose={() => setConfigOpen(false)} />
-  </main>
-
   return <main className={styles.shell}>
     <header className={styles.topbar}>
       <div><p>物流协同 / SHIPPING OPS</p><h1>自助收寄</h1></div>
-      <div className={styles.topbarActions}><a className={styles.configButton} href="/sales-portal">销售寄件提报</a>{settings.canManageConnections && <button className={styles.configButton} onClick={() => setConfigOpen(true)}><Settings size={14}/>寄件配置</button>}<div className={styles.connection}><span />{selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div></div>
+      <div className={styles.topbarActions}><a className={styles.configButton} href="/sales-portal">销售寄件提报</a><div className={styles.connection}><span />{selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div></div>
     </header>
     {message && <div className={styles.toast} role="status">{message}</div>}
     {productionOrderUnverified && <div className={styles.notice} role="status">Production只读连接已通过，但下单权限尚未实测。请先从台账选择一票，在右侧核对完整资料并单票确认；本次首票实测前，批量下单保持禁用。</div>}
@@ -240,6 +232,5 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
         )}
       </section>
     </div>
-    {settings.canManageConnections && <ShippingConfigDrawer open={configOpen} onClose={() => setConfigOpen(false)} />}
   </main>
 }
