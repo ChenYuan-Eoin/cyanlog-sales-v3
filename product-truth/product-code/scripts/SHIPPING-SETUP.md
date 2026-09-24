@@ -15,6 +15,14 @@
 
 以下旧配置已退出运行时代码：`SF_ENVIRONMENT`、`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_MONTHLY_CARD`、`SF_SANDBOX_MONTHLY_CARD`、`SF_SERVICES_JSON`、`SHIPPING_SENDER_JSON`、`SF_PRODUCTION_ORDER_ENABLED`。均在`/shipping`配置抽屉或服务端订单策略中管理。
 
+## 顺丰Node.js鉴权
+
+本项目为Node.js服务端，按顺丰鉴权说明使用OAuth2：沙盒向`https://sfapi-sbox.sf-express.com/oauth2/accessToken`、生产向`https://bspgw.sf-express.com/oauth2/accessToken`提交表单参数`partnerID`、`secret`（CheckWord）和`grantType=password`。取得的`accessToken`由服务端按有效期缓存，并在到期前自动重新获取；运行人员不登录顺丰，也不需每日维护令牌。
+
+后续标准接口请求仍POST到对应环境的`/std/service`，公共参数使用`partnerID`、`requestID`、`serviceCode`、`timestamp`、`accessToken`和`msgData`。OAuth2请求不得同时发送`msgDigest`。访问令牌只保存在服务端进程内存，不回传浏览器、不写数据库、不记录日志。顺丰文档的标准MD5数字签名说明标注为适用Java，非Java建议OAuth2；即使数字签名探测成功，也不作为Node.js接入符合推荐规范的依据。
+
+OAuth2获取令牌成功只代表机器凭据已认证，不代表顺丰已授予下单、订单查询、轨迹或取消权限。这些业务能力仍需分别验证。`expressTypeId`必须来自已授权服务产品清单，不得猜测或使用未经确认的默认码。
+
 ## Vercel Production变量核对（2026-09-23；只核对名称，未读取值）
 
 只读取变量名称和环境范围，没有读取变量值。

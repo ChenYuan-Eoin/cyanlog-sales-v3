@@ -103,12 +103,12 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
       <div className={styles.content}>
         <section className={styles.section}>
           <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>顺丰机器连接</h3></div><span>{connection ? `尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>
-          <p className={styles.hint}>PartnerID与CheckWord经服务端加密保存，读取时不会返回CheckWord。人员不需要登录顺丰。</p>
+          <p className={styles.hint}>PartnerID与CheckWord经服务端加密保存；服务端按顺丰OAuth2获取并自动续期令牌。人员不需要登录顺丰。</p>
           <label>运行环境<select value={environment} onChange={event => setEnvironment(event.target.value as typeof environment)}><option value="sandbox">沙盒</option><option value="production">生产</option></select></label>
           {connection && <div className={styles.savedState}>已保存 · {connection.status === 'connected' ? '沙盒连接通过' : connection.status === 'failed' ? '最近连接检查失败' : '待连接检查'} · 查询能力 {connection.capabilities.query === 'verified' ? '已验证' : '未验证'}</div>}
           {connection && <div className={styles.capabilities} aria-label="顺丰能力验证状态">{([['order', '下单'], ['query', '订单查询'], ['tracking', '轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection.capabilities[key] === 'verified' ? '已验证' : connection.capabilities[key] === 'unavailable' ? '不可用' : '未验证'}</b></div>)}</div>}
           <label>PartnerID<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder={connection ? '重新输入以轮换凭据' : '顺丰分配的PartnerID'}/></label>
-          <label>CheckWord<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder="只用于签名，不会再次显示"/></label>
+          <label>CheckWord<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder="只用于服务端认证，不会再次显示"/></label>
           <div className={styles.serviceHeading}><strong>已授权服务产品</strong><span>需与顺丰应用权限一致</span></div>
           <div className={styles.services}>{authorizedServices.map(service => <div key={service.id}><span>{service.name} · {service.id} · {service.preference === 'standard' ? '标准' : '加急'}</span><button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>)}</div>
           <div className={styles.serviceInputs}><label>服务编号<input inputMode="numeric" value={newServiceId} onChange={event => setNewServiceId(event.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="顺丰服务产品ID"/></label><label>服务名称<input value={newServiceName} onChange={event => setNewServiceName(event.target.value)} placeholder="例如已开通产品"/></label><label>服务偏好<select value={newServicePreference} onChange={event => setNewServicePreference(event.target.value as typeof newServicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select></label><button className={styles.secondary} onClick={addService}><Plus size={14}/>添加</button></div>
@@ -135,7 +135,7 @@ export default function ShippingConfigDrawer({ open, onClose }: { open: boolean;
           <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>
         </section>
         {message && <p className={styles.message} role="status">{message}</p>}
-        <p className={styles.footerNote}>连接检查只验证顺丰沙盒的只读签名请求，不创建运单，也不代表下单、轨迹、取消权限已开通。</p>
+        <p className={styles.footerNote}>连接检查验证顺丰沙盒OAuth2认证，不创建运单，也不代表下单、轨迹、取消权限已开通。</p>
       </div>
     </aside>
   </div>

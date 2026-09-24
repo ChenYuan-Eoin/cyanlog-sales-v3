@@ -3,11 +3,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { parseAddress } from './address'
 import { anonymousShipmentSchema, shippingInputSchema, trackingSchema } from './validation'
 import { allowedShippingUser, ShippingError } from './config'
-import { sfDigest, decodeSfResponse, buildSfOrder, extractCancellation, extractOrder, extractTracking } from './sf-client'
+import { decodeSfResponse, buildSfOrder, extractCancellation, extractOrder, extractTracking } from './sf-client'
 import { checkShippingPolicy, submitShipping } from './service'
 import type { ShippingStore, StoredShipping } from './store'
 import type { ShippingInput } from './types'
-import { createHash } from 'node:crypto'
 import { resolveBusinessContext, signShipmentContext, verifyShipmentContext } from './context'
 import { nextShippingReviewAt } from './collaboration'
 const contact = { name: '测试联系人', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '测试街道1号测试楼' }
@@ -54,7 +53,6 @@ describe('anonymous shipment context', () => {
   it('uses explicit Shanghai 11:00 and 17:00 review cutoffs', () => { expect(nextShippingReviewAt(new Date('2026-09-22T01:00:00Z'))).toBe('2026-09-22T03:00:00.000Z'); expect(nextShippingReviewAt(new Date('2026-09-22T04:00:00Z'))).toBe('2026-09-22T09:00:00.000Z'); expect(nextShippingReviewAt(new Date('2026-09-22T10:00:00Z'))).toBe('2026-09-23T03:00:00.000Z') })
 })
 describe('SF protocol', () => {
-  it('signs UTF8 form-encoded message, not hex MD5', () => { const msg = '空 格+~!'; const encoded = '%E7%A9%BA+%E6%A0%BC%2B%7E%21123secret'; expect(sfDigest(msg, '123', 'secret')).toBe(createHash('md5').update(encoded).digest('base64')) })
   it('requires gateway AND business success', () => { expect(() => decodeSfResponse({ apiResultCode: 'bad', apiResultData: '{"success":true}' })).toThrow(); expect(() => decodeSfResponse({ apiResultCode: 'A1000', apiResultData: '{"success":false}' })).toThrow(); expect(decodeSfResponse({ apiResultCode: 'A1000', apiResultData: '{"success":true,"msgData":{"ok":1}}' })).toEqual({ ok: 1 }) })
   it('marks an explicit SF business rejection as definitive', () => { try { decodeSfResponse({ apiResultCode: 'A1000', apiResultData: '{"success":false,"errorCode":"6150"}' }); throw new Error('expected rejection') } catch (error) { expect(error).toMatchObject({ status: 422, requestStage: 'provider_rejected' }) } })
   it('keeps supplied monthly account out of user input', () => { const order = buildSfOrder('id', input, 'test-account'); expect(order.monthlyCard).toBe('test-account'); expect(order.contactInfoList.map(c => c.contactType)).toEqual([1, 2]); expect(order.payMethod).toBe(1) })

@@ -1,16 +1,55 @@
-// REQ: F054. SF standard API protocol. Verify account-specific permissions in sandbox before release.
+// REQ: F054. SF OAuth2 API protocol. Verify account-specific permissions in sandbox before release.
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { ShippingError } from './config'
 import type { ShippingInput, TrackingResult } from './types'
 import type { ShippingRuntimeConfig } from './runtime-config'
-export function sfDigest(message: string, timestamp: string, checkWord: string) {
-  // Java URLEncoder / PHP urlencode compatible UTF-8 form encoding, then raw MD5 + Base64.
-  const encoded = new URLSearchParams({ v: message + timestamp + checkWord }).toString().slice(2)
-  return createHash('md5').update(encoded).digest('base64')
-}
 const envelope = z.object({ apiResultCode: z.string(), apiResultData: z.union([z.string(), z.record(z.string(), z.unknown())]).optional() })
 const business = z.object({ success: z.union([z.boolean(), z.enum(['true', 'false'])]), errorCode: z.string().optional(), msgData: z.unknown().optional() })
+const tokenResponse = z.object({ apiResultCode: z.string(), accessToken: z.string().min(1).nullable().optional(), expiresIn: z.number().int().positive().max(86400).nullable().optional() })
+type SfAuthConfig = Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>
+const tokenCache = new Map<string, { accessToken: string; expiresAt: number }>()
+const tokenRequests = new Map<string, Promise<string>>()
+const tokenRefreshMarginMs = 60_000
+
+function sfBaseUrl(environment: SfAuthConfig['environment']) {
+  return environment === 'sandbox' ? 'https://sfapi-sbox.sf-express.com' : 'https://bspgw.sf-express.com'
+}
+
+async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
+  const cacheKey = createHash('sha256').update(`${config.environment}\0${config.partnerId}\0${config.checkWord}`).digest('hex')
+  const now = Date.now()
+  const cached = tokenCache.get(cacheKey)
+  if (cached && cached.expiresAt > now + tokenRefreshMarginMs) return cached.accessToken
+  const activeRequest = tokenRequests.get(cacheKey)
+  if (activeRequest) return activeRequest
+
+  const request = (async () => {
+    const body = new URLSearchParams({ partnerID: config.partnerId, secret: config.checkWord, grantType: 'password' })
+    let response: Response
+    try {
+      response = await fetch(`${sfBaseUrl(config.environment)}/oauth2/accessToken`, {
+        method: 'POST', body,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error'
+      })
+    } catch {
+      throw new ShippingError(502, '无法连接顺丰OAuth2认证服务，请稍后重试。')
+    }
+    if (!response.ok) throw new ShippingError(502, '顺丰OAuth2认证服务暂不可用，请稍后重试。')
+    let parsed: z.infer<typeof tokenResponse>
+    try { parsed = tokenResponse.parse(await response.json()) }
+    catch { throw new ShippingError(502, '顺丰OAuth2认证服务返回无法识别的响应。') }
+    if (parsed.apiResultCode !== 'A1000' || !parsed.accessToken || !parsed.expiresIn) {
+      throw new ShippingError(502, '顺丰OAuth2认证失败，请检查PartnerID、CheckWord和应用授权。')
+    }
+    tokenCache.set(cacheKey, { accessToken: parsed.accessToken, expiresAt: Date.now() + parsed.expiresIn * 1000 })
+    return parsed.accessToken
+  })()
+  tokenRequests.set(cacheKey, request)
+  try { return await request }
+  finally { tokenRequests.delete(cacheKey) }
+}
 export function decodeSfResponse(raw: unknown): unknown {
   const outer = envelope.parse(raw)
   if (outer.apiResultCode !== 'A1000') throw new ShippingError(502, '顺丰接口未受理请求，请检查账号权限后再查询结果。')
@@ -19,9 +58,9 @@ export function decodeSfResponse(raw: unknown): unknown {
   return data.msgData
 }
 export async function sfCall(serviceCode: string, message: unknown, config: Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>): Promise<unknown> {
-  const timestamp = Date.now().toString(), msgData = JSON.stringify(message)
-  const body = new URLSearchParams({ partnerID: config.partnerId, requestID: randomUUID(), serviceCode, timestamp, msgData, msgDigest: sfDigest(msgData, timestamp, config.checkWord) })
-  const url = config.environment === 'sandbox' ? 'https://sfapi-sbox.sf-express.com/std/service' : 'https://sfapi.sf-express.com/std/service'
+  const timestamp = Date.now().toString(), msgData = JSON.stringify(message), accessToken = await getSfAccessToken(config)
+  const body = new URLSearchParams({ partnerID: config.partnerId, requestID: randomUUID(), serviceCode, timestamp, accessToken, msgData })
+  const url = `${sfBaseUrl(config.environment)}/std/service`
   const started = Date.now()
   let upstreamStatus: number | undefined
   try {
@@ -39,36 +78,17 @@ export async function sfCall(serviceCode: string, message: unknown, config: Pick
 }
 
 /**
- * Performs a signed, read-only sandbox order-result query with a synthetic ID.
- * This checks transport/signature acceptance without creating a shipment.
- * It does not prove that create, tracking, or cancellation permissions are enabled.
+ * Checks sandbox OAuth2 credentials only. It never creates a shipment and does not
+ * prove that create, tracking, or cancellation permissions are enabled.
  */
 export async function probeSfSandbox(partnerId: string, checkWord: string) {
-  const serviceCode = 'EXP_RECE_SEARCH_ORDER_RESP'
-  const timestamp = Date.now().toString()
-  const msgData = JSON.stringify({ orderId: randomUUID(), language: 'zh-CN', searchType: '1' })
-  const body = new URLSearchParams({ partnerID: partnerId, requestID: randomUUID(), serviceCode, timestamp, msgData, msgDigest: sfDigest(msgData, timestamp, checkWord) })
-  let response: Response
   try {
-    response = await fetch('https://sfapi-sbox.sf-express.com/std/service', {
-      method: 'POST', body,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-      signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error'
-    })
-  } catch {
-    return { connected: false, message: '无法连接顺丰沙盒，请检查网络和机器凭据。' }
+    await getSfAccessToken({ environment: 'sandbox', partnerId, checkWord })
+    return { connected: true, message: '顺丰沙盒OAuth2认证通过；未创建运单，也不代表下单、轨迹或取消权限已开通。' }
+  } catch (error) {
+    if (error instanceof ShippingError) return { connected: false, message: error.message }
+    return { connected: false, message: '顺丰沙盒OAuth2认证失败，请检查网络和机器凭据。' }
   }
-  if (!response.ok) return { connected: false, message: '顺丰沙盒未接受连接请求，请检查服务端响应和机器凭据。' }
-  let raw: unknown
-  try { raw = await response.json() } catch { return { connected: false, message: '顺丰沙盒返回无法识别的响应。' } }
-  let outer: z.infer<typeof envelope>
-  try { outer = envelope.parse(raw) } catch { return { connected: false, message: '顺丰沙盒返回无法识别的响应。' } }
-  if (outer.apiResultCode !== 'A1000') return { connected: false, message: '顺丰沙盒拒绝了签名请求，请核对PartnerID和CheckWord。' }
-  // A successful envelope may contain a business-level “order not found” result
-  // because this probe deliberately uses a one-time synthetic order ID.
-  try { business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData) }
-  catch { return { connected: false, message: '顺丰沙盒返回无法识别的响应。' } }
-  return { connected: true, message: '顺丰沙盒已接受只读签名请求；此结果不代表下单、轨迹或取消权限已开通。' }
 }
 export function buildSfOrder(orderId: string, input: ShippingInput, monthlyCard: string) {
   if (!input.serviceId) throw new ShippingError(400, '请先选择已授权的承运商服务产品。', 'validation')
