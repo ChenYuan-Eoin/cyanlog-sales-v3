@@ -101,7 +101,8 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
     let succeeded = 0
     for (const row of candidates) {
       setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'pending', error: undefined } : item))
-      const recipient = parseAddress(`${row.recipient} ${row.phone} ${row.address}`).contact
+      const parsedRecipientAddress = parseAddress(row.address).contact
+      const recipient = { ...parsedRecipientAddress, name: row.recipient.trim(), phone: row.phone.trim() }
       try {
         const receipt = await json<{ waybill: string | null }>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, confirmed: true, connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, input: { sender: settings.sender, recipient, cargo: uniformCargo, weight: 1, serviceId: Number(serviceId), remark: '', source: 'manual', payment: 'sender_monthly', pickupWindow } }) })
         succeeded += 1

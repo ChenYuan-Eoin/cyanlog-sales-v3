@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ShippingWorkbench from './workbench'
 import { workbenchOrdersForTest } from '@/lib/shipping/workbench-test-fixtures'
+import { parseAddress } from '@/lib/shipping/address'
+import { ownerOrderSchema } from '@/lib/shipping/validation'
 import type { ShippingSettings, ShipmentOrder } from '@/lib/shipping/types'
 
 const settings: ShippingSettings = { environment: 'sandbox', ready: true, canSubmit: true, reason: '', services: [{ id: 2, name: '顺丰标快' }], monthlyTail: '0000', sender: { name: '前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科苑路15号' } }
@@ -116,10 +118,11 @@ describe('self-service shipping workbench', () => {
 
   it('does not resend successful rows when a real batch request partially fails', async () => {
     const sent: Array<{ key: string }> = []
+    const sentBodies: unknown[] = []
     let failedOnce = false
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
       if (!init?.body) return new Response(JSON.stringify({ records: [] }), { status: 200 })
-      const body = JSON.parse(String(init.body)); sent.push(body)
+      const body = JSON.parse(String(init.body)); sent.push(body); sentBodies.push(body)
       if (!failedOnce && sent.length === 2) { failedOnce = true; return new Response(JSON.stringify({ error: '临时失败' }), { status: 503 }) }
       return new Response(JSON.stringify({ waybill: `SF${sent.length}` }), { status: 200 })
     })
@@ -139,5 +142,20 @@ describe('self-service shipping workbench', () => {
     expect(await screen.findByText(/本次完成 1 票/)).toBeTruthy()
     expect(sent).toHaveLength(5)
     expect(sent[4].key).toBe(failedKey)
+    expect(sentBodies.every(body => ownerOrderSchema.safeParse(body).success)).toBe(true)
+  })
+
+  it('builds a valid order payload from the synthetic SF sandbox address example', () => {
+    const recipientAddress = parseAddress('广东省深圳市南山区科技园测试路88号A座').contact
+    const recipient = { ...recipientAddress, name: '沙盒测试收件人', phone: '13800000000' }
+    const parsed = ownerOrderSchema.safeParse({
+      key: '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0',
+      confirmed: true,
+      connectionId: '23a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0',
+      billingAccountId: '33a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0',
+      input: { sender: settings.sender, recipient, cargo: '文件/合同', weight: 1, serviceId: 2, remark: '', source: 'manual', payment: 'sender_monthly', pickupWindow: '今天 17:00 统一揽收' }
+    })
+    if (!parsed.success) throw new Error(`${JSON.stringify(recipient)} :: ${parsed.error.issues.map(issue => `${issue.path.join('.')}:${issue.message}`).join(' | ')}`)
+    expect(parsed.success).toBe(true)
   })
 })
