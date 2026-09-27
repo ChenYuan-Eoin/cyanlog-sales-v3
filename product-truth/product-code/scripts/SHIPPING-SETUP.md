@@ -41,27 +41,28 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 ### 旧顺丰环境变量
 
-Production仍有旧`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_ENVIRONMENT`、`SF_MONTHLY_CARD`和`SF_SERVICES_JSON`，目前均为Vercel Config类型。它们只供配置中心的一次性迁移按钮读取，日常顺丰API不读取环境变量。Production还运行旧SHA `dd28bf60583954822edca05fbd991126a6ddb56f`，因此新版本完成Production部署、配置迁移和验收前不要删除它们。新版本稳定、凭据/卡号/服务产品已存入数据库后，再从Vercel删除这些旧变量。`SF_SANDBOX_MONTHLY_CARD`和`SF_PRODUCTION_ORDER_ENABLED`目前仅能看到Preview条目，Production未显示。
+当前Vercel Production仍有旧`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_ENVIRONMENT`、`SF_MONTHLY_CARD`和`SF_SERVICES_JSON`；未读取变量值。新代码的一次性迁入按钮可把PartnerID/CheckWord、授权服务和月结卡号存入数据库，日常下单、查询、轨迹和取消均从数据库取配置。`SF_ENVIRONMENT`不会被新代码读取；但旧Production部署仍在运行，旧变量须等新版本部署、配置迁入并完成验收后再清理。当前没有Production `SHIPPING_SENDER_JSON`，公司默认寄件人须在配置中心手工录入。新版本稳定后删除不再需要的`SF_*`和`SHIPPING_ALLOWED_USER_IDS`，不需要为此新建或轮换密钥。`SF_SANDBOX_MONTHLY_CARD`和`SF_PRODUCTION_ORDER_ENABLED`目前仅能看到Preview条目。
 
 ### 当前环境状态
 
 - Production的Supabase核心变量与上述三个服务端密钥均已存在；没有要求新增或更换密钥。
 - Production `shipping_carrier_connections`、`shipping_billing_accounts`、`shipping_sender_profiles`当前均为0行；因此尚未配置生产连接、生产月结账号或公司默认寄件人。
 - Production的订单、运单和轨迹表已存在并启用RLS，无需重复应用迁移。
-- 隔离Preview当前有1条沙盒连接（连接和只读查询已验证）、1个活动默认月结账号、1个默认寄件人，但连接`authorized_services`仍为0项，所以沙盒下单链尚不能验收。
-- Vercel Preview `codex/wp11-main-integration`当前READY部署SHA为`e999e410a684570bc14d1f968247f8d1ec6eb68d`。现有Chrome已确认三栏业务工作台正常、配置在配置中心，业务页无配置遮罩。配置表现有沙盒授权服务列表为空；迁入旧服务清单或由管理员补录前不能验收沙盒下单。
-- 生产仍是旧SHA；没有读取环境变量值、没有写Production配置行、没有真实下单。
+- 隔离Preview已有1条沙盒连接、1个活动默认月结账号、1个默认寄件人和1个已授权服务。现有Chrome曾成功创建一票合成沙盒订单；取消接口返回A1004（顺丰应用未关联`EXP_RECE_UPDATE_ORDER`），轨迹查询返回的是沙盒模拟响应，均不能证明Production能力。
+- 最新稳定Preview部署仍在原分支`codex/wp11-main-integration`，当前候选SHA为`f4d2c82a67dd62c75ce86139400e5c5201a2f4a9`。现有Chrome刷新后确认`/shipping`为纯三栏业务页，寄件设置位于`/configs?tab=shipping`，没有设置遮罩覆盖工作台。
+- 顺丰控制台的“ONES-自助查寄”应用中，`EXP_RECE_CREATE_ORDER`待上线，`EXP_RECE_SEARCH_ORDER_RESP`与`EXP_RECE_SEARCH_ROUTES`已上线，`EXP_RECE_UPDATE_ORDER`尚未关联。控制台要求接口在沙盒7天内成功调用至少3次后才能申请上线；下单与取消因此仍是外部上线门禁。
+- Production仍运行旧版本；数据库配置表为空，默认寄件人待录入。未修改Production环境变量、未写Production配置行、未提交真实运单。
 
 ## 真实寄件验收准备（用户执行）
 
 1. 三个服务端密钥已配置为Vercel Sensitive变量；仅Vercel保存密钥值，不要将其复制到仓库、聊天或日志。将来轮换加密主密钥前先重加密数据库中的所有凭据和月结卡号。
 2. Production与隔离Supabase项目均已按序应用`20260922000001`、`20260923074619`、`20260923081415`，并验证配置表/订单表RLS、拒绝`anon`/`authenticated`直接访问、`service_role`权限和快照列/索引。Production配置表仍为空；这表示当前没有生产承运商连接、月结账号或寄件人资料。
-3. 配置管理员在配置中心→寄件配置录入顺丰机器凭据、各环境月结号、真实已授权服务产品和公司默认寄件人，并将旧寄件人员名单迁入组织权限表。沙盒只读测试通过后，分别核验订单、查回、轨迹和未揽收取消能力；连接通过不自动开启Production下单。
-4. 月结账号主体按顺丰要求完成一次性应用授权/账号绑定；普通ONES寄件人无需获得顺丰管理员身份。
+3. 新版本部署到Production后，配置管理员在配置中心迁入已有的Production机器凭据、月结卡号和授权服务；手动录入公司默认寄件人，并把旧寄件人员名单迁入组织权限表。确认`EXP_RECE_CREATE_ORDER`已经顺丰上线、`EXP_RECE_UPDATE_ORDER`已关联后，再分别验证订单、查回、轨迹和未揽收取消能力；只读连接通过不自动开启Production下单。
+4. 按顺丰要求确认生产月结账号已绑定当前开发者应用；普通ONES寄件人无需获得顺丰管理员身份。
 5. 部署并通过用户现有Chrome验收后，用户指定一票真实寄件，核对金额和收件信息并亲自确认下单。揽收前由用户核验一键取消及ONES/顺丰状态一致。
-6. 新版本稳定并完成迁移后，单独删除Vercel中不再使用的`SF_*`和`SHIPPING_ALLOWED_USER_IDS`旧变量；不要在旧代码仍服务Production时先删变量。
+6. 新版本稳定并完成配置迁移、访问权限迁移和真实验收后，单独删除Vercel中不再使用的`SF_*`和`SHIPPING_ALLOWED_USER_IDS`旧变量；不要在旧代码仍服务Production时先删变量。
 
-截至2026-09-24核对：未读取Vercel环境变量值、未读取或导出Production联系人内容、未创建真实运单、未部署Production。已通过已授权的Supabase管理接口应用下列三条增量迁移；RLS与权限已核验。Production配置表计数为连接0、月结账号0、寄件人0；Preview有连接1（状态connected、只读查询已验证；下单/轨迹/取消未验证）、默认可用月结账号1、默认寄件人1。Preview行中没有读取姓名、电话、地址、账号或凭据内容。Production当前仍运行旧部署。
+截至2026-09-24 13:38 UTC核对：未读取Vercel环境变量值、未读取或导出Production联系人内容、未创建真实运单、未部署Production。Production现有Supabase项目变量与三个寄件运行密钥均存在；旧SF变量仍在，可由新版本配置中心迁入。Production寄件连接、月结账号、寄件人、订单和运单表计数均为0。Preview一票合成沙盒订单已成功创建；取消返回A1004，沙盒轨迹响应为模拟数据。当前顺丰生产下单API待上线、取消API未关联。无密钥轮换或环境变量新增要求。
 
 ## 前向迁移
 
@@ -107,7 +108,15 @@ Production项目为Supabase Free计划，当前没有托管备份或PITR。**不
 
 ## 验收
 
-运行 `sh scripts/local.sh test:run lib/shipping app/api/shipping app/shipping`，随后typecheck/lint/build。浏览器使用隔离库本地服务。假响应仅在测试夹具使用，不在产品内设置mock成功模式。普通页面无连接时明确显示未接通、禁用外部操作，但可整理地址。
+运行 `sh scripts/local.sh test:run lib/shipping app/api/shipping app/shipping`，随后typecheck/lint/build。真实工作台不允许把承运商失败改为模拟成功。普通页面无连接时明确显示未接通、禁用外部操作，但可整理地址。
+
+### 文本优先与独立模拟体验（2026-09-27）
+
+`/shipping`默认显示文本解析，文件导入排第二。文本最多200票、100,000字，支持常见地址顺序和带标签的多行资料。解析预览与提交使用同一份收件数据，缺省市区、手机号或门牌在下单前明确提示。
+
+用户明确要求先查看完整流程，因此新增独立`/shipping/demo`入口。它沿用现有登录要求和同一三栏组件，始终显示模拟提示；示例客户、`DEMO-`单号和轨迹仅在当前页面内存中流转。可以演示解析、纠错、批量下单、销售提报确认、查询、取消和重置；不调用顺丰、不保存业务数据、不产生费用。它不证明沙盒或Production接口已经通过。
+
+Excel解压库改为需要解析xlsx或下载模板时才加载。当前同口径构建清单中寄件页面入口JavaScript由152,378降为119,595字节gzip（减少21.51%），入口不再包含JSZip；不把该体积变化等同于已测得的网页耗时。200条地址的解析和收件资料准备在本机基准合计约0.4ms，CPU解析不是主要瓶颈。详细基准和模拟隔离测试保存在当前worktree的`codex-runtime/shipping-performance-20260927`与`shipping-text-demo-20260927`。
 
 生产或真实付费寄件需独立授权；下单、接口沙盒、代码通过、线上发布是不同结果。
 
@@ -120,7 +129,7 @@ Production项目为Supabase Free计划，当前没有托管备份或PITR。**不
 
 ## 正式启用前的外部门禁
 
-顺丰当前控制台要求：API在7天内测试成功3次以上，才进入待上线；下单还需要云打印上线或免面单申请通过。个人版暂不开发打印，建议申请免面单。正式月结号需在应用详情单独绑定。以上操作与网站Production发布、真实付费寄件分别确认，当前只完成沙盒。
+顺丰控制台显示：API需在沙盒7天内成功调用至少3次后才能申请上线；下单还需云打印上线或免面单申请通过。当前`EXP_RECE_CREATE_ORDER`处于待上线，`EXP_RECE_UPDATE_ORDER`尚未关联；查单和轨迹API已上线。正式月结号需在应用详情绑定。上述平台授权、网站Production发布、真实付费寄件是不同门禁；当前只完成一票沙盒下单，取消仍被A1004拒绝，轨迹响应为沙盒模拟数据。
 
 官方接入规则：https://open.sf-express.com/developSupport/195960?activeIndex=149495
 
@@ -128,7 +137,7 @@ Production项目为Supabase Free计划，当前没有托管备份或PITR。**不
 
 用户明确所有验收在 `https://sales.cyanlog.icu` 的现有Chrome会话进行。localhost、隔离数据库、顺丰沙盒仅是开发证据，不向用户作为验收交付。
 
-本轮候选SHA为`d40a1fa8f67289e73521ddc4c79589704e97f9a9`，本地代码门禁为`code_green`。Production数据库迁移已完成，候选尚未合入main、发布到Production或通过现有Chrome验收；新的候选Preview还缺隔离Supabase服务角色密钥和获准操作员名单。Production完整运行验证尚未完成。
+当前代码SHA `f4d2c82a67dd62c75ce86139400e5c5201a2f4a9`通过本地目标/全量测试、lint、typecheck和build，状态为`code_green`；已发布到原Preview分支，但尚未合入main或部署Production。Production发布仍等待顺丰API上线、配置中心录入公司默认寄件人、Production完整路径验收及现有Chrome验收。当前机器`dig`能解析`sales.cyanlog.icu`，但本机`curl`仍报无法解析；Production域名尚未通过现有Chrome验收。
 
 追加迁移 `20260911000003_shipping_contacts_defaults.sql` 提供私有地址簿和上次成功下单快照。匿名页面仅提供填写界面；匿名付费寄件策略尚待用户明确。
 

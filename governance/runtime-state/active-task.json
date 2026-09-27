@@ -237,9 +237,9 @@
       }
     ],
     "release_blockers": [
-      "Production的shipping_carrier_connections、shipping_billing_accounts、shipping_sender_profiles均为0行。Vercel Production变量仅可见旧SF_CHECK_WORD、SF_MONTHLY_CARD、SF_SERVICES_JSON及三项SHIPPING_* Secret；未见SF_PARTNER_ID，服务端数据库未保存Production机器连接、商务授权expressTypeId或寄件人资料，因此生产下单不可用。",
-      "Preview隔离数据库有1个沙盒连接、1个默认月结账号和1个默认寄件人。Vercel Preview部署dpl_2pPc9DQyMpZxSKV3iYsMBhVFYD7h（SHA 201726731b916c14b578416100f71ce5ba8a2b00，sin1）上，现有管理员Chrome成功完成OAuth2令牌获取和EXP_RECE_SEARCH_ORDER_RESP只读查询；页面显示通过、未创建运单，Supabase记录connection_status=connected/query_capability=verified/last_tested_at=2026-09-24 10:44:53 UTC。Production仍无连接配置；预览连接的下单/轨迹/取消能力未验证。候选分支的加密键与原Preview不同且曾报告解密失败；保留原分支设置，不复制或更换密钥。",
-      "Vercel将sales.cyanlog.icu标记为Valid Configuration并绑定旧Production READY部署；本机DNS对其返回SERVFAIL，现有Chrome无法解析域名，尽管绕过DNS的只读HTTP探测返回200。须恢复本机/网络DNS解析后才能按Production门禁验收。",
+      "Production的shipping_carrier_connections、shipping_billing_accounts、shipping_sender_profiles均为0行。Vercel Production仍有旧SF_PARTNER_ID、SF_CHECK_WORD、SF_MONTHLY_CARD、SF_SERVICES_JSON配置及加密/上下文/回执运行密钥；新版本可用配置中心的一次性迁入流程保存机器连接、授权服务和月结账号。Production默认寄件人未保存在数据库，且当前没有旧SHIPPING_SENDER_JSON可迁入，需由配置管理员在配置中心录入公司寄件人资料后才能下单。",
+      "隔离Preview当前有1条沙盒连接、默认月结账号、默认寄件人和已授权服务；现有Chrome验证OAuth2只读连接通过并成功创建1票合成沙盒运单。取消接口返回A1004，轨迹返回沙盒模拟内容，故完整沙盒路径仍未通过。顺丰控制台的Production应用中EXP_RECE_CREATE_ORDER待上线、EXP_RECE_UPDATE_ORDER未关联；两项平台权限必须核实后才能证明Production下单/取消可用。候选仍保留原Preview分支的变量设置，不复制或更换密钥。",
+      "Vercel将sales.cyanlog.icu标记为Valid Configuration。当前默认DNS查询能返回Vercel CNAME与地址，但本机curl的系统解析仍报无法解析；尚未用用户现有Chrome完成Production域名验收。需在不绕过DNS的Chrome会话中确认正常解析后才能满足Production门禁。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [

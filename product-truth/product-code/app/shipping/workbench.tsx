@@ -1,31 +1,27 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, Truck, UploadCloud } from 'lucide-react'
 import type { ShipmentOrder, ShipmentOrderStatus, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
-import { batchRowErrors, buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
-import { parseAddress } from '@/lib/shipping/address'
+import { buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
+import { parseShippingText, prepareBatchRecipient } from '@/lib/shipping/batch-text'
+import { shippingWorkbenchRequest, type ShippingSimulation } from '@/lib/shipping/workbench-client'
 import styles from './workbench.module.css'
 
 const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待确认', returned: '已驳回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
 const statusTone: Record<ShipmentOrderStatus, string> = { accepted: 'orange', awaiting_confirmation: 'orange', returned: 'red', confirmed: 'blue', ordering: 'blue', order_unknown: 'red', waybill_created: 'blue', in_transit: 'blue', delivered: 'green', cancelled: 'gray', order_failed: 'red' }
 
-async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...init, cache: 'no-store', headers: init?.body ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers })
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.error || '操作暂未完成')
-  return data as T
-}
-
 function cityOf(order: ShipmentOrder) { return order.input.recipient.city || order.input.recipient.province }
 function customerOf(order: ShipmentOrder) { return order.input.customerName || order.relation.customerRef || '未填写客户' }
 
-export default function ShippingWorkbench({ settings }: { settings: ShippingSettings }) {
+export default function ShippingWorkbench({ settings, simulation }: { settings: ShippingSettings; simulation?: ShippingSimulation }) {
+  const request = simulation ? simulation.request : shippingWorkbenchRequest
+  const isSimulation = Boolean(simulation)
   const [orders, setOrders] = useState<ShipmentOrder[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [batch, setBatch] = useState<BatchDraftRow[]>([])
-  const [entryMode, setEntryMode] = useState<'file' | 'text'>('file')
-  const [bulkText, setBulkText] = useState('')
+  const [entryMode, setEntryMode] = useState<'file' | 'text'>('text')
+  const [bulkText, setBulkText] = useState(simulation?.sampleText || '')
   const [batchBusy, setBatchBusy] = useState(false)
   const [connectionId, setConnectionId] = useState(settings.connectionId || '')
   const [serviceId, setServiceId] = useState(String(settings.services[0]?.id || ''))
@@ -41,23 +37,44 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState('')
   const [pendingProductionReviewId, setPendingProductionReviewId] = useState('')
+  const [ledgerLoading, setLedgerLoading] = useState(true)
+  const [trackingBusy, setTrackingBusy] = useState(false)
+  const trackingRequest = useRef(0)
+  const [dateRange, setDateRange] = useState<'all' | 'today' | 'three-days' | 'week'>('all')
 
   useEffect(() => {
-    void json<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50').then(result => {
-      if (result.records.length) { setOrders(result.records); setSelectedId(result.records[0].id) }
-    }).catch(error => setMessage(`收寄件台账读取失败：${(error as Error).message}`))
-  }, [])
+    let active = true
+    void request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50').then(async result => {
+      if (!active) return
+      setOrders(result.records)
+      const first = result.records[0]
+      if (first) { setSelectedId(first.id); setManualWaybill(first.waybill || '') }
+      if (isSimulation && first?.waybill) {
+        const result = await request<TrackingResult>('/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: first.waybill }) })
+        if (active && trackingRequest.current === 0) setTracking(result)
+      }
+    }).catch(error => { if (active) setMessage(`收寄件台账读取失败：${(error as Error).message}`) })
+      .finally(() => { if (active) setLedgerLoading(false) })
+    return () => { active = false }
+  }, [request, isSimulation])
 
   const selected = orders.find(order => order.id === selectedId) || orders[0]
   const filtered = useMemo(() => orders.filter(order => {
     if (type !== 'all' && (order.direction || 'outbound') !== type) return false
     if (status !== 'all' && order.status !== status) return false
+    if (dateRange !== 'all') {
+      const start = new Date(); start.setHours(0, 0, 0, 0)
+      if (dateRange === 'three-days') start.setDate(start.getDate() - 2)
+      if (dateRange === 'week') start.setDate(start.getDate() - (start.getDay() + 6) % 7)
+      if (new Date(order.createdAt).getTime() < start.getTime()) return false
+    }
     const haystack = [order.orderNo, order.waybill, order.relation.salesRef, customerOf(order), order.input.recipient.name, cityOf(order)].join(' ').toLowerCase()
     return haystack.includes(search.trim().toLowerCase())
-  }), [orders, search, status, type])
-  const validCount = batch.filter(row => batchRowErrors(row).length === 0 && row.result !== 'success').length
+  }), [orders, search, status, type, dateRange])
+  const preparedRows = useMemo(() => batch.map(row => ({ row, ...prepareBatchRecipient(row) })), [batch])
+  const validCount = preparedRows.filter(({ row, errors }) => !errors.length && row.result !== 'success').length
   const successCount = batch.filter(row => row.result === 'success').length
-  const invalidCount = batch.filter(row => batchRowErrors(row).length > 0).length
+  const invalidCount = preparedRows.filter(({ errors }) => errors.length > 0).length
   const selectedConnection = settings.carrierConnections?.find(connection => connection.id === connectionId)
   const selectedServices = selectedConnection?.services || settings.services
   const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.status === 'active')
@@ -76,12 +93,9 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
     setBillingAccountId(accounts.find(account => account.isDefault)?.id || accounts[0]?.id || '')
   }
   function parseBulk() {
-    const rows = bulkText.split(/\n+/).map(line => line.trim()).filter(Boolean).map((line, index) => {
-      const phone = line.match(/1[3-9]\d{9}/)?.[0] || ''
-      const parts = line.replace(phone, '').split(/[，,\s]+/).filter(Boolean)
-      return { id: index + 1, key: crypto.randomUUID(), recipient: parts.shift() || '', phone, address: parts.join(' '), cargo: uniformCargo }
-    })
-    setBatch(rows)
+    setMessage('')
+    try { setBatch(parseShippingText(bulkText, uniformCargo)) }
+    catch (error) { setMessage((error as Error).message) }
   }
   async function importFile(file?: File) {
     if (!file) return
@@ -95,17 +109,15 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
   async function executeBatch() {
     if (productionOrderUnverified) { setMessage('首票Production订单尚未实测。请先从台账选择一票，在右侧核对完整收寄资料后逐票确认。'); return }
     if (!canSubmitCurrent) { setMessage('当前连接、月结账号、寄件服务或寄件人资料未就绪，暂不能下单。'); return }
-    const candidates = batch.filter(row => batchRowErrors(row).length === 0 && row.result !== 'success')
+    const candidates = preparedRows.filter(({ row, errors }) => !errors.length && row.result !== 'success')
     if (!candidates.length) return
     setBatchBusy(true); setMessage('')
     let succeeded = 0
     const successfulWaybills: string[] = []
-    for (const row of candidates) {
+    for (const { row, recipient } of candidates) {
       setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'pending', error: undefined } : item))
-      const parsedRecipientAddress = parseAddress(row.address).contact
-      const recipient = { ...parsedRecipientAddress, name: row.recipient.trim(), phone: row.phone.trim() }
       try {
-        const receipt = await json<{ waybill: string | null }>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, confirmed: true, connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, input: { sender: settings.sender, recipient, cargo: uniformCargo, weight: 1, serviceId: Number(serviceId), remark: '', source: 'manual', payment: 'sender_monthly', pickupWindow } }) })
+        const receipt = await request<{ waybill: string | null }>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, confirmed: true, connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, input: { sender: settings.sender, recipient, cargo: uniformCargo, weight: 1, serviceId: Number(serviceId), remark: '', source: 'manual', payment: 'sender_monthly', pickupWindow } }) })
         succeeded += 1
         if (receipt.waybill) successfulWaybills.push(receipt.waybill)
         setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'success', waybill: receipt.waybill || undefined, error: undefined } : item))
@@ -116,13 +128,13 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
     let ledgerRefreshError = ''
     if (succeeded) {
       try {
-        const ledger = await json<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+        const ledger = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
         setOrders(ledger.records)
         const newOrder = ledger.records.find(order => order.waybill && successfulWaybills.includes(order.waybill))
-        if (newOrder) setSelectedId(newOrder.id)
+        if (newOrder) { setSelectedId(newOrder.id); setManualWaybill(newOrder.waybill || ''); setTracking(null); trackingRequest.current += 1 }
       } catch (error) { ledgerRefreshError = `台账刷新失败：${(error as Error).message}` }
     }
-    setBatchBusy(false); setMessage(`本次完成 ${succeeded} 票；失败和异常行已保留，可修正后使用原请求继续。${ledgerRefreshError ? ` ${ledgerRefreshError}` : ''}`)
+    setBatchBusy(false); setMessage(`${isSimulation ? '模拟完成' : '本次完成'} ${succeeded} 票；失败和异常行已保留，可修正后使用原请求继续。${ledgerRefreshError ? ` ${ledgerRefreshError}` : ''}`)
   }
   async function act(order: ShipmentOrder, action: 'confirm' | 'return', productionReviewed = false) {
     if (action === 'confirm' && productionOrderUnverified && !productionReviewed) {
@@ -134,45 +146,57 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
     if (action === 'confirm') setPendingProductionReviewId('')
     setBusy(order.id); setMessage('')
     try {
-      await json(`/api/shipping/ledger/${order.id}/${action}`, { method: 'POST', body: JSON.stringify(action === 'return' ? { reason } : { connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, serviceId: Number(serviceId) || undefined }) })
-      const refreshed = await json<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50'); setOrders(refreshed.records)
-      setMessage(action === 'confirm' ? '已确认下单，单据状态已更新。' : '已驳回并记录原因。')
+      await request(`/api/shipping/ledger/${order.id}/${action}`, { method: 'POST', body: JSON.stringify(action === 'return' ? { reason } : { connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, serviceId: Number(serviceId) || undefined }) })
+      const refreshed = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50'); setOrders(refreshed.records)
+      setMessage(action === 'confirm' ? `${isSimulation ? '模拟' : '已'}确认下单，单据状态已更新。` : '已驳回并记录原因。')
     } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
   }
   async function refreshTracking(number = manualWaybill || selected?.waybill || '') {
     if (!number) return
-    try { setTracking(await json('/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: number, ...(phoneSuffix ? { phoneSuffix } : {}) }) })); setManualWaybill(number) } catch (error) { setMessage((error as Error).message); setTracking(null) }
+    const currentRequest = ++trackingRequest.current
+    setTrackingBusy(true); setMessage('')
+    try {
+      const result = await request<TrackingResult>('/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: number, ...(phoneSuffix ? { phoneSuffix } : {}) }) })
+      if (currentRequest === trackingRequest.current) { setTracking(result); setManualWaybill(number) }
+    } catch (error) {
+      if (currentRequest === trackingRequest.current) { setMessage((error as Error).message); setTracking(null) }
+    } finally { if (currentRequest === trackingRequest.current) setTrackingBusy(false) }
   }
   async function cancelSelected() {
     if (!selected || selected.status !== 'waybill_created') return
     setBusy(selected.id)
-    try { await json(`/api/shipping/ledger/${selected.id}/cancel`, { method: 'POST', body: '{}' }); setOrders(items => items.map(item => item.id === selected.id ? { ...item, status: 'cancelled' } : item)); setMessage('顺丰运单已取消。') } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
+    try { await request(`/api/shipping/ledger/${selected.id}/cancel`, { method: 'POST', body: '{}' }); setOrders(items => items.map(item => item.id === selected.id ? { ...item, status: 'cancelled' } : item)); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false); setMessage(isSimulation ? '模拟运单已取消，没有操作真实运单。' : '顺丰运单已取消。') } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
   }
 
   return <main className={styles.shell}>
     <header className={styles.topbar}>
       <div><p>物流协同 / SHIPPING OPS</p><h1>自助收寄</h1></div>
-      <div className={styles.topbarActions}><a className={styles.configButton} href="/sales-portal">销售寄件提报</a><div className={styles.connection}><span />{selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div></div>
+      <div className={styles.topbarActions}>
+        {simulation ? <><button className={styles.configButton} disabled={batchBusy || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <><a className={styles.configButton} href="/shipping/demo">模拟体验</a><a className={styles.configButton} href="/sales-portal">销售寄件提报</a></>}
+        <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div>
+      </div>
     </header>
+    {simulation && <div className={styles.simulationNotice} role="note"><strong>模拟体验</strong> 地址、单号和轨迹均为示例，仅在当前页面演示，不向顺丰下单、不产生费用。<span>先解析左侧4条地址 → 修正手机号 → 模拟下单 → 查看台账、轨迹与取消；中栏还有待确认的销售提报。</span></div>}
+
     {message && <div className={styles.toast} role="status">{message}</div>}
     {productionOrderUnverified && <div className={styles.notice} role="status">Production只读连接已通过，但下单权限尚未实测。请先从台账选择一票，在右侧核对完整资料并单票确认；本次首票实测前，批量下单保持禁用。</div>}
     <div className={styles.columns}>
       <section className={styles.column} aria-label="批量寄件操作台">
-        <div className={styles.columnHeader}><div><span className={styles.step}>01</span><h2>批量寄件</h2></div><small>导入 · 纠错 · 下单</small></div>
+        <div className={styles.columnHeader}><div><span className={styles.step}>01</span><h2>批量寄件</h2></div><small>粘贴 · 纠错 · 下单</small></div>
         <div className={styles.scrollBody}>
-          <div className={styles.segmented}><button className={entryMode === 'file' ? styles.active : ''} onClick={() => setEntryMode('file')}>文件导入</button><button className={entryMode === 'text' ? styles.active : ''} onClick={() => setEntryMode('text')}>文本解析</button></div>
-          {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><button className={styles.linkButton} onClick={() => void downloadTemplate()}>下载标准模板.xlsx</button></div> : <div className={styles.textParser}><textarea aria-label="多行地址文本" rows={5} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'每行一票，例如：\n张三 13800138000 上海市浦东新区张江路88号'}/><button className={styles.secondaryButton} onClick={parseBulk}>解析为寄件行</button></div>}
-          <div className={styles.sectionTitle}><h3>导入预览</h3><span>{batch.length ? `${batch.length} 票` : '尚未导入'}</span></div>
-          <div className={styles.batchList}>{batch.map(row => { const errors = batchRowErrors(row), valid = errors.length === 0; return <article key={row.id} className={`${styles.batchRow} ${!valid || row.result === 'failed' ? styles.invalidRow : ''}`}><div className={styles.rowTop}><b>#{String(row.id).padStart(2, '0')}</b>{row.result === 'success' ? <span className={styles.good}><CheckCircle2 size={12}/>{row.waybill || '已下单'}</span> : row.result === 'pending' ? <span className={styles.good}>提交中</span> : valid ? <span className={styles.good}><CheckCircle2 size={12}/>正常</span> : <span className={styles.bad}><AlertTriangle size={12}/>需修正</span>}</div><div className={styles.inlineGrid}><input aria-label={`第${row.id}行收件人`} disabled={batchBusy || row.result === 'success'} value={row.recipient} onChange={event => updateBatch(row.id, 'recipient', event.target.value)}/><input aria-label={`第${row.id}行联系电话`} disabled={batchBusy || row.result === 'success'} value={row.phone} onChange={event => updateBatch(row.id, 'phone', event.target.value)}/></div><input aria-label={`第${row.id}行收件地址`} disabled={batchBusy || row.result === 'success'} value={row.address} onChange={event => updateBatch(row.id, 'address', event.target.value)}/>{errors.length > 0 && <small>{errors.join('；')}</small>}{row.error && <small>{row.error}</small>}</article>})}</div>
+          <div className={styles.segmented} role="group" aria-label="地址录入方式"><button aria-pressed={entryMode === 'text'} className={entryMode === 'text' ? styles.active : ''} disabled={batchBusy} onClick={() => setEntryMode('text')}>文本解析</button><button aria-pressed={entryMode === 'file'} className={entryMode === 'file' ? styles.active : ''} disabled={batchBusy} onClick={() => setEntryMode('file')}>文件导入</button></div>
+          {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><button className={styles.linkButton} onClick={() => void downloadTemplate()}>下载标准模板.xlsx</button></div> : <div className={styles.textParser}><p>粘贴姓名、手机号和完整地址，每行一票，最多200票。</p><textarea aria-label="多行地址文本" rows={6} maxLength={100000} disabled={batchBusy} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'每行一票，例如：\n张三 13800138000 上海市浦东新区张江路88号'}/><div className={styles.parserActions}><button className={styles.secondaryButton} disabled={!bulkText.trim() || batchBusy} onClick={parseBulk}>解析为寄件行</button>{simulation && <button className={styles.linkButton} disabled={batchBusy} onClick={() => setBulkText(simulation.sampleText)}>重填示例地址</button>}</div></div>}
+          <div className={styles.sectionTitle}><h3>{entryMode === 'text' ? '解析预览' : '导入预览'}</h3><span>{batch.length ? `${batch.length} 票` : entryMode === 'text' ? '等待解析地址' : '尚未导入'}</span></div>
+          <div className={styles.batchList}>{preparedRows.map(({ row, errors }) => { const valid = errors.length === 0; return <article key={row.id} className={`${styles.batchRow} ${!valid || row.result === 'failed' ? styles.invalidRow : ''}`}><div className={styles.rowTop}><b>#{String(row.id).padStart(2, '0')}</b>{row.result === 'success' ? <span className={styles.good}><CheckCircle2 size={12}/>{row.waybill || '已下单'}</span> : row.result === 'pending' ? <span className={styles.good}>提交中</span> : valid ? <span className={styles.good}><CheckCircle2 size={12}/>正常</span> : <span className={styles.bad}><AlertTriangle size={12}/>需修正</span>}</div><div className={styles.inlineGrid}><input aria-label={`第${row.id}行收件人`} disabled={batchBusy || row.result === 'success'} value={row.recipient} onChange={event => updateBatch(row.id, 'recipient', event.target.value)}/><input aria-label={`第${row.id}行联系电话`} disabled={batchBusy || row.result === 'success'} value={row.phone} onChange={event => updateBatch(row.id, 'phone', event.target.value)}/></div><input aria-label={`第${row.id}行收件地址`} disabled={batchBusy || row.result === 'success'} value={row.address} onChange={event => updateBatch(row.id, 'address', event.target.value)}/>{errors.length > 0 && <small>{errors.join('；')}</small>}{row.error && <small>{row.error}</small>}</article>})}</div>
           <div className={styles.bulkSettings}><h3>统一参数</h3><label>承运商连接<select value={connectionId} onChange={event => changeConnection(event.target.value)}>{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id} disabled={connection.status !== 'connected'}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label><label>寄件人<select disabled><option>{settings.sender.name || '请先配置公司默认寄件人'}</option></select></label><label>月结账号<select value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label><div className={styles.inlineGrid}><label>寄件服务<select value={serviceId} onChange={event => setServiceId(event.target.value)}>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label><label>物品属性<select value={uniformCargo} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div><label>预约上门<select value={pickupWindow} onChange={event => setPickupWindow(event.target.value)}><option>今天 17:00 统一揽收</option><option>明天 10:00 统一揽收</option></select></label></div>
         </div>
-        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待下单</strong><small>{successCount ? `${successCount} 票成功 · ` : ''}{invalidCount} 票异常</small></div><button disabled={!validCount || batchBusy || !canSubmitCurrent || productionOrderUnverified} onClick={() => void executeBatch()}><Truck size={15}/>{batchBusy ? '批量处理中…' : `批量确认下单（${validCount}票）`}</button></footer>
+        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待下单</strong><small>{successCount ? `${successCount} 票成功 · ` : ''}{invalidCount} 票异常</small></div><button disabled={!validCount || batchBusy || !canSubmitCurrent || productionOrderUnverified} onClick={() => void executeBatch()}><Truck size={15}/>{batchBusy ? '批量处理中…' : `${isSimulation ? '模拟批量下单' : '批量确认下单'}（${validCount}票）`}</button></footer>
       </section>
 
       <section className={styles.column} aria-label="收寄件台账与待办">
         <div className={styles.columnHeader}><div><span className={styles.step}>02</span><h2>台账与待办</h2></div><small>{orders.filter(order => order.status === 'awaiting_confirmation').length} 条待确认</small></div>
-        <div className={styles.filters}><div className={styles.segmented}><button className={type === 'all' ? styles.active : ''} onClick={() => setType('all')}>全部</button><button className={type === 'outbound' ? styles.active : ''} onClick={() => setType('outbound')}>寄出件</button><button className={type === 'inbound' ? styles.active : ''} onClick={() => setType('inbound')}>收到件</button></div><div className={styles.quickDates}><button>今天</button><button>近3天</button><button>本周</button></div><select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待确认（销售提报）</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="order_failed">异常件</option></select><label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="销售、客户、收件人、运单号"/></label></div>
-        <div className={styles.orderList}>{filtered.map(order => <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`} onClick={() => { setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null) }}><div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div><div className={styles.cardCore}><div><small>客户</small><strong>{customerOf(order)}</strong></div><ChevronRight size={15}/><div><small>收件人</small><strong>{order.input.recipient.name}</strong></div></div>{order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}<div className={styles.cardMeta}><span>{order.waybill || order.orderNo}</span><time>{new Date(order.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>{order.status === 'awaiting_confirmation' && <div className={styles.cardActions}><button className={styles.reject} disabled={busy === order.id} onClick={event => { event.stopPropagation(); void act(order, 'return') }}>驳回</button><button disabled={busy === order.id} onClick={event => { event.stopPropagation(); void act(order, 'confirm') }}>确认下单</button></div>}</article>)}</div>
+        <div className={styles.filters}><div className={styles.segmented}><button className={type === 'all' ? styles.active : ''} onClick={() => setType('all')}>全部</button><button className={type === 'outbound' ? styles.active : ''} onClick={() => setType('outbound')}>寄出件</button><button className={type === 'inbound' ? styles.active : ''} onClick={() => setType('inbound')}>收到件</button></div><div className={styles.quickDates}>{([{ value: 'all', label: '全部日期' }, { value: 'today', label: '今天' }, { value: 'three-days', label: '近3天' }, { value: 'week', label: '本周' }] as const).map(item => <button key={item.value} aria-pressed={dateRange === item.value} onClick={() => setDateRange(item.value)}>{item.label}</button>)}</div><select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待确认（销售提报）</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="order_failed">异常件</option></select><label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="销售、客户、收件人、运单号"/></label></div>
+        <div className={styles.orderList}>{ledgerLoading ? <p className={styles.listHint}>正在读取台账…</p> : !filtered.length && <p className={styles.listHint}>暂无匹配单据</p>}{filtered.map(order => <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`} onClick={() => { setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false) }}><div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div><div className={styles.cardCore}><div><small>客户</small><strong>{customerOf(order)}</strong></div><ChevronRight size={15}/><div><small>收件人</small><strong>{order.input.recipient.name}</strong></div></div>{order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}<div className={styles.cardMeta}><span>{order.waybill || order.orderNo}</span><time>{new Date(order.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>{order.status === 'awaiting_confirmation' && <div className={styles.cardActions}><button className={styles.reject} disabled={busy === order.id} onClick={event => { event.stopPropagation(); void act(order, 'return') }}>驳回</button><button disabled={busy === order.id} onClick={event => { event.stopPropagation(); void act(order, 'confirm') }}>{isSimulation ? '模拟确认下单' : '确认下单'}</button></div>}</article>)}</div>
       </section>
 
       <section className={styles.column} aria-label="单据详情与物流轨迹">
@@ -180,16 +204,16 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
         <form className={styles.manualTrack} aria-label="物流轨迹查询" onSubmit={event => { event.preventDefault(); void refreshTracking(manualWaybill) }}>
           <input aria-label="备用查询运单号" value={manualWaybill} onChange={event => setManualWaybill(event.target.value.toUpperCase())} placeholder="输入顺丰运单号查询" />
           <input aria-label="查询手机号后四位" value={phoneSuffix} onChange={event => setPhoneSuffix(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="手机后四位" />
-          <button type="submit" disabled={!manualWaybill}><Search size={14}/>查询轨迹</button>
+          <button type="submit" disabled={!manualWaybill || trackingBusy}><Search size={14}/>{trackingBusy ? '查询中…' : '查询轨迹'}</button>
         </form>
         {selected ? (
           <div className={styles.detailStack}>
             <section className={styles.detailPane}>
               <div className={styles.detailHero}>
-                <div><span>{selected.waybill ? '承运商运单' : '业务提报单'}</span><strong>{selected.waybill || selected.orderNo}</strong></div>
+                <div><span>{isSimulation ? '模拟单号' : selected.waybill ? '承运商运单' : '业务提报单'}</span><strong>{selected.waybill || selected.orderNo}</strong></div>
                 <div className={styles.detailActions}>
                   <button aria-label="复制单号" onClick={() => void navigator.clipboard?.writeText(selected.waybill || selected.orderNo)}><Clipboard size={15}/></button>
-                  {selected.status === 'waybill_created' && <button className={styles.cancelButton} disabled={busy === selected.id} onClick={() => void cancelSelected()}>取消运单</button>}
+                  {selected.status === 'waybill_created' && <button className={styles.cancelButton} disabled={busy === selected.id} onClick={() => void cancelSelected()}>{isSimulation ? '模拟取消运单' : '取消运单'}</button>}
                 </div>
               </div>
               <div className={styles.factGrid}>
@@ -222,10 +246,10 @@ export default function ShippingWorkbench({ settings }: { settings: ShippingSett
               <div className={styles.trackTop}>
                 <div>
                   <small>最新物流状态</small>
-                  <h3><span/> {selected.status === 'delivered' ? '已签收' : selected.status === 'in_transit' ? '运输中' : selected.waybill ? '等待揽收' : '尚未出单'}</h3>
+                  <h3><span/> {selected.status === 'cancelled' ? '已取消' : selected.status === 'delivered' ? '已签收' : selected.status === 'in_transit' ? '运输中' : selected.waybill ? '等待揽收' : '尚未出单'}</h3>
                   <p className={styles.courier}>{tracking?.courier ? [tracking.courier.name, tracking.courier.employeeId, tracking.courier.phone].filter(Boolean).join(' · ') : '当前轨迹未提供快递员姓名、工号或电话'}</p>
                 </div>
-                <button disabled={!selected.waybill} onClick={() => void refreshTracking(selected.waybill || '')}><RefreshCw size={14}/>刷新</button>
+                <button disabled={!selected.waybill || trackingBusy} onClick={() => void refreshTracking(selected.waybill || '')}><RefreshCw size={14}/>刷新</button>
               </div>
               {tracking ? (
                 <ol className={styles.timeline}>{tracking.events.map((event, index) => <li key={`${event.time}-${index}`}><i/><time>{event.time}</time><p>{event.description}</p><small>{event.location}</small></li>)}</ol>

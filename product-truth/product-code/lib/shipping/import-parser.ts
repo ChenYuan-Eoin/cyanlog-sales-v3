@@ -1,5 +1,3 @@
-import JSZip from 'jszip'
-
 export type BatchDraftRow = { id: number; key: string; recipient: string; phone: string; address: string; cargo: string; result?: 'pending' | 'success' | 'failed'; error?: string; waybill?: string }
 
 const headerAliases: Record<string, keyof Pick<BatchDraftRow, 'recipient' | 'phone' | 'address' | 'cargo'>> = {
@@ -42,6 +40,7 @@ function xmlText(value: string) { return value.replace(/<[^>]+>/g, '').replace(/
 function columnOf(reference: string) { let value = 0; for (const char of reference.match(/[A-Z]+/)?.[0] || 'A') value = value * 26 + char.charCodeAt(0) - 64; return value - 1 }
 
 export async function parseXlsx(buffer: ArrayBuffer): Promise<BatchDraftRow[]> {
+  const { default: JSZip } = await import('jszip')
   const zip = await JSZip.loadAsync(buffer)
   const sheet = await zip.file('xl/worksheets/sheet1.xml')?.async('string')
   if (!sheet) throw new Error('Excel 文件缺少第一个工作表。')
@@ -68,6 +67,7 @@ export async function parseShippingFile(file: File): Promise<BatchDraftRow[]> {
 
 function escapeXml(value: string) { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
 export async function buildShippingTemplate(): Promise<Blob> {
+  const { default: JSZip } = await import('jszip')
   const zip = new JSZip(), cells = ['收件人', '联系电话', '收件地址', '物品'].map((value, index) => `<c r="${String.fromCharCode(65 + index)}1" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`).join('')
   zip.file('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
   zip.file('_rels/.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')

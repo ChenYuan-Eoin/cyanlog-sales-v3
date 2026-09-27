@@ -31,6 +31,20 @@ describe('self-service shipping workbench', () => {
     expect(screen.queryByRole('button', { name: '导入示例数据' })).toBeNull()
     expect(screen.queryByText('SF1234567890123')).toBeNull()
     expect(screen.queryByRole('navigation', { name: '寄件协同功能' })).toBeNull()
+    expect(screen.getByLabelText('多行地址文本')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '文本解析' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('link', { name: '模拟体验' }).getAttribute('href')).toBe('/shipping/demo')
+  })
+
+  it('keeps incomplete regions out of the real order request', async () => {
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '演示张三 13800000001 广东省示例路88号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    expect(screen.getByText('地址需包含完整省市区，请补充后重新确认')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '批量确认下单（0票）' })).toHaveProperty('disabled', true)
+    expect(fetcher.mock.calls.some((call: unknown[]) => (call[1] as RequestInit | undefined)?.method === 'POST')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: '文件导入' }))
+    expect(screen.getByText('选择 Excel 或 CSV')).toBeTruthy()
   })
 
   it('shows a standalone tracking result when the ledger has no selected order', async () => {
