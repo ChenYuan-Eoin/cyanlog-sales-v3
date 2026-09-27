@@ -15,6 +15,14 @@
 
 正常下单、查询、轨迹和取消路径只从组织数据库读取配置。配置管理员可在配置中心对当前环境触发一次性“迁入旧配置”：服务端读取旧`SF_*`/`SHIPPING_SENDER_JSON`值后，加密写入缺失的数据库项，不向浏览器返回原值，也不覆盖已保存的配置。完成迁移后，删除旧变量；正常运行不依赖它们。
 
+### 组织范围与旧名单切换
+
+普通寄件请求的组织由服务端`shipping:operate`角色/直接权限确定；台账、确认、退回、查回、取消、旧寄件请求和协同轨迹均使用这一次授权得到的组织。`SHIPPING_ALLOWED_USER_IDS`不再授予运行时权限，也不再补充提醒接收人；配置管理员须先迁入旧名单或在配置中心保存寄件人员权限。
+
+旧凭据和旧人员名单只能迁入可证明的原组织：名单中全部用户存在，主组织及成员关系只能指向同一个组织。无法证明、跨组织或多组织时拒绝迁入，不能以当前管理员的组织冒领部署级秘密。完成名单迁入后重复点击只读取当前数据库权限，不恢复已经撤销的人员，删除旧变量后也保持幂等。
+
+新匿名提报在服务器同时读取公司默认寄件人和组织后绑定`org_id`；存在多个公开组织候选时明确拒绝，客户端不能指定组织。历史空组织数据不会被自动分配给当前操作员，其持有者仍可用原回执查看最小状态。2026-09-27只读聚合核对：Preview有1票已绑定组织的协同测试单；旧shipping_requests另有8条缺组织的沙盒请求，原行保留并拒绝自动认领。Production协同台账和旧请求表均为空；本次不做数据补写或schema迁移。提醒只包含接收人自己组织的订单摘要。
+
 ## 顺丰标准接口鉴权
 
 Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工扫码。沙盒令牌地址为`https://sfapi-sbox.sf-express.com/oauth2/accessToken`，生产令牌地址为`https://bspgw.sf-express.com/oauth2/accessToken`；沙盒标准接口地址为`https://sfapi-sbox.sf-express.com/std/service`，生产标准接口地址为`https://sfapi.sf-express.com/std/service`。服务端用表单字段`partnerID`、`secret`和`grantType=password`获取令牌，在进程内缓存并于过期前刷新；标准接口表单发送`partnerID`、`requestID`、`serviceCode`、`timestamp`、`accessToken`和`msgData`。OAuth2模式不得同时发送`msgDigest`。CheckWord与令牌仅存在服务端，绝不回传浏览器或写日志。依据：顺丰提供的Node.js OAuth2接入说明及[顺丰统一接入平台对接规范](https://qiao.sf-express.com/doc/download/%E4%B8%B0%E6%A1%A5%E5%B9%B3%E5%8F%B0%E6%96%B0API%E6%8E%A5%E5%8F%A3%E8%A7%84%E8%8C%83.pdf)。

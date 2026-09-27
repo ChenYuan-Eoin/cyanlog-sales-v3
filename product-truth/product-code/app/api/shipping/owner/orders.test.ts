@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 const mocks = vi.hoisted(() => ({ create: vi.fn(), settings: vi.fn(), runtime: vi.fn(), chooseService: vi.fn(), confirm: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ requireAuth: async () => ({ id: 'operator-1' }), AuthError: class extends Error {} }))
-vi.mock('@/lib/shipping/runtime-config', () => ({ getUserShippingSettings: mocks.settings, getShippingRuntimeConfig: mocks.runtime, selectAuthorizedShippingService: mocks.chooseService }))
+vi.mock('@/lib/shipping/runtime-config', () => ({ loadShippingSettings: mocks.settings, getShippingRuntimeConfig: mocks.runtime, selectAuthorizedShippingService: mocks.chooseService }))
 vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: async () => 'org-1' }))
 vi.mock('@/lib/shipping/collaboration', () => ({ createOwnerShipment: mocks.create, publicShipmentReceipt: (order: unknown) => order }))
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: mocks.confirm }))
@@ -16,7 +16,7 @@ const body = { key: '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0', confirmed: true, con
 
 beforeEach(() => {
   mocks.create.mockReset().mockResolvedValue({ id: 'order-1', status: 'accepted' })
-  mocks.settings.mockReset().mockResolvedValue({ orgId: 'org-1', settings: { defaultBillingAccountId: 'account-1' } })
+  mocks.settings.mockReset().mockResolvedValue({ defaultBillingAccountId: 'account-1' })
   mocks.runtime.mockReset().mockResolvedValue(runtime)
   mocks.chooseService.mockReset().mockReturnValue(runtime.services[0])
   mocks.confirm.mockReset().mockResolvedValue({ status: 'waybill_created', waybill: 'SF1234567890123' })
@@ -27,10 +27,11 @@ describe('owner order consumes server-configured sender and account', () => {
     const response = await POST(new NextRequest('http://localhost/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify(body) }))
     expect(response.status).toBe(200)
     expect(mocks.runtime).toHaveBeenCalledWith({ orgId: runtime.orgId, billingAccountId: runtime.billingAccountId, connectionId: runtime.connectionId })
+    expect(mocks.settings).toHaveBeenCalledWith('org-1')
     const createArgs = mocks.create.mock.calls[0][0]
     expect(createArgs.input.sender).toEqual(serverSender)
     expect(createArgs.snapshot).toMatchObject({ orgId: runtime.orgId, connectionId: runtime.connectionId, billingAccountId: runtime.billingAccountId, senderProfileId: runtime.senderProfileId, billingAccountTail: '3456' })
     expect(JSON.stringify(createArgs)).not.toContain('secret')
-    expect(mocks.confirm).toHaveBeenCalledWith('order-1', 'operator-1', { connectionId: runtime.connectionId, billingAccountId: runtime.billingAccountId, serviceId: 2 })
+    expect(mocks.confirm).toHaveBeenCalledWith('order-1', 'operator-1', 'org-1', { connectionId: runtime.connectionId, billingAccountId: runtime.billingAccountId, serviceId: 2 })
   })
 })

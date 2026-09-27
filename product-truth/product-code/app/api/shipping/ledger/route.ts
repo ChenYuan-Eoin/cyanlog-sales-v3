@@ -6,9 +6,9 @@ import { listShipmentLedger } from '@/lib/shipping/collaboration'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
-  return shippingHandler(req, async () => {
+  return shippingHandler(req, async (_user, orgId) => {
     const filters = shipmentLedgerQuerySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()))
-    const records = await listShipmentLedger(filters)
+    const records = await listShipmentLedger(orgId, filters)
     return { records, nextCursor: records.length === filters.limit ? records.at(-1)?.createdAt || null : null }
   })
 }

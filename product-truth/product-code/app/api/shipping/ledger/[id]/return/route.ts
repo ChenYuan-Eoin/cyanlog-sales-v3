@@ -6,8 +6,8 @@ import { returnShipmentOrder } from '@/lib/shipping/workflow'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return shippingHandler(req, async user => {
+  return shippingHandler(req, async (user, orgId) => {
     const body = returnShipmentSchema.parse(await shippingJson(req))
-    return returnShipmentOrder((await params).id, user.id, body.reason)
+    return returnShipmentOrder((await params).id, user.id, orgId, body.reason)
   })
 }

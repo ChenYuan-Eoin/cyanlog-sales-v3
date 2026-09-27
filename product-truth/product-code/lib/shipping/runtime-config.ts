@@ -83,21 +83,17 @@ export async function getUserShippingSettings(userId: string) {
   return { orgId, settings: await loadShippingSettings(orgId) }
 }
 
-export async function resolvePublicShippingOrgId() {
-  const { data, error } = await supabaseAdmin.from('shipping_sender_profiles').select('org_id').eq('is_default', true).limit(2)
+export async function getPublicShippingDefaults(): Promise<{ orgId: string; sender: Contact }> {
+  const { data, error } = await supabaseAdmin.from('shipping_sender_profiles')
+    .select('org_id,name,phone,province,city,county,address').eq('is_default', true).limit(2)
   if (error) throw new ShippingError(503, '公司默认寄件配置暂不可用。')
-  const orgIds = [...new Set((data || []).map(row => row.org_id))]
-  if (orgIds.length !== 1) throw new ShippingError(503, orgIds.length ? '公开寄件入口需要明确绑定一个公司组织。' : '公司默认寄件地址尚未配置，请联系管理员。')
-  return orgIds[0] as string
+  if (data?.length !== 1 || !data[0].org_id) throw new ShippingError(503, data?.length ? '公开寄件入口需要明确绑定一个公司组织。' : '公司默认寄件地址尚未配置，请联系管理员。')
+  const row = data[0]
+  return { orgId: row.org_id, sender: { name: row.name, phone: row.phone, province: row.province, city: row.city, county: row.county, address: row.address } }
 }
 
-export async function getPublicDefaultSender(): Promise<Contact> {
-  const orgId = await resolvePublicShippingOrgId()
-  const { data, error } = await supabaseAdmin.from('shipping_sender_profiles')
-    .select('name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle()
-  if (error || !data) throw new ShippingError(503, '公司默认寄件地址尚未配置，请联系管理员。')
-  return data as Contact
-}
+export async function resolvePublicShippingOrgId() { return (await getPublicShippingDefaults()).orgId }
+export async function getPublicDefaultSender(): Promise<Contact> { return (await getPublicShippingDefaults()).sender }
 
 export async function getShippingRuntimeConfig(args: { orgId: string; billingAccountId?: string; connectionId?: string; requireOrderCapability?: boolean; allowHistorical?: boolean }): Promise<ShippingRuntimeConfig> {
   let accountQuery = supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,account_ciphertext,account_tail,status').eq('org_id', args.orgId)

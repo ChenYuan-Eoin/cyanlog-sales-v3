@@ -7,18 +7,19 @@ import { getOwnedShippingWaybill } from '@/lib/shipping/store'
 import { importedOutboundSuffix } from '@/lib/shipping/outbound'
 import { recordTrackingResult } from '@/lib/shipping/tracking-store'
 import { recordShippingCapability } from '@/lib/shipping/connections'
-import { getOwnedShipmentProviderSnapshot } from '@/lib/shipping/collaboration'
-import { getShippingRuntimeConfig, getUserShippingSettings } from '@/lib/shipping/runtime-config'
+import { getOrganizationShipmentProviderSnapshot } from '@/lib/shipping/collaboration'
+import { getShippingRuntimeConfig, loadShippingSettings } from '@/lib/shipping/runtime-config'
 export const runtime = 'nodejs'
-export async function POST(req: NextRequest) { return shippingHandler(req, async user => {
+export async function POST(req: NextRequest) { return shippingHandler(req, async (user, orgId) => {
   const input = trackingSchema.parse(await shippingJson(req))
   const [ownedLegacy, ownedCollaborative, importedSuffix] = await Promise.all([
-    getOwnedShippingWaybill(user.id, input.waybill),
-    getOwnedShipmentProviderSnapshot(user.id, input.waybill),
+    getOwnedShippingWaybill(user.id, orgId, input.waybill),
+    getOrganizationShipmentProviderSnapshot(orgId, input.waybill),
     importedOutboundSuffix(user.id, input.waybill)
   ])
+  if ((ownedLegacy && ownedLegacy.org_id !== orgId) || (ownedCollaborative && ownedCollaborative.org_id !== orgId)) throw new ShippingError(403, '该运单不属于当前授权组织。')
   const owned = ownedLegacy || ownedCollaborative
-  if (!owned && !importedSuffix) throw new ShippingError(403, '当前仅支持查询本人已记录的寄出运单。')
+  if (!owned && !importedSuffix) throw new ShippingError(403, '当前仅支持查询本组织单据或本人已核验的寄出运单。')
   let config
   if (ownedLegacy) {
     if (!ownedLegacy.org_id || !ownedLegacy.carrier_connection_id || !ownedLegacy.billing_account_id) throw new ShippingError(409, '该历史运单没有配置快照，请联系管理员协助查询。')
@@ -27,12 +28,12 @@ export async function POST(req: NextRequest) { return shippingHandler(req, async
     if (!ownedCollaborative.org_id || !ownedCollaborative.carrier_connection_id || !ownedCollaborative.billing_account_id) throw new ShippingError(409, '该历史运单没有配置快照，请联系管理员协助查询。')
     config = await getShippingRuntimeConfig({ orgId: ownedCollaborative.org_id, connectionId: ownedCollaborative.carrier_connection_id, billingAccountId: ownedCollaborative.billing_account_id, allowHistorical: true, requireOrderCapability: false })
   } else {
-    const { orgId, settings } = await getUserShippingSettings(user.id)
+    const settings = await loadShippingSettings(orgId)
     if (!settings.defaultBillingAccountId) throw new ShippingError(409, '当前组织尚未配置可用于查询的顺丰连接。')
     config = await getShippingRuntimeConfig({ orgId, billingAccountId: settings.defaultBillingAccountId, requireOrderCapability: false })
   }
   const result = await querySfTracking(input.waybill, importedSuffix || input.phoneSuffix, config)
-  await recordTrackingResult(result)
+  await recordTrackingResult(orgId, result)
   try { await recordShippingCapability(config.orgId, config.connectionId, 'tracking') }
   catch { console.error('shipping.capability.record_failed', { capability: 'tracking' }) }
   return result

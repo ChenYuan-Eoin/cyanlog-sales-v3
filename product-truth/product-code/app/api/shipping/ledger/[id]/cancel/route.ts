@@ -5,5 +5,5 @@ import { cancelShipmentOrder } from '@/lib/shipping/workflow'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return shippingHandler(req, async user => cancelShipmentOrder((await params).id, user.id))
+  return shippingHandler(req, async (user, orgId) => cancelShipmentOrder((await params).id, user.id, orgId))
 }

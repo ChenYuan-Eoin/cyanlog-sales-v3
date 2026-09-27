@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
+import { canImportLegacyShippingConfiguration } from './legacy-configuration-scope'
 import type { Contact } from './types'
 
 const credentialSchema = z.object({ partnerId: z.string().trim().min(1).max(64), checkWord: z.string().trim().min(1).max(256), environment: z.enum(['sandbox', 'production']) }).strict()
@@ -159,6 +160,9 @@ export function hasLegacyShippingConfiguration(environment: CarrierEnvironment, 
 }
 
 export async function importLegacyShippingConfiguration(orgId: string, userId: string, environment: CarrierEnvironment, env: Record<string, string | undefined> = process.env) {
+  if (!await canImportLegacyShippingConfiguration(orgId, env)) {
+    throw new ShippingError(403, '无法确认旧寄件配置属于当前组织，请在配置中心手动录入。')
+  }
   const imported: string[] = []
   const needsAttention: string[] = []
   let configuration = await loadShippingConfiguration(orgId)

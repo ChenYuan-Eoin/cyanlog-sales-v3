@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getDefaultOrgId, getOrgPermissions, getUserScopedRoleAssignments } from '@/lib/scoped-access'
 import { hasPermission } from '@/lib/permissions'
 import { ShippingError } from './config'
+import { canImportLegacyShippingConfiguration } from './legacy-configuration-scope'
 
 export const SHIPPING_OPERATOR_PERMISSION = 'shipping:operate'
 
@@ -17,7 +18,7 @@ function isUuid(value: string) {
 }
 
 function parseLegacyOperatorIds(value = process.env.SHIPPING_ALLOWED_USER_IDS || '') {
-  return [...new Set(value.split(',').map((item) => item.trim()).filter((item) => isUuid(item)))]
+  return [...new Set(value.split(',').map((item) => item.trim().toLowerCase()).filter((item) => isUuid(item)))]
 }
 
 function legacyImportCompleteForOrg(scope: Record<string, unknown> | null | undefined, orgId: string) {
@@ -79,16 +80,7 @@ export async function requireShippingOperator(userId: string) {
     directGrant = Boolean(data)
   }
 
-  // The deployment allowlist is only a one-time bridge. After its entries are
-  // imported, the organization-scoped permission table is the only source.
-  let legacyGrant = false
-  if (!legacyImportCompleteForOrg(point?.scope, orgId) && parseLegacyOperatorIds().includes(userId)) {
-    const { data, error } = await supabaseAdmin.from('user_organizations').select('user_id')
-      .eq('org_id', orgId).eq('user_id', userId).maybeSingle()
-    if (error) throw new ShippingError(503, '寄件操作授权读取失败。')
-    legacyGrant = Boolean(data)
-  }
-  if (roleGrant || directGrant || legacyGrant) return orgId
+  if (roleGrant || directGrant) return orgId
   throw new ShippingError(403, '当前账号没有自助收寄操作权限。')
 }
 
@@ -103,13 +95,14 @@ export async function loadShippingOperatorAccess(orgId: string) {
     operatorIds = new Set((data || []).map((row) => row.user_id).filter((id): id is string => typeof id === 'string'))
   }
   const migrated = legacyImportCompleteForOrg(point?.scope, orgId)
-  const legacySet = new Set(!migrated ? parseLegacyOperatorIds().filter((id) => users.some((user) => user.id === id)) : [])
+  const canImportLegacy = !migrated && await canImportLegacyShippingConfiguration(orgId)
+  const legacySet = new Set(canImportLegacy ? parseLegacyOperatorIds().filter((id) => users.some((user) => user.id === id)) : [])
   return {
     operators: users.map((user) => ({
       id: user.id,
       name: user.display_name || '未设置姓名',
       enabled: user.login_enabled === true && user.status !== 'inactive',
-      canOperate: operatorIds.has(user.id) || legacySet.has(user.id),
+      canOperate: operatorIds.has(user.id),
       grantSource: operatorIds.has(user.id) ? 'database' as const : legacySet.has(user.id) ? 'legacy' as const : 'none' as const,
     })),
     legacyImportAvailable: !migrated && legacySet.size > 0,
@@ -126,16 +119,6 @@ export async function listShippingOperatorRecipients() {
     if (error) throw new ShippingError(503, '寄件提醒接收人读取失败。')
     for (const row of data || []) {
       if (typeof row.user_id === 'string' && typeof row.org_id === 'string') recipients.set(`${row.user_id}:${row.org_id}`, { userId: row.user_id, orgId: row.org_id })
-    }
-  }
-  const legacyIds = parseLegacyOperatorIds()
-  if (legacyIds.length) {
-    const { data, error } = await supabaseAdmin.from('user_organizations').select('user_id,org_id').in('user_id', legacyIds)
-    if (error) throw new ShippingError(503, '寄件提醒接收人读取失败。')
-    for (const row of data || []) {
-      if (typeof row.user_id === 'string' && typeof row.org_id === 'string' && !legacyImportCompleteForOrg(point?.scope, row.org_id)) {
-        recipients.set(`${row.user_id}:${row.org_id}`, { userId: row.user_id, orgId: row.org_id })
-      }
     }
   }
   if (!recipients.size) return []
@@ -180,6 +163,14 @@ export async function saveShippingOperatorAccess(orgId: string, actorId: string,
 }
 
 export async function importLegacyShippingOperatorAccess(orgId: string, actorId: string) {
+  const currentPoint = await getShippingOperatePoint()
+  // Retrying an already imported list must not restore subsequently revoked grants.
+  if (legacyImportCompleteForOrg(currentPoint?.scope, orgId)) {
+    return { importedCount: 0, ...await loadShippingOperatorAccess(orgId) }
+  }
+  if (!await canImportLegacyShippingConfiguration(orgId)) {
+    throw new ShippingError(403, '无法确认旧寄件名单属于当前组织，请在配置中心手动授权。')
+  }
   const legacyIds = parseLegacyOperatorIds()
   if (!legacyIds.length) throw new ShippingError(409, '当前环境没有可迁移的旧寄件操作名单。')
   const users = await listOrganizationUsers(orgId)

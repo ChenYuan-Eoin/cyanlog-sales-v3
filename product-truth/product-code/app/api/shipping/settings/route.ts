@@ -14,6 +14,7 @@ import {
   getConnectionProbeCredentials,
   recordConnectionProbe
 } from '@/lib/shipping/connections'
+import { canImportLegacyShippingConfiguration } from '@/lib/shipping/legacy-configuration-scope'
 import { probeSfConnection } from '@/lib/shipping/sf-client'
 import { ShippingError } from '@/lib/shipping/config'
 import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
@@ -26,12 +27,14 @@ export async function GET(req: NextRequest) {
     try {
       const orgId = await requireShippingConnectionManager(user.id)
       const [configuration, operatorAccess] = await Promise.all([loadShippingConfiguration(orgId), loadShippingOperatorAccess(orgId)])
+      const legacy = { sandbox: hasLegacyShippingConfiguration('sandbox', configuration), production: hasLegacyShippingConfiguration('production', configuration) }
+      const legacyAllowed = (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
       return NextResponse.json({
         configuration,
         operatorAccess,
         legacyConfigurationAvailable: {
-          sandbox: hasLegacyShippingConfiguration('sandbox', configuration),
-          production: hasLegacyShippingConfiguration('production', configuration),
+          sandbox: Boolean(legacyAllowed && legacy.sandbox),
+          production: Boolean(legacyAllowed && legacy.production),
         },
       }, { headers: { 'Cache-Control': 'no-store' } })
     } catch (error) {

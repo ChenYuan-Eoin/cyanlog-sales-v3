@@ -1,14 +1,15 @@
 import type { NextRequest } from 'next/server'
 import { shippingHandler } from '@/lib/shipping/http'
 import { ShippingError } from '@/lib/shipping/config'
-import { shippingStore, publicRecord } from '@/lib/shipping/store'
+import { shippingStoreForOrg, publicRecord } from '@/lib/shipping/store'
 import { lookupSfOrder } from '@/lib/shipping/sf-client'
 import { getShippingRuntimeConfig } from '@/lib/shipping/runtime-config'
 export const runtime = 'nodejs'
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  return shippingHandler(req, async user => {
+  return shippingHandler(req, async (user, orgId) => {
     const { id } = await ctx.params
     if (!/^PV3[a-f0-9]{28}$/.test(id)) throw new ShippingError(400, '请求编号无效。')
+    const shippingStore = shippingStoreForOrg(orgId)
     const record = await shippingStore.get(id, user.id)
     if (!record) throw new ShippingError(404, '未找到本人的寄件记录。')
     if (record.status === 'accepted' && record.waybill) return publicRecord(record)

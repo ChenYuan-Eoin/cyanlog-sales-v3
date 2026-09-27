@@ -57,15 +57,19 @@ export function publicShipmentReceipt(order: ShipmentOrder): ShipmentReceipt {
   return { orderNo: order.orderNo, status: order.status, waybill: order.waybill, nextReviewAt: order.nextReviewAt, createdAt: order.createdAt }
 }
 
-export async function createAnonymousShipment(args: { key: string; rawInput?: string; input: ShippingInput; contextToken?: string; businessCode?: string }) {
+export async function createAnonymousShipment(args: { orgId: string; key: string; rawInput?: string; input: ShippingInput; contextToken?: string; businessCode?: string }) {
+  requireOrganization(args.orgId)
   const signed = args.contextToken ? verifyShipmentContext(args.contextToken) : null
   if (args.contextToken && !signed) throw new ShippingError(400, '寄件链接无效或已过期，请联系业务人员重新获取。')
   const relation = signed || resolveBusinessContext(args.businessCode)
   const receiptToken = receiptFor(args.key)
   const payloadHash = hash(JSON.stringify(args.input))
-  const row = { order_no: orderNo(), created_by: null, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || args.input.submittedBy?.name || null, customer_ref: relation?.customerRef || args.input.customerName || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
+  const row = { order_no: orderNo(), org_id: args.orgId, created_by: null, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || args.input.submittedBy?.name || null, customer_ref: relation?.customerRef || args.input.customerName || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
-  if (result.error?.code === '23505') result = await supabaseAdmin.from('shipping_orders').select(select).eq('intake_source', 'anonymous_web').eq('idempotency_key', args.key).single()
+  if (result.error?.code === '23505') {
+    result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('intake_source', 'anonymous_web').eq('idempotency_key', args.key).single()
+    if (!result.data) throw new ShippingError(409, '寄件请求编号已被使用，请保留原回执并使用新的请求编号。')
+  }
   if (result.error || !result.data) throw new ShippingError(503, '寄件单暂未保存，请稍后重试。')
   if ((result.data as ShipmentRow).payload_hash !== payloadHash) throw new ShippingError(409, '同一寄件请求的内容发生变化，请打开原回执确认。')
   const order = map(result.data as ShipmentRow)
@@ -75,11 +79,15 @@ export async function createAnonymousShipment(args: { key: string; rawInput?: st
 export async function createOwnerShipment(args: { userId: string; key: string; input: ShippingInput; snapshot: { orgId: string; connectionId: string; billingAccountId: string; senderProfileId: string; environment: 'sandbox' | 'production'; billingAccountTail: string; serviceId: number; serviceName: string } }) {
   const receiptToken = receiptFor(args.key)
   const { snapshot } = args
+  requireOrganization(snapshot.orgId)
   const shippingConfigSnapshot = { carrier: 'sf', connectionId: snapshot.connectionId, environment: snapshot.environment, billingAccountId: snapshot.billingAccountId, billingAccountTail: snapshot.billingAccountTail, senderProfileId: snapshot.senderProfileId, serviceId: snapshot.serviceId, serviceName: snapshot.serviceName }
   const payloadHash = hash(JSON.stringify({ input: args.input, shippingConfigSnapshot }))
   const row = { order_no: orderNo(), org_id: snapshot.orgId, carrier_connection_id: snapshot.connectionId, billing_account_id: snapshot.billingAccountId, sender_profile_id: snapshot.senderProfileId, connection_environment: snapshot.environment, billing_account_tail: snapshot.billingAccountTail, shipping_config_snapshot: shippingConfigSnapshot, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'direct', status: 'accepted', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: null }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
-  if (result.error?.code === '23505') result = await supabaseAdmin.from('shipping_orders').select(select).eq('intake_source', 'owner_web').eq('idempotency_key', args.key).single()
+  if (result.error?.code === '23505') {
+    result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', snapshot.orgId).eq('created_by', args.userId).eq('intake_source', 'owner_web').eq('idempotency_key', args.key).single()
+    if (!result.data) throw new ShippingError(409, '寄件请求编号已被使用，请从当前组织的原寄件单核对。')
+  }
   if (result.error || !result.data) throw new ShippingError(503, '本人寄件单暂未保存，请稍后重试。')
   if ((result.data as ShipmentRow).payload_hash !== payloadHash) throw new ShippingError(409, '同一寄件请求的内容发生变化，请打开原寄件单确认。')
   return map(result.data as ShipmentRow)
@@ -92,8 +100,13 @@ export async function getShipmentByReceipt(token: string) {
   return data ? map(data as ShipmentRow) : null
 }
 
-export async function listShipmentLedger(filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; limit: number }) {
-  let query = supabaseAdmin.from('shipping_orders').select(select).order('created_at', { ascending: false }).limit(filters.limit)
+function requireOrganization(orgId: string) {
+  if (!orgId) throw new ShippingError(403, '当前账号没有可用的组织寄件授权。')
+}
+
+export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; limit: number }) {
+  requireOrganization(orgId)
+  let query = supabaseAdmin.from('shipping_orders').select(select).eq('org_id', orgId).order('created_at', { ascending: false }).limit(filters.limit)
   if (filters.salesRef) query = query.eq('sales_ref', filters.salesRef)
   if (filters.customerRef) query = query.eq('customer_ref', filters.customerRef)
   if (filters.status) query = query.eq('status', filters.status)
@@ -104,8 +117,9 @@ export async function listShipmentLedger(filters: { salesRef?: string; customerR
   return (data || []).map(row => map(row as ShipmentRow))
 }
 
-export async function assignShipmentRelation(id: string, salesRef: string, customerRef?: string) {
-  const { data, error } = await supabaseAdmin.from('shipping_orders').update({ sales_ref: salesRef, customer_ref: customerRef || null, assignment_status: 'assigned', updated_at: new Date().toISOString() }).eq('id', id).in('status', ['accepted', 'awaiting_confirmation', 'returned']).select(select).maybeSingle()
+export async function assignShipmentRelation(id: string, orgId: string, salesRef: string, customerRef?: string) {
+  requireOrganization(orgId)
+  const { data, error } = await supabaseAdmin.from('shipping_orders').update({ sales_ref: salesRef, customer_ref: customerRef || null, assignment_status: 'assigned', updated_at: new Date().toISOString() }).eq('id', id).eq('org_id', orgId).in('status', ['accepted', 'awaiting_confirmation', 'returned']).select(select).maybeSingle()
   if (error) throw new ShippingError(503, '销售和客户关系保存失败。')
   if (!data) throw new ShippingError(409, '寄件单已经进入下单流程，不能重新分配。')
   return map(data as ShipmentRow)
@@ -113,28 +127,39 @@ export async function assignShipmentRelation(id: string, salesRef: string, custo
 
 export async function createDueShipmentReviewReminders(now = new Date()) {
   const recipients = await listShippingOperatorRecipients()
-  if (!recipients.length) return { orders: 0, reminders: 0 }
-  const notifiedAt = now.toISOString()
-  const { data: orders, error } = await supabaseAdmin.from('shipping_orders').update({ review_notified_at: notifiedAt, updated_at: notifiedAt }).eq('status', 'awaiting_confirmation').lte('next_review_at', notifiedAt).is('review_notified_at', null).select('id,order_no')
-  if (error) throw new ShippingError(503, '待核对寄件单汇总失败。')
-  if (!orders?.length) return { orders: 0, reminders: 0 }
-  const title = `有 ${orders.length} 个寄件单待核对`
-  const description = `寄件单：${orders.slice(0, 5).map(order => order.order_no).join('、')}${orders.length > 5 ? ' 等' : ''}`
-  const { error: reminderError } = await supabaseAdmin.from('reminders').insert(recipients.map(recipient => ({ org_id: recipient.orgId, user_id: recipient.userId, type: 'APPROVAL', title, description, link_type: 'SHIPPING', priority: 'HIGH', due_at: notifiedAt })))
-  if (reminderError) {
-    await supabaseAdmin.from('shipping_orders').update({ review_notified_at: null }).in('id', orders.map(order => order.id)).eq('review_notified_at', notifiedAt)
-    throw new ShippingError(503, '寄件核对提醒生成失败。')
+  const groups = new Map<string, Set<string>>()
+  for (const recipient of recipients) {
+    if (!recipient.orgId) continue
+    const users = groups.get(recipient.orgId) || new Set<string>()
+    users.add(recipient.userId); groups.set(recipient.orgId, users)
   }
-  return { orders: orders.length, reminders: recipients.length }
+  const totals = { orders: 0, reminders: 0 }
+  const notifiedAt = now.toISOString()
+  for (const [orgId, users] of groups) {
+    const { data: orders, error } = await supabaseAdmin.from('shipping_orders').update({ review_notified_at: notifiedAt, updated_at: notifiedAt })
+      .eq('org_id', orgId).eq('status', 'awaiting_confirmation').lte('next_review_at', notifiedAt).is('review_notified_at', null).select('id,order_no')
+    if (error) throw new ShippingError(503, '待核对寄件单汇总失败。')
+    if (!orders?.length) continue
+    const title = `有 ${orders.length} 个寄件单待核对`
+    const description = `寄件单：${orders.slice(0, 5).map(order => order.order_no).join('、')}${orders.length > 5 ? ' 等' : ''}`
+    const { error: reminderError } = await supabaseAdmin.from('reminders').insert([...users].map(userId => ({ org_id: orgId, user_id: userId, type: 'APPROVAL', title, description, link_type: 'SHIPPING', priority: 'HIGH', due_at: notifiedAt })))
+    if (reminderError) {
+      await supabaseAdmin.from('shipping_orders').update({ review_notified_at: null }).eq('org_id', orgId).in('id', orders.map(order => order.id)).eq('review_notified_at', notifiedAt)
+      throw new ShippingError(503, '寄件核对提醒生成失败。')
+    }
+    totals.orders += orders.length; totals.reminders += users.size
+  }
+  return totals
 }
 
-export async function getOwnedShipmentProviderSnapshot(userId: string, waybill: string) {
+export async function getOrganizationShipmentProviderSnapshot(orgId: string, waybill: string) {
+  requireOrganization(orgId)
   const { data: waybillRow, error: waybillError } = await supabaseAdmin.from('shipping_waybills').select('shipping_order_id').eq('carrier_key', 'sf').eq('waybill_no', waybill).maybeSingle()
   if (waybillError) throw new ShippingError(503, '运单归属核对暂不可用。')
   if (!waybillRow) return null
   const { data, error } = await supabaseAdmin.from('shipping_orders')
     .select('org_id,carrier_connection_id,billing_account_id')
-    .eq('id', waybillRow.shipping_order_id).eq('created_by', userId).maybeSingle()
+    .eq('id', waybillRow.shipping_order_id).eq('org_id', orgId).maybeSingle()
   if (error) throw new ShippingError(503, '运单配置快照读取失败。')
   return data || null
 }
