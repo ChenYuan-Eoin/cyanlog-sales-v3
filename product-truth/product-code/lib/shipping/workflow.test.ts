@@ -21,7 +21,21 @@ const queries: Array<{ table: string; action: string; filters: Array<[string, un
 function makeQueryBuilder(table: string) {
   const query = { table, action: 'select', filters: [] as Array<[string, unknown]>, values: undefined as Record<string, unknown> | undefined }
   queries.push(query)
-  const result = () => ({ data: query.action === 'update' ? (claimLost ? null : { id: order.id }) : table === 'shipping_orders' ? loadedOrder : { waybill_no: 'SF1234567890123' }, error: null })
+  const result = () => {
+    if (query.action === 'update') {
+      if (claimLost) return { data: null, error: null }
+      if (table === 'shipping_orders') {
+        const matched = query.filters.every(([key, value]) => {
+          const actual = loadedOrder[key as keyof typeof loadedOrder]
+          return Array.isArray(value) ? value.includes(actual) : value === actual
+        })
+        if (!matched) return { data: null, error: null }
+        loadedOrder = { ...loadedOrder, ...query.values }
+      }
+      return { data: { id: order.id }, error: null }
+    }
+    return { data: table === 'shipping_orders' ? loadedOrder : { waybill_no: 'SF1234567890123' }, error: null }
+  }
   const builder = {
     select: () => builder,
     update: (values: Record<string, unknown>) => { query.action = 'update'; query.values = values; return builder },
@@ -110,6 +124,47 @@ describe('historical carrier snapshot operations', () => {
     loadedOrder = { ...order, status: 'cancelled' }
     await expect(cancelShipmentOrder('order-1', 'operator-1', 'org-A')).resolves.toEqual({ id: 'order-1', status: 'cancelled' })
     expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+
+  it('persists an accepted SF cancellation when tracking advances during the provider request', async () => {
+    mocks.cancel.mockImplementation(async () => {
+      loadedOrder = { ...loadedOrder, status: 'in_transit' }
+      return true
+    })
+    await expect(cancelShipmentOrder('order-1', 'operator-1', 'org-A')).resolves.toEqual({ id: 'order-1', status: 'cancelled' })
+    expect(loadedOrder.status).toBe('cancelled')
+    expect(queries.find(query => query.table === 'shipping_waybills' && query.action === 'update')?.values).toMatchObject({ latest_status: 'cancelled' })
+  })
+
+  it('does not overwrite a delivered order if tracking wins the cancellation race', async () => {
+    mocks.cancel.mockImplementation(async () => {
+      loadedOrder = { ...loadedOrder, status: 'delivered' }
+      return true
+    })
+    await expect(cancelShipmentOrder('order-1', 'operator-1', 'org-A')).rejects.toMatchObject({ status: 409 })
+    expect(loadedOrder.status).toBe('delivered')
+    expect(queries.some(query => query.table === 'shipping_waybills' && query.action === 'update')).toBe(false)
+  })
+
+  it('returns success when another accepted cancellation has already updated the order', async () => {
+    mocks.cancel.mockImplementation(async () => {
+      loadedOrder = { ...loadedOrder, status: 'cancelled' }
+      return true
+    })
+    await expect(cancelShipmentOrder('order-1', 'operator-1', 'org-A')).resolves.toEqual({ id: 'order-1', status: 'cancelled' })
+    expect(loadedOrder.status).toBe('cancelled')
+    expect(queries.filter(query => query.table === 'shipping_orders' && query.action === 'select')).toHaveLength(2)
+  })
+
+  it.each(['provider_rejected', 'provider_unreachable'] as const)('does not mark cancellation when SF reports %s', async stage => {
+    mocks.cancel.mockImplementation(async () => {
+      loadedOrder = { ...loadedOrder, status: 'in_transit' }
+      throw new ShippingError(502, 'synthetic cancellation failure', stage)
+    })
+    await expect(cancelShipmentOrder('order-1', 'operator-1', 'org-A')).rejects.toMatchObject({ requestStage: stage })
+    expect(loadedOrder.status).toBe('in_transit')
+    expect(queries.some(query => query.action === 'update')).toBe(false)
+    expect(mocks.capability).not.toHaveBeenCalled()
   })
 
   it('reconciles an unknown order using its stored connection without submitting a second shipment', async () => {

@@ -33,8 +33,12 @@ export async function POST(req: NextRequest) { return shippingHandler(req, async
     config = await getShippingRuntimeConfig({ orgId, billingAccountId: settings.defaultBillingAccountId, requireOrderCapability: false })
   }
   const result = await querySfTracking(input.waybill, importedSuffix || input.phoneSuffix, config)
-  await recordTrackingResult(orgId, result)
+  // SF documents sandbox routes as MOCK. They cannot prove a shipment was
+  // collected/delivered and must not pollute the actual order/event state.
+  const recording = config.environment === 'production'
+    ? await recordTrackingResult(orgId, result)
+    : { recorded: 0, shipmentStatus: undefined }
   try { await recordShippingCapability(config.orgId, config.connectionId, 'tracking') }
   catch { console.error('shipping.capability.record_failed', { capability: 'tracking' }) }
-  return result
+  return { ...result, source: config.environment === 'production' ? 'carrier' : 'sandbox_mock', ...(recording.shipmentStatus ? { shipmentStatus: recording.shipmentStatus } : {}) }
 }) }

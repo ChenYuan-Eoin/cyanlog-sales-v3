@@ -130,6 +130,41 @@ describe('self-service shipping workbench', () => {
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
   })
 
+  it('updates the ledger from saved pickup status and removes cancellation without another ledger request', async () => {
+    const order = { ...fixtureOrders[1], status: 'waybill_created' as const }
+    fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith('/api/shipping/ledger') ? { records: [order] } : { waybill: order.waybill, queriedAt: '2026-09-27T00:00:00Z', shipmentStatus: 'in_transit', events: [{ time: '2026-09-27 08:00:00', location: '深圳市', description: '顺丰速运 已收取快件', status: 'in_transit' }] }), { status: 200 }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findAllByText('远景能源')
+    expect(screen.getByRole('button', { name: '取消运单' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    expect(await screen.findByText('顺丰速运 已收取快件')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '运输中' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+    expect(fetcher.mock.calls.filter(([url]) => String(url).startsWith('/api/shipping/ledger'))).toHaveLength(1)
+  })
+
+  it.each(['cancelled', 'delivered'] as const)('does not downgrade a %s order after a stale tracking response', async status => {
+    const order = { ...fixtureOrders[1], status }
+    fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith('/api/shipping/ledger') ? { records: [order] } : { waybill: order.waybill, queriedAt: '2026-09-27T00:00:00Z', shipmentStatus: 'waybill_created', events: [{ time: '2026-09-20 08:00:00', location: '深圳市', description: '旧的待揽收事件' }] }), { status: 200 }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findAllByText('远景能源')
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    await screen.findByText('旧的待揽收事件')
+    expect(screen.getByRole('heading', { name: status === 'cancelled' ? '已取消' : '已签收' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+  })
+
+  it('labels sandbox mock tracking without treating its delivery claim as actual shipment progress', async () => {
+    const order = { ...fixtureOrders[1], status: 'waybill_created' as const }
+    fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith('/api/shipping/ledger') ? { records: [order] } : { waybill: order.waybill, queriedAt: '2026-09-27T00:00:00Z', source: 'sandbox_mock', shipmentStatus: 'delivered', events: [{ time: '2026-09-27 08:00:00', location: '模拟地点', description: '已签收' }] }), { status: 200 }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findAllByText('远景能源')
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    expect(await screen.findByRole('note')).toHaveProperty('textContent', '顺丰沙盒返回的是模拟轨迹，不用于判断实际揽收、签收或取消状态。')
+    expect(screen.getByRole('heading', { name: '等待揽收' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '取消运单' })).toBeTruthy()
+  })
+
   it('reloads and selects a newly created order in the ledger after batch success', async () => {
     let ledgerLoads = 0
     const createdOrder: ShipmentOrder = { ...fixtureOrders[0], id: 'new-sandbox-order', status: 'waybill_created', waybill: 'SF12345678901234' }

@@ -126,9 +126,15 @@ export async function cancelShipmentOrder(id: string, userId: string, orgId: str
   const connection = await getShippingRuntimeConfig({ orgId: row.org_id, billingAccountId: row.billing_account_id, connectionId: row.carrier_connection_id, allowHistorical: true, requireOrderCapability: false })
   await cancelSfOrder(row.provider_order_id, connection)
   const now = new Date().toISOString()
-  const { data, error } = await supabaseAdmin.from('shipping_orders').update({ status: 'cancelled', confirmed_by: userId, updated_at: now }).eq('id', id).eq('org_id', orgId).eq('status', 'waybill_created').select('id').maybeSingle()
+  // SF has accepted this request. Tracking may have advanced during that call;
+  // persist the confirmed cancellation without overwriting a delivered order.
+  const { data, error } = await supabaseAdmin.from('shipping_orders').update({ status: 'cancelled', confirmed_by: userId, updated_at: now }).eq('id', id).eq('org_id', orgId).in('status', ['waybill_created', 'in_transit']).select('id').maybeSingle()
   if (error) throw new ShippingError(503, '顺丰已受理取消，但本地状态保存失败，请勿重复操作。')
-  if (!data) throw new ShippingError(409, '寄件单状态已变化，请刷新后核对。')
+  if (!data) {
+    const current = await loadForAction(id, orgId)
+    if (current.status === 'cancelled') return { id, status: 'cancelled' as const }
+    throw new ShippingError(409, '顺丰已受理取消，但寄件单状态已变化，请刷新后核对。')
+  }
   const { error: waybillError } = await supabaseAdmin.from('shipping_waybills').update({ latest_status: 'cancelled', updated_at: now }).eq('shipping_order_id', id)
   if (waybillError) throw new ShippingError(503, '顺丰已取消运单，但物流状态保存失败，请刷新核对。')
   try { await recordShippingCapability(row.org_id, connection.connectionId, 'cancel') }

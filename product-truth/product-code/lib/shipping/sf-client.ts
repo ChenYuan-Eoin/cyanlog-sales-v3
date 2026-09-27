@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { ShippingError } from './config'
 import type { ShippingInput, TrackingResult } from './types'
 import type { ShippingRuntimeConfig } from './runtime-config'
+import { normalizeTrackingStatus, normalizeTrackingTime } from './tracking-status'
 const envelope = z.object({ apiResultCode: z.string(), apiResultData: z.union([z.string(), z.record(z.string(), z.unknown())]).optional() })
 const business = z.object({ success: z.union([z.boolean(), z.enum(['true', 'false'])]), errorCode: z.string().optional(), msgData: z.unknown().optional() })
 const tokenResponse = z.object({ apiResultCode: z.string(), accessToken: z.string().min(1).nullable().optional(), expiresIn: z.number().int().positive().max(86400).nullable().optional() })
@@ -182,13 +183,27 @@ export function extractCancellation(raw: unknown, expectedId: string) {
 export async function cancelSfOrder(orderId: string, config: ShippingRuntimeConfig) {
   return extractCancellation(await sfCall('EXP_RECE_UPDATE_ORDER', { orderId, dealType: 2, language: 'zh-CN' }, config), orderId)
 }
-const routeData = z.object({ routeResps: z.array(z.object({ mailNo: z.string().nullable().optional(), routes: z.array(z.object({ acceptTime: z.string(), acceptAddress: z.string().nullish(), remark: z.string() })) })) })
+const routeData = z.object({ routeResps: z.array(z.object({ mailNo: z.string().nullable().optional(), routes: z.array(z.object({
+  acceptTime: z.string(), acceptAddress: z.string().nullish(), remark: z.string(),
+  firstStatusName: z.string().nullish(), secondaryStatusName: z.string().nullish(), opCode: z.string().nullish(),
+})) })) })
 export function extractTracking(raw: unknown, waybill: string): TrackingResult {
   const data = routeData.parse(raw)
   const match = data.routeResps.find(r => r.mailNo === waybill)
   if (!match && data.routeResps.some(r => r.routes.length)) throw new ShippingError(502, '顺丰返回的运单号不一致。')
-  return { waybill, queriedAt: new Date().toISOString(), events: (match?.routes || []).map(r => ({ time: r.acceptTime, location: r.acceptAddress || '', description: r.remark })).sort((a, b) => b.time.localeCompare(a.time)) }
+  const events = (match?.routes || []).map(route => ({
+    event: {
+      time: route.acceptTime, location: route.acceptAddress || '', description: route.remark,
+      status: normalizeTrackingStatus({ ...route, description: route.remark }),
+    },
+    timestamp: normalizeTrackingTime(route.acceptTime),
+  })).sort((a, b) => {
+    if (!a.timestamp) return b.timestamp ? 1 : 0
+    if (!b.timestamp) return -1
+    return Date.parse(b.timestamp) - Date.parse(a.timestamp)
+  }).map(({ event }) => event)
+  return { waybill, queriedAt: new Date().toISOString(), events }
 }
 export async function querySfTracking(waybill: string, phoneSuffix: string | undefined, config: ShippingRuntimeConfig) {
-  return extractTracking(await sfCall('EXP_RECE_SEARCH_ROUTES', { language: '0', trackingType: '1', trackingNumber: [waybill], methodType: '1', ...(phoneSuffix ? { checkPhoneNo: phoneSuffix } : {}) }, config), waybill)
+  return extractTracking(await sfCall('EXP_RECE_SEARCH_ROUTES', { language: 'zh-CN', trackingType: '1', trackingNumber: [waybill], methodType: '1', ...(phoneSuffix ? { checkPhoneNo: phoneSuffix } : {}) }, config), waybill)
 }

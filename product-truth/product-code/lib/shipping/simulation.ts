@@ -47,7 +47,7 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
       : order.status === 'delivered' ? ['模拟：收件人已签收', '模拟：快件正在派送', '模拟：快件运输中', '模拟：已揽收']
       : order.status === 'in_transit' ? ['模拟：快件运输中', '模拟：已到达中转场', '模拟：已揽收']
       : ['模拟：已生成示例运单，等待揽收']
-    return { waybill, queriedAt: new Date().toISOString(), events: descriptions.map((description, index) => ({ time: new Date(now - index * 3600000).toISOString(), location: index ? sender.city : order.input.recipient.city, description })) }
+    return { waybill, queriedAt: new Date().toISOString(), source: 'simulation', shipmentStatus: order.status, events: descriptions.map((description, index) => ({ time: new Date(now - index * 3600000).toISOString(), location: index ? sender.city : order.input.recipient.city, description })) }
   }
 
   function dispatch(url: string, init?: RequestInit): unknown {

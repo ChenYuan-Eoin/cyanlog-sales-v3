@@ -14,6 +14,15 @@ const statusTone: Record<ShipmentOrderStatus, string> = { accepted: 'orange', aw
 function cityOf(order: ShipmentOrder) { return order.input.recipient.city || order.input.recipient.province }
 function customerOf(order: ShipmentOrder) { return order.input.customerName || order.relation.customerRef || '未填写客户' }
 
+function withTrackingStatus(order: ShipmentOrder, result: TrackingResult): ShipmentOrder {
+  if (result.source === 'sandbox_mock' || order.waybill !== result.waybill || !result.shipmentStatus) return order
+  // A delayed response must not reopen a collected or terminal shipment.
+  if (order.status !== 'waybill_created' && order.status !== 'in_transit') return order
+  const next = result.shipmentStatus
+  if (next !== 'in_transit' && next !== 'delivered' && next !== 'cancelled') return order
+  return next === order.status ? order : { ...order, status: next }
+}
+
 export default function ShippingWorkbench({ settings, simulation }: { settings: ShippingSettings; simulation?: ShippingSimulation }) {
   const request = simulation ? simulation.request : shippingWorkbenchRequest
   const isSimulation = Boolean(simulation)
@@ -157,7 +166,10 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     setTrackingBusy(true); setMessage('')
     try {
       const result = await request<TrackingResult>('/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: number, ...(phoneSuffix ? { phoneSuffix } : {}) }) })
-      if (currentRequest === trackingRequest.current) { setTracking(result); setManualWaybill(number) }
+      if (currentRequest === trackingRequest.current) {
+        setTracking(result); setManualWaybill(number)
+        if (result.shipmentStatus) setOrders(items => items.map(order => withTrackingStatus(order, result)))
+      }
     } catch (error) {
       if (currentRequest === trackingRequest.current) { setMessage((error as Error).message); setTracking(null) }
     } finally { if (currentRequest === trackingRequest.current) setTrackingBusy(false) }
@@ -206,6 +218,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
           <input aria-label="查询手机号后四位" value={phoneSuffix} onChange={event => setPhoneSuffix(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="手机后四位" />
           <button type="submit" disabled={!manualWaybill || trackingBusy}><Search size={14}/>{trackingBusy ? '查询中…' : '查询轨迹'}</button>
         </form>
+        {tracking?.source === 'sandbox_mock' && <p className={styles.trackingNotice} role="note">顺丰沙盒返回的是模拟轨迹，不用于判断实际揽收、签收或取消状态。</p>}
         {selected ? (
           <div className={styles.detailStack}>
             <section className={styles.detailPane}>

@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({ from: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 import { recordTrackingResult } from './tracking-store'
 
-type Waybill = { id: string; shipping_order_id: string; carrier_key: string; waybill_no: string; shipping_orders: { org_id: string | null } | Array<{ org_id: string | null }> | null }
+type Waybill = { id: string; shipping_order_id: string; carrier_key: string; waybill_no: string; latest_event_at: string | null; latest_status: string; shipping_orders: { org_id: string | null; status?: string } | Array<{ org_id: string | null; status?: string }> | null }
 type Query = { table: string; action: 'select' | 'upsert' | 'update'; select?: string; filters: Array<[string, unknown]>; values?: unknown }
 let waybill: Waybill | null
 let queries: Query[]
@@ -28,6 +28,7 @@ function builder(table: string) {
   const api = {
     select: (fields: string) => { query.select = fields; return api },
     eq: (key: string, value: unknown) => { query.filters.push([key, value]); return api },
+    is: (key: string, value: unknown) => { query.filters.push([key, value]); return api },
     upsert: (values: unknown) => { query.action = 'upsert'; query.values = values; return api },
     update: (values: unknown) => { query.action = 'update'; query.values = values; return api },
     maybeSingle: async () => resolve(),
@@ -37,7 +38,7 @@ function builder(table: string) {
 }
 
 beforeEach(() => {
-  waybill = { id: 'waybill-1', shipping_order_id: 'order-1', carrier_key: 'sf', waybill_no: result.waybill, shipping_orders: { org_id: 'org-A' } }
+  waybill = { id: 'waybill-1', shipping_order_id: 'order-1', carrier_key: 'sf', waybill_no: result.waybill, latest_event_at: null, latest_status: 'waybill_created', shipping_orders: { org_id: 'org-A', status: 'waybill_created' } }
   queries = []; returnUnfiltered = false; databaseError = false
   mocks.from.mockReset().mockImplementation(builder)
 })
@@ -52,7 +53,7 @@ describe('tracking event organization scope', () => {
     waybill!.shipping_orders = { org_id: orgId }
     expect(await recordTrackingResult('org-A', result)).toEqual({ recorded: 0 })
     expect(queries).toHaveLength(1)
-    expect(queries[0].select).toContain('shipping_orders!inner(org_id)')
+    expect(queries[0].select).toContain('shipping_orders!inner(org_id,status)')
     expect(queries[0].filters).toContainEqual(['shipping_orders.org_id', 'org-A'])
     expect(queries.every(query => query.action === 'select')).toBe(true)
   })
@@ -70,8 +71,8 @@ describe('tracking event organization scope', () => {
   })
 
   it.each([false, true])('records only the verified company waybill (array relation: %s)', async arrayRelation => {
-    if (arrayRelation) waybill!.shipping_orders = [{ org_id: 'org-A' }]
-    expect(await recordTrackingResult('org-A', result)).toEqual({ recorded: 1 })
+    if (arrayRelation) waybill!.shipping_orders = [{ org_id: 'org-A', status: 'waybill_created' }]
+    expect(await recordTrackingResult('org-A', result)).toMatchObject({ recorded: 1 })
     const events = queries.find(query => query.table === 'shipping_tracking_events')
     expect(events?.values).toEqual([expect.objectContaining({ waybill_id: 'waybill-1', description: '模拟运输中' })])
     const update = queries.find(query => query.action === 'update')

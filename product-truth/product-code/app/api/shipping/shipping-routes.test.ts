@@ -35,7 +35,7 @@ describe('shipping access is server enforced', () => {
   it('rejects cross-origin side effects before calling SF', async () => { auth.mockResolvedValue({ id: 'allowed' }); const r = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', headers: { origin: 'https://evil.example' }, body: JSON.stringify({ waybill: 'SF1234567890123' }) })); expect(r.status).toBe(403); expect(query).not.toHaveBeenCalled() })
   it('rejects malformed or extra fields', async () => { auth.mockResolvedValue({ id: 'allowed' }); const r = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123', created_by: 'other' }) })); expect(r.status).toBe(400); expect(query).not.toHaveBeenCalled() })
   it('queries an owned waybill using its saved connection snapshot and records verified capability', async () => { auth.mockResolvedValue({ id: 'allowed' }); ownedLegacy.mockResolvedValue({ org_id: 'org-1', carrier_connection_id: 'conn-1', billing_account_id: 'account-1' }); const r = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123' }) })); expect(r.status).toBe(200); expect(runtimeConfig).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', connectionId: 'conn-1', billingAccountId: 'account-1', allowHistorical: true })); expect(query).toHaveBeenCalledWith('SF1234567890123', undefined, runtime); expect(recordCapability).toHaveBeenCalledWith('org-1', 'conn-1', 'tracking') })
-  it('records normalized events for platform waybills', async () => { auth.mockResolvedValue({ id: 'allowed' }); ownedLegacy.mockResolvedValue({ org_id: 'org-1', carrier_connection_id: 'conn-1', billing_account_id: 'account-1' }); await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123' }) })); expect(recordTracking).toHaveBeenCalledWith('org-1', expect.objectContaining({ waybill: 'SF1234567890123' })) })
+  it('records normalized events for platform waybills', async () => { runtimeConfig.mockResolvedValue({ ...runtime, environment: 'production' }); auth.mockResolvedValue({ id: 'allowed' }); ownedLegacy.mockResolvedValue({ org_id: 'org-1', carrier_connection_id: 'conn-1', billing_account_id: 'account-1' }); await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123' }) })); expect(recordTracking).toHaveBeenCalledWith('org-1', expect.objectContaining({ waybill: 'SF1234567890123' })) })
   it('does not treat four digits as proof that a foreign waybill belongs to the user', async () => { auth.mockResolvedValue({ id: 'allowed' }); const denied = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123', phoneSuffix: '1234' }) })); expect(denied.status).toBe(403); expect(query).not.toHaveBeenCalled() })
   it('looks up an imported waybill under the caller and uses its verified phone suffix', async () => { auth.mockResolvedValue({ id: 'allowed' }); importedSuffix.mockResolvedValue('1410'); const response = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123', phoneSuffix: '0000' }) })); expect(response.status).toBe(200); expect(importedSuffix).toHaveBeenCalledWith('allowed', 'SF1234567890123'); expect(userSettings).toHaveBeenCalledWith('org-1'); expect(query).toHaveBeenCalledWith('SF1234567890123', '1410', runtime) })
   it('blocks a former organization snapshot before loading its credentials or calling SF', async () => {
@@ -46,6 +46,7 @@ describe('shipping access is server enforced', () => {
     expect(runtimeConfig).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled(); expect(recordTracking).not.toHaveBeenCalled()
   })
   it('allows organization operators to track a same-organization anonymous intake after confirmation', async () => {
+    runtimeConfig.mockResolvedValue({ ...runtime, environment: 'production' })
     auth.mockResolvedValue({ id: 'allowed' })
     ownedCollaborative.mockResolvedValue({ org_id: 'org-1', carrier_connection_id: 'conn-1', billing_account_id: 'account-1' })
     const response = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123' }) }))
@@ -53,6 +54,29 @@ describe('shipping access is server enforced', () => {
     expect(ownedCollaborative).toHaveBeenCalledWith('org-1', 'SF1234567890123')
     expect(ownedLegacy).toHaveBeenCalledWith('allowed', 'org-1', 'SF1234567890123')
     expect(recordTracking).toHaveBeenCalledWith('org-1', expect.objectContaining({ waybill: 'SF1234567890123' }))
+  })
+  it('returns the saved shipment status together with the route, without an extra ledger fetch', async () => {
+    runtimeConfig.mockResolvedValue({ ...runtime, environment: 'production' })
+    auth.mockResolvedValue({ id: 'allowed' })
+    ownedCollaborative.mockResolvedValue({ org_id: 'org-1', carrier_connection_id: 'conn-1', billing_account_id: 'account-1' })
+    recordTracking.mockResolvedValue({ recorded: 1, shipmentStatus: 'in_transit' })
+    const response = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123' }) }))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ waybill: 'SF1234567890123', shipmentStatus: 'in_transit' })
+    expect(query).toHaveBeenCalledTimes(1)
+    expect(recordTracking).toHaveBeenCalledTimes(1)
+  })
+
+  it('labels SF sandbox mock routes and never uses them to update persisted shipment status', async () => {
+    auth.mockResolvedValue({ id: 'allowed' })
+    ownedCollaborative.mockResolvedValue({ org_id: 'org-1', carrier_connection_id: 'conn-1', billing_account_id: 'account-1' })
+    query.mockResolvedValue({ waybill: 'SF1234567890123', queriedAt: '2026-09-27T00:00:00Z', events: [{ time: '2026-09-27 08:00:00', description: '已签收', location: '模拟地点', status: 'delivered' }] })
+    const response = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123' }) }))
+    expect(response.status).toBe(200)
+    const result = await response.json()
+    expect(result.source).toBe('sandbox_mock')
+    expect(result).not.toHaveProperty('shipmentStatus')
+    expect(recordTracking).not.toHaveBeenCalled()
   })
 
 })
