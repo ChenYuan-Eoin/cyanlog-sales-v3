@@ -1,18 +1,18 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const m=vi.hoisted(()=>({token:vi.fn(),user:vi.fn(),redirect:vi.fn(),manager:vi.fn(),operator:vi.fn()}))
+const m=vi.hoisted(()=>({token:vi.fn(),user:vi.fn(),redirect:vi.fn(),manager:vi.fn(),operator:vi.fn(),settings:vi.fn()}))
 vi.mock('@/lib/server-auth',()=>({getServerAuthToken:m.token}))
 vi.mock('@/lib/auth',()=>({getAuthUserByToken:m.user}))
-vi.mock('@/lib/shipping/runtime-config',()=>({getUserShippingSettings:async()=>({orgId:'org-1',settings:{environment:'sandbox',ready:false,reason:'',services:[],monthlyTail:'',sender:{name:'',phone:'',province:'',city:'',county:'',address:''},canSubmit:false}})}))
+vi.mock('@/lib/shipping/runtime-config',()=>({loadShippingSettings:m.settings}))
 vi.mock('@/lib/shipping/connection-authorization',()=>({requireShippingConnectionManager:async()=>{if(!m.manager())throw new Error('not a manager')}}))
 vi.mock('@/lib/shipping/operator-access',()=>({requireShippingOperator:m.operator}))
 vi.mock('next/navigation',()=>({redirect:m.redirect}))
 import ShippingPage from './page'
 import { ShippingError } from '@/lib/shipping/config'
-beforeEach(()=>{m.token.mockReset();m.user.mockReset();m.redirect.mockReset();m.manager.mockReset();m.operator.mockReset();m.manager.mockReturnValue(false);m.operator.mockRejectedValue(new ShippingError(403,'denied'));m.redirect.mockImplementation((path:string)=>{throw new Error(`redirect:${path}`)})})
+beforeEach(()=>{m.token.mockReset();m.user.mockReset();m.redirect.mockReset();m.manager.mockReset();m.operator.mockReset();m.settings.mockReset().mockResolvedValue({environment:'sandbox',ready:false,reason:'',services:[],monthlyTail:'',sender:{name:'',phone:'',province:'',city:'',county:'',address:''},canSubmit:false});m.manager.mockReturnValue(false);m.operator.mockRejectedValue(new ShippingError(403,'denied'));m.redirect.mockImplementation((path:string)=>{throw new Error(`redirect:${path}`)})})
 describe('self-service shipping workbench access',()=>{
  it('requires login for the operator workbench',async()=>{m.token.mockResolvedValue(undefined);await expect(ShippingPage()).rejects.toThrow('redirect:/login')})
  it('rejects a member without the database-backed operator permission',async()=>{m.token.mockResolvedValue('token');m.user.mockResolvedValue({id:'outsider'});await expect(ShippingPage()).rejects.toThrow('redirect:/?denied=shipping:operate')})
  it('routes a connection manager without operator access to Config Center',async()=>{m.token.mockResolvedValue('token');m.user.mockResolvedValue({id:'manager'});m.manager.mockReturnValue(true);await expect(ShippingPage()).rejects.toThrow('redirect:/configs?tab=shipping')})
- it('renders the three-column workbench for a database-authorized operator',async()=>{m.token.mockResolvedValue('token');m.user.mockResolvedValue({id:'operator'});m.operator.mockResolvedValue('org-1');const page=await ShippingPage();expect(page.type.name).toBe('ShippingWorkbench')})
+ it('renders the three-column workbench from the same server-authorized organization',async()=>{m.token.mockResolvedValue('token');m.user.mockResolvedValue({id:'operator'});m.operator.mockResolvedValue('org-1');const page=await ShippingPage();expect(page.type.name).toBe('ShippingWorkbench');expect(m.settings).toHaveBeenCalledWith('org-1')})
 })
