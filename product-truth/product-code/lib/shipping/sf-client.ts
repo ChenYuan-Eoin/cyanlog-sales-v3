@@ -29,6 +29,14 @@ function sfServiceUrl(environment: SfAuthConfig['environment']) {
   return `${origin}/std/service`
 }
 
+function endpointMetadata(endpoint: string) {
+  const region = process.env.VERCEL_REGION
+  return {
+    endpointHostname: new URL(endpoint).hostname,
+    runtimeRegion: typeof region === 'string' && /^[a-z]{3}\d{1,2}$/.test(region) ? region : undefined,
+  }
+}
+
 function transportMetadata(error: unknown, endpoint: string) {
   const asRecord = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {}
   const failure = asRecord(error), cause = asRecord(failure.cause)
@@ -68,10 +76,8 @@ function transportMetadata(error: unknown, endpoint: string) {
     if (item.cause && typeof item.cause === 'object') pending.push(item.cause)
     if ((current instanceof AggregateError || item.name === 'AggregateError') && Array.isArray(item.errors)) pending.push(...item.errors.slice(0, 8))
   }
-  const region = process.env.VERCEL_REGION
   return {
-    endpointHostname: new URL(endpoint).hostname,
-    runtimeRegion: typeof region === 'string' && /^[a-z]{3}\d{1,2}$/.test(region) ? region : undefined,
+    ...endpointMetadata(endpoint),
     attemptedAddresses,
     errorType: typeof failure.name === 'string' && /^(?:Error|TypeError|AbortError|TimeoutError|AggregateError)$/.test(failure.name) ? failure.name : undefined,
     networkCode: typeof cause.code === 'string' && transportErrorCodes.has(cause.code) ? cause.code : undefined,
@@ -131,7 +137,7 @@ export function decodeSfResponse(raw: unknown): unknown {
     throw new ShippingError(502, `顺丰接口未受理请求（${code}），请检查账号权限。`, 'provider_rejected')
   }
   const data = business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData)
-  if (data.success !== true && data.success !== 'true') throw new ShippingError(422, `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
+  if (data.success !== true && data.success !== 'true') throw new ShippingError(422, data.errorCode === '6150' ? '顺丰未找到该订单（6150）。' : `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
   return data.msgData
 }
 async function postSfService(serviceCode: string, message: unknown, config: SfAuthConfig, accessToken: string): Promise<unknown> {
@@ -150,6 +156,7 @@ async function postSfService(serviceCode: string, message: unknown, config: SfAu
     throw new ShippingError(502, timedOut ? '顺丰网关连接超时，未收到顺丰响应。' : '无法连接顺丰网关，未收到顺丰响应。', 'provider_unreachable')
   }
   const upstreamStatus = response.status
+  console.info('shipping.sf.response', { serviceCode, environment: config.environment, ...endpointMetadata(url), status: upstreamStatus, elapsedMs: Date.now() - started })
   if (!response.ok) {
     console.error('shipping.sf.http', { serviceCode, environment: config.environment, upstreamStatus, elapsedMs: Date.now() - started })
     throw new ShippingError(502, `顺丰标准接口返回HTTP错误（${response.status}），连接未验证。`, 'provider_http_error')

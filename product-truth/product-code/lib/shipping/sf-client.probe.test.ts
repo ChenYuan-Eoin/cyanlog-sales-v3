@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { probeSfProduction, probeSfSandbox } from './sf-client'
+import { probeSfProduction, probeSfSandbox, sfCall } from './sf-client'
 
 describe('SF sandbox OAuth2 connectivity probe', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks() })
@@ -119,6 +119,29 @@ describe('SF sandbox OAuth2 connectivity probe', () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain('private')
     expect(JSON.stringify(log.mock.calls)).not.toContain('partner-service-diagnostics')
     expect(JSON.stringify(log.mock.calls)).not.toContain('example-service-token')
+  })
+
+  it.each([200, 503])('records only safe HTTP response metadata for status %s without adding provider calls', async status => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('VERCEL_REGION', status === 200 ? 'hkg1' : 'private-invalid-region')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ apiResultCode: 'A1000', accessToken: 'example-response-token', expiresIn: 7200 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ apiResultCode: 'A1000', apiResultData: { success: false, errorCode: '6150', msgData: { note: 'private-business-details' } } }), { status, headers: { 'x-private-provider-header': 'private-provider-header-value' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const call = sfCall('EXP_RECE_SEARCH_ORDER_RESP', { orderId: 'private-order-id', language: 'zh-CN', searchType: '1' }, { environment: 'sandbox', partnerId: `private-response-partner-${status}`, checkWord: 'private-response-checkword' })
+    if (status === 200) await expect(call).rejects.toMatchObject({ requestStage: 'provider_rejected', status: 422, message: '顺丰未找到该订单（6150）。' })
+    else await expect(call).rejects.toMatchObject({ requestStage: 'provider_http_error', status: 502 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const serviceBody = new URLSearchParams(String(fetchMock.mock.calls[1][1].body))
+    expect(serviceBody.get('serviceCode')).toBe('EXP_RECE_SEARCH_ORDER_RESP')
+    expect(info).toHaveBeenCalledTimes(1)
+    expect(info).toHaveBeenCalledWith('shipping.sf.response', {
+      serviceCode: 'EXP_RECE_SEARCH_ORDER_RESP', environment: 'sandbox', endpointHostname: 'sfapi-sbox.sf-express.com',
+      runtimeRegion: status === 200 ? 'hkg1' : undefined, status, elapsedMs: expect.any(Number),
+    })
+    expect(JSON.stringify(info.mock.calls)).not.toContain('private')
+    expect(JSON.stringify(info.mock.calls)).not.toContain('example-response-token')
   })
 
   it('distinguishes an HTTP response from a network timeout without returning upstream details', async () => {
