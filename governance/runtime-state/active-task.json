@@ -219,7 +219,7 @@
       "blocking_acceptance_defects": [
         "IN-20260927-003",
         "IN-20260927-004",
-        "IN-20261008-001"
+        "IN-20261008-003"
       ],
       "runtime_contract_version": "f054-v2"
     },

@@ -6,6 +6,7 @@ import { workbenchOrdersForTest } from '@/lib/shipping/workbench-test-fixtures'
 import { parseAddress } from '@/lib/shipping/address'
 import { ownerOrderSchema } from '@/lib/shipping/validation'
 import type { ShippingSettings, ShipmentOrder } from '@/lib/shipping/types'
+import type { ShippingWorkbenchRequest } from '@/lib/shipping/workbench-client'
 
 const settings: ShippingSettings = { environment: 'sandbox', ready: true, canSubmit: true, reason: '', services: [{ id: 2, name: '顺丰标快' }], monthlyTail: '0000', sender: { name: '前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科苑路15号' } }
 const fetcher = vi.fn()
@@ -19,6 +20,202 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it.each([['real', 'order_unknown'], ['real', 'ordering'], ['simulation', 'order_unknown'], ['simulation', 'ordering']] as const)('keeps %s %s batch orders locked until reconciliation returns a real waybill', async (mode, initialStatus) => {
+    const calls: Array<{ url: string; body?: Record<string, unknown> }> = []
+    let submitted = false, reconciles = 0
+    const waybill = mode === 'real' ? 'SF1234567890123' : 'DEMO-000005'
+    const order: ShipmentOrder = { ...fixtureOrders[0], id: 'pending-order', status: initialStatus, waybill: null }
+    const dispatch = async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      if (url === '/api/shipping/owner/orders') { submitted = true; return { orderId: order.id, status: initialStatus, waybill: null } }
+      if (url.endsWith('/reconcile')) {
+        reconciles += 1
+        if (reconciles === 1) return { id: order.id, status: 'order_unknown', waybill: null }
+        order.status = 'waybill_created'; order.waybill = waybill
+        return { id: order.id, status: order.status, waybill }
+      }
+      if (url.startsWith('/api/shipping/ledger')) return { records: submitted ? [structuredClone(order)] : [] }
+      throw new Error('Unexpected request '+url)
+    }
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => new Response(JSON.stringify(await dispatch(url, init)), { status: 200 }))
+    render(<ShippingWorkbench settings={settings} simulation={mode === 'simulation' ? { request: dispatch as ShippingWorkbenchRequest, sampleText: '', onReset: vi.fn() } : undefined}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    fireEvent.click(screen.getByRole('button', { name: mode === 'real' ? '批量确认下单（1票）' : '模拟批量下单（1票）' }))
+    expect(await screen.findByText(/成功 0 票；待确认 1 票/)).toBeTruthy()
+    expect(screen.getByLabelText('第1行收件人')).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '解析为寄件行' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '文件导入' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: mode === 'real' ? '批量确认下单（0票）' : '模拟批量下单（0票）' })).toHaveProperty('disabled', true)
+    const originalKey = calls.find(call => call.url === '/api/shipping/owner/orders')?.body?.key
+    fireEvent.click(screen.getByRole('button', { name: '查回第1行下单结果' }))
+    expect(await screen.findByText(/查回结果仍待确认/)).toBeTruthy()
+    expect(screen.getByLabelText('第1行收件地址')).toHaveProperty('disabled', true)
+    fireEvent.click(screen.getByRole('button', { name: '查回第1行下单结果' }))
+    expect(await screen.findByText(/已查回运单/)).toBeTruthy()
+    expect(screen.getAllByText(waybill).length).toBeGreaterThan(0)
+    expect(calls.filter(call => call.url === '/api/shipping/owner/orders')).toHaveLength(1)
+    expect(calls.filter(call => call.url.endsWith('/reconcile')).map(call => call.url)).toEqual(['/api/shipping/ledger/pending-order/reconcile', '/api/shipping/ledger/pending-order/reconcile'])
+    expect(calls.find(call => call.url === '/api/shipping/owner/orders')?.body?.key).toBe(originalKey)
+    if (mode === 'simulation') expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it.each([['real', 'order_unknown'], ['real', 'ordering'], ['simulation', 'order_unknown'], ['simulation', 'ordering']] as const)('does not announce a %s middle-column %s confirmation as successful', async (mode, status) => {
+    let submitted = false
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null }
+    const dispatch = async (url: string) => {
+      if (url.endsWith('/confirm')) { submitted = true; return { id: order.id, status, waybill: null } }
+      return { records: [{ ...order, status: submitted ? status : order.status }] }
+    }
+    fetcher.mockImplementation(async (url: string) => Response.json(await dispatch(url)))
+    render(<ShippingWorkbench settings={settings} simulation={mode === 'simulation' ? { request: dispatch as ShippingWorkbenchRequest, sampleText: '', onReset: vi.fn() } : undefined}/>)
+    await screen.findAllByText('华东建筑设计院')
+    fireEvent.click(screen.getByRole('button', { name: mode === 'real' ? '确认下单' : '模拟确认下单' }))
+    expect(await screen.findByText(/下单结果待确认，请查回原单/)).toBeTruthy()
+    expect(screen.queryByText('已确认下单，单据状态已更新。')).toBeNull()
+    expect(screen.queryByRole('button', { name: '确认下单' })).toBeNull()
+    expect(screen.getByRole('button', { name: '查回所选单据下单结果' })).toBeTruthy()
+  })
+  it.each([null, '', 'SF123', 'DEMO-000005'])('does not count waybill_created with invalid real waybill %s as successful', async waybill => {
+    fetcher.mockImplementation(async (url: string) => Response.json(url.endsWith('/owner/orders') ? { orderId: 'uncertain-order', status: 'waybill_created', waybill } : { records: [] }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    expect(await screen.findByText(/成功 0 票；待确认 1 票/)).toBeTruthy()
+    expect(screen.getByLabelText('第1行联系电话')).toHaveProperty('disabled', true)
+    expect(screen.queryByText('已下单')).toBeNull()
+  })
+
+  it('preserves the locked batch when reconciliation fails and never creates another order', async () => {
+    fetcher.mockImplementation(async (url: string) => {
+      if (url.endsWith('/owner/orders')) return Response.json({ orderId: 'uncertain-order', status: 'order_unknown', waybill: null })
+      if (url.endsWith('/reconcile')) return Response.json({ error: '查询暂时不可用' }, { status: 502 })
+      return Response.json({ records: [] })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    await screen.findByText(/成功 0 票；待确认 1 票/)
+    fireEvent.click(screen.getByRole('button', { name: '查回第1行下单结果' }))
+    expect(await screen.findByText(/查回失败：查询暂时不可用/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: '解析为寄件行' })).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('第1行收件人')).toHaveProperty('disabled', true)
+    expect(fetcher.mock.calls.filter(([url]) => url === '/api/shipping/owner/orders')).toHaveLength(1)
+    expect(fetcher).toHaveBeenCalledWith('/api/shipping/ledger/uncertain-order/reconcile', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it.each(['network', 'server', 'conflict', 'invalid-response'] as const)('locks an uncertain %s failure without allowing a new batch key', async failure => {
+    let ledgerLoads = 0
+    fetcher.mockImplementation(async (url: string) => {
+      if (url.endsWith('/owner/orders')) {
+        if (failure === 'network') throw new TypeError('network disconnected')
+        if (failure === 'invalid-response') return new Response('not-json', { status: 400 })
+        return Response.json({ error: '无法确认结果' }, { status: failure === 'conflict' ? 409 : 500 })
+      }
+      ledgerLoads += 1
+      return Response.json({ records: [] })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    expect(await screen.findByText(/成功 0 票；待确认 1 票；失败 0 票/)).toBeTruthy()
+    expect(screen.getByLabelText('第1行收件人')).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '解析为寄件行' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '批量确认下单（0票）' })).toHaveProperty('disabled', true)
+    expect(screen.getByText(/请从台账查回原单/)).toBeTruthy()
+    expect(ledgerLoads).toBe(2)
+    expect(fetcher.mock.calls.filter(([url]) => url === '/api/shipping/owner/orders')).toHaveLength(1)
+  })
+
+  it('keeps an explicit validation rejection editable', async () => {
+    fetcher.mockImplementation(async (url: string) => url.endsWith('/owner/orders')
+      ? Response.json({ error: '收件地区不正确', requestStage: 'validation' }, { status: 400 })
+      : Response.json({ records: [] }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    expect(await screen.findByText(/成功 0 票；待确认 0 票；失败 1 票/)).toBeTruthy()
+    expect(screen.getByLabelText('第1行收件地址')).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: '解析为寄件行' })).toHaveProperty('disabled', false)
+  })
+
+  it('allocates a fresh request only when the user explicitly retries a provider-rejected row', async () => {
+    const keys: string[] = []
+    let ledgerLoads = 0
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/owner/orders')) {
+        keys.push(JSON.parse(String(init?.body)).key)
+        return keys.length === 1 ? Response.json({ error: '顺丰明确未受理', requestStage: 'provider_rejected' }, { status: 422 })
+          : Response.json({ orderId: 'retry-order', status: 'waybill_created', waybill: 'SF1234567890123' })
+      }
+      ledgerLoads += 1
+      return Response.json({ records: [] })
+    })
+    const generateKey = vi.spyOn(globalThis.crypto, 'randomUUID')
+    try {
+      render(<ShippingWorkbench settings={settings}/>)
+      await screen.findByText('暂无收寄记录')
+      fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
+      fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+      expect(generateKey).toHaveBeenCalledTimes(1)
+      fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+      await screen.findByText(/待确认 0 票；失败 1 票/)
+      expect(keys).toHaveLength(1)
+      expect(generateKey).toHaveBeenCalledTimes(1)
+      expect(ledgerLoads).toBe(2)
+      fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+      await screen.findByText(/成功 1 票；待确认 0 票/)
+      expect(keys).toHaveLength(2)
+      expect(keys[1]).not.toBe(keys[0])
+      expect(generateKey).toHaveBeenCalledTimes(2)
+    } finally { generateKey.mockRestore() }
+  })
+
+  it('reuses the original request on an explicit retry after pre-submission validation rejection', async () => {
+    const keys: string[] = []
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (!url.endsWith('/owner/orders')) return Response.json({ records: [] })
+      keys.push(JSON.parse(String(init?.body)).key)
+      return keys.length === 1 ? Response.json({ error: '请修正收件地区', requestStage: 'validation' }, { status: 400 })
+        : Response.json({ orderId: 'validated-order', status: 'waybill_created', waybill: 'SF1234567890123' })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    await screen.findByText(/待确认 0 票；失败 1 票/)
+    expect(keys).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    await screen.findByText(/成功 1 票；待确认 0 票/)
+    expect(keys).toHaveLength(2)
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it('keeps a middle-column order addressable for reconciliation after a lost confirmation response', async () => {
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null }
+    fetcher.mockImplementation(async (url: string) => {
+      if (url.endsWith('/confirm')) throw new TypeError('example connection lost')
+      return Response.json({ records: [order] })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findAllByText('华东建筑设计院')
+    fireEvent.click(screen.getByRole('button', { name: '确认下单' }))
+    expect(await screen.findByText(/下单结果待确认，请查回原单/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '确认下单' })).toBeNull()
+    expect(screen.getByRole('button', { name: '查回所选单据下单结果' })).toBeTruthy()
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/confirm'))).toHaveLength(1)
+  })
+
   it('renders the workbench without inventing orders or waybills', async () => {
     render(<ShippingWorkbench settings={settings}/>)
     expect(screen.getByRole('region', { name: '批量寄件操作台' })).toBeTruthy()
@@ -173,7 +370,7 @@ describe('self-service shipping workbench', () => {
         ledgerLoads += 1
         return new Response(JSON.stringify({ records: ledgerLoads === 1 ? [] : [createdOrder] }), { status: 200 })
       }
-      return new Response(JSON.stringify({ waybill: createdOrder.waybill }), { status: 200 })
+      return new Response(JSON.stringify({ orderId: createdOrder.id, status: 'waybill_created', waybill: createdOrder.waybill }), { status: 200 })
     })
     render(<ShippingWorkbench settings={settings}/>)
     await screen.findByText('暂无收寄记录')
@@ -181,7 +378,7 @@ describe('self-service shipping workbench', () => {
     fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '沙盒测试收件人 13800000000 广东省深圳市南山区科技园测试路88号A座' } })
     fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
     fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
-    expect(await screen.findByText(/本次完成 1 票/)).toBeTruthy()
+    expect(await screen.findByText(/成功 1 票/)).toBeTruthy()
     expect(screen.getAllByText('SF12345678901234').length).toBeGreaterThanOrEqual(2)
     expect(ledgerLoads).toBe(2)
   })
@@ -193,8 +390,8 @@ describe('self-service shipping workbench', () => {
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
       if (!init?.body) return new Response(JSON.stringify({ records: [] }), { status: 200 })
       const body = JSON.parse(String(init.body)); sent.push(body); sentBodies.push(body)
-      if (!failedOnce && sent.length === 2) { failedOnce = true; return new Response(JSON.stringify({ error: '临时失败' }), { status: 503 }) }
-      return new Response(JSON.stringify({ waybill: `SF${sent.length}` }), { status: 200 })
+      if (!failedOnce && sent.length === 2) { failedOnce = true; return new Response(JSON.stringify({ error: '请修正收件地区', requestStage: 'validation' }), { status: 400 }) }
+      return new Response(JSON.stringify({ orderId: `created-${sent.length}`, status: 'waybill_created', waybill: `SF${String(sent.length).padStart(12, '0')}` }), { status: 200 })
     })
     render(<ShippingWorkbench settings={settings}/>)
     fireEvent.click(screen.getByRole('button', { name: '文本解析' }))
@@ -206,10 +403,10 @@ describe('self-service shipping workbench', () => {
     ].join('\n') } })
     fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
     fireEvent.click(screen.getByRole('button', { name: '批量确认下单（4票）' }))
-    expect(await screen.findByText(/本次完成 3 票/)).toBeTruthy()
+    expect(await screen.findByText(/成功 3 票/)).toBeTruthy()
     const failedKey = sent[1].key
     fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
-    expect(await screen.findByText(/本次完成 1 票/)).toBeTruthy()
+    expect(await screen.findByText(/成功 1 票/)).toBeTruthy()
     expect(sent).toHaveLength(5)
     expect(sent[4].key).toBe(failedKey)
     expect(sentBodies.every(body => ownerOrderSchema.safeParse(body).success)).toBe(true)

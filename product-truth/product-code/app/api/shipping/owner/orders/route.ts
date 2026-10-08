@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
       userId: user.id, key: submission.key, input,
       snapshot: { orgId, connectionId: connection.connectionId, billingAccountId: connection.billingAccountId, senderProfileId: connection.senderProfileId, environment: connection.environment, billingAccountTail: connection.billingAccountTail, serviceId: service.id, serviceName: service.name }
     })
-    if (order.status === 'waybill_created') return publicShipmentReceipt(order)
+    if (order.status === 'waybill_created') return { ...publicShipmentReceipt(order), orderId: order.id }
     const result = await confirmAndSubmitShipment(order.id, user.id, orgId, { connectionId: connection.connectionId, billingAccountId, serviceId: service.id })
-    return { ...publicShipmentReceipt(order), status: result.status, waybill: result.waybill }
+    return { ...publicShipmentReceipt(order), orderId: order.id, status: result.status, waybill: result.waybill }
   })
 }

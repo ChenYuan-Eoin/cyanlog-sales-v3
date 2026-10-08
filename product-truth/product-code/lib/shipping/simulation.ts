@@ -58,17 +58,23 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
     if (url === '/api/shipping/owner/orders') {
       if (!body.key || !body.input?.recipient?.name) throw new Error('请先完成示例收件资料。')
       const previous = createdByKey.get(body.key)
-      if (previous) return { waybill: previous }
+      if (previous) {
+        const existing = records.find(order => order.id === previous)
+        if (!existing) throw new Error('未找到原示例单据。')
+        return { orderId: existing.id, status: existing.status, waybill: existing.waybill }
+      }
       sequence += 1
       const waybill = `DEMO-${String(sequence).padStart(6, '0')}`
-      records.unshift({ id: `demo-order-${sequence}`, orderNo: `DEMO-REQ-${sequence}`, status: 'waybill_created', intakeSource: 'owner_web', confirmationPolicy: 'direct', input: { ...body.input, serviceName: services[0].name }, relation: { salesRef: '示例销售', customerRef: null, assignmentStatus: 'assigned' }, waybill, nextReviewAt: null, createdAt: new Date().toISOString(), direction: 'outbound' })
-      createdByKey.set(body.key, waybill)
-      return { waybill }
+      const orderId = `demo-order-${sequence}`
+      records.unshift({ id: orderId, orderNo: `DEMO-REQ-${sequence}`, status: 'waybill_created', intakeSource: 'owner_web', confirmationPolicy: 'direct', input: { ...body.input, serviceName: services[0].name }, relation: { salesRef: '示例销售', customerRef: null, assignmentStatus: 'assigned' }, waybill, nextReviewAt: null, createdAt: new Date().toISOString(), direction: 'outbound' })
+      createdByKey.set(body.key, orderId)
+      return { orderId, status: 'waybill_created', waybill }
     }
     if (url === '/api/shipping/tracking') return tracking(body.waybill || '')
-    const action = url.match(/^\/api\/shipping\/ledger\/(demo-order-\d+)\/(confirm|return|cancel)$/)
+    const action = url.match(/^\/api\/shipping\/ledger\/(demo-order-\d+)\/(confirm|return|cancel|reconcile)$/)
     const order = action && records.find(item => item.id === action[1])
     if (!action || !order) throw new Error('未找到可操作的示例单据。')
+    if (action[2] === 'reconcile') return { orderId: order.id, status: order.status, waybill: order.waybill }
     if (action[2] === 'cancel') {
       if (order.status !== 'waybill_created') throw new Error('示例订单已揽收，不能取消。')
       order.status = 'cancelled'
@@ -82,7 +88,7 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
         order.waybill = `DEMO-${String(++sequence).padStart(6, '0')}`
       }
     }
-    return { status: order.status, waybill: order.waybill }
+    return { orderId: order.id, status: order.status, waybill: order.waybill }
   }
 
   return async <T>(url: string, init?: RequestInit) => structuredClone(dispatch(url, init)) as T
