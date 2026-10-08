@@ -3,6 +3,8 @@ import { shippingHandler } from '@/lib/shipping/http'
 import { reconcileShipmentOrder } from '@/lib/shipping/workflow'
 
 export const runtime = 'nodejs'
+// Isolate carrier reachability on the existing read-only reconciliation path.
+export const preferredRegion = 'hkg1'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return shippingHandler(req, async (_user, orgId) => reconcileShipmentOrder((await params).id, orgId))
