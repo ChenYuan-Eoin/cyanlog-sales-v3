@@ -1,4 +1,4 @@
-export type BatchDraftRow = { id: number; key: string; recipient: string; phone: string; address: string; cargo: string; result?: 'pending' | 'success' | 'failed'; error?: string; waybill?: string }
+export type BatchDraftRow = { id: number; key: string; recipient: string; phone: string; address: string; cargo: string; originalText?: string; result?: 'pending' | 'success' | 'failed'; error?: string; waybill?: string }
 
 const headerAliases: Record<string, keyof Pick<BatchDraftRow, 'recipient' | 'phone' | 'address' | 'cargo'>> = {
   收件人: 'recipient', 收件人姓名: 'recipient', 姓名: 'recipient',

@@ -3,6 +3,179 @@ import { parseShippingText, prepareBatchRecipient, SHIPPING_TEXT_MAX_LENGTH } fr
 import { contactSchema } from './validation'
 
 describe('shipping text intake', () => {
+  it('keeps company-prefixed multiline addresses together and preserves each original record', () => {
+    const first = '示例文档公司： 张样例 13800000001\n四川省成都市锦江区示例路28号A座'
+    const second = '示例通信公司： 北京市海淀区示例路65号院1号楼\n示例大厦A座21层行政部，邮编：100190，收件人：李样例，联系电话：62580000/13900000002。'
+    const rows = parseShippingText(`${first}\n\n${second}`)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ recipient: '张样例', phone: '13800000001', address: '四川省成都市锦江区示例路28号A座', originalText: first })
+    expect(rows[1]).toMatchObject({ recipient: '李样例', phone: '13900000002', originalText: second })
+    expect(rows[1].address).toBe('北京市海淀区示例路65号院1号楼 示例大厦A座21层行政部')
+    expect(rows.every(row => prepareBatchRecipient(row).errors.length === 0)).toBe(true)
+  })
+
+  it('groups four blank-separated records without turning address continuations into tickets', () => {
+    const blocks = [
+      '示例文档公司： 张样例 13800000001\n四川省成都市锦江区示例路28号A座',
+      '示例通信公司： 北京市海淀区示例路65号院1号楼\n示例大厦A座21层行政部，邮编：100190，收件人：李样例，联系电话：62580000/13900000002。',
+      '示例客户甲： 陈样例 13800000003 广东省深圳市南山区示例路8号',
+      '示例客户乙： 浙江省杭州市西湖区示例路9号，唐样例，13800000004',
+    ]
+    const rows = parseShippingText(blocks.join('\n\n'))
+    expect(rows).toHaveLength(4)
+    expect(rows.map(row => row.originalText)).toEqual(blocks)
+    expect(rows.map(row => row.recipient)).toEqual(['张样例', '李样例', '陈样例', '唐样例'])
+    expect(rows.every(row => prepareBatchRecipient(row).errors.length === 0)).toBe(true)
+  })
+
+  it('splits clearly new recipients without blank lines and never pairs them with the previous address', () => {
+    const rows = parseShippingText('张样例 13800000001\n四川省成都市锦江区示例路28号\n李样例 13800000002\n北京市海淀区示例路65号\n陈样例 13800000003 广东省深圳市南山区示例路8号')
+    expect(rows).toHaveLength(3)
+    expect(rows.map(({ recipient, phone, address }) => ({ recipient, phone, address }))).toEqual([
+      { recipient: '张样例', phone: '13800000001', address: '四川省成都市锦江区示例路28号' },
+      { recipient: '李样例', phone: '13800000002', address: '北京市海淀区示例路65号' },
+      { recipient: '陈样例', phone: '13800000003', address: '广东省深圳市南山区示例路8号' },
+    ])
+  })
+
+  it('does not move the next recipient address into an incomplete preceding ticket', () => {
+    const rows = parseShippingText('张样例 13800000001\n李样例 13800000002\n北京市海淀区示例路65号')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ recipient: '张样例', phone: '13800000001', address: '' })
+    expect(rows[1]).toMatchObject({ recipient: '李样例', address: '北京市海淀区示例路65号' })
+    expect(prepareBatchRecipient(rows[0]).fieldErrors.address).toContain('缺少收件地址')
+  })
+
+  it('selects the only mobile number beside a landline and leaves multiple mobiles unresolved', () => {
+    const [single] = parseShippingText('姓名：李样例\n联系电话：010-62580000/13900000002\n地址：北京市海淀区示例路65号')
+    expect(single.phone).toBe('13900000002')
+    expect(prepareBatchRecipient(single).errors).toEqual([])
+    const [multiple] = parseShippingText('姓名：李样例\n手机：13800000001\n联系电话：13900000002\n地址：北京市海淀区示例路65号')
+    expect(multiple.phone).toBe('13800000001 / 13900000002')
+    expect(prepareBatchRecipient(multiple).fieldErrors.phone.join('')).toContain('多个电话号码')
+  })
+
+  it('exposes missing and invalid values on their own fields and updates errors after correction', () => {
+    const row = { id: 1, key: 'test-key', recipient: '', phone: '', address: '', cargo: '文件' }
+    const empty = prepareBatchRecipient(row)
+    expect(empty.fieldErrors).toEqual({ recipient: ['缺少收件人'], phone: ['缺少联系电话'], address: ['缺少收件地址'] })
+    expect(empty.errors).toEqual(['缺少收件人', '缺少联系电话', '缺少收件地址'])
+    const corrected = prepareBatchRecipient({ ...row, recipient: '张样例', phone: '13800000001', address: '广东省深圳市南山区示例路8号' })
+    expect(corrected.fieldErrors).toEqual({ recipient: [], phone: [], address: [] })
+    expect(corrected.errors).toEqual([])
+  })
+
+  it('retains unknown company prefixes only in the original text, never as recipient or address', () => {
+    const originalText = '  示例文档公司： 13800000001\r\n四川省成都市锦江区示例路28号  '
+    const [row] = parseShippingText(originalText)
+    expect(row).toMatchObject({ recipient: '', phone: '13800000001', address: '四川省成都市锦江区示例路28号', originalText })
+    expect(prepareBatchRecipient(row).fieldErrors.recipient).toContain('缺少收件人')
+  })
+
+  it.each([
+    '收件人：张样例 手机：13800000001 地址：四川省成都市锦江区示例路28号；收件人：李样例 手机：13900000002 地址：北京市海淀区示例路65号',
+    '地址：四川省成都市锦江区示例路28号 收件人：张样例 手机：13800000001；地址：北京市海淀区示例路65号 收件人：李样例 手机：13900000002',
+    '张样例 13800000001 四川省成都市锦江区示例路28号；李样例 13900000002 北京市海淀区示例路65号',
+    '张样例 13800000001 四川省成都市锦江区示例路28号\n北京市海淀区示例路65号\n李样例 13900000002',
+  ])('recognises separate recipients inside one paragraph without mixing their addresses: %s', text => {
+    const rows = parseShippingText(text)
+    expect(rows).toHaveLength(2)
+    expect(rows.map(({ recipient, phone, address }) => ({ recipient, phone, address }))).toEqual([
+      { recipient: '张样例', phone: '13800000001', address: '四川省成都市锦江区示例路28号' },
+      { recipient: '李样例', phone: '13900000002', address: '北京市海淀区示例路65号' },
+    ])
+    expect(rows.every(row => prepareBatchRecipient(row).errors.length === 0)).toBe(true)
+  })
+
+  it('keeps two complete shipments separate even when the recipient names are identical', () => {
+    const rows = parseShippingText('张样例 13800000001 四川省成都市锦江区示例路28号；张样例 13800000001 北京市海淀区示例路65号')
+    expect(rows).toHaveLength(2)
+    expect(rows.map(row => row.address)).toEqual(['四川省成都市锦江区示例路28号', '北京市海淀区示例路65号'])
+  })
+
+  it('does not copy one supplied address to a second explicitly named recipient', () => {
+    const rows = parseShippingText('地址：北京市海淀区示例路65号 收件人：张样例 手机：13800000001；收件人：李样例 手机：13900000002')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ recipient: '张样例', address: '北京市海淀区示例路65号' })
+    expect(rows[1]).toMatchObject({ recipient: '李样例', phone: '13900000002', address: '' })
+    expect(prepareBatchRecipient(rows[1]).fieldErrors.address).toContain('缺少收件地址')
+  })
+
+  it.each(['A座', '创新中心'])('retains a bare building continuation %s on the same shipment', continuation => {
+    const rows = parseShippingText(`张样例 13800000001\n广东省深圳市南山区示例路8号\n${continuation}`)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ recipient: '张样例', phone: '13800000001', address: `广东省深圳市南山区示例路8号 ${continuation}` })
+    expect(prepareBatchRecipient(rows[0]).errors).toEqual([])
+  })
+
+  it.each(['A座', '创新中心'])('does not turn the building continuation %s into a missing recipient name', continuation => {
+    const rows = parseShippingText(`广东省深圳市南山区示例路8号\n${continuation}\n13800000001`)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ recipient: '', phone: '13800000001', address: `广东省深圳市南山区示例路8号 ${continuation}` })
+    expect(prepareBatchRecipient(rows[0]).fieldErrors.recipient).toContain('缺少收件人')
+  })
+
+  it('splits a second complete administrative address at EOF without copying the first recipient', () => {
+    const rows = parseShippingText('张样例 13800000001\n广东省深圳市南山区示例路8号\n浙江省杭州市余杭区示例路9号')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ recipient: '张样例', phone: '13800000001', address: '广东省深圳市南山区示例路8号' })
+    expect(rows[1]).toMatchObject({ recipient: '', phone: '', address: '浙江省杭州市余杭区示例路9号' })
+    expect(prepareBatchRecipient(rows[1]).errors).toEqual(expect.arrayContaining(['缺少收件人', '缺少联系电话']))
+  })
+
+  it.each([
+    '收件人：张样例 13800000001 广东省深圳市南山区示例路8号；李样例 13900000002 浙江省杭州市余杭区示例路9号',
+    '姓名：张样例 电话：13800000001 地址：广东省深圳市南山区示例路8号；李样例 13900000002 浙江省杭州市余杭区示例路9号',
+  ])('recognises a new unlabelled recipient after labelled fields: %s', text => {
+    const rows = parseShippingText(text)
+    expect(rows).toHaveLength(2)
+    expect(rows.map(({ recipient, phone, address }) => ({ recipient, phone, address }))).toEqual([
+      { recipient: '张样例', phone: '13800000001', address: '广东省深圳市南山区示例路8号' },
+      { recipient: '李样例', phone: '13900000002', address: '浙江省杭州市余杭区示例路9号' },
+    ])
+  })
+
+  it('keeps standalone name, phone and address lines together for multiple recipients without blank lines', () => {
+    const rows = parseShippingText('张样例\n13800000001\n广东省深圳市南山区示例路8号\n李样例\n13900000002\n浙江省杭州市余杭区示例路9号')
+    expect(rows).toHaveLength(2)
+    expect(rows.map(row => row.recipient)).toEqual(['张样例', '李样例'])
+    expect(rows.every(row => prepareBatchRecipient(row).errors.length === 0)).toBe(true)
+  })
+
+  it('normalises an explicit +86 mobile without losing its original text', () => {
+    const originalText = '张样例 +86 138 0000 0001 广东省深圳市南山区示例路8号'
+    const [row] = parseShippingText(originalText)
+    expect(row).toMatchObject({ phone: '13800000001', originalText })
+    expect(prepareBatchRecipient(row).fieldErrors.phone).toEqual([])
+    const prepared = prepareBatchRecipient({ ...row, phone: '+86 138 0000 0001' })
+    expect(prepared.recipient.phone).toBe('13800000001')
+    expect(contactSchema.safeParse(prepared.recipient).success).toBe(true)
+  })
+
+  it('accepts complete domestic landlines and recognises a second named landline recipient', () => {
+    const rows = parseShippingText('收件人：张样例 010-62580000 北京市海淀区示例路8号；李样例 0571-62580001 浙江省杭州市余杭区示例路9号')
+    expect(rows).toHaveLength(2)
+    expect(rows.map(row => row.phone)).toEqual(['010-62580000', '0571-62580001'])
+    expect(rows.every(row => prepareBatchRecipient(row).errors.length === 0)).toBe(true)
+    expect(rows.every(row => contactSchema.safeParse(prepareBatchRecipient(row).recipient).success)).toBe(true)
+  })
+
+  it('keeps local phone numbers for correction and splits two clearly named local-number recipients', () => {
+    const rows = parseShippingText('张样例 62580000 北京市海淀区示例路8号；李样例 62580001 浙江省杭州市余杭区示例路9号')
+    expect(rows).toHaveLength(2)
+    expect(rows.map(row => row.phone)).toEqual(['62580000', '62580001'])
+    expect(rows.every(row => prepareBatchRecipient(row).fieldErrors.phone.join('').includes('区号'))).toBe(true)
+  })
+
+  it.each(['+1 415 555 0123', '+44 20 7946 0958', '+852 6123 4567'])('preserves the full international prefix for manual review: %s', phone => {
+    const originalText = `张样例 ${phone} 广东省深圳市南山区示例路8号`
+    const [row] = parseShippingText(originalText)
+    expect(row).toMatchObject({ recipient: '张样例', phone, address: '广东省深圳市南山区示例路8号', originalText })
+    const errors = prepareBatchRecipient(row).fieldErrors.phone.join('')
+    expect(errors).toContain('国内')
+    expect(errors).not.toContain('11位')
+  })
+
   it.each([
     ['林示例 13800000001 广东省深圳市南山区科苑路8号', '林示例', '13800000001', '广东省深圳市南山区科苑路8号'],
     ['13800000002,唐演示,浙江省杭州市西湖区文三路90号', '唐演示', '13800000002', '浙江省杭州市西湖区文三路90号'],

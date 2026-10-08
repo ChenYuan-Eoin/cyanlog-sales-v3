@@ -217,9 +217,9 @@
         "excludes_until_final_approval": "No destructive schema/data removal or unrelated product changes. User still confirms a concrete real shipment and charges in existing Chrome."
       },
       "blocking_acceptance_defects": [
-        "IN-20260927-003",
-        "IN-20260927-004",
-        "IN-20261008-003"
+        "IN-20261008-003",
+        "IN-20261008-004",
+        "IN-20261008-005"
       ],
       "runtime_contract_version": "f054-v2"
     },

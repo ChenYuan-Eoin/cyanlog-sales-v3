@@ -20,6 +20,72 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('places missing phone and address errors on their own fields and clears each immediately after correction', async () => {
+    const originalText = '收件人：示例甲\n电话：\n地址：'
+    const generateKey = vi.spyOn(globalThis.crypto, 'randomUUID')
+    let submitted: Record<string, unknown> | undefined
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/owner/orders')) {
+        submitted = JSON.parse(String(init?.body))
+        return Response.json({ orderId: 'corrected-order', status: 'waybill_created', waybill: 'SF1234567890123' })
+      }
+      return Response.json({ records: [] })
+    })
+    try {
+      render(<ShippingWorkbench settings={settings}/>)
+      await screen.findByText('暂无收寄记录')
+      fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: originalText } })
+      fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+      const phone = screen.getByLabelText('第1行联系电话')
+      const address = screen.getByLabelText('第1行收件地址')
+      expect(phone.getAttribute('aria-invalid')).toBe('true')
+      expect(address.getAttribute('aria-invalid')).toBe('true')
+      expect(document.getElementById(phone.getAttribute('aria-describedby') || '')?.textContent).toMatch(/电话|手机/)
+      expect(document.getElementById(address.getAttribute('aria-describedby') || '')?.textContent).toMatch(/地址/)
+      expect(screen.getByRole('button', { name: '批量确认下单（0票）' })).toHaveProperty('disabled', true)
+      expect(screen.getByText('1 票需修正；仅 0 票有效资料可提交。')).toBeTruthy()
+      fireEvent.click(screen.getByText('查看原文'))
+      expect(screen.getByLabelText('第1票原文').textContent).toBe(originalText)
+      const originalKey = generateKey.mock.results[0].value
+      fireEvent.change(phone, { target: { value: '13800000011' } })
+      expect(phone.getAttribute('aria-invalid')).toBe('false')
+      expect(phone.hasAttribute('aria-describedby')).toBe(false)
+      expect(address.getAttribute('aria-invalid')).toBe('true')
+      fireEvent.change(address, { target: { value: '广东省深圳市南山区示例路1号' } })
+      expect(address.getAttribute('aria-invalid')).toBe('false')
+      expect(screen.queryByText('1 票需修正；仅 0 票有效资料可提交。')).toBeNull()
+      expect(generateKey).toHaveBeenCalledTimes(1)
+      fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+      await screen.findByText(/成功 1 票/)
+      expect(submitted?.key).toBe(originalKey)
+      expect(submitted).not.toHaveProperty('originalText')
+      expect(submitted?.input).not.toHaveProperty('originalText')
+      expect(JSON.stringify(submitted)).not.toContain(JSON.stringify(originalText))
+    } finally { generateKey.mockRestore() }
+  })
+
+  it('explains that only valid tickets are submitted while retaining incomplete recipients for correction', async () => {
+    const sentNames: string[] = []
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/owner/orders')) {
+        sentNames.push(JSON.parse(String(init?.body)).input.recipient.name)
+        return Response.json({ orderId: 'valid-order', status: 'waybill_created', waybill: 'SF1234567890123' })
+      }
+      return Response.json({ records: [] })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    expect(screen.getByText('支持多位收件人；同一人的姓名、电话和地址可分行，空行有助于分票。解析后请核对每票资料。')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '姓名：示例甲\n电话：\n地址：广东省深圳市南山区示例路1号\n\n示例乙 13800000022 上海市浦东新区示例路2号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    expect(screen.getByText('1 票需修正；仅 1 票有效资料可提交。')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '批量确认下单（1票）' }))
+    await screen.findByText(/成功 1 票/)
+    expect(sentNames).toEqual(['示例乙'])
+    expect(screen.getByLabelText('第1行联系电话')).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText('第1行联系电话').getAttribute('aria-invalid')).toBe('true')
+  })
+
   it.each([['real', 'order_unknown'], ['real', 'ordering'], ['simulation', 'order_unknown'], ['simulation', 'ordering']] as const)('keeps %s %s batch orders locked until reconciliation returns a real waybill', async (mode, initialStatus) => {
     const calls: Array<{ url: string; body?: Record<string, unknown> }> = []
     let submitted = false, reconciles = 0
