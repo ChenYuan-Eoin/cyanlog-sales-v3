@@ -1,5 +1,6 @@
 // REQ: F054. SF Node.js OAuth2 API protocol. Tokens stay in process memory only.
 import { createHash, randomUUID } from 'node:crypto'
+import { isIP } from 'node:net'
 import { z } from 'zod'
 import { ShippingError } from './config'
 import type { ShippingInput, TrackingResult } from './types'
@@ -12,6 +13,11 @@ type SfAuthConfig = Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'c
 const tokenCache = new Map<string, { accessToken: string; expiresAt: number }>()
 const tokenRequests = new Map<string, Promise<string>>()
 const tokenRefreshMarginMs = 60_000
+const transportErrorCodes = new Set([
+  'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'UND_ERR_SOCKET', 'UND_ERR_ABORTED',
+  'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'EPIPE',
+  'ERR_TLS_CERT_ALTNAME_INVALID', 'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+])
 
 function sfTokenUrl(environment: SfAuthConfig['environment']) {
   const origin = environment === 'sandbox' ? 'https://sfapi-sbox.sf-express.com' : 'https://bspgw.sf-express.com'
@@ -21,6 +27,55 @@ function sfTokenUrl(environment: SfAuthConfig['environment']) {
 function sfServiceUrl(environment: SfAuthConfig['environment']) {
   const origin = environment === 'sandbox' ? 'https://sfapi-sbox.sf-express.com' : 'https://sfapi.sf-express.com'
   return `${origin}/std/service`
+}
+
+function transportMetadata(error: unknown, endpoint: string) {
+  const asRecord = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {}
+  const failure = asRecord(error), cause = asRecord(failure.cause)
+  const attemptedAddresses: Array<{ address: string; family: 4 | 6 }> = []
+  const knownAddresses = new Set<string>()
+  const addAddress = (value: unknown) => {
+    if (typeof value !== 'string' || value.length > 80 || attemptedAddresses.length >= 8) return
+    let address = value.trim()
+    // Only strip unambiguous host:port forms. A bare IPv6 address is never split at its last colon.
+    if (!isIP(address)) {
+      const bracketed = address.match(/^\[([0-9a-fA-F:.]+)\](?::(\d{1,5}))?$/)
+      const ipv4Port = address.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/)
+      const parsed = bracketed || ipv4Port
+      if (!parsed || (parsed[2] !== undefined && (Number(parsed[2]) < 1 || Number(parsed[2]) > 65535))) return
+      address = parsed[1]
+    }
+    const family = isIP(address)
+    if ((family !== 4 && family !== 6) || address.includes('%')) return
+    address = address.toLowerCase()
+    if (knownAddresses.has(address)) return
+    knownAddresses.add(address)
+    attemptedAddresses.push({ address, family })
+  }
+  const pending: unknown[] = [error]
+  const visited = new Set<unknown>()
+  // Bounded traversal also handles Node's AggregateError without serialising arbitrary error content.
+  for (let index = 0; index < pending.length && index < 16; index += 1) {
+    const current = pending[index]
+    if (visited.has(current)) continue
+    visited.add(current)
+    const item = asRecord(current)
+    addAddress(item.address)
+    if (typeof item.message === 'string' && item.message.length <= 4096) {
+      const attempted = item.message.match(/\battempted address(?:es)?:\s*([^)]*)(?:\)|$)/i)?.[1]
+      if (attempted && attempted.length <= 2048) attempted.split(',').slice(0, 32).forEach(addAddress)
+    }
+    if (item.cause && typeof item.cause === 'object') pending.push(item.cause)
+    if ((current instanceof AggregateError || item.name === 'AggregateError') && Array.isArray(item.errors)) pending.push(...item.errors.slice(0, 8))
+  }
+  const region = process.env.VERCEL_REGION
+  return {
+    endpointHostname: new URL(endpoint).hostname,
+    runtimeRegion: typeof region === 'string' && /^[a-z]{3}\d{1,2}$/.test(region) ? region : undefined,
+    attemptedAddresses,
+    errorType: typeof failure.name === 'string' && /^(?:Error|TypeError|AbortError|TimeoutError|AggregateError)$/.test(failure.name) ? failure.name : undefined,
+    networkCode: typeof cause.code === 'string' && transportErrorCodes.has(cause.code) ? cause.code : undefined,
+  }
 }
 
 async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
@@ -47,8 +102,7 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
       console.error('shipping.sf.oauth_transport', {
         environment: config.environment,
         elapsedMs: Date.now() - startedAt,
-        errorType: failure?.name,
-        networkCode: /^[A-Z0-9_]+$/.test(networkCode || '') ? networkCode : undefined
+        ...transportMetadata(error, sfTokenUrl(config.environment))
       })
       const timedOut = networkCode === 'UND_ERR_CONNECT_TIMEOUT' || failure?.name === 'TimeoutError' || failure?.name === 'AbortError'
       throw new ShippingError(502, timedOut ? '顺丰OAuth2认证连接超时，未收到顺丰响应。' : '无法连接顺丰OAuth2认证服务，未收到响应。', 'provider_unreachable')
@@ -91,7 +145,7 @@ async function postSfService(serviceCode: string, message: unknown, config: SfAu
   } catch (error) {
     // Only transport metadata: never log request bodies, credentials or customer details.
     const failure = error as { name?: string; cause?: { code?: string } }
-    console.error('shipping.sf.transport', { serviceCode, environment: config.environment, upstreamStatus: undefined, elapsedMs: Date.now() - started, errorType: failure?.name, networkCode: /^[A-Z0-9_]+$/.test(failure?.cause?.code || '') ? failure.cause?.code : undefined })
+    console.error('shipping.sf.transport', { serviceCode, environment: config.environment, upstreamStatus: undefined, elapsedMs: Date.now() - started, ...transportMetadata(error, url) })
     const timedOut = failure?.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' || failure?.name === 'TimeoutError' || failure?.name === 'AbortError'
     throw new ShippingError(502, timedOut ? '顺丰网关连接超时，未收到顺丰响应。' : '无法连接顺丰网关，未收到顺丰响应。', 'provider_unreachable')
   }

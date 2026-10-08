@@ -4,16 +4,19 @@
 
 ## 服务端环境变量
 
-写入本地私有环境文件或部署平台服务端环境配置；不要写入tracked文件或公开前缀。
+F054基础运行必需5项：`NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`SHIPPING_CREDENTIALS_ENCRYPTION_KEY`、`SHIPPING_RECEIPT_SECRET`。前两项是公开项目配置，后三项仅限服务端；服务端密钥写入私有环境文件或部署平台，不能写入tracked文件或公开前缀。此处列出代码依赖，不代表当前部署已满足，也不要求重新生成现有密钥。
 
 - `SHIPPING_CREDENTIALS_ENCRYPTION_KEY`：64位十六进制、32随机字节，用作AES-256-GCM应用层凭据加密主密钥，并派生月结卡号指纹密钥。可用 `openssl rand -hex 32` 生成；不能记录到日志。轮换前需先重加密已存凭据和账号号。
-- `SHIPPING_ALLOWED_USER_IDS`：旧版访问名单的一次性迁移输入。配置管理员在配置中心迁移后，运行时操作授权从组织级`user_permission_assignments`读取；此变量只供一次性迁移按钮读取；组织权限表验证完成后从Vercel删除。
-- `SHIPPING_CONTEXT_SECRET`：匿名业务上下文链接签名密钥，至少32字符。
-- `SHIPPING_RECEIPT_SECRET`：匿名回执令牌HMAC密钥，至少32字符。
+- `SHIPPING_RECEIPT_SECRET`：至少32字符；用于回执令牌HMAC和匿名限流，认证操作员创建寄件单也依赖它。
+- `SHIPPING_CONTEXT_SECRET`：使用签名业务上下文链接时必需，至少32字符；不携带上下文令牌的普通提报和内部下单不依赖它。
+- `CRON_SECRET`：启用定时寄件审核提醒时必需，复用现有平台定时任务配置；不是顺丰接口凭据，也不会自动下单。
+- `SHIPPING_ALLOWED_USER_IDS`：一次性旧名单迁入及旧凭据所属组织证明，不再授予运行时寄件权限。只有旧凭据配置和人员权限两类导入均完成，并完成新版本稳定验收后，才可从Vercel删除。
 - `SHIPPING_ANONYMOUS_LIMIT`：可选匿名提报限流值，默认20。
 - `SHIPPING_BUSINESS_CONTEXTS_JSON`：可选业务代码关系映射，不含承运商配置。
 
-正常下单、查询、轨迹和取消路径只从组织数据库读取配置。配置管理员可在配置中心对当前环境触发一次性“迁入旧配置”：服务端读取旧`SF_*`/`SHIPPING_SENDER_JSON`值后，加密写入缺失的数据库项，不向浏览器返回原值，也不覆盖已保存的配置。完成迁移后，删除旧变量；正常运行不依赖它们。
+正常下单、查询、轨迹和取消路径只从组织数据库读取配置。配置管理员可在配置中心对当前环境触发一次性“迁入旧配置”：服务端读取旧`SF_*`/`SHIPPING_SENDER_JSON`值后，加密写入缺失的数据库项，不向浏览器返回原值，也不覆盖已保存的配置。两类导入和新版本稳定验收完成后再清理旧变量；正常运行不依赖它们。
+
+`scripts/check-env.mjs`只将3个Supabase变量设为强制项，寄件密钥缺失仅输出警告且不校验格式。因此它退出成功不能证明F054基础变量齐全，更不能证明Production寄件已通过；还须分别核对密钥格式、数据库配置、供应商能力与真实操作。
 
 ### 组织范围与旧名单切换
 
@@ -33,19 +36,19 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 ## Production环境变量清单（2026-09-24只读核对）
 
-以下清单区分运行必需项、可选项和旧版本兼容变量。Vercel只核对变量名、类型、环境和分支范围；没有读取变量值、没有增删或轮换变量。
+以下表格保留2026-09-24的变量元数据核对记录，不代表当前配置已满足。该次Vercel核对只读取变量名、类型、环境和分支范围，没有读取变量值、增删或轮换变量；运行依赖分类以本页“服务端环境变量”为准。
 
-| 用途 | 变量 | 当前Production状态 | 需要保留的原因 |
+| 用途 | 变量 | 2026-09-24 Production记录 | 需要保留的原因 |
 |---|---|---|---|
 | Supabase项目地址 | `NEXT_PUBLIC_SUPABASE_URL` | Config，已存在 | 现有客户端和服务端数据库连接使用 |
 | Supabase客户端访问 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Config，已存在 | 浏览器端受RLS保护的Supabase客户端使用 |
 | Supabase服务端访问 | `SUPABASE_SERVICE_ROLE_KEY` | Secret，已存在 | 服务端API访问Supabase；绝不能传到浏览器 |
 | 寄件凭据加密 | `SHIPPING_CREDENTIALS_ENCRYPTION_KEY` | Secret，已存在 | AES-256-GCM加密数据库中的PartnerID、CheckWord和月结卡号；32随机字节编码为64位十六进制 |
-| 匿名上下文签名 | `SHIPPING_CONTEXT_SECRET` | Secret，已存在 | 销售/匿名提报链接签名，至少32字符 |
-| 匿名回执签名 | `SHIPPING_RECEIPT_SECRET` | Secret，已存在 | 匿名提交回执与限流签名，至少32字符 |
-| 一次性旧名单迁移 | `SHIPPING_ALLOWED_USER_IDS` | Config，已存在 | 只用于把旧逗号分隔ONES用户UUID名单迁入组织权限表；每个组织迁移完成后即可删除，不作为持续授权来源 |
+| 签名上下文（条件必需） | `SHIPPING_CONTEXT_SECRET` | Secret，已存在 | 携带签名业务上下文的链接使用，至少32字符 |
+| 寄件回执与限流 | `SHIPPING_RECEIPT_SECRET` | Secret，已存在 | 内部和匿名寄件单创建、匿名回执与限流签名，至少32字符 |
+| 一次性旧配置/名单迁入 | `SHIPPING_ALLOWED_USER_IDS` | Config，已存在 | 证明旧凭据所属组织并迁入人员权限；两类导入和新版本稳定验收完成后再删，不作为持续授权来源 |
 
-可选项：`SHIPPING_ANONYMOUS_LIMIT`（默认20）、`SHIPPING_BUSINESS_CONTEXTS_JSON`（默认空对象）。当前Production未配置这两项；它们不是普通寄件和承运商API运行的必需项。
+可选项：`SHIPPING_ANONYMOUS_LIMIT`（默认20）、`SHIPPING_BUSINESS_CONTEXTS_JSON`（默认空对象）。该次Production核对未配置这两项；它们不是普通寄件和承运商API运行的必需项。
 
 ### 旧顺丰环境变量
 
@@ -63,7 +66,7 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 ## 真实寄件验收准备（用户执行）
 
-1. 三个服务端密钥已配置为Vercel Sensitive变量；仅Vercel保存密钥值，不要将其复制到仓库、聊天或日志。将来轮换加密主密钥前先重加密数据库中的所有凭据和月结卡号。
+1. 部署前核对本页基础项及已启用功能的条件必需项在Production的作用域与格式，继续复用现有有效密钥；不要将密钥值复制到仓库、聊天或日志。将来轮换加密主密钥前先重加密数据库中的所有凭据和月结卡号。
 2. Production与隔离Supabase项目均已按序应用`20260922000001`、`20260923074619`、`20260923081415`，并验证配置表/订单表RLS、拒绝`anon`/`authenticated`直接访问、`service_role`权限和快照列/索引。Production配置表仍为空；这表示当前没有生产承运商连接、月结账号或寄件人资料。
 3. 新版本部署到Production后，配置管理员在配置中心迁入已有的Production机器凭据、月结卡号和授权服务；手动录入公司默认寄件人，并把旧寄件人员名单迁入组织权限表。确认`EXP_RECE_CREATE_ORDER`已经顺丰上线、`EXP_RECE_UPDATE_ORDER`已关联后，再分别验证订单、查回、轨迹和未揽收取消能力；只读连接通过不自动开启Production下单。
 4. 按顺丰要求确认生产月结账号已绑定当前开发者应用；普通ONES寄件人无需获得顺丰管理员身份。

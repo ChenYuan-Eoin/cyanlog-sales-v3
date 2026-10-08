@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { probeSfProduction, probeSfSandbox } from './sf-client'
 
 describe('SF sandbox OAuth2 connectivity probe', () => {
-  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+  afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
   it('obtains a sandbox OAuth2 token and calls the read-only standard API without creating a shipment', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
@@ -55,6 +55,70 @@ describe('SF sandbox OAuth2 connectivity probe', () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain('fixture transport failure')
     expect(JSON.stringify(log.mock.calls)).not.toContain('c'.repeat(32))
     expect(JSON.stringify(log.mock.calls)).toContain('UND_ERR_CONNECT_TIMEOUT')
+  })
+
+  it.each(['attempted addresses', 'attempted address'])('logs only validated IPs from %s and the runtime region for an OAuth connection timeout', async fragmentLabel => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('VERCEL_REGION', 'sin1')
+    const cause = Object.assign(new AggregateError([
+      Object.assign(new Error('private child message'), { address: '192.0.2.9' }),
+      Object.assign(new Error('private malformed address'), { address: 'credential-fixture.example:443' }),
+    ], `Connect Timeout Error (${fragmentLabel}: 203.0.113.2:443, [2001:db8::3]:8443, credential-fixture, timeout: 10000ms) private upstream content`), {
+      code: 'UND_ERR_CONNECT_TIMEOUT', address: '198.51.100.1:443',
+    })
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('private top-level failure', { cause }))
+    vi.stubGlobal('fetch', fetchMock)
+    await probeSfSandbox('partner-diagnostics-unique', 'private-checkword-diagnostics')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(log).toHaveBeenCalledWith('shipping.sf.oauth_transport', expect.objectContaining({
+      endpointHostname: 'sfapi-sbox.sf-express.com', runtimeRegion: 'sin1', networkCode: 'UND_ERR_CONNECT_TIMEOUT',
+      attemptedAddresses: [
+        { address: '198.51.100.1', family: 4 },
+        { address: '203.0.113.2', family: 4 },
+        { address: '2001:db8::3', family: 6 },
+        { address: '192.0.2.9', family: 4 },
+      ],
+    }))
+    const serialized = JSON.stringify(log.mock.calls)
+    for (const privateValue of ['private', 'credential-fixture', 'partner-diagnostics-unique', 'attempted addresses:', 'timeout: 10000ms']) expect(serialized).not.toContain(privateValue)
+  })
+
+  it('rejects malformed metadata instead of logging hostnames, invalid ports or arbitrary IP-containing messages', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('VERCEL_REGION', 'sin1 private-region')
+    const error = Object.assign(new Error('credentials in an arbitrary message 203.0.113.4'), {
+      name: 'private-error-type',
+      cause: { code: 'EPRIVATE_TOKEN', address: '203.0.113.3:99999', message: 'private network detail with 192.0.2.8', errors: [{ address: '999.999.999.999:443' }, { address: '[2001:db8::1]:443/private-token' }] },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error))
+    await probeSfSandbox('partner-invalid-metadata', 'private-checkword-metadata')
+    expect(log).toHaveBeenCalledWith('shipping.sf.oauth_transport', expect.objectContaining({ endpointHostname: 'sfapi-sbox.sf-express.com', attemptedAddresses: [] }))
+    const metadata = log.mock.calls[0][1]
+    expect(metadata.runtimeRegion).toBeUndefined()
+    expect(metadata.errorType).toBeUndefined()
+    expect(metadata.networkCode).toBeUndefined()
+    const serialized = JSON.stringify(log.mock.calls)
+    expect(serialized).not.toContain('private')
+    expect(serialized).not.toContain('203.0.113.4')
+    expect(serialized).not.toContain('192.0.2.8')
+  })
+
+  it('adds the same safe destination metadata to service transport failures without exposing its token', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('VERCEL_REGION', 'sin1')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ apiResultCode: 'A1000', accessToken: 'example-service-token', expiresIn: 7200 }), { status: 200 }))
+      .mockRejectedValueOnce(new TypeError('private service failure', { cause: { code: 'ECONNRESET', address: '[2001:db8::4]:443', message: 'private service detail' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    await probeSfSandbox('partner-service-diagnostics', 'private-service-checkword')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(log).toHaveBeenCalledWith('shipping.sf.transport', expect.objectContaining({
+      endpointHostname: 'sfapi-sbox.sf-express.com', runtimeRegion: 'sin1', networkCode: 'ECONNRESET',
+      attemptedAddresses: [{ address: '2001:db8::4', family: 6 }],
+    }))
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private')
+    expect(JSON.stringify(log.mock.calls)).not.toContain('partner-service-diagnostics')
+    expect(JSON.stringify(log.mock.calls)).not.toContain('example-service-token')
   })
 
   it('distinguishes an HTTP response from a network timeout without returning upstream details', async () => {
