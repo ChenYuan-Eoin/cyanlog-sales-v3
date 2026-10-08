@@ -147,7 +147,14 @@ export async function saveDefaultSender(orgId: string, userId: string, input: un
   return loadShippingConfiguration(orgId)
 }
 
+function legacyEnvironmentMatches(environment: CarrierEnvironment, env: Record<string, string | undefined>) {
+  // Legacy credentials describe one explicit SF environment. Deployment type
+  // and the administrator's selected target do not prove that provenance.
+  return (env.SF_ENVIRONMENT === 'sandbox' || env.SF_ENVIRONMENT === 'production') && env.SF_ENVIRONMENT === environment
+}
+
 export function hasLegacyShippingConfiguration(environment: CarrierEnvironment, configuration: ShippingConfiguration, env: Record<string, string | undefined> = process.env) {
+  if (!legacyEnvironmentMatches(environment, env)) return false
   const connection = configuration.connections.find((item) => item.carrier === 'sf' && item.environment === environment)
   const monthlyCard = environment === 'production' ? env.SF_MONTHLY_CARD : env.SF_SANDBOX_MONTHLY_CARD
   const hasAccount = connection && configuration.billingAccounts.some((account) => account.connectionId === connection.id && account.status === 'active')
@@ -160,6 +167,9 @@ export function hasLegacyShippingConfiguration(environment: CarrierEnvironment, 
 }
 
 export async function importLegacyShippingConfiguration(orgId: string, userId: string, environment: CarrierEnvironment, env: Record<string, string | undefined> = process.env) {
+  if (!legacyEnvironmentMatches(environment, env)) {
+    throw new ShippingError(409, '旧配置运行环境不明确或与所选环境不符，请在配置中心手动录入对应环境的资料。')
+  }
   if (!await canImportLegacyShippingConfiguration(orgId, env)) {
     throw new ShippingError(403, '无法确认旧寄件配置属于当前组织，请在配置中心手动录入。')
   }

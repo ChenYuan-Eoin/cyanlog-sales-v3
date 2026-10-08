@@ -21,6 +21,7 @@ beforeEach(() => {
   mocks.updates.length = 0
   connection.authorized_services = []
   connection.order_capability = 'not_tested'
+  vi.stubEnv('SF_ENVIRONMENT', 'sandbox')
   vi.stubEnv('SF_PARTNER_ID', '')
   vi.stubEnv('SF_CHECK_WORD', '')
   vi.stubEnv('SF_SERVICES_JSON', '')

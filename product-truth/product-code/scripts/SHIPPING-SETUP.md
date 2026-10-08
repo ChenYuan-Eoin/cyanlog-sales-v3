@@ -52,7 +52,7 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 ### 旧顺丰环境变量
 
-当前Vercel Production仍有旧`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_ENVIRONMENT`、`SF_MONTHLY_CARD`和`SF_SERVICES_JSON`；未读取变量值。新代码的一次性迁入按钮可把PartnerID/CheckWord、授权服务和月结卡号存入数据库，日常下单、查询、轨迹和取消均从数据库取配置。`SF_ENVIRONMENT`不会被新代码读取；但旧Production部署仍在运行，旧变量须等新版本部署、配置迁入并完成验收后再清理。当前没有Production `SHIPPING_SENDER_JSON`，公司默认寄件人须在配置中心手工录入。新版本稳定后删除不再需要的`SF_*`和`SHIPPING_ALLOWED_USER_IDS`，不需要为此新建或轮换密钥。`SF_SANDBOX_MONTHLY_CARD`和`SF_PRODUCTION_ORDER_ENABLED`目前仅能看到Preview条目。
+2026-09-24的Vercel Production核对记录包含旧`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_ENVIRONMENT`、`SF_MONTHLY_CARD`和`SF_SERVICES_JSON`，未读取变量值。新代码的一次性迁入按钮可把PartnerID/CheckWord、授权服务和月结卡号存入数据库；旧`SF_ENVIRONMENT`仅用于导入来源环境校验，必须明确为`sandbox`或`production`且与所选环境一致，缺失、非法或不匹配时拒绝导入，不能把同一校验码复制成两个环境。日常下单、查询、轨迹和取消仍从数据库取配置。旧变量须等新版本部署、配置与人员权限迁入并完成验收后再清理。该次核对没有Production `SHIPPING_SENDER_JSON`，公司默认寄件人须在配置中心手工录入。新版本稳定后删除不再需要的`SF_*`和`SHIPPING_ALLOWED_USER_IDS`，不需要为此新建或轮换密钥。`SF_SANDBOX_MONTHLY_CARD`和`SF_PRODUCTION_ORDER_ENABLED`当时仅能看到Preview条目。
 
 ### 2026-09-24环境核对记录（历史快照）
 
