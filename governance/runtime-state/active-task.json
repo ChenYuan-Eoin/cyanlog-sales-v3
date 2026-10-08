@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-09-24T19:07:30+08:00",
+  "updated_at": "2026-10-08T04:41:47.759Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -149,7 +149,11 @@
       "product-truth/product-code/app/api/shipping",
       "product-truth/product-code/app/configs",
       "product-truth/product-code/lib/config-center",
-      "product-truth/product-code/lib/permissions.ts"
+      "product-truth/product-code/lib/permissions.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -211,7 +215,13 @@
         "micro_fix_scope": "F054 WP18 release scope approved by user",
         "final_scope": "F054 WP18：在隔离环境按顺序验证并应用缺失的基础协同迁移20260922000001_shipping_collaboration_m0及配置/快照迁移20260923074619_shipping_carrier_configuration、20260923081415_shipping_order_configuration_snapshot，核对RLS/权限和数据未丢失；确认可恢复Production备份点和回滚条件后，在Production应用同一前向兼容迁移链，配置所需服务端环境变量，按main/production策略发布精确SHA并以用户现有Chrome验收。真实付费运单仅限用户在页面核对收寄信息与费用后确认的一票。",
         "excludes_until_final_approval": "No destructive schema/data removal or unrelated product changes. User still confirms a concrete real shipment and charges in existing Chrome."
-      }
+      },
+      "blocking_acceptance_defects": [
+        "IN-20260927-003",
+        "IN-20260927-004",
+        "IN-20261008-001"
+      ],
+      "runtime_contract_version": "f054-v2"
     },
     "feature_id": "F054"
   },
@@ -238,8 +248,8 @@
     ],
     "release_blockers": [
       "Production的shipping_carrier_connections、shipping_billing_accounts、shipping_sender_profiles均为0行。Vercel Production仍有旧SF_PARTNER_ID、SF_CHECK_WORD、SF_MONTHLY_CARD、SF_SERVICES_JSON配置及加密/上下文/回执运行密钥；新版本可用配置中心的一次性迁入流程保存机器连接、授权服务和月结账号。Production默认寄件人未保存在数据库，且当前没有旧SHIPPING_SENDER_JSON可迁入，需由配置管理员在配置中心录入公司寄件人资料后才能下单。",
-      "隔离Preview当前有1条沙盒连接、默认月结账号、默认寄件人和已授权服务；现有Chrome验证OAuth2只读连接通过并成功创建1票合成沙盒运单。取消接口返回A1004，轨迹返回沙盒模拟内容，故完整沙盒路径仍未通过。顺丰控制台的Production应用中EXP_RECE_CREATE_ORDER待上线、EXP_RECE_UPDATE_ORDER未关联；两项平台权限必须核实后才能证明Production下单/取消可用。候选仍保留原Preview分支的变量设置，不复制或更换密钥。",
-      "Vercel将sales.cyanlog.icu标记为Valid Configuration。当前默认DNS查询能返回Vercel CNAME与地址，但本机curl的系统解析仍报无法解析；尚未用用户现有Chrome完成Production域名验收。需在不绕过DNS的Chrome会话中确认正常解析后才能满足Production门禁。",
+      "原Preview已有沙盒连接、默认月结账号及寄件人，现有Chrome已验证沙盒OAuth2下单和轨迹响应；MOCK轨迹不再落库或推进订单状态。顺丰EXP_RECE_UPDATE_ORDER尚待关联确认及取消联调；EXP_RECE_CREATE_ORDER仍待上线。免面单申请已被驳回，需对应销售/网点负责人工号、确认收派员上门打印安排和申请理由；不得自行改做云打印或把沙盒证据当作Production能力。",
+      "仍需用户现有Chrome在https://sales.cyanlog.icu对精确发布版本完成实际下单、未揽收取消及轨迹验收；机器部署/域名和只读HTTP证据不能代替该浏览器验收。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [

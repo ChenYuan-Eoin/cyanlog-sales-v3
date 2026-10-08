@@ -10,10 +10,15 @@ const core = require('./harness-core');
 const {
   DELIVERY_ATTESTATION_REF,
   REQUIRED_DEFECT_REPLAY_ACTIONS,
+  SHIPPING_COLLABORATION_ACTIONS,
   VERCEL_PRODUCTION_CONTRACT,
   checkDeliveryStage,
   getDeliveryStatus,
   recordDeliveryEvidence,
+  requiredReplayActions,
+  shippingWorkspaceEvidenceBlockers,
+  shippingProductionVerifierScopeBlockers,
+  unresolvedBlockingDefects,
   resolveVercelDeploymentCommit,
   sealDeliveryAttestation,
   transitionDeliveryState,
@@ -247,6 +252,86 @@ function makeSettings(repoRoot) {
       }
     }
   });
+}
+
+function runShippingContractSelftest(repoRoot) {
+  const scoped = {
+    activeId: 'WP18', featureId: 'F054', runtimeProfile: 'shipping_workspace', runtimeContractVersion: 'f054-v2',
+    targetState: 'production_released', productionDatabaseMode: 'controlled_write_approved',
+    productionReleaseAuthorization: { status: 'approved_for_final_release' }
+  };
+  assert.deepStrictEqual(shippingProductionVerifierScopeBlockers(scoped), []);
+  for (const override of [
+    { featureId: 'F001' }, { runtimeProfile: 'ai' }, { runtimeContractVersion: 'f054-v1' },
+    { activeId: 'G1' }, { targetState: 'code_green' }, { productionDatabaseMode: 'read_only_pending' },
+    { productionReleaseAuthorization: { status: 'pending' } }
+  ]) assert.ok(shippingProductionVerifierScopeBlockers({ ...scoped, ...override }).length);
+
+  const state = { active_task: { delivery_contract: {
+    runtime_profile: 'shipping_workspace', runtime_contract_version: 'f054-v2',
+    target_state: 'production_released', blocking_acceptance_defects: ['IN-20261008-001']
+  } } };
+  assert.deepStrictEqual(requiredReplayActions(state), SHIPPING_COLLABORATION_ACTIONS);
+  assert.ok(!requiredReplayActions(state).includes('select_payment'));
+  assert.ok(requiredReplayActions(state).includes('cancel_uncollected_order'));
+  const production = {
+    shipping_workspace: { payload: {
+      contract_version: 'f054-v2', origin: 'https://sales.cyanlog.icu',
+      ...Object.fromEntries(['page_accessible', 'anonymous_form_submittable', 'receipt_recoverable', 'owner_direct_available',
+        'review_queue_available', 'production_submission_enabled', 'configuration_in_database', 'configuration_center',
+        'credentials_masked', 'order_configuration_snapshot_verified', 'cancel_before_collection_verified'].map(k => [k, true])),
+      ledger_filters: ['sales', 'customer', 'contact', 'status'], cancellation_service_code: 'EXP_RECE_UPDATE_ORDER'
+    } },
+    shipping_tracking: { payload: {
+      success: true, waybill: 'SF1234567890123', event_count: 2, sf_environment: 'production',
+      app_endpoint: 'https://sales.cyanlog.icu/api/shipping/tracking', mock: false,
+      source: 'production_database', operator_observations_are_attested: true
+    } },
+    shipping_access: { payload: Object.fromEntries(['public_intake_allowed', 'guest_ledger_denied', 'owner_can_read',
+      'relationship_assignment_controlled', 'rate_limit_enforced'].map(k => [k, true])) }
+  };
+  assert.deepStrictEqual(shippingWorkspaceEvidenceBlockers(production, 'production', 'f054-v2'), []);
+  for (const [section, key, value] of [
+    ['shipping_workspace', 'contract_version', 'f054-v1'],
+    ['shipping_workspace', 'configuration_in_database', false],
+    ['shipping_workspace', 'order_configuration_snapshot_verified', false],
+    ['shipping_workspace', 'cancel_before_collection_verified', false],
+    ['shipping_workspace', 'cancellation_service_code', 'EXP_RECE_CREATE_ORDER'],
+    ['shipping_tracking', 'sf_environment', 'sandbox'], ['shipping_tracking', 'mock', true],
+    ['shipping_tracking', 'source', 'production_api'], ['shipping_tracking', 'operator_observations_are_attested', false],
+    ['shipping_tracking', 'app_endpoint', 'https://preview.example.invalid/api/shipping/tracking'],
+    ['shipping_tracking', 'event_count', 0]
+  ]) {
+    const invalid = structuredClone(production); invalid[section].payload[key] = value;
+    assert.ok(shippingWorkspaceEvidenceBlockers(invalid, 'production', 'f054-v2').length, `${section}.${key} must fail closed`);
+  }
+  const sandbox = structuredClone(production);
+  sandbox.shipping_workspace.payload.origin = 'https://preview.example.invalid';
+  Object.assign(sandbox.shipping_tracking.payload, {
+    sf_environment: 'sandbox', app_endpoint: 'https://preview.example.invalid/api/shipping/tracking',
+    source: 'sandbox_api', mock: true, events_persisted: false, order_state_unchanged: true
+  });
+  assert.deepStrictEqual(shippingWorkspaceEvidenceBlockers(sandbox, 'sandbox', 'f054-v2'), []);
+  sandbox.shipping_tracking.payload.events_persisted = true;
+  assert.ok(shippingWorkspaceEvidenceBlockers(sandbox, 'sandbox', 'f054-v2').length);
+
+  const head = 'a'.repeat(40);
+  const reproduction = evidenceEnvelope(repoRoot, 'shipping-verifier-reproduction', { candidate: head, actual: 'WP11-only rejection' });
+  const replay = evidenceEnvelope(repoRoot, 'shipping-verifier-preview', { commit: head, actions: SHIPPING_COLLABORATION_ACTIONS });
+  const proof = {
+    verified: true, root_cause: 'The verifier used a retired work-package ID and retired authentication/data contracts.',
+    reproduction, regression_artifact_sha256: replay.sha256, preview_commit: head,
+    production_verified: false
+  };
+  const defects = { 'IN-20261008-001': proof };
+  assert.deepStrictEqual(unresolvedBlockingDefects(state, defects, head, { defect_replay: replay }, {}, repoRoot, 'integration_ready'), []);
+  assert.deepStrictEqual(unresolvedBlockingDefects(state, defects, head, { defect_replay: replay }, {}, repoRoot, 'production_released'), ['IN-20261008-001']);
+  assert.deepStrictEqual(unresolvedBlockingDefects(state, defects, 'b'.repeat(40), { defect_replay: replay }, {}, repoRoot, 'integration_ready'), ['IN-20261008-001']);
+  const acceptance = evidenceEnvelope(repoRoot, 'shipping-verifier-production', { commit: head, actions: SHIPPING_COLLABORATION_ACTIONS });
+  Object.assign(proof, { production_verified: true, production_commit: head, production_regression_artifact_sha256: acceptance.sha256 });
+  assert.deepStrictEqual(unresolvedBlockingDefects(state, defects, head, { defect_replay: replay }, { browser_acceptance: acceptance }, repoRoot, 'production_released'), []);
+  fs.appendFileSync(path.join(deliveryRuntimeRoot(repoRoot), acceptance.artifact_path), 'tampered');
+  assert.deepStrictEqual(unresolvedBlockingDefects(state, defects, head, { defect_replay: replay }, { browser_acceptance: acceptance }, repoRoot, 'production_released'), ['IN-20261008-001']);
 }
 
 function makeSchedulerFixture(repoRoot) {
@@ -974,6 +1059,7 @@ function runSelftest(repoRoot) {
   core.setPhase(repoRoot, 'verify');
   const passingCompletion = core.completionAudit(repoRoot);
   assert.strictEqual(passingCompletion.ok, true);
+  runShippingContractSelftest(repoRoot);
   runDeliverySelftest(repoRoot);
   const completed = core.completeGoal(repoRoot, { by: 'selftest' });
   assert.strictEqual(completed.contract.status, 'complete');
@@ -999,6 +1085,10 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js')], {
+      encoding: 'utf8', timeout: 60000
+    });
+    assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');
     runSelftest(repoRoot);
   } finally {
     if (previousRuntimeDir === undefined) {

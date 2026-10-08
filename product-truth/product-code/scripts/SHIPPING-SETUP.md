@@ -51,13 +51,13 @@ Node.js服务端使用顺丰OAuth2机器凭据，不需要网页登录或人工�
 
 当前Vercel Production仍有旧`SF_PARTNER_ID`、`SF_CHECK_WORD`、`SF_ENVIRONMENT`、`SF_MONTHLY_CARD`和`SF_SERVICES_JSON`；未读取变量值。新代码的一次性迁入按钮可把PartnerID/CheckWord、授权服务和月结卡号存入数据库，日常下单、查询、轨迹和取消均从数据库取配置。`SF_ENVIRONMENT`不会被新代码读取；但旧Production部署仍在运行，旧变量须等新版本部署、配置迁入并完成验收后再清理。当前没有Production `SHIPPING_SENDER_JSON`，公司默认寄件人须在配置中心手工录入。新版本稳定后删除不再需要的`SF_*`和`SHIPPING_ALLOWED_USER_IDS`，不需要为此新建或轮换密钥。`SF_SANDBOX_MONTHLY_CARD`和`SF_PRODUCTION_ORDER_ENABLED`目前仅能看到Preview条目。
 
-### 当前环境状态
+### 2026-09-24环境核对记录（历史快照）
 
 - Production的Supabase核心变量与上述三个服务端密钥均已存在；没有要求新增或更换密钥。
 - Production `shipping_carrier_connections`、`shipping_billing_accounts`、`shipping_sender_profiles`当前均为0行；因此尚未配置生产连接、生产月结账号或公司默认寄件人。
 - Production的订单、运单和轨迹表已存在并启用RLS，无需重复应用迁移。
 - 隔离Preview已有1条沙盒连接、1个活动默认月结账号、1个默认寄件人和1个已授权服务。现有Chrome曾成功创建一票合成沙盒订单；取消接口返回A1004（顺丰应用未关联`EXP_RECE_UPDATE_ORDER`），轨迹查询返回的是沙盒模拟响应，均不能证明Production能力。
-- 最新稳定Preview部署仍在原分支`codex/wp11-main-integration`，当前候选SHA为`f4d2c82a67dd62c75ce86139400e5c5201a2f4a9`。现有Chrome刷新后确认`/shipping`为纯三栏业务页，寄件设置位于`/configs?tab=shipping`，没有设置遮罩覆盖工作台。
+- 当日核验的Preview部署位于原分支`codex/wp11-main-integration`，SHA为`f4d2c82a67dd62c75ce86139400e5c5201a2f4a9`。现有Chrome刷新后确认`/shipping`为纯三栏业务页，寄件设置位于`/configs?tab=shipping`，没有设置遮罩覆盖工作台。此历史记录不代表最新候选部署。
 - 顺丰控制台的“ONES-自助查寄”应用中，`EXP_RECE_CREATE_ORDER`待上线，`EXP_RECE_SEARCH_ORDER_RESP`与`EXP_RECE_SEARCH_ROUTES`已上线，`EXP_RECE_UPDATE_ORDER`尚未关联。控制台要求接口在沙盒7天内成功调用至少3次后才能申请上线；下单与取消因此仍是外部上线门禁。
 - Production仍运行旧版本；数据库配置表为空，默认寄件人待录入。未修改Production环境变量、未写Production配置行、未提交真实运单。
 
@@ -145,7 +145,7 @@ Excel解压库改为需要解析xlsx或下载模板时才加载。文本优先�
 
 用户明确所有验收在 `https://sales.cyanlog.icu` 的现有Chrome会话进行。localhost、隔离数据库、顺丰沙盒仅是开发证据，不向用户作为验收交付。
 
-当前代码SHA `f4d2c82a67dd62c75ce86139400e5c5201a2f4a9`通过本地目标/全量测试、lint、typecheck和build，状态为`code_green`；已发布到原Preview分支，但尚未合入main或部署Production。Production发布仍等待顺丰API上线、配置中心录入公司默认寄件人、Production完整路径验收及现有Chrome验收。当前机器`dig`能解析`sales.cyanlog.icu`，但本机`curl`仍报无法解析；Production域名尚未通过现有Chrome验收。
+当前代码与部署状态以worktree独立的`codex-runtime/delivery-evidence.json`、Git远端及Vercel实际部署为准。文档中的历史SHA、连通性或DNS观察不能作为当前阻断或完成证据。Production发布须核实顺丰API上线、配置中心公司默认寄件人、Production完整路径及现有Chrome验收。
 
 追加迁移 `20260911000003_shipping_contacts_defaults.sql` 提供私有地址簿和上次成功下单快照。匿名页面仅提供填写界面；匿名付费寄件策略尚待用户明确。
 
@@ -162,3 +162,13 @@ Excel解压库改为需要解析xlsx或下载模板时才加载。文本优先�
 顺丰官方说明沙盒路由响应为MOCK。因此沙盒轨迹会明确标注，只用于接口联调展示，不写入物流事件或推进单据状态，也不能证明实际揽收/签收。独立模拟页继续只操作浏览器内存；两者均不能替代Production真实寄件验收。
 
 取消开始时仍必须处于待揽收；若顺丰已明确接受取消、同时另一查询刚推进运输状态，服务端会按组织核对并保存取消结果。已签收冲突保留实际状态供核对，顺丰拒绝或超时均不标成已取消。
+
+## 当前工作台的发布验证合同
+
+`shipping_workspace`使用`f054-v2`合同，按F054功能、有效工作包、明确Production授权和精确部署SHA确定作用范围，不把历史WP11编号作为准入条件。内部`/shipping`要求系统登录，匿名提报位于`/sales-portal`；数据库连接失败导致的登录跳转不能直接认定为会话过期。
+
+发布核验读取现有协同表和三个配置表的权限、组织归属及订单配置快照，不要求导入旧个人联系人、重新提供顺丰凭据或调用旧MD5鉴权。操作员在现有Chrome执行真实操作；受控验证器将这些明确标注的操作员观察与Production数据库证据交叉核对，不把界面观察伪称为独立供应商抓包。匿名访问探测和管理SQL保持只读；已批准的应用轨迹刷新可能写入轨迹与能力验证时间，不能称为完全无写入。
+
+当前SHA的Preview复验可解除集成前阻断；最终Production关闭仍要求同一SHA的正式站点复验、受控数据库检查和现有Chrome证明。沙盒MOCK轨迹必须证明未写入事件或推进订单状态，不能代替真实Production轨迹；取消必须单独验证`EXP_RECE_UPDATE_ORDER`成功。
+
+选择免打印方案时，以顺丰控制台的免面单审核结果为准。若审核要求销售或网点负责人工号及收派员上门打印安排，须补齐真实资料；不能把代码测试通过当作供应商审批通过，也不能自行切换到云打印方案。

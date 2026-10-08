@@ -43,6 +43,12 @@ const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_req
 const SHIPPING_REPLAY_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'confirm_submission', 'query_tracking', 'reload_recent', 'verify_access']);
 const SHIPPING_WORKSPACE_ITEMS = Object.freeze(['shipping_workspace', 'shipping_tracking', 'shipping_access']);
 const SHIPPING_WORKSPACE_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'select_payment', 'query_tracking', 'reload_recent', 'verify_access']);
+const SHIPPING_COLLABORATION_ACTIONS = Object.freeze([
+  'open_configuration_center', 'verify_masked_configuration', 'paste_addresses',
+  'correct_invalid_recipient', 'review_configured_batch', 'submit_anonymous_request',
+  'confirm_pending_request', 'query_tracking', 'cancel_uncollected_order',
+  'reload_ledger', 'verify_organization_access'
+]);
 const REQUIRED_DEFECT_REPLAY_ACTIONS = Object.freeze([
   'page_scroll',
   'open_edit_dialog',
@@ -286,17 +292,43 @@ function inspectGitWorktreeIsolation(repoRoot) {
 function runtimeProfileOf(state) {
   return state.active_task?.delivery_contract?.runtime_profile || 'ai';
 }
+function runtimeContractVersionOf(state) {
+  return state.active_task?.delivery_contract?.runtime_contract_version || null;
+}
 function requiredReplayActions(state) {
+  if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-v2') return SHIPPING_COLLABORATION_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace') return SHIPPING_WORKSPACE_ACTIONS;
   return runtimeProfileOf(state) === 'shipping' ? SHIPPING_REPLAY_ACTIONS : REQUIRED_DEFECT_REPLAY_ACTIONS;
 }
-function shippingWorkspaceEvidenceBlockers(section, environment) {
+function shippingWorkspaceEvidenceBlockers(section, environment, expectedContractVersion = null) {
   const errors = [], workspace = section.shipping_workspace?.payload || {}, tracking = section.shipping_tracking?.payload || {}, access = section.shipping_access?.payload || {};
-  if (workspace.contract_version === 'f054-v1') {
+  if (expectedContractVersion && workspace.contract_version !== expectedContractVersion) errors.push('Shipping workspace evidence contract version does not match the Active contract');
+  if (['f054-v1', 'f054-v2'].includes(workspace.contract_version)) {
     for (const key of ['page_accessible','anonymous_form_submittable','receipt_recoverable','owner_direct_available','review_queue_available']) if (workspace[key] !== true) errors.push(`Shipping collaboration workspace proof missing: ${key}`);
     for (const filter of ['sales','customer','contact','status']) if (!workspace.ledger_filters?.includes(filter)) errors.push(`Shipping ledger filter proof missing: ${filter}`);
     if (environment === 'production' && workspace.production_submission_enabled !== true) errors.push('Production submission is not enabled behind the confirmed-order policy');
     for (const key of ['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced']) if (access[key] !== true) errors.push(`Shipping collaboration access proof missing: ${key}`);
+    if (workspace.contract_version === 'f054-v2') {
+      for (const key of ['configuration_in_database', 'configuration_center', 'credentials_masked', 'order_configuration_snapshot_verified', 'cancel_before_collection_verified']) {
+        if (workspace[key] !== true) errors.push(`Shipping configured-workbench proof missing: ${key}`);
+      }
+      if (workspace.cancellation_service_code !== 'EXP_RECE_UPDATE_ORDER') errors.push('Shipping cancellation service is not EXP_RECE_UPDATE_ORDER');
+      if (tracking.sf_environment !== environment) errors.push('Tracking evidence environment mismatch');
+      let appEndpointValid = false;
+      try {
+        const origin = new URL(workspace.origin);
+        appEndpointValid = origin.protocol === 'https:' && origin.username === '' && origin.password === ''
+          && tracking.app_endpoint === `${origin.origin}/api/shipping/tracking`
+          && (environment !== 'production' || origin.origin === `https://${VERCEL_PRODUCTION_CONTRACT.domain}`);
+      } catch { /* Missing origin is not proof of an application request. */ }
+      if (!appEndpointValid) errors.push('Tracking application endpoint does not match the verified workspace origin');
+      if (environment === 'production') {
+        if (tracking.mock !== false || tracking.source !== 'production_database') errors.push('Production tracking must use persisted non-mock production evidence');
+        if (tracking.operator_observations_are_attested !== true) errors.push('Tracking browser observations must declare the operator trust boundary');
+      } else if (tracking.mock !== true || tracking.events_persisted !== false || tracking.order_state_unchanged !== true) {
+        errors.push('Sandbox MOCK tracking must prove no event persistence or order-state mutation');
+      }
+    }
   } else {
     if (workspace.page_accessible !== true || workspace.address_book_usable !== true || workspace.form_editable !== true) errors.push('Shipping workspace page, address book or form proof is missing');
     if (!['sender_cash', 'recipient', 'sender_monthly'].every(x => workspace.payment_choices?.includes(x))) errors.push('Per-shipment payment choices are not verified');
@@ -306,8 +338,21 @@ function shippingWorkspaceEvidenceBlockers(section, environment) {
   }
   if (tracking.success !== true || !/^(?:SF)?[0-9]{10,15}$/.test(String(tracking.waybill || '')) || !Number.isInteger(tracking.event_count) || tracking.event_count < 1) errors.push('Live outbound tracking proof is missing');
   const endpoint = environment === 'production' ? 'https://sfapi.sf-express.com/std/service' : 'https://sfapi-sbox.sf-express.com/std/service';
-  if (tracking.endpoint !== endpoint) errors.push('Tracking endpoint does not match the required environment');
+  if (workspace.contract_version !== 'f054-v2' && tracking.endpoint !== endpoint) errors.push('Tracking endpoint does not match the required environment');
   return errors;
+}
+
+function shippingProductionVerifierScopeBlockers(status) {
+  const blockers = [];
+  if (status.runtimeProfile !== 'shipping_workspace' || status.runtimeContractVersion !== 'f054-v2'
+    || status.featureId !== 'F054' || !WORK_PACKAGE_ID_PATTERN.test(String(status.activeId || ''))) {
+    blockers.push('Verifier requires the scoped F054 configured-workbench contract');
+  }
+  if (status.targetState !== 'production_released' || status.productionReleaseAuthorization?.status !== 'approved_for_final_release'
+    || status.productionDatabaseMode !== 'controlled_write_approved') {
+    blockers.push('Verifier requires the approved Production release and write contract');
+  }
+  return blockers;
 }
 function shippingRuntimeEvidenceBlockers(section, environment) {
   const blockers = [];
@@ -397,6 +442,8 @@ function validateSchedulerState(options = {}) {
   const profile = runtimeProfileOf(state);
   if (!['ai', 'shipping', 'shipping_workspace'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
+  const contractVersion = runtimeContractVersionOf(state);
+  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
   const canonicalRuntimeEvidence = profile === 'shipping_workspace' ? SHIPPING_WORKSPACE_ITEMS : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
     deliveryContract
@@ -1308,7 +1355,7 @@ function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, ex
     return blockers;
   }
   if (requiredItems.includes('shipping_workspace')) {
-    blockers.push(...shippingWorkspaceEvidenceBlockers(section, 'production'));
+    blockers.push(...shippingWorkspaceEvidenceBlockers(section, 'production', expected.runtimeContractVersion));
     return blockers;
   }
   const reviewId = section.review_run?.payload?.review_id;
@@ -1474,10 +1521,12 @@ function loadBehaviorLogProof(repoRoot, head) {
   };
 }
 
-function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '') {
+function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '', stage = 'production_released') {
   const configured = new Set(state.active_task?.delivery_contract?.blocking_acceptance_defects || []);
   if (!configured.size) return [];
-  const productionTarget = state.active_task?.delivery_contract?.target_state === 'production_released';
+  // Integration consumes current-SHA Preview replay. Production closure still
+  // requires a separate replay on the released Production deployment.
+  const productionTarget = stage === 'production_released' && state.active_task?.delivery_contract?.target_state === 'production_released';
   const resolved = new Set();
   for (const [id, proof] of Object.entries(runtimeDefects)) {
     const previewVerified = (
@@ -1573,10 +1622,12 @@ function getDeliveryStatus(options = {}) {
     ok: scheduler.ok && parseErrors.length === 0,
     repoRoot,
     activeId: state.active_task?.id || null,
+    featureId: state.active_task?.feature_id || null,
     targetState: state.active_task?.delivery_contract?.target_state || null,
     allowedStates: state.active_task?.delivery_contract?.allowed_states || [],
     requiredCodeChecks: state.active_task?.delivery_contract?.required_code_checks || [],
     runtimeProfile: runtimeProfileOf(state),
+    runtimeContractVersion: runtimeContractVersionOf(state),
     requiredReplayActions: requiredReplayActions(state),
     requiredRuntimeEvidence: state.active_task?.delivery_contract?.required_runtime_evidence || [],
     requiredProductionRuntimeEvidence: state.active_task?.delivery_contract?.required_production_runtime_evidence || [],
@@ -1621,6 +1672,11 @@ function getDeliveryStatus(options = {}) {
     releaseControl,
     gateSnapshots: attestation.gateSnapshots || {},
     vercelProduction: attestation.gateSnapshots?.[completionState]?.vercelProduction || null,
+    previewBlockingDefects: unresolvedBlockingDefects(
+      state,
+      evidence.preview?.journeys?.blocking_defect_replay === true ? (attestation.defects || {}) : {},
+      head, evidence.preview?.artifacts || {}, {}, repoRoot, 'clean_preview_green'
+    ),
     blockingDefects: unresolvedBlockingDefects(
       state,
       evidence.preview?.journeys?.blocking_defect_replay === true
@@ -1731,10 +1787,16 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
+        if (status.runtimeContractVersion === 'f054-v2') {
+          try {
+            const origin = new URL(envelope.payload.origin);
+            if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
+          } catch { blockers.push(`runtime evidence origin missing or invalid: ${item}`); }
+        }
       }
     }
     if (status.runtimeProfile === 'shipping_workspace') {
-      blockers.push(...shippingWorkspaceEvidenceBlockers(evidence.runtime || {}, 'sandbox'));
+      blockers.push(...shippingWorkspaceEvidenceBlockers(evidence.runtime || {}, 'sandbox', status.runtimeContractVersion));
     } else if (status.runtimeProfile === 'shipping') {
       blockers.push(...shippingRuntimeEvidenceBlockers(evidence.runtime || {}, 'sandbox'));
     } else {
@@ -1780,7 +1842,8 @@ function checkDeliveryStage(stage, options = {}) {
     });
     status.vercelProduction = liveVercel.snapshot;
     blockers.push(...liveVercel.blockers);
-    if (status.blockingDefects.length) blockers.push(`blocking defects unresolved: ${status.blockingDefects.join(', ')}`);
+    const previewDefects = status.previewBlockingDefects || status.blockingDefects;
+    if (previewDefects.length) blockers.push(`blocking defects unresolved in Preview: ${previewDefects.join(', ')}`);
     if (!status.git.originMainFresh) blockers.push('origin/main is stale; fetch origin before integration');
     if (stage === 'integration_ready' && !status.git.originMainIsAncestor) blockers.push('origin/main is not an ancestor of candidate HEAD');
     if (status.releaseControl.production_branch !== 'production') blockers.push('Production Branch isolation is not recorded as production');
@@ -1884,7 +1947,8 @@ function checkDeliveryStage(stage, options = {}) {
       repoRoot,
       {
         commit: status.git.head,
-        deploymentId: liveVercel.snapshot?.deployment?.id
+        deploymentId: liveVercel.snapshot?.deployment?.id,
+        runtimeContractVersion: status.runtimeContractVersion
       }
     ));
     blockers.push(...productionBrowserOperatorAttestationBlockers(
@@ -1932,7 +1996,8 @@ function checkDeliveryStage(stage, options = {}) {
 const LIVE_SHIPPING_WORKSPACE_RECEIPT = Symbol('live shipping workspace verifier receipt');
 async function verifyShippingWorkspaceProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
-  if (status.runtimeProfile !== 'shipping_workspace' || status.activeId !== 'WP11') throw new Error('Verifier requires the scoped WP11 workspace contract');
+  const scopeBlockers = shippingProductionVerifierScopeBlockers(status);
+  if (scopeBlockers.length) throw new Error(scopeBlockers.join('; '));
   if (status.git.remoteProduction !== status.git.head || !status.git.clean) throw new Error('Verifier requires the clean deployed production commit');
   if (!evidenceEnvelopeValid(options.operator, repoRoot)) throw new Error('Operator evidence envelope is invalid');
   const live = verifyVercelProductionState(repoRoot, status.git.head, { stage: 'production_released' });
@@ -1942,7 +2007,7 @@ async function verifyShippingWorkspaceProduction(options = {}) {
     ...options, commit: status.git.head, deploymentId: live.snapshot.deployment.id,
     runtime: path.dirname(runtimePath)
   });
-  const check = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, { commit: status.git.head, deploymentId: live.snapshot.deployment.id });
+  const check = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, { commit: status.git.head, deploymentId: live.snapshot.deployment.id, runtimeContractVersion: status.runtimeContractVersion });
   if (check.length) throw new Error(check.join('; '));
   return recordDeliveryEvidence('production_runtime', payload, { repoRoot, liveShippingWorkspaceReceipt: LIVE_SHIPPING_WORKSPACE_RECEIPT });
 }
@@ -2222,8 +2287,12 @@ module.exports = {
   REQUIRED_DEFECT_REPLAY_ACTIONS,
   SHIPPING_RUNTIME_ITEMS,
   SHIPPING_REPLAY_ACTIONS,
+  SHIPPING_COLLABORATION_ACTIONS,
+  requiredReplayActions,
   shippingRuntimeEvidenceBlockers,
   shippingWorkspaceEvidenceBlockers,
+  shippingProductionVerifierScopeBlockers,
+  unresolvedBlockingDefects,
   VERCEL_PRODUCTION_CONTRACT,
   findRepoRoot,
   getDocumentEntry,
