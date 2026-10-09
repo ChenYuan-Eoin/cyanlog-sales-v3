@@ -190,7 +190,7 @@ HTTP成功只表示接口返回了结果。工作台必须同时收到`waybill_c
 
 ## 公司邮箱入口发布顺序
 
-员工身份使用迁移 `20261008104340_shipping_employee_email_access.sql`。迁移将配置、验证码、个人资料、60天会话及工单员工归属外键放在同一事务；任何末尾约束失败必须整体回滚。部署前检查四张新表和 `shipping_orders.employee_profile_id` 是否存在，并核对迁移历史，不能重复执行或只补部分对象。
+员工身份使用迁移 `20261009042436_shipping_employee_email_access.sql`。迁移将配置、验证码、个人资料、60天会话及工单员工归属外键放在同一事务；任何末尾约束失败必须整体回滚。部署前检查四张新表和 `shipping_orders.employee_profile_id` 是否存在，并核对迁移历史，不能重复执行或只补部分对象。
 
 1. 先在隔离数据库验证完整迁移与失败回滚。四张表启用 RLS，撤销 `public/anon/authenticated` 的直接访问；两个验证码 RPC 只允许 `service_role`。员工会话不是后台用户，不授予 `shipping:operate`。
 2. Production 新 DDL 仍需满足当前合同的恢复策略和独立授权要求；既有寄件迁移批准不能当作本次邮箱迁移已经执行或已获批准。禁止为备份将真实联系人导出到 Agent 工作区。

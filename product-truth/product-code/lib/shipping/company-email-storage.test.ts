@@ -25,7 +25,7 @@ beforeAll(async () => {
   db = new PGlite()
   await db.exec('create role anon; create role authenticated; create role service_role bypassrls; create table public.organizations(id uuid primary key); create table public.users(id uuid primary key); create table public.shipping_orders(id uuid primary key,org_id uuid,created_at timestamptz default now());')
   await db.query('insert into public.organizations values ($1),($2)', [orgId, otherOrg])
-  await db.exec(readFileSync(new URL('../../supabase/migrations/20261008104340_shipping_employee_email_access.sql', import.meta.url), 'utf8'))
+  await db.exec(readFileSync(new URL('../../supabase/migrations/20261009042436_shipping_employee_email_access.sql', import.meta.url), 'utf8'))
   await db.query("insert into public.shipping_email_access_settings(org_id,enabled,allowed_domains) values ($1,true,array['company.example']),($2,true,array['company.example'])", [orgId, otherOrg])
 }, 30_000)
 afterAll(async () => { await db?.close() })
@@ -36,7 +36,7 @@ describe('employee email database boundary (local PostgreSQL engine)', () => {
     try {
       // A late schema conflict must not leave a partially installed identity system.
       await isolated.exec('create role anon; create role authenticated; create role service_role bypassrls; create table public.organizations(id uuid primary key); create table public.users(id uuid primary key); create table public.shipping_orders(id uuid primary key,org_id text,created_at timestamptz default now());')
-      await expect(isolated.exec(readFileSync(new URL('../../supabase/migrations/20261008104340_shipping_employee_email_access.sql', import.meta.url), 'utf8'))).rejects.toThrow()
+      await expect(isolated.exec(readFileSync(new URL('../../supabase/migrations/20261009042436_shipping_employee_email_access.sql', import.meta.url), 'utf8'))).rejects.toThrow()
       await isolated.exec('rollback')
       const result = await isolated.query<{ profiles: string | null; rpc: string | null }>("select to_regclass('public.shipping_employee_profiles')::text as profiles, to_regprocedure('public.verify_shipping_email_challenge(uuid,uuid,text,text,text)')::text as rpc")
       expect(result.rows[0]).toEqual({ profiles: null, rpc: null })
