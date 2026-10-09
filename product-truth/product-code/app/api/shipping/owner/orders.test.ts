@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), operator: vi.fn(), create: vi.fn(), settings: vi.fn(), runtime: vi.fn(), chooseService: vi.fn(), confirm: vi.fn(), carrier: vi.fn() }))
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), operator: vi.fn(), create: vi.fn(), settings: vi.fn(), sender: vi.fn(), runtime: vi.fn(), chooseService: vi.fn(), confirm: vi.fn(), carrier: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth, AuthError: class extends Error {} }))
 vi.mock('@/lib/shipping/runtime-config', () => ({ loadShippingSettings: mocks.settings, getShippingRuntimeConfig: mocks.runtime, selectAuthorizedShippingService: mocks.chooseService }))
+vi.mock('@/lib/shipping/sender-profile', () => ({ loadDefaultShippingSender: mocks.sender }))
 vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: mocks.operator }))
 vi.mock('@/lib/shipping/collaboration', () => ({ createOwnerShipment: mocks.create, publicShipmentReceipt: (order: { orderNo: string; status: string; waybill: string | null }) => ({ orderNo: order.orderNo, status: order.status, waybill: order.waybill }) }))
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: mocks.confirm }))
@@ -23,6 +24,7 @@ beforeEach(() => {
   mocks.operator.mockReset().mockResolvedValue('org-1')
   mocks.create.mockReset().mockResolvedValue({ id: 'order-1', orderNo: 'SO-20261008-ABC12345', status: 'awaiting_confirmation', waybill: null })
   mocks.settings.mockReset().mockResolvedValue({ sender: companySender, defaultBillingAccountId: undefined, canSubmit: false })
+  mocks.sender.mockReset().mockResolvedValue(companySender)
   mocks.runtime.mockReset()
   mocks.chooseService.mockReset()
   mocks.confirm.mockReset()
@@ -30,6 +32,15 @@ beforeEach(() => {
 })
 
 describe('operator intake creates a work order without carrier submission', () => {
+  it('continues taking work orders when carrier settings cannot be read', async () => {
+    mocks.settings.mockRejectedValue(new ShippingError(503, '寄件连接读取失败。'))
+    const response = await POST(request(minimalBody))
+    expect(response.status).toBe(202)
+    expect(mocks.create).toHaveBeenCalled()
+    expect(mocks.settings).not.toHaveBeenCalled()
+    expect(mocks.sender).toHaveBeenCalledWith('org-1')
+    expect(mocks.carrier).not.toHaveBeenCalled()
+  })
   it('accepts recipient-only business fields without carrier readiness, account or service ID', async () => {
     const response = await POST(request(minimalBody))
     expect(response.status).toBe(202)
@@ -52,14 +63,22 @@ describe('operator intake creates a work order without carrier submission', () =
   })
 
   it('retains a complete sender supplied by an authorized operator', async () => {
+    mocks.sender.mockRejectedValue(new ShippingError(503, '默认资料不可用'))
     const sender = { ...companySender, name: '示例另址寄件人', address: '另一示例路9号' }
     const response = await POST(request({ ...minimalBody, input: { ...minimalBody.input, sender } }))
     expect(response.status).toBe(202)
     expect(mocks.create.mock.calls[0][0].input.sender).toEqual(sender)
+    expect(mocks.sender).not.toHaveBeenCalled()
+  })
+
+  it('reports unavailable default data instead of silently saving an empty sender', async () => {
+    mocks.sender.mockRejectedValue(new ShippingError(503, '默认资料不可用'))
+    expect((await POST(request(minimalBody))).status).toBe(503)
+    expect(mocks.create).not.toHaveBeenCalled()
   })
 
   it('keeps a missing company sender visible as an incomplete draft without calling SF', async () => {
-    mocks.settings.mockResolvedValue({ sender: { name: '', phone: '', province: '', city: '', county: '', address: '' }, canSubmit: false })
+    mocks.sender.mockResolvedValue({ name: '', phone: '', province: '', city: '', county: '', address: '' })
     const response = await POST(request(minimalBody))
     expect(response.status).toBe(202)
     expect(mocks.create.mock.calls[0][0].input.sender.name).toBe('')

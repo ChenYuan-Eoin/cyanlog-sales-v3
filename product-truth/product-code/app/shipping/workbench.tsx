@@ -292,11 +292,13 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
       <div><p>物流协同 / SHIPPING OPS</p><h1>自助收寄</h1></div>
       <div className={styles.topbarActions}>
         {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <><a className={styles.configButton} href="/shipping/demo">模拟体验</a><a className={styles.configButton} href="/sales-portal">销售寄件提报</a></>}
-        <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div>
+        <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div>
       </div>
     </header>
     {simulation && <div className={styles.simulationNotice} role="note"><strong>模拟体验</strong> 地址、单号和轨迹均为示例，仅在当前页面演示，不向顺丰下单、不产生费用。<span>左栏解析并提交工单 → 中栏核对并模拟确认下单 → 右栏查看运单、轨迹与取消。销售匿名提报直接进入中栏。</span></div>}
 
+    {settings.configurationWarning && <div className={styles.notice} role="status">{settings.configurationWarning}</div>}
+    {settings.defaultsWarning && <div className={styles.notice} role="status">{settings.defaultsWarning}</div>}
     {message && <div className={styles.toast} role="status">{message}</div>}
     {productionOrderUnverified && <div className={styles.notice} role="status">生产连接已验证，下单权限尚未实测。可正常提报工单；请先在中栏核对并确认一票，之后再批量正式下单。</div>}
     <div className={styles.columns}>
@@ -339,7 +341,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
               {row.result === 'unknown' && <button className={styles.secondaryButton} aria-label={`重取第${row.id}行工单回执`} disabled={batchBusy} onClick={() => void executeBatch(row.id)}>重取工单回执</button>}
             </article>
           })}</div>
-          <div className={styles.bulkSettings}><h3>工单资料</h3><p className={styles.intakeHint}>此处由操作员录入，提交后进入中栏待审核。销售通过独立提报页提交的工单也会直接进入中栏。</p><p>默认寄件人：{settings.sender.name || '待配置公司寄件人'}<br/>{settings.sender.phone}<br/>{settings.sender.province}{settings.sender.city}{settings.sender.county}{settings.sender.address}</p><label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
+          <div className={styles.bulkSettings}><h3>工单资料</h3><p className={styles.intakeHint}>此处由操作员录入，提交后进入中栏待审核。销售通过独立提报页提交的工单也会直接进入中栏。</p><p>默认寄件人：{settings.sender.name || (settings.defaultsWarning ? '资料暂不可读取' : '待配置公司寄件人')}<br/>{settings.sender.phone}<br/>{settings.sender.province}{settings.sender.city}{settings.sender.county}{settings.sender.address}</p><label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
         </div>
         <footer className={styles.stickyFooter}><div><strong>{validCount} 票待提报</strong><small>{successCount ? `${successCount} 票已提报 · ` : ''}{uncertainCount ? `${uncertainCount} 票回执待确认 · ` : ''}{invalidCount} 票需修正</small></div><button disabled={!validCount || batchBusy || confirmationBusy} onClick={() => void executeBatch()}><Clipboard size={15}/>{batchBusy ? '提报中…' : `提交工单（${validCount}票）`}</button></footer>
       </section>

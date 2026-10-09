@@ -1021,8 +1021,11 @@ requirements:
     description: 基于自动审核核验结果调用平台 AI 生成审核意见/风险/建议；失败回退不伪造；AI_CONFIG 发布后生效。
 
   F054:
-    name: 自助收寄
-    module: 双入口工单提报、运营审核、配置中心与物流跟踪
+    name: 企业寄件协同（自助收寄）
+    module: 双入口工单提报、运营确认、可配置渠道与承运商履约
+    product_goal: 企业寄件协同核心不绑定具体公司、机器人或承运商
+    first_release: 寄件先顺丰真实闭环；收件独立覆盖常用快递，每30分钟更新；保留邮箱60天、资料复用与企微身份/扫码/提报/通知要求
+    goal_layering_status: user_updated_product_goal_scenarios_under_review
     source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
     status: WP18_active
     priority: P1
@@ -1034,11 +1037,15 @@ requirements:
       - app/configs
       - lib/shipping
       - supabase/migrations
-    description: WP18正在实现，Production未更新。操作员左栏批量解析纠错后只建待审核工单；销售独立匿名页直接进入中栏，销售本人为实际寄件人及工单归属人，资料持久化带入且确认时不得被公司默认覆盖。只有中栏运营逐票核对后的批量确认触发顺丰下单/叫件，右栏追踪；出号回填原工单并按原提报人关系回传，通知失败只重发通知，邮箱首次验证与60天会话、个人资料复用；整体目标纳入企微身份、机器人提报和单号/变更通知，接入条件及独立批次待评估，不绕过中栏正式确认。连接和月结配置在配置中心维护，服务端OAuth2机器凭据加密保存，无面单打印或新增审批系统。
+    description: WP18正在实现，Production未更新。操作员左栏批量解析纠错后只建待审核工单；员工独立免密码页经身份验证后进入中栏，销售本人为实际寄件人及工单归属人，资料持久化带入且确认时不得被公司默认覆盖。只有中栏运营逐票核对后的批量确认触发顺丰下单/叫件，右栏追踪；出号回填原工单并按原提报人关系回传，通知失败只重发通知，邮箱首次验证与60天会话、个人资料复用；整体目标纳入企微身份、机器人提报和单号/变更通知，接入条件及独立批次待评估，不绕过中栏正式确认。连接和月结配置在配置中心维护，服务端OAuth2机器凭据加密保存，无面单打印或新增审批系统。
 
 # Maintained PRD index
 sf_self_service_order_prd:
   id: F054
+  goal_layering: 产品总目标为企业寄件协同；顺丰为首期MVP适配器，原始五项交付责任保留，新增承运商寄件不在首期范围，常用快递收件查询独立覆盖
+  configuration_contract_status: inbound_query_design_authorized_30min
+  configuration_contract: product-truth/feature-packets/F054-sf-self-service-order.md#3-配置中心具体设计
+  configuration_boundary: 核心工单规则内置；邮箱域、公司机器人、承运商连接及寄件策略按组织配置；顺丰是首个适配器，demo企微只用于测试；新增未支持平台需实现适配器。
   status: WP18_active
   source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011 / IN-20260923-013 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
   branch: codex/shipping-collaboration-console

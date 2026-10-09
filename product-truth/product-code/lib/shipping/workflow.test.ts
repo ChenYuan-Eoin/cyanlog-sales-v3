@@ -1,5 +1,12 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CarrierAdapter } from './carrier-adapter'
+
+const adapterOverride = vi.hoisted(() => ({ value: undefined as CarrierAdapter | undefined }))
+vi.mock('./carrier-adapter', async importOriginal => {
+  const real = await importOriginal<typeof import('./carrier-adapter')>()
+  return { ...real, getCarrierAdapter: (key: string) => adapterOverride.value?.key === key ? adapterOverride.value : real.getCarrierAdapter(key) }
+})
 
 const mocks = vi.hoisted(() => ({ from: vi.fn(), runtimeConfig: vi.fn(), service: vi.fn(), cancel: vi.fn(), lookup: vi.fn(), submit: vi.fn(), capability: vi.fn(), defaultOrg: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
@@ -50,6 +57,7 @@ function makeQueryBuilder(table: string) {
 }
 
 beforeEach(() => {
+  adapterOverride.value = undefined
   loadedOrder = { ...order }
   claimLost = false
   queries.length = 0
@@ -231,5 +239,32 @@ describe('historical carrier snapshot operations', () => {
     claimLost = true
     await expect(confirmAndSubmitShipment('order-1', 'operator-1', 'org-A')).rejects.toMatchObject({ status: 409 })
     expect(mocks.submit).not.toHaveBeenCalled()
+  })
+})
+
+describe('workflow uses a carrier contract, not provider-specific calls', () => {
+  it('dispatches create, reconcile and cancel through the same installed test adapter', async () => {
+    const create = vi.fn().mockResolvedValue('TEST-WAYBILL')
+    const lookup = vi.fn().mockResolvedValue('TEST-WAYBILL')
+    const cancel = vi.fn().mockResolvedValue(undefined)
+    const { partnerId: _partner, checkWord: _word, billingAccount: _account, ...metadata } = runtime
+    void _partner; void _word; void _account
+    const connect = vi.fn().mockResolvedValue({ key: 'test-only', context: metadata, selectService: () => runtime.services[0], create, lookup, cancel })
+    adapterOverride.value = { key: 'test-only', connect }
+    loadedOrder = { ...order, provider_key: 'test-only', status: 'awaiting_confirmation' }
+    mocks.submit.mockImplementation(async args => ({ id: 'original-provider-request', status: 'accepted', waybill: await args.send('original-provider-request', args.input) }))
+    await expect(confirmAndSubmitShipment(order.id, 'operator-1', 'org-A')).resolves.toMatchObject({ status: 'waybill_created', waybill: 'TEST-WAYBILL' })
+    expect(create).toHaveBeenCalledOnce()
+    expect(queries.find(q => q.table === 'shipping_waybills' && q.action === 'upsert')?.values).toMatchObject({ carrier_key: 'test-only' })
+    expect(mocks.submit.mock.calls[0][0].runtimeConfig).not.toHaveProperty('checkWord')
+    loadedOrder = { ...order, provider_key: 'test-only', status: 'order_unknown' }
+    await expect(reconcileShipmentOrder(order.id, 'org-A')).resolves.toMatchObject({ status: 'waybill_created' })
+    expect(lookup).toHaveBeenCalledWith(order.provider_order_id)
+    loadedOrder = { ...order, provider_key: 'test-only' }
+    await expect(cancelShipmentOrder(order.id, 'operator-1', 'org-A')).resolves.toMatchObject({ status: 'cancelled' })
+    expect(cancel).toHaveBeenCalledWith(order.provider_order_id)
+    expect(mocks.runtimeConfig).not.toHaveBeenCalled()
+    expect(mocks.lookup).not.toHaveBeenCalled()
+    expect(mocks.cancel).not.toHaveBeenCalled()
   })
 })

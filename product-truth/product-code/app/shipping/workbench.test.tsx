@@ -20,6 +20,23 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('keeps intake usable during configuration outages while disabling formal confirmation', async () => {
+    const warning = '寄件配置暂时无法读取，正式下单暂不可用。'
+    fetcher.mockImplementation(async (url: string) => url.endsWith('/owner/orders')
+      ? Response.json({ orderId: 'intake-only', orderNo: 'SO-INTAKE-ONLY', status: 'awaiting_confirmation', waybill: null })
+      : Response.json({ records: [] }))
+    render(<ShippingWorkbench settings={{ ...settings, ready: false, canSubmit: false, services: [], carrierConnections: [], billingAccounts: [], configurationWarning: warning }}/>)
+    await screen.findByText('暂无收寄记录')
+    expect(screen.getByText(warning)).toBeTruthy()
+    expect(screen.getByText('配置暂不可用')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '收件人：示例甲\n电话：13800000011\n地址：广东省深圳市南山区示例路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    expect(screen.getByRole('button', { name: '提交工单（1票）' })).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: '批量确认并下单（0票）' })).toHaveProperty('disabled', true)
+    fireEvent.click(screen.getByRole('button', { name: '提交工单（1票）' }))
+    await screen.findByText(/已提报 1 票/)
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/confirm'))).toBe(false)
+  })
   it('places missing phone and address errors on their own fields and clears each immediately after correction', async () => {
     const originalText = '收件人：示例甲\n电话：\n地址：'
     const generateKey = vi.spyOn(globalThis.crypto, 'randomUUID')

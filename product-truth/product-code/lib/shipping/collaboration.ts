@@ -166,13 +166,14 @@ export async function createDueShipmentReviewReminders(now = new Date()) {
 
 export async function getOrganizationShipmentProviderSnapshot(orgId: string, waybill: string) {
   requireOrganization(orgId)
-  const { data: waybillRow, error: waybillError } = await supabaseAdmin.from('shipping_waybills').select('shipping_order_id').eq('carrier_key', 'sf').eq('waybill_no', waybill).maybeSingle()
+  const { data: waybillRow, error: waybillError } = await supabaseAdmin.from('shipping_waybills').select('shipping_order_id,carrier_key,shipping_orders!inner(org_id)').eq('shipping_orders.org_id', orgId).eq('waybill_no', waybill).maybeSingle()
   if (waybillError) throw new ShippingError(503, '运单归属核对暂不可用。')
   if (!waybillRow) return null
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('org_id,carrier_connection_id,billing_account_id')
+    .select('org_id,provider_key,carrier_connection_id,billing_account_id,connection_environment')
     .eq('id', waybillRow.shipping_order_id).eq('org_id', orgId).maybeSingle()
   if (error) throw new ShippingError(503, '运单配置快照读取失败。')
+  if (data && (data.org_id !== orgId || data.provider_key !== waybillRow.carrier_key)) throw new ShippingError(409, '运单归属或承运商快照不一致，无法查询。')
   return data || null
 }
 

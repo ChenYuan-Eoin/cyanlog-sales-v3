@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m=vi.hoisted(()=>({token:vi.fn(),user:vi.fn(),redirect:vi.fn(),manager:vi.fn(),operator:vi.fn(),settings:vi.fn()}))
 vi.mock('@/lib/server-auth',()=>({getServerAuthToken:m.token}))
 vi.mock('@/lib/auth',()=>({getAuthUserByToken:m.user}))
-vi.mock('@/lib/shipping/runtime-config',()=>({loadShippingSettings:m.settings}))
+vi.mock('@/lib/shipping/workspace-settings',()=>({loadShippingWorkspaceSettings:m.settings}))
 vi.mock('@/lib/shipping/connection-authorization',()=>({requireShippingConnectionManager:async()=>{if(!m.manager())throw new Error('not a manager')}}))
 vi.mock('@/lib/shipping/operator-access',()=>({requireShippingOperator:m.operator}))
 vi.mock('next/navigation',()=>({redirect:m.redirect}))

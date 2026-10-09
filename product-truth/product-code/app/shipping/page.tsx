@@ -4,7 +4,7 @@ import { getAuthUserByToken } from '@/lib/auth'
 import { ShippingError } from '@/lib/shipping/config'
 import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
 import { requireShippingOperator } from '@/lib/shipping/operator-access'
-import { loadShippingSettings } from '@/lib/shipping/runtime-config'
+import { loadShippingWorkspaceSettings } from '@/lib/shipping/workspace-settings'
 import ShippingWorkbench from './workbench'
 export const dynamic = 'force-dynamic'
 export default async function ShippingPage() {
@@ -20,6 +20,6 @@ export default async function ShippingPage() {
     if (canManageConnections) redirect('/configs?tab=shipping')
     redirect('/?denied=shipping:operate')
   }
-  const settings = await loadShippingSettings(authorizedOrgId)
+  const settings = await loadShippingWorkspaceSettings(authorizedOrgId)
   return <ShippingWorkbench settings={{ ...settings, canOperate: true, canManageConnections }} />
 }

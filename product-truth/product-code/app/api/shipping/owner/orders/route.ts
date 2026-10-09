@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { shippingHandler, shippingJson } from '@/lib/shipping/http'
 import { ownerOrderSchema } from '@/lib/shipping/validation'
 import { createOwnerShipment, publicShipmentReceipt } from '@/lib/shipping/collaboration'
-import { loadShippingSettings } from '@/lib/shipping/runtime-config'
+import { loadDefaultShippingSender } from '@/lib/shipping/sender-profile'
 import { emptyContact, type ShippingInput } from '@/lib/shipping/types'
 
 export const runtime = 'nodejs'
@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 export async function POST(req: NextRequest) {
   const response = await shippingHandler(req, async (user, orgId) => {
     const submission = ownerOrderSchema.parse(await shippingJson(req))
-    const sender = submission.input.sender || (await loadShippingSettings(orgId)).sender || emptyContact()
+    const sender = submission.input.sender || await loadDefaultShippingSender(orgId) || emptyContact()
     const input: ShippingInput = { ...submission.input, sender }
     delete input.serviceId
     const order = await createOwnerShipment({

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { ShippingInput } from './types'
 import type { ShippingStore, StoredShipping } from './store'
 import { ShippingError } from './config'
-import type { ShippingRuntimeConfig } from './runtime-config'
+import type { CarrierOrderContext } from './carrier-adapter'
 // Single policy entry: future order-based policy must validate server-side before reserving a request.
 export function checkShippingPolicy(input: ShippingInput, services: { id: number }[]) {
   if (input.source !== 'manual') throw new ShippingError(400, '暂不支持该寄件来源。')
@@ -10,7 +10,7 @@ export function checkShippingPolicy(input: ShippingInput, services: { id: number
   if (!services.some(s => s.id === input.serviceId)) throw new ShippingError(400, '请选择已开通的快递服务。')
 }
 export function shippingRequestId(userId: string, key: string) { return 'PV3' + createHash('sha256').update(userId + ':' + key).digest('hex').slice(0, 28) }
-export async function submitShipping(args: { userId: string; key: string; input: ShippingInput; connection: string; environment: 'sandbox' | 'production'; store: ShippingStore; send: (id: string, input: ShippingInput) => Promise<string | null>; runtimeConfig?: ShippingRuntimeConfig }) {
+export async function submitShipping(args: { userId: string; key: string; input: ShippingInput; connection: string; environment: 'sandbox' | 'production'; store: ShippingStore; send: (id: string, input: ShippingInput) => Promise<string | null>; runtimeConfig?: CarrierOrderContext }) {
   const { userId, key, input, connection, environment, store, send, runtimeConfig } = args
   const id = shippingRequestId(userId, key)
   const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex')
