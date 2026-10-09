@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-08T04:41:47.759Z",
+  "updated_at": "2026-10-08T10:22:51.719586+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -133,7 +133,7 @@
     "name": "Production发布与真实寄件验收",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP18：核验Production与隔离Preview已有基础协同、连接/快照迁移与RLS/权限；不重复应用迁移；使用Node.js OAuth2验证顺丰机器凭据并核实Production配置、商务授权服务和默认寄件人；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。 用户 2026-09-24 明确要求：寄件配置迁入现有配置中心，/shipping 恢复纯业务三栏；分别核验配置管理员与获授权操作员权限，禁止设置遮罩覆盖业务工作台。 用户原始目标包含彻底移除写死的寄件环境配置；本批消除寄件操作员 ID 环境白名单，改由配置中心的 shipping:operate 权限控制。",
+    "objective": "F054 WP18：核验Production与隔离Preview已有基础协同、连接/快照迁移与RLS/权限；不重复应用迁移；使用Node.js OAuth2验证顺丰机器凭据并核实Production配置、商务授权服务和默认寄件人；将同一精确SHA通过Preview、main和Production发布；使用用户现有Chrome验收Production下单、未揽收取消和轨迹；真实寄件由用户核对收件资料和费用后确认。 用户 2026-09-24 明确要求：寄件配置迁入现有配置中心，/shipping 恢复纯业务三栏；分别核验配置管理员与获授权操作员权限，禁止设置遮罩覆盖业务工作台。 用户原始目标包含彻底移除写死的寄件环境配置；本批消除寄件操作员 ID 环境白名单，改由配置中心的 shipping:operate 权限控制。 2026-10-08用户截图与连续澄清确定三栏为同一业务链：左栏及员工外部入口仅提交固定格式待审核工单与寄出预览，禁止调用顺丰下单或叫件；只有中栏操作员逐票核对后批量确认才正式下单并请求揽收；右栏查询正式运单轨迹。旧本人直下入口也不得绕过工单确认。出号后按原工单及已绑定提报人回填运单并形成通知，通知失败不能导致重新下单；企微具体渠道接入单独评估。此边界纠偏优先于继续按旧左栏直接下单路径验收。 两个录入主体明确分开：左栏由操作员本人操作；销售从独立免登录页面提交且本人就是实际寄件人和工单归属人，其姓名、电话、团队及寄件地址应先维护后复用。匿名工单确认时不得用公司默认寄件人覆盖销售本人；公司默认只适用于操作员来源的默认场景。公司成员免密码准入与精准通知身份方式另按IN-20261008-011评估，客户端自报姓名或手机号不能作为企业成员身份凭证。 IN-20261008-011已由用户选择公司邮箱首次验证，允许ones.cn/ones.ai精确域；邮箱持有者验证后只获工单提报会话和本人寄件资料，不获得操作员权限。发信与员工资料长期保存属于该寄件闭环，不能用纯浏览器缓存冒充已完成。 邮箱方案需要标准SMTP发送适配器与本地SQL验证；仅为该已选方案允许精确锁定免费开源依赖及锁文件，不引入新付费发信服务。 2026-10-09目标更新：邮箱会话有效期60天，允许ones.cn、ones.ai精确域，个人寄件资料首次维护后持久复用；将企微身份绑定、扫码/企微内免密码入口、机器人提报及出号/变更通知纳入整体目标，优先评估复用现有coding应用，具体接入拆成可独立演示批次后按WIP=1调度，不隐式开启第二Active。机器人员工消息只生成待审核工单，仍由操作员中栏确认正式下单；通知失败不得重下单。保留邮箱入口；若企微条件不足，应提出差距和方案而非跳过。截图显示既有OAuth可信域quote.cyanlog.icu；不得直接覆盖以免影响报价业务，应先确认寄件域授权或独立应用方案。R&D、测试、排错自主推进；产品取舍、公司权限和新增持续费用及时提出。目标更新不等于部署、完工或恢复已暂停的自动执行。",
     "started_at": "2026-09-23T09:34:46.080Z",
     "activation_basis": "WP17 SHA 0282568d742cb07985591aad093157bc26c3cb96达到code_green并通过Harness审计；用户通过IN-20260923-014明确授权WP18必要Production迁移、服务端配置与发布。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
@@ -153,7 +153,13 @@
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/REQ_REGISTRY.yml",
+      "product-truth/product-code/app/sales-portal",
+      "product-truth/product-code/package.json",
+      "product-truth/product-code/pnpm-lock.yaml",
+      "product-truth/product-code/.env.local"
     ],
     "delivery_contract": {
       "target_state": "production_released",

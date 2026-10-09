@@ -1022,24 +1022,25 @@ requirements:
 
   F054:
     name: 自助收寄
-    module: 三栏操作台、销售寄件提报、多快递连接、月结账号与物流跟踪
-    source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011
-    status: wp17_active
+    module: 双入口工单提报、运营审核、配置中心与物流跟踪
+    source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
+    status: WP18_active
     priority: P1
     feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
     code_locations:
       - app/shipping
       - app/sales-portal
       - app/api/shipping
+      - app/configs
       - lib/shipping
       - supabase/migrations
-    description: 单一“自助收寄”入口和三栏工作台；销售独立提报；配置管理员在页内管理顺丰服务端机器连接、多个月结账号与默认寄件资料，普通用户只使用脱敏授权账号；动态下单、查件、轨迹和未揽收取消均在ONES完成，运行时不登录承运商网站，不使用第三方聚合平台或手机认证。无面单打印。
+    description: WP18正在实现，Production未更新。操作员左栏批量解析纠错后只建待审核工单；销售独立匿名页直接进入中栏，销售本人为实际寄件人及工单归属人，资料持久化带入且确认时不得被公司默认覆盖。只有中栏运营逐票核对后的批量确认触发顺丰下单/叫件，右栏追踪；出号回填原工单并按原提报人关系回传，通知失败只重发通知，邮箱首次验证与60天会话、个人资料复用；整体目标纳入企微身份、机器人提报和单号/变更通知，接入条件及独立批次待评估，不绕过中栏正式确认。连接和月结配置在配置中心维护，服务端OAuth2机器凭据加密保存，无面单打印或新增审批系统。
 
 # Maintained PRD index
 sf_self_service_order_prd:
   id: F054
-  status: wp17_active
-  source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011 / IN-20260923-013
+  status: WP18_active
+  source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011 / IN-20260923-013 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
   branch: codex/shipping-collaboration-console
-  work_package: WP17
+  work_package: WP18
   feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md

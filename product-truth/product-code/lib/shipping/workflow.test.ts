@@ -13,7 +13,7 @@ import { cancelShipmentOrder, confirmAndSubmitShipment, reconcileShipmentOrder, 
 import { ShippingError } from './config'
 
 const runtime = { orgId: 'org-A', connectionId: 'connection-1', environment: 'sandbox', partnerId: 'synthetic-partner', checkWord: 'synthetic-checkword', services: [{ id: 1, name: '标快', preference: 'standard' }], billingAccountId: 'account-1', billingAccount: '123456', billingAccountTail: '3456', senderProfileId: 'sender-1', sender: { name: 'A', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '测试路1号' }, connectionKey: 'key', snapshot: {} }
-const order = { id: 'order-1', org_id: 'org-A' as string | null, status: 'waybill_created', shipment_payload: { source: 'manual', serviceId: 1 }, provider_key: 'sf', provider_order_id: 'provider-order-1', carrier_connection_id: 'connection-1', billing_account_id: 'account-1', sender_profile_id: 'sender-1', connection_environment: 'sandbox', billing_account_tail: '3456', shipping_config_snapshot: {} }
+const order = { id: 'order-1', org_id: 'org-A' as string | null, intake_source: 'owner_web', status: 'waybill_created', shipment_payload: { source: 'manual', serviceId: 1, recipient: { ...runtime.sender, name: '示例收件人' } } as Record<string, unknown>, provider_key: 'sf', provider_order_id: 'provider-order-1', carrier_connection_id: 'connection-1', billing_account_id: 'account-1', sender_profile_id: 'sender-1', connection_environment: 'sandbox', billing_account_tail: '3456', shipping_config_snapshot: {} }
 let loadedOrder = { ...order }
 let claimLost = false
 const queries: Array<{ table: string; action: string; filters: Array<[string, unknown]>; values?: Record<string, unknown> }> = []
@@ -54,7 +54,7 @@ beforeEach(() => {
   claimLost = false
   queries.length = 0
   mocks.from.mockReset().mockImplementation(makeQueryBuilder)
-  mocks.runtimeConfig.mockReset().mockResolvedValue(runtime)
+  mocks.runtimeConfig.mockReset().mockImplementation(async args => args.senderOverride ? { ...runtime, sender: args.senderOverride, senderProfileId: null, snapshot: { senderSource: 'workorder', senderProfileId: null } } : runtime)
   mocks.service.mockReset().mockReturnValue(runtime.services[0])
   mocks.cancel.mockReset().mockResolvedValue(true)
   mocks.lookup.mockReset().mockResolvedValue('SF1234567890123')
@@ -69,6 +69,37 @@ const actions = [
   { name: 'reconcile', status: 'waybill_created', call: (orgId: string) => reconcileShipmentOrder('order-1', orgId) },
   { name: 'cancel', status: 'waybill_created', call: (orgId: string) => cancelShipmentOrder('order-1', 'operator-1', orgId) },
 ]
+
+describe('work-order sender preservation at formal confirmation', () => {
+  it('uses a sales sender snapshot and never substitutes the company sender', async () => {
+    const salesSender = { ...runtime.sender, name: '  示例销售  ', address: '个人示例寄件路9号' }
+    loadedOrder = { ...order, status: 'awaiting_confirmation', intake_source: 'anonymous_web', shipment_payload: { ...order.shipment_payload, sender: salesSender } }
+    await confirmAndSubmitShipment('order-1', 'operator-1', 'org-A')
+    expect(mocks.runtimeConfig).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-A', senderOverride: { ...salesSender, name: '示例销售' } }))
+    expect(mocks.submit.mock.calls[0][0].input.sender).toEqual({ ...salesSender, name: '示例销售' })
+    const frozen = queries.find(query => query.values?.status === 'ordering')?.values
+    expect(frozen?.shipment_payload).toMatchObject({ sender: { name: '示例销售', address: '个人示例寄件路9号' } })
+    expect(frozen?.shipping_config_snapshot).toMatchObject({ senderSource: 'workorder', senderProfileId: null })
+  })
+  it('allows only a missing operator sender to use the company default', async () => {
+    loadedOrder = { ...order, status: 'awaiting_confirmation' }
+    await confirmAndSubmitShipment('order-1', 'operator-1', 'org-A')
+    expect(mocks.submit.mock.calls[0][0].input.sender).toEqual(runtime.sender)
+    expect(queries.find(query => query.values?.status === 'ordering')?.values?.shipping_config_snapshot).toMatchObject({ senderSource: 'company_default' })
+  })
+  it.each(['anonymous_web', 'crm', 'wechat_bot'])('refuses missing %s sender before loading credentials or contacting SF', async intake_source => {
+    loadedOrder = { ...order, status: 'awaiting_confirmation', intake_source }
+    await expect(confirmAndSubmitShipment('order-1', 'operator-1', 'org-A')).rejects.toMatchObject({ status: 400, requestStage: 'validation' })
+    expect(mocks.runtimeConfig).not.toHaveBeenCalled()
+    expect(mocks.submit).not.toHaveBeenCalled()
+    expect(queries.some(query => query.action !== 'select')).toBe(false)
+  })
+  it('does not replace an incomplete but nonempty operator sender with the company sender', async () => {
+    loadedOrder = { ...order, status: 'awaiting_confirmation', shipment_payload: { ...order.shipment_payload, sender: { name: '示例本人', phone: '', province: '', city: '', county: '', address: '' } } }
+    await expect(confirmAndSubmitShipment('order-1', 'operator-1', 'org-A')).rejects.toMatchObject({ status: 400 })
+    expect(mocks.submit).not.toHaveBeenCalled()
+  })
+})
 
 describe('shipping order organization boundaries', () => {
   it.each(actions)('$name rejects a returned row belonging to another organization before side effects', async ({ status, call }) => {

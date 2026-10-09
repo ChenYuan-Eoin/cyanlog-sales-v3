@@ -29,7 +29,7 @@ function seedOrders(now: number): ShipmentOrder[] {
     id: `demo-order-${index + 1}`, orderNo: `DEMO-REQ-${index + 1}`, status,
     intakeSource: 'anonymous_web', confirmationPolicy: 'scheduled_review',
     relation: { salesRef: '示例销售', customerRef: customerName, assignmentStatus: 'assigned' },
-    input: { sender, recipient, customerName, cargo: index % 2 ? '样品' : '文件/合同', weight: 1, serviceId: 2, serviceName: services[0].name, remark: '', source: 'manual', payment: 'sender_monthly', specialRequirements: index === 1 ? '示例需求：文件请用防水袋包装，上门前联系前台。' : '' },
+    input: { sender: index === 1 ? { ...sender, name: '示例销售', phone: '13800000009', address: '销售寄件处示例楼9号' } : sender, recipient, customerName, cargo: index % 2 ? '样品' : '文件/合同', weight: 1, serviceId: 2, serviceName: services[0].name, remark: '', source: 'manual', payment: 'sender_monthly', specialRequirements: index === 1 ? '示例需求：文件请用防水袋包装，上门前联系前台。' : '' },
     waybill: status === 'awaiting_confirmation' ? null : `DEMO-${String(index + 1).padStart(6, '0')}`,
     nextReviewAt: null, createdAt: new Date(now - index * 86400000).toISOString(), direction: index === 3 ? 'inbound' : 'outbound',
   }))
@@ -61,34 +61,33 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
       if (previous) {
         const existing = records.find(order => order.id === previous)
         if (!existing) throw new Error('未找到原示例单据。')
-        return { orderId: existing.id, status: existing.status, waybill: existing.waybill }
+        return { orderId: existing.id, orderNo: existing.orderNo, status: existing.status, waybill: existing.waybill }
       }
       sequence += 1
-      const waybill = `DEMO-${String(sequence).padStart(6, '0')}`
       const orderId = `demo-order-${sequence}`
-      records.unshift({ id: orderId, orderNo: `DEMO-REQ-${sequence}`, status: 'waybill_created', intakeSource: 'owner_web', confirmationPolicy: 'direct', input: { ...body.input, serviceName: services[0].name }, relation: { salesRef: '示例销售', customerRef: null, assignmentStatus: 'assigned' }, waybill, nextReviewAt: null, createdAt: new Date().toISOString(), direction: 'outbound' })
+      records.unshift({ id: orderId, orderNo: `DEMO-REQ-${sequence}`, status: 'awaiting_confirmation', intakeSource: 'owner_web', confirmationPolicy: 'scheduled_review', input: { ...body.input, sender: body.input.sender || shippingSimulationSettings.sender }, relation: { salesRef: '示例销售', customerRef: null, assignmentStatus: 'assigned' }, waybill: null, nextReviewAt: null, createdAt: new Date().toISOString(), direction: 'outbound' })
       createdByKey.set(body.key, orderId)
-      return { orderId, status: 'waybill_created', waybill }
+      return { orderId, orderNo: `DEMO-REQ-${sequence}`, status: 'awaiting_confirmation', waybill: null }
     }
     if (url === '/api/shipping/tracking') return tracking(body.waybill || '')
     const action = url.match(/^\/api\/shipping\/ledger\/(demo-order-\d+)\/(confirm|return|cancel|reconcile)$/)
     const order = action && records.find(item => item.id === action[1])
     if (!action || !order) throw new Error('未找到可操作的示例单据。')
-    if (action[2] === 'reconcile') return { orderId: order.id, status: order.status, waybill: order.waybill }
+    if (action[2] === 'reconcile') return { orderId: order.id, orderNo: order.orderNo, status: order.status, waybill: order.waybill }
     if (action[2] === 'cancel') {
       if (order.status !== 'waybill_created') throw new Error('示例订单已揽收，不能取消。')
       order.status = 'cancelled'
     } else {
       if (order.status !== 'awaiting_confirmation') throw new Error('示例单据已处理，请刷新后查看。')
       if (action[2] === 'return') {
-        if (!body.reason?.trim()) throw new Error('请填写驳回原因。')
+        if (!body.reason?.trim()) throw new Error('请填写退回工单原因。')
         order.status = 'returned'
       } else {
         order.status = 'waybill_created'
         order.waybill = `DEMO-${String(++sequence).padStart(6, '0')}`
       }
     }
-    return { orderId: order.id, status: order.status, waybill: order.waybill }
+    return { orderId: order.id, orderNo: order.orderNo, status: order.status, waybill: order.waybill }
   }
 
   return async <T>(url: string, init?: RequestInit) => structuredClone(dispatch(url, init)) as T

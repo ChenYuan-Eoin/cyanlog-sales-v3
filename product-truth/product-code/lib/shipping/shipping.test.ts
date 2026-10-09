@@ -30,7 +30,7 @@ describe('boundary validation', () => {
   it('keeps external intake provider-independent and accepts a neutral delivery preference', () => {
     const externalInput = { ...input }
     delete externalInput.serviceId
-    const parsed = anonymousShipmentSchema.parse({ key, input: { ...externalInput, servicePreference: 'urgent', customerName: '星河科技', submittedBy: { name: '张三', phone: '13800000000', team: '华南销售部' } } })
+    const parsed = anonymousShipmentSchema.parse({ key, input: { ...externalInput, servicePreference: 'urgent', customerName: '星河科技', submittedBy: { name: contact.name, phone: contact.phone, team: '华南销售部' } } })
     expect(parsed.input.servicePreference).toBe('urgent')
     expect(parsed.input).not.toHaveProperty('serviceId')
   })
@@ -38,7 +38,7 @@ describe('boundary validation', () => {
   it('accepts provider-independent sales preferences without trusting relation IDs', () => {
     const salesInput = { ...input }
     delete salesInput.serviceId
-    const valid = { ...salesInput, servicePreference: 'standard', customerName: '星河科技', submittedBy: { name: '张三', phone: '13800000000', team: '华南销售部' }, specialRequirements: '样品易碎' }
+    const valid = { ...salesInput, servicePreference: 'standard', customerName: '星河科技', submittedBy: { name: contact.name, phone: contact.phone, team: '华南销售部' }, specialRequirements: '样品易碎' }
     expect(anonymousShipmentSchema.safeParse({ key, input: valid, rawInput: '测试地址' }).success).toBe(true)
     expect(anonymousShipmentSchema.safeParse({ key, input: valid, salesRef: 'forged' }).success).toBe(false)
   })

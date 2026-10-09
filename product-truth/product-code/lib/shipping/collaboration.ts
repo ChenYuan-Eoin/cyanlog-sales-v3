@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { resolveBusinessContext, verifyShipmentContext } from './context'
 import { listShippingOperatorRecipients } from './operator-access'
-import type { ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, ShippingInput } from './types'
+import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, ShippingInput } from './types'
 
 const select = 'id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot,shipping_waybills(waybill_no)'
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
@@ -57,17 +57,29 @@ export function publicShipmentReceipt(order: ShipmentOrder): ShipmentReceipt {
   return { orderNo: order.orderNo, status: order.status, waybill: order.waybill, nextReviewAt: order.nextReviewAt, createdAt: order.createdAt }
 }
 
-export async function createAnonymousShipment(args: { orgId: string; key: string; rawInput?: string; input: ShippingInput; contextToken?: string; businessCode?: string }) {
+export async function createAnonymousShipment(args: { orgId: string; key: string; rawInput?: string; input: ShippingInput; contextToken?: string; businessCode?: string; employee?: { id: string; sender: Contact; team: string } }) {
   requireOrganization(args.orgId)
   const signed = args.contextToken ? verifyShipmentContext(args.contextToken) : null
   if (args.contextToken && !signed) throw new ShippingError(400, '寄件链接无效或已过期，请联系业务人员重新获取。')
   const relation = signed || resolveBusinessContext(args.businessCode)
-  const receiptToken = receiptFor(args.key)
+  const digest = args.employee ? hash(JSON.stringify(['employee-workorder-v1', args.orgId, args.employee.id, args.key])) : null
+  const key = digest ? `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}` : args.key
+  const receiptToken = receiptFor(key)
   const payloadHash = hash(JSON.stringify(args.input))
-  const row = { order_no: orderNo(), org_id: args.orgId, created_by: null, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || args.input.submittedBy?.name || null, customer_ref: relation?.customerRef || args.input.customerName || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
+  if (args.employee) {
+    const prior = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('employee_profile_id', args.employee.id).eq('intake_source', 'anonymous_web').eq('idempotency_key', key).maybeSingle()
+    if (prior.error) throw new ShippingError(503, '原工单暂时无法核对，请稍后重试。')
+    if (prior.data) {
+      if ((prior.data as ShipmentRow).payload_hash !== payloadHash) throw new ShippingError(409, '同一寄件请求的内容发生变化，请核对原工单。')
+      return { order: map(prior.data as ShipmentRow), receiptToken }
+    }
+    const senderMatches = (Object.keys(args.employee.sender) as (keyof Contact)[]).every(field => args.input.sender[field] === args.employee!.sender[field])
+    if (!senderMatches || args.input.submittedBy?.name !== args.employee.sender.name || args.input.submittedBy?.phone !== args.employee.sender.phone || args.input.submittedBy?.team !== args.employee.team) throw new ShippingError(409, '个人寄件资料已变化，请刷新资料后重新预览。')
+  }
+  const row = { order_no: orderNo(), org_id: args.orgId, created_by: null, employee_profile_id: args.employee?.id || null, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || args.input.submittedBy?.name || null, customer_ref: relation?.customerRef || args.input.customerName || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
   if (result.error?.code === '23505') {
-    result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('intake_source', 'anonymous_web').eq('idempotency_key', args.key).single()
+    result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('intake_source', 'anonymous_web').eq('idempotency_key', key).single()
     if (!result.data) throw new ShippingError(409, '寄件请求编号已被使用，请保留原回执并使用新的请求编号。')
   }
   if (result.error || !result.data) throw new ShippingError(503, '寄件单暂未保存，请稍后重试。')
@@ -76,16 +88,16 @@ export async function createAnonymousShipment(args: { orgId: string; key: string
   return { order, receiptToken }
 }
 
-export async function createOwnerShipment(args: { userId: string; key: string; input: ShippingInput; snapshot: { orgId: string; connectionId: string; billingAccountId: string; senderProfileId: string; environment: 'sandbox' | 'production'; billingAccountTail: string; serviceId: number; serviceName: string } }) {
+export async function createOwnerShipment(args: { orgId: string; userId: string; key: string; input: ShippingInput; usesDefaultSender?: boolean }) {
   const receiptToken = receiptFor(args.key)
-  const { snapshot } = args
-  requireOrganization(snapshot.orgId)
-  const shippingConfigSnapshot = { carrier: 'sf', connectionId: snapshot.connectionId, environment: snapshot.environment, billingAccountId: snapshot.billingAccountId, billingAccountTail: snapshot.billingAccountTail, senderProfileId: snapshot.senderProfileId, serviceId: snapshot.serviceId, serviceName: snapshot.serviceName }
-  const payloadHash = hash(JSON.stringify({ input: args.input, shippingConfigSnapshot }))
-  const row = { order_no: orderNo(), org_id: snapshot.orgId, carrier_connection_id: snapshot.connectionId, billing_account_id: snapshot.billingAccountId, sender_profile_id: snapshot.senderProfileId, connection_environment: snapshot.environment, billing_account_tail: snapshot.billingAccountTail, shipping_config_snapshot: shippingConfigSnapshot, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'direct', status: 'accepted', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: null }
+  requireOrganization(args.orgId)
+  // Derived defaults may change after a lost response. The same original input
+  // must still retrieve its first work order and sender snapshot without dispatch.
+  const payloadHash = hash(JSON.stringify({ ...args.input, sender: args.usesDefaultSender ? null : args.input.sender }))
+  const row = { order_no: orderNo(), org_id: args.orgId, carrier_connection_id: null, billing_account_id: null, sender_profile_id: null, connection_environment: null, billing_account_tail: null, shipping_config_snapshot: {}, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
   if (result.error?.code === '23505') {
-    result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', snapshot.orgId).eq('created_by', args.userId).eq('intake_source', 'owner_web').eq('idempotency_key', args.key).single()
+    result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('created_by', args.userId).eq('intake_source', 'owner_web').eq('idempotency_key', args.key).single()
     if (!result.data) throw new ShippingError(409, '寄件请求编号已被使用，请从当前组织的原寄件单核对。')
   }
   if (result.error || !result.data) throw new ShippingError(503, '本人寄件单暂未保存，请稍后重试。')
@@ -162,4 +174,12 @@ export async function getOrganizationShipmentProviderSnapshot(orgId: string, way
     .eq('id', waybillRow.shipping_order_id).eq('org_id', orgId).maybeSingle()
   if (error) throw new ShippingError(503, '运单配置快照读取失败。')
   return data || null
+}
+
+export async function listEmployeeShipmentReceipts(orgId: string, employeeId: string) {
+  requireOrganization(orgId)
+  if (!employeeId) throw new ShippingError(401, '请先验证公司邮箱。')
+  const { data, error } = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', orgId).eq('employee_profile_id', employeeId).eq('intake_source', 'anonymous_web').order('created_at', { ascending: false }).limit(50)
+  if (error) throw new ShippingError(503, '个人工单暂时无法读取，请稍后刷新。')
+  return (data || []).map(row => publicShipmentReceipt(map(row as ShipmentRow)))
 }

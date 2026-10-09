@@ -5,7 +5,7 @@ import type { ShippingInput } from './types'
 const mocks = vi.hoisted(() => ({ from: vi.fn(), recipients: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 vi.mock('./operator-access', () => ({ listShippingOperatorRecipients: mocks.recipients }))
-import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, listShipmentLedger } from './collaboration'
+import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, listShipmentLedger, listEmployeeShipmentReceipts } from './collaboration'
 
 type Row = Record<string, unknown>
 let tables: Record<string, Row[]>
@@ -60,6 +60,22 @@ describe('shipping collaboration organization boundary', () => {
     expect(tables.shipping_orders[1].sales_ref).toBeNull()
     expect(tables.shipping_orders[2].org_id).toBeNull()
   })
+  it('isolates employee keys and preserves retries after profile edits', async () => {
+    const employee = { id: 'employee-A', sender: input.sender, team: input.submittedBy?.team || '团队' }
+    const employeeInput = { ...input, submittedBy: { name: employee.sender.name, phone: employee.sender.phone, team: employee.team } }
+    const first = await createAnonymousShipment({ orgId: 'org-A', key: 'same-key', input: employeeInput, employee })
+    const retry = await createAnonymousShipment({ orgId: 'org-A', key: 'same-key', input: employeeInput, employee: { ...employee, sender: { ...employee.sender, address: '修改后的新地址' } } })
+    expect(retry.order.id).toBe(first.order.id)
+    expect(retry.receiptToken).toBe(first.receiptToken)
+    const other = await createAnonymousShipment({ orgId: 'org-A', key: 'same-key', input: employeeInput, employee: { ...employee, id: 'employee-B' } })
+    expect(other.order.id).not.toBe(first.order.id)
+    expect(other.receiptToken).not.toBe(first.receiptToken)
+    expect(tables.shipping_orders.at(-1)?.employee_profile_id).toBe('employee-B')
+    const own = await listEmployeeShipmentReceipts('org-A', 'employee-A')
+    expect(own.map(order => order.orderNo)).toEqual([first.order.orderNo])
+    expect(await listEmployeeShipmentReceipts('org-B', 'employee-A')).toEqual([])
+    await expect(createAnonymousShipment({ orgId: 'org-A', key: 'new-key', input: employeeInput, employee: { ...employee, sender: { ...employee.sender, name: '另一个人' } } })).rejects.toMatchObject({ status: 409 })
+  })
   it('binds new anonymous submissions to the server-resolved organization', async () => {
     await createAnonymousShipment({ orgId: 'org-A', key: 'anonymous-key', input })
     expect(tables.shipping_orders.at(-1)?.org_id).toBe('org-A')
@@ -76,9 +92,32 @@ describe('shipping collaboration organization boundary', () => {
     expect(tables.shipping_orders.filter(item => item.idempotency_key === 'repeat-key')).toHaveLength(1)
   })
   it('does not expose an owner order to another user reusing its key', async () => {
-    const snapshot = { orgId: 'org-A', connectionId: 'conn', billingAccountId: 'account', senderProfileId: 'sender', environment: 'sandbox' as const, billingAccountTail: '0000', serviceId: 2, serviceName: '示例服务' }
-    await createOwnerShipment({ userId: 'owner-A', key: 'same-owner-key', input, snapshot })
-    await expect(createOwnerShipment({ userId: 'owner-B', key: 'same-owner-key', input, snapshot })).rejects.toMatchObject({ status: 409 })
+    await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'same-owner-key', input })
+    await expect(createOwnerShipment({ orgId: 'org-A', userId: 'owner-B', key: 'same-owner-key', input })).rejects.toMatchObject({ status: 409 })
+    await expect(createOwnerShipment({ orgId: 'org-B', userId: 'owner-A', key: 'same-owner-key', input })).rejects.toMatchObject({ status: 409 })
+  })
+  it('creates only a reviewable work order without carrier bindings', async () => {
+    const order = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'intake-key', input })
+    expect(order).toMatchObject({ status: 'awaiting_confirmation', confirmationPolicy: 'scheduled_review', waybill: null })
+    expect(tables.shipping_orders.at(-1)).toMatchObject({ org_id: 'org-A', created_by: 'owner-A', carrier_connection_id: null, billing_account_id: null, connection_environment: null, shipping_config_snapshot: {} })
+    expect(mocks.from.mock.calls.every(([table]) => table === 'shipping_orders')).toBe(true)
+  })
+  it('retrieves the original work order and sender when company defaults change after a lost response', async () => {
+    const first = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'stable-intake-key', input, usesDefaultSender: true })
+    const retry = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'stable-intake-key', input: { ...input, sender: { ...input.sender, address: '更改后的示例路9号' } }, usesDefaultSender: true })
+    expect(retry.id).toBe(first.id)
+    expect(retry.input.sender).toEqual(input.sender)
+    expect(tables.shipping_orders.filter(item => item.idempotency_key === 'stable-intake-key')).toHaveLength(1)
+    await expect(createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'stable-intake-key', input: { ...input, recipient: { ...input.recipient, name: '另一位示例收件人' } }, usesDefaultSender: true })).rejects.toMatchObject({ status: 409 })
+  })
+  it('returns the current state of a previously submitted work order without resetting or recreating it', async () => {
+    const first = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'finished-intake-key', input })
+    const stored = tables.shipping_orders.find(item => item.id === first.id)!
+    stored.status = 'waybill_created'
+    stored.shipping_waybills = [{ waybill_no: 'SF1234567890123' }]
+    const repeated = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'finished-intake-key', input })
+    expect(repeated).toMatchObject({ id: first.id, status: 'waybill_created', waybill: 'SF1234567890123' })
+    expect(tables.shipping_orders.filter(item => item.idempotency_key === 'finished-intake-key')).toHaveLength(1)
   })
   it('groups reminders by organization without exposing other order numbers', async () => {
     expect(await createDueShipmentReviewReminders(new Date('2026-09-27T12:00:00Z'))).toEqual({ orders: 2, reminders: 2 })

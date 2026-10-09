@@ -5,12 +5,14 @@ import { shippingStoreForOrg } from './store'
 import { cancelSfOrder, createSfOrder, lookupSfOrder } from './sf-client'
 import { getShippingRuntimeConfig, selectAuthorizedShippingService } from './runtime-config'
 import { recordShippingCapability } from './connections'
+import { contactSchema } from './validation'
 import type { ShippingInput } from './types'
 
 type ProcessRow = {
   id: string
   org_id: string | null
   status: string
+  intake_source: string
   shipment_payload: ShippingInput
   provider_key: string
   provider_order_id: string | null
@@ -25,20 +27,26 @@ type ConfirmationSelection = { connectionId?: string; billingAccountId?: string;
 
 async function loadForAction(id: string, orgId: string): Promise<ProcessRow> {
   if (!orgId?.trim()) throw new ShippingError(403, '当前操作员没有组织寄件权限。')
-  const { data, error } = await supabaseAdmin.from('shipping_orders').select('id,org_id,status,shipment_payload,provider_key,provider_order_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot').eq('id', id).eq('org_id', orgId).single()
+  const { data, error } = await supabaseAdmin.from('shipping_orders').select('id,org_id,status,intake_source,shipment_payload,provider_key,provider_order_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot').eq('id', id).eq('org_id', orgId).single()
   if (error || !data || data.org_id !== orgId) throw new ShippingError(404, '寄件单不存在。')
   return data as ProcessRow
 }
 
 async function orderRuntime(row: ProcessRow, orgId: string, selection?: ConfirmationSelection) {
+  const sender = contactSchema.safeParse(row.shipment_payload.sender)
+  const rawSender = row.shipment_payload.sender
+  const senderMissing = rawSender == null || (typeof rawSender === 'object' && !Array.isArray(rawSender) && Object.values(rawSender).every(value => value == null || (typeof value === 'string' && !value.trim())))
+  if (!sender.success && !(row.intake_source === 'owner_web' && senderMissing)) throw new ShippingError(400, '工单寄件人资料不完整或格式无效，请退回补齐。', 'validation')
+  const recipient = contactSchema.safeParse(row.shipment_payload.recipient)
+  if (!recipient.success) throw new ShippingError(400, '工单收件人资料不完整或格式无效，请退回补齐。', 'validation')
   if (row.billing_account_id && selection?.billingAccountId && row.billing_account_id !== selection.billingAccountId) throw new ShippingError(409, '寄件单已绑定月结账号，请勿更换；如需更换请退回后重新提交。')
   const billingAccountId = row.billing_account_id || selection?.billingAccountId
   if (row.carrier_connection_id && selection?.connectionId && row.carrier_connection_id !== selection.connectionId) throw new ShippingError(409, '寄件单已绑定快递连接，不能在确认时切换。')
-  const connection = await getShippingRuntimeConfig({ orgId, billingAccountId, connectionId: row.carrier_connection_id || selection?.connectionId })
+  const connection = await getShippingRuntimeConfig({ orgId, billingAccountId, connectionId: row.carrier_connection_id || selection?.connectionId, ...(sender.success ? { senderOverride: sender.data } : {}) })
   const service = selectAuthorizedShippingService(connection.services, row.shipment_payload.servicePreference || 'standard', selection?.serviceId || row.shipment_payload.serviceId)
-  const input: ShippingInput = { ...row.shipment_payload, sender: connection.sender, serviceId: service.id, serviceName: service.name }
+  const input: ShippingInput = { ...row.shipment_payload, sender: sender.success ? sender.data : connection.sender, recipient: recipient.data, serviceId: service.id, serviceName: service.name }
   checkShippingPolicy(input, connection.services)
-  const snapshot = { ...connection.snapshot, serviceId: service.id, serviceName: service.name, servicePreference: service.preference }
+  const snapshot = { ...connection.snapshot, senderSource: sender.success ? 'workorder' : 'company_default', serviceId: service.id, serviceName: service.name, servicePreference: service.preference }
   return { orgId, connection, input, snapshot }
 }
 

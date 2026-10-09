@@ -7,16 +7,16 @@ const input: ShippingInput = {
   recipient: { name: '演示收件人', phone: '13800000001', province: '广东省', city: '深圳市', county: '南山区', address: '示例路1号' },
   cargo: '文件', weight: 1, serviceId: 2, remark: '', source: 'manual', payment: 'sender_monthly',
 }
-type Receipt = { orderId: string; status: string; waybill: string | null }
+type Receipt = { orderId: string; orderNo: string; status: string; waybill: string | null }
 afterEach(() => vi.unstubAllGlobals())
 
 describe('shipping demo uses the authenticated order receipt contract', () => {
-  it('returns a stable order ID, explicit status and a demo waybill without network access', async () => {
+  it('creates only a review work order without a waybill or network access', async () => {
     const fetch = vi.fn(() => { throw new Error('Demo must remain in memory') })
     vi.stubGlobal('fetch', fetch)
     const request = createShippingSimulation()
     const receipt = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) })
-    expect(receipt).toEqual({ orderId: 'demo-order-5', status: 'waybill_created', waybill: 'DEMO-000005' })
+    expect(receipt).toEqual({ orderId: 'demo-order-5', orderNo: 'DEMO-REQ-5', status: 'awaiting_confirmation', waybill: null })
     expect(fetch).not.toHaveBeenCalled()
   })
 
@@ -35,9 +35,29 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
     const initial = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) })
     const result = await request<Receipt>(`/api/shipping/ledger/${initial.orderId}/reconcile`, { method: 'POST' })
     expect(result).toEqual(initial)
+    const confirmed = await request<Receipt>(`/api/shipping/ledger/${initial.orderId}/confirm`, { method: 'POST' })
+    expect(confirmed.status).toBe('waybill_created')
+    expect(confirmed.waybill).toMatch(/^DEMO-/)
     await request(`/api/shipping/ledger/${initial.orderId}/cancel`, { method: 'POST' })
-    expect(await request(`/api/shipping/ledger/${initial.orderId}/reconcile`, { method: 'POST' })).toEqual({ ...initial, status: 'cancelled' })
+    expect(await request(`/api/shipping/ledger/${initial.orderId}/reconcile`, { method: 'POST' })).toEqual({ ...confirmed, status: 'cancelled' })
     expect((await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')).records).toHaveLength(5)
+  })
+
+  it('reclaims an intake receipt after confirmation without recreating or resetting the work order', async () => {
+    const request = createShippingSimulation()
+    const init = { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) }
+    const receipt = await request<Receipt>('/api/shipping/owner/orders', init)
+    const confirmed = await request<Receipt>(`/api/shipping/ledger/${receipt.orderId}/confirm`, { method: 'POST' })
+    const reclaimed = await request<Receipt>('/api/shipping/owner/orders', init)
+    expect(reclaimed).toEqual(confirmed)
+    expect((await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')).records).toHaveLength(5)
+  })
+
+  it('keeps the sales sender when the operator confirms an anonymous work order', async () => {
+    const request = createShippingSimulation()
+    await request('/api/shipping/ledger/demo-order-2/confirm', { method: 'POST', body: JSON.stringify({ sender: shippingSimulationSettings.sender }) })
+    const { records } = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+    expect(records.find(order => order.id === 'demo-order-2')?.input.sender.name).toBe('示例销售')
   })
 
   it('rejects unknown reconcile IDs instead of using a network fallback', async () => {

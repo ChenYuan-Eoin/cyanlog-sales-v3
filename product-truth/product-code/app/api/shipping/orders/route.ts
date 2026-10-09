@@ -1,11 +1,8 @@
 import type { NextRequest } from 'next/server'
-import { shippingHandler, shippingJson } from '@/lib/shipping/http'
+import { shippingHandler } from '@/lib/shipping/http'
 import { ShippingError } from '@/lib/shipping/config'
 import { shippingStoreForOrg, publicRecord } from '@/lib/shipping/store'
-import { submitShipping, checkShippingPolicy, shippingRequestId } from '@/lib/shipping/service'
-import { createSfOrder } from '@/lib/shipping/sf-client'
-import { getShippingRuntimeConfig, loadShippingSettings } from '@/lib/shipping/runtime-config'
-import { ownerOrderSchema } from '@/lib/shipping/validation'
+import { shippingRequestId } from '@/lib/shipping/service'
 import { listImportedOutbound } from '@/lib/shipping/outbound'
 import { z } from 'zod'
 export const runtime = 'nodejs'
@@ -22,18 +19,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  return shippingHandler(req, async (user, orgId) => {
-    const submission = ownerOrderSchema.parse(await shippingJson(req))
-    const settings = await loadShippingSettings(orgId)
-    const billingAccountId = submission.billingAccountId || settings.defaultBillingAccountId
-    if (!billingAccountId) throw new ShippingError(409, '请先配置活动月结账号。')
-    const connection = await getShippingRuntimeConfig({ orgId, billingAccountId })
-    const input = { ...submission.input, sender: connection.sender }
-    checkShippingPolicy(input, connection.services)
-    const key = submission.key
-    return publicRecord(await submitShipping({
-      userId: user.id, key, input, connection: connection.connectionKey, environment: connection.environment, runtimeConfig: connection,
-      store: shippingStoreForOrg(orgId), send: (requestId, frozenInput) => createSfOrder(requestId, frozenInput, connection)
-    }))
+  return shippingHandler(req, async () => {
+    throw new ShippingError(410, '直接下单入口已停用，请先提报寄件工单，再由操作员审核确认下单。', 'validation')
   })
 }

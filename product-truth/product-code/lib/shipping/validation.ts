@@ -2,19 +2,32 @@ import { z } from 'zod'
 import { DOMESTIC_SHIPPING_PHONE_PATTERN } from './phone'
 const text = (max: number) => z.string().trim().min(1, '请填写完整信息').max(max)
 export const contactSchema = z.object({ name: text(60), phone: text(30).regex(DOMESTIC_SHIPPING_PHONE_PATTERN, '请填写国内手机号或带区号的座机'), province: text(30), city: text(30), county: text(30), address: text(200).min(5, '请补充街道和门牌号') }).strict()
-const shippingSubmitterSchema = z.object({ name: text(60), phone: text(30).regex(/^1[3-9]\d{9}$/, '请填写提报人手机号'), team: text(80) }).strict()
+const shippingSubmitterSchema = z.object({ name: text(60), phone: text(30).regex(DOMESTIC_SHIPPING_PHONE_PATTERN, '请填写国内手机号或带区号的座机'), team: text(80) }).strict()
 export const shippingInputSchema = z.object({ sender: contactSchema, recipient: contactSchema, cargo: text(60), weight: z.number().finite().positive().max(20), serviceId: z.number().int().positive().optional(), servicePreference: z.enum(['standard', 'urgent']).optional(), remark: z.string().trim().max(100), source: z.literal('manual'), payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).optional(), customerName: z.string().trim().max(120).optional(), submittedBy: shippingSubmitterSchema.optional(), specialRequirements: z.string().trim().max(500).optional(), pickupWindow: z.string().trim().max(80).optional() }).strict()
 const ownerShippingInputSchema = shippingInputSchema.extend({ serviceId: z.number().int().positive() })
 export const createSchema = z.object({ key: z.string().uuid(), input: ownerShippingInputSchema, confirmed: z.literal(true) }).strict()
-export const ownerOrderSchema = z.object({ key: z.string().uuid(), input: ownerShippingInputSchema, confirmed: z.literal(true), connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional() }).strict()
+const operatorIntakeInputSchema = shippingInputSchema.extend({
+  sender: contactSchema.optional(),
+  weight: z.number().finite().positive().max(20).default(1),
+  servicePreference: z.enum(['standard', 'urgent']).default('standard'),
+  remark: z.string().trim().max(100).default(''),
+  source: z.literal('manual').default('manual'),
+  payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).default('sender_monthly'),
+})
+// Legacy fields are accepted for existing clients; they never authorize carrier
+// submission. Actual connection/account/service selection happens at review.
+export const ownerOrderSchema = z.object({ key: z.string().uuid(), input: operatorIntakeInputSchema, confirmed: z.literal(true).optional(), connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional() }).strict()
 export const orderSelectionSchema = z.object({ connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional(), serviceId: z.number().int().positive().optional() }).strict()
 const anonymousShippingInputSchema = shippingInputSchema.omit({ serviceId: true }).extend({
-  sender: contactSchema.optional(),
+  sender: contactSchema,
   servicePreference: z.enum(['standard', 'urgent']).default('standard'),
   payment: z.literal('sender_monthly').optional(),
   customerName: text(120),
   submittedBy: shippingSubmitterSchema,
   specialRequirements: z.string().trim().max(500).optional(),
+}).superRefine((input, ctx) => {
+  if (input.sender.name !== input.submittedBy.name) ctx.addIssue({ code: 'custom', path: ['sender', 'name'], message: '寄件人姓名须与提报人个人资料一致。' })
+  if (input.sender.phone !== input.submittedBy.phone) ctx.addIssue({ code: 'custom', path: ['sender', 'phone'], message: '寄件人电话须与提报人个人资料一致。' })
 })
 export const anonymousShipmentSchema = z.object({
   key: z.string().uuid(),

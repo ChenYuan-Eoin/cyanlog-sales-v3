@@ -5,6 +5,7 @@ import { CheckCircle2, LoaderCircle, Plus, Settings, ShieldCheck, X } from 'luci
 import type { ShippingConfiguration } from '@/lib/shipping/connections'
 import { emptyContact, type Contact } from '@/lib/shipping/types'
 import styles from './config-drawer.module.css'
+import EmailConfiguration from './email-configuration'
 
 async function request<T>(init?: RequestInit): Promise<T> {
   const response = await fetch('/api/shipping/settings', { ...init, cache: 'no-store', headers: init?.body ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers })
@@ -243,6 +244,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <div className={styles.actions}><button className={styles.secondary} disabled={!operatorAccess || operatorAccess.legacyImportAvailable || operatorBusy} onClick={() => void saveOperatorAccess()}>{operatorBusy ? '保存中…' : '保存寄件人员权限'}</button></div>
           {operatorMessage && <p className={styles.probe} role="status">{operatorMessage}</p>}
         </section>
+        <EmailConfiguration/>
         {message && <p className={styles.message} role="status">{message}</p>}
         <p className={styles.footerNote}>连接检查使用所选环境的OAuth2与只读订单查询，不创建运单；轨迹、取消等能力仍需分别验证。</p>
       </div>

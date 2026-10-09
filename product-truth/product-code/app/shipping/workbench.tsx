@@ -2,20 +2,33 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, Truck, UploadCloud } from 'lucide-react'
-import type { ShipmentOrder, ShipmentOrderStatus, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
+import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShippingInput, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
 import { buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
 import { parseShippingText, prepareBatchRecipient } from '@/lib/shipping/batch-text'
 import { shippingWorkbenchRequest, ShippingWorkbenchRequestError, isDefinitiveShippingRejection, type ShippingSimulation } from '@/lib/shipping/workbench-client'
+import { contactSchema } from '@/lib/shipping/validation'
 import styles from './workbench.module.css'
 
-const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待确认', returned: '已驳回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
+const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待审核', returned: '工单已退回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
 const statusTone: Record<ShipmentOrderStatus, string> = { accepted: 'orange', awaiting_confirmation: 'orange', returned: 'red', confirmed: 'blue', ordering: 'blue', order_unknown: 'red', waybill_created: 'blue', in_transit: 'blue', delivered: 'green', cancelled: 'gray', order_failed: 'red' }
-type BatchRow = Omit<BatchDraftRow, 'result'> & { result?: 'pending' | 'unknown' | 'success' | 'failed'; orderId?: string; needsNewRequestOnRetry?: boolean }
-type SubmissionResult = { id?: string; orderId?: string; status?: ShipmentOrderStatus; waybill?: string | null }
+type IntakeInput = Omit<ShippingInput, 'sender'> & { sender?: ShippingInput['sender'] }
+type BatchRow = Omit<BatchDraftRow, 'result'> & { result?: 'pending' | 'unknown' | 'success' | 'failed'; orderId?: string; orderNo?: string; intakeInput?: IntakeInput }
+type SubmissionResult = { id?: string; orderId?: string; orderNo?: string; status?: ShipmentOrderStatus; waybill?: string | null }
 const maySubmitRow = (row: BatchRow) => !row.result || row.result === 'failed'
 
 function cityOf(order: ShipmentOrder) { return order.input.recipient.city || order.input.recipient.province }
 function customerOf(order: ShipmentOrder) { return order.input.customerName || order.relation.customerRef || '未填写客户' }
+
+function senderForReview(order: ShipmentOrder, companySender: Contact): { contact: Contact | null; source: string } {
+  const saved = contactSchema.safeParse(order.input.sender)
+  if (saved.success) return { contact: saved.data, source: order.intakeSource === 'anonymous_web' ? '销售本人寄件资料' : '工单寄件资料' }
+  const missing = Object.values(order.input.sender || {}).every(value => typeof value === 'string' && !value.trim())
+  if (order.intakeSource === 'owner_web' && missing) {
+    const fallback = contactSchema.safeParse(companySender)
+    if (fallback.success) return { contact: fallback.data, source: '公司默认寄件资料' }
+  }
+  return { contact: null, source: order.intakeSource === 'owner_web' && missing ? '公司寄件资料待补齐' : '工单寄件资料待补齐' }
+}
 
 function withTrackingStatus(order: ShipmentOrder, result: TrackingResult): ShipmentOrder {
   if (result.source === 'sandbox_mock' || order.waybill !== result.waybill || !result.shipmentStatus) return order
@@ -39,7 +52,6 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const [serviceId, setServiceId] = useState(String(settings.services[0]?.id || ''))
   const [billingAccountId, setBillingAccountId] = useState(settings.defaultBillingAccountId || '')
   const [uniformCargo, setUniformCargo] = useState('文件/合同')
-  const [pickupWindow, setPickupWindow] = useState('今天 17:00 统一揽收')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | ShipmentOrderStatus>('all')
   const [type, setType] = useState<'all' | 'outbound' | 'inbound'>('all')
@@ -48,7 +60,9 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const [phoneSuffix, setPhoneSuffix] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState('')
-  const [pendingProductionReviewId, setPendingProductionReviewId] = useState('')
+  const [reviewIds, setReviewIds] = useState<string[]>([])
+  const [confirmationBusy, setConfirmationBusy] = useState(false)
+  const confirmationRunning = useRef(false)
   const [ledgerLoading, setLedgerLoading] = useState(true)
   const [trackingBusy, setTrackingBusy] = useState(false)
   const trackingRequest = useRef(0)
@@ -89,15 +103,17 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const validCount = preparedRows.filter(({ row, errors }) => !errors.length && maySubmitRow(row)).length
   const successCount = batch.filter(row => row.result === 'success').length
   const uncertainCount = batch.filter(row => row.result === 'unknown' || row.result === 'pending').length
-  const inputLocked = batchBusy || uncertainCount > 0
+  const inputLocked = batchBusy || confirmationBusy || uncertainCount > 0
   const invalidCount = preparedRows.filter(({ errors }) => errors.length > 0).length
   const selectedConnection = settings.carrierConnections?.find(connection => connection.id === connectionId)
   const selectedServices = selectedConnection?.services || settings.services
   const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.status === 'active')
   const selectedAccount = availableAccounts.find(account => account.id === billingAccountId)
   const canSubmitCurrent = settings.carrierConnections?.length
-    ? Boolean(selectedConnection?.status === 'connected' && availableAccounts.some(account => account.id === billingAccountId) && selectedServices.some(service => String(service.id) === serviceId) && settings.sender.name && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
+    ? Boolean(selectedConnection?.status === 'connected' && availableAccounts.some(account => account.id === billingAccountId) && selectedServices.some(service => String(service.id) === serviceId) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
     : settings.canSubmit
+  const reviewedOrders = filtered.filter(order => reviewIds.includes(order.id) && order.status === 'awaiting_confirmation')
+  const reviewedSendersReady = reviewedOrders.every(order => senderForReview(order, settings.sender).contact !== null)
   const productionOrderUnverified = selectedConnection?.environment === 'production' && selectedConnection.orderCapability === 'not_tested'
 
   function successfulSubmission(result: SubmissionResult): result is SubmissionResult & { status: 'waybill_created'; waybill: string } {
@@ -140,64 +156,55 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     const blob = await buildShippingTemplate(), url = URL.createObjectURL(blob), link = document.createElement('a')
     link.href = url; link.download = '寄件标准导入模板.xlsx'; link.click(); URL.revokeObjectURL(url)
   }
-  async function executeBatch() {
-    if (batchRunning.current) return
-    if (productionOrderUnverified) { setMessage('首票Production订单尚未实测。请先从台账选择一票，在右侧核对完整收寄资料后逐票确认。'); return }
-    if (!canSubmitCurrent) { setMessage('当前连接、月结账号、寄件服务或寄件人资料未就绪，暂不能下单。'); return }
-    const candidates = preparedRows.filter(({ row, errors }) => !errors.length && maySubmitRow(row))
+  async function executeBatch(retrieveRowId?: number) {
+    if (batchRunning.current || confirmationRunning.current) return
+    const candidates = preparedRows.filter(({ row, errors }) => !errors.length && (retrieveRowId ? row.id === retrieveRowId && row.result === 'unknown' : maySubmitRow(row)))
     if (!candidates.length) return
     batchRunning.current = true
     setBatchBusy(true); setMessage('')
     let succeeded = 0, uncertain = 0, failed = 0
-    const successfulWaybills: string[] = []
     const affectedOrderIds: string[] = []
     for (const { row, recipient } of candidates) {
+      // Intake retries replay the same content and key. No carrier operation occurs here.
+      const input: IntakeInput = row.intakeInput || { ...(contactSchema.safeParse(settings.sender).success ? { sender: settings.sender } : {}), recipient, cargo: row.cargo || uniformCargo, weight: 1, remark: '', source: 'manual', payment: 'sender_monthly' }
+      setBatch(items => items.map(item => item.id === row.id ? { ...item, intakeInput: input, result: 'pending', error: undefined } : item))
       try {
-        // Only a new user click after a definitive carrier rejection may start
-        // a new request. Validation retries and uncertain outcomes keep the key.
-        const requestKey = row.needsNewRequestOnRetry ? globalThis.crypto.randomUUID() : row.key
-        setBatch(items => items.map(item => item.id === row.id ? { ...item, key: requestKey, orderId: row.needsNewRequestOnRetry ? undefined : item.orderId, needsNewRequestOnRetry: false, result: 'pending', error: undefined } : item))
-        const receipt = await request<SubmissionResult>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: requestKey, confirmed: true, connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, input: { sender: settings.sender, recipient, cargo: uniformCargo, weight: 1, serviceId: Number(serviceId), remark: '', source: 'manual', payment: 'sender_monthly', pickupWindow } }) })
+        const receipt = await request<SubmissionResult>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, input }) })
         const orderId = receipt.orderId || receipt.id
-        if (orderId) affectedOrderIds.push(orderId)
-        if (successfulSubmission(receipt)) {
-          succeeded += 1; successfulWaybills.push(receipt.waybill)
-          setBatch(items => items.map(item => item.id === row.id ? { ...item, orderId, result: 'success', waybill: receipt.waybill, error: undefined } : item))
+        if (orderId && receipt.orderNo && receipt.status && receipt.status in statusLabel) {
+          succeeded += 1; affectedOrderIds.push(orderId)
+          setBatch(items => items.map(item => item.id === row.id ? { ...item, orderId, orderNo: receipt.orderNo, result: 'success', error: undefined } : item))
         } else {
           uncertain += 1
-          setBatch(items => items.map(item => item.id === row.id ? { ...item, orderId, result: 'unknown', waybill: undefined, error: orderId ? '下单结果待确认，请查回原单，勿重复下单。' : '服务端未返回单据编号，请从台账查回，勿重复下单。' } : item))
+          setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'unknown', error: '工单回执不完整，请用原请求重取回执。此步骤不会向顺丰下单。' } : item))
         }
       } catch (error) {
         if (definiteRejection(error)) {
           failed += 1
-          const needsNewRequestOnRetry = error instanceof ShippingWorkbenchRequestError && error.requestStage === 'provider_rejected'
-          setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'failed', needsNewRequestOnRetry, error: (error as Error).message } : item))
+          setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'failed', intakeInput: undefined, error: (error as Error).message } : item))
         } else {
           uncertain += 1
-          setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'unknown', error: '请求结果不明，已保留原请求编号。请从台账查回原单，勿重新解析或重复下单。' } : item))
+          setBatch(items => items.map(item => item.id === row.id ? { ...item, result: 'unknown', error: '工单回执未收到，原请求已保留。请重取回执；不会触发顺丰下单。' } : item))
         }
       }
     }
     let ledgerRefreshError = ''
-    if (candidates.length) {
-      try {
-        const ledger = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
-        setOrders(ledger.records)
-        const newOrder = ledger.records.find(order => affectedOrderIds.includes(order.id) || (order.waybill && successfulWaybills.includes(order.waybill)))
-        if (newOrder) { setSelectedId(newOrder.id); setManualWaybill(newOrder.waybill || ''); setTracking(null); trackingRequest.current += 1 }
-      } catch (error) { ledgerRefreshError = `台账刷新失败：${(error as Error).message}` }
-    }
+    try {
+      const ledger = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+      setOrders(ledger.records)
+      const newOrder = ledger.records.find(order => affectedOrderIds.includes(order.id))
+      if (newOrder) { setSelectedId(newOrder.id); setManualWaybill(newOrder.waybill || ''); setTracking(null); trackingRequest.current += 1 }
+    } catch (error) { ledgerRefreshError = ` 台账刷新失败：${(error as Error).message}` }
     batchRunning.current = false
-    setBatchBusy(false); setMessage(`${isSimulation ? '模拟结果' : '本次结果'}：成功 ${succeeded} 票；待确认 ${uncertain} 票；失败 ${failed} 票。${uncertain ? '待确认行已锁定，请查回原单，勿重新解析或重复下单。' : '已保留失败行和原请求编号。'}${ledgerRefreshError ? ` ${ledgerRefreshError}` : ''}`)
+    setBatchBusy(false); setMessage(`工单提报：已提报 ${succeeded} 票；回执待确认 ${uncertain} 票；失败 ${failed} 票。请在中栏核对工单后正式下单。${ledgerRefreshError}`)
   }
   async function reconcileOrder(orderId: string) {
-    if (!orderId || reconciliationRequests.current.has(orderId) || batchBusy) return
+    if (!orderId || reconciliationRequests.current.has(orderId) || batchBusy || confirmationRunning.current) return
     reconciliationRequests.current.add(orderId); setBusy(orderId); setMessage('')
     try {
       const result = await request<SubmissionResult>(`/api/shipping/ledger/${encodeURIComponent(orderId)}/reconcile`, { method: 'POST', body: '{}' })
       if ((result.id && result.id !== orderId) || (result.orderId && result.orderId !== orderId)) throw new Error('查回结果的单据编号不一致，已保留原单。')
       const successful = successfulSubmission(result)
-      setBatch(rows => rows.map(row => row.orderId === orderId ? { ...row, result: successful ? 'success' : 'unknown', waybill: successful ? result.waybill : undefined, error: successful ? undefined : '查回结果仍待确认，请稍后继续查回原单，勿重复下单。' } : row))
       setOrders(rows => rows.map(order => order.id === orderId ? applySubmission(order, result) : order))
       let refreshError = ''
       try {
@@ -210,35 +217,55 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     } catch (error) { setMessage(`查回失败：${(error as Error).message} 原单已保留，请稍后继续查回。`) }
     finally { reconciliationRequests.current.delete(orderId); setBusy('') }
   }
-  async function act(order: ShipmentOrder, action: 'confirm' | 'return', productionReviewed = false) {
-    if (action === 'confirm' && productionOrderUnverified && !productionReviewed) {
-      setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); setPendingProductionReviewId(order.id); setMessage('该首票已载入右侧详情，请核对完整寄收地址、服务和月结账号。')
-      return
+  function toggleReview(order: ShipmentOrder) {
+    if (confirmationRunning.current || order.status !== 'awaiting_confirmation') return
+    setReviewIds(ids => ids.includes(order.id) ? ids.filter(id => id !== order.id) : [...ids, order.id])
+  }
+  async function confirmReviewed() {
+    if (confirmationRunning.current || batchRunning.current || !reviewedOrders.length || !canSubmitCurrent || !reviewedSendersReady) return
+    if (productionOrderUnverified && reviewedOrders.length !== 1) { setMessage('生产下单权限尚未实测，请先核对并确认一票工单。'); return }
+    confirmationRunning.current = true; setConfirmationBusy(true); setMessage('')
+    let succeeded = 0, uncertain = 0, failed = 0
+    const results = new Map<string, SubmissionResult>()
+    const errors: string[] = []
+    for (const order of reviewedOrders) {
+      setBusy(order.id)
+      try {
+        const result = await request<SubmissionResult>(`/api/shipping/ledger/${encodeURIComponent(order.id)}/confirm`, { method: 'POST', body: JSON.stringify({ connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, serviceId: Number(serviceId) || undefined }) })
+        if ((result.id && result.id !== order.id) || (result.orderId && result.orderId !== order.id)) throw new ShippingWorkbenchRequestError('下单回执工单编号不一致，请查回原单。', 200, 'client_invalid_response')
+        results.set(order.id, result)
+        if (successfulSubmission(result)) succeeded += 1
+        else if (result.status === 'order_failed') failed += 1
+        else uncertain += 1
+      } catch (error) {
+        if (definiteRejection(error)) { failed += 1; errors.push(`${order.orderNo}：${(error as Error).message}`) }
+        else { uncertain += 1; results.set(order.id, { status: 'order_unknown', waybill: null }) }
+      }
+      setOrders(rows => rows.map(item => results.has(item.id) ? applySubmission(item, results.get(item.id)!) : item))
     }
-    const reason = action === 'return' ? window.prompt('请输入驳回原因')?.trim() : undefined
-    if (action === 'return' && !reason) return
-    if (action === 'confirm') setPendingProductionReviewId('')
+    let refreshError = ''
+    try {
+      const refreshed = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+      setOrders(refreshed.records.map(item => results.has(item.id) ? applySubmission(item, results.get(item.id)!) : item))
+    } catch (error) { refreshError = ` 台账刷新失败：${(error as Error).message}` }
+    setReviewIds(ids => ids.filter(id => !results.has(id)))
+    const first = reviewedOrders.find(order => results.has(order.id))
+    if (first) { setSelectedId(first.id); setManualWaybill(results.get(first.id)?.waybill || ''); setTracking(null); trackingRequest.current += 1 }
+    confirmationRunning.current = false; setConfirmationBusy(false); setBusy('')
+    setMessage(`${isSimulation ? '模拟' : '正式'}下单：成功 ${succeeded} 票；结果待确认 ${uncertain} 票；失败 ${failed} 票。${uncertain ? '下单结果待确认，请查回原单，勿重复下单。' : ''}${errors.join('；')}${refreshError}`)
+  }
+  async function returnOrder(order: ShipmentOrder) {
+    if (busy || confirmationRunning.current) return
+    const reason = window.prompt('请输入退回工单原因')?.trim()
+    if (!reason) return
     setBusy(order.id); setMessage('')
     try {
-      const result = await request<SubmissionResult>(`/api/shipping/ledger/${order.id}/${action}`, { method: 'POST', body: JSON.stringify(action === 'return' ? { reason } : { connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, serviceId: Number(serviceId) || undefined }) })
-      if (action === 'confirm') setOrders(rows => rows.map(item => item.id === order.id ? applySubmission(item, result) : item))
-      let refreshError = ''
-      try {
-        const refreshed = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
-        setOrders(refreshed.records.map(item => action === 'confirm' && item.id === order.id ? applySubmission(item, result) : item))
-      } catch (error) { refreshError = ` 台账刷新失败：${(error as Error).message}` }
-      setMessage((action === 'confirm' ? successfulSubmission(result) ? `${isSimulation ? '模拟' : '已'}确认下单，运单 ${result.waybill}。` : '下单结果待确认，请查回原单，勿重复下单。' : '已驳回并记录原因。') + refreshError)
-    } catch (error) {
-      if (action === 'confirm' && !definiteRejection(error)) {
-        const pending: SubmissionResult = { status: 'order_unknown', waybill: null }
-        setOrders(rows => rows.map(item => item.id === order.id ? applySubmission(item, pending) : item))
-        try {
-          const refreshed = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
-          setOrders(refreshed.records.map(item => item.id === order.id ? applySubmission(item, pending) : item))
-        } catch { /* The original order remains available for reconciliation. */ }
-        setMessage('下单结果待确认，请查回原单，勿重复下单。')
-      } else setMessage((error as Error).message)
-    } finally { setBusy('') }
+      await request(`/api/shipping/ledger/${encodeURIComponent(order.id)}/return`, { method: 'POST', body: JSON.stringify({ reason }) })
+      setOrders(rows => rows.map(item => item.id === order.id ? { ...item, status: 'returned' } : item))
+      setReviewIds(ids => ids.filter(id => id !== order.id))
+      setMessage('工单已退回并记录原因，未向顺丰下单。')
+    } catch (error) { setMessage((error as Error).message) }
+    finally { setBusy('') }
   }
   async function refreshTracking(number = manualWaybill || selected?.waybill || '') {
     if (!number) return
@@ -255,7 +282,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     } finally { if (currentRequest === trackingRequest.current) setTrackingBusy(false) }
   }
   async function cancelSelected() {
-    if (!selected || selected.status !== 'waybill_created') return
+    if (!selected || selected.status !== 'waybill_created' || confirmationRunning.current || busy) return
     setBusy(selected.id)
     try { await request(`/api/shipping/ledger/${selected.id}/cancel`, { method: 'POST', body: '{}' }); setOrders(items => items.map(item => item.id === selected.id ? { ...item, status: 'cancelled' } : item)); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false); setMessage(isSimulation ? '模拟运单已取消，没有操作真实运单。' : '顺丰运单已取消。') } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
   }
@@ -268,13 +295,13 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
         <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div>
       </div>
     </header>
-    {simulation && <div className={styles.simulationNotice} role="note"><strong>模拟体验</strong> 地址、单号和轨迹均为示例，仅在当前页面演示，不向顺丰下单、不产生费用。<span>先解析左侧4条地址 → 修正手机号 → 模拟下单 → 查看台账、轨迹与取消；中栏还有待确认的销售提报。</span></div>}
+    {simulation && <div className={styles.simulationNotice} role="note"><strong>模拟体验</strong> 地址、单号和轨迹均为示例，仅在当前页面演示，不向顺丰下单、不产生费用。<span>左栏解析并提交工单 → 中栏核对并模拟确认下单 → 右栏查看运单、轨迹与取消。销售匿名提报直接进入中栏。</span></div>}
 
     {message && <div className={styles.toast} role="status">{message}</div>}
-    {productionOrderUnverified && <div className={styles.notice} role="status">Production只读连接已通过，但下单权限尚未实测。请先从台账选择一票，在右侧核对完整资料并单票确认；本次首票实测前，批量下单保持禁用。</div>}
+    {productionOrderUnverified && <div className={styles.notice} role="status">生产连接已验证，下单权限尚未实测。可正常提报工单；请先在中栏核对并确认一票，之后再批量正式下单。</div>}
     <div className={styles.columns}>
       <section className={styles.column} aria-label="批量寄件操作台">
-        <div className={styles.columnHeader}><div><span className={styles.step}>01</span><h2>批量寄件</h2></div><small>粘贴 · 纠错 · 下单</small></div>
+        <div className={styles.columnHeader}><div><span className={styles.step}>01</span><h2>批量提报工单</h2></div><small>操作员录入 · 纠错 · 提报</small></div>
         <div className={styles.scrollBody}>
           <div className={styles.segmented} role="group" aria-label="地址录入方式"><button aria-pressed={entryMode === 'text'} className={entryMode === 'text' ? styles.active : ''} disabled={inputLocked} onClick={() => setEntryMode('text')}>文本解析</button><button aria-pressed={entryMode === 'file'} className={entryMode === 'file' ? styles.active : ''} disabled={inputLocked} onClick={() => setEntryMode('file')}>文件导入</button></div>
           {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" disabled={inputLocked} onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><button className={styles.linkButton} onClick={() => void downloadTemplate()}>下载标准模板.xlsx</button></div> : <div className={styles.textParser}><p>支持多位收件人；同一人的姓名、电话和地址可分行，空行有助于分票。解析后请核对每票资料。</p><textarea aria-label="多行地址文本" rows={6} maxLength={100000} disabled={inputLocked} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'姓名：示例甲\n电话：13800000000\n地址：广东省深圳市南山区示例路88号\n\n示例乙 13900000000 上海市浦东新区示例路66号'}/><div className={styles.parserActions}><button className={styles.secondaryButton} disabled={!bulkText.trim() || inputLocked} onClick={parseBulk}>解析为寄件行</button>{simulation && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setBulkText(simulation.sampleText)}>重填示例地址</button>}</div></div>}
@@ -285,15 +312,15 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
             return <article key={row.id} className={`${styles.batchRow} ${!valid || row.result === 'failed' ? styles.invalidRow : ''}`}>
               <div className={styles.rowTop}>
                 <b>#{String(row.id).padStart(2, '0')}</b>
-                {row.result === 'success' ? <span className={styles.good}><CheckCircle2 size={12}/>{row.waybill}</span>
-                  : row.result === 'unknown' ? <span className={styles.bad}>结果待确认</span>
+                {row.result === 'success' ? <span className={styles.good}><CheckCircle2 size={12}/>已提报 · {row.orderNo}</span>
+                  : row.result === 'unknown' ? <span className={styles.bad}>回执待确认</span>
                   : row.result === 'pending' ? <span className={styles.good}>提交中</span>
                   : valid ? <span className={styles.good}><CheckCircle2 size={12}/>正常</span>
                   : <span className={styles.bad}><AlertTriangle size={12}/>需修正</span>}
               </div>
               <div className={styles.batchFields}>{([
                 { field: 'recipient', label: '收件人', placeholder: '请补充收件人姓名' },
-                { field: 'phone', label: '联系电话', placeholder: '请输入11位收件人手机号' },
+                { field: 'phone', label: '联系电话', placeholder: '手机号或带区号的固话' },
                 { field: 'address', label: '收件地址', placeholder: '请补充省市区、街道和门牌号' },
               ] as const).map(({ field, label, placeholder }) => {
                 const inputId = `shipping-batch-${row.id}-${field}`
@@ -302,25 +329,63 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
                 return <label key={field} htmlFor={inputId} className={`${styles.batchField} ${field === 'address' ? styles.batchAddress : ''}`}>
                   <span>{label}</span>
                   <input id={inputId} aria-label={`第${row.id}行${label}`} aria-invalid={problems.length > 0} aria-describedby={problems.length ? errorId : undefined}
-                    type={field === 'phone' ? 'tel' : 'text'} placeholder={placeholder} disabled={batchBusy || !maySubmitRow(row)}
+                    type={field === 'phone' ? 'tel' : 'text'} placeholder={placeholder} disabled={batchBusy || confirmationBusy || !maySubmitRow(row)}
                     value={row[field]} onChange={event => updateBatch(row.id, field, event.target.value)}/>
                   {problems.length > 0 && <small id={errorId} className={styles.fieldError}>{problems.join('；')}</small>}
                 </label>
               })}</div>
               {row.originalText && <details className={styles.originalText}><summary>查看原文</summary><pre aria-label={`第${row.id}票原文`}>{row.originalText}</pre></details>}
               {row.error && <small>{row.error}</small>}
-              {row.result === 'unknown' && row.orderId && <button className={styles.secondaryButton} aria-label={`查回第${row.id}行下单结果`} disabled={batchBusy || busy === row.orderId} onClick={() => void reconcileOrder(row.orderId!)}>{busy === row.orderId ? '查回中…' : '查回下单结果'}</button>}
+              {row.result === 'unknown' && <button className={styles.secondaryButton} aria-label={`重取第${row.id}行工单回执`} disabled={batchBusy} onClick={() => void executeBatch(row.id)}>重取工单回执</button>}
             </article>
           })}</div>
-          <div className={styles.bulkSettings}><h3>统一参数</h3><label>承运商连接<select value={connectionId} onChange={event => changeConnection(event.target.value)}>{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id} disabled={connection.status !== 'connected'}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label><label>寄件人<select disabled><option>{settings.sender.name || '请先配置公司默认寄件人'}</option></select></label><label>月结账号<select value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label><div className={styles.inlineGrid}><label>寄件服务<select value={serviceId} onChange={event => setServiceId(event.target.value)}>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label><label>物品属性<select value={uniformCargo} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div><label>预约上门<select value={pickupWindow} onChange={event => setPickupWindow(event.target.value)}><option>今天 17:00 统一揽收</option><option>明天 10:00 统一揽收</option></select></label></div>
+          <div className={styles.bulkSettings}><h3>工单资料</h3><p className={styles.intakeHint}>此处由操作员录入，提交后进入中栏待审核。销售通过独立提报页提交的工单也会直接进入中栏。</p><p>默认寄件人：{settings.sender.name || '待配置公司寄件人'}<br/>{settings.sender.phone}<br/>{settings.sender.province}{settings.sender.city}{settings.sender.county}{settings.sender.address}</p><label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
         </div>
-        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待下单</strong><small>{successCount ? `${successCount} 票成功 · ` : ''}{uncertainCount ? `${uncertainCount} 票待确认 · ` : ''}{invalidCount} 票异常</small></div><button disabled={!validCount || batchBusy || !canSubmitCurrent || productionOrderUnverified} onClick={() => void executeBatch()}><Truck size={15}/>{batchBusy ? '批量处理中…' : `${isSimulation ? '模拟批量下单' : '批量确认下单'}（${validCount}票）`}</button></footer>
+        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待提报</strong><small>{successCount ? `${successCount} 票已提报 · ` : ''}{uncertainCount ? `${uncertainCount} 票回执待确认 · ` : ''}{invalidCount} 票需修正</small></div><button disabled={!validCount || batchBusy || confirmationBusy} onClick={() => void executeBatch()}><Clipboard size={15}/>{batchBusy ? '提报中…' : `提交工单（${validCount}票）`}</button></footer>
       </section>
 
       <section className={styles.column} aria-label="收寄件台账与待办">
-        <div className={styles.columnHeader}><div><span className={styles.step}>02</span><h2>台账与待办</h2></div><small>{orders.filter(order => order.status === 'awaiting_confirmation').length} 条待确认</small></div>
-        <div className={styles.filters}><div className={styles.segmented}><button className={type === 'all' ? styles.active : ''} onClick={() => setType('all')}>全部</button><button className={type === 'outbound' ? styles.active : ''} onClick={() => setType('outbound')}>寄出件</button><button className={type === 'inbound' ? styles.active : ''} onClick={() => setType('inbound')}>收到件</button></div><div className={styles.quickDates}>{([{ value: 'all', label: '全部日期' }, { value: 'today', label: '今天' }, { value: 'three-days', label: '近3天' }, { value: 'week', label: '本周' }] as const).map(item => <button key={item.value} aria-pressed={dateRange === item.value} onClick={() => setDateRange(item.value)}>{item.label}</button>)}</div><select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待确认（销售提报）</option><option value="order_unknown">下单结果待确认</option><option value="ordering">下单中</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="order_failed">异常件</option></select><label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="销售、客户、收件人、运单号"/></label></div>
-        <div className={styles.orderList}>{ledgerLoading ? <p className={styles.listHint}>正在读取台账…</p> : !filtered.length && <p className={styles.listHint}>暂无匹配单据</p>}{filtered.map(order => <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`} onClick={() => { setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false) }}><div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div><div className={styles.cardCore}><div><small>客户</small><strong>{customerOf(order)}</strong></div><ChevronRight size={15}/><div><small>收件人</small><strong>{order.input.recipient.name}</strong></div></div>{order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}<div className={styles.cardMeta}><span>{order.waybill || order.orderNo}</span><time>{new Date(order.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>{order.status === 'awaiting_confirmation' && <div className={styles.cardActions}><button className={styles.reject} disabled={busy === order.id} onClick={event => { event.stopPropagation(); void act(order, 'return') }}>驳回</button><button disabled={busy === order.id} onClick={event => { event.stopPropagation(); void act(order, 'confirm') }}>{isSimulation ? '模拟确认下单' : '确认下单'}</button></div>}</article>)}</div>
+        <div className={styles.columnHeader}><div><span className={styles.step}>02</span><h2>工单审核与下单</h2></div><small>{orders.filter(order => order.status === 'awaiting_confirmation').length} 条待审核</small></div>
+        <div className={styles.filters}>
+          <div className={styles.segmented}><button className={type === 'all' ? styles.active : ''} onClick={() => setType('all')}>全部</button><button className={type === 'outbound' ? styles.active : ''} onClick={() => setType('outbound')}>寄出件</button><button className={type === 'inbound' ? styles.active : ''} onClick={() => setType('inbound')}>收到件</button></div>
+          <div className={styles.quickDates}>{([{ value: 'all', label: '全部日期' }, { value: 'today', label: '今天' }, { value: 'three-days', label: '近3天' }, { value: 'week', label: '本周' }] as const).map(item => <button key={item.value} aria-pressed={dateRange === item.value} onClick={() => setDateRange(item.value)}>{item.label}</button>)}</div>
+          <select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待审核工单</option><option value="returned">已退回工单</option><option value="order_unknown">下单结果待确认</option><option value="ordering">下单中</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="order_failed">异常件</option></select>
+          <label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="销售、客户、收件人、工单号、运单号"/></label>
+        </div>
+        <div className={styles.orderList}>
+          {reviewedOrders.length > 0 && <section className={styles.bulkSettings} aria-label="正式下单参数">
+            <h3>所选 {reviewedOrders.length} 票的正式下单参数</h3>
+            <label>承运商连接<select disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id} disabled={connection.status !== 'connected'}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
+            <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>
+            <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => setServiceId(event.target.value)}>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+            <p className={styles.intakeHint}>请逐票核对下方完整收寄资料。确认后才向顺丰提交订单并请求揽收；实际寄件人按各工单保存的资料使用。</p>
+            <p className={styles.intakeHint}>运费以顺丰实际结算为准。{productionOrderUnverified ? '生产首票需单独确认。' : ''}</p>
+            {!canSubmitCurrent && <p className={styles.bad}>连接、月结账号或寄件服务未就绪，请在配置中心处理后正式下单。</p>}
+          </section>}
+          {ledgerLoading ? <p className={styles.listHint}>正在读取台账…</p> : !filtered.length && <p className={styles.listHint}>暂无匹配单据</p>}
+          {filtered.map(order => {
+            const senderReview = senderForReview(order, settings.sender)
+            return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`} onClick={() => { setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false) }}>
+            <div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.intakeSource === 'owner_web' ? '操作员提报' : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div>
+            <div className={styles.cardCore}><div><small>客户</small><strong>{customerOf(order)}</strong></div><ChevronRight size={15}/><div><small>收件人</small><strong>{order.input.recipient.name}</strong></div></div>
+            {order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}
+            <div className={styles.cardMeta}><span>{order.waybill || order.orderNo}</span><time>{new Date(order.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>
+            {order.status === 'awaiting_confirmation' && <>
+              <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
+                <label className={styles.reviewSelection}><input type="checkbox" aria-label={`核对并选择工单 ${order.orderNo}`} disabled={confirmationBusy || !!busy} checked={reviewIds.includes(order.id)} onChange={() => toggleReview(order)}/>核对工单</label>
+                <button className={styles.reject} disabled={confirmationBusy || !!busy} onClick={() => void returnOrder(order)}>退回工单</button>
+              </div>
+              {reviewIds.includes(order.id) && <section className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
+                <h3>正式下单前核对</h3>
+                {senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>公司寄件资料不完整。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
+                <p><b>收件人</b><br/>{order.input.recipient.name} · {order.input.recipient.phone}<br/>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}{order.input.recipient.address}</p>
+                <p><b>物品</b> {order.input.cargo} · {order.input.weight}kg<br/>服务偏好：{order.input.servicePreference === 'urgent' ? '加急' : '标准'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>
+                {order.input.submittedBy && <p>提报销售：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}
+              </section>}
+            </>}
+          </article>})}
+        </div>
+        <footer className={styles.stickyFooter}><div><strong>已选 {reviewedOrders.length} 票工单</strong><small>核对后确认才通知顺丰</small></div><button disabled={!reviewedOrders.length || confirmationBusy || batchBusy || !!busy || !canSubmitCurrent || !reviewedSendersReady || (productionOrderUnverified && reviewedOrders.length !== 1)} onClick={() => void confirmReviewed()}><Truck size={15}/>{confirmationBusy ? '正式下单中…' : `${isSimulation ? '模拟确认并下单' : '批量确认并下单'}（${reviewedOrders.length}票）`}</button></footer>
       </section>
 
       <section className={styles.column} aria-label="单据详情与物流轨迹">
@@ -338,7 +403,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
                 <div><span>{isSimulation ? '模拟单号' : selected.waybill ? '承运商运单' : '业务提报单'}</span><strong>{selected.waybill || selected.orderNo}</strong></div>
                 <div className={styles.detailActions}>
                   <button aria-label="复制单号" onClick={() => void navigator.clipboard?.writeText(selected.waybill || selected.orderNo)}><Clipboard size={15}/></button>
-                  {(selected.status === 'order_unknown' || selected.status === 'ordering') && <button className={styles.secondaryButton} aria-label="查回所选单据下单结果" disabled={batchBusy || busy === selected.id} onClick={() => void reconcileOrder(selected.id)}>{busy === selected.id ? '查回中…' : '查回下单结果'}</button>}{selected.status === 'waybill_created' && <button className={styles.cancelButton} disabled={busy === selected.id} onClick={() => void cancelSelected()}>{isSimulation ? '模拟取消运单' : '取消运单'}</button>}
+                  {(selected.status === 'order_unknown' || selected.status === 'ordering') && <button className={styles.secondaryButton} aria-label="查回所选单据下单结果" disabled={batchBusy || confirmationBusy || !!busy} onClick={() => void reconcileOrder(selected.id)}>{busy === selected.id ? '查回中…' : '查回下单结果'}</button>}{selected.status === 'waybill_created' && <button className={styles.cancelButton} disabled={confirmationBusy || !!busy} onClick={() => void cancelSelected()}>{isSimulation ? '模拟取消运单' : '取消运单'}</button>}
                 </div>
               </div>
               <div className={styles.factGrid}>
@@ -356,17 +421,6 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
                 {selected.input.specialRequirements && <p><AlertTriangle size={13}/>{selected.input.specialRequirements}</p>}
               </div>
             </section>
-            {pendingProductionReviewId === selected.id && <section className={styles.productionReview} role="group" aria-label="首票Production订单复核">
-              <h3>首票Production订单复核</h3>
-              <p><b>寄件人</b><br/>{settings.sender.name} · {settings.sender.phone}<br/>{settings.sender.province}{settings.sender.city}{settings.sender.county}{settings.sender.address}</p>
-              <p><b>收件人</b><br/>{selected.input.recipient.name} · {selected.input.recipient.phone}<br/>{selected.input.recipient.province}{selected.input.recipient.city}{selected.input.recipient.county}{selected.input.recipient.address}</p>
-              <p>{customerOf(selected)} · {selected.input.cargo} · {selected.input.weight}kg · {selectedServices.find(service => String(service.id) === serviceId)?.name || selected.input.serviceName || '服务待选'} · {selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '月结账号待选'}</p>
-              <small>确认将立即向顺丰Production提交此票并按月结结算；页面没有实时报价，运费以顺丰实际结算为准。请确认已核对收寄信息及费用安排。</small>
-              <div className={styles.reviewActions}>
-                <button className={styles.secondaryButton} disabled={busy === selected.id} onClick={() => setPendingProductionReviewId('')}>返回</button>
-                <button className={styles.reviewConfirm} disabled={busy === selected.id || !canSubmitCurrent} onClick={() => void act(selected, 'confirm', true)}>{busy === selected.id ? '提交中…' : '确认首票Production下单'}</button>
-              </div>
-            </section>}
             <section className={styles.trackingPane}>
               <div className={styles.trackTop}>
                 <div>
