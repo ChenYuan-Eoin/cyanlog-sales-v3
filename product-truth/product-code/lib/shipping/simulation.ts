@@ -54,7 +54,7 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
     const method = init?.method || 'GET'
     if (method === 'GET' && url === '/api/shipping/ledger?limit=50') return { records }
     if (method !== 'POST') throw new Error('模拟体验不支持此操作。')
-    const body = JSON.parse(String(init?.body || '{}')) as { key?: string; input?: ShippingInput; waybill?: string; reason?: string }
+    const body = JSON.parse(String(init?.body || '{}')) as { key?: string; input?: ShippingInput; waybill?: string; reason?: string; payment?: unknown }
     if (url === '/api/shipping/owner/orders') {
       if (!body.key || !body.input?.recipient?.name) throw new Error('请先完成示例收件资料。')
       const previous = createdByKey.get(body.key)
@@ -83,6 +83,8 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
         if (!body.reason?.trim()) throw new Error('请填写退回工单原因。')
         order.status = 'returned'
       } else {
+        const payment = orderSelectionSchema.shape.payment.parse(body.payment)
+        order.input.payment = payment || order.input.payment || 'sender_monthly'
         order.status = 'waybill_created'
         order.waybill = `DEMO-${String(++sequence).padStart(6, '0')}`
       }
@@ -92,3 +94,4 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
 
   return async <T>(url: string, init?: RequestInit) => structuredClone(dispatch(url, init)) as T
 }
+import { orderSelectionSchema } from './validation'

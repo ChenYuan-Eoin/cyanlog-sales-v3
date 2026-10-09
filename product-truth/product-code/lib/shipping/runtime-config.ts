@@ -5,7 +5,7 @@ import { getDefaultOrgId } from '@/lib/scoped-access'
 import { ShippingError } from './config'
 import { decryptShippingSecret } from './connections'
 import { contactSchema } from './validation'
-import { emptyContact, type Contact, type ShippingSettings } from './types'
+import { emptyContact, type Contact, type ShippingSettings, type ShippingPayment } from './types'
 
 const servicesSchema = z.array(z.object({ id: z.number().int().positive(), name: z.string().min(1).max(40), preference: z.enum(['standard', 'urgent']).default('standard') })).max(20)
 const credentialsSchema = z.object({ partnerId: z.string().min(1), checkWord: z.string().min(1) }).strict()
@@ -17,7 +17,7 @@ export type ShippingRuntimeConfig = {
   partnerId: string
   checkWord: string
   services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }>
-  billingAccountId: string
+  billingAccountId: string | null
   billingAccount: string
   billingAccountTail: string
   senderProfileId: string | null
@@ -96,23 +96,38 @@ export async function getPublicShippingDefaults(): Promise<{ orgId: string; send
 export async function resolvePublicShippingOrgId() { return (await getPublicShippingDefaults()).orgId }
 export async function getPublicDefaultSender(): Promise<Contact> { return (await getPublicShippingDefaults()).sender }
 
-export async function getShippingRuntimeConfig(args: { orgId: string; billingAccountId?: string; connectionId?: string; requireOrderCapability?: boolean; allowHistorical?: boolean; senderOverride?: Contact }): Promise<ShippingRuntimeConfig> {
+export async function getShippingRuntimeConfig(args: { orgId: string; billingAccountId?: string | null; connectionId?: string; payment?: ShippingPayment; requireOrderCapability?: boolean; allowHistorical?: boolean; senderOverride?: Contact }): Promise<ShippingRuntimeConfig> {
   const suppliedSender = args.senderOverride === undefined ? undefined : contactSchema.safeParse(args.senderOverride)
   if (suppliedSender && !suppliedSender.success) throw new ShippingError(400, '工单寄件人资料不完整或格式无效，请退回补齐。', 'validation')
-  let accountQuery = supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,account_ciphertext,account_tail,status').eq('org_id', args.orgId)
-  if (!args.allowHistorical) accountQuery = accountQuery.eq('status', 'active')
-  if (args.billingAccountId) accountQuery = accountQuery.eq('id', args.billingAccountId)
-  else accountQuery = accountQuery.eq('is_default', true)
-  const { data: account, error: accountError } = await accountQuery.maybeSingle()
-  if (accountError) throw new ShippingError(503, '月结账号读取失败。')
-  if (!account) throw new ShippingError(409, args.billingAccountId ? '所选月结账号不存在或已停用。' : '请先设置一个活动的默认月结账号。')
-  if (args.connectionId && account.connection_id !== args.connectionId) throw new ShippingError(409, '所选月结账号与快递连接不匹配。')
+  if (!args.orgId?.trim()) throw new ShippingError(403, '缺少组织范围。')
+  const payment = args.payment || 'sender_monthly'
+  const monthlyRequired = args.requireOrderCapability !== false && payment === 'sender_monthly'
+  let account: { id: string; connection_id: string; account_ciphertext: string; account_tail: string } | null = null
+  // A stored connection is sufficient for query/cancel/tracking. A new cash or
+  // recipient-paid order must not depend on reading a monthly billing account.
+  const billingAccountId = monthlyRequired || args.requireOrderCapability === false ? args.billingAccountId : undefined
+  if (monthlyRequired || billingAccountId) {
+    let accountQuery = supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,account_ciphertext,account_tail,status').eq('org_id', args.orgId)
+    if (!args.allowHistorical) accountQuery = accountQuery.eq('status', 'active')
+    if (billingAccountId) accountQuery = accountQuery.eq('id', billingAccountId)
+    else {
+      accountQuery = accountQuery.eq('is_default', true)
+      if (args.connectionId) accountQuery = accountQuery.eq('connection_id', args.connectionId)
+    }
+    const { data, error } = await accountQuery.maybeSingle()
+    if (error) throw new ShippingError(503, '月结账号读取失败。')
+    account = data
+    if (!account && (monthlyRequired || billingAccountId)) throw new ShippingError(409, billingAccountId ? '所选月结账号不存在或已停用。' : '请先设置一个活动的默认月结账号。')
+  }
+  if (args.connectionId && account && account.connection_id !== args.connectionId) throw new ShippingError(409, '所选月结账号与快递连接不匹配。')
+  const connectionId = args.connectionId || account?.connection_id
+  if (!connectionId) throw new ShippingError(409, '请先选择快递连接。')
 
   const { data: connection, error: connectionError } = await supabaseAdmin.from('shipping_carrier_connections')
     .select('id,environment,credentials_ciphertext,connection_status,authorized_services,order_capability,partner_id_tail')
-    .eq('org_id', args.orgId).eq('id', account.connection_id).eq('carrier_key', 'sf').maybeSingle()
+    .eq('org_id', args.orgId).eq('id', connectionId).eq('carrier_key', 'sf').maybeSingle()
   if (connectionError) throw new ShippingError(503, '快递连接读取失败。')
-  if (!connection || (!args.allowHistorical && connection.connection_status !== 'connected')) throw new ShippingError(409, '所选快递连接尚未通过沙盒连通检查。')
+  if (!connection || (!args.allowHistorical && connection.connection_status !== 'connected')) throw new ShippingError(409, '所选快递连接尚未通过当前环境连通检查。')
   if (connection.environment === 'production' && args.requireOrderCapability !== false && !productionOrderCapabilityAllowsAttempt(connection.order_capability)) throw new ShippingError(409, 'Production下单能力标记为不可用，请联系配置管理员复核。')
   let senderContact = emptyContact(), senderProfileId: string | null = null
   let senderSource = 'not_required'
@@ -136,15 +151,15 @@ export async function getShippingRuntimeConfig(args: { orgId: string; billingAcc
   let billingAccount: string
   try {
     credentials = credentialsSchema.parse(JSON.parse(decryptShippingSecret(connection.credentials_ciphertext)))
-    billingAccount = decryptShippingSecret(account.account_ciphertext)
+    billingAccount = account ? decryptShippingSecret(account.account_ciphertext) : ''
   } catch (error) {
     if (error instanceof ShippingError) throw error
     throw new ShippingError(503, '寄件连接凭据无法读取，请由配置管理员重新保存。')
   }
   const services = servicesSchema.safeParse(connection.authorized_services || [])
-  if (!services.success || services.data.length === 0) throw new ShippingError(409, '该连接尚未配置已授权服务产品。')
+  if (!services.success || (args.requireOrderCapability !== false && services.data.length === 0)) throw new ShippingError(409, '该连接尚未配置已授权服务产品。')
   const environment = connection.environment as 'sandbox' | 'production'
-  const connectionKey = createHash('sha256').update([args.orgId, connection.id, account.id, environment].join(':')).digest('hex')
-  const snapshot = { carrier: 'sf', connectionId: connection.id, environment, billingAccountId: account.id, billingAccountTail: account.account_tail, senderProfileId, senderSource, services: services.data }
-  return { orgId: args.orgId, connectionId: connection.id, environment, ...credentials, services: services.data, billingAccountId: account.id, billingAccount, billingAccountTail: account.account_tail, senderProfileId, sender: senderContact, connectionKey, snapshot }
+  const connectionKey = createHash('sha256').update([args.orgId, connection.id, account?.id || 'no-monthly-account', environment].join(':')).digest('hex')
+  const snapshot = { carrier: 'sf', connectionId: connection.id, environment, billingAccountId: account?.id || null, billingAccountTail: account?.account_tail || '', senderProfileId, senderSource, ...(args.requireOrderCapability === false ? {} : { payment }), services: services.data }
+  return { orgId: args.orgId, connectionId: connection.id, environment, ...credentials, services: services.data, billingAccountId: account?.id || null, billingAccount, billingAccountTail: account?.account_tail || '', senderProfileId, sender: senderContact, connectionKey, snapshot }
 }

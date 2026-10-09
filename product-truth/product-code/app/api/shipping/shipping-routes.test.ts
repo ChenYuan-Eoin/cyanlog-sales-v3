@@ -42,6 +42,16 @@ describe('shipping access is server enforced', () => {
     expect(r.status).toBe(400)
     expect(runtimeConfig).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled()
   })
+  it('tracks a nonmonthly order using its saved connection without requiring an account', async () => {
+    auth.mockResolvedValue({ id: 'allowed' })
+    ownedCollaborative.mockResolvedValue({ org_id: 'org-1', provider_key: 'sf', carrier_connection_id: 'conn-1', billing_account_id: null, connection_environment: 'sandbox' })
+    runtimeConfig.mockResolvedValue({ ...runtime, billingAccountId: null, billingAccount: '' })
+    const r = await POST(new NextRequest('http://localhost/api/shipping/tracking', { method: 'POST', body: JSON.stringify({ waybill: 'SF1234567890123' }) }))
+    expect(r.status).toBe(200)
+    expect(runtimeConfig).toHaveBeenCalledWith(expect.objectContaining({ connectionId: 'conn-1', billingAccountId: null, requireOrderCapability: false }))
+    expect(userSettings).not.toHaveBeenCalled()
+    expect(query).toHaveBeenCalledOnce()
+  })
   it('rejects a changed historical connection environment before fetching or recording routes', async () => {
     auth.mockResolvedValue({ id: 'allowed' })
     runtimeConfig.mockResolvedValue({ ...runtime, environment: 'production' })

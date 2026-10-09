@@ -17,7 +17,7 @@ const operatorIntakeInputSchema = shippingInputSchema.extend({
 // Legacy fields are accepted for existing clients; they never authorize carrier
 // submission. Actual connection/account/service selection happens at review.
 export const ownerOrderSchema = z.object({ key: z.string().uuid(), input: operatorIntakeInputSchema, confirmed: z.literal(true).optional(), connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional() }).strict()
-export const orderSelectionSchema = z.object({ connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional(), serviceId: z.number().int().positive().optional() }).strict()
+export const orderSelectionSchema = z.object({ payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).optional(), connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional(), serviceId: z.number().int().positive().optional() }).strict()
 const anonymousShippingInputSchema = shippingInputSchema.omit({ serviceId: true }).extend({
   sender: contactSchema,
   servicePreference: z.enum(['standard', 'urgent']).default('standard'),

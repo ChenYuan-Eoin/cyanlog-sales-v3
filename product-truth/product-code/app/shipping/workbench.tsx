@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, Truck, UploadCloud } from 'lucide-react'
-import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShippingInput, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
+import type { Contact, ShippingPayment, ShipmentOrder, ShipmentOrderStatus, ShippingInput, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
 import { buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
 import { parseShippingText, prepareBatchRecipient } from '@/lib/shipping/batch-text'
 import { shippingWorkbenchRequest, ShippingWorkbenchRequestError, isDefinitiveShippingRejection, type ShippingSimulation } from '@/lib/shipping/workbench-client'
@@ -51,6 +51,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const [connectionId, setConnectionId] = useState(settings.connectionId || '')
   const [serviceId, setServiceId] = useState(String(settings.services[0]?.id || ''))
   const [billingAccountId, setBillingAccountId] = useState(settings.defaultBillingAccountId || '')
+  const [payment, setPayment] = useState<ShippingPayment>('sender_monthly')
   const [uniformCargo, setUniformCargo] = useState('文件/合同')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | ShipmentOrderStatus>('all')
@@ -110,7 +111,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.status === 'active')
   const selectedAccount = availableAccounts.find(account => account.id === billingAccountId)
   const canSubmitCurrent = settings.carrierConnections?.length
-    ? Boolean(selectedConnection?.status === 'connected' && availableAccounts.some(account => account.id === billingAccountId) && selectedServices.some(service => String(service.id) === serviceId) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
+    ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.some(service => String(service.id) === serviceId) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
     : settings.canSubmit
   const reviewedOrders = filtered.filter(order => reviewIds.includes(order.id) && order.status === 'awaiting_confirmation')
   const reviewedSendersReady = reviewedOrders.every(order => senderForReview(order, settings.sender).contact !== null)
@@ -231,7 +232,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     for (const order of reviewedOrders) {
       setBusy(order.id)
       try {
-        const result = await request<SubmissionResult>(`/api/shipping/ledger/${encodeURIComponent(order.id)}/confirm`, { method: 'POST', body: JSON.stringify({ connectionId: connectionId || undefined, billingAccountId: billingAccountId || undefined, serviceId: Number(serviceId) || undefined }) })
+        const result = await request<SubmissionResult>(`/api/shipping/ledger/${encodeURIComponent(order.id)}/confirm`, { method: 'POST', body: JSON.stringify({ connectionId: connectionId || undefined, payment, billingAccountId: payment === 'sender_monthly' ? billingAccountId || undefined : undefined, serviceId: Number(serviceId) || undefined }) })
         if ((result.id && result.id !== order.id) || (result.orderId && result.orderId !== order.id)) throw new ShippingWorkbenchRequestError('下单回执工单编号不一致，请查回原单。', 200, 'client_invalid_response')
         results.set(order.id, result)
         if (successfulSubmission(result)) succeeded += 1
@@ -292,7 +293,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
       <div><p>物流协同 / SHIPPING OPS</p><h1>自助收寄</h1></div>
       <div className={styles.topbarActions}>
         {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <><a className={styles.configButton} href="/shipping/demo">模拟体验</a><a className={styles.configButton} href="/sales-portal">销售寄件提报</a></>}
-        <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '连接或月结账号待选择'}</small></div>
+        <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{payment === 'sender_cash' ? '寄方现结' : payment === 'recipient' ? '收方到付' : selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '月结账号待选择'}</small></div>
       </div>
     </header>
     {simulation && <div className={styles.simulationNotice} role="note"><strong>模拟体验</strong> 地址、单号和轨迹均为示例，仅在当前页面演示，不向顺丰下单、不产生费用。<span>左栏解析并提交工单 → 中栏核对并模拟确认下单 → 右栏查看运单、轨迹与取消。销售匿名提报直接进入中栏。</span></div>}
@@ -358,11 +359,12 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
           {reviewedOrders.length > 0 && <section className={styles.bulkSettings} aria-label="正式下单参数">
             <h3>所选 {reviewedOrders.length} 票的正式下单参数</h3>
             <label>承运商连接<select disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id} disabled={connection.status !== 'connected'}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
-            <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>
+            <label>本批付款方式<select disabled={confirmationBusy} value={payment} onChange={event => { setPayment(event.target.value as ShippingPayment); setReviewIds([]) }}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
+            {payment === 'sender_monthly' && <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>}
             <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => setServiceId(event.target.value)}>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
             <p className={styles.intakeHint}>请逐票核对下方完整收寄资料。确认后才向顺丰提交订单并请求揽收；实际寄件人按各工单保存的资料使用。</p>
-            <p className={styles.intakeHint}>运费以顺丰实际结算为准。{productionOrderUnverified ? '生产首票需单独确认。' : ''}</p>
-            {!canSubmitCurrent && <p className={styles.bad}>连接、月结账号或寄件服务未就绪，请在配置中心处理后正式下单。</p>}
+            <p className={styles.intakeHint}>付款方式：{payment === 'sender_monthly' ? '公司月结' : payment === 'sender_cash' ? '寄方现结' : '收方到付'}。运费以顺丰实际结算为准。{productionOrderUnverified ? '生产首票需单独确认。' : ''}</p>
+            {!canSubmitCurrent && <p className={styles.bad}>{payment === 'sender_monthly' ? '连接、月结账号或寄件服务未就绪，请在配置中心处理后正式下单。' : '快递连接或寄件服务未就绪，请在配置中心处理后正式下单。'}</p>}
           </section>}
           {ledgerLoading ? <p className={styles.listHint}>正在读取台账…</p> : !filtered.length && <p className={styles.listHint}>暂无匹配单据</p>}
           {filtered.map(order => {

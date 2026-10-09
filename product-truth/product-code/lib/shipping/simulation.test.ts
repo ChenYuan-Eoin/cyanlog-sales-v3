@@ -11,6 +11,13 @@ type Receipt = { orderId: string; orderNo: string; status: string; waybill: stri
 afterEach(() => vi.unstubAllGlobals())
 
 describe('shipping demo uses the authenticated order receipt contract', () => {
+  it('stores the payment explicitly chosen at confirmation', async () => {
+    const request = createShippingSimulation()
+    const receipt = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'payment-example', input }) })
+    await request(`/api/shipping/ledger/${receipt.orderId}/confirm`, { method: 'POST', body: JSON.stringify({ payment: 'recipient' }) })
+    const ledger = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+    expect(ledger.records.find(order => order.id === receipt.orderId)?.input.payment).toBe('recipient')
+  })
   it('creates only a review work order without a waybill or network access', async () => {
     const fetch = vi.fn(() => { throw new Error('Demo must remain in memory') })
     vi.stubGlobal('fetch', fetch)

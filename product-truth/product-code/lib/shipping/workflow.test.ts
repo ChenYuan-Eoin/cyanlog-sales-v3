@@ -20,7 +20,7 @@ import { cancelShipmentOrder, confirmAndSubmitShipment, reconcileShipmentOrder, 
 import { ShippingError } from './config'
 
 const runtime = { orgId: 'org-A', connectionId: 'connection-1', environment: 'sandbox', partnerId: 'synthetic-partner', checkWord: 'synthetic-checkword', services: [{ id: 1, name: '标快', preference: 'standard' }], billingAccountId: 'account-1', billingAccount: '123456', billingAccountTail: '3456', senderProfileId: 'sender-1', sender: { name: 'A', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '测试路1号' }, connectionKey: 'key', snapshot: {} }
-const order = { id: 'order-1', org_id: 'org-A' as string | null, intake_source: 'owner_web', status: 'waybill_created', shipment_payload: { source: 'manual', serviceId: 1, recipient: { ...runtime.sender, name: '示例收件人' } } as Record<string, unknown>, provider_key: 'sf', provider_order_id: 'provider-order-1', carrier_connection_id: 'connection-1', billing_account_id: 'account-1', sender_profile_id: 'sender-1', connection_environment: 'sandbox', billing_account_tail: '3456', shipping_config_snapshot: {} }
+const order = { id: 'order-1', org_id: 'org-A' as string | null, intake_source: 'owner_web', status: 'waybill_created', shipment_payload: { source: 'manual', serviceId: 1, recipient: { ...runtime.sender, name: '示例收件人' } } as Record<string, unknown>, provider_key: 'sf', provider_order_id: 'provider-order-1', carrier_connection_id: 'connection-1', billing_account_id: 'account-1' as string | null, sender_profile_id: 'sender-1', connection_environment: 'sandbox', billing_account_tail: '3456', shipping_config_snapshot: {} }
 let loadedOrder = { ...order }
 let claimLost = false
 const queries: Array<{ table: string; action: string; filters: Array<[string, unknown]>; values?: Record<string, unknown> }> = []
@@ -243,6 +243,25 @@ describe('historical carrier snapshot operations', () => {
 })
 
 describe('workflow uses a carrier contract, not provider-specific calls', () => {
+  it('freezes nonmonthly payment and recovers/cancels it without a billing account snapshot', async () => {
+    loadedOrder = { ...order, status: 'awaiting_confirmation', billing_account_id: null }
+    mocks.runtimeConfig.mockResolvedValue({ ...runtime, billingAccountId: null, billingAccount: '', billingAccountTail: '' })
+    await confirmAndSubmitShipment(order.id, 'operator-1', 'org-A', { payment: 'recipient', connectionId: runtime.connectionId })
+    expect(loadedOrder.shipment_payload.payment).toBe('recipient')
+    expect(loadedOrder.shipping_config_snapshot).toMatchObject({ payment: 'recipient' })
+    expect(loadedOrder.billing_account_id).toBeNull()
+    expect(mocks.runtimeConfig).toHaveBeenCalledWith(expect.objectContaining({ payment: 'recipient', billingAccountId: undefined, connectionId: runtime.connectionId }))
+    loadedOrder.status = 'order_unknown'
+    await expect(reconcileShipmentOrder(order.id, 'org-A')).resolves.toMatchObject({ status: 'waybill_created' })
+    await expect(cancelShipmentOrder(order.id, 'operator-1', 'org-A')).resolves.toMatchObject({ status: 'cancelled' })
+    expect(mocks.lookup).toHaveBeenCalledOnce()
+    expect(mocks.cancel).toHaveBeenCalledOnce()
+  })
+  it('does not change a previously confirmed payment method during retry', async () => {
+    loadedOrder = { ...order, status: 'confirmed', shipment_payload: { ...order.shipment_payload, payment: 'recipient' } }
+    await expect(confirmAndSubmitShipment(order.id, 'operator-1', 'org-A', { payment: 'sender_monthly' })).rejects.toMatchObject({ status: 409 })
+    expect(mocks.submit).not.toHaveBeenCalled()
+  })
   it('dispatches create, reconcile and cancel through the same installed test adapter', async () => {
     const create = vi.fn().mockResolvedValue('TEST-WAYBILL')
     const lookup = vi.fn().mockResolvedValue('TEST-WAYBILL')

@@ -22,15 +22,15 @@ export async function POST(req: NextRequest) { return shippingHandler(req, async
   if (!owned && !importedSuffix) throw new ShippingError(403, '当前仅支持查询本组织单据或本人已核验的寄出运单。')
   let carrier
   if (ownedLegacy) {
-    if (!ownedLegacy.org_id || !ownedLegacy.carrier_connection_id || !ownedLegacy.billing_account_id) throw new ShippingError(409, '该历史运单没有配置快照，请联系管理员协助查询。')
+    if (!ownedLegacy.org_id || !ownedLegacy.carrier_connection_id) throw new ShippingError(409, '该历史运单没有配置快照，请联系管理员协助查询。')
     carrier = await getHistoricalCarrierAdapter(ownedLegacy.shipping_config_snapshot?.carrier).connect({ expectedEnvironment: ownedLegacy.environment, orgId: ownedLegacy.org_id, connectionId: ownedLegacy.carrier_connection_id, billingAccountId: ownedLegacy.billing_account_id, allowHistorical: true, requireOrderCapability: false })
   } else if (ownedCollaborative) {
-    if (!ownedCollaborative.org_id || !ownedCollaborative.carrier_connection_id || !ownedCollaborative.billing_account_id) throw new ShippingError(409, '该历史运单没有配置快照，请联系管理员协助查询。')
+    if (!ownedCollaborative.org_id || !ownedCollaborative.carrier_connection_id) throw new ShippingError(409, '该历史运单没有配置快照，请联系管理员协助查询。')
     carrier = await getHistoricalCarrierAdapter(ownedCollaborative.provider_key).connect({ expectedEnvironment: ownedCollaborative.connection_environment, orgId: ownedCollaborative.org_id, connectionId: ownedCollaborative.carrier_connection_id, billingAccountId: ownedCollaborative.billing_account_id, allowHistorical: true, requireOrderCapability: false })
   } else {
     const settings = await loadShippingSettings(orgId)
-    if (!settings.defaultBillingAccountId) throw new ShippingError(409, '当前组织尚未配置可用于查询的顺丰连接。')
-    carrier = await getHistoricalCarrierAdapter(undefined).connect({ orgId, billingAccountId: settings.defaultBillingAccountId, requireOrderCapability: false })
+    if (!settings.connectionId && !settings.defaultBillingAccountId) throw new ShippingError(409, '当前组织尚未配置可用于查询的顺丰连接。')
+    carrier = await getHistoricalCarrierAdapter(undefined).connect({ orgId, connectionId: settings.connectionId, billingAccountId: settings.defaultBillingAccountId, requireOrderCapability: false })
   }
   const config = carrier.context
   const result = await carrier.track(input.waybill, importedSuffix || input.phoneSuffix)

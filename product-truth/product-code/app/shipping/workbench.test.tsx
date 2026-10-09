@@ -20,6 +20,29 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it.each(['sender_cash', 'recipient'])('confirms %s without a monthly account after explicit review', async payment => {
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null, input: { ...fixtureOrders[0].input, sender: settings.sender } }
+    const connectionId = '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0'
+    fetcher.mockImplementation(async (url: string) => url.endsWith('/confirm')
+      ? Response.json({ id: order.id, status: 'waybill_created', waybill: 'SF1234567890123' })
+      : Response.json({ records: [order] }))
+    render(<ShippingWorkbench settings={{ ...settings, canSubmit: false, connectionId, carrierConnections: [{ id: connectionId, carrier: 'sf', environment: 'sandbox', status: 'connected', orderCapability: 'verified', services: [{ id: 2, name: '测试服务', preference: 'standard' }] }], billingAccounts: [] }}/>)
+    const review = await screen.findByLabelText(`核对并选择工单 ${order.orderNo}`)
+    fireEvent.click(review)
+    expect(screen.getByRole('button', { name: '批量确认并下单（1票）' })).toHaveProperty('disabled', true)
+    fireEvent.change(screen.getByLabelText('本批付款方式'), { target: { value: payment } })
+    expect(review).toHaveProperty('checked', false)
+    expect(screen.queryByLabelText('月结账号')).toBeNull()
+    fireEvent.click(review)
+    const confirm = screen.getByRole('button', { name: '批量确认并下单（1票）' })
+    expect(confirm).toHaveProperty('disabled', false)
+    fireEvent.click(confirm)
+    await waitFor(() => expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/confirm'))).toBe(true))
+    const [, init] = fetcher.mock.calls.find(([url]) => String(url).endsWith('/confirm'))!
+    const body = JSON.parse(String(init.body))
+    expect(body).toMatchObject({ payment, connectionId, serviceId: 2 })
+    expect(body).not.toHaveProperty('billingAccountId')
+  })
   it('keeps intake usable during configuration outages while disabling formal confirmation', async () => {
     const warning = '寄件配置暂时无法读取，正式下单暂不可用。'
     fetcher.mockImplementation(async (url: string) => url.endsWith('/owner/orders')

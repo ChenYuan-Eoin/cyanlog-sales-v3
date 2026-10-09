@@ -1,5 +1,5 @@
 import { ShippingError } from './config'
-import type { Contact, ShippingInput, TrackingResult } from './types'
+import type { Contact, ShippingInput, ShippingPayment, TrackingResult } from './types'
 import { getShippingRuntimeConfig, selectAuthorizedShippingService } from './runtime-config'
 import { cancelSfOrder, createSfOrder, lookupSfOrder, querySfTracking } from './sf-client'
 
@@ -9,7 +9,7 @@ export type CarrierOrderContext = {
   connectionId: string
   environment: 'sandbox' | 'production'
   connectionKey: string
-  billingAccountId: string
+  billingAccountId: string | null
   billingAccountTail: string
   senderProfileId: string | null
   sender: Contact
@@ -20,7 +20,8 @@ export type CarrierOrderContext = {
 export type CarrierSelection = {
   orgId: string
   connectionId?: string
-  billingAccountId?: string
+  billingAccountId?: string | null
+  payment?: ShippingPayment
   senderOverride?: Contact
   allowHistorical?: boolean
   requireOrderCapability?: boolean

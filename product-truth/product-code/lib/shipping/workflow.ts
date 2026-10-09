@@ -5,7 +5,7 @@ import { shippingStoreForOrg } from './store'
 import { getCarrierAdapter } from './carrier-adapter'
 import { recordShippingCapability } from './connections'
 import { contactSchema } from './validation'
-import type { ShippingInput } from './types'
+import type { ShippingInput, ShippingPayment } from './types'
 
 type ProcessRow = {
   id: string
@@ -22,7 +22,7 @@ type ProcessRow = {
   billing_account_tail: string | null
   shipping_config_snapshot: Record<string, unknown> | null
 }
-type ConfirmationSelection = { connectionId?: string; billingAccountId?: string; serviceId?: number }
+type ConfirmationSelection = { connectionId?: string; billingAccountId?: string; serviceId?: number; payment?: ShippingPayment }
 
 async function loadForAction(id: string, orgId: string): Promise<ProcessRow> {
   if (!orgId?.trim()) throw new ShippingError(403, '当前操作员没有组织寄件权限。')
@@ -39,14 +39,17 @@ async function orderRuntime(row: ProcessRow, orgId: string, selection?: Confirma
   const recipient = contactSchema.safeParse(row.shipment_payload.recipient)
   if (!recipient.success) throw new ShippingError(400, '工单收件人资料不完整或格式无效，请退回补齐。', 'validation')
   if (row.billing_account_id && selection?.billingAccountId && row.billing_account_id !== selection.billingAccountId) throw new ShippingError(409, '寄件单已绑定月结账号，请勿更换；如需更换请退回后重新提交。')
-  const billingAccountId = row.billing_account_id || selection?.billingAccountId
+  const originalPayment = row.shipment_payload.payment || 'sender_monthly'
+  const payment = selection?.payment || originalPayment
+  if (row.status === 'confirmed' && payment !== originalPayment) throw new ShippingError(409, '已确认订单不能更改付款方式，请先核对原单。')
+  const billingAccountId = payment === 'sender_monthly' ? row.billing_account_id || selection?.billingAccountId : undefined
   if (row.carrier_connection_id && selection?.connectionId && row.carrier_connection_id !== selection.connectionId) throw new ShippingError(409, '寄件单已绑定快递连接，不能在确认时切换。')
-  const carrier = await getCarrierAdapter(row.provider_key).connect({ orgId, billingAccountId, connectionId: row.carrier_connection_id || selection?.connectionId, ...(sender.success ? { senderOverride: sender.data } : {}) })
+  const carrier = await getCarrierAdapter(row.provider_key).connect({ orgId, payment, billingAccountId, connectionId: row.carrier_connection_id || selection?.connectionId, ...(sender.success ? { senderOverride: sender.data } : {}) })
   const connection = carrier.context
   const service = carrier.selectService(row.shipment_payload.servicePreference || 'standard', selection?.serviceId || row.shipment_payload.serviceId)
-  const input: ShippingInput = { ...row.shipment_payload, sender: sender.success ? sender.data : connection.sender, recipient: recipient.data, serviceId: service.id, serviceName: service.name }
+  const input: ShippingInput = { ...row.shipment_payload, payment, sender: sender.success ? sender.data : connection.sender, recipient: recipient.data, serviceId: service.id, serviceName: service.name }
   checkShippingPolicy(input, connection.services)
-  const snapshot = { ...connection.snapshot, senderSource: sender.success ? 'workorder' : 'company_default', serviceId: service.id, serviceName: service.name, servicePreference: service.preference }
+  const snapshot = { ...connection.snapshot, payment, senderSource: sender.success ? 'workorder' : 'company_default', serviceId: service.id, serviceName: service.name, servicePreference: service.preference }
   return { orgId, connection, carrier, input, snapshot }
 }
 
@@ -110,7 +113,7 @@ export async function reconcileShipmentOrder(id: string, orgId: string) {
     const { data } = await supabaseAdmin.from('shipping_waybills').select('waybill_no').eq('shipping_order_id', id).maybeSingle()
     return { id, status: 'waybill_created' as const, waybill: data?.waybill_no || null }
   }
-  if (row.status !== 'order_unknown' || !row.provider_order_id || !row.org_id || !row.carrier_connection_id || !row.billing_account_id) throw new ShippingError(409, '当前寄件单没有可查回的配置快照。')
+  if (row.status !== 'order_unknown' || !row.provider_order_id || !row.org_id || !row.carrier_connection_id) throw new ShippingError(409, '当前寄件单没有可查回的配置快照。')
   const carrier = await getCarrierAdapter(row.provider_key).connect({ expectedEnvironment: row.connection_environment, orgId: row.org_id, billingAccountId: row.billing_account_id, connectionId: row.carrier_connection_id, allowHistorical: true, requireOrderCapability: false })
   const connection = carrier.context
   const waybill = await carrier.lookup(row.provider_order_id)
@@ -131,7 +134,7 @@ export async function cancelShipmentOrder(id: string, userId: string, orgId: str
   if (row.status === 'cancelled') return { id, status: 'cancelled' as const }
   getCarrierAdapter(row.provider_key)
   if (row.status !== 'waybill_created' || !row.provider_order_id) throw new ShippingError(409, '只有未揽收且已生成运单的订单可以取消。')
-  if (!row.org_id || !row.carrier_connection_id || !row.billing_account_id) throw new ShippingError(409, '历史订单缺少快递连接快照，无法安全取消。')
+  if (!row.org_id || !row.carrier_connection_id) throw new ShippingError(409, '历史订单缺少快递连接快照，无法安全取消。')
   const carrier = await getCarrierAdapter(row.provider_key).connect({ expectedEnvironment: row.connection_environment, orgId: row.org_id, billingAccountId: row.billing_account_id, connectionId: row.carrier_connection_id, allowHistorical: true, requireOrderCapability: false })
   const connection = carrier.context
   await carrier.cancel(row.provider_order_id)

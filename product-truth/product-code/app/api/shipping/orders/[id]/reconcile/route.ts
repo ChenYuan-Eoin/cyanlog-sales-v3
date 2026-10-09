@@ -12,7 +12,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const record = await shippingStore.get(id, user.id)
     if (!record || record.org_id !== orgId) throw new ShippingError(404, '未找到本人的寄件记录。')
     if (record.status === 'accepted' && record.waybill) return publicRecord(record)
-    if (!record.org_id || !record.carrier_connection_id || !record.billing_account_id) throw new ShippingError(409, '该历史寄件记录没有数据库配置快照，无法查回。')
+    if (!record.org_id || !record.carrier_connection_id) throw new ShippingError(409, '该历史寄件记录没有数据库配置快照，无法查回。')
     const carrier = await getHistoricalCarrierAdapter(record.shipping_config_snapshot?.carrier).connect({ expectedEnvironment: record.environment, orgId: record.org_id, connectionId: record.carrier_connection_id, billingAccountId: record.billing_account_id, allowHistorical: true, requireOrderCapability: false })
     const waybill = await carrier.lookup(id)
     // Missing waybill remains pending/unknown; never infer absence as permission to resend.

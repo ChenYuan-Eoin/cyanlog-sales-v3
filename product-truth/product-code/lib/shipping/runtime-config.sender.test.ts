@@ -28,6 +28,26 @@ beforeEach(() => {
 })
 
 describe('carrier configuration and work-order sender are independent', () => {
+  it.each(['sender_cash', 'recipient'] as const)('resolves %s with a connection and personal sender but no billing account', async payment => {
+    m.rows.shipping_billing_accounts = []
+    const config = await getShippingRuntimeConfig({ orgId: 'org-A', connectionId: 'connection-1', payment, senderOverride: personal })
+    expect(config).toMatchObject({ billingAccountId: null, billingAccount: '', sender: { name: '示例销售' } })
+    expect(config.snapshot).toMatchObject({ payment, billingAccountId: null })
+    expect(m.from.mock.calls.some(([table]) => table === 'shipping_billing_accounts')).toBe(false)
+  })
+  it('still rejects monthly payment without an authorized account', async () => {
+    m.rows.shipping_billing_accounts = []
+    await expect(getShippingRuntimeConfig({ orgId: 'org-A', connectionId: 'connection-1', payment: 'sender_monthly', senderOverride: personal })).rejects.toMatchObject({ status: 409 })
+    expect(m.decrypt).not.toHaveBeenCalled()
+  })
+  it('can query nonmonthly historical orders using only the saved connection', async () => {
+    m.rows.shipping_billing_accounts = []
+    m.rows.shipping_sender_profiles = []
+    m.rows.shipping_carrier_connections[0].authorized_services = []
+    const config = await getShippingRuntimeConfig({ orgId: 'org-A', connectionId: 'connection-1', allowHistorical: true, requireOrderCapability: false })
+    expect(config.billingAccountId).toBeNull()
+    expect(m.from.mock.calls.map(([table]) => table)).toEqual(['shipping_carrier_connections'])
+  })
   it('uses the validated personal sender without requiring or reading a company sender profile', async () => {
     m.rows.shipping_sender_profiles = []
     const config = await getShippingRuntimeConfig({ ...selection, senderOverride: personal })
