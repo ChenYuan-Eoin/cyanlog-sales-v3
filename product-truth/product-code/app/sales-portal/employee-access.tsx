@@ -8,12 +8,12 @@ import MyWorkorders from './my-workorders'
 export type EmployeeProfile = { id: string; email: string; sender: Contact | null; team: string; updatedAt: string }
 const endpoint = '/api/shipping/public/employee'
 async function call(body?: unknown) {
-  const response = await fetch(endpoint, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' })
+  const response = await fetch(endpoint, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store', signal: AbortSignal.timeout(10000) })
   const data = await response.json()
   if (!response.ok) throw new Error(data.error || '员工寄件服务暂不可用')
   return data
 }
-export type EmployeeAccessState = { employee: EmployeeProfile | null; controls: ReactNode; canSubmit: boolean; sessionKey: number; sender: Contact; team: string }
+export type EmployeeAccessState = { employee: EmployeeProfile | null; controls: ReactNode; canSubmit: boolean; unavailableReason: string; sessionKey: number; sender: Contact; team: string }
 export default function EmployeeAccess({ children, requireVerification = false, emailAvailable = true }: { children: (state: EmployeeAccessState) => ReactNode; requireVerification?: boolean; emailAvailable?: boolean }) {
   const [remember, setRemember] = useState(false)
   const [sessionKey, setSessionKey] = useState(0)
@@ -56,7 +56,7 @@ export default function EmployeeAccess({ children, requireVerification = false, 
   const controls = <>
     <section className={`${styles.card} ${styles.accessCard}`} aria-label="邮箱验证">
       <div className={styles.cardTitle}><div><h2>{requireVerification ? '公司要求邮箱验证' : '邮箱验证（可选）'}</h2><p>{requireVerification ? '本公司启用了邮箱验证要求。' : '无需注册、登录或验证码即可提报工单。'} 验证邮箱后可保存个人资料和查看本人历史，本设备会话有效期 60 天。</p></div></div>
-      {loading ? <p role="status">正在读取个人寄件资料…</p> : loadFailed ? <>{feedback}<button type="button" onClick={load}>重新读取资料</button></> : !employee && !emailAvailable ? <p>邮箱验证尚未启用，不影响匿名提报。</p> : !employee ? <form onSubmit={verify}>
+      {loading ? <p role="status">正在读取个人寄件资料…</p> : loadFailed ? <>{feedback}{!requireVerification && <p>暂时无法读取已验证资料，仍可填写下方资料匿名提报，无需登录或验证码。</p>}<button type="button" onClick={load}>重新读取资料</button></> : !employee && !emailAvailable ? <p>邮箱验证尚未启用，不影响匿名提报。</p> : !employee ? <form onSubmit={verify}>
         <fieldset disabled={busy} className={styles.verificationRow}>
           <label>公司邮箱<input type="email" required autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setChallenge(''); setCode(''); setNotice('') }}/></label>
           <button type="button" disabled={!email || now < retryAt} onClick={requestCode}>{now < retryAt ? `${Math.ceil((retryAt - now) / 1000)} 秒后可重发` : '获取验证码'}</button>
@@ -76,5 +76,7 @@ export default function EmployeeAccess({ children, requireVerification = false, 
     </section>
     {employee && <details className={styles.card}><summary>我的提报记录</summary><MyWorkorders key={employee.id}/></details>}
   </>
-  return children({ employee, controls, canSubmit: Boolean((!requireVerification || employee) && !busy && !loading && !loadFailed && contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) }).success && team.trim()), sessionKey, sender, team })
+  const senderCheck = contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) })
+  const unavailableReason = loading ? '正在读取寄件资料，请稍候…' : busy ? '正在处理资料，请稍候…' : requireVerification && !employee ? '公司已要求邮箱验证，请先完成验证。' : !senderCheck.success ? `请完善寄件资料：${senderCheck.error.issues.map(issue => issue.message).join('；')}` : !team.trim() ? '请填写所属团队。' : ''
+  return children({ employee, controls, unavailableReason, canSubmit: Boolean((!requireVerification || employee) && !busy && !loading && (!loadFailed || !requireVerification) && contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) }).success && team.trim()), sessionKey, sender, team })
 }

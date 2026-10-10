@@ -164,3 +164,13 @@ describe('shipping configuration drawer', () => {
     await waitFor(() => expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', ''))
   })
 })
+
+it('shows connection validation in the viewport feedback before the long configuration form', async () => {
+  fetcher.mockResolvedValue(Response.json({ configuration: { connections: [], billingAccounts: [], sender: null } }))
+  render(<ShippingConfigDrawer embedded/>)
+  fireEvent.click(await screen.findByRole('button', { name: '保存连接' }))
+  const status = screen.getByText('请展开“首次接入 / 更换应用凭据”，填写应用编号和应用密钥。')
+  expect(status.getAttribute('role')).toBe('status')
+  expect(status.className).toContain('feedback')
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+})

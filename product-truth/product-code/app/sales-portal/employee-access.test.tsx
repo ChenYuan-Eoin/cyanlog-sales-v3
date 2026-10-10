@@ -41,3 +41,14 @@ describe('employee portal access', () => {
     expect(await screen.findByLabelText('公司邮箱')).toBeTruthy()
   })
 })
+
+it('allows anonymous intake after optional profile lookup fails', async () => {
+  fetcher.mockResolvedValue(response({ error: '资料读取失败' }, 503))
+  mount()
+  await screen.findByRole('button', { name: '重新读取资料' })
+  for (const [label, value] of Object.entries({ '寄件人姓名': '测试姓名', '寄件人联系电话': '13800000000', '寄件省份': '广东省', '寄件城市': '深圳市', '寄件区县': '南山区', '详细寄件地址': '科苑路15号', '所属团队': '销售' })) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } })
+  }
+  expect(screen.getByText('工单表单：')).toBeTruthy()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})

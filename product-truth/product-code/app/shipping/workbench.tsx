@@ -131,6 +131,13 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     return { ...order, status: result.status === 'ordering' ? 'ordering' : result.status === 'order_failed' ? 'order_failed' : 'order_unknown', waybill: null }
   }
   function updateBatch(id: number, field: 'recipient' | 'phone' | 'address', value: string) { setBatch(rows => rows.map(row => row.id === id && maySubmitRow(row) && !batchBusy ? { ...row, [field]: value } : row)) }
+  function removeDraft(id: number) {
+    if (inputLocked) return
+    setBatch(rows => rows.filter(row => row.id !== id || !maySubmitRow(row)))
+  }
+  function confirmReplacement() {
+    return !batch.length || window.confirm('重新解析或导入将替换当前列表，手工修改和移除结果不会保留。是否继续？')
+  }
   function changeConnection(nextId: string) {
     setConnectionId(nextId)
     setServiceId('')
@@ -138,13 +145,13 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     setBillingAccountId(accounts.find(account => account.isDefault)?.id || accounts[0]?.id || '')
   }
   function parseBulk() {
-    if (inputLocked) return
+    if (inputLocked || !confirmReplacement()) return
     setMessage('')
     try { setBatch(parseShippingText(bulkText, uniformCargo)) }
     catch (error) { setMessage((error as Error).message) }
   }
   async function importFile(file?: File) {
-    if (!file || inputLocked) return
+    if (!file || inputLocked || !confirmReplacement()) return
     setMessage('')
     try {
       const imported = await parseShippingFile(file)
@@ -314,6 +321,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
             return <article key={row.id} className={`${styles.batchRow} ${!valid || row.result === 'failed' ? styles.invalidRow : ''}`}>
               <div className={styles.rowTop}>
                 <b>#{String(row.id).padStart(2, '0')}</b>
+                {maySubmitRow(row) && <button type="button" className={styles.linkButton} disabled={inputLocked} aria-label={`移除第${row.id}票草稿`} onClick={() => removeDraft(row.id)}>移除这票</button>}
                 {row.result === 'success' ? <span className={styles.good}><CheckCircle2 size={12}/>已提报 · {row.orderNo}</span>
                   : row.result === 'unknown' ? <span className={styles.bad}>回执待确认</span>
                   : row.result === 'pending' ? <span className={styles.good}>提交中</span>

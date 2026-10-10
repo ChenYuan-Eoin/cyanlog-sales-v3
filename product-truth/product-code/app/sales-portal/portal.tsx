@@ -20,9 +20,9 @@ export default function SalesPortal() {
   const [error, setError] = useState('')
   useEffect(() => { let active = true; fetch('/api/shipping/public/options', { cache: 'no-store' }).then(async response => { const body = await response.json(); if (!response.ok || !Array.isArray(body.services)) throw new Error(body.error || '提报设置暂不可用'); if (active) setOptions(body) }).catch(e => { if (active) setError(e.message) }); return () => { active = false } }, [])
   if (lookupToken) return <ReceiptLookup token={lookupToken}/>
-  return <EmployeeAccess requireVerification={options?.requireVerification ?? false} emailAvailable={options?.emailAvailable ?? false}>{({ employee, controls, canSubmit, sessionKey, sender, team }) => <SalesRequestForm key={sessionKey} employee={employee} accessControls={<>{controls}{error && <p role="alert" className={styles.error}>{error}</p>}</>} accessReady={Boolean(options && canSubmit)} draftSender={sender} draftTeam={team} services={options?.services}/>}</EmployeeAccess>
+  return <EmployeeAccess requireVerification={options?.requireVerification ?? false} emailAvailable={options?.emailAvailable ?? false}>{({ employee, controls, canSubmit, unavailableReason, sessionKey, sender, team }) => <SalesRequestForm key={sessionKey} employee={employee} accessControls={<>{controls}{error && <p role="alert" className={styles.error}>{error}</p>}</>} accessReady={Boolean(options && canSubmit)} accessHint={error || (!options ? '正在读取提报设置…' : unavailableReason)} draftSender={sender} draftTeam={team} services={options?.services}/>}</EmployeeAccess>
 }
-export function SalesRequestForm({ employee, accessControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services }: { employee: EmployeeProfile | null; accessControls?: ReactNode; accessReady?: boolean; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[] }) {
+export function SalesRequestForm({ employee, accessControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint }: { employee: EmployeeProfile | null; accessControls?: ReactNode; accessReady?: boolean; accessHint?: string; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[] }) {
   const senderContact = draftSender || employee?.sender || emptyContact()
   const sender = { ...senderContact, phone: normalizeDomesticShippingPhone(senderContact.phone) }
   const submitter = { name: sender.name, phone: sender.phone, team: draftTeam ?? employee?.team ?? '' }
@@ -41,6 +41,7 @@ export function SalesRequestForm({ employee, accessControls, accessReady = Boole
   const [uncertain, setUncertain] = useState(false)
   const pendingSubmission = useRef<string | null>(null)
   const submissionRunning = useRef(false)
+  const pendingCredentials = useRef<RequestCredentials>('omit')
   const [receiptStatus, setReceiptStatus] = useState('')
   const [receipt, setReceipt] = useState<(ShipmentReceipt & { receiptToken?: string }) | null>(null)
 
@@ -62,12 +63,13 @@ export function SalesRequestForm({ employee, accessControls, accessReady = Boole
       if (!submission.success) { setError(submission.error.issues.map(issue => issue.message).join('；')); return }
       if (!preview) { setPreview(true); return }
       pendingSubmission.current = JSON.stringify(submission.data)
+      pendingCredentials.current = employee ? 'same-origin' : 'omit'
     }
     if (!pendingSubmission.current) return
     submissionRunning.current = true
     setBusy(true)
     try {
-      const response = await fetch('/api/shipping/public/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: pendingSubmission.current })
+      const response = await fetch('/api/shipping/public/orders', { credentials: pendingCredentials.current, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: pendingSubmission.current })
       const data = await response.json()
       if (!response.ok && [400, 401, 403, 422, 429].includes(response.status)) { pendingSubmission.current = null; setUncertain(false); setPreview(false); setError(data.error || '请核对工单资料'); return }
       if (!response.ok || typeof data.orderNo !== 'string' || !data.orderNo || data.orderNo.length > 80 || typeof data.status !== 'string' || !Object.hasOwn(receiptLabels, data.status) || (data.waybill != null && (typeof data.waybill !== 'string' || data.waybill.length > 80))) throw new Error('暂未确认工单提交结果，请使用原请求重取回执。')
@@ -90,6 +92,7 @@ export function SalesRequestForm({ employee, accessControls, accessReady = Boole
       </fieldset>
       {preview && <section className={styles.card} aria-label="寄出预览"><h2>寄出预览</h2><p>寄件人：{submitter.name} · {normalizeDomesticShippingPhone(submitter.phone)} · {senderAddress}</p><p>收件人：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address}</p><p>{customerName} · {cargo} · {weight} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}</p>{specialRequirements && <p>{specialRequirements}</p>}<small>此步只提交工单；审核确认、正式下单和叫件由操作员完成。</small></section>}
       {error && <p className={styles.error} role="alert">{error}</p>}
+      {!accessReady && accessHint && <p role="status" className={styles.error}>{accessHint}</p>}
       <footer className={styles.submit}><div><CheckCircle2 size={16}/><span>提交只会进入前台待确认池，不会直接产生运费。</span></div><button disabled={busy || !accessReady}>{busy ? '提交中…' : uncertain ? '重取工单回执' : preview ? '确认提交工单' : '预览工单'}<ArrowRight size={16}/></button></footer>
     </form>
   </main>

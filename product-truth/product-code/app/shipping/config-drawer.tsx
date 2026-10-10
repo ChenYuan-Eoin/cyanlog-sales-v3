@@ -70,10 +70,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       setOperatorAccess(data.operatorAccess)
       setOperatorDraft(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
     }
-    if (data.operatorAccess) {
-      setOperatorAccess(data.operatorAccess)
-      setOperatorDraft(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
-    }
     const savedSender = data.configuration.sender
     if (savedSender) {
       setSenderName(savedSender.displayName)
@@ -100,13 +96,13 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
       if (data.imported || data.needsAttention) setLegacyMigrationReport({ imported: data.imported || [], needsAttention: data.needsAttention || [] })
       if (!data.configuration && !data.operatorAccess) throw new Error('配置更新成功，但服务器未返回最新配置。请刷新后检查。')
-      setMessage('配置已保存。')
+      setMessage(`${label === 'connection' ? '顺丰连接' : label === 'services' ? '可提报服务' : label === 'account' ? '月结账号' : label === 'sender' ? '默认寄件资料' : '配置'}已保存。`)
       return data
     } catch (error) { setMessage((error as Error).message); return null } finally { setBusy('') }
   }
 
   async function saveConnection() {
-    if (!partnerId.trim() || !checkWord.trim()) { setMessage('请填写PartnerID和CheckWord。'); return }
+    if (!partnerId.trim() || !checkWord.trim()) { setMessage('请展开“首次接入 / 更换应用凭据”，填写应用编号和应用密钥。'); return }
     setProbeMessage(''); setProbePassed(false)
     const saved = await mutate('connection', 'save_connection', { environment, partnerId, checkWord, services: authorizedServices })
     if (saved) { setPartnerId(''); setCheckWord('') }
@@ -186,6 +182,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   return <div className={embedded ? styles.embedded : styles.backdrop} role={embedded ? 'region' : 'presentation'} onMouseDown={event => { if (!embedded && event.target === event.currentTarget) onClose?.() }}>
     <aside className={styles.drawer} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-labelledby="shipping-config-title">
       <header className={styles.header}><div><p>SHIPPING SETTINGS</p><h2 id="shipping-config-title">寄件设置</h2></div>{!embedded && <button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button>}</header>
+      {message && <p className={`${styles.message} ${styles.feedback}`} role="status" aria-live="polite">{message}</p>}
       <div className={styles.content}>
         <EmailConfiguration/>
         <section className={styles.section}>
@@ -243,7 +240,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <div className={styles.actions}><button className={styles.secondary} disabled={!operatorAccess || operatorAccess.legacyImportAvailable || operatorBusy} onClick={() => void saveOperatorAccess()}>{operatorBusy ? '保存中…' : '保存确认人员权限'}</button></div>
           {operatorMessage && <p className={styles.probe} role="status">{operatorMessage}</p>}
         </section>
-        {message && <p className={styles.message} role="status">{message}</p>}
         <p className={styles.footerNote}>连接检查使用所选环境的OAuth2与只读订单查询，不创建运单；轨迹、取消等能力仍需分别验证。</p>
       </div>
     </aside>
