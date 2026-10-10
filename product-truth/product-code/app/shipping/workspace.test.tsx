@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ShippingWorkspace from './workspace'
 import type { ShippingSettings } from '@/lib/shipping/types'
 const contact = { name: '测试人员', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '测试街道1号' }
@@ -21,6 +21,32 @@ describe('one screen shipping interaction', () => {
   await screen.findByText('顺丰暂时不可用')
   fireEvent.click(screen.getByRole('button', { name: '本人寄件' }))
   expect((screen.getByLabelText('收件人详细地址') as HTMLInputElement).value).toBe('科技路1号')
+ })
+ it('opens tracking immediately and can return while loading without losing the draft or reopening on a late response', async () => {
+  let resolveTracking!: (response: Response) => void
+  fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking') ? new Promise<Response>(resolve => { resolveTracking = resolve }) : new Response(JSON.stringify({ records: [], imported: [{ id: 'own', waybill: 'SF1234567890123', source_time: '2026-09-12', source_status: '已签收' }] })))
+  render(<ShippingWorkspace settings={settings} userId="test-user" />)
+  fireEvent.change(screen.getByLabelText('收件人姓名'), { target: { value: '草稿联系人' } })
+  fireEvent.click(screen.getByRole('button', { name: '物流跟踪' }))
+  fireEvent.click(await screen.findByRole('button', { name: '查轨迹' }))
+  expect(screen.getByText('正在查询物流…')).toBeTruthy()
+  expect(screen.queryByRole('region', { name: '本人历史寄件' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '返回寄件列表' }))
+  expect(screen.getByRole('region', { name: '本人历史寄件' })).toBeTruthy()
+  await act(async () => { resolveTracking(new Response(JSON.stringify({ waybill: 'SF1234567890123', queriedAt: new Date().toISOString(), events: [{ time: '2026-09-12', description: '延迟到达的轨迹' }] }))) })
+  expect(screen.queryByText('延迟到达的轨迹')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '本人寄件' }))
+  expect((screen.getByLabelText('收件人姓名') as HTMLInputElement).value).toBe('草稿联系人')
+ })
+ it.each([200, 502])('returns to the list after a tracking response (%s)', async status => {
+  fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url.endsWith('/tracking') ? status === 200 ? { waybill: 'SF1234567890123', queriedAt: new Date().toISOString(), events: [{ time: '2026-09-12', description: '已签收测试' }] } : { error: '查询失败测试' } : { records: [], imported: [{ id: 'own', waybill: 'SF1234567890123', source_time: '2026-09-12', source_status: '已签收' }] }), { status: url.endsWith('/tracking') ? status : 200 }))
+  render(<ShippingWorkspace settings={settings} userId="test-user" />)
+  fireEvent.click(screen.getByRole('button', { name: '物流跟踪' }))
+  fireEvent.click(await screen.findByRole('button', { name: '查轨迹' }))
+  await screen.findByText(status === 200 ? '已签收测试' : '查询失败测试')
+  fireEvent.click(screen.getByRole('button', { name: '返回寄件列表' }))
+  expect(screen.getByRole('button', { name: '查轨迹' })).toBeTruthy()
+  expect(screen.queryByText(status === 200 ? '已签收测试' : '查询失败测试')).toBeNull()
  })
  it('uses the same request after a lost response, including after reload', async () => {
   const bodies: unknown[] = []

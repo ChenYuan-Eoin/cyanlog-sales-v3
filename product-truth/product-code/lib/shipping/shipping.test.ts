@@ -18,6 +18,22 @@ function memoryStore(): ShippingStore {
 }
 describe('address extraction', () => {
   it('extracts a full mainland address without inventing values', () => { const r = parseAddress('张三 13800000000 广东省深圳市南山区科技路1号'); expect(r.contact).toEqual({ name: '张三', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科技路1号' }) })
+  it('extracts a standalone name after multiline address and company', () => {
+    const r = parseAddress('上海市浦东新区测试路18号\n上海示例信息技术有限公司\n李明\n13800000000')
+    expect(r.contact.name).toBe('李明')
+    expect(r.contact.address).toContain('上海示例信息技术有限公司')
+    expect(r.contact.address).not.toContain('李明')
+  })
+  it('leaves multiple standalone name candidates for manual review', () => {
+    const r = parseAddress('上海市浦东新区测试路18号\n李明\n王芳\n13800000000')
+    expect(r.contact.name).toBe('')
+    expect(r.contact.address).toContain('李明')
+    expect(r.contact.address).toContain('王芳')
+  })
+  it('does not treat a separate address line as a name', () => {
+    const r = parseAddress('上海市\n浦东新区\n测试路18号\n13800000000')
+    expect(r.contact.name).toBe('')
+  })
   it('handles labeled municipality and landline', () => { const r = parseAddress('收件人：李四 电话：010-12345678 地址：北京市朝阳区测试路2号'); expect(r.contact.city).toBe('北京市'); expect(r.contact.county).toBe('朝阳区'); expect(r.contact.name).toBe('李四'); expect(r.contact.phone).toBe('010-12345678') })
   it('does not select one of multiple recipients', () => { const r = parseAddress('张三13800000000李四13900000000'); expect(r.contact.phone).toBe(''); expect(r.warnings.join()).toContain('多个') })
   it('preserves unresolved addresses for manual correction', () => { const r = parseAddress('深圳南山测试园区'); expect(r.contact.province).toBe(''); expect(r.contact.address).toBe('深圳南山测试园区') })
