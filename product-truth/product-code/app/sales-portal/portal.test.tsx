@@ -1,7 +1,7 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { SalesRequestForm } from './portal'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import SalesPortal, { SalesRequestForm } from './portal'
 const employee = { id: 'employee-1', email: 'person@ones.cn', team: '大客户部', updatedAt: '2026-10-09T00:00:00.000Z', sender: { name: '李娜', phone: '13800138000', province: '广东省', city: '广州市', county: '天河区', address: '销售路88号' } }
 
 const fetcher = vi.fn()
@@ -48,4 +48,43 @@ describe('sales shipping portal', () => {
     expect(fetcher.mock.calls.every(call => call[0] === '/api/shipping/public/orders')).toBe(true)
   })
 
+})
+
+
+describe('single-page anonymous intake', () => {
+  const reply = (data: unknown) => new Response(JSON.stringify(data), { status: 200 })
+  it('shows the complete form before email verification and preserves the draft through verification and profile saving', async () => {
+    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : null
+      if (!body) return reply({ employee: null, orders: [] })
+      if (body.action === 'request_code') return reply({ challengeId: 'challenge-1', delivery: 'accepted' })
+      if (body.action === 'verify_code') return reply({ employee: { ...employee, sender: null, team: '' } })
+      if (body.action === 'save_profile') return reply({ employee: { ...employee, sender: body.profile.sender, team: body.profile.team } })
+      if (body.action === 'logout') return reply({ employee: null })
+      throw new Error('unexpected request')
+    })
+    render(<SalesPortal />)
+    expect(screen.getByText('客户与收件信息')).toBeTruthy()
+    expect(screen.getByText('物品与特殊需求')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByPlaceholderText('公司或项目客户名称'), { target: { value: '验证前填写的客户' } })
+    for (const [label, value] of [['寄件人姓名','李娜'],['寄件人联系电话','13800138000'],['寄件省份','广东省'],['寄件城市','广州市'],['寄件区县','天河区'],['详细寄件地址','销售路88号'],['所属团队','大客户部']]) fireEvent.change(screen.getByLabelText(label), { target: { value } })
+    fireEvent.change(await screen.findByLabelText('公司邮箱'), { target: { value: 'person@ones.cn' } })
+    fireEvent.click(screen.getByRole('button', { name: '获取验证码' }))
+    fireEvent.change(await screen.findByLabelText('邮箱验证码'), { target: { value: '012345' } })
+    fireEvent.click(screen.getByRole('button', { name: '验证邮箱' }))
+    await screen.findByText('person@ones.cn · 已验证')
+    expect((screen.getByLabelText('寄件人姓名') as HTMLInputElement).value).toBe('李娜')
+    expect((screen.getByPlaceholderText('公司或项目客户名称') as HTMLInputElement).value).toBe('验证前填写的客户')
+    expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '保存寄件资料' }))
+    await waitFor(() => expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(false))
+    expect((screen.getByPlaceholderText('公司或项目客户名称') as HTMLInputElement).value).toBe('验证前填写的客户')
+    expect(fetcher.mock.calls.some(call => call[0] === '/api/shipping/public/orders')).toBe(false)
+    expect(document.querySelector('form form')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '退出 / 换人' }))
+    await screen.findByLabelText('公司邮箱')
+    expect((screen.getByPlaceholderText('公司或项目客户名称') as HTMLInputElement).value).toBe('')
+    expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(true)
+  })
 })
