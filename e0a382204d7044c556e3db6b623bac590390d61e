@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "activeId": "WP18",
+  "commit": "e0a382204d7044c556e3db6b623bac590390d61e",
+  "evidence": {
+    "code": {
+      "commit": "e0a382204d7044c556e3db6b623bac590390d61e",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "full_tests",
+          "artifact_path": "check-logs/93faa815c7df977c0fe733ebb5384da0677a8b8b/check-03-test.log",
+          "log_sha256": "8c4c4337d6a38a99b2fee73adb311890d0fdfd682f09ce0713f3184ddab321b7",
+          "exit_code": 0
+        },
+        {
+          "name": "lint",
+          "artifact_path": "check-logs/93faa815c7df977c0fe733ebb5384da0677a8b8b/check-02-lint.log",
+          "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+          "exit_code": 0
+        },
+        {
+          "name": "typecheck",
+          "artifact_path": "check-logs/93faa815c7df977c0fe733ebb5384da0677a8b8b/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0
+        },
+        {
+          "name": "target_tests",
+          "artifact_path": "shipping-feedback-target.log",
+          "log_sha256": "d4d194c34546399dd34c09f155f18dae71bff169a27c27c40ebb591774895237",
+          "exit_code": 0
+        },
+        {
+          "name": "build",
+          "artifact_path": "shipping-feedback-final-build.log",
+          "log_sha256": "9e8ac3d31468c4e04ffa2983d31ea392d20e3213ca76b1973c983436bd7224c6",
+          "exit_code": 0
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "9097da4e51d04fd401f934bcdc63a877b806fa0cdf3cdd9361d593bf23bedee1",
+        "entry_sha256": "8f5d676f82db1d83ff38af40d494480d70f4d24a352cfcb40f44ccb5e8c6b175"
+      },
+      "scope": "Shipping save feedback, draft remove/reparse, optional identity failure and address-label parsing. Login complaint remains unconfirmed."
+    }
+  },
+  "updatedAt": "2026-10-10T07:24:26.493Z",
+  "gateSnapshots": {
+    "executing": {
+      "stage": "executing",
+      "checkedAt": "2026-10-10T07:24:26.475Z",
+      "head": "e0a382204d7044c556e3db6b623bac590390d61e",
+      "originMain": "ef21c2b3eff1ae8f8569bf32132f2d770f6983fb",
+      "remoteMain": "ef21c2b3eff1ae8f8569bf32132f2d770f6983fb",
+      "remoteProduction": "ef21c2b3eff1ae8f8569bf32132f2d770f6983fb",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "11c9d8d2537178b91cfceb4fe476db264bff3b1b",
+      "remoteAttestationRefOid": "11c9d8d2537178b91cfceb4fe476db264bff3b1b",
+      "remoteSnapshotCheckedAt": "2026-10-10T07:24:12.762Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "e29fa03e07e6e0b5add48079d4576330e76195fc83b40687d4a12317b3c06665",
+  "sealedAt": "2026-10-10T07:24:26.494Z",
+  "attestationDigest": "47efe646295161cff202c461e7b1752dad6e0c9c124a59a8d99a34195bbb22a6"
+}
