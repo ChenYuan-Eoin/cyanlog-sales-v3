@@ -159,7 +159,33 @@
       "product-truth/product-code/app/sales-portal",
       "product-truth/product-code/package.json",
       "product-truth/product-code/pnpm-lock.yaml",
-      "product-truth/product-code/.env.local"
+      "product-truth/product-code/.env.local",
+      ".env.local",
+      ".github/workflows/ci.yml",
+      ".github/workflows/skills.yml",
+      ".gitignore",
+      ".opencode/lib/project-guard-core.mjs",
+      ".opencode/plugins/price-v3-guard.js",
+      ".vercel/.env.production.local",
+      "README.md",
+      "manifest.yaml",
+      "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/product-code/.vercel/.env.development.local",
+      "product-truth/product-code/app/api/quotes/[id]/derive-order/route.ts",
+      "product-truth/product-code/app/api/quotes/[id]/derive-seal/route.ts",
+      "product-truth/product-code/app/api/quotes/[id]/derive-tender/route.ts",
+      "product-truth/product-code/app/api/quotes/derive-routes.test.ts",
+      "product-truth/product-code/lib/quote/downstream-derive.ts",
+      "product-truth/product-code/lib/quote/downstream-persistence.test.ts",
+      "product-truth/product-code/scripts/WP10-RELEASE-REPAIR.md",
+      "product-truth/product-code/scripts/check-preview-target.mjs",
+      "product-truth/product-code/scripts/check-requirement-structure.mjs",
+      "product-truth/product-code/scripts/check-requirement-structure.test.ts",
+      "product-truth/product-code/scripts/check-sensitive-tracked.mjs",
+      "product-truth/product-code/scripts/check-sensitive-tracked.test.ts",
+      "product-truth/product-code/scripts/prepare-wp10-release.mjs",
+      "product-truth/product-code/scripts/project-guard.test.ts",
+      "product-truth/product-code/supabase/migrations/20260910000002_atomic_quote_derivations.sql"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -235,7 +261,8 @@
       "strategy": "integrate_complete_candidate_into_main",
       "scope": "Current shipping-collaboration-console development including existing quotation changes; preserve protected dirty workspace",
       "action": "commit, fast-forward push main, verify hosted build",
-      "supersedes": "pending shipping-only release-order exception"
+      "supersedes": "pending shipping-only release-order exception",
+      "branch_consolidation": "User goal: integrate useful unique changes, archive and retire fully integrated or superseded branches, preserve dirty worktrees"
     }
   },
   "execution_queue": {
