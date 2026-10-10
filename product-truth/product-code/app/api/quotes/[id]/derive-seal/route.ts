@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: AsyncRouteParams) {
       return errorResponse('盖章申请必须填写申请原因', 400, 'VALIDATION_ERROR')
     }
 
-    const result = await deriveSeal({ ...ctx.source, reason })
+    const result = await deriveSeal({ ...ctx.source, actor_id: user.id, reason })
     return NextResponse.json({ success: true, data: { ...result, message: '已从冻结版本派生盖章申请' } })
   } catch (error) {
     const authError = error instanceof Error && error.name === 'AuthError'

@@ -1,99 +1,22 @@
-# ONES Skills Auto-Trigger
-# 在 PR 创建时自动触发 skill-req-review
-
-name: Skills Auto-Trigger
-
+name: Requirement Structure Checks
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    paths:
+      - 'product-truth/REQ_REGISTRY.yml'
+      - 'product-truth/feature-packets/**'
+      - 'product-truth/product-code/scripts/check-requirement-structure.*'
+      - '.github/workflows/skills.yml'
   push:
-    branches: [main, develop]
-
+    branches: [main, develop, 'codex/**']
+permissions:
+  contents: read
 jobs:
-  req-review:
-    name: Run skill-req-review
+  requirement-structure:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Run skill-req-review
-        run: |
-          echo "═══════════════════════════════════════"
-          echo "ONES Skill Runner - Auto Triggered"
-          echo "═══════════════════════════════════════"
-          echo ""
-          echo "🎯 执行: skill-req-review (需求审查)"
-          echo ""
-
-          # 检查 REQ_REGISTRY.yml 是否有变更
-          if git diff --name-only origin/${{ github.base_ref }} HEAD | grep -q "REQ_REGISTRY.yml"; then
-            echo "⚠️  REQ_REGISTRY.yml 有变更，执行审查..."
-            echo ""
-
-            # 简化版 req-review 检查
-            echo "| 检查项 | 状态 | 详情 |"
-            echo "|--------|------|------|"
-            echo "| R1 REQ ID 唯一性 | ✅ | 检查通过 |"
-            echo "| R2 状态流程合规 | ✅ | 检查通过 |"
-            echo "| R3 代码位置追踪 | ✅ | 检查通过 |"
-            echo "| R4 同步完整性 | ✅ | 检查通过 |"
-            echo "| R5 无孤儿子需求 | ✅ | 检查通过 |"
-            echo ""
-            echo "✅ 需求审查通过"
-          else
-            echo "ℹ️  REQ_REGISTRY.yml 无变更，跳过审查"
-          fi
-
-  feedback-on-failure:
-    name: Collect feedback on failure
-    runs-on: ubuntu-latest
-    if: failure()
-    steps:
-      - name: Collect failure feedback
-        run: |
-          echo "═══════════════════════════════════════"
-          echo "ONES Feedback Collector - Failure Mode"
-          echo "═══════════════════════════════════════"
-          echo ""
-          echo "📊 收集失败反馈..."
-          echo ""
-          echo "类型检查: ❌ 失败"
-          echo "Lint:     ⚠️ 需检查"
-          echo "测试:     ❌ 失败"
-          echo ""
-          echo "反馈已保存，请修复后重新提交"
-
-  socrates-on-req-change:
-    name: Run skill-socrates on REQ change
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' &&
-      contains(github.event.head_commit.message, 'REQ') &&
-      contains(github.event.head_commit.message, '已确认|confirmed|completed')
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run skill-socrates
-        run: |
-          echo "═══════════════════════════════════════"
-          echo "ONES Skill Runner - Socrates Check"
-          echo "═══════════════════════════════════════"
-          echo ""
-          echo "🎯 执行: skill-socrates (苏格拉底提问)"
-          echo ""
-          echo "📋 检测到需求状态变更，提出以下问题："
-          echo ""
-          echo "1. [技术] 这个需求的实现方式，是否已经考虑到数据量和性能瓶颈？"
-          echo "2. [风险] 如果关键依赖服务不可用，这个功能会如何表现？"
-          echo "3. [对齐] 这个需求与已确认的其他 REQ 是否存在冲突？"
-          echo "4. [边界] 网络中断/数据为空/并发操作如何处理？"
-          echo "5. [维护] 这个实现的维护成本如何？文档是否完善？"
-          echo ""
-          echo "---"
-          echo "请回答以上问题，帮助完善需求设计。"
+          node-version: '24'
+      - name: Check IDs, lifecycle states and declared Feature Packet paths
+        run: node product-truth/product-code/scripts/check-requirement-structure.mjs
