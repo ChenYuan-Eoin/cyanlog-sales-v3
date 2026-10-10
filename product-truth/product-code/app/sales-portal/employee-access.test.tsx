@@ -52,3 +52,15 @@ it('allows anonymous intake after optional profile lookup fails', async () => {
   expect(screen.getByText('工单表单：')).toBeTruthy()
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
+
+it('parses sender information and allows optional team to remain empty', async () => {
+  fetcher.mockResolvedValue(response({ employee: null }))
+  render(<EmployeeAccess emailAvailable={false} rules={{ companyName: { enabled: true, required: true, minLength: 4 }, team: { enabled: false, required: false, minLength: 1 }, teamOptions: [] }}>{({ controls, canSubmit }) => <>{controls}<button disabled={!canSubmit}>提报就绪</button></>}</EmployeeAccess>)
+  await screen.findByText('邮箱验证尚未启用，不影响匿名提报。')
+  fireEvent.change(screen.getByLabelText('寄方地址文本'), { target: { value: '张三 13800000000 广东省深圳市南山区科苑路15号' } })
+  fireEvent.click(screen.getByRole('button', { name: '解析寄方信息' }))
+  expect(screen.getByLabelText('寄件人姓名')).toHaveProperty('value', '张三')
+  expect(screen.getByLabelText('寄件城市')).toHaveProperty('value', '深圳市')
+  expect(screen.queryByLabelText('所属团队')).toBeNull()
+  expect(screen.getByRole('button', { name: '提报就绪' })).toHaveProperty('disabled', false)
+})

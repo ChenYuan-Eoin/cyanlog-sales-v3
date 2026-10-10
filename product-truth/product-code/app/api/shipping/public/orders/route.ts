@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { shippingJson } from '@/lib/shipping/http'
 import { ShippingError } from '@/lib/shipping/config'
-import { anonymousShipmentSchema } from '@/lib/shipping/validation'
+import { makeAnonymousShipmentSchema } from '@/lib/shipping/validation'
 import { createAnonymousShipment, publicShipmentReceipt, listEmployeeShipmentReceipts } from '@/lib/shipping/collaboration'
 import { enforceAnonymousShippingRate } from '@/lib/shipping/rate-limit'
 import { requireShippingEmployee, getShippingEmployeeSession } from '@/lib/shipping/company-email-access'
@@ -17,8 +17,8 @@ export async function POST(req: NextRequest) {
     const origin = req.headers.get('origin')
     if (origin !== req.nextUrl.origin) throw new ShippingError(403, '请求来源不受信任。')
     await enforceAnonymousShippingRate(req)
-    const submission = anonymousShipmentSchema.parse(await shippingJson(req))
     const options = await loadPublicIntakeOptions()
+    const submission = makeAnonymousShipmentSchema(options.rules).parse(await shippingJson(req))
     const session = await getShippingEmployeeSession(req)
     if (options.requireVerification && !session) throw new ShippingError(401, '公司要求验证邮箱后提报，请在页面完成验证。')
     if (session && session.employee.orgId !== options.orgId) throw new ShippingError(403, '邮箱身份不属于当前提报入口，请退出后重新填写。')

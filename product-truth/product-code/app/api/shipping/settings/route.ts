@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
+import { loadShippingWorkspaceSettings } from '@/lib/shipping/workspace-settings'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { shippingManagerHandler, shippingJson } from '@/lib/shipping/http'
 import {
@@ -24,6 +25,10 @@ export const runtime = 'nodejs'
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
+    if (req.nextUrl.searchParams.get('workspace') === '1') {
+      const orgId = await requireShippingOperator(user.id)
+      return NextResponse.json({ settings: await loadShippingWorkspaceSettings(orgId) }, { headers: { 'Cache-Control': 'no-store' } })
+    }
     try {
       const orgId = await requireShippingConnectionManager(user.id)
       const [configuration, operatorAccess] = await Promise.all([loadShippingConfiguration(orgId), loadShippingOperatorAccess(orgId)])

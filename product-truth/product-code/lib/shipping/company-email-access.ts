@@ -1,6 +1,8 @@
 import { createHmac, randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { loadIntakeSettings } from './intake-settings'
+import { intakeFieldSchema } from './intake-rules'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { contactSchema } from './validation'
@@ -104,7 +106,8 @@ export async function requireShippingEmployee(req: NextRequest) {
 }
 
 export async function saveShippingEmployeeProfile(session: ShippingEmployeeSession, input: unknown) {
-  const data = z.object({ sender: z.preprocess(value => value && typeof value === 'object' && 'phone' in value && typeof value.phone === 'string' ? { ...value, phone: normalizeDomesticShippingPhone(value.phone) } : value, contactSchema), team: z.string().trim().min(1).max(80), expectedUpdatedAt: z.iso.datetime({ offset: true }) }).strict().parse(input)
+  const rules = await loadIntakeSettings(session.employee.orgId)
+  const data = z.object({ sender: z.preprocess(value => value && typeof value === 'object' && 'phone' in value && typeof value.phone === 'string' ? { ...value, phone: normalizeDomesticShippingPhone(value.phone) } : value, contactSchema), team: intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions), expectedUpdatedAt: z.iso.datetime({ offset: true }) }).strict().parse(input)
   const sender = contactSchema.parse({ ...data.sender, phone: normalizeDomesticShippingPhone(data.sender.phone) })
   const { data: row, error } = await supabaseAdmin.from('shipping_employee_profiles').update({ sender_contact: sender, team: data.team, updated_at: new Date().toISOString() })
     .eq('id', session.employee.id).eq('org_id', session.employee.orgId).eq('is_active', true).eq('session_version', session.employee.sessionVersion).eq('updated_at', data.expectedUpdatedAt).select(employeeColumns).maybeSingle()

@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react'
+import { parseAddress } from '@/lib/shipping/address'
+import { DEFAULT_INTAKE_RULES, intakeFieldSchema, type IntakeRules } from '@/lib/shipping/intake-rules'
 import { contactSchema } from '@/lib/shipping/validation'
 import { normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
 import { emptyContact, type Contact } from '@/lib/shipping/types'
@@ -14,7 +16,9 @@ async function call(body?: unknown) {
   return data
 }
 export type EmployeeAccessState = { employee: EmployeeProfile | null; controls: ReactNode; canSubmit: boolean; unavailableReason: string; sessionKey: number; sender: Contact; team: string }
-export default function EmployeeAccess({ children, requireVerification = false, emailAvailable = true }: { children: (state: EmployeeAccessState) => ReactNode; requireVerification?: boolean; emailAvailable?: boolean }) {
+export default function EmployeeAccess({ children, requireVerification = false, emailAvailable = true, rules = DEFAULT_INTAKE_RULES }: { children: (state: EmployeeAccessState) => ReactNode; requireVerification?: boolean; emailAvailable?: boolean; rules?: IntakeRules }) {
+  const [senderText, setSenderText] = useState('')
+  const [senderNotice, setSenderNotice] = useState('')
   const [remember, setRemember] = useState(false)
   const [sessionKey, setSessionKey] = useState(0)
   const [employee, setEmployee] = useState<EmployeeProfile | null>(null)
@@ -30,6 +34,7 @@ export default function EmployeeAccess({ children, requireVerification = false, 
 
   function accept(profile: EmployeeProfile | null, preserveDraft = false) {
     setEmployee(profile)
+    if (!profile && !preserveDraft) { setSenderText(''); setSenderNotice('') }
     if (profile?.sender || !preserveDraft) { setSender(profile?.sender || emptyContact()); setTeam(profile?.team || '') }
     setEditing(!!profile && !profile.sender)
   }
@@ -68,8 +73,9 @@ export default function EmployeeAccess({ children, requireVerification = false, 
       <div className={styles.cardTitle}><div><h2>我的寄件资料</h2><p>填写实际寄件人和揽收地址，提交后由操作员核对确认。</p></div></div>
       {editing || !employee?.sender ? <form onSubmit={save}>
         <fieldset disabled={busy} className={styles.fields}>
+          <label>粘贴寄方信息<textarea aria-label="寄方地址文本" rows={3} value={senderText} onChange={e => setSenderText(e.target.value)} placeholder="粘贴寄件人姓名、电话和完整地址"/></label><button type="button" disabled={!senderText.trim() || busy} onClick={() => { const parsed = parseAddress(senderText); setSender(parsed.contact); setSenderNotice(parsed.warnings.join('；')) }}>解析寄方信息</button>{senderNotice && <p role="status">{senderNotice}</p>}
           <div className={styles.grid2}>{(['name','phone','province','city','county','address'] as const).map((field, index) => <label key={field}>{['寄件人姓名','寄件人联系电话','寄件省份','寄件城市','寄件区县','详细寄件地址'][index]}<input required value={sender[field]} onChange={e => setSender(current => ({ ...current, [field]: e.target.value }))}/></label>)}</div>
-          <label>所属团队<input required maxLength={80} value={team} onChange={e => setTeam(e.target.value)}/></label>
+          {rules.team.enabled && <label>所属团队{rules.teamOptions.length ? <select required={rules.team.required} value={team} onChange={e => setTeam(e.target.value)}><option value="">请选择所属团队</option>{rules.teamOptions.map(name => <option key={name}>{name}</option>)}</select> : <input required={rules.team.required} minLength={rules.team.minLength} maxLength={80} value={team} onChange={e => setTeam(e.target.value)}/>}</label>}
           <div className={styles.identityRow}>{employee && <button type="submit" disabled={loading || loadFailed}>保存寄件资料</button>}{!employee && <label className={styles.remember}><input type="checkbox" checked={remember} onChange={e => { setRemember(e.target.checked); if (!e.target.checked) { try { localStorage.removeItem('shipping-anonymous-sender-v1') } catch { /* optional device storage */ } } }}/>在本设备记住寄件资料（公共设备请勿勾选）</label>}{employee?.sender && <button type="button" onClick={() => { accept(employee); setEditing(false); setError('') }}>取消修改</button>}</div>
         </fieldset>
       </form> : <><p>{employee.sender.name} · {employee.sender.phone} · {employee.team}</p><p>{employee.sender.province}{employee.sender.city}{employee.sender.county}{employee.sender.address}</p><button type="button" disabled={busy} onClick={() => { accept(employee); setEditing(true) }}>修改我的寄件资料</button></>}
@@ -77,6 +83,7 @@ export default function EmployeeAccess({ children, requireVerification = false, 
     {employee && <details className={styles.card}><summary>我的提报记录</summary><MyWorkorders key={employee.id}/></details>}
   </>
   const senderCheck = contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) })
-  const unavailableReason = loading ? '正在读取寄件资料，请稍候…' : busy ? '正在处理资料，请稍候…' : requireVerification && !employee ? '公司已要求邮箱验证，请先完成验证。' : !senderCheck.success ? `请完善寄件资料：${senderCheck.error.issues.map(issue => issue.message).join('；')}` : !team.trim() ? '请填写所属团队。' : ''
-  return children({ employee, controls, unavailableReason, canSubmit: Boolean((!requireVerification || employee) && !busy && !loading && (!loadFailed || !requireVerification) && contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) }).success && team.trim()), sessionKey, sender, team })
+  const teamCheck = intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions).safeParse(team)
+  const unavailableReason = loading ? '正在读取寄件资料，请稍候…' : busy ? '正在处理资料，请稍候…' : requireVerification && !employee ? '公司已要求邮箱验证，请先完成验证。' : !senderCheck.success ? `请完善寄件资料：${senderCheck.error.issues.map(issue => issue.message).join('；')}` : !teamCheck.success ? teamCheck.error.issues.map(issue => issue.message).join('；') : ''
+  return children({ employee, controls, unavailableReason, canSubmit: Boolean((!requireVerification || employee) && !busy && !loading && (!loadFailed || !requireVerification) && contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) }).success && teamCheck.success), sessionKey, sender, team })
 }

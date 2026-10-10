@@ -126,8 +126,8 @@ describe('shipping configuration drawer', () => {
     expect(productionProbe).toHaveProperty('disabled', false)
     expect(screen.getByText('生产连接测试只调用只读订单查询，不创建运单，也不证明生产下单权限。首票实际寄件仍需操作员逐票核对资料与费用后确认。')).toBeTruthy()
     fireEvent.click(productionProbe)
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
-    const [, request] = fetcher.mock.calls[1] as [string, RequestInit]
+    await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true))
+    const [, request] = fetcher.mock.calls.find(([, init]) => init?.method === 'POST') as [string, RequestInit]
     expect(JSON.parse(String(request.body))).toEqual({ action: 'test_production_connection' })
   })
 
@@ -143,8 +143,8 @@ describe('shipping configuration drawer', () => {
     fireEvent.click(screen.getByRole('button', { name: '添加服务' }))
     fireEvent.click(screen.getByRole('button', { name: '保存可提报服务' }))
 
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
-    const [, request] = fetcher.mock.calls[1] as [string, RequestInit]
+    await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true))
+    const [, request] = fetcher.mock.calls.find(([, init]) => init?.method === 'POST') as [string, RequestInit]
     expect(JSON.parse(String(request.body))).toEqual({ action: 'save_authorized_services', environment: 'sandbox', services: [{ id: 2, name: '顺丰标快', preference: 'standard' }, { id: 1, name: '顺丰特快', preference: 'urgent' }, { id: 6, name: '顺丰即日', preference: 'urgent' }] })
     expect(screen.getByLabelText('应用编号')).toHaveProperty('value', '')
     expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', '')
@@ -160,7 +160,7 @@ describe('shipping configuration drawer', () => {
     fireEvent.change(screen.getByLabelText('应用密钥'), { target: { value: 'check-word-private' } })
     fireEvent.click(screen.getByRole('button', { name: '保存连接' }))
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/shipping/settings', expect.objectContaining({ method: 'POST' })))
-    expect(String(fetcher.mock.calls[1][1].body)).toContain('check-word-private')
+    expect(String(fetcher.mock.calls.find(([, init]) => init?.method === 'POST')?.[1].body)).toContain('check-word-private')
     await waitFor(() => expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', ''))
   })
 })

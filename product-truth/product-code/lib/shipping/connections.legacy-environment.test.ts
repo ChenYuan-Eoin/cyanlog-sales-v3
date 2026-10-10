@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 type Row = Record<string, unknown>
 const m = vi.hoisted(() => ({ from: vi.fn(), tables: {} as Record<string, Row[]>, writes: [] as Array<{ table: string; operation: string }> }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: m.from } }))
-import { decryptShippingSecret, hasLegacyShippingConfiguration, importLegacyShippingConfiguration, loadShippingConfiguration, saveCarrierCredentials, type CarrierEnvironment } from './connections'
+import { decryptShippingSecret, hasLegacyShippingConfiguration, importLegacyShippingConfiguration, loadShippingConfiguration, saveCarrierCredentials, saveBillingAccount, type CarrierEnvironment } from './connections'
 
 const userId = '11111111-1111-4111-8111-111111111111'
 const orgId = '22222222-2222-4222-8222-222222222222'
@@ -30,18 +30,21 @@ beforeEach(() => {
     const filters: Array<(row: Row) => boolean> = []
     let operation = 'select', value: Row = {}
     const run = () => {
+      let inserted: Row | undefined
       if (operation !== 'select') {
         m.writes.push({ table, operation })
         if (operation === 'update') m.tables[table].filter(row => filters.every(filter => filter(row))).forEach(row => Object.assign(row, value))
-        else m.tables[table].push({ id: `${table}-${m.tables[table].length + 1}`, ...value })
+        else { inserted = { id: `${table}-${m.tables[table].length + 1}`, ...value }; m.tables[table].push(inserted) }
         operation = 'select'
       }
-      const data = m.tables[table].filter(row => filters.every(filter => filter(row)))
+      const data = inserted ? [inserted] : m.tables[table].filter(row => filters.every(filter => filter(row)))
       return { data, error: null, count: data.length }
     }
     const query: Record<string, unknown> = {}
     query.select = () => query
     query.eq = (key: string, expected: unknown) => { filters.push(row => row[key] === expected); return query }
+    query.is = (key: string, expected: unknown) => { filters.push(row => (row[key] ?? null) === expected); return query }
+    query.neq = (key: string, expected: unknown) => { filters.push(row => row[key] !== expected); return query }
     query.in = (key: string, values: unknown[]) => { filters.push(row => values.includes(row[key])); return query }
     query.order = () => query
     for (const method of ['upsert', 'update', 'insert']) query[method] = (data: Row) => { operation = method; value = data; return query }
@@ -94,6 +97,17 @@ describe('legacy shipping environment provenance', () => {
     await saveCarrierCredentials(orgId, userId, { partnerId: 'example-manual-partner', checkWord: 'example-manual-check-word', environment: 'production', services: [{ id: 2, name: '示例服务' }] })
     const configuration = await loadShippingConfiguration(orgId)
     expect(configuration.connections[0].environment).toBe('production')
-    expect(m.writes).toEqual([{ table: 'shipping_carrier_connections', operation: 'upsert' }])
+    expect(m.writes).toEqual([{ table: 'shipping_carrier_connections', operation: 'upsert' }, { table: 'shipping_billing_accounts', operation: 'update' }])
   })
+})
+
+it('saves a monthly account before API setup, then links it only to its matching environment', async () => {
+  const saved = await saveBillingAccount(orgId, userId, { accountNumber: '0000005616', environment: 'production' })
+  expect(saved.connections).toHaveLength(0)
+  expect(saved.billingAccounts[0]).toMatchObject({ connectionId: '', environment: 'production', tail: '5616', isDefault: true })
+  await saveCarrierCredentials(orgId, userId, { partnerId: 'sandbox-1234', checkWord: 'sandbox-secret', environment: 'sandbox', services: [] })
+  expect(m.tables.shipping_billing_accounts[0].connection_id).toBeNull()
+  const linked = await saveCarrierCredentials(orgId, userId, { partnerId: 'production-1234', checkWord: 'production-secret', environment: 'production', services: [] })
+  expect(linked.billingAccounts[0].connectionId).toBe(linked.connections.find(c => c.environment === 'production')?.id)
+  expect(JSON.stringify(linked)).not.toContain('0000005616')
 })

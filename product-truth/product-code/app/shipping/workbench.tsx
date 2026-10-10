@@ -39,7 +39,9 @@ function withTrackingStatus(order: ShipmentOrder, result: TrackingResult): Shipm
   return next === order.status ? order : { ...order, status: next }
 }
 
-export default function ShippingWorkbench({ settings, simulation }: { settings: ShippingSettings; simulation?: ShippingSimulation }) {
+export default function ShippingWorkbench({ settings: initialSettings, simulation }: { settings: ShippingSettings; simulation?: ShippingSimulation }) {
+  const [settings, setSettings] = useState(initialSettings)
+  useEffect(() => { setSettings(initialSettings) }, [initialSettings])
   const request = simulation ? simulation.request : shippingWorkbenchRequest
   const isSimulation = Boolean(simulation)
   const [orders, setOrders] = useState<ShipmentOrder[]>([])
@@ -108,7 +110,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const invalidCount = preparedRows.filter(({ errors }) => errors.length > 0).length
   const selectedConnection = settings.carrierConnections?.find(connection => connection.id === connectionId)
   const selectedServices = selectedConnection?.services || settings.services
-  const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.status === 'active')
+  const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.environment === (selectedConnection?.environment || settings.environment) && account.status === 'active')
   const selectedAccount = availableAccounts.find(account => account.id === billingAccountId)
   const canSubmitCurrent = settings.carrierConnections?.length
     ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.length > 0 && (!serviceId || selectedServices.some(service => String(service.id) === serviceId)) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
@@ -137,6 +139,15 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   }
   function confirmReplacement() {
     return !batch.length || window.confirm('重新解析或导入将替换当前列表，手工修改和移除结果不会保留。是否继续？')
+  }
+  async function refreshConfiguration() {
+    if (busy || confirmationBusy || batchBusy) return
+    setBusy('configuration'); setMessage('')
+    try {
+      const result = await request<{ settings: ShippingSettings }>('/api/shipping/settings?workspace=1')
+      setSettings(current => ({ ...current, ...result.settings })); setConnectionId(result.settings.connectionId || ''); setBillingAccountId(result.settings.defaultBillingAccountId || ''); setServiceId(''); setReviewIds([])
+      setMessage('寄件配置已刷新，草稿保留；请重新核对下单参数。')
+    } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
   }
   function changeConnection(nextId: string) {
     setConnectionId(nextId)
@@ -298,7 +309,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
     <header className={styles.topbar}>
       <div><p>物流协同 / SHIPPING OPS</p><h1>自助收寄</h1></div>
       <div className={styles.topbarActions}>
-        {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <><a className={styles.configButton} href="/shipping/demo">模拟体验</a><a className={styles.configButton} href="/sales-portal">销售寄件提报</a></>}
+        {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <><a className={styles.configButton} href="/shipping/demo">模拟体验</a><a className={styles.configButton} href="/sales-portal">销售寄件提报</a><button className={styles.configButton} disabled={!!busy || confirmationBusy || batchBusy} onClick={() => void refreshConfiguration()}>刷新寄件配置</button></>}
         <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{payment === 'sender_cash' ? '寄方现结' : payment === 'recipient' ? '收方到付' : selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '月结账号待选择'}</small></div>
       </div>
     </header>
@@ -365,9 +376,9 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
         <div className={styles.orderList}>
           {reviewedOrders.length > 0 && <section className={styles.bulkSettings} aria-label="正式下单参数">
             <h3>所选 {reviewedOrders.length} 票的正式下单参数</h3>
-            <label>承运商连接<select disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id} disabled={connection.status !== 'connected'}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
+            <label>承运商连接<select disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{!settings.carrierConnections?.length && <option value="">顺丰 · 生产 · 待配置接口</option>}{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
             <label>本批付款方式<select disabled={confirmationBusy} value={payment} onChange={event => { setPayment(event.target.value as ShippingPayment); setReviewIds([]) }}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
-            {payment === 'sender_monthly' && <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>}
+            {payment === 'sender_monthly' && <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{!availableAccounts.length && <option value="">当前承运商环境暂无月结账号</option>}{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>}
             <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => { setServiceId(event.target.value); setReviewIds([]) }}><option value="">按每票工单所选产品</option>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
             <p className={styles.intakeHint}>请逐票核对下方完整收寄资料。确认后才向顺丰提交订单并请求揽收；实际寄件人按各工单保存的资料使用。</p>
             <p className={styles.intakeHint}>付款方式：{payment === 'sender_monthly' ? '公司月结' : payment === 'sender_cash' ? '寄方现结' : '收方到付'}。运费以顺丰实际结算为准。{productionOrderUnverified ? '生产首票需单独确认。' : ''}</p>

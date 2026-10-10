@@ -58,13 +58,13 @@ function databaseError() { return new ShippingError(503, '寄件配置保存失�
 export async function loadShippingConfiguration(orgId: string): Promise<ShippingConfiguration> {
   const [connections, accounts, sender] = await Promise.all([
     supabaseAdmin.from('shipping_carrier_connections').select('id,carrier_key,environment,partner_id_tail,connection_status,authorized_services,order_capability,query_capability,tracking_capability,cancel_capability,last_tested_at').eq('org_id', orgId).order('created_at', { ascending: true }),
-    supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,display_name,account_tail,status,is_default').eq('org_id', orgId).order('created_at', { ascending: true }),
+    supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,environment,display_name,account_tail,status,is_default').eq('org_id', orgId).order('created_at', { ascending: true }),
     supabaseAdmin.from('shipping_sender_profiles').select('display_name,name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle()
   ])
   if (connections.error || accounts.error || sender.error) throw databaseError()
   return {
     connections: (connections.data || []).map((row) => ({ id: row.id, carrier: 'sf', environment: row.environment, partnerIdTail: row.partner_id_tail, status: row.connection_status, services: serviceSchema.parse(row.authorized_services || []), capabilities: { order: row.order_capability, query: row.query_capability, tracking: row.tracking_capability, cancel: row.cancel_capability }, lastTestedAt: row.last_tested_at })),
-    billingAccounts: (accounts.data || []).map((row) => ({ id: row.id, connectionId: row.connection_id, environment: (connections.data || []).find(connection => connection.id === row.connection_id)?.environment === 'production' ? 'production' : 'sandbox', displayName: row.display_name, tail: row.account_tail, status: row.status, isDefault: row.is_default })),
+    billingAccounts: (accounts.data || []).map((row) => ({ id: row.id, connectionId: row.connection_id || '', environment: row.environment || ((connections.data || []).find(connection => connection.id === row.connection_id)?.environment === 'production' ? 'production' : 'sandbox'), displayName: row.display_name, tail: row.account_tail, status: row.status, isDefault: row.is_default })),
     sender: sender.data ? { displayName: sender.data.display_name, name: sender.data.name, phone: sender.data.phone, province: sender.data.province, city: sender.data.city, county: sender.data.county, address: sender.data.address } : null
   }
 }
@@ -80,6 +80,8 @@ export async function saveCarrierCredentials(orgId: string, userId: string, inpu
     last_tested_at: null, created_by: userId, updated_by: userId
   }, { onConflict: 'org_id,carrier_key,environment' }).select('id').single()
   if (error || !data) throw databaseError()
+  const linked = await supabaseAdmin.from('shipping_billing_accounts').update({ connection_id: data.id }).eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', parsed.environment).is('connection_id', null)
+  if (linked.error) throw databaseError()
   return loadShippingConfiguration(orgId)
 }
 
@@ -103,28 +105,27 @@ export async function saveBillingAccount(orgId: string, userId: string, input: u
   const parsed = accountSchema.parse(input)
   const config = await loadShippingConfiguration(orgId)
   const connection = config.connections.find((item) => item.carrier === 'sf' && item.environment === parsed.environment)
-  if (!connection) throw new ShippingError(409, `请先保存顺丰${parsed.environment === 'sandbox' ? '沙盒' : '生产'}连接资料。`)
-  const makeDefault = parsed.isDefault || !config.billingAccounts.some(account => account.connectionId === connection.id && account.status === 'active' && account.isDefault)
+  const makeDefault = parsed.isDefault || !config.billingAccounts.some(account => account.environment === parsed.environment && account.status === 'active' && account.isDefault)
   const key = fingerprintKey()
   const accountFingerprint = createHmac('sha256', key).update(`billing-account:${parsed.accountNumber}`).digest('hex')
   if (makeDefault) {
-    const { error } = await supabaseAdmin.from('shipping_billing_accounts').update({ is_default: false, updated_by: userId, updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('connection_id', connection.id).eq('is_default', true)
+    const { error } = await supabaseAdmin.from('shipping_billing_accounts').update({ is_default: false, updated_by: userId, updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', parsed.environment).eq('is_default', true)
     if (error) throw databaseError()
   }
   const { error } = await supabaseAdmin.from('shipping_billing_accounts').upsert({
-    org_id: orgId, connection_id: connection.id, account_ciphertext: encryptShippingSecret(parsed.accountNumber), account_fingerprint: accountFingerprint,
+    org_id: orgId, connection_id: connection?.id || null, carrier_key: 'sf', environment: parsed.environment, account_ciphertext: encryptShippingSecret(parsed.accountNumber), account_fingerprint: accountFingerprint,
     account_tail: parsed.accountNumber.slice(-4), display_name: parsed.displayName || `月结尾号 ${parsed.accountNumber.slice(-4)}`, status: 'active', is_default: makeDefault, updated_by: userId, updated_at: new Date().toISOString()
-  }, { onConflict: 'org_id,connection_id,account_fingerprint' })
+  }, { onConflict: 'org_id,carrier_key,environment,account_fingerprint' })
   if (error) throw databaseError()
   return loadShippingConfiguration(orgId)
 }
 
 export async function updateBillingAccount(orgId: string, userId: string, accountId: string, action: 'default' | 'deactivate') {
   if (action === 'default') {
-    const { data: account, error: lookupError } = await supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,status').eq('org_id', orgId).eq('id', accountId).maybeSingle()
+    const { data: account, error: lookupError } = await supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,environment,status').eq('org_id', orgId).eq('id', accountId).maybeSingle()
     if (lookupError || !account) throw new ShippingError(404, '月结账号不存在。')
     if (account.status !== 'active') throw new ShippingError(409, '已停用账号不能设为默认。')
-    const { error: unsetError } = await supabaseAdmin.from('shipping_billing_accounts').update({ is_default: false, updated_by: userId, updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('connection_id', account.connection_id).eq('is_default', true)
+    const { error: unsetError } = await supabaseAdmin.from('shipping_billing_accounts').update({ is_default: false, updated_by: userId, updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', account.environment).eq('is_default', true)
     if (unsetError) throw databaseError()
   }
   const update = action === 'default' ? { is_default: true, updated_by: userId, updated_at: new Date().toISOString() } : { is_default: false, status: 'inactive', updated_by: userId, updated_at: new Date().toISOString() }
@@ -157,7 +158,7 @@ export function hasLegacyShippingConfiguration(environment: CarrierEnvironment, 
   if (!legacyEnvironmentMatches(environment, env)) return false
   const connection = configuration.connections.find((item) => item.carrier === 'sf' && item.environment === environment)
   const monthlyCard = environment === 'production' ? env.SF_MONTHLY_CARD : env.SF_SANDBOX_MONTHLY_CARD
-  const hasAccount = connection && configuration.billingAccounts.some((account) => account.connectionId === connection.id && account.status === 'active')
+  const hasAccount = configuration.billingAccounts.some((account) => account.environment === environment && account.status === 'active')
   return Boolean(
     (!connection && env.SF_PARTNER_ID && env.SF_CHECK_WORD)
     || (connection && !connection.services.length && env.SF_SERVICES_JSON)

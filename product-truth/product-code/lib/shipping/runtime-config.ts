@@ -45,7 +45,7 @@ export async function loadShippingSettings(orgId: string): Promise<ShippingSetti
     .eq('org_id', orgId).eq('carrier_key', 'sf').neq('connection_status', 'disabled').order('environment', { ascending: true })
   if (connectionError) throw new ShippingError(503, '寄件连接读取失败。')
   const { data: accountRows, error: accountError } = await supabaseAdmin.from('shipping_billing_accounts')
-    .select('id,connection_id,display_name,account_tail,status,is_default').eq('org_id', orgId).eq('status', 'active').order('created_at', { ascending: true })
+    .select('id,connection_id,environment,display_name,account_tail,status,is_default').eq('org_id', orgId).eq('status', 'active').order('created_at', { ascending: true })
   if (accountError) throw new ShippingError(503, '月结账号读取失败。')
   const { data: sender, error: senderError } = await supabaseAdmin.from('shipping_sender_profiles')
     .select('display_name,name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle()
@@ -53,11 +53,10 @@ export async function loadShippingSettings(orgId: string): Promise<ShippingSetti
 
   const connections = connectionRows || []
   const accounts = accountRows || []
-  const preferred = connections.find(row => row.environment === 'sandbox' && row.connection_status === 'connected')
-    || connections.find(row => row.environment === 'production' && row.connection_status === 'connected')
-    || connections.find(row => row.environment === 'sandbox')
+  const preferred = connections.find(row => row.environment === 'production')
+    || connections.find(row => row.environment === 'sandbox' && row.connection_status === 'connected')
     || connections[0]
-  const matchingAccounts = preferred ? accounts.filter(row => row.connection_id === preferred.id) : []
+  const matchingAccounts = preferred ? accounts.filter(row => row.connection_id === preferred.id) : accounts.filter(row => row.environment === 'production')
   const defaultAccount = matchingAccounts.find(row => row.is_default) || matchingAccounts[0]
   const services = preferred ? servicesSchema.safeParse(preferred.authorized_services || []) : null
   const normalizedServices = services?.success ? services.data : []
@@ -69,11 +68,11 @@ export async function loadShippingSettings(orgId: string): Promise<ShippingSetti
   const ready = Boolean(connected && senderReady && normalizedServices.length)
   const canSubmit = ready && monthlyReady && productionAuthorized
   const publicSettings: ShippingSettings = {
-    environment: preferred?.environment || 'sandbox', ready, canSubmit,
+    environment: preferred?.environment || 'production', ready, canSubmit,
     reason: !preferred ? '尚未配置快递平台连接。' : !connected ? '快递连接尚未通过当前环境只读连通检查。' : !senderReady ? '尚未配置公司默认寄件人。' : !monthlyReady ? '尚未绑定活动月结账号。' : !normalizedServices.length ? '尚未配置已授权服务产品。' : !productionAuthorized ? 'Production下单能力标记为不可用，请联系配置管理员复核。' : '',
     services: normalizedServices, sender: contact, monthlyTail: defaultAccount?.account_tail || '', connectionId: preferred?.id || '', defaultBillingAccountId: defaultAccount?.id || '',
     carrierConnections: connections.map(row => ({ id: row.id, carrier: 'sf', environment: row.environment, status: row.connection_status, orderCapability: row.order_capability, services: servicesSchema.safeParse(row.authorized_services || []).success ? servicesSchema.parse(row.authorized_services || []) : [] })),
-    billingAccounts: accounts.map(row => ({ id: row.id, connectionId: row.connection_id, displayName: row.display_name, tail: row.account_tail, environment: connections.find(item => item.id === row.connection_id)?.environment || 'sandbox', isDefault: row.is_default, status: row.status }))
+    billingAccounts: accounts.map(row => ({ id: row.id, connectionId: row.connection_id || '', displayName: row.display_name, tail: row.account_tail, environment: row.environment || connections.find(item => item.id === row.connection_id)?.environment || 'production', isDefault: row.is_default, status: row.status }))
   }
   return publicSettings
 }

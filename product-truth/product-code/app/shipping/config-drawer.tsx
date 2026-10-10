@@ -5,6 +5,8 @@ import { CheckCircle2, LoaderCircle, Plus, Settings, ShieldCheck, X } from 'luci
 import type { ShippingConfiguration } from '@/lib/shipping/connections'
 import { emptyContact, type Contact } from '@/lib/shipping/types'
 import styles from './config-drawer.module.css'
+import { parseAddress } from '@/lib/shipping/address'
+import IntakeConfiguration from './intake-configuration'
 import EmailConfiguration from './email-configuration'
 import { SF_SERVICE_CATALOG, DEFAULT_INTAKE_SERVICES } from '@/lib/shipping/sf-service-catalog'
 
@@ -42,6 +44,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [accountNumber, setAccountNumber] = useState('')
   const [accountName, setAccountName] = useState('')
   const [senderName, setSenderName] = useState('公司默认寄件地址')
+  const [senderText, setSenderText] = useState('')
   const [sender, setSender] = useState<Contact>(emptyContact())
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState('')
@@ -184,11 +187,12 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       <header className={styles.header}><div><p>SHIPPING SETTINGS</p><h2 id="shipping-config-title">寄件设置</h2></div>{!embedded && <button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button>}</header>
       {message && <p className={`${styles.message} ${styles.feedback}`} role="status" aria-live="polite">{message}</p>}
       <div className={styles.content}>
+        <IntakeConfiguration/>
         <EmailConfiguration/>
         <section className={styles.section}>
           <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>顺丰 API 接入</h3></div><span>{connection ? `尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>
           <p className={styles.hint}>只需配置一次应用编号和密钥，系统自动获取和刷新接口令牌，无需定期登录顺丰官网。已有服务器配置可直接迁入。</p>
-          <label>运行环境<select value={environment} onChange={event => setEnvironment(event.target.value as typeof environment)}><option value="sandbox">沙盒</option><option value="production">生产</option></select></label>
+          <label>承运商<select value="sf" disabled><option value="sf">顺丰速运</option></select></label><p className={styles.hint}>当前支持顺丰接口。月结号可先保存，接口凭据用于后续正式下单。</p><label>运行环境<select value={environment} onChange={event => setEnvironment(event.target.value as typeof environment)}><option value="sandbox">沙盒</option><option value="production">生产</option></select></label>
           {connection && <div className={styles.savedState}>已保存 · {connection.status === 'connected' ? `${connection.environment === 'sandbox' ? '沙盒' : '生产'}连接通过` : connection.status === 'failed' ? '最近连接检查失败' : '待连接检查'} · 只读查询能力 {connection.capabilities.query === 'verified' ? '已验证' : '未验证'}</div>}
           {connection && <div className={styles.capabilities} aria-label="顺丰能力验证状态">{([['order', '下单'], ['query', '订单查询'], ['tracking', '轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection.capabilities[key] === 'verified' ? '已验证' : connection.capabilities[key] === 'unavailable' ? '不可用' : '未验证'}</b></div>)}</div>}
           <details><summary>首次接入 / 更换应用凭据</summary><label>应用编号<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder={connection ? '重新输入以轮换凭据' : '顺丰分配的PartnerID'}/></label>
@@ -216,7 +220,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
 
         <section className={styles.section}>
           <div className={styles.sectionTitle}><div><Settings size={16}/><h3>公司默认寄件人</h3></div></div>
-          <div className={styles.twoColumns}><label>姓名<input value={sender.name} onChange={event => setSender(value => ({ ...value, name: event.target.value }))}/></label><label>电话<input value={sender.phone} onChange={event => setSender(value => ({ ...value, phone: event.target.value }))}/></label></div>
+          <div className={styles.twoColumns}><label>粘贴默认寄方信息<textarea aria-label="默认寄方地址文本" rows={3} value={senderText} onChange={event => setSenderText(event.target.value)} placeholder="姓名 电话 省市区及详细地址"/></label><button type="button" disabled={!senderText.trim() || !!busy} onClick={() => { const parsed = parseAddress(senderText); setSender(parsed.contact); setMessage(parsed.warnings.join('；')) }}>解析默认寄方信息</button><label>姓名<input value={sender.name} onChange={event => setSender(value => ({ ...value, name: event.target.value }))}/></label><label>电话<input value={sender.phone} onChange={event => setSender(value => ({ ...value, phone: event.target.value }))}/></label></div>
           <div className={styles.threeColumns}><label>省<input value={sender.province} onChange={event => setSender(value => ({ ...value, province: event.target.value }))}/></label><label>市<input value={sender.city} onChange={event => setSender(value => ({ ...value, city: event.target.value }))}/></label><label>区县<input value={sender.county} onChange={event => setSender(value => ({ ...value, county: event.target.value }))}/></label></div>
           <label>详细地址<input value={sender.address} onChange={event => setSender(value => ({ ...value, address: event.target.value }))}/></label>
           <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>
