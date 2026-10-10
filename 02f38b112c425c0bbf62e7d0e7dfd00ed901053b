@@ -50,25 +50,36 @@
         "entry_sha256": "7203b50d62b92ccbc48898964e92c449f359ad45d4d4943ebba366658b869224"
       },
       "scope": "Monthly accounts independent from API setup, production-first selection, explicit config refresh, sender parsing, configurable company/team intake rules. Private additive migration applied and verified in Preview and Production."
+    },
+    "production": {
+      "commit": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
+      "deployment_id": "dpl_5EaPuHGckCR9yWMsWiCKAPFZg8D2",
+      "status": "READY",
+      "domain": "sales.cyanlog.icu",
+      "current_scope_evidence": {
+        "artifact_path": "shipping-config-production-proof.json",
+        "sha256": "ac2f3967dabbd8262d8e98c68f7493d70d2bd092fa05a215470737a161cb3171"
+      },
+      "remaining": "SF API connection unconfigured; no real carrier order, no workorder submission, no fees"
     }
   },
-  "updatedAt": "2026-10-10T08:28:04.808Z",
+  "updatedAt": "2026-10-10T08:47:46.594Z",
   "completionState": "code_green",
   "gateSnapshots": {
     "code_green": {
       "stage": "code_green",
-      "checkedAt": "2026-10-10T08:28:04.791Z",
+      "checkedAt": "2026-10-10T08:47:46.576Z",
       "head": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
-      "originMain": "0b7a34984ea7388cdf853d1a3265fe20fc2c9389",
-      "remoteMain": null,
-      "remoteProduction": null,
-      "defaultBranch": null,
-      "originMainFresh": false,
-      "originMainIsAncestor": false,
-      "mainIntegrated": false,
-      "localAttestationRefOid": "3ea167caea86a8d6851b9f1677e02c1711f7b8db",
-      "remoteAttestationRefOid": null,
-      "remoteSnapshotCheckedAt": "2026-10-10T08:27:59.441Z",
+      "originMain": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
+      "remoteMain": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
+      "remoteProduction": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": true,
+      "localAttestationRefOid": "cb0ad147fa62378db3a97c3fff7abdebfc0443a9",
+      "remoteAttestationRefOid": "cb0ad147fa62378db3a97c3fff7abdebfc0443a9",
+      "remoteSnapshotCheckedAt": "2026-10-10T08:47:42.980Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -78,10 +89,96 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "effa093c2414f70dc6a57e79b17a8ff850be52a6d2d7d4b208cacba9f7a732e2",
-  "sealedAt": "2026-10-10T08:28:04.808Z",
-  "attestationDigest": "de173429800e658b285557e5dc3626b92e939a91f617947faa2b3664c93e8dae"
+  "previousAttestationDigest": "de173429800e658b285557e5dc3626b92e939a91f617947faa2b3664c93e8dae",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP18",
+    "commit": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
+    "evidence": {
+      "code": {
+        "commit": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "full_tests",
+            "artifact_path": "check-logs/104d30eeded7ce62f3c3b0397d75e824de076afd/check-03-test.log",
+            "log_sha256": "39b5efe3ed2314ec66c7d1eec42066751ad3e72520cd5f9f4422d147a1e9e2f0",
+            "exit_code": 0
+          },
+          {
+            "name": "lint",
+            "artifact_path": "check-logs/104d30eeded7ce62f3c3b0397d75e824de076afd/check-02-lint.log",
+            "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+            "exit_code": 0
+          },
+          {
+            "name": "typecheck",
+            "artifact_path": "check-logs/104d30eeded7ce62f3c3b0397d75e824de076afd/check-01-typecheck.log",
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+            "exit_code": 0
+          },
+          {
+            "name": "target_tests",
+            "artifact_path": "shipping-config-rules-target.log",
+            "log_sha256": "e60d84dafd58843f4b649c22a7f37e0579aa8f1307d64760682031164b0ed9a0",
+            "exit_code": 0
+          },
+          {
+            "name": "build",
+            "artifact_path": "shipping-config-rules-build.log",
+            "log_sha256": "bd807818004ef93227de31e8d3c6b481639ba9745ddd04476d516800710899fb",
+            "exit_code": 0
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "a2ab2b0a33cc4bd0d02c0ffac9190fe274a3dfc4be88c1b2820c973de739d4d2",
+          "entry_sha256": "7203b50d62b92ccbc48898964e92c449f359ad45d4d4943ebba366658b869224"
+        },
+        "scope": "Monthly accounts independent from API setup, production-first selection, explicit config refresh, sender parsing, configurable company/team intake rules. Private additive migration applied and verified in Preview and Production."
+      }
+    },
+    "updatedAt": "2026-10-10T08:28:04.808Z",
+    "completionState": "code_green",
+    "gateSnapshots": {
+      "code_green": {
+        "stage": "code_green",
+        "checkedAt": "2026-10-10T08:28:04.791Z",
+        "head": "02f38b112c425c0bbf62e7d0e7dfd00ed901053b",
+        "originMain": "0b7a34984ea7388cdf853d1a3265fe20fc2c9389",
+        "remoteMain": null,
+        "remoteProduction": null,
+        "defaultBranch": null,
+        "originMainFresh": false,
+        "originMainIsAncestor": false,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "3ea167caea86a8d6851b9f1677e02c1711f7b8db",
+        "remoteAttestationRefOid": null,
+        "remoteSnapshotCheckedAt": "2026-10-10T08:27:59.441Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "effa093c2414f70dc6a57e79b17a8ff850be52a6d2d7d4b208cacba9f7a732e2",
+    "sealedAt": "2026-10-10T08:28:04.808Z",
+    "attestationDigest": "de173429800e658b285557e5dc3626b92e939a91f617947faa2b3664c93e8dae"
+  },
+  "revision": 2,
+  "contentDigest": "18c0ec49fa9e15e5f49182523e4d894a4fb3d7910ef9186ca1fc9bd401591df2",
+  "sealedAt": "2026-10-10T08:47:46.595Z",
+  "attestationDigest": "dadeac5a4a88ec4218670206655cc4aef82198161c16d129683c1d705b4b1e7c"
 }
