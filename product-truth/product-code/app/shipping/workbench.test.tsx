@@ -40,7 +40,8 @@ describe('self-service shipping workbench', () => {
     await waitFor(() => expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/confirm'))).toBe(true))
     const [, init] = fetcher.mock.calls.find(([url]) => String(url).endsWith('/confirm'))!
     const body = JSON.parse(String(init.body))
-    expect(body).toMatchObject({ payment, connectionId, serviceId: 2 })
+    expect(body).toMatchObject({ payment, connectionId })
+    expect(body).not.toHaveProperty('serviceId')
     expect(body).not.toHaveProperty('billingAccountId')
   })
   it('keeps intake usable during configuration outages while disabling formal confirmation', async () => {

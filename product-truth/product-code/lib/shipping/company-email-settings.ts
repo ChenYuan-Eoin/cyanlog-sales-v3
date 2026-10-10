@@ -6,21 +6,21 @@ import { normalizeCompanyEmailDomains, normalizeEmployeeEmail } from './company-
 import { verifyCompanyMailer, CompanyMailError, type CompanyMailerConfig } from './company-mailer'
 
 type SettingsRow = {
-  org_id: string; enabled: boolean; allowed_domains: string[]; smtp_host: string | null
+  org_id: string; enabled: boolean; require_verification?: boolean; allowed_domains: string[]; smtp_host: string | null
   smtp_port: 465 | 587; smtp_secure: boolean; from_email: string | null; from_name: string
   credentials_ciphertext: string | null; connection_status: 'unconfigured' | 'configured' | 'verified' | 'failed'
   last_tested_at: string | null; last_error_kind: CompanyMailError['reason'] | null; updated_at: string
 }
 export type CompanyEmailSettings = {
-  enabled: boolean; allowedDomains: string[]; smtpHost: string; smtpPort: 465 | 587
+  enabled: boolean; requireVerification?: boolean; allowedDomains: string[]; smtpHost: string; smtpPort: 465 | 587
   fromEmail: string; fromName: string; hasCredentials: boolean
   connectionStatus: SettingsRow['connection_status']; lastTestedAt: string | null; updatedAt: string | null
   lastErrorKind: CompanyMailError['reason'] | null
 }
-const columns = 'org_id,enabled,allowed_domains,smtp_host,smtp_port,smtp_secure,from_email,from_name,credentials_ciphertext,connection_status,last_tested_at,last_error_kind,updated_at'
+const columns = 'org_id,enabled,require_verification,allowed_domains,smtp_host,smtp_port,smtp_secure,from_email,from_name,credentials_ciphertext,connection_status,last_tested_at,last_error_kind,updated_at'
 const credentialsSchema = z.object({ kind: z.literal('shipping_smtp'), host: z.string(), username: z.email(), password: z.string().min(1).max(1024) }).strict()
 const saveSchema = z.object({
-  enabled: z.boolean(), allowedDomains: z.array(z.string()).max(20),
+  enabled: z.boolean(), requireVerification: z.boolean().optional(), allowedDomains: z.array(z.string()).max(20),
   smtpHost: z.string().trim().toLowerCase().max(253), smtpPort: z.union([z.literal(465), z.literal(587)]),
   fromEmail: z.string().trim().max(254), fromName: z.string().trim().min(1).max(80).regex(/^[^\r\n]+$/),
   password: z.string().min(1).max(1024).refine(value => value.trim().length > 0).optional(),
@@ -35,7 +35,7 @@ async function readSettings(orgId: string): Promise<SettingsRow | null> {
 }
 function toPublicSettings(row: SettingsRow | null): CompanyEmailSettings {
   return {
-    enabled: row?.enabled ?? false, allowedDomains: row?.allowed_domains ?? [],
+    enabled: row?.enabled ?? false, requireVerification: row?.require_verification ?? false, allowedDomains: row?.allowed_domains ?? [],
     smtpHost: row?.smtp_host ?? '', smtpPort: row?.smtp_port ?? 465,
     fromEmail: row?.from_email ?? '', fromName: row?.from_name ?? '自助收寄',
     hasCredentials: Boolean(row?.credentials_ciphertext), connectionStatus: row?.connection_status ?? 'unconfigured',
@@ -49,6 +49,8 @@ export async function saveCompanyEmailSettings(orgId: string, userId: string, in
   const parsed = saveSchema.parse(input)
   const allowedDomains = normalizeCompanyEmailDomains(parsed.allowedDomains)
   const current = await readSettings(orgId)
+  const requireVerification = parsed.requireVerification ?? current?.require_verification ?? false
+  if (requireVerification && !parsed.enabled) throw new ShippingError(400, '要求邮箱验证前，请先启用并配置验证码发送。')
   if ((current?.updated_at ?? null) !== parsed.expectedUpdatedAt) throw new ShippingError(409, '邮箱配置已更新，请刷新后再保存。')
   const fromEmail = parsed.fromEmail ? normalizeEmployeeEmail(parsed.fromEmail) : null
   if (parsed.smtpHost && !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(parsed.smtpHost)) throw new ShippingError(400, '请填写合法的SMTP服务器域名。')
@@ -60,7 +62,7 @@ export async function saveCompanyEmailSettings(orgId: string, userId: string, in
     : current?.credentials_ciphertext ?? null
   if (parsed.enabled && (!allowedDomains.length || !parsed.smtpHost || !fromEmail || !credentials)) throw new ShippingError(400, '请先补齐公司邮箱域和发信配置，再启用员工入口。')
   const changed = !current || destinationChanged || Boolean(parsed.password) || current.smtp_port !== parsed.smtpPort
-  const row = { org_id: orgId, enabled: parsed.enabled, allowed_domains: allowedDomains, smtp_host: parsed.smtpHost || null, smtp_port: parsed.smtpPort, smtp_secure: parsed.smtpPort === 465, from_email: fromEmail, from_name: parsed.fromName, credentials_ciphertext: credentials, connection_status: changed ? credentials ? 'configured' : 'unconfigured' : current.connection_status, last_tested_at: changed ? null : current.last_tested_at, last_error_kind: changed ? null : current.last_error_kind, updated_by: userId, updated_at: new Date().toISOString() }
+  const row = { org_id: orgId, enabled: parsed.enabled, require_verification: requireVerification, allowed_domains: allowedDomains, smtp_host: parsed.smtpHost || null, smtp_port: parsed.smtpPort, smtp_secure: parsed.smtpPort === 465, from_email: fromEmail, from_name: parsed.fromName, credentials_ciphertext: credentials, connection_status: changed ? credentials ? 'configured' : 'unconfigured' : current.connection_status, last_tested_at: changed ? null : current.last_tested_at, last_error_kind: changed ? null : current.last_error_kind, updated_by: userId, updated_at: new Date().toISOString() }
   const result = current
     ? await supabaseAdmin.from('shipping_email_access_settings').update(row).eq('org_id', orgId).eq('updated_at', current.updated_at).select(columns).maybeSingle()
     : await supabaseAdmin.from('shipping_email_access_settings').insert(row).select(columns).single()

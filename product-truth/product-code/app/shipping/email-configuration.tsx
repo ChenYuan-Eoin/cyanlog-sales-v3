@@ -28,7 +28,7 @@ function EmailSettingsForm() {
     setBusy(true); setMessage('')
     try {
       const reply = await request({ method: 'POST', body: JSON.stringify({ action: 'save', settings: {
-        enabled: settings.enabled, allowedDomains: domains.split(/[\s,，;；]+/).filter(Boolean),
+        enabled: settings.enabled, requireVerification: settings.requireVerification ?? false, allowedDomains: domains.split(/[\s,，;；]+/).filter(Boolean),
         smtpHost: settings.smtpHost, smtpPort: settings.smtpPort, fromEmail: settings.fromEmail,
         fromName: settings.fromName, ...(password ? { password } : {}), expectedUpdatedAt: settings.updatedAt,
       } }) })
@@ -44,10 +44,10 @@ function EmailSettingsForm() {
     } catch (error) { setMessage((error as Error).message) } finally { setBusy(false) }
   }
   return <div>
-    <p className={styles.hint}>使用一个系统邮箱发送验证码。销售只需验证自己的公司邮箱，无需提供邮箱密码；正式寄件仍由操作员审核确认。</p>
+    <p className={styles.hint}>默认允许匿名提报，无需账号密码。邮箱验证是可选能力，用于保存个人资料和查看本人历史；开启强制验证前需完成发信配置。</p>
     {settings && <fieldset disabled={busy} onChange={() => setDirty(true)} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
       <label>允许的公司邮箱后缀<input value={domains} onChange={event => setDomains(event.target.value)} placeholder="多个后缀用逗号分隔，例如 company.com"/></label>
-      <label className={styles.checkbox}><input type="checkbox" checked={settings.enabled} onChange={event => setSettings({ ...settings, enabled: event.target.checked })}/>启用员工邮箱验证入口</label>
+      <label className={styles.checkbox}><input type="checkbox" checked={settings.enabled} onChange={event => setSettings({ ...settings, enabled: event.target.checked, requireVerification: event.target.checked ? settings.requireVerification : false })}/>启用可选邮箱验证</label><label className={styles.checkbox}><input type="checkbox" disabled={!settings.enabled} checked={settings.requireVerification ?? false} onChange={event => setSettings({ ...settings, requireVerification: event.target.checked })}/>要求员工验证邮箱后才能提报（默认关闭）</label>
       <label>系统发信邮箱<input type="email" autoComplete="off" value={settings.fromEmail} onChange={event => setSettings({ ...settings, fromEmail: event.target.value })} placeholder="用于发送验证码的公司邮箱"/></label>
       <label>发信显示名称<input maxLength={80} value={settings.fromName} onChange={event => setSettings({ ...settings, fromName: event.target.value })}/></label>
       <div className={styles.twoColumns}>
@@ -65,9 +65,9 @@ function EmailSettingsForm() {
 }
 
 export default function EmailConfiguration() {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   return <section className={styles.section} aria-label="员工邮箱验证配置">
-    <div className={styles.sectionTitle}><div><h3>员工邮箱验证与寄件资料</h3></div></div>
+    <div className={styles.sectionTitle}><div><h3>员工提报与邮箱验证</h3></div></div>
     <button type="button" className={styles.secondary} aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? '收起邮箱配置' : '配置公司邮箱验证'}</button>
     {open && <EmailSettingsForm/>}
   </section>

@@ -49,7 +49,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const [bulkText, setBulkText] = useState(simulation?.sampleText || '')
   const [batchBusy, setBatchBusy] = useState(false)
   const [connectionId, setConnectionId] = useState(settings.connectionId || '')
-  const [serviceId, setServiceId] = useState(String(settings.services[0]?.id || ''))
+  const [serviceId, setServiceId] = useState('')
   const [billingAccountId, setBillingAccountId] = useState(settings.defaultBillingAccountId || '')
   const [payment, setPayment] = useState<ShippingPayment>('sender_monthly')
   const [uniformCargo, setUniformCargo] = useState('文件/合同')
@@ -111,7 +111,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.status === 'active')
   const selectedAccount = availableAccounts.find(account => account.id === billingAccountId)
   const canSubmitCurrent = settings.carrierConnections?.length
-    ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.some(service => String(service.id) === serviceId) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
+    ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.length > 0 && (!serviceId || selectedServices.some(service => String(service.id) === serviceId)) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
     : settings.canSubmit
   const reviewedOrders = filtered.filter(order => reviewIds.includes(order.id) && order.status === 'awaiting_confirmation')
   const reviewedSendersReady = reviewedOrders.every(order => senderForReview(order, settings.sender).contact !== null)
@@ -133,8 +133,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
   function updateBatch(id: number, field: 'recipient' | 'phone' | 'address', value: string) { setBatch(rows => rows.map(row => row.id === id && maySubmitRow(row) && !batchBusy ? { ...row, [field]: value } : row)) }
   function changeConnection(nextId: string) {
     setConnectionId(nextId)
-    const target = settings.carrierConnections?.find(connection => connection.id === nextId)
-    setServiceId(String(target?.services[0]?.id || ''))
+    setServiceId('')
     const accounts = (settings.billingAccounts || []).filter(account => account.connectionId === nextId && account.status === 'active')
     setBillingAccountId(accounts.find(account => account.isDefault)?.id || accounts[0]?.id || '')
   }
@@ -361,7 +360,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
             <label>承运商连接<select disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id} disabled={connection.status !== 'connected'}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
             <label>本批付款方式<select disabled={confirmationBusy} value={payment} onChange={event => { setPayment(event.target.value as ShippingPayment); setReviewIds([]) }}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
             {payment === 'sender_monthly' && <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>}
-            <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => setServiceId(event.target.value)}>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+            <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => { setServiceId(event.target.value); setReviewIds([]) }}><option value="">按每票工单所选产品</option>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
             <p className={styles.intakeHint}>请逐票核对下方完整收寄资料。确认后才向顺丰提交订单并请求揽收；实际寄件人按各工单保存的资料使用。</p>
             <p className={styles.intakeHint}>付款方式：{payment === 'sender_monthly' ? '公司月结' : payment === 'sender_cash' ? '寄方现结' : '收方到付'}。运费以顺丰实际结算为准。{productionOrderUnverified ? '生产首票需单独确认。' : ''}</p>
             {!canSubmitCurrent && <p className={styles.bad}>{payment === 'sender_monthly' ? '连接、月结账号或寄件服务未就绪，请在配置中心处理后正式下单。' : '快递连接或寄件服务未就绪，请在配置中心处理后正式下单。'}</p>}
@@ -383,7 +382,7 @@ export default function ShippingWorkbench({ settings, simulation }: { settings: 
                 <h3>正式下单前核对</h3>
                 {senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>公司寄件资料不完整。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
                 <p><b>收件人</b><br/>{order.input.recipient.name} · {order.input.recipient.phone}<br/>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}{order.input.recipient.address}</p>
-                <p><b>物品</b> {order.input.cargo} · {order.input.weight}kg<br/>服务偏好：{order.input.servicePreference === 'urgent' ? '加急' : '标准'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>
+                <p><b>物品</b> {order.input.cargo} · {order.input.weight}kg<br/>服务产品：{order.input.serviceName || (order.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}<br/>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '邮箱已验证' : '匿名自报，待核对' : '操作员录入'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>
                 {order.input.submittedBy && <p>提报销售：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}
               </section>}
             </>}

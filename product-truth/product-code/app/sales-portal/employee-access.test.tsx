@@ -6,7 +6,7 @@ const fetcher = vi.fn()
 const employee = { id: 'employee-a', email: 'person@ones.cn', team: '销售部', updatedAt: '2026-10-09T00:00:00.000Z', sender: { name: '测试姓名', phone: '13800138000', province: '广东省', city: '深圳市', county: '南山区', address: '测试路88号' } }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status })
 function mount() { return render(<EmployeeAccess>{({ employee: profile, controls, canSubmit }) => <>{controls}{canSubmit && <div>工单表单：{profile?.sender?.name}</div>}</>}</EmployeeAccess>) }
-beforeEach(() => { vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher); fetcher.mockReset() })
+beforeEach(() => { vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher); fetcher.mockReset(); localStorage.clear() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('employee portal access', () => {
   it('loads the saved profile without re-entering personal details', async () => {

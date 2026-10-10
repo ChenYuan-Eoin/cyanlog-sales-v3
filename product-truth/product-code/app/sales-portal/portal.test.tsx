@@ -5,7 +5,7 @@ import SalesPortal, { SalesRequestForm } from './portal'
 const employee = { id: 'employee-1', email: 'person@ones.cn', team: '大客户部', updatedAt: '2026-10-09T00:00:00.000Z', sender: { name: '李娜', phone: '13800138000', province: '广东省', city: '广州市', county: '天河区', address: '销售路88号' } }
 
 const fetcher = vi.fn()
-beforeEach(() => { vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher); fetcher.mockReset() })
+beforeEach(() => { vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher); fetcher.mockReset(); localStorage.clear(); window.location.hash = '' })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('sales shipping portal', () => {
@@ -55,6 +55,7 @@ describe('single-page anonymous intake', () => {
   const reply = (data: unknown) => new Response(JSON.stringify(data), { status: 200 })
   it('shows the complete form before email verification and preserves the draft through verification and profile saving', async () => {
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (_url.endsWith('/options')) return reply({ services: [{ id: 2, name: '顺丰标快', preference: 'standard' }], requireVerification: true, emailAvailable: true })
       const body = init?.body ? JSON.parse(String(init.body)) : null
       if (!body) return reply({ employee: null, orders: [] })
       if (body.action === 'request_code') return reply({ challengeId: 'challenge-1', delivery: 'accepted' })
@@ -76,7 +77,7 @@ describe('single-page anonymous intake', () => {
     await screen.findByText('person@ones.cn · 已验证')
     expect((screen.getByLabelText('寄件人姓名') as HTMLInputElement).value).toBe('李娜')
     expect((screen.getByPlaceholderText('公司或项目客户名称') as HTMLInputElement).value).toBe('验证前填写的客户')
-    expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(true)
+    await waitFor(() => expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: '保存寄件资料' }))
     await waitFor(() => expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(false))
     expect((screen.getByPlaceholderText('公司或项目客户名称') as HTMLInputElement).value).toBe('验证前填写的客户')
@@ -87,4 +88,26 @@ describe('single-page anonymous intake', () => {
     expect((screen.getByPlaceholderText('公司或项目客户名称') as HTMLInputElement).value).toBe('')
     expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(true)
   })
+})
+
+
+it('submits a complete anonymous workorder without asking for a code or saving a profile', async () => {
+  fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/options')) return new Response(JSON.stringify({ services: [{ id: 6, name: '顺丰即日', preference: 'urgent' }], requireVerification: false, emailAvailable: false }))
+    if (init?.method === 'POST') return new Response(JSON.stringify({ orderNo: 'SO-ANON', status: 'awaiting_confirmation', receiptToken: 'a'.repeat(43) }), { status: 202 })
+    return new Response(JSON.stringify({ employee: null }))
+  })
+  render(<SalesPortal />)
+  for (const [label, value] of [['寄件人姓名','李娜'],['寄件人联系电话','13800138000'],['寄件省份','广东省'],['寄件城市','广州市'],['寄件区县','天河区'],['详细寄件地址','销售路88号'],['所属团队','大客户部']]) fireEvent.change(screen.getByLabelText(label), { target: { value } })
+  fireEvent.change(screen.getByPlaceholderText('公司或项目客户名称'), { target: { value: '匿名客户' } })
+  fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号' } })
+  fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
+  await screen.findByText('邮箱验证尚未启用，不影响匿名提报。')
+  await waitFor(() => expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(screen.getByRole('button', { name: '预览工单' })); fireEvent.click(screen.getByRole('button', { name: '确认提交工单' }))
+  expect(await screen.findByText('SO-ANON')).toBeTruthy()
+  const posts = fetcher.mock.calls.filter(call => call[1]?.method === 'POST')
+  expect(posts).toHaveLength(1); expect(posts[0][0]).toBe('/api/shipping/public/orders')
+  expect(JSON.parse(posts[0][1].body).input).toMatchObject({ serviceId: 6, sender: { name: '李娜' } })
+  expect(screen.getByRole('button', { name: '复制查询链接' })).toBeTruthy()
 })

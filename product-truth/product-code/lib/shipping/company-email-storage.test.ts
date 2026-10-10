@@ -26,6 +26,7 @@ beforeAll(async () => {
   await db.exec('create role anon; create role authenticated; create role service_role bypassrls; create table public.organizations(id uuid primary key); create table public.users(id uuid primary key); create table public.shipping_orders(id uuid primary key,org_id uuid,created_at timestamptz default now());')
   await db.query('insert into public.organizations values ($1),($2)', [orgId, otherOrg])
   await db.exec(readFileSync(new URL('../../supabase/migrations/20261009042436_shipping_employee_email_access.sql', import.meta.url), 'utf8'))
+  await db.exec(readFileSync(new URL('../../supabase/migrations/20261010000001_shipping_optional_email_verification.sql', import.meta.url), 'utf8'))
   await db.query("insert into public.shipping_email_access_settings(org_id,enabled,allowed_domains) values ($1,true,array['company.example']),($2,true,array['company.example'])", [orgId, otherOrg])
 }, 30_000)
 afterAll(async () => { await db?.close() })
@@ -117,4 +118,10 @@ describe('employee email database boundary (local PostgreSQL engine)', () => {
     expect((await verify(challenge.id, challenge.email)).result.status).toBe('invalid')
     expect((await reserve(challenge.email)).result.status).toBe('unavailable')
   })
+})
+
+it('defaults to anonymous intake and cannot require verification while sending is disabled', async () => {
+  const result = await db.query<{ required: boolean }>('select require_verification as required from public.shipping_email_access_settings where org_id=$1', [orgId])
+  expect(result.rows[0].required).toBe(false)
+  await expect(db.query('update public.shipping_email_access_settings set enabled=false,require_verification=true where org_id=$1', [orgId])).rejects.toThrow()
 })

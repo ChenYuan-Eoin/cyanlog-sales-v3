@@ -13,8 +13,9 @@ async function call(body?: unknown) {
   if (!response.ok) throw new Error(data.error || '员工寄件服务暂不可用')
   return data
 }
-export type EmployeeAccessState = { employee: EmployeeProfile | null; controls: ReactNode; canSubmit: boolean; sessionKey: number }
-export default function EmployeeAccess({ children }: { children: (state: EmployeeAccessState) => ReactNode }) {
+export type EmployeeAccessState = { employee: EmployeeProfile | null; controls: ReactNode; canSubmit: boolean; sessionKey: number; sender: Contact; team: string }
+export default function EmployeeAccess({ children, requireVerification = false, emailAvailable = true }: { children: (state: EmployeeAccessState) => ReactNode; requireVerification?: boolean; emailAvailable?: boolean }) {
+  const [remember, setRemember] = useState(false)
   const [sessionKey, setSessionKey] = useState(0)
   const [employee, setEmployee] = useState<EmployeeProfile | null>(null)
   const [loading, setLoading] = useState(true), [loadFailed, setLoadFailed] = useState(false)
@@ -24,6 +25,9 @@ export default function EmployeeAccess({ children }: { children: (state: Employe
   const [error, setError] = useState(''), [notice, setNotice] = useState('')
   const [retryAt, setRetryAt] = useState(0), [now, setNow] = useState(Date.now)
   const running = useRef(false)
+  useEffect(() => { try { const saved = JSON.parse(localStorage.getItem('shipping-anonymous-sender-v1') || 'null'); if (saved?.remember && contactSchema.safeParse(saved.sender).success && typeof saved.team === 'string') { setSender(saved.sender); setTeam(saved.team); setRemember(true) } } catch { /* optional device preference */ } }, [])
+  useEffect(() => { if (!remember || employee) return; try { localStorage.setItem('shipping-anonymous-sender-v1', JSON.stringify({ remember: true, sender, team })) } catch { /* private browsing must not block intake */ } }, [remember, sender, team, employee])
+
   function accept(profile: EmployeeProfile | null, preserveDraft = false) {
     setEmployee(profile)
     if (profile?.sender || !preserveDraft) { setSender(profile?.sender || emptyContact()); setTeam(profile?.team || '') }
@@ -51,26 +55,26 @@ export default function EmployeeAccess({ children }: { children: (state: Employe
   const feedback = <>{error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status">{notice}</p>}</>
   const controls = <>
     <section className={`${styles.card} ${styles.accessCard}`} aria-label="邮箱验证">
-      <div className={styles.cardTitle}><div><h2>邮箱验证</h2><p>可先填写下方资料，提交前验证公司邮箱。本设备验证有效期为 60 天。</p></div></div>
-      {loading ? <p role="status">正在读取个人寄件资料…</p> : loadFailed ? <>{feedback}<button type="button" onClick={load}>重新读取资料</button></> : !employee ? <form onSubmit={verify}>
+      <div className={styles.cardTitle}><div><h2>{requireVerification ? '公司要求邮箱验证' : '邮箱验证（可选）'}</h2><p>{requireVerification ? '本公司启用了邮箱验证要求。' : '无需注册、登录或验证码即可提报工单。'} 验证邮箱后可保存个人资料和查看本人历史，本设备会话有效期 60 天。</p></div></div>
+      {loading ? <p role="status">正在读取个人寄件资料…</p> : loadFailed ? <>{feedback}<button type="button" onClick={load}>重新读取资料</button></> : !employee && !emailAvailable ? <p>邮箱验证尚未启用，不影响匿名提报。</p> : !employee ? <form onSubmit={verify}>
         <fieldset disabled={busy} className={styles.verificationRow}>
           <label>公司邮箱<input type="email" required autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setChallenge(''); setCode(''); setNotice('') }}/></label>
           <button type="button" disabled={!email || now < retryAt} onClick={requestCode}>{now < retryAt ? `${Math.ceil((retryAt - now) / 1000)} 秒后可重发` : '获取验证码'}</button>
           {challenge && <><label>邮箱验证码<input required autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}/></label><button type="submit">验证邮箱</button></>}
         </fieldset>{feedback}
-      </form> : <><div className={styles.identityRow}><span>{employee.email} · 已验证</span><button type="button" disabled={busy} onClick={() => act(async () => { await call({ action: 'logout' }); accept(null); setSessionKey(key => key + 1); setEmail(''); setChallenge(''); setCode('') })}>退出 / 换人</button></div>{feedback}</>}
+      </form> : <><div className={styles.identityRow}><span>{employee.email} · 已验证</span><button type="button" disabled={busy} onClick={() => act(async () => { await call({ action: 'logout' }); accept(null); setRemember(false); try { localStorage.removeItem('shipping-anonymous-sender-v1') } catch { /* optional device storage */ } setSessionKey(key => key + 1); setEmail(''); setChallenge(''); setCode('') })}>退出 / 换人</button></div>{feedback}</>}
     </section>
     <section className={`${styles.card} ${styles.accessCard}`} aria-label="我的寄件资料">
-      <div className={styles.cardTitle}><div><h2>我的寄件资料</h2><p>保存一次，之后自动使用。操作员确认后按此地址联系上门揽收。</p></div></div>
+      <div className={styles.cardTitle}><div><h2>我的寄件资料</h2><p>填写实际寄件人和揽收地址，提交后由操作员核对确认。</p></div></div>
       {editing || !employee?.sender ? <form onSubmit={save}>
         <fieldset disabled={busy} className={styles.fields}>
           <div className={styles.grid2}>{(['name','phone','province','city','county','address'] as const).map((field, index) => <label key={field}>{['寄件人姓名','寄件人联系电话','寄件省份','寄件城市','寄件区县','详细寄件地址'][index]}<input required value={sender[field]} onChange={e => setSender(current => ({ ...current, [field]: e.target.value }))}/></label>)}</div>
           <label>所属团队<input required maxLength={80} value={team} onChange={e => setTeam(e.target.value)}/></label>
-          <div className={styles.identityRow}><button type="submit" disabled={!employee || loading || loadFailed}>保存寄件资料</button>{!employee && <span>邮箱验证后即可保存，已填内容会保留。</span>}{employee?.sender && <button type="button" onClick={() => { accept(employee); setEditing(false); setError('') }}>取消修改</button>}</div>
+          <div className={styles.identityRow}>{employee && <button type="submit" disabled={loading || loadFailed}>保存寄件资料</button>}{!employee && <label className={styles.remember}><input type="checkbox" checked={remember} onChange={e => { setRemember(e.target.checked); if (!e.target.checked) { try { localStorage.removeItem('shipping-anonymous-sender-v1') } catch { /* optional device storage */ } } }}/>在本设备记住寄件资料（公共设备请勿勾选）</label>}{employee?.sender && <button type="button" onClick={() => { accept(employee); setEditing(false); setError('') }}>取消修改</button>}</div>
         </fieldset>
       </form> : <><p>{employee.sender.name} · {employee.sender.phone} · {employee.team}</p><p>{employee.sender.province}{employee.sender.city}{employee.sender.county}{employee.sender.address}</p><button type="button" disabled={busy} onClick={() => { accept(employee); setEditing(true) }}>修改我的寄件资料</button></>}
     </section>
     {employee && <details className={styles.card}><summary>我的提报记录</summary><MyWorkorders key={employee.id}/></details>}
   </>
-  return children({ employee, controls, canSubmit: Boolean(employee?.sender && !editing && !busy && !loading && !loadFailed), sessionKey })
+  return children({ employee, controls, canSubmit: Boolean((!requireVerification || employee) && !busy && !loading && !loadFailed && contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) }).success && team.trim()), sessionKey, sender, team })
 }

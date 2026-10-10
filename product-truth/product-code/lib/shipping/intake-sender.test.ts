@@ -19,8 +19,9 @@ describe('anonymous sales sender business snapshot', () => {
     expect(result.success).toBe(false)
     if (!result.success) expect(result.error.issues.some(issue => issue.path.join('.') === `input.sender.${field}`)).toBe(true)
   })
-  it('does not accept carrier fields or a client-selected organization in public intake', () => {
+  it('accepts a requested service code but never a client-selected organization or service label', () => {
     expect(anonymousShipmentSchema.safeParse({ ...request, orgId: 'other-organization' }).success).toBe(false)
-    expect(anonymousShipmentSchema.safeParse({ ...request, input: { ...input, serviceId: 2 } }).success).toBe(false)
+    expect(anonymousShipmentSchema.safeParse({ ...request, input: { ...input, serviceId: 2 } }).success).toBe(true)
+    expect(anonymousShipmentSchema.safeParse({ ...request, input: { ...input, serviceName: 'forged' } }).success).toBe(false)
   })
 })

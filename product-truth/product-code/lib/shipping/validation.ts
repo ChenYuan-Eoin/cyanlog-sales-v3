@@ -18,7 +18,7 @@ const operatorIntakeInputSchema = shippingInputSchema.extend({
 // submission. Actual connection/account/service selection happens at review.
 export const ownerOrderSchema = z.object({ key: z.string().uuid(), input: operatorIntakeInputSchema, confirmed: z.literal(true).optional(), connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional() }).strict()
 export const orderSelectionSchema = z.object({ payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).optional(), connectionId: z.string().uuid().optional(), billingAccountId: z.string().uuid().optional(), serviceId: z.number().int().positive().optional() }).strict()
-const anonymousShippingInputSchema = shippingInputSchema.omit({ serviceId: true }).extend({
+const anonymousShippingInputSchema = shippingInputSchema.extend({
   sender: contactSchema,
   servicePreference: z.enum(['standard', 'urgent']).default('standard'),
   payment: z.literal('sender_monthly').optional(),

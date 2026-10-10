@@ -93,7 +93,14 @@ export async function getPublicShippingDefaults(): Promise<{ orgId: string; send
   return { orgId: row.org_id, sender: { name: row.name, phone: row.phone, province: row.province, city: row.city, county: row.county, address: row.address } }
 }
 
-export async function resolvePublicShippingOrgId() { return (await getPublicShippingDefaults()).orgId }
+export async function resolvePublicShippingOrgId() {
+  // The public company deployment is unambiguous only with a single organization.
+  // Caller-provided organization IDs are never accepted and no carrier setup is required.
+  const { data, error } = await supabaseAdmin.from('organizations').select('id').limit(2)
+  if (error) throw new ShippingError(503, '公开提报入口暂不可用。')
+  if (data?.length !== 1 || !data[0].id) throw new ShippingError(503, '公开入口需要绑定明确的公司组织。')
+  return String(data[0].id)
+}
 export async function getPublicDefaultSender(): Promise<Contact> { return (await getPublicShippingDefaults()).sender }
 
 export async function getShippingRuntimeConfig(args: { orgId: string; billingAccountId?: string | null; connectionId?: string; payment?: ShippingPayment; requireOrderCapability?: boolean; allowHistorical?: boolean; senderOverride?: Contact }): Promise<ShippingRuntimeConfig> {

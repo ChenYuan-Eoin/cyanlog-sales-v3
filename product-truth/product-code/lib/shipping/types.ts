@@ -13,6 +13,7 @@ export type ShippingSettings = { guest?: boolean; canOperate?: boolean; canManag
 export type ShipmentOrderStatus = 'accepted' | 'awaiting_confirmation' | 'returned' | 'confirmed' | 'ordering' | 'order_unknown' | 'waybill_created' | 'in_transit' | 'delivered' | 'cancelled' | 'order_failed'
 export type ShipmentRelation = { salesRef: string | null; customerRef: string | null; assignmentStatus: 'assigned' | 'unassigned' }
 export type ShipmentOrder = {
+  identityVerified?: boolean
   id: string
   orderNo: string
   intakeSource: 'anonymous_web' | 'owner_web' | 'crm' | 'wechat_bot'

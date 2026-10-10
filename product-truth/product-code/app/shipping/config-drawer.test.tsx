@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ShippingConfigDrawer from './config-drawer'
 
+vi.mock('./email-configuration', () => ({ default: () => <section aria-label="员工邮箱验证配置">员工提报与邮箱验证</section> }))
 const fetcher = vi.fn()
 beforeEach(() => {
   fetcher.mockReset()
@@ -17,16 +18,16 @@ describe('shipping configuration drawer', () => {
     fetcher.mockResolvedValue(new Response(JSON.stringify({ navigationAvailable: true }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
     expect(await screen.findByText('当前账号可以办理寄件，但没有寄件配置管理权限。')).toBeTruthy()
-    expect(screen.queryByLabelText('PartnerID')).toBeNull()
+    expect(screen.queryByLabelText('应用编号')).toBeNull()
     expect(screen.getByRole('link', { name: '返回自助收寄工作台' }).getAttribute('href')).toBe('/shipping')
   })
 
   it('renders inline in Config Center without opening a modal or adding a screen overlay', async () => {
     render(<ShippingConfigDrawer embedded />)
-    expect(await screen.findByRole('region', { name: '顺丰连接与寄件资料' })).toBeTruthy()
+    expect(await screen.findByRole('region', { name: '寄件设置' })).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('button', { name: '关闭寄件配置' })).toBeNull()
-    expect(screen.getByLabelText('PartnerID')).toBeTruthy()
+    expect(screen.getByLabelText('应用编号')).toBeTruthy()
   })
 
   it('migrates the existing operator list into org-scoped permissions without exposing IDs', async () => {
@@ -49,7 +50,7 @@ describe('shipping configuration drawer', () => {
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { operatorAccess: savedAccess } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
     fireEvent.click(await screen.findByRole('checkbox', { name: '寄件同事' }))
-    fireEvent.click(screen.getByRole('button', { name: '保存寄件人员权限' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存确认人员权限' }))
     expect(await screen.findByText('寄件操作权限已保存。')).toBeTruthy()
     const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
     expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'save_operator_access', userIds: [operatorId] })
@@ -61,7 +62,7 @@ describe('shipping configuration drawer', () => {
       ? { ...{ configuration: legacyConfiguration, legacyConfigurationAvailable: { sandbox: false, production: false } }, imported: ['顺丰机器连接（服务端加密）', '已授权服务产品'], needsAttention: [] }
       : { configuration: { connections: [], billingAccounts: [], sender: null }, legacyConfigurationAvailable: { sandbox: true, production: false } }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
-    fireEvent.click(await screen.findByRole('button', { name: '迁入旧沙盒配置' }))
+    fireEvent.change(await screen.findByLabelText('运行环境'), { target: { value: 'sandbox' } }); fireEvent.click(await screen.findByRole('button', { name: '迁入旧沙盒配置' }))
     expect(await screen.findByText(/已迁入：顺丰机器连接（服务端加密）、已授权服务产品/)).toBeTruthy()
     const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
     expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'import_legacy_configuration', environment: 'sandbox' })
@@ -84,7 +85,7 @@ describe('shipping configuration drawer', () => {
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { operatorAccess: { ...access, operators: [{ ...access.operators[0], canOperate: true, grantSource: 'database' }] } } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess: access }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
     fireEvent.click(await screen.findByRole('checkbox', { name: '寄件同事' }))
-    fireEvent.click(screen.getByRole('button', { name: '保存寄件人员权限' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存确认人员权限' }))
     expect(await screen.findByText('寄件操作权限已保存。')).toBeTruthy()
     const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
     expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'save_operator_access', userIds: ['11111111-1111-4111-8111-111111111111'] })
@@ -97,7 +98,8 @@ describe('shipping configuration drawer', () => {
     } }), { status: 200 }))
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
     expect(await screen.findByText(/沙盒 · 尾号 5616 · 可用 · 默认/)).toBeTruthy()
-    expect(screen.getByLabelText('CheckWord')).toHaveProperty('value', '')
+    fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'sandbox' } })
+    expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', '')
     expect(screen.getByLabelText('月结卡号')).toHaveProperty('value', '')
     expect(screen.getByText(/尾号 8391/)).toBeTruthy()
   })
@@ -114,6 +116,7 @@ describe('shipping configuration drawer', () => {
       return new Response(JSON.stringify({ configuration }), { status: 200 })
     })
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
+    fireEvent.change(await screen.findByLabelText('运行环境'), { target: { value: 'sandbox' } })
     expect(await screen.findByRole('button', { name: '测试沙盒连接' })).toHaveProperty('disabled', false)
 
     fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'production' } })
@@ -135,16 +138,16 @@ describe('shipping configuration drawer', () => {
       return new Response(JSON.stringify({ configuration: { connections: [connection], billingAccounts: [], sender: null } }), { status: 200 })
     })
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
-    fireEvent.change(await screen.findByLabelText('服务编号'), { target: { value: '2' } })
-    fireEvent.change(screen.getByLabelText('服务名称'), { target: { value: '顺丰标快' } })
-    fireEvent.click(screen.getByRole('button', { name: '添加' }))
-    fireEvent.click(screen.getByRole('button', { name: '保存授权服务' }))
+    fireEvent.change(await screen.findByLabelText('运行环境'), { target: { value: 'sandbox' } })
+    fireEvent.change(screen.getByLabelText('顺丰服务产品'), { target: { value: '6' } })
+    fireEvent.click(screen.getByRole('button', { name: '添加服务' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存可提报服务' }))
 
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
     const [, request] = fetcher.mock.calls[1] as [string, RequestInit]
-    expect(JSON.parse(String(request.body))).toEqual({ action: 'save_authorized_services', environment: 'sandbox', services: [{ id: 2, name: '顺丰标快', preference: 'standard' }] })
-    expect(screen.getByLabelText('PartnerID')).toHaveProperty('value', '')
-    expect(screen.getByLabelText('CheckWord')).toHaveProperty('value', '')
+    expect(JSON.parse(String(request.body))).toEqual({ action: 'save_authorized_services', environment: 'sandbox', services: [{ id: 2, name: '顺丰标快', preference: 'standard' }, { id: 1, name: '顺丰特快', preference: 'urgent' }, { id: 6, name: '顺丰即日', preference: 'urgent' }] })
+    expect(screen.getByLabelText('应用编号')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', '')
   })
 
   it('saves connection credentials only through the server route and clears the secret field', async () => {
@@ -153,11 +156,11 @@ describe('shipping configuration drawer', () => {
       return new Response(JSON.stringify({ configuration: { connections: [], billingAccounts: [], sender: null } }), { status: 200 })
     })
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
-    fireEvent.change(await screen.findByLabelText('PartnerID'), { target: { value: 'partner-8391' } })
-    fireEvent.change(screen.getByLabelText('CheckWord'), { target: { value: 'check-word-private' } })
+    fireEvent.change(await screen.findByLabelText('应用编号'), { target: { value: 'partner-8391' } })
+    fireEvent.change(screen.getByLabelText('应用密钥'), { target: { value: 'check-word-private' } })
     fireEvent.click(screen.getByRole('button', { name: '保存连接' }))
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/shipping/settings', expect.objectContaining({ method: 'POST' })))
     expect(String(fetcher.mock.calls[1][1].body)).toContain('check-word-private')
-    await waitFor(() => expect(screen.getByLabelText('CheckWord')).toHaveProperty('value', ''))
+    await waitFor(() => expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', ''))
   })
 })

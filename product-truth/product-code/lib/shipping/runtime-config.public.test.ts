@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ from: vi.fn(), rows: [] as Array<Record<string, unknown>>, error: null as unknown }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
-import { getPublicShippingDefaults } from './runtime-config'
+import { getPublicShippingDefaults, resolvePublicShippingOrgId } from './runtime-config'
 
 beforeEach(() => {
   mocks.rows = []; mocks.error = null
@@ -26,4 +26,12 @@ describe('public intake organization binding', () => {
     mocks.rows = [{ org_id: null }]
     await expect(getPublicShippingDefaults()).rejects.toMatchObject({ status: 503 })
   })
+})
+
+it('resolves anonymous intake without requiring a carrier connection or default sender', async () => {
+  mocks.rows = [{ id: 'org-A' }]
+  expect(await resolvePublicShippingOrgId()).toBe('org-A')
+  expect(mocks.from).toHaveBeenCalledWith('organizations')
+  mocks.rows = [{ id: 'org-A' }, { id: 'org-B' }]
+  await expect(resolvePublicShippingOrgId()).rejects.toMatchObject({ status: 503 })
 })
