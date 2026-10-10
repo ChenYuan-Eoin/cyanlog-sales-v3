@@ -547,7 +547,8 @@ requirements:
     name: AI模型能力与业务使用边界
     module: 全局AI平台（配置中心）
     source: PROJECT-主文档.md#6.2.3
-    status: wp01_wp02_completed_wp09_hosted_runtime_active
+    status: in_progress
+    execution_status: wp01_wp02_completed_wp09_hosted_runtime_active
     priority: P1
     feature_packet: product-truth/feature-packets/F012-ai-runtime-config.md
     code_locations:
@@ -1028,7 +1029,8 @@ requirements:
     first_release: 寄件先顺丰真实闭环；收件独立覆盖常用快递，每30分钟更新；保留邮箱60天、资料复用与企微身份/扫码/提报/通知要求
     goal_layering_status: user_updated_product_goal_scenarios_under_review
     source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
-    status: WP18_active
+    status: in_progress
+    execution_status: WP18_active
     priority: P1
     feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
     code_locations:
@@ -1047,8 +1049,8 @@ sf_self_service_order_prd:
   configuration_contract_status: inbound_query_design_authorized_30min
   configuration_contract: product-truth/feature-packets/F054-sf-self-service-order.md#3-配置中心具体设计
   configuration_boundary: 核心工单规则内置；邮箱域、公司机器人、承运商连接及寄件策略按组织配置；顺丰是首个适配器，demo企微只用于测试；新增未支持平台需实现适配器。
-  status: WP18_active
+  status: in_progress
   source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011 / IN-20260923-013 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
-  branch: codex/shipping-collaboration-console
+  branch: main
   work_package: WP18
   feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
