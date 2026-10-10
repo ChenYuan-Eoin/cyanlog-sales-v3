@@ -22,7 +22,7 @@ const anonymousShippingInputSchema = shippingInputSchema.extend({
   sender: contactSchema,
   servicePreference: z.enum(['standard', 'urgent']).default('standard'),
   payment: z.literal('sender_monthly').optional(),
-  customerName: text(120),
+  customerName: z.string().trim().min(4, '公司名称为必填，至少填写4个字符').max(120, '公司名称最多120个字符'),
   submittedBy: shippingSubmitterSchema,
   specialRequirements: z.string().trim().max(500).optional(),
 }).superRefine((input, ctx) => {

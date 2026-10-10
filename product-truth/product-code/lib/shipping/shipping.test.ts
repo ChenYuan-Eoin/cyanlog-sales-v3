@@ -39,6 +39,15 @@ describe('address extraction', () => {
   it('preserves unresolved addresses for manual correction', () => { const r = parseAddress('深圳南山测试园区'); expect(r.contact.province).toBe(''); expect(r.contact.address).toBe('深圳南山测试园区') })
 })
 describe('boundary validation', () => {
+  it.each(['', '   ', '甲', '甲乙丙', '  甲乙丙  ', undefined])('requires a company name of at least four characters: %s', customerName => {
+    const result = anonymousShipmentSchema.safeParse({ key, input: { ...input, customerName, submittedBy: { name: contact.name, phone: contact.phone, team: '销售团队' } } })
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error.issues.some(issue => issue.path.join('.') === 'input.customerName')).toBe(true)
+  })
+  it('accepts four characters without business registration lookup and trims surrounding spaces', () => {
+    const result = anonymousShipmentSchema.parse({ key, input: { ...input, customerName: '  示例企业  ', submittedBy: { name: contact.name, phone: contact.phone, team: '销售团队' } } })
+    expect(result.input.customerName).toBe('示例企业')
+  })
   it('accepts a simple valid shipment', () => expect(shippingInputSchema.parse(input)).toEqual(input))
   it.each([0, -1, Infinity, NaN, 21])('rejects unsafe weight %s', weight => expect(shippingInputSchema.safeParse({ ...input, weight }).success).toBe(false))
   it('rejects unimplemented order source and forged metadata', () => { expect(shippingInputSchema.safeParse({ ...input, source: 'order' }).success).toBe(false); expect(shippingInputSchema.safeParse({ ...input, created_by: 'other' }).success).toBe(false) })
