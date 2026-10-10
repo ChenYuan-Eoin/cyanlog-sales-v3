@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "activeId": "WP18",
+  "commit": "0b7a34984ea7388cdf853d1a3265fe20fc2c9389",
+  "evidence": {
+    "code": {
+      "commit": "0b7a34984ea7388cdf853d1a3265fe20fc2c9389",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "full_tests",
+          "artifact_path": "check-logs/6d672b995f1736edfe83315dd718b82a3aee65f4/check-03-test.log",
+          "log_sha256": "bfb9dca9ac33184f74f8b989a508f2f46616842503a87a612ef31d4015b7903a",
+          "exit_code": 0
+        },
+        {
+          "name": "lint",
+          "artifact_path": "check-logs/6d672b995f1736edfe83315dd718b82a3aee65f4/check-02-lint.log",
+          "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+          "exit_code": 0
+        },
+        {
+          "name": "typecheck",
+          "artifact_path": "check-logs/6d672b995f1736edfe83315dd718b82a3aee65f4/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0
+        },
+        {
+          "name": "target_tests",
+          "artifact_path": "company-name-target.log",
+          "log_sha256": "60338b7e4bd6a4ec083f15964a009eca83781fb11453aa147f32fb9dfe552859",
+          "exit_code": 0
+        },
+        {
+          "name": "build",
+          "artifact_path": "company-name-build.log",
+          "log_sha256": "f20c1e249af9a9d412363c0e86831fa52d3c356dd2834d4958da785a105bbc63",
+          "exit_code": 0
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "a3197d0904f8769ffde0889593dc8de1eca134e1c41ce5b1d25cf84040d7e795",
+        "entry_sha256": "1c840d5ad9b65d2fbc3152dac564f81741cba506e3d82256cd95a2c1e5761947"
+      },
+      "scope": "Employee company name required, trimmed minimum four characters, no business registry lookup"
+    }
+  },
+  "updatedAt": "2026-10-10T08:07:05.357Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-10T08:07:05.340Z",
+      "head": "0b7a34984ea7388cdf853d1a3265fe20fc2c9389",
+      "originMain": "e0a382204d7044c556e3db6b623bac590390d61e",
+      "remoteMain": "e0a382204d7044c556e3db6b623bac590390d61e",
+      "remoteProduction": "e0a382204d7044c556e3db6b623bac590390d61e",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "a29d290b8c186ffaf1597db09c0e57a16749617b",
+      "remoteAttestationRefOid": "a29d290b8c186ffaf1597db09c0e57a16749617b",
+      "remoteSnapshotCheckedAt": "2026-10-10T08:07:01.480Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "70f554131fd9f363976f14deb0c1dd94ca956c8b169c2e31fb583fb9c6f23011",
+  "sealedAt": "2026-10-10T08:07:05.358Z",
+  "attestationDigest": "7d71f24089d5b8f7108a2550a5280b6e5610543e1dae966930110f8a8d033066"
+}
