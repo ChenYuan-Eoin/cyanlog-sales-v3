@@ -58,7 +58,7 @@ export function publicShipmentReceipt(order: ShipmentOrder): ShipmentReceipt {
   return { orderNo: order.orderNo, status: order.status, waybill: order.waybill, nextReviewAt: order.nextReviewAt, createdAt: order.createdAt }
 }
 
-export async function createAnonymousShipment(args: { orgId: string; key: string; rawInput?: string; input: ShippingInput; contextToken?: string; businessCode?: string; employee?: { id: string; identity?: { provider: 'wecom'; userId: string; phoneSource: 'wecom' | 'preset' }; sender?: Contact; team?: string } }) {
+export async function createAnonymousShipment(args: { orgId: string; key: string; rawInput?: string; input: ShippingInput; contextToken?: string; businessCode?: string; employee?: { id: string; identity?: { provider: 'wecom'; userId: string; corpId?: string; botConnectionId?: string; phoneSource: 'wecom' | 'preset' }; sender?: Contact; team?: string } }) {
   requireOrganization(args.orgId)
   const signed = args.contextToken ? verifyShipmentContext(args.contextToken) : null
   if (args.contextToken && !signed) throw new ShippingError(400, '寄件链接无效或已过期，请联系业务人员重新获取。')

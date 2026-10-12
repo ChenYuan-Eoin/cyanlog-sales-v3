@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-12T05:47:36.030846+00:00",
+  "updated_at": "2026-10-12T06:43:16.891282+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,14 +128,14 @@
     ]
   },
   "active_task": {
-    "id": "WP22",
-    "slug": "reusable-sender-intake",
-    "name": "默认寄方复用与提报纠错",
+    "id": "WP19",
+    "slug": "wecom-authorized-shipping-intake",
+    "name": "企微企业连接与组织授权提报",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP22：公司寄方配置或个人寄方保存一次后复用；寄方摘要前置，临时更换不覆盖常用资料；主输入承担收件解析，统一联系人识别并明确客户单位、寄件单位和团队语义；缺项就地可修正，员工与操作员提报仍进入待审核。",
-    "started_at": "2026-10-12T05:47:36.030539+00:00",
-    "activation_basis": "IN-20261012-007授权编号逐项推进；编号01查件功能已完成真实生产样本对照，按顺序进入02。上游网络可用性限制保留，不代表全十项目标完成。",
+    "objective": "F054 WP19：管理员在配置中心维护企微企业、自建应用、URL回调机器人及组织授权范围；员工免系统账号提报，切换企业不改代码，旧身份和工单不串企业。机器人提报仍进入待审核，实际出号通知由WP20接续。",
+    "started_at": "2026-10-12T06:43:16.891282+00:00",
+    "activation_basis": "IN-20261012-007批准逐项推进；WP22生产范围验收通过；IN-20261012-011/013及用户URL回调选择补齐企微维护基线。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -267,25 +267,18 @@
   },
   "execution_queue": {
     "active": {
-      "id": "WP22",
-      "slug": "reusable-sender-intake",
-      "reason": "按已批准编号顺序推进；第01项真实查件范围已验收。"
-    },
-    "next": {
       "id": "WP19",
       "slug": "wecom-authorized-shipping-intake",
-      "name": "企微员工真实提报",
-      "entry_gate": "WP22提报交互生产验收",
+      "reason": "IN-20261012-007批准逐项推进；WP22生产范围验收通过；IN-20261012-011/013及用户URL回调选择补齐企微维护基线。"
+    },
+    "next": {
+      "id": "WP23",
+      "slug": "confirmed-monthly-dispatch",
+      "name": "前台确认与真实月结出号",
+      "entry_gate": "按F054编号顺序，前一项验收后进入",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
-      {
-        "id": "WP23",
-        "slug": "confirmed-monthly-dispatch",
-        "name": "前台确认与真实月结出号",
-        "entry_gate": "按F054编号顺序，前一项验收后进入",
-        "entry_gate_status": "waiting_active_completion"
-      },
       {
         "id": "WP20",
         "slug": "wecom-waybill-notifications",
@@ -383,6 +376,12 @@
       }
     ],
     "completed": [
+      {
+        "id": "WP22",
+        "slug": "reusable-sender-intake",
+        "result": "仅编号02：寄方复用、共享解析、客户字段与记录布局已生产验收，测试工单提报至待审核并退回，无运单；其余目标仍未完成",
+        "evidence": "codex-runtime/wp22-production-intake.json"
+      },
       {
         "id": "WP21",
         "slug": "existing-waybill-production-tracking",

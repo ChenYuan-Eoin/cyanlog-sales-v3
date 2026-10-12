@@ -6,7 +6,12 @@ import { resolvePublicShippingOrgId } from './runtime-config'
 import { DEFAULT_INTAKE_SERVICES, SF_SERVICE_CATALOG, type ShippingServiceOption } from './sf-service-catalog'
 
 export async function loadPublicIntakeOptions() {
-  const orgId = await resolvePublicShippingOrgId()
+  return loadIntakeOptionsForOrg(await resolvePublicShippingOrgId())
+}
+
+/** Only call with an organization resolved from a trusted session or bot record. */
+export async function loadIntakeOptionsForOrg(orgId: string) {
+  if (!orgId) throw new ShippingError(403, '缺少可信组织范围。')
   const [wecom, connection, rules] = await Promise.all([
     readWecomSettings(orgId),
     supabaseAdmin.from('shipping_carrier_connections').select('authorized_services').eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', 'production').neq('connection_status', 'disabled').maybeSingle(),

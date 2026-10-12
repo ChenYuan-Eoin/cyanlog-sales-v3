@@ -1,3 +1,4 @@
+import { normalizeWecomDirectory } from './wecom-directory'
 import { ShippingError } from './config'
 export type WecomCredentials = { corpId: string; agentId: number; secret: string }
 type Reply = { errcode?: number; errmsg?: string; [key: string]: unknown }
@@ -27,15 +28,7 @@ export async function wecomDirectory(credentials: WecomCredentials) {
   const access_token=await wecomToken(credentials)
   const [departments,members]=await Promise.all([call('department/list',{access_token}),call('user/list',{access_token,department_id:'1',fetch_child:'1'})])
   if (!Array.isArray(departments.department) || !Array.isArray(members.userlist)) throw new ShippingError(502,'企微通讯录响应不完整，现有白名单保持不变。')
-  const names=new Map<number,string>()
-  for (const raw of departments.department) if (raw && typeof raw==='object' && typeof raw.name==='string') names.set(Number(raw.id),raw.name)
-  const seen=new Set<string>()
-  const rows=members.userlist.map(raw=> {
-    if (!raw || typeof raw!=='object' || typeof raw.userid!=='string' || !raw.userid || typeof raw.name!=='string' || !raw.name || !Array.isArray(raw.department) || seen.has(raw.userid)) throw new ShippingError(502,'企微成员数据不完整或重复，现有白名单保持不变。')
-    seen.add(raw.userid)
-    return { userid:raw.userid,name:raw.name,mobile:typeof raw.mobile==='string'?raw.mobile:'',departments:raw.department.map((id: unknown)=>names.get(Number(id)) || `部门${id}`),active:raw.status===1 }
-  })
-  return { companyName:names.get(1)||'',members:rows }
+  return normalizeWecomDirectory(departments.department, members.userlist)
 }
 export async function wecomIdentity(credentials: WecomCredentials,code: string) {
   const access_token=await wecomToken(credentials)
@@ -50,4 +43,13 @@ export async function sendWecomMessage(credentials: WecomCredentials,userId: str
   const result=await call('message/send',{access_token},{touser:userId,agentid:credentials.agentId,msgtype:'markdown',markdown:{content},enable_duplicate_check:1,duplicate_check_interval:1800})
   if (result.invaliduser || result.unlicenseduser) throw new ShippingError(502,'目标员工不在应用的可发送范围。')
   return { messageId:typeof result.msgid==='string'?result.msgid:'' }
+}
+// Robot creators who are not super admins receive encrypted member IDs.
+// Official mapping: document/path/101521; only this application's visible users.
+export async function resolveWecomBotUserId(credentials: WecomCredentials, openUserId: string) {
+  const access_token=await wecomToken(credentials)
+  const result=await call('batch/openuserid_to_userid',{access_token},{open_userid_list:[openUserId]})
+  if(!Array.isArray(result.userid_list))throw new ShippingError(502,'企微机器人身份映射暂不可用。')
+  const item=result.userid_list.find((value:unknown)=>value&&typeof value==='object'&&(value as Record<string,unknown>).open_userid===openUserId)
+  return item&&typeof item.userid==='string'?item.userid:null
 }
