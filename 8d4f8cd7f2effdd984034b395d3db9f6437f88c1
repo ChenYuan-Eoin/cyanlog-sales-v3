@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "activeId": "WP21",
+  "commit": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
+  "evidence": {
+    "code": {
+      "commit": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "artifact_path": "check-logs/a41539242ecf0b399c14738ba9f8b73663959574/check-03-test.log",
+          "log_sha256": "9c9f57eae8ae3165c9a37aa365434fbf0d3f090c62a0dc6428f24980801a58b1",
+          "exit_code": 0
+        },
+        {
+          "name": "full_tests",
+          "artifact_path": "check-logs/a41539242ecf0b399c14738ba9f8b73663959574/check-03-test.log",
+          "log_sha256": "9c9f57eae8ae3165c9a37aa365434fbf0d3f090c62a0dc6428f24980801a58b1",
+          "exit_code": 0
+        },
+        {
+          "name": "lint",
+          "artifact_path": "check-logs/a41539242ecf0b399c14738ba9f8b73663959574/check-02-lint.log",
+          "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+          "exit_code": 0
+        },
+        {
+          "name": "typecheck",
+          "artifact_path": "check-logs/a41539242ecf0b399c14738ba9f8b73663959574/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0
+        },
+        {
+          "name": "build",
+          "artifact_path": "wp21-failover-build.log",
+          "log_sha256": "1bbea8f27fd86950fa8d739ef14eeae906acf8c4d907604a2fcecc4a2d335262",
+          "exit_code": 0
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "39cf945496524cec453c7276da37de62c92602043bf5e3bf0df641a8a96da3ed",
+        "entry_sha256": "24205edf63f2a46e5d7b3705ab5623f49e5710f26d8168857aad392839ba38a4"
+      },
+      "scope": "WP21 bounded OAuth transport failover between two SF documented production endpoints; no region change, no business-request replay, no TLS/authentication bypass."
+    }
+  },
+  "updatedAt": "2026-10-12T05:07:58.764Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-12T05:07:58.747Z",
+      "head": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
+      "originMain": "e22c664080090635b5e2a54f9a558bd6d822c098",
+      "remoteMain": "e22c664080090635b5e2a54f9a558bd6d822c098",
+      "remoteProduction": "e22c664080090635b5e2a54f9a558bd6d822c098",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "a60ba177e885a78dfab80610820d0bcccc4a7e90",
+      "remoteAttestationRefOid": "a60ba177e885a78dfab80610820d0bcccc4a7e90",
+      "remoteSnapshotCheckedAt": "2026-10-12T05:07:56.306Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "34b1eb3f765edbf7a86ae61b1f31291720e6172e789f6ffe5f34cd08201cf6e1",
+  "sealedAt": "2026-10-12T05:07:58.765Z",
+  "attestationDigest": "4057f55566c51ae2477a75ccbd92b917db3e91ed77c8ffee2a42329ca036ffff"
+}
