@@ -58,8 +58,16 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const [payment, setPayment] = useState<ShippingPayment>('sender_monthly')
   const [senderOverride, setSenderOverride] = useState<Contact | null>(null)
   const [senderText, setSenderText] = useState('')
+  const senderSection = useRef<HTMLDivElement>(null)
+  const senderTextInput = useRef<HTMLTextAreaElement>(null)
+  const [returnDraft, setReturnDraft] = useState<{ orderId: string; reason: string; error: string } | null>(null)
+  const returnRunning = useRef(false)
   const batchSender = senderOverride || settings.sender
-  const senderReady = contactSchema.safeParse(batchSender).success
+  const senderValidation = contactSchema.safeParse(batchSender)
+  const senderReady = senderValidation.success
+  const senderLabels: Record<string, string> = { name: '寄件人姓名', phone: '寄件电话', province: '省份', city: '城市', county: '区县', address: '揽收详细地址' }
+  const senderProblems = senderValidation.success ? [] : [...new Set(senderValidation.error.issues.map(issue => senderLabels[String(issue.path[0])] || '寄方资料'))]
+  function showSenderFields() { senderSection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); senderTextInput.current?.focus({ preventScroll: true }) }
   const rules = settings.intakeRules || DEFAULT_INTAKE_RULES
   const [uniformCargo, setUniformCargo] = useState('文件/合同')
   const [search, setSearch] = useState('')
@@ -286,18 +294,32 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     confirmationRunning.current = false; setConfirmationBusy(false); setBusy('')
     setMessage(`${isSimulation ? '模拟' : '正式'}下单：成功 ${succeeded} 票；结果待确认 ${uncertain} 票；失败 ${failed} 票。${uncertain ? '下单结果待确认，请查回原单，勿重复下单。' : ''}${errors.join('；')}${refreshError}`)
   }
+  function beginReturn(order: ShipmentOrder) {
+    const issues: string[] = []
+    if (!senderForReview(order, settings.sender).contact) issues.push('请补齐本票实际寄件人姓名、联系电话和完整揽收地址')
+    if (!contactSchema.safeParse(order.input.recipient).success) issues.push('请补齐收件人姓名、联系电话和完整收件地址')
+    const company = intakeFieldSchema(rules.companyName, '公司名称', 120).safeParse(order.input.customerName)
+    const team = intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions).safeParse(order.input.submittedBy?.team)
+    if (!company.success) issues.push(...company.error.issues.map(issue => issue.message))
+    if (!team.success) issues.push(...team.error.issues.map(issue => issue.message))
+    setReturnDraft({ orderId: order.id, reason: issues.length ? issues.join('；') : '请核对收寄资料，补充说明后重新提报。', error: '' })
+  }
   async function returnOrder(order: ShipmentOrder) {
-    if (busy || confirmationRunning.current) return
-    const reason = window.prompt('请输入退回工单原因')?.trim()
-    if (!reason) return
+    if (busy || confirmationRunning.current || returnRunning.current || returnDraft?.orderId !== order.id) return
+    const reason = returnDraft.reason.trim()
+    if (reason.length < 2 || reason.length > 300) { setReturnDraft(current => current && { ...current, error: '退回原因需填写2至300个字符。' }); return }
+    returnRunning.current = true
     setBusy(order.id); setMessage('')
     try {
       await request(`/api/shipping/ledger/${encodeURIComponent(order.id)}/return`, { method: 'POST', body: JSON.stringify({ reason }) })
       setOrders(rows => rows.map(item => item.id === order.id ? { ...item, status: 'returned' } : item))
       setReviewIds(ids => ids.filter(id => id !== order.id))
+      setReturnDraft(null)
       setMessage('工单已退回并记录原因，未向顺丰下单。')
-    } catch (error) { setMessage((error as Error).message) }
-    finally { setBusy('') }
+    } catch (error) {
+      const errorMessage = `退回未完成：${(error as Error).message}`
+      setReturnDraft(current => current && { ...current, error: errorMessage }); setMessage(errorMessage)
+    } finally { returnRunning.current = false; setBusy('') }
   }
   async function refreshTracking(number = manualWaybill || selected?.waybill || '') {
     if (!number) return
@@ -350,7 +372,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 {row.result === 'success' ? <span className={styles.good}><CheckCircle2 size={12}/>已提报 · {row.orderNo}</span>
                   : row.result === 'unknown' ? <span className={styles.bad}>回执待确认</span>
                   : row.result === 'pending' ? <span className={styles.good}>提交中</span>
-                  : valid ? <span className={styles.good}><CheckCircle2 size={12}/>正常</span>
+                  : valid ? <span className={styles.good}><CheckCircle2 size={12}/>{senderReady ? '可提交' : '收件资料完整 · 待补寄方'}</span>
                   : <span className={styles.bad}><AlertTriangle size={12}/>需修正</span>}
               </div>
               <div className={styles.batchFields}>{([
@@ -379,16 +401,16 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
               {row.result === 'unknown' && <button className={styles.secondaryButton} aria-label={`重取第${row.id}行工单回执`} disabled={batchBusy} onClick={() => void executeBatch(row.id)}>重取工单回执</button>}
             </article>
           })}</div>
-          <div className={styles.bulkSettings}><h3>本批寄方资料</h3><p className={styles.intakeHint}>用于本批新工单的实际寄件人和揽收地址。提交后仍需在中栏确认下单。</p>
+          <div className={styles.bulkSettings} ref={senderSection}><h3>本批寄方资料</h3><p className={styles.intakeHint}>用于本批新工单的实际寄件人和揽收地址。提交后仍需在中栏确认下单。</p>
             {settings.intakeRulesWarning && <p role="alert" className={styles.fieldError}>{settings.intakeRulesWarning}</p>}
-            <label>粘贴寄方信息<textarea aria-label="本批寄方信息文本" rows={3} value={senderText} disabled={inputLocked} onChange={event => setSenderText(event.target.value)} placeholder="粘贴寄件人姓名、联系电话和完整揽收地址"/></label>
+            <label>粘贴寄方信息<textarea ref={senderTextInput} aria-label="本批寄方信息文本" rows={3} value={senderText} disabled={inputLocked} onChange={event => setSenderText(event.target.value)} placeholder="粘贴寄件人姓名、联系电话和完整揽收地址"/></label>
             <button className={styles.secondaryButton} disabled={inputLocked || !senderText.trim()} onClick={() => { const parsed = parseAddress(senderText); setSenderOverride(parsed.contact); setMessage(parsed.warnings.join('；')) }}>解析本批寄方</button>
             <div className={styles.batchFields}>{([{ field: 'name', label: '寄件人' }, { field: 'phone', label: '寄件电话' }, { field: 'province', label: '寄件省份' }, { field: 'city', label: '寄件城市' }, { field: 'county', label: '寄件区县' }, { field: 'address', label: '揽收详细地址' }] as const).map(({ field, label }) => <label key={field} className={styles.batchField}><span>{label} *</span><input aria-label={`本批${label}`} value={batchSender[field]} disabled={inputLocked} onChange={event => setSenderOverride({ ...batchSender, [field]: event.target.value })}/></label>)}</div>
             {!senderReady && <p role="status" className={styles.fieldError}>请补齐寄件人姓名、联系电话和完整揽收地址，才能提交工单。</p>}
             {senderOverride && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setSenderOverride(null)}>使用公司默认寄方</button>}
             <label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
         </div>
-        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待提报</strong><small>{successCount ? `${successCount} 票已提报 · ` : ''}{uncertainCount ? `${uncertainCount} 票回执待确认 · ` : ''}{invalidCount} 票需修正</small></div><button disabled={!validCount || !senderReady || Boolean(settings.intakeRulesWarning) || batchBusy || confirmationBusy} onClick={() => void executeBatch()}><Clipboard size={15}/>{batchBusy ? '提报中…' : `提交工单（${validCount}票）`}</button></footer>
+        <footer className={styles.stickyFooter}><div><strong>{validCount} 票收件资料完整</strong><small>{successCount ? `${successCount} 票已提报 · ` : ''}{uncertainCount ? `${uncertainCount} 票回执待确认 · ` : ''}{invalidCount} 票需修正</small>{batch.some(maySubmitRow) && !senderReady && <div className={styles.submitBlocker} role="status">请补齐或修正寄方：{senderProblems.join('、')}。<button type="button" className={styles.linkButton} onClick={showSenderFields}>去补齐寄方</button></div>}{settings.intakeRulesWarning && <p role="alert" className={styles.submitBlocker}>{settings.intakeRulesWarning}</p>}</div><button disabled={!validCount || !senderReady || Boolean(settings.intakeRulesWarning) || batchBusy || confirmationBusy} onClick={() => void executeBatch()}><Clipboard size={15}/>{batchBusy ? '提报中…' : `提交工单（${validCount}票）`}</button></footer>
       </section>
 
       <section className={styles.column} aria-label="收寄件台账与待办">
@@ -421,8 +443,15 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             {order.status === 'awaiting_confirmation' && <>
               <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
                 <label className={styles.reviewSelection}><input type="checkbox" aria-label={`核对并选择工单 ${order.orderNo}`} disabled={confirmationBusy || !!busy} checked={reviewIds.includes(order.id)} onChange={() => toggleReview(order)}/>核对工单</label>
-                <button className={styles.reject} disabled={confirmationBusy || !!busy} onClick={() => void returnOrder(order)}>退回工单</button>
+                <button className={styles.reject} disabled={confirmationBusy || !!busy} onClick={() => beginReturn(order)}>退回工单</button>
               </div>
+              {returnDraft?.orderId === order.id && <form className={styles.returnForm} aria-label={`退回工单 ${order.orderNo}`} onClick={event => event.stopPropagation()} onSubmit={event => { event.preventDefault(); void returnOrder(order) }}>
+                <label>退回原因<textarea aria-label="退回原因" value={returnDraft.reason} minLength={2} maxLength={300} required disabled={!!busy} onChange={event => setReturnDraft({ orderId: order.id, reason: event.target.value, error: '' })}/></label>
+                <small>已按当前缺项预填，可修改。确认后将退回给提报人补充。</small>
+                {returnDraft.reason.trim().length < 2 && <p role="alert">请填写至少2个字符的退回原因。</p>}
+                {returnDraft.error && <p role="alert">{returnDraft.error}</p>}
+                <div><button type="submit" className={styles.reject} disabled={!!busy || returnDraft.reason.trim().length < 2 || returnDraft.reason.trim().length > 300}>{busy === order.id ? '退回中…' : '确认退回'}</button><button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setReturnDraft(null)}>取消</button></div>
+              </form>}
               {reviewIds.includes(order.id) && <section className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
                 <h3>正式下单前核对</h3>
                 {senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}

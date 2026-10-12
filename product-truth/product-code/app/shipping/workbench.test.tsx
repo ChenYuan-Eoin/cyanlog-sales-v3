@@ -29,6 +29,9 @@ describe('self-service shipping workbench', () => {
     fireEvent.change(screen.getByLabelText('第1行公司名称'), { target: { value: '示例公司' } })
     fireEvent.change(screen.getByLabelText('第1行所属团队'), { target: { value: '销售部' } })
     expect(screen.getByRole('button', { name: '提交工单（1票）' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('收件资料完整 · 待补寄方')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '去补齐寄方' }))
+    expect(document.activeElement).toBe(screen.getByLabelText('本批寄方信息文本'))
     fireEvent.change(screen.getByLabelText('本批寄方信息文本'), { target: { value: '李四 13900000011 广东省深圳市南山区科技园路8号' } })
     fireEvent.click(screen.getByRole('button', { name: '解析本批寄方' }))
     expect(screen.getByLabelText('本批寄件人')).toHaveProperty('value', '李四')
@@ -297,16 +300,35 @@ describe('self-service shipping workbench', () => {
   it('returns an unsubmitted work order without invoking cancellation or carrier creation', async () => {
     const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null }
     useLedger([order])
-    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('请补充材料说明')
-    try {
+    {
       render(<ShippingWorkbench settings={settings}/>)
       await screen.findAllByText('华东建筑设计院')
       fireEvent.click(screen.getByRole('button', { name: '退回工单' }))
+      fireEvent.change(screen.getByLabelText('退回原因'), { target: { value: '请补充材料说明' } })
+      fireEvent.click(screen.getByRole('button', { name: '确认退回' }))
       await screen.findByText('工单已退回并记录原因，未向顺丰下单。')
       expect(fetcher).toHaveBeenCalledWith(`/api/shipping/ledger/${order.id}/return`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ reason: '请补充材料说明' }) }))
       expect(fetcher.mock.calls.some(([url]) => /confirm|cancel/.test(String(url)))).toBe(false)
       expect(screen.getByText('工单已退回')).toBeTruthy()
-    } finally { prompt.mockRestore() }
+    }
+  })
+
+  it('prefills actual defects, prevents blank returns, and keeps failed returns editable', async () => {
+    const emptySender = { name: '', phone: '', province: '', city: '', county: '', address: '' }
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, intakeSource: 'owner_web' as const, input: { ...fixtureOrders[0].input, sender: emptySender } }
+    fetcher.mockImplementation(async (url: string) => url.endsWith('/return') ? Response.json({ error: '服务暂不可用' }, { status: 503 }) : Response.json({ records: [order] }))
+    render(<ShippingWorkbench settings={{ ...settings, sender: emptySender }}/>)
+    fireEvent.click(await screen.findByRole('button', { name: '退回工单' }))
+    expect((screen.getByLabelText('退回原因') as HTMLTextAreaElement).value).toContain('完整揽收地址')
+    fireEvent.change(screen.getByLabelText('退回原因'), { target: { value: ' ' } })
+    expect(screen.getByRole('button', { name: '确认退回' })).toHaveProperty('disabled', true)
+    fireEvent.submit(screen.getByRole('form', { name: `退回工单 ${order.orderNo}` }))
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/return'))).toBe(false)
+    fireEvent.change(screen.getByLabelText('退回原因'), { target: { value: '请补齐寄方资料' } })
+    fireEvent.click(screen.getByRole('button', { name: '确认退回' }))
+    await screen.findAllByText('退回未完成：服务暂不可用')
+    expect(screen.getByLabelText('退回原因')).toHaveProperty('value', '请补齐寄方资料')
+    expect(screen.queryByText('工单已退回')).toBeNull()
   })
 
   it.each([['real', 'order_unknown'], ['real', 'ordering'], ['simulation', 'order_unknown'], ['simulation', 'ordering']] as const)('retains %s middle-column %s outcomes for reconciliation without retrying confirmation', async (mode, status) => {
