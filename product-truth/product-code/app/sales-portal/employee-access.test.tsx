@@ -23,3 +23,12 @@ it('keeps administrator-enabled open intake usable without an email verification
  fetcher.mockResolvedValue(response({employee:null}));render(<EmployeeAccess requireVerification={false} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:false,required:false,minLength:1},teamOptions:[]}}>{({controls,canSubmit})=><>{controls}<button disabled={!canSubmit}>提报就绪</button></>}</EmployeeAccess>)
  fireEvent.change(await screen.findByLabelText('寄方地址文本'),{target:{value:'张三 13800000000 广东省深圳市南山区科苑路15号'}});fireEvent.click(screen.getByRole('button',{name:'解析寄方信息'}));await waitFor(()=>expect(screen.getByRole('button',{name:'提报就绪'})).toHaveProperty('disabled',false));expect(screen.queryByLabelText('公司邮箱')).toBeNull()
 })
+
+ it('preserves saved pickup details when a new paste is not a complete address',async()=>{
+  mount();await screen.findByLabelText('寄方地址文本')
+  fireEvent.change(screen.getByLabelText('寄方地址文本'),{target:{value:'这里没有可以识别的地区'}})
+  fireEvent.click(screen.getByRole('button',{name:'解析寄方信息'}))
+  expect(screen.getByLabelText('寄件省份')).toHaveProperty('value','广东省')
+  expect(screen.getByLabelText('详细寄件地址')).toHaveProperty('value','示例路88号')
+  expect(screen.getByRole('status').textContent).toContain('现有寄方资料已保留')
+ })

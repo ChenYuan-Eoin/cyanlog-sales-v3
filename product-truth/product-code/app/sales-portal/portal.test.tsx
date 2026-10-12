@@ -80,3 +80,10 @@ it('submits a complete anonymous workorder without asking for a code or saving a
   expect(JSON.parse(posts[0][1].body).input).toMatchObject({ serviceId: 6, sender: { name: '李娜' } })
   expect(screen.getByRole('button', { name: '复制查询链接' })).toBeTruthy()
 })
+
+ it('keeps customer editable and empty for a verified employee, separate from identity company', () => {
+  render(<SalesRequestForm employee={{...employee,wecom:true,companyName:'员工所属企业'}}/>)
+  expect(screen.getByLabelText('客户公司名称')).toHaveProperty('value','')
+  expect(screen.getByLabelText('客户公司名称')).toHaveProperty('disabled',false)
+  expect(screen.getByRole('complementary',{name:'我的提报记录'})).toBeTruthy()
+ })

@@ -202,12 +202,12 @@ describe('shipping text intake', () => {
     expect(rows.every(row => prepareBatchRecipient(row).errors.length === 0)).toBe(true)
   })
 
-  it('leaves omitted administrative regions for correction instead of inventing them', () => {
+  it('infers an omitted province from the unique city reference', () => {
     const [row] = parseShippingText('林示例 13800000001 深圳市南山区科苑路8号')
     expect(row.address).toBe('深圳市南山区科苑路8号')
     const result = prepareBatchRecipient(row)
-    expect(result.recipient.province).toBe('')
-    expect(result.errors.join('')).toContain('完整省市区')
+    expect(result.recipient).toMatchObject({province:'广东省',city:'深圳市',county:'南山区',address:'科苑路8号'})
+    expect(result.errors).toEqual([])
   })
 
   it('retains malformed phone numbers and blocks them before submitting', () => {

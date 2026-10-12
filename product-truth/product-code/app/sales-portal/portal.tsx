@@ -8,6 +8,7 @@ import { makeAnonymousShipmentSchema } from '@/lib/shipping/validation'
 import { normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
 import { emptyContact, type Contact, type ShipmentReceipt, type ShipmentOrderStatus } from '@/lib/shipping/types'
 import styles from './sales-portal.module.css'
+import MyWorkorders from './my-workorders'
 import EmployeeAccess, { type EmployeeProfile } from './employee-access'
 
 import type { ShippingServiceOption } from '@/lib/shipping/sf-service-catalog'
@@ -28,8 +29,8 @@ export function SalesRequestForm({ employee, accessControls, accessReady = Boole
   const senderContact = draftSender || employee?.sender || emptyContact()
   const sender = { ...senderContact, phone: normalizeDomesticShippingPhone(senderContact.phone) }
   const submitter = { name: sender.name, phone: sender.phone, team: draftTeam ?? employee?.team ?? '' }
-  const [customerName, setCustomerName] = useState(employee?.wecom ? employee.companyName || '' : '')
-  useEffect(() => { if (employee?.wecom) setCustomerName(employee.companyName || '') }, [employee?.wecom, employee?.companyName])
+  const [customerName, setCustomerName] = useState('')
+  const [mobilePane, setMobilePane] = useState<'form' | 'records'>('form')
   const [recipient, setRecipient] = useState<Contact>(emptyContact)
   const [rawAddress, setRawAddress] = useState('')
   const senderAddress = `${sender.province}${sender.city}${sender.county}${sender.address}`
@@ -55,9 +56,13 @@ export function SalesRequestForm({ employee, accessControls, accessReady = Boole
     setError(result.warnings.join(' '))
     setPreview(false)
   }
-  const effectiveRules = employee?.wecom ? { ...rules, companyName: { enabled: true, required: true, minLength: 1 }, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [] } : rules
+  const effectiveRules = employee?.wecom ? { ...rules, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [] } : rules
   const draftInput = { sender, recipient, cargo, weight: Number(weight), ...(services ? { serviceId: Number(serviceId || services[0]?.id) } : { servicePreference }), remark: '', source: 'manual', payment: 'sender_monthly', customerName, submittedBy: { ...submitter, name: sender.name, phone: sender.phone }, specialRequirements }
-  const draftComplete = makeAnonymousShipmentSchema(effectiveRules).shape.input.safeParse(draftInput).success
+  const draftResult = makeAnonymousShipmentSchema(effectiveRules).shape.input.safeParse(draftInput)
+  const draftComplete = draftResult.success
+  const fieldLabels: Record<string,string> = { 'recipient.name':'收件人', 'recipient.phone':'收件电话', 'recipient.province':'收件省份', 'recipient.city':'收件城市', 'recipient.county':'收件区县', 'recipient.address':'收件详细地址', customerName:'客户公司名称', cargo:'物品', weight:'预估重量', serviceId:'快递服务' }
+  const draftProblems = draftResult.success ? [] : draftResult.error.issues.map(issue => `${fieldLabels[issue.path.join('.')] || '寄件资料'}：${issue.message}`)
+  const recipientProblem = (field: keyof Contact) => !rawAddress.trim() || draftResult.success ? '' : draftResult.error.issues.filter(issue => issue.path.join('.') === `recipient.${field}`).map(issue => issue.message).join('；')
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (submissionRunning.current) return
@@ -89,18 +94,24 @@ export function SalesRequestForm({ employee, accessControls, accessReady = Boole
   return <main className={styles.page}>
     <header className={styles.header}><div className={styles.brand}><span>O</span><div><strong>自助收寄</strong><small>销售寄件提报</small></div></div><div className={styles.secure}>{employee?.wecom ? '企业微信身份已验证' : '开放提报 · 无需账号密码'}</div></header>
     <div className={styles.hero}><div><p>SALES SHIPPING REQUEST</p><h1>把寄件信息交给前台，<br/>剩下的流程我们来处理。</h1><span>填写客户和收件信息，提交后即可获得业务流水号。</span></div><div className={styles.steps}><span className={styles.current}>1 填写信息</span><i/><span>2 前台确认</span><i/><span>3 快递揽收</span></div></div>
+    {employee && <nav className={styles.mobileNav} aria-label="提报与记录"><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>我的提报记录</button></nav>}
+    <div className={styles.workspace}>
+    <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
     {accessControls && <div className={`${styles.form} ${styles.accessControls}`}>{accessControls}</div>}
     <form className={styles.form} onSubmit={submit} onChange={() => setPreview(false)}>
       <fieldset className={styles.fields} disabled={busy || uncertain}>
       {!accessControls && <section className={styles.card}><div className={styles.cardTitle}><UserRound size={18}/><div><h2>我的寄件资料</h2><p>已保存，操作员确认后按此地址联系上门揽收</p></div></div><p>{submitter.name} · {submitter.phone} · {submitter.team}</p><p>{senderAddress}</p></section>}
-      <section className={styles.card}><div className={styles.cardTitle}><Building2 size={18}/><div><h2>客户与收件信息</h2><p>客户、收件人和城市会显示在前台待办卡片</p></div></div>{!employee?.wecom && rules.companyName.enabled && <label className={styles.customer}>公司名称<input required={rules.companyName.required} minLength={rules.companyName.minLength} maxLength={120} value={customerName} onChange={event => setCustomerName(event.target.value)} placeholder={`请填写公司名称，至少${rules.companyName.minLength}个字符`}/></label>}<div className={styles.paste}><div><ClipboardPaste size={16}/><strong>智能地址一键粘贴</strong><span>把微信里的整段地址直接贴进来</span></div><textarea aria-label="智能地址一键粘贴" rows={3} value={rawAddress} onChange={event => setRawAddress(event.target.value)} placeholder="例如：张三 13800138000 广东省深圳市南山区科苑路15号"/><button type="button" onClick={recognize}><Sparkles size={14}/>识别并填充</button></div><div className={styles.grid2}><label>收件人<input required value={recipient.name} onChange={event => setRecipientField('name', event.target.value)}/></label><label>联系电话<input required value={recipient.phone} onChange={event => setRecipientField('phone', event.target.value)}/></label></div><div className={styles.grid3}><label>省份<input required value={recipient.province} onChange={event => setRecipientField('province', event.target.value)}/></label><label>城市<input required value={recipient.city} onChange={event => setRecipientField('city', event.target.value)}/></label><label>区县<input required value={recipient.county} onChange={event => setRecipientField('county', event.target.value)}/></label></div><label>详细地址<input required value={recipient.address} onChange={event => setRecipientField('address', event.target.value)}/></label></section>
+      <section className={styles.card}><div className={styles.cardTitle}><Building2 size={18}/><div><h2>客户与收件信息</h2><p>客户、收件人和城市会显示在前台待办卡片</p></div></div>{rules.companyName.enabled && <label className={styles.customer}>客户公司名称<input required={rules.companyName.required} minLength={rules.companyName.minLength} maxLength={120} value={customerName} onChange={event => setCustomerName(event.target.value)} placeholder={`请填写公司名称，至少${rules.companyName.minLength}个字符`}/></label>}<div className={styles.paste}><div><ClipboardPaste size={16}/><strong>智能地址一键粘贴</strong><span>把微信里的整段地址直接贴进来</span></div><textarea aria-label="智能地址一键粘贴" rows={3} value={rawAddress} onChange={event => setRawAddress(event.target.value)} placeholder="例如：张三 13800138000 广东省深圳市南山区科苑路15号"/><button type="button" onClick={recognize}><Sparkles size={14}/>识别并填充</button></div><div className={styles.grid2}><label>收件人<input required value={recipient.name} aria-invalid={Boolean(recipientProblem('name'))} onChange={event => setRecipientField('name', event.target.value)}/>{recipientProblem('name') && <small className={styles.fieldError}>{recipientProblem('name')}</small>}</label><label>联系电话<input required value={recipient.phone} aria-invalid={Boolean(recipientProblem('phone'))} onChange={event => setRecipientField('phone', event.target.value)}/>{recipientProblem('phone') && <small className={styles.fieldError}>{recipientProblem('phone')}</small>}</label></div><div className={styles.grid3}><label>省份<input required value={recipient.province} aria-invalid={Boolean(recipientProblem('province'))} onChange={event => setRecipientField('province', event.target.value)}/>{recipientProblem('province') && <small className={styles.fieldError}>{recipientProblem('province')}</small>}</label><label>城市<input required value={recipient.city} aria-invalid={Boolean(recipientProblem('city'))} onChange={event => setRecipientField('city', event.target.value)}/>{recipientProblem('city') && <small className={styles.fieldError}>{recipientProblem('city')}</small>}</label><label>区县<input required value={recipient.county} aria-invalid={Boolean(recipientProblem('county'))} onChange={event => setRecipientField('county', event.target.value)}/>{recipientProblem('county') && <small className={styles.fieldError}>{recipientProblem('county')}</small>}</label></div><label>详细地址<input required value={recipient.address} aria-invalid={Boolean(recipientProblem('address'))} onChange={event => setRecipientField('address', event.target.value)}/>{recipientProblem('address') && <small className={styles.fieldError}>{recipientProblem('address')}</small>}</label></section>
       <section className={styles.card}><div className={styles.cardTitle}><Package size={18}/><div><h2>物品与特殊需求</h2><p>特殊要求会醒目标记给前台确认</p></div></div><div className={styles.grid3}><label>托寄物<select value={cargo} onChange={event => setCargo(event.target.value)}><option>发票</option><option>合同</option><option>样品</option><option>礼品</option><option>其他</option></select></label><label>预估重量（kg）<input type="number" min="0.01" max="20" step="0.01" value={weight} onChange={event => setWeight(event.target.value)}/></label><label>顺丰服务产品{services ? <select required value={serviceId || String(services[0]?.id || '')} onChange={event => setServiceId(event.target.value)}>{services.length ? services.map(item => <option key={item.id} value={item.id}>{item.name}</option>) : <option value="">暂无开放的服务，请联系操作员</option>}</select> : <select value={servicePreference} onChange={event => setServicePreference(event.target.value as typeof servicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select>}</label></div><label>我的特殊需求（选填）<textarea rows={3} maxLength={500} value={specialRequirements} onChange={event => setSpecialRequirements(event.target.value)} placeholder="例如：周五前送达、样品易碎、上门前联系、随件附带某份资料……"/><span className={styles.counter}>{specialRequirements.length}/500</span></label></section>
       </fieldset>
       {preview && <section className={styles.card} aria-label="寄出预览"><h2>寄出预览</h2><p>寄件人：{submitter.name} · {normalizeDomesticShippingPhone(submitter.phone)} · {senderAddress}</p><p>收件人：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address}</p><p>{customerName} · {cargo} · {weight} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}</p>{specialRequirements && <p>{specialRequirements}</p>}<small>此步只提交工单；审核确认、正式下单和叫件由操作员完成。</small></section>}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      {!accessReady && accessHint && <p role="status" className={styles.error}>{accessHint}</p>}{accessReady && !draftComplete && !uncertain && <p role="status" className={styles.error}>{employee?.wecom && !customerName ? '企微寄件单位资料暂缺，请联系管理员。' : '请补齐收件人姓名、有效电话、完整地址及物品信息后提报。'}</p>}
+      {!accessReady && accessHint && <p role="status" className={styles.error}>{accessHint}</p>}{accessReady && !draftComplete && !uncertain && <p role="status" className={styles.error}>{draftResult.success ? '' : [...new Set(draftProblems)].join('；')}</p>}
       <footer className={styles.submit}><div><CheckCircle2 size={16}/><span>提交只会进入前台待确认池，不会直接产生运费。</span></div><button disabled={busy || !accessReady || (!uncertain && !draftComplete)}>{busy ? '提交中…' : uncertain ? '重取工单回执' : preview ? '确认提交工单' : '预览工单'}<ArrowRight size={16}/></button></footer>
     </form>
+    </div>
+    {employee && <aside aria-label="我的提报记录" className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><h2>我的提报记录</h2><MyWorkorders key={employee.id}/></aside>}
+    </div>
   </main>
 }
 

@@ -5,6 +5,7 @@ import { CheckCircle2, LoaderCircle, Plus, Settings, ShieldCheck, X } from 'luci
 import type { ShippingConfiguration } from '@/lib/shipping/connections'
 import { emptyContact, type Contact } from '@/lib/shipping/types'
 import styles from './config-drawer.module.css'
+import { contactSchema } from '@/lib/shipping/validation'
 import { parseAddress } from '@/lib/shipping/address'
 import IntakeConfiguration from './intake-configuration'
 import WecomConfiguration from './wecom-configuration'
@@ -220,7 +221,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
 
         <section className={styles.section}>
           <div className={styles.sectionTitle}><div><Settings size={16}/><h3>公司默认寄件人</h3></div></div>
-          <div className={styles.twoColumns}><label>粘贴默认寄方信息<textarea aria-label="默认寄方地址文本" rows={3} value={senderText} onChange={event => setSenderText(event.target.value)} placeholder="姓名 电话 省市区及详细地址"/></label><button type="button" disabled={!senderText.trim() || !!busy} onClick={() => { const parsed = parseAddress(senderText); setSender(parsed.contact); setMessage(parsed.warnings.join('；')) }}>解析默认寄方信息</button><label>姓名<input value={sender.name} onChange={event => setSender(value => ({ ...value, name: event.target.value }))}/></label><label>电话<input value={sender.phone} onChange={event => setSender(value => ({ ...value, phone: event.target.value }))}/></label></div>
+          <div className={styles.twoColumns}><label>粘贴默认寄方信息<textarea aria-label="默认寄方地址文本" rows={3} value={senderText} onChange={event => setSenderText(event.target.value)} placeholder="姓名 电话 省市区及详细地址"/></label><button type="button" disabled={!senderText.trim() || !!busy} onClick={() => { const parsed = parseAddress(senderText); if (!contactSchema.safeParse(parsed.contact).success) { setMessage('未识别出完整寄方，原资料已保留。' + parsed.warnings.join('；')); return } setSender(parsed.contact); setMessage(parsed.warnings.join('；') || '寄方已解析，请核对后保存。') }}>解析默认寄方信息</button><label>姓名<input value={sender.name} onChange={event => setSender(value => ({ ...value, name: event.target.value }))}/></label><label>电话<input value={sender.phone} onChange={event => setSender(value => ({ ...value, phone: event.target.value }))}/></label></div>
           <div className={styles.threeColumns}><label>省<input value={sender.province} onChange={event => setSender(value => ({ ...value, province: event.target.value }))}/></label><label>市<input value={sender.city} onChange={event => setSender(value => ({ ...value, city: event.target.value }))}/></label><label>区县<input value={sender.county} onChange={event => setSender(value => ({ ...value, county: event.target.value }))}/></label></div>
           <label>详细地址<input value={sender.address} onChange={event => setSender(value => ({ ...value, address: event.target.value }))}/></label>
           <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>

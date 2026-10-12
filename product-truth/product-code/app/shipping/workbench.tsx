@@ -58,6 +58,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const [payment, setPayment] = useState<ShippingPayment>('sender_monthly')
   const [senderOverride, setSenderOverride] = useState<Contact | null>(null)
   const [senderText, setSenderText] = useState('')
+  const [editingSender, setEditingSender] = useState(!contactSchema.safeParse(settings.sender).success)
   const senderSection = useRef<HTMLDivElement>(null)
   const senderTextInput = useRef<HTMLTextAreaElement>(null)
   const [returnDraft, setReturnDraft] = useState<{ orderId: string; reason: string; error: string } | null>(null)
@@ -67,7 +68,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const senderReady = senderValidation.success
   const senderLabels: Record<string, string> = { name: '寄件人姓名', phone: '寄件电话', province: '省份', city: '城市', county: '区县', address: '揽收详细地址' }
   const senderProblems = senderValidation.success ? [] : [...new Set(senderValidation.error.issues.map(issue => senderLabels[String(issue.path[0])] || '寄方资料'))]
-  function showSenderFields() { senderSection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); senderTextInput.current?.focus({ preventScroll: true }) }
+  function showSenderFields() { setEditingSender(true); senderSection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); senderTextInput.current?.focus({ preventScroll: true }) }
   const rules = settings.intakeRules || DEFAULT_INTAKE_RULES
   const [uniformCargo, setUniformCargo] = useState('文件/合同')
   const [search, setSearch] = useState('')
@@ -199,7 +200,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   }
   async function executeBatch(retrieveRowId?: number) {
     if (batchRunning.current || confirmationRunning.current) return
-    if (!retrieveRowId && (!senderReady || settings.intakeRulesWarning)) { setMessage(settings.intakeRulesWarning || '请先补齐下方本批寄方资料，再提交工单。'); return }
+    if (!retrieveRowId && (!senderReady || settings.intakeRulesWarning)) { setMessage(settings.intakeRulesWarning || '请先补齐顶部本批寄方资料，再提交工单。'); return }
     const candidates = preparedRows.filter(({ row, errors }) => (retrieveRowId ? row.id === retrieveRowId && row.result === 'unknown' : !errors.length && maySubmitRow(row)))
     if (!candidates.length) return
     batchRunning.current = true
@@ -364,6 +365,14 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
       <section className={styles.column} aria-label="批量寄件操作台">
         <div className={styles.columnHeader}><div><span className={styles.step}>01</span><h2>批量提报工单</h2></div><small>操作员录入 · 纠错 · 提报</small></div>
         <div className={styles.scrollBody}>
+          <div className={styles.bulkSettings} ref={senderSection}><h3>从哪里寄出</h3><p>{senderOverride ? '本批临时寄方' : '公司默认寄方'}：{batchSender.name} · {batchSender.phone}<br/>{batchSender.province}{batchSender.city === batchSender.province ? '' : batchSender.city}{batchSender.county}{batchSender.address}</p><button type="button" className={styles.linkButton} aria-expanded={editingSender} onClick={() => setEditingSender(value => !value)}>{editingSender ? '收起寄方编辑' : '本批更换寄方'}</button><div hidden={!editingSender}><p className={styles.intakeHint}>修改仅用于本批新工单，不覆盖公司默认资料。</p>
+            {settings.intakeRulesWarning && <p role="alert" className={styles.fieldError}>{settings.intakeRulesWarning}</p>}
+            <label>粘贴寄方信息<textarea ref={senderTextInput} aria-label="本批寄方信息文本" rows={3} value={senderText} disabled={inputLocked} onChange={event => setSenderText(event.target.value)} placeholder="粘贴寄件人姓名、联系电话和完整揽收地址"/></label>
+            <button className={styles.secondaryButton} disabled={inputLocked || !senderText.trim()} onClick={() => { const parsed = parseAddress(senderText); if (!contactSchema.safeParse(parsed.contact).success) { setMessage('未识别出完整寄方，原资料已保留。' + parsed.warnings.join('；')); return } setSenderOverride(parsed.contact); setMessage(parsed.warnings.join('；') || '已更新本批寄方，请核对。') }}>解析本批寄方</button>
+            <div className={styles.batchFields}>{([{ field: 'name', label: '寄件人' }, { field: 'phone', label: '寄件电话' }, { field: 'province', label: '寄件省份' }, { field: 'city', label: '寄件城市' }, { field: 'county', label: '寄件区县' }, { field: 'address', label: '揽收详细地址' }] as const).map(({ field, label }) => <label key={field} className={styles.batchField}><span>{label} *</span><input aria-label={`本批${label}`} value={batchSender[field]} disabled={inputLocked} onChange={event => setSenderOverride({ ...batchSender, [field]: event.target.value })}/></label>)}</div>
+            {!senderReady && <p role="status" className={styles.fieldError}>请补齐寄件人姓名、联系电话和完整揽收地址，才能提交工单。</p>}
+            {senderOverride && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setSenderOverride(null)}>使用公司默认寄方</button>}
+            </div><label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
           <div className={styles.segmented} role="group" aria-label="地址录入方式"><button aria-pressed={entryMode === 'text'} className={entryMode === 'text' ? styles.active : ''} disabled={inputLocked} onClick={() => setEntryMode('text')}>文本解析</button><button aria-pressed={entryMode === 'file'} className={entryMode === 'file' ? styles.active : ''} disabled={inputLocked} onClick={() => setEntryMode('file')}>文件导入</button></div>
           {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" disabled={inputLocked} onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><button className={styles.linkButton} onClick={() => void downloadTemplate()}>下载标准模板.xlsx</button></div> : <div className={styles.textParser}><p>支持多位收件人；同一人的姓名、电话和地址可分行，空行有助于分票。解析后请核对每票资料。</p><textarea aria-label="多行地址文本" rows={6} maxLength={100000} disabled={inputLocked} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'姓名：示例甲\n电话：13800000000\n地址：广东省深圳市南山区示例路88号\n\n示例乙 13900000000 上海市浦东新区示例路66号'}/><div className={styles.parserActions}><button className={styles.secondaryButton} disabled={!bulkText.trim() || inputLocked} onClick={parseBulk}>解析为寄件行</button>{simulation && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setBulkText(simulation.sampleText)}>重填示例地址</button>}</div></div>}
           <div className={styles.sectionTitle}><h3>{entryMode === 'text' ? '解析预览' : '导入预览'}</h3><span>{batch.length ? `${batch.length} 票` : entryMode === 'text' ? '等待解析地址' : '尚未导入'}</span></div>
@@ -406,14 +415,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
               {row.result === 'unknown' && <button className={styles.secondaryButton} aria-label={`重取第${row.id}行工单回执`} disabled={batchBusy} onClick={() => void executeBatch(row.id)}>重取工单回执</button>}
             </article>
           })}</div>
-          <div className={styles.bulkSettings} ref={senderSection}><h3>本批寄方资料</h3><p className={styles.intakeHint}>用于本批新工单的实际寄件人和揽收地址。提交后仍需在中栏确认下单。</p>
-            {settings.intakeRulesWarning && <p role="alert" className={styles.fieldError}>{settings.intakeRulesWarning}</p>}
-            <label>粘贴寄方信息<textarea ref={senderTextInput} aria-label="本批寄方信息文本" rows={3} value={senderText} disabled={inputLocked} onChange={event => setSenderText(event.target.value)} placeholder="粘贴寄件人姓名、联系电话和完整揽收地址"/></label>
-            <button className={styles.secondaryButton} disabled={inputLocked || !senderText.trim()} onClick={() => { const parsed = parseAddress(senderText); setSenderOverride(parsed.contact); setMessage(parsed.warnings.join('；')) }}>解析本批寄方</button>
-            <div className={styles.batchFields}>{([{ field: 'name', label: '寄件人' }, { field: 'phone', label: '寄件电话' }, { field: 'province', label: '寄件省份' }, { field: 'city', label: '寄件城市' }, { field: 'county', label: '寄件区县' }, { field: 'address', label: '揽收详细地址' }] as const).map(({ field, label }) => <label key={field} className={styles.batchField}><span>{label} *</span><input aria-label={`本批${label}`} value={batchSender[field]} disabled={inputLocked} onChange={event => setSenderOverride({ ...batchSender, [field]: event.target.value })}/></label>)}</div>
-            {!senderReady && <p role="status" className={styles.fieldError}>请补齐寄件人姓名、联系电话和完整揽收地址，才能提交工单。</p>}
-            {senderOverride && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setSenderOverride(null)}>使用公司默认寄方</button>}
-            <label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
+
         </div>
         <footer className={styles.stickyFooter}><div><strong>{validCount} 票收件资料完整</strong><small>{successCount ? `${successCount} 票已提报 · ` : ''}{uncertainCount ? `${uncertainCount} 票回执待确认 · ` : ''}{invalidCount} 票需修正</small>{batch.some(maySubmitRow) && !senderReady && <div className={styles.submitBlocker} role="status">请补齐或修正寄方：{senderProblems.join('、')}。<button type="button" className={styles.linkButton} onClick={showSenderFields}>去补齐寄方</button></div>}{settings.intakeRulesWarning && <p role="alert" className={styles.submitBlocker}>{settings.intakeRulesWarning}</p>}</div><button disabled={!validCount || !senderReady || Boolean(settings.intakeRulesWarning) || batchBusy || confirmationBusy} onClick={() => void executeBatch()}><Clipboard size={15}/>{batchBusy ? '提报中…' : `提交工单（${validCount}票）`}</button></footer>
       </section>

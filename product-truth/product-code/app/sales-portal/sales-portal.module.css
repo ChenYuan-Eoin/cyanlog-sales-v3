@@ -7,3 +7,8 @@
 @media(max-width:720px){.verificationRow{align-items:stretch}.verificationRow label{flex-basis:100%}.verificationRow button{width:100%}}
 
 .card .remember{display:flex;align-items:center;gap:8px}.card .remember input{width:auto;margin:0}.successCard button+button{margin-top:12px}
+
+.workspace{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:24px;padding:0 24px}.workspace>div{min-width:0}.workspace .form{max-width:none}.records{min-width:0;align-self:start;position:sticky;top:20px}.records>h2{font-size:16px;margin:0 0 12px}.records ul{list-style:none;padding:0}.records li{padding:14px 0;border-bottom:1px solid #e5e9f0;overflow-wrap:anywhere;font-size:13px;line-height:1.7}.records li strong,.records li span{display:block}.mobileNav{display:none}.senderSummary{font-size:14px;line-height:1.8;overflow-wrap:anywhere}.card input:disabled{background:#f3f5f8;color:#657286}.card button{cursor:pointer}.card button:disabled{cursor:not-allowed}
+@media(max-width:720px){.workspace{display:block;padding:0 12px}.workspace .form{padding:0}.mobileNav{display:flex;gap:8px;padding:0 12px 16px}.mobileNav button{flex:1;padding:12px;border:1px solid #d6deea;background:white;border-radius:8px}.mobileNav button[aria-pressed=true]{color:#2867c7;border-color:#2867c7}.mobileHidden{display:none}.records{position:static}}
+
+.fieldError{display:block;color:#b73542;font-size:12px;margin-top:6px}.card input[aria-invalid=true]{border-color:#d45c67}
