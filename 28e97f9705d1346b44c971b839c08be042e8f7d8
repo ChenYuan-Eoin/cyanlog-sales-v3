@@ -50,14 +50,24 @@
         "entry_sha256": "caa994535ba8f4bdd54dc8d2d5a1367207021cd8e26fb38386b564776bd17c15"
       },
       "scope": "WP19 plus production-reproduced sender parser field sizing. OAuth user scan and real SF dispatch still unverified."
+    },
+    "production": {
+      "commit": "28e97f9705d1346b44c971b839c08be042e8f7d8",
+      "deployment_id": "dpl_33SGBbpjP6BDhBJ89MtLMNdRBGak",
+      "domain": "sales.cyanlog.icu",
+      "ready": true,
+      "target": "production",
+      "checked_at": "2026-10-12T02:28:15.577458+00:00",
+      "scope": "Operator intake fields, sender completeness, parser layout; WeCom configuration and two-member sync verified in existing Chrome. User OAuth scan, actual SF order and tracking remain unverified.",
+      "artifact_path": "operator-intake-production-replay.json"
     }
   },
-  "updatedAt": "2026-10-12T02:24:58.050Z",
+  "updatedAt": "2026-10-12T02:28:17.821Z",
   "completionState": "code_green",
   "gateSnapshots": {
     "code_green": {
       "stage": "code_green",
-      "checkedAt": "2026-10-12T02:24:58.033Z",
+      "checkedAt": "2026-10-12T02:28:17.803Z",
       "head": "28e97f9705d1346b44c971b839c08be042e8f7d8",
       "originMain": "28e97f9705d1346b44c971b839c08be042e8f7d8",
       "remoteMain": "28e97f9705d1346b44c971b839c08be042e8f7d8",
@@ -66,9 +76,9 @@
       "originMainFresh": true,
       "originMainIsAncestor": true,
       "mainIntegrated": true,
-      "localAttestationRefOid": "90c03c1c9f8754270e8d6ac789b138c07bd5b17d",
-      "remoteAttestationRefOid": "90c03c1c9f8754270e8d6ac789b138c07bd5b17d",
-      "remoteSnapshotCheckedAt": "2026-10-12T02:24:53.865Z",
+      "localAttestationRefOid": "d1eb591c10ae1f8cdd6fa489d87bfeab20e541fc",
+      "remoteAttestationRefOid": "d1eb591c10ae1f8cdd6fa489d87bfeab20e541fc",
+      "remoteSnapshotCheckedAt": "2026-10-12T02:28:15.791Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -78,10 +88,96 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "faf0cfa7c6b89bc22e4fe0d8f9ca2057f39344d14e61221a12fd9172bb8a38b6",
-  "sealedAt": "2026-10-12T02:24:58.050Z",
-  "attestationDigest": "cc613c7af7b0c45aef609bfb64b7882b05215676907f43701135cd82ee2ce0dd"
+  "previousAttestationDigest": "cc613c7af7b0c45aef609bfb64b7882b05215676907f43701135cd82ee2ce0dd",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP19",
+    "commit": "28e97f9705d1346b44c971b839c08be042e8f7d8",
+    "evidence": {
+      "code": {
+        "commit": "28e97f9705d1346b44c971b839c08be042e8f7d8",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "target_tests",
+            "artifact_path": "check-logs/43ec46e96154dc01463d13f3fd9a58c7757eed40/check-03-test.log",
+            "log_sha256": "c413db1f84956b00270a971218d51e709a310df6f37dd9bc7c7571012567acb1",
+            "exit_code": 0
+          },
+          {
+            "name": "full_tests",
+            "artifact_path": "check-logs/43ec46e96154dc01463d13f3fd9a58c7757eed40/check-03-test.log",
+            "log_sha256": "c413db1f84956b00270a971218d51e709a310df6f37dd9bc7c7571012567acb1",
+            "exit_code": 0
+          },
+          {
+            "name": "lint",
+            "artifact_path": "check-logs/43ec46e96154dc01463d13f3fd9a58c7757eed40/check-02-lint.log",
+            "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+            "exit_code": 0
+          },
+          {
+            "name": "typecheck",
+            "artifact_path": "check-logs/43ec46e96154dc01463d13f3fd9a58c7757eed40/check-01-typecheck.log",
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+            "exit_code": 0
+          },
+          {
+            "name": "build",
+            "artifact_path": "shipping-layout-build.log",
+            "log_sha256": "49e67f55bb62181b13eb6d4c1fa489ad43a51d59dcc51da567ad6238bcc789a9",
+            "exit_code": 0
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "bbea4d4747446e16c108be33dd94710cbd7de8f0e6b1aa537db53534ea78ed40",
+          "entry_sha256": "caa994535ba8f4bdd54dc8d2d5a1367207021cd8e26fb38386b564776bd17c15"
+        },
+        "scope": "WP19 plus production-reproduced sender parser field sizing. OAuth user scan and real SF dispatch still unverified."
+      }
+    },
+    "updatedAt": "2026-10-12T02:24:58.050Z",
+    "completionState": "code_green",
+    "gateSnapshots": {
+      "code_green": {
+        "stage": "code_green",
+        "checkedAt": "2026-10-12T02:24:58.033Z",
+        "head": "28e97f9705d1346b44c971b839c08be042e8f7d8",
+        "originMain": "28e97f9705d1346b44c971b839c08be042e8f7d8",
+        "remoteMain": "28e97f9705d1346b44c971b839c08be042e8f7d8",
+        "remoteProduction": "28e97f9705d1346b44c971b839c08be042e8f7d8",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": true,
+        "localAttestationRefOid": "90c03c1c9f8754270e8d6ac789b138c07bd5b17d",
+        "remoteAttestationRefOid": "90c03c1c9f8754270e8d6ac789b138c07bd5b17d",
+        "remoteSnapshotCheckedAt": "2026-10-12T02:24:53.865Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "faf0cfa7c6b89bc22e4fe0d8f9ca2057f39344d14e61221a12fd9172bb8a38b6",
+    "sealedAt": "2026-10-12T02:24:58.050Z",
+    "attestationDigest": "cc613c7af7b0c45aef609bfb64b7882b05215676907f43701135cd82ee2ce0dd"
+  },
+  "revision": 2,
+  "contentDigest": "e55daa436c36205022fe969a4673bab7e837dba9b867ed10757985421cf79d12",
+  "sealedAt": "2026-10-12T02:28:17.821Z",
+  "attestationDigest": "d97b285c923d31efaeb58f5f8e4bcbb5c418033cfe486a3a0b88ad6ac93b0592"
 }
