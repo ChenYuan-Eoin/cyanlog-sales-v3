@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "activeId": "WP23",
+  "commit": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+  "evidence": {
+    "code": {
+      "commit": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "artifact_path": "wp23-recovery-target-tests.log",
+          "log_sha256": "0f43c7e310b9080eb040601a7d6810ea0b16db36d246ad8f3d84b3e1bfc99152",
+          "exit_code": 0
+        },
+        {
+          "name": "full_tests",
+          "artifact_path": "check-logs/ce7575e9ec3eb10c3c0094060f0732216239ba81/check-03-test.log",
+          "log_sha256": "9fa702548e904bcde35b43f01c0441e73ee4483549bc9190d2010754de6f32e0",
+          "exit_code": 0
+        },
+        {
+          "name": "lint",
+          "artifact_path": "check-logs/ce7575e9ec3eb10c3c0094060f0732216239ba81/check-02-lint.log",
+          "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+          "exit_code": 0
+        },
+        {
+          "name": "typecheck",
+          "artifact_path": "check-logs/ce7575e9ec3eb10c3c0094060f0732216239ba81/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0
+        },
+        {
+          "name": "build",
+          "artifact_path": "wp23-recovery-build.log",
+          "log_sha256": "3a437c64bd99d2e406583756aef02153db462bb9781a8d45d6474f9de7d2ed5d",
+          "exit_code": 0
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "7370b130f3e60557f05e67f2004a33500ed594621071edb04906e3bfe4b42e07",
+        "entry_sha256": "7359d97b0860f463faddce779e4b027abf502825dd93a0c7990219ea306755ca"
+      },
+      "scope": "WP23 operator original-order recovery; A1004 external diagnosis deferred; true monthly waybill not verified"
+    },
+    "preview": {
+      "commit": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "provider_source_commit": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "deployment_id": "dpl_6c7r8MVZocegAXEFUnnVjjFsPmBT",
+      "url": "https://cyanlog-sales-v3-n9dm0u84v-eoins-projects-94b17ece.vercel.app",
+      "ready": true,
+      "git_dirty": false,
+      "api_replay": true,
+      "artifact_path": "wp23-recovery-preview.json",
+      "scope": "Original-order recovery microfix real API replay; does not claim complete shipping/provider acceptance"
+    }
+  },
+  "updatedAt": "2026-10-12T09:41:34.788Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-12T09:41:34.769Z",
+      "head": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "originMain": "706c02f5d1606e2491a26afe92cfe65cb1afb93a",
+      "remoteMain": "706c02f5d1606e2491a26afe92cfe65cb1afb93a",
+      "remoteProduction": "706c02f5d1606e2491a26afe92cfe65cb1afb93a",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "ed94e177b61940106e9c542e5ad038b1c65eadcb",
+      "remoteAttestationRefOid": "ed94e177b61940106e9c542e5ad038b1c65eadcb",
+      "remoteSnapshotCheckedAt": "2026-10-12T09:41:32.470Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "04b0f8c1cd480b6b7f16c7ad18d238c067ccc71049f5b1f8ab28ce4ec45643e0",
+  "sealedAt": "2026-10-12T09:41:34.788Z",
+  "attestationDigest": "a7751a82a09f3834929d3de53c05f3d48dea6be88476391c065d413f629bf942"
+}
