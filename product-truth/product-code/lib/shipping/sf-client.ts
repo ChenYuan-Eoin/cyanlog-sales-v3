@@ -7,7 +7,7 @@ import type { ShippingInput, TrackingResult } from './types'
 import type { ShippingRuntimeConfig } from './runtime-config'
 import { normalizeTrackingStatus, normalizeTrackingTime } from './tracking-status'
 const envelope = z.object({ apiResultCode: z.string(), apiResultData: z.union([z.string(), z.record(z.string(), z.unknown())]).optional() })
-const business = z.object({ success: z.union([z.boolean(), z.enum(['true', 'false'])]), errorCode: z.string().optional(), msgData: z.unknown().optional() })
+const business = z.object({ success: z.union([z.boolean(), z.enum(['true', 'false'])]), errorCode: z.string().optional(), msgData: z.unknown().optional(), obj: z.unknown().optional() })
 const tokenResponse = z.object({ apiResultCode: z.string(), accessToken: z.string().min(1).nullable().optional(), expiresIn: z.number().int().positive().max(86400).nullable().optional() })
 type SfAuthConfig = Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>
 const tokenCache = new Map<string, { accessToken: string; expiresAt: number }>()
@@ -142,7 +142,7 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
   try { return await request }
   finally { tokenRequests.delete(cacheKey) }
 }
-export function decodeSfResponse(raw: unknown): unknown {
+export function decodeSfResponse(raw: unknown, payloadField: 'msgData' | 'obj' = 'msgData'): unknown {
   const outer = envelope.parse(raw)
   if (outer.apiResultCode !== 'A1000') {
     const code = /^[A-Z0-9_]{1,20}$/.test(outer.apiResultCode) ? outer.apiResultCode : 'unknown'
@@ -150,7 +150,7 @@ export function decodeSfResponse(raw: unknown): unknown {
   }
   const data = business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData)
   if (data.success !== true && data.success !== 'true') throw new ShippingError(422, data.errorCode === '6150' ? '顺丰未找到该订单（6150）。' : `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
-  return data.msgData
+  return data[payloadField]
 }
 async function postSfService(serviceCode: string, message: unknown, config: SfAuthConfig, accessToken: string): Promise<unknown> {
   const timestamp = Date.now().toString(), msgData = JSON.stringify(message)
@@ -180,9 +180,9 @@ async function postSfService(serviceCode: string, message: unknown, config: SfAu
   }
 }
 
-export async function sfCall(serviceCode: string, message: unknown, config: Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>): Promise<unknown> {
+export async function sfCall(serviceCode: string, message: unknown, config: Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>, payloadField: 'msgData' | 'obj' = 'msgData'): Promise<unknown> {
   const accessToken = await getSfAccessToken(config)
-  return decodeSfResponse(await postSfService(serviceCode, message, config, accessToken))
+  return decodeSfResponse(await postSfService(serviceCode, message, config, accessToken), payloadField)
 }
 
 /**

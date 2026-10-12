@@ -200,3 +200,39 @@ HTTP成功只表示接口返回了结果。工作台必须同时收到`waybill_c
 6. 确認员工提报进入中栏，未触发顺丰；操作员核对后确认才生成正式运单。个人寄件快照不得被公司默认寄件人覆盖。更新员工资料不得改写历史工单。
 
 代码回滚保留新增表和已保存资料，不执行 DROP/TRUNCATE；先关闭员工入口，再回退至已经验证的兼容版本。员工主动查看本人工单与运单号不等同于企微自动通知已交付，企微通知需独立验收。
+
+## 内部员工寄件到 PDF（无账号管理 UI）
+
+`lib/shipping/employee-label-pdf.ts` 提供 `createEmployeeSfPdfFunction(config)`；初始化一次后，返回的函数只接收员工 ID 和寄件资料。配置由调用方从服务端本地配置加载，不能放进前端 bundle，也不需要新增管理表或页面。
+
+```ts
+import { createEmployeeSfPdfFunction, EmployeeSfPdfError } from '@/lib/shipping/employee-label-pdf'
+
+const createPdf = createEmployeeSfPdfFunction({
+  environment: 'sandbox',
+  partnerId: serverConfig.partnerId,
+  checkWord: serverConfig.checkWord,
+  templateCode: serverConfig.templateCode,
+  employees: localEmployeeMapping, // { [employeeId]: { monthlyCard, enterpriseId } }
+  outputDirectory: serverConfig.pdfDirectory, // 可省略，默认系统临时目录
+})
+
+// 仅由已完成业务确认的内部调用方调用；orderId 使用原业务单号，不要在重试时换号。
+const result = await createPdf(employeeId, {
+  orderId: workorder.orderNo,
+  sender: workorder.sender,
+  recipient: workorder.recipient,
+  cargo: '文件', weight: 1, serviceId: workorder.serviceId,
+})
+// result.pdfPath 是已保存文件；同时返回 waybillNo、orderId、employeeId、enterpriseId。
+// EmployeeSfPdfError.stage 区分失败阶段；出号后失败的错误还保留 waybillNo。
+```
+
+- 下单使用 `EXP_RECE_CREATE_ORDER`。生产传员工映射的 `monthlyCard`；沙箱显式传 `monthlyCard: ''`。企业归属只作本地追溯，不传旧 XML 的 `j_custid`。
+- PDF 使用 `COM_RECE_CLOUD_PRINT_WAYBILLS`，`version: '2.0'`、`sync: true`，从 `obj.files` 读取 URL/Token，以 GET 和 `X-Auth-token` 下载。打印模板编码必须来自已关联接口详情，不能猜模板名。
+- 顺丰后台路径：开发者对接 → 当前应用 → 查看 API → 基础通用 API → 面单类接口 → 关联 API → 云打印面单转 PDF 接口。插件接口 `COM_RECE_CLOUD_PRINT_PARSEDDATA` 需要 `SCPPrint.js` 和电脑打印插件，不是本函数的后端 PDF 路径。
+- 本函数不会自动重试下单。发生打印/下载/保存失败时，已存在的运单号会随错误返回；不要换订单号重复创建运单。
+- Vercel 的临时文件不是永久存储；调用方应在本次处理内读取文件返回或交给已有文件存储。没有新增持久存储服务。
+- 验证状态：协议和自动测试已覆盖；当前应用 PDF 接口可关联，但关联授权、实际模板及真实下单到 PDF 尚待联调，不代表生产业务验收完成。
+
+官方文档：[JSON 下单](https://open.sf-express.com/Api/ApiDetails?level3=393)、[同步 PDF](https://open.sf-express.com/Api/ApiDetails?level3=317)、[打印插件](https://open.sf-express.com/Api/ApiDetails?level3=324)。

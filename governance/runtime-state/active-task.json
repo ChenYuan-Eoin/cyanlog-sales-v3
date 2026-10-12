@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-12T09:25:44.969268+00:00",
+  "updated_at": "2026-10-12T09:51:07.760585+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -133,7 +133,7 @@
     "name": "平台下单流程与原单恢复",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP23：先修顺平台内提报、资料核对、人工确认下单、明确失败后的原单恢复，逐项复验现有生产页面断点。顺丰A1004服务权限排查排在平台流程修复之后；真实API月结出号仍是最终验收，不以提报成功或模拟出号替代。",
+    "objective": "F054 WP23当前切片：实现内部函数，员工ID与寄件资料经服务端本地映射，调用顺丰下单与同步面单PDF接口并下载保存；基本报错保留已有运单号，不新增账号管理或UI。已完成的原单恢复发布保留。A1004外部权限排查后排，真实API出号和PDF仍须实际验收。",
     "started_at": "2026-10-12T09:16:30.085183+00:00",
     "activation_basis": "IN-20261012-018：用户纠正顺序，更新目标但A1004往后排，先跑通平台下单流程；不继续外部权限排查。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
