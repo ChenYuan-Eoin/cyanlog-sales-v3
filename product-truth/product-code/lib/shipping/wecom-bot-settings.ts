@@ -50,3 +50,16 @@ export async function revealWecomBotSetup(orgId:string,id:unknown) {
  if(error||!data)throw new ShippingError(404,'当前企业的机器人配置不存在。')
  return {botId,setupKeys:wecomBotKeys(data as WecomBotRow)}
 }
+
+export async function repairWecomBotSetup(orgId:string,userId:string,id:unknown) {
+ const botId=z.uuid().parse(id),config=await readWecomSettings(orgId)
+ const {data,error}=await supabaseAdmin.from('shipping_wecom_bots').select(`org_id,credentials_ciphertext,${publicColumns}`).eq('id',botId).eq('org_id',orgId).eq('corp_id',config?.corp_id||'').maybeSingle()
+ if(error||!data)throw new ShippingError(404,'当前企业的机器人配置不存在。')
+ if(data.status!=='draft'||data.verified_at)throw new ShippingError(409,'仅可修复尚未验证的机器人草稿，已验证通道不会改动。')
+ const keys=wecomBotKeys(data as WecomBotRow)
+ if(/^[A-Za-z0-9]{43}$/.test(keys.encodingAESKey))return {botId,setupKeys:keys}
+ keys.encodingAESKey=newWecomCallbackKeys().encodingAESKey
+ const result=await supabaseAdmin.from('shipping_wecom_bots').update({credentials_ciphertext:encryptShippingSecret(JSON.stringify(keys)),updated_by:userId,updated_at:new Date().toISOString()}).eq('id',botId).eq('org_id',orgId).eq('status','draft').is('verified_at',null).eq('updated_at',data.updated_at).select('id').maybeSingle()
+ if(result.error||!result.data)throw new ShippingError(409,'配置已变化，请刷新后重试。')
+ return {botId,setupKeys:keys}
+}
