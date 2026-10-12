@@ -604,3 +604,11 @@ it('removes one draft independently and preserves edits when replacement is canc
   expect(screen.getByRole('button', { name: '提交工单（1票）' })).toBeTruthy()
   confirm.mockRestore()
 })
+
+ it('does not suggest changing a verified employee department to a manually configured team', async () => {
+  const order={...fixtureOrders[0],identityVerified:true,status:'awaiting_confirmation' as const,waybill:null,input:{...fixtureOrders[0].input,submittedBy:{name:'陈源',phone:'13800000000',team:'企微同步部门'}}}
+  useLedger([order])
+  render(<ShippingWorkbench settings={{...settings,intakeRules:{...settings.intakeRules!,team:{enabled:true,required:true,minLength:4},teamOptions:['南区一组']}}}/>)
+  fireEvent.click(await screen.findByRole('button',{name:'退回工单'}))
+  expect(screen.getByLabelText('退回原因')).not.toHaveProperty('value',expect.stringContaining('请选择后台配置的所属团队'))
+ })

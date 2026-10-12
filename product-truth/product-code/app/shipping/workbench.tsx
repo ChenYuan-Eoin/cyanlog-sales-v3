@@ -302,7 +302,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     if (!senderForReview(order, settings.sender).contact) issues.push('请补齐本票实际寄件人姓名、联系电话和完整揽收地址')
     if (!contactSchema.safeParse(order.input.recipient).success) issues.push('请补齐收件人姓名、联系电话和完整收件地址')
     const company = intakeFieldSchema(rules.companyName, '公司名称', 120).safeParse(order.input.customerName)
-    const team = intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions).safeParse(order.input.submittedBy?.team)
+    const team = intakeFieldSchema(order.identityVerified ? { enabled: true, required: true, minLength: 1 } : rules.team, '所属团队', 80, order.identityVerified ? [] : rules.teamOptions).safeParse(order.input.submittedBy?.team)
     if (!company.success) issues.push(...company.error.issues.map(issue => issue.message))
     if (!team.success) issues.push(...team.error.issues.map(issue => issue.message))
     setReturnDraft({ orderId: order.id, reason: issues.length ? issues.join('；') : '请核对收寄资料，补充说明后重新提报。', error: '' })
