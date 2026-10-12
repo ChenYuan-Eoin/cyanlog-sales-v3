@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "activeId": "WP23",
+  "commit": "1830fdfea25f00434d8050ccfead3b9a0b28c6d5",
+  "evidence": {
+    "code": {
+      "commit": "1830fdfea25f00434d8050ccfead3b9a0b28c6d5",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "artifact_path": "check-logs/c1f3bf85c0b83deaf86acfbf41c1583967832bc9/check-03-test.log",
+          "log_sha256": "e419963a52d815d7403eae75a2c5ce88ae24b00ab08a38ab7551378d1e04499d",
+          "exit_code": 0
+        },
+        {
+          "name": "full_tests",
+          "artifact_path": "check-logs/c1f3bf85c0b83deaf86acfbf41c1583967832bc9/check-03-test.log",
+          "log_sha256": "e419963a52d815d7403eae75a2c5ce88ae24b00ab08a38ab7551378d1e04499d",
+          "exit_code": 0
+        },
+        {
+          "name": "lint",
+          "artifact_path": "check-logs/c1f3bf85c0b83deaf86acfbf41c1583967832bc9/check-02-lint.log",
+          "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+          "exit_code": 0
+        },
+        {
+          "name": "typecheck",
+          "artifact_path": "check-logs/c1f3bf85c0b83deaf86acfbf41c1583967832bc9/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0
+        },
+        {
+          "name": "build",
+          "artifact_path": "wp23-pdf-live-fix-build.log",
+          "log_sha256": "4870954280317da36a4b19152d385ca1ce30213b284c33ba220b582aadfe965b",
+          "exit_code": 0
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "3f8ad4bd5c32fb3b28eba1463ab2176aeda9f58e3003792400235a3c798eb90f",
+        "entry_sha256": "36e61dc8ec792fa681727d2299f56088d227587517c22380091ee019e9cbd265"
+      },
+      "scope": "Internal function and actual sandbox PDF accepted; production monthly shipment not accepted"
+    }
+  },
+  "updatedAt": "2026-10-12T10:38:44.953Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-12T10:38:44.935Z",
+      "head": "1830fdfea25f00434d8050ccfead3b9a0b28c6d5",
+      "originMain": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "remoteMain": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "remoteProduction": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "ff744ab06d2c9ce0d7acfc06fc5879422b0d6f17",
+      "remoteAttestationRefOid": "ff744ab06d2c9ce0d7acfc06fc5879422b0d6f17",
+      "remoteSnapshotCheckedAt": "2026-10-12T10:38:42.728Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "013240dc1f22db90f69479f26f058ead87a48a558e712927ca27514ad5115747",
+  "sealedAt": "2026-10-12T10:38:44.954Z",
+  "attestationDigest": "a5e13b98367067fc5fb800a491c2770143b3efce778a55cf29f897b4b4d77bbd"
+}
