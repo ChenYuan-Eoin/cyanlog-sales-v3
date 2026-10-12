@@ -95,24 +95,35 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
   const request = (async () => {
     const body = new URLSearchParams({ partnerID: config.partnerId, secret: config.checkWord, grantType: 'password' })
     const startedAt = Date.now()
-    let response: Response
-    try {
-      response = await fetch(sfTokenUrl(config.environment), {
-        method: 'POST', body,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        signal: AbortSignal.timeout(12000), cache: 'no-store', redirect: 'error'
-      })
-    } catch (error) {
-      const failure = error as { name?: string; cause?: { code?: string } }
-      const networkCode = failure?.cause?.code
-      console.error('shipping.sf.oauth_transport', {
-        environment: config.environment,
-        elapsedMs: Date.now() - startedAt,
-        ...transportMetadata(error, sfTokenUrl(config.environment))
-      })
-      const timedOut = networkCode === 'UND_ERR_CONNECT_TIMEOUT' || failure?.name === 'TimeoutError' || failure?.name === 'AbortError'
-      throw new ShippingError(502, timedOut ? '顺丰OAuth2认证连接超时，未收到顺丰响应。' : '无法连接顺丰OAuth2认证服务，未收到响应。', 'provider_unreachable')
+    // Both endpoints are published in SF's OAuth2 guide (activeIndex=641728).
+    // Fail over authentication transport only; never replay a business request here.
+    const endpoints = config.environment === 'production'
+      ? [sfTokenUrl(config.environment), 'https://sfapi.sf-express.com/oauth2/accessToken']
+      : [sfTokenUrl(config.environment)]
+    const retryableCodes = new Set(['UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH'])
+    let response: Response | undefined
+    let responseEndpoint = endpoints[0]
+    for (let attempt = 0; attempt < endpoints.length; attempt += 1) {
+      responseEndpoint = endpoints[attempt]
+      try {
+        response = await fetch(responseEndpoint, {
+          method: 'POST', body,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          signal: AbortSignal.timeout(endpoints.length > 1 ? 6000 : 12000), cache: 'no-store', redirect: 'error'
+        })
+        break
+      } catch (error) {
+        const failure = error as { name?: string; cause?: { code?: string } }
+        const networkCode = failure?.cause?.code
+        const timedOut = networkCode === 'UND_ERR_CONNECT_TIMEOUT' || failure?.name === 'TimeoutError' || failure?.name === 'AbortError'
+        const canFailover = attempt + 1 < endpoints.length && (networkCode ? retryableCodes.has(networkCode) : timedOut)
+        const metadata = { environment: config.environment, elapsedMs: Date.now() - startedAt, ...transportMetadata(error, responseEndpoint) }
+        if (canFailover) { console.warn('shipping.sf.oauth_transport_fallback', metadata); continue }
+        console.error('shipping.sf.oauth_transport', metadata)
+        throw new ShippingError(502, timedOut ? '顺丰OAuth2认证连接超时，未收到顺丰响应。' : '无法连接顺丰OAuth2认证服务，未收到响应。', 'provider_unreachable')
+      }
     }
+    if (!response) throw new ShippingError(502, '顺丰认证服务未返回响应。', 'provider_unreachable')
     if (!response.ok) {
       console.error('shipping.sf.oauth_http', { environment: config.environment, upstreamStatus: response.status, elapsedMs: Date.now() - startedAt })
       throw new ShippingError(502, `顺丰OAuth2认证服务返回HTTP错误（${response.status}）。`, 'provider_http_error')
@@ -123,6 +134,7 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
     if (parsed.apiResultCode !== 'A1000' || !parsed.accessToken || !parsed.expiresIn) {
       throw new ShippingError(502, '顺丰OAuth2认证失败，请检查PartnerID、CheckWord和应用授权。', 'provider_rejected')
     }
+    if (responseEndpoint !== endpoints[0]) console.info('shipping.sf.oauth_fallback_succeeded', { ...endpointMetadata(responseEndpoint), elapsedMs: Date.now() - startedAt })
     tokenCache.set(cacheKey, { accessToken: parsed.accessToken, expiresAt: Date.now() + parsed.expiresIn * 1000 })
     return parsed.accessToken
   })()

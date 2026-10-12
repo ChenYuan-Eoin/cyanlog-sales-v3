@@ -44,6 +44,45 @@ describe('SF Node.js OAuth2 API requests', () => {
     expect(serviceCalls.every(call => !call.body.has('msgDigest'))).toBe(true)
   })
 
+  it('uses the other documented production token endpoint after a connection timeout', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input); calls.push(url)
+      if (url.startsWith('https://bspgw.')) throw Object.assign(new TypeError('connect failed'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } })
+      if (url.endsWith('/oauth2/accessToken')) return Response.json({ apiResultCode: 'A1000', accessToken: 'example-fallback-token', expiresIn: 7200 })
+      return orderResponse(JSON.parse(new URLSearchParams(String(init?.body)).get('msgData')!).orderId)
+    }))
+    const isolated = { ...config, partnerId: 'fallback-example' }
+    expect(await lookupSfOrder('fallback-order', isolated)).toBe('SF1234567890123')
+    expect(calls).toEqual(['https://bspgw.sf-express.com/oauth2/accessToken', 'https://sfapi.sf-express.com/oauth2/accessToken', 'https://sfapi.sf-express.com/std/service'])
+    expect(warn).toHaveBeenCalled(); expect(info).toHaveBeenCalled()
+    expect(JSON.stringify([warn.mock.calls, info.mock.calls])).not.toContain(isolated.checkWord)
+    expect(JSON.stringify([warn.mock.calls, info.mock.calls])).not.toContain('example-fallback-token')
+  })
+
+  it.each(['certificate', 'http', 'credentials'])('does not fail over a %s rejection', async mode => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn(async () => {
+      if (mode === 'certificate') throw Object.assign(new TypeError('certificate failure'), { cause: { code: 'CERT_HAS_EXPIRED' } })
+      if (mode === 'http') return new Response('denied', { status: 403 })
+      return Response.json({ apiResultCode: 'A1011', accessToken: null, expiresIn: null })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(lookupSfOrder('no-fallback', { ...config, partnerId: `example-${mode}` })).rejects.toMatchObject({ status: 502 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('never sends sandbox credentials to the production fallback', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn().mockRejectedValue(Object.assign(new TypeError('timeout'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(lookupSfOrder('sandbox-only', { ...config, environment: 'sandbox', partnerId: 'sandbox-example' })).rejects.toMatchObject({ requestStage: 'provider_unreachable' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://sfapi-sbox.sf-express.com/oauth2/accessToken')
+  })
+
   it('refreshes the token before expiry and does not log or persist it', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
     let tokenSequence = 0
