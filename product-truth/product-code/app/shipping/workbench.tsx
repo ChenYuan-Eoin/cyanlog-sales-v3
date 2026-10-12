@@ -521,8 +521,8 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             </section>
           </div>
         ) : (
-          <div className={`${styles.noTracking} ${styles.emptyTracking}`}>
-            <PackageCheck size={32}/>
+          <div className={trackingTarget || tracking ? styles.externalTracking : `${styles.noTracking} ${styles.emptyTracking}`}>
+            {!trackingTarget && !tracking && <PackageCheck size={32}/>}
             <strong>{trackingTarget || tracking ? `顺丰运单 ${trackingTarget || tracking?.waybill}` : '暂无收寄记录'}</strong>
             <p>{trackingBusy ? '正在查询这票运单…' : trackingError ? '请按上方提示处理后重新查询。此运单未关联当前台账工单。' : tracking ? `物流轨迹查询结果 · 更新于 ${new Date(tracking.queriedAt).toLocaleString('zh-CN')}` : '可直接输入顺丰运单号查询；本人或业务提报的真实单据也会显示在这里。'}</p>
             {tracking && (tracking.events.length ? <ol className={styles.timeline}>{tracking.events.map((event, index) => <li key={`${event.time}-${index}`}><i/><time>{event.time}</time><p>{event.description}</p><small>{event.location}</small></li>)}</ol> : <p>暂无物流轨迹，运单可能尚未揽收。</p>)}
