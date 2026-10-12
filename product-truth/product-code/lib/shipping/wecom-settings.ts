@@ -23,7 +23,7 @@ export async function listWecomMembers(orgId:string) {
  if(error)throw new ShippingError(503,'企微名单暂不可读取。')
  return (data||[]) as WecomMember[]
 }
-const saveSchema=z.object({corpId:z.string().trim().regex(/^ww[a-zA-Z0-9]{8,64}$/),agentId:z.number().int().positive(),secret:z.string().trim().min(1).max(256).optional(),orderCheckMode:z.union([z.literal(0),z.literal(1)]),fallbackPhone:z.string().trim().max(32),deniedMessage:z.string().trim().min(1).max(200),expectedUpdatedAt:z.string().nullable()}).strict()
+const saveSchema=z.object({corpId:z.string().trim().regex(/^ww[a-zA-Z0-9]{8,64}$/),agentId:z.number().int().positive(),secret:z.string().trim().min(1).max(256).optional(),orderCheckMode:z.union([z.literal(0),z.literal(1)]),fallbackPhone:z.string().trim().max(32),deniedMessage:z.string().trim().min(1).max(200),expectedUpdatedAt:z.string().nullable(),draftId:z.uuid().optional()}).strict()
 export async function syncWecomDirectory(orgId:string) {
  const row=await readWecomSettings(orgId)
  if(!row)throw new ShippingError(409,'请先保存企微应用配置。')
@@ -42,7 +42,7 @@ export async function updateWecomMember(orgId:string,input:unknown) {
  return listWecomMembers(orgId)
 }
 
-export type WecomConfigDraft = { id: string; corpId: string; agentId: number; appName: string; orderCheckMode:0|1; companyName: string; preparedAt: string; departments: import('./wecom-directory').WecomDepartment[]; memberCount: number }
+export type WecomConfigDraft = { id: string; corpId: string; agentId: number; appName: string; fallbackPhone:string;deniedMessage:string;orderCheckMode:0|1; companyName: string; preparedAt: string; departments: import('./wecom-directory').WecomDepartment[]; memberCount: number }
 type DraftRow = { id:string;org_id:string;config:Record<string,unknown>;departments:import('./wecom-directory').WecomDepartment[];members:import('./wecom-directory').WecomDirectoryMember[];prepared_at:string }
 export async function readWecomDraft(orgId:string):Promise<WecomConfigDraft|null> {
  const {data,error}=await supabaseAdmin.from('shipping_wecom_config_drafts').select('id,org_id,config,departments,members,prepared_at').eq('org_id',orgId).maybeSingle()
@@ -50,16 +50,23 @@ export async function readWecomDraft(orgId:string):Promise<WecomConfigDraft|null
  if(!data)return null
  const row=data as DraftRow
  // Never serialize pending credentials, raw directory phone numbers or secrets.
- return {id:row.id,corpId:String(row.config.corp_id),agentId:Number(row.config.agent_id),appName:String(row.config.app_name||''),orderCheckMode:Number(row.config.order_check_mode)===0?0:1,companyName:String(row.config.company_name||''),preparedAt:row.prepared_at,departments:row.departments,memberCount:row.members.filter(m=>m.active).length}
+ return {id:row.id,corpId:String(row.config.corp_id),agentId:Number(row.config.agent_id),appName:String(row.config.app_name||''),fallbackPhone:String(row.config.fallback_phone||''),deniedMessage:String(row.config.denied_message||''),orderCheckMode:Number(row.config.order_check_mode)===0?0:1,companyName:String(row.config.company_name||''),preparedAt:row.prepared_at,departments:row.departments,memberCount:row.members.filter(m=>m.active).length}
 }
 export async function prepareWecomConfiguration(orgId:string,userId:string,input:unknown) {
  const data=saveSchema.parse(input),current=await readWecomSettings(orgId)
  if((current?.updated_at??null)!==data.expectedUpdatedAt)throw new ShippingError(409,'当前配置已变化，请刷新后再准备新配置。')
  const sameIdentity=current?.corp_id===data.corpId&&current?.agent_id===data.agentId
- if(!data.secret&&!sameIdentity)throw new ShippingError(400,'更换企业或应用时，请填写新应用对应的密钥。')
+ let retainedCipher=sameIdentity?current?.credentials_ciphertext:undefined
+ if(data.draftId&&!data.secret){
+  const pending=await supabaseAdmin.from('shipping_wecom_config_drafts').select('config').eq('org_id',orgId).eq('id',data.draftId).maybeSingle()
+  if(pending.error||!pending.data)throw new ShippingError(409,'待启用配置已变化，请刷新后重试。')
+  if(pending.data.config.corp_id!==data.corpId||Number(pending.data.config.agent_id)!==data.agentId)throw new ShippingError(400,'更换草稿的企业或应用时，请填写新应用密钥。')
+  retainedCipher=pending.data.config.credentials_ciphertext
+ }
+ if(!data.secret&&!retainedCipher)throw new ShippingError(400,'更换企业或应用时，请填写新应用对应的密钥。')
  const phone=normalizeDomesticShippingPhone(data.fallbackPhone)
  if(phone&&!DOMESTIC_SHIPPING_PHONE_PATTERN.test(phone))throw new ShippingError(400,'预置电话必须是有效国内手机号或座机。')
- const secret=data.secret||decryptShippingSecret(current!.credentials_ciphertext)
+ const secret=data.secret||decryptShippingSecret(retainedCipher!)
  const credentials={corpId:data.corpId,agentId:data.agentId,secret}
  const app=await inspectWecomApplication(credentials)
  wecomApplicationCallbackUrl(app.redirectDomain)
@@ -89,4 +96,10 @@ export async function saveWecomDepartmentScope(orgId:string,selected:unknown) {
  const directory=await wecomDirectory(wecomCredentials(row))
  const {error}=await supabaseAdmin.rpc('sync_shipping_wecom_directory_v2',{p_org_id:orgId,p_corp_id:row.corp_id,p_agent_id:row.agent_id,p_config_updated_at:row.updated_at,p_company_name:directory.companyName,p_departments:directory.departments,p_members:directory.members,p_selected_department_ids:departmentIds})
  if(error)throw new ShippingError(409,'组织授权未保存：部门或配置已变化，请同步后重新选择。')
+}
+
+export async function discardWecomConfiguration(orgId:string,id:unknown) {
+ const draftId=z.uuid().parse(id)
+ const {data,error}=await supabaseAdmin.from('shipping_wecom_config_drafts').delete().eq('org_id',orgId).eq('id',draftId).select('id').maybeSingle()
+ if(error||!data)throw new ShippingError(409,'待启用配置已变化，请刷新后重试。')
 }
