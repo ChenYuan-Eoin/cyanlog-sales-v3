@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('./sf-client', async original => ({ ...await original<typeof import('./sf-client')>(), sfCall: mocks.call }))
-import { createEmployeeSfPdfFunction, type EmployeeSfPdfConfig } from './employee-label-pdf'
+import { createEmployeeSfPdfFunction, printSfWaybillPdf, type EmployeeSfPdfConfig } from './employee-label-pdf'
 import { decodeSfResponse } from './sf-client'
 import { ShippingError } from './config'
 const contact = { name: '测试联系人', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '虚拟验收路100号' }
@@ -16,7 +16,7 @@ const download = vi.fn()
 beforeEach(async () => {
  root = await mkdtemp(join(tmpdir(), 'sf-label-test-'))
  config = { environment: 'production', partnerId: 'example-partner', checkWord: 'example-checkword', templateCode: 'example-template', employees: { staff1: { monthlyCard: '0000000000', enterpriseId: 'example-company' } }, outputDirectory: root }
- mocks.call.mockReset().mockImplementation(async (service: string) => service === 'EXP_RECE_CREATE_ORDER' ? { orderId: shipment.orderId, waybillNoInfoList: [{ waybillType: 1, waybillNo: waybill }] } : { files: [{ waybillNo: waybill, url: 'https://print.sf-express.com/label.pdf', token: 'example-download-token' }] })
+ mocks.call.mockReset().mockImplementation(async (service: string, message: {extJson?: {mergePdf?:boolean}}) => service === 'EXP_RECE_CREATE_ORDER' ? { orderId: shipment.orderId, waybillNoInfoList: [{ waybillType: 1, waybillNo: waybill }] } : { files: [{ ...(message.extJson?.mergePdf ? {} : {waybillNo: waybill}), url: 'https://print.sf-express.com/label.pdf', token: 'example-download-token' }] })
  download.mockReset().mockResolvedValue(new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf' } }))
  vi.stubGlobal('fetch', download)
 })
@@ -61,4 +61,11 @@ it('decodes the official print obj envelope separately from order msgData', () =
  const obj={files:[]}
  expect(decodeSfResponse({apiResultCode:'A1000',apiResultData:JSON.stringify({success:true,obj})},'obj')).toEqual(obj)
  expect(decodeSfResponse({apiResultCode:'A1000',apiResultData:JSON.stringify({success:true,msgData:{orderId:'example'}})})).toEqual({orderId:'example'})
+})
+
+it('reprints the previously issued waybill through the PDF API without creating a new order', async () => {
+ const pdfPath = await printSfWaybillPdf(waybill, shipment.orderId, config)
+ expect(await readFile(pdfPath)).toEqual(pdfBytes)
+ expect(mocks.call).toHaveBeenCalledTimes(1)
+ expect(mocks.call.mock.calls[0][0]).toBe('COM_RECE_CLOUD_PRINT_WAYBILLS')
 })

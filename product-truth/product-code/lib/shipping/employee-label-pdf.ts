@@ -80,18 +80,28 @@ export function createEmployeeSfPdfFunction(config: EmployeeSfPdfConfig) {
     } catch (error) {
       throw new EmployeeSfPdfError(error instanceof ShippingError ? error.message : '下单结果未能确认，请按原orderId查回，不要更换编号重复下单。', 'order', data.orderId)
     }
+    const pdfPath = await printSfWaybillPdf(waybillNo, data.orderId, config)
+    return { pdfPath, waybillNo, orderId: data.orderId, employeeId, enterpriseId: mapping.enterpriseId }
+  }
+}
+
+
+/** Reprint an already-issued shipment. This helper never calls the create-order API. */
+export async function printSfWaybillPdf(waybillNo: string, orderId: string, config: EmployeeSfPdfConfig): Promise<string> {
+  if (!/^(?:SF)?\d{10,20}$/.test(waybillNo) || !config.templateCode?.trim() || !['sandbox', 'production'].includes(config.environment)) throw new EmployeeSfPdfError('运单号或打印配置无效。', 'configuration', orderId, waybillNo)
+  const auth = { environment: config.environment, partnerId: config.partnerId, checkWord: config.checkWord }
     let file: z.infer<typeof printResult>['files'][number]
     try {
-      const printed = printResult.parse(await sfCall('COM_RECE_CLOUD_PRINT_WAYBILLS', { templateCode: config.templateCode, version: '2.0', fileType: 'pdf', sync: true, documents: [{ masterWaybillNo: waybillNo }], extJson: { mergePdf: true, mergeType: 'all' } }, auth, 'obj'))
+      const printed = printResult.parse(await sfCall('COM_RECE_CLOUD_PRINT_WAYBILLS', { templateCode: config.templateCode, version: '2.0', fileType: 'pdf', sync: true, documents: [{ masterWaybillNo: waybillNo }] }, auth, 'obj'))
       const matches = printed.files.filter(item => item.waybillNo === waybillNo)
       if (matches.length !== 1 || printed.files.length !== 1) throw new Error('面单文件与运单不匹配。')
       file = matches[0]
     } catch (error) {
-      throw new EmployeeSfPdfError(`已出号，面单生成失败：${error instanceof ShippingError ? error.message : '未收到匹配的PDF文件。'} 请只重试打印，勿重新下单。`, 'print', data.orderId, waybillNo)
+      throw new EmployeeSfPdfError(`已出号，面单生成失败：${error instanceof ShippingError ? error.message : '未收到匹配的PDF文件。'} 请只重试打印，勿重新下单。`, 'print', orderId, waybillNo)
     }
     let pdf: Buffer
     try { pdf = await downloadPdf(file.url, file.token) }
-    catch { throw new EmployeeSfPdfError('已出号，但PDF下载失败；请重新获取面单，勿重新下单。', 'download', data.orderId, waybillNo) }
+    catch { throw new EmployeeSfPdfError('已出号，但PDF下载失败；请重新获取面单，勿重新下单。', 'download', orderId, waybillNo) }
     let directory: string | undefined
     try {
       const root = config.outputDirectory || join(tmpdir(), 'sf-labels')
@@ -99,10 +109,9 @@ export function createEmployeeSfPdfFunction(config: EmployeeSfPdfConfig) {
       directory = await mkdtemp(join(root, 'label-'))
       const pdfPath = join(directory, `${waybillNo}.pdf`)
       await writeFile(pdfPath, pdf, { mode: 0o600, flag: 'wx' })
-      return { pdfPath, waybillNo, orderId: data.orderId, employeeId, enterpriseId: mapping.enterpriseId }
+      return pdfPath
     } catch {
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => undefined)
-      throw new EmployeeSfPdfError('已出号，但PDF保存失败；请检查保存目录，勿重新下单。', 'save', data.orderId, waybillNo)
+      throw new EmployeeSfPdfError('已出号，但PDF保存失败；请检查保存目录，勿重新下单。', 'save', orderId, waybillNo)
     }
-  }
 }

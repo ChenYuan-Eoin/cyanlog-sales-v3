@@ -231,8 +231,8 @@ const result = await createPdf(employeeId, {
 - 下单使用 `EXP_RECE_CREATE_ORDER`。生产传员工映射的 `monthlyCard`；沙箱显式传 `monthlyCard: ''`。企业归属只作本地追溯，不传旧 XML 的 `j_custid`。
 - PDF 使用 `COM_RECE_CLOUD_PRINT_WAYBILLS`，`version: '2.0'`、`sync: true`，从 `obj.files` 读取 URL/Token，以 GET 和 `X-Auth-token` 下载。打印模板编码必须来自已关联接口详情，不能猜模板名。
 - 顺丰后台路径：开发者对接 → 当前应用 → 查看 API → 基础通用 API → 面单类接口 → 关联 API → 云打印面单转 PDF 接口。插件接口 `COM_RECE_CLOUD_PRINT_PARSEDDATA` 需要 `SCPPrint.js` 和电脑打印插件，不是本函数的后端 PDF 路径。
-- 本函数不会自动重试下单。发生打印/下载/保存失败时，已存在的运单号会随错误返回；不要换订单号重复创建运单。
+- 本函数不会自动重试下单。发生打印/下载/保存失败时，已存在的运单号会随错误返回；用同模块的 `printSfWaybillPdf(waybillNo, orderId, config)` 仅重取面单，不要换订单号重复创建运单。单票不传合并PDF选项，避免顺丰合并响应省略运单号。
 - Vercel 的临时文件不是永久存储；调用方应在本次处理内读取文件返回或交给已有文件存储。没有新增持久存储服务。
-- 验证状态：协议和自动测试已覆盖；当前应用 PDF 接口可关联，但关联授权、实际模板及真实下单到 PDF 尚待联调，不代表生产业务验收完成。
+- 验证状态：2026-10-12 当前应用已配置标准76×130模板、JSON及同步接收。实际运行内部函数获得顺丰沙箱运单 SF7444706953882 并下载一页 PDF（67383字节）；另一张沙箱单验证了只重取PDF、不重新下单。模板码从实际接口详情读取。生产真实月结、员工实际映射与生产部署执行仍未验收。
 
 官方文档：[JSON 下单](https://open.sf-express.com/Api/ApiDetails?level3=393)、[同步 PDF](https://open.sf-express.com/Api/ApiDetails?level3=317)、[打印插件](https://open.sf-express.com/Api/ApiDetails?level3=324)。
