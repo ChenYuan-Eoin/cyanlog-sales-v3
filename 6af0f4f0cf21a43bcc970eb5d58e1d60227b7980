@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "activeId": "WP19",
+  "commit": "6af0f4f0cf21a43bcc970eb5d58e1d60227b7980",
+  "evidence": {
+    "code": {
+      "commit": "6af0f4f0cf21a43bcc970eb5d58e1d60227b7980",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "artifact_path": "check-logs/168ae66cbe29f51f86f9c9a238976eef7b374bec/check-03-test.log",
+          "log_sha256": "4de879c705b3df2f171686a4714ecceb46c7bc8e18bb505a6a0e08c1c667ea5a",
+          "exit_code": 0
+        },
+        {
+          "name": "full_tests",
+          "artifact_path": "check-logs/168ae66cbe29f51f86f9c9a238976eef7b374bec/check-03-test.log",
+          "log_sha256": "4de879c705b3df2f171686a4714ecceb46c7bc8e18bb505a6a0e08c1c667ea5a",
+          "exit_code": 0
+        },
+        {
+          "name": "lint",
+          "artifact_path": "check-logs/168ae66cbe29f51f86f9c9a238976eef7b374bec/check-02-lint.log",
+          "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+          "exit_code": 0
+        },
+        {
+          "name": "typecheck",
+          "artifact_path": "check-logs/168ae66cbe29f51f86f9c9a238976eef7b374bec/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0
+        },
+        {
+          "name": "build",
+          "artifact_path": "wp19-wecom-lifecycle-build.log",
+          "log_sha256": "0ac0004ed3bbd348bca7ce560a213d6dbea1baa9f450b05f11f5573a6da4a4d6",
+          "exit_code": 0
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "e6fcbbb96eceb996c9a3eabf51db431df699e2a66f819f10d012c026eb3954db",
+        "entry_sha256": "19c9ab5a583fbae78948d0a008661640d615ec676d5cbd417179585e196da098"
+      },
+      "scope": "WP19 enterprise configuration and callback intake; provider handshake and production acceptance pending"
+    },
+    "preview": {
+      "commit": "6af0f4f0cf21a43bcc970eb5d58e1d60227b7980",
+      "provider_source_commit": "6af0f4f0cf21a43bcc970eb5d58e1d60227b7980",
+      "deployment_id": "dpl_7sQyRJhZ7EuLjkdHpd1Q5deUm28e",
+      "url": "https://cyanlog-sales-v3-bixly1m0v-eoins-projects-94b17ece.vercel.app",
+      "ready": true,
+      "git_dirty": false,
+      "api_replay": true,
+      "artifact_path": "wp19-preview-acceptance.json",
+      "scope": "Real isolated API chain; no claim of provider-origin webhook or full F054 desktop/tablet/carrier acceptance."
+    }
+  },
+  "updatedAt": "2026-10-12T08:19:54.998Z",
+  "completionState": "code_green",
+  "releaseControl": {
+    "production_branch": "production",
+    "production_release_approval_id": "IN-20260923-014",
+    "scope": "User-authorized F054 configuration release; real provider callback acceptance remains pending."
+  },
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-12T08:19:54.981Z",
+      "head": "6af0f4f0cf21a43bcc970eb5d58e1d60227b7980",
+      "originMain": "ccad80bfc8437f293c8bfdc57f9a370341a7e0cc",
+      "remoteMain": "ccad80bfc8437f293c8bfdc57f9a370341a7e0cc",
+      "remoteProduction": "ccad80bfc8437f293c8bfdc57f9a370341a7e0cc",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "c92e57662185aeeacbebf2e522c51c7381900fa1",
+      "remoteAttestationRefOid": "c92e57662185aeeacbebf2e522c51c7381900fa1",
+      "remoteSnapshotCheckedAt": "2026-10-12T08:19:52.538Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "cd84c1e5798f2b87dabdc9ad2fef5689c631047a439c1b3a54d65f101638a773",
+  "sealedAt": "2026-10-12T08:19:54.999Z",
+  "attestationDigest": "e190f9269d1a64beda3b4229e43c3565cedcdabafbe45a7ba48d087f14d3f204"
+}
