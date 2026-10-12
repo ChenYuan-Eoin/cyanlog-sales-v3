@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
-import { checkShippingPolicy, submitShipping } from './service'
+import { checkShippingPolicy, submitShipping, shippingRequestId } from './service'
 import { shippingStoreForOrg } from './store'
 import { getCarrierAdapter } from './carrier-adapter'
 import { recordShippingCapability } from './connections'
@@ -49,7 +50,7 @@ async function orderRuntime(row: ProcessRow, orgId: string, selection?: Confirma
   const service = carrier.selectService(row.shipment_payload.servicePreference || 'standard', selection?.serviceId || row.shipment_payload.serviceId)
   const input: ShippingInput = { ...row.shipment_payload, payment, sender: sender.success ? sender.data : connection.sender, recipient: recipient.data, serviceId: service.id, serviceName: service.name }
   checkShippingPolicy(input, connection.services)
-  const snapshot = { ...connection.snapshot, payment, senderSource: sender.success ? 'workorder' : 'company_default', serviceId: service.id, serviceName: service.name, servicePreference: service.preference }
+  const snapshot = { ...connection.snapshot, ...(row.shipping_config_snapshot?.dispatchRecovery ? { dispatchRecovery: row.shipping_config_snapshot.dispatchRecovery } : {}), ...(row.shipping_config_snapshot?.orderFailure ? { orderFailure: row.shipping_config_snapshot.orderFailure } : {}), payment, senderSource: sender.success ? 'workorder' : 'company_default', serviceId: service.id, serviceName: service.name, servicePreference: service.preference }
   return { orgId, connection, carrier, input, snapshot }
 }
 
@@ -67,10 +68,13 @@ export async function confirmAndSubmitShipment(id: string, userId: string, orgId
   if (!['accepted', 'awaiting_confirmation', 'confirmed', 'order_unknown'].includes(row.status)) throw new ShippingError(409, '当前寄件单不能确认下单。')
   if (row.status === 'order_unknown') return reconcileShipmentOrder(id, orgId)
   const { connection, carrier, input, snapshot } = await orderRuntime(row, orgId, selection)
+  const recovery = snapshot.dispatchRecovery as { requestKey?: string } | undefined
+  const requestKey = recovery?.requestKey || id
+  const providerOrderId = shippingRequestId(userId, requestKey)
 
   if (row.status === 'accepted' || row.status === 'awaiting_confirmation') {
     const { data, error } = await supabaseAdmin.from('shipping_orders').update({
-      status: 'ordering', shipment_payload: input, carrier_connection_id: connection.connectionId,
+      status: 'ordering', provider_order_id: providerOrderId, shipment_payload: input, carrier_connection_id: connection.connectionId,
       billing_account_id: connection.billingAccountId, sender_profile_id: connection.senderProfileId,
       connection_environment: connection.environment, billing_account_tail: connection.billingAccountTail,
       shipping_config_snapshot: snapshot, confirmed_by: userId, confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString()
@@ -79,7 +83,7 @@ export async function confirmAndSubmitShipment(id: string, userId: string, orgId
     if (!data) throw new ShippingError(409, '寄件单已被其他操作处理，请刷新。')
   } else {
     const { data, error } = await supabaseAdmin.from('shipping_orders').update({
-      status: 'ordering', shipment_payload: input, carrier_connection_id: connection.connectionId,
+      status: 'ordering', provider_order_id: providerOrderId, shipment_payload: input, carrier_connection_id: connection.connectionId,
       billing_account_id: connection.billingAccountId, sender_profile_id: connection.senderProfileId,
       connection_environment: connection.environment, billing_account_tail: connection.billingAccountTail,
       shipping_config_snapshot: snapshot, updated_at: new Date().toISOString()
@@ -89,7 +93,7 @@ export async function confirmAndSubmitShipment(id: string, userId: string, orgId
   }
 
   try {
-    const provider = await submitShipping({ userId, key: id, input, connection: connection.connectionKey, environment: connection.environment, runtimeConfig: connection, store: shippingStoreForOrg(orgId), send: carrier.create })
+    const provider = await submitShipping({ userId, key: requestKey, input, connection: connection.connectionKey, environment: connection.environment, runtimeConfig: connection, store: shippingStoreForOrg(orgId), send: carrier.create })
     if (provider.status !== 'accepted' || !provider.waybill) {
       await supabaseAdmin.from('shipping_orders').update({ status: 'order_unknown', provider_order_id: provider.id, updated_at: new Date().toISOString() }).eq('id', id).eq('org_id', orgId)
       return { id, status: 'order_unknown' as const, waybill: null }
@@ -102,9 +106,29 @@ export async function confirmAndSubmitShipment(id: string, userId: string, orgId
     catch { console.error('shipping.capability.record_failed', { capability: 'order' }) }
     return { id, status: 'waybill_created' as const, waybill: provider.waybill }
   } catch (error) {
-    await supabaseAdmin.from('shipping_orders').update({ status: error instanceof ShippingError && error.requestStage === 'provider_rejected' ? 'order_failed' : 'order_unknown', updated_at: new Date().toISOString() }).eq('id', id).eq('org_id', orgId)
+    const at = new Date().toISOString()
+    const failure = { message: error instanceof ShippingError ? error.message.slice(0, 500) : '下单结果暂不能确认，请先查回原请求。', at }
+    const saved = await supabaseAdmin.from('shipping_orders').update({ status: error instanceof ShippingError && error.requestStage === 'provider_rejected' ? 'order_failed' : 'order_unknown', shipping_config_snapshot: { ...snapshot, orderFailure: failure }, updated_at: at }).eq('id', id).eq('org_id', orgId).eq('status', 'ordering')
+    if (saved.error) throw new ShippingError(503, '下单失败信息未保存，请刷新核对原单，勿直接重新寄件。')
     throw error
   }
+}
+
+export async function reopenFailedShipmentOrder(id: string, userId: string, orgId: string) {
+  const row = await loadForAction(id, orgId)
+  if (row.status !== 'order_failed') throw new ShippingError(409, '只有已明确拒绝的工单可以重新核对；结果未知请先查回。')
+  const waybill = await supabaseAdmin.from('shipping_waybills').select('waybill_no').eq('shipping_order_id', id).maybeSingle()
+  if (waybill.error) throw new ShippingError(503, '原单运单结果暂不可核对，请稍后再试。')
+  if (waybill.data) throw new ShippingError(409, '原单已有运单，请刷新核对，不能重新下单。')
+  const snapshot = row.shipping_config_snapshot || {}
+  const prior = snapshot.dispatchRecovery as { history?: unknown[] } | undefined
+  const history = Array.isArray(prior?.history) ? prior.history : []
+  if (history.length >= 100) throw new ShippingError(409, '该工单多次下单失败，请先处理异常原因。')
+  const dispatchRecovery = { requestKey: randomUUID(), history: [...history, { providerOrderId: row.provider_order_id, failure: snapshot.orderFailure || { message: '历史版本未保存拒单原因。' }, reopenedBy: userId, reopenedAt: new Date().toISOString() }] }
+  const { data, error } = await supabaseAdmin.from('shipping_orders').update({ status: 'awaiting_confirmation', shipping_config_snapshot: { ...snapshot, dispatchRecovery }, updated_at: new Date().toISOString() }).eq('id', id).eq('org_id', orgId).eq('status', 'order_failed').select('id,status').maybeSingle()
+  if (error) throw new ShippingError(503, '恢复核对失败，原工单保留。')
+  if (!data) throw new ShippingError(409, '工单状态已变化，请刷新。')
+  return { id, status: 'awaiting_confirmation' as const }
 }
 
 export async function reconcileShipmentOrder(id: string, orgId: string) {

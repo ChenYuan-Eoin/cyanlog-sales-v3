@@ -13,10 +13,10 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 vi.mock('@/lib/scoped-access', () => ({ getDefaultOrgId: mocks.defaultOrg }))
 vi.mock('./runtime-config', () => ({ getShippingRuntimeConfig: mocks.runtimeConfig, selectAuthorizedShippingService: mocks.service }))
 vi.mock('./sf-client', () => ({ cancelSfOrder: mocks.cancel, lookupSfOrder: mocks.lookup, createSfOrder: vi.fn() }))
-vi.mock('./service', () => ({ submitShipping: mocks.submit, checkShippingPolicy: vi.fn() }))
+vi.mock('./service', async importOriginal => ({ ...await importOriginal<typeof import('./service')>(), submitShipping: mocks.submit, checkShippingPolicy: vi.fn() }))
 vi.mock('./connections', () => ({ recordShippingCapability: mocks.capability }))
 vi.mock('./store', () => ({ shippingStoreForOrg: vi.fn(() => ({})) }))
-import { cancelShipmentOrder, confirmAndSubmitShipment, reconcileShipmentOrder, returnShipmentOrder } from './workflow'
+import { cancelShipmentOrder, confirmAndSubmitShipment, reconcileShipmentOrder, returnShipmentOrder, reopenFailedShipmentOrder } from './workflow'
 import { ShippingError } from './config'
 
 const runtime = { orgId: 'org-A', connectionId: 'connection-1', environment: 'sandbox', partnerId: 'synthetic-partner', checkWord: 'synthetic-checkword', services: [{ id: 1, name: '标快', preference: 'standard' }], billingAccountId: 'account-1', billingAccount: '123456', billingAccountTail: '3456', senderProfileId: 'sender-1', sender: { name: 'A', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '测试路1号' }, connectionKey: 'key', snapshot: {} }
@@ -41,7 +41,7 @@ function makeQueryBuilder(table: string) {
       }
       return { data: { id: order.id }, error: null }
     }
-    return { data: table === 'shipping_orders' ? loadedOrder : { waybill_no: 'SF1234567890123' }, error: null }
+    return { data: table === 'shipping_orders' ? loadedOrder : loadedOrder.status === 'order_failed' ? null : { waybill_no: 'SF1234567890123' }, error: null }
   }
   const builder = {
     select: () => builder,
@@ -285,5 +285,34 @@ describe('workflow uses a carrier contract, not provider-specific calls', () => 
     expect(mocks.runtimeConfig).not.toHaveBeenCalled()
     expect(mocks.lookup).not.toHaveBeenCalled()
     expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+})
+
+describe('definitively rejected original-order recovery', () => {
+  it('retains the failure, reopens without calling carrier, and uses a fresh request only after confirmation', async () => {
+    loadedOrder = { ...order, status: 'awaiting_confirmation' }
+    mocks.submit.mockRejectedValueOnce(new ShippingError(422, '承运商明确拒绝', 'provider_rejected'))
+    await expect(confirmAndSubmitShipment(order.id, 'operator-1', 'org-A')).rejects.toThrow('明确拒绝')
+    expect(loadedOrder.status).toBe('order_failed')
+    expect(loadedOrder.shipping_config_snapshot).toMatchObject({orderFailure:{message:'承运商明确拒绝'}})
+    mocks.submit.mockClear()
+    await reopenFailedShipmentOrder(order.id, 'operator-1', 'org-A')
+    expect(loadedOrder.status).toBe('awaiting_confirmation')
+    expect(mocks.submit).not.toHaveBeenCalled()
+    const recovery = (loadedOrder.shipping_config_snapshot as {dispatchRecovery:{requestKey:string;history:unknown[]}}).dispatchRecovery
+    expect(recovery.requestKey).not.toBe(order.id);expect(recovery.history).toHaveLength(1)
+    await confirmAndSubmitShipment(order.id, 'operator-2', 'org-A')
+    expect(mocks.submit).toHaveBeenCalledWith(expect.objectContaining({key:recovery.requestKey}))
+    expect(loadedOrder.status).toBe('waybill_created')
+  })
+  it.each(['order_unknown','ordering','waybill_created'])('cannot reopen %s', async status => {
+    loadedOrder = {...order,status}
+    await expect(reopenFailedShipmentOrder(order.id,'operator-1','org-A')).rejects.toThrow('只有已明确拒绝')
+    expect(mocks.submit).not.toHaveBeenCalled();expect(queries.some(q=>q.action==='update')).toBe(false)
+  })
+  it('does not overwrite another operator transition', async () => {
+    loadedOrder={...order,status:'order_failed'};claimLost=true
+    await expect(reopenFailedShipmentOrder(order.id,'operator-1','org-A')).rejects.toThrow('状态已变化')
+    expect(mocks.submit).not.toHaveBeenCalled()
   })
 })

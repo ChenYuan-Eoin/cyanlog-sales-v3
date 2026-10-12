@@ -156,6 +156,17 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     if (successfulSubmission(order)) return order
     return { ...order, status: result.status === 'ordering' ? 'ordering' : result.status === 'order_failed' ? 'order_failed' : 'order_unknown', waybill: null }
   }
+  async function reopenFailed(order: ShipmentOrder) {
+    if (busy || confirmationBusy || batchBusy) return
+    setBusy(order.id)
+    try {
+      await request(`/api/shipping/ledger/${order.id}/reopen`, { method: 'POST' })
+      setOrders(current => current.map(item => item.id === order.id ? { ...item, status: 'awaiting_confirmation' } : item))
+      setReviewIds([order.id]); setStatus('all')
+      setMessage('原工单已回到待核对，尚未向承运商发单。请先处理失败原因，再核对确认。')
+    } catch (error) { setMessage(`恢复核对失败：${(error as Error).message}`) }
+    finally { setBusy('') }
+  }
   function updateBatch(id: number, field: 'recipient' | 'phone' | 'address' | 'customerName' | 'team', value: string) { setBatch(rows => rows.map(row => row.id === id && maySubmitRow(row) && !batchBusy ? { ...row, [field]: value } : row)) }
   function removeDraft(id: number) {
     if (inputLocked) return
@@ -491,6 +502,12 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                   {(selected.status === 'order_unknown' || selected.status === 'ordering') && <button className={styles.secondaryButton} aria-label="查回所选单据下单结果" disabled={batchBusy || confirmationBusy || !!busy} onClick={() => void reconcileOrder(selected.id)}>{busy === selected.id ? '查回中…' : '查回下单结果'}</button>}{selected.status === 'waybill_created' && <button className={styles.cancelButton} disabled={confirmationBusy || !!busy} onClick={() => void cancelSelected()}>{isSimulation ? '模拟取消运单' : '取消运单'}</button>}
                 </div>
               </div>
+              {(selected.status === 'order_failed' || selected.status === 'order_unknown' || (selected.status === 'awaiting_confirmation' && selected.failure)) && <section className={styles.workorderReview} aria-label="下单异常处理">
+                <h3>{selected.status === 'order_failed' ? '下单已被拒绝' : selected.status === 'order_unknown' ? '下单结果待确认' : '重新核对原工单'}</h3>
+                <p role="alert">{selected.failure?.message || (selected.status === 'order_failed' ? '上次下单已被拒绝，历史版本未保存具体原因。' : '尚未确认是否生成运单，请先查回原请求，勿重复下单。')}</p>
+                {selected.failure?.at && <small>发生时间：{new Date(selected.failure.at).toLocaleString('zh-CN')}</small>}
+                {selected.status === 'order_failed' && <><p>重新核对只恢复本工单的审核状态；核对并确认后才再次向承运商发单。</p><button type="button" disabled={batchBusy || confirmationBusy || !!busy} onClick={() => void reopenFailed(selected)}>{busy === selected.id ? '恢复中…' : '重新核对原工单'}</button></>}
+              </section>}
               <div className={styles.factGrid}>
                 <div><small>客户</small><b>{customerOf(selected)}</b></div>
                 <div><small>提单销售</small><b>{selected.input.submittedBy?.name || selected.relation.salesRef || '待分配'}</b></div>

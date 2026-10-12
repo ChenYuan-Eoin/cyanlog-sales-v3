@@ -51,7 +51,8 @@ function orderNo(now = new Date()) {
 
 function map(row: ShipmentRow): ShipmentOrder {
   const waybillRows = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
-  return { id: row.id, identityVerified: Boolean(row.employee_profile_id), orderNo: row.order_no, intakeSource: row.intake_source, confirmationPolicy: row.confirmation_policy, status: row.status, relation: { salesRef: row.sales_ref, customerRef: row.customer_ref, assignmentStatus: row.assignment_status }, input: row.shipment_payload, waybill: waybillRows[0]?.waybill_no || null, nextReviewAt: row.next_review_at, createdAt: row.created_at }
+  const failure = row.shipping_config_snapshot?.orderFailure as { message?: unknown; at?: unknown } | undefined
+  return { ...(failure && typeof failure.message === 'string' && typeof failure.at === 'string' ? { failure: { message: failure.message.slice(0, 500), at: failure.at } } : {}), id: row.id, identityVerified: Boolean(row.employee_profile_id), orderNo: row.order_no, intakeSource: row.intake_source, confirmationPolicy: row.confirmation_policy, status: row.status, relation: { salesRef: row.sales_ref, customerRef: row.customer_ref, assignmentStatus: row.assignment_status }, input: row.shipment_payload, waybill: waybillRows[0]?.waybill_no || null, nextReviewAt: row.next_review_at, createdAt: row.created_at }
 }
 
 export function publicShipmentReceipt(order: ShipmentOrder): ShipmentReceipt {

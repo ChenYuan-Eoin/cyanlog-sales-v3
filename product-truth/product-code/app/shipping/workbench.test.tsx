@@ -20,6 +20,20 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('keeps the saved failure visible and restores the original order for explicit review without dispatching', async () => {
+    const order: ShipmentOrder = { ...fixtureOrders[0], status: 'order_failed', waybill: null, failure: { message: '承运商明确拒绝本次请求', at: '2026-10-12T09:00:00Z' } }
+    useLedger([order])
+    render(<ShippingWorkbench settings={settings}/>)
+    const recovery = await screen.findByRole('region', {name:'下单异常处理'})
+    expect(within(recovery).getByRole('alert').textContent).toContain('明确拒绝')
+    fireEvent.click(within(recovery).getByRole('button',{name:'重新核对原工单'}))
+    await screen.findByText('原工单已回到待核对，尚未向承运商发单。请先处理失败原因，再核对确认。')
+    expect(screen.getByRole('checkbox',{name:`核对并选择工单 ${order.orderNo}`})).toHaveProperty('checked',true)
+    const writes=fetcher.mock.calls.filter(([,init])=>init?.method==='POST').map(([url])=>url)
+    expect(writes).toEqual([`/api/shipping/ledger/${order.id}/reopen`])
+    expect(within(screen.getByRole('region',{name:'下单异常处理'})).getByRole('alert').textContent).toContain('明确拒绝')
+  })
+
   it('keeps an external failed query separate from the unrelated selected work order', async () => {
     const order = { ...fixtureOrders[0], status: 'returned' as const, waybill: null }
     fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking') ? Response.json({ error: '请校验运单归属' }, { status: 403 }) : Response.json({ records: [order] }))

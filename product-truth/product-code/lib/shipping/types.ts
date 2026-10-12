@@ -14,6 +14,7 @@ export type ShippingSettings = { intakeRules?: IntakeRules; intakeRulesWarning?:
 export type ShipmentOrderStatus = 'accepted' | 'awaiting_confirmation' | 'returned' | 'confirmed' | 'ordering' | 'order_unknown' | 'waybill_created' | 'in_transit' | 'delivered' | 'cancelled' | 'order_failed'
 export type ShipmentRelation = { salesRef: string | null; customerRef: string | null; assignmentStatus: 'assigned' | 'unassigned' }
 export type ShipmentOrder = {
+  failure?: { message: string; at: string }
   identityVerified?: boolean
   id: string
   orderNo: string
