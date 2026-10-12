@@ -83,6 +83,8 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const confirmationRunning = useRef(false)
   const [ledgerLoading, setLedgerLoading] = useState(true)
   const [trackingBusy, setTrackingBusy] = useState(false)
+  const [trackingTarget, setTrackingTarget] = useState('')
+  const [trackingError, setTrackingError] = useState('')
   const trackingRequest = useRef(0)
   const reconciliationRequests = useRef(new Set<string>())
   const batchRunning = useRef(false)
@@ -104,7 +106,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     return () => { active = false }
   }, [request, isSimulation])
 
-  const selected = orders.find(order => order.id === selectedId) || orders[0]
+  const selected = trackingTarget ? orders.find(order => order.waybill === trackingTarget) : orders.find(order => order.id === selectedId) || orders[0]
   const filtered = useMemo(() => orders.filter(order => {
     if (type !== 'all' && (order.direction || 'outbound') !== type) return false
     if (status !== 'all' && order.status !== status) return false
@@ -233,7 +235,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
       const ledger = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
       setOrders(ledger.records)
       const newOrder = ledger.records.find(order => affectedOrderIds.includes(order.id))
-      if (newOrder) { setSelectedId(newOrder.id); setManualWaybill(newOrder.waybill || ''); setTracking(null); trackingRequest.current += 1 }
+      if (newOrder) { setTrackingTarget(''); setTrackingError(''); setSelectedId(newOrder.id); setManualWaybill(newOrder.waybill || ''); setTracking(null); trackingRequest.current += 1 }
     } catch (error) { ledgerRefreshError = ` 台账刷新失败：${(error as Error).message}` }
     batchRunning.current = false
     setBatchBusy(false); setMessage(`工单提报：已提报 ${succeeded} 票；回执待确认 ${uncertain} 票；失败 ${failed} 票。请在中栏核对工单后正式下单。${ledgerRefreshError}`)
@@ -290,7 +292,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     } catch (error) { refreshError = ` 台账刷新失败：${(error as Error).message}` }
     setReviewIds(ids => ids.filter(id => !results.has(id)))
     const first = reviewedOrders.find(order => results.has(order.id))
-    if (first) { setSelectedId(first.id); setManualWaybill(results.get(first.id)?.waybill || ''); setTracking(null); trackingRequest.current += 1 }
+    if (first) { setTrackingTarget(''); setTrackingError(''); setSelectedId(first.id); setManualWaybill(results.get(first.id)?.waybill || ''); setTracking(null); trackingRequest.current += 1 }
     confirmationRunning.current = false; setConfirmationBusy(false); setBusy('')
     setMessage(`${isSimulation ? '模拟' : '正式'}下单：成功 ${succeeded} 票；结果待确认 ${uncertain} 票；失败 ${failed} 票。${uncertain ? '下单结果待确认，请查回原单，勿重复下单。' : ''}${errors.join('；')}${refreshError}`)
   }
@@ -322,7 +324,10 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     } finally { returnRunning.current = false; setBusy('') }
   }
   async function refreshTracking(number = manualWaybill || selected?.waybill || '') {
+    number = number.trim().toUpperCase()
     if (!number) return
+    setTrackingTarget(number); setTrackingError('')
+    setTracking(current => current?.waybill === number ? current : null)
     const currentRequest = ++trackingRequest.current
     setTrackingBusy(true); setMessage('')
     try {
@@ -332,7 +337,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
         if (result.shipmentStatus) setOrders(items => items.map(order => withTrackingStatus(order, result)))
       }
     } catch (error) {
-      if (currentRequest === trackingRequest.current) { setMessage((error as Error).message); setTracking(null) }
+      if (currentRequest === trackingRequest.current) { setMessage((error as Error).message); setTrackingError((error as Error).message) }
     } finally { if (currentRequest === trackingRequest.current) setTrackingBusy(false) }
   }
   async function cancelSelected() {
@@ -435,7 +440,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           {ledgerLoading ? <p className={styles.listHint}>正在读取台账…</p> : !filtered.length && <p className={styles.listHint}>暂无匹配单据</p>}
           {filtered.map(order => {
             const senderReview = senderForReview(order, settings.sender)
-            return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`} onClick={() => { setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false) }}>
+            return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`} onClick={() => { setTrackingTarget(''); setTrackingError(''); setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false) }}>
             <div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.intakeSource === 'owner_web' ? '操作员提报' : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div>
             <div className={styles.cardCore}><div><small>客户</small><strong>{customerOf(order)}</strong></div><ChevronRight size={15}/><div><small>收件人</small><strong>{order.input.recipient.name}</strong></div></div>
             {order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}
@@ -472,6 +477,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           <input aria-label="查询手机号后四位" value={phoneSuffix} onChange={event => setPhoneSuffix(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="手机后四位" />
           <button type="submit" disabled={!manualWaybill || trackingBusy}><Search size={14}/>{trackingBusy ? '查询中…' : '查询轨迹'}</button>
         </form>
+        {trackingError && <p role="alert" className={styles.trackingNotice}>运单 {trackingTarget} 查询未成功：{trackingError}{tracking ? ' 上次查询结果保留，尚未更新。' : ''}</p>}
         {tracking?.source === 'sandbox_mock' && <p className={styles.trackingNotice} role="note">顺丰沙盒返回的是模拟轨迹，不用于判断实际揽收、签收或取消状态。</p>}
         {selected ? (
           <div className={styles.detailStack}>
@@ -517,8 +523,8 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
         ) : (
           <div className={`${styles.noTracking} ${styles.emptyTracking}`}>
             <PackageCheck size={32}/>
-            <strong>{tracking ? `顺丰运单 ${tracking.waybill}` : '暂无收寄记录'}</strong>
-            <p>{tracking ? '物流轨迹查询结果' : '可直接输入顺丰运单号查询；本人或业务提报的真实单据也会显示在这里。'}</p>
+            <strong>{trackingTarget || tracking ? `顺丰运单 ${trackingTarget || tracking?.waybill}` : '暂无收寄记录'}</strong>
+            <p>{trackingBusy ? '正在查询这票运单…' : trackingError ? '请按上方提示处理后重新查询。此运单未关联当前台账工单。' : tracking ? `物流轨迹查询结果 · 更新于 ${new Date(tracking.queriedAt).toLocaleString('zh-CN')}` : '可直接输入顺丰运单号查询；本人或业务提报的真实单据也会显示在这里。'}</p>
             {tracking && (tracking.events.length ? <ol className={styles.timeline}>{tracking.events.map((event, index) => <li key={`${event.time}-${index}`}><i/><time>{event.time}</time><p>{event.description}</p><small>{event.location}</small></li>)}</ol> : <p>暂无物流轨迹，运单可能尚未揽收。</p>)}
           </div>
         )}

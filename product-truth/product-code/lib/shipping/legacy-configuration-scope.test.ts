@@ -44,6 +44,17 @@ beforeEach(() => {
 })
 
 describe('legacy shipping configuration organization provenance', () => {
+  it('checks real organization provenance for legacy seeded PostgreSQL UUIDs', async () => {
+    const seeded = '30000001-0000-0000-0000-000000000000'
+    mocks.users = [{ id: seeded, org_id: 'org-a' }]
+    mocks.memberships = [{ user_id: seeded, org_id: 'org-a' }]
+    const legacy = { SHIPPING_ALLOWED_USER_IDS: seeded }
+    await expect(canImportLegacyShippingConfiguration('org-a', legacy)).resolves.toBe(true)
+    await expect(canImportLegacyShippingConfiguration('org-b', legacy)).resolves.toBe(false)
+    mocks.memberships.push({ user_id: seeded, org_id: 'org-b' })
+    await expect(canImportLegacyShippingConfiguration('org-a', legacy)).resolves.toBe(false)
+  })
+
   it('allows the uniquely shared organization and rejects another organization', async () => {
     await expect(canImportLegacyShippingConfiguration('org-a', env)).resolves.toBe(true)
     await expect(canImportLegacyShippingConfiguration('org-b', env)).resolves.toBe(false)

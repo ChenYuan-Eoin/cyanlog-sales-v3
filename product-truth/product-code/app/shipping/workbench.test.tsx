@@ -20,6 +20,21 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('keeps an external failed query separate from the unrelated selected work order', async () => {
+    const order = { ...fixtureOrders[0], status: 'returned' as const, waybill: null }
+    fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking') ? Response.json({ error: '请校验运单归属' }, { status: 403 }) : Response.json({ records: [order] }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findAllByText(order.orderNo)
+    fireEvent.change(screen.getByLabelText('备用查询运单号'), { target: { value: 'SF0213179537901' } })
+    fireEvent.click(screen.getByRole('button', { name: '查询轨迹' }))
+    await screen.findByRole('alert')
+    const detail = within(screen.getByRole('region', { name: '单据详情与物流轨迹' }))
+    expect(detail.getByText('顺丰运单 SF0213179537901')).toBeTruthy()
+    expect(detail.queryByText(order.orderNo)).toBeNull()
+    expect(detail.queryByText('尚未出单')).toBeNull()
+    expect(detail.getByRole('alert').textContent).toContain('请校验运单归属')
+  })
+
   it('requires visible configured company and team fields and a complete parsed sender before intake', async () => {
     render(<ShippingWorkbench settings={{ ...settings, sender: { name: '', phone: '', province: '', city: '', county: '', address: '' }, intakeRules: { companyName: { enabled: true, required: true, minLength: 4 }, team: { enabled: true, required: true, minLength: 1 }, teamOptions: ['销售部'] } }}/>)
     await screen.findByText('暂无收寄记录')

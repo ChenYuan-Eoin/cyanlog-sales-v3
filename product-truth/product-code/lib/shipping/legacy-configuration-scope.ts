@@ -1,7 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+// Accept canonical PostgreSQL UUIDs, including seeded IDs. Membership proves ownership.
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Deployment-wide legacy secrets can only belong to one provable organization. */
 export async function canImportLegacyShippingConfiguration(
