@@ -8,6 +8,7 @@ export const shippingInputSchema = z.object({ sender: contactSchema, recipient: 
 const ownerShippingInputSchema = shippingInputSchema.extend({ serviceId: z.number().int().positive() })
 export const createSchema = z.object({ key: z.string().uuid(), input: ownerShippingInputSchema, confirmed: z.literal(true) }).strict()
 const operatorIntakeInputSchema = shippingInputSchema.extend({
+  submittedBy: shippingSubmitterSchema.extend({ team: z.string().trim().max(80).default('') }).optional(),
   sender: contactSchema.optional(),
   weight: z.number().finite().positive().max(20).default(1),
   servicePreference: z.enum(['standard', 'urgent']).default('standard'),

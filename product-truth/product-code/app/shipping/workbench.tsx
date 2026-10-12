@@ -7,6 +7,8 @@ import { buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/
 import { parseShippingText, prepareBatchRecipient } from '@/lib/shipping/batch-text'
 import { shippingWorkbenchRequest, ShippingWorkbenchRequestError, isDefinitiveShippingRejection, type ShippingSimulation } from '@/lib/shipping/workbench-client'
 import { contactSchema } from '@/lib/shipping/validation'
+import { parseAddress } from '@/lib/shipping/address'
+import { DEFAULT_INTAKE_RULES, intakeFieldSchema } from '@/lib/shipping/intake-rules'
 import styles from './workbench.module.css'
 
 const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待审核', returned: '工单已退回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
@@ -54,6 +56,11 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const [serviceId, setServiceId] = useState('')
   const [billingAccountId, setBillingAccountId] = useState(settings.defaultBillingAccountId || '')
   const [payment, setPayment] = useState<ShippingPayment>('sender_monthly')
+  const [senderOverride, setSenderOverride] = useState<Contact | null>(null)
+  const [senderText, setSenderText] = useState('')
+  const batchSender = senderOverride || settings.sender
+  const senderReady = contactSchema.safeParse(batchSender).success
+  const rules = settings.intakeRules || DEFAULT_INTAKE_RULES
   const [uniformCargo, setUniformCargo] = useState('文件/合同')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | ShipmentOrderStatus>('all')
@@ -102,7 +109,13 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     const haystack = [order.orderNo, order.waybill, order.relation.salesRef, customerOf(order), order.input.recipient.name, cityOf(order)].join(' ').toLowerCase()
     return haystack.includes(search.trim().toLowerCase())
   }), [orders, search, status, type, dateRange])
-  const preparedRows = useMemo(() => batch.map(row => ({ row, ...prepareBatchRecipient({ ...row, result: undefined }) })), [batch])
+  const preparedRows = useMemo(() => batch.map(row => {
+    const prepared = prepareBatchRecipient({ ...row, result: undefined })
+    const company = intakeFieldSchema(rules.companyName, '公司名称', 120).safeParse(row.customerName)
+    const team = intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions).safeParse(row.team)
+    const metadataErrors = { customerName: company.success ? [] : company.error.issues.map(issue => issue.message), team: team.success ? [] : team.error.issues.map(issue => issue.message) }
+    return { row, ...prepared, errors: [...prepared.errors, ...metadataErrors.customerName, ...metadataErrors.team], metadataErrors }
+  }), [batch, rules])
   const validCount = preparedRows.filter(({ row, errors }) => !errors.length && maySubmitRow(row)).length
   const successCount = batch.filter(row => row.result === 'success').length
   const uncertainCount = batch.filter(row => row.result === 'unknown' || row.result === 'pending').length
@@ -132,7 +145,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     if (successfulSubmission(order)) return order
     return { ...order, status: result.status === 'ordering' ? 'ordering' : result.status === 'order_failed' ? 'order_failed' : 'order_unknown', waybill: null }
   }
-  function updateBatch(id: number, field: 'recipient' | 'phone' | 'address', value: string) { setBatch(rows => rows.map(row => row.id === id && maySubmitRow(row) && !batchBusy ? { ...row, [field]: value } : row)) }
+  function updateBatch(id: number, field: 'recipient' | 'phone' | 'address' | 'customerName' | 'team', value: string) { setBatch(rows => rows.map(row => row.id === id && maySubmitRow(row) && !batchBusy ? { ...row, [field]: value } : row)) }
   function removeDraft(id: number) {
     if (inputLocked) return
     setBatch(rows => rows.filter(row => row.id !== id || !maySubmitRow(row)))
@@ -176,7 +189,8 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   }
   async function executeBatch(retrieveRowId?: number) {
     if (batchRunning.current || confirmationRunning.current) return
-    const candidates = preparedRows.filter(({ row, errors }) => !errors.length && (retrieveRowId ? row.id === retrieveRowId && row.result === 'unknown' : maySubmitRow(row)))
+    if (!retrieveRowId && (!senderReady || settings.intakeRulesWarning)) { setMessage(settings.intakeRulesWarning || '请先补齐下方本批寄方资料，再提交工单。'); return }
+    const candidates = preparedRows.filter(({ row, errors }) => (retrieveRowId ? row.id === retrieveRowId && row.result === 'unknown' : !errors.length && maySubmitRow(row)))
     if (!candidates.length) return
     batchRunning.current = true
     setBatchBusy(true); setMessage('')
@@ -184,7 +198,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     const affectedOrderIds: string[] = []
     for (const { row, recipient } of candidates) {
       // Intake retries replay the same content and key. No carrier operation occurs here.
-      const input: IntakeInput = row.intakeInput || { ...(contactSchema.safeParse(settings.sender).success ? { sender: settings.sender } : {}), recipient, cargo: row.cargo || uniformCargo, weight: 1, remark: '', source: 'manual', payment: 'sender_monthly' }
+      const input: IntakeInput = row.intakeInput || { sender: batchSender, customerName: rules.companyName.enabled ? (row.customerName || '').trim() : '', submittedBy: { name: batchSender.name, phone: batchSender.phone, team: rules.team.enabled ? (row.team || '').trim() : '' }, recipient, cargo: row.cargo || uniformCargo, weight: 1, remark: '', source: 'manual', payment: 'sender_monthly' }
       setBatch(items => items.map(item => item.id === row.id ? { ...item, intakeInput: input, result: 'pending', error: undefined } : item))
       try {
         const receipt = await request<SubmissionResult>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, input }) })
@@ -309,7 +323,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     <header className={styles.topbar}>
       <div><p>物流协同 / SHIPPING OPS</p><h1>自助收寄</h1></div>
       <div className={styles.topbarActions}>
-        {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <><a className={styles.configButton} href="/shipping/demo">模拟体验</a><a className={styles.configButton} href="/sales-portal">销售寄件提报</a><button className={styles.configButton} disabled={!!busy || confirmationBusy || batchBusy} onClick={() => void refreshConfiguration()}>刷新寄件配置</button></>}
+        {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <><a className={styles.configButton} href="/sales-portal">销售寄件提报</a><button className={styles.configButton} disabled={!!busy || confirmationBusy || batchBusy} onClick={() => void refreshConfiguration()}>刷新寄件配置</button></>}
         <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{payment === 'sender_cash' ? '寄方现结' : payment === 'recipient' ? '收方到付' : selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '月结账号待选择'}</small></div>
       </div>
     </header>
@@ -327,7 +341,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" disabled={inputLocked} onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><button className={styles.linkButton} onClick={() => void downloadTemplate()}>下载标准模板.xlsx</button></div> : <div className={styles.textParser}><p>支持多位收件人；同一人的姓名、电话和地址可分行，空行有助于分票。解析后请核对每票资料。</p><textarea aria-label="多行地址文本" rows={6} maxLength={100000} disabled={inputLocked} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'姓名：示例甲\n电话：13800000000\n地址：广东省深圳市南山区示例路88号\n\n示例乙 13900000000 上海市浦东新区示例路66号'}/><div className={styles.parserActions}><button className={styles.secondaryButton} disabled={!bulkText.trim() || inputLocked} onClick={parseBulk}>解析为寄件行</button>{simulation && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setBulkText(simulation.sampleText)}>重填示例地址</button>}</div></div>}
           <div className={styles.sectionTitle}><h3>{entryMode === 'text' ? '解析预览' : '导入预览'}</h3><span>{batch.length ? `${batch.length} 票` : entryMode === 'text' ? '等待解析地址' : '尚未导入'}</span></div>
           {invalidCount > 0 && <p className={styles.batchValidationSummary} role="status">{invalidCount} 票需修正；仅 {validCount} 票有效资料可提交。</p>}
-          <div className={styles.batchList}>{preparedRows.map(({ row, errors, fieldErrors }) => {
+          <div className={styles.batchList}>{preparedRows.map(({ row, errors, fieldErrors, metadataErrors }) => {
             const valid = errors.length === 0
             return <article key={row.id} className={`${styles.batchRow} ${!valid || row.result === 'failed' ? styles.invalidRow : ''}`}>
               <div className={styles.rowTop}>
@@ -354,15 +368,27 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                     value={row[field]} onChange={event => updateBatch(row.id, field, event.target.value)}/>
                   {problems.length > 0 && <small id={errorId} className={styles.fieldError}>{problems.join('；')}</small>}
                 </label>
-              })}</div>
+              })}
+              {([{ field: 'customerName', label: '公司名称', rule: rules.companyName }, { field: 'team', label: '所属团队', rule: rules.team }] as const).filter(item => item.rule.enabled).map(({ field, label, rule }) => <label key={field} className={styles.batchField}>
+                <span>{label}{rule.required ? ' *' : '（选填）'}</span>
+                {field === 'team' && rules.teamOptions.length ? <select aria-label={`第${row.id}行${label}`} value={row.team || ''} disabled={inputLocked || !maySubmitRow(row)} onChange={event => updateBatch(row.id, field, event.target.value)}><option value="">请选择所属团队</option>{rules.teamOptions.map(team => <option key={team}>{team}</option>)}</select> : <input aria-label={`第${row.id}行${label}`} value={row[field] || ''} maxLength={field === 'team' ? 80 : 120} required={rule.required} aria-invalid={metadataErrors[field].length > 0} disabled={inputLocked || !maySubmitRow(row)} placeholder={rule.minLength ? `至少${rule.minLength}个字符` : label} onChange={event => updateBatch(row.id, field, event.target.value)}/>}
+                {metadataErrors[field].length > 0 && <small className={styles.fieldError}>{metadataErrors[field].join('；')}</small>}
+              </label>)}</div>
               {row.originalText && <details className={styles.originalText}><summary>查看原文</summary><pre aria-label={`第${row.id}票原文`}>{row.originalText}</pre></details>}
               {row.error && <small>{row.error}</small>}
               {row.result === 'unknown' && <button className={styles.secondaryButton} aria-label={`重取第${row.id}行工单回执`} disabled={batchBusy} onClick={() => void executeBatch(row.id)}>重取工单回执</button>}
             </article>
           })}</div>
-          <div className={styles.bulkSettings}><h3>工单资料</h3><p className={styles.intakeHint}>此处由操作员录入，提交后进入中栏待审核。销售通过独立提报页提交的工单也会直接进入中栏。</p><p>默认寄件人：{settings.sender.name || (settings.defaultsWarning ? '资料暂不可读取' : '待配置公司寄件人')}<br/>{settings.sender.phone}<br/>{settings.sender.province}{settings.sender.city}{settings.sender.county}{settings.sender.address}</p><label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
+          <div className={styles.bulkSettings}><h3>本批寄方资料</h3><p className={styles.intakeHint}>用于本批新工单的实际寄件人和揽收地址。提交后仍需在中栏确认下单。</p>
+            {settings.intakeRulesWarning && <p role="alert" className={styles.fieldError}>{settings.intakeRulesWarning}</p>}
+            <label>粘贴寄方信息<textarea aria-label="本批寄方信息文本" rows={3} value={senderText} disabled={inputLocked} onChange={event => setSenderText(event.target.value)} placeholder="粘贴寄件人姓名、联系电话和完整揽收地址"/></label>
+            <button className={styles.secondaryButton} disabled={inputLocked || !senderText.trim()} onClick={() => { const parsed = parseAddress(senderText); setSenderOverride(parsed.contact); setMessage(parsed.warnings.join('；')) }}>解析本批寄方</button>
+            <div className={styles.batchFields}>{([{ field: 'name', label: '寄件人' }, { field: 'phone', label: '寄件电话' }, { field: 'province', label: '寄件省份' }, { field: 'city', label: '寄件城市' }, { field: 'county', label: '寄件区县' }, { field: 'address', label: '揽收详细地址' }] as const).map(({ field, label }) => <label key={field} className={styles.batchField}><span>{label} *</span><input aria-label={`本批${label}`} value={batchSender[field]} disabled={inputLocked} onChange={event => setSenderOverride({ ...batchSender, [field]: event.target.value })}/></label>)}</div>
+            {!senderReady && <p role="status" className={styles.fieldError}>请补齐寄件人姓名、联系电话和完整揽收地址，才能提交工单。</p>}
+            {senderOverride && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setSenderOverride(null)}>使用公司默认寄方</button>}
+            <label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
         </div>
-        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待提报</strong><small>{successCount ? `${successCount} 票已提报 · ` : ''}{uncertainCount ? `${uncertainCount} 票回执待确认 · ` : ''}{invalidCount} 票需修正</small></div><button disabled={!validCount || batchBusy || confirmationBusy} onClick={() => void executeBatch()}><Clipboard size={15}/>{batchBusy ? '提报中…' : `提交工单（${validCount}票）`}</button></footer>
+        <footer className={styles.stickyFooter}><div><strong>{validCount} 票待提报</strong><small>{successCount ? `${successCount} 票已提报 · ` : ''}{uncertainCount ? `${uncertainCount} 票回执待确认 · ` : ''}{invalidCount} 票需修正</small></div><button disabled={!validCount || !senderReady || Boolean(settings.intakeRulesWarning) || batchBusy || confirmationBusy} onClick={() => void executeBatch()}><Clipboard size={15}/>{batchBusy ? '提报中…' : `提交工单（${validCount}票）`}</button></footer>
       </section>
 
       <section className={styles.column} aria-label="收寄件台账与待办">
@@ -399,9 +425,9 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
               </div>
               {reviewIds.includes(order.id) && <section className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
                 <h3>正式下单前核对</h3>
-                {senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>公司寄件资料不完整。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
+                {senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
                 <p><b>收件人</b><br/>{order.input.recipient.name} · {order.input.recipient.phone}<br/>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}{order.input.recipient.address}</p>
-                <p><b>物品</b> {order.input.cargo} · {order.input.weight}kg<br/>服务产品：{order.input.serviceName || (order.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}<br/>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '邮箱已验证' : '匿名自报，待核对' : '操作员录入'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>
+                <p><b>物品</b> {order.input.cargo} · {order.input.weight}kg<br/>服务产品：{order.input.serviceName || (order.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}<br/>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '身份已验证' : '匿名自报，待核对' : '操作员录入'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>
                 {order.input.submittedBy && <p>提报销售：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}
               </section>}
             </>}

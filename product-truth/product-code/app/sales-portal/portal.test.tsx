@@ -51,45 +51,13 @@ describe('sales shipping portal', () => {
 })
 
 
-describe('single-page anonymous intake', () => {
-  const reply = (data: unknown) => new Response(JSON.stringify(data), { status: 200 })
-  it('shows the complete form before email verification and preserves the draft through verification and profile saving', async () => {
-    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => {
-      if (_url.endsWith('/options')) return reply({ services: [{ id: 2, name: '顺丰标快', preference: 'standard' }], requireVerification: true, emailAvailable: true })
-      const body = init?.body ? JSON.parse(String(init.body)) : null
-      if (!body) return reply({ employee: null, orders: [] })
-      if (body.action === 'request_code') return reply({ challengeId: 'challenge-1', delivery: 'accepted' })
-      if (body.action === 'verify_code') return reply({ employee: { ...employee, sender: null, team: '' } })
-      if (body.action === 'save_profile') return reply({ employee: { ...employee, sender: body.profile.sender, team: body.profile.team } })
-      if (body.action === 'logout') return reply({ employee: null })
-      throw new Error('unexpected request')
-    })
-    render(<SalesPortal />)
-    expect(screen.getByText('客户与收件信息')).toBeTruthy()
-    expect(screen.getByText('物品与特殊需求')).toBeTruthy()
-    expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.change(screen.getByPlaceholderText('请填写公司名称，至少4个字符'), { target: { value: '验证前填写的客户' } })
-    for (const [label, value] of [['寄件人姓名','李娜'],['寄件人联系电话','13800138000'],['寄件省份','广东省'],['寄件城市','广州市'],['寄件区县','天河区'],['详细寄件地址','销售路88号'],['所属团队','大客户部']]) fireEvent.change(screen.getByLabelText(label), { target: { value } })
-    fireEvent.change(await screen.findByLabelText('公司邮箱'), { target: { value: 'person@ones.cn' } })
-    fireEvent.click(screen.getByRole('button', { name: '获取验证码' }))
-    fireEvent.change(await screen.findByLabelText('邮箱验证码'), { target: { value: '012345' } })
-    fireEvent.click(screen.getByRole('button', { name: '验证邮箱' }))
-    await screen.findByText('person@ones.cn · 已验证')
-    expect((screen.getByLabelText('寄件人姓名') as HTMLInputElement).value).toBe('李娜')
-    expect((screen.getByPlaceholderText('请填写公司名称，至少4个字符') as HTMLInputElement).value).toBe('验证前填写的客户')
-    await waitFor(() => expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(false))
-    fireEvent.click(screen.getByRole('button', { name: '保存寄件资料' }))
-    await waitFor(() => expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(false))
-    expect((screen.getByPlaceholderText('请填写公司名称，至少4个字符') as HTMLInputElement).value).toBe('验证前填写的客户')
-    expect(fetcher.mock.calls.some(call => call[0] === '/api/shipping/public/orders')).toBe(false)
-    expect(document.querySelector('form form')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '退出 / 换人' }))
-    await screen.findByLabelText('公司邮箱')
-    expect((screen.getByPlaceholderText('请填写公司名称，至少4个字符') as HTMLInputElement).value).toBe('')
-    expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(true)
-  })
+it('does not render a shipment form for an unidentified whitelist visitor', async () => {
+ fetcher.mockImplementation(async (url:string)=>new Response(JSON.stringify(url.endsWith('/options')?{services:[],requireVerification:true,emailAvailable:false}:{employee:null})))
+ render(<SalesPortal/>)
+ expect(screen.queryByText('客户与收件信息')).toBeNull()
+ expect(await screen.findByRole('link',{name:'使用企业微信验证身份'})).toBeTruthy()
+ expect(screen.queryByLabelText('公司邮箱')).toBeNull()
 })
-
 
 it('submits a complete anonymous workorder without asking for a code or saving a profile', async () => {
   fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -98,11 +66,12 @@ it('submits a complete anonymous workorder without asking for a code or saving a
     return new Response(JSON.stringify({ employee: null }))
   })
   render(<SalesPortal />)
+  await screen.findByLabelText('寄件人姓名')
   for (const [label, value] of [['寄件人姓名','李娜'],['寄件人联系电话','13800138000'],['寄件省份','广东省'],['寄件城市','广州市'],['寄件区县','天河区'],['详细寄件地址','销售路88号'],['所属团队','大客户部']]) fireEvent.change(screen.getByLabelText(label), { target: { value } })
   fireEvent.change(screen.getByPlaceholderText('请填写公司名称，至少4个字符'), { target: { value: '匿名客户' } })
   fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号' } })
   fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
-  await screen.findByText('邮箱验证尚未启用，不影响匿名提报。')
+  await screen.findByText('开放提报')
   await waitFor(() => expect((screen.getByRole('button', { name: '预览工单' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: '预览工单' })); fireEvent.click(screen.getByRole('button', { name: '确认提交工单' }))
   expect(await screen.findByText('SO-ANON')).toBeTruthy()

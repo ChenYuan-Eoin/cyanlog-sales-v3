@@ -1,3 +1,4 @@
+import { loadIntakeSettings } from './intake-settings'
 import { ShippingError } from './config'
 import { loadShippingSettings } from './runtime-config'
 import { loadDefaultShippingSender } from './sender-profile'
@@ -5,7 +6,7 @@ import { emptyContact, type ShippingSettings } from './types'
 
 // Only the operator workspace degrades on configuration read failures. The
 // confirmation APIs still resolve and validate actual configuration fail-closed.
-export async function loadShippingWorkspaceSettings(orgId: string): Promise<ShippingSettings> {
+async function loadWorkspaceBase(orgId: string): Promise<ShippingSettings> {
   if (!orgId?.trim()) throw new ShippingError(403, '缺少组织范围。')
   try { return await loadShippingSettings(orgId) }
   catch (error) {
@@ -24,4 +25,10 @@ export async function loadShippingWorkspaceSettings(orgId: string): Promise<Ship
       sender, services: [], monthlyTail: '', carrierConnections: [], billingAccounts: [],
     }
   }
+}
+
+export async function loadShippingWorkspaceSettings(orgId: string): Promise<ShippingSettings> {
+  const settings = await loadWorkspaceBase(orgId)
+  try { return { ...settings, intakeRules: await loadIntakeSettings(orgId) } }
+  catch { return { ...settings, intakeRulesWarning: '提报字段规则暂时无法读取，请刷新后再提交。现有工单仍可查看。' } }
 }

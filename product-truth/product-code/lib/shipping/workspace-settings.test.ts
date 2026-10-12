@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ShippingError } from './config'
 import { emptyContact } from './types'
-const m = vi.hoisted(() => ({ settings: vi.fn(), sender: vi.fn() }))
+const m = vi.hoisted(() => ({ rules: vi.fn(), settings: vi.fn(), sender: vi.fn() }))
+vi.mock('./intake-settings', () => ({ loadIntakeSettings: m.rules }))
 vi.mock('./runtime-config', () => ({ loadShippingSettings: m.settings }))
 vi.mock('./sender-profile', () => ({ loadDefaultShippingSender: m.sender }))
 import { loadShippingWorkspaceSettings } from './workspace-settings'
@@ -12,7 +13,7 @@ describe('workspace availability is separate from carrier readiness', () => {
   it('preserves healthy settings without another sender query', async () => {
     const settings = { ready: true, canSubmit: true, environment: 'production' }
     m.settings.mockResolvedValue(settings)
-    expect(await loadShippingWorkspaceSettings('org-1')).toBe(settings)
+    expect(await loadShippingWorkspaceSettings('org-1')).toMatchObject(settings)
     expect(m.sender).not.toHaveBeenCalled()
   })
   it('retains the same organization sender but disables fulfillment when settings are unavailable', async () => {

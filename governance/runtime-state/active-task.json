@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-08T10:22:51.719586+00:00",
+  "updated_at": "2026-10-10T10:36:45.490086+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,14 +128,14 @@
     ]
   },
   "active_task": {
-    "id": "WP18",
-    "slug": "shipping-production-release-and-acceptance",
-    "name": "Production发布与真实寄件验收",
+    "id": "WP19",
+    "slug": "wecom-authorized-shipping-intake",
+    "name": "企微白名单身份提报",
     "kind": "product",
     "status": "active",
-    "objective": "F054 WP18：员工匿名访问公开页面，不注册、不登录、不强制邮箱验证即可提交待确认快递工单；邮箱验证可选，用于保存资料和查看本人历史。操作员核对后由服务器调用顺丰API下单，令牌自动维护，不依赖顺丰官网登录。配置中心简化月结号加备注、正式环境默认、邮箱规则独立、顺丰服务产品按官方目录配置。完成生产发布及匿名提报、回执查询和防重复验收；未经逐票确认不创建真实运单。",
-    "started_at": "2026-09-23T09:34:46.080Z",
-    "activation_basis": "WP17 SHA 0282568d742cb07985591aad093157bc26c3cb96达到code_green并通过Harness审计；用户通过IN-20260923-014明确授权WP18必要Production迁移、服务端配置与发布。",
+    "objective": "F054 WP19：企微自建应用配置与通讯录同步支撑员工白名单提报；服务端OAuth绑定UserID，页面及提交接口一致鉴权；姓名、手机、寄件单位和部门从可信档案反填并锁定；缺失或格式错误手机使用管理员配置的有效预置寄件号码，记录来源与本票快照。废弃SMTP运行入口。先以已验证的两名可见成员在生产验收，仍由操作员确认才向顺丰下单。",
+    "started_at": "2026-10-10T10:36:45.489922+00:00",
+    "activation_basis": "IN-20261010-014要求替换匿名/邮箱基线，已实测应用与2名成员并说明范围影响；IN-20261010-019用户确认白名单并要求推进。原WP18顺丰真实下单阻断保留，未标记完成。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -267,15 +267,15 @@
   },
   "execution_queue": {
     "active": {
-      "id": "WP18",
-      "slug": "shipping-production-release-and-acceptance",
-      "reason": "用户明确要求更新目标并继续推进：当前只推动本平台真实确认→顺丰月结下单→真实单号自动回填，不扩建Harness，不做官网代下单或无结果扩展。既有生产授权与现场保护边界保留。"
+      "id": "WP19",
+      "slug": "wecom-authorized-shipping-intake",
+      "reason": "用户确认企微白名单新基线，先落实可信身份提报。"
     },
     "next": {
-      "id": "WP10",
-      "slug": "quote-domain-complete-migration",
-      "name": "报价域完整形态与换机可迁移基座",
-      "entry_gate": "F054 WP18 production release and user Chrome acceptance",
+      "id": "WP20",
+      "slug": "wecom-waybill-notifications",
+      "name": "企微出号通知",
+      "entry_gate": "WP19身份绑定和生产提报验收",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
@@ -284,6 +284,13 @@
         "slug": "experience-umbrella",
         "name": "品牌、组织与响应式体验",
         "activation_requirement": "激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包"
+      },
+      {
+        "id": "WP10",
+        "slug": "quote-domain-complete-migration",
+        "name": "报价域完整形态与换机可迁移基座",
+        "entry_gate": "F054 WP18 production release and user Chrome acceptance",
+        "entry_gate_status": "waiting_active_completion"
       }
     ],
     "release_blockers": [
@@ -319,6 +326,11 @@
       {
         "id": "F002-LEGACY-ACTIVE",
         "reason": "旧 active-task 状态已过期，保留追溯但不执行"
+      },
+      {
+        "id": "WP18",
+        "slug": "shipping-production-release-and-acceptance",
+        "reason": "已有配置和前台修复保留；顺丰真实API连接/下单/轨迹未验收，企微批次不冒充其完成。"
       }
     ],
     "completed": [
@@ -859,6 +871,144 @@
           "tokens"
         ],
         "note": "阶段0-4 以代码与本地验证证据推进；阶段5 线上验收需用户现有 Chrome + Production 证据，遵守既有发布门禁；AI 云端额度充值属用户决策项"
+      }
+    },
+    "WP18": {
+      "id": "WP18",
+      "slug": "shipping-production-release-and-acceptance",
+      "name": "Production发布与真实寄件验收",
+      "kind": "product",
+      "status": "active",
+      "objective": "F054 WP18：员工匿名访问公开页面，不注册、不登录、不强制邮箱验证即可提交待确认快递工单；邮箱验证可选，用于保存资料和查看本人历史。操作员核对后由服务器调用顺丰API下单，令牌自动维护，不依赖顺丰官网登录。配置中心简化月结号加备注、正式环境默认、邮箱规则独立、顺丰服务产品按官方目录配置。完成生产发布及匿名提报、回执查询和防重复验收；未经逐票确认不创建真实运单。",
+      "started_at": "2026-09-23T09:34:46.080Z",
+      "activation_basis": "WP17 SHA 0282568d742cb07985591aad093157bc26c3cb96达到code_green并通过Harness审计；用户通过IN-20260923-014明确授权WP18必要Production迁移、服务端配置与发布。",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/shipping-collaboration-console/Price-v3",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/.env.example",
+        "product-truth/product-code/scripts/SHIPPING-SETUP.md",
+        "product-truth/product-code/scripts/check-env.mjs",
+        "product-truth/product-code/supabase/migrations",
+        "product-truth/product-code/lib/shipping",
+        "product-truth/product-code/app/shipping",
+        "product-truth/product-code/app/api/shipping",
+        "product-truth/product-code/app/configs",
+        "product-truth/product-code/lib/config-center",
+        "product-truth/product-code/lib/permissions.ts",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+        "product-truth/feature-packets/F054-sf-self-service-order.md",
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/product-code/app/sales-portal",
+        "product-truth/product-code/package.json",
+        "product-truth/product-code/pnpm-lock.yaml",
+        "product-truth/product-code/.env.local",
+        ".env.local",
+        ".github/workflows/ci.yml",
+        ".github/workflows/skills.yml",
+        ".gitignore",
+        ".opencode/lib/project-guard-core.mjs",
+        ".opencode/plugins/price-v3-guard.js",
+        ".vercel/.env.production.local",
+        "README.md",
+        "manifest.yaml",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/product-code/.vercel/.env.development.local",
+        "product-truth/product-code/app/api/quotes/[id]/derive-order/route.ts",
+        "product-truth/product-code/app/api/quotes/[id]/derive-seal/route.ts",
+        "product-truth/product-code/app/api/quotes/[id]/derive-tender/route.ts",
+        "product-truth/product-code/app/api/quotes/derive-routes.test.ts",
+        "product-truth/product-code/lib/quote/downstream-derive.ts",
+        "product-truth/product-code/lib/quote/downstream-persistence.test.ts",
+        "product-truth/product-code/scripts/WP10-RELEASE-REPAIR.md",
+        "product-truth/product-code/scripts/check-preview-target.mjs",
+        "product-truth/product-code/scripts/check-requirement-structure.mjs",
+        "product-truth/product-code/scripts/check-requirement-structure.test.ts",
+        "product-truth/product-code/scripts/check-sensitive-tracked.mjs",
+        "product-truth/product-code/scripts/check-sensitive-tracked.test.ts",
+        "product-truth/product-code/scripts/prepare-wp10-release.mjs",
+        "product-truth/product-code/scripts/project-guard.test.ts",
+        "product-truth/product-code/supabase/migrations/20260910000002_atomic_quote_derivations.sql"
+      ],
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "note": "IN-20260923-014授权必要Production写入和精确SHA发布。2026-09-24 Supabase迁移清单已确认Production与隔离Preview均按序存在20260922000001、20260923074619、20260923081415；只读Postgres核验确认7张寄件表均启用RLS，anon/authenticated没有SELECT权限且service_role具备所需CRUD权限，故当前不再需要执行或重放DDL。Production没有托管备份/PITR恢复点；未经单独核验恢复策略不得再做Production DDL或破坏性数据操作。不得DROP/TRUNCATE或将Production联系人数据导出到Agent工作区。真实下单前由用户核对收件信息和费用；未通过现有Chrome受信验收不得标记production_released。",
+        "production_database_mode": "controlled_write_approved",
+        "runtime_profile": "shipping_workspace",
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "controlled_write_approved"
+        },
+        "production_release_authorization": {
+          "status": "approved_for_final_release",
+          "micro_fix_approval_id": "IN-20260923-014",
+          "clarification_id": "IN-20260923-011",
+          "final_release_approval_id": "IN-20260923-014",
+          "micro_fix_scope": "F054 WP18 release scope approved by user",
+          "final_scope": "F054 WP18：在隔离环境按顺序验证并应用缺失的基础协同迁移20260922000001_shipping_collaboration_m0及配置/快照迁移20260923074619_shipping_carrier_configuration、20260923081415_shipping_order_configuration_snapshot，核对RLS/权限和数据未丢失；确认可恢复Production备份点和回滚条件后，在Production应用同一前向兼容迁移链，配置所需服务端环境变量，按main/production策略发布精确SHA并以用户现有Chrome验收。真实付费运单仅限用户在页面核对收寄信息与费用后确认的一票。",
+          "excludes_until_final_approval": "No destructive schema/data removal or unrelated product changes. User still confirms a concrete real shipment and charges in existing Chrome."
+        },
+        "blocking_acceptance_defects": [
+          "IN-20261008-003",
+          "IN-20261008-004",
+          "IN-20261008-008"
+        ],
+        "runtime_contract_version": "f054-v2"
+      },
+      "feature_id": "F054",
+      "integration_decision": {
+        "authority": "IN-20261010-001",
+        "strategy": "integrate_complete_candidate_into_main",
+        "scope": "Current shipping-collaboration-console development including existing quotation changes; preserve protected dirty workspace",
+        "action": "commit, fast-forward push main, verify hosted build",
+        "supersedes": "pending shipping-only release-order exception",
+        "branch_consolidation": "User goal: integrate useful unique changes, archive and retire fully integrated or superseded branches, preserve dirty worktrees"
       }
     }
   }

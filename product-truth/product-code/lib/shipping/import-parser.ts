@@ -1,6 +1,7 @@
-export type BatchDraftRow = { id: number; key: string; recipient: string; phone: string; address: string; cargo: string; originalText?: string; result?: 'pending' | 'success' | 'failed'; error?: string; waybill?: string }
+export type BatchDraftRow = { customerName?: string; team?: string; id: number; key: string; recipient: string; phone: string; address: string; cargo: string; originalText?: string; result?: 'pending' | 'success' | 'failed'; error?: string; waybill?: string }
 
-const headerAliases: Record<string, keyof Pick<BatchDraftRow, 'recipient' | 'phone' | 'address' | 'cargo'>> = {
+const headerAliases: Record<string, keyof Pick<BatchDraftRow, 'recipient' | 'phone' | 'address' | 'cargo' | 'customerName' | 'team'>> = {
+  公司名称: 'customerName', 公司: 'customerName', 所属团队: 'team', 团队: 'team',
   收件人: 'recipient', 收件人姓名: 'recipient', 姓名: 'recipient',
   联系电话: 'phone', 手机号: 'phone', 电话: 'phone', 手机: 'phone',
   收件地址: 'address', 详细地址: 'address', 地址: 'address',
@@ -68,7 +69,7 @@ export async function parseShippingFile(file: File): Promise<BatchDraftRow[]> {
 function escapeXml(value: string) { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
 export async function buildShippingTemplate(): Promise<Blob> {
   const { default: JSZip } = await import('jszip')
-  const zip = new JSZip(), cells = ['收件人', '联系电话', '收件地址', '物品'].map((value, index) => `<c r="${String.fromCharCode(65 + index)}1" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`).join('')
+  const zip = new JSZip(), cells = ['收件人', '联系电话', '收件地址', '物品', '公司名称', '所属团队'].map((value, index) => `<c r="${String.fromCharCode(65 + index)}1" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`).join('')
   zip.file('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
   zip.file('_rels/.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
   zip.file('xl/workbook.xml', '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="顺丰批量导入" sheetId="1" r:id="rId1"/></sheets></workbook>')

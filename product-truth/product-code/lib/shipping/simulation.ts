@@ -12,6 +12,7 @@ export const shippingExampleText = [
 const sender: Contact = { name: '示例公司前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '演示园区示例楼1号' }
 const services = [{ id: 2, name: '示例标准寄件', preference: 'standard' as const }]
 export const shippingSimulationSettings: ShippingSettings = {
+  intakeRules: { companyName: { enabled: false, required: false, minLength: 0 }, team: { enabled: false, required: false, minLength: 0 }, teamOptions: [] },
   environment: 'sandbox', ready: true, canSubmit: true, reason: '', monthlyTail: '0000', sender,
   services, connectionId: 'demo-connection', defaultBillingAccountId: 'demo-account',
   carrierConnections: [{ id: 'demo-connection', carrier: 'sf', environment: 'sandbox', status: 'connected', orderCapability: 'verified', services }],

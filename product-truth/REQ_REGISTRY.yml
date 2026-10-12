@@ -1048,9 +1048,9 @@ sf_self_service_order_prd:
   goal_layering: 产品总目标为企业寄件协同；顺丰为首期MVP适配器，原始五项交付责任保留，新增承运商寄件不在首期范围，常用快递收件查询独立覆盖
   configuration_contract_status: inbound_query_design_authorized_30min
   configuration_contract: product-truth/feature-packets/F054-sf-self-service-order.md#3-配置中心具体设计
-  configuration_boundary: 核心工单规则内置；邮箱域、公司机器人、承运商连接及寄件策略按组织配置；顺丰是首个适配器，demo企微只用于测试；新增未支持平台需实现适配器。
+  configuration_boundary: 核心工单规则内置；企微应用、白名单、号码预置、公司机器人、承运商连接及寄件策略按组织配置；顺丰是首个适配器，demo企微只用于测试；新增未支持平台需实现适配器。
   status: in_progress
   source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011 / IN-20260923-013 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
   branch: main
-  work_package: WP18
+  work_package: WP19
   feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md

@@ -1,89 +1,46 @@
 'use client'
-import { useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react'
-import { parseAddress } from '@/lib/shipping/address'
-import { DEFAULT_INTAKE_RULES, intakeFieldSchema, type IntakeRules } from '@/lib/shipping/intake-rules'
+import { useEffect,useRef,useState,type ReactNode,type FormEvent } from 'react'
 import { contactSchema } from '@/lib/shipping/validation'
+import { parseAddress } from '@/lib/shipping/address'
 import { normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
-import { emptyContact, type Contact } from '@/lib/shipping/types'
-import styles from './sales-portal.module.css'
+import { DEFAULT_INTAKE_RULES,intakeFieldSchema,type IntakeRules } from '@/lib/shipping/intake-rules'
+import { emptyContact,type Contact } from '@/lib/shipping/types'
 import MyWorkorders from './my-workorders'
-export type EmployeeProfile = { id: string; email: string; sender: Contact | null; team: string; updatedAt: string }
-const endpoint = '/api/shipping/public/employee'
-async function call(body?: unknown) {
-  const response = await fetch(endpoint, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store', signal: AbortSignal.timeout(10000) })
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.error || '员工寄件服务暂不可用')
-  return data
-}
-export type EmployeeAccessState = { employee: EmployeeProfile | null; controls: ReactNode; canSubmit: boolean; unavailableReason: string; sessionKey: number; sender: Contact; team: string }
-export default function EmployeeAccess({ children, requireVerification = false, emailAvailable = true, rules = DEFAULT_INTAKE_RULES }: { children: (state: EmployeeAccessState) => ReactNode; requireVerification?: boolean; emailAvailable?: boolean; rules?: IntakeRules }) {
-  const [senderText, setSenderText] = useState('')
-  const [senderNotice, setSenderNotice] = useState('')
-  const [remember, setRemember] = useState(false)
-  const [sessionKey, setSessionKey] = useState(0)
-  const [employee, setEmployee] = useState<EmployeeProfile | null>(null)
-  const [loading, setLoading] = useState(true), [loadFailed, setLoadFailed] = useState(false)
-  const [email, setEmail] = useState(''), [code, setCode] = useState(''), [challenge, setChallenge] = useState('')
-  const [sender, setSender] = useState<Contact>(emptyContact), [team, setTeam] = useState('')
-  const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false)
-  const [error, setError] = useState(''), [notice, setNotice] = useState('')
-  const [retryAt, setRetryAt] = useState(0), [now, setNow] = useState(Date.now)
-  const running = useRef(false)
-  useEffect(() => { try { const saved = JSON.parse(localStorage.getItem('shipping-anonymous-sender-v1') || 'null'); if (saved?.remember && contactSchema.safeParse(saved.sender).success && typeof saved.team === 'string') { setSender(saved.sender); setTeam(saved.team); setRemember(true) } } catch { /* optional device preference */ } }, [])
-  useEffect(() => { if (!remember || employee) return; try { localStorage.setItem('shipping-anonymous-sender-v1', JSON.stringify({ remember: true, sender, team })) } catch { /* private browsing must not block intake */ } }, [remember, sender, team, employee])
-
-  function accept(profile: EmployeeProfile | null, preserveDraft = false) {
-    setEmployee(profile)
-    if (!profile && !preserveDraft) { setSenderText(''); setSenderNotice('') }
-    if (profile?.sender || !preserveDraft) { setSender(profile?.sender || emptyContact()); setTeam(profile?.team || '') }
-    setEditing(!!profile && !profile.sender)
-  }
-  async function load() {
-    setLoading(true); setError(''); setLoadFailed(false)
-    try { const data = await call(); accept(data.employee, true) } catch (e) { setLoadFailed(true); setError(e instanceof Error ? e.message : '暂时无法读取资料') } finally { setLoading(false) }
-  }
-  useEffect(() => { let alive = true; call().then(data => { if (alive) accept(data.employee, true) }).catch(e => { if (alive) { setLoadFailed(true); setError(e.message) } }).finally(() => { if (alive) setLoading(false) }); return () => { alive = false } }, [])
-  useEffect(() => { if (!retryAt) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [retryAt])
-  async function act(action: () => Promise<void>) {
-    if (running.current) return
-    running.current = true; setBusy(true); setError(''); setNotice('')
-    try { await action() } catch (e) { setError(e instanceof Error ? e.message : '操作暂未完成') } finally { running.current = false; setBusy(false) }
-  }
-  async function requestCode() { await act(async () => { const data = await call({ action: 'request_code', email }); setChallenge(data.challengeId); setCode(''); setRetryAt(Date.now() + 60_000); setNow(Date.now()); setNotice(data.delivery === 'accepted' ? '验证码已交给邮件服务器，请查收（也可检查垃圾邮件）。' : data.delivery === 'failed' ? '邮件未能发送，请联系管理员检查发信配置。' : '邮件发送结果待确认，请检查邮箱；未收到可稍后重新获取。') }) }
-  async function verify(event: FormEvent) { event.preventDefault(); await act(async () => { const data = await call({ action: 'verify_code', email, challengeId: challenge, code }); accept(data.employee, true); setChallenge(''); setCode('') }) }
-  async function save(event: FormEvent) {
-    event.preventDefault(); if (!employee) return
-    await act(async () => { const result = contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) }); if (!result.success) throw new Error(result.error.issues.map(issue => issue.message).join('；'))
-      const data = await call({ action: 'save_profile', profile: { sender: result.data, team, expectedUpdatedAt: employee.updatedAt } }); accept(data.employee); setEditing(false)
-    })
-  }
-  const feedback = <>{error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status">{notice}</p>}</>
-  const controls = <>
-    <section className={`${styles.card} ${styles.accessCard}`} aria-label="邮箱验证">
-      <div className={styles.cardTitle}><div><h2>{requireVerification ? '公司要求邮箱验证' : '邮箱验证（可选）'}</h2><p>{requireVerification ? '本公司启用了邮箱验证要求。' : '无需注册、登录或验证码即可提报工单。'} 验证邮箱后可保存个人资料和查看本人历史，本设备会话有效期 60 天。</p></div></div>
-      {loading ? <p role="status">正在读取个人寄件资料…</p> : loadFailed ? <>{feedback}{!requireVerification && <p>暂时无法读取已验证资料，仍可填写下方资料匿名提报，无需登录或验证码。</p>}<button type="button" onClick={load}>重新读取资料</button></> : !employee && !emailAvailable ? <p>邮箱验证尚未启用，不影响匿名提报。</p> : !employee ? <form onSubmit={verify}>
-        <fieldset disabled={busy} className={styles.verificationRow}>
-          <label>公司邮箱<input type="email" required autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setChallenge(''); setCode(''); setNotice('') }}/></label>
-          <button type="button" disabled={!email || now < retryAt} onClick={requestCode}>{now < retryAt ? `${Math.ceil((retryAt - now) / 1000)} 秒后可重发` : '获取验证码'}</button>
-          {challenge && <><label>邮箱验证码<input required autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}/></label><button type="submit">验证邮箱</button></>}
-        </fieldset>{feedback}
-      </form> : <><div className={styles.identityRow}><span>{employee.email} · 已验证</span><button type="button" disabled={busy} onClick={() => act(async () => { await call({ action: 'logout' }); accept(null); setRemember(false); try { localStorage.removeItem('shipping-anonymous-sender-v1') } catch { /* optional device storage */ } setSessionKey(key => key + 1); setEmail(''); setChallenge(''); setCode('') })}>退出 / 换人</button></div>{feedback}</>}
-    </section>
-    <section className={`${styles.card} ${styles.accessCard}`} aria-label="我的寄件资料">
-      <div className={styles.cardTitle}><div><h2>我的寄件资料</h2><p>填写实际寄件人和揽收地址，提交后由操作员核对确认。</p></div></div>
-      {editing || !employee?.sender ? <form onSubmit={save}>
-        <fieldset disabled={busy} className={styles.fields}>
-          <label>粘贴寄方信息<textarea aria-label="寄方地址文本" rows={3} value={senderText} onChange={e => setSenderText(e.target.value)} placeholder="粘贴寄件人姓名、电话和完整地址"/></label><button type="button" disabled={!senderText.trim() || busy} onClick={() => { const parsed = parseAddress(senderText); setSender(parsed.contact); setSenderNotice(parsed.warnings.join('；')) }}>解析寄方信息</button>{senderNotice && <p role="status">{senderNotice}</p>}
-          <div className={styles.grid2}>{(['name','phone','province','city','county','address'] as const).map((field, index) => <label key={field}>{['寄件人姓名','寄件人联系电话','寄件省份','寄件城市','寄件区县','详细寄件地址'][index]}<input required value={sender[field]} onChange={e => setSender(current => ({ ...current, [field]: e.target.value }))}/></label>)}</div>
-          {rules.team.enabled && <label>所属团队{rules.teamOptions.length ? <select required={rules.team.required} value={team} onChange={e => setTeam(e.target.value)}><option value="">请选择所属团队</option>{rules.teamOptions.map(name => <option key={name}>{name}</option>)}</select> : <input required={rules.team.required} minLength={rules.team.minLength} maxLength={80} value={team} onChange={e => setTeam(e.target.value)}/>}</label>}
-          <div className={styles.identityRow}>{employee && <button type="submit" disabled={loading || loadFailed}>保存寄件资料</button>}{!employee && <label className={styles.remember}><input type="checkbox" checked={remember} onChange={e => { setRemember(e.target.checked); if (!e.target.checked) { try { localStorage.removeItem('shipping-anonymous-sender-v1') } catch { /* optional device storage */ } } }}/>在本设备记住寄件资料（公共设备请勿勾选）</label>}{employee?.sender && <button type="button" onClick={() => { accept(employee); setEditing(false); setError('') }}>取消修改</button>}</div>
-        </fieldset>
-      </form> : <><p>{employee.sender.name} · {employee.sender.phone} · {employee.team}</p><p>{employee.sender.province}{employee.sender.city}{employee.sender.county}{employee.sender.address}</p><button type="button" disabled={busy} onClick={() => { accept(employee); setEditing(true) }}>修改我的寄件资料</button></>}
-    </section>
-    {employee && <details className={styles.card}><summary>我的提报记录</summary><MyWorkorders key={employee.id}/></details>}
-  </>
-  const senderCheck = contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) })
-  const teamCheck = intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions).safeParse(team)
-  const unavailableReason = loading ? '正在读取寄件资料，请稍候…' : busy ? '正在处理资料，请稍候…' : requireVerification && !employee ? '公司已要求邮箱验证，请先完成验证。' : !senderCheck.success ? `请完善寄件资料：${senderCheck.error.issues.map(issue => issue.message).join('；')}` : !teamCheck.success ? teamCheck.error.issues.map(issue => issue.message).join('；') : ''
-  return children({ employee, controls, unavailableReason, canSubmit: Boolean((!requireVerification || employee) && !busy && !loading && (!loadFailed || !requireVerification) && contactSchema.safeParse({ ...sender, phone: normalizeDomesticShippingPhone(sender.phone) }).success && teamCheck.success), sessionKey, sender, team })
+import styles from './sales-portal.module.css'
+export type EmployeeProfile={id:string;email:string;sender:Contact|null;team:string;updatedAt:string;wecom?:boolean;companyName?:string;phoneSource?:'wecom'|'preset'|'unavailable'}
+export type EmployeeAccessState={employee:EmployeeProfile|null;controls:ReactNode;canSubmit:boolean;unavailableReason:string;sessionKey:number;sender:Contact;team:string}
+const endpoint='/api/shipping/public/employee'
+async function call(body?:unknown){const response=await fetch(endpoint,{...(body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store',signal:AbortSignal.timeout(10000)})});const data=await response.json();if(!response.ok)throw new Error(data.error||'员工寄件服务暂不可用');return data}
+export default function EmployeeAccess({children,requireVerification=false,rules=DEFAULT_INTAKE_RULES,initialEmployee=null}: {children:(state:EmployeeAccessState)=>ReactNode;requireVerification?:boolean;emailAvailable?:boolean;rules?:IntakeRules;initialEmployee?:EmployeeProfile|null}){
+ const [draftDirty,setDraftDirty]=useState(false)
+ const [employee,setEmployee]=useState(initialEmployee),[loading,setLoading]=useState(!initialEmployee),[loadFailed,setLoadFailed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
+ const [sender,setSender]=useState<Contact>(initialEmployee?.sender||emptyContact()),[team,setTeam]=useState(initialEmployee?.team||''),[senderText,setSenderText]=useState(''),[remember,setRemember]=useState(false),[sessionKey,setSessionKey]=useState(0)
+ const running=useRef(false)
+ function accept(profile:EmployeeProfile|null){setEmployee(profile);if(profile){setSender(profile.sender||emptyContact());setTeam(profile.team)}else if(employee){setSender(emptyContact());setTeam('');setSessionKey(k=>k+1)}}
+ useEffect(()=>{let active=true;call().then(data=>{if(active){setEmployee(data.employee);if(data.employee){setSender(data.employee.sender||emptyContact());setTeam(data.employee.team)}else if(initialEmployee){setSender(emptyContact());setTeam('');setSessionKey(k=>k+1)}}}).catch(e=>{if(active){setLoadFailed(true);setError(e.message)}}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[initialEmployee])
+ useEffect(()=>{if(requireVerification)return;try{const saved=JSON.parse(localStorage.getItem('shipping-anonymous-sender-v1')||'null');if(saved?.remember&&contactSchema.safeParse(saved.sender).success&&typeof saved.team==='string'){setSender(saved.sender);setTeam(saved.team);setRemember(true)}}catch{/* optional device draft */}},[requireVerification])
+ useEffect(()=>{if(!remember||employee||requireVerification)return;try{localStorage.setItem('shipping-anonymous-sender-v1',JSON.stringify({remember:true,sender,team}))}catch{/* optional device draft */}},[remember,employee,requireVerification,sender,team])
+ async function retry(){setLoading(true);setError('');setLoadFailed(false);try{const next=(await call()).employee as EmployeeProfile|null;if(next&&next.id===employee?.id&&draftDirty){setEmployee(next);setTeam(next.team);setSender(current=>({...next.sender||emptyContact(),province:current.province,city:current.city,county:current.county,address:current.address}))}else{accept(next)}}catch(e){setLoadFailed(true);setError((e as Error).message)}finally{setLoading(false)}}
+ async function save(event:FormEvent){event.preventDefault();if(!employee||running.current)return;running.current=true;setBusy(true);setError('');try{const contact=contactSchema.parse({...sender,phone:normalizeDomesticShippingPhone(sender.phone)});accept((await call({action:'save_profile',profile:{sender:contact,team,expectedUpdatedAt:employee.updatedAt}})).employee);setDraftDirty(false);setNotice('揽收地址已保存，下次自动带入。')}catch(e){setError((e as Error).message)}finally{running.current=false;setBusy(false)}}
+ async function logout(){if(running.current)return;running.current=true;setBusy(true);try{await call({action:'logout'});setEmployee(null);setSender(emptyContact());setTeam('');setSenderText('');setNotice('');setRemember(false);setDraftDirty(false);setSessionKey(k=>k+1);try{localStorage.removeItem('shipping-anonymous-sender-v1')}catch{/* optional storage */}}catch(e){setError((e as Error).message)}finally{running.current=false;setBusy(false)}}
+ if(requireVerification&&(!employee||loadFailed))return <main className={styles.page}><section className={styles.card}><h1>{loading?'正在验证企业微信身份…':'需要企业微信授权身份'}</h1>{error&&<p role="alert">{error}</p>}{!loading&&<><a href="/api/shipping/public/wecom/authorize">使用企业微信验证身份</a><button type="button" onClick={()=>void retry()}>重新读取资料</button></>}</section></main>
+ const verified=employee?.wecom===true
+ const teamRule=verified?{enabled:true,required:true,minLength:1}:rules.team
+ const teamCheck=intakeFieldSchema(teamRule,'所属团队',80,verified?[]:rules.teamOptions).safeParse(team)
+ const senderCheck=contactSchema.safeParse({...sender,phone:normalizeDomesticShippingPhone(sender.phone)})
+ const unavailableReason=loading?'正在读取寄件资料…':busy?'正在处理寄件资料…':!senderCheck.success?(verified&&employee?.phoneSource==='unavailable'?'请管理员补齐或配置预置寄件电话。':'请解析或补齐实际揽收地址和联系电话。'):!teamCheck.success?(verified?'企微部门资料暂缺，请联系管理员同步通讯录。':teamCheck.error.issues.map(e=>e.message).join('；')):''
+ const controls=<>
+  <section className={styles.card} aria-label="员工身份"><h2>{verified?'企业微信身份已验证':'开放提报'}</h2>{verified?<><p>{employee?.sender?.name} · {employee?.companyName} · {employee?.team}</p><button type="button" disabled={busy} onClick={()=>void retry()}>刷新寄件资料</button><button type="button" disabled={busy} onClick={()=>void logout()}>退出 / 换人</button></>:<p>当前入口允许开放提报，资料由操作员核对后才下单。</p>}{error&&<p role="alert" className={styles.error}>{error}</p>}{loadFailed&&!requireVerification&&<button type="button" onClick={()=>void retry()}>重新读取资料</button>}</section>
+  <section className={styles.card} aria-label="我的寄件资料"><h2>我的寄件资料</h2><p>{verified?'姓名、联系电话、寄件单位和部门由企业资料确定；可填写或更新揽收地址。':'粘贴寄方信息后核对，提交后由操作员确认。'}</p><form onSubmit={save}><fieldset className={styles.fields} disabled={busy}>
+   <label>粘贴寄方信息<textarea aria-label="寄方地址文本" rows={3} value={senderText} onChange={e=>setSenderText(e.target.value)} placeholder="粘贴揽收地址，或姓名、电话和完整地址"/></label><button type="button" disabled={!senderText.trim()} onClick={()=>{const parsed=parseAddress(senderText);setDraftDirty(true);setSender(verified?{...parsed.contact,name:sender.name,phone:sender.phone}:parsed.contact);setNotice(parsed.warnings.filter(w=>!verified||!/(联系电话|联系人姓名)/.test(w)).join('；'))}}>解析寄方信息</button>
+   <div className={styles.grid2}>{(['name','phone','province','city','county','address'] as const).map((field,index)=><label key={field}>{['寄件人姓名','寄件人联系电话','寄件省份','寄件城市','寄件区县','详细寄件地址'][index]}<input required disabled={verified&&(field==='name'||field==='phone')} value={sender[field]} onChange={e=>{if(verified&&(field==='name'||field==='phone'))return;setDraftDirty(true);setSender(s=>({...s,[field]:e.target.value}))}}/></label>)}</div>
+   {verified&&<label>寄件单位<input disabled value={employee?.companyName||''}/></label>}
+   {(verified||rules.team.enabled)&&<label>所属团队{!verified&&rules.teamOptions.length?<select required={rules.team.required} value={team} onChange={e=>setTeam(e.target.value)}><option value="">请选择所属团队</option>{rules.teamOptions.map(name=><option key={name}>{name}</option>)}</select>:<input disabled={verified} required={teamRule.required} maxLength={80} value={team} onChange={e=>setTeam(e.target.value)}/>}</label>}
+   {employee?.phoneSource==='unavailable'&&<p>身份已验证，但寄件电话需管理员补齐或配置预置号码；已有工单仍可查询。</p>}
+   {employee?.phoneSource==='preset'&&<p>联系电话使用管理员预置号码，供快递联系；身份仍以企业微信账号为准。</p>}
+   {employee?<button type="submit">保存揽收地址</button>:<label><input type="checkbox" checked={remember} onChange={e=>{setRemember(e.target.checked);if(!e.target.checked)try{localStorage.removeItem('shipping-anonymous-sender-v1')}catch{/* optional storage */}}}/>在本设备记住寄件资料（公共设备请勿勾选）</label>}
+  </fieldset></form>{notice&&<p role="status">{notice}</p>}</section>
+  {employee&&<details className={styles.card}><summary>我的提报记录</summary><MyWorkorders key={employee.id}/></details>}
+ </>
+ return children({employee,controls,canSubmit:!loading&&!busy&&(!requireVerification||Boolean(employee)&&!loadFailed)&&senderCheck.success&&teamCheck.success,unavailableReason,sessionKey,sender,team})
 }

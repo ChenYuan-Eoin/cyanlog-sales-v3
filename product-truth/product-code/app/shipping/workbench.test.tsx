@@ -8,7 +8,7 @@ import { ownerOrderSchema } from '@/lib/shipping/validation'
 import type { ShippingSettings, ShipmentOrder } from '@/lib/shipping/types'
 import type { ShippingWorkbenchRequest } from '@/lib/shipping/workbench-client'
 
-const settings: ShippingSettings = { environment: 'sandbox', ready: true, canSubmit: true, reason: '', services: [{ id: 2, name: '顺丰标快' }], monthlyTail: '0000', sender: { name: '前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科苑路15号' } }
+const settings: ShippingSettings = { intakeRules: { companyName: { enabled: false, required: false, minLength: 0 }, team: { enabled: false, required: false, minLength: 0 }, teamOptions: [] }, environment: 'sandbox', ready: true, canSubmit: true, reason: '', services: [{ id: 2, name: '顺丰标快' }], monthlyTail: '0000', sender: { name: '前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科苑路15号' } }
 const fetcher = vi.fn()
 const fixtureOrders: ShipmentOrder[] = workbenchOrdersForTest.map((order, index) => ({ ...order, id: `order-${index + 1}` }))
 
@@ -20,6 +20,22 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('requires visible configured company and team fields and a complete parsed sender before intake', async () => {
+    render(<ShippingWorkbench settings={{ ...settings, sender: { name: '', phone: '', province: '', city: '', county: '', address: '' }, intakeRules: { companyName: { enabled: true, required: true, minLength: 4 }, team: { enabled: true, required: true, minLength: 1 }, teamOptions: ['销售部'] } }}/>)
+    await screen.findByText('暂无收寄记录')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '张三 13800000011 广东省深圳市南山区示例路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+    expect(screen.getByRole('button', { name: '提交工单（0票）' })).toHaveProperty('disabled', true)
+    fireEvent.change(screen.getByLabelText('第1行公司名称'), { target: { value: '示例公司' } })
+    fireEvent.change(screen.getByLabelText('第1行所属团队'), { target: { value: '销售部' } })
+    expect(screen.getByRole('button', { name: '提交工单（1票）' })).toHaveProperty('disabled', true)
+    fireEvent.change(screen.getByLabelText('本批寄方信息文本'), { target: { value: '李四 13900000011 广东省深圳市南山区科技园路8号' } })
+    fireEvent.click(screen.getByRole('button', { name: '解析本批寄方' }))
+    expect(screen.getByLabelText('本批寄件人')).toHaveProperty('value', '李四')
+    expect(screen.getByRole('button', { name: '提交工单（1票）' })).toHaveProperty('disabled', false)
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/owner/orders'))).toBe(false)
+  })
+
   it.each(['sender_cash', 'recipient'])('confirms %s without a monthly account after explicit review', async payment => {
     const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null, input: { ...fixtureOrders[0].input, sender: settings.sender } }
     const connectionId = '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0'
@@ -174,7 +190,7 @@ describe('self-service shipping workbench', () => {
     expect(fetcher.mock.calls.some(([url]) => /confirm|reconcile/.test(String(url)))).toBe(false)
   })
 
-  it('allows an operator to submit a work order before company sender information is complete', async () => {
+  it('keeps incomplete sender drafts local until corrected', async () => {
     let payload: { input?: Record<string, unknown> } | undefined
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/owner/orders')) { payload = JSON.parse(String(init?.body)); return Response.json({ orderId: 'no-sender', orderNo: 'SO-NO-SENDER', status: 'awaiting_confirmation', waybill: null }) }
@@ -185,8 +201,8 @@ describe('self-service shipping workbench', () => {
     fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })
     fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
     fireEvent.click(screen.getByRole('button', { name: '提交工单（1票）' }))
-    await screen.findByText(/已提报 1 票/)
-    expect(payload?.input).not.toHaveProperty('sender')
+    expect(screen.getByRole('button', { name: '提交工单（1票）' })).toHaveProperty('disabled', true)
+    expect(payload).toBeUndefined()
   })
 
   it('keeps incomplete work-order receipts unresolved rather than counting an HTTP 200 as intake success', async () => {
@@ -352,7 +368,7 @@ describe('self-service shipping workbench', () => {
     expect(screen.queryByRole('navigation', { name: '寄件协同功能' })).toBeNull()
     expect(screen.getByLabelText('多行地址文本')).toBeTruthy()
     expect(screen.getByRole('button', { name: '文本解析' }).getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByRole('link', { name: '模拟体验' }).getAttribute('href')).toBe('/shipping/demo')
+    expect(screen.queryByRole('link', { name: '模拟体验' })).toBeNull()
   })
 
   it('keeps incomplete regions out of the real order request', async () => {

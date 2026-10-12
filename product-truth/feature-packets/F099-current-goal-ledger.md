@@ -36,10 +36,10 @@
 | WP14 | shipping-provider-closure | 无——独立工具域 | code_green / `32a2c4fa` | 取消、轨迹字段与收件来源边界 |
 | WP15 | shipping-carrier-configuration | 无——独立工具域 | code_green / `d68b28d0` | 加密顺丰机器连接、多月结账号、默认寄件人资料与沙盒只读连接检查 |
 | WP16 | shipping-dynamic-order-consumption | 无——独立工具域 | code_green / `6b736e65` | 批量/确认下单从数据库动态读取有效连接、月结账号及寄件人 |
-| WP17 | shipping-production-readiness | 无——独立工具域 | **Active** | 生产环境变量清单、能力权限检查及真实寄件验收准备 |
-| WP18 | shipping-production-release-and-acceptance | 无——独立工具域 | Waiting authorization | Production前向迁移/环境配置/精确SHA发布与用户指定真实寄件验收 |
+| WP17 | shipping-production-readiness | 无——独立工具域 | code_green | 生产环境变量清单、能力权限检查及真实寄件验收准备 |
+| WP18 | shipping-production-release-and-acceptance | 无——独立工具域 | Parked, not complete | Production前向迁移/环境配置/精确SHA发布与用户指定真实寄件验收 |
 
-当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP17`。WP11及其dirty/运行证据保留；WP12-WP16已达到code_green。F054生产变量与真实寄件验收准备归WP17；Production部署/数据库写入/真实付费寄件仍需独立授权。WP18只在用户审阅具体SHA、变量差异和回滚步骤后明确授权；WP10保留为更后续工作包，不得触碰根工作区受保护dirty状态。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
+当前唯一Active以`governance/runtime-state/active-task.json`为准：`WP19`。以下WP17/18授权安排为历史记录，当前以2026-10-10调整为准。WP11及其dirty/运行证据保留；WP12-WP16已达到code_green。F054生产变量与真实寄件验收准备归WP17；Production部署/数据库写入/真实付费寄件仍需独立授权。WP18只在用户审阅具体SHA、变量差异和回滚步骤后明确授权；WP10保留为更后续工作包，不得触碰根工作区受保护dirty状态。旧混合任务`P0-ONLINE-SYNC-RULE-COLLECTION-RESET`不再作为Active。
 
 ## 2. 候选边界
 
@@ -113,3 +113,14 @@ Production 数据库继续只读；WP01-WP05 的上述候选均未部署 Product
 - 同一路由在本机可按 `local → cloud` 执行；在 Hosted 环境必须排除只能从用户电脑访问的 local Provider，并把 cloud 作为第 1 次真实尝试。环境排除不是 Provider 失败，不得生成 local invocation 或标记为降级。
 - `AIRuntimePlanSnapshot` 同时保存管理员配置顺序和当前环境有效顺序；有效顺序必须是配置顺序的有序子序列，历史快照继续兼容。
 - 本批退出必须由同一个 release commit 的隔离 Preview 证明：真实 cloud Provider、真实业务用点、ReviewRun、`model_invocations`、token、桌面/iPad 与工程门禁。Production 继续只读且不部署。
+
+
+## 2026-10-10 企微批次调整
+
+唯一Active现为WP19，以active-task.json为准。此前WP17/18的历史状态文字不作为当前调度。
+
+| WP | Slug | 当前状态 | 单一用户任务 |
+|---|---|---|---|
+| WP19 | wecom-authorized-shipping-intake | Active | 白名单员工经企微可信身份进入表单并提交待确认工单 |
+| WP20 | wecom-waybill-notifications | Queued | 已绑定员工收到真实出号私信，失败只重试通知 |
+| WP18 | shipping-production-release-and-acceptance | Parked, not complete | 顺丰真实API下单、轨迹及业务验收仍未完成 |

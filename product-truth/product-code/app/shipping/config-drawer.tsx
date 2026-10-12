@@ -7,7 +7,7 @@ import { emptyContact, type Contact } from '@/lib/shipping/types'
 import styles from './config-drawer.module.css'
 import { parseAddress } from '@/lib/shipping/address'
 import IntakeConfiguration from './intake-configuration'
-import EmailConfiguration from './email-configuration'
+import WecomConfiguration from './wecom-configuration'
 import { SF_SERVICE_CATALOG, DEFAULT_INTAKE_SERVICES } from '@/lib/shipping/sf-service-catalog'
 
 async function request<T>(init?: RequestInit): Promise<T> {
@@ -188,7 +188,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       {message && <p className={`${styles.message} ${styles.feedback}`} role="status" aria-live="polite">{message}</p>}
       <div className={styles.content}>
         <IntakeConfiguration/>
-        <EmailConfiguration/>
+        <WecomConfiguration onMessage={setMessage}/>
         <section className={styles.section}>
           <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>顺丰 API 接入</h3></div><span>{connection ? `尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>
           <p className={styles.hint}>只需配置一次应用编号和密钥，系统自动获取和刷新接口令牌，无需定期登录顺丰官网。已有服务器配置可直接迁入。</p>
