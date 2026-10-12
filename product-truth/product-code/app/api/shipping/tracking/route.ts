@@ -11,6 +11,8 @@ import { recordShippingCapability } from '@/lib/shipping/connections'
 import { getOrganizationShipmentProviderSnapshot } from '@/lib/shipping/collaboration'
 import { loadShippingSettings } from '@/lib/shipping/runtime-config'
 export const runtime = 'nodejs'
+// Keep the read-only carrier query close to SF's gateway; no project-wide region change.
+export const preferredRegion = 'hkg1'
 export async function POST(req: NextRequest) { return shippingHandler(req, async (user, orgId) => {
   const input = trackingSchema.parse(await shippingJson(req))
   const [ownedLegacy, ownedCollaborative, importedSuffix] = await Promise.all([
