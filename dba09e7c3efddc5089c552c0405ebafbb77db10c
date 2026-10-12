@@ -50,25 +50,35 @@
         "entry_sha256": "1f8b375e358f61df35709ed5591f47c9f1bd72d080907e627b4deab2aa18f9db"
       },
       "scope": "WP21 bounded per-route hkg1 network comparison; official SF endpoints and authentication unchanged; compiled Next manifest confirms only tracking route region preference."
+    },
+    "production": {
+      "commit": "dba09e7c3efddc5089c552c0405ebafbb77db10c",
+      "deployment_id": "dpl_CZ5Bgocwn7bSnMWV886Vq3hFB3nF",
+      "domain": "sales.cyanlog.icu",
+      "ready": true,
+      "target": "production",
+      "checked_at": "2026-10-12T05:43:11.681121+00:00",
+      "artifact_path": "wp21-production-samples.json",
+      "scope": "Numbered item01: four authorized existing waybills read through real production SF API and compared with official site; wrong suffix rejected and unauthenticated request401. Existing Chrome observed results and scrolling. Carrier ordering and remaining nine items unverified; network timeouts remain an operational limitation."
     }
   },
-  "updatedAt": "2026-10-12T05:19:50.049Z",
+  "updatedAt": "2026-10-12T05:43:27.299Z",
   "completionState": "code_green",
   "gateSnapshots": {
     "code_green": {
       "stage": "code_green",
-      "checkedAt": "2026-10-12T05:19:50.031Z",
+      "checkedAt": "2026-10-12T05:43:27.281Z",
       "head": "dba09e7c3efddc5089c552c0405ebafbb77db10c",
-      "originMain": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
-      "remoteMain": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
-      "remoteProduction": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
-      "defaultBranch": "main",
-      "originMainFresh": true,
-      "originMainIsAncestor": true,
+      "originMain": "dba09e7c3efddc5089c552c0405ebafbb77db10c",
+      "remoteMain": null,
+      "remoteProduction": null,
+      "defaultBranch": null,
+      "originMainFresh": false,
+      "originMainIsAncestor": false,
       "mainIntegrated": false,
-      "localAttestationRefOid": "5f3e34b7507c95bc5c73d5c5dfbe0f01d1f2064a",
-      "remoteAttestationRefOid": "5f3e34b7507c95bc5c73d5c5dfbe0f01d1f2064a",
-      "remoteSnapshotCheckedAt": "2026-10-12T05:19:47.788Z",
+      "localAttestationRefOid": "c301ad604f3dc3f6759a14044a7383c201a4b58e",
+      "remoteAttestationRefOid": null,
+      "remoteSnapshotCheckedAt": "2026-10-12T05:43:11.908Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -78,10 +88,96 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "c1da06f1d443ad0e05070f0b4571e8c997bed1d40adc37591183a30e4704d35f",
-  "sealedAt": "2026-10-12T05:19:50.049Z",
-  "attestationDigest": "44619fcf32455fdd9102603f3ba9e4a4503eec9fe8f3a01a15e660fe4c4d0757"
+  "previousAttestationDigest": "44619fcf32455fdd9102603f3ba9e4a4503eec9fe8f3a01a15e660fe4c4d0757",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP21",
+    "commit": "dba09e7c3efddc5089c552c0405ebafbb77db10c",
+    "evidence": {
+      "code": {
+        "commit": "dba09e7c3efddc5089c552c0405ebafbb77db10c",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "target_tests",
+            "artifact_path": "check-logs/f4449bf9b33b5f2cee4ecf21c6ad419817f98684/check-03-test.log",
+            "log_sha256": "e57f1d4944aca06fd6799ba99db6ad51c78c06f2497f254a31cc518fcaf93ac1",
+            "exit_code": 0
+          },
+          {
+            "name": "full_tests",
+            "artifact_path": "check-logs/f4449bf9b33b5f2cee4ecf21c6ad419817f98684/check-03-test.log",
+            "log_sha256": "e57f1d4944aca06fd6799ba99db6ad51c78c06f2497f254a31cc518fcaf93ac1",
+            "exit_code": 0
+          },
+          {
+            "name": "lint",
+            "artifact_path": "check-logs/f4449bf9b33b5f2cee4ecf21c6ad419817f98684/check-02-lint.log",
+            "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+            "exit_code": 0
+          },
+          {
+            "name": "typecheck",
+            "artifact_path": "check-logs/f4449bf9b33b5f2cee4ecf21c6ad419817f98684/check-01-typecheck.log",
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+            "exit_code": 0
+          },
+          {
+            "name": "build",
+            "artifact_path": "wp21-hkg-build.log",
+            "log_sha256": "ff696e8659d0e9fc3a3de1c777fd74ac4a949cb80ac38325b0f09c645d74d121",
+            "exit_code": 0
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "c24949c164d4351156b6d0c0ccbef248ce9d2bfa07aac3eda50851712ec08e87",
+          "entry_sha256": "1f8b375e358f61df35709ed5591f47c9f1bd72d080907e627b4deab2aa18f9db"
+        },
+        "scope": "WP21 bounded per-route hkg1 network comparison; official SF endpoints and authentication unchanged; compiled Next manifest confirms only tracking route region preference."
+      }
+    },
+    "updatedAt": "2026-10-12T05:19:50.049Z",
+    "completionState": "code_green",
+    "gateSnapshots": {
+      "code_green": {
+        "stage": "code_green",
+        "checkedAt": "2026-10-12T05:19:50.031Z",
+        "head": "dba09e7c3efddc5089c552c0405ebafbb77db10c",
+        "originMain": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
+        "remoteMain": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
+        "remoteProduction": "8d4f8cd7f2effdd984034b395d3db9f6437f88c1",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "5f3e34b7507c95bc5c73d5c5dfbe0f01d1f2064a",
+        "remoteAttestationRefOid": "5f3e34b7507c95bc5c73d5c5dfbe0f01d1f2064a",
+        "remoteSnapshotCheckedAt": "2026-10-12T05:19:47.788Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "c1da06f1d443ad0e05070f0b4571e8c997bed1d40adc37591183a30e4704d35f",
+    "sealedAt": "2026-10-12T05:19:50.049Z",
+    "attestationDigest": "44619fcf32455fdd9102603f3ba9e4a4503eec9fe8f3a01a15e660fe4c4d0757"
+  },
+  "revision": 2,
+  "contentDigest": "a0122f0146d2e47efe54413bbf4f003553bd7a2c43ef035869d5d1c6f57cc43f",
+  "sealedAt": "2026-10-12T05:43:27.300Z",
+  "attestationDigest": "e9badfd7c26baba35287afc23868c3c4d97e8a58d111dab575a4175992e5ee8e"
 }
