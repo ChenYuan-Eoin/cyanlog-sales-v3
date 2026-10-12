@@ -13,7 +13,11 @@ function keyBuffer(keys: WecomCallbackKeys) {
   return key
 }
 export function newWecomCallbackKeys(): WecomCallbackKeys {
-  return { token: randomBytes(16).toString('hex'), encodingAESKey: randomBytes(32).toString('base64').slice(0, -1) }
+  // The provider setup form rejects + and / even though Base64 permits them.
+  // Reject whole random samples to retain canonical padding bits and entropy.
+  let encodingAESKey: string
+  do { encodingAESKey = randomBytes(32).toString('base64').slice(0, -1) } while (!/^[A-Za-z0-9]{43}$/.test(encodingAESKey))
+  return { token: randomBytes(16).toString('hex'), encodingAESKey }
 }
 export function validateWecomCallbackKeys(keys: WecomCallbackKeys) { keyBuffer(keys) }
 function signature(keys: WecomCallbackKeys, timestamp: string, nonce: string, encrypted: string) {

@@ -13,6 +13,13 @@ describe('WeCom internal robot callback cryptography', () => {
     expect(decode(reply(json))).toBe(json)
   })
   it('generates valid independent credentials', () => { const a = newWecomCallbackKeys(), b = newWecomCallbackKeys(); expect(a).not.toEqual(b); expect(() => validateWecomCallbackKeys(a)).not.toThrow() })
+  it('generates keys accepted by the provider alphanumeric-only setup form', () => {
+    for (let i = 0; i < 128; i++) {
+      const generated = newWecomCallbackKeys()
+      expect(generated.encodingAESKey).toMatch(/^[A-Za-z0-9]{43}$/)
+      expect(() => validateWecomCallbackKeys(generated)).not.toThrow()
+    }
+  })
   it('rejects tampered signatures, ciphertext, nonce and stale callbacks', () => {
     const value = reply()
     expect(() => decode({ ...value, msgsignature: '0'.repeat(40) })).toThrow('验证失败')
