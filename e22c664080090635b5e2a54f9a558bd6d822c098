@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "activeId": "WP21",
+  "commit": "e22c664080090635b5e2a54f9a558bd6d822c098",
+  "evidence": {
+    "code": {
+      "commit": "e22c664080090635b5e2a54f9a558bd6d822c098",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "artifact_path": "check-logs/173ea28fe75ab74ab68918900c9ce1d4604e673b/check-03-test.log",
+          "log_sha256": "24a4685b301b5ebd5f312b8c789db18aea19ade7a8c803d180e2d152eb9eaa84",
+          "exit_code": 0
+        },
+        {
+          "name": "full_tests",
+          "artifact_path": "check-logs/173ea28fe75ab74ab68918900c9ce1d4604e673b/check-03-test.log",
+          "log_sha256": "24a4685b301b5ebd5f312b8c789db18aea19ade7a8c803d180e2d152eb9eaa84",
+          "exit_code": 0
+        },
+        {
+          "name": "lint",
+          "artifact_path": "check-logs/173ea28fe75ab74ab68918900c9ce1d4604e673b/check-02-lint.log",
+          "log_sha256": "822e0b1300535d812c150261dfb701674a23eae62dbf5f7c359b1c6d10aa2cf6",
+          "exit_code": 0
+        },
+        {
+          "name": "typecheck",
+          "artifact_path": "check-logs/173ea28fe75ab74ab68918900c9ce1d4604e673b/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0
+        },
+        {
+          "name": "build",
+          "artifact_path": "wp21-display-build.log",
+          "log_sha256": "65fc25ab9d9360426ebaacab70637509503ade108e6261857d64825888274e60",
+          "exit_code": 0
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "7890d4c8d0da36f397738bac7bd6696ffab656d4fbe2806aba3c466cfbffaaf1",
+        "entry_sha256": "501db29148feea80dd61f26fefe75822b8642941333e3c906cd51c7e4b7cad80"
+      },
+      "scope": "WP21 external tracking results rendered with readable scrollable timeline; production data verification recorded separately."
+    }
+  },
+  "updatedAt": "2026-10-12T04:48:01.015Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-12T04:48:00.997Z",
+      "head": "e22c664080090635b5e2a54f9a558bd6d822c098",
+      "originMain": "484a750ea842051898b72136593a3914f7ef06c9",
+      "remoteMain": "484a750ea842051898b72136593a3914f7ef06c9",
+      "remoteProduction": "484a750ea842051898b72136593a3914f7ef06c9",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "3473f36b3dd02445979e6ed4494a01551450b7cf",
+      "remoteAttestationRefOid": "3473f36b3dd02445979e6ed4494a01551450b7cf",
+      "remoteSnapshotCheckedAt": "2026-10-12T04:47:58.878Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "b06eddd7c00b1eb84985e0c0b1b739755b51e74b26623cb34c4f665f95b35a4f",
+  "sealedAt": "2026-10-12T04:48:01.015Z",
+  "attestationDigest": "eb0b0142e5ab6c1503d9ef027dfe80540dddecca91432c07d4cd66cf4a915488"
+}
