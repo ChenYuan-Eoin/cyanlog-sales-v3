@@ -149,7 +149,13 @@ export function decodeSfResponse(raw: unknown, payloadField: 'msgData' | 'obj' =
     throw new ShippingError(502, `顺丰接口未受理请求（${code}），请检查账号权限。`, 'provider_rejected')
   }
   const data = business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData)
-  if (data.success !== true && data.success !== 'true') throw new ShippingError(422, data.errorCode === '6150' ? '顺丰未找到该订单（6150）。' : `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
+  if (data.success !== true && data.success !== 'true') {
+    const code = data.errorCode && /^[A-Z0-9_]{1,20}$/.test(data.errorCode) ? data.errorCode : undefined
+    const message = code === '6150' ? '顺丰未找到该订单（6150）。'
+      : code === '8037' ? '顺丰订单已取消（8037）。'
+        : `顺丰拒绝受理${code ? `（${code}）` : ''}，请核对资料或接口权限。`
+    throw new ShippingError(422, message, 'provider_rejected', code)
+  }
   return data[payloadField]
 }
 async function postSfService(serviceCode: string, message: unknown, config: SfAuthConfig, accessToken: string): Promise<unknown> {
@@ -254,7 +260,13 @@ export function extractCancellation(raw: unknown, expectedId: string) {
   return true
 }
 export async function cancelSfOrder(orderId: string, config: ShippingRuntimeConfig) {
-  return extractCancellation(await sfCall('EXP_RECE_UPDATE_ORDER', { orderId, dealType: 2, language: 'zh-CN' }, config), orderId)
+  try {
+    return extractCancellation(await sfCall('EXP_RECE_UPDATE_ORDER', { orderId, dealType: 2, language: 'zh-CN' }, config), orderId)
+  } catch (error) {
+    // SF business 8037 means this order was already canceled, including a retry after a lost response.
+    if (error instanceof ShippingError && error.requestStage === 'provider_rejected' && error.providerBusinessCode === '8037') return true
+    throw error
+  }
 }
 const routeData = z.object({ routeResps: z.array(z.object({ mailNo: z.string().nullable().optional(), routes: z.array(z.object({
   acceptTime: z.string(), acceptAddress: z.string().nullish(), remark: z.string(),

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { lookupSfOrder } from './sf-client'
+import { cancelSfOrder, lookupSfOrder } from './sf-client'
 import type { ShippingRuntimeConfig } from './runtime-config'
 
 const config: ShippingRuntimeConfig = {
@@ -106,5 +106,40 @@ describe('SF Node.js OAuth2 API requests', () => {
     expect(tokens).toEqual(['refresh-token-1', 'refresh-token-2'])
     const postedBodies = fetchMock.mock.calls.map(call => String((call[1] as RequestInit).body || ''))
     expect(postedBodies.some(body => body.includes('msgDigest='))).toBe(false)
+  })
+})
+
+
+describe('SF cancellation convergence', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it.each(['canceled', 'missing', 'gateway', 'mismatched', 'transport'])('handles %s without confusing rejection and cancellation', async mode => {
+    const requests: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/oauth2/accessToken')) return Response.json({ apiResultCode: 'A1000', accessToken: 't'.repeat(48), expiresIn: 7200 })
+      const form = new URLSearchParams(String(init?.body))
+      expect(form.get('serviceCode')).toBe('EXP_RECE_UPDATE_ORDER')
+      requests.push(JSON.parse(form.get('msgData')!))
+      if (mode === 'transport') throw new TypeError('network lost')
+      return Response.json({
+        apiResultCode: mode === 'gateway' ? '8037' : 'A1000',
+        apiResultData: JSON.stringify(mode === 'mismatched'
+          ? { success: true, msgData: { orderId: 'another-order' } }
+          : { success: false, errorCode: mode === 'missing' ? '6150' : '8037', errorMsg: 'private provider details' })
+      })
+    }))
+    const result = cancelSfOrder('same-order', { ...config, partnerId: `cancel-${mode}` })
+    if (mode === 'canceled') await expect(result).resolves.toBe(true)
+    else await expect(result).rejects.toThrow()
+    expect(requests).toEqual([{ orderId: 'same-order', dealType: 2, language: 'zh-CN' }])
+  })
+
+  it('keeps already-canceled lookup distinct from order-not-found', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/oauth2/accessToken')
+      ? Response.json({ apiResultCode: 'A1000', accessToken: 't'.repeat(48), expiresIn: 7200 })
+      : Response.json({ apiResultCode: 'A1000', apiResultData: JSON.stringify({ success: false, errorCode: '8037' }) })))
+    await expect(lookupSfOrder('same-order', { ...config, partnerId: 'canceled-lookup' })).rejects.toMatchObject({
+      providerBusinessCode: '8037', message: '顺丰订单已取消（8037）。'
+    })
   })
 })
