@@ -932,6 +932,12 @@ function actionAuthority(repoRoot, authority, binding) {
   }
 }
 
+function actionApprovalPath(repoRoot, binding) {
+  // Each source/evidence version needs a new grant; old consumed grants remain
+  // immutable. A new notes object cannot reuse approval for an older object.
+  return path.join(paths(repoRoot).runtimeDir, 'action-approvals', `${binding.commandHash}-${hashText(JSON.stringify(binding))}.json`);
+}
+
 function approveAction(repoRoot, request) {
   const binding = actionBinding(repoRoot, request.command, request.cwd);
   repoRoot = binding.workspace;
@@ -939,7 +945,7 @@ function approveAction(repoRoot, request) {
   const expires = Date.parse(request.expiresAt);
   if (!Number.isFinite(expires) || expires <= Date.now() || expires > Date.now() + 3600000) throw new Error('approval expiry must be within one hour');
   const approval = { ...binding, authority: request.authority, expiresAt: request.expiresAt, id: crypto.randomUUID() };
-  const file = path.join(paths(repoRoot).runtimeDir, 'action-approvals', `${binding.commandHash}.json`);
+  const file = actionApprovalPath(repoRoot, binding);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(approval), { flag: 'wx', mode: 0o600 });
   appendJsonl(paths(repoRoot).evidenceLedgerPath, { type: 'action-approved', at: nowIso(), ...approval });
@@ -952,7 +958,7 @@ function consumeActionApproval(repoRoot, command, payload) {
     const input = payload.tool_input || payload.input || payload.arguments || payload;
     const binding = actionBinding(repoRoot, command, input.workdir || input.cwd || repoRoot);
     repoRoot = binding.workspace;
-    const file = path.join(paths(repoRoot).runtimeDir, 'action-approvals', `${binding.commandHash}.json`);
+    const file = actionApprovalPath(repoRoot, binding);
     const approval = readJson(file);
     if (!approval || !(Date.parse(approval.expiresAt) > Date.now()) ||
         Object.keys(binding).some((key) => approval[key] !== binding[key])) return null;
@@ -1760,6 +1766,7 @@ function runtimeValidation(repoRoot) {
 
 module.exports = {
   approveAction,
+  actionApprovalPath,
   actionBinding,
   AUTONOMY_LEVELS,
   HIGH_RISK_PATTERNS,

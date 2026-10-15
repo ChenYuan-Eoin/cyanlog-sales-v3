@@ -1119,7 +1119,7 @@ function runActionApprovalSelftest(repoRoot) {
   assert.throws(() => core.approveAction(repoRoot, request), /EEXIST/);
   assert.strictEqual(evaluate(command + ' --yes').ok, false);
   assert.strictEqual(evaluate(command, os.tmpdir()).ok, false);
-  const approvalFile = path.join(core.paths(repoRoot).runtimeDir, 'action-approvals', `${crypto.createHash('sha256').update(command).digest('hex')}.json`);
+  const approvalFile = core.actionApprovalPath(repoRoot, core.actionBinding(repoRoot, command, repoRoot));
   const original = core.readJson(approvalFile);
   for (const replacement of [{ expiresAt: '2000-01-01' }, { head: 'wrong' }, { goalHash: 'wrong' }, { target: 'wrong' }, { environment: 'production' }]) {
     writeJson(approvalFile, { ...original, ...replacement });
@@ -1160,7 +1160,7 @@ function runActionApprovalSelftest(repoRoot) {
   assert.strictEqual(evaluate(productionCommand).ok, false);
   assert.throws(() => core.approveAction(repoRoot, { ...productionRequest, command: productionCommand.replace(' --skip-domain', '') }), /unsupported/);
   core.approveAction(repoRoot, productionRequest);
-  const productionApproval = path.join(core.paths(repoRoot).runtimeDir, 'action-approvals', crypto.createHash('sha256').update(productionCommand).digest('hex')+'.json');
+  const productionApproval = core.actionApprovalPath(repoRoot, core.actionBinding(repoRoot, productionCommand, repoRoot));
   const productionOriginal = core.readJson(productionApproval);
   for (const replacement of [{ head: 'wrong' }, { target: 'team_other/prj_other' }, { expiresAt: '2000-01-01' }, { environment: 'preview' }]) {
     writeJson(productionApproval, { ...productionOriginal, ...replacement });
@@ -1200,6 +1200,7 @@ function runActionApprovalSelftest(repoRoot) {
   const noteBinding = core.actionBinding(repoRoot, notePush, repoRoot);
   runGit(repoRoot, ['notes', '--ref=price-v3-delivery', 'append', '-m', 'second evidence']);
   assert.notStrictEqual(core.actionBinding(repoRoot, notePush, repoRoot).refObject, noteBinding.refObject);
+  assert.notStrictEqual(core.actionApprovalPath(repoRoot, core.actionBinding(repoRoot, notePush, repoRoot)), core.actionApprovalPath(repoRoot, noteBinding));
   runGit(repoRoot, ['remote', 'set-url', 'origin', 'https://github.com/other/repo.git']);
   assert.throws(() => core.actionBinding(repoRoot, push, repoRoot), /remote/);
   console.log('action approval and classification selftest ok');
