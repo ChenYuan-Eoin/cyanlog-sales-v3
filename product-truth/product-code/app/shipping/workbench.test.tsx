@@ -421,6 +421,29 @@ describe('self-service shipping workbench', () => {
     expect(screen.getByRole('button', { name: '查回所选单据下单结果' })).toBeTruthy()
   })
 
+  it('shows authentication failure as safely reopenable even when the ledger refresh fails', async () => {
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null }
+    let confirmed = false
+    fetcher.mockImplementation(async (url: string) => {
+      if (url.endsWith('/confirm')) {
+        confirmed = true
+        return Response.json({ error: '认证超时，下单请求尚未发送', requestStage: 'provider_not_sent' }, { status: 502 })
+      }
+      if (confirmed) throw new TypeError('ledger unavailable')
+      return Response.json({ records: [order] })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findAllByText('华东建筑设计院')
+    fireEvent.click(screen.getByRole('checkbox', { name: `核对并选择工单 ${order.orderNo}` }))
+    fireEvent.click(screen.getByRole('button', { name: '批量确认并下单（1票）' }))
+    expect(await screen.findByText(/成功 0 票；结果待确认 0 票；失败 1 票/)).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '本次下单未成功' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '重新核对原工单' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '查回所选单据下单结果' })).toBeNull()
+    expect(screen.getByRole('alert').textContent).toContain('尚未发送')
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/confirm'))).toHaveLength(1)
+  })
+
   it('keeps a lost formal confirmation response addressable by original order ID', async () => {
     const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null }
     fetcher.mockImplementation(async (url: string) => { if (url.endsWith('/confirm')) throw new TypeError('example connection lost'); return Response.json({ records: [order] }) })

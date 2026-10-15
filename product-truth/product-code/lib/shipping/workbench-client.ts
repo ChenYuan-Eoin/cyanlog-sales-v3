@@ -1,7 +1,7 @@
 export type ShippingWorkbenchRequest = <T>(url: string, init?: RequestInit) => Promise<T>
 
-type RequestStage = 'validation' | 'provider_rejected' | 'provider_unreachable' | 'provider_http_error' | 'provider_invalid_response' | 'client_network_error' | 'client_invalid_response'
-const serverStages = new Set<RequestStage>(['validation', 'provider_rejected', 'provider_unreachable', 'provider_http_error', 'provider_invalid_response'])
+type RequestStage = 'validation' | 'provider_not_sent' | 'provider_rejected' | 'provider_unreachable' | 'provider_http_error' | 'provider_invalid_response' | 'client_network_error' | 'client_invalid_response'
+const serverStages = new Set<RequestStage>(['validation', 'provider_not_sent', 'provider_rejected', 'provider_unreachable', 'provider_http_error', 'provider_invalid_response'])
 
 export class ShippingWorkbenchRequestError extends Error {
   constructor(message: string, public readonly status?: number, public readonly requestStage?: RequestStage) {
@@ -12,7 +12,7 @@ export class ShippingWorkbenchRequestError extends Error {
 
 export function isDefinitiveShippingRejection(error: unknown): boolean {
   if (!(error instanceof ShippingWorkbenchRequestError)) return false
-  if (error.requestStage === 'validation' || error.requestStage === 'provider_rejected') return true
+  if (error.requestStage === 'validation' || error.requestStage === 'provider_not_sent' || error.requestStage === 'provider_rejected') return true
   if (error.requestStage) return false
   return error.status !== undefined && [400, 401, 403, 413, 422].includes(error.status)
 }

@@ -107,8 +107,8 @@ export async function confirmAndSubmitShipment(id: string, userId: string, orgId
     return { id, status: 'waybill_created' as const, waybill: provider.waybill }
   } catch (error) {
     const at = new Date().toISOString()
-    const failure = { message: error instanceof ShippingError ? error.message.slice(0, 500) : '下单结果暂不能确认，请先查回原请求。', at }
-    const saved = await supabaseAdmin.from('shipping_orders').update({ status: error instanceof ShippingError && error.requestStage === 'provider_rejected' ? 'order_failed' : 'order_unknown', shipping_config_snapshot: { ...snapshot, orderFailure: failure }, updated_at: at }).eq('id', id).eq('org_id', orgId).eq('status', 'ordering')
+    const failure = { message: error instanceof ShippingError ? error.message.slice(0, 500) : '下单结果暂不能确认，请先查回原请求。', at, ...(error instanceof ShippingError && error.requestStage ? { stage: error.requestStage } : {}) }
+    const saved = await supabaseAdmin.from('shipping_orders').update({ status: error instanceof ShippingError && (error.requestStage === 'provider_rejected' || error.requestStage === 'provider_not_sent') ? 'order_failed' : 'order_unknown', shipping_config_snapshot: { ...snapshot, orderFailure: failure }, updated_at: at }).eq('id', id).eq('org_id', orgId).eq('status', 'ordering')
     if (saved.error) throw new ShippingError(503, '下单失败信息未保存，请刷新核对原单，勿直接重新寄件。')
     throw error
   }
@@ -116,7 +116,7 @@ export async function confirmAndSubmitShipment(id: string, userId: string, orgId
 
 export async function reopenFailedShipmentOrder(id: string, userId: string, orgId: string) {
   const row = await loadForAction(id, orgId)
-  if (row.status !== 'order_failed') throw new ShippingError(409, '只有已明确拒绝的工单可以重新核对；结果未知请先查回。')
+  if (row.status !== 'order_failed') throw new ShippingError(409, '只有已明确拒绝或确认未发送的工单可以重新核对；结果未知请先查回。')
   const waybill = await supabaseAdmin.from('shipping_waybills').select('waybill_no').eq('shipping_order_id', id).maybeSingle()
   if (waybill.error) throw new ShippingError(503, '原单运单结果暂不可核对，请稍后再试。')
   if (waybill.data) throw new ShippingError(409, '原单已有运单，请刷新核对，不能重新下单。')

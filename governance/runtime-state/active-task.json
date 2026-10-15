@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-15T09:02:34.528012+00:00",
+  "updated_at": "2026-10-15T10:39:13.112822+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,71 +128,21 @@
     ]
   },
   "active_task": {
-    "id": "WP33",
-    "slug": "shipping-configuration-usability",
-    "name": "寄件配置与操作反馈",
+    "id": "WP34",
+    "slug": "shipping-auth-recovery",
+    "name": "顺丰认证失败与原单安全恢复",
     "kind": "product",
     "status": "active",
-    "objective": "将已获用户确认的寄件配置六分区与操作反馈改进发布到生产，在用户现有Chrome的正式域名验收；真实运单只读，不扩大接口能力。",
+    "objective": "修复生产OAuth认证失败被误判为下单结果未知的问题；保留明确未发单错误并支持原单安全恢复，发送后不确定请求始终先查回。排查认证网络故障，不新增生产测试单或改动受保护运单。",
     "started_at": "2026-10-15T07:45:54.444Z",
-    "activation_basis": "IN-20261015-060：用户看过布局评估后明确要求改进实现",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp33-ui-release/Price-v3",
+    "activation_basis": "IN-20261015-077/078：生产下单阻断，依据生产事故例外优先处理",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp34-shipping-auth-recovery/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/.env.example",
-      "product-truth/product-code/scripts/SHIPPING-SETUP.md",
-      "product-truth/product-code/scripts/check-env.mjs",
-      "product-truth/product-code/supabase/migrations",
       "product-truth/product-code/lib/shipping",
-      "product-truth/product-code/app/shipping",
       "product-truth/product-code/app/api/shipping",
-      "product-truth/product-code/app/configs",
-      "product-truth/product-code/lib/config-center",
-      "product-truth/product-code/lib/permissions.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
-      ".codex/hooks.json",
-      ".codex/hooks/harness-adapter.js",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/REQ_REGISTRY.yml",
-      "product-truth/product-code/app/sales-portal",
-      "product-truth/product-code/package.json",
-      "product-truth/product-code/pnpm-lock.yaml",
-      "product-truth/product-code/.env.local",
-      ".env.local",
-      ".github/workflows/ci.yml",
-      ".github/workflows/skills.yml",
-      ".gitignore",
-      ".opencode/lib/project-guard-core.mjs",
-      ".opencode/plugins/price-v3-guard.js",
-      ".vercel/.env.production.local",
-      "README.md",
-      "manifest.yaml",
-      "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/product-code/.vercel/.env.development.local",
-      "product-truth/product-code/app/api/quotes/[id]/derive-order/route.ts",
-      "product-truth/product-code/app/api/quotes/[id]/derive-seal/route.ts",
-      "product-truth/product-code/app/api/quotes/[id]/derive-tender/route.ts",
-      "product-truth/product-code/app/api/quotes/derive-routes.test.ts",
-      "product-truth/product-code/lib/quote/downstream-derive.ts",
-      "product-truth/product-code/lib/quote/downstream-persistence.test.ts",
-      "product-truth/product-code/scripts/WP10-RELEASE-REPAIR.md",
-      "product-truth/product-code/scripts/check-preview-target.mjs",
-      "product-truth/product-code/scripts/check-requirement-structure.mjs",
-      "product-truth/product-code/scripts/check-requirement-structure.test.ts",
-      "product-truth/product-code/scripts/check-sensitive-tracked.mjs",
-      "product-truth/product-code/scripts/check-sensitive-tracked.test.ts",
-      "product-truth/product-code/scripts/prepare-wp10-release.mjs",
-      "product-truth/product-code/scripts/project-guard.test.ts",
-      "product-truth/product-code/supabase/migrations/20260910000002_atomic_quote_derivations.sql",
-      "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
-      "product-truth/product-code/node_modules",
-      "product-truth/product-code/.next"
+      "product-truth/product-code/app/shipping"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -233,7 +183,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "IN-20261015-062批准WP33代码发布；数据库保持只读，真实运单不得取消、修改或创建。UI验收不代表顺丰增删改查验收完成。已有主干面单辅助代码保持默认行为，后续WP29-WP32后端改动不纳入。",
+      "note": "WP34生产事故最小修复；发布仅限认证失败分类、原单恢复及对应回归，不含界面扩展、数据库迁移、凭据修改或新增真实测试订单。WP33已部署界面保留，形式验收门禁阻断仍单独记录。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -247,20 +197,16 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261015-062",
-        "final_scope": "WP33寄件配置六分区及已复现操作反馈的代码发布；允许必要的提交、推送、隔离验证及精确SHA生产部署，不含数据库迁移、凭据/权限修改、新生产订单或现有运单变更",
+        "status": "pending_security_gate_and_final_write_approval",
+        "final_release_approval_id": "IN-20261015-078",
+        "final_scope": "用户要求已跑通流程稳定及生产下单故障修复，允许范围内可逆代码修复和部署；无数据库迁移、凭据修改或新增生产测试订单",
         "database_write_authorized": false,
-        "micro_fix_approval_id": "IN-20261015-060",
-        "clarification_id": "IN-20261015-068",
-        "micro_fix_scope": "已确认六分区UI、操作反馈及阻断代码发布的精确授权门禁修复",
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        "micro_fix_approval_id": "IN-20261015-077",
+        "clarification_id": "IN-20261015-078",
+        "micro_fix_scope": "OAuth未发单分类、失败原因保存及原单安全恢复；范围和安全边界已授权，部署凭证待绑定本次候选"
       },
       "blocking_acceptance_defects": [
-        "IN-20261015-058",
-        "IN-20261015-060",
-        "IN-20261015-068"
+        "IN-20261015-077"
       ],
       "runtime_contract_version": "f054-ui-v1"
     },
@@ -274,9 +220,9 @@
   },
   "execution_queue": {
     "active": {
-      "id": "WP33",
-      "slug": "shipping-configuration-usability",
-      "name": "寄件配置与操作反馈"
+      "id": "WP34",
+      "slug": "shipping-auth-recovery",
+      "name": "顺丰认证失败与原单安全恢复"
     },
     "next": {
       "id": "WP32",
@@ -406,6 +352,12 @@
         "id": "WP31",
         "slug": "bulk-review-selection",
         "reason": "本地候选eca8056a保留，尚未发布；用户明确开始推送接收下一步"
+      },
+      {
+        "id": "WP33",
+        "slug": "shipping-configuration-usability",
+        "name": "寄件配置与操作反馈",
+        "reason": "生产界面已实际发布并在用户Chrome重放，形式production_released门禁缺少无关contract_comparison_diffs目录；未冒充门禁通过。生产下单事故WP34优先，随后收尾。"
       }
     ],
     "completed": [
@@ -1945,6 +1897,151 @@
         "branch_consolidation": "User goal: integrate useful unique changes, archive and retire fully integrated or superseded branches, preserve dirty worktrees"
       },
       "resume_condition": "WP33寄件配置与操作反馈候选验证后恢复；接口接入和生产推送闭环尚未完成。"
+    },
+    "WP33": {
+      "id": "WP33",
+      "slug": "shipping-configuration-usability",
+      "name": "寄件配置与操作反馈",
+      "kind": "product",
+      "status": "parked",
+      "objective": "将已获用户确认的寄件配置六分区与操作反馈改进发布到生产，在用户现有Chrome的正式域名验收；真实运单只读，不扩大接口能力。",
+      "started_at": "2026-10-15T07:45:54.444Z",
+      "activation_basis": "IN-20261015-060：用户看过布局评估后明确要求改进实现",
+      "execution_workspace": "/Users/nsss/Documents/ChatGPT/Price-v3",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/.env.example",
+        "product-truth/product-code/scripts/SHIPPING-SETUP.md",
+        "product-truth/product-code/scripts/check-env.mjs",
+        "product-truth/product-code/supabase/migrations",
+        "product-truth/product-code/lib/shipping",
+        "product-truth/product-code/app/shipping",
+        "product-truth/product-code/app/api/shipping",
+        "product-truth/product-code/app/configs",
+        "product-truth/product-code/lib/config-center",
+        "product-truth/product-code/lib/permissions.ts",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
+        ".codex/hooks.json",
+        ".codex/hooks/harness-adapter.js",
+        "product-truth/feature-packets/F054-sf-self-service-order.md",
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/product-code/app/sales-portal",
+        "product-truth/product-code/package.json",
+        "product-truth/product-code/pnpm-lock.yaml",
+        "product-truth/product-code/.env.local",
+        ".env.local",
+        ".github/workflows/ci.yml",
+        ".github/workflows/skills.yml",
+        ".gitignore",
+        ".opencode/lib/project-guard-core.mjs",
+        ".opencode/plugins/price-v3-guard.js",
+        ".vercel/.env.production.local",
+        "README.md",
+        "manifest.yaml",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/product-code/.vercel/.env.development.local",
+        "product-truth/product-code/app/api/quotes/[id]/derive-order/route.ts",
+        "product-truth/product-code/app/api/quotes/[id]/derive-seal/route.ts",
+        "product-truth/product-code/app/api/quotes/[id]/derive-tender/route.ts",
+        "product-truth/product-code/app/api/quotes/derive-routes.test.ts",
+        "product-truth/product-code/lib/quote/downstream-derive.ts",
+        "product-truth/product-code/lib/quote/downstream-persistence.test.ts",
+        "product-truth/product-code/scripts/WP10-RELEASE-REPAIR.md",
+        "product-truth/product-code/scripts/check-preview-target.mjs",
+        "product-truth/product-code/scripts/check-requirement-structure.mjs",
+        "product-truth/product-code/scripts/check-requirement-structure.test.ts",
+        "product-truth/product-code/scripts/check-sensitive-tracked.mjs",
+        "product-truth/product-code/scripts/check-sensitive-tracked.test.ts",
+        "product-truth/product-code/scripts/prepare-wp10-release.mjs",
+        "product-truth/product-code/scripts/project-guard.test.ts",
+        "product-truth/product-code/supabase/migrations/20260910000002_atomic_quote_derivations.sql",
+        "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
+        "product-truth/product-code/node_modules",
+        "product-truth/product-code/.next"
+      ],
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "note": "IN-20261015-062批准WP33代码发布；数据库保持只读，真实运单不得取消、修改或创建。UI验收不代表顺丰增删改查验收完成。已有主干面单辅助代码保持默认行为，后续WP29-WP32后端改动不纳入。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "shipping_workspace",
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "final_release_approval_id": "IN-20261015-062",
+          "final_scope": "WP33寄件配置六分区及已复现操作反馈的代码发布；允许必要的提交、推送、隔离验证及精确SHA生产部署，不含数据库迁移、凭据/权限修改、新生产订单或现有运单变更",
+          "database_write_authorized": false,
+          "micro_fix_approval_id": "IN-20261015-060",
+          "clarification_id": "IN-20261015-068",
+          "micro_fix_scope": "已确认六分区UI、操作反馈及阻断代码发布的精确授权门禁修复",
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        },
+        "blocking_acceptance_defects": [
+          "IN-20261015-058",
+          "IN-20261015-060",
+          "IN-20261015-068"
+        ],
+        "runtime_contract_version": "f054-ui-v1"
+      },
+      "feature_id": "F054",
+      "integration_decision": {
+        "strategy": "isolate_ui_on_verified_production_base",
+        "authority": "IN-20261015-062",
+        "requested_target": "production_released",
+        "constraint": "code-only release; production database remains read_only"
+      }
     }
   }
 }

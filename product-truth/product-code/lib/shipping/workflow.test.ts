@@ -305,6 +305,29 @@ describe('definitively rejected original-order recovery', () => {
     expect(mocks.submit).toHaveBeenCalledWith(expect.objectContaining({key:recovery.requestKey}))
     expect(loadedOrder.status).toBe('waybill_created')
   })
+  it('recovers an authentication failure on the original workorder without an automatic second submission', async () => {
+    loadedOrder = { ...order, status: 'awaiting_confirmation' }
+    mocks.submit.mockRejectedValueOnce(new ShippingError(502, '认证超时，下单请求尚未发送', 'provider_not_sent'))
+    await expect(confirmAndSubmitShipment(order.id, 'operator-1', 'org-A')).rejects.toMatchObject({ requestStage: 'provider_not_sent' })
+    expect(loadedOrder.status).toBe('order_failed')
+    expect(loadedOrder.shipping_config_snapshot).toMatchObject({ orderFailure: { stage: 'provider_not_sent', message: expect.stringContaining('尚未发送') } })
+    mocks.submit.mockClear()
+    await reopenFailedShipmentOrder(order.id, 'operator-1', 'org-A')
+    expect(loadedOrder.status).toBe('awaiting_confirmation')
+    expect(mocks.submit).not.toHaveBeenCalled()
+    await confirmAndSubmitShipment(order.id, 'operator-1', 'org-A')
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
+    expect(loadedOrder.status).toBe('waybill_created')
+  })
+  it.each(['provider_unreachable', 'provider_http_error', 'provider_invalid_response'] as const)('keeps a post-send %s failure locked for reconciliation', async stage => {
+    loadedOrder = { ...order, status: 'awaiting_confirmation' }
+    mocks.submit.mockRejectedValueOnce(new ShippingError(502, '业务响应未确认', stage))
+    await expect(confirmAndSubmitShipment(order.id, 'operator-1', 'org-A')).rejects.toMatchObject({ requestStage: stage })
+    expect(loadedOrder.status).toBe('order_unknown')
+    expect(loadedOrder.shipping_config_snapshot).toMatchObject({ orderFailure: { stage } })
+    await expect(reopenFailedShipmentOrder(order.id, 'operator-1', 'org-A')).rejects.toThrow('结果未知请先查回')
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
+  })
   it.each(['order_unknown','ordering','waybill_created'])('cannot reopen %s', async status => {
     loadedOrder = {...order,status}
     await expect(reopenFailedShipmentOrder(order.id,'operator-1','org-A')).rejects.toThrow('只有已明确拒绝')

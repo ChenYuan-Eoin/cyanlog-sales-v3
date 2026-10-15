@@ -18,6 +18,12 @@ describe('shipping submission error certainty', () => {
     expect(isDefinitiveShippingRejection(error)).toBe(true)
   })
 
+  it('recognizes a server-proven not-sent authentication failure even with HTTP 502', async () => {
+    const error = await requestFailure(Response.json({ error: '认证超时，请重新核对原工单', requestStage: 'provider_not_sent' }, { status: 502 }))
+    expect(error).toMatchObject({ requestStage: 'provider_not_sent', status: 502 })
+    expect(isDefinitiveShippingRejection(error)).toBe(true)
+  })
+
   it('recognizes explicit pre-submission rejections without treating server or conflict errors as safe to resubmit', async () => {
     for (const status of [400, 401, 403, 413, 422]) {
       const error = await requestFailure(Response.json({ error: '前置请求被拒绝' }, { status }))

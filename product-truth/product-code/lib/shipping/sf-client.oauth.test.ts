@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { lookupSfOrder } from './sf-client'
+import { createSfOrder, lookupSfOrder } from './sf-client'
 import type { ShippingRuntimeConfig } from './runtime-config'
 
 const config: ShippingRuntimeConfig = {
@@ -81,6 +81,34 @@ describe('SF Node.js OAuth2 API requests', () => {
     await expect(lookupSfOrder('sandbox-only', { ...config, environment: 'sandbox', partnerId: 'sandbox-example' })).rejects.toMatchObject({ requestStage: 'provider_unreachable' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe('https://sfapi-sbox.sf-express.com/oauth2/accessToken')
+  })
+
+  it.each(['timeout', 'http', 'invalid', 'rejected'])('proves create was not sent when authentication fails: %s', async mode => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) => {
+      if (mode === 'timeout') throw new DOMException('timeout', 'TimeoutError')
+      if (mode === 'http') return new Response('unavailable', { status: 503 })
+      if (mode === 'invalid') return new Response('not-json')
+      return Response.json({ apiResultCode: 'A1011' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const isolated = { ...config, partnerId: `create-auth-${mode}` }
+    await expect(createSfOrder('create-not-sent', { sender: config.sender, recipient: config.sender, cargo: '文件', weight: 1, remark: '', serviceId: 2, source: 'manual' }, isolated)).rejects.toMatchObject({ requestStage: 'provider_not_sent', message: expect.stringContaining('尚未发送') })
+    expect(fetchMock.mock.calls.length).toBe(mode === 'timeout' ? 2 : 1)
+    expect(fetchMock.mock.calls.every(call => String(call[0]).endsWith('/oauth2/accessToken'))).toBe(true)
+  })
+
+  it('never labels a business timeout as not-sent or repeats the create request', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).endsWith('/oauth2/accessToken')) return Response.json({ apiResultCode: 'A1000', accessToken: 'example-create-token', expiresIn: 7200 })
+      throw new DOMException('timeout', 'TimeoutError')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(createSfOrder('create-unknown', { sender: config.sender, recipient: config.sender, cargo: '文件', weight: 1, remark: '', serviceId: 2, source: 'manual' }, { ...config, partnerId: 'create-business-timeout' })).rejects.toMatchObject({ requestStage: 'provider_unreachable' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls.filter(call => String(call[0]).endsWith('/std/service'))).toHaveLength(1)
   })
 
   it('refreshes the token before expiry and does not log or persist it', async () => {

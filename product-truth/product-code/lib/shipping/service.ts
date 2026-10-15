@@ -24,7 +24,8 @@ export async function submitShipping(args: { userId: string; key: string; input:
   let waybill: string | null
   try { waybill = await send(id, input) }
   catch (error) {
-    if (error instanceof ShippingError && error.requestStage === 'provider_rejected') {
+    if (error instanceof ShippingError) {
+      // Keep the request locked and let the workflow persist safe diagnostics.
       await store.finish(id, userId, 'unknown', null)
       throw error
     }

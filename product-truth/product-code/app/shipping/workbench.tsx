@@ -318,7 +318,13 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
         else if (result.status === 'order_failed') failed += 1
         else uncertain += 1
       } catch (error) {
-        if (definiteRejection(error)) { failed += 1; errors.push(`${order.orderNo}：${(error as Error).message}`) }
+        if (definiteRejection(error)) {
+          failed += 1; errors.push(`${order.orderNo}：${(error as Error).message}`)
+          if (error instanceof ShippingWorkbenchRequestError && error.requestStage === 'provider_not_sent') {
+            results.set(order.id, { status: 'order_failed', waybill: null })
+            setOrders(rows => rows.map(item => item.id === order.id ? { ...item, status: 'order_failed', failure: { message: error.message, at: new Date().toISOString() } } : item))
+          }
+        }
         else { uncertain += 1; results.set(order.id, { status: 'order_unknown', waybill: null }) }
       }
       setOrders(rows => rows.map(item => results.has(item.id) ? applySubmission(item, results.get(item.id)!) : item))
@@ -531,7 +537,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 </div>
               </div>
               {(selected.status === 'order_failed' || selected.status === 'order_unknown' || (selected.status === 'awaiting_confirmation' && selected.failure)) && <section className={styles.workorderReview} aria-label="下单异常处理">
-                <h3>{selected.status === 'order_failed' ? '下单已被拒绝' : selected.status === 'order_unknown' ? '下单结果待确认' : '重新核对原工单'}</h3>
+                <h3>{selected.status === 'order_failed' ? '本次下单未成功' : selected.status === 'order_unknown' ? '下单结果待确认' : '重新核对原工单'}</h3>
                 <p role="alert">{selected.failure?.message || (selected.status === 'order_failed' ? '上次下单已被拒绝，历史版本未保存具体原因。' : '尚未确认是否生成运单，请先查回原请求，勿重复下单。')}</p>
                 {selected.failure?.at && <small>发生时间：{new Date(selected.failure.at).toLocaleString('zh-CN')}</small>}
                 {selected.status === 'order_failed' && <><p>重新核对只恢复本工单的审核状态；核对并确认后才再次向承运商发单。</p><button type="button" disabled={batchBusy || confirmationBusy || !!busy} onClick={() => void reopenFailed(selected)}>{busy === selected.id ? '恢复中…' : '重新核对原工单'}</button></>}

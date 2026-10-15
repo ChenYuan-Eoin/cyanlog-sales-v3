@@ -242,7 +242,16 @@ export function extractOrder(raw: unknown, expectedId: string) {
   return data.waybillNoInfoList?.find(x => x.waybillType === 1)?.waybillNo || data.waybillNoInfoList?.[0]?.waybillNo || null
 }
 export async function createSfOrder(id: string, input: ShippingInput, config: ShippingRuntimeConfig) {
-  return extractOrder(await sfCall('EXP_RECE_CREATE_ORDER', buildSfOrder(id, input, config.billingAccount), config), id)
+  const message = buildSfOrder(id, input, config.billingAccount)
+  let accessToken: string
+  try { accessToken = await getSfAccessToken(config) }
+  catch (error) {
+    // Only authentication failure proves not-sent. Once postSfService starts,
+    // a transport failure must retain the reconciliation lock.
+    const reason = error instanceof ShippingError ? error.message : '顺丰认证暂不可用。'
+    throw new ShippingError(502, `${reason} 下单请求尚未发送，请稍后重新核对原工单再试。`, 'provider_not_sent')
+  }
+  return extractOrder(decodeSfResponse(await postSfService('EXP_RECE_CREATE_ORDER', message, config, accessToken)), id)
 }
 export async function lookupSfOrder(id: string, config: ShippingRuntimeConfig) {
   return extractOrder(await sfCall('EXP_RECE_SEARCH_ORDER_RESP', { orderId: id, language: 'zh-CN', searchType: '1' }, config), id)
