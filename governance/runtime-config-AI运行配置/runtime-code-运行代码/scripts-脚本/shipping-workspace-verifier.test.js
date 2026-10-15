@@ -16,7 +16,7 @@ function fixture(t) {
   const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'shipping-verifier-test-'));
   t.after(() => fs.rmSync(runtime, { recursive: true, force: true }));
   const now = Date.now(), stamp = seconds => new Date(now+seconds*1000).toISOString();
-  const options = { commit: 'a'.repeat(40), deploymentId: 'dpl_example', runtime, token: 'example-management-token', ownerId: id('1'), orgId: id('2'), orderId: id('3'), waybill: 'SF1234567890123' };
+  const options = { commit: 'a'.repeat(40), deploymentId: 'dpl_example', runtime, token: 'example-management-token', ownerId: '30000001-0000-0000-0000-000000000000', orgId: '00000001-0000-0000-0000-000000000000', orderId: id('3'), waybill: 'SF1234567890123' };
   const ui = {
     source: 'trusted_existing_chrome_operator', commit: options.commit, deployment_id: options.deploymentId, origin: ORIGIN, environment: 'production', org_id: options.orgId, operator_id: options.ownerId,
     browser_context: 'existing_user_chrome', existing_tab_id: '1234', new_tabs: 0, new_browser_contexts: 0,

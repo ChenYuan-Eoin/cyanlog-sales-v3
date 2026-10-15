@@ -11,7 +11,9 @@ const SHIPPING_TABLES = ['shipping_requests', 'shipping_contacts', 'shipping_out
 const TABLES = [...CONTRACT_TABLES, ...SHIPPING_TABLES];
 const DELETE_TABLES = ['shipping_intake_rate_limits', 'shipping_carrier_connections', 'shipping_billing_accounts', 'shipping_sender_profiles'];
 const RPC_NAMES = ['exec_sql', 'claim_contract_analysis_job', 'claim_shipping_intake_rate'];
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Existing seeded organization/user IDs are valid Postgres UUID values without
+// RFC version bits. Validate SQL-safe UUID syntax; membership is checked live.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const WAYBILL = /^(?:SF)?[0-9]{10,15}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const UI_FLAGS = ['page_accessible', 'anonymous_form_submittable', 'receipt_recoverable', 'owner_direct_available', 'review_queue_available', 'production_submission_enabled', 'configuration_center', 'credentials_masked', 'public_intake_allowed', 'guest_ledger_denied', 'owner_can_read', 'relationship_assignment_controlled', 'rate_limit_enforced'];
