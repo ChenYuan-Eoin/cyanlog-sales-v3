@@ -938,14 +938,34 @@ function actionApprovalPath(repoRoot, binding) {
   return path.join(paths(repoRoot).runtimeDir, 'action-approvals', `${binding.commandHash}-${hashText(JSON.stringify(binding))}.json`);
 }
 
+function latestActionApproval(repoRoot, binding) {
+  const base = actionApprovalPath(repoRoot, binding);
+  let file = base, attempt = 0;
+  while (fs.existsSync(`${base}.retry-${attempt + 1}`)) file = `${base}.retry-${++attempt}`;
+  return { base, file, attempt };
+}
+
 function approveAction(repoRoot, request) {
   const binding = actionBinding(repoRoot, request.command, request.cwd);
   repoRoot = binding.workspace;
   actionAuthority(repoRoot, request.authority, binding);
   const expires = Date.parse(request.expiresAt);
   if (!Number.isFinite(expires) || expires <= Date.now() || expires > Date.now() + 3600000) throw new Error('approval expiry must be within one hour');
-  const approval = { ...binding, authority: request.authority, expiresAt: request.expiresAt, id: crypto.randomUUID() };
-  const file = actionApprovalPath(repoRoot, binding);
+  const latest = latestActionApproval(repoRoot, binding);
+  let file = latest.file;
+  const retry = {};
+  if (request.retryOf || request.retryReason) {
+    const previous = readJson(latest.file);
+    if (!previous || request.retryOf !== previous.id || !fs.existsSync(`${latest.file}.consumed`)
+      || typeof request.retryReason !== 'string' || request.retryReason.trim().length < 20) {
+      throw new Error('retry requires latest consumed grant and recorded reason');
+    }
+    // Recheck authority and immutable binding above. Never erase or resurrect a
+    // consumed grant; wx makes concurrent retries compete for one new attempt.
+    file = `${latest.base}.retry-${latest.attempt + 1}`;
+    Object.assign(retry, { retryOf: previous.id, retryReason: request.retryReason.trim() });
+  }
+  const approval = { ...binding, authority: request.authority, expiresAt: request.expiresAt, id: crypto.randomUUID(), ...retry };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(approval), { flag: 'wx', mode: 0o600 });
   appendJsonl(paths(repoRoot).evidenceLedgerPath, { type: 'action-approved', at: nowIso(), ...approval });
@@ -958,7 +978,7 @@ function consumeActionApproval(repoRoot, command, payload) {
     const input = payload.tool_input || payload.input || payload.arguments || payload;
     const binding = actionBinding(repoRoot, command, input.workdir || input.cwd || repoRoot);
     repoRoot = binding.workspace;
-    const file = actionApprovalPath(repoRoot, binding);
+    const { file } = latestActionApproval(repoRoot, binding);
     const approval = readJson(file);
     if (!approval || !(Date.parse(approval.expiresAt) > Date.now()) ||
         Object.keys(binding).some((key) => approval[key] !== binding[key])) return null;

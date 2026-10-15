@@ -1117,6 +1117,9 @@ function runActionApprovalSelftest(repoRoot) {
     else process.env.VERCEL_PROJECT_ID = previousProject;
   }
   assert.throws(() => core.approveAction(repoRoot, request), /EEXIST/);
+  const retryReason = 'Transport failed after allowance; remote state checked unchanged.';
+  const initialGrant = core.readJson(core.actionApprovalPath(repoRoot, core.actionBinding(repoRoot, command, repoRoot)));
+  assert.throws(() => core.approveAction(repoRoot, { ...request, retryOf: initialGrant.id, retryReason }), /latest consumed/);
   assert.strictEqual(evaluate(command + ' --yes').ok, false);
   assert.strictEqual(evaluate(command, os.tmpdir()).ok, false);
   const approvalFile = core.actionApprovalPath(repoRoot, core.actionBinding(repoRoot, command, repoRoot));
@@ -1133,6 +1136,15 @@ function runActionApprovalSelftest(repoRoot) {
   core.saveState(repoRoot, { ...state, activeGates: ['HG2'] });
   assert.strictEqual(evaluate().ok, false);
   core.saveState(repoRoot, state);
+  assert.strictEqual(evaluate().ok, true);
+  assert.strictEqual(evaluate().ok, false);
+  assert.throws(() => core.approveAction(repoRoot, { ...request, retryOf: 'wrong-id', retryReason }), /latest consumed/);
+  assert.throws(() => core.approveAction(repoRoot, { ...request, retryOf: original.id, retryReason: '' }), /latest consumed/);
+  const retried = core.approveAction(repoRoot, { ...request, retryOf: original.id, retryReason });
+  assert.notStrictEqual(retried.id, original.id);
+  assert.strictEqual(core.readJson(approvalFile).id, original.id);
+  assert.ok(fs.existsSync(`${approvalFile}.consumed`));
+  assert.throws(() => core.approveAction(repoRoot, { ...request, retryOf: original.id, retryReason }), /latest consumed/);
   assert.strictEqual(evaluate().ok, true);
   assert.strictEqual(evaluate().ok, false);
   const read = 'cat /tmp/vercel/skills/vercel-cli/references/deployment.md';
