@@ -157,8 +157,19 @@ async function verify(options) {
     assert(time(row.connection_updated_at) <= now+60_000, 'Connection timestamp is in the future');
     return Object.fromEntries(['order_id','org_id','status','order_updated_at','waybill_id','waybill_no','latest_status','latest_event_at','connection_id','connection_org_id','environment','connection_status','tracking_capability','cancel_capability','connection_updated_at','account_org_id','account_status','sender_org_id','snapshot_matches'].map(key => [key, row[key]]));
   }
-  const tracked = await snapshot(orderId, waybill);
-  assert(tracked.tracking_capability === 'verified' && time(tracked.connection_updated_at) >= time(ui.tracking.started_at)-60_000, 'Tracking capability or recent connection update missing');
+  async function existingTrackingSnapshot() {
+    // A UI release reads an existing shipment. Historical orders can lack a
+    // sender-profile FK; requiring a fresh order snapshot would force a write.
+    const rows = await query(`select o.id as order_id,o.org_id,o.status,o.updated_at as order_updated_at,w.id as waybill_id,w.waybill_no,w.latest_status,w.latest_event_at,c.id as connection_id,c.org_id as connection_org_id,c.environment,c.connection_status,c.tracking_capability,c.updated_at as connection_updated_at from public.shipping_orders o join public.shipping_waybills w on w.shipping_order_id=o.id join public.shipping_carrier_connections c on c.id=o.carrier_connection_id where o.id='${orderId}' and o.org_id='${orgId}' and o.connection_environment='production' and w.waybill_no='${waybill}' and w.carrier_key='sf' and o.provider_key='sf'`);
+    assert(rows.length === 1, 'Existing Production tracking order not found');
+    const row = rows[0];
+    assert(row.order_id === orderId && row.waybill_no === waybill && UUID.test(row.waybill_id || '') && UUID.test(row.connection_id || '') && row.org_id === orgId && row.connection_org_id === orgId, 'Existing tracking organization mismatch');
+    assert(row.environment === 'production' && row.connection_status === 'connected' && row.tracking_capability === 'verified', 'Existing tracking connection is not verified Production');
+    assert(time(row.connection_updated_at) <= now+60_000, 'Connection timestamp is in the future');
+    return row;
+  }
+  const tracked = uiOnly ? await existingTrackingSnapshot() : await snapshot(orderId, waybill);
+  if (!uiOnly) assert(tracked.tracking_capability === 'verified' && time(tracked.connection_updated_at) >= time(ui.tracking.started_at)-60_000, 'Tracking capability or recent connection update missing');
   const rows = await query(`select count(*)::int as event_count,max(e.event_at) as latest_event_at,max(e.created_at) as latest_persisted_at from public.shipping_tracking_events e join public.shipping_waybills w on w.id=e.waybill_id join public.shipping_orders o on o.id=w.shipping_order_id where o.id='${orderId}' and o.org_id='${orgId}' and o.connection_environment='production' and w.id='${tracked.waybill_id}' and w.waybill_no='${waybill}' and e.provider_key='sf' and e.event_at is not null and isfinite(e.event_at) and e.event_at<=now() and e.created_at<=now()`);
   assert(rows.length === 1 && Number.isInteger(rows[0].event_count) && rows[0].event_count >= ui.tracking.event_count, 'Matching persisted Production tracking events missing');
   const events = rows[0];

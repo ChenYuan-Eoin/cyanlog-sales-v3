@@ -98,12 +98,22 @@ function uiFixture(t) {
 }
 
 test('UI release verifies unchanged security boundaries and existing tracking without requiring a cancellation', async t => {
-  const f = uiFixture(t), result = await verify(f.options);
+  const f = uiFixture(t);
+  f.data.tracked[0].sender_org_id = null;
+  f.data.tracked[0].snapshot_matches = false;
+  f.data.tracked[0].connection_updated_at = f.stamp(-3600);
+  const result = await verify(f.options);
   assert.deepEqual(shippingWorkspaceEvidenceBlockers(result, 'production', 'f054-ui-v1'), []);
   assert.equal(result.shipping_workspace.payload.cancel_before_collection_verified, undefined);
   const sql = f.requests.filter(item => item.init.body).map(item => JSON.parse(item.init.body).query);
   assert.equal(sql.filter(query => query.includes('from public.shipping_orders')).length, 1);
   assert.ok(sql.every(query => /^select\s/i.test(query)));
+  assert.ok(sql.filter(query => query.includes('from public.shipping_orders')).every(query => !query.includes('sender_profile')));
+});
+
+test('UI-only historical tracking still rejects a cross-organization connection', async t => {
+  const f = uiFixture(t); f.data.tracked[0].connection_org_id = id('9');
+  await assert.rejects(verify(f.options), /organization mismatch/);
 });
 
 for (const [label, mutate, message] of [
