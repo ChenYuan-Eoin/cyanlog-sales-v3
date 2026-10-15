@@ -1,0 +1,538 @@
+{
+  "version": 1,
+  "activeId": "WP33",
+  "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+  "evidence": {
+    "code": {
+      "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "wp33-target-transcript.log",
+          "log_sha256": "bacd35d6b0a3ffcb41eea4ceabd1bd56a5b28f8184ff2d1d928f81859394fc1b"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "check-logs/b82a552b643c5fb52bc9bf41977491db318fdd20/check-03-test.log",
+          "log_sha256": "597c8d9cb8e3ddc5c87b29411d37cd35f47a44907b7a881c4f1748cf4c81de43"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "check-logs/b82a552b643c5fb52bc9bf41977491db318fdd20/check-02-lint.log",
+          "log_sha256": "3de4920512c11824a0d9d13588142a32742db3a15ababfb9ca7074047f1f6010"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "check-logs/b82a552b643c5fb52bc9bf41977491db318fdd20/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "wp33-build-transcript.log",
+          "log_sha256": "4845dd5c29877b64307f3ef0afc1e78d51583eaf25b0a8b85515af20e6e68077"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "a14765e556784700f1f0719557fadd1bb399f6f594a7058ac0b10c1d27b3e75a",
+        "entry_sha256": "2223e1f94fc18b23eaba6011aab7b477861b5f59aef9ce55b42f9c297a920310"
+      }
+    },
+    "preview": {
+      "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+      "provider_source_commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+      "deployment_id": "dpl_4w9yBZoKRtjtHKfJbtQs8q9ZdWu3",
+      "url": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app",
+      "ready": true,
+      "git_dirty": false,
+      "journeys": {
+        "desktop": true,
+        "ipad": true,
+        "blocking_defect_replay": true
+      },
+      "artifacts": {
+        "desktop": {
+          "artifact_path": "wp33-acceptance/preview-desktop.json",
+          "sha256": "554feba74f6f2fcf8d6af32d86a5a489dcc161ad9edc6600ea3be57b0c175ceb",
+          "payload": {
+            "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+            "deployment_id": "dpl_4w9yBZoKRtjtHKfJbtQs8q9ZdWu3",
+            "origin": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app",
+            "url": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app/configs?tab=shipping",
+            "source": "trusted_existing_chrome_operator",
+            "attested_at": "2026-10-15T09:55:27.892Z",
+            "attested_by": "codex:operator",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "existing-preview-ones-sales",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "viewport": {
+              "width": 1920,
+              "height": 929
+            },
+            "result": "pass",
+            "attachments": [
+              {
+                "path": "wp33-acceptance/preview-configuration-observation.json",
+                "sha256": "24b4332dcf4f8d2830f308d2879cc7d0ce7682defea8a45d640daedd6550356d"
+              },
+              {
+                "path": "wp33-acceptance/preview-workspace-observation.json",
+                "sha256": "b23a2dab9b651035576f8816de1834e3686c1d4c395d54f1eeb0855421f48755"
+              },
+              {
+                "path": "wp33-acceptance/preview-membership-read.json",
+                "sha256": "d0f4206e8f367eaadc1072ba0b74804ded8f28e2e3b036b4dad04d01e3117ff9"
+              }
+            ]
+          }
+        },
+        "ipad": {
+          "artifact_path": "wp33-acceptance/preview-ipad.json",
+          "sha256": "619ab9be962cf624239fa640eccee207f6c2c1403cf45dacccae1237bdc23f4c",
+          "payload": {
+            "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+            "deployment_id": "dpl_4w9yBZoKRtjtHKfJbtQs8q9ZdWu3",
+            "origin": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app",
+            "url": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app/configs?tab=shipping",
+            "source": "trusted_existing_chrome_operator",
+            "attested_at": "2026-10-15T09:55:27.892Z",
+            "attested_by": "codex:operator",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "existing-preview-ones-sales",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "viewport": {
+              "width": 1024,
+              "height": 842
+            },
+            "result": "pass",
+            "observations": [
+              "Existing Chrome DevTools responsive viewport, no new context/tab",
+              "Configuration domain tabs become horizontal navigation; six shipping sections wrap into 3 columns by 2 rows",
+              "Clicked status-sync section, scrolled content; navigation and controls remained responsive",
+              "Shipping workbench retains horizontally wide three-column layout; no claim of mobile redesign"
+            ],
+            "attachments": [
+              {
+                "path": "wp33-acceptance/preview-configuration-observation.json",
+                "sha256": "24b4332dcf4f8d2830f308d2879cc7d0ce7682defea8a45d640daedd6550356d"
+              },
+              {
+                "path": "wp33-acceptance/preview-workspace-observation.json",
+                "sha256": "b23a2dab9b651035576f8816de1834e3686c1d4c395d54f1eeb0855421f48755"
+              },
+              {
+                "path": "wp33-acceptance/preview-membership-read.json",
+                "sha256": "d0f4206e8f367eaadc1072ba0b74804ded8f28e2e3b036b4dad04d01e3117ff9"
+              }
+            ]
+          }
+        },
+        "defect_replay": {
+          "artifact_path": "wp33-acceptance/preview-defect-replay.json",
+          "sha256": "f567858a8c3d266aff59756cc25261e67a979c5f90bb85bbfcddcb65f9baa522",
+          "payload": {
+            "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+            "deployment_id": "dpl_4w9yBZoKRtjtHKfJbtQs8q9ZdWu3",
+            "origin": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app",
+            "url": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app/configs?tab=shipping",
+            "source": "trusted_existing_chrome_operator",
+            "attested_at": "2026-10-15T09:55:27.892Z",
+            "attested_by": "codex:operator",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "existing-preview-ones-sales",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "actions": [
+              "open_configuration_center",
+              "switch_configuration_sections",
+              "verify_environment_scoping",
+              "retain_unsaved_draft",
+              "verify_masked_configuration",
+              "return_to_workspace",
+              "select_order_with_keyboard",
+              "copy_waybill",
+              "download_template",
+              "query_tracking",
+              "reload_ledger",
+              "verify_organization_access"
+            ],
+            "result": "pass",
+            "overlays_after": 0,
+            "body_scroll_lock_released": true,
+            "app_inert_after": false,
+            "attachments": [
+              {
+                "path": "wp33-acceptance/preview-configuration-observation.json",
+                "sha256": "24b4332dcf4f8d2830f308d2879cc7d0ce7682defea8a45d640daedd6550356d"
+              },
+              {
+                "path": "wp33-acceptance/preview-workspace-observation.json",
+                "sha256": "b23a2dab9b651035576f8816de1834e3686c1d4c395d54f1eeb0855421f48755"
+              },
+              {
+                "path": "wp33-acceptance/preview-membership-read.json",
+                "sha256": "d0f4206e8f367eaadc1072ba0b74804ded8f28e2e3b036b4dad04d01e3117ff9"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "runtime": {
+      "shipping_workspace": {
+        "artifact_path": "wp33-acceptance/preview-workspace.json",
+        "sha256": "d7ad2845c41f17c90e9306cc7471214e7e2eb7a318f7675fcd1daad27b6e4195",
+        "payload": {
+          "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+          "deployment_id": "dpl_4w9yBZoKRtjtHKfJbtQs8q9ZdWu3",
+          "origin": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app",
+          "url": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app/configs?tab=shipping",
+          "source": "trusted_existing_chrome_operator",
+          "attested_at": "2026-10-15T09:55:27.892Z",
+          "attested_by": "codex:operator",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "existing-preview-ones-sales",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "contract_version": "f054-ui-v1",
+          "page_accessible": true,
+          "configuration_center": true,
+          "six_sections_available": true,
+          "environment_scoping": true,
+          "draft_retention": true,
+          "credentials_masked": true,
+          "no_empty_counts": true,
+          "copy_feedback": true,
+          "template_download": true,
+          "keyboard_selection": true,
+          "no_business_mutations": true,
+          "attachments": [
+            {
+              "path": "wp33-acceptance/preview-configuration-observation.json",
+              "sha256": "24b4332dcf4f8d2830f308d2879cc7d0ce7682defea8a45d640daedd6550356d"
+            },
+            {
+              "path": "wp33-acceptance/preview-workspace-observation.json",
+              "sha256": "b23a2dab9b651035576f8816de1834e3686c1d4c395d54f1eeb0855421f48755"
+            },
+            {
+              "path": "wp33-acceptance/preview-membership-read.json",
+              "sha256": "d0f4206e8f367eaadc1072ba0b74804ded8f28e2e3b036b4dad04d01e3117ff9"
+            }
+          ]
+        }
+      },
+      "shipping_tracking": {
+        "artifact_path": "wp33-acceptance/preview-tracking.json",
+        "sha256": "3b7e3caee8b15e8bb79844fbd2d81c804e3dcc03cfc89132b27a95bba652311e",
+        "payload": {
+          "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+          "deployment_id": "dpl_4w9yBZoKRtjtHKfJbtQs8q9ZdWu3",
+          "origin": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app",
+          "url": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app/configs?tab=shipping",
+          "source": "trusted_existing_chrome_operator",
+          "attested_at": "2026-10-15T09:55:27.892Z",
+          "attested_by": "codex:operator",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "existing-preview-ones-sales",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "presentation_checked": true,
+          "no_carrier_write": true,
+          "result": "credential decryption error displayed; sandbox success not claimed",
+          "attachments": [
+            {
+              "path": "wp33-acceptance/preview-workspace-observation.json",
+              "sha256": "b23a2dab9b651035576f8816de1834e3686c1d4c395d54f1eeb0855421f48755"
+            }
+          ]
+        }
+      },
+      "shipping_access": {
+        "artifact_path": "wp33-acceptance/preview-access.json",
+        "sha256": "6db0695cf5c093449bcb6401412099b0b7b4aafa798f66c39d7b98ee6d24d0e0",
+        "payload": {
+          "commit": "f3fa1be25c871c36c7786d472264a4a883f97635",
+          "deployment_id": "dpl_4w9yBZoKRtjtHKfJbtQs8q9ZdWu3",
+          "origin": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app",
+          "url": "https://cyanlog-sales-v3-git-codex-wp33-f044aa-eoins-projects-94b17ece.vercel.app/configs?tab=shipping",
+          "source": "trusted_existing_chrome_operator",
+          "attested_at": "2026-10-15T09:55:27.892Z",
+          "attested_by": "codex:operator",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "existing-preview-ones-sales",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "guest_ledger_denied": true,
+          "owner_can_read": true,
+          "organization_matched": true,
+          "anonymous_observation": {
+            "status": 302,
+            "layer": "Vercel protection; not claimed as application ACL proof"
+          },
+          "attachments": [
+            {
+              "path": "wp33-acceptance/preview-membership-read.json",
+              "sha256": "d0f4206e8f367eaadc1072ba0b74804ded8f28e2e3b036b4dad04d01e3117ff9"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "updatedAt": "2026-10-15T09:57:29.643Z",
+  "completionState": "integration_ready",
+  "defects": {
+    "IN-20261015-058": {
+      "verified": true,
+      "root_cause": "Clipboard action had no visible label or success and failure feedback; current exact Preview now shows copy result.",
+      "reproduction": {
+        "artifact_path": "wp33-acceptance/reproduction-IN-20261015-058.json",
+        "sha256": "b2deb250c6db274f19d5d6c7cd331c374655169387cf5efd4cbaf5542b9d16f5",
+        "payload": {
+          "source": "recorded_production_reproduction_and_runtime_capsule",
+          "inbox": {
+            "id": "IN-20261015-058",
+            "target": "WP32",
+            "feature": "F054",
+            "state": "reproduced_local_fix_started",
+            "intent": "复制单号没有可见操作反馈",
+            "classification": "当前验收反馈的最小交互修复",
+            "created_at": "2026-10-15T07:45:54.444Z",
+            "capsule": {
+              "candidate_sha": "92852ece4a06e85af804acc3dd18c05df849dad6",
+              "url": "https://sales.cyanlog.icu/shipping",
+              "production_deployment": "dpl_ESRCp3WRVBP1iZmg2P7YrggHrhky",
+              "production_sha": "未独立核验",
+              "viewport": "现有Chrome窗口1920×1050含浏览器工具栏",
+              "initial": "已选择已签收SF1220961872136，搜索台账为空",
+              "steps": [
+                "点击复制单号",
+                "读取AX未出现成功或失败提示",
+                "粘贴到同页搜索台账",
+                "清空临时筛选"
+              ],
+              "expected": "复制单号并给出明确成功或失败提示",
+              "actual": "复制内容正确、台账筛选成功；按钮图标无可见文字，操作无反馈",
+              "evidence": "本轮CUA原Chrome操作及AX；未修改真实订单"
+            },
+            "change": "增加可见标签，捕获剪贴板不可用和拒绝，反馈包含可手动复制的原单号",
+            "delivery": "仅本地候选，未发布"
+          },
+          "clarification": "Old toolbar deployment ID in original capsule was unverified; live before-release deployment separately verified as dpl_Pg7Kr9udyQJVuc9WgXCJCV3C3kir at 2c71ff7. Current production configuration old-layout reproduced in existing Chrome this turn."
+        }
+      },
+      "regression_artifact_sha256": "f567858a8c3d266aff59756cc25261e67a979c5f90bb85bbfcddcb65f9baa522",
+      "preview_commit": "f3fa1be25c871c36c7786d472264a4a883f97635"
+    },
+    "IN-20261015-060": {
+      "verified": true,
+      "root_cause": "All configuration domains shared one long form and generic empty counts; isolated navigation and environment-aware drafts now match the approved design.",
+      "reproduction": {
+        "artifact_path": "wp33-acceptance/reproduction-IN-20261015-060.json",
+        "sha256": "f75dc1d886de15d940af0622cc20289ac4a51ee9120c42d25725d3cb9352011d",
+        "payload": {
+          "source": "recorded_production_reproduction_and_runtime_capsule",
+          "inbox": {
+            "id": "IN-20261015-060",
+            "target": "WP33",
+            "feature": "F054",
+            "state": "approved_execution",
+            "source": "user_explicit",
+            "intent": "将配置中心布局方案实现为可操作界面",
+            "created_at": "2026-10-15T07:45:54.444Z",
+            "related": [
+              "IN-20261015-057",
+              "IN-20261015-059"
+            ],
+            "approval_basis": "已展示IN-057布局和影响评估后，用户明确要求“实现上基本没变化…配置中心的布局还是混乱的…按我前面输入的意图进行改进”",
+            "assessment": "独立批次WP33先实现寄件配置的清晰分区、环境提示和操作反馈；WP32接口接入候选及阻塞完整保留，随后恢复。范围不含其他配置域重构或新增后台接口。",
+            "capsule": {
+              "candidate_sha": "92852ece4a06e85af804acc3dd18c05df849dad6",
+              "url": "https://sales.cyanlog.icu/configs?tab=shipping",
+              "production_deployment": "dpl_ESRCp3WRVBP1iZmg2P7YrggHrhky",
+              "viewport": "现有Chrome窗口1920×1050含浏览器工具栏",
+              "initial": "寄件配置已加载",
+              "steps": [
+                "现有shipping页进入配置中心",
+                "选择寄件配置",
+                "读取标题和操作列表并截图"
+              ],
+              "actual": "已有顺丰生产连接及月结5616，但导航显示0项；全部配置串成长表单，首屏仅员工提报规则，无法快速定位API",
+              "expected": "首屏接入概况、分区导航、当前环境明确；分区独立操作且草稿保留"
+            },
+            "release": "只授权可逆本地实现与验证，不继承WP32生产写入或发布授权"
+          },
+          "clarification": "Old toolbar deployment ID in original capsule was unverified; live before-release deployment separately verified as dpl_Pg7Kr9udyQJVuc9WgXCJCV3C3kir at 2c71ff7. Current production configuration old-layout reproduced in existing Chrome this turn."
+        }
+      },
+      "regression_artifact_sha256": "f567858a8c3d266aff59756cc25261e67a979c5f90bb85bbfcddcb65f9baa522",
+      "preview_commit": "f3fa1be25c871c36c7786d472264a4a883f97635"
+    },
+    "IN-20261015-068": {
+      "verified": true,
+      "root_cause": "Harness classified authorized readonly release checks and exact worktree writes incorrectly, coupled UI evidence to carrier mutation, and consumed failed transport grants without audited retry.",
+      "reproduction": {
+        "artifact_path": "wp33-acceptance/reproduction-IN-20261015-068.json",
+        "sha256": "e42eaf6efcc2ebff0a2ea7cdb84ac78ccb3475ff2177bc7362f496bcdab6ec50",
+        "payload": {
+          "source": "recorded_production_reproduction_and_runtime_capsule",
+          "inbox": {
+            "id": "IN-20261015-068",
+            "target": "WP33",
+            "type": "release_gate_repair",
+            "state": "approved_execution",
+            "source": "user_explicit",
+            "created_at": "2026-10-15T08:45:35.946323+00:00",
+            "related": [
+              "IN-20261015-062",
+              "IN-20261015-063"
+            ],
+            "quotes": [
+              "拦截是什么问题，能解决吗",
+              "生产先验收掉，然后展开的功能，等前面的原型验收后再做，先推进上线"
+            ],
+            "scope": "修复阻断既有UI生产发布的本地门禁：准确识别授权项目只读查询；仅以明确授权、精确SHA/命令/项目、短时单次凭证允许生产代码发布；独立判定数据库只读和界面验收。保留已有保护及dirty改动，不放开任意外部写入。",
+            "assessment": "作为WP33第三个阻断当前验收的微修复；展开编辑、预约、包装不纳入本次发布。旧f054-v2全链路订单验收保留，不用UI验收声称CRUD完成。",
+            "capsule": {
+              "candidate_sha": "92852ece4a06e85af804acc3dd18c05df849dad6",
+              "operation": "Vercel get_deployment只读查询；检查生产授权入口与交付校验",
+              "expected": "允许受控只读发布核查，已授权代码发布可保持数据库只读",
+              "actual": "HG3不识别只读工具；授权仅实现Preview/沙箱DB；验收强制受控DB写入并沿用订单取消路径",
+              "evidence": "本线程PreToolUse拒绝及harness-core.js/project-registry.js代码检查"
+            }
+          },
+          "clarification": "Old toolbar deployment ID in original capsule was unverified; live before-release deployment separately verified as dpl_Pg7Kr9udyQJVuc9WgXCJCV3C3kir at 2c71ff7. Current production configuration old-layout reproduced in existing Chrome this turn."
+        }
+      },
+      "regression_artifact_sha256": "f567858a8c3d266aff59756cc25261e67a979c5f90bb85bbfcddcb65f9baa522",
+      "preview_commit": "f3fa1be25c871c36c7786d472264a4a883f97635"
+    }
+  },
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_branch_evidence": {
+      "artifact_path": "wp33-acceptance/production-branch-before.json",
+      "sha256": "02d4e2d1c901f892b02c84fd9321b6492369bb8a8f4a91a0378dc578756a7c1b",
+      "payload": {
+        "branch": "production",
+        "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "observed_at": "2026-10-15T09:55:27.892Z",
+        "source": "Vercel project GET metadata; fresh gate independently rechecks"
+      }
+    },
+    "production_commit_before": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+    "production_deployment_id_before": "dpl_Pg7Kr9udyQJVuc9WgXCJCV3C3kir"
+  },
+  "gateSnapshots": {
+    "integration_ready": {
+      "stage": "integration_ready",
+      "checkedAt": "2026-10-15T09:57:29.615Z",
+      "head": "f3fa1be25c871c36c7786d472264a4a883f97635",
+      "originMain": "1830fdfea25f00434d8050ccfead3b9a0b28c6d5",
+      "remoteMain": "1830fdfea25f00434d8050ccfead3b9a0b28c6d5",
+      "remoteProduction": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "954511f8e56fa8844a0753d35173c01f11e027c3",
+      "remoteAttestationRefOid": "954511f8e56fa8844a0753d35173c01f11e027c3",
+      "remoteSnapshotCheckedAt": "2026-10-15T09:57:04.736Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-10-15T09:57:07.644Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_Pg7Kr9udyQJVuc9WgXCJCV3C3kir?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_Pg7Kr9udyQJVuc9WgXCJCV3C3kir"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "deployment": {
+          "id": "dpl_Pg7Kr9udyQJVuc9WgXCJCV3C3kir",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "2c71ff755913619975c5a9e9212420f2e79c82c3",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-10-15T09-57-07-644Z-49449-project.json",
+            "sha256": "24edba7baa348c30d073732f654c9d0d05622c0aa42b911a50acac11576792af"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-10-15T09-57-07-644Z-49449-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-10-15T09-57-07-644Z-49449-deployment.json",
+            "sha256": "a461acac083672431b3feb5a384453a38c8e826eddea232163367971759dc352"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "63724ebdd2e6bbee4372cbb2642ff0f791f8a1b364cd2b5ed934b3494046dd1e",
+  "sealedAt": "2026-10-15T09:57:29.643Z",
+  "attestationDigest": "a123fa40170b245a350e2166e7c3a9808ded4f42bf2dc30b22ed7120084617b0"
+}
