@@ -1176,6 +1176,14 @@ function runActionApprovalSelftest(repoRoot) {
   assert.strictEqual(boundPush.head, runGit(repoRoot, ['rev-parse', 'HEAD']).trim());
   assert.strictEqual(boundPush.action, 'release_git_push');
   assert.strictEqual(evaluate(push).ok, false);
+  const productionContract = require('./project-registry').VERCEL_PRODUCTION_CONTRACT;
+  Object.assign(scheduler.active_task.delivery_contract.production_release_authorization, { vercel_team_id: productionContract.teamId, vercel_project_id: productionContract.projectId });
+  writeJson(schedulerPath, scheduler);
+  fs.appendFileSync(inboxPath, JSON.stringify({ id: 'IN-PUSH-ACTION', state: 'user_authorized', action_approval: { by: 'user', target: boundPush.target, environment: 'production', cwd: fs.realpathSync(repoRoot), commandHash: boundPush.commandHash, commandKind: 'release_git_push', releaseAuthority: releaseId } })+'\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'git release action authority fixture']);
+  core.approveAction(repoRoot, { command: push, cwd: repoRoot, authority: 'IN-PUSH-ACTION', expiresAt: new Date(Date.now()+600000).toISOString() });
+  assert.strictEqual(evaluate(push).ok, true);
+  assert.strictEqual(evaluate(push).ok, false);
   assert.throws(() => core.actionBinding(repoRoot, 'git push --force origin HEAD:refs/heads/production', repoRoot), /unsupported/);
   assert.throws(() => core.actionBinding(repoRoot, 'git push origin HEAD:refs/heads/unapproved', repoRoot), /unsupported/);
   runGit(repoRoot, ['notes', '--ref=price-v3-delivery', 'add', '-m', 'first evidence']);

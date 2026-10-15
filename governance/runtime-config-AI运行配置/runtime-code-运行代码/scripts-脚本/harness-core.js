@@ -1462,7 +1462,9 @@ function evaluateToolUse(repoRoot, payload = {}) {
     documentRisk
   });
 
-  if (actionMatrix.driftRisk) {
+  // Risky commands remain blocked below unless an exact, current single-use
+  // action grant establishes authority. Autonomous target drift stays denied.
+  if (actionMatrix.driftRisk && !commandRisk) {
     return {
       ok: false,
       reason: actionMatrix.driftRisk,
@@ -1521,11 +1523,13 @@ function evaluateToolUse(repoRoot, payload = {}) {
     if (approvalId) {
       const row = actionMatrix.rows.find((item) => item.id === 'external_side_effect');
       if (row) Object.assign(row, { status: MATRIX_STATUS.PASS, blocking: false, detail: `explicit single-use approval: ${approvalId}; execution not yet verified` });
+      const targetRow = actionMatrix.rows.find((item) => item.id === 'target_object');
+      if (targetRow) Object.assign(targetRow, { status: MATRIX_STATUS.PASS, blocking: false, detail: `exact target authorized by ${approvalId}` });
       return { ok: true, matrix: actionMatrix, gate: gateId, explicitActionApproval: approvalId };
     }
     return {
       ok: false,
-      reason: 'high-risk command requires explicit user approval',
+      reason: actionMatrix.driftRisk || 'high-risk command requires explicit user approval',
       matrix: actionMatrix,
       risk: commandRisk,
       command,
