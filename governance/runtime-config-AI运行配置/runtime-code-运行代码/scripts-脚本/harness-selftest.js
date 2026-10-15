@@ -1185,6 +1185,15 @@ function runActionApprovalSelftest(repoRoot) {
   assert.strictEqual(evaluate(push).ok, true);
   assert.strictEqual(evaluate(push).ok, false);
   assert.throws(() => core.actionBinding(repoRoot, 'git push --force origin HEAD:refs/heads/production', repoRoot), /unsupported/);
+  const explicitPush = `git -C ${repoRoot} push origin HEAD:refs/heads/codex/test`;
+  const explicitBinding = core.actionBinding(repoRoot, explicitPush, repoRoot);
+  assert.strictEqual(explicitBinding.workspace, fs.realpathSync(repoRoot));
+  fs.appendFileSync(inboxPath, JSON.stringify({ id: 'IN-EXPLICIT-PUSH', state: 'user_authorized', action_approval: { by: 'user', target: explicitBinding.target, environment: 'production', cwd: fs.realpathSync(repoRoot), commandHash: explicitBinding.commandHash, commandKind: 'release_git_push', releaseAuthority: releaseId } })+'\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'explicit worktree action authority fixture']);
+  assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'Bash', tool_input: { command: explicitPush } }).ok, false);
+  core.approveAction(repoRoot, { command: explicitPush, cwd: repoRoot, authority: 'IN-EXPLICIT-PUSH', expiresAt: new Date(Date.now()+600000).toISOString() });
+  assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'Bash', tool_input: { command: explicitPush } }).ok, true);
+  assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'Bash', tool_input: { command: explicitPush } }).ok, false);
   assert.throws(() => core.actionBinding(repoRoot, 'git push origin HEAD:refs/heads/unapproved', repoRoot), /unsupported/);
   runGit(repoRoot, ['notes', '--ref=price-v3-delivery', 'add', '-m', 'first evidence']);
   const notePush = 'git push origin refs/notes/price-v3-delivery';

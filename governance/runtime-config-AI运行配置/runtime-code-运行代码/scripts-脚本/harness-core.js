@@ -61,7 +61,7 @@ const HIGH_RISK_PATTERNS = [
   { pattern: /\bfind\b[^;\n]*\b-delete\b/, reason: 'bulk deletion' },
   { pattern: /\bgit\s+reset\s+--hard\b/, reason: 'destructive git reset' },
   { pattern: /\bgit\s+clean\s+-[^;\n]*f/, reason: 'destructive git clean' },
-  { pattern: /\bgit\s+push(\s|$)/, reason: 'remote git mutation' },
+  { pattern: /\bgit\s+(?:-C\s+\S+\s+)?push(\s|$)/, reason: 'remote git mutation' },
   { pattern: /--force-with-lease|--force\b/, reason: 'forced mutation' },
   { pattern: /\bsudo\b/, reason: 'privileged command' },
   { pattern: /\bchmod\s+-R\s+777\b/, reason: 'broad permission weakening' },
@@ -855,6 +855,9 @@ function actionWorkspace(repoRoot, cwd) {
 
 function actionBinding(repoRoot, command, cwd) {
   if (typeof command !== 'string' || /[\n\r;$`|&<>\\"']/.test(command)) throw new Error('one literal command required');
+  const literalCommand = command;
+  const explicitGit = /^git -C (\/[A-Za-z0-9_./-]+) (push origin .+)$/.exec(command);
+  if (explicitGit) { cwd = explicitGit[1]; command = `git ${explicitGit[2]}`; }
   repoRoot = actionWorkspace(repoRoot, cwd);
   const directory = fs.realpathSync(cwd);
   const root = fs.realpathSync(repoRoot);
@@ -895,7 +898,7 @@ function actionBinding(repoRoot, command, cwd) {
   if (git(['status', '--porcelain']).length) throw new Error('approval requires clean committed workspace');
   const contract = loadContract(repoRoot);
   if (contract?.status !== 'approved') throw new Error('approved goal required');
-  return { commandHash: hashText(command), cwd: directory, workspace: root, head: git(['rev-parse', 'HEAD']),
+  return { commandHash: hashText(literalCommand), cwd: directory, workspace: root, head: git(['rev-parse', 'HEAD']),
     goalHash: hashText(JSON.stringify([contract.id, contract.objective, contract.boundaries, contract.revisions])), target, environment, action, deploymentId, refObject };
 }
 
@@ -944,6 +947,7 @@ function approveAction(repoRoot, request) {
 }
 
 function consumeActionApproval(repoRoot, command, payload) {
+  const initialRoot = repoRoot;
   try {
     const input = payload.tool_input || payload.input || payload.arguments || payload;
     const binding = actionBinding(repoRoot, command, input.workdir || input.cwd || repoRoot);
@@ -958,7 +962,8 @@ function consumeActionApproval(repoRoot, command, payload) {
     fs.writeFileSync(`${file}.consumed`, nowIso(), { flag: 'wx', mode: 0o600 });
     appendJsonl(paths(repoRoot).evidenceLedgerPath, { type: 'action-allowed-once', id: approval.id, at: nowIso() });
     return approval.id;
-  } catch {
+  } catch (error) {
+    appendJsonl(paths(initialRoot).evidenceLedgerPath, { type: 'action-grant-rejected', at: nowIso(), reason: error.message, payloadKeys: Object.keys(payload), inputKeys: Object.keys(payload.tool_input || payload.input || payload.arguments || {}), cwd: payload.tool_input?.workdir || payload.input?.workdir || payload.arguments?.workdir || payload.workdir || null });
     return null;
   }
 }
@@ -1094,7 +1099,7 @@ function commandTargetObject(command) {
   if (/\b(stripe|resend)\b[^;\n]*(create|delete|update|deploy|webhook)/.test(command)) {
     return 'billing-or-messaging-provider';
   }
-  if (/\bgit\s+push(\s|$)/.test(command)) {
+  if (/\bgit\s+(?:-C\s+\S+\s+)?push(\s|$)/.test(command)) {
     return 'remote-git';
   }
   if (/\b(curl|wget|http)\b[^;\n]*\b(POST|PUT|PATCH|DELETE)\b/i.test(command)) {
