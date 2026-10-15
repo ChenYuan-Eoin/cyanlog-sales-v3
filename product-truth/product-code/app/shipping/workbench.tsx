@@ -52,6 +52,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const [entryMode, setEntryMode] = useState<'file' | 'text'>('text')
   const [bulkText, setBulkText] = useState(simulation?.sampleText || '')
   const [batchBusy, setBatchBusy] = useState(false)
+  const [templateBusy, setTemplateBusy] = useState(false)
   const [connectionId, setConnectionId] = useState(settings.connectionId || '')
   const [serviceId, setServiceId] = useState('')
   const [billingAccountId, setBillingAccountId] = useState(settings.defaultBillingAccountId || '')
@@ -143,6 +144,18 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const reviewedSendersReady = reviewedOrders.every(order => senderForReview(order, settings.sender).contact !== null)
   const productionOrderUnverified = selectedConnection?.environment === 'production' && selectedConnection.orderCapability === 'not_tested'
 
+  async function copySelectedNumber() {
+    if (!selected) return
+    const number = selected.waybill || selected.orderNo
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable')
+      await navigator.clipboard.writeText(number)
+      setMessage(`已复制单号：${number}`)
+    } catch {
+      setMessage(`复制未成功，请选中单号后手动复制：${number}`)
+    }
+  }
+
   function successfulSubmission(result: SubmissionResult): result is SubmissionResult & { status: 'waybill_created'; waybill: string } {
     return result.status === 'waybill_created' && typeof result.waybill === 'string'
       && (isSimulation ? /^DEMO-\d{6}$/.test(result.waybill) : /^(?:SF)?\d{10,15}$/.test(result.waybill))
@@ -206,8 +219,21 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     } catch (error) { setMessage((error as Error).message) }
   }
   async function downloadTemplate() {
-    const blob = await buildShippingTemplate(), url = URL.createObjectURL(blob), link = document.createElement('a')
-    link.href = url; link.download = '寄件标准导入模板.xlsx'; link.click(); URL.revokeObjectURL(url)
+    if (templateBusy) return
+    setTemplateBusy(true); setMessage('')
+    let url: string | undefined
+    try {
+      const blob = await buildShippingTemplate()
+      url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url; link.download = '寄件标准导入模板.xlsx'; link.click()
+      setMessage('模板已生成，请在浏览器下载列表中查看。')
+    } catch (error) {
+      setMessage(`模板下载未完成：${error instanceof Error ? error.message : '生成失败'}。请重试，或使用文本解析录入。`)
+    } finally {
+      if (url) { const downloadUrl = url; window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000) }
+      setTemplateBusy(false)
+    }
   }
   async function executeBatch(retrieveRowId?: number) {
     if (batchRunning.current || confirmationRunning.current) return
@@ -385,7 +411,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             {senderOverride && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setSenderOverride(null)}>使用公司默认寄方</button>}
             </div><label>新录入物品属性<select value={uniformCargo} disabled={inputLocked} onChange={event => setUniformCargo(event.target.value)}><option>文件/合同</option><option>样品</option><option>礼品</option></select></label></div>
           <div className={styles.segmented} role="group" aria-label="地址录入方式"><button aria-pressed={entryMode === 'text'} className={entryMode === 'text' ? styles.active : ''} disabled={inputLocked} onClick={() => setEntryMode('text')}>文本解析</button><button aria-pressed={entryMode === 'file'} className={entryMode === 'file' ? styles.active : ''} disabled={inputLocked} onClick={() => setEntryMode('file')}>文件导入</button></div>
-          {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" disabled={inputLocked} onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><button className={styles.linkButton} onClick={() => void downloadTemplate()}>下载标准模板.xlsx</button></div> : <div className={styles.textParser}><p>支持多位收件人；同一人的姓名、电话和地址可分行，空行有助于分票。解析后请核对每票资料。</p><textarea aria-label="多行地址文本" rows={6} maxLength={100000} disabled={inputLocked} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'姓名：示例甲\n电话：13800000000\n地址：广东省深圳市南山区示例路88号\n\n示例乙 13900000000 上海市浦东新区示例路66号'}/><div className={styles.parserActions}><button className={styles.secondaryButton} disabled={!bulkText.trim() || inputLocked} onClick={parseBulk}>解析为寄件行</button>{simulation && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setBulkText(simulation.sampleText)}>重填示例地址</button>}</div></div>}
+          {entryMode === 'file' ? <div className={styles.dropzone}><UploadCloud size={28}/><strong>选择 Excel 或 CSV</strong><span>支持 .xlsx / .csv，最多200票</span><input id="shipping-batch-file" className={styles.fileInput} type="file" accept=".xlsx,.csv" disabled={inputLocked} onChange={event => void importFile(event.target.files?.[0])}/><label htmlFor="shipping-batch-file" className={styles.fileButton}>选择文件</label><button className={styles.linkButton} disabled={templateBusy} onClick={() => void downloadTemplate()}>{templateBusy ? '正在生成模板…' : '下载标准模板.xlsx'}</button></div> : <div className={styles.textParser}><p>支持多位收件人；同一人的姓名、电话和地址可分行，空行有助于分票。解析后请核对每票资料。</p><textarea aria-label="多行地址文本" rows={6} maxLength={100000} disabled={inputLocked} value={bulkText} onChange={event => setBulkText(event.target.value)} placeholder={'姓名：示例甲\n电话：13800000000\n地址：广东省深圳市南山区示例路88号\n\n示例乙 13900000000 上海市浦东新区示例路66号'}/><div className={styles.parserActions}><button className={styles.secondaryButton} disabled={!bulkText.trim() || inputLocked} onClick={parseBulk}>解析为寄件行</button>{simulation && <button className={styles.linkButton} disabled={inputLocked} onClick={() => setBulkText(simulation.sampleText)}>重填示例地址</button>}</div></div>}
           <div className={styles.sectionTitle}><h3>{entryMode === 'text' ? '解析预览' : '导入预览'}</h3><span>{batch.length ? `${batch.length} 票` : entryMode === 'text' ? '等待解析地址' : '尚未导入'}</span></div>
           {invalidCount > 0 && <p className={styles.batchValidationSummary} role="status">{invalidCount} 票需修正；仅 {validCount} 票有效资料可提交。</p>}
           <div className={styles.batchList}>{preparedRows.map(({ row, errors, fieldErrors, metadataErrors }) => {
@@ -453,11 +479,13 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           {ledgerLoading ? <p className={styles.listHint}>正在读取台账…</p> : !filtered.length && <p className={styles.listHint}>暂无匹配单据</p>}
           {filtered.map(order => {
             const senderReview = senderForReview(order, settings.sender)
-            return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`} onClick={() => { setTrackingTarget(''); setTrackingError(''); setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false) }}>
+            return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`}>
+            <button type="button" className={styles.orderSelect} aria-label={`查看单据 ${order.waybill || order.orderNo}`} aria-pressed={order.id === selected?.id} onClick={() => { setTrackingTarget(''); setTrackingError(''); setSelectedId(order.id); setManualWaybill(order.waybill || ''); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false) }}>
             <div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.intakeSource === 'owner_web' ? '操作员提报' : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div>
             <div className={styles.cardCore}><div><small>客户</small><strong>{customerOf(order)}</strong></div><ChevronRight size={15}/><div><small>收件人</small><strong>{order.input.recipient.name}</strong></div></div>
             {order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}
             <div className={styles.cardMeta}><span>{order.waybill || order.orderNo}</span><time>{new Date(order.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>
+            </button>
             {order.status === 'awaiting_confirmation' && <>
               <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
                 <label className={styles.reviewSelection}><input type="checkbox" aria-label={`核对并选择工单 ${order.orderNo}`} disabled={confirmationBusy || !!busy} checked={reviewIds.includes(order.id)} onChange={() => toggleReview(order)}/>核对工单</label>
@@ -498,7 +526,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
               <div className={styles.detailHero}>
                 <div><span>{isSimulation ? '模拟单号' : selected.waybill ? '承运商运单' : '业务提报单'}</span><strong>{selected.waybill || selected.orderNo}</strong></div>
                 <div className={styles.detailActions}>
-                  <button aria-label="复制单号" onClick={() => void navigator.clipboard?.writeText(selected.waybill || selected.orderNo)}><Clipboard size={15}/></button>
+                  <button aria-label="复制单号" onClick={() => void copySelectedNumber()}><Clipboard size={15} aria-hidden="true"/>复制单号</button>
                   {(selected.status === 'order_unknown' || selected.status === 'ordering') && <button className={styles.secondaryButton} aria-label="查回所选单据下单结果" disabled={batchBusy || confirmationBusy || !!busy} onClick={() => void reconcileOrder(selected.id)}>{busy === selected.id ? '查回中…' : '查回下单结果'}</button>}{selected.status === 'waybill_created' && <button className={styles.cancelButton} disabled={confirmationBusy || !!busy} onClick={() => void cancelSelected()}>{isSimulation ? '模拟取消运单' : '取消运单'}</button>}
                 </div>
               </div>

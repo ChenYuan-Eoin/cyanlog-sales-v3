@@ -2,6 +2,8 @@
 
 const {
   AUTONOMY_LEVELS,
+  approveAction,
+  readJson,
   approveContract,
   clearGoal,
   completeGoal,
@@ -105,6 +107,7 @@ function usage() {
     '  harness-goal.js start --wp WP00 [--level A0|A1|A2|A3] [--success csv] [--scope csv] <goal>',
     '  harness-goal.js revise --reason text --authority IN-id --by name [--success csv] [--scope csv] <goal>',
     '  harness-goal.js approve [--level A1|A2|A3] [--by name]',
+    '  harness-goal.js approve-action --request /absolute/request.json (exact authority, clean SHA, max one hour, single use)',
     '  harness-goal.js phase <intake|research|contract_review|execute|verify|approval|blocked|complete>',
     '  harness-goal.js checkpoint --name text --status pending|pass|blocked [--detail text]',
     '  harness-goal.js evidence --status pass|fail|info --type command|note --summary text [--detail text] [--satisfies csv]',
@@ -122,6 +125,11 @@ function main() {
   const { options, rest } = parseOptions(args);
 
   try {
+    if (command === 'approve-action') {
+      const approval = approveAction(repoRoot, readJson(options.request));
+      console.log(`Action approval recorded: ${approval.id} target=${approval.target} expires=${approval.expiresAt}`);
+      return;
+    }
     if (command === 'start') {
       const goalText = rest.join(' ');
       const { contract } = startGoal(repoRoot, goalText, {

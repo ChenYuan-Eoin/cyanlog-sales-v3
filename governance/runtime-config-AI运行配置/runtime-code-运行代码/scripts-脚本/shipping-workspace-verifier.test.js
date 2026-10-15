@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { verify } = require('./shipping-workspace-verifier.js');
-const { shippingWorkspaceEvidenceBlockers } = require('./project-registry.js');
+const { shippingWorkspaceEvidenceBlockers, SHIPPING_UI_FLAGS } = require('./project-registry.js');
 const ORIGIN = 'https://sales.cyanlog.icu';
 const CONTRACT_TABLES = ['contract_ai_chats','contract_comparisons','contract_items','contract_signatures','contract_risk_cards','contract_template_params','contract_rule_snapshots','contract_risk_card_fixes','contract_rules_v2','contract_drafts','contract_comparison_diffs'];
 const TABLES = [...CONTRACT_TABLES, 'shipping_requests','shipping_contacts','shipping_outbound_imports','shipping_orders','shipping_waybills','shipping_tracking_events','shipping_intake_rate_limits','shipping_carrier_connections','shipping_billing_accounts','shipping_sender_profiles'];
@@ -80,12 +80,42 @@ function fixture(t) {
     else if (sql.includes('from pg_proc')) result = data.rpc;
     else if (sql.includes('from public.users')) result = data.users;
     else if (sql.includes('from public.shipping_tracking_events')) result = data.events;
-    else if (sql.includes('from public.shipping_orders')) result = sql.includes("o.id='"+ui.cancellation.order_id+"'") ? data.cancelled : data.tracked;
+    else if (sql.includes('from public.shipping_orders')) result = ui.cancellation && sql.includes("o.id='"+ui.cancellation.order_id+"'") ? data.cancelled : data.tracked;
     else assert.fail('Unexpected SQL');
     return Response.json(result);
   });
   return { options, ui, data, seal, requests, runtime, stamp };
 }
+
+function uiFixture(t) {
+  const f = fixture(t);
+  f.options.contractVersion = 'f054-ui-v1';
+  delete f.ui.cancellation;
+  f.ui.attachments = f.ui.attachments.filter(item => item.path !== 'cancellation.json');
+  for (const key of SHIPPING_UI_FLAGS) f.ui[key] = true;
+  f.seal();
+  return f;
+}
+
+test('UI release verifies unchanged security boundaries and existing tracking without requiring a cancellation', async t => {
+  const f = uiFixture(t), result = await verify(f.options);
+  assert.deepEqual(shippingWorkspaceEvidenceBlockers(result, 'production', 'f054-ui-v1'), []);
+  assert.equal(result.shipping_workspace.payload.cancel_before_collection_verified, undefined);
+  const sql = f.requests.filter(item => item.init.body).map(item => JSON.parse(item.init.body).query);
+  assert.equal(sql.filter(query => query.includes('from public.shipping_orders')).length, 1);
+  assert.ok(sql.every(query => /^select\s/i.test(query)));
+});
+
+for (const [label, mutate, message] of [
+  ['missing draft retention', f => { f.ui.draft_retention = false; }, /draft_retention/],
+  ['business mutation', f => { f.ui.no_business_mutations = false; }, /no_business_mutations/],
+  ['cancellation included in UI-only evidence', f => { f.ui.cancellation = {}; }, /must not contain cancellation/],
+  ['unknown UI contract', f => { f.options.contractVersion = 'anything'; }, /Unsupported verification contract/],
+]) test('UI release rejects '+label, async t => {
+  const f = uiFixture(t); mutate(f); f.seal();
+  await assert.rejects(verify(f.options), message);
+  assert.equal(f.requests.length, 0);
+});
 
 test('verifies current deployed shipping flow using SQL and explicit Chrome attestations, preserving evidence hashes', async t => {
   const f = fixture(t), result = await verify(f.options);

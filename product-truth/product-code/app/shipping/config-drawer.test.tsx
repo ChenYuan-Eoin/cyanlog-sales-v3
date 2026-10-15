@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import ShippingConfigDrawer from './config-drawer'
 
 vi.mock('./email-configuration', () => ({ default: () => <section aria-label="员工邮箱验证配置">员工提报与邮箱验证</section> }))
@@ -13,7 +13,81 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
+async function openSection(name: string) {
+  fireEvent.click(await screen.findByRole('button', { name }))
+}
+
 describe('shipping configuration drawer', () => {
+  it('opens on overview and keeps sender drafts when changing sections', async () => {
+    render(<ShippingConfigDrawer embedded />)
+    await screen.findByRole('region', { name: '接入总览内容' })
+    expect(screen.queryByRole('button', { name: '保存连接' })).toBeNull()
+    await openSection('默认寄件人')
+    fireEvent.change(screen.getByLabelText('姓名'), { target: { value: '未保存的寄件人' } })
+    await openSection('员工与企微')
+    await openSection('默认寄件人')
+    expect(screen.getByLabelText('姓名')).toHaveProperty('value', '未保存的寄件人')
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
+  it('isolates account lists and clears sensitive unsaved values on environment change', async () => {
+    fetcher.mockResolvedValue(Response.json({ configuration: { connections: [], sender: null, billingAccounts: [
+      { id: 'p', environment: 'production', displayName: '生产月结', tail: '0001', status: 'active', isDefault: true },
+      { id: 's', environment: 'sandbox', displayName: '沙盒月结', tail: '0002', status: 'active', isDefault: true },
+    ] } }))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('月结账号')
+    expect(screen.queryByText('沙盒月结')).toBeNull()
+    fireEvent.change(screen.getByLabelText('月结卡号'), { target: { value: '123456789' } })
+    await openSection('顺丰与接口')
+    fireEvent.change(screen.getByLabelText('应用密钥'), { target: { value: 'draft-secret' } })
+    fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'sandbox' } })
+    expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', '')
+    await openSection('月结账号')
+    expect(screen.getByText('沙盒月结')).toBeTruthy()
+    expect(screen.queryByText('生产月结')).toBeNull()
+    expect(screen.getByLabelText('月结卡号')).toHaveProperty('value', '')
+  })
+
+  it('preserves unsaved service changes after a different configuration is saved', async () => {
+    const configuration = { connections: [{ id: 'p', carrier: 'sf', environment: 'production', partnerIdTail: '0001', status: 'connected', services: [{ id: 2, name: '顺丰标快', preference: 'standard' }], capabilities: {} }], billingAccounts: [], sender: null }
+    fetcher.mockImplementation(async () => Response.json({ configuration }))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰与接口')
+    fireEvent.change(screen.getByLabelText('顺丰服务产品'), { target: { value: '6' } })
+    fireEvent.click(screen.getByRole('button', { name: '添加服务' }))
+    await openSection('月结账号')
+    fireEvent.change(screen.getByLabelText('月结卡号'), { target: { value: '123456789' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存月结账号' }))
+    await screen.findByText('月结账号已保存。')
+    await openSection('顺丰与接口')
+    expect(screen.getByRole('button', { name: '移除顺丰即日' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'sandbox' } })
+    expect(screen.queryByRole('button', { name: '移除顺丰即日' })).toBeNull()
+    fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'production' } })
+    expect(screen.getByRole('button', { name: '移除顺丰即日' })).toBeTruthy()
+  })
+
+  it('retains entered account after save rejection and never reports a successful save', async () => {
+    fetcher.mockImplementation(async (_url, init) => init?.method === 'POST'
+      ? Response.json({ error: '月结账号未通过校验' }, { status: 400 })
+      : Response.json({ configuration: { connections: [], billingAccounts: [], sender: null } }))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('月结账号')
+    fireEvent.change(screen.getByLabelText('月结卡号'), { target: { value: '123456789' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存月结账号' }))
+    expect(await screen.findByText('月结账号未通过校验')).toBeTruthy()
+    expect(screen.getByLabelText('月结卡号')).toHaveProperty('value', '123456789')
+    expect(screen.queryByText('月结账号已保存。')).toBeNull()
+  })
+
+  it('does not invent callback health when the settings endpoint has no evidence', async () => {
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('状态同步')
+    expect(screen.getByRole('heading', { name: '自动同步尚不能由本页确认' })).toBeTruthy()
+    expect(screen.getByText('接收状态待接入')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /开启推送|自动同步|提交上线/ })).toBeNull()
+  })
   it('shows a clear permission message instead of an editable blank form to operators', async () => {
     fetcher.mockResolvedValue(new Response(JSON.stringify({ navigationAvailable: true }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
@@ -24,6 +98,7 @@ describe('shipping configuration drawer', () => {
 
   it('renders inline in Config Center without opening a modal or adding a screen overlay', async () => {
     render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰与接口')
     expect(await screen.findByRole('region', { name: '寄件设置' })).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('button', { name: '关闭寄件配置' })).toBeNull()
@@ -36,6 +111,8 @@ describe('shipping configuration drawer', () => {
     const migratedAccess = { operators: [{ ...legacyAccess.operators[0], grantSource: 'database' as const }], legacyImportAvailable: false, legacyImportCompleted: true }
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { importedCount: 1, operatorAccess: migratedAccess } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess: legacyAccess }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰与接口')
+    await openSection('员工与企微')
     fireEvent.click(await screen.findByRole('button', { name: '迁移当前寄件名单' }))
     expect(await screen.findByText(/已将当前环境中原有的 1 个寄件授权迁入组织权限/)).toBeTruthy()
     const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
@@ -49,6 +126,8 @@ describe('shipping configuration drawer', () => {
     const savedAccess = { ...operatorAccess, operators: [{ ...operatorAccess.operators[0], canOperate: true, grantSource: 'database' as const }] }
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { operatorAccess: savedAccess } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰与接口')
+    await openSection('员工与企微')
     fireEvent.click(await screen.findByRole('checkbox', { name: '寄件同事' }))
     fireEvent.click(screen.getByRole('button', { name: '保存确认人员权限' }))
     expect(await screen.findByText('寄件操作权限已保存。')).toBeTruthy()
@@ -62,6 +141,7 @@ describe('shipping configuration drawer', () => {
       ? { ...{ configuration: legacyConfiguration, legacyConfigurationAvailable: { sandbox: false, production: false } }, imported: ['顺丰机器连接（服务端加密）', '已授权服务产品'], needsAttention: [] }
       : { configuration: { connections: [], billingAccounts: [], sender: null }, legacyConfigurationAvailable: { sandbox: true, production: false } }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰与接口')
     fireEvent.change(await screen.findByLabelText('运行环境'), { target: { value: 'sandbox' } }); fireEvent.click(await screen.findByRole('button', { name: '迁入旧沙盒配置' }))
     expect(await screen.findByText(/已迁入：顺丰机器连接（服务端加密）、已授权服务产品/)).toBeTruthy()
     const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
@@ -73,6 +153,8 @@ describe('shipping configuration drawer', () => {
     const migratedAccess = { operators: [{ ...legacyAccess.operators[0], grantSource: 'database' as const }], legacyImportAvailable: false, legacyImportCompleted: true }
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { importedCount: 1, operatorAccess: migratedAccess } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess: legacyAccess }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰与接口')
+    await openSection('员工与企微')
     fireEvent.click(await screen.findByRole('button', { name: '迁移当前寄件名单' }))
     expect(await screen.findByText(/已将当前环境中原有的 1 个寄件授权迁入组织权限/)).toBeTruthy()
     const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
@@ -84,6 +166,8 @@ describe('shipping configuration drawer', () => {
     const access = { operators: [{ id: '11111111-1111-4111-8111-111111111111', name: '寄件同事', enabled: true, canOperate: false, grantSource: 'none' as const }], legacyImportAvailable: false, legacyImportCompleted: true }
     fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { operatorAccess: { ...access, operators: [{ ...access.operators[0], canOperate: true, grantSource: 'database' }] } } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess: access }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰与接口')
+    await openSection('员工与企微')
     fireEvent.click(await screen.findByRole('checkbox', { name: '寄件同事' }))
     fireEvent.click(screen.getByRole('button', { name: '保存确认人员权限' }))
     expect(await screen.findByText('寄件操作权限已保存。')).toBeTruthy()
@@ -97,11 +181,14 @@ describe('shipping configuration drawer', () => {
       billingAccounts: [{ id: 'acct-1', connectionId: 'conn-1', environment: 'sandbox', displayName: '企业月结', tail: '5616', status: 'active', isDefault: true }], sender: null
     } }), { status: 200 }))
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
-    expect(await screen.findByText(/沙盒 · 尾号 5616 · 可用 · 默认/)).toBeTruthy()
+    await openSection('顺丰与接口')
     fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'sandbox' } })
+    await openSection('月结账号')
+    expect(await screen.findByText(/沙盒 · 尾号 5616 · 可用 · 默认/)).toBeTruthy()
+    await openSection('顺丰与接口')
     expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', '')
     expect(screen.getByLabelText('月结卡号')).toHaveProperty('value', '')
-    expect(screen.getByText(/尾号 8391/)).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: '顺丰与接口内容' })).getByText('尾号 8391')).toBeTruthy()
   })
 
   it('runs a read-only test for the selected environment and keeps Production order capability separate', async () => {
@@ -116,6 +203,7 @@ describe('shipping configuration drawer', () => {
       return new Response(JSON.stringify({ configuration }), { status: 200 })
     })
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
+    await openSection('顺丰与接口')
     fireEvent.change(await screen.findByLabelText('运行环境'), { target: { value: 'sandbox' } })
     expect(await screen.findByRole('button', { name: '测试沙盒连接' })).toHaveProperty('disabled', false)
 
@@ -138,6 +226,7 @@ describe('shipping configuration drawer', () => {
       return new Response(JSON.stringify({ configuration: { connections: [connection], billingAccounts: [], sender: null } }), { status: 200 })
     })
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
+    await openSection('顺丰与接口')
     fireEvent.change(await screen.findByLabelText('运行环境'), { target: { value: 'sandbox' } })
     fireEvent.change(screen.getByLabelText('顺丰服务产品'), { target: { value: '6' } })
     fireEvent.click(screen.getByRole('button', { name: '添加服务' }))
@@ -156,6 +245,7 @@ describe('shipping configuration drawer', () => {
       return new Response(JSON.stringify({ configuration: { connections: [], billingAccounts: [], sender: null } }), { status: 200 })
     })
     render(<ShippingConfigDrawer open onClose={() => undefined}/>)
+    await openSection('顺丰与接口')
     fireEvent.change(await screen.findByLabelText('应用编号'), { target: { value: 'partner-8391' } })
     fireEvent.change(screen.getByLabelText('应用密钥'), { target: { value: 'check-word-private' } })
     fireEvent.click(screen.getByRole('button', { name: '保存连接' }))
@@ -168,6 +258,7 @@ describe('shipping configuration drawer', () => {
 it('shows connection validation in the viewport feedback before the long configuration form', async () => {
   fetcher.mockResolvedValue(Response.json({ configuration: { connections: [], billingAccounts: [], sender: null } }))
   render(<ShippingConfigDrawer embedded/>)
+    await openSection('顺丰与接口')
   fireEvent.click(await screen.findByRole('button', { name: '保存连接' }))
   const status = screen.getByText('请展开“首次接入 / 更换应用凭据”，填写应用编号和应用密钥。')
   expect(status.getAttribute('role')).toBe('status')

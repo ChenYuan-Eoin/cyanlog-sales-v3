@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { SHIPPING_UI_FLAGS } = require('./project-registry');
 const PROJECT = 'wfawwhphfqqwfwrrkogy';
 const ORIGIN = 'https://sales.cyanlog.icu';
 const CONTRACT_TABLES = ['contract_ai_chats','contract_comparisons','contract_items','contract_signatures','contract_risk_cards','contract_template_params','contract_rule_snapshots','contract_risk_card_fixes','contract_rules_v2','contract_drafts','contract_comparison_diffs'];
@@ -39,25 +40,29 @@ function readArtifact(runtime, file, expectedHash) {
   assert(hash(bytes) === expectedHash, 'Operator artifact hash mismatch');
   return { bytes, value: JSON.parse(bytes.toString('utf8')) };
 }
-function verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerId, orderId, waybill, now }) {
+function verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerId, orderId, waybill, now, contractVersion }) {
   const artifact = readArtifact(runtime, operator?.artifact_path, operator?.sha256);
   assert(JSON.stringify(canonical(artifact.value)) === JSON.stringify(canonical(operator.payload)), 'Operator envelope payload mismatch');
   const ui = artifact.value;
-  exactKeys(ui, ['source', 'commit', 'deployment_id', 'origin', 'environment', 'org_id', 'operator_id', 'browser_context', 'existing_tab_id', 'new_tabs', 'new_browser_contexts', 'attestation_type', 'trust_boundary', 'attested_by', 'attested_at', 'ledger_filters', 'tracking', 'cancellation', 'attachments', ...UI_FLAGS], 'operator evidence');
+  const uiOnly = contractVersion === 'f054-ui-v1';
+  exactKeys(ui, ['source', 'commit', 'deployment_id', 'origin', 'environment', 'org_id', 'operator_id', 'browser_context', 'existing_tab_id', 'new_tabs', 'new_browser_contexts', 'attestation_type', 'trust_boundary', 'attested_by', 'attested_at', 'ledger_filters', 'tracking', 'cancellation', 'attachments', ...UI_FLAGS, ...(uiOnly ? SHIPPING_UI_FLAGS : [])], 'operator evidence');
   assert(ui.source === 'trusted_existing_chrome_operator' && ui.commit === commit && ui.deployment_id === deploymentId && ui.origin === ORIGIN && ui.environment === 'production', 'Current Production operator attestation required');
   assert(ui.org_id === orgId && ui.operator_id === ownerId, 'Operator organization or identity mismatch');
   assert(ui.browser_context === 'existing_user_chrome' && ui.new_tabs === 0 && ui.new_browser_contexts === 0 && /^[a-zA-Z0-9_-]{1,100}$/.test(ui.existing_tab_id || ''), 'Existing Chrome session required');
   assert(ui.attestation_type === 'trusted_operator_browser' && ui.trust_boundary === 'operator_attestation_not_machine_proof' && /^[a-zA-Z0-9_.:-]{1,100}$/.test(ui.attested_by || ''), 'Explicit operator trust boundary required');
   const attested = time(ui.attested_at);
   assert(attested <= now + 60_000 && now - attested <= 60*60_000, 'Operator attestation is not fresh');
-  for (const key of UI_FLAGS) assert(ui[key] === true, 'Missing operator observation: '+key);
-  assert(Array.isArray(ui.ledger_filters) && ui.ledger_filters.length === 4 && ['sales', 'customer', 'contact', 'status'].every(key => ui.ledger_filters.includes(key)), 'Complete ledger filter observations required');
+  for (const key of (uiOnly ? [...SHIPPING_UI_FLAGS, 'guest_ledger_denied', 'owner_can_read'] : UI_FLAGS)) assert(ui[key] === true, 'Missing operator observation: '+key);
+  if (!uiOnly) assert(Array.isArray(ui.ledger_filters) && ui.ledger_filters.length === 4 && ['sales', 'customer', 'contact', 'status'].every(key => ui.ledger_filters.includes(key)), 'Complete ledger filter observations required');
   exactKeys(ui.tracking, ['order_id', 'waybill', 'app_endpoint', 'started_at', 'observed_at', 'success', 'source', 'mock', 'event_count'], 'tracking observation');
   assert(ui.tracking.order_id === orderId && ui.tracking.waybill === waybill && ui.tracking.app_endpoint === ORIGIN+'/api/shipping/tracking', 'Tracking observation target mismatch');
   assert(ui.tracking.success === true && ui.tracking.source === 'carrier' && ui.tracking.mock === false && Number.isInteger(ui.tracking.event_count) && ui.tracking.event_count > 0, 'Real non-mock tracking observation required');
-  exactKeys(ui.cancellation, ['order_id', 'waybill', 'started_at', 'observed_at', 'success', 'before_status', 'after_status', 'service_code'], 'cancellation observation');
-  assert(UUID.test(ui.cancellation.order_id || '') && WAYBILL.test(ui.cancellation.waybill || '') && ui.cancellation.success === true && ui.cancellation.before_status === 'waybill_created' && ui.cancellation.after_status === 'cancelled' && ui.cancellation.service_code === 'EXP_RECE_UPDATE_ORDER', 'Successful pre-collection cancellation observation required');
-  for (const item of [ui.tracking, ui.cancellation]) {
+  if (uiOnly) assert(ui.cancellation === undefined, 'UI-only release must not contain cancellation operations');
+  else {
+    exactKeys(ui.cancellation, ['order_id', 'waybill', 'started_at', 'observed_at', 'success', 'before_status', 'after_status', 'service_code'], 'cancellation observation');
+    assert(UUID.test(ui.cancellation.order_id || '') && WAYBILL.test(ui.cancellation.waybill || '') && ui.cancellation.success === true && ui.cancellation.before_status === 'waybill_created' && ui.cancellation.after_status === 'cancelled' && ui.cancellation.service_code === 'EXP_RECE_UPDATE_ORDER', 'Successful pre-collection cancellation observation required');
+  }
+  for (const item of (uiOnly ? [ui.tracking] : [ui.tracking, ui.cancellation])) {
     const started = time(item.started_at), observed = time(item.observed_at);
     assert(started <= observed && observed <= attested && now - started <= 60*60_000, 'Observation time sequence mismatch');
   }
@@ -69,13 +74,13 @@ function verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerI
     const entry = readArtifact(runtime, item.path, item.sha256), value = entry.value;
     exactKeys(value, ['source', 'commit', 'deployment_id', 'origin', 'org_id', 'operator_id', 'existing_tab_id', 'action', 'result', 'observed_at', 'redacted'], 'redacted observation');
     assert(value.source === 'redacted_existing_chrome_observation' && value.redacted === true && value.commit === commit && value.deployment_id === deploymentId && value.origin === ORIGIN && value.org_id === orgId && value.operator_id === ownerId && value.existing_tab_id === ui.existing_tab_id, 'Redacted observation binding mismatch');
-    assert(['workspace', 'configuration', 'access', 'tracking', 'cancellation'].includes(value.action) && value.result === 'pass', 'Invalid redacted observation action');
+    assert((uiOnly ? ['workspace', 'configuration', 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).includes(value.action) && value.result === 'pass', 'Invalid redacted observation action');
     assert(time(value.observed_at) <= attested && now - time(value.observed_at) <= 60*60_000, 'Redacted observation is not fresh');
     if (value.action === 'tracking' || value.action === 'cancellation') assert(value.observed_at === ui[value.action].observed_at, 'Observation attachment timestamp mismatch');
     actions.add(value.action);
     return entry.bytes;
   });
-  assert(['workspace', 'configuration', 'access', 'tracking', 'cancellation'].every(action => actions.has(action)), 'Operator observation attachment coverage incomplete');
+  assert((uiOnly ? ['workspace', 'configuration', 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).every(action => actions.has(action)), 'Operator observation attachment coverage incomplete');
   return { ui, bytes: artifact.bytes, attachments };
 }
 
@@ -85,8 +90,11 @@ async function verify(options) {
   assert(/^[0-9a-f]{40}$/.test(commit || '') && /^dpl_[A-Za-z0-9]+$/.test(deploymentId || ''), 'Exact Production commit and deployment required');
   assert(UUID.test(ownerId || '') && UUID.test(orgId || '') && UUID.test(orderId || '') && WAYBILL.test(waybill || ''), 'Explicit operator, organization, order and waybill required');
   assert(typeof token === 'string' && token.length > 0, 'Existing Supabase management credential required');
+  const contractVersion = options.contractVersion || 'f054-v2';
+  assert(['f054-v2', 'f054-ui-v1'].includes(contractVersion), 'Unsupported verification contract');
+  const uiOnly = contractVersion === 'f054-ui-v1';
   const now = Date.now();
-  const proof = verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerId, orderId, waybill, now });
+  const proof = verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerId, orderId, waybill, now, contractVersion });
   const ui = proof.ui;
   async function getJson(url, init = {}) {
     const response = await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(20000) });
@@ -153,10 +161,13 @@ async function verify(options) {
   assert(rows.length === 1 && Number.isInteger(rows[0].event_count) && rows[0].event_count >= ui.tracking.event_count, 'Matching persisted Production tracking events missing');
   const events = rows[0];
   assert(events.event_count > 0 && time(events.latest_event_at) <= now+60_000 && time(events.latest_persisted_at) <= now+60_000, 'Invalid persisted tracking timestamps');
-  const cancelled = await snapshot(ui.cancellation.order_id, ui.cancellation.waybill);
-  assert(cancelled.status === 'cancelled' && cancelled.latest_status === 'cancelled' && cancelled.cancel_capability === 'verified', 'Persisted successful cancellation missing');
-  assert(time(cancelled.order_updated_at) >= time(ui.cancellation.started_at)-60_000 && time(cancelled.order_updated_at) <= time(ui.cancellation.observed_at)+60_000 && time(cancelled.connection_updated_at) >= time(ui.cancellation.started_at)-60_000, 'Cancellation time does not match the observed operation');
-  evidence.service_role = { source: 'management_database_read', org_id: orgId, tracked_order: tracked, cancelled_order: cancelled };
+  let cancelled;
+  if (!uiOnly) {
+    cancelled = await snapshot(ui.cancellation.order_id, ui.cancellation.waybill);
+    assert(cancelled.status === 'cancelled' && cancelled.latest_status === 'cancelled' && cancelled.cancel_capability === 'verified', 'Persisted successful cancellation missing');
+    assert(time(cancelled.order_updated_at) >= time(ui.cancellation.started_at)-60_000 && time(cancelled.order_updated_at) <= time(ui.cancellation.observed_at)+60_000 && time(cancelled.connection_updated_at) >= time(ui.cancellation.started_at)-60_000, 'Cancellation time does not match the observed operation');
+  }
+  evidence.service_role = { source: 'management_database_read', org_id: orgId, tracked_order: tracked, ...(cancelled ? { cancelled_order: cancelled } : {}) };
   evidence.tracking_events = { org_id: orgId, order_id: orderId, waybill, event_count: events.event_count, latest_event_at: events.latest_event_at, latest_persisted_at: events.latest_persisted_at };
 
   // Only validated, non-secret evidence is written. Original operator bytes are
@@ -185,7 +196,9 @@ async function verify(options) {
   return {
     security_gate: envelope('security-gate', { source: 'live_production_database_verifier', gate_id: 'SECURITY-P0-RLS-PRODUCTION', status: 'passed', production_project_ref: PROJECT, scope: 'existing_protected_tables_and_shipping_configuration', checks: Object.fromEntries(['catalog','rls','acl','rpc','advisor','anon','service_role'].map(key => [key, 'pass'])) }),
     verifier: envelope('verifier', { source: 'live_production_runtime_verifier', ...attested }),
-    shipping_workspace: envelope('workspace', { source: 'production_database', contract_version: 'f054-v2', ...Object.fromEntries(UI_FLAGS.filter(key => !['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced'].includes(key)).map(key => [key, ui[key]])), ledger_filters: ui.ledger_filters, configuration_in_database: true, order_configuration_snapshot_verified: true, cancel_before_collection_verified: true, cancellation_service_code: ui.cancellation.service_code, cancelled_order_id: cancelled.order_id, ...attested }),
+    shipping_workspace: envelope('workspace', uiOnly
+      ? { source: 'production_database', contract_version: contractVersion, ...Object.fromEntries(SHIPPING_UI_FLAGS.map(key => [key, ui[key]])), ...attested }
+      : { source: 'production_database', contract_version: 'f054-v2', ...Object.fromEntries(UI_FLAGS.filter(key => !['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced'].includes(key)).map(key => [key, ui[key]])), ledger_filters: ui.ledger_filters, configuration_in_database: true, order_configuration_snapshot_verified: true, cancel_before_collection_verified: true, cancellation_service_code: ui.cancellation.service_code, cancelled_order_id: cancelled.order_id, ...attested }),
     shipping_tracking: envelope('tracking', { source: 'production_database', success: true, order_id: orderId, waybill, event_count: events.event_count, sf_environment: 'production', app_endpoint: ui.tracking.app_endpoint, mock: false, tracking_capability: tracked.tracking_capability, connection_updated_at: tracked.connection_updated_at, latest_event_at: events.latest_event_at, latest_persisted_at: events.latest_persisted_at, query_observed_at: ui.tracking.observed_at, ...attested }),
     shipping_access: envelope('access', { source: 'production_database', ...Object.fromEntries(['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced'].map(key => [key, ui[key]])), organization_matched: true, ...attested }),
   };

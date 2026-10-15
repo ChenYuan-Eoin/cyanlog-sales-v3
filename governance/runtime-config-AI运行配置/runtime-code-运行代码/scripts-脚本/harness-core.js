@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
-const { loadRegistry } = require('./project-registry');
+const { loadRegistry, VERCEL_PRODUCTION_CONTRACT } = require('./project-registry');
 
 const PHASE_TO_GATE = {
   intake: 'HG0',
@@ -66,11 +66,16 @@ const HIGH_RISK_PATTERNS = [
   { pattern: /\bsudo\b/, reason: 'privileged command' },
   { pattern: /\bchmod\s+-R\s+777\b/, reason: 'broad permission weakening' },
   { pattern: /\b(vercel|netlify|wrangler|firebase|railway|render)\b[^;\n]*(--prod|deploy|publish)/, reason: 'deployment command' },
+  { pattern: /\bvercel\s+(promote|rollback)\b/, reason: 'production alias mutation' },
   { pattern: /\bsupabase\b[^;\n]*(db\s+(push|reset)|migration\s+up|functions\s+deploy)/, reason: 'database or edge-function mutation' },
   { pattern: /\b(stripe|resend)\b[^;\n]*(create|delete|update|deploy|webhook)/, reason: 'billing or messaging provider mutation' },
   { pattern: /\b(drop\s+database|drop\s+schema|drop\s+table|truncate\s+table)\b/i, reason: 'destructive SQL' },
   { pattern: /\b(curl|wget|http)\b[^;\n]*\b(POST|PUT|PATCH|DELETE)\b/i, reason: 'external write request' }
 ];
+
+// 门禁控制面命令：退出 HG0/HG2/HG5 的唯一途径是执行 harness-goal.js 的治理命令，
+// 而这些阶段禁止 Bash；不放行就会把门禁自己锁死。这里只豁免该脚本的这一组子命令。
+const HARNESS_CONTROL_COMMAND = /\bharness-goal\.js\b\s+(status|template|approve|revise|evidence|checkpoint|audit|phase|complete|clear)\b/;
 
 const MATRIX_STATUS = {
   PASS: 'pass',
@@ -778,22 +783,45 @@ function normalizeToolName(name) {
   if (!raw) {
     return '';
   }
-  if (raw === 'apply_patch' || raw.endsWith('.apply_patch')) {
+  // Exact read-only connectors; do not classify arbitrary MCP tools by suffix.
+  if (/^mcp__codex_apps__vercel__(get_deployment|get_project|list_deployments|get_project_domain|list_project_domains)$/.test(raw)
+    || /^mcp__codex_app__(list_artifacts|get_worktree_creation_status)$/.test(raw)) return 'Read';
+  // This tool creates a managed local checkout for the current repository only.
+  if (raw === 'mcp__codex_app__create_worktree') return 'Edit';
+  // Codex 与 Claude 的工具名不同，这里统一归一到 gate 表使用的名称。
+  const lastDot = raw.lastIndexOf('.');
+  const dotTail = lastDot === -1 ? raw : raw.slice(lastDot + 1);
+  const tail = dotTail.includes('__') ? dotTail.split('__').pop() : dotTail;
+  const is = (...names) => names.includes(raw) || names.includes(dotTail) || names.includes(tail);
+  if (is('apply_patch', 'edit_file', 'str_replace_editor')) {
     return 'Edit';
   }
-  if (raw === 'exec_command' || raw.endsWith('.exec_command') || raw === 'Bash') {
+  if (is('write_file', 'create_file')) {
+    return 'Write';
+  }
+  if (is('exec_command', 'write_stdin', 'Bash', 'Shell')) {
     return 'Bash';
   }
-  if (raw.endsWith('.read_mcp_resource') || raw.endsWith('.list_mcp_resources')) {
+  if (is('request_user_input', 'request_user_input_async', 'AskUserQuestion')) {
+    return 'AskUserQuestion';
+  }
+  if (is('read_file', 'list_dir', 'list_files', 'find_files', 'view_image', 'tool_search')) {
     return 'Read';
   }
-  if (raw === 'view_image' || raw.endsWith('.view_image')) {
+  if (is('read_mcp_resource', 'list_mcp_resources')) {
     return 'Read';
+  }
+  if (is('grep', 'grep_files', 'search_files', 'search_content')) {
+    return 'Grep';
+  }
+  if (is('glob')) {
+    return 'Glob';
   }
   return raw;
 }
 
 function detectCommandRisk(command = '') {
+  if (isPlainDocumentRead(command)) return '';
   for (const item of HIGH_RISK_PATTERNS) {
     if (item.pattern.test(command)) {
       return item.reason;
@@ -802,14 +830,151 @@ function detectCommandRisk(command = '') {
   return '';
 }
 
+// Only a literal document read is exempt. Shell expansion, redirection, pipes
+// and command composition deliberately fall through to the normal checks.
+function isPlainDocumentRead(command) {
+  return /^cat[ \t]+(?:\/[A-Za-z0-9_./-]+\.md)(?:[ \t]+\/[A-Za-z0-9_./-]+\.md)*[ \t]*$/.test(command);
+}
+
+// Supplement existing gates with a single-use grant, never a blanket bypass.
+// Authority is recorded user evidence, not cryptographic human authentication.
+function actionWorkspace(repoRoot, cwd) {
+  const root = fs.realpathSync(repoRoot), directory = fs.realpathSync(cwd);
+  if (directory === root || directory.startsWith(`${root}${path.sep}`)) return root;
+  const gitPath = (at, argument) => {
+    const result = spawnSync('git', ['rev-parse', argument], { cwd: at, encoding: 'utf8' });
+    if (result.status !== 0) throw new Error('action workspace is not a repository');
+    return fs.realpathSync(path.resolve(at, result.stdout.trim()));
+  };
+  const worktree = gitPath(directory, '--show-toplevel');
+  if (gitPath(root, '--git-common-dir') !== gitPath(worktree, '--git-common-dir')) throw new Error('action workspace belongs to another repository');
+  const parentGoal = loadContract(root), worktreeGoal = loadContract(worktree);
+  if (parentGoal?.status !== 'approved' || worktreeGoal?.status !== 'approved' || parentGoal.workPackageId !== worktreeGoal.workPackageId) throw new Error('action workspace has no matching approved work package');
+  return worktree;
+}
+
+function actionBinding(repoRoot, command, cwd) {
+  if (typeof command !== 'string' || /[\n\r;$`|&<>\\"']/.test(command)) throw new Error('one literal command required');
+  repoRoot = actionWorkspace(repoRoot, cwd);
+  const directory = fs.realpathSync(cwd);
+  const root = fs.realpathSync(repoRoot);
+  if (directory !== root && !directory.startsWith(`${root}${path.sep}`)) throw new Error('cwd outside workspace');
+  const git = (args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    if (result.status !== 0) throw new Error('cannot bind approval to git state');
+    return result.stdout.trim();
+  };
+  let target, environment, action, deploymentId = null, refObject = null;
+  const previewDeploy = /^(?:\/[A-Za-z0-9_./-]+\/)?vercel deploy --target preview --scope [A-Za-z0-9_-]+(?: --yes)?$/.test(command);
+  const productionDeploy = /^(?:\/[A-Za-z0-9_./-]+\/)?vercel deploy --prod --skip-domain --scope [A-Za-z0-9_-]+(?: --yes)?$/.test(command);
+  const productionPromote = /^(?:\/[A-Za-z0-9_./-]+\/)?vercel promote dpl_[A-Za-z0-9]+ --scope [A-Za-z0-9_-]+(?: --yes)?$/.test(command);
+  if (previewDeploy || productionDeploy || productionPromote) {
+    const linked = readJson(path.join(directory, '.vercel/project.json'));
+    const scope = command.match(/--scope ([A-Za-z0-9_-]+)/)[1];
+    if (!linked?.projectId || linked.orgId !== scope) throw new Error('preview project/scope binding missing');
+    if ((process.env.VERCEL_PROJECT_ID && process.env.VERCEL_PROJECT_ID !== linked.projectId) ||
+        (process.env.VERCEL_ORG_ID && process.env.VERCEL_ORG_ID !== linked.orgId)) throw new Error('environment overrides preview target');
+    target = `${linked.orgId}/${linked.projectId}`;
+    environment = previewDeploy ? 'preview' : 'production';
+    action = previewDeploy ? 'preview_deploy' : productionDeploy ? 'staged_production_deploy' : 'production_promote';
+    if (productionPromote) deploymentId = command.match(/ promote (dpl_[A-Za-z0-9]+) /)[1];
+  } else if (/^git push origin (?:(?:HEAD|[a-f0-9]{40}):refs\/heads\/(?:main|production|codex\/[a-z0-9-]+)|refs\/notes\/price-v3-delivery)$/.test(command)) {
+    if (!['https://github.com/ChenYuan-Eoin/cyanlog-sales-v3.git', 'git@github.com:ChenYuan-Eoin/cyanlog-sales-v3.git'].includes(git(['remote', 'get-url', '--push', 'origin']))) throw new Error('unexpected release git remote');
+    if (command.endsWith('refs/notes/price-v3-delivery')) refObject = git(['rev-parse', 'refs/notes/price-v3-delivery']);
+    else if (git(['rev-parse', command.split(' ')[3].split(':')[0]]) !== git(['rev-parse', 'HEAD'])) throw new Error('only exact HEAD may be pushed');
+    target = `${VERCEL_PRODUCTION_CONTRACT.teamId}/${VERCEL_PRODUCTION_CONTRACT.projectId}`;
+    environment = 'production';
+    action = 'release_git_push';
+  } else if (/^(?:\/[A-Za-z0-9_./-]+\/)?supabase db push --db-url \S+$/.test(command)) {
+    const url = new URL(command.split(' --db-url ')[1]);
+    if (!['postgres:', 'postgresql:'].includes(url.protocol) || !/^db\.[a-z0-9]+\.supabase\.co$/.test(url.hostname)) throw new Error('explicit isolated database host required');
+    target = url.hostname;
+    environment = 'sandbox';
+    action = 'sandbox_database_push';
+  } else throw new Error('unsupported approval action');
+  if (git(['status', '--porcelain']).length) throw new Error('approval requires clean committed workspace');
+  const contract = loadContract(repoRoot);
+  if (contract?.status !== 'approved') throw new Error('approved goal required');
+  return { commandHash: hashText(command), cwd: directory, workspace: root, head: git(['rev-parse', 'HEAD']),
+    goalHash: hashText(JSON.stringify([contract.id, contract.objective, contract.boundaries, contract.revisions])), target, environment, action, deploymentId, refObject };
+}
+
+function actionAuthority(repoRoot, authority, binding) {
+  repoRoot = binding.workspace;
+  const inbox = fs.readFileSync(path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl'), 'utf8');
+  const entry = inbox.split('\n').filter(Boolean).map((line) => JSON.parse(line)).find((item) => item.id === authority);
+  const allowed = entry?.action_approval;
+  if (entry?.state !== 'user_authorized' || allowed?.by !== 'user' ||
+      allowed.target !== binding.target || allowed.environment !== binding.environment ||
+      allowed.commandHash !== binding.commandHash || allowed.cwd !== binding.cwd) throw new Error('matching explicit user action authority required');
+  if (binding.environment === 'production') {
+    const state = readJson(path.join(repoRoot, 'governance/runtime-state/active-task.json'));
+    const contract = state?.active_task?.delivery_contract;
+    const release = contract?.production_release_authorization;
+    const record = inbox.split('\n').filter(Boolean).map(line => JSON.parse(line)).find(item => item.id === release?.final_release_approval_id);
+    if (release?.status !== 'approved_code_only' || contract.final_acceptance?.production_database_mode !== 'read_only'
+      || record?.type !== 'final_production_release_authorization' || record.state !== 'approved' || record.source !== 'user_explicit'
+      || record.code_release_authorized !== true || record.production_database_write_authorized !== false
+      || record.scope !== release.final_scope || record.authorized_commit_binding !== 'delivery_attestation_current_head'
+      || allowed.releaseAuthority !== record.id || binding.target !== `${release.vercel_team_id}/${release.vercel_project_id}`) {
+      throw new Error('matching code-only Production release authority required');
+    }
+    if (binding.action === 'production_promote') {
+      if (allowed.deploymentId !== binding.deploymentId || allowed.deploymentCommit !== binding.head
+        || allowed.deploymentProjectId !== release.vercel_project_id || allowed.deploymentTarget !== 'production'
+        || allowed.deploymentState !== 'READY') throw new Error('exact READY Production deployment binding required');
+    } else if (!['staged_production_deploy', 'release_git_push'].includes(binding.action) || allowed.commandKind !== binding.action) {
+      throw new Error('Production action must be staged deploy or exact deployment promotion');
+    }
+  }
+}
+
+function approveAction(repoRoot, request) {
+  const binding = actionBinding(repoRoot, request.command, request.cwd);
+  repoRoot = binding.workspace;
+  actionAuthority(repoRoot, request.authority, binding);
+  const expires = Date.parse(request.expiresAt);
+  if (!Number.isFinite(expires) || expires <= Date.now() || expires > Date.now() + 3600000) throw new Error('approval expiry must be within one hour');
+  const approval = { ...binding, authority: request.authority, expiresAt: request.expiresAt, id: crypto.randomUUID() };
+  const file = path.join(paths(repoRoot).runtimeDir, 'action-approvals', `${binding.commandHash}.json`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(approval), { flag: 'wx', mode: 0o600 });
+  appendJsonl(paths(repoRoot).evidenceLedgerPath, { type: 'action-approved', at: nowIso(), ...approval });
+  return approval;
+}
+
+function consumeActionApproval(repoRoot, command, payload) {
+  try {
+    const input = payload.tool_input || payload.input || payload.arguments || payload;
+    const binding = actionBinding(repoRoot, command, input.workdir || input.cwd || repoRoot);
+    repoRoot = binding.workspace;
+    const file = path.join(paths(repoRoot).runtimeDir, 'action-approvals', `${binding.commandHash}.json`);
+    const approval = readJson(file);
+    if (!approval || !(Date.parse(approval.expiresAt) > Date.now()) ||
+        Object.keys(binding).some((key) => approval[key] !== binding[key])) return null;
+    actionAuthority(repoRoot, approval.authority, binding);
+    // Retained exclusive marker prevents concurrent consumption and replay.
+    // This records allowance, not successful external execution.
+    fs.writeFileSync(`${file}.consumed`, nowIso(), { flag: 'wx', mode: 0o600 });
+    appendJsonl(paths(repoRoot).evidenceLedgerPath, { type: 'action-allowed-once', id: approval.id, at: nowIso() });
+    return approval.id;
+  } catch {
+    return null;
+  }
+}
+
 function commandTextFromPayload(payload = {}) {
   const candidates = [
     payload.tool_input?.cmd,
     payload.tool_input?.command,
+    payload.tool_input?.chars,
+    payload.tool_input?.stdin,
     payload.input?.cmd,
     payload.input?.command,
+    payload.input?.chars,
     payload.arguments?.cmd,
     payload.arguments?.command,
+    payload.arguments?.chars,
     payload.cmd,
     payload.command
   ];
@@ -858,9 +1023,20 @@ function isHarnessRuntimeStatePath(repoRoot, filePath) {
 }
 
 function normalizedScopes(contract) {
-  return (contract?.boundaries?.allowedScopes || [])
-    .map((scope) => String(scope || '').replace(/\/+$/, ''))
-    .filter(Boolean);
+  // 历史 contract 可能把多个 scope 写成一个分号或逗号连接的长字符串，
+  // 这里统一拆成独立 scope，避免 scopeAllowsPath 永远匹配失败。
+  const raw = contract?.boundaries?.allowedScopes;
+  const entries = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const scopes = [];
+  for (const entry of entries) {
+    for (const part of String(entry || '').split(/[;,\n]+/)) {
+      const scope = part.trim().replace(/^\.\//, '').replace(/\/+$/, '');
+      if (scope && !scopes.includes(scope)) {
+        scopes.push(scope);
+      }
+    }
+  }
+  return scopes;
 }
 
 function scopeAllowsPath(contract, rel) {
@@ -908,6 +1084,7 @@ function contractLooksHarnessScoped(contract) {
 }
 
 function commandTargetObject(command) {
+  if (isPlainDocumentRead(command)) return '';
   if (/\b(vercel|netlify|wrangler|firebase|railway|render)\b[^;\n]*(--prod|deploy|publish)/.test(command)) {
     return 'business-deploy';
   }
@@ -1249,7 +1426,21 @@ function evaluateToolUse(repoRoot, payload = {}) {
   const level = normalizeAutonomyLevel(contract?.autonomyBudget?.level || 'A0');
   const autonomy = AUTONOMY_LEVELS[level];
   const category = toolCategory(toolName);
-  const command = commandTextFromPayload(payload);
+  const rawCommand = commandTextFromPayload(payload);
+  if (category === 'edit' && rawCommand.startsWith('*** Begin Patch')) {
+    const targets = [...rawCommand.matchAll(/^\*\*\* (?:Update File|Add File|Delete File|Move to): (.+)$/gm)].map((match) => match[1]);
+    if (!targets.length) return { ok: false, reason: 'patch targets missing', gate: gateId, exitCode: 2 };
+    // Every patch destination must pass ordinary file-edit scope/control checks.
+    for (const target of targets) {
+      const result = evaluateToolUse(repoRoot, { tool_name: rawToolName, tool_input: { file_path: target } });
+      if (!result.ok) return result;
+    }
+    return { ok: true, gate: gateId, patchTargets: targets };
+  }
+  const command = category === 'command' ? rawCommand : '';
+  if (category === 'command' && HARNESS_CONTROL_COMMAND.test(command)) {
+    return { ok: true, gate: gateId, controlPlaneCommand: true };
+  }
   const commandRisk = detectCommandRisk(command);
   const controlRisk = category === 'edit' ? controlPlaneEditRisk(repoRoot, contract, payload) : '';
   const documentRisk = documentEditRisk(repoRoot, payload, category);
@@ -1326,6 +1517,12 @@ function evaluateToolUse(repoRoot, payload = {}) {
   }
 
   if (commandRisk) {
+    const approvalId = consumeActionApproval(repoRoot, command, payload);
+    if (approvalId) {
+      const row = actionMatrix.rows.find((item) => item.id === 'external_side_effect');
+      if (row) Object.assign(row, { status: MATRIX_STATUS.PASS, blocking: false, detail: `explicit single-use approval: ${approvalId}; execution not yet verified` });
+      return { ok: true, matrix: actionMatrix, gate: gateId, explicitActionApproval: approvalId };
+    }
     return {
       ok: false,
       reason: 'high-risk command requires explicit user approval',
@@ -1553,6 +1750,8 @@ function runtimeValidation(repoRoot) {
 }
 
 module.exports = {
+  approveAction,
+  actionBinding,
   AUTONOMY_LEVELS,
   HIGH_RISK_PATTERNS,
   MATRIX_STATUS,

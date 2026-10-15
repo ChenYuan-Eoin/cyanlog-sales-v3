@@ -261,6 +261,10 @@ function runShippingContractSelftest(repoRoot) {
     productionReleaseAuthorization: { status: 'approved_for_final_release' }
   };
   assert.deepStrictEqual(shippingProductionVerifierScopeBlockers(scoped), []);
+  const uiScoped = { ...scoped, runtimeContractVersion: 'f054-ui-v1', productionDatabaseMode: 'read_only', productionReleaseAuthorization: { status: 'approved_code_only' } };
+  assert.deepStrictEqual(shippingProductionVerifierScopeBlockers(uiScoped), []);
+  assert.ok(shippingProductionVerifierScopeBlockers({ ...uiScoped, productionDatabaseMode: 'controlled_write_approved' }).length);
+  assert.ok(shippingProductionVerifierScopeBlockers({ ...uiScoped, runtimeContractVersion: 'f054-v2' }).length);
   for (const override of [
     { featureId: 'F001' }, { runtimeProfile: 'ai' }, { runtimeContractVersion: 'f054-v1' },
     { activeId: 'G1' }, { targetState: 'code_green' }, { productionDatabaseMode: 'read_only_pending' },
@@ -1075,6 +1079,115 @@ function runSelftest(repoRoot) {
   console.log('harness selftest ok');
 }
 
+function runActionApprovalSelftest(repoRoot) {
+  runGit(repoRoot, ['init', '--quiet']);
+  runGit(repoRoot, ['config', 'user.email', 'test@example.invalid']);
+  runGit(repoRoot, ['config', 'user.name', 'Harness test']);
+  makeSettings(repoRoot);
+  makeSchedulerFixture(repoRoot);
+  fs.writeFileSync(path.join(repoRoot, '.gitignore'), '.runtime/\n');
+  writeJson(path.join(repoRoot, '.vercel/project.json'), { projectId: 'prj_test', orgId: 'team_test' });
+  core.startGoal(repoRoot, 'Validate shipping preview', { level: 'A3', workPackageId: 'WP99', scopes: 'product-truth/product-code' });
+  core.approveContract(repoRoot, { level: 'A3', by: 'selftest' });
+  core.recordEvidence(repoRoot, { status: 'pass', summary: 'fixture research', satisfies: core.loadContract(repoRoot).researchPlan.requiredChecks.map((item) => `research-check:${item.id}`) });
+  core.setPhase(repoRoot, 'execute');
+  const command = 'vercel deploy --target preview --scope team_test';
+  const authority = 'IN-SELFTEST-ACTION';
+  const inboxPath = path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl');
+  fs.writeFileSync(inboxPath, JSON.stringify({ id: authority, state: 'user_authorized', action_approval: {
+    by: 'user', target: 'team_test/prj_test', environment: 'preview', cwd: fs.realpathSync(repoRoot),
+    commandHash: crypto.createHash('sha256').update(command).digest('hex')
+  } }) + '\n');
+  runGit(repoRoot, ['add', '.']);
+  runGit(repoRoot, ['commit', '--quiet', '-m', 'approval fixture']);
+  const request = { command, cwd: repoRoot, authority, expiresAt: new Date(Date.now() + 600000).toISOString() };
+  const evaluate = (cmd = command, workdir = repoRoot) => core.evaluateToolUse(repoRoot, { tool_name: 'Bash', tool_input: { cmd, workdir } });
+  assert.strictEqual(evaluate().ok, false);
+  assert.throws(() => core.approveAction(repoRoot, { ...request, authority: 'missing' }), /authority/);
+  assert.throws(() => core.approveAction(repoRoot, { ...request, expiresAt: 'invalid' }), /expiry/);
+  assert.throws(() => core.approveAction(repoRoot, { ...request, command: command + ' --prod' }), /unsupported/);
+  assert.throws(() => core.approveAction(repoRoot, { ...request, command: command + '; echo extra' }), /literal/);
+  core.approveAction(repoRoot, request);
+  const previousProject = process.env.VERCEL_PROJECT_ID;
+  try {
+    process.env.VERCEL_PROJECT_ID = 'prj_other';
+    assert.strictEqual(evaluate().ok, false);
+  } finally {
+    if (previousProject === undefined) delete process.env.VERCEL_PROJECT_ID;
+    else process.env.VERCEL_PROJECT_ID = previousProject;
+  }
+  assert.throws(() => core.approveAction(repoRoot, request), /EEXIST/);
+  assert.strictEqual(evaluate(command + ' --yes').ok, false);
+  assert.strictEqual(evaluate(command, os.tmpdir()).ok, false);
+  const approvalFile = path.join(core.paths(repoRoot).runtimeDir, 'action-approvals', `${crypto.createHash('sha256').update(command).digest('hex')}.json`);
+  const original = core.readJson(approvalFile);
+  for (const replacement of [{ expiresAt: '2000-01-01' }, { head: 'wrong' }, { goalHash: 'wrong' }, { target: 'wrong' }, { environment: 'production' }]) {
+    writeJson(approvalFile, { ...original, ...replacement });
+    assert.strictEqual(evaluate().ok, false);
+  }
+  writeJson(approvalFile, original);
+  fs.writeFileSync(path.join(repoRoot, 'dirty.txt'), 'changed');
+  assert.strictEqual(evaluate().ok, false);
+  fs.unlinkSync(path.join(repoRoot, 'dirty.txt'));
+  const state = core.loadState(repoRoot);
+  core.saveState(repoRoot, { ...state, activeGates: ['HG2'] });
+  assert.strictEqual(evaluate().ok, false);
+  core.saveState(repoRoot, state);
+  assert.strictEqual(evaluate().ok, true);
+  assert.strictEqual(evaluate().ok, false);
+  const read = 'cat /tmp/vercel/skills/vercel-cli/references/deployment.md';
+  assert.strictEqual(evaluate(read).ok, true);
+  assert.strictEqual(evaluate(read + '; vercel deploy --prod').ok, false);
+  const patch = (target) => `*** Begin Patch\n*** Update File: ${target}\n@@\n+vercel deploy --prod\n*** End Patch`;
+  assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'apply_patch', command: patch('product-truth/product-code/test.js') }).ok, true);
+  assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'apply_patch', command: patch('.codex/hooks.json') }).ok, false);
+  assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'apply_patch', command: patch(core.paths(repoRoot).statePath) }).ok, false);
+  const mixedPatch = patch('product-truth/product-code/test.js').replace('*** End Patch', '*** Add File: outside.js\n+example\n*** End Patch');
+  assert.strictEqual(core.evaluateToolUse(repoRoot, { tool_name: 'apply_patch', command: mixedPatch }).ok, false);
+  for (const tool of ['mcp__codex_apps__vercel__get_deployment', 'mcp__codex_apps__vercel__get_project', 'mcp__codex_app__list_artifacts']) assert.strictEqual(core.normalizeToolName(tool), 'Read');
+  for (const tool of ['mcp__other__get_deployment', 'mcp__codex_apps__vercel__create_deployment', 'mcp__codex_app__archive_worktree']) assert.notStrictEqual(core.normalizeToolName(tool), 'Read');
+
+  const productionCommand = 'vercel deploy --prod --skip-domain --scope team_test --yes';
+  const releaseId = 'IN-SELFTEST-PRODUCTION', actionId = 'IN-SELFTEST-PRODUCTION-ACTION';
+  const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
+  const scheduler = core.readJson(schedulerPath);
+  scheduler.active_task.delivery_contract = { final_acceptance: { production_database_mode: 'read_only' }, production_release_authorization: { status: 'approved_code_only', final_release_approval_id: releaseId, final_scope: 'UI only', vercel_team_id: 'team_test', vercel_project_id: 'prj_test' } };
+  writeJson(schedulerPath, scheduler);
+  fs.appendFileSync(inboxPath, JSON.stringify({ id: releaseId, type: 'final_production_release_authorization', state: 'approved', source: 'user_explicit', scope: 'UI only', code_release_authorized: true, production_database_write_authorized: false, authorized_commit_binding: 'delivery_attestation_current_head' })+'\n');
+  fs.appendFileSync(inboxPath, JSON.stringify({ id: actionId, state: 'user_authorized', action_approval: { by: 'user', target: 'team_test/prj_test', environment: 'production', cwd: fs.realpathSync(repoRoot), commandHash: crypto.createHash('sha256').update(productionCommand).digest('hex'), commandKind: 'staged_production_deploy', releaseAuthority: releaseId } })+'\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'code-only release authority fixture']);
+  const productionRequest = { command: productionCommand, cwd: repoRoot, authority: actionId, expiresAt: new Date(Date.now()+600000).toISOString() };
+  assert.strictEqual(evaluate(productionCommand).ok, false);
+  assert.throws(() => core.approveAction(repoRoot, { ...productionRequest, command: productionCommand.replace(' --skip-domain', '') }), /unsupported/);
+  core.approveAction(repoRoot, productionRequest);
+  const productionApproval = path.join(core.paths(repoRoot).runtimeDir, 'action-approvals', crypto.createHash('sha256').update(productionCommand).digest('hex')+'.json');
+  const productionOriginal = core.readJson(productionApproval);
+  for (const replacement of [{ head: 'wrong' }, { target: 'team_other/prj_other' }, { expiresAt: '2000-01-01' }, { environment: 'preview' }]) {
+    writeJson(productionApproval, { ...productionOriginal, ...replacement });
+    assert.strictEqual(evaluate(productionCommand).ok, false);
+  }
+  writeJson(productionApproval, productionOriginal);
+  assert.strictEqual(evaluate('vercel promote dpl_other --scope team_test --yes').ok, false);
+  assert.strictEqual(evaluate(productionCommand).ok, true);
+  assert.strictEqual(evaluate(productionCommand).ok, false);
+  runGit(repoRoot, ['remote', 'add', 'origin', 'https://github.com/ChenYuan-Eoin/cyanlog-sales-v3.git']);
+  const push = 'git push origin HEAD:refs/heads/codex/test';
+  const boundPush = core.actionBinding(repoRoot, push, repoRoot);
+  assert.strictEqual(boundPush.head, runGit(repoRoot, ['rev-parse', 'HEAD']).trim());
+  assert.strictEqual(boundPush.action, 'release_git_push');
+  assert.strictEqual(evaluate(push).ok, false);
+  assert.throws(() => core.actionBinding(repoRoot, 'git push --force origin HEAD:refs/heads/production', repoRoot), /unsupported/);
+  assert.throws(() => core.actionBinding(repoRoot, 'git push origin HEAD:refs/heads/unapproved', repoRoot), /unsupported/);
+  runGit(repoRoot, ['notes', '--ref=price-v3-delivery', 'add', '-m', 'first evidence']);
+  const notePush = 'git push origin refs/notes/price-v3-delivery';
+  const noteBinding = core.actionBinding(repoRoot, notePush, repoRoot);
+  runGit(repoRoot, ['notes', '--ref=price-v3-delivery', 'append', '-m', 'second evidence']);
+  assert.notStrictEqual(core.actionBinding(repoRoot, notePush, repoRoot).refObject, noteBinding.refObject);
+  runGit(repoRoot, ['remote', 'set-url', 'origin', 'https://github.com/other/repo.git']);
+  assert.throws(() => core.actionBinding(repoRoot, push, repoRoot), /remote/);
+  console.log('action approval and classification selftest ok');
+}
+
 function main() {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-selftest-'));
   const previousRuntimeDir = process.env.PRICE_V3_HARNESS_RUNTIME_DIR;
@@ -1090,6 +1203,10 @@ function main() {
     });
     assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');
     runSelftest(repoRoot);
+    const approvalRoot = path.join(repoRoot, 'approval-fixture');
+    fs.mkdirSync(approvalRoot);
+    process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(approvalRoot, '.runtime', 'harness');
+    runActionApprovalSelftest(approvalRoot);
   } finally {
     if (previousRuntimeDir === undefined) {
       delete process.env.PRICE_V3_HARNESS_RUNTIME_DIR;

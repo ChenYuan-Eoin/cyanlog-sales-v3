@@ -1643,7 +1643,7 @@ export default function ConfigsClient({
             </p>
           </div>
 
-          <div className="hidden gap-3 sm:grid-cols-3 xl:grid xl:min-w-[420px]">
+          <div className={activeTab === 'shipping' ? 'hidden' : 'hidden gap-3 sm:grid-cols-3 xl:grid xl:min-w-[420px]'}>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div className="text-xs font-medium text-slate-500">生效范围</div>
               <div className="mt-2 text-sm font-semibold text-slate-900">组织级统一发布</div>
@@ -1684,7 +1684,7 @@ export default function ConfigsClient({
                 >
                   {section.label}
                   <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${isActiveSection ? 'bg-white/10' : 'bg-slate-100'}`}>
-                    {formatSectionCount(section.tabs)} 项
+                    {section.id === 'shipping' ? '独立设置' : `${formatSectionCount(section.tabs)} 项`}
                   </span>
                 </button>
               )
@@ -1719,7 +1719,7 @@ export default function ConfigsClient({
                         <div className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           isActiveSection ? 'bg-white/10 text-slate-100' : 'bg-white text-slate-500'
                         }`}>
-                          {formatSectionCount(section.tabs)} 项
+                          {section.id === 'shipping' ? '独立设置' : `${formatSectionCount(section.tabs)} 项`}
                         </div>
                       </div>
                       <p className={`mt-2 text-xs leading-5 ${
@@ -1744,7 +1744,7 @@ export default function ConfigsClient({
           </aside>
 
           <main className="min-w-0">
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:p-6">
+            <div className={activeTab === 'shipping' ? 'hidden' : 'rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:p-6'}>
               <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start 2xl:justify-between">
                 <div className="min-w-0">
                   <div className="hidden items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400 xl:flex">
@@ -1806,7 +1806,7 @@ export default function ConfigsClient({
                       <span className={`rounded-full px-2 py-0.5 text-xs ${
                         isActive ? 'bg-white/10 text-slate-100' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {formatModuleCount(tabId)} 项
+                        {tabId === 'shipping' ? '独立设置' : `${formatModuleCount(tabId)} 项`}
                       </span>
                     </button>
                   )

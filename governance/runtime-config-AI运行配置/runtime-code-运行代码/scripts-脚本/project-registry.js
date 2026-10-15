@@ -42,6 +42,8 @@ const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
 const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_request', 'shipping_tracking', 'shipping_access']);
 const SHIPPING_REPLAY_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'confirm_submission', 'query_tracking', 'reload_recent', 'verify_access']);
 const SHIPPING_WORKSPACE_ITEMS = Object.freeze(['shipping_workspace', 'shipping_tracking', 'shipping_access']);
+const SHIPPING_UI_ACTIONS = Object.freeze(['open_configuration_center', 'switch_configuration_sections', 'verify_environment_scoping', 'retain_unsaved_draft', 'verify_masked_configuration', 'return_to_workspace', 'select_order_with_keyboard', 'copy_waybill', 'download_template', 'query_tracking', 'reload_ledger', 'verify_organization_access']);
+const SHIPPING_UI_FLAGS = Object.freeze(['page_accessible', 'configuration_center', 'six_sections_available', 'environment_scoping', 'draft_retention', 'credentials_masked', 'no_empty_counts', 'copy_feedback', 'template_download', 'keyboard_selection', 'no_business_mutations']);
 const SHIPPING_WORKSPACE_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'select_payment', 'query_tracking', 'reload_recent', 'verify_access']);
 const SHIPPING_COLLABORATION_ACTIONS = Object.freeze([
   'open_configuration_center', 'verify_masked_configuration', 'paste_addresses',
@@ -296,6 +298,7 @@ function runtimeContractVersionOf(state) {
   return state.active_task?.delivery_contract?.runtime_contract_version || null;
 }
 function requiredReplayActions(state) {
+  if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-ui-v1') return SHIPPING_UI_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-v2') return SHIPPING_COLLABORATION_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace') return SHIPPING_WORKSPACE_ACTIONS;
   return runtimeProfileOf(state) === 'shipping' ? SHIPPING_REPLAY_ACTIONS : REQUIRED_DEFECT_REPLAY_ACTIONS;
@@ -303,6 +306,17 @@ function requiredReplayActions(state) {
 function shippingWorkspaceEvidenceBlockers(section, environment, expectedContractVersion = null) {
   const errors = [], workspace = section.shipping_workspace?.payload || {}, tracking = section.shipping_tracking?.payload || {}, access = section.shipping_access?.payload || {};
   if (expectedContractVersion && workspace.contract_version !== expectedContractVersion) errors.push('Shipping workspace evidence contract version does not match the Active contract');
+  if (workspace.contract_version === 'f054-ui-v1') {
+    for (const key of SHIPPING_UI_FLAGS) if (workspace[key] !== true) errors.push(`Shipping UI proof missing: ${key}`);
+    for (const key of ['guest_ledger_denied', 'owner_can_read', 'organization_matched']) if (access[key] !== true) errors.push(`Shipping UI access proof missing: ${key}`);
+    if (workspace.cancel_before_collection_verified !== undefined) errors.push('UI evidence must not claim cancellation verification');
+    if (environment === 'production') {
+      if (tracking.success !== true || tracking.mock !== false || !/^(?:SF)?[0-9]{10,15}$/.test(String(tracking.waybill || '')) || !(tracking.event_count > 0)) errors.push('Existing shipment tracking evidence is missing');
+      if (tracking.sf_environment !== environment) errors.push('Tracking evidence environment mismatch');
+      if (tracking.source !== 'production_database' || tracking.operator_observations_are_attested !== true) errors.push('Production UI tracking needs persisted evidence and operator attestation');
+    } else if (tracking.presentation_checked !== true || tracking.no_carrier_write !== true) errors.push('Preview tracking presentation and no-write proof are missing');
+    return errors;
+  }
   if (['f054-v1', 'f054-v2'].includes(workspace.contract_version)) {
     for (const key of ['page_accessible','anonymous_form_submittable','receipt_recoverable','owner_direct_available','review_queue_available']) if (workspace[key] !== true) errors.push(`Shipping collaboration workspace proof missing: ${key}`);
     for (const filter of ['sales','customer','contact','status']) if (!workspace.ledger_filters?.includes(filter)) errors.push(`Shipping ledger filter proof missing: ${filter}`);
@@ -344,12 +358,13 @@ function shippingWorkspaceEvidenceBlockers(section, environment, expectedContrac
 
 function shippingProductionVerifierScopeBlockers(status) {
   const blockers = [];
-  if (status.runtimeProfile !== 'shipping_workspace' || status.runtimeContractVersion !== 'f054-v2'
+  if (status.runtimeProfile !== 'shipping_workspace' || !['f054-v2', 'f054-ui-v1'].includes(status.runtimeContractVersion)
     || status.featureId !== 'F054' || !WORK_PACKAGE_ID_PATTERN.test(String(status.activeId || ''))) {
     blockers.push('Verifier requires the scoped F054 configured-workbench contract');
   }
-  if (status.targetState !== 'production_released' || status.productionReleaseAuthorization?.status !== 'approved_for_final_release'
-    || status.productionDatabaseMode !== 'controlled_write_approved') {
+  if (status.targetState !== 'production_released' || (status.runtimeContractVersion === 'f054-ui-v1'
+    ? status.productionReleaseAuthorization?.status !== 'approved_code_only' || status.productionDatabaseMode !== 'read_only'
+    : status.productionReleaseAuthorization?.status !== 'approved_for_final_release' || status.productionDatabaseMode !== 'controlled_write_approved')) {
     blockers.push('Verifier requires the approved Production release and write contract');
   }
   return blockers;
@@ -443,7 +458,7 @@ function validateSchedulerState(options = {}) {
   if (!['ai', 'shipping', 'shipping_workspace'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
   const contractVersion = runtimeContractVersionOf(state);
-  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
+  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
   const canonicalRuntimeEvidence = profile === 'shipping_workspace' ? SHIPPING_WORKSPACE_ITEMS : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
     deliveryContract
@@ -470,22 +485,24 @@ function validateSchedulerState(options = {}) {
         errors.push(`active_task.delivery_contract.production_release_authorization.${field} is required`);
       }
     }
-    if (!['pending_security_gate_and_final_write_approval', 'approved_for_final_release'].includes(releaseAuthorization?.status)) {
+    if (!['pending_security_gate_and_final_write_approval', 'approved_for_final_release', 'approved_code_only'].includes(releaseAuthorization?.status)) {
       errors.push('active_task.delivery_contract.production_release_authorization.status is invalid');
     }
-    if (releaseAuthorization?.status === 'approved_for_final_release' && !String(releaseAuthorization?.final_release_approval_id || '').trim()) {
+    if (['approved_for_final_release', 'approved_code_only'].includes(releaseAuthorization?.status) && !String(releaseAuthorization?.final_release_approval_id || '').trim()) {
       errors.push('active_task.delivery_contract.production_release_authorization.final_release_approval_id is required for final release');
     }
     if (deliveryContract.final_acceptance?.browser !== 'trusted_operator_attestation_from_user_existing_chrome_only') {
       errors.push('active_task.delivery_contract.final_acceptance must distinguish trusted existing-Chrome operator attestation from machine proof');
     }
     const databaseMode = deliveryContract.final_acceptance?.production_database_mode;
-    if (!['read_only_pending_security_gate_and_final_approval', 'controlled_write_approved'].includes(databaseMode)) {
+    if (!['read_only_pending_security_gate_and_final_approval', 'controlled_write_approved', 'read_only'].includes(databaseMode)) {
       errors.push('active_task.delivery_contract.final_acceptance.production_database_mode is invalid');
     }
     if (releaseAuthorization?.status === 'approved_for_final_release' && databaseMode !== 'controlled_write_approved') {
       errors.push('final Production release approval requires controlled_write_approved database mode');
     }
+    if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || contractVersion !== 'f054-ui-v1'
+      || releaseAuthorization.database_write_authorized !== false)) errors.push('Code-only release requires the UI contract and explicit read-only database boundary');
   }
   for (const dynamicKey of ['evidence', 'release_control', 'releaseControl', 'completionState', 'completion_state', 'defects']) {
     if (deliveryContract && Object.prototype.hasOwnProperty.call(deliveryContract, dynamicKey)) {
@@ -526,13 +543,15 @@ function validateSchedulerState(options = {}) {
         errors.push(`Production release authorization ${field} is missing from demand inbox: ${id}`);
       }
     }
-    if (releaseAuthorization.status === 'approved_for_final_release') {
+    if (['approved_for_final_release', 'approved_code_only'].includes(releaseAuthorization.status)) {
       const finalRecord = inboxRecords.find((record) => record?.id === releaseAuthorization.final_release_approval_id);
       if (finalRecord?.type !== 'final_production_release_authorization') errors.push('final Production authorization inbox record type is invalid');
       if (finalRecord?.state !== 'approved') errors.push('final Production authorization inbox record state is not approved');
       if (finalRecord?.source !== 'user_explicit') errors.push('final Production authorization inbox record is not user explicit');
       if (finalRecord?.scope !== releaseAuthorization.final_scope) errors.push('final Production authorization inbox record scope mismatch');
-      if (finalRecord?.production_write_authorized !== true) errors.push('final Production authorization inbox record does not allow controlled writes');
+      if (releaseAuthorization.status === 'approved_code_only') {
+        if (finalRecord?.code_release_authorized !== true || finalRecord?.production_database_write_authorized !== false) errors.push('Code-only Production authorization must explicitly preserve the database write boundary');
+      } else if (finalRecord?.production_write_authorized !== true) errors.push('final Production authorization inbox record does not allow controlled writes');
       if (finalRecord?.authorized_commit_binding !== 'delivery_attestation_current_head') errors.push('final Production authorization inbox record has no exact-HEAD attestation binding');
     }
   }
@@ -1787,7 +1806,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (status.runtimeContractVersion === 'f054-v2') {
+        if (['f054-v2', 'f054-ui-v1'].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -1918,14 +1937,17 @@ function checkDeliveryStage(stage, options = {}) {
     if (!status.git.mainIntegrated) blockers.push('origin/main does not equal released candidate HEAD');
     if (status.git.defaultBranch !== 'main') blockers.push(`GitHub default branch is ${status.git.defaultBranch || 'unknown'}, expected main`);
     if (status.git.remoteProduction !== status.git.head) blockers.push('origin/production does not equal released candidate HEAD');
-    if (status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release and write authorization is still pending');
-    if (status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database mode has not changed from read-only pending to controlled_write_approved');
+    const codeOnly = status.productionReleaseAuthorization?.status === 'approved_code_only';
+    if (!codeOnly && status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release authorization is still pending');
+    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || status.runtimeContractVersion !== 'f054-ui-v1' : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
     const approvalRecord = status.productionReleaseAuthorizationRecord;
     if (approvalRecord?.type !== 'final_production_release_authorization') blockers.push('Final Production authorization record type is invalid');
     if (approvalRecord?.state !== 'approved') blockers.push('Final Production authorization record is not approved');
     if (approvalRecord?.source !== 'user_explicit') blockers.push('Final Production authorization is not sourced from an explicit user decision');
     if (approvalRecord?.scope !== status.productionReleaseAuthorization?.final_scope) blockers.push('Final Production authorization record scope does not match the Active contract');
-    if (approvalRecord?.production_write_authorized !== true) blockers.push('Final Production authorization does not explicitly allow the controlled Production write');
+    if (codeOnly) {
+      if (approvalRecord?.code_release_authorized !== true || approvalRecord?.production_database_write_authorized !== false) blockers.push('Explicit code-only Production authority is missing');
+    } else if (approvalRecord?.production_write_authorized !== true) blockers.push('Final Production authorization does not explicitly allow the controlled Production write');
     if (approvalRecord?.authorized_commit_binding !== 'delivery_attestation_current_head') blockers.push('Final Production authorization does not require exact-HEAD delivery attestation binding');
     if (status.releaseControl.production_release_approval_id !== status.productionReleaseAuthorization?.final_release_approval_id) blockers.push('Production release approval ID does not match the Active final-release contract');
     if (status.releaseControl.production_release_clarification_id !== status.productionReleaseAuthorization?.clarification_id) blockers.push('Production release clarification ID does not match the Active contract');
@@ -2004,7 +2026,7 @@ async function verifyShippingWorkspaceProduction(options = {}) {
   if (live.blockers.length) throw new Error(live.blockers.join('; '));
   const { runtimePath } = loadDeliveryMutableBase({ repoRoot });
   const payload = await require('./shipping-workspace-verifier.js').verify({
-    ...options, commit: status.git.head, deploymentId: live.snapshot.deployment.id,
+    ...options, contractVersion: status.runtimeContractVersion, commit: status.git.head, deploymentId: live.snapshot.deployment.id,
     runtime: path.dirname(runtimePath)
   });
   const check = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, { commit: status.git.head, deploymentId: live.snapshot.deployment.id, runtimeContractVersion: status.runtimeContractVersion });
@@ -2288,6 +2310,8 @@ module.exports = {
   SHIPPING_RUNTIME_ITEMS,
   SHIPPING_REPLAY_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,
+  SHIPPING_UI_ACTIONS,
+  SHIPPING_UI_FLAGS,
   requiredReplayActions,
   shippingRuntimeEvidenceBlockers,
   shippingWorkspaceEvidenceBlockers,

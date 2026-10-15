@@ -7,6 +7,7 @@ import { parseAddress } from '@/lib/shipping/address'
 import { ownerOrderSchema } from '@/lib/shipping/validation'
 import type { ShippingSettings, ShipmentOrder } from '@/lib/shipping/types'
 import type { ShippingWorkbenchRequest } from '@/lib/shipping/workbench-client'
+import * as importParser from '@/lib/shipping/import-parser'
 
 const settings: ShippingSettings = { intakeRules: { companyName: { enabled: false, required: false, minLength: 0 }, team: { enabled: false, required: false, minLength: 0 }, teamOptions: [] }, environment: 'sandbox', ready: true, canSubmit: true, reason: '', services: [{ id: 2, name: '顺丰标快' }], monthlyTail: '0000', sender: { name: '前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科苑路15号' } }
 const fetcher = vi.fn()
@@ -20,6 +21,33 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('reports a failed template download and lets the operator retry', async () => {
+    const build = vi.spyOn(importParser, 'buildShippingTemplate').mockRejectedValue(new Error('模板生成失败'))
+    try {
+      render(<ShippingWorkbench settings={settings}/>)
+      fireEvent.click(screen.getByRole('button', { name: '文件导入' }))
+      fireEvent.click(screen.getByRole('button', { name: '下载标准模板.xlsx' }))
+      expect(await screen.findByText('模板下载未完成：模板生成失败。请重试，或使用文本解析录入。')).toBeTruthy()
+      expect(screen.getByRole('button', { name: '下载标准模板.xlsx' })).toHaveProperty('disabled', false)
+    } finally { build.mockRestore() }
+  })
+  it.each(['success', 'denied', 'unavailable'] as const)('reports clipboard outcome: %s', async outcome => {
+    const order = { ...fixtureOrders[1], status: 'in_transit' as const }
+    useLedger([order])
+    const writeText = outcome === 'denied' ? vi.fn().mockRejectedValue(new Error('permission denied')) : vi.fn().mockResolvedValue(undefined)
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: outcome === 'unavailable' ? undefined : { writeText } })
+    try {
+      render(<ShippingWorkbench settings={settings}/>)
+      fireEvent.click(await screen.findByRole('button', { name: '复制单号' }))
+      expect(await screen.findByText(`${outcome === 'success' ? '已复制单号：' : '复制未成功，请选中单号后手动复制：'}${order.waybill}`)).toBeTruthy()
+      if (outcome !== 'unavailable') expect(writeText).toHaveBeenCalledWith(order.waybill)
+      expect(fetcher.mock.calls.some(([, init]) => init?.method)).toBe(false)
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, 'clipboard', descriptor)
+      else Reflect.deleteProperty(navigator, 'clipboard')
+    }
+  })
   it('keeps the saved failure visible and restores the original order for explicit review without dispatching', async () => {
     const order: ShipmentOrder = { ...fixtureOrders[0], status: 'order_failed', waybill: null, failure: { message: '承运商明确拒绝本次请求', at: '2026-10-12T09:00:00Z' } }
     useLedger([order])
