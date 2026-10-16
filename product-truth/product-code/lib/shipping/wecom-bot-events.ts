@@ -5,7 +5,7 @@ import { ShippingError } from './config'
 import { encryptShippingSecret, decryptShippingSecret } from './connections'
 import { readWecomBotForCallback, type WecomBotRow } from './wecom-bot-settings'
 import { readWecomSettings, wecomCredentials } from './wecom-settings'
-import { findWecomMember } from './wecom-session'
+import { findWecomMember, findWecomMemberById } from './wecom-session'
 import { resolveWecomBotUserId } from './wecom-client'
 import { loadIntakeOptionsForOrg } from './intake-options'
 import { prepareWecomBotIntake, BOT_INTAKE_HELP } from './wecom-bot-intake'
@@ -32,8 +32,17 @@ export async function readWecomBotEvent(bot:WecomBotRow,id:string,source:{userid
  if(error)throw new ShippingError(503,'回执暂不可读取。')
  if(!data)throw new ShippingError(404,'提报回执不存在。')
  const event=data as BotEvent,message=messageSchema.parse(JSON.parse(decryptShippingSecret(event.payload_ciphertext)))
- if(event.prepared_ciphertext){const prepared=JSON.parse(decryptShippingSecret(event.prepared_ciphertext));const permission=await supabaseAdmin.from('shipping_employee_profiles').select('is_active,wecom_allowed,wecom_corp_id').eq('id',prepared.employee.id).eq('org_id',bot.org_id).maybeSingle();if(permission.error)throw new ShippingError(503,'员工授权暂不可核对。');if(!permission.data?.is_active||!permission.data.wecom_allowed||permission.data.wecom_corp_id!==bot.corp_id)throw new ShippingError(403,'员工授权已变化，不能继续查询本次回执。')}
  if(message.from.userid!==source.userid||message.chattype!==source.chattype||message.chatid!==source.chatid)throw new ShippingError(403,'不能读取其他会话的提报回执。')
+ const config=await readWecomSettings(bot.org_id)
+ if(bot.status!=='active'||!config||config.corp_id!==bot.corp_id)throw new ShippingError(403,'企业连接已变更，不能读取本次回执。')
+ if(event.prepared_ciphertext){
+  const prepared=JSON.parse(decryptShippingSecret(event.prepared_ciphertext))
+  if(prepared.employee?.identity?.corpId!==bot.corp_id||!prepared.employee?.id||!await findWecomMemberById(config,prepared.employee.id))throw new ShippingError(403,'员工授权已变化，不能继续查询本次回执。')
+ }else{
+  let employee=await findWecomMember(config,message.from.userid)
+  if(!employee){const mapped=await resolveWecomBotUserId(wecomCredentials(config),message.from.userid);if(mapped)employee=await findWecomMember(config,mapped)}
+  if(!employee)throw new ShippingError(403,'您不在当前企业的提报范围内。')
+ }
  if(['pending','processing'].includes(event.state)&&Date.now()-Date.parse(event.created_at)>6*60*1000)return {...event,state:'failed' as const,response_content:'本次处理未及时完成，请在员工提报页核对是否已有工单，避免重复提报。'}
  return event
 }

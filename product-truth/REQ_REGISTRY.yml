@@ -1026,11 +1026,11 @@ requirements:
     module: 双入口工单提报、运营确认、可配置渠道与承运商履约
     product_goal: 企业寄件协同核心不绑定具体公司、机器人或承运商
     monthly_payment_boundary: 普通获授权寄件按票选择企业月结号；不要求成为月结管理员或财务负责人逐票审批；开发者应用授权与账号管理认证不得无证据当作日常寄件前提
-    first_release: 寄件先顺丰真实闭环；收件独立覆盖常用快递，每30分钟更新；保留邮箱60天、资料复用与企微身份/扫码/提报/通知要求
+    first_release: 寄件先顺丰真实闭环；收件独立覆盖常用快递，每30分钟更新；员工企微身份、60天会话、资料复用与机器人提报/通知分项验收
     goal_layering_status: user_updated_product_goal_scenarios_under_review
     source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
     status: in_progress
-    execution_status: WP35_sales_intake_experience_executing
+    execution_status: WP19_wecom_authorized_shipping_intake_executing
     priority: P1
     feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
     code_locations:
@@ -1040,7 +1040,7 @@ requirements:
       - app/configs
       - lib/shipping
       - supabase/migrations
-    description: WP35正在实现销售提报身份卡片、可选预填寄方和草稿保护，生产是否发布以精确SHA运行证据为准。操作员左栏批量解析纠错后只建待审核工单；员工公开提报页默认匿名、无需账号密码或强制邮箱验证，提交进入中栏，销售本人为实际寄件人及工单归属人，资料持久化带入且确认时不得被公司默认覆盖。只有中栏运营逐票核对后的批量确认触发顺丰下单/叫件，右栏追踪；出号回填原工单并按原提报人关系回传，通知失败只重发通知，可选邮箱验证与60天会话、个人资料复用；整体目标纳入企微身份、机器人提报和单号/变更通知，接入条件及独立批次待评估，不绕过中栏正式确认。连接和月结配置在配置中心维护，服务端OAuth2机器凭据加密保存，无面单打印或新增审批系统。
+    description: WP19实施单企业企微接入和网页/机器人共同成员校验，寄件页不另建人员部门或角色管理；WP35销售提报体验候选保留，生产是否发布以精确SHA运行证据为准。操作员左栏批量解析纠错后只建待审核工单；员工提报页仅当前企业有效且符合既有范围的成员可用，无需另注册系统账号，提交进入中栏，销售本人为实际寄件人及工单归属人，资料持久化带入且确认时不得被公司默认覆盖。只有中栏运营逐票核对后的批量确认触发顺丰下单/叫件，右栏追踪；出号回填原工单并按原提报人关系回传，通知失败只重发通知，60天会话仍需持续核对成员状态，个人资料复用；整体目标纳入企微身份、机器人提报和单号/变更通知，接入条件及独立批次待评估，不绕过中栏正式确认。连接和月结配置在配置中心维护，服务端OAuth2机器凭据加密保存，无面单打印或新增审批系统。
 
 # Maintained PRD index
 sf_self_service_order_prd:
@@ -1048,7 +1048,7 @@ sf_self_service_order_prd:
   goal_layering: 产品总目标为企业寄件协同；顺丰为首期MVP适配器，原始五项交付责任保留，新增承运商寄件不在首期范围，常用快递收件查询独立覆盖
   configuration_contract_status: inbound_query_design_authorized_30min
   configuration_contract: product-truth/feature-packets/F054-sf-self-service-order.md#3-配置中心具体设计
-  configuration_boundary: 核心工单规则内置；企微应用、白名单、号码预置、公司机器人、承运商连接及寄件策略按组织配置；顺丰是首个适配器，demo企微只用于测试；新增未支持平台需实现适配器。
+  configuration_boundary: 核心工单规则内置；本期一套企微企业应用、号码预置、机器人、承运商连接及寄件策略按业务组织配置。人员来自企微，只读保留既有提报限制；操作员权限读取系统组织权限，不在寄件维护重复名单。多平台多组织为后续平台能力，本期不开发。
   status: in_progress
   source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-011 / IN-20260923-013 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
   branch: main

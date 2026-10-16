@@ -18,6 +18,23 @@ async function openSection(name: string) {
 }
 
 describe('shipping configuration drawer', () => {
+  it('references organization permissions without another editable employee list', async () => {
+    fetcher.mockResolvedValue(Response.json({configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[{id:'staff',name:'寄件同事',enabled:true,canOperate:true}],legacyImportAvailable:false}}))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('企业接入')
+    expect(screen.getByRole('link',{name:'查看组织与权限 →'}).getAttribute('href')).toBe('/configs?tab=role-access')
+    expect(screen.queryByRole('checkbox',{name:'寄件同事'})).toBeNull()
+    expect(screen.queryByRole('button',{name:'保存确认人员权限'})).toBeNull()
+    expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false)
+  })
+  it('retains a visible legacy-access notice without silently migrating grants', async () => {
+    fetcher.mockResolvedValue(Response.json({configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[],legacyImportAvailable:true}}))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('企业接入')
+    expect(screen.getByText(/仍有历史授权待迁移/)).toBeTruthy()
+    expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false)
+  })
+
   it('distinguishes the preview site from the carrier production selector', async () => {
     fetcher.mockImplementation(async () => Response.json({ deploymentEnvironment: 'preview', configuration: { connections: [], billingAccounts: [], sender: null } }))
     render(<ShippingConfigDrawer embedded />)
@@ -56,7 +73,7 @@ describe('shipping configuration drawer', () => {
     expect(screen.queryByRole('button', { name: '保存连接' })).toBeNull()
     await openSection('默认寄件人')
     fireEvent.change(screen.getByLabelText('姓名'), { target: { value: '未保存的寄件人' } })
-    await openSection('员工与企微')
+    await openSection('企业接入')
     await openSection('默认寄件人')
     expect(screen.getByLabelText('姓名')).toHaveProperty('value', '未保存的寄件人')
     expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
@@ -137,35 +154,7 @@ describe('shipping configuration drawer', () => {
     expect(screen.getByLabelText('应用编号')).toBeTruthy()
   })
 
-  it('migrates the existing operator list into org-scoped permissions without exposing IDs', async () => {
-    const operatorId = '11111111-1111-4111-8111-111111111111'
-    const legacyAccess = { operators: [{ id: operatorId, name: '寄件同事', enabled: true, canOperate: true, grantSource: 'legacy' as const }], legacyImportAvailable: true, legacyImportCompleted: false }
-    const migratedAccess = { operators: [{ ...legacyAccess.operators[0], grantSource: 'database' as const }], legacyImportAvailable: false, legacyImportCompleted: true }
-    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { importedCount: 1, operatorAccess: migratedAccess } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess: legacyAccess }), { status: 200 }))
-    render(<ShippingConfigDrawer embedded />)
-    await openSection('顺丰与接口')
-    await openSection('员工与企微')
-    fireEvent.click(await screen.findByRole('button', { name: '迁移当前寄件名单' }))
-    expect(await screen.findByText(/已将当前环境中原有的 1 个寄件授权迁入组织权限/)).toBeTruthy()
-    const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
-    expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'import_legacy_operator_access' })
-    expect(screen.getByRole('checkbox', { name: '寄件同事' })).toHaveProperty('checked', true)
-  })
 
-  it('saves operator access as organization-scoped permission assignments', async () => {
-    const operatorId = '11111111-1111-4111-8111-111111111111'
-    const operatorAccess = { operators: [{ id: operatorId, name: '寄件同事', enabled: true, canOperate: false, grantSource: 'none' as const }], legacyImportAvailable: false, legacyImportCompleted: true }
-    const savedAccess = { ...operatorAccess, operators: [{ ...operatorAccess.operators[0], canOperate: true, grantSource: 'database' as const }] }
-    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { operatorAccess: savedAccess } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess }), { status: 200 }))
-    render(<ShippingConfigDrawer embedded />)
-    await openSection('顺丰与接口')
-    await openSection('员工与企微')
-    fireEvent.click(await screen.findByRole('checkbox', { name: '寄件同事' }))
-    fireEvent.click(screen.getByRole('button', { name: '保存确认人员权限' }))
-    expect(await screen.findByText('寄件操作权限已保存。')).toBeTruthy()
-    const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
-    expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'save_operator_access', userIds: [operatorId] })
-  })
 
   it('migrates legacy service/account configuration server-side without returning its source values', async () => {
     const legacyConfiguration = { connections: [{ id: 'sandbox-1', carrier: 'sf', environment: 'sandbox', partnerIdTail: '8391', status: 'configured', services: [{ id: 2, name: '顺丰标快', preference: 'standard' }], capabilities: { order: 'not_tested', query: 'not_tested', tracking: 'not_tested', cancel: 'not_tested' }, lastTestedAt: null }], billingAccounts: [], sender: null }
@@ -180,32 +169,7 @@ describe('shipping configuration drawer', () => {
     expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'import_legacy_configuration', environment: 'sandbox' })
   })
 
-  it('migrates the existing operator list into org-scoped database permissions without exposing IDs', async () => {
-    const legacyAccess = { operators: [{ id: '11111111-1111-4111-8111-111111111111', name: '寄件同事', enabled: true, canOperate: true, grantSource: 'legacy' as const }], legacyImportAvailable: true, legacyImportCompleted: false }
-    const migratedAccess = { operators: [{ ...legacyAccess.operators[0], grantSource: 'database' as const }], legacyImportAvailable: false, legacyImportCompleted: true }
-    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { importedCount: 1, operatorAccess: migratedAccess } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess: legacyAccess }), { status: 200 }))
-    render(<ShippingConfigDrawer embedded />)
-    await openSection('顺丰与接口')
-    await openSection('员工与企微')
-    fireEvent.click(await screen.findByRole('button', { name: '迁移当前寄件名单' }))
-    expect(await screen.findByText(/已将当前环境中原有的 1 个寄件授权迁入组织权限/)).toBeTruthy()
-    const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
-    expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'import_legacy_operator_access' })
-    expect(screen.getByRole('checkbox', { name: '寄件同事' })).toHaveProperty('checked', true)
-  })
 
-  it('saves authorized members only to the current organization permission endpoint', async () => {
-    const access = { operators: [{ id: '11111111-1111-4111-8111-111111111111', name: '寄件同事', enabled: true, canOperate: false, grantSource: 'none' as const }], legacyImportAvailable: false, legacyImportCompleted: true }
-    fetcher.mockImplementation(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'POST' ? { operatorAccess: { ...access, operators: [{ ...access.operators[0], canOperate: true, grantSource: 'database' }] } } : { configuration: { connections: [], billingAccounts: [], sender: null }, operatorAccess: access }), { status: 200 }))
-    render(<ShippingConfigDrawer embedded />)
-    await openSection('顺丰与接口')
-    await openSection('员工与企微')
-    fireEvent.click(await screen.findByRole('checkbox', { name: '寄件同事' }))
-    fireEvent.click(screen.getByRole('button', { name: '保存确认人员权限' }))
-    expect(await screen.findByText('寄件操作权限已保存。')).toBeTruthy()
-    const postCall = fetcher.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
-    expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toEqual({ action: 'save_operator_access', userIds: ['11111111-1111-4111-8111-111111111111'] })
-  })
 
   it('shows server-only credentials and masked account controls without exposing stored values', async () => {
     fetcher.mockResolvedValue(new Response(JSON.stringify({ configuration: {

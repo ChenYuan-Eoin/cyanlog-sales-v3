@@ -20,5 +20,5 @@ export async function loadIntakeOptionsForOrg(orgId: string) {
   if (connection.error) throw new ShippingError(503, '提报设置暂不可用，请稍后重试。')
   const configured = connection.data?.authorized_services
   const services: ShippingServiceOption[] = Array.isArray(configured) && configured.length ? configured.filter((item): item is ShippingServiceOption => Number.isInteger(item?.id) && item.id > 0 && typeof item.name === 'string').map((item): ShippingServiceOption => ({ id: item.id, name: item.name, preference: item.preference === 'urgent' ? 'urgent' : 'standard', limitation: SF_SERVICE_CATALOG.find(row => row.id === item.id)?.limitation })).filter(item => !item.limitation) : DEFAULT_INTAKE_SERVICES
-  return { orgId, rules, services, emailAvailable: false, requireVerification: wecom?.order_check_mode !== 0, wecomReady: Boolean(wecom?.directory_synced_at) }
+  return { orgId, rules, services, emailAvailable: false, requireVerification: true, wecomReady: Boolean(wecom?.directory_synced_at) }
 }

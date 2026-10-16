@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-16T07:43:35.475527+00:00",
+  "updated_at": "2026-10-16T09:01:39.347307+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,31 +128,23 @@
     ]
   },
   "active_task": {
-    "id": "WP35",
-    "slug": "sales-intake-experience",
-    "name": "销售寄件提报体验",
+    "id": "WP19",
+    "slug": "wecom-authorized-shipping-intake",
+    "name": "企微企业接入与员工提报校验",
     "kind": "product",
     "status": "active",
-    "objective": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-    "started_at": "2026-10-16T07:43:35.475527+00:00",
-    "activation_basis": "IN-20261016-016：用户确认原型与系统配色并明确要求正式上线",
+    "objective": "单企业企微接入收拢为清晰设置，网页/机器人共用有效成员和既有范围校验；取消重复人员管理入口，保留历史资料和隔离边界。",
+    "started_at": "2026-10-16T09:01:39.347307+00:00",
+    "activation_basis": "IN-20261016-028：用户阅读影响评估后明确批准实施",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/sales-portal",
-      "product-truth/product-code/lib/shipping/wecom-session.ts",
-      "product-truth/product-code/lib/shipping/wecom-session.test.ts",
-      "product-truth/product-code/app/shipping/config-drawer.tsx",
-      "product-truth/product-code/app/shipping/config-drawer.test.tsx",
-      "product-truth/product-code/app/api/shipping/settings/route.ts",
-      "product-truth/product-code/app/api/shipping/settings/route.test.ts",
       "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/REQ_REGISTRY.yml",
-      "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js"
+      "product-truth/product-code/app/shipping",
+      "product-truth/product-code/app/api/shipping",
+      "product-truth/product-code/lib/shipping"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -193,7 +185,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+      "note": "WP19单企业企微接入与提报校验；保留WP35候选依赖，生产数据只读。不得将配置UI通过冒充真实机器人或顺丰闭环。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -207,19 +199,18 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261016-016",
-        "micro_fix_approval_id": "IN-20261016-009",
-        "clarification_id": "IN-20261016-015",
-        "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+        "status": "pending_security_gate_and_final_write_approval",
+        "final_release_approval_id": "IN-20261016-028",
+        "micro_fix_approval_id": "IN-20261016-028",
+        "clarification_id": "IN-20261016-027",
+        "micro_fix_scope": "企微接入收拢与共同身份校验，不修改平台组织能力",
+        "final_scope": "单企业企微寄件接入和统一提报校验；本次实施不修改生产凭据或数据",
         "database_write_authorized": false,
         "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
       },
       "blocking_acceptance_defects": [
-        "IN-20261016-009",
-        "IN-20261016-023"
+        "IN-20261016-028"
       ],
       "runtime_contract_version": "f054-intake-v1"
     },
@@ -233,30 +224,30 @@
   },
   "execution_queue": {
     "active": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验"
+      "id": "WP19",
+      "slug": "wecom-authorized-shipping-intake",
+      "name": "企微企业接入与员工提报校验"
     },
     "next": {
-      "id": "WP36",
-      "slug": "workorder-review-expansion",
-      "name": "工单展开核对与操作",
-      "entry_gate": "WP35正式站验收后独立实施",
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件提报体验",
+      "entry_gate": "WP19边界收敛后恢复既有候选的正式站验收",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
+      {
+        "id": "WP36",
+        "slug": "workorder-review-expansion",
+        "name": "工单展开核对与操作",
+        "entry_gate": "WP35正式站验收后独立实施",
+        "entry_gate_status": "waiting_active_completion"
+      },
       {
         "id": "WP32",
         "slug": "sf-push-progress",
         "name": "顺丰推送接收与工单进度",
         "entry_gate": "WP33界面候选验证后恢复原接口闭环",
-        "entry_gate_status": "waiting_active_completion"
-      },
-      {
-        "id": "WP19",
-        "slug": "wecom-authorized-shipping-intake",
-        "name": "企微员工真实提报与机器人接入收尾",
-        "entry_gate": "WP23明确真实出号结果后按用户批准顺序续接",
         "entry_gate_status": "waiting_active_completion"
       },
       {
@@ -2165,6 +2156,110 @@
         "constraint": "code-only release; no schema or new production shipment"
       },
       "reason": "已生产发布，交付证据保存在WP34独立codex-runtime；本次用户明确开始WP35。"
+    },
+    "WP35": {
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件提报体验",
+      "kind": "product",
+      "status": "active",
+      "objective": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+      "started_at": "2026-10-16T07:43:35.475527+00:00",
+      "activation_basis": "IN-20261016-016：用户确认原型与系统配色并明确要求正式上线",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/app/sales-portal",
+        "product-truth/product-code/lib/shipping/wecom-session.ts",
+        "product-truth/product-code/lib/shipping/wecom-session.test.ts",
+        "product-truth/product-code/app/shipping/config-drawer.tsx",
+        "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+        "product-truth/product-code/app/api/shipping/settings/route.ts",
+        "product-truth/product-code/app/api/shipping/settings/route.test.ts",
+        "product-truth/feature-packets/F054-sf-self-service-order.md",
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js"
+      ],
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "note": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "shipping_workspace",
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "final_release_approval_id": "IN-20261016-016",
+          "micro_fix_approval_id": "IN-20261016-009",
+          "clarification_id": "IN-20261016-015",
+          "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+          "final_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+          "database_write_authorized": false,
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        },
+        "blocking_acceptance_defects": [
+          "IN-20261016-009",
+          "IN-20261016-023"
+        ],
+        "runtime_contract_version": "f054-intake-v1"
+      },
+      "feature_id": "F054",
+      "integration_decision": {
+        "strategy": "isolated_candidate_on_production",
+        "authority": "IN-20261016-016",
+        "requested_target": "production_released",
+        "constraint": "code-only release; production data read-only"
+      }
     }
   }
 }

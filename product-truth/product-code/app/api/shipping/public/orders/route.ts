@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     await enforceAnonymousShippingRate(req)
     const options = await loadPublicIntakeOptions()
     const session = await getWecomSession(req)
-    if (options.requireVerification && !session) throw new ShippingError(401, '请先通过企业微信白名单身份验证。')
+    if (!session) throw new ShippingError(401, '请先通过企业微信验证员工身份。')
     if (session && session.orgId !== options.orgId) throw new ShippingError(403, '企微身份不属于当前提报入口。')
     if (session?.phoneSource === 'unavailable') throw new ShippingError(422, '身份已验证，但缺少有效寄件电话，请管理员配置预置号码；已有工单仍可查询。')
     const submission = makeAnonymousShipmentSchema(session && options.rules ? { ...options.rules, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [] } : options.rules).parse(await shippingJson(req))

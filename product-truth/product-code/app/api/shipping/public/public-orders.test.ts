@@ -45,14 +45,12 @@ describe('employee shipment intake', () => {
   it('rejects forged relation fields', async () => { const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify({ ...body, salesRef: 'forged' }) })); expect(response.status).toBe(400); expect(create).not.toHaveBeenCalled() })
   it('rejects caller-supplied organization fields', async () => { const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify({ ...body, orgId: 'org-foreign' }) })); expect(response.status).toBe(400); expect(create).not.toHaveBeenCalled() })
   it('enforces the durable anonymous intake rate limit', async () => { enforceRate.mockRejectedValue(new ShippingError(429, '提交过于频繁，请稍后再试。')); const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify(body) })); expect(response.status).toBe(429); expect(create).not.toHaveBeenCalled() })
-  it('accepts an anonymous workorder with no email session and no login', async () => {
+  it('rejects anonymous intake even if an old options reply advertises open mode', async () => {
     getEmployee.mockResolvedValue(null)
     const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify(body) }))
-    expect(response.status).toBe(202); expect(create.mock.calls[0][0]).not.toHaveProperty('employee')
-    expect(create.mock.calls[0][0]).toMatchObject({ orgId: 'org-1', input: { serviceId: 2, serviceName: '顺丰标快' } })
+    expect(response.status).toBe(401); expect(create).not.toHaveBeenCalled()
   })
   it('accepts configured products beyond the old standard/urgent choices and rejects unconfigured codes', async () => {
-    getEmployee.mockResolvedValue(null)
     const req = (serviceId: number) => new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify({ ...body, input: { ...input, serviceId } }) })
     expect((await POST(req(6))).status).toBe(202)
     expect(create.mock.calls[0][0].input).toMatchObject({ serviceId: 6, serviceName: '顺丰即日' })

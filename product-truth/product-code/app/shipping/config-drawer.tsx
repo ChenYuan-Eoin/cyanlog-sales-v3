@@ -39,7 +39,7 @@ const CONFIG_SECTIONS = [
   { id: 'carrier', label: '顺丰与接口', hint: '应用连接、服务产品' },
   { id: 'accounts', label: '月结账号', hint: '默认付款账号' },
   { id: 'sender', label: '默认寄件人', hint: '公司寄出资料' },
-  { id: 'people', label: '员工与企微', hint: '提报规则、身份与权限' },
+  { id: 'people', label: '企业接入', hint: '员工入口、机器人与提报规则' },
   { id: 'sync', label: '状态同步', hint: '查询能力与同步边界' },
 ] as const
 type ConfigSection = typeof CONFIG_SECTIONS[number]['id']
@@ -75,9 +75,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [probePassed, setProbePassed] = useState(false)
   const [accessState, setAccessState] = useState<'checking' | 'ready' | 'unavailable'>('checking')
   const [operatorAccess, setOperatorAccess] = useState<OperatorAccess | null>(null)
-  const [operatorDraft, setOperatorDraft] = useState<string[]>([])
-  const [operatorBusy, setOperatorBusy] = useState(false)
-  const [operatorMessage, setOperatorMessage] = useState('')
   const [legacyConfigurationAvailable, setLegacyConfigurationAvailable] = useState<Record<'sandbox' | 'production', boolean>>({ sandbox: false, production: false })
   const [legacyMigrationReport, setLegacyMigrationReport] = useState<{ imported: string[]; needsAttention: string[] } | null>(null)
 
@@ -95,7 +92,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
     if (data.operatorAccess) {
       setOperatorAccess(data.operatorAccess)
-      setOperatorDraft(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
     }
     const savedSender = data.configuration.sender
     if (savedSender) {
@@ -128,7 +124,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       if (data.configuration) setConfiguration(data.configuration)
       if (data.operatorAccess) {
         setOperatorAccess(data.operatorAccess)
-        setOperatorDraft(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
       }
       if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
       if (data.imported || data.needsAttention) setLegacyMigrationReport({ imported: data.imported || [], needsAttention: data.needsAttention || [] })
@@ -183,25 +178,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
 
   async function saveSenderProfile() {
     await mutate('sender', 'save_sender', { displayName: senderName, contact: sender })
-  }
-
-  async function saveOperatorAccess() {
-    if (!operatorAccess || operatorAccess.legacyImportAvailable) return
-    setOperatorBusy(true); setOperatorMessage('')
-    try {
-      const response = await mutate('operators', 'save_operator_access', { userIds: operatorDraft })
-      if (!response?.operatorAccess) return
-      setOperatorMessage('寄件操作权限已保存。')
-    } finally { setOperatorBusy(false) }
-  }
-
-  async function importLegacyOperatorAccess() {
-    setOperatorBusy(true); setOperatorMessage('')
-    try {
-      const response = await mutate('operators', 'import_legacy_operator_access')
-      if (!response?.operatorAccess) return
-      setOperatorMessage(`已将当前环境中原有的 ${response.importedCount || 0} 个寄件授权迁入组织权限。`)
-    } finally { setOperatorBusy(false) }
   }
 
   if (!open && !embedded) return null
@@ -277,27 +253,14 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>
         </section>
         <div id="shipping-panel-people" hidden={section !== 'people'}>
-        <IntakeConfiguration/>
         <WecomConfiguration onMessage={setMessage}/>
-        <section className={styles.section}>
-          <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>下单确认人员</h3></div><span>按组织授权</span></div>
-          <p className={styles.hint}>只授予ONES自助收寄操作权限，不授予连接、月结账号或账单管理权限。人员限当前组织且账号已启用。</p>
-          {operatorAccess?.legacyImportAvailable && <div className={styles.message}>
-            <p>当前环境仍有旧的临时寄件名单。先将原有授权迁到组织权限表，迁移会保留当前名单，不增加其他人员。</p>
-            <button className={styles.secondary} disabled={operatorBusy} onClick={() => void importLegacyOperatorAccess()}>{operatorBusy ? '迁移中…' : '迁移当前寄件名单'}</button>
-          </div>}
-          <div className={styles.operatorList}>
-            {(operatorAccess?.operators || []).map(operator => <label key={operator.id} className={styles.operatorRow}>
-              <input type="checkbox" checked={operatorDraft.includes(operator.id)} disabled={!operator.enabled || operatorBusy || !!operatorAccess?.legacyImportAvailable} onChange={event => setOperatorDraft(current => event.target.checked ? [...new Set([...current, operator.id])] : current.filter(id => id !== operator.id))}/>
-              <span>{operator.name}</span>
-              {!operator.enabled && <small>账号未启用</small>}
-              {operator.grantSource === 'legacy' && <small>待迁移</small>}
-            </label>)}
-            {!operatorAccess?.operators.length && <p className={styles.hint}>当前组织没有可授权的启用账号。</p>}
-          </div>
-          <div className={styles.actions}><button className={styles.secondary} disabled={!operatorAccess || operatorAccess.legacyImportAvailable || operatorBusy} onClick={() => void saveOperatorAccess()}>{operatorBusy ? '保存中…' : '保存确认人员权限'}</button></div>
-          {operatorMessage && <p className={styles.probe} role="status">{operatorMessage}</p>}
+        <section className={styles.section} aria-label="审核与下单权限来源">
+          <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>审核与下单权限</h3></div><span>来源：组织与权限</span></div>
+          <p className={styles.hint}>员工身份仅用于提报和本人订单查询。审核、正式下单与连接管理继续使用系统已有权限，现有授权保持不变。</p>
+          {operatorAccess?.legacyImportAvailable && <p className={styles.message}>仍有历史授权待迁移。本次页面调整不会改写这些授权。</p>}
+          <a href="/configs?tab=role-access">查看组织与权限 →</a>
         </section>
+        <details><summary>寄件提报规则</summary><IntakeConfiguration/></details>
         </div>
         <section id="shipping-panel-sync" hidden={section !== 'sync'} className={styles.section} aria-label="状态同步内容">
           <div className={styles.noticeCard}><h4>自动同步尚不能由本页确认</h4><p>当前配置接口未提供回调地址、最近接收时间及失败重试记录。没有接收证据时，不显示“推送正常”。</p><p>单票最新轨迹请在收寄工作台查询；接口上线、查询成功与自动推送成功是不同结果。</p></div>

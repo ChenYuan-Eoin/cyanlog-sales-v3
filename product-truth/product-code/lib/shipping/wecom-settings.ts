@@ -54,6 +54,7 @@ export async function readWecomDraft(orgId:string):Promise<WecomConfigDraft|null
 }
 export async function prepareWecomConfiguration(orgId:string,userId:string,input:unknown) {
  const data=saveSchema.parse(input),current=await readWecomSettings(orgId)
+ if(data.orderCheckMode!==1)throw new ShippingError(400,'寄件提报仅向当前企业有效成员开放，请刷新配置页面。')
  if((current?.updated_at??null)!==data.expectedUpdatedAt)throw new ShippingError(409,'当前配置已变化，请刷新后再准备新配置。')
  const sameIdentity=current?.corp_id===data.corpId&&current?.agent_id===data.agentId
  let retainedCipher=sameIdentity?current?.credentials_ciphertext:undefined
@@ -78,14 +79,21 @@ export async function prepareWecomConfiguration(orgId:string,userId:string,input
  return readWecomDraft(orgId)
 }
 export async function activateWecomConfiguration(orgId:string,userId:string,input:unknown) {
- const data=z.object({draftId:z.uuid(),departmentIds:z.array(z.number().int().positive().safe()).max(10000)}).strict().parse(input)
+ const data=z.object({draftId:z.uuid(),scopeMode:z.enum(['preserve','application'])}).strict().parse(input)
  const pending=await supabaseAdmin.from('shipping_wecom_config_drafts').select('config').eq('org_id',orgId).eq('id',data.draftId).maybeSingle()
  if(pending.error||!pending.data)throw new ShippingError(409,'待启用配置不存在，请重新测试。')
  const config=pending.data.config as Record<string,string>
+ if(Number(config.order_check_mode)!==1)throw new ShippingError(409,'待启用配置使用旧的开放提报模式，请重新测试企业应用。')
+ const current=await readWecomSettings(orgId)
+ const sameEnterprise=current?.corp_id===config.corp_id
+ if(sameEnterprise&&data.scopeMode!=='preserve')throw new ShippingError(409,'同一企业更新应用时必须保留已有提报范围。')
+ if(!sameEnterprise&&data.scopeMode!=='application')throw new ShippingError(409,'请确认使用新企业应用的可见范围。')
+ if(sameEnterprise&&current.allowed_department_ids==null)throw new ShippingError(409,'当前企业仍有旧的逐人授权，需先完成授权迁移；原连接与现有权限保持不变。')
  const directory=await wecomDirectory({corpId:config.corp_id,agentId:Number(config.agent_id),secret:decryptShippingSecret(config.credentials_ciphertext)})
+ const departmentIds=sameEnterprise?current.allowed_department_ids!:directory.departments.map(department=>department.id)
  const refreshed=await supabaseAdmin.from('shipping_wecom_config_drafts').update({departments:directory.departments,members:directory.members}).eq('org_id',orgId).eq('id',data.draftId).select('id').maybeSingle()
  if(refreshed.error||!refreshed.data)throw new ShippingError(409,'待启用配置已变化，请刷新后重试。')
- const {data:changed,error}=await supabaseAdmin.rpc('activate_shipping_wecom_config',{p_org_id:orgId,p_draft_id:data.draftId,p_user_id:userId,p_department_ids:data.departmentIds})
+ const {data:changed,error}=await supabaseAdmin.rpc('activate_shipping_wecom_config',{p_org_id:orgId,p_draft_id:data.draftId,p_user_id:userId,p_department_ids:departmentIds})
  if(error||!changed)throw new ShippingError(409,'配置未启用：待启用配置可能已过期或当前设置已变化。请重新测试后启用，原连接保持不变。')
 }
 export async function saveWecomDepartmentScope(orgId:string,selected:unknown) {

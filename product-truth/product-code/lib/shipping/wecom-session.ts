@@ -5,6 +5,7 @@ import { ShippingError } from './config'
 import { readWecomSettings,type WecomSettingsRow } from './wecom-settings'
 import { normalizeDomesticShippingPhone,DOMESTIC_SHIPPING_PHONE_PATTERN } from './phone'
 import { emptyContact,type Contact } from './types'
+import { currentWecomAccess, isAllowedWecomMember } from './wecom-access'
 export const WECOM_SESSION_COOKIE='shipping_wecom_session'
 export const WECOM_STATE_COOKIE='shipping_wecom_state'
 export const WECOM_SESSION_SECONDS=60*24*60*60
@@ -35,7 +36,7 @@ export function verifyWecomState(state:string,cookie:string|undefined,now=Date.n
  return {orgId}
 }
 async function profileFromRow(row:Record<string,unknown>,config:WecomSettingsRow):Promise<WecomProfile|null> {
- if(row.wecom_corp_id!==config.corp_id||row.is_active!==true||row.wecom_allowed!==true||typeof row.wechat_userid!=='string'||!config.directory_synced_at)return null
+ if(!isAllowedWecomMember(row,config))return null
  let resolved:{phone:string;source:'wecom'|'preset'|'unavailable'}
  try{resolved=chooseWecomPhone(String(row.mobile||''),config.fallback_phone,row.use_preset_phone===true)}catch(error){if(!(error instanceof ShippingError)||error.status!==409)throw error;resolved={phone:'',source:'unavailable'}}
  const stored=row.sender_contact && typeof row.sender_contact==='object' ? row.sender_contact as Partial<Contact> : null
@@ -48,11 +49,18 @@ async function profileFromRow(row:Record<string,unknown>,config:WecomSettingsRow
  const sender=personal||company||contact(null)
  const senderChoices={company,personal}
  const senderSource=personal?'personal' as const:company?'company' as const:'custom' as const
- return {id:String(row.id),orgId:config.org_id,userId:row.wechat_userid,name:sender.name,phone:sender.phone,phoneSource:resolved.source,companyName:String(row.company_name||config.company_name),team:String(row.team||''),sender,senderChoices,senderSource,updatedAt:String(row.updated_at),sessionVersion:Number(row.session_version)}
+ return {id:String(row.id),orgId:config.org_id,userId:String(row.wechat_userid),name:sender.name,phone:sender.phone,phoneSource:resolved.source,companyName:String(row.company_name||config.company_name),team:String(row.team||''),sender,senderChoices,senderSource,updatedAt:String(row.updated_at),sessionVersion:Number(row.session_version)}
 }
 export async function findWecomMember(config:WecomSettingsRow,userId:string) {
+ config=await currentWecomAccess(config)
  const {data,error}=await supabaseAdmin.from('shipping_employee_profiles').select(profileColumns).eq('org_id',config.org_id).eq('wecom_corp_id',config.corp_id).eq('wechat_userid',userId).maybeSingle()
- if(error)throw new ShippingError(503,'员工白名单暂不可读取。')
+ if(error)throw new ShippingError(503,'企业成员身份暂不可读取。')
+ return data?profileFromRow(data,config):null
+}
+export async function findWecomMemberById(config:WecomSettingsRow,id:string) {
+ config=await currentWecomAccess(config)
+ const {data,error}=await supabaseAdmin.from('shipping_employee_profiles').select(profileColumns).eq('org_id',config.org_id).eq('wecom_corp_id',config.corp_id).eq('id',id).maybeSingle()
+ if(error)throw new ShippingError(503,'企业成员身份暂不可读取。')
  return data?profileFromRow(data,config):null
 }
 export async function issueWecomSession(profile:WecomProfile) {
@@ -67,8 +75,9 @@ export async function getWecomSession(req:NextRequest) {
  const {data,error}=await supabaseAdmin.from('shipping_employee_sessions').select('org_id,employee_id,issued_version,expires_at,revoked_at').eq('token_hash',hash(token)).maybeSingle()
  if(error)throw new ShippingError(503,'员工身份暂不可验证，请稍后重试。')
  if(!data||data.revoked_at||!Number.isFinite(Date.parse(data.expires_at))||Date.parse(data.expires_at)<=Date.now())return null
- const config=await readWecomSettings(data.org_id)
- if(!config)return null
+ const storedConfig=await readWecomSettings(data.org_id)
+ if(!storedConfig)return null
+ const config=await currentWecomAccess(storedConfig)
  const result=await supabaseAdmin.from('shipping_employee_profiles').select(profileColumns).eq('org_id',data.org_id).eq('id',data.employee_id).maybeSingle()
  if(result.error)throw new ShippingError(503,'员工身份暂不可验证。')
  if(!result.data||Number(result.data.session_version)!==Number(data.issued_version))return null
