@@ -19,6 +19,7 @@ async function request<T>(init?: RequestInit): Promise<T> {
 }
 
 type ConfigurationReply = {
+  deploymentEnvironment?: 'production' | 'preview' | 'development' | 'unknown'
   configuration?: ShippingConfiguration
   navigationAvailable?: boolean
   operatorAccess?: OperatorAccess
@@ -48,6 +49,8 @@ type Service = { id: number; name: string; preference: 'standard' | 'urgent' }
 export default function ShippingConfigDrawer({ open = true, onClose, embedded = false }: { open?: boolean; onClose?: () => void; embedded?: boolean }) {
   const [configuration, setConfiguration] = useState<ShippingConfiguration>({ connections: [], billingAccounts: [], sender: null })
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production')
+  const [deploymentEnvironment, setDeploymentEnvironment] = useState<NonNullable<ConfigurationReply['deploymentEnvironment']>>('unknown')
+  const [saveFailed, setSaveFailed] = useState(false)
   const [section, setSection] = useState<ConfigSection>('overview')
   const panelTitle = useRef<HTMLHeadingElement>(null)
   const [partnerId, setPartnerId] = useState('')
@@ -88,6 +91,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       return
     }
     setConfiguration(data.configuration)
+    setDeploymentEnvironment(data.deploymentEnvironment || 'unknown')
     if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
     if (data.operatorAccess) {
       setOperatorAccess(data.operatorAccess)
@@ -118,7 +122,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function mutate(label: string, action: string, values: Record<string, unknown> = {}) {
-    setBusy(label); setMessage('')
+    setBusy(label); setMessage(''); setSaveFailed(false)
     try {
       const data = await request<ConfigurationReply>({ method: 'POST', body: JSON.stringify({ action, ...values }) })
       if (data.configuration) setConfiguration(data.configuration)
@@ -131,7 +135,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       if (!data.configuration && !data.operatorAccess) throw new Error('配置更新成功，但服务器未返回最新配置。请刷新后检查。')
       setMessage(`${label === 'connection' ? '顺丰连接' : label === 'services' ? '可提报服务' : label === 'account' ? '月结账号' : label === 'sender' ? '默认寄件资料' : '配置'}已保存。`)
       return data
-    } catch (error) { setMessage((error as Error).message); return null } finally { setBusy('') }
+    } catch (error) { setMessage((error as Error).message); setSaveFailed(true); return null } finally { setBusy('') }
   }
 
   async function saveConnection() {
@@ -219,8 +223,10 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     <aside className={styles.drawer} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-labelledby="shipping-config-title">
       <header className={styles.header}><div><p>SHIPPING SETTINGS</p><h2 id="shipping-config-title">寄件设置</h2></div>{!embedded && <button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button>}</header>
       {message && <p className={`${styles.message} ${styles.feedback}`} role="status" aria-live="polite">{message}</p>}
+      {saveFailed && message && <p className={styles.hint} role="status">本次保存未确认成功，输入和原有配置仍保留。请核对站点环境及错误原因后重试。</p>}
       <div className={styles.content}>
-        <div className={styles.environmentBar}><label>运行环境<select value={environment} disabled={!!busy} onChange={event => changeEnvironment(event.target.value as Environment)}><option value="production">生产</option><option value="sandbox">沙盒</option></select></label><p>{environment === 'production' ? '生产配置用于真实寄件。' : '沙盒配置仅用于接口验证。'} 默认寄件人、员工权限为组织共用。</p><a href="/shipping">返回收寄工作台 →</a></div>
+        <div className={styles.noticeCard} role="note" aria-label="站点部署环境"><strong>{deploymentEnvironment === 'production' ? '当前站点：正式环境' : deploymentEnvironment === 'preview' ? '当前站点：预览环境' : deploymentEnvironment === 'development' ? '当前站点：开发环境' : '当前站点：部署环境未确认'}</strong><p>{deploymentEnvironment === 'production' ? '本页读取正式站保存的寄件配置。界面更新不会重建或清空已保存配置。' : '这里不是已确认的正式站配置入口。下方“顺丰接口环境”仅区分承运商生产与沙盒，不会切换站点、数据库或密钥。'} {deploymentEnvironment !== 'production' && <a href="https://sales.cyanlog.icu/configs?tab=shipping">前往正式站管理真实寄件配置 →</a>}</p></div>
+        <div className={styles.environmentBar}><label>顺丰接口环境<select aria-label="运行环境" value={environment} disabled={!!busy} onChange={event => changeEnvironment(event.target.value as Environment)}><option value="production">生产</option><option value="sandbox">沙盒</option></select></label><p>{environment === 'production' ? '当前站点保存的顺丰生产配置。' : '当前站点保存的顺丰沙盒配置。'} 默认寄件人、员工权限为组织共用。</p><a href="/shipping">返回收寄工作台 →</a></div>
         <nav className={styles.sectionNav} aria-label="寄件设置分区">{CONFIG_SECTIONS.map(item => <button type="button" key={item.id} aria-label={item.label} aria-current={section === item.id ? 'page' : undefined} aria-controls={`shipping-panel-${item.id}`} onClick={() => selectSection(item.id)}><strong>{item.label}</strong><span>{item.hint}</span></button>)}</nav>
         <div className={styles.panelHeading}><h3 ref={panelTitle} tabIndex={-1}>{currentSection.label}</h3><p>{currentSection.hint} · 各区分别保存，切换分区保留当前草稿。</p></div>
         <section id="shipping-panel-overview" hidden={section !== 'overview'} aria-label="接入总览内容">
@@ -257,7 +263,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <div className={styles.sectionTitle}><div><Settings size={16}/><h3>月结账号</h3></div><span>账号仅显示尾号</span></div>
           <p className={styles.hint}>仅显示{environment === 'production' ? '生产' : '沙盒'}账号。新增账号保存到当前环境。</p>
           <div className={styles.accountList}>{environmentAccounts.map(account => <article key={account.id} className={styles.account}><div><strong>{account.displayName}</strong><small>{account.environment === 'sandbox' ? '沙盒' : '生产'} · 尾号 {account.tail} · {account.status === 'active' ? '可用' : '已停用'}{account.isDefault ? ' · 默认' : ''}</small></div><div className={styles.accountActions}>{account.status === 'active' && !account.isDefault && <button className={styles.textAction} disabled={!!busy} onClick={() => void mutate(`default-${account.id}`, 'set_default_account', { accountId: account.id })}>设默认</button>}{account.status === 'active' && <button className={styles.textAction} disabled={!!busy} onClick={() => { if (window.confirm(`停用月结账号「${account.displayName}」（尾号 ${account.tail}）？新工单将无法选择此账号，历史工单记录保留。`)) void mutate(`disable-${account.id}`, 'deactivate_account', { accountId: account.id }) }}>停用</button>}</div></article>)}</div>
-          {!environmentAccounts.length && <p className={styles.hint}>当前环境尚未保存月结账号。</p>}
+          {!environmentAccounts.length && <p className={styles.hint}>{deploymentEnvironment === 'preview' || deploymentEnvironment === 'development' ? '当前预览/开发站点未保存该顺丰环境的月结账号；不代表正式站账号缺失。' : '当前站点的所选顺丰环境尚未保存月结账号。'}</p>}
           <label>月结卡号<input autoComplete="off" inputMode="numeric" value={accountNumber} onChange={event => setAccountNumber(event.target.value.replace(/\D/g, '').slice(0, 32))} placeholder="输入完整月结卡号"/></label>
           <label>备注说明（选填）<input value={accountName} onChange={event => setAccountName(event.target.value)} maxLength={80}/></label>
           <button className={styles.secondary} disabled={!!busy} onClick={() => void saveAccount()}>{busy === 'account' ? '保存中…' : <><Plus size={14}/>保存月结账号</>}</button>

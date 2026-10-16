@@ -143,6 +143,10 @@
       "product-truth/product-code/app/sales-portal",
       "product-truth/product-code/lib/shipping/wecom-session.ts",
       "product-truth/product-code/lib/shipping/wecom-session.test.ts",
+      "product-truth/product-code/app/shipping/config-drawer.tsx",
+      "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+      "product-truth/product-code/app/api/shipping/settings/route.ts",
+      "product-truth/product-code/app/api/shipping/settings/route.test.ts",
       "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
@@ -214,7 +218,8 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
       },
       "blocking_acceptance_defects": [
-        "IN-20261016-009"
+        "IN-20261016-009",
+        "IN-20261016-023"
       ],
       "runtime_contract_version": "f054-intake-v1"
     },

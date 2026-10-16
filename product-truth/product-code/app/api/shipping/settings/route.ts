@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       const legacy = { sandbox: hasLegacyShippingConfiguration('sandbox', configuration), production: hasLegacyShippingConfiguration('production', configuration) }
       const legacyAllowed = (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
       return NextResponse.json({
+        deploymentEnvironment: ['production', 'preview', 'development'].includes(process.env.VERCEL_ENV || '') ? process.env.VERCEL_ENV : 'unknown',
         configuration,
         operatorAccess,
         legacyConfigurationAvailable: {

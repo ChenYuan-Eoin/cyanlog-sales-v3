@@ -18,6 +18,38 @@ async function openSection(name: string) {
 }
 
 describe('shipping configuration drawer', () => {
+  it('distinguishes the preview site from the carrier production selector', async () => {
+    fetcher.mockImplementation(async () => Response.json({ deploymentEnvironment: 'preview', configuration: { connections: [], billingAccounts: [], sender: null } }))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('月结账号')
+    expect(screen.getByText('当前站点：预览环境')).toBeTruthy()
+    expect(screen.getByLabelText('运行环境')).toHaveProperty('value', 'production')
+    expect(screen.getByText(/不代表正式站账号缺失/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: /前往正式站/ }).getAttribute('href')).toBe('https://sales.cyanlog.icu/configs?tab=shipping')
+  })
+
+  it('keeps the existing account and draft after a missing-key save failure', async () => {
+    fetcher.mockImplementation(async (_url, init) => init?.method === 'POST'
+      ? Response.json({ error: '寄件凭据加密密钥尚未配置。' }, { status: 503 })
+      : Response.json({ deploymentEnvironment: 'production', configuration: { connections: [], sender: null, billingAccounts: [{ id: 'p', environment: 'production', displayName: '原有月结', tail: '5616', status: 'active', isDefault: true }] } }))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('月结账号')
+    fireEvent.change(screen.getByLabelText('月结卡号'), { target: { value: '123456789' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存月结账号' }))
+    await screen.findByText('寄件凭据加密密钥尚未配置。')
+    expect(screen.getByText('原有月结')).toBeTruthy()
+    expect(screen.getByLabelText('月结卡号')).toHaveProperty('value', '123456789')
+    expect(screen.getByText(/本次保存未确认成功/)).toBeTruthy()
+    expect(screen.queryByText(/尚未保存月结账号/)).toBeNull()
+  })
+
+  it('does not present an empty editable account list when configuration loading fails', async () => {
+    fetcher.mockImplementation(async () => Response.json({ error: '寄件配置读取失败。' }, { status: 503 }))
+    render(<ShippingConfigDrawer embedded />)
+    await screen.findByRole('heading', { name: '寄件配置不可用' })
+    expect(screen.queryByRole('button', { name: '保存月结账号' })).toBeNull()
+    expect(screen.queryByText(/尚未保存月结账号/)).toBeNull()
+  })
   it('opens on overview and keeps sender drafts when changing sections', async () => {
     render(<ShippingConfigDrawer embedded />)
     await screen.findByRole('region', { name: '接入总览内容' })
