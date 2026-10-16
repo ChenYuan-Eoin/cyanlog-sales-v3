@@ -133,7 +133,7 @@
     "name": "企微企业接入与员工提报校验",
     "kind": "product",
     "status": "active",
-    "objective": "单企业企微接入收拢为清晰设置，网页/机器人共用有效成员和既有范围校验；取消重复人员管理入口，保留历史资料和隔离边界。",
+    "objective": "将单企业企微接入与统一成员校验、既有WP35销售提报体验代码发布到sales.cyanlog.icu并在用户现有Chrome验收；保留生产配置、数据与现有权限，不扩建平台人员管理。",
     "started_at": "2026-10-16T09:01:39.347307+00:00",
     "activation_basis": "IN-20261016-028：用户阅读影响评估后明确批准实施",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3",
@@ -199,12 +199,12 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "pending_security_gate_and_final_write_approval",
-        "final_release_approval_id": "IN-20261016-028",
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261016-029",
         "micro_fix_approval_id": "IN-20261016-028",
-        "clarification_id": "IN-20261016-027",
+        "clarification_id": "IN-20261016-029",
         "micro_fix_scope": "企微接入收拢与共同身份校验，不修改平台组织能力",
-        "final_scope": "单企业企微寄件接入和统一提报校验；本次实施不修改生产凭据或数据",
+        "final_scope": "WP19企微企业接入、网页与机器人共同成员校验及已保留的WP35销售提报体验代码发布；在sales.cyanlog.icu现有Chrome验收。不含数据库迁移、生产凭据替换、扩大人员权限、真实顺丰创建或取消修改。",
         "database_write_authorized": false,
         "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
@@ -217,7 +217,7 @@
     "feature_id": "F054",
     "integration_decision": {
       "strategy": "isolated_candidate_on_production",
-      "authority": "IN-20261016-016",
+      "authority": "IN-20261016-029",
       "requested_target": "production_released",
       "constraint": "code-only release; production data read-only"
     }
