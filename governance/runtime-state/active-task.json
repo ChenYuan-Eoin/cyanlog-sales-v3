@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-15T10:39:13.112822+00:00",
+  "updated_at": "2026-10-16T07:43:35.475527+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,25 +128,27 @@
     ]
   },
   "active_task": {
-    "id": "WP34",
-    "slug": "shipping-auth-recovery",
-    "name": "顺丰认证失败与原单安全恢复",
+    "id": "WP35",
+    "slug": "sales-intake-experience",
+    "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "修复生产OAuth认证失败被误判为下单结果未知的问题；保留明确未发单错误并支持原单安全恢复，发送后不确定请求始终先查回。排查认证网络故障，不新增生产测试单或改动受保护运单。",
-    "started_at": "2026-10-15T07:45:54.444Z",
-    "activation_basis": "IN-20261015-077/078：生产下单阻断，依据生产事故例外优先处理",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp34-shipping-auth-recovery/Price-v3",
+    "objective": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+    "started_at": "2026-10-16T07:43:35.475527+00:00",
+    "activation_basis": "IN-20261016-016：用户确认原型与系统配色并明确要求正式上线",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/lib/shipping",
-      "product-truth/product-code/app/api/shipping",
-      "product-truth/product-code/app/shipping",
+      "product-truth/product-code/app/sales-portal",
+      "product-truth/product-code/lib/shipping/wecom-session.ts",
+      "product-truth/product-code/lib/shipping/wecom-session.test.ts",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/REQ_REGISTRY.yml",
+      "product-truth/feature-packets/F099-current-goal-ledger.md",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -187,7 +189,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "WP34生产事故最小修复；发布仅限认证失败分类、原单恢复及对应回归，不含界面扩展、数据库迁移、凭据修改或新增真实测试订单。WP33已部署界面保留，形式验收门禁阻断仍单独记录。",
+      "note": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -202,42 +204,49 @@
       },
       "production_release_authorization": {
         "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261016-002",
-        "final_scope": "WP34认证失败分类、原单安全恢复和专项验收的代码发布；允许必要提交、推送、隔离验证及精确SHA生产发布；无数据库迁移、凭据修改、新生产测试单或受保护运单变更。",
+        "final_release_approval_id": "IN-20261016-016",
+        "micro_fix_approval_id": "IN-20261016-009",
+        "clarification_id": "IN-20261016-015",
+        "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
+        "final_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
         "database_write_authorized": false,
-        "micro_fix_approval_id": "IN-20261015-077",
-        "clarification_id": "IN-20261016-001",
-        "micro_fix_scope": "OAuth未发单分类、失败原因保存及原单安全恢复；范围和安全边界已授权，部署凭证待绑定本次候选",
         "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
       },
       "blocking_acceptance_defects": [
-        "IN-20261015-077"
+        "IN-20261016-009"
       ],
-      "runtime_contract_version": "f054-recovery-v1"
+      "runtime_contract_version": "f054-intake-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
-      "strategy": "minimal_incident_fix_on_verified_production_base",
-      "authority": "IN-20261016-002",
+      "strategy": "isolated_candidate_on_production",
+      "authority": "IN-20261016-016",
       "requested_target": "production_released",
-      "constraint": "code-only release; no schema or new production shipment"
+      "constraint": "code-only release; production data read-only"
     }
   },
   "execution_queue": {
     "active": {
-      "id": "WP34",
-      "slug": "shipping-auth-recovery",
-      "name": "顺丰认证失败与原单安全恢复"
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件提报体验"
     },
     "next": {
-      "id": "WP32",
-      "slug": "sf-push-progress",
-      "name": "顺丰推送接收与工单进度",
-      "entry_gate": "WP33界面候选验证后恢复原接口闭环",
+      "id": "WP36",
+      "slug": "workorder-review-expansion",
+      "name": "工单展开核对与操作",
+      "entry_gate": "WP35正式站验收后独立实施",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
+      {
+        "id": "WP32",
+        "slug": "sf-push-progress",
+        "name": "顺丰推送接收与工单进度",
+        "entry_gate": "WP33界面候选验证后恢复原接口闭环",
+        "entry_gate_status": "waiting_active_completion"
+      },
       {
         "id": "WP19",
         "slug": "wecom-authorized-shipping-intake",
@@ -464,6 +473,11 @@
         "evidence_commit": "a987f85d5701a38a13a245e0ebc5484cadecb3ab",
         "preview_deployment": "dpl_2P11eFtwxutsQXMUoU8R46XdDGUx",
         "result": "四类合同任务、源文件身份与上传编排候选已固化；同一隔离 Preview 的真实合同列表入口默认进入审查，桌面/iPad 选中第 45 页风险后只滚动 DOCX 内部正文，window 不移动；临时风险和认证 token 已精确清理，Production 未写入或部署"
+      },
+      {
+        "id": "WP34",
+        "slug": "shipping-auth-recovery",
+        "result": "认证失败分类与原单恢复已生产发布，证据留存WP34 worktree runtime；不表示完整顺丰CRUD通过。"
       }
     ]
   },
@@ -2048,6 +2062,104 @@
         "requested_target": "production_released",
         "constraint": "code-only release; production database remains read_only"
       }
+    },
+    "WP34": {
+      "id": "WP34",
+      "slug": "shipping-auth-recovery",
+      "name": "顺丰认证失败与原单安全恢复",
+      "kind": "product",
+      "status": "archived",
+      "objective": "修复生产OAuth认证失败被误判为下单结果未知的问题；保留明确未发单错误并支持原单安全恢复，发送后不确定请求始终先查回。排查认证网络故障，不新增生产测试单或改动受保护运单。",
+      "started_at": "2026-10-15T07:45:54.444Z",
+      "activation_basis": "IN-20261015-077/078：生产下单阻断，依据生产事故例外优先处理",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp34-shipping-auth-recovery/Price-v3",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/lib/shipping",
+        "product-truth/product-code/app/api/shipping",
+        "product-truth/product-code/app/shipping",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
+      ],
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "note": "WP34生产事故最小修复；发布仅限认证失败分类、原单恢复及对应回归，不含界面扩展、数据库迁移、凭据修改或新增真实测试订单。WP33已部署界面保留，形式验收门禁阻断仍单独记录。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "shipping_workspace",
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "final_release_approval_id": "IN-20261016-002",
+          "final_scope": "WP34认证失败分类、原单安全恢复和专项验收的代码发布；允许必要提交、推送、隔离验证及精确SHA生产发布；无数据库迁移、凭据修改、新生产测试单或受保护运单变更。",
+          "database_write_authorized": false,
+          "micro_fix_approval_id": "IN-20261015-077",
+          "clarification_id": "IN-20261016-001",
+          "micro_fix_scope": "OAuth未发单分类、失败原因保存及原单安全恢复；范围和安全边界已授权，部署凭证待绑定本次候选",
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        },
+        "blocking_acceptance_defects": [
+          "IN-20261015-077"
+        ],
+        "runtime_contract_version": "f054-recovery-v1"
+      },
+      "feature_id": "F054",
+      "integration_decision": {
+        "strategy": "minimal_incident_fix_on_verified_production_base",
+        "authority": "IN-20261016-002",
+        "requested_target": "production_released",
+        "constraint": "code-only release; no schema or new production shipment"
+      },
+      "reason": "已生产发布，交付证据保存在WP34独立codex-runtime；本次用户明确开始WP35。"
     }
   }
 }

@@ -3,12 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { SHIPPING_UI_FLAGS, SHIPPING_RECOVERY_FLAGS } = require('./project-registry');
+const { SHIPPING_UI_FLAGS, SHIPPING_RECOVERY_FLAGS, SHIPPING_INTAKE_FLAGS } = require('./project-registry');
 const PROJECT = 'wfawwhphfqqwfwrrkogy';
 const ORIGIN = 'https://sales.cyanlog.icu';
 const CONTRACT_TABLES = ['contract_ai_chats','contract_comparisons','contract_items','contract_signatures','contract_risk_cards','contract_template_params','contract_rule_snapshots','contract_risk_card_fixes','contract_rules_v2','contract_drafts','contract_comparison_diffs'];
 const SHIPPING_TABLES = ['shipping_requests', 'shipping_contacts', 'shipping_outbound_imports', 'shipping_orders', 'shipping_waybills', 'shipping_tracking_events', 'shipping_intake_rate_limits', 'shipping_carrier_connections', 'shipping_billing_accounts', 'shipping_sender_profiles'];
 const TABLES = [...CONTRACT_TABLES, ...SHIPPING_TABLES];
+const INTAKE_TABLES = ['shipping_wecom_settings', 'shipping_employee_profiles', 'shipping_employee_sessions'];
 const DELETE_TABLES = ['shipping_intake_rate_limits', 'shipping_carrier_connections', 'shipping_billing_accounts', 'shipping_sender_profiles'];
 const RPC_NAMES = ['exec_sql', 'claim_contract_analysis_job', 'claim_shipping_intake_rate'];
 // Existing seeded organization/user IDs are valid Postgres UUID values without
@@ -53,16 +54,18 @@ function verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerI
   const artifact = readArtifact(runtime, operator?.artifact_path, operator?.sha256);
   assert(JSON.stringify(canonical(artifact.value)) === JSON.stringify(canonical(operator.payload)), 'Operator envelope payload mismatch');
   const ui = artifact.value;
+  const intakeOnly = contractVersion === 'f054-intake-v1';
   const recoveryOnly = contractVersion === 'f054-recovery-v1';
-  const uiOnly = contractVersion === 'f054-ui-v1' || recoveryOnly;
-  exactKeys(ui, ['source', 'commit', 'deployment_id', 'origin', 'environment', 'org_id', 'operator_id', 'browser_context', 'existing_tab_id', 'new_tabs', 'new_browser_contexts', 'attestation_type', 'trust_boundary', 'attested_by', 'attested_at', 'ledger_filters', 'tracking', 'cancellation', 'attachments', ...UI_FLAGS, ...(recoveryOnly ? [...SHIPPING_RECOVERY_FLAGS, 'recovered_order_ids', 'unknown_order_id'] : uiOnly ? SHIPPING_UI_FLAGS : [])], 'operator evidence');
+  const uiOnly = contractVersion === 'f054-ui-v1' || recoveryOnly || intakeOnly;
+  const uiFlags = intakeOnly ? SHIPPING_INTAKE_FLAGS : SHIPPING_UI_FLAGS;
+  exactKeys(ui, ['source', 'commit', 'deployment_id', 'origin', 'environment', 'org_id', 'operator_id', 'browser_context', 'existing_tab_id', 'new_tabs', 'new_browser_contexts', 'attestation_type', 'trust_boundary', 'attested_by', 'attested_at', 'ledger_filters', 'tracking', 'cancellation', 'attachments', ...UI_FLAGS, ...(recoveryOnly ? [...SHIPPING_RECOVERY_FLAGS, 'recovered_order_ids', 'unknown_order_id'] : uiOnly ? uiFlags : [])], 'operator evidence');
   assert(ui.source === 'trusted_existing_chrome_operator' && ui.commit === commit && ui.deployment_id === deploymentId && ui.origin === ORIGIN && ui.environment === 'production', 'Current Production operator attestation required');
   assert(ui.org_id === orgId && ui.operator_id === ownerId, 'Operator organization or identity mismatch');
   assert(ui.browser_context === 'existing_user_chrome' && ui.new_tabs === 0 && ui.new_browser_contexts === 0 && /^[a-zA-Z0-9_-]{1,100}$/.test(ui.existing_tab_id || ''), 'Existing Chrome session required');
   assert(ui.attestation_type === 'trusted_operator_browser' && ui.trust_boundary === 'operator_attestation_not_machine_proof' && /^[a-zA-Z0-9_.:-]{1,100}$/.test(ui.attested_by || ''), 'Explicit operator trust boundary required');
   const attested = time(ui.attested_at);
   assert(attested <= now + 60_000 && now - attested <= 60*60_000, 'Operator attestation is not fresh');
-  for (const key of (uiOnly ? [...(recoveryOnly ? SHIPPING_RECOVERY_FLAGS : SHIPPING_UI_FLAGS), 'guest_ledger_denied', 'owner_can_read'] : UI_FLAGS)) assert(ui[key] === true, 'Missing operator observation: '+key);
+  for (const key of (uiOnly ? [...(recoveryOnly ? SHIPPING_RECOVERY_FLAGS : uiFlags), 'guest_ledger_denied', 'owner_can_read'] : UI_FLAGS)) assert(ui[key] === true, 'Missing operator observation: '+key);
   if (recoveryOnly) {
     assert(Array.isArray(ui.recovered_order_ids) && ui.recovered_order_ids.length >= 1 && ui.recovered_order_ids.length <= 3 && new Set(ui.recovered_order_ids).size === ui.recovered_order_ids.length && ui.recovered_order_ids.every(id => UUID.test(id)) && UUID.test(ui.unknown_order_id || '') && !ui.recovered_order_ids.includes(ui.unknown_order_id), 'Explicit distinct recovery and unknown orders required');
   }
@@ -87,13 +90,13 @@ function verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerI
     const entry = readArtifact(runtime, item.path, item.sha256), value = entry.value;
     exactKeys(value, ['source', 'commit', 'deployment_id', 'origin', 'org_id', 'operator_id', 'existing_tab_id', 'action', 'result', 'observed_at', 'redacted'], 'redacted observation');
     assert(value.source === 'redacted_existing_chrome_observation' && value.redacted === true && value.commit === commit && value.deployment_id === deploymentId && value.origin === ORIGIN && value.org_id === orgId && value.operator_id === ownerId && value.existing_tab_id === ui.existing_tab_id, 'Redacted observation binding mismatch');
-    assert((uiOnly ? ['workspace', ...(recoveryOnly ? ['recovery'] : ['configuration']), 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).includes(value.action) && value.result === 'pass', 'Invalid redacted observation action');
+    assert((uiOnly ? ['workspace', ...(recoveryOnly ? ['recovery'] : intakeOnly ? ['intake'] : ['configuration']), 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).includes(value.action) && value.result === 'pass', 'Invalid redacted observation action');
     assert(time(value.observed_at) <= attested && now - time(value.observed_at) <= 60*60_000, 'Redacted observation is not fresh');
     if (value.action === 'tracking' || value.action === 'cancellation') assert(value.observed_at === ui[value.action].observed_at, 'Observation attachment timestamp mismatch');
     actions.add(value.action);
     return entry.bytes;
   });
-  assert((uiOnly ? ['workspace', ...(recoveryOnly ? ['recovery'] : ['configuration']), 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).every(action => actions.has(action)), 'Operator observation attachment coverage incomplete');
+  assert((uiOnly ? ['workspace', ...(recoveryOnly ? ['recovery'] : intakeOnly ? ['intake'] : ['configuration']), 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).every(action => actions.has(action)), 'Operator observation attachment coverage incomplete');
   return { ui, bytes: artifact.bytes, attachments };
 }
 
@@ -104,9 +107,11 @@ async function verify(options) {
   assert(UUID.test(ownerId || '') && UUID.test(orgId || '') && UUID.test(orderId || '') && WAYBILL.test(waybill || ''), 'Explicit operator, organization, order and waybill required');
   assert(typeof token === 'string' && token.length > 0, 'Existing Supabase management credential required');
   const contractVersion = options.contractVersion || 'f054-v2';
-  assert(['f054-v2', 'f054-ui-v1', 'f054-recovery-v1'].includes(contractVersion), 'Unsupported verification contract');
+  assert(['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1'].includes(contractVersion), 'Unsupported verification contract');
+  const intakeOnly = contractVersion === 'f054-intake-v1';
   const recoveryOnly = contractVersion === 'f054-recovery-v1';
-  const uiOnly = contractVersion === 'f054-ui-v1' || recoveryOnly;
+  const uiOnly = contractVersion === 'f054-ui-v1' || recoveryOnly || intakeOnly;
+  const uiFlags = intakeOnly ? SHIPPING_INTAKE_FLAGS : SHIPPING_UI_FLAGS;
   const now = Date.now();
   const proof = verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerId, orderId, waybill, now, contractVersion });
   const ui = proof.ui;
@@ -122,25 +127,26 @@ async function verify(options) {
     return result;
   }
   const evidence = {};
-  const names = TABLES.map(name => "'"+name+"'").join(',');
+  const scopedTables = intakeOnly ? [...TABLES, ...INTAKE_TABLES] : TABLES;
+  const names = scopedTables.map(name => "'"+name+"'").join(',');
   const catalog = await query(`select c.relname,c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in (${names})`);
   // Recovery changes no contract schema. Require every shipping table and check
   // every existing protected contract table; absent contract features are reported.
   // The full CRUD and UI contracts retain their original complete-catalog gate.
-  const requiredTables = recoveryOnly ? SHIPPING_TABLES : TABLES;
+  const requiredTables = intakeOnly ? [...SHIPPING_TABLES, ...INTAKE_TABLES] : recoveryOnly ? SHIPPING_TABLES : TABLES;
   const coversTables = rows => requiredTables.every(name => rows.filter(row => row.relname === name).length === 1)
-    && rows.every(row => TABLES.includes(row.relname)) && new Set(rows.map(row => row.relname)).size === rows.length;
+    && rows.every(row => scopedTables.includes(row.relname)) && new Set(rows.map(row => row.relname)).size === rows.length;
 
   assert(coversTables(catalog), 'Shipping security catalog incomplete');
   assert(catalog.every(row => row.relrowsecurity === true), 'Shipping RLS disabled');
   evidence.catalog = catalog.map(({ relname, relrowsecurity }) => ({ relname, relrowsecurity }));
-  if (recoveryOnly) evidence.absent_contract_features = CONTRACT_TABLES.filter(name => !catalog.some(row => row.relname === name));
+  if (recoveryOnly || intakeOnly) evidence.absent_contract_features = CONTRACT_TABLES.filter(name => !catalog.some(row => row.relname === name));
   evidence.rls = evidence.catalog.map(row => ({ table: row.relname, enabled: row.relrowsecurity }));
   const acl = await query(`select c.relname,has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE') as anon_access,has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE') as client_access,has_table_privilege('service_role',c.oid,'SELECT') as service_read,has_table_privilege('service_role',c.oid,'INSERT') as service_insert,has_table_privilege('service_role',c.oid,'UPDATE') as service_update,has_table_privilege('service_role',c.oid,'DELETE') as service_delete from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in (${names})`);
   assert(coversTables(acl) && acl.length === catalog.length && catalog.every(item => acl.some(row => row.relname === item.relname)) && acl.every(row => row.anon_access === false && row.client_access === false && row.service_read === true), 'Private table ACL mismatch');
   // has_table_privilege with a comma list means ANY privilege. Required server
   // operations must therefore be checked separately, following the migrations.
-  for (const row of acl.filter(item => SHIPPING_TABLES.includes(item.relname))) {
+  for (const row of acl.filter(item => SHIPPING_TABLES.includes(item.relname) || intakeOnly && INTAKE_TABLES.includes(item.relname))) {
     assert(row.service_insert === true, 'Shipping INSERT privilege missing: '+row.relname);
     if (row.relname !== 'shipping_tracking_events') assert(row.service_update === true, 'Shipping UPDATE privilege missing: '+row.relname);
     if (DELETE_TABLES.includes(row.relname)) assert(row.service_delete === true, 'Shipping DELETE privilege missing: '+row.relname);
@@ -151,9 +157,9 @@ async function verify(options) {
   evidence.rpc = rpc.map(({ name, signature, anon_execute, client_execute, service_execute }) => ({ name, signature, anon_execute, client_execute, service_execute }));
   const advisor = await getJson(`https://api.supabase.com/v1/projects/${PROJECT}/advisors/security`, { headers: { Authorization: 'Bearer '+token } });
   assert(Array.isArray(advisor.lints), 'Security advisor result unavailable');
-  const relevant = advisor.lints.filter(item => TABLES.includes(item.metadata?.name));
+  const relevant = advisor.lints.filter(item => scopedTables.includes(item.metadata?.name));
   assert(!relevant.some(item => item.level === 'ERROR'), 'Scoped security advisor errors remain');
-  evidence.advisor = { scope: TABLES, checked: true, scoped_error_count: 0 };
+  evidence.advisor = { scope: scopedTables, checked: true, scoped_error_count: 0 };
   const boundaries = {};
   for (const route of ['/shipping', '/sales-portal', '/api/shipping/orders', '/api/shipping/contacts', '/api/shipping/ledger', '/api/shipping/settings']) {
     const response = await fetch(ORIGIN+route, { redirect: 'manual', signal: AbortSignal.timeout(20000) });
@@ -243,7 +249,7 @@ async function verify(options) {
     security_gate: envelope('security-gate', { source: 'live_production_database_verifier', gate_id: 'SECURITY-P0-RLS-PRODUCTION', status: 'passed', production_project_ref: PROJECT, scope: 'existing_protected_tables_and_shipping_configuration', checks: Object.fromEntries(['catalog','rls','acl','rpc','advisor','anon','service_role'].map(key => [key, 'pass'])) }),
     verifier: envelope('verifier', { source: 'live_production_runtime_verifier', ...attested }),
     shipping_workspace: envelope('workspace', uiOnly
-      ? { source: 'production_database', contract_version: contractVersion, ...Object.fromEntries((recoveryOnly ? SHIPPING_RECOVERY_FLAGS : SHIPPING_UI_FLAGS).map(key => [key, ui[key]])), ...(recoveryOnly ? { recovery_database_verified: true, recovered_order_ids: recoveredOrders } : {}), ...attested }
+      ? { source: 'production_database', contract_version: contractVersion, ...Object.fromEntries((recoveryOnly ? SHIPPING_RECOVERY_FLAGS : uiFlags).map(key => [key, ui[key]])), ...(recoveryOnly ? { recovery_database_verified: true, recovered_order_ids: recoveredOrders } : {}), ...attested }
       : { source: 'production_database', contract_version: 'f054-v2', ...Object.fromEntries(UI_FLAGS.filter(key => !['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced'].includes(key)).map(key => [key, ui[key]])), ledger_filters: ui.ledger_filters, configuration_in_database: true, order_configuration_snapshot_verified: true, cancel_before_collection_verified: true, cancellation_service_code: ui.cancellation.service_code, cancelled_order_id: cancelled.order_id, ...attested }),
     shipping_tracking: envelope('tracking', { source: 'production_database', success: true, order_id: orderId, waybill, event_count: events.event_count, sf_environment: 'production', app_endpoint: ui.tracking.app_endpoint, mock: false, tracking_capability: tracked.tracking_capability, connection_updated_at: tracked.connection_updated_at, latest_event_at: events.latest_event_at, latest_persisted_at: events.latest_persisted_at, query_observed_at: ui.tracking.observed_at, ...attested }),
     shipping_access: envelope('access', { source: 'production_database', ...Object.fromEntries(['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced'].map(key => [key, ui[key]])), organization_matched: true, ...attested }),

@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { verify } = require('./shipping-workspace-verifier.js');
-const { shippingWorkspaceEvidenceBlockers, SHIPPING_UI_FLAGS } = require('./project-registry.js');
+const { shippingWorkspaceEvidenceBlockers, SHIPPING_UI_FLAGS, SHIPPING_INTAKE_FLAGS } = require('./project-registry.js');
 const ORIGIN = 'https://sales.cyanlog.icu';
 const CONTRACT_TABLES = ['contract_ai_chats','contract_comparisons','contract_items','contract_signatures','contract_risk_cards','contract_template_params','contract_rule_snapshots','contract_risk_card_fixes','contract_rules_v2','contract_drafts','contract_comparison_diffs'];
 const TABLES = [...CONTRACT_TABLES, 'shipping_requests','shipping_contacts','shipping_outbound_imports','shipping_orders','shipping_waybills','shipping_tracking_events','shipping_intake_rate_limits','shipping_carrier_connections','shipping_billing_accounts','shipping_sender_profiles'];
@@ -358,4 +358,38 @@ test('recovery contract cannot accept UI-only evidence or missing isolated repla
   const payload = { contract_version: 'f054-recovery-v1', ...Object.fromEntries(require('./project-registry').SHIPPING_RECOVERY_FLAGS.map(k => [k,true])) };
   const evidence = { shipping_workspace: {payload}, shipping_access: {payload:{guest_ledger_denied:true,owner_can_read:true,organization_matched:true}}, shipping_tracking:{payload:{presentation_checked:true,no_carrier_write:true}} };
   assert.ok(shippingWorkspaceEvidenceBlockers(evidence,'preview','f054-recovery-v1').some(e => e.includes('Isolated')));
+});
+
+function intakeFixture(t) {
+ const f = fixture(t); f.options.contractVersion = 'f054-intake-v1'; delete f.ui.cancellation;
+ f.ui.attachments = f.ui.attachments.filter(item => !['cancellation.json','configuration.json'].includes(item.path));
+ const observation = JSON.parse(fs.readFileSync(path.join(f.runtime, 'workspace.json'))); observation.action = 'intake';
+ const bytes = Buffer.from(JSON.stringify(observation)); fs.writeFileSync(path.join(f.runtime, 'intake.json'), bytes);
+ f.ui.attachments.push({path:'intake.json',sha256:hash(bytes),media_type:'application/json',redacted:true});
+ for (const key of SHIPPING_INTAKE_FLAGS) f.ui[key] = true;
+ for (const relname of ['shipping_wecom_settings','shipping_employee_profiles','shipping_employee_sessions']) {
+  f.data.catalog.push({relname,relrowsecurity:true});
+  f.data.acl.push({relname,anon_access:false,client_access:false,service_read:true,service_insert:true,service_update:true,service_delete:false});
+ }
+ f.data.catalog = f.data.catalog.filter(row=>row.relname !== 'contract_comparison_diffs');
+ f.data.acl = f.data.acl.filter(row=>row.relname !== 'contract_comparison_diffs');
+ f.seal(); return f;
+}
+test('intake checks all identity and shipping tables while reporting unrelated absent contract features',async t=>{
+ const f=intakeFixture(t), result=await verify(f.options);
+ assert.deepEqual(shippingWorkspaceEvidenceBlockers(result,'production','f054-intake-v1'),[]);
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.runtime,'production-runtime-verifier',f.options.commit,'absent_contract_features.json'))),['contract_comparison_diffs']);
+ assert.equal(result.shipping_workspace.payload.no_business_mutations,true);
+});
+for (const [label,mutate,pattern] of [
+ ['missing employee table',f=>{f.data.catalog=f.data.catalog.filter(row=>row.relname!=='shipping_employee_profiles')},/catalog incomplete/],
+ ['employee public access',f=>{f.data.acl.find(row=>row.relname==='shipping_employee_sessions').anon_access=true},/ACL mismatch/],
+ ['identity editable',f=>{f.ui.identity_locked=false},/identity_locked/],
+ ['stale preview allowed',f=>{f.ui.preview_invalidated_on_sender_change=false},/preview_invalidated/],
+ ['business write claimed',f=>{f.ui.no_business_mutations=false},/no_business_mutations/],
+ ['missing intake observation',f=>{f.ui.attachments=f.ui.attachments.filter(item=>item.path!=='intake.json')},/coverage incomplete/],
+]) test('intake rejects '+label,async t=>{const f=intakeFixture(t);mutate(f);f.seal();await assert.rejects(verify(f.options),pattern)});
+test('legacy UI contract still requires its full contract catalog',async t=>{
+ const f=uiFixture(t);f.data.catalog=f.data.catalog.filter(row=>row.relname!=='contract_comparison_diffs');
+ await assert.rejects(verify(f.options),/catalog incomplete/);
 });
