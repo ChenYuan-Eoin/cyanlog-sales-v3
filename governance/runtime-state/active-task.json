@@ -142,7 +142,11 @@
       "governance/runtime-state/demand-inbox.jsonl",
       "product-truth/product-code/lib/shipping",
       "product-truth/product-code/app/api/shipping",
-      "product-truth/product-code/app/shipping"
+      "product-truth/product-code/app/shipping",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -197,25 +201,27 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "pending_security_gate_and_final_write_approval",
-        "final_release_approval_id": "IN-20261015-078",
-        "final_scope": "用户要求已跑通流程稳定及生产下单故障修复，允许范围内可逆代码修复和部署；无数据库迁移、凭据修改或新增生产测试订单",
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261016-002",
+        "final_scope": "WP34认证失败分类、原单安全恢复和专项验收的代码发布；允许必要提交、推送、隔离验证及精确SHA生产发布；无数据库迁移、凭据修改、新生产测试单或受保护运单变更。",
         "database_write_authorized": false,
         "micro_fix_approval_id": "IN-20261015-077",
-        "clarification_id": "IN-20261015-078",
-        "micro_fix_scope": "OAuth未发单分类、失败原因保存及原单安全恢复；范围和安全边界已授权，部署凭证待绑定本次候选"
+        "clarification_id": "IN-20261016-001",
+        "micro_fix_scope": "OAuth未发单分类、失败原因保存及原单安全恢复；范围和安全边界已授权，部署凭证待绑定本次候选",
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
       },
       "blocking_acceptance_defects": [
         "IN-20261015-077"
       ],
-      "runtime_contract_version": "f054-ui-v1"
+      "runtime_contract_version": "f054-recovery-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
-      "strategy": "isolate_ui_on_verified_production_base",
-      "authority": "IN-20261015-062",
+      "strategy": "minimal_incident_fix_on_verified_production_base",
+      "authority": "IN-20261016-002",
       "requested_target": "production_released",
-      "constraint": "code-only release; production database remains read_only"
+      "constraint": "code-only release; no schema or new production shipment"
     }
   },
   "execution_queue": {

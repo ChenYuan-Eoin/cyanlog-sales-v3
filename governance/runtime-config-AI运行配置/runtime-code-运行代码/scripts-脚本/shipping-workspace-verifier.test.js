@@ -80,6 +80,7 @@ function fixture(t) {
     else if (sql.includes('from pg_proc')) result = data.rpc;
     else if (sql.includes('from public.users')) result = data.users;
     else if (sql.includes('from public.shipping_tracking_events')) result = data.events;
+    else if (sql.includes('as original_request_locked')) result = data.recovery;
     else if (sql.includes('from public.shipping_orders')) result = ui.cancellation && sql.includes("o.id='"+ui.cancellation.order_id+"'") ? data.cancelled : data.tracked;
     else assert.fail('Unexpected SQL');
     return Response.json(result);
@@ -272,4 +273,59 @@ test('all business SELECT column references exist in the actual shipping migrati
       assert.ok(schema.get(aliases[alias])?.has(column), 'Unknown migration column '+aliases[alias]+'.'+column);
     }
   }
+});
+
+function recoveryFixture(t) {
+  const f = fixture(t);
+  f.options.contractVersion = 'f054-recovery-v1'; delete f.ui.cancellation;
+  f.ui.recovered_order_ids = [id('8')]; f.ui.unknown_order_id = id('9');
+  for (const key of require('./project-registry').SHIPPING_RECOVERY_FLAGS) f.ui[key] = true;
+  f.ui.attachments = f.ui.attachments.filter(item => item.path !== 'cancellation.json');
+  const entry = f.ui.attachments.find(item => item.path === 'configuration.json');
+  const filename = path.join(f.runtime, entry.path), data = JSON.parse(fs.readFileSync(filename));
+  data.action = 'recovery'; const bytes = Buffer.from(JSON.stringify(data)); fs.writeFileSync(filename, bytes); entry.sha256 = hash(bytes);
+  f.data.catalog = f.data.catalog.filter(row => row.relname !== 'contract_comparison_diffs');
+  f.data.acl = f.data.acl.filter(row => row.relname !== 'contract_comparison_diffs');
+  f.data.recovery = [
+    { id: id('8'), org_id: f.options.orgId, status: 'awaiting_confirmation', failure_stage: 'provider_not_sent', has_failure_reason: true, has_recovery_key: true, recovery_count: 1, has_waybill: false, original_request_locked: true },
+    { id: id('9'), org_id: f.options.orgId, status: 'order_unknown', has_recovery_key: false, has_waybill: false, original_request_locked: true },
+  ];
+  f.seal(); return f;
+}
+
+test('recovery contract verifies original orders and locked unknown requests without carrier writes', async t => {
+  const f = recoveryFixture(t), result = await verify(f.options);
+  assert.deepEqual(shippingWorkspaceEvidenceBlockers(result, 'production', 'f054-recovery-v1'), []);
+  assert.deepEqual(result.shipping_workspace.payload.recovered_order_ids, [id('8')]);
+  assert.equal(result.shipping_workspace.payload.cancel_before_collection_verified, undefined);
+  const queries = f.requests.filter(r => r.init.body).map(r => JSON.parse(r.init.body).query);
+  assert.ok(queries.every(q => /^select /i.test(q)));
+  const query = queries.find(q => q.includes('original_request_locked'));
+  assert.match(query, /r.id=o.provider_order_id/); assert.match(query, /r.waybill is null/);
+  const absent = result.security_gate.payload.attachments.find(x => x.path.endsWith('/absent_contract_features.json'));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.runtime, absent.path))), ['contract_comparison_diffs']);
+});
+
+for (const [label, mutate, expected] of [
+  ['missing shipping table', f => f.data.catalog.pop(), /catalog incomplete/],
+  ['existing contract table insecure', f => f.data.catalog[0].relrowsecurity = false, /RLS disabled/],
+  ['existing contract ACL omitted', f => f.data.acl.shift(), /ACL mismatch/],
+  ['client access to existing table', f => f.data.acl[0].client_access = true, /ACL mismatch/],
+  ['missing recovered order', f => f.data.recovery.shift(), /coverage missing/],
+  ['recovered order belongs to another org', f => f.data.recovery[0].org_id = id('7'), /recovery database mismatch/],
+  ['uncertain result falsely recovered', f => f.data.recovery[0].failure_stage = 'provider_unreachable', /recovery database mismatch/],
+  ['new waybill exists', f => f.data.recovery[0].has_waybill = true, /recovery database mismatch/],
+  ['original outbox unlocked', f => f.data.recovery[0].original_request_locked = false, /recovery database mismatch/],
+  ['unknown has retry key', f => f.data.recovery[1].has_recovery_key = true, /protection database mismatch/],
+  ['unknown was reopened', f => f.data.recovery[1].status = 'awaiting_confirmation', /protection database mismatch/],
+]) test('recovery contract rejects '+label, async t => {
+  const f = recoveryFixture(t); mutate(f); await assert.rejects(verify(f.options), expected);
+});
+
+test('recovery contract cannot accept UI-only evidence or missing isolated replay', async t => {
+  const f = uiFixture(t); f.options.contractVersion = 'f054-recovery-v1';
+  await assert.rejects(verify(f.options), /Unapproved field|Missing operator/);
+  const payload = { contract_version: 'f054-recovery-v1', ...Object.fromEntries(require('./project-registry').SHIPPING_RECOVERY_FLAGS.map(k => [k,true])) };
+  const evidence = { shipping_workspace: {payload}, shipping_access: {payload:{guest_ledger_denied:true,owner_can_read:true,organization_matched:true}}, shipping_tracking:{payload:{presentation_checked:true,no_carrier_write:true}} };
+  assert.ok(shippingWorkspaceEvidenceBlockers(evidence,'preview','f054-recovery-v1').some(e => e.includes('Isolated')));
 });

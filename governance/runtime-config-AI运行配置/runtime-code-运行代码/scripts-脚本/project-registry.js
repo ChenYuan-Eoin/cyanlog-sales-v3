@@ -42,6 +42,8 @@ const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
 const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_request', 'shipping_tracking', 'shipping_access']);
 const SHIPPING_REPLAY_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'confirm_submission', 'query_tracking', 'reload_recent', 'verify_access']);
 const SHIPPING_WORKSPACE_ITEMS = Object.freeze(['shipping_workspace', 'shipping_tracking', 'shipping_access']);
+const SHIPPING_RECOVERY_ACTIONS = Object.freeze(['inspect_failure_reason', 'review_recovered_orders', 'verify_unknown_lookup_only', 'query_tracking', 'reload_ledger', 'verify_organization_access']);
+const SHIPPING_RECOVERY_FLAGS = Object.freeze(['page_accessible', 'failure_reason_visible', 'recovered_orders_visible', 'unknown_orders_lookup_only', 'no_carrier_write']);
 const SHIPPING_UI_ACTIONS = Object.freeze(['open_configuration_center', 'switch_configuration_sections', 'verify_environment_scoping', 'retain_unsaved_draft', 'verify_masked_configuration', 'return_to_workspace', 'select_order_with_keyboard', 'copy_waybill', 'download_template', 'query_tracking', 'reload_ledger', 'verify_organization_access']);
 const SHIPPING_UI_FLAGS = Object.freeze(['page_accessible', 'configuration_center', 'six_sections_available', 'environment_scoping', 'draft_retention', 'credentials_masked', 'no_empty_counts', 'copy_feedback', 'template_download', 'keyboard_selection', 'no_business_mutations']);
 const SHIPPING_WORKSPACE_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'select_payment', 'query_tracking', 'reload_recent', 'verify_access']);
@@ -298,6 +300,7 @@ function runtimeContractVersionOf(state) {
   return state.active_task?.delivery_contract?.runtime_contract_version || null;
 }
 function requiredReplayActions(state) {
+  if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-recovery-v1') return SHIPPING_RECOVERY_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-ui-v1') return SHIPPING_UI_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-v2') return SHIPPING_COLLABORATION_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace') return SHIPPING_WORKSPACE_ACTIONS;
@@ -306,6 +309,16 @@ function requiredReplayActions(state) {
 function shippingWorkspaceEvidenceBlockers(section, environment, expectedContractVersion = null) {
   const errors = [], workspace = section.shipping_workspace?.payload || {}, tracking = section.shipping_tracking?.payload || {}, access = section.shipping_access?.payload || {};
   if (expectedContractVersion && workspace.contract_version !== expectedContractVersion) errors.push('Shipping workspace evidence contract version does not match the Active contract');
+  if (workspace.contract_version === 'f054-recovery-v1') {
+    for (const key of SHIPPING_RECOVERY_FLAGS) if (workspace[key] !== true) errors.push(`Shipping recovery proof missing: ${key}`);
+    for (const key of ['guest_ledger_denied', 'owner_can_read', 'organization_matched']) if (access[key] !== true) errors.push(`Shipping recovery access proof missing: ${key}`);
+    if (workspace.cancel_before_collection_verified !== undefined) errors.push('Recovery evidence must not claim cancellation verification');
+    if (environment === 'production') {
+      if (workspace.recovery_database_verified !== true || !Array.isArray(workspace.recovered_order_ids) || workspace.recovered_order_ids.length < 1) errors.push('Persisted original-order recovery evidence missing');
+      if (tracking.success !== true || tracking.mock !== false || tracking.source !== 'production_database' || tracking.sf_environment !== 'production' || tracking.operator_observations_are_attested !== true || !(tracking.event_count > 0)) errors.push('Existing Production tracking evidence missing');
+    } else if (workspace.reopen_exercised !== true || workspace.unknown_reopen_denied !== true || tracking.presentation_checked !== true || tracking.no_carrier_write !== true) errors.push('Isolated original-order recovery replay missing');
+    return errors;
+  }
   if (workspace.contract_version === 'f054-ui-v1') {
     for (const key of SHIPPING_UI_FLAGS) if (workspace[key] !== true) errors.push(`Shipping UI proof missing: ${key}`);
     for (const key of ['guest_ledger_denied', 'owner_can_read', 'organization_matched']) if (access[key] !== true) errors.push(`Shipping UI access proof missing: ${key}`);
@@ -358,11 +371,11 @@ function shippingWorkspaceEvidenceBlockers(section, environment, expectedContrac
 
 function shippingProductionVerifierScopeBlockers(status) {
   const blockers = [];
-  if (status.runtimeProfile !== 'shipping_workspace' || !['f054-v2', 'f054-ui-v1'].includes(status.runtimeContractVersion)
+  if (status.runtimeProfile !== 'shipping_workspace' || !['f054-v2', 'f054-ui-v1', 'f054-recovery-v1'].includes(status.runtimeContractVersion)
     || status.featureId !== 'F054' || !WORK_PACKAGE_ID_PATTERN.test(String(status.activeId || ''))) {
     blockers.push('Verifier requires the scoped F054 configured-workbench contract');
   }
-  if (status.targetState !== 'production_released' || (status.runtimeContractVersion === 'f054-ui-v1'
+  if (status.targetState !== 'production_released' || (['f054-ui-v1', 'f054-recovery-v1'].includes(status.runtimeContractVersion)
     ? status.productionReleaseAuthorization?.status !== 'approved_code_only' || status.productionDatabaseMode !== 'read_only'
     : status.productionReleaseAuthorization?.status !== 'approved_for_final_release' || status.productionDatabaseMode !== 'controlled_write_approved')) {
     blockers.push('Verifier requires the approved Production release and write contract');
@@ -458,7 +471,7 @@ function validateSchedulerState(options = {}) {
   if (!['ai', 'shipping', 'shipping_workspace'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
   const contractVersion = runtimeContractVersionOf(state);
-  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
+  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
   const canonicalRuntimeEvidence = profile === 'shipping_workspace' ? SHIPPING_WORKSPACE_ITEMS : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
     deliveryContract
@@ -501,8 +514,8 @@ function validateSchedulerState(options = {}) {
     if (releaseAuthorization?.status === 'approved_for_final_release' && databaseMode !== 'controlled_write_approved') {
       errors.push('final Production release approval requires controlled_write_approved database mode');
     }
-    if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || contractVersion !== 'f054-ui-v1'
-      || releaseAuthorization.database_write_authorized !== false)) errors.push('Code-only release requires the UI contract and explicit read-only database boundary');
+    if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1'].includes(contractVersion)
+      || releaseAuthorization.database_write_authorized !== false)) errors.push('Code-only release requires the UI or recovery contract and explicit read-only database boundary');
   }
   for (const dynamicKey of ['evidence', 'release_control', 'releaseControl', 'completionState', 'completion_state', 'defects']) {
     if (deliveryContract && Object.prototype.hasOwnProperty.call(deliveryContract, dynamicKey)) {
@@ -1806,7 +1819,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (['f054-v2', 'f054-ui-v1'].includes(status.runtimeContractVersion)) {
+        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1'].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -1939,7 +1952,7 @@ function checkDeliveryStage(stage, options = {}) {
     if (status.git.remoteProduction !== status.git.head) blockers.push('origin/production does not equal released candidate HEAD');
     const codeOnly = status.productionReleaseAuthorization?.status === 'approved_code_only';
     if (!codeOnly && status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release authorization is still pending');
-    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || status.runtimeContractVersion !== 'f054-ui-v1' : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
+    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1'].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
     const approvalRecord = status.productionReleaseAuthorizationRecord;
     if (approvalRecord?.type !== 'final_production_release_authorization') blockers.push('Final Production authorization record type is invalid');
     if (approvalRecord?.state !== 'approved') blockers.push('Final Production authorization record is not approved');
@@ -2312,6 +2325,8 @@ module.exports = {
   SHIPPING_COLLABORATION_ACTIONS,
   SHIPPING_UI_ACTIONS,
   SHIPPING_UI_FLAGS,
+  SHIPPING_RECOVERY_FLAGS,
+  SHIPPING_RECOVERY_ACTIONS,
   requiredReplayActions,
   shippingRuntimeEvidenceBlockers,
   shippingWorkspaceEvidenceBlockers,

@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { SHIPPING_UI_FLAGS } = require('./project-registry');
+const { SHIPPING_UI_FLAGS, SHIPPING_RECOVERY_FLAGS } = require('./project-registry');
 const PROJECT = 'wfawwhphfqqwfwrrkogy';
 const ORIGIN = 'https://sales.cyanlog.icu';
 const CONTRACT_TABLES = ['contract_ai_chats','contract_comparisons','contract_items','contract_signatures','contract_risk_cards','contract_template_params','contract_rule_snapshots','contract_risk_card_fixes','contract_rules_v2','contract_drafts','contract_comparison_diffs'];
@@ -46,15 +46,19 @@ function verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerI
   const artifact = readArtifact(runtime, operator?.artifact_path, operator?.sha256);
   assert(JSON.stringify(canonical(artifact.value)) === JSON.stringify(canonical(operator.payload)), 'Operator envelope payload mismatch');
   const ui = artifact.value;
-  const uiOnly = contractVersion === 'f054-ui-v1';
-  exactKeys(ui, ['source', 'commit', 'deployment_id', 'origin', 'environment', 'org_id', 'operator_id', 'browser_context', 'existing_tab_id', 'new_tabs', 'new_browser_contexts', 'attestation_type', 'trust_boundary', 'attested_by', 'attested_at', 'ledger_filters', 'tracking', 'cancellation', 'attachments', ...UI_FLAGS, ...(uiOnly ? SHIPPING_UI_FLAGS : [])], 'operator evidence');
+  const recoveryOnly = contractVersion === 'f054-recovery-v1';
+  const uiOnly = contractVersion === 'f054-ui-v1' || recoveryOnly;
+  exactKeys(ui, ['source', 'commit', 'deployment_id', 'origin', 'environment', 'org_id', 'operator_id', 'browser_context', 'existing_tab_id', 'new_tabs', 'new_browser_contexts', 'attestation_type', 'trust_boundary', 'attested_by', 'attested_at', 'ledger_filters', 'tracking', 'cancellation', 'attachments', ...UI_FLAGS, ...(recoveryOnly ? [...SHIPPING_RECOVERY_FLAGS, 'recovered_order_ids', 'unknown_order_id'] : uiOnly ? SHIPPING_UI_FLAGS : [])], 'operator evidence');
   assert(ui.source === 'trusted_existing_chrome_operator' && ui.commit === commit && ui.deployment_id === deploymentId && ui.origin === ORIGIN && ui.environment === 'production', 'Current Production operator attestation required');
   assert(ui.org_id === orgId && ui.operator_id === ownerId, 'Operator organization or identity mismatch');
   assert(ui.browser_context === 'existing_user_chrome' && ui.new_tabs === 0 && ui.new_browser_contexts === 0 && /^[a-zA-Z0-9_-]{1,100}$/.test(ui.existing_tab_id || ''), 'Existing Chrome session required');
   assert(ui.attestation_type === 'trusted_operator_browser' && ui.trust_boundary === 'operator_attestation_not_machine_proof' && /^[a-zA-Z0-9_.:-]{1,100}$/.test(ui.attested_by || ''), 'Explicit operator trust boundary required');
   const attested = time(ui.attested_at);
   assert(attested <= now + 60_000 && now - attested <= 60*60_000, 'Operator attestation is not fresh');
-  for (const key of (uiOnly ? [...SHIPPING_UI_FLAGS, 'guest_ledger_denied', 'owner_can_read'] : UI_FLAGS)) assert(ui[key] === true, 'Missing operator observation: '+key);
+  for (const key of (uiOnly ? [...(recoveryOnly ? SHIPPING_RECOVERY_FLAGS : SHIPPING_UI_FLAGS), 'guest_ledger_denied', 'owner_can_read'] : UI_FLAGS)) assert(ui[key] === true, 'Missing operator observation: '+key);
+  if (recoveryOnly) {
+    assert(Array.isArray(ui.recovered_order_ids) && ui.recovered_order_ids.length >= 1 && ui.recovered_order_ids.length <= 3 && new Set(ui.recovered_order_ids).size === ui.recovered_order_ids.length && ui.recovered_order_ids.every(id => UUID.test(id)) && UUID.test(ui.unknown_order_id || '') && !ui.recovered_order_ids.includes(ui.unknown_order_id), 'Explicit distinct recovery and unknown orders required');
+  }
   if (!uiOnly) assert(Array.isArray(ui.ledger_filters) && ui.ledger_filters.length === 4 && ['sales', 'customer', 'contact', 'status'].every(key => ui.ledger_filters.includes(key)), 'Complete ledger filter observations required');
   exactKeys(ui.tracking, ['order_id', 'waybill', 'app_endpoint', 'started_at', 'observed_at', 'success', 'source', 'mock', 'event_count'], 'tracking observation');
   assert(ui.tracking.order_id === orderId && ui.tracking.waybill === waybill && ui.tracking.app_endpoint === ORIGIN+'/api/shipping/tracking', 'Tracking observation target mismatch');
@@ -76,13 +80,13 @@ function verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerI
     const entry = readArtifact(runtime, item.path, item.sha256), value = entry.value;
     exactKeys(value, ['source', 'commit', 'deployment_id', 'origin', 'org_id', 'operator_id', 'existing_tab_id', 'action', 'result', 'observed_at', 'redacted'], 'redacted observation');
     assert(value.source === 'redacted_existing_chrome_observation' && value.redacted === true && value.commit === commit && value.deployment_id === deploymentId && value.origin === ORIGIN && value.org_id === orgId && value.operator_id === ownerId && value.existing_tab_id === ui.existing_tab_id, 'Redacted observation binding mismatch');
-    assert((uiOnly ? ['workspace', 'configuration', 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).includes(value.action) && value.result === 'pass', 'Invalid redacted observation action');
+    assert((uiOnly ? ['workspace', ...(recoveryOnly ? ['recovery'] : ['configuration']), 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).includes(value.action) && value.result === 'pass', 'Invalid redacted observation action');
     assert(time(value.observed_at) <= attested && now - time(value.observed_at) <= 60*60_000, 'Redacted observation is not fresh');
     if (value.action === 'tracking' || value.action === 'cancellation') assert(value.observed_at === ui[value.action].observed_at, 'Observation attachment timestamp mismatch');
     actions.add(value.action);
     return entry.bytes;
   });
-  assert((uiOnly ? ['workspace', 'configuration', 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).every(action => actions.has(action)), 'Operator observation attachment coverage incomplete');
+  assert((uiOnly ? ['workspace', ...(recoveryOnly ? ['recovery'] : ['configuration']), 'access', 'tracking'] : ['workspace', 'configuration', 'access', 'tracking', 'cancellation']).every(action => actions.has(action)), 'Operator observation attachment coverage incomplete');
   return { ui, bytes: artifact.bytes, attachments };
 }
 
@@ -93,8 +97,9 @@ async function verify(options) {
   assert(UUID.test(ownerId || '') && UUID.test(orgId || '') && UUID.test(orderId || '') && WAYBILL.test(waybill || ''), 'Explicit operator, organization, order and waybill required');
   assert(typeof token === 'string' && token.length > 0, 'Existing Supabase management credential required');
   const contractVersion = options.contractVersion || 'f054-v2';
-  assert(['f054-v2', 'f054-ui-v1'].includes(contractVersion), 'Unsupported verification contract');
-  const uiOnly = contractVersion === 'f054-ui-v1';
+  assert(['f054-v2', 'f054-ui-v1', 'f054-recovery-v1'].includes(contractVersion), 'Unsupported verification contract');
+  const recoveryOnly = contractVersion === 'f054-recovery-v1';
+  const uiOnly = contractVersion === 'f054-ui-v1' || recoveryOnly;
   const now = Date.now();
   const proof = verifyOperator({ runtime, operator, commit, deploymentId, orgId, ownerId, orderId, waybill, now, contractVersion });
   const ui = proof.ui;
@@ -112,13 +117,20 @@ async function verify(options) {
   const evidence = {};
   const names = TABLES.map(name => "'"+name+"'").join(',');
   const catalog = await query(`select c.relname,c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in (${names})`);
-  const coversTables = rows => rows.length === TABLES.length && TABLES.every(name => rows.filter(row => row.relname === name).length === 1);
+  // Recovery changes no contract schema. Require every shipping table and check
+  // every existing protected contract table; absent contract features are reported.
+  // The full CRUD and UI contracts retain their original complete-catalog gate.
+  const requiredTables = recoveryOnly ? SHIPPING_TABLES : TABLES;
+  const coversTables = rows => requiredTables.every(name => rows.filter(row => row.relname === name).length === 1)
+    && rows.every(row => TABLES.includes(row.relname)) && new Set(rows.map(row => row.relname)).size === rows.length;
+
   assert(coversTables(catalog), 'Shipping security catalog incomplete');
   assert(catalog.every(row => row.relrowsecurity === true), 'Shipping RLS disabled');
   evidence.catalog = catalog.map(({ relname, relrowsecurity }) => ({ relname, relrowsecurity }));
+  if (recoveryOnly) evidence.absent_contract_features = CONTRACT_TABLES.filter(name => !catalog.some(row => row.relname === name));
   evidence.rls = evidence.catalog.map(row => ({ table: row.relname, enabled: row.relrowsecurity }));
   const acl = await query(`select c.relname,has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE') as anon_access,has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE') as client_access,has_table_privilege('service_role',c.oid,'SELECT') as service_read,has_table_privilege('service_role',c.oid,'INSERT') as service_insert,has_table_privilege('service_role',c.oid,'UPDATE') as service_update,has_table_privilege('service_role',c.oid,'DELETE') as service_delete from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in (${names})`);
-  assert(coversTables(acl) && acl.every(row => row.anon_access === false && row.client_access === false && row.service_read === true), 'Private table ACL mismatch');
+  assert(coversTables(acl) && acl.length === catalog.length && catalog.every(item => acl.some(row => row.relname === item.relname)) && acl.every(row => row.anon_access === false && row.client_access === false && row.service_read === true), 'Private table ACL mismatch');
   // has_table_privilege with a comma list means ANY privilege. Required server
   // operations must therefore be checked separately, following the migrations.
   for (const row of acl.filter(item => SHIPPING_TABLES.includes(item.relname))) {
@@ -180,6 +192,20 @@ async function verify(options) {
     assert(cancelled.status === 'cancelled' && cancelled.latest_status === 'cancelled' && cancelled.cancel_capability === 'verified', 'Persisted successful cancellation missing');
     assert(time(cancelled.order_updated_at) >= time(ui.cancellation.started_at)-60_000 && time(cancelled.order_updated_at) <= time(ui.cancellation.observed_at)+60_000 && time(cancelled.connection_updated_at) >= time(ui.cancellation.started_at)-60_000, 'Cancellation time does not match the observed operation');
   }
+  let recoveredOrders;
+  if (recoveryOnly) {
+    const ids = [...ui.recovered_order_ids, ui.unknown_order_id].map(id => "'"+id+"'").join(',');
+    const recoveryRows = await query(`select o.id,o.org_id,o.status,o.shipping_config_snapshot->'orderFailure'->>'stage' as failure_stage,(length(coalesce(o.shipping_config_snapshot->'orderFailure'->>'message',''))>0) as has_failure_reason,(length(coalesce(o.shipping_config_snapshot->'dispatchRecovery'->>'requestKey',''))>0) as has_recovery_key,jsonb_array_length(coalesce(o.shipping_config_snapshot->'dispatchRecovery'->'history','[]'::jsonb)) as recovery_count,exists(select 1 from public.shipping_waybills w where w.shipping_order_id=o.id) as has_waybill,exists(select 1 from public.shipping_requests r where r.id=o.provider_order_id and r.status='unknown' and r.waybill is null) as original_request_locked from public.shipping_orders o where o.org_id='${orgId}' and o.connection_environment='production' and o.id in (${ids})`);
+    assert(recoveryRows.length === ui.recovered_order_ids.length+1, 'Recovery order coverage missing');
+    for (const id of ui.recovered_order_ids) {
+      const row = recoveryRows.find(row => row.id === id);
+      assert(row && row.org_id === orgId && row.status === 'awaiting_confirmation' && row.failure_stage === 'provider_not_sent' && row.has_failure_reason === true && row.has_recovery_key === true && row.recovery_count > 0 && row.has_waybill === false && row.original_request_locked === true, 'Original-order recovery database mismatch');
+    }
+    const unknown = recoveryRows.find(row => row.id === ui.unknown_order_id);
+    assert(unknown && unknown.org_id === orgId && unknown.status === 'order_unknown' && unknown.has_recovery_key === false && unknown.has_waybill === false && unknown.original_request_locked === true, 'Uncertain-order protection database mismatch');
+    recoveredOrders = ui.recovered_order_ids;
+    evidence.recovery = recoveryRows;
+  }
   evidence.service_role = { source: 'management_database_read', org_id: orgId, tracked_order: tracked, ...(cancelled ? { cancelled_order: cancelled } : {}) };
   evidence.tracking_events = { org_id: orgId, order_id: orderId, waybill, event_count: events.event_count, latest_event_at: events.latest_event_at, latest_persisted_at: events.latest_persisted_at };
 
@@ -210,7 +236,7 @@ async function verify(options) {
     security_gate: envelope('security-gate', { source: 'live_production_database_verifier', gate_id: 'SECURITY-P0-RLS-PRODUCTION', status: 'passed', production_project_ref: PROJECT, scope: 'existing_protected_tables_and_shipping_configuration', checks: Object.fromEntries(['catalog','rls','acl','rpc','advisor','anon','service_role'].map(key => [key, 'pass'])) }),
     verifier: envelope('verifier', { source: 'live_production_runtime_verifier', ...attested }),
     shipping_workspace: envelope('workspace', uiOnly
-      ? { source: 'production_database', contract_version: contractVersion, ...Object.fromEntries(SHIPPING_UI_FLAGS.map(key => [key, ui[key]])), ...attested }
+      ? { source: 'production_database', contract_version: contractVersion, ...Object.fromEntries((recoveryOnly ? SHIPPING_RECOVERY_FLAGS : SHIPPING_UI_FLAGS).map(key => [key, ui[key]])), ...(recoveryOnly ? { recovery_database_verified: true, recovered_order_ids: recoveredOrders } : {}), ...attested }
       : { source: 'production_database', contract_version: 'f054-v2', ...Object.fromEntries(UI_FLAGS.filter(key => !['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced'].includes(key)).map(key => [key, ui[key]])), ledger_filters: ui.ledger_filters, configuration_in_database: true, order_configuration_snapshot_verified: true, cancel_before_collection_verified: true, cancellation_service_code: ui.cancellation.service_code, cancelled_order_id: cancelled.order_id, ...attested }),
     shipping_tracking: envelope('tracking', { source: 'production_database', success: true, order_id: orderId, waybill, event_count: events.event_count, sf_environment: 'production', app_endpoint: ui.tracking.app_endpoint, mock: false, tracking_capability: tracked.tracking_capability, connection_updated_at: tracked.connection_updated_at, latest_event_at: events.latest_event_at, latest_persisted_at: events.latest_persisted_at, query_observed_at: ui.tracking.observed_at, ...attested }),
     shipping_access: envelope('access', { source: 'production_database', ...Object.fromEntries(['public_intake_allowed','guest_ledger_denied','owner_can_read','relationship_assignment_controlled','rate_limit_enforced'].map(key => [key, ui[key]])), organization_matched: true, ...attested }),
