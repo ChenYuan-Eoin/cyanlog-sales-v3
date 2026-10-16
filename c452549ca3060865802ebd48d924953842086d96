@@ -1,0 +1,442 @@
+{
+  "version": 1,
+  "activeId": "WP34",
+  "commit": "c452549ca3060865802ebd48d924953842086d96",
+  "evidence": {
+    "code": {
+      "commit": "c452549ca3060865802ebd48d924953842086d96",
+      "checks": {
+        "typecheck": true,
+        "lint": true,
+        "full_tests": true,
+        "target_tests": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "typecheck",
+          "command": "bash /Users/nsss/.codex/worktrees/wp34-shipping-auth-recovery/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh",
+          "exit_code": 0,
+          "artifact_path": "check-logs/cf11ec02b3120feb742a9df5b9810f8de6f991a9/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "lint",
+          "command": "bash /Users/nsss/.codex/worktrees/wp34-shipping-auth-recovery/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh",
+          "exit_code": 0,
+          "artifact_path": "check-logs/cf11ec02b3120feb742a9df5b9810f8de6f991a9/check-02-lint.log",
+          "log_sha256": "d5ae9939e58b489da390a98f5aa89cb460432ce4cf8f3b6fbf6d22f8476dbae1"
+        },
+        {
+          "name": "full_tests",
+          "command": "bash /Users/nsss/.codex/worktrees/wp34-shipping-auth-recovery/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh",
+          "exit_code": 0,
+          "artifact_path": "check-logs/cf11ec02b3120feb742a9df5b9810f8de6f991a9/check-03-test.log",
+          "log_sha256": "3b377acf550a66e28676304c630fdb9c0e5091b05699b6c3bfca9d9c91ef4cd3"
+        },
+        {
+          "name": "target_tests",
+          "command": "node --test governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+          "exit_code": 0,
+          "artifact_path": "pg-time-target-tests.log",
+          "log_sha256": "0ce70df53ad082ddd062d2cea4fc21e4adafb70b41e6b8bd42eaf6f669af7bc3"
+        },
+        {
+          "name": "build",
+          "command": "pnpm --dir product-truth/product-code build",
+          "exit_code": 0,
+          "artifact_path": "pg-time-build.log",
+          "log_sha256": "87edf6ac310896715d436cfb610183ab006346b1e14e91a761de44833c245ca5"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "15284a568fe5dbc679dd58e8bdd4d92c519fd076e8a69fb114d58889f521b22e",
+        "entry_sha256": "e4a2a40b9f5cb32512bab58df22d5dcc5aaa090e7c1fd1f8fbd0881eb97e52dc"
+      }
+    },
+    "preview": {
+      "commit": "c452549ca3060865802ebd48d924953842086d96",
+      "provider_source_commit": "c452549ca3060865802ebd48d924953842086d96",
+      "deployment_id": "dpl_CpYiBrTbd1S1J141v9rq1n2Ce6qJ",
+      "url": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app",
+      "ready": true,
+      "git_dirty": false,
+      "journeys": {
+        "desktop": true,
+        "ipad": true,
+        "blocking_defect_replay": true
+      },
+      "artifacts": {
+        "desktop": {
+          "artifact_path": "wp34-acceptance/pg-preview-desktop.json",
+          "sha256": "1b7261d66ef8f8d074d07d870368f7235de486d46add97df63afacfa8aceafc5",
+          "payload": {
+            "commit": "c452549ca3060865802ebd48d924953842086d96",
+            "deployment_id": "dpl_CpYiBrTbd1S1J141v9rq1n2Ce6qJ",
+            "origin": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app",
+            "url": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app/shipping",
+            "source": "trusted_existing_chrome_operator",
+            "attested_at": "2026-10-16T04:32:39.751Z",
+            "attested_by": "codex:operator",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "existing-preview-ones-sales",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "viewport": {
+              "width": 1920,
+              "height": 929
+            },
+            "result": "pass",
+            "attachments": [
+              {
+                "path": "wp34-acceptance/pg-preview-observation.json",
+                "sha256": "8dd9e4f18825f6bbba31a2435d7d635bcaddb4ba58827953b087e2157fee59a4"
+              }
+            ]
+          }
+        },
+        "ipad": {
+          "artifact_path": "wp34-acceptance/pg-preview-ipad.json",
+          "sha256": "9a571dadb953e651806dadc222d0990217dbb9d7d01496012c026048f621abfb",
+          "payload": {
+            "commit": "c452549ca3060865802ebd48d924953842086d96",
+            "deployment_id": "dpl_CpYiBrTbd1S1J141v9rq1n2Ce6qJ",
+            "origin": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app",
+            "url": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app/shipping",
+            "source": "trusted_existing_chrome_operator",
+            "attested_at": "2026-10-16T04:32:39.751Z",
+            "attested_by": "codex:operator",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "existing-preview-ones-sales",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "viewport": {
+              "width": 1024,
+              "height": 842
+            },
+            "result": "pass",
+            "limitation": "Original workbench retains horizontally wide layout; no mobile redesign claimed",
+            "attachments": [
+              {
+                "path": "wp34-acceptance/pg-preview-observation.json",
+                "sha256": "8dd9e4f18825f6bbba31a2435d7d635bcaddb4ba58827953b087e2157fee59a4"
+              }
+            ]
+          }
+        },
+        "defect_replay": {
+          "artifact_path": "wp34-acceptance/pg-preview-defect_replay.json",
+          "sha256": "ee7908af0533d832f7391d3fdc8265a4c1311ca7609057253726dbc967440dc5",
+          "payload": {
+            "commit": "c452549ca3060865802ebd48d924953842086d96",
+            "deployment_id": "dpl_CpYiBrTbd1S1J141v9rq1n2Ce6qJ",
+            "origin": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app",
+            "url": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app/shipping",
+            "source": "trusted_existing_chrome_operator",
+            "attested_at": "2026-10-16T04:32:39.751Z",
+            "attested_by": "codex:operator",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "existing-preview-ones-sales",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "actions": [
+              "inspect_failure_reason",
+              "review_recovered_orders",
+              "verify_unknown_lookup_only",
+              "query_tracking",
+              "reload_ledger",
+              "verify_organization_access"
+            ],
+            "result": "pass",
+            "overlays_after": 0,
+            "body_scroll_lock_released": true,
+            "app_inert_after": false,
+            "attachments": [
+              {
+                "path": "wp34-acceptance/pg-preview-observation.json",
+                "sha256": "8dd9e4f18825f6bbba31a2435d7d635bcaddb4ba58827953b087e2157fee59a4"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "runtime": {
+      "shipping_workspace": {
+        "artifact_path": "wp34-acceptance/pg-runtime-shipping_workspace.json",
+        "sha256": "2e296f30c79b7b5df91095944b3887840e08ce15c1a1d9cc8e4d7ef5f3d3cad7",
+        "payload": {
+          "commit": "c452549ca3060865802ebd48d924953842086d96",
+          "deployment_id": "dpl_CpYiBrTbd1S1J141v9rq1n2Ce6qJ",
+          "origin": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app",
+          "url": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app/shipping",
+          "source": "trusted_existing_chrome_operator",
+          "attested_at": "2026-10-16T04:32:39.751Z",
+          "attested_by": "codex:operator",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "existing-preview-ones-sales",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "contract_version": "f054-recovery-v1",
+          "page_accessible": true,
+          "failure_reason_visible": true,
+          "recovered_orders_visible": true,
+          "unknown_orders_lookup_only": true,
+          "no_carrier_write": true,
+          "reopen_exercised": true,
+          "unknown_reopen_denied": true,
+          "unknown_reopen_denied_scope": "UI exposes only lookup; API guard separately verified by target tests",
+          "attachments": [
+            {
+              "path": "wp34-acceptance/pg-preview-observation.json",
+              "sha256": "8dd9e4f18825f6bbba31a2435d7d635bcaddb4ba58827953b087e2157fee59a4"
+            }
+          ]
+        }
+      },
+      "shipping_tracking": {
+        "artifact_path": "wp34-acceptance/pg-runtime-shipping_tracking.json",
+        "sha256": "88ff3e5951d50068944d6e50f0093e4a8ac3cf28c3a8413e3c76d90d13115358",
+        "payload": {
+          "commit": "c452549ca3060865802ebd48d924953842086d96",
+          "deployment_id": "dpl_CpYiBrTbd1S1J141v9rq1n2Ce6qJ",
+          "origin": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app",
+          "url": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app/shipping",
+          "source": "trusted_existing_chrome_operator",
+          "attested_at": "2026-10-16T04:32:39.751Z",
+          "attested_by": "codex:operator",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "existing-preview-ones-sales",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "presentation_checked": true,
+          "no_carrier_write": true,
+          "result": "Explicit credential-decryption error rendered for existing sandbox tracking; successful sandbox carrier response not claimed",
+          "attachments": [
+            {
+              "path": "wp34-acceptance/pg-preview-observation.json",
+              "sha256": "8dd9e4f18825f6bbba31a2435d7d635bcaddb4ba58827953b087e2157fee59a4"
+            }
+          ]
+        }
+      },
+      "shipping_access": {
+        "artifact_path": "wp34-acceptance/pg-runtime-shipping_access.json",
+        "sha256": "bcf0b7e70eebcc5d002c86b3df338e9d598eb00e6bf44375f5457ac099e7e702",
+        "payload": {
+          "commit": "c452549ca3060865802ebd48d924953842086d96",
+          "deployment_id": "dpl_CpYiBrTbd1S1J141v9rq1n2Ce6qJ",
+          "origin": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app",
+          "url": "https://cyanlog-sales-v3-git-codex-wp34-b9fe47-eoins-projects-94b17ece.vercel.app/shipping",
+          "source": "trusted_existing_chrome_operator",
+          "attested_at": "2026-10-16T04:32:39.751Z",
+          "attested_by": "codex:operator",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "existing-preview-ones-sales",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "guest_ledger_denied": true,
+          "owner_can_read": true,
+          "organization_matched": true,
+          "org_id": "a226ed0f-5e6f-445f-82c4-378362b45ab5",
+          "owner_user_id": "0be7e3cf-897f-4691-bffd-9e1dc430190d",
+          "evidence_basis": "Authenticated existing Preview session read/reopened its scoped synthetic row; DB confirms org/owner. Anonymous GET denied by Vercel SSO302 before app; final app ACL checked separately.",
+          "attachments": [
+            {
+              "path": "wp34-acceptance/pg-preview-observation.json",
+              "sha256": "8dd9e4f18825f6bbba31a2435d7d635bcaddb4ba58827953b087e2157fee59a4"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "updatedAt": "2026-10-16T04:34:29.224Z",
+  "completionState": "integration_ready",
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_branch_evidence": {
+      "artifact_path": "wp34-acceptance/production-branch-before.json",
+      "sha256": "9bd338f5a9accf4f38f060ba1fdf3e6a0671ed1cf60a514af2f939c9514bd4e4",
+      "payload": {
+        "branch": "production",
+        "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "observed_at": "2026-10-16T03:07:28.712Z",
+        "source": "Vercel project GET metadata; fresh gate independently rechecks"
+      }
+    },
+    "production_commit_before": "7c8f01bf44d71b02e4c8fbbb234c6672cc3a104d",
+    "production_deployment_id_before": "dpl_b7AR21YaG7YYR3jViu97bgw2g4Kz",
+    "production_release_approval_id": "IN-20261016-002",
+    "production_release_clarification_id": "IN-20261016-001",
+    "production_release_scope": "WP34认证失败分类、原单安全恢复和专项验收的代码发布；允许必要提交、推送、隔离验证及精确SHA生产发布；无数据库迁移、凭据修改、新生产测试单或受保护运单变更。",
+    "production_release_commit_authorized": "c452549ca3060865802ebd48d924953842086d96",
+    "production_release_method": "vercel_git_production_branch",
+    "production_commit_after": "7c8f01bf44d71b02e4c8fbbb234c6672cc3a104d",
+    "production_deployment_id_after": "dpl_b7AR21YaG7YYR3jViu97bgw2g4Kz"
+  },
+  "defects": {
+    "IN-20261015-077": {
+      "verified": true,
+      "root_cause": "OAuth timeout occurred before CREATE was sent, but old submit path discarded the ShippingError stage and classified the order as unknown. New provider_not_sent stage preserves failure and permits explicit original-order review, while ambiguous business responses remain lookup-only.",
+      "reproduction": {
+        "artifact_path": "wp34-acceptance/reproduction-IN-20261015-077.json",
+        "sha256": "2e55dd2f9e292056139598c3e39d7d034ea8c89e1450c05569702b17d017060e",
+        "payload": {
+          "source": "recorded_production_reproduction_and_logs",
+          "inbox": {
+            "id": "IN-20261015-077",
+            "target": "F054",
+            "type": "production_incident",
+            "state": "triaging",
+            "source": "user_explicit",
+            "created_at": "2026-10-15T10:24:34.040268+00:00",
+            "quote": "下单不成功，已经跑通的流程为何又会不通",
+            "related": [
+              "IN-20261015-062",
+              "IN-20261015-068"
+            ],
+            "capsule": {
+              "candidate_sha": "f3fa1be25c871c36c7786d472264a4a883f97635",
+              "deployment_id": "dpl_Bsf2YvWb6dg3UjMVwCx9pewSae4A",
+              "url": "https://sales.cyanlog.icu/shipping",
+              "viewport": {
+                "attachment_width": 2276,
+                "attachment_height": 1352
+              },
+              "initial": "用户新建两票生产寄件提报并确认，均显示结果待确认",
+              "steps": [
+                "用户确认下单",
+                "用户点击查回下单结果"
+              ],
+              "expected": "明确返回运单或可安全恢复的未发送状态，避免重复下单",
+              "actual": "查回失败：顺丰OAuth2认证连接超时，未收到顺丰响应。原单已保留，请稍后继续查回。",
+              "order_numbers": [
+                "SO-20261015-170B1DFE",
+                "SO-20261015-C535DEFF"
+              ],
+              "evidence": "/var/folders/vm/8p67qbts0yb50prnyd72frhc0000gn/T/codex-clipboard-5b5b49b6-8092-43dc-a193-18a1905fb6d0.png"
+            },
+            "assessment": "按生产业务阻断优先只读诊断。当前WP33六分区界面已生产发布并完成Chrome界面/只读轨迹重放，最终交付校验仍受远端连接超时阻断；不将UI验收外推为下单闭环。先查现有两票状态和服务端OAuth日志、发布差异，再按生产事故例外分离恢复批次；不修改既有受保护运单，不重复新建，不暗中扩大配置/数据权限。",
+            "known_facts": [
+              "本次sf-client差异仅增加显式可选obj返回字段，默认msgData及OAuth/下单流程保持原代码",
+              "OAuth缓存仅进程内，生产双认证端点各6秒超时；实际故障原因待服务器日志确认"
+            ]
+          },
+          "log_evidence": "WP33 production-incident-logs and OAuth comparison; WP34 original-order recovery evidence"
+        }
+      },
+      "regression_artifact_sha256": "ee7908af0533d832f7391d3fdc8265a4c1311ca7609057253726dbc967440dc5",
+      "preview_commit": "c452549ca3060865802ebd48d924953842086d96",
+      "production_verified": false,
+      "production_commit": null,
+      "production_regression_artifact_sha256": null
+    },
+    "IN-20261016-008": {
+      "verified": true,
+      "root_cause": "Postgres management API emits timestamps with a space and +HH offset, while operator observations require ISO T/+HH:MM. Separate database normalization now preserves strict operator validation and all freshness/security checks.",
+      "preview_commit": "c452549ca3060865802ebd48d924953842086d96",
+      "regression_artifact_sha256": "ee7908af0533d832f7391d3fdc8265a4c1311ca7609057253726dbc967440dc5",
+      "production_verified": false,
+      "diagnostic_production_security": "passed with real read-only queries on 7c deployed app; current SHA Production replay still required"
+    }
+  },
+  "gateSnapshots": {
+    "integration_ready": {
+      "stage": "integration_ready",
+      "checkedAt": "2026-10-16T04:34:29.196Z",
+      "head": "c452549ca3060865802ebd48d924953842086d96",
+      "originMain": "7c8f01bf44d71b02e4c8fbbb234c6672cc3a104d",
+      "remoteMain": "7c8f01bf44d71b02e4c8fbbb234c6672cc3a104d",
+      "remoteProduction": "7c8f01bf44d71b02e4c8fbbb234c6672cc3a104d",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "3e2ca6e514cf1b3665a1b76d2a3c3f899f1d0a00",
+      "remoteAttestationRefOid": "3e2ca6e514cf1b3665a1b76d2a3c3f899f1d0a00",
+      "remoteSnapshotCheckedAt": "2026-10-16T04:32:44.265Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-10-16T04:34:03.938Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_b7AR21YaG7YYR3jViu97bgw2g4Kz?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_b7AR21YaG7YYR3jViu97bgw2g4Kz"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "deployment": {
+          "id": "dpl_b7AR21YaG7YYR3jViu97bgw2g4Kz",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "7c8f01bf44d71b02e4c8fbbb234c6672cc3a104d",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "7c8f01bf44d71b02e4c8fbbb234c6672cc3a104d",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-10-16T04-34-03-938Z-79312-project.json",
+            "sha256": "ff7f59424ad72227ff83969ec4f3a9b2f3dd9b2c58dc46a13cd6a69692d2e875"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-10-16T04-34-03-938Z-79312-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-10-16T04-34-03-938Z-79312-deployment.json",
+            "sha256": "b889f2e650a61c4164a96f51691b22b8b46887b991cf37b04ee9b83778a3f658"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "3769101386429ef3b9de0e95bd405b52408af0c2521e0442dbd2ac72ae13d733",
+  "sealedAt": "2026-10-16T04:34:29.225Z",
+  "attestationDigest": "462caf3e14833946747484c1719795632bc38559680d7e399d9c882fa4ac7ad7"
+}
