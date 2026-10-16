@@ -210,7 +210,8 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
       },
       "blocking_acceptance_defects": [
-        "IN-20261016-028"
+        "IN-20261016-028",
+        "IN-20261016-034"
       ],
       "runtime_contract_version": "f054-intake-v1"
     },

@@ -25,6 +25,7 @@ it('coalesces refreshes and uses only a fresh authoritative result',async()=>{
  mock.sync.mockResolvedValue(undefined);mock.read.mockResolvedValue(fresh)
  expect(await Promise.all([currentWecomAccess(old),currentWecomAccess(old)])).toEqual([fresh,fresh])
  expect(mock.sync).toHaveBeenCalledExactlyOnceWith('org-a')
+ expect(mock.read).toHaveBeenCalledWith('org-a',{fresh:true})
 })
 it('fails closed on provider errors and permits a later successful refresh',async()=>{
  const old={...config(),directory_synced_at:null}

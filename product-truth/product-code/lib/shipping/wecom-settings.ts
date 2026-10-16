@@ -9,8 +9,12 @@ export type WecomSettingsRow = { department_snapshot?:import('./wecom-directory'
 export type WecomSettings = { departments:import('./wecom-directory').WecomDepartment[];allowedDepartmentIds:number[]|null;corpId:string;agentId:number|null;hasSecret:boolean;orderCheckMode:0|1;fallbackPhone:string;deniedMessage:string;redirectDomain:string;companyName:string;directorySyncedAt:string|null;updatedAt:string|null }
 export type WecomMember = { id:string;wechat_userid:string;wecom_name:string;mobile:string;department_names:string[];department_ids?:number[];is_active:boolean;wecom_allowed:boolean;use_preset_phone:boolean }
 const columns='org_id,corp_id,agent_id,credentials_ciphertext,order_check_mode,fallback_phone,denied_message,redirect_domain,company_name,directory_synced_at,updated_at,department_snapshot,allowed_department_ids'
-export async function readWecomSettings(orgId:string):Promise<WecomSettingsRow|null> {
- const {data,error}=await supabaseAdmin.from('shipping_wecom_settings').select(columns).eq('org_id',orgId).maybeSingle()
+export async function readWecomSettings(orgId:string,options?:{fresh?:boolean}):Promise<WecomSettingsRow|null> {
+ let query=supabaseAdmin.from('shipping_wecom_settings').select(columns).eq('org_id',orgId)
+ // A sync RPC does not invalidate React's per-render GET memoization.
+ // Its follow-up authorization read must reach the database in this request.
+ if(options?.fresh)query=query.abortSignal(AbortSignal.timeout(10000))
+ const {data,error}=await query.maybeSingle()
  if(error)throw new ShippingError(503,'企微配置暂不可用。')
  return data as WecomSettingsRow|null
 }

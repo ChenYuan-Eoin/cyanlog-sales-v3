@@ -19,7 +19,7 @@ export async function currentWecomAccess(config: WecomSettingsRow): Promise<Weco
     try {
       // The existing atomic RPC retains local restrictions, personal addresses and IDs.
       await syncWecomDirectory(config.org_id)
-      const current = await readWecomSettings(config.org_id)
+      const current = await readWecomSettings(config.org_id, { fresh: true })
       if (!current || current.corp_id !== config.corp_id || current.agent_id !== config.agent_id) {
         throw new ShippingError(403, '企业应用已变更，请重新从寄件入口进入。')
       }
