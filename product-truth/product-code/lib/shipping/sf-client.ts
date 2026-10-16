@@ -10,8 +10,9 @@ const envelope = z.object({ apiResultCode: z.string(), apiResultData: z.union([z
 const business = z.object({ success: z.union([z.boolean(), z.enum(['true', 'false'])]), errorCode: z.string().optional(), msgData: z.unknown().optional(), obj: z.unknown().optional() })
 const tokenResponse = z.object({ apiResultCode: z.string(), accessToken: z.string().min(1).nullable().optional(), expiresIn: z.number().int().positive().max(86400).nullable().optional() })
 type SfAuthConfig = Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>
-const tokenCache = new Map<string, { accessToken: string; expiresAt: number }>()
-const tokenRequests = new Map<string, Promise<string>>()
+type SfSession = { accessToken: string; serviceUrl: string }
+const tokenCache = new Map<string, SfSession & { expiresAt: number }>()
+const tokenRequests = new Map<string, Promise<SfSession>>()
 const tokenRefreshMarginMs = 60_000
 const transportErrorCodes = new Set([
   'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'UND_ERR_SOCKET', 'UND_ERR_ABORTED',
@@ -84,21 +85,21 @@ function transportMetadata(error: unknown, endpoint: string) {
   }
 }
 
-async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
+async function getSfAccessToken(config: SfAuthConfig): Promise<SfSession> {
   const cacheKey = createHash('sha256').update(`${config.environment}\0${config.partnerId}\0${config.checkWord}`).digest('hex')
   const now = Date.now()
   const cached = tokenCache.get(cacheKey)
-  if (cached && cached.expiresAt > now + tokenRefreshMarginMs) return cached.accessToken
+  if (cached && cached.expiresAt > now + tokenRefreshMarginMs) return cached
   const activeRequest = tokenRequests.get(cacheKey)
   if (activeRequest) return activeRequest
 
   const request = (async () => {
     const body = new URLSearchParams({ partnerID: config.partnerId, secret: config.checkWord, grantType: 'password' })
     const startedAt = Date.now()
-    // Both endpoints are published in SF's OAuth2 guide (activeIndex=641728).
-    // Fail over authentication transport only; never replay a business request here.
+    // SF also publishes sfapi-hk as a production standard gateway. Keep the
+    // successful authentication gateway with its token; never replay a business POST.
     const endpoints = config.environment === 'production'
-      ? [sfTokenUrl(config.environment), 'https://sfapi.sf-express.com/oauth2/accessToken']
+      ? [sfTokenUrl(config.environment), 'https://sfapi.sf-express.com/oauth2/accessToken', 'https://sfapi-hk.sf-express.com/oauth2/accessToken']
       : [sfTokenUrl(config.environment)]
     const retryableCodes = new Set(['UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH'])
     let response: Response | undefined
@@ -109,7 +110,7 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
         response = await fetch(responseEndpoint, {
           method: 'POST', body,
           headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-          signal: AbortSignal.timeout(endpoints.length > 1 ? 6000 : 12000), cache: 'no-store', redirect: 'error'
+          signal: AbortSignal.timeout(12000 / endpoints.length), cache: 'no-store', redirect: 'error'
         })
         break
       } catch (error) {
@@ -135,8 +136,13 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<string> {
       throw new ShippingError(502, '顺丰OAuth2认证失败，请检查PartnerID、CheckWord和应用授权。', 'provider_rejected')
     }
     if (responseEndpoint !== endpoints[0]) console.info('shipping.sf.oauth_fallback_succeeded', { ...endpointMetadata(responseEndpoint), elapsedMs: Date.now() - startedAt })
-    tokenCache.set(cacheKey, { accessToken: parsed.accessToken, expiresAt: Date.now() + parsed.expiresIn * 1000 })
-    return parsed.accessToken
+    const session: SfSession = {
+      accessToken: parsed.accessToken,
+      serviceUrl: responseEndpoint === 'https://sfapi-hk.sf-express.com/oauth2/accessToken'
+        ? 'https://sfapi-hk.sf-express.com/std/service' : sfServiceUrl(config.environment),
+    }
+    tokenCache.set(cacheKey, { ...session, expiresAt: Date.now() + parsed.expiresIn * 1000 })
+    return session
   })()
   tokenRequests.set(cacheKey, request)
   try { return await request }
@@ -152,10 +158,10 @@ export function decodeSfResponse(raw: unknown, payloadField: 'msgData' | 'obj' =
   if (data.success !== true && data.success !== 'true') throw new ShippingError(422, data.errorCode === '6150' ? '顺丰未找到该订单（6150）。' : `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
   return data[payloadField]
 }
-async function postSfService(serviceCode: string, message: unknown, config: SfAuthConfig, accessToken: string): Promise<unknown> {
+async function postSfService(serviceCode: string, message: unknown, config: SfAuthConfig, session: SfSession): Promise<unknown> {
   const timestamp = Date.now().toString(), msgData = JSON.stringify(message)
-  const body = new URLSearchParams({ partnerID: config.partnerId, requestID: randomUUID(), serviceCode, timestamp, accessToken, msgData })
-  const url = sfServiceUrl(config.environment)
+  const body = new URLSearchParams({ partnerID: config.partnerId, requestID: randomUUID(), serviceCode, timestamp, accessToken: session.accessToken, msgData })
+  const url = session.serviceUrl
   const started = Date.now()
   let response: Response
   try {
@@ -181,8 +187,8 @@ async function postSfService(serviceCode: string, message: unknown, config: SfAu
 }
 
 export async function sfCall(serviceCode: string, message: unknown, config: Pick<ShippingRuntimeConfig, 'environment' | 'partnerId' | 'checkWord'>, payloadField: 'msgData' | 'obj' = 'msgData'): Promise<unknown> {
-  const accessToken = await getSfAccessToken(config)
-  return decodeSfResponse(await postSfService(serviceCode, message, config, accessToken), payloadField)
+  const session = await getSfAccessToken(config)
+  return decodeSfResponse(await postSfService(serviceCode, message, config, session), payloadField)
 }
 
 /**
@@ -193,8 +199,8 @@ export async function probeSfConnection(environment: SfAuthConfig['environment']
   const config: SfAuthConfig = { environment, partnerId, checkWord }
   const environmentName = environment === 'sandbox' ? '沙盒' : '生产'
   try {
-    const accessToken = await getSfAccessToken(config)
-    const raw = await postSfService('EXP_RECE_SEARCH_ORDER_RESP', { orderId: randomUUID(), language: 'zh-CN', searchType: '1' }, config, accessToken)
+    const session = await getSfAccessToken(config)
+    const raw = await postSfService('EXP_RECE_SEARCH_ORDER_RESP', { orderId: randomUUID(), language: 'zh-CN', searchType: '1' }, config, session)
     let outer: z.infer<typeof envelope>
     try { outer = envelope.parse(raw) }
     catch { return { connected: false, queryVerified: false, message: `顺丰${environmentName}OAuth2已认证，但只读API返回无法识别的响应；未创建运单。` } }
@@ -243,15 +249,15 @@ export function extractOrder(raw: unknown, expectedId: string) {
 }
 export async function createSfOrder(id: string, input: ShippingInput, config: ShippingRuntimeConfig) {
   const message = buildSfOrder(id, input, config.billingAccount)
-  let accessToken: string
-  try { accessToken = await getSfAccessToken(config) }
+  let session: SfSession
+  try { session = await getSfAccessToken(config) }
   catch (error) {
     // Only authentication failure proves not-sent. Once postSfService starts,
     // a transport failure must retain the reconciliation lock.
     const reason = error instanceof ShippingError ? error.message : '顺丰认证暂不可用。'
     throw new ShippingError(502, `${reason} 下单请求尚未发送，请稍后重新核对原工单再试。`, 'provider_not_sent')
   }
-  return extractOrder(decodeSfResponse(await postSfService('EXP_RECE_CREATE_ORDER', message, config, accessToken)), id)
+  return extractOrder(decodeSfResponse(await postSfService('EXP_RECE_CREATE_ORDER', message, config, session)), id)
 }
 export async function lookupSfOrder(id: string, config: ShippingRuntimeConfig) {
   return extractOrder(await sfCall('EXP_RECE_SEARCH_ORDER_RESP', { orderId: id, language: 'zh-CN', searchType: '1' }, config), id)

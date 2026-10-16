@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createSfOrder, lookupSfOrder } from './sf-client'
+import { createSfOrder, lookupSfOrder, probeSfProduction, cancelSfOrder } from './sf-client'
 import type { ShippingRuntimeConfig } from './runtime-config'
 
 const config: ShippingRuntimeConfig = {
@@ -62,6 +62,73 @@ describe('SF Node.js OAuth2 API requests', () => {
     expect(JSON.stringify([warn.mock.calls, info.mock.calls])).not.toContain('example-fallback-token')
   })
 
+  it('binds concurrent requests and cached tokens to the reachable Hong Kong production gateway', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    const seen: Array<{ url: string; body: URLSearchParams }> = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input), body = new URLSearchParams(String(init?.body))
+      seen.push({ url, body })
+      if (url.endsWith('/oauth2/accessToken')) {
+        if (!url.includes('sfapi-hk.')) throw new DOMException('timeout', 'TimeoutError')
+        return Response.json({ apiResultCode: 'A1000', accessToken: 'example-hk-token-fixture', expiresIn: 7200 })
+      }
+      return orderResponse(JSON.parse(body.get('msgData')!).orderId)
+    }))
+    const isolated = { ...config, partnerId: 'hk-concurrent-example' }
+    expect(await Promise.all(['hk-one', 'hk-two'].map(id => lookupSfOrder(id, isolated)))).toEqual(['SF1234567890123', 'SF1234567890123'])
+    await lookupSfOrder('hk-cached', isolated)
+    expect(seen.filter(call => call.url.endsWith('/oauth2/accessToken')).map(call => call.url)).toEqual([
+      'https://bspgw.sf-express.com/oauth2/accessToken', 'https://sfapi.sf-express.com/oauth2/accessToken', 'https://sfapi-hk.sf-express.com/oauth2/accessToken',
+    ])
+    const serviceCalls = seen.filter(call => call.url.endsWith('/std/service'))
+    expect(serviceCalls).toHaveLength(3)
+    expect(serviceCalls.every(call => call.url === 'https://sfapi-hk.sf-express.com/std/service' && call.body.get('accessToken') === 'example-hk-token-fixture')).toBe(true)
+    expect(timeout.mock.calls.filter(([ms]) => ms === 4000)).toHaveLength(3)
+    expect(info).toHaveBeenCalledWith('shipping.sf.oauth_fallback_succeeded', expect.objectContaining({ endpointHostname: 'sfapi-hk.sf-express.com' }))
+    expect(JSON.stringify(info.mock.calls)).not.toContain('example-hk-token-fixture')
+  })
+
+  it('uses the authenticated Hong Kong gateway for a read-only production probe', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const seen: Array<{ url: string; body: URLSearchParams }> = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input), body = new URLSearchParams(String(init?.body)); seen.push({ url, body })
+      if (url.endsWith('/oauth2/accessToken')) {
+        if (!url.includes('sfapi-hk.')) throw new DOMException('timeout', 'TimeoutError')
+        return Response.json({ apiResultCode: 'A1000', accessToken: 'example-hk-probe-token', expiresIn: 7200 })
+      }
+      return Response.json({ apiResultCode: 'A1000', apiResultData: { success: false, errorCode: '6150' } })
+    }))
+    expect(await probeSfProduction('hk-probe-example', config.checkWord)).toMatchObject({ connected: true, queryVerified: true })
+    const businessCalls = seen.filter(call => call.body.has('serviceCode'))
+    expect(businessCalls).toHaveLength(1)
+    expect(businessCalls[0].url).toBe('https://sfapi-hk.sf-express.com/std/service')
+    expect(businessCalls[0].body.get('serviceCode')).toBe('EXP_RECE_SEARCH_ORDER_RESP')
+  })
+
+  it.each(['create', 'cancel'])('does not retry an uncertain %s after Hong Kong authentication fallback', async operation => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/oauth2/accessToken')) {
+        if (!url.includes('sfapi-hk.')) throw new DOMException('timeout', 'TimeoutError')
+        return Response.json({ apiResultCode: 'A1000', accessToken: 'example-hk-write-token', expiresIn: 7200 })
+      }
+      throw new DOMException('timeout', 'TimeoutError')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const isolated = { ...config, partnerId: `hk-uncertain-${operation}` }
+    const request = operation === 'create'
+      ? createSfOrder('hk-uncertain', { sender: config.sender, recipient: config.sender, cargo: '文件', weight: 1, remark: '', serviceId: 2, source: 'manual' }, isolated)
+      : cancelSfOrder('hk-uncertain', isolated)
+    await expect(request).rejects.toMatchObject({ requestStage: 'provider_unreachable' })
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/std/service')).map(([url]) => url)).toEqual(['https://sfapi-hk.sf-express.com/std/service'])
+  })
+
   it.each(['certificate', 'http', 'credentials'])('does not fail over a %s rejection', async mode => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const fetchMock = vi.fn(async () => {
@@ -95,7 +162,7 @@ describe('SF Node.js OAuth2 API requests', () => {
     vi.stubGlobal('fetch', fetchMock)
     const isolated = { ...config, partnerId: `create-auth-${mode}` }
     await expect(createSfOrder('create-not-sent', { sender: config.sender, recipient: config.sender, cargo: '文件', weight: 1, remark: '', serviceId: 2, source: 'manual' }, isolated)).rejects.toMatchObject({ requestStage: 'provider_not_sent', message: expect.stringContaining('尚未发送') })
-    expect(fetchMock.mock.calls.length).toBe(mode === 'timeout' ? 2 : 1)
+    expect(fetchMock.mock.calls.length).toBe(mode === 'timeout' ? 3 : 1)
     expect(fetchMock.mock.calls.every(call => String(call[0]).endsWith('/oauth2/accessToken'))).toBe(true)
   })
 
