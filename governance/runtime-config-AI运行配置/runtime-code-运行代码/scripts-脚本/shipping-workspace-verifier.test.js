@@ -153,6 +153,36 @@ test('verifies current deployed shipping flow using SQL and explicit Chrome atte
   assert.ok(!serialized.includes('tracking_verified_at'));
 });
 
+for (const offset of ['+00', '+08:00']) test('accepts real Postgres timestamps with '+offset+' without changing their instant', async t => {
+  const f = fixture(t);
+  const pg = value => new Date(Date.parse(value)+(offset === '+08:00' ? 8*3600_000 : 0)).toISOString().replace('T', ' ').replace('Z', offset);
+  for (const row of [...f.data.tracked, ...f.data.cancelled, ...f.data.events]) {
+    for (const key of Object.keys(row).filter(key => key.endsWith('_at'))) row[key] = pg(row[key]);
+  }
+  const result = await verify(f.options);
+  assert.deepEqual(shippingWorkspaceEvidenceBlockers(result, 'production', 'f054-v2'), []);
+  assert.equal(result.shipping_tracking.payload.latest_event_at, f.data.events[0].latest_event_at, 'raw database evidence stays intact');
+});
+
+for (const [label, mutate, message] of [
+  ['timezone-free database time', f => { f.data.tracked[0].connection_updated_at = '2026-10-16 04:19:44.865'; }, /timestamp/],
+  ['future database connection', f => { f.data.tracked[0].connection_updated_at = f.stamp(3600).replace('T', ' ').replace('Z', '+00'); }, /future/],
+  ['future database event', f => { f.data.events[0].latest_event_at = f.stamp(3600).replace('T', ' ').replace('Z', '+00'); }, /persisted tracking timestamps/],
+  ['old database cancellation', f => { f.data.cancelled[0].order_updated_at = f.stamp(-7200).replace('T', ' ').replace('Z', '+00'); }, /Cancellation time/],
+]) test('rejects '+label+' after Postgres format support', async t => {
+  const f = fixture(t); mutate(f);
+  await assert.rejects(verify(f.options), message);
+  assert.equal(fs.existsSync(path.join(f.runtime, 'production-runtime-verifier')), false);
+});
+
+test('Postgres formatting does not relax operator timestamp requirements', async t => {
+  const f = fixture(t);
+  f.ui.attested_at = f.ui.attested_at.replace('T', ' ').replace('Z', '+00');
+  f.seal();
+  await assert.rejects(verify(f.options), /timestamp/);
+  assert.equal(f.requests.length, 0);
+});
+
 for (const [label, mutate, message] of [
   ['workspace unexpectedly public', f => { f.data.boundaries['/shipping'] = { status: 200 }; }, /boundary failed/],
   ['portal requires login', f => { f.data.boundaries['/sales-portal'] = { status: 307, location: '/login' }; }, /boundary failed/],

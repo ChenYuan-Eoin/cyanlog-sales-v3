@@ -32,6 +32,13 @@ function time(value) {
   assert(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)), 'Invalid observation timestamp');
   return Date.parse(value);
 }
+function databaseTime(value) {
+  // Postgres management queries return timestamptz as a space-separated value
+  // with +HH or +HH:MM. Normalize only that database representation; operator
+  // observations must still use the strict ISO timestamp accepted by time().
+  const postgres = typeof value === 'string' && value.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)([+-]\d{2})(?::?(\d{2}))?$/);
+  return time(postgres ? `${postgres[1]}T${postgres[2]}${postgres[3]}:${postgres[4] || '00'}` : value);
+}
 function readArtifact(runtime, file, expectedHash) {
   assert(typeof file === 'string' && SHA256.test(expectedHash || ''), 'Invalid operator artifact reference');
   const base = fs.realpathSync(runtime), resolved = fs.realpathSync(path.resolve(runtime, file));
@@ -166,7 +173,7 @@ async function verify(options) {
     const row = rows[0];
     assert(row.order_id === id && row.waybill_no === number && UUID.test(row.waybill_id || '') && UUID.test(row.connection_id || '') && [row.org_id, row.connection_org_id, row.account_org_id, row.sender_org_id].every(value => value === orgId), 'Order configuration organization mismatch');
     assert(row.environment === 'production' && row.connection_status === 'connected' && row.account_status === 'active' && row.snapshot_matches === true, 'Production order configuration snapshot mismatch');
-    assert(time(row.connection_updated_at) <= now+60_000, 'Connection timestamp is in the future');
+    assert(databaseTime(row.connection_updated_at) <= now+60_000, 'Connection timestamp is in the future');
     return Object.fromEntries(['order_id','org_id','status','order_updated_at','waybill_id','waybill_no','latest_status','latest_event_at','connection_id','connection_org_id','environment','connection_status','tracking_capability','cancel_capability','connection_updated_at','account_org_id','account_status','sender_org_id','snapshot_matches'].map(key => [key, row[key]]));
   }
   async function existingTrackingSnapshot() {
@@ -177,20 +184,20 @@ async function verify(options) {
     const row = rows[0];
     assert(row.order_id === orderId && row.waybill_no === waybill && UUID.test(row.waybill_id || '') && UUID.test(row.connection_id || '') && row.org_id === orgId && row.connection_org_id === orgId, 'Existing tracking organization mismatch');
     assert(row.environment === 'production' && row.connection_status === 'connected' && row.tracking_capability === 'verified', 'Existing tracking connection is not verified Production');
-    assert(time(row.connection_updated_at) <= now+60_000, 'Connection timestamp is in the future');
+    assert(databaseTime(row.connection_updated_at) <= now+60_000, 'Connection timestamp is in the future');
     return row;
   }
   const tracked = uiOnly ? await existingTrackingSnapshot() : await snapshot(orderId, waybill);
-  if (!uiOnly) assert(tracked.tracking_capability === 'verified' && time(tracked.connection_updated_at) >= time(ui.tracking.started_at)-60_000, 'Tracking capability or recent connection update missing');
+  if (!uiOnly) assert(tracked.tracking_capability === 'verified' && databaseTime(tracked.connection_updated_at) >= time(ui.tracking.started_at)-60_000, 'Tracking capability or recent connection update missing');
   const rows = await query(`select count(*)::int as event_count,max(e.event_at) as latest_event_at,max(e.created_at) as latest_persisted_at from public.shipping_tracking_events e join public.shipping_waybills w on w.id=e.waybill_id join public.shipping_orders o on o.id=w.shipping_order_id where o.id='${orderId}' and o.org_id='${orgId}' and o.connection_environment='production' and w.id='${tracked.waybill_id}' and w.waybill_no='${waybill}' and e.provider_key='sf' and e.event_at is not null and isfinite(e.event_at) and e.event_at<=now() and e.created_at<=now()`);
   assert(rows.length === 1 && Number.isInteger(rows[0].event_count) && rows[0].event_count >= ui.tracking.event_count, 'Matching persisted Production tracking events missing');
   const events = rows[0];
-  assert(events.event_count > 0 && time(events.latest_event_at) <= now+60_000 && time(events.latest_persisted_at) <= now+60_000, 'Invalid persisted tracking timestamps');
+  assert(events.event_count > 0 && databaseTime(events.latest_event_at) <= now+60_000 && databaseTime(events.latest_persisted_at) <= now+60_000, 'Invalid persisted tracking timestamps');
   let cancelled;
   if (!uiOnly) {
     cancelled = await snapshot(ui.cancellation.order_id, ui.cancellation.waybill);
     assert(cancelled.status === 'cancelled' && cancelled.latest_status === 'cancelled' && cancelled.cancel_capability === 'verified', 'Persisted successful cancellation missing');
-    assert(time(cancelled.order_updated_at) >= time(ui.cancellation.started_at)-60_000 && time(cancelled.order_updated_at) <= time(ui.cancellation.observed_at)+60_000 && time(cancelled.connection_updated_at) >= time(ui.cancellation.started_at)-60_000, 'Cancellation time does not match the observed operation');
+    assert(databaseTime(cancelled.order_updated_at) >= time(ui.cancellation.started_at)-60_000 && databaseTime(cancelled.order_updated_at) <= time(ui.cancellation.observed_at)+60_000 && databaseTime(cancelled.connection_updated_at) >= time(ui.cancellation.started_at)-60_000, 'Cancellation time does not match the observed operation');
   }
   let recoveredOrders;
   if (recoveryOnly) {
