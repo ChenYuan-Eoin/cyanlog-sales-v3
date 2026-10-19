@@ -1,0 +1,57 @@
+{
+  "id": "IN-20261019-030",
+  "source": "user_explicit",
+  "state": "release_authorized_not_yet_released",
+  "target": "WP42",
+  "type": "final_production_release_authorization",
+  "quote": "在Dev 的状态，尽快完成生产侧构建，不要这边搞的热闹，推送上去不生效",
+  "assessment": "用户要求将已验证候选落实到正式站；授权本次代码集成、推送与Production构建发布。发布候选64e0abea，包含配置中心精简、解析按钮修复和配置保存状态保护；不含未提交的长连接机器人服务，不包含数据库迁移、生产数据写入或密钥替换。保留原有配置并以现有Chrome正式域名复验。",
+  "candidate_sha": "64e0abea597a430402ab68356fe42b89c20257ce",
+  "production_database_mode": "read_only",
+  "created_at": "2026-10-19T09:07:11.599657+00:00",
+  "validation": {
+    "commit": "64e0abea597a430402ab68356fe42b89c20257ce",
+    "checkedAt": "2026-10-19T08:57:31.815957+00:00",
+    "tests": {
+      "target": 55,
+      "fullPassed": 2693,
+      "fullSkipped": 5,
+      "harness": 12,
+      "typecheck": true,
+      "lint": true,
+      "build": true
+    },
+    "preview": {
+      "id": "dpl_HG24fhrwj4ay7DKwyjexdznf7k57",
+      "ready": true,
+      "url": "https://cyanlog-sales-v3-6ewn4mtma-eoins-projects-94b17ece.vercel.app"
+    },
+    "browser": {
+      "source": "existing_chrome",
+      "tab": "1110515411",
+      "account": "existing Preview E2E Admin",
+      "saveSandboxAccountRemark": true,
+      "refreshReadsSavedRemark": true,
+      "testAccountTail": "4242",
+      "originalAccountUntouched": true,
+      "testAccountDeactivated": true
+    },
+    "connectionProbe": {
+      "existingCredentialDecryptionReachedProvider": true,
+      "providerVerified": false,
+      "result": "SF OAuth2 connection timeout; no shipment created"
+    },
+    "productionChanged": false,
+    "redeployReadback": {
+      "passed": true,
+      "deploymentId": "dpl_4PYugmHvqmHPCFLoV57QuroMYCQ6",
+      "url": "https://cyanlog-sales-v3-dns3hp1lq-eoins-projects-94b17ece.vercel.app",
+      "stableAlias": "https://cyanlog-sales-v3-config-preview.vercel.app",
+      "loginPreservedAcrossRedeploy": true,
+      "remarkPreserved": true,
+      "sameSourceCommit": true
+    },
+    "gitHookMode": "advisory, backed up original local hooks path"
+  },
+  "previousProduction": "4b6551cdaa674655047974d3f7643fb9c7718077"
+}
