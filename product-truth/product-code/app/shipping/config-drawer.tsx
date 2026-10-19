@@ -35,12 +35,8 @@ type OperatorAccess = {
 }
 
 const CONFIG_SECTIONS = [
-  { id: 'overview', label: '接入总览', hint: '查看配置与待验证项' },
-  { id: 'carrier', label: '顺丰与接口', hint: '应用连接、服务产品' },
-  { id: 'accounts', label: '月结账号', hint: '默认付款账号' },
-  { id: 'sender', label: '默认寄件人', hint: '公司寄出资料' },
-  { id: 'people', label: '企业接入', hint: '员工入口、机器人与提报规则' },
-  { id: 'sync', label: '状态同步', hint: '查询能力与同步边界' },
+  { id: 'carrier', label: '顺丰接入' },
+  { id: 'enterprise', label: '企业接入' },
 ] as const
 type ConfigSection = typeof CONFIG_SECTIONS[number]['id']
 type Environment = 'sandbox' | 'production'
@@ -51,7 +47,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production')
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<NonNullable<ConfigurationReply['deploymentEnvironment']>>('unknown')
   const [saveFailed, setSaveFailed] = useState(false)
-  const [section, setSection] = useState<ConfigSection>('overview')
+  const [section, setSection] = useState<ConfigSection>('carrier')
   const panelTitle = useRef<HTMLHeadingElement>(null)
   const [partnerId, setPartnerId] = useState('')
   const [checkWord, setCheckWord] = useState('')
@@ -134,7 +130,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function saveConnection() {
-    if (!partnerId.trim() || !checkWord.trim()) { setMessage('请展开“首次接入 / 更换应用凭据”，填写应用编号和应用密钥。'); return }
+    if (!partnerId.trim() || !checkWord.trim()) { setMessage('请填写 PartnerID 和应用密钥。'); return }
     setProbeMessage(''); setProbePassed(false)
     const saved = await mutate('connection', 'save_connection', { environment, partnerId, checkWord, services: authorizedServices })
     if (saved) { setPartnerId(''); setCheckWord(''); setServiceDrafts(current => ({ ...current, [environment]: undefined })) }
@@ -191,82 +187,119 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       </div>
     </section>
   }
-  const hasSandboxConnection = configuration.connections.some(item => item.carrier === 'sf' && item.environment === 'sandbox')
   const environmentAccounts = configuration.billingAccounts.filter(account => account.environment === environment)
-  const defaultAccount = environmentAccounts.find(account => account.status === 'active' && account.isDefault)
   const currentSection = CONFIG_SECTIONS.find(item => item.id === section)!
   return <div className={embedded ? styles.embedded : styles.backdrop} role={embedded ? 'region' : 'presentation'} onMouseDown={event => { if (!embedded && event.target === event.currentTarget) onClose?.() }}>
     <aside className={styles.drawer} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-labelledby="shipping-config-title">
-      <header className={styles.header}><div><p>SHIPPING SETTINGS</p><h2 id="shipping-config-title">寄件设置</h2></div>{!embedded && <button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button>}</header>
+      <header className={styles.header}>
+        <h2 id="shipping-config-title">寄件设置</h2>
+        {!embedded && <button className={styles.close} aria-label="关闭寄件配置" onClick={onClose}><X size={18}/></button>}
+      </header>
       {message && <p className={`${styles.message} ${styles.feedback}`} role="status" aria-live="polite">{message}</p>}
-      {saveFailed && message && <p className={styles.hint} role="status">本次保存未确认成功，输入和原有配置仍保留。请核对站点环境及错误原因后重试。</p>}
+      {saveFailed && message && <p className={styles.hint} role="status">本次保存未确认成功，输入和原有配置仍保留。</p>}
       <div className={styles.content}>
-        <div className={styles.noticeCard} role="note" aria-label="站点部署环境"><strong>{deploymentEnvironment === 'production' ? '当前站点：正式环境' : deploymentEnvironment === 'preview' ? '当前站点：预览环境' : deploymentEnvironment === 'development' ? '当前站点：开发环境' : '当前站点：部署环境未确认'}</strong><p>{deploymentEnvironment === 'production' ? '本页读取正式站保存的寄件配置。界面更新不会重建或清空已保存配置。' : '这里不是已确认的正式站配置入口。下方“顺丰接口环境”仅区分承运商生产与沙盒，不会切换站点、数据库或密钥。'} {deploymentEnvironment !== 'production' && <a href="https://sales.cyanlog.icu/configs?tab=shipping">前往正式站管理真实寄件配置 →</a>}</p></div>
-        <div className={styles.environmentBar}><label>顺丰接口环境<select aria-label="运行环境" value={environment} disabled={!!busy} onChange={event => changeEnvironment(event.target.value as Environment)}><option value="production">生产</option><option value="sandbox">沙盒</option></select></label><p>{environment === 'production' ? '当前站点保存的顺丰生产配置。' : '当前站点保存的顺丰沙盒配置。'} 默认寄件人、员工权限为组织共用。</p><a href="/shipping">返回收寄工作台 →</a></div>
-        <nav className={styles.sectionNav} aria-label="寄件设置分区">{CONFIG_SECTIONS.map(item => <button type="button" key={item.id} aria-label={item.label} aria-current={section === item.id ? 'page' : undefined} aria-controls={`shipping-panel-${item.id}`} onClick={() => selectSection(item.id)}><strong>{item.label}</strong><span>{item.hint}</span></button>)}</nav>
-        <div className={styles.panelHeading}><h3 ref={panelTitle} tabIndex={-1}>{currentSection.label}</h3><p>{currentSection.hint} · 各区分别保存，切换分区保留当前草稿。</p></div>
-        <section id="shipping-panel-overview" hidden={section !== 'overview'} aria-label="接入总览内容">
-          <div className={styles.overviewGrid}>
-            <article><span>顺丰应用</span><strong>{connection ? `已保存 · 尾号 ${connection.partnerIdTail}` : '尚未配置'}</strong><p>{connection?.status === 'connected' ? '最近连接检查通过' : connection?.status === 'failed' ? '最近连接检查失败' : '等待连接检查'}</p><button className={styles.textAction} onClick={() => selectSection('carrier')}>管理连接与接口 →</button></article>
-            <article><span>默认月结账号</span><strong>{defaultAccount ? `尾号 ${defaultAccount.tail}` : '尚未设置'}</strong><p>当前环境 {environmentAccounts.filter(account => account.status === 'active').length} 个可用账号</p><button className={styles.textAction} onClick={() => selectSection('accounts')}>管理月结账号 →</button></article>
-            <article><span>公司默认寄件人</span><strong>{configuration.sender?.name || '尚未设置'}</strong><p>{configuration.sender ? `${configuration.sender.province} ${configuration.sender.city}` : '员工个人寄件仍使用自己的寄方资料'}</p><button className={styles.textAction} onClick={() => selectSection('sender')}>管理默认寄件人 →</button></article>
-          </div>
-          <div className={styles.noticeCard}><h4>配置保存 ≠ 全链路验证</h4><p>连接测试只验证认证与只读订单查询。下单、轨迹、取消和修改需要各自的实测结果；不能用“连接通过”代替。</p><button className={styles.secondary} onClick={() => selectSection('sync')}>查看能力与同步说明</button></div>
-        </section>
-        <section id="shipping-panel-carrier" hidden={section !== 'carrier'} className={styles.section} aria-label="顺丰与接口内容"><fieldset className={styles.formGroup} disabled={!!busy}>
-          <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>顺丰 API 接入</h3></div><span>{connection ? `尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>
-          <p className={styles.hint}>只需配置一次应用编号和密钥，系统自动获取和刷新接口令牌，无需定期登录顺丰官网。已有服务器配置可直接迁入。</p>
-          <p className={styles.hint}>当前承运商：顺丰速运。月结号可先保存，接口凭据用于后续正式下单。</p>
-          {connection && <div className={styles.savedState}>已保存 · {connection.status === 'connected' ? `${connection.environment === 'sandbox' ? '沙盒' : '生产'}连接通过` : connection.status === 'failed' ? '最近连接检查失败' : '待连接检查'} · 只读查询能力 {connection.capabilities.query === 'verified' ? '已验证' : '未验证'}</div>}
-          {connection && <div className={styles.capabilities} aria-label="顺丰能力验证状态">{([['order', '下单'], ['query', '订单查询'], ['tracking', '轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection.capabilities[key] === 'verified' ? '已验证' : connection.capabilities[key] === 'unavailable' ? '不可用' : '未验证'}</b></div>)}</div>}
-          <details open={!connection}><summary>首次接入 / 更换应用凭据</summary><label>应用编号<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder={connection ? '重新输入以轮换凭据' : '顺丰分配的PartnerID'}/></label>
-          <label>应用密钥<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder="只用于服务端认证，不会再次显示"/></label><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button></details>
-          <div className={styles.serviceHeading}><strong>允许提报的顺丰服务产品</strong><span>实际承运仍以顺丰接口返回为准</span></div>
-          <div className={styles.services}>{authorizedServices.map((service, index) => <div key={service.id}><span>{service.name}{index === 0 ? ' · 默认' : ''}</span>{index > 0 && <button className={styles.textAction} onClick={() => setAuthorizedServices(current => [service, ...current.filter(item => item.id !== service.id)])}>设为默认服务</button>}<button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>)}</div>
-          <div className={styles.serviceInputs}><label>顺丰服务产品<select value={newServiceId} onChange={event => { const item = SF_SERVICE_CATALOG.find(row => row.id === Number(event.target.value)); setNewServiceId(event.target.value); setNewServiceName(item?.name || ''); setNewServicePreference(item?.preference || 'standard') }}><option value="">从官方目录选择</option>{SF_SERVICE_CATALOG.map(item => <option key={item.id} value={item.id} disabled={Boolean(item.limitation)}>{item.name}{item.limitation ? '（需扩展跨境/港澳台表单）' : ''}</option>)}</select></label><button className={styles.secondary} onClick={addService}><Plus size={14}/>添加服务</button></div>
-          <p className={styles.hint}>第一项为员工默认服务。可选择标快、特快、即日、半日达等目录产品；跨境和港澳台产品缺少国家/报关字段，暂不能提报。当前单票表单上限 20kg，特殊产品仍需对应接口授权。</p>
-
-          <div className={styles.actions}><button className={styles.secondary} disabled={!!busy || !connection || !authorizedServices.length} onClick={() => void saveAuthorizedServices()}>{busy === 'services' ? '保存服务中…' : '保存可提报服务'}</button><button className={styles.secondary} disabled={!!busy || !connection} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button></div>
-          {!connection && <p className={styles.hint}>先展开应用凭据并保存当前环境的连接，才能保存服务或测试连接。</p>}
-          {legacyConfigurationAvailable[environment] && <div className={styles.legacyImport}><p>检测到此环境仍有旧版服务器配置。迁入会将缺少的连接、服务、月结账号或寄件人资料存入数据库；凭据和月结卡号由服务端加密，日常下单改读数据库。</p><button className={styles.secondary} disabled={!!busy} onClick={() => void importLegacyConfiguration()}>{busy === 'legacy-import' ? '迁入中…' : `迁入旧${environment === 'sandbox' ? '沙盒' : '生产'}配置`}</button></div>}
-          {legacyMigrationReport && <div className={styles.message} role="status">{legacyMigrationReport.imported.length ? `已迁入：${legacyMigrationReport.imported.join('、')}。` : '没有发现可迁入的新配置。'}{legacyMigrationReport.needsAttention.length > 0 && <small>需管理员复核：{legacyMigrationReport.needsAttention.join('；')}</small>}</div>}
-          {environment === 'sandbox' && !hasSandboxConnection && <p className={styles.hint}>请先保存沙盒连接，再运行只读连通性测试。</p>}
-          {environment === 'production' && <p className={styles.hint}>生产连接测试只调用只读订单查询，不创建运单，也不证明生产下单权限。首票实际寄件仍需操作员逐票核对资料与费用后确认。</p>}
-          {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
-        </fieldset></section>
-
-        <section id="shipping-panel-accounts" hidden={section !== 'accounts'} className={styles.section} aria-label="月结账号内容">
-          <div className={styles.sectionTitle}><div><Settings size={16}/><h3>月结账号</h3></div><span>账号仅显示尾号</span></div>
-          <p className={styles.hint}>仅显示{environment === 'production' ? '生产' : '沙盒'}账号。新增账号保存到当前环境。</p>
-          <div className={styles.accountList}>{environmentAccounts.map(account => <article key={account.id} className={styles.account}><div><strong>{account.displayName}</strong><small>{account.environment === 'sandbox' ? '沙盒' : '生产'} · 尾号 {account.tail} · {account.status === 'active' ? '可用' : '已停用'}{account.isDefault ? ' · 默认' : ''}</small></div><div className={styles.accountActions}>{account.status === 'active' && !account.isDefault && <button className={styles.textAction} disabled={!!busy} onClick={() => void mutate(`default-${account.id}`, 'set_default_account', { accountId: account.id })}>设默认</button>}{account.status === 'active' && <button className={styles.textAction} disabled={!!busy} onClick={() => { if (window.confirm(`停用月结账号「${account.displayName}」（尾号 ${account.tail}）？新工单将无法选择此账号，历史工单记录保留。`)) void mutate(`disable-${account.id}`, 'deactivate_account', { accountId: account.id }) }}>停用</button>}</div></article>)}</div>
-          {!environmentAccounts.length && <p className={styles.hint}>{deploymentEnvironment === 'preview' || deploymentEnvironment === 'development' ? '当前预览/开发站点未保存该顺丰环境的月结账号；不代表正式站账号缺失。' : '当前站点的所选顺丰环境尚未保存月结账号。'}</p>}
-          <label>月结卡号<input autoComplete="off" inputMode="numeric" value={accountNumber} onChange={event => setAccountNumber(event.target.value.replace(/\D/g, '').slice(0, 32))} placeholder="输入完整月结卡号"/></label>
-          <label>备注说明（选填）<input value={accountName} onChange={event => setAccountName(event.target.value)} maxLength={80}/></label>
-          <button className={styles.secondary} disabled={!!busy} onClick={() => void saveAccount()}>{busy === 'account' ? '保存中…' : <><Plus size={14}/>保存月结账号</>}</button>
-        </section>
-
-        <section id="shipping-panel-sender" hidden={section !== 'sender'} className={styles.section} aria-label="默认寄件人内容">
-          <div className={styles.sectionTitle}><div><Settings size={16}/><h3>公司默认寄件人</h3></div></div>
-          <div className={styles.twoColumns}><label>粘贴默认寄方信息<textarea aria-label="默认寄方地址文本" rows={3} value={senderText} onChange={event => setSenderText(event.target.value)} placeholder="姓名 电话 省市区及详细地址"/></label><button type="button" disabled={!senderText.trim() || !!busy} onClick={() => { const parsed = parseAddress(senderText); if (!contactSchema.safeParse(parsed.contact).success) { setMessage('未识别出完整寄方，原资料已保留。' + parsed.warnings.join('；')); return } setSender(parsed.contact); setMessage(parsed.warnings.join('；') || '寄方已解析，请核对后保存。') }}>解析默认寄方信息</button><label>姓名<input value={sender.name} onChange={event => setSender(value => ({ ...value, name: event.target.value }))}/></label><label>电话<input value={sender.phone} onChange={event => setSender(value => ({ ...value, phone: event.target.value }))}/></label></div>
-          <div className={styles.threeColumns}><label>省<input value={sender.province} onChange={event => setSender(value => ({ ...value, province: event.target.value }))}/></label><label>市<input value={sender.city} onChange={event => setSender(value => ({ ...value, city: event.target.value }))}/></label><label>区县<input value={sender.county} onChange={event => setSender(value => ({ ...value, county: event.target.value }))}/></label></div>
-          <label>详细地址<input value={sender.address} onChange={event => setSender(value => ({ ...value, address: event.target.value }))}/></label>
-          <button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button>
-        </section>
-        <div id="shipping-panel-people" hidden={section !== 'people'}>
-        <WecomConfiguration onMessage={setMessage}/>
-        <section className={styles.section} aria-label="审核与下单权限来源">
-          <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h3>审核与下单权限</h3></div><span>来源：组织与权限</span></div>
-          <p className={styles.hint}>员工身份仅用于提报和本人订单查询。审核、正式下单与连接管理继续使用系统已有权限，现有授权保持不变。</p>
-          {operatorAccess?.legacyImportAvailable && <p className={styles.message}>仍有历史授权待迁移。本次页面调整不会改写这些授权。</p>}
-          <a href="/configs?tab=role-access">查看组织与权限 →</a>
-        </section>
-        <details><summary>寄件提报规则</summary><IntakeConfiguration/></details>
+        <div className={styles.siteBar} aria-label="站点部署环境">
+          <span>{deploymentEnvironment === 'production' ? '当前站点：正式环境' : deploymentEnvironment === 'preview' ? '当前站点：预览环境' : deploymentEnvironment === 'development' ? '当前站点：开发环境' : '当前站点：部署环境未确认'}</span>
+          {deploymentEnvironment !== 'production' && <a href="https://sales.cyanlog.icu/configs?tab=shipping">前往正式站 →</a>}
+          <a href="/shipping">返回收寄工作台 →</a>
         </div>
-        <section id="shipping-panel-sync" hidden={section !== 'sync'} className={styles.section} aria-label="状态同步内容">
-          <div className={styles.noticeCard}><h4>自动同步尚不能由本页确认</h4><p>当前配置接口未提供回调地址、最近接收时间及失败重试记录。没有接收证据时，不显示“推送正常”。</p><p>单票最新轨迹请在收寄工作台查询；接口上线、查询成功与自动推送成功是不同结果。</p></div>
-          <h4>当前环境已记录的能力</h4>
-          <div className={styles.capabilities}>{([['order', '下单'], ['query', '订单查询'], ['tracking', '物流轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection?.capabilities[key] === 'verified' ? '已有验证记录' : connection?.capabilities[key] === 'unavailable' ? '不可用' : '尚未验证'}</b></div>)}<div><span>修改已出号订单</span><b>尚无验证记录</b></div><div><span>订单与路由推送</span><b>接收状态待接入</b></div></div>
-          <p className={styles.hint}>以上读取当前环境的配置记录，不代表每张运单均可修改或取消。实际操作仍受订单阶段和顺丰返回结果限制。</p>
+        <nav className={styles.sectionNav} aria-label="寄件设置分区">
+          {CONFIG_SECTIONS.map(item => <button type="button" key={item.id} aria-current={section === item.id ? 'page' : undefined} aria-controls={`shipping-panel-${item.id}`} onClick={() => selectSection(item.id)}>{item.label}</button>)}
+        </nav>
+        <div className={styles.panelHeading}><h3 ref={panelTitle} tabIndex={-1}>{currentSection.label}</h3></div>
+
+        <section id="shipping-panel-carrier" hidden={section !== 'carrier'} aria-label="顺丰接入内容">
+          <div className={styles.environmentBar}>
+            <label>顺丰接口环境<select aria-label="运行环境" value={environment} disabled={!!busy} onChange={event => changeEnvironment(event.target.value as Environment)}><option value="production">生产</option><option value="sandbox">沙盒</option></select></label>
+          </div>
+          <section className={styles.section} aria-label="顺丰应用连接">
+            <fieldset className={styles.formGroup} disabled={!!busy}>
+              <div className={styles.sectionTitle}><div><ShieldCheck size={16}/><h4>应用连接</h4></div><span>{connection ? `PartnerID 尾号 ${connection.partnerIdTail}` : '尚未配置'}</span></div>
+              {connection && <div className={styles.connectionStatus}>
+                <strong>{connection.status === 'connected' ? '连接测试通过' : connection.status === 'failed' ? '连接测试失败' : '已保存，待测试'}</strong>
+                {connection.lastTestedAt && <span>最近测试：{new Date(connection.lastTestedAt).toLocaleString('zh-CN')}</span>}
+              </div>}
+              <details open={!connection}>
+                <summary>{connection ? '更换应用凭据' : '填写应用凭据'}</summary>
+                <div className={styles.twoColumns}>
+                  <label>PartnerID<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder="顺丰应用编号"/></label>
+                  <label>应用密钥<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder={connection ? '填写新密钥' : '顺丰应用密钥'}/></label>
+                </div>
+                <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button></div>
+              </details>
+              <div className={styles.actions}>
+                <button className={styles.secondary} disabled={!!busy || !connection} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button>
+              </div>
+              <p className={styles.actionHint}>{connection ? '仅查询订单，不会创建或取消运单。' : '保存连接后可测试。'}</p>
+              {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
+              {legacyConfigurationAvailable[environment] && <div className={styles.legacyImport}>
+                <p>发现旧版配置，可补充导入尚未保存的连接、月结账号和寄件资料。</p>
+                <button className={styles.secondary} disabled={!!busy} onClick={() => void importLegacyConfiguration()}>{busy === 'legacy-import' ? '迁入中…' : `迁入旧${environment === 'sandbox' ? '沙盒' : '生产'}配置`}</button>
+              </div>}
+              {legacyMigrationReport && <div className={styles.message} role="status">{legacyMigrationReport.imported.length ? `已迁入：${legacyMigrationReport.imported.join('、')}。` : '没有发现可迁入的新配置。'}{legacyMigrationReport.needsAttention.length > 0 && <small>需管理员复核：{legacyMigrationReport.needsAttention.join('；')}</small>}</div>}
+            </fieldset>
+          </section>
+
+          <section className={styles.section} aria-label="月结与服务">
+            <div className={styles.sectionTitle}><div><Settings size={16}/><h4>月结与服务</h4></div></div>
+            <fieldset className={styles.formGroup} disabled={!!busy}>
+              <h5 className={styles.groupTitle}>月结账号</h5>
+              <div className={styles.accountList}>{environmentAccounts.map(account => <article key={account.id} className={styles.account}>
+                <div><strong>{account.displayName}</strong><small>{account.environment === 'sandbox' ? '沙盒' : '生产'} · 尾号 {account.tail} · {account.status === 'active' ? '可用' : '已停用'}{account.isDefault ? ' · 默认' : ''}</small></div>
+                <div className={styles.accountActions}>
+                  {account.status === 'active' && !account.isDefault && <button className={styles.textAction} disabled={!!busy} onClick={() => void mutate(`default-${account.id}`, 'set_default_account', { accountId: account.id })}>设默认</button>}
+                  {account.status === 'active' && <button className={styles.textAction} disabled={!!busy} onClick={() => { if (window.confirm(`停用月结账号「${account.displayName}」（尾号 ${account.tail}）？新工单将无法选择此账号，历史工单记录保留。`)) void mutate(`disable-${account.id}`, 'deactivate_account', { accountId: account.id }) }}>停用</button>}
+                </div>
+              </article>)}</div>
+              {!environmentAccounts.length && <p className={styles.hint}>{deploymentEnvironment === 'preview' || deploymentEnvironment === 'development' ? '当前预览/开发站点未保存该顺丰环境的月结账号；不代表正式站账号缺失。' : '当前站点的所选顺丰环境尚未保存月结账号。'}</p>}
+              <div className={styles.twoColumns}>
+                <label>月结卡号<input autoComplete="off" inputMode="numeric" value={accountNumber} onChange={event => setAccountNumber(event.target.value.replace(/\D/g, '').slice(0, 32))} placeholder="输入完整月结卡号"/></label>
+                <label>备注说明（选填）<input value={accountName} onChange={event => setAccountName(event.target.value)} maxLength={80}/></label>
+              </div>
+              <div className={styles.actions}><button className={styles.secondary} disabled={!!busy} onClick={() => void saveAccount()}>{busy === 'account' ? '保存中…' : <><Plus size={14}/>保存月结账号</>}</button></div>
+
+              <div className={styles.serviceHeading}><h5 className={styles.groupTitle}>可提报服务</h5><span>当前顺丰应用下的月结账号共用</span></div>
+              <div className={styles.services}>{authorizedServices.map((service, index) => <div key={service.id}>
+                <span>{service.name}{index === 0 ? ' · 默认' : ''}</span>
+                <div className={styles.accountActions}>{index > 0 && <button className={styles.textAction} onClick={() => setAuthorizedServices(current => [service, ...current.filter(item => item.id !== service.id)])}>设为默认服务</button>}<button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>
+              </div>)}</div>
+              <div className={styles.serviceInputs}>
+                <label>顺丰服务产品<select value={newServiceId} onChange={event => { const item = SF_SERVICE_CATALOG.find(row => row.id === Number(event.target.value)); setNewServiceId(event.target.value); setNewServiceName(item?.name || ''); setNewServicePreference(item?.preference || 'standard') }}><option value="">从官方目录选择</option>{SF_SERVICE_CATALOG.map(item => <option key={item.id} value={item.id} disabled={Boolean(item.limitation)}>{item.name}{item.limitation ? '（暂不支持）' : ''}</option>)}</select></label>
+                <button className={styles.secondary} onClick={addService}><Plus size={14}/>添加服务</button>
+              </div>
+              <p className={styles.actionHint}>第一项为默认服务。单票上限 20kg，暂不支持跨境及港澳台寄件。</p>
+              <div className={styles.actions}><button className={styles.secondary} disabled={!!busy || !connection || !authorizedServices.length} onClick={() => void saveAuthorizedServices()}>{busy === 'services' ? '保存服务中…' : '保存可提报服务'}</button></div>
+              {!connection && <p className={styles.actionHint}>请先保存当前环境的顺丰连接。</p>}
+            </fieldset>
+          </section>
+
+          <details>
+            <summary>接口验证记录</summary>
+            <div className={styles.capabilities} aria-label="顺丰能力验证记录">{([['order', '下单'], ['query', '订单查询'], ['tracking', '物流轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection?.capabilities[key] === 'verified' ? '已有验证记录' : connection?.capabilities[key] === 'unavailable' ? '不可用' : '尚未验证'}</b></div>)}<div><span>订单与路由推送</span><b>接收状态待接入</b></div></div>
+            <p className={styles.hint}>可用操作以当前运单状态和顺丰处理结果为准。</p>
+          </details>
+        </section>
+
+        <section id="shipping-panel-enterprise" hidden={section !== 'enterprise'} aria-label="企业接入内容">
+          <WecomConfiguration onMessage={setMessage}/>
+          <section className={styles.section} aria-label="默认寄件人内容">
+            <div className={styles.sectionTitle}><div><Settings size={16}/><h3>公司默认寄件人</h3></div></div>
+            <div className={styles.addressImport}>
+              <label>粘贴默认寄方信息<textarea aria-label="默认寄方地址文本" rows={3} value={senderText} onChange={event => setSenderText(event.target.value)} placeholder="姓名 电话 省市区及详细地址"/></label>
+              <div className={styles.actions}><button type="button" disabled={!senderText.trim() || !!busy} onClick={() => { const parsed = parseAddress(senderText); if (!contactSchema.safeParse(parsed.contact).success) { setMessage('未识别出完整寄方，原资料已保留。' + parsed.warnings.join('；')); return } setSender(parsed.contact); setMessage(parsed.warnings.join('；') || '寄方已解析，请核对后保存。') }}>解析默认寄方信息</button></div>
+            </div>
+            <div className={styles.twoColumns}><label>姓名<input value={sender.name} onChange={event => setSender(value => ({ ...value, name: event.target.value }))}/></label><label>电话<input value={sender.phone} onChange={event => setSender(value => ({ ...value, phone: event.target.value }))}/></label></div>
+            <div className={styles.threeColumns}><label>省<input value={sender.province} onChange={event => setSender(value => ({ ...value, province: event.target.value }))}/></label><label>市<input value={sender.city} onChange={event => setSender(value => ({ ...value, city: event.target.value }))}/></label><label>区县<input value={sender.county} onChange={event => setSender(value => ({ ...value, county: event.target.value }))}/></label></div>
+            <label>详细地址<input value={sender.address} onChange={event => setSender(value => ({ ...value, address: event.target.value }))}/></label>
+            <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button></div>
+          </section>
+          <details><summary>寄件提报规则</summary><IntakeConfiguration/></details>
+          <details>
+            <summary>审核与下单权限</summary>
+            <p className={styles.hint}>审核、下单和配置权限在“组织与权限”中管理。</p>
+            {operatorAccess?.legacyImportAvailable && <p className={styles.message}>存在历史授权，请联系管理员核对。</p>}
+            <a href="/configs?tab=role-access">查看组织与权限 →</a>
+          </details>
         </section>
       </div>
     </aside>

@@ -14,7 +14,21 @@ function repoRoot() {
   return result.status === 0 ? result.stdout.trim() : process.cwd();
 }
 
-const ROOT = repoRoot();
+const payload = readStdinJson();
+const HOST_ROOT = repoRoot();
+let ROOT;
+try {
+  const workspace = require(path.join(HOST_ROOT, 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js'));
+  ROOT = workspace.resolveExecutionWorkspace(HOST_ROOT);
+} catch (error) {
+  const workspace = require(path.join(HOST_ROOT, 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js'));
+  if (EVENT === 'PreToolUse' && workspace.isBindingRecovery(HOST_ROOT, payload)) {
+    console.log('[Harness] bounded workspace recovery command allowed; new binding still requires full authority validation');
+    process.exit(0);
+  }
+  console.error(`[Harness workspace blocked] ${error.message}`);
+  process.exit(2);
+}
 const core = require(path.join(
   ROOT,
   'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js'
@@ -155,6 +169,21 @@ function printMatrix(matrix, title = 'Action evaluation matrix') {
 }
 
 function preToolUse(payload) {
+  const tool = core.normalizeToolName(payload.tool_name || payload.toolName || payload.tool?.name || payload.tool || payload.name);
+  if (['Edit', 'Write', 'MultiEdit', 'Browser', 'Delegate'].includes(tool)) {
+    const registry = require(path.join(ROOT, 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js'));
+    const check = registry.validateSchedulerState({ repoRoot: ROOT });
+    if (!check.ok) deny({ reason: `workspace preflight failed: ${check.errors.join('; ')}`, exitCode: 2 });
+    if (['Edit', 'Write', 'MultiEdit'].includes(tool)) {
+      const input = payload.tool_input || payload.input || payload.arguments || {};
+      const targets = [input.file_path || input.path || payload.file_path || payload.path, ...(input.edits || []).map(edit => edit.file_path || edit.path)].filter(Boolean);
+      const patch = typeof input === 'string' ? input : core.commandTextFromPayload(payload);
+      if (patch.startsWith('*** Begin Patch')) targets.push(...[...patch.matchAll(/^\*\*\* (?:Update File|Add File|Delete File|Move to): (.+)$/gm)].map(match => match[1]));
+      if (ROOT !== HOST_ROOT && targets.some(file => !path.isAbsolute(file))) deny({ reason: 'bound workspace writes require absolute paths; relative paths belong to the caller checkout', exitCode: 2 });
+      if (!targets.length && ROOT !== HOST_ROOT) deny({ reason: 'bound workspace write has no inspectable target', exitCode: 2 });
+      if (targets.length && targets.some(file => !registry.isSchedulerPathAllowed(file, { repoRoot: ROOT }).allowed)) deny({ reason: 'write target is outside Active scope or protected runtime state', exitCode: 2 });
+    }
+  }
   const result = core.evaluateToolUse(ROOT, payload);
   if (!result.ok) {
     deny(result);
@@ -185,7 +214,6 @@ function stop() {
   }
 }
 
-const payload = readStdinJson();
 if (EVENT === 'UserPromptSubmit') {
   userPromptSubmit(payload);
 } else if (EVENT === 'PreToolUse') {

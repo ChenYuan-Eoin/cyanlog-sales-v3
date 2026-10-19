@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
+const { runtimePathPolicy } = require('./harness-workspace');
 
 const REGISTRY_RELATIVE_PATH = 'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json';
 const SCHEDULER_RELATIVE_PATH = 'governance/runtime-state/active-task.json';
@@ -2141,6 +2142,8 @@ function isSchedulerPathAllowed(filePath, options = {}) {
   const { repoRoot, state } = loadSchedulerState(options);
   const relativePath = toRepoRelative(filePath, { repoRoot });
   const allowedPaths = state.active_task.allowed_paths || [];
+  const artifact = runtimePathPolicy(repoRoot, filePath);
+  if (artifact) return { ...artifact, activeId: state.active_task.id, baselineStatus: state.product_baseline?.status, relativePath };
   return {
     allowed: allowedPaths.some((allowedPath) => {
       const normalized = normalizeRelative(allowedPath);

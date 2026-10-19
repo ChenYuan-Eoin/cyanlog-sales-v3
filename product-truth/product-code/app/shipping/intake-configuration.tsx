@@ -16,7 +16,7 @@ export default function IntakeConfiguration() {
       setRules(intakeRulesSchema.parse(body.rules)); setMessage('补充信息规则已保存，新打开的员工提报页立即使用。')
     } catch (e) { setMessage(e instanceof Error ? e.message : '保存失败') } finally { setBusy(false) }
   }
-  return <section className={styles.section} aria-label="补充信息配置"><h3>员工提报补充信息</h3><p className={styles.hint}>公司名称指收件客户公司，所有提报入口均遵循此规则，与员工的寄件单位无关。员工所属部门由企业身份资料自动带入，本页只设置寄件业务信息。不做工商信息校验。</p>
+  return <section className={styles.section} aria-label="补充信息配置"><h3>员工提报补充信息</h3><p className={styles.hint}>设置收件客户公司的填写要求。</p>
     {rules && <fieldset className={styles.formGroup} disabled={busy}>{(['companyName'] as const).map(key => <div key={key}><strong>{'公司名称'}</strong><label className={styles.checkbox}><input type="checkbox" checked={rules[key].enabled} onChange={e => setRules({ ...rules, [key]: { ...rules[key], enabled: e.target.checked, required: e.target.checked && rules[key].required } })}/>{'显示公司名称'}</label><label className={styles.checkbox}><input type="checkbox" disabled={!rules[key].enabled} checked={rules[key].required} onChange={e => setRules({ ...rules, [key]: { ...rules[key], required: e.target.checked } })}/>{'公司名称必填'}</label><label>{'公司名称最少字数'}<input type="number" min="0" max={120} value={rules[key].minLength} onChange={e => setRules({ ...rules, [key]: { ...rules[key], minLength: Number(e.target.value) } })}/></label></div>)}<button type="button" onClick={() => void save()}>{busy ? '保存中…' : '保存补充信息规则'}</button></fieldset>}
     {message && <p role="status" className={styles.message}>{message}</p>}
   </section>

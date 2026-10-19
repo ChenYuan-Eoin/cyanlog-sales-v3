@@ -49,13 +49,13 @@ export default function WecomConfiguration({ onMessage }: { onMessage?: (message
   const sameEnterprise = Boolean(draft && settings?.corpId === draft.corpId)
   const historicalScope = settings?.allowedDepartmentIds === null ? '沿用已授权成员' : settings?.allowedDepartmentIds.length === 0 ? '当前未开放成员提报' : '沿用已有部门范围'
   return <section className={styles.section} aria-label="企业接入">
-    <div className={styles.sectionTitle}><div><Building2 size={18}/><h3>企业应用</h3></div><span>企业微信</span></div>
-    <p className={styles.hint}>验证员工身份，供网页和机器人共用。员工提报后，由操作员审核并向顺丰下单。</p>
+    <div className={styles.sectionTitle}><div><Building2 size={18}/><h3>企微自建应用</h3></div><span>员工身份认证</span></div>
+    <p className={styles.hint}>用于员工登录和寄件提报。</p>
     {!settings && <p role="status">{message || '正在读取企业连接…'}</p>}
     {settings && editor && <>
       <div className={ui.connection}>
         <span className={ui.icon}><Building2 size={20}/></span>
-        <div><strong>{settings.hasSecret ? settings.companyName || settings.corpId : '尚未连接企业'}</strong><p>{settings.hasSecret ? `应用 ${settings.agentId} · 网页身份入口` : '连接企业自建应用后，员工即可验证身份。'}</p></div>
+        <div><strong>{settings.hasSecret ? settings.companyName || settings.corpId : '尚未连接企业'}</strong><p>{settings.hasSecret ? `AgentID ${settings.agentId}` : '填写 CorpID、AgentID 和应用 Secret。'}</p></div>
         <span className={ui.status}>{settings.hasSecret ? settings.directorySyncedAt ? '已保存连接' : '待核对成员范围' : '待配置'}</span>
       </div>
       <details ref={editorDetails} open={!editor.hasSecret}>
@@ -66,10 +66,10 @@ export default function WecomConfiguration({ onMessage }: { onMessage?: (message
             <label>应用ID（AgentID）<input type="number" min="1" value={editor.agentId || ''} onChange={event => setEditor({ ...editor, agentId: Number(event.target.value) || null })}/></label>
           </div>
           <label>应用密钥（Secret）<input type="password" autoComplete="new-password" value={secret} onChange={event => setSecret(event.target.value)} placeholder={editor.hasSecret ? '已加密保存；同一应用留空保持' : '填写自建应用密钥'}/></label>
-          <p className={styles.hint}>自建应用用于员工身份验证；机器人的回调参数在下方单独配置。</p>
-          <label>预置寄件电话（可选）<input type="tel" value={editor.fallbackPhone} onChange={event => setEditor({ ...editor, fallbackPhone: event.target.value })}/></label>
-          <p className={styles.hint}>员工电话缺失时使用此号码，身份仍为员工本人。均无可用电话时保留资料并提示补齐。</p>
-          <label>无法提报时的提示<input value={editor.deniedMessage} maxLength={200} onChange={event => setEditor({ ...editor, deniedMessage: event.target.value })}/></label>
+          <p className={styles.hint}>访问令牌由系统自动获取，无需填写。</p>
+          <details><summary>提报选项（可选）</summary><label>预置寄件电话（可选）<input type="tel" value={editor.fallbackPhone} onChange={event => setEditor({ ...editor, fallbackPhone: event.target.value })}/></label>
+          <p className={styles.hint}>员工未提供电话时使用此号码。</p>
+          <label>无法提报时的提示<input value={editor.deniedMessage} maxLength={200} onChange={event => setEditor({ ...editor, deniedMessage: event.target.value })}/></label></details>
           <div className={styles.actions}><button type="button" onClick={() => void prepare()}>{busy ? '处理中…' : '测试并准备配置'}</button>{dirty && <button type="button" className={styles.secondary} onClick={() => { setEditor(settings); setSecret(''); setDirty(false); setEditorDraftId(null) }}>还原本次编辑</button>}</div>
         </fieldset>
       </details>
@@ -85,17 +85,15 @@ export default function WecomConfiguration({ onMessage }: { onMessage?: (message
           <button type="button" className={styles.secondary} disabled={busy} onClick={() => void act({ action: 'discard', draftId: draft.id }, '待启用配置已放弃，当前连接保持不变。')}>放弃待启用配置</button>
         </div>
       </section>}
+      <details><summary>企微后台设置</summary><p className={styles.hint}>在企微后台设置应用可见范围、网页授权可信域名及所需可信 IP。</p>{settings.redirectDomain && <p className={ui.domain}>网页授权可信域名：{settings.redirectDomain}</p>}</details>
       <div className={ui.access}>
         <div className={styles.sectionTitle}><div><ShieldCheck size={17}/><h4>提报范围</h4></div><span>只读</span></div>
-        <p>当前企业应用中的有效成员，且符合已有提报范围。</p>
         <div className={ui.facts}><span>{historicalScope}</span><span>上次核对：{eligible} 位可提报成员</span></div>
-        <p className={styles.hint}>人员与部门在企微维护。本页不建立另一份员工名单；已有额外范围限制继续生效。</p>
         <div className={ui.sync}><small>资料核对时间：{settings.directorySyncedAt ? new Date(settings.directorySyncedAt).toLocaleString('zh-CN') : '尚未核对'}</small><button type="button" className={styles.secondary} disabled={busy || dirty || !settings.hasSecret} onClick={() => void act({ action: 'sync' }, '企业成员状态已刷新，原有提报范围保持不变。')}><RefreshCw size={14}/>刷新成员状态</button></div>
         {dirty && <p className={styles.hint}>当前有未保存编辑，请先测试配置或还原编辑，再刷新成员状态。</p>}
-        {settings.redirectDomain && <p className={ui.domain}>企业应用授权域名：{settings.redirectDomain}</p>}
       </div>
-      <WecomBotConfiguration corpId={settings.corpId} ready={settings.hasSecret && Boolean(settings.directorySyncedAt)}/>
     </>}
+    <WecomBotConfiguration corpId={settings?.corpId || ''} ready={Boolean(settings?.hasSecret && settings.directorySyncedAt)}/>
     {settings && message && <p className={styles.message} role="status">{message}</p>}
   </section>
 }

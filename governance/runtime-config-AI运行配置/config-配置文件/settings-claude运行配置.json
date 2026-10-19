@@ -82,8 +82,18 @@
           "maintenance"
         ]
       },
-      "tools": ["AskUserQuestion", "Read", "Grep"],
-      "forbidden_tools": ["Edit", "Write", "Bash", "Agent", "Skill"]
+      "tools": [
+        "AskUserQuestion",
+        "Read",
+        "Grep"
+      ],
+      "forbidden_tools": [
+        "Edit",
+        "Write",
+        "Bash",
+        "Agent",
+        "Skill"
+      ]
     },
     "skill-req-review": {
       "description": "需求文档审查 - 检查REQ ID唯一性、状态流程等",
@@ -95,9 +105,26 @@
           "product-truth/00-master/PROJECT-主文档.md"
         ]
       },
-      "tools": ["Read", "Grep", "Glob"],
-      "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
-      "checks": ["R1", "R2", "R3", "R4", "R5"]
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob"
+      ],
+      "forbidden_tools": [
+        "Edit",
+        "Write",
+        "AskUserQuestion",
+        "Bash",
+        "Agent",
+        "Skill"
+      ],
+      "checks": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5"
+      ]
     },
     "skill-code-review": {
       "description": "代码审查 - 检查REQ标记、TODO、错误处理等",
@@ -109,9 +136,24 @@
           "product-truth/product-code/**/*.tsx"
         ]
       },
-      "tools": ["Read", "Grep"],
-      "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
-      "checks": ["C1", "C2", "C3", "C4"]
+      "tools": [
+        "Read",
+        "Grep"
+      ],
+      "forbidden_tools": [
+        "Edit",
+        "Write",
+        "AskUserQuestion",
+        "Bash",
+        "Agent",
+        "Skill"
+      ],
+      "checks": [
+        "C1",
+        "C2",
+        "C3",
+        "C4"
+      ]
     },
     "skill-security-audit": {
       "description": "安全审计 - 扫描密钥泄露、SQL注入、XSS等",
@@ -123,9 +165,24 @@
         ]
       },
       "manual_command": "/skill-security-audit",
-      "tools": ["Read", "Grep", "Glob"],
-      "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash"],
-      "checks": ["S1", "S2", "S3", "S4", "S5"]
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob"
+      ],
+      "forbidden_tools": [
+        "Edit",
+        "Write",
+        "AskUserQuestion",
+        "Bash"
+      ],
+      "checks": [
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S5"
+      ]
     },
     "skill-doc-sync": {
       "description": "文档同步检查 - 确保代码与文档同步",
@@ -133,9 +190,22 @@
         "type": "git_hook",
         "event": "pre-commit"
       },
-      "tools": ["Read", "Grep", "Glob"],
-      "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash"],
-      "checks": ["D1", "D2", "D3"]
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob"
+      ],
+      "forbidden_tools": [
+        "Edit",
+        "Write",
+        "AskUserQuestion",
+        "Bash"
+      ],
+      "checks": [
+        "D1",
+        "D2",
+        "D3"
+      ]
     },
     "skill-commit-msg": {
       "description": "提交信息规范检查",
@@ -143,8 +213,17 @@
         "type": "git_hook",
         "event": "commit-msg"
       },
-      "tools": ["Read"],
-      "forbidden_tools": ["Edit", "Write", "AskUserQuestion", "Bash", "Agent", "Skill"],
+      "tools": [
+        "Read"
+      ],
+      "forbidden_tools": [
+        "Edit",
+        "Write",
+        "AskUserQuestion",
+        "Bash",
+        "Agent",
+        "Skill"
+      ],
       "pattern": "^(feat|fix|docs|style|refactor|test|chore)(\\(.+\\))?: .+"
     }
   },
@@ -156,7 +235,8 @@
         "Read",
         "Grep",
         "Glob",
-        "AskUserQuestion"
+        "AskUserQuestion",
+        "Wait"
       ],
       "skills": []
     },
@@ -167,7 +247,11 @@
         "Read",
         "Grep",
         "Glob",
-        "Bash"
+        "Bash",
+        "AskUserQuestion",
+        "Wait",
+        "WebRead",
+        "Delegate"
       ],
       "skills": []
     },
@@ -178,7 +262,10 @@
         "Read",
         "Grep",
         "Glob",
-        "AskUserQuestion"
+        "AskUserQuestion",
+        "Wait",
+        "WebRead",
+        "Delegate"
       ],
       "skills": [
         "skill-req-review",
@@ -195,7 +282,12 @@
         "Edit",
         "Write",
         "MultiEdit",
-        "Bash"
+        "Bash",
+        "AskUserQuestion",
+        "Wait",
+        "WebRead",
+        "Delegate",
+        "Browser"
       ],
       "skills": [
         "skill-code-review"
@@ -208,7 +300,12 @@
         "Read",
         "Grep",
         "Glob",
-        "Bash"
+        "Bash",
+        "AskUserQuestion",
+        "Wait",
+        "WebRead",
+        "Delegate",
+        "Browser"
       ],
       "skills": [
         "skill-socrates"
@@ -221,7 +318,8 @@
         "Read",
         "Grep",
         "Glob",
-        "AskUserQuestion"
+        "AskUserQuestion",
+        "Wait"
       ],
       "skills": []
     }

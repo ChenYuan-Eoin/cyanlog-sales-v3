@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-16T09:01:39.347307+00:00",
+  "updated_at": "2026-10-19T04:23:47.946789+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,33 +128,41 @@
     ]
   },
   "active_task": {
-    "id": "WP19",
-    "slug": "wecom-authorized-shipping-intake",
-    "name": "企微企业接入与员工提报校验",
+    "id": "WP40",
+    "slug": "shipping-integration-settings",
+    "name": "寄件接入配置整理",
     "kind": "product",
     "status": "active",
-    "objective": "将单企业企微接入与统一成员校验、既有WP35销售提报体验代码发布到sales.cyanlog.icu并在用户现有Chrome验收；保留生产配置、数据与现有权限，不扩建平台人员管理。",
-    "started_at": "2026-10-16T09:01:39.347307+00:00",
-    "activation_basis": "IN-20261016-028：用户阅读影响评估后明确批准实施",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3",
+    "objective": "按顺丰接入和企业接入两个入口提供精炼参数、连接验证与状态；月结与共用服务放一起、公司默认寄件人与企微/机器人同入口；修复解析按钮拉伸，删除内部实现说明，保护所有草稿、环境隔离及既有权限。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
+    "activation_basis": "IN-20261019-008：用户批准先Harness后产品，进一步要求精炼接入参数与清晰机器人入口",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/product-code/app/shipping/config-drawer.tsx",
+      "product-truth/product-code/app/shipping/config-drawer.module.css",
+      "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+      "product-truth/product-code/app/shipping/wecom-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-configuration.test.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
+      "product-truth/product-code/app/shipping/intake-configuration.tsx",
+      "product-truth/product-code/app/configs/ConfigsClient.tsx",
+      "product-truth/product-code/node_modules",
       "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/REQ_REGISTRY.yml",
-      "product-truth/product-code/app/shipping",
-      "product-truth/product-code/app/api/shipping",
-      "product-truth/product-code/lib/shipping"
+      "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/product-code/.next",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
+      "product-truth/product-code/.vercel/project.json",
+      ".vercel/project.json"
     ],
+    "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "clean_preview_green",
       "allowed_states": [
         "executing",
         "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "clean_preview_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -173,70 +181,28 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "required_production_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
-      ],
-      "required_production_evidence": [
-        "exact_production_commit",
-        "vercel_deployment_ready_and_promoted",
-        "sales.cyanlog.icu_alias",
-        "controlled_production_security_and_runtime_verifier",
-        "trusted_existing_chrome_operator_attestation"
-      ],
-      "note": "WP19单企业企微接入与提报校验；保留WP35候选依赖，生产数据只读。不得将配置UI通过冒充真实机器人或顺丰闭环。",
+      "note": "WP40精炼寄件接入配置UI；不改变数据模型、权限、认证协议；Production发布须另绑定本批批准。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
-      "final_acceptance": {
-        "origin": "https://sales.cyanlog.icu",
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "new_local_browser_or_context_prohibited": true,
-        "new_tab_prohibited": true,
-        "local_and_preview_role": "diagnostic_only_not_completion",
-        "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
-        "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
-        "production_database_mode": "read_only"
-      },
-      "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261016-029",
-        "micro_fix_approval_id": "IN-20261016-028",
-        "clarification_id": "IN-20261016-029",
-        "micro_fix_scope": "企微接入收拢与共同身份校验，不修改平台组织能力",
-        "final_scope": "WP19企微企业接入、网页与机器人共同成员校验及已保留的WP35销售提报体验代码发布；在sales.cyanlog.icu现有Chrome验收。不含数据库迁移、生产凭据替换、扩大人员权限、真实顺丰创建或取消修改。",
-        "database_write_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
-      },
-      "blocking_acceptance_defects": [
-        "IN-20261016-028",
-        "IN-20261016-034"
-      ],
       "runtime_contract_version": "f054-intake-v1"
     },
-    "feature_id": "F054",
-    "integration_decision": {
-      "strategy": "isolated_candidate_on_production",
-      "authority": "IN-20261016-029",
-      "requested_target": "production_released",
-      "constraint": "code-only release; production data read-only"
-    }
+    "started_at": "2026-10-19T04:23:47.946789+00:00"
   },
   "execution_queue": {
     "active": {
-      "id": "WP19",
-      "slug": "wecom-authorized-shipping-intake",
-      "name": "企微企业接入与员工提报校验"
+      "id": "WP40",
+      "slug": "shipping-integration-settings",
+      "name": "寄件接入配置整理"
     },
-    "next": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验",
-      "entry_gate": "WP19边界收敛后恢复既有候选的正式站验收",
-      "entry_gate_status": "waiting_active_completion"
-    },
+    "next": null,
     "ready": [
+      {
+        "id": "WP35",
+        "slug": "sales-intake-experience",
+        "name": "销售寄件提报体验",
+        "entry_gate": "WP19边界收敛后恢复既有候选的正式站验收",
+        "entry_gate_status": "waiting_active_completion"
+      },
       {
         "id": "WP36",
         "slug": "workorder-review-expansion",
@@ -370,6 +336,13 @@
         "slug": "shipping-configuration-usability",
         "name": "寄件配置与操作反馈",
         "reason": "生产界面已实际发布并在用户Chrome重放，形式production_released门禁缺少无关contract_comparison_diffs目录；未冒充门禁通过。生产下单事故WP34优先，随后收尾。"
+      },
+      {
+        "id": "WP19",
+        "slug": "wecom-authorized-shipping-intake",
+        "name": "企微企业接入与员工提报校验",
+        "reason": "用户批准WP39先修Harness；已发布候选与本地UI微修复保留，未把历史门禁声明为完成",
+        "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3"
       }
     ],
     "completed": [
@@ -2261,6 +2234,64 @@
         "requested_target": "production_released",
         "constraint": "code-only release; production data read-only"
       }
+    }
+  },
+  "parked_tasks": {
+    "WP39": {
+      "id": "WP39",
+      "slug": "harness-workspace-preflight",
+      "name": "Harness工作区与工具执行闭环",
+      "kind": "governance",
+      "status": "awaiting_delivery_checks",
+      "objective": "修复工具分类、工作区状态绑定和运行产物范围；开工预检一次报告阻断。保留外部高风险操作、运行状态及Git元数据保护。",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
+      "activation_basis": "IN-20261019-007：用户阅读评估后明确要求先修Harness再修产品",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-doctor.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        ".codex/hooks/harness-adapter.js",
+        "../../../../Documents/ChatGPT/Price-v3/.codex/hooks/harness-adapter.js",
+        "../../../../Documents/ChatGPT/Price-v3/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js"
+      ],
+      "feature_id": "F054",
+      "delivery_contract": {
+        "target_state": "code_green",
+        "allowed_states": [
+          "executing",
+          "code_green"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "note": "WP39本地Harness修复与正反向验证；不发布产品、不写生产数据库。产品交付门禁保持独立。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "shipping_workspace",
+        "runtime_contract_version": "f054-intake-v1"
+      },
+      "started_at": "2026-10-19T03:57:28.312478+00:00",
+      "reason": "Harness实现已通过7组专项回归及原有自测、独立复核和真实工具调用；随候选完成提交门禁，不宣称已发布。"
     }
   }
 }

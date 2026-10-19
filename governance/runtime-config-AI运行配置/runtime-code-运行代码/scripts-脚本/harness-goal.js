@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+const { bindWorkspace } = require('./harness-workspace');
+const registry = require('./project-registry');
+const core = require('./harness-core');
+
 const {
   AUTONOMY_LEVELS,
   approveAction,
@@ -114,6 +118,8 @@ function usage() {
     '  harness-goal.js audit [--json]',
     '  harness-goal.js complete [--by name]',
     '  harness-goal.js status [--json]',
+    '  harness-goal.js preflight [--tools comma-separated-tools] [--paths comma-separated-paths]',
+    '  harness-goal.js bind --caller /checkout --workspace /registered-worktree --authority IN-id',
     '  harness-goal.js template',
     '  harness-goal.js clear'
   ].join('\n'));
@@ -125,6 +131,27 @@ function main() {
   const { options, rest } = parseOptions(args);
 
   try {
+    if (command === 'bind') {
+      if (!options.caller || !options.workspace || !options.authority) throw new Error('bind requires caller, workspace and authority');
+      console.log(JSON.stringify(bindWorkspace(options.caller, options.workspace, options.authority), null, 2));
+      return;
+    }
+    if (command === 'preflight') {
+      const scheduler = registry.validateSchedulerState({ repoRoot });
+      const state = loadState(repoRoot), contract = loadContract(repoRoot);
+      const tools = String(options.tools || 'Read,AskUserQuestion,Bash').split(',').filter(Boolean);
+      const toolChecks = tools.map(tool => {
+        const result = core.evaluateToolUse(repoRoot, { tool_name: tool });
+        return { tool, ok: result.ok, reason: result.reason || null };
+      });
+      const pathChecks = String(options.paths || '').split(',').filter(Boolean).map(file => ({ file, ...registry.isSchedulerPathAllowed(file, { repoRoot }) }));
+      const errors = [...scheduler.errors, ...toolChecks.filter(row => !row.ok).map(row => `${row.tool}: ${row.reason}`), ...pathChecks.filter(row => !row.allowed).map(row => `${row.file}: ${row.reason || 'outside Active scope'}`)];
+      const target = registry.loadSchedulerState({ repoRoot }).state.active_task?.execution_workspace;
+      if (target !== repoRoot) errors.push(`Active execution workspace differs: ${target}`);
+      console.log(JSON.stringify({ ok: errors.length === 0, repoRoot, workPackage: scheduler.activeId, phase: state.phase, gate: state.activeGates?.[0], autonomy: contract?.autonomyBudget?.level, tools: toolChecks, paths: pathChecks, errors }, null, 2));
+      process.exitCode = errors.length ? 2 : 0;
+      return;
+    }
     if (command === 'approve-action') {
       const approval = approveAction(repoRoot, readJson(options.request));
       console.log(`Action approval recorded: ${approval.id} target=${approval.target} expires=${approval.expiresAt}`);

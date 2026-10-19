@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const { loadRegistry, VERCEL_PRODUCTION_CONTRACT } = require('./project-registry');
+const { runtimePathPolicy } = require('./harness-workspace');
 
 const PHASE_TO_GATE = {
   intake: 'HG0',
@@ -780,6 +781,12 @@ function activeGate(state) {
 
 function normalizeToolName(name) {
   const raw = String(name || '');
+  // Explicit aliases only: unknown connectors never inherit read/delegation access.
+  const collaborationNames = ['spawn_agent', 'followup_task', 'send_message', 'list_agents', 'wait_agent', 'interrupt_agent'];
+  if (collaborationNames.some(name => [`collaboration.${name}`, `collaboration${name}`, `collaboration__${name}`].includes(raw))) return 'Delegate';
+  if (['web__run', 'web.run', 'webrun'].includes(raw)) return 'WebRead';
+  if (['mcp__cua_repl__js', 'mcp__cua_repl.js'].includes(raw)) return 'Browser';
+  if (['wait', 'functions.wait', 'functions__wait', 'clock.sleep', 'clock__sleep'].includes(raw)) return 'Wait';
   if (!raw) {
     return '';
   }
@@ -818,6 +825,17 @@ function normalizeToolName(name) {
     return 'Glob';
   }
   return raw;
+}
+
+function isHarnessControlCommand(repoRoot, command) {
+  if (/[;|&<>`$\n\r]/.test(command)) return false;
+  const tokens = command.match(/"[^"]*"|'[^']*'|[^\s]+/g) || [];
+  const unquote = value => value?.replace(/^(["'])(.*)\1$/, '$2');
+  const [binary, script, operation] = tokens.map(unquote);
+  if (!['node', process.execPath].includes(binary)) return false;
+  const expected = path.join(repoRoot, 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js');
+  if (!script || path.resolve(repoRoot, script) !== expected) return false;
+  return ['status', 'template', 'approve', 'approve-action', 'revise', 'evidence', 'checkpoint', 'audit', 'phase', 'complete', 'clear', 'bind', 'preflight'].includes(operation);
 }
 
 function detectCommandRisk(command = '') {
@@ -996,6 +1014,8 @@ function consumeActionApproval(repoRoot, command, payload) {
 
 function commandTextFromPayload(payload = {}) {
   const candidates = [
+    typeof payload.tool_input === 'string' ? payload.tool_input : '',
+    typeof payload.input === 'string' ? payload.input : '',
     payload.tool_input?.cmd,
     payload.tool_input?.command,
     payload.tool_input?.chars,
@@ -1336,7 +1356,8 @@ function buildActionEvaluationMatrix(repoRoot, details) {
   const targetObject = actionTargetObject(repoRoot, payload, command);
   const impact = actionImpact(category, targetObject, commandRisk, controlRisk);
   const driftRisk = targetDriftRisk(contract, targetObject, category);
-  const scopedRisk = scopeRisk(contract, category, rel);
+  const artifact = category === 'edit' && payloadFilePath(payload) ? runtimePathPolicy(repoRoot, payloadFilePath(payload)) : null;
+  const scopedRisk = artifact ? (artifact.allowed ? '' : artifact.reason) : scopeRisk(contract, category, rel);
   const externalTargets = new Set([
     'business-deploy',
     'database-provider',
@@ -1469,7 +1490,7 @@ function evaluateToolUse(repoRoot, payload = {}) {
     return { ok: true, gate: gateId, patchTargets: targets };
   }
   const command = category === 'command' ? rawCommand : '';
-  if (category === 'command' && HARNESS_CONTROL_COMMAND.test(command)) {
+  if (category === 'command' && isHarnessControlCommand(repoRoot, command)) {
     return { ok: true, gate: gateId, controlPlaneCommand: true };
   }
   const commandRisk = detectCommandRisk(command);

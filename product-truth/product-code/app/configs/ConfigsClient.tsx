@@ -56,19 +56,19 @@ const CONFIG_TABS: Record<ConfigTabId, {
 }> = {
   'price-list': {
     label: '价盘与阶梯价',
-    description: '配置中心拥有 SKU、基础价、最低价和阶梯价，报价工作台只读消费已发布价格。',
+    description: '维护产品价格和阶梯价。',
     section: 'trading',
     icon: PackageIcon,
   },
   tax: {
     label: '税率规则',
-    description: '统一管理税率、适用地区和结算口径，避免报价与合同口径不一致。',
+    description: '设置税率及适用地区。',
     section: 'trading',
     icon: PercentIcon,
   },
   approval: {
     label: '审批权限',
-    description: '按折扣、金额和合同风险设置审批链，形成交易治理闭环。',
+    description: '设置折扣、金额和合同风险的审批条件。',
     section: 'trading',
     icon: ShieldCheckIcon,
   },
@@ -92,13 +92,13 @@ const CONFIG_TABS: Record<ConfigTabId, {
   },
   ai: {
     label: 'AI 模型与消费',
-    description: '统一管理模型接入、可用模型、降级顺序和业务能力选择，供所有业务模块消费。',
+    description: '管理模型连接、使用范围和备用模型。',
     section: 'ai-platform',
     icon: BotIcon,
   },
   theme: {
     label: '界面主题',
-    description: '控制运行时主题变量与视觉发布，确保业务界面一致可控。',
+    description: '设置品牌颜色和界面主题。',
     section: 'experience',
     icon: PaletteIcon,
   },
@@ -164,7 +164,7 @@ const CONFIG_TABS: Record<ConfigTabId, {
   },
   shipping: {
     label: '寄件连接与账号',
-    description: '管理顺丰机器连接、授权服务、月结账号和公司默认寄件人；自助收寄仅承载业务操作。',
+    description: '顺丰、企业微信与公司寄件资料。',
     section: 'shipping',
     icon: PackageIcon,
   },
@@ -179,43 +179,43 @@ const CONFIG_SECTIONS: Array<{
   {
     id: 'trading',
     label: '交易配置',
-    description: '围绕报价工作台的价盘、税率和审批配置。',
+    description: '价盘、税率和审批。',
     tabs: ['price-list', 'price-matrix', 'price-matrix-import', 'product-versions', 'business-params', 'approval-chains', 'approval-rules', 'tax', 'approval'],
   },
   {
     id: 'contract-rules',
     label: '合同规则',
-    description: '管理合同审核的问题分类、具体规则、属性与统一发布边界。',
+    description: '合同审核规则和问题分类。',
     tabs: ['rules'],
   },
   {
     id: 'ai-platform',
     label: 'AI 平台',
-    description: '管理全局模型能力与业务功能选择，不从属于合同模块。',
+    description: '模型连接与功能设置。',
     tabs: ['ai'],
   },
   {
     id: 'quote-output',
     label: '报价输出',
-    description: '报价单输出规则：字段字典、模板、条款映射与单号。',
+    description: '报价模板、条款和单号。',
     tabs: ['field-dictionary', 'output-templates', 'clause-mappings', 'numbering-rules'],
   },
   {
     id: 'org-access',
     label: '组织与权限',
-    description: '围绕部门、成员、角色能力和作用域分配的组织控制面。',
+    description: '部门、成员和角色权限。',
     tabs: ['org-structure', 'role-access'],
   },
   {
     id: 'experience',
     label: '界面与体验',
-    description: '运行时主题和界面变量集中配置发布。',
+    description: '品牌颜色和界面主题。',
     tabs: ['theme'],
   },
   {
     id: 'shipping',
     label: '寄件配置',
-    description: '集中管理承运商连接与履约默认资料；寄件工作台只消费有效配置。',
+    description: '顺丰、企业微信与寄件资料。',
     tabs: ['shipping'],
   },
 ]
@@ -1635,12 +1635,9 @@ export default function ConfigsClient({
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
               <SettingsIcon size={14} />
-              组织级配置工作台
+              组织设置
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">配置中心</h1>
-            <p className="mt-2 hidden max-w-3xl text-sm text-slate-500 xl:block">
-              参考 Apollo 的分层思路，按“配置域 → 配置集 → 发布版本”管理交易、治理、AI 与界面运行时。
-            </p>
           </div>
 
           <div className={activeTab === 'shipping' ? 'hidden' : 'hidden gap-3 sm:grid-cols-3 xl:grid xl:min-w-[420px]'}>
@@ -1649,7 +1646,7 @@ export default function ConfigsClient({
               <div className="mt-2 text-sm font-semibold text-slate-900">组织级统一发布</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <div className="text-xs font-medium text-slate-500">消费端</div>
+              <div className="text-xs font-medium text-slate-500">适用模块</div>
               <div className="mt-2 text-sm font-semibold text-slate-900">报价 / 合同 / 标书</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -1695,9 +1692,6 @@ export default function ConfigsClient({
             <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="px-3 pb-3 pt-2">
                 <div className="text-sm font-semibold text-slate-900">配置域</div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  把所有配置先归到稳定的业务域，再进入具体配置集编辑。
-                </p>
               </div>
 
               <div className="space-y-2">
@@ -1732,14 +1726,7 @@ export default function ConfigsClient({
                 })}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">结构约束</div>
-                <ul className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
-                  <li>配置中心只拥有配置，不承载业务执行。</li>
-                  <li>报价工作台、合同审核页只读消费已发布配置。</li>
-                  <li>配置项需要有版本、状态和作用范围。</li>
-                </ul>
-              </div>
+
             </div>
           </aside>
 
