@@ -190,7 +190,7 @@ describe('shipping configuration drawer', () => {
     const records = screen.getByText('接口验证记录').closest('details')!
     expect(records.open).toBe(false)
     fireEvent.click(screen.getByText('接口验证记录'))
-    expect(screen.getByText('接收状态待接入')).toBeTruthy()
+    expect(screen.getByText('接收状态未提供')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /开启推送|自动同步|提交上线/ })).toBeNull()
   })
   it('shows a clear permission message instead of an editable blank form to operators', async () => {
@@ -236,7 +236,7 @@ describe('shipping configuration drawer', () => {
     await openSection('顺丰接入')
     fireEvent.change(screen.getByLabelText('运行环境'), { target: { value: 'sandbox' } })
     await openSection('顺丰接入')
-    expect(await screen.findByText(/沙盒 · 尾号 5616 · 可用 · 默认/)).toBeTruthy()
+    expect(await screen.findByText(/沙盒 · 尾号 5616 · 已启用 · 默认/)).toBeTruthy()
     await openSection('顺丰接入')
     expect(screen.getByLabelText('应用密钥')).toHaveProperty('value', '')
     expect(screen.getByLabelText('月结卡号')).toHaveProperty('value', '')

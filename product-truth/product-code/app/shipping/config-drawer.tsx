@@ -245,7 +245,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
             <fieldset className={styles.formGroup} disabled={!!busy}>
               <h5 className={styles.groupTitle}>月结账号</h5>
               <div className={styles.accountList}>{environmentAccounts.map(account => <article key={account.id} className={styles.account}>
-                <div><strong>{account.displayName}</strong><small>{account.environment === 'sandbox' ? '沙盒' : '生产'} · 尾号 {account.tail} · {account.status === 'active' ? '可用' : '已停用'}{account.isDefault ? ' · 默认' : ''}</small></div>
+                <div><strong>{account.displayName}</strong><small>{account.environment === 'sandbox' ? '沙盒' : '生产'} · 尾号 {account.tail} · {account.status === 'active' ? '已启用' : '已停用'}{account.isDefault ? ' · 默认' : ''}</small></div>
                 <div className={styles.accountActions}>
                   {account.status === 'active' && !account.isDefault && <button className={styles.textAction} disabled={!!busy} onClick={() => void mutate(`default-${account.id}`, 'set_default_account', { accountId: account.id })}>设默认</button>}
                   {account.status === 'active' && <button className={styles.textAction} disabled={!!busy} onClick={() => { if (window.confirm(`停用月结账号「${account.displayName}」（尾号 ${account.tail}）？新工单将无法选择此账号，历史工单记录保留。`)) void mutate(`disable-${account.id}`, 'deactivate_account', { accountId: account.id }) }}>停用</button>}
@@ -275,7 +275,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
 
           <details>
             <summary>接口验证记录</summary>
-            <div className={styles.capabilities} aria-label="顺丰能力验证记录">{([['order', '下单'], ['query', '订单查询'], ['tracking', '物流轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection?.capabilities[key] === 'verified' ? '已有验证记录' : connection?.capabilities[key] === 'unavailable' ? '不可用' : '尚未验证'}</b></div>)}<div><span>订单与路由推送</span><b>接收状态待接入</b></div></div>
+            <div className={styles.capabilities} aria-label="顺丰能力验证记录">{([['order', '下单'], ['query', '订单查询'], ['tracking', '物流轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection?.capabilities[key] === 'verified' ? '已有验证记录' : connection?.capabilities[key] === 'unavailable' ? '不可用' : '尚未验证'}</b></div>)}<div><span>订单与路由推送</span><b>接收状态未提供</b></div></div>
             <p className={styles.hint}>可用操作以当前运单状态和顺丰处理结果为准。</p>
           </details>
         </section>

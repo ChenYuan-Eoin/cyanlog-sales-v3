@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-19T04:56:23.197Z",
+  "updated_at": "2026-10-19T05:11:59.181Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -128,38 +128,40 @@
     ]
   },
   "active_task": {
-    "id": "WP39",
-    "slug": "harness-workspace-preflight",
-    "name": "Harness工作区与工具执行闭环",
-    "kind": "governance",
+    "id": "WP40",
+    "slug": "shipping-integration-settings",
+    "name": "寄件接入配置整理",
+    "kind": "product",
     "status": "active",
-    "objective": "修复工具分类、工作区状态绑定和运行产物范围；开工预检一次报告阻断。保留外部高风险操作、运行状态及Git元数据保护。",
+    "objective": "按顺丰接入和企业接入两个入口提供精炼参数、连接验证与状态；月结与共用服务放一起、公司默认寄件人与企微/机器人同入口；修复解析按钮拉伸，删除内部实现说明，保护所有草稿、环境隔离及既有权限。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
-    "activation_basis": "IN-20261019-007；012复验推翻Harness已完成的假设，恢复原授权独立修复",
+    "activation_basis": "IN-20261019-008：用户批准先Harness后产品，进一步要求精炼接入参数与清晰机器人入口",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-doctor.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      ".codex/hooks/harness-adapter.js",
-      "../../../../Documents/ChatGPT/Price-v3/.codex/hooks/harness-adapter.js",
-      "../../../../Documents/ChatGPT/Price-v3/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-switch.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-switch.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/package.json"
+      "product-truth/product-code/app/shipping/config-drawer.tsx",
+      "product-truth/product-code/app/shipping/config-drawer.module.css",
+      "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+      "product-truth/product-code/app/shipping/wecom-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-configuration.test.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
+      "product-truth/product-code/app/shipping/intake-configuration.tsx",
+      "product-truth/product-code/app/configs/ConfigsClient.tsx",
+      "product-truth/product-code/node_modules",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/product-code/.next",
+      "product-truth/product-code/.vercel/project.json",
+      ".vercel/project.json"
     ],
     "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "clean_preview_green",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -178,24 +180,20 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "WP39本地Harness修复与正反向验证；不发布产品、不写生产数据库。产品交付门禁保持独立。",
+      "note": "WP40精炼寄件接入配置UI；不改变数据模型、权限、认证协议；Production发布须另绑定本批批准。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-intake-v1"
     },
-    "started_at": "2026-10-19T04:56:23.197Z"
+    "started_at": "2026-10-19T04:23:47.946789+00:00"
   },
   "execution_queue": {
     "active": {
-      "id": "WP39",
-      "slug": "harness-workspace-preflight",
-      "name": "Harness工作区与工具执行闭环"
-    },
-    "next": {
       "id": "WP40",
       "slug": "shipping-integration-settings",
       "name": "寄件接入配置整理"
     },
+    "next": null,
     "ready": [
       {
         "id": "WP35",
@@ -2238,42 +2236,39 @@
     }
   },
   "parked_tasks": {
-    "WP40": {
-      "id": "WP40",
-      "slug": "shipping-integration-settings",
-      "name": "寄件接入配置整理",
-      "kind": "product",
-      "status": "awaiting_preview_acceptance",
-      "objective": "按顺丰接入和企业接入两个入口提供精炼参数、连接验证与状态；月结与共用服务放一起、公司默认寄件人与企微/机器人同入口；修复解析按钮拉伸，删除内部实现说明，保护所有草稿、环境隔离及既有权限。",
+    "WP39": {
+      "id": "WP39",
+      "slug": "harness-workspace-preflight",
+      "name": "Harness工作区与工具执行闭环",
+      "kind": "governance",
+      "status": "awaiting_integration",
+      "objective": "修复工具分类、工作区状态绑定和运行产物范围；开工预检一次报告阻断。保留外部高风险操作、运行状态及Git元数据保护。",
       "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
-      "activation_basis": "IN-20261019-008：用户批准先Harness后产品，进一步要求精炼接入参数与清晰机器人入口",
+      "activation_basis": "IN-20261019-007；012复验推翻Harness已完成的假设，恢复原授权独立修复",
       "allowed_paths": [
         "governance/runtime-state/active-task.json",
         "governance/runtime-state/demand-inbox.jsonl",
-        "product-truth/product-code/app/shipping/config-drawer.tsx",
-        "product-truth/product-code/app/shipping/config-drawer.module.css",
-        "product-truth/product-code/app/shipping/config-drawer.test.tsx",
-        "product-truth/product-code/app/shipping/wecom-configuration.tsx",
-        "product-truth/product-code/app/shipping/wecom-configuration.test.tsx",
-        "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
-        "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
-        "product-truth/product-code/app/shipping/intake-configuration.tsx",
-        "product-truth/product-code/app/configs/ConfigsClient.tsx",
-        "product-truth/product-code/node_modules",
-        "product-truth/feature-packets/F054-sf-self-service-order.md",
-        "product-truth/feature-packets/F099-current-goal-ledger.md",
-        "product-truth/product-code/.next",
+        "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-doctor.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js",
         "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
-        "product-truth/product-code/.vercel/project.json",
-        ".vercel/project.json"
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        ".codex/hooks/harness-adapter.js",
+        "../../../../Documents/ChatGPT/Price-v3/.codex/hooks/harness-adapter.js",
+        "../../../../Documents/ChatGPT/Price-v3/governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-switch.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-switch.test.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/package.json"
       ],
       "feature_id": "F054",
       "delivery_contract": {
-        "target_state": "clean_preview_green",
+        "target_state": "code_green",
         "allowed_states": [
           "executing",
-          "code_green",
-          "clean_preview_green"
+          "code_green"
         ],
         "integration_branch": "main",
         "production_branch": "production",
@@ -2292,13 +2287,13 @@
           "shipping_tracking",
           "shipping_access"
         ],
-        "note": "WP40精炼寄件接入配置UI；不改变数据模型、权限、认证协议；Production发布须另绑定本批批准。",
+        "note": "WP39本地Harness修复与正反向验证；不发布产品、不写生产数据库。产品交付门禁保持独立。",
         "production_database_mode": "read_only",
         "runtime_profile": "shipping_workspace",
         "runtime_contract_version": "f054-intake-v1"
       },
-      "started_at": "2026-10-19T04:23:47.946789+00:00",
-      "reason": "保留已提交产品候选，先补齐原Harness验收缺口。"
+      "started_at": "2026-10-19T04:56:23.197Z",
+      "reason": "保留独立Harness修复候选；恢复原授权接入配置验收。"
     }
   }
 }
