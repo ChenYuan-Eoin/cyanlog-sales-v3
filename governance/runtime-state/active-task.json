@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-19T08:14:11.052773+00:00",
+  "updated_at": "2026-10-19T09:27:59.479976+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -129,35 +129,33 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP42",
-    "slug": "shipping-configuration-persistence",
-    "name": "寄件基础配置持久化",
+    "id": "WP41",
+    "slug": "wecom-bot-long-connection",
+    "name": "企微智能机器人长连接接入",
     "kind": "product",
     "status": "active",
-    "objective": "寄件基础配置保存后可重新读取，并在界面版本更新后持续可用；修复当前Preview缺少加密运行配置造成的保存失败，保留既有数据、密钥及权限，不要求恢复历史丢失输入。",
+    "objective": "企微长连接接入：安全保存Bot ID/Secret，配置页默认长连接并隔离旧URL回调，验证本机认证及连接状态；不将凭据保存或认证通过宣称为订单闭环。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
-    "activation_basis": "IN-20261019-023",
+    "activation_basis": "IN-20261019-031",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/shipping/config-drawer.tsx",
-      "product-truth/product-code/app/shipping/config-drawer.test.tsx",
-      "product-truth/product-code/app/api/shipping/settings/route.ts",
-      "product-truth/product-code/app/api/shipping/settings/route.test.ts",
-      "product-truth/product-code/lib/shipping/connections.ts",
-      "product-truth/product-code/lib/shipping/connections.test.ts",
+      "product-truth/product-code/services/wecom-bot",
       "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-switch.test.js"
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
+      "product-truth/product-code/app/shipping/wecom-configuration.test.tsx",
+      "product-truth/product-code/lib/shipping/wecom-bot-settings.ts",
+      "product-truth/product-code/lib/shipping/wecom-bot-settings.test.ts",
+      "product-truth/product-code/app/api/shipping/wecom/bot/route.ts"
     ],
     "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "clean_preview_green",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -173,20 +171,22 @@
       ],
       "required_runtime_evidence": [
         "shipping_workspace",
+        "shipping_tracking",
         "shipping_access"
       ],
-      "note": "基础配置持久化回归必须包含实际保存、刷新和版本更新后读取；不以布局验收替代。Production另行授权。",
+      "note": "长连接接入独立工作包；code_green仅表示代码验证，必须另存真实认证/连接和运行位置证据，不能宣称业务闭环或Production交付。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-config-ui-v1"
+      "runtime_contract_version": "f054-intake-v1"
     },
-    "started_at": "2026-10-19T08:14:11.052773+00:00"
+    "started_at": "2026-10-19T09:27:59.479976+00:00",
+    "reason": "用户明确先修基础配置持久化；长连接候选保留"
   },
   "execution_queue": {
     "active": {
-      "id": "WP42",
-      "slug": "shipping-configuration-persistence",
-      "name": "寄件基础配置持久化"
+      "id": "WP41",
+      "slug": "wecom-bot-long-connection",
+      "name": "企微智能机器人长连接接入"
     },
     "next": null,
     "ready": [
@@ -2350,28 +2350,36 @@
       "started_at": "2026-10-19T04:23:47.946789+00:00",
       "reason": "配置页候选已验证；Production发布独立授权"
     },
-    "WP41": {
-      "id": "WP41",
-      "slug": "wecom-bot-long-connection",
-      "name": "企微智能机器人长连接接入",
+    "WP42": {
+      "id": "WP42",
+      "slug": "shipping-configuration-persistence",
+      "name": "寄件基础配置持久化",
       "kind": "product",
-      "status": "awaiting_credentials",
-      "objective": "独立实现企微智能机器人长连接接收服务与安全配置加载，验证认证、连接状态、断线恢复及停止；复用用户已启用的机器人。先完成接入，不把连接成功宣称为下单取消业务完成。",
+      "status": "production_released",
+      "objective": "寄件基础配置保存后可重新读取，并在界面版本更新后持续可用；修复当前Preview缺少加密运行配置造成的保存失败，保留既有数据、密钥及权限，不要求恢复历史丢失输入。",
       "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
-      "activation_basis": "IN-20261019-018",
+      "activation_basis": "IN-20261019-023",
       "allowed_paths": [
         "governance/runtime-state/active-task.json",
         "governance/runtime-state/demand-inbox.jsonl",
-        "product-truth/product-code/services/wecom-bot",
+        "product-truth/product-code/app/shipping/config-drawer.tsx",
+        "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+        "product-truth/product-code/app/api/shipping/settings/route.ts",
+        "product-truth/product-code/app/api/shipping/settings/route.test.ts",
+        "product-truth/product-code/lib/shipping/connections.ts",
+        "product-truth/product-code/lib/shipping/connections.test.ts",
         "product-truth/feature-packets/F054-sf-self-service-order.md",
-        "product-truth/feature-packets/F099-current-goal-ledger.md"
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-switch.test.js"
       ],
       "feature_id": "F054",
       "delivery_contract": {
-        "target_state": "code_green",
+        "target_state": "clean_preview_green",
         "allowed_states": [
           "executing",
-          "code_green"
+          "code_green",
+          "clean_preview_green"
         ],
         "integration_branch": "main",
         "production_branch": "production",
@@ -2387,16 +2395,15 @@
         ],
         "required_runtime_evidence": [
           "shipping_workspace",
-          "shipping_tracking",
           "shipping_access"
         ],
-        "note": "长连接接入独立工作包；code_green仅表示代码验证，必须另存真实认证/连接和运行位置证据，不能宣称业务闭环或Production交付。",
+        "note": "基础配置持久化回归必须包含实际保存、刷新和版本更新后读取；不以布局验收替代。Production另行授权。",
         "production_database_mode": "read_only",
         "runtime_profile": "shipping_workspace",
-        "runtime_contract_version": "f054-intake-v1"
+        "runtime_contract_version": "f054-config-ui-v1"
       },
-      "started_at": "2026-10-19T06:54:04.063Z",
-      "reason": "用户明确先修基础配置持久化；长连接候选保留"
+      "started_at": "2026-10-19T08:14:11.052773+00:00",
+      "release_evidence": "worktree codex-runtime/checks/wp42/production-release.json"
     }
   }
 }

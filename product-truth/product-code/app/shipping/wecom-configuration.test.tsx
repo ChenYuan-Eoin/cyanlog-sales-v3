@@ -49,7 +49,6 @@ it('keeps the robot entry discoverable but disabled when enterprise settings fai
  await screen.findByText('企业资料暂不可用')
  const robot = screen.getByRole('region', { name: '企微机器人配置' })
  expect(within(robot).getByRole('heading', { name: '企微智能机器人（可选）' })).toBeTruthy()
- fireEvent.click(within(robot).getByText('新增 / 更换机器人'))
- expect(within(robot).getByRole('button', { name: '生成回调配置' })).toHaveProperty('disabled', true)
+ expect(within(robot).getByRole('button', { name: '保存长连接配置' })).toHaveProperty('disabled', true)
  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
 })

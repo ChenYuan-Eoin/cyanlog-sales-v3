@@ -24,3 +24,40 @@ it.each([{status:'active',verified_at:null},{status:'draft',verified_at:'2026-10
 it('refuses a stale repair if verification or another edit won the race',async()=>{
  race=true;await expect(repairWecomBotSetup('org','admin',id)).rejects.toThrow('配置已变化')
 })
+
+it('saves long connection credentials encrypted without exposing them or changing callback drafts',async()=>{
+ const {saveWecomLongConnection}=await import('./wecom-bot-settings')
+ let inserted:Record<string,unknown>|undefined
+ mocks.from.mockImplementation(()=>({insert:(value:Record<string,unknown>)=>{inserted=value;return {select:()=>({single:async()=>({data:{id,bot_id:'robot-1',status:'draft'},error:null})})}}}))
+ const result=await saveWecomLongConnection('org','admin',{name:'Bot',botId:'robot-1',secret:'test-secret'})
+ expect(mocks.encrypt).toHaveBeenCalledWith(JSON.stringify({transport:'long_connection',secret:'test-secret'}))
+ expect(inserted).toMatchObject({org_id:'org',corp_id:'ww0000000000000001',credentials_ciphertext:'long-connection:v1:new-cipher',verified_at:null,status:'draft'})
+ expect(result.bot.transport).toBe('long_connection')
+ expect(JSON.stringify(result)).not.toContain('test-secret')
+})
+
+it('retains the encrypted Secret when editing a saved long connection with an empty Secret',async()=>{
+ const {saveWecomLongConnection}=await import('./wecom-bot-settings')
+ row={...row,bot_id:'robot-1',credentials_ciphertext:'long-connection:v1:existing-cipher'}
+ mocks.from.mockImplementation(()=>{const filters:Record<string,unknown>={};let value:Record<string,unknown>|undefined;const chain={select:()=>chain,eq:(key:string,v:unknown)=>{filters[key]=v;return chain},update:(v:Record<string,unknown>)=>{value=v;return chain},maybeSingle:async()=>({data:row,error:null}),single:async()=>{writes.push({value:value!,filters});return {data:{id},error:null}}};return chain})
+ await saveWecomLongConnection('org','admin',{id,name:'Renamed',botId:'robot-1',secret:''})
+ expect(writes[0].value.credentials_ciphertext).toBe('long-connection:v1:existing-cipher')
+ expect(writes[0].filters).toMatchObject({org_id:'org',id,updated_at:row.updated_at})
+ expect(mocks.encrypt).not.toHaveBeenCalled()
+ await expect(saveWecomLongConnection('org','admin',{id,name:'Renamed',botId:'different-bot',secret:''})).rejects.toThrow('更换Bot ID')
+})
+
+it('does not overwrite callback credentials when given their ID for a long connection',async()=>{
+ const {saveWecomLongConnection}=await import('./wecom-bot-settings')
+ await expect(saveWecomLongConnection('org','admin',{id,name:'Bot',botId:'robot-1',secret:'test-secret'})).rejects.toThrow('URL回调配置')
+ expect(writes).toHaveLength(0)
+})
+
+it('lists legacy and long-connection transports without any ciphertext or plaintext',async()=>{
+ const {listWecomBots}=await import('./wecom-bot-settings')
+ mocks.from.mockImplementation(()=>{const chain={select:()=>chain,eq:()=>chain,order:async()=>({data:[{...row,credentials_ciphertext:'old-cipher'},{...row,id:'second',credentials_ciphertext:'long-connection:v1:secret-cipher'}],error:null})};return chain})
+ const bots=await listWecomBots('org')
+ expect(bots.map(bot=>bot.transport)).toEqual(['url_callback','long_connection'])
+ expect(JSON.stringify(bots)).not.toContain('cipher')
+ expect(mocks.decrypt).not.toHaveBeenCalled()
+})
