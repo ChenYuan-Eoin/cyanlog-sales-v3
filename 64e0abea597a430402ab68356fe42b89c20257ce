@@ -55,3 +55,83 @@
   },
   "previousProduction": "4b6551cdaa674655047974d3f7643fb9c7718077"
 }
+
+{
+  "state": "production_released",
+  "commit": "64e0abea597a430402ab68356fe42b89c20257ce",
+  "deploymentId": "dpl_qX9ShNM1pJw25n5VxGcR3ambmy4B",
+  "target": "production",
+  "ready": true,
+  "domain": "https://sales.cyanlog.icu",
+  "mainContainsCandidate": true,
+  "productionBranchMatches": true,
+  "authorization": "IN-20261019-030",
+  "databaseWrites": false,
+  "databaseBefore": [
+    {
+      "name": "shipping_carrier_connections",
+      "count": 1,
+      "fingerprint": "9d6d454e830c2cbbd72168fe96a62b1f"
+    },
+    {
+      "name": "shipping_billing_accounts",
+      "count": 1,
+      "fingerprint": "145895d98145acfc01600f164c4a3aad"
+    },
+    {
+      "name": "shipping_sender_profiles",
+      "count": 1,
+      "fingerprint": "9ab1531ba7f4828623d86cbb8c6ad78d"
+    },
+    {
+      "name": "shipping_wecom_settings",
+      "count": 1,
+      "fingerprint": "566753ca2a8684afa6299976d2db684f"
+    }
+  ],
+  "databaseAfter": [
+    {
+      "name": "shipping_carrier_connections",
+      "count": 1,
+      "fingerprint": "9d6d454e830c2cbbd72168fe96a62b1f"
+    },
+    {
+      "name": "shipping_billing_accounts",
+      "count": 1,
+      "fingerprint": "145895d98145acfc01600f164c4a3aad"
+    },
+    {
+      "name": "shipping_sender_profiles",
+      "count": 1,
+      "fingerprint": "9ab1531ba7f4828623d86cbb8c6ad78d"
+    },
+    {
+      "name": "shipping_wecom_settings",
+      "count": 1,
+      "fingerprint": "566753ca2a8684afa6299976d2db684f"
+    }
+  ],
+  "configurationUnchanged": true,
+  "operatorReplay": {
+    "source": "existing_user_chrome",
+    "tab": "1110515270",
+    "url": "https://sales.cyanlog.icu/configs?tab=shipping",
+    "loggedIn": true,
+    "tabs": [
+      "顺丰接入",
+      "企业接入"
+    ],
+    "parseButton": {
+      "width": 134,
+      "height": 40
+    },
+    "existingCarrierVisible": true,
+    "existingMonthlyAccountVisible": true,
+    "existingSenderVisible": true,
+    "encryptedSaveEnabled": true
+  },
+  "excluded": [
+    "uncommitted local WeCom long-connection service",
+    "Bot order/cancel/tracking end-to-end completion"
+  ]
+}
